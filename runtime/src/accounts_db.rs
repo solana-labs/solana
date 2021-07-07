@@ -5919,10 +5919,11 @@ impl AccountsDb {
         if let Some(limit) = limit_load_slot_count_from_snapshot {
             slots.truncate(limit); // get rid of the newer slots and keep just the older
         }
-        for pass in 0..2 {
-            if !verify && pass == 1 {
-                break;
-            }
+        // pass == 0 always runs and generates the index
+        // pass == 1 only runs if verify == true.
+        // verify checks that all the expected items are in the accounts index and measures how long it takes to look them all up
+        let passes = if verify { 2 } else { 1 };
+        for pass in 0..passes {
             let total_processed_slots_across_all_threads = AtomicU64::new(0);
             let outer_slots_len = slots.len();
             let chunk_size = (outer_slots_len / 7) + 1; // approximately 400k slots in a snapshot
@@ -5948,16 +5949,17 @@ impl AccountsDb {
                         scan_time.stop();
                         scan_time_sum += scan_time.as_us();
 
-                        if pass == 0 {
-                            let insert_us = self.generate_index_for_slot(accounts_map, slot);
-                            insertion_time_us.fetch_add(insert_us, Ordering::Relaxed);
+                        let insert_us = if pass == 0 {
+                            // generate index
+                            self.generate_index_for_slot(accounts_map, slot)
                         } else {
-                            let mut m = Measure::start("");
-                            // do this here
+                            // verify index matches expected and measure the time to get all items
+                            assert!(verify);
+                            let mut lookup_time = Measure::start("lookup_time");
                             for account in accounts_map.into_iter() {
                                 let (key, account_info) = account;
-                                let lock = self.accounts_index.get_account_maps_read_lock(key);
-                                let x = lock.get(key).unwrap();
+                                let lock = self.accounts_index.get_account_maps_read_lock(&key);
+                                let x = lock.get(&key).unwrap();
                                 let sl = x.slot_list.read().unwrap();
                                 let mut count = 0;
                                 for (slot2, account_info2) in sl.iter() {
@@ -5973,11 +5975,11 @@ impl AccountsDb {
                                     }
                                 }
                                 assert_eq!(1, count);
-                                //self.accounts_index.get(&key, None, None)
                             }
-                            m.stop();
-                            insertion_time_us.fetch_add(m.as_us(), Ordering::Relaxed);
-                        }
+                            lookup_time.stop();
+                            lookup_time.as_us()
+                        };
+                        insertion_time_us.fetch_add(insert_us, Ordering::Relaxed);
                     }
                     scan_time_sum
                 })
