@@ -99,7 +99,6 @@ else
       solana-dos
       solana-install-init
       solana-stake-accounts
-      solana-stake-monitor
       solana-stake-o-matic
       solana-test-validator
       solana-tokens
