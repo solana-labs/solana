@@ -8,7 +8,7 @@
     "@project-serum/serum": "^0.13.44",
     "@react-hook/debounce": "^4.0.0",
     "@sentry/react": "^6.8.0",
-    "@solana/spl-token-registry": "^0.2.170",
+    "@solana/spl-token-registry": "^0.2.171",
     "@solana/web3.js": "^1.20.0",
     "@testing-library/jest-dom": "^5.14.1",
     "@testing-library/react": "^12.0.0",
