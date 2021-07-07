@@ -15,9 +15,9 @@ use solana_ledger::{
     genesis_utils::{create_genesis_config, GenesisConfigInfo},
     shred::Shred,
 };
+use solana_runtime::{bank::Bank, bank_forks::BankForks};
 use solana_sdk::pubkey;
 use solana_sdk::timing::timestamp;
-use solana_runtime::{bank::Bank, bank_forks::BankForks};
 use std::{
     collections::HashMap,
     net::UdpSocket,
