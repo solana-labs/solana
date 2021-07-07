@@ -174,13 +174,8 @@ impl PreAccount {
                 return Err(InstructionError::ExecutableAccountNotRentExempt);
             }
             if !is_writable // line coverage used to get branch coverage
-<<<<<<< HEAD
                 || pre.executable
-                || *program_id != pre.owner
-=======
-                || pre.executable()
-                || program_id != post.owner()
->>>>>>> 44289e672 (Update verify policy (#18459))
+                || *program_id != post.owner
             {
                 return Err(InstructionError::ExecutableModified);
             }
