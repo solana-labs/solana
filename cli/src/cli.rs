@@ -200,6 +200,7 @@ pub enum CliCommand {
         seed: Option<String>,
         staker: Option<Pubkey>,
         withdrawer: Option<Pubkey>,
+        withdrawer_signer: Option<SignerIndex>,
         lockup: Lockup,
         amount: SpendAmount,
         sign_only: bool,
@@ -723,7 +724,10 @@ pub fn parse_command(
         }
         // Stake Commands
         ("create-stake-account", Some(matches)) => {
-            parse_create_stake_account(matches, default_signer, wallet_manager)
+            parse_create_stake_account(matches, default_signer, wallet_manager, !CHECKED)
+        }
+        ("create-stake-account-checked", Some(matches)) => {
+            parse_create_stake_account(matches, default_signer, wallet_manager, CHECKED)
         }
         ("delegate-stake", Some(matches)) => {
             parse_stake_delegate_stake(matches, default_signer, wallet_manager)
@@ -1553,6 +1557,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             seed,
             staker,
             withdrawer,
+            withdrawer_signer,
             lockup,
             amount,
             sign_only,
@@ -1570,6 +1575,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             seed,
             staker,
             withdrawer,
+            *withdrawer_signer,
             lockup,
             *amount,
             *sign_only,
@@ -2696,6 +2702,7 @@ mod tests {
             seed: None,
             staker: None,
             withdrawer: None,
+            withdrawer_signer: None,
             lockup: Lockup {
                 epoch: 0,
                 unix_timestamp: 0,
