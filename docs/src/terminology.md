@@ -32,7 +32,7 @@ A contiguous set of [entries](terminology.md#entry) on the ledger covered by a [
 
 ## blockhash
 
-A fingerprint ([hash](terminology.md#hash)) that identifies a record (block).  Solana computes a blockhash from the last [entry id](terminology.md#entry-id) of the block.
+A unique value ([hash](terminology.md#hash)) that identifies a record (block).  Solana computes a blockhash from the last [entry id](terminology.md#entry-id) of the block.
 
 ## block height
 
@@ -44,7 +44,7 @@ The server node ([validator](terminology.md#validator)) that produces the genesi
 
 ## BPF loader 
 
-The Solana program that owns and loads smart contract programs into validator memory.
+The Solana program that owns and loads (BPF) smart contract programs, allowing the program to interface with the runtime
 
 ## CBC block
 
@@ -64,7 +64,7 @@ The wallclock duration between a [leader](terminology.md#leader) creating a [tic
 
 ## confirmed block
 
-A record of transactions and other data ([block](terminology.md#block)) that has received a [supermajority](terminology.md#supermajority) of [ledger votes](terminology.md#ledger-vote) that matches the leader's.
+A [block](terminology.md#block) that has received a [supermajority](terminology.md#supermajority) of [ledger votes](terminology.md#ledger-vote) that matches the leader's.
 
 ## control plane
 
@@ -261,7 +261,7 @@ Collectively, slots create a logical clock. Slots are ordered sequentially and n
 
 ## smart contract
 
-A program on a blockchain. 
+A program on a blockchain that allows updates to accounts.
 
 ## sol
 
