@@ -8,7 +8,7 @@ use solana_sdk::{
     account::{AccountSharedData, ReadableAccount, WritableAccount},
     account_utils::StateMut,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-    feature_set::{instructions_sysvar_enabled, FeatureSet},
+    feature_set::{instructions_sysvar_enabled, updated_verify_policy, FeatureSet},
     ic_logger_msg, ic_msg,
     instruction::{CompiledInstruction, Instruction, InstructionError},
     keyed_account::{create_keyed_accounts_unified, keyed_account_at_index, KeyedAccount},
@@ -103,6 +103,7 @@ impl PreAccount {
         post: &AccountSharedData,
         timings: &mut ExecuteDetailsTimings,
         outermost_call: bool,
+        updated_verify_policy: bool,
     ) -> Result<(), InstructionError> {
         let pre = self.account.borrow();
 
@@ -171,9 +172,14 @@ impl PreAccount {
             if !rent.is_exempt(post.lamports(), post.data().len()) {
                 return Err(InstructionError::ExecutableAccountNotRentExempt);
             }
+            let owner = if updated_verify_policy {
+                post.owner()
+            } else {
+                pre.owner()
+            };
             if !is_writable // line coverage used to get branch coverage
                 || pre.executable()
-                || program_id != post.owner()
+                || program_id != owner
             {
                 return Err(InstructionError::ExecutableModified);
             }
@@ -403,6 +409,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
             caller_write_privileges,
             &mut self.timings,
             logger,
+            self.feature_set.is_active(&updated_verify_policy::id()),
         )
     }
     fn get_caller(&self) -> Result<&Pubkey, InstructionError> {
@@ -988,6 +995,7 @@ impl MessageProcessor {
         rent: &Rent,
         timings: &mut ExecuteDetailsTimings,
         logger: Rc<RefCell<dyn Logger>>,
+        updated_verify_policy: bool,
     ) -> Result<(), InstructionError> {
         // Verify all executable accounts have zero outstanding refs
         Self::verify_account_references(executable_accounts)?;
@@ -1013,6 +1021,7 @@ impl MessageProcessor {
                         &account,
                         timings,
                         true,
+                        updated_verify_policy,
                     )
                     .map_err(|err| {
                         ic_logger_msg!(
@@ -1049,6 +1058,7 @@ impl MessageProcessor {
         caller_write_privileges: Option<&[bool]>,
         timings: &mut ExecuteDetailsTimings,
         logger: Rc<RefCell<dyn Logger>>,
+        updated_verify_policy: bool,
     ) -> Result<(), InstructionError> {
         // Verify the per-account instruction results
         let (mut pre_sum, mut post_sum) = (0_u128, 0_u128);
@@ -1071,7 +1081,15 @@ impl MessageProcessor {
                         }
                         let account = account.borrow();
                         pre_account
-                            .verify(program_id, is_writable, rent, &account, timings, false)
+                            .verify(
+                                program_id,
+                                is_writable,
+                                rent,
+                                &account,
+                                timings,
+                                false,
+                                updated_verify_policy,
+                            )
                             .map_err(|err| {
                                 ic_logger_msg!(logger, "failed to verify account {}: {}", key, err);
                                 err
@@ -1161,6 +1179,7 @@ impl MessageProcessor {
             &rent_collector.rent,
             timings,
             invoke_context.get_logger(),
+            invoke_context.is_feature_active(&updated_verify_policy::id()),
         )?;
 
         timings.accumulate(&invoke_context.timings);
@@ -1455,6 +1474,7 @@ mod tests {
                 &self.post,
                 &mut ExecuteDetailsTimings::default(),
                 false,
+                true,
             )
         }
     }
