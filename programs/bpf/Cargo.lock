@@ -1145,7 +1145,7 @@ dependencies = [
  "http",
  "indexmap",
  "slab",
- "tokio 1.8.0",
+ "tokio 1.8.1",
  "tokio-util",
  "tracing",
 ]
@@ -1298,7 +1298,7 @@ dependencies = [
  "itoa",
  "pin-project",
  "socket2",
- "tokio 1.8.0",
+ "tokio 1.8.1",
  "tower-service",
  "tracing",
  "want",
@@ -1314,7 +1314,7 @@ dependencies = [
  "hyper",
  "log",
  "rustls",
- "tokio 1.8.0",
+ "tokio 1.8.1",
  "tokio-rustls",
  "webpki",
 ]
@@ -2332,7 +2332,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_urlencoded",
- "tokio 1.8.0",
+ "tokio 1.8.1",
  "tokio-rustls",
  "url",
  "wasm-bindgen",
@@ -2714,7 +2714,7 @@ dependencies = [
  "solana-program 1.8.0",
  "solana-sdk",
  "tarpc",
- "tokio 1.8.0",
+ "tokio 1.8.1",
  "tokio-serde",
 ]
 
@@ -2741,7 +2741,7 @@ dependencies = [
  "solana-runtime",
  "solana-sdk",
  "tarpc",
- "tokio 1.8.0",
+ "tokio 1.8.1",
  "tokio-serde",
  "tokio-stream",
 ]
@@ -3139,7 +3139,7 @@ dependencies = [
  "solana-version",
  "solana-vote-program",
  "thiserror",
- "tokio 1.8.0",
+ "tokio 1.8.1",
  "tungstenite",
  "url",
 ]
@@ -3198,7 +3198,7 @@ dependencies = [
  "solana-version",
  "spl-memo",
  "thiserror",
- "tokio 1.8.0",
+ "tokio 1.8.1",
 ]
 
 [[package]]
@@ -3318,7 +3318,7 @@ dependencies = [
  "solana-logger 1.8.0",
  "solana-sdk",
  "solana-version",
- "tokio 1.8.0",
+ "tokio 1.8.1",
  "url",
 ]
 
@@ -3409,7 +3409,7 @@ dependencies = [
  "solana-sdk",
  "solana-vote-program",
  "thiserror",
- "tokio 1.8.0",
+ "tokio 1.8.1",
 ]
 
 [[package]]
@@ -3797,7 +3797,7 @@ dependencies = [
  "static_assertions",
  "tarpc-plugins",
  "thiserror",
- "tokio 1.8.0",
+ "tokio 1.8.1",
  "tokio-serde",
  "tokio-util",
  "tracing",
@@ -3955,9 +3955,9 @@ dependencies = [
 
 [[package]]
 name = "tokio"
-version = "1.8.0"
+version = "1.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "570c2eb13b3ab38208130eccd41be92520388791207fde783bda7c1e8ace28d4"
+checksum = "98c8b05dc14c75ea83d63dd391100353789f5f24b8b3866542a5e85c8be8e985"
 dependencies = [
  "autocfg",
  "bytes 1.0.1",
@@ -4063,7 +4063,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bc6844de72e57df1980054b38be3a9f4702aba4858be64dd700181a8a6d0e1b6"
 dependencies = [
  "rustls",
- "tokio 1.8.0",
+ "tokio 1.8.1",
  "webpki",
 ]
 
@@ -4090,7 +4090,7 @@ checksum = "f8864d706fdb3cc0843a49647ac892720dac98a6eeb818b77190592cf4994066"
 dependencies = [
  "futures-core",
  "pin-project-lite 0.2.4",
- "tokio 1.8.0",
+ "tokio 1.8.1",
 ]
 
 [[package]]
@@ -4191,7 +4191,7 @@ dependencies = [
  "log",
  "pin-project-lite 0.2.4",
  "slab",
- "tokio 1.8.0",
+ "tokio 1.8.1",
 ]
 
 [[package]]
