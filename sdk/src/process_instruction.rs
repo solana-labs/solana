@@ -2,7 +2,6 @@ use solana_sdk::{
     account::AccountSharedData,
     instruction::{CompiledInstruction, Instruction, InstructionError},
     keyed_account::{create_keyed_accounts_unified, KeyedAccount},
-    message::Message,
     pubkey::Pubkey,
     sysvar::Sysvar,
 };
@@ -62,10 +61,9 @@ pub trait InvokeContext {
     /// Verify and update PreAccount state based on program execution
     fn verify_and_update(
         &mut self,
-        message: &Message,
         instruction: &CompiledInstruction,
         accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
-        caller_pivileges: Option<&[bool]>,
+        write_privileges: &[bool],
     ) -> Result<(), InstructionError>;
     /// Get the program ID of the currently executing program
     fn get_caller(&self) -> Result<&Pubkey, InstructionError>;
@@ -393,10 +391,9 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
     }
     fn verify_and_update(
         &mut self,
-        _message: &Message,
         _instruction: &CompiledInstruction,
         _accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
-        _caller_pivileges: Option<&[bool]>,
+        _write_pivileges: &[bool],
     ) -> Result<(), InstructionError> {
         Ok(())
     }

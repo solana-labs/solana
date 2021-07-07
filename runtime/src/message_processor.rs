@@ -390,10 +390,9 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
     }
     fn verify_and_update(
         &mut self,
-        message: &Message,
         instruction: &CompiledInstruction,
         accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
-        caller_write_privileges: Option<&[bool]>,
+        write_privileges: &[bool],
     ) -> Result<(), InstructionError> {
         let stack_frame = self
             .invoke_stack
@@ -401,13 +400,12 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
             .ok_or(InstructionError::CallDepth)?;
         let logger = self.get_logger();
         MessageProcessor::verify_and_update(
-            message,
             instruction,
             &mut self.pre_accounts,
             accounts,
             &stack_frame.key,
             &self.rent,
-            caller_write_privileges,
+            write_privileges,
             &mut self.timings,
             logger,
         )
@@ -913,12 +911,7 @@ impl MessageProcessor {
             let program_id = instruction.program_id(&message.account_keys);
 
             // Verify the calling program hasn't misbehaved
-            invoke_context.verify_and_update(
-                message,
-                instruction,
-                accounts,
-                Some(caller_write_privileges),
-            )?;
+            invoke_context.verify_and_update(instruction, accounts, caller_write_privileges)?;
 
             // Construct keyed accounts
             let keyed_accounts =
@@ -939,7 +932,10 @@ impl MessageProcessor {
             );
             if result.is_ok() {
                 // Verify the called program has not misbehaved
-                result = invoke_context.verify_and_update(message, instruction, accounts, None);
+                let write_privileges: Vec<bool> = (0..message.account_keys.len())
+                    .map(|i| message.is_writable(i))
+                    .collect();
+                result = invoke_context.verify_and_update(instruction, accounts, &write_privileges);
             }
 
             // Restore previous state
@@ -1047,26 +1043,21 @@ impl MessageProcessor {
     /// Verify the results of a cross-program instruction
     #[allow(clippy::too_many_arguments)]
     fn verify_and_update(
-        message: &Message,
         instruction: &CompiledInstruction,
         pre_accounts: &mut [PreAccount],
         accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
         program_id: &Pubkey,
         rent: &Rent,
-        caller_write_privileges: Option<&[bool]>,
+        write_privileges: &[bool],
         timings: &mut ExecuteDetailsTimings,
         logger: Rc<RefCell<dyn Logger>>,
     ) -> Result<(), InstructionError> {
         // Verify the per-account instruction results
         let (mut pre_sum, mut post_sum) = (0_u128, 0_u128);
         let mut work = |_unique_index: usize, account_index: usize| {
-            if account_index < message.account_keys.len() && account_index < accounts.len() {
+            if account_index < write_privileges.len() && account_index < accounts.len() {
                 let (key, account) = &accounts[account_index];
-                let is_writable = if let Some(caller_write_privileges) = caller_write_privileges {
-                    caller_write_privileges[account_index]
-                } else {
-                    message.is_writable(account_index)
-                };
+                let is_writable = write_privileges[account_index];
                 // Find the matching PreAccount
                 for pre_account in pre_accounts.iter_mut() {
                     if key == pre_account.key() {
@@ -1332,8 +1323,11 @@ mod tests {
                     &solana_sdk::pubkey::Pubkey::default(),
                 ))),
             ));
+            let write_privileges: Vec<bool> = (0..message.account_keys.len())
+                .map(|i| message.is_writable(i))
+                .collect();
             invoke_context
-                .verify_and_update(&message, &message.instructions[0], &these_accounts, None)
+                .verify_and_update(&message.instructions[0], &these_accounts, &write_privileges)
                 .unwrap();
             assert_eq!(
                 invoke_context.pre_accounts[owned_index]
@@ -1349,10 +1343,9 @@ mod tests {
                 (MAX_DEPTH + not_owned_index) as u8;
             assert_eq!(
                 invoke_context.verify_and_update(
-                    &message,
                     &message.instructions[0],
                     &accounts[not_owned_index..owned_index + 1],
-                    None
+                    &write_privileges,
                 ),
                 Err(InstructionError::ExternalAccountDataModified)
             );
