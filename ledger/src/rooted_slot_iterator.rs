@@ -84,7 +84,7 @@ mod tests {
     fn test_rooted_slot_iterator() {
         let blockstore_path = get_tmp_ledger_path!();
         let blockstore = Blockstore::open(&blockstore_path).unwrap();
-        blockstore.set_roots(&[0]).unwrap();
+        blockstore.set_roots(std::iter::once(&0)).unwrap();
         let ticks_per_slot = 5;
         /*
             Build a blockstore in the ledger with the following fork structure:
@@ -131,7 +131,7 @@ mod tests {
             fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 4, fork_point, fork_hash);
 
         // Set a root
-        blockstore.set_roots(&[1, 2, 3]).unwrap();
+        blockstore.set_roots(vec![1, 2, 3].iter()).unwrap();
 
         // Trying to get an iterator on a different fork will error
         assert!(RootedSlotIterator::new(4, &blockstore).is_err());
@@ -196,11 +196,11 @@ mod tests {
         }
 
         // Set roots
-        blockstore.set_roots(&[0, 1, 2, 3]).unwrap();
+        blockstore.set_roots(vec![0, 1, 2, 3].iter()).unwrap();
 
         // Create one post-skip slot at 10, simulating starting from a snapshot
         // at 10
-        blockstore.set_roots(&[10]).unwrap();
+        blockstore.set_roots(std::iter::once(&10)).unwrap();
         // Try to get an iterator from before the skip. The post-skip slot
         // should not return a SlotMeta
         let result: Vec<_> = RootedSlotIterator::new(3, &blockstore)
@@ -214,7 +214,7 @@ mod tests {
         fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 11, 10, Hash::default());
 
         // Set roots
-        blockstore.set_roots(&[11]).unwrap();
+        blockstore.set_roots(std::iter::once(&11)).unwrap();
 
         let result: Vec<_> = RootedSlotIterator::new(0, &blockstore)
             .unwrap()

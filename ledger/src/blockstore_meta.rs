@@ -253,6 +253,11 @@ pub struct PerfSample {
     pub sample_period_secs: u16,
 }
 
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
+pub struct ProgramCost {
+    pub cost: u64,
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

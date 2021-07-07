@@ -233,6 +233,10 @@ pub struct CliEpochInfo {
     pub epoch_info: EpochInfo,
     #[serde(skip)]
     pub average_slot_time_ms: u64,
+    #[serde(skip)]
+    pub start_block_time: Option<UnixTimestamp>,
+    #[serde(skip)]
+    pub current_block_time: Option<UnixTimestamp>,
 }
 
 impl QuietDisplay for CliEpochInfo {}
@@ -277,21 +281,41 @@ impl fmt::Display for CliEpochInfo {
                 remaining_slots_in_epoch
             ),
         )?;
+        let (time_elapsed, annotation) = if let (Some(start_block_time), Some(current_block_time)) =
+            (self.start_block_time, self.current_block_time)
+        {
+            (
+                Duration::from_secs((current_block_time - start_block_time) as u64),
+                None,
+            )
+        } else {
+            (
+                slot_to_duration(self.epoch_info.slot_index, self.average_slot_time_ms),
+                Some("* estimated based on current slot durations"),
+            )
+        };
+        let time_remaining = slot_to_duration(remaining_slots_in_epoch, self.average_slot_time_ms);
         writeln_name_value(
             f,
             "Epoch Completed Time:",
             &format!(
-                "{}/{} ({} remaining)",
-                slot_to_human_time(self.epoch_info.slot_index, self.average_slot_time_ms),
-                slot_to_human_time(self.epoch_info.slots_in_epoch, self.average_slot_time_ms),
-                slot_to_human_time(remaining_slots_in_epoch, self.average_slot_time_ms)
+                "{}{}/{} ({} remaining)",
+                humantime::format_duration(time_elapsed).to_string(),
+                if annotation.is_some() { "*" } else { "" },
+                humantime::format_duration(time_elapsed + time_remaining).to_string(),
+                humantime::format_duration(time_remaining).to_string(),
             ),
-        )
+        )?;
+        if let Some(annotation) = annotation {
+            writeln!(f)?;
+            writeln!(f, "{}", annotation)?;
+        }
+        Ok(())
     }
 }
 
-fn slot_to_human_time(slot: Slot, slot_time_ms: u64) -> String {
-    humantime::format_duration(Duration::from_secs((slot * slot_time_ms) / 1000)).to_string()
+fn slot_to_duration(slot: Slot, slot_time_ms: u64) -> Duration {
+    Duration::from_secs((slot * slot_time_ms) / 1000)
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -323,6 +347,8 @@ pub struct CliValidators {
     pub total_current_stake: u64,
     pub total_delinquent_stake: u64,
     pub validators: Vec<CliValidator>,
+    pub average_skip_rate: f64,
+    pub average_stake_weighted_skip_rate: f64,
     #[serde(skip_serializing)]
     pub validators_sort_order: CliValidatorsSortOrder,
     #[serde(skip_serializing)]
@@ -485,6 +511,18 @@ impl fmt::Display for CliValidators {
         if self.validators.len() > 100 {
             writeln!(f, "{}", header)?;
         }
+
+        writeln!(f)?;
+        writeln_name_value(
+            f,
+            "Average Stake-Weighted Skip Rate:",
+            &format!("{:.2}%", self.average_stake_weighted_skip_rate,),
+        )?;
+        writeln_name_value(
+            f,
+            "Average Unweighted Skip Rate:    ",
+            &format!("{:.2}%", self.average_skip_rate),
+        )?;
 
         writeln!(f)?;
         writeln_name_value(
@@ -2411,6 +2449,10 @@ mod tests {
 
             fn try_sign_message(&self, _message: &[u8]) -> Result<Signature, SignerError> {
                 Ok(Signature::new(&[1u8; 64]))
+            }
+
+            fn is_interactive(&self) -> bool {
+                false
             }
         }
 

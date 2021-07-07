@@ -44,11 +44,12 @@ use {
         accounts::AccountAddressFilter,
         accounts_index::{AccountIndex, AccountSecondaryIndexes, IndexKey},
         bank::Bank,
-        bank_forks::{BankForks, SnapshotConfig},
+        bank_forks::BankForks,
         commitment::{BlockCommitmentArray, BlockCommitmentCache, CommitmentSlots},
         inline_spl_token_v2_0::{SPL_TOKEN_ACCOUNT_MINT_OFFSET, SPL_TOKEN_ACCOUNT_OWNER_OFFSET},
         non_circulating_supply::calculate_non_circulating_supply,
-        snapshot_utils::get_highest_snapshot_archive_path,
+        snapshot_config::SnapshotConfig,
+        snapshot_utils,
     },
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
@@ -1898,6 +1899,10 @@ fn verify_transaction(transaction: &Transaction) -> Result<()> {
         return Err(RpcCustomError::TransactionPrecompileVerificationFailure(e).into());
     }
 
+    if !transaction.verify_signatures_len() {
+        return Err(RpcCustomError::TransactionSignatureVerificationFailure.into());
+    }
+
     Ok(())
 }
 
@@ -2254,8 +2259,9 @@ pub mod rpc_minimal {
 
             meta.snapshot_config
                 .and_then(|snapshot_config| {
-                    get_highest_snapshot_archive_path(&snapshot_config.snapshot_package_output_path)
-                        .map(|(_, (slot, _, _))| slot)
+                    snapshot_utils::get_highest_snapshot_archive_slot(
+                        &snapshot_config.snapshot_package_output_path,
+                    )
                 })
                 .ok_or_else(|| RpcCustomError::NoSnapshot.into())
         }
@@ -3090,15 +3096,21 @@ pub mod rpc_full {
                     accounts.push(if result.is_err() {
                         None
                     } else {
-                        transaction
-                            .message
-                            .account_keys
-                            .iter()
-                            .position(|pubkey| *pubkey == address)
-                            .map(|i| post_simulation_accounts.get(i))
-                            .flatten()
-                            .map(|account| {
-                                UiAccount::encode(&address, account, accounts_encoding, None, None)
+                        (0..transaction.message.account_keys.len())
+                            .position(|i| {
+                                post_simulation_accounts
+                                    .get(i)
+                                    .map(|(key, _account)| *key == address)
+                                    .unwrap_or(false)
+                            })
+                            .map(|i| {
+                                UiAccount::encode(
+                                    &address,
+                                    &post_simulation_accounts[i].1,
+                                    accounts_encoding,
+                                    None,
+                                    None,
+                                )
                             })
                     });
                 }
@@ -3855,7 +3867,7 @@ pub fn create_test_transactions_and_populate_blockstore(
         0,
     );
     blockstore.insert_shreds(shreds, None, false).unwrap();
-    blockstore.set_roots(&[slot]).unwrap();
+    blockstore.set_roots(std::iter::once(&slot)).unwrap();
 
     let (transaction_status_sender, transaction_status_receiver) = crossbeam_channel::unbounded();
     let (replay_vote_sender, _replay_vote_receiver) = crossbeam_channel::unbounded();
@@ -4019,7 +4031,7 @@ pub mod tests {
                 let parent = if i > 0 { roots[i - 1] } else { 0 };
                 fill_blockstore_slot_with_ticks(&blockstore, 5, *root, parent, Hash::default());
             }
-            blockstore.set_roots(&roots).unwrap();
+            blockstore.set_roots(roots.iter()).unwrap();
             let new_bank = Bank::new_from_parent(
                 &parent_bank,
                 parent_bank.collector_id(),
@@ -6693,7 +6705,7 @@ pub mod tests {
         let bank = Arc::new(Bank::default());
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
-        blockstore.set_roots(&[0, 1]).unwrap();
+        blockstore.set_roots(vec![0, 1].iter()).unwrap();
         // Build BlockCommitmentCache with rooted slots
         let mut cache0 = BlockCommitment::default();
         cache0.increase_rooted_stake(50);

@@ -44,7 +44,7 @@ fn get_declaration_packed_len(
             .map(|element| get_declaration_packed_len(element, definitions))
             .sum(),
         None => match declaration {
-            "u8" | "i8" => 1,
+            "bool" | "u8" | "i8" => 1,
             "u16" | "i16" => 2,
             "u32" | "i32" => 4,
             "u64" | "i64" => 8,
@@ -143,6 +143,7 @@ mod tests {
         pub number_u32: u32,
         pub tuple: (u8, u16),
         pub enumeration: TestEnum,
+        pub r#bool: bool,
     }
 
     #[derive(Debug, PartialEq, BorshSerialize, BorshDeserialize, BorshSchema)]
@@ -192,6 +193,7 @@ mod tests {
         assert_eq!(
             get_packed_len::<TestStruct>(),
             size_of::<u64>() * 16
+                + size_of::<bool>()
                 + size_of::<u128>()
                 + size_of::<u32>()
                 + size_of::<u8>()

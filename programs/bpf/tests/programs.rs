@@ -292,26 +292,24 @@ fn process_transaction_and_record_inner(
     let signature = tx.signatures.get(0).unwrap().clone();
     let txs = vec![tx];
     let tx_batch = bank.prepare_batch(txs.iter());
-    let (mut results, _, mut inner, _transaction_logs) = bank.load_execute_and_commit_transactions(
-        &tx_batch,
-        MAX_PROCESSING_AGE,
-        false,
-        true,
-        false,
-        &mut ExecuteTimings::default(),
-    );
-    let inner_instructions = if inner.is_empty() {
-        Some(vec![vec![]])
-    } else {
-        inner.swap_remove(0)
-    };
+    let (mut results, _, mut inner_instructions, _transaction_logs) = bank
+        .load_execute_and_commit_transactions(
+            &tx_batch,
+            MAX_PROCESSING_AGE,
+            false,
+            true,
+            false,
+            &mut ExecuteTimings::default(),
+        );
     let result = results
         .fee_collection_results
         .swap_remove(0)
         .and_then(|_| bank.get_signature_status(&signature).unwrap());
     (
         result,
-        inner_instructions.expect("cpi recording should be enabled"),
+        inner_instructions
+            .swap_remove(0)
+            .expect("cpi recording should be enabled"),
     )
 }
 
@@ -329,8 +327,8 @@ fn execute_transactions(bank: &Bank, txs: &[Transaction]) -> Vec<ConfirmedTransa
             post_balances,
             ..
         },
-        mut inner_instructions,
-        mut transaction_logs,
+        inner_instructions,
+        transaction_logs,
     ) = bank.load_execute_and_commit_transactions(
         &batch,
         std::usize::MAX,
@@ -340,13 +338,6 @@ fn execute_transactions(bank: &Bank, txs: &[Transaction]) -> Vec<ConfirmedTransa
         &mut timings,
     );
     let tx_post_token_balances = collect_token_balances(&bank, &batch, &mut mint_decimals);
-
-    for _ in 0..(txs.len() - transaction_logs.len()) {
-        transaction_logs.push(vec![]);
-    }
-    for _ in 0..(txs.len() - inner_instructions.len()) {
-        inner_instructions.push(None);
-    }
 
     izip!(
         txs.iter(),
@@ -395,7 +386,7 @@ fn execute_transactions(bank: &Bank, txs: &[Transaction]) -> Vec<ConfirmedTransa
                 pre_token_balances: Some(pre_token_balances),
                 post_token_balances: Some(post_token_balances),
                 inner_instructions,
-                log_messages: Some(log_messages),
+                log_messages,
                 rewards: None,
             };
 
@@ -1301,17 +1292,17 @@ fn assert_instruction_count() {
             ("solana_bpf_rust_128bit", 584),
             ("solana_bpf_rust_alloc", 7082),
             ("solana_bpf_rust_custom_heap", 522),
-            ("solana_bpf_rust_dep_crate", 2),
+            ("solana_bpf_rust_dep_crate", 47),
             ("solana_bpf_rust_external_spend", 504),
             ("solana_bpf_rust_iter", 724),
             ("solana_bpf_rust_many_args", 233),
-            ("solana_bpf_rust_mem", 3119),
+            ("solana_bpf_rust_mem", 3117),
             ("solana_bpf_rust_membuiltins", 4065),
             ("solana_bpf_rust_noop", 478),
             ("solana_bpf_rust_param_passing", 46),
             ("solana_bpf_rust_rand", 481),
             ("solana_bpf_rust_sanity", 873),
-            ("solana_bpf_rust_sha", 32295),
+            ("solana_bpf_rust_sha", 32301),
         ]);
     }
 

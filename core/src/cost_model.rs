@@ -5,23 +5,28 @@
 //! Instructions take time to execute, both historical and runtime data are
 //! used to determine each instruction's execution time, the sum of that
 //! is transaction's "execution cost"
-//! The main function is `calculate_cost` which returns a TransactionCost struct.
+//! The main function is `calculate_cost` which returns &TransactionCost.
 //!
 use crate::execute_cost_table::ExecuteCostTable;
 use log::*;
-use solana_sdk::{message::Message, pubkey::Pubkey, transaction::Transaction};
+use solana_sdk::{pubkey::Pubkey, transaction::Transaction};
 use std::collections::HashMap;
 
-// Guestimated from mainnet-beta data, sigver averages 1us, read averages 7us and write avergae 25us
-const SIGNED_WRITABLE_ACCOUNT_ACCESS_COST: u64 = 1 + 25;
-const SIGNED_READONLY_ACCOUNT_ACCESS_COST: u64 = 1 + 7;
-const NON_SIGNED_WRITABLE_ACCOUNT_ACCESS_COST: u64 = 25;
+// Guestimated from mainnet-beta data, sigver averages 1us, average read 7us and average write 25us
+const SIGVER_COST: u64 = 1;
 const NON_SIGNED_READONLY_ACCOUNT_ACCESS_COST: u64 = 7;
+const NON_SIGNED_WRITABLE_ACCOUNT_ACCESS_COST: u64 = 25;
+const SIGNED_READONLY_ACCOUNT_ACCESS_COST: u64 =
+    SIGVER_COST + NON_SIGNED_READONLY_ACCOUNT_ACCESS_COST;
+const SIGNED_WRITABLE_ACCOUNT_ACCESS_COST: u64 =
+    SIGVER_COST + NON_SIGNED_WRITABLE_ACCOUNT_ACCESS_COST;
 
 // Sampled from mainnet-beta, the instruction execution timings stats are (in us):
 // min=194, max=62164, avg=8214.49, med=2243
 pub const ACCOUNT_MAX_COST: u64 = 100_000_000;
 pub const BLOCK_MAX_COST: u64 = 2_500_000_000;
+
+const MAX_WRITABLE_ACCOUNTS: usize = 256;
 
 // cost of transaction is made of account_access_cost and instruction execution_cost
 // where
@@ -36,11 +41,29 @@ pub struct TransactionCost {
     pub execution_cost: u64,
 }
 
+impl TransactionCost {
+    pub fn new_with_capacity(capacity: usize) -> Self {
+        Self {
+            writable_accounts: Vec::with_capacity(capacity),
+            ..Self::default()
+        }
+    }
+
+    pub fn reset(&mut self) {
+        self.writable_accounts.clear();
+        self.account_access_cost = 0;
+        self.execution_cost = 0;
+    }
+}
+
 #[derive(Debug)]
 pub struct CostModel {
     account_cost_limit: u64,
     block_cost_limit: u64,
     instruction_execution_cost_table: ExecuteCostTable,
+
+    // reusable variables
+    transaction_cost: TransactionCost,
 }
 
 impl Default for CostModel {
@@ -55,6 +78,7 @@ impl CostModel {
             account_cost_limit: chain_max,
             block_cost_limit: block_max,
             instruction_execution_cost_table: ExecuteCostTable::default(),
+            transaction_cost: TransactionCost::new_with_capacity(MAX_WRITABLE_ACCOUNTS),
         }
     }
 
@@ -66,28 +90,34 @@ impl CostModel {
         self.block_cost_limit
     }
 
-    pub fn calculate_cost(&self, transaction: &Transaction) -> TransactionCost {
-        let (
-            signed_writable_accounts,
-            signed_readonly_accounts,
-            non_signed_writable_accounts,
-            non_signed_readonly_accounts,
-        ) = CostModel::sort_accounts_by_type(transaction.message());
+    pub fn calculate_cost(&mut self, transaction: &Transaction) -> &TransactionCost {
+        self.transaction_cost.reset();
 
-        let mut cost = TransactionCost {
-            writable_accounts: vec![],
-            account_access_cost: CostModel::find_account_access_cost(
-                &signed_writable_accounts,
-                &signed_readonly_accounts,
-                &non_signed_writable_accounts,
-                &non_signed_readonly_accounts,
-            ),
-            execution_cost: self.find_transaction_cost(transaction),
-        };
-        cost.writable_accounts.extend(&signed_writable_accounts);
-        cost.writable_accounts.extend(&non_signed_writable_accounts);
-        debug!("transaction {:?} has cost {:?}", transaction, cost);
-        cost
+        let message = transaction.message();
+        message.account_keys.iter().enumerate().for_each(|(i, k)| {
+            let is_signer = message.is_signer(i);
+            let is_writable = message.is_writable(i);
+
+            if is_signer && is_writable {
+                self.transaction_cost.writable_accounts.push(*k);
+                self.transaction_cost.account_access_cost += SIGNED_WRITABLE_ACCOUNT_ACCESS_COST;
+            } else if is_signer && !is_writable {
+                self.transaction_cost.account_access_cost += SIGNED_READONLY_ACCOUNT_ACCESS_COST;
+            } else if !is_signer && is_writable {
+                self.transaction_cost.writable_accounts.push(*k);
+                self.transaction_cost.account_access_cost +=
+                    NON_SIGNED_WRITABLE_ACCOUNT_ACCESS_COST;
+            } else {
+                self.transaction_cost.account_access_cost +=
+                    NON_SIGNED_READONLY_ACCOUNT_ACCESS_COST;
+            }
+        });
+        self.transaction_cost.execution_cost = self.find_transaction_cost(transaction);
+        debug!(
+            "transaction {:?} has cost {:?}",
+            transaction, self.transaction_cost
+        );
+        &self.transaction_cost
     }
 
     // To update or insert instruction cost to table.
@@ -137,50 +167,6 @@ impl CostModel {
             cost += instruction_cost;
         }
         cost
-    }
-
-    fn find_account_access_cost(
-        signed_writable_accounts: &[Pubkey],
-        signed_readonly_accounts: &[Pubkey],
-        non_signed_writable_accounts: &[Pubkey],
-        non_signed_readonly_accounts: &[Pubkey],
-    ) -> u64 {
-        let mut cost = 0;
-        cost += signed_writable_accounts.len() as u64 * SIGNED_WRITABLE_ACCOUNT_ACCESS_COST;
-        cost += signed_readonly_accounts.len() as u64 * SIGNED_READONLY_ACCOUNT_ACCESS_COST;
-        cost += non_signed_writable_accounts.len() as u64 * NON_SIGNED_WRITABLE_ACCOUNT_ACCESS_COST;
-        cost += non_signed_readonly_accounts.len() as u64 * NON_SIGNED_READONLY_ACCOUNT_ACCESS_COST;
-        cost
-    }
-
-    fn sort_accounts_by_type(
-        message: &Message,
-    ) -> (Vec<Pubkey>, Vec<Pubkey>, Vec<Pubkey>, Vec<Pubkey>) {
-        let demote_sysvar_write_locks = true;
-        let mut signer_writable: Vec<Pubkey> = vec![];
-        let mut signer_readonly: Vec<Pubkey> = vec![];
-        let mut non_signer_writable: Vec<Pubkey> = vec![];
-        let mut non_signer_readonly: Vec<Pubkey> = vec![];
-        message.account_keys.iter().enumerate().for_each(|(i, k)| {
-            let is_signer = message.is_signer(i);
-            let is_writable = message.is_writable(i, demote_sysvar_write_locks);
-
-            if is_signer && is_writable {
-                signer_writable.push(*k);
-            } else if is_signer && !is_writable {
-                signer_readonly.push(*k);
-            } else if !is_signer && is_writable {
-                non_signer_writable.push(*k);
-            } else {
-                non_signer_readonly.push(*k);
-            }
-        });
-        (
-            signer_writable,
-            signer_readonly,
-            non_signer_writable,
-            non_signer_readonly,
-        )
     }
 }
 
@@ -339,25 +325,14 @@ mod tests {
             vec![prog1, prog2],
             instructions,
         );
-        debug!("many random transaction {:?}", tx);
 
-        let (
-            signed_writable_accounts,
-            signed_readonly_accounts,
-            non_signed_writable_accounts,
-            non_signed_readonly_accounts,
-        ) = CostModel::sort_accounts_by_type(tx.message());
-
-        assert_eq!(2, signed_writable_accounts.len());
-        assert_eq!(signer1.pubkey(), signed_writable_accounts[0]);
-        assert_eq!(signer2.pubkey(), signed_writable_accounts[1]);
-        assert_eq!(0, signed_readonly_accounts.len());
-        assert_eq!(2, non_signed_writable_accounts.len());
-        assert_eq!(key1, non_signed_writable_accounts[0]);
-        assert_eq!(key2, non_signed_writable_accounts[1]);
-        assert_eq!(2, non_signed_readonly_accounts.len());
-        assert_eq!(prog1, non_signed_readonly_accounts[0]);
-        assert_eq!(prog2, non_signed_readonly_accounts[1]);
+        let mut cost_model = CostModel::default();
+        let tx_cost = cost_model.calculate_cost(&tx);
+        assert_eq!(2 + 2, tx_cost.writable_accounts.len());
+        assert_eq!(signer1.pubkey(), tx_cost.writable_accounts[0]);
+        assert_eq!(signer2.pubkey(), tx_cost.writable_accounts[1]);
+        assert_eq!(key1, tx_cost.writable_accounts[2]);
+        assert_eq!(key2, tx_cost.writable_accounts[3]);
     }
 
     #[test]
@@ -419,43 +394,6 @@ mod tests {
     }
 
     #[test]
-    fn test_cost_model_can_be_shared_concurrently_as_immutable() {
-        let (mint_keypair, start_hash) = test_setup();
-        let number_threads = 10;
-        let expected_account_cost = SIGNED_WRITABLE_ACCOUNT_ACCESS_COST
-            + NON_SIGNED_WRITABLE_ACCOUNT_ACCESS_COST
-            + NON_SIGNED_READONLY_ACCOUNT_ACCESS_COST;
-
-        let cost_model = Arc::new(CostModel::default());
-
-        let thread_handlers: Vec<JoinHandle<()>> = (0..number_threads)
-            .map(|_| {
-                // each thread creates its own simple transaction
-                let simple_transaction = system_transaction::transfer(
-                    &mint_keypair,
-                    &Keypair::new().pubkey(),
-                    2,
-                    start_hash,
-                );
-                let cost_model = cost_model.clone();
-                thread::spawn(move || {
-                    let tx_cost = cost_model.calculate_cost(&simple_transaction);
-                    assert_eq!(2, tx_cost.writable_accounts.len());
-                    assert_eq!(expected_account_cost, tx_cost.account_access_cost);
-                    assert_eq!(
-                        cost_model.instruction_execution_cost_table.get_mode(),
-                        tx_cost.execution_cost
-                    );
-                })
-            })
-            .collect();
-
-        for th in thread_handlers {
-            th.join().unwrap();
-        }
-    }
-
-    #[test]
     fn test_cost_model_can_be_shared_concurrently_with_rwlock() {
         let (mint_keypair, start_hash) = test_setup();
         // construct a transaction with multiple random instructions
@@ -498,7 +436,8 @@ mod tests {
                     })
                 } else {
                     thread::spawn(move || {
-                        let tx_cost = cost_model.read().unwrap().calculate_cost(&tx);
+                        let mut cost_model = cost_model.write().unwrap();
+                        let tx_cost = cost_model.calculate_cost(&tx);
                         assert_eq!(3, tx_cost.writable_accounts.len());
                         assert_eq!(expected_account_cost, tx_cost.account_access_cost);
                     })

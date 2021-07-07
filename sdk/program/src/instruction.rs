@@ -231,6 +231,10 @@ pub enum InstructionError {
     /// Unsupported sysvar
     #[error("Unsupported sysvar")]
     UnsupportedSysvar,
+
+    /// Illegal account owner
+    #[error("Provided owner is not allowed")]
+    IllegalOwner,
     // Note: For any new error added here an equivilent ProgramError and it's
     // conversions must also be added
 }

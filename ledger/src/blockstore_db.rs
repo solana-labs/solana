@@ -22,7 +22,7 @@ use solana_sdk::{
 };
 use solana_storage_proto::convert::generated;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     ffi::{CStr, CString},
     fs,
     marker::PhantomData,
@@ -71,6 +71,8 @@ const BLOCKTIME_CF: &str = "blocktime";
 const PERF_SAMPLES_CF: &str = "perf_samples";
 /// Column family for BlockHeight
 const BLOCK_HEIGHT_CF: &str = "block_height";
+/// Column family for ProgramCosts
+const PROGRAM_COSTS_CF: &str = "program_costs";
 
 // 1 day is chosen for the same reasoning of DEFAULT_COMPACTION_SLOT_INTERVAL
 const PERIODIC_COMPACTION_SECONDS: u64 = 60 * 60 * 24;
@@ -174,6 +176,10 @@ pub mod columns {
     #[derive(Debug)]
     /// The block height column
     pub struct BlockHeight;
+
+    #[derive(Debug)]
+    // The program costs column
+    pub struct ProgramCosts;
 }
 
 pub enum AccessType {
@@ -258,8 +264,8 @@ impl Rocks {
     ) -> Result<Rocks> {
         use columns::{
             AddressSignatures, BlockHeight, Blocktime, DeadSlots, DuplicateSlots, ErasureMeta,
-            Index, Orphans, PerfSamples, Rewards, Root, ShredCode, ShredData, SlotMeta,
-            TransactionStatus, TransactionStatusIndex,
+            Index, Orphans, PerfSamples, ProgramCosts, Rewards, Root, ShredCode, ShredData,
+            SlotMeta, TransactionStatus, TransactionStatusIndex,
         };
 
         fs::create_dir_all(&path)?;
@@ -340,6 +346,10 @@ impl Rocks {
             BlockHeight::NAME,
             get_cf_options::<BlockHeight>(&access_type, &oldest_slot),
         );
+        let program_costs_cf_descriptor = ColumnFamilyDescriptor::new(
+            ProgramCosts::NAME,
+            get_cf_options::<ProgramCosts>(&access_type, &oldest_slot),
+        );
         // Don't forget to add to both run_purge_with_stats() and
         // compact_storage() in ledger/src/blockstore/blockstore_purge.rs!!
 
@@ -363,6 +373,7 @@ impl Rocks {
             (Blocktime::NAME, blocktime_cf_descriptor),
             (PerfSamples::NAME, perf_samples_cf_descriptor),
             (BlockHeight::NAME, block_height_cf_descriptor),
+            (ProgramCosts::NAME, program_costs_cf_descriptor),
         ];
         let cf_names: Vec<_> = cfs.iter().map(|c| c.0).collect();
 
@@ -403,9 +414,9 @@ impl Rocks {
         // this is only needed for LedgerCleanupService. so guard with PrimaryOnly (i.e. running solana-validator)
         if matches!(access_type, AccessType::PrimaryOnly) {
             for cf_name in cf_names {
-                // this special column family must be excluded from LedgerCleanupService's rocksdb
+                // these special column families must be excluded from LedgerCleanupService's rocksdb
                 // compactions
-                if cf_name == TransactionStatusIndex::NAME {
+                if excludes_from_compaction(cf_name) {
                     continue;
                 }
 
@@ -463,8 +474,8 @@ impl Rocks {
     fn columns(&self) -> Vec<&'static str> {
         use columns::{
             AddressSignatures, BlockHeight, Blocktime, DeadSlots, DuplicateSlots, ErasureMeta,
-            Index, Orphans, PerfSamples, Rewards, Root, ShredCode, ShredData, SlotMeta,
-            TransactionStatus, TransactionStatusIndex,
+            Index, Orphans, PerfSamples, ProgramCosts, Rewards, Root, ShredCode, ShredData,
+            SlotMeta, TransactionStatus, TransactionStatusIndex,
         };
 
         vec![
@@ -484,6 +495,7 @@ impl Rocks {
             Blocktime::NAME,
             PerfSamples::NAME,
             BlockHeight::NAME,
+            ProgramCosts::NAME,
         ]
     }
 
@@ -506,6 +518,11 @@ impl Rocks {
 
     fn put_cf(&self, cf: &ColumnFamily, key: &[u8], value: &[u8]) -> Result<()> {
         self.0.put_cf(cf, key, value)?;
+        Ok(())
+    }
+
+    fn delete_cf(&self, cf: &ColumnFamily, key: &[u8]) -> Result<()> {
+        self.0.delete_cf(cf, key)?;
         Ok(())
     }
 
@@ -748,6 +765,39 @@ impl ColumnName for columns::BlockHeight {
 }
 impl TypedColumn for columns::BlockHeight {
     type Type = u64;
+}
+
+impl ColumnName for columns::ProgramCosts {
+    const NAME: &'static str = PROGRAM_COSTS_CF;
+}
+impl TypedColumn for columns::ProgramCosts {
+    type Type = blockstore_meta::ProgramCost;
+}
+impl Column for columns::ProgramCosts {
+    type Index = Pubkey;
+
+    fn key(pubkey: Pubkey) -> Vec<u8> {
+        let mut key = vec![0; 32]; // size_of Pubkey
+        key[0..32].clone_from_slice(&pubkey.as_ref()[0..32]);
+        key
+    }
+
+    fn index(key: &[u8]) -> Self::Index {
+        Pubkey::new(&key[0..32])
+    }
+
+    fn primary_index(_index: Self::Index) -> u64 {
+        unimplemented!()
+    }
+
+    fn slot(_index: Self::Index) -> Slot {
+        unimplemented!()
+    }
+
+    #[allow(clippy::wrong_self_convention)]
+    fn as_index(_index: u64) -> Self::Index {
+        Pubkey::default()
+    }
 }
 
 impl Column for columns::ShredCode {
@@ -1113,6 +1163,10 @@ where
         self.backend
             .put_cf(self.handle(), &C::key(key), &serialized_value)
     }
+
+    pub fn delete(&self, key: C::Index) -> Result<()> {
+        self.backend.delete_cf(self.handle(), &C::key(key))
+    }
 }
 
 impl<C> LedgerColumn<C>
@@ -1260,11 +1314,9 @@ fn get_cf_options<C: 'static + Column + ColumnName>(
     options.set_max_bytes_for_level_base(total_size_base);
     options.set_target_file_size_base(file_size_base);
 
-    // TransactionStatusIndex must be excluded from LedgerCleanupService's rocksdb
+    // TransactionStatusIndex and ProgramCosts must be excluded from LedgerCleanupService's rocksdb
     // compactions....
-    if matches!(access_type, AccessType::PrimaryOnly)
-        && C::NAME != columns::TransactionStatusIndex::NAME
-    {
+    if matches!(access_type, AccessType::PrimaryOnly) && !excludes_from_compaction(C::NAME) {
         options.set_compaction_filter_factory(PurgedSlotFilterFactory::<C> {
             oldest_slot: oldest_slot.clone(),
             name: CString::new(format!("purged_slot_filter_factory({})", C::NAME)).unwrap(),
@@ -1302,6 +1354,18 @@ fn get_db_options(access_type: &AccessType) -> Options {
     }
 
     options
+}
+
+fn excludes_from_compaction(cf_name: &str) -> bool {
+    // list of Column Families must be excluded from compaction:
+    let no_compaction_cfs: HashSet<&'static str> = vec![
+        columns::TransactionStatusIndex::NAME,
+        columns::ProgramCosts::NAME,
+    ]
+    .into_iter()
+    .collect();
+
+    no_compaction_cfs.get(cf_name).is_some()
 }
 
 #[cfg(test)]
@@ -1355,5 +1419,15 @@ pub mod tests {
             compaction_filter.filter(dummy_level, &key, &dummy_value),
             CompactionDecision::Keep
         );
+    }
+
+    #[test]
+    fn test_excludes_from_compaction() {
+        // currently there are two CFs are excluded from compaction:
+        assert!(excludes_from_compaction(
+            columns::TransactionStatusIndex::NAME
+        ));
+        assert!(excludes_from_compaction(columns::ProgramCosts::NAME));
+        assert!(!excludes_from_compaction("something else"));
     }
 }

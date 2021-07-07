@@ -230,8 +230,14 @@ function AnimatedTransactionCount({ info }: { info: PerformanceInfo }) {
       // and start from there.
       const elapsed = Date.now() - countUp.lastUpdate;
       const elapsedPeriods = elapsed / (PERF_UPDATE_SEC * 1000);
-      countUp.start = countUp.start + elapsedPeriods * countUp.period;
-      countUp.period = txCount - countUp.start;
+      countUp.start = Math.floor(
+        countUp.start + elapsedPeriods * countUp.period
+      );
+
+      // if counter gets ahead of actual count, just hold for a bit
+      // until txCount catches up (this will sometimes happen when a tab is
+      // sent to the background and/or connection drops)
+      countUp.period = Math.max(txCount - countUp.start, 1);
     } else {
       // Since this is the first tx count value, estimate the previous
       // tx count in order to have a starting point for our animation

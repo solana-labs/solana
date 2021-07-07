@@ -27,9 +27,7 @@ fn bench_manual_instruction_serialize(b: &mut Bencher) {
     let instructions = make_instructions();
     let message = Message::new(&instructions, None);
     b.iter(|| {
-        test::black_box(message.serialize_instructions(
-            true, // demote_sysvar_write_locks
-        ));
+        test::black_box(message.serialize_instructions());
     });
 }
 
@@ -46,9 +44,7 @@ fn bench_bincode_instruction_deserialize(b: &mut Bencher) {
 fn bench_manual_instruction_deserialize(b: &mut Bencher) {
     let instructions = make_instructions();
     let message = Message::new(&instructions, None);
-    let serialized = message.serialize_instructions(
-        true, // demote_sysvar_write_locks
-    );
+    let serialized = message.serialize_instructions();
     b.iter(|| {
         for i in 0..instructions.len() {
             test::black_box(instructions::load_instruction_at(i, &serialized).unwrap());
@@ -60,9 +56,7 @@ fn bench_manual_instruction_deserialize(b: &mut Bencher) {
 fn bench_manual_instruction_deserialize_single(b: &mut Bencher) {
     let instructions = make_instructions();
     let message = Message::new(&instructions, None);
-    let serialized = message.serialize_instructions(
-        true, // demote_sysvar_write_locks
-    );
+    let serialized = message.serialize_instructions();
     b.iter(|| {
         test::black_box(instructions::load_instruction_at(3, &serialized).unwrap());
     });

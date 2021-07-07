@@ -64,7 +64,7 @@ pub trait InvokeContext {
         &mut self,
         message: &Message,
         instruction: &CompiledInstruction,
-        accounts: &[Rc<RefCell<AccountSharedData>>],
+        accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
         caller_pivileges: Option<&[bool]>,
     ) -> Result<(), InstructionError>;
     /// Get the program ID of the currently executing program
@@ -90,7 +90,7 @@ pub trait InvokeContext {
     fn record_instruction(&self, instruction: &Instruction);
     /// Get the bank's active feature set
     fn is_feature_active(&self, feature_id: &Pubkey) -> bool;
-    /// Get an account from a pre-account
+    /// Get an account by its key
     fn get_account(&self, pubkey: &Pubkey) -> Option<Rc<RefCell<AccountSharedData>>>;
     /// Update timing
     fn update_timing(
@@ -395,7 +395,7 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
         &mut self,
         _message: &Message,
         _instruction: &CompiledInstruction,
-        _accounts: &[Rc<RefCell<AccountSharedData>>],
+        _accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
         _caller_pivileges: Option<&[bool]>,
     ) -> Result<(), InstructionError> {
         Ok(())
