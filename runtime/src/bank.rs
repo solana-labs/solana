@@ -80,7 +80,7 @@ use solana_sdk::{
     epoch_schedule::EpochSchedule,
     feature,
     feature_set::{self, FeatureSet},
-    fee_calculator::{FeeCalculator, FeeConfig, FeeRateGovernor},
+    fee_calculator::{FeeCalculator, FeeRateGovernor},
     genesis_config::{ClusterType, GenesisConfig},
     hard_forks::HardForks,
     hash::{extend_and_hash, hashv, Hash},
@@ -3313,10 +3313,6 @@ impl Bank {
         let hash_queue = self.blockhash_queue.read().unwrap();
         let mut fees = 0;
 
-        let fee_config = FeeConfig {
-            secp256k1_program_enabled: self.secp256k1_program_enabled(),
-        };
-
         let results = txs
             .zip(executed)
             .map(|(tx, (res, nonce_rollback))| {
@@ -3334,7 +3330,7 @@ impl Bank {
                     });
                 let fee_calculator = fee_calculator.ok_or(TransactionError::BlockhashNotFound)?;
 
-                let fee = fee_calculator.calculate_fee_with_config(tx.message(), &fee_config);
+                let fee = fee_calculator.calculate_fee(tx.message());
 
                 let message = tx.message();
                 match *res {
@@ -5010,11 +5006,6 @@ impl Bank {
 
     pub fn shrink_candidate_slots(&self) -> usize {
         self.rc.accounts.accounts_db.shrink_candidate_slots()
-    }
-
-    pub fn secp256k1_program_enabled(&self) -> bool {
-        self.feature_set
-            .is_active(&feature_set::secp256k1_program_enabled::id())
     }
 
     pub fn no_overflow_rent_distribution_enabled(&self) -> bool {

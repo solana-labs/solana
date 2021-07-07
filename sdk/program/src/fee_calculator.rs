@@ -20,18 +20,6 @@ impl Default for FeeCalculator {
     }
 }
 
-pub struct FeeConfig {
-    pub secp256k1_program_enabled: bool,
-}
-
-impl Default for FeeConfig {
-    fn default() -> Self {
-        Self {
-            secp256k1_program_enabled: true,
-        }
-    }
-}
-
 impl FeeCalculator {
     pub fn new(lamports_per_signature: u64) -> Self {
         Self {
@@ -40,20 +28,14 @@ impl FeeCalculator {
     }
 
     pub fn calculate_fee(&self, message: &Message) -> u64 {
-        self.calculate_fee_with_config(message, &FeeConfig::default())
-    }
-
-    pub fn calculate_fee_with_config(&self, message: &Message, fee_config: &FeeConfig) -> u64 {
         let mut num_secp256k1_signatures: u64 = 0;
-        if fee_config.secp256k1_program_enabled {
-            for instruction in &message.instructions {
-                let program_index = instruction.program_id_index as usize;
-                // Transaction may not be sanitized here
-                if program_index < message.account_keys.len() {
-                    let id = message.account_keys[program_index];
-                    if secp256k1_program::check_id(&id) && !instruction.data.is_empty() {
-                        num_secp256k1_signatures += instruction.data[0] as u64;
-                    }
+        for instruction in &message.instructions {
+            let program_index = instruction.program_id_index as usize;
+            // Transaction may not be sanitized here
+            if program_index < message.account_keys.len() {
+                let id = message.account_keys[program_index];
+                if secp256k1_program::check_id(&id) && !instruction.data.is_empty() {
+                    num_secp256k1_signatures += instruction.data[0] as u64;
                 }
             }
         }
@@ -259,15 +241,6 @@ mod tests {
             Some(&pubkey0),
         );
         assert_eq!(FeeCalculator::new(1).calculate_fee(&message), 2);
-        assert_eq!(
-            FeeCalculator::new(1).calculate_fee_with_config(
-                &message,
-                &FeeConfig {
-                    secp256k1_program_enabled: false
-                }
-            ),
-            1
-        );
 
         secp_instruction.data = vec![0];
         secp_instruction2.data = vec![10];

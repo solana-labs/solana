@@ -359,7 +359,6 @@ pub trait EntrySlice {
     fn verify_and_hash_transactions(
         &self,
         skip_verification: bool,
-        secp256k1_program_enabled: bool,
         verify_tx_signatures_len: bool,
     ) -> Option<Vec<EntryType<'_>>>;
 }
@@ -515,7 +514,6 @@ impl EntrySlice for [Entry] {
     fn verify_and_hash_transactions<'a>(
         &'a self,
         skip_verification: bool,
-        secp256k1_program_enabled: bool,
         verify_tx_signatures_len: bool,
     ) -> Option<Vec<EntryType<'a>>> {
         let verify_and_hash = |tx: &'a Transaction| -> Option<HashedTransaction<'a>> {
@@ -524,10 +522,7 @@ impl EntrySlice for [Entry] {
                 if size > PACKET_DATA_SIZE as u64 {
                     return None;
                 }
-                if secp256k1_program_enabled {
-                    // Verify tx precompiles if secp256k1 program is enabled.
-                    tx.verify_precompiles().ok()?;
-                }
+                tx.verify_precompiles().ok()?;
                 if verify_tx_signatures_len && !tx.verify_signatures_len() {
                     return None;
                 }
@@ -927,10 +922,10 @@ mod tests {
             let tx = make_transaction(TestCase::RemoveSignature);
             let entries = vec![next_entry(&recent_blockhash, 1, vec![tx])];
             assert!(entries[..]
-                .verify_and_hash_transactions(false, false, false)
+                .verify_and_hash_transactions(false, false)
                 .is_some());
             assert!(entries[..]
-                .verify_and_hash_transactions(false, false, true)
+                .verify_and_hash_transactions(false, true)
                 .is_none());
         }
         // Too many signatures.
@@ -938,10 +933,10 @@ mod tests {
             let tx = make_transaction(TestCase::AddSignature);
             let entries = vec![next_entry(&recent_blockhash, 1, vec![tx])];
             assert!(entries[..]
-                .verify_and_hash_transactions(false, false, false)
+                .verify_and_hash_transactions(false, false)
                 .is_some());
             assert!(entries[..]
-                .verify_and_hash_transactions(false, false, true)
+                .verify_and_hash_transactions(false, true)
                 .is_none());
         }
     }
@@ -967,7 +962,7 @@ mod tests {
             let entries = vec![next_entry(&recent_blockhash, 1, vec![tx.clone()])];
             assert!(bincode::serialized_size(&tx).unwrap() <= PACKET_DATA_SIZE as u64);
             assert!(entries[..]
-                .verify_and_hash_transactions(false, false, false)
+                .verify_and_hash_transactions(false, false)
                 .is_some());
         }
         // Big transaction.
@@ -976,7 +971,7 @@ mod tests {
             let entries = vec![next_entry(&recent_blockhash, 1, vec![tx.clone()])];
             assert!(bincode::serialized_size(&tx).unwrap() > PACKET_DATA_SIZE as u64);
             assert!(entries[..]
-                .verify_and_hash_transactions(false, false, false)
+                .verify_and_hash_transactions(false, false)
                 .is_none());
         }
         // Assert that verify fails as soon as serialized
@@ -987,7 +982,7 @@ mod tests {
             assert_eq!(
                 bincode::serialized_size(&tx).unwrap() <= PACKET_DATA_SIZE as u64,
                 entries[..]
-                    .verify_and_hash_transactions(false, false, false)
+                    .verify_and_hash_transactions(false, false)
                     .is_some(),
             );
         }
