@@ -1,5 +1,5 @@
 import {Buffer} from 'buffer';
-import * as BufferLayout from 'buffer-layout';
+import * as BufferLayout from '@solana/buffer-layout';
 import secp256k1 from 'secp256k1';
 import assert from 'assert';
 import {keccak_256} from 'js-sha3';

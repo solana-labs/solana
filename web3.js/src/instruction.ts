@@ -1,5 +1,5 @@
 import {Buffer} from 'buffer';
-import * as BufferLayout from 'buffer-layout';
+import * as BufferLayout from '@solana/buffer-layout';
 
 import * as Layout from './layout';
 
@@ -10,7 +10,7 @@ export type InstructionType = {
   /** The Instruction index (from solana upstream program) */
   index: number;
   /** The BufferLayout to use to build data */
-  layout: typeof BufferLayout;
+  layout: BufferLayout.Layout;
 };
 
 /**

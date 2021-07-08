@@ -1,5 +1,5 @@
 import {Buffer} from 'buffer';
-import * as BufferLayout from 'buffer-layout';
+import * as BufferLayout from '@solana/buffer-layout';
 
 import {PublicKey} from './publickey';
 import {Transaction, PACKET_DATA_SIZE} from './transaction';
