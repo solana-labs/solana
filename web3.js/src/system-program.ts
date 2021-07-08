@@ -52,11 +52,11 @@ export type AssignParams = {
 export type CreateAccountWithSeedParams = {
   /** The account that will transfer lamports to the created account */
   fromPubkey: PublicKey;
-  /** Public key of the created account */
+  /** Public key of the created account. Must be pre-calculated with PublicKey.createWithSeed() */
   newAccountPubkey: PublicKey;
-  /** Base public key to use to derive the address of the created account */
+  /** Base public key to use to derive the address of the created account. Must be the same as the base key used to create `newAccountPubkey` */
   basePubkey: PublicKey;
-  /** Seed to use to derive the address of the created account */
+  /** Seed to use to derive the address of the created account. Must be the same as the seed used to create `newAccountPubkey` */
   seed: string;
   /** Amount of lamports to transfer to the created account */
   lamports: number;

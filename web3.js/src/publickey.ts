@@ -111,6 +111,8 @@ export class PublicKey extends Struct {
 
   /**
    * Derive a public key from another key, a seed, and a program ID.
+   * The program ID will also serve as the owner of the public key, giving
+   * it permission to write data to the account.
    */
   static async createWithSeed(
     fromPublicKey: PublicKey,
