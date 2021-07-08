@@ -39,5 +39,10 @@ cargo_audit_ignores=(
   # https://github.com/paritytech/libsecp256k1/issues/66
   --ignore RUSTSEC-2020-0146
 
+  # prost-types: Conversion from `prost_types::Timestamp` to `SystemTime` can cause an overflow and panic
+  #
+  # Blocked on googleapi protobuf build errors
+  --ignore RUSTSEC-2021-0073
+
 )
 scripts/cargo-for-all-lock-files.sh stable audit "${cargo_audit_ignores[@]}"
