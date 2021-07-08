@@ -54,7 +54,7 @@ export type CreateAccountWithSeedParams = {
   fromPubkey: PublicKey;
   /** Public key of the created account. Must be pre-calculated with PublicKey.createWithSeed() */
   newAccountPubkey: PublicKey;
-  /** Base public key to use to derive the address of the created account. Will be the same as what you used in PublicKey.createWithSeed() */
+  /** Base public key to use to derive the address of the created account. Must be the same as the base key used to create `newAccountPubkey` */
   basePubkey: PublicKey;
   /** Seed to use to derive the address of the created account. Must be the same as the seed used to create `newAccountPubkey` */
   seed: string;
