@@ -121,13 +121,13 @@ impl ReplaySlotStats {
             .per_program_timings
             .iter()
             .collect();
-        per_pubkey_timings.sort_by(|a, b| b.1 .0.cmp(&a.1 .0));
-        let total: u64 = per_pubkey_timings.iter().map(|a| a.1 .0).sum();
+        per_pubkey_timings.sort_by(|a, b| b.1.accumulated_us.cmp(&a.1.accumulated_us));
+        let total: u64 = per_pubkey_timings.iter().map(|a| a.1.accumulated_us).sum();
         for (pubkey, time) in per_pubkey_timings.iter().take(5) {
             datapoint_info!(
                 "per_program_timings",
                 ("pubkey", pubkey.to_string(), String),
-                ("execute_us", time.0, i64)
+                ("execute_us", time.accumulated_us, i64)
             );
         }
         datapoint_info!(

@@ -135,26 +135,27 @@ impl CostUpdateService {
 
     fn update_cost_model(cost_model: &RwLock<CostModel>, execute_timings: &ExecuteTimings) -> bool {
         let mut dirty = false;
-        let mut cost_model_mutable = cost_model.write().unwrap();
-        for (program_id, stats) in &execute_timings.details.per_program_timings {
-            let cost = stats.0 / stats.1 as u64;
-            match cost_model_mutable.upsert_instruction_cost(program_id, &cost) {
-                Ok(c) => {
-                    debug!(
-                        "after replayed into bank, instruction {:?} has averaged cost {}",
-                        program_id, c
-                    );
-                    dirty = true;
-                }
-                Err(err) => {
-                    debug!(
+        {
+            let mut cost_model_mutable = cost_model.write().unwrap();
+            for (program_id, stats) in &execute_timings.details.per_program_timings {
+                let cost = stats.accumulated_us / stats.num_invocations as u64;
+                match cost_model_mutable.upsert_instruction_cost(program_id, cost) {
+                    Ok(c) => {
+                        debug!(
+                            "after replayed into bank, instruction {:?} has averaged cost {}",
+                            program_id, c
+                        );
+                        dirty = true;
+                    }
+                    Err(err) => {
+                        debug!(
                         "after replayed into bank, instruction {:?} failed to update cost, err: {}",
                         program_id, err
                     );
+                    }
                 }
             }
         }
-        drop(cost_model_mutable);
         debug!(
            "after replayed into bank, updated cost model instruction cost table, current values: {:?}",
            cost_model.read().unwrap().get_instruction_cost_table()

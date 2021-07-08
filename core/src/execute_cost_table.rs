@@ -78,15 +78,15 @@ impl ExecuteCostTable {
         self.table.get(key)
     }
 
-    pub fn upsert(&mut self, key: &Pubkey, value: &u64) {
+    pub fn upsert(&mut self, key: &Pubkey, value: u64) {
         let need_to_add = self.table.get(key).is_none();
         let current_size = self.get_count();
         if current_size == self.capacity && need_to_add {
             self.prune_to(&((current_size as f64 * PRUNE_RATIO) as usize));
         }
 
-        let program_cost = self.table.entry(*key).or_insert(*value);
-        *program_cost = (*program_cost + *value) / 2;
+        let program_cost = self.table.entry(*key).or_insert(value);
+        *program_cost = (*program_cost + value) / 2;
 
         let (count, timestamp) = self
             .occurrences

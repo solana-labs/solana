@@ -92,7 +92,7 @@ impl CostModel {
 
     pub fn initialize_cost_table(&mut self, cost_table: &[(Pubkey, u64)]) {
         for (program_id, cost) in cost_table {
-            match self.upsert_instruction_cost(program_id, cost) {
+            match self.upsert_instruction_cost(program_id, *cost) {
                 Ok(c) => {
                     debug!(
                         "initiating cost table, instruction {:?} has cost {}",
@@ -147,7 +147,7 @@ impl CostModel {
     pub fn upsert_instruction_cost(
         &mut self,
         program_key: &Pubkey,
-        cost: &u64,
+        cost: u64,
     ) -> Result<u64, &'static str> {
         self.instruction_execution_cost_table
             .upsert(program_key, cost);
