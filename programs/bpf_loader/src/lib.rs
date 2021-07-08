@@ -30,7 +30,7 @@ use solana_sdk::{
     bpf_loader, bpf_loader_deprecated,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     clock::Clock,
-    entrypoint::SUCCESS,
+    entrypoint::{HEAP_LENGTH, SUCCESS},
     feature_set::{add_missing_program_error_mappings, upgradeable_close_instruction},
     ic_logger_msg, ic_msg,
     instruction::InstructionError,
@@ -142,10 +142,6 @@ fn check_loader_id(id: &Pubkey) -> bool {
         || bpf_loader_upgradeable::check_id(id)
 }
 
-/// Default program heap size, allocators
-/// are expected to enforce this
-const DEFAULT_HEAP_SIZE: usize = 32 * 1024;
-
 /// Create the BPF virtual machine
 pub fn create_vm<'a>(
     loader_id: &'a Pubkey,
@@ -153,7 +149,11 @@ pub fn create_vm<'a>(
     parameter_bytes: &mut [u8],
     invoke_context: &'a mut dyn InvokeContext,
 ) -> Result<EbpfVm<'a, BpfError, ThisInstructionMeter>, EbpfError<BpfError>> {
-    let heap = AlignedMemory::new_with_size(DEFAULT_HEAP_SIZE, HOST_ALIGN);
+    let bpf_compute_budget = invoke_context.get_bpf_compute_budget();
+    let heap = AlignedMemory::new_with_size(
+        bpf_compute_budget.heap_size.unwrap_or(HEAP_LENGTH),
+        HOST_ALIGN,
+    );
     let heap_region = MemoryRegion::new_from_slice(heap.as_slice(), MM_HEAP_START, 0, true);
     let mut vm = EbpfVm::new(program, parameter_bytes, &[heap_region])?;
     syscalls::bind_syscall_context_objects(loader_id, &mut vm, invoke_context, heap)?;

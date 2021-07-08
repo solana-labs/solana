@@ -27,6 +27,7 @@ pub mod loader_utils;
 pub mod log_collector;
 pub mod message_processor;
 mod native_loader;
+pub mod neon_evm_program;
 pub mod non_circulating_supply;
 mod pubkey_bins;
 mod read_only_accounts_cache;
