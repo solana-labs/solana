@@ -1116,7 +1116,8 @@ impl Bank {
         datapoint_info!(
             "bank-new_from_parent-heights",
             ("slot_height", slot, i64),
-            ("block_height", new.block_height, i64)
+            ("block_height", new.block_height, i64),
+            ("parent_slot_height", parent.slot(), i64),
         );
 
         new.ancestors.insert(new.slot(), 0);
