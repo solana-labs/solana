@@ -7,6 +7,7 @@ use {
         serde_snapshot::{
             bank_from_stream, bank_to_stream, SerdeStyle, SnapshotStorage, SnapshotStorages,
         },
+        shared_buffer_reader::{SharedBuffer, SharedBufferReader},
         snapshot_package::{
             AccountsPackage, AccountsPackagePre, AccountsPackageSendError, AccountsPackageSender,
         },
@@ -626,7 +627,7 @@ pub struct BankFromArchiveTimings {
 }
 
 // From testing, 4 seems to be a sweet spot for ranges of 60M-360M accounts and 16-64 cores. This may need to be tuned later.
-pub const PARALLEL_UNTAR_READERS_DEFAULT: usize = 4;
+const PARALLEL_UNTAR_READERS_DEFAULT: usize = 4;
 
 /// Rebuild a bank from a snapshot archive
 #[allow(clippy::too_many_arguments)]
@@ -840,9 +841,13 @@ fn unpack_snapshot_local<T: 'static + Read + std::marker::Send, F: Fn() -> T>(
     parallel_archivers: usize,
 ) -> Result<UnpackedAppendVecMap> {
     assert!(parallel_archivers > 0);
+    // a shared 'reader' that reads the decompressed stream once, keeps some history, and acts as a reader for multiple parallel archive readers
+    let shared_buffer = SharedBuffer::new(reader());
+
+    // allocate all readers before any readers start reading
     let readers = (0..parallel_archivers)
         .into_iter()
-        .map(|_| reader())
+        .map(|_| SharedBufferReader::new(&shared_buffer))
         .collect::<Vec<_>>();
 
     // create 'parallel_archivers' # of parallel workers, each responsible for 1/parallel_archivers of all the files to extract.
