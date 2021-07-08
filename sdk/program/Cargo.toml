@@ -34,13 +34,9 @@ solana-sdk-macro = { path = "../macro", version = "=1.7.5" }
 thiserror = "1.0"
 
 [target.'cfg(not(target_arch = "bpf"))'.dependencies]
-<<<<<<< HEAD
 blake3 = "0.3.7"
 curve25519-dalek = "2.1.0"
-=======
-curve25519-dalek = "3.0.0"
 libsecp256k1 = "0.5.0"
->>>>>>> 1f288ce52 (Add ecrecover syscall (#17720))
 rand = "0.7.0"
 solana-logger = { path = "../../logger", version = "=1.7.5" }
 

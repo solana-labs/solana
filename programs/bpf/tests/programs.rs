@@ -1281,16 +1281,10 @@ fn assert_instruction_count() {
             ("noop", 42),
             ("noop++", 42),
             ("relative_call", 10),
-<<<<<<< HEAD
             ("sanity", 174),
             ("sanity++", 174),
-            ("sha", 694),
-=======
-            ("sanity", 169),
-            ("sanity++", 168),
             ("secp256k1_recover", 357),
-            ("sha", 1040),
->>>>>>> 1f288ce52 (Add ecrecover syscall (#17720))
+            ("sha", 694),
             ("struct_pass", 8),
             ("struct_ret", 22),
         ]);
@@ -1309,16 +1303,10 @@ fn assert_instruction_count() {
             ("solana_bpf_rust_membuiltins", 4069),
             ("solana_bpf_rust_noop", 495),
             ("solana_bpf_rust_param_passing", 46),
-<<<<<<< HEAD
             ("solana_bpf_rust_rand", 498),
             ("solana_bpf_rust_sanity", 917),
-            ("solana_bpf_rust_sha", 29099),
-=======
-            ("solana_bpf_rust_rand", 481),
-            ("solana_bpf_rust_sanity", 900),
-            ("solana_bpf_rust_secp256k1_recover", 301),
-            ("solana_bpf_rust_sha", 32333),
->>>>>>> 1f288ce52 (Add ecrecover syscall (#17720))
+            ("solana_bpf_rust_secp256k1_recover", 306),
+            ("solana_bpf_rust_sha", 29131),
         ]);
     }
 

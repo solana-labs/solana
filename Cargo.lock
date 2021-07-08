@@ -1774,6 +1774,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "hmac-drbg"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "17ea0a1394df5b6574da6e0c1ade9e78868c9fb0a4e5ef4428e32da4676b85b1"
+dependencies = [
+ "digest 0.9.0",
+ "generic-array 0.14.3",
+ "hmac 0.8.1",
+]
+
+[[package]]
 name = "http"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2255,11 +2266,59 @@ dependencies = [
  "arrayref",
  "crunchy",
  "digest 0.8.1",
- "hmac-drbg",
+ "hmac-drbg 0.2.0",
  "rand 0.7.3",
  "sha2 0.8.2",
  "subtle 2.2.2",
  "typenum",
+]
+
+[[package]]
+name = "libsecp256k1"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bd1137239ab33b41aa9637a88a28249e5e70c40a42ccc92db7f12cc356c1fcd7"
+dependencies = [
+ "arrayref",
+ "base64 0.12.3",
+ "digest 0.9.0",
+ "hmac-drbg 0.3.0",
+ "libsecp256k1-core",
+ "libsecp256k1-gen-ecmult",
+ "libsecp256k1-gen-genmult",
+ "rand 0.7.3",
+ "serde",
+ "sha2 0.9.2",
+ "typenum",
+]
+
+[[package]]
+name = "libsecp256k1-core"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ee11012b293ea30093c129173cac4335513064094619f4639a25b310fd33c11"
+dependencies = [
+ "crunchy",
+ "digest 0.9.0",
+ "subtle 2.2.2",
+]
+
+[[package]]
+name = "libsecp256k1-gen-ecmult"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32239626ffbb6a095b83b37a02ceb3672b2443a87a000a884fc3c4d16925c9c0"
+dependencies = [
+ "libsecp256k1-core",
+]
+
+[[package]]
+name = "libsecp256k1-gen-genmult"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "76acb433e21d10f5f9892b1962c2856c58c7f39a9e4bd68ac82b9436a0ffd5b9"
+dependencies = [
+ "libsecp256k1-core",
 ]
 
 [[package]]
@@ -4125,12 +4184,8 @@ version = "1.7.5"
 dependencies = [
  "bincode",
  "byteorder",
-<<<<<<< HEAD
+ "libsecp256k1 0.5.0",
  "log 0.4.11",
-=======
- "libsecp256k1",
- "log 0.4.14",
->>>>>>> 1f288ce52 (Add ecrecover syscall (#17720))
  "num-derive",
  "num-traits",
  "rand 0.7.3",
@@ -5041,12 +5096,8 @@ dependencies = [
  "hex",
  "itertools",
  "lazy_static",
-<<<<<<< HEAD
+ "libsecp256k1 0.5.0",
  "log 0.4.11",
-=======
- "libsecp256k1",
- "log 0.4.14",
->>>>>>> 1f288ce52 (Add ecrecover syscall (#17720))
  "num-derive",
  "num-traits",
  "rand 0.7.3",
@@ -5244,7 +5295,7 @@ dependencies = [
  "hmac 0.10.1",
  "itertools",
  "lazy_static",
- "libsecp256k1",
+ "libsecp256k1 0.3.5",
  "log 0.4.11",
  "memmap2",
  "num-derive",
@@ -5303,7 +5354,7 @@ version = "1.7.5"
 dependencies = [
  "bincode",
  "digest 0.9.0",
- "libsecp256k1",
+ "libsecp256k1 0.3.5",
  "rand 0.7.3",
  "sha3",
  "solana-logger 1.7.5",

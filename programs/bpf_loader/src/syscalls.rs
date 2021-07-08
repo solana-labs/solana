@@ -19,14 +19,9 @@ use solana_sdk::{
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     epoch_schedule::EpochSchedule,
     feature_set::{
-<<<<<<< HEAD
         cpi_data_cost, enforce_aligned_host_addrs, keccak256_syscall_enabled, memory_ops_syscalls,
-        set_upgrade_authority_via_cpi_enabled, sysvar_via_syscall, update_data_on_realloc,
-=======
-        blake3_syscall_enabled, cpi_data_cost, enforce_aligned_host_addrs,
-        keccak256_syscall_enabled, memory_ops_syscalls, secp256k1_recover_syscall_enabled,
+        secp256k1_recover_syscall_enabled, set_upgrade_authority_via_cpi_enabled,
         sysvar_via_syscall, update_data_on_realloc,
->>>>>>> 1f288ce52 (Add ecrecover syscall (#17720))
     },
     hash::{Hasher, HASH_BYTES},
     ic_msg,
@@ -142,18 +137,11 @@ pub fn register_syscalls(
         syscall_registry.register_syscall_by_name(b"sol_keccak256", SyscallKeccak256::call)?;
     }
 
-<<<<<<< HEAD
-=======
     if invoke_context.is_feature_active(&secp256k1_recover_syscall_enabled::id()) {
         syscall_registry
             .register_syscall_by_name(b"sol_secp256k1_recover", SyscallSecp256k1Recover::call)?;
     }
 
-    if invoke_context.is_feature_active(&blake3_syscall_enabled::id()) {
-        syscall_registry.register_syscall_by_name(b"sol_blake3", SyscallBlake3::call)?;
-    }
-
->>>>>>> 1f288ce52 (Add ecrecover syscall (#17720))
     if invoke_context.is_feature_active(&sysvar_via_syscall::id()) {
         syscall_registry
             .register_syscall_by_name(b"sol_get_clock_sysvar", SyscallGetClockSysvar::call)?;
@@ -1359,8 +1347,6 @@ impl<'a> SyscallObject<BpfError> for SyscallMemset<'a> {
     }
 }
 
-<<<<<<< HEAD
-=======
 /// secp256k1_recover
 pub struct SyscallSecp256k1Recover<'a> {
     cost: u64,
@@ -1447,66 +1433,6 @@ impl<'a> SyscallObject<BpfError> for SyscallSecp256k1Recover<'a> {
     }
 }
 
-// Blake3
-pub struct SyscallBlake3<'a> {
-    base_cost: u64,
-    byte_cost: u64,
-    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
-    loader_id: &'a Pubkey,
-}
-impl<'a> SyscallObject<BpfError> for SyscallBlake3<'a> {
-    fn call(
-        &mut self,
-        vals_addr: u64,
-        vals_len: u64,
-        result_addr: u64,
-        _arg4: u64,
-        _arg5: u64,
-        memory_mapping: &MemoryMapping,
-        result: &mut Result<u64, EbpfError<BpfError>>,
-    ) {
-        question_mark!(self.compute_meter.consume(self.base_cost), result);
-        let hash_result = question_mark!(
-            translate_slice_mut::<u8>(
-                memory_mapping,
-                result_addr,
-                blake3::HASH_BYTES as u64,
-                self.loader_id,
-                true,
-            ),
-            result
-        );
-        let mut hasher = blake3::Hasher::default();
-        if vals_len > 0 {
-            let vals = question_mark!(
-                translate_slice::<&[u8]>(memory_mapping, vals_addr, vals_len, self.loader_id, true),
-                result
-            );
-            for val in vals.iter() {
-                let bytes = question_mark!(
-                    translate_slice::<u8>(
-                        memory_mapping,
-                        val.as_ptr() as u64,
-                        val.len() as u64,
-                        self.loader_id,
-                        true,
-                    ),
-                    result
-                );
-                question_mark!(
-                    self.compute_meter
-                        .consume(self.byte_cost * (val.len() as u64 / 2)),
-                    result
-                );
-                hasher.hash(bytes);
-            }
-        }
-        hash_result.copy_from_slice(&hasher.result().to_bytes());
-        *result = Ok(0);
-    }
-}
-
->>>>>>> 1f288ce52 (Add ecrecover syscall (#17720))
 // Cross-program invocation syscalls
 
 struct AccountReferences<'a> {
