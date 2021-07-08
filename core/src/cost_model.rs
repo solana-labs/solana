@@ -90,6 +90,29 @@ impl CostModel {
         self.block_cost_limit
     }
 
+    pub fn initialize_cost_table(&mut self, cost_table: &[(Pubkey, u64)]) {
+        for (program_id, cost) in cost_table {
+            match self.upsert_instruction_cost(program_id, cost) {
+                Ok(c) => {
+                    debug!(
+                        "initiating cost table, instruction {:?} has cost {}",
+                        program_id, c
+                    );
+                }
+                Err(err) => {
+                    debug!(
+                        "initiating cost table, failed for instruction {:?}, err: {}",
+                        program_id, err
+                    );
+                }
+            }
+        }
+        debug!(
+            "restored cost model instruction cost table from blockstore, current values: {:?}",
+            self.get_instruction_cost_table()
+        );
+    }
+
     pub fn calculate_cost(&mut self, transaction: &Transaction) -> &TransactionCost {
         self.transaction_cost.reset();
 
@@ -447,6 +470,25 @@ mod tests {
 
         for th in thread_handlers {
             th.join().unwrap();
+        }
+    }
+
+    #[test]
+    fn test_cost_model_init_cost_table() {
+        // build cost table
+        let cost_table = vec![
+            (Pubkey::new_unique(), 10),
+            (Pubkey::new_unique(), 20),
+            (Pubkey::new_unique(), 30),
+        ];
+
+        // init cost model
+        let mut cost_model = CostModel::default();
+        cost_model.initialize_cost_table(&cost_table);
+
+        // verify
+        for (id, cost) in cost_table.iter() {
+            assert_eq!(*cost, cost_model.find_instruction_cost(id));
         }
     }
 }
