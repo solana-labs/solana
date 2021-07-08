@@ -2023,22 +2023,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
         .stake_subcommands()
         .subcommand(
             SubCommand::with_name("airdrop")
-                .about("Request lamports")
-                .arg(
-                    Arg::with_name("faucet_host")
-                        .long("faucet-host")
-                        .value_name("URL")
-                        .takes_value(true)
-                        .help("Faucet host to use [default: the --url host]"),
-                )
-                .arg(
-                    Arg::with_name("faucet_port")
-                        .long("faucet-port")
-                        .value_name("PORT_NUMBER")
-                        .takes_value(true)
-                        .default_value(solana_faucet::faucet::FAUCET_PORT_STR)
-                        .help("Faucet port to use"),
-                )
+                .about("Request SOL from a faucet")
                 .arg(
                     Arg::with_name("amount")
                         .index(1)
