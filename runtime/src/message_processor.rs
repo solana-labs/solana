@@ -1010,6 +1010,7 @@ impl MessageProcessor {
     }
 
     /// Verify the results of a cross-program instruction
+    #[allow(clippy::too_many_arguments)]
     fn verify_and_update(
         message: &Message,
         instruction: &CompiledInstruction,
