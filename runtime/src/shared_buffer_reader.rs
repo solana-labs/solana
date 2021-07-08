@@ -146,7 +146,7 @@ impl Drop for SharedBufferReader {
 
 impl SharedBufferInternal {
     // read ahead the entire file.
-    // This is goverend by the supply of buffers.
+    // This is governed by the supply of buffers.
     // Buffers are likely limited to cap memory usage.
     // A buffer is recycled after the last client finishes reading from it.
     // When a buffer is available (initially or recycled), this code wakes up and reads into that buffer.
