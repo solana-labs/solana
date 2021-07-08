@@ -4860,6 +4860,60 @@ mod tests {
         assert_eq!(reset_fork.unwrap(), 4);
     }
 
+    #[test]
+    fn test_dump_then_repair_correct_slots() {
+        // Create the tree of banks in a BankForks object
+        let forks = tr(0) / (tr(1)) / (tr(2));
+
+        let ReplayBlockstoreComponents {
+            ref mut vote_simulator,
+            ref blockstore,
+            ..
+        } = replay_blockstore_components(Some(forks), 1, None);
+
+        let VoteSimulator {
+            ref mut progress,
+            ref bank_forks,
+            ..
+        } = vote_simulator;
+
+        let (mut ancestors, mut descendants) = {
+            let r_bank_forks = bank_forks.read().unwrap();
+            (r_bank_forks.ancestors(), r_bank_forks.descendants().clone())
+        };
+
+        // Insert different versions of both 1 and 2. Both slots 1 and 2 should
+        // then be purged
+        let mut duplicate_slots_to_repair = DuplicateSlotsToRepair::default();
+        duplicate_slots_to_repair.insert((1, Hash::new_unique()));
+        duplicate_slots_to_repair.insert((2, Hash::new_unique()));
+        ReplayStage::dump_then_repair_correct_slots(
+            &mut duplicate_slots_to_repair,
+            &mut ancestors,
+            &mut descendants,
+            progress,
+            bank_forks,
+            blockstore,
+            None,
+        );
+
+        let r_bank_forks = bank_forks.read().unwrap();
+        for slot in 0..=2 {
+            let bank = r_bank_forks.get(slot);
+            let ancestor_result = ancestors.get(&slot);
+            let descendants_result = descendants.get(&slot);
+            if slot == 0 {
+                assert!(bank.is_some());
+                assert!(ancestor_result.is_some());
+                assert!(descendants_result.is_some());
+            } else {
+                assert!(bank.is_none());
+                assert!(ancestor_result.is_none());
+                assert!(descendants_result.is_none());
+            }
+        }
+    }
+
     fn setup_vote_then_rollback(
         first_vote: Slot,
         num_validators: usize,
