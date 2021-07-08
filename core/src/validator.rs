@@ -6,6 +6,10 @@ use crate::{
     cluster_info_vote_listener::VoteTracker,
     completed_data_sets_service::CompletedDataSetsService,
     consensus::{reconcile_blockstore_roots_with_tower, Tower},
+<<<<<<< HEAD
+=======
+    cost_model::CostModel,
+>>>>>>> b6dff1292 (update ledger tool to restore cost table from blockstore (#18489))
     rewards_recorder_service::{RewardsRecorderSender, RewardsRecorderService},
     sample_performance_service::SamplePerformanceService,
     serve_repair::ServeRepair,
@@ -654,6 +658,13 @@ impl Validator {
             bank_forks.read().unwrap().root_bank().deref(),
         ));
 
+<<<<<<< HEAD
+=======
+        let mut cost_model = CostModel::default();
+        cost_model.initialize_cost_table(&blockstore.read_program_costs().unwrap());
+        let cost_model = Arc::new(RwLock::new(cost_model));
+
+>>>>>>> b6dff1292 (update ledger tool to restore cost table from blockstore (#18489))
         let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
         let (verified_vote_sender, verified_vote_receiver) = unbounded();
         let (gossip_verified_vote_hash_sender, gossip_verified_vote_hash_receiver) = unbounded();

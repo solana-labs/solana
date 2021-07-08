@@ -14,6 +14,11 @@ use solana_clap_utils::{
         is_parsable, is_pubkey, is_pubkey_or_keypair, is_slot, is_valid_percentage,
     },
 };
+<<<<<<< HEAD
+=======
+use solana_core::cost_model::CostModel;
+use solana_core::cost_tracker::CostTracker;
+>>>>>>> b6dff1292 (update ledger tool to restore cost table from blockstore (#18489))
 use solana_ledger::entry::Entry;
 use solana_ledger::{
     ancestor_iterator::AncestorIterator,
@@ -727,6 +732,61 @@ fn load_bank_forks(
     )
 }
 
+<<<<<<< HEAD
+=======
+fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> {
+    if blockstore.is_dead(slot) {
+        return Err("Dead slot".to_string());
+    }
+
+    let (entries, _num_shreds, _is_full) = blockstore
+        .get_slot_entries_with_shred_info(slot, 0, false)
+        .map_err(|err| format!(" Slot: {}, Failed to load entries, err {:?}", slot, err))?;
+
+    let mut transactions = 0;
+    let mut programs = 0;
+    let mut program_ids = HashMap::new();
+    let mut cost_model = CostModel::default();
+    cost_model.initialize_cost_table(&blockstore.read_program_costs().unwrap());
+    let cost_model = Arc::new(RwLock::new(cost_model));
+    let mut cost_tracker = CostTracker::new(cost_model.clone());
+
+    for entry in &entries {
+        transactions += entry.transactions.len();
+        let mut cost_model = cost_model.write().unwrap();
+        for transaction in &entry.transactions {
+            programs += transaction.message().instructions.len();
+            let tx_cost = cost_model.calculate_cost(transaction);
+            if cost_tracker.try_add(tx_cost).is_err() {
+                println!(
+                    "Slot: {}, CostModel rejected transaction {:?}, stats {:?}!",
+                    slot,
+                    transaction,
+                    cost_tracker.get_stats()
+                );
+            }
+            for instruction in &transaction.message().instructions {
+                let program_id =
+                    transaction.message().account_keys[instruction.program_id_index as usize];
+                *program_ids.entry(program_id).or_insert(0) += 1;
+            }
+        }
+    }
+
+    println!(
+        "Slot: {}, Entries: {}, Transactions: {}, Programs {}, {:?}",
+        slot,
+        entries.len(),
+        transactions,
+        programs,
+        cost_tracker.get_stats()
+    );
+    println!("  Programs: {:?}", program_ids);
+
+    Ok(())
+}
+
+>>>>>>> b6dff1292 (update ledger tool to restore cost table from blockstore (#18489))
 fn open_genesis_config_by(ledger_path: &Path, matches: &ArgMatches<'_>) -> GenesisConfig {
     let max_genesis_archive_unpacked_size =
         value_t_or_exit!(matches, "max_genesis_archive_unpacked_size", u64);
