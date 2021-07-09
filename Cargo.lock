@@ -1771,12 +1771,13 @@ dependencies = [
 
 [[package]]
 name = "http-body"
-version = "0.4.0"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2861bd27ee074e5ee891e8b539837a9430012e249d7f0ca2d795650f579c1994"
+checksum = "60daa14be0e0786db0f03a9e57cb404c9d756eed2b6c62b9ea98ec5743ec75a9"
 dependencies = [
  "bytes 1.0.1",
  "http",
+ "pin-project-lite 0.2.4",
 ]
 
 [[package]]
@@ -1852,7 +1853,7 @@ dependencies = [
  "futures-util",
  "h2 0.3.0",
  "http",
- "http-body 0.4.0",
+ "http-body 0.4.2",
  "httparse",
  "httpdate",
  "itoa",
@@ -1877,6 +1878,18 @@ dependencies = [
  "tokio 1.8.1",
  "tokio-rustls",
  "webpki",
+]
+
+[[package]]
+name = "hyper-timeout"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbb958482e8c7be4bc3cf272a766a2b0bf1a6755e7a6ae777f017a31d11b13b1"
+dependencies = [
+ "hyper 0.14.3",
+ "pin-project-lite 0.2.4",
+ "tokio 1.8.1",
+ "tokio-io-timeout",
 ]
 
 [[package]]
@@ -1984,6 +1997,15 @@ name = "itertools"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "284f18f85651fe11e8a991b2adb42cb078325c996ed026d994719efcfca1d54b"
+dependencies = [
+ "either",
+]
+
+[[package]]
+name = "itertools"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "69ddb889f9d0d08a67338271fa9b62996bc788c7796a5c18cf057420aaed5eaf"
 dependencies = [
  "either",
 ]
@@ -3079,9 +3101,9 @@ dependencies = [
 
 [[package]]
 name = "prost"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e6984d2f1a23009bd270b8bb56d0926810a3d483f59c987d77969e9d8e840b2"
+checksum = "de5e2533f59d08fcf364fd374ebda0692a70bd6d7e66ef97f306f45c6c5d8020"
 dependencies = [
  "bytes 1.0.1",
  "prost-derive",
@@ -3089,12 +3111,12 @@ dependencies = [
 
 [[package]]
 name = "prost-derive"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "169a15f3008ecb5160cba7d37bcd690a7601b6d30cfb87a117d45e59d52af5d4"
+checksum = "600d2f334aa05acb02a755e217ef1ab6dea4d51b58b7846588b747edec04efba"
 dependencies = [
  "anyhow",
- "itertools",
+ "itertools 0.10.1",
  "proc-macro2 1.0.24",
  "quote 1.0.6",
  "syn 1.0.60",
@@ -3102,9 +3124,9 @@ dependencies = [
 
 [[package]]
 name = "prost-types"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b518d7cdd93dab1d1122cf07fa9a60771836c668dde9d9e2a139f957f0d9f1bb"
+checksum = "603bbd6394701d13f3f25aada59c7de9d35a6a5887cfc156181234a44002771b"
 dependencies = [
  "bytes 1.0.1",
  "prost",
@@ -3466,7 +3488,7 @@ dependencies = [
  "futures-core",
  "futures-util",
  "http",
- "http-body 0.4.0",
+ "http-body 0.4.2",
  "hyper 0.14.3",
  "hyper-rustls",
  "hyper-tls",
@@ -4084,7 +4106,7 @@ name = "solana-bench-exchange"
 version = "1.6.17"
 dependencies = [
  "clap",
- "itertools",
+ "itertools 0.9.0",
  "log 0.4.11",
  "num-derive",
  "num-traits",
@@ -4366,7 +4388,7 @@ dependencies = [
  "flate2",
  "fs_extra",
  "indexmap",
- "itertools",
+ "itertools 0.9.0",
  "jsonrpc-core",
  "jsonrpc-core-client",
  "jsonrpc-derive",
@@ -4697,7 +4719,7 @@ dependencies = [
  "fs_extra",
  "futures 0.3.8",
  "futures-util",
- "itertools",
+ "itertools 0.9.0",
  "lazy_static",
  "libc",
  "log 0.4.11",
@@ -4750,7 +4772,7 @@ dependencies = [
  "futures 0.3.8",
  "futures-util",
  "histogram",
- "itertools",
+ "itertools 0.9.0",
  "log 0.4.11",
  "regex",
  "serde",
@@ -4781,7 +4803,7 @@ dependencies = [
  "crossbeam-channel 0.4.4",
  "fs_extra",
  "gag",
- "itertools",
+ "itertools 0.9.0",
  "log 0.4.11",
  "rand 0.7.3",
  "rayon",
@@ -4997,7 +5019,7 @@ dependencies = [
  "bv",
  "curve25519-dalek 2.1.0",
  "hex",
- "itertools",
+ "itertools 0.9.0",
  "lazy_static",
  "log 0.4.11",
  "num-derive",
@@ -5032,7 +5054,7 @@ dependencies = [
  "bv",
  "curve25519-dalek 2.1.0",
  "hex",
- "itertools",
+ "itertools 0.9.0",
  "lazy_static",
  "log 0.4.11",
  "num-derive",
@@ -5143,7 +5165,7 @@ dependencies = [
  "dir-diff",
  "flate2",
  "fnv",
- "itertools",
+ "itertools 0.9.0",
  "lazy_static",
  "libc",
  "libloading 0.6.2",
@@ -5204,7 +5226,7 @@ dependencies = [
  "generic-array 0.14.3",
  "hex",
  "hmac 0.10.1",
- "itertools",
+ "itertools 0.9.0",
  "lazy_static",
  "libsecp256k1",
  "log 0.4.11",
@@ -6151,6 +6173,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "tokio-io-timeout"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "90c49f106be240de154571dd31fbe48acb10ba6c6dd6f6517ad603abffa42de9"
+dependencies = [
+ "pin-project-lite 0.2.4",
+ "tokio 1.8.1",
+]
+
+[[package]]
 name = "tokio-macros"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6375,9 +6407,9 @@ dependencies = [
 
 [[package]]
 name = "tonic"
-version = "0.4.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3ba8f479158947373b6df40cf48f4779bb25c99ca3c661bd95e0ab1963ad8b0e"
+checksum = "b584f064fdfc50017ec39162d5aebce49912f1eb16fd128e04b7f4ce4907c7e5"
 dependencies = [
  "async-stream",
  "async-trait",
@@ -6387,8 +6419,9 @@ dependencies = [
  "futures-util",
  "h2 0.3.0",
  "http",
- "http-body 0.4.0",
+ "http-body 0.4.2",
  "hyper 0.14.3",
+ "hyper-timeout",
  "percent-encoding 2.1.0",
  "pin-project 1.0.1",
  "prost",
@@ -6398,6 +6431,7 @@ dependencies = [
  "tokio-stream",
  "tokio-util 0.6.3",
  "tower",
+ "tower-layer",
  "tower-service",
  "tracing",
  "tracing-futures",
@@ -6405,9 +6439,9 @@ dependencies = [
 
 [[package]]
 name = "tower"
-version = "0.4.4"
+version = "0.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5fd7b451959622e21de79261673d658a0944b835012c58c51878ea55957fb51a"
+checksum = "f60422bc7fefa2f3ec70359b8ff1caff59d785877eb70595904605bcc412470f"
 dependencies = [
  "futures-core",
  "futures-util",
@@ -6417,6 +6451,7 @@ dependencies = [
  "slab",
  "tokio 1.8.1",
  "tokio-stream",
+ "tokio-util 0.6.3",
  "tower-layer",
  "tower-service",
  "tracing",
@@ -7006,6 +7041,6 @@ checksum = "b89249644df056b522696b1bb9e7c18c87e8ffa3e2f0dc3b0155875d6498f01b"
 dependencies = [
  "cc",
  "glob",
- "itertools",
+ "itertools 0.9.0",
  "libc",
 ]
