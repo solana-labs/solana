@@ -87,15 +87,26 @@ pub enum ActivationType {
 /// normal child Bank creation.
 /// https://github.com/solana-labs/solana/blob/84b139cc94b5be7c9e0c18c2ad91743231b85a0d/runtime/src/bank.rs#L1723
 fn feature_builtins() -> Vec<(Builtin, Pubkey, ActivationType)> {
-    vec![(
-        Builtin::new(
-            "compute_budget_program",
-            solana_sdk::compute_budget::id(),
-            solana_compute_budget_program::process_instruction,
+    vec![
+        (
+            Builtin::new(
+                "compute_budget_program",
+                solana_sdk::compute_budget::id(),
+                solana_compute_budget_program::process_instruction,
+            ),
+            feature_set::tx_wide_compute_cap::id(),
+            ActivationType::NewProgram,
         ),
-        feature_set::tx_wide_compute_cap::id(),
-        ActivationType::NewProgram,
-    )]
+        (
+            Builtin::new(
+                "node_instance_program",
+                solana_vote_program::node_instance::id(),
+                solana_vote_program::node_instance::process_instruction,
+            ),
+            feature_set::node_instance_program::id(),
+            ActivationType::NewProgram,
+        ),
+    ]
 }
 
 pub(crate) fn get() -> Builtins {
