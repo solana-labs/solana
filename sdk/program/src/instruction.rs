@@ -209,7 +209,7 @@ pub enum InstructionError {
     /// Warning: This error should never be emitted by the runtime.
     ///
     /// This error includes strings from the underlying 3rd party Borsh crate
-    /// which can be dangerous beause the error strings could change across
+    /// which can be dangerous because the error strings could change across
     /// Borsh versions. Only programs can use this error because they are
     /// consistent across Solana software versions.
     ///
@@ -235,7 +235,7 @@ pub enum InstructionError {
     /// Illegal account owner
     #[error("Provided owner is not allowed")]
     IllegalOwner,
-    // Note: For any new error added here an equivilent ProgramError and it's
+    // Note: For any new error added here an equivalent ProgramError and its
     // conversions must also be added
 }
 
