@@ -116,11 +116,9 @@ fn star_network_create(num: usize) -> Network {
             let node_keypair = Arc::new(Keypair::new());
             let contact_info = ContactInfo::new_localhost(&node_keypair.pubkey(), 0);
             let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(contact_info.clone()));
-            let id = new.label().pubkey();
             let mut node = CrdsGossip::default();
             node.crds.insert(new.clone(), timestamp()).unwrap();
             node.crds.insert(entry.clone(), timestamp()).unwrap();
-            node.set_self(&id);
             let node = Node::new(node_keypair, contact_info, Arc::new(Mutex::new(node)));
             (new.label().pubkey(), node)
         })
@@ -128,7 +126,6 @@ fn star_network_create(num: usize) -> Network {
     let mut node = CrdsGossip::default();
     let id = entry.label().pubkey();
     node.crds.insert(entry, timestamp()).unwrap();
-    node.set_self(&id);
     let node = Node::new(node_keypair, contact_info, Arc::new(Mutex::new(node)));
     network.insert(id, node);
     Network::new(network)
@@ -141,18 +138,14 @@ fn rstar_network_create(num: usize) -> Network {
     let mut origin = CrdsGossip::default();
     let id = entry.label().pubkey();
     origin.crds.insert(entry, timestamp()).unwrap();
-    origin.set_self(&id);
     let mut network: HashMap<_, _> = (1..num)
         .map(|_| {
             let node_keypair = Arc::new(Keypair::new());
             let contact_info = ContactInfo::new_localhost(&node_keypair.pubkey(), 0);
             let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(contact_info.clone()));
-            let id = new.label().pubkey();
             let mut node = CrdsGossip::default();
             node.crds.insert(new.clone(), timestamp()).unwrap();
             origin.crds.insert(new.clone(), timestamp()).unwrap();
-            node.set_self(&id);
-
             let node = Node::new(node_keypair, contact_info, Arc::new(Mutex::new(node)));
             (new.label().pubkey(), node)
         })
@@ -168,10 +161,8 @@ fn ring_network_create(num: usize) -> Network {
             let node_keypair = Arc::new(Keypair::new());
             let contact_info = ContactInfo::new_localhost(&node_keypair.pubkey(), 0);
             let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(contact_info.clone()));
-            let id = new.label().pubkey();
             let mut node = CrdsGossip::default();
             node.crds.insert(new.clone(), timestamp()).unwrap();
-            node.set_self(&id);
             let node = Node::new(node_keypair, contact_info, Arc::new(Mutex::new(node)));
             (new.label().pubkey(), node)
         })
@@ -180,7 +171,7 @@ fn ring_network_create(num: usize) -> Network {
     for k in 0..keys.len() {
         let start_info = {
             let start = &network[&keys[k]];
-            let start_id = start.lock().unwrap().id;
+            let start_id = keys[k];
             let label = CrdsValueLabel::ContactInfo(start_id);
             let gossip = start.gossip.lock().unwrap();
             gossip.crds.get(&label).unwrap().value.clone()
@@ -202,10 +193,8 @@ fn connected_staked_network_create(stakes: &[u64]) -> Network {
             let node_keypair = Arc::new(Keypair::new());
             let contact_info = ContactInfo::new_localhost(&node_keypair.pubkey(), 0);
             let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(contact_info.clone()));
-            let id = new.label().pubkey();
             let mut node = CrdsGossip::default();
             node.crds.insert(new.clone(), timestamp()).unwrap();
-            node.set_self(&id);
             let node = Node::staked(
                 node_keypair,
                 contact_info,
@@ -221,15 +210,14 @@ fn connected_staked_network_create(stakes: &[u64]) -> Network {
         .iter()
         .map(|k| {
             let start = &network[k].lock().unwrap();
-            let start_id = start.id;
-            let start_label = CrdsValueLabel::ContactInfo(start_id);
+            let start_label = CrdsValueLabel::ContactInfo(*k);
             start.crds.get(&start_label).unwrap().value.clone()
         })
         .collect();
-    for end in network.values_mut() {
+    for (end_pubkey, end) in network.iter_mut() {
         for k in 0..keys.len() {
             let mut end = end.lock().unwrap();
-            if keys[k] != end.id {
+            if keys[k] != *end_pubkey {
                 let start_info = start_entries[k].clone();
                 end.crds.insert(start_info, timestamp()).unwrap();
             }
@@ -258,9 +246,13 @@ fn network_simulator(thread_pool: &ThreadPool, network: &mut Network, max_conver
     // make sure there is someone in the active set
     let network_values: Vec<Node> = network.values().cloned().collect();
     network_values.par_iter().for_each(|node| {
-        node.lock()
-            .unwrap()
-            .refresh_push_active_set(&HashMap::new(), None);
+        let node_pubkey = node.keypair.pubkey();
+        node.lock().unwrap().refresh_push_active_set(
+            &node_pubkey,
+            0,               // shred version
+            &HashMap::new(), // stakes
+            None,            // gossip validators
+        );
     });
     let mut total_bytes = bytes_tx;
     let mut ts = timestamp();
@@ -271,8 +263,9 @@ fn network_simulator(thread_pool: &ThreadPool, network: &mut Network, max_conver
         ts += 1000;
         // push a message to the network
         network_values.par_iter().for_each(|locked_node| {
+            let node_pubkey = locked_node.keypair.pubkey();
             let node = &mut locked_node.lock().unwrap();
-            let label = CrdsValueLabel::ContactInfo(node.id);
+            let label = CrdsValueLabel::ContactInfo(node_pubkey);
             let entry = node.crds.get(&label).unwrap();
             let mut m = entry.value.contact_info().cloned().unwrap();
             m.wallclock = now;
@@ -327,13 +320,15 @@ fn network_run_push(
         let requests: Vec<_> = network_values
             .par_iter()
             .map(|node| {
+                let node_pubkey = node.keypair.pubkey();
                 let mut node_lock = node.lock().unwrap();
                 let timeouts = node_lock.make_timeouts(
+                    node_pubkey,
                     &HashMap::default(), // stakes
                     Duration::from_millis(node_lock.pull.crds_timeout),
                 );
-                node_lock.purge(thread_pool, now, &timeouts);
-                (node_lock.id, node_lock.new_push_messages(vec![], now))
+                node_lock.purge(&node_pubkey, thread_pool, now, &timeouts);
+                (node_pubkey, node_lock.new_push_messages(vec![], now))
             })
             .collect();
         let transfered: Vec<_> = requests
@@ -356,7 +351,14 @@ fn network_run_push(
                         .collect();
                     let prunes_map = network
                         .get(&to)
-                        .map(|node| node.lock().unwrap().prune_received_cache(origins, &stakes))
+                        .map(|node| {
+                            let node_pubkey = node.keypair.pubkey();
+                            node.lock().unwrap().prune_received_cache(
+                                &node_pubkey,
+                                origins,
+                                &stakes,
+                            )
+                        })
                         .unwrap();
 
                     for (from, prune_set) in prunes_map {
@@ -371,11 +373,19 @@ fn network_run_push(
                         network
                             .get(&from)
                             .map(|node| {
+                                let node_pubkey = node.keypair.pubkey();
                                 let node = node.lock().unwrap();
-                                let destination = node.id;
+                                let destination = node_pubkey;
                                 let now = timestamp();
-                                node.process_prune_msg(&to, &destination, &prune_keys, now, now)
-                                    .unwrap()
+                                node.process_prune_msg(
+                                    &node_pubkey,
+                                    &to,
+                                    &destination,
+                                    &prune_keys,
+                                    now,
+                                    now,
+                                )
+                                .unwrap()
                             })
                             .unwrap();
                     }
@@ -399,9 +409,13 @@ fn network_run_push(
         }
         if now % CRDS_GOSSIP_PUSH_MSG_TIMEOUT_MS == 0 && now > 0 {
             network_values.par_iter().for_each(|node| {
-                node.lock()
-                    .unwrap()
-                    .refresh_push_active_set(&HashMap::new(), None);
+                let node_pubkey = node.keypair.pubkey();
+                node.lock().unwrap().refresh_push_active_set(
+                    &node_pubkey,
+                    0,               // shred version
+                    &HashMap::new(), // stakes
+                    None,            // gossip validators
+                );
             });
         }
         total = network_values
@@ -468,6 +482,7 @@ fn network_run_pull(
                         .new_pull_request(
                             thread_pool,
                             from.keypair.deref(),
+                            0, // shred version.
                             now,
                             None,
                             &HashMap::new(),
@@ -476,8 +491,9 @@ fn network_run_pull(
                             &mut pings,
                         )
                         .ok()?;
+                    let from_pubkey = from.keypair.pubkey();
                     let gossip = from.gossip.lock().unwrap();
-                    let label = CrdsValueLabel::ContactInfo(gossip.id);
+                    let label = CrdsValueLabel::ContactInfo(from_pubkey);
                     let self_info = gossip.crds.get(&label).unwrap().value.clone();
                     Some((peer.id, filters, self_info))
                 })
@@ -676,11 +692,8 @@ fn test_star_network_large_push() {
 }
 #[test]
 fn test_prune_errors() {
-    let mut crds_gossip = CrdsGossip {
-        id: Pubkey::new(&[0; 32]),
-        ..CrdsGossip::default()
-    };
-    let id = crds_gossip.id;
+    let mut crds_gossip = CrdsGossip::default();
+    let id = Pubkey::new(&[0; 32]);
     let ci = ContactInfo::new_localhost(&Pubkey::new(&[1; 32]), 0);
     let prune_pubkey = Pubkey::new(&[2; 32]);
     crds_gossip
@@ -690,22 +703,42 @@ fn test_prune_errors() {
             0,
         )
         .unwrap();
-    crds_gossip.refresh_push_active_set(&HashMap::new(), None);
+    crds_gossip.refresh_push_active_set(
+        &id,
+        0,               // shred version
+        &HashMap::new(), // stakes
+        None,            // gossip validators
+    );
     let now = timestamp();
     //incorrect dest
     let mut res = crds_gossip.process_prune_msg(
-        &ci.id,
-        &Pubkey::new(hash(&[1; 32]).as_ref()),
-        &[prune_pubkey],
+        &id,                                   // self_pubkey
+        &ci.id,                                // peer
+        &Pubkey::new(hash(&[1; 32]).as_ref()), // destination
+        &[prune_pubkey],                       // origins
         now,
         now,
     );
     assert_eq!(res.err(), Some(CrdsGossipError::BadPruneDestination));
     //correct dest
-    res = crds_gossip.process_prune_msg(&ci.id, &id, &[prune_pubkey], now, now);
+    res = crds_gossip.process_prune_msg(
+        &id,             // self_pubkey
+        &ci.id,          // peer
+        &id,             // destination
+        &[prune_pubkey], // origins
+        now,
+        now,
+    );
     res.unwrap();
     //test timeout
     let timeout = now + crds_gossip.push.prune_timeout * 2;
-    res = crds_gossip.process_prune_msg(&ci.id, &id, &[prune_pubkey], now, timeout);
+    res = crds_gossip.process_prune_msg(
+        &id,             // self_pubkey
+        &ci.id,          // peer
+        &id,             // destination
+        &[prune_pubkey], // origins
+        now,
+        timeout,
+    );
     assert_eq!(res.err(), Some(CrdsGossipError::PruneMessageTimeout));
 }
