@@ -154,3 +154,16 @@ Following APIs are not included:
 - getSignaturesForAddress
 - getFirstAvailableBlock
 - getBlockProduction
+
+
+Action Items
+
+1. Build the replica framework and executable
+2. Integrate snapshot restore code
+3. Develop the ReplRpcUpdatedSlotsRequestor and ReplRpcUpdatedSlotsServer interface code
+4. Develop the ReplRpcUpdatedSlotsRequestor and ReplRpcUpdatedSlotsServer detailed implementations: managing the ReplEligibleSlotSet lifecycle: adding new roots and deleting root to it. And interfaces managing ReplWorkingSlotSet interface: adding and removing. Develop component synthesising information from BankForks, BlockCommitmentCache and OptimistcallyConfirmedBank on the server side and maintaining information on the client side. 
+5. Develop the interface code for ReplRpcAccountsRequestor and ReplRpcAccountsServer
+6. Develop detailed implementation for ReplRpcAccountsRequestor and ReplRpcAccountsServer and develop the replication account storage serializer and deserializer.
+7. Develop the interface code JsonRpcAccountsService
+8. Detailed Implementation of JsonRpcAccountsService, refactor code to share with part of JsonRpcService.
+
