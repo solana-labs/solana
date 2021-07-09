@@ -35,6 +35,7 @@ pub mod tests {
         },
         thread::Builder,
     };
+    #[ignore]
     #[test]
     fn test_waitable_condvar() {
         let data = Arc::new(AtomicBool::new(false));
