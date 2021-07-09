@@ -19,13 +19,13 @@ use std::{
 };
 
 #[derive(Default)]
-pub struct CostTrackingServiceStats {
+pub struct BlockGenerationCostTrackingServiceStats {
     last_print: u64,
     cost_tracker_update_count: u64,
     cost_tracker_update_elapsed: u64,
 }
 
-impl CostTrackingServiceStats {
+impl BlockGenerationCostTrackingServiceStats {
     fn update(&mut self, cost_tracker_update_count: u64, cost_tracker_update_elapsed: u64) {
         self.cost_tracker_update_count += cost_tracker_update_count;
         self.cost_tracker_update_elapsed += cost_tracker_update_elapsed;
@@ -35,7 +35,6 @@ impl CostTrackingServiceStats {
         if elapsed_ms > 1000 {
             datapoint_info!(
                 "cost-tracking-service-stats",
-                ("total_elapsed_us", elapsed_ms * 1000, i64),
                 (
                     "cost_tracker_update_count",
                     self.cost_tracker_update_count as i64,
@@ -48,7 +47,7 @@ impl CostTrackingServiceStats {
                 ),
             );
 
-            *self = CostTrackingServiceStats::default();
+            *self = BlockGenerationCostTrackingServiceStats::default();
             self.last_print = now;
         }
     }
@@ -59,17 +58,17 @@ pub struct CommittedTransactionBatch {
     pub execution_results: Vec<TransactionExecutionResult>,
 }
 
-pub type CostTrackingReceiver = Receiver<CommittedTransactionBatch>;
+pub type BlockGenerationCostTrackingReceiver = Receiver<CommittedTransactionBatch>;
 
-pub struct CostTrackingService {
+pub struct BlockGenerationCostTrackingService {
     thread_hdl: JoinHandle<()>,
 }
 
-impl CostTrackingService {
+impl BlockGenerationCostTrackingService {
     pub fn new(
         exit: Arc<AtomicBool>,
         cost_tracker: Arc<RwLock<CostTracker>>,
-        cost_tracking_receiver: CostTrackingReceiver,
+        cost_tracking_receiver: BlockGenerationCostTrackingReceiver,
     ) -> Self {
         let thread_hdl = Builder::new()
             .name("solana-cost-tracking-service".to_string())
@@ -88,9 +87,9 @@ impl CostTrackingService {
     fn service_loop(
         exit: Arc<AtomicBool>,
         cost_tracker: Arc<RwLock<CostTracker>>,
-        cost_tracking_receiver: CostTrackingReceiver,
+        cost_tracking_receiver: BlockGenerationCostTrackingReceiver,
     ) {
-        let mut cost_tracking_service_stats = CostTrackingServiceStats::default();
+        let mut cost_tracking_service_stats = BlockGenerationCostTrackingServiceStats::default();
         let wait_timer = Duration::from_millis(10);
 
         loop {
@@ -172,7 +171,7 @@ mod tests {
         let cost_tracker = Arc::new(RwLock::new(CostTracker::new(Arc::new(RwLock::new(
             CostModel::default(),
         )))));
-        CostTrackingService::process_batch(&cost_tracker, &batch);
+        BlockGenerationCostTrackingService::process_batch(&cost_tracker, &batch);
         let cost_stats = cost_tracker.read().unwrap().get_stats();
 
         // each transfer tx has account access cost of 58 and 0 execution cost, 2 OK TXs

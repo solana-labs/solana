@@ -2,7 +2,7 @@
 //! to contruct a software pipeline. The stage uses all available CPU cores and
 //! can do its processing in parallel with signature verification on the GPU.
 use crate::{
-    cost_tracker::CostTracker, cost_tracking_service::CommittedTransactionBatch,
+    block_generation_cost_tracking_service::CommittedTransactionBatch, cost_tracker::CostTracker,
     packet_hasher::PacketHasher,
 };
 use crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError};
@@ -261,7 +261,7 @@ impl BankingStage {
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: ReplayVoteSender,
         cost_tracker: Arc<RwLock<CostTracker>>,
-        cost_tracking_sender: Sender<CommittedTransactionBatch>,
+        block_generation_cost_tracking_sender: Sender<CommittedTransactionBatch>,
     ) -> Self {
         Self::new_num_threads(
             cluster_info,
@@ -272,7 +272,7 @@ impl BankingStage {
             transaction_status_sender,
             gossip_vote_sender,
             cost_tracker,
-            cost_tracking_sender,
+            block_generation_cost_tracking_sender,
         )
     }
 
@@ -285,7 +285,7 @@ impl BankingStage {
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: ReplayVoteSender,
         cost_tracker: Arc<RwLock<CostTracker>>,
-        cost_tracking_sender: Sender<CommittedTransactionBatch>,
+        block_generation_cost_tracking_sender: Sender<CommittedTransactionBatch>,
     ) -> Self {
         let batch_limit = TOTAL_BUFFERED_PACKETS / ((num_threads - 1) as usize * PACKETS_PER_BATCH);
         // Single thread to generate entries from many banks.
@@ -312,7 +312,8 @@ impl BankingStage {
                 let gossip_vote_sender = gossip_vote_sender.clone();
                 let duplicates = duplicates.clone();
                 let cost_tracker = cost_tracker.clone();
-                let cost_tracking_sender = cost_tracking_sender.clone();
+                let block_generation_cost_tracking_sender =
+                    block_generation_cost_tracking_sender.clone();
                 Builder::new()
                     .name("solana-banking-stage-tx".to_string())
                     .spawn(move || {
@@ -328,7 +329,7 @@ impl BankingStage {
                             gossip_vote_sender,
                             &duplicates,
                             &cost_tracker,
-                            cost_tracking_sender,
+                            block_generation_cost_tracking_sender,
                         );
                     })
                     .unwrap()
@@ -399,7 +400,7 @@ impl BankingStage {
         banking_stage_stats: &BankingStageStats,
         recorder: &TransactionRecorder,
         cost_tracker: &Arc<RwLock<CostTracker>>,
-        cost_tracking_sender: Sender<CommittedTransactionBatch>,
+        block_generation_cost_tracking_sender: Sender<CommittedTransactionBatch>,
     ) {
         let mut rebuffered_packets_len = 0;
         let mut new_tx_count = 0;
@@ -443,7 +444,7 @@ impl BankingStage {
                             gossip_vote_sender,
                             banking_stage_stats,
                             cost_tracker,
-                            cost_tracking_sender.clone(),
+                            block_generation_cost_tracking_sender.clone(),
                         );
                     if processed < verified_txs_len
                         || !Bank::should_bank_still_be_processing_txs(
@@ -547,7 +548,7 @@ impl BankingStage {
         banking_stage_stats: &BankingStageStats,
         recorder: &TransactionRecorder,
         cost_tracker: &Arc<RwLock<CostTracker>>,
-        cost_tracking_sender: Sender<CommittedTransactionBatch>,
+        block_generation_cost_tracking_sender: Sender<CommittedTransactionBatch>,
     ) -> BufferedPacketsDecision {
         let bank_start;
         let (
@@ -596,7 +597,7 @@ impl BankingStage {
                     banking_stage_stats,
                     recorder,
                     cost_tracker,
-                    cost_tracking_sender,
+                    block_generation_cost_tracking_sender,
                 );
             }
             BufferedPacketsDecision::Forward => {
@@ -667,7 +668,7 @@ impl BankingStage {
         gossip_vote_sender: ReplayVoteSender,
         duplicates: &Arc<Mutex<(LruCache<u64, ()>, PacketHasher)>>,
         cost_tracker: &Arc<RwLock<CostTracker>>,
-        cost_tracking_sender: Sender<CommittedTransactionBatch>,
+        block_generation_cost_tracking_sender: Sender<CommittedTransactionBatch>,
     ) {
         let recorder = poh_recorder.lock().unwrap().recorder();
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
@@ -688,7 +689,7 @@ impl BankingStage {
                     &banking_stage_stats,
                     &recorder,
                     cost_tracker,
-                    cost_tracking_sender.clone(),
+                    block_generation_cost_tracking_sender.clone(),
                 );
                 if matches!(decision, BufferedPacketsDecision::Hold)
                     || matches!(decision, BufferedPacketsDecision::ForwardAndHold)
@@ -724,7 +725,7 @@ impl BankingStage {
                 duplicates,
                 &recorder,
                 cost_tracker,
-                cost_tracking_sender.clone(),
+                block_generation_cost_tracking_sender.clone(),
             ) {
                 Ok(()) | Err(RecvTimeoutError::Timeout) => (),
                 Err(RecvTimeoutError::Disconnected) => break,
@@ -809,7 +810,7 @@ impl BankingStage {
         batch: &TransactionBatch,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
-        cost_tracking_sender: Sender<CommittedTransactionBatch>,
+        block_generation_cost_tracking_sender: Sender<CommittedTransactionBatch>,
     ) -> (Result<usize, PohRecorderError>, Vec<usize>) {
         let mut load_execute_time = Measure::start("load_execute_time");
         // Use a shorter maximum age when adding transactions into the pipeline.  This will reduce
@@ -906,7 +907,7 @@ impl BankingStage {
                 num_to_commit,
                 transactions.len()
             );
-            cost_tracking_sender
+            block_generation_cost_tracking_sender
                 .send(CommittedTransactionBatch {
                     transactions,
                     execution_results,
@@ -941,7 +942,7 @@ impl BankingStage {
         chunk_offset: usize,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
-        cost_tracking_sender: Sender<CommittedTransactionBatch>,
+        block_generation_cost_tracking_sender: Sender<CommittedTransactionBatch>,
     ) -> (Result<usize, PohRecorderError>, Vec<usize>) {
         let mut lock_time = Measure::start("lock_time");
         // Once accounts are locked, other threads cannot encode transactions that will modify the
@@ -955,7 +956,7 @@ impl BankingStage {
             &batch,
             transaction_status_sender,
             gossip_vote_sender,
-            cost_tracking_sender,
+            block_generation_cost_tracking_sender,
         );
         retryable_txs.iter_mut().for_each(|x| *x += chunk_offset);
 
@@ -986,7 +987,7 @@ impl BankingStage {
         poh: &TransactionRecorder,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
-        cost_tracking_sender: Sender<CommittedTransactionBatch>,
+        block_generation_cost_tracking_sender: Sender<CommittedTransactionBatch>,
     ) -> (usize, Vec<usize>) {
         let mut chunk_start = 0;
         let mut unprocessed_txs = vec![];
@@ -1003,7 +1004,7 @@ impl BankingStage {
                 chunk_start,
                 transaction_status_sender.clone(),
                 gossip_vote_sender,
-                cost_tracking_sender.clone(),
+                block_generation_cost_tracking_sender.clone(),
             );
             trace!("process_transactions result: {:?}", result);
 
@@ -1196,7 +1197,7 @@ impl BankingStage {
         gossip_vote_sender: &ReplayVoteSender,
         banking_stage_stats: &BankingStageStats,
         cost_tracker: &Arc<RwLock<CostTracker>>,
-        cost_tracking_sender: Sender<CommittedTransactionBatch>,
+        block_generation_cost_tracking_sender: Sender<CommittedTransactionBatch>,
     ) -> (usize, usize, Vec<usize>) {
         let mut packet_conversion_time = Measure::start("packet_conversion");
         let (transactions, transaction_to_packet_indexes, retryable_packet_indexes) =
@@ -1229,7 +1230,7 @@ impl BankingStage {
             poh,
             transaction_status_sender,
             gossip_vote_sender,
-            cost_tracking_sender,
+            block_generation_cost_tracking_sender,
         );
         process_tx_time.stop();
         let unprocessed_tx_count = unprocessed_tx_indexes.len();
@@ -1356,7 +1357,7 @@ impl BankingStage {
         duplicates: &Arc<Mutex<(LruCache<u64, ()>, PacketHasher)>>,
         recorder: &TransactionRecorder,
         cost_tracker: &Arc<RwLock<CostTracker>>,
-        cost_tracking_sender: Sender<CommittedTransactionBatch>,
+        block_generation_cost_tracking_sender: Sender<CommittedTransactionBatch>,
     ) -> Result<(), RecvTimeoutError> {
         let mut recv_time = Measure::start("process_packets_recv");
         let mms = verified_receiver.recv_timeout(recv_timeout)?;
@@ -1408,7 +1409,7 @@ impl BankingStage {
                     gossip_vote_sender,
                     banking_stage_stats,
                     cost_tracker,
-                    cost_tracking_sender.clone(),
+                    block_generation_cost_tracking_sender.clone(),
                 );
 
             new_tx_count += processed;
@@ -1621,7 +1622,7 @@ mod tests {
         let (verified_sender, verified_receiver) = unbounded();
         let (vote_sender, vote_receiver) = unbounded();
         let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
-        let (cost_tracking_sender, _) = channel();
+        let (block_generation_cost_tracking_sender, _) = channel();
         let ledger_path = get_tmp_ledger_path!();
         {
             let blockstore = Arc::new(
@@ -1642,7 +1643,7 @@ mod tests {
                 Arc::new(RwLock::new(CostTracker::new(Arc::new(RwLock::new(
                     CostModel::default(),
                 ))))),
-                cost_tracking_sender,
+                block_generation_cost_tracking_sender,
             );
             drop(verified_sender);
             drop(vote_sender);
@@ -1665,7 +1666,7 @@ mod tests {
         let start_hash = bank.last_blockhash();
         let (verified_sender, verified_receiver) = unbounded();
         let (vote_sender, vote_receiver) = unbounded();
-        let (cost_tracking_sender, _) = channel();
+        let (block_generation_cost_tracking_sender, _) = channel();
         let ledger_path = get_tmp_ledger_path!();
         {
             let blockstore = Arc::new(
@@ -1692,7 +1693,7 @@ mod tests {
                 Arc::new(RwLock::new(CostTracker::new(Arc::new(RwLock::new(
                     CostModel::default(),
                 ))))),
-                cost_tracking_sender,
+                block_generation_cost_tracking_sender,
             );
             trace!("sending bank");
             drop(verified_sender);
@@ -1737,7 +1738,7 @@ mod tests {
         let start_hash = bank.last_blockhash();
         let (verified_sender, verified_receiver) = unbounded();
         let (vote_sender, vote_receiver) = unbounded();
-        let (cost_tracking_sender, _) = channel();
+        let (block_generation_cost_tracking_sender, _) = channel();
         let ledger_path = get_tmp_ledger_path!();
         {
             let blockstore = Arc::new(
@@ -1766,7 +1767,7 @@ mod tests {
                 Arc::new(RwLock::new(CostTracker::new(Arc::new(RwLock::new(
                     CostModel::default(),
                 ))))),
-                cost_tracking_sender,
+                block_generation_cost_tracking_sender,
             );
 
             // fund another account so we can send 2 good transactions in a single batch.
@@ -1885,7 +1886,7 @@ mod tests {
         verified_sender.send(packets).unwrap();
 
         let (vote_sender, vote_receiver) = unbounded();
-        let (cost_tracking_sender, _) = channel();
+        let (block_generation_cost_tracking_sender, _) = channel();
         let ledger_path = get_tmp_ledger_path!();
         {
             let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
@@ -1919,7 +1920,7 @@ mod tests {
                     Arc::new(RwLock::new(CostTracker::new(Arc::new(RwLock::new(
                         CostModel::default(),
                     ))))),
-                    cost_tracking_sender,
+                    block_generation_cost_tracking_sender,
                 );
 
                 // wait for banking_stage to eat the packets
@@ -2245,7 +2246,7 @@ mod tests {
             max_tick_height: bank.tick_height() + 1,
         };
         let ledger_path = get_tmp_ledger_path!();
-        let (cost_tracking_sender, _) = channel();
+        let (block_generation_cost_tracking_sender, _) = channel();
         {
             let blockstore = Blockstore::open(&ledger_path)
                 .expect("Expected to be able to open database ledger");
@@ -2276,7 +2277,7 @@ mod tests {
                 0,
                 None,
                 &gossip_vote_sender,
-                cost_tracking_sender.clone(),
+                block_generation_cost_tracking_sender.clone(),
             )
             .0
             .unwrap();
@@ -2315,7 +2316,7 @@ mod tests {
                     0,
                     None,
                     &gossip_vote_sender,
-                    cost_tracking_sender,
+                    block_generation_cost_tracking_sender,
                 )
                 .0,
                 Err(PohRecorderError::MaxHeightReached)
@@ -2378,7 +2379,7 @@ mod tests {
             min_tick_height: bank.tick_height(),
             max_tick_height: bank.tick_height() + 1,
         };
-        let (cost_tracking_sender, _) = channel();
+        let (block_generation_cost_tracking_sender, _) = channel();
         let ledger_path = get_tmp_ledger_path!();
         {
             let blockstore = Blockstore::open(&ledger_path)
@@ -2411,7 +2412,7 @@ mod tests {
                 0,
                 None,
                 &gossip_vote_sender,
-                cost_tracking_sender,
+                block_generation_cost_tracking_sender,
             );
 
             poh_recorder
@@ -2486,7 +2487,7 @@ mod tests {
                     .into(),
             ];
 
-        let (cost_tracking_sender, _) = channel();
+        let (block_generation_cost_tracking_sender, _) = channel();
         let ledger_path = get_tmp_ledger_path!();
         {
             let blockstore = Blockstore::open(&ledger_path)
@@ -2520,7 +2521,7 @@ mod tests {
                     &recorder,
                     None,
                     &gossip_vote_sender,
-                    cost_tracking_sender,
+                    block_generation_cost_tracking_sender,
                 );
 
             assert_eq!(processed_transactions_count, 0,);
@@ -2572,7 +2573,7 @@ mod tests {
             min_tick_height: bank.tick_height(),
             max_tick_height: bank.tick_height() + 1,
         };
-        let (cost_tracking_sender, _) = channel();
+        let (block_generation_cost_tracking_sender, _) = channel();
         let ledger_path = get_tmp_ledger_path!();
         {
             let blockstore = Blockstore::open(&ledger_path)
@@ -2621,7 +2622,7 @@ mod tests {
                     enable_cpi_and_log_storage: false,
                 }),
                 &gossip_vote_sender,
-                cost_tracking_sender,
+                block_generation_cost_tracking_sender,
             );
 
             transaction_status_service.join().unwrap();
@@ -2735,7 +2736,7 @@ mod tests {
             .collect();
 
             let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
-            let (cost_tracking_sender, _) = channel();
+            let (block_generation_cost_tracking_sender, _) = channel();
 
             // When the working bank in poh_recorder is None, no packets should be processed
             assert!(!poh_recorder.lock().unwrap().has_bank());
@@ -2753,7 +2754,7 @@ mod tests {
                 &Arc::new(RwLock::new(CostTracker::new(Arc::new(RwLock::new(
                     CostModel::default(),
                 ))))),
-                cost_tracking_sender.clone(),
+                block_generation_cost_tracking_sender.clone(),
             );
             assert_eq!(buffered_packets[0].1.len(), num_conflicting_transactions);
             // When the poh recorder has a bank, should process all non conflicting buffered packets.
@@ -2773,7 +2774,7 @@ mod tests {
                     &Arc::new(RwLock::new(CostTracker::new(Arc::new(RwLock::new(
                         CostModel::default(),
                     ))))),
-                    cost_tracking_sender.clone(),
+                    block_generation_cost_tracking_sender.clone(),
                 );
                 if num_expected_unprocessed == 0 {
                     assert!(buffered_packets.is_empty())
@@ -2825,7 +2826,7 @@ mod tests {
             let poh_recorder_ = poh_recorder.clone();
             let recorder = poh_recorder_.lock().unwrap().recorder();
             let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
-            let (cost_tracking_sender, _) = channel();
+            let (block_generation_cost_tracking_sender, _) = channel();
             // Start up thread to process the banks
             let t_consume = Builder::new()
                 .name("consume-buffered-packets".to_string())
@@ -2843,7 +2844,7 @@ mod tests {
                         &Arc::new(RwLock::new(CostTracker::new(Arc::new(RwLock::new(
                             CostModel::default(),
                         ))))),
-                        cost_tracking_sender,
+                        block_generation_cost_tracking_sender,
                     );
 
                     // Check everything is correct. All indexes after `interrupted_iteration`

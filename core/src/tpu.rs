@@ -3,6 +3,9 @@
 
 use crate::{
     banking_stage::BankingStage,
+    block_generation_cost_tracking_service::{
+        BlockGenerationCostTrackingService, CommittedTransactionBatch,
+    },
     broadcast_stage::{BroadcastStage, BroadcastStageType, RetransmitSlotsReceiver},
     cluster_info_vote_listener::{
         ClusterInfoVoteListener, GossipDuplicateConfirmedSlotsSender, GossipVerifiedVoteHashSender,
@@ -10,7 +13,6 @@ use crate::{
     },
     cost_model::CostModel,
     cost_tracker::CostTracker,
-    cost_tracking_service::{CommittedTransactionBatch, CostTrackingService},
     fetch_stage::FetchStage,
     sigverify::TransactionSigVerifier,
     sigverify_stage::SigVerifyStage,
@@ -45,7 +47,7 @@ pub struct Tpu {
     banking_stage: BankingStage,
     cluster_info_vote_listener: ClusterInfoVoteListener,
     broadcast_stage: BroadcastStage,
-    cost_tracking_service: CostTrackingService,
+    block_generation_cost_tracking_service: BlockGenerationCostTrackingService,
 }
 
 impl Tpu {
@@ -109,12 +111,15 @@ impl Tpu {
         );
 
         let cost_tracker = Arc::new(RwLock::new(CostTracker::new(cost_model.clone())));
-        let (cost_tracking_sender, cost_tracking_receiver): (
+        let (block_generation_cost_tracking_sender, block_generation_cost_tracking_receiver): (
             Sender<CommittedTransactionBatch>,
             Receiver<CommittedTransactionBatch>,
         ) = channel();
-        let cost_tracking_service =
-            CostTrackingService::new(exit.clone(), cost_tracker.clone(), cost_tracking_receiver);
+        let block_generation_cost_tracking_service = BlockGenerationCostTrackingService::new(
+            exit.clone(),
+            cost_tracker.clone(),
+            block_generation_cost_tracking_receiver,
+        );
 
         let banking_stage = BankingStage::new(
             cluster_info,
@@ -124,7 +129,7 @@ impl Tpu {
             transaction_status_sender,
             replay_vote_sender,
             cost_tracker,
-            cost_tracking_sender,
+            block_generation_cost_tracking_sender,
         );
 
         let broadcast_stage = broadcast_type.new_broadcast_stage(
@@ -144,7 +149,7 @@ impl Tpu {
             banking_stage,
             cluster_info_vote_listener,
             broadcast_stage,
-            cost_tracking_service,
+            block_generation_cost_tracking_service,
         }
     }
 
@@ -154,7 +159,7 @@ impl Tpu {
             self.sigverify_stage.join(),
             self.cluster_info_vote_listener.join(),
             self.banking_stage.join(),
-            self.cost_tracking_service.join(),
+            self.block_generation_cost_tracking_service.join(),
         ];
         let broadcast_result = self.broadcast_stage.join();
         for result in results {
