@@ -1,16 +1,18 @@
 // Primitives for reading/writing BigTable tables
 
-use crate::{
-    access_token::{AccessToken, Scope},
-    compression::{compress_best, decompress},
-    root_ca_certificate,
-};
-use log::*;
-use std::time::{Duration, Instant};
-use thiserror::Error;
-use tonic::{
-    codegen::InterceptedService, metadata::MetadataValue, transport::ClientTlsConfig, Request,
-    Status,
+use {
+    crate::{
+        access_token::{AccessToken, Scope},
+        compression::{compress_best, decompress},
+        root_ca_certificate,
+    },
+    log::*,
+    std::time::{Duration, Instant},
+    thiserror::Error,
+    tonic::{
+        codegen::InterceptedService, metadata::MetadataValue, transport::ClientTlsConfig, Request,
+        Status,
+    },
 };
 
 mod google {
