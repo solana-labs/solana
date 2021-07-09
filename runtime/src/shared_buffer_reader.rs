@@ -97,6 +97,10 @@ impl SharedBuffer {
                 instance_.read_entire_file_in_bg(reader);
                 // The bg thread is exiting, so nobody needs to wait on this thread to exit.
                 // Otherwise, this thread could end up trying to join itself if destroying instance_ below causes Drop to be called.
+                if let Some(handle) = instance_.bg_reader.lock().unwrap().take() {
+                    handle.join().unwrap(); // should be deadlock
+                }
+        
                 instance_.bg_reader.lock().unwrap().take();
             });
         *instance.bg_reader.lock().unwrap() = Some(handle.unwrap());
