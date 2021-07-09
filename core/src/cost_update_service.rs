@@ -161,7 +161,6 @@ impl CostUpdateService {
                 }
             }
         }
-        drop(cost_model_mutable);
         debug!(
            "after replayed into bank, updated cost model instruction cost table, current values: {:?}",
            cost_model.read().unwrap().get_instruction_cost_table()
@@ -194,6 +193,7 @@ impl CostUpdateService {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use solana_runtime::message_processor::ProgramTiming;
     use solana_sdk::pubkey::Pubkey;
 
     #[test]
@@ -226,10 +226,13 @@ mod tests {
             let count: u32 = 10;
             expected_cost = accumulated_units / count as u64;
 
-            execute_timings
-                .details
-                .per_program_timings
-                .insert(program_key_1, (accumulated_us, count));
+            execute_timings.details.per_program_timings.insert(
+                program_key_1,
+                ProgramTiming {
+                    accumulated_us,
+                    count,
+                },
+            );
             CostUpdateService::update_cost_model(&cost_model, &execute_timings);
             assert_eq!(
                 1,
@@ -256,10 +259,13 @@ mod tests {
             // to expect new cost is Average(new_value, existing_value)
             expected_cost = ((accumulated_units / count as u64) + expected_cost) / 2;
 
-            execute_timings
-                .details
-                .per_program_timings
-                .insert(program_key_1, (accumulated_us, count));
+            execute_timings.details.per_program_timings.insert(
+                program_key_1,
+                ProgramTiming {
+                    accumulated_us,
+                    count,
+                },
+            );
             CostUpdateService::update_cost_model(&cost_model, &execute_timings);
             assert_eq!(
                 1,
