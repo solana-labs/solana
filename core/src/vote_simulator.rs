@@ -7,7 +7,7 @@ use crate::{
     heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
     latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
     progress_map::{ForkProgress, ProgressMap},
-    replay_stage::{HeaviestForkFailures, ReplayStage},
+    replay_stage::{HeaviestForkFailures, ReplayStage, ReplayStageState},
     unfrozen_gossip_verified_vote_hashes::UnfrozenGossipVerifiedVoteHashes,
 };
 use solana_runtime::{
@@ -200,7 +200,7 @@ impl VoteSimulator {
             &mut DuplicateSlotsTracker::default(),
             &mut GossipDuplicateConfirmedSlots::default(),
             &mut UnfrozenGossipVerifiedVoteHashes::default(),
-            &mut true,
+            &mut ReplayStageState::Normal,
             &mut Vec::new(),
         )
     }

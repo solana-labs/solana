@@ -19,7 +19,7 @@ use solana_sdk::{
     slot_history::{Check, SlotHistory},
 };
 use solana_vote_program::{
-    vote_instruction,
+    node_instance, vote_instruction,
     vote_state::{BlockTimestamp, Lockout, Vote, VoteState, MAX_LOCKOUT_HISTORY},
 };
 use std::{
@@ -49,6 +49,7 @@ impl SwitchForkDecision {
         vote: Vote,
         vote_account_pubkey: &Pubkey,
         authorized_voter_pubkey: &Pubkey,
+        instance_id: Option<&(node_instance::InstanceId, Pubkey)>,
     ) -> Option<Instruction> {
         match self {
             SwitchForkDecision::FailedSwitchThreshold(_, total_stake) => {
@@ -56,19 +57,38 @@ impl SwitchForkDecision {
                 None
             }
             SwitchForkDecision::FailedSwitchDuplicateRollback(_) => None,
-            SwitchForkDecision::SameFork => Some(vote_instruction::vote(
-                vote_account_pubkey,
-                authorized_voter_pubkey,
-                vote,
-            )),
-            SwitchForkDecision::SwitchProof(switch_proof_hash) => {
-                Some(vote_instruction::vote_switch(
-                    vote_account_pubkey,
-                    authorized_voter_pubkey,
-                    vote,
-                    *switch_proof_hash,
-                ))
-            }
+            SwitchForkDecision::SameFork => Some(
+                if let Some((instance_id, node_instance_pubkey)) = instance_id {
+                    vote_instruction::vote_with_instance(
+                        vote_account_pubkey,
+                        authorized_voter_pubkey,
+                        vote,
+                        node_instance_pubkey,
+                        *instance_id,
+                    )
+                } else {
+                    vote_instruction::vote(vote_account_pubkey, authorized_voter_pubkey, vote)
+                },
+            ),
+            SwitchForkDecision::SwitchProof(switch_proof_hash) => Some(
+                if let Some((instance_id, node_instance_pubkey)) = instance_id {
+                    vote_instruction::vote_switch_with_instance(
+                        vote_account_pubkey,
+                        authorized_voter_pubkey,
+                        vote,
+                        *switch_proof_hash,
+                        node_instance_pubkey,
+                        *instance_id,
+                    )
+                } else {
+                    vote_instruction::vote_switch(
+                        vote_account_pubkey,
+                        authorized_voter_pubkey,
+                        vote,
+                        *switch_proof_hash,
+                    )
+                },
+            ),
         }
     }
 
@@ -1263,6 +1283,32 @@ impl Tower {
     }
 }
 
+/// Check if a `vote_state` is locked out at the provided `slot`
+pub(crate) fn is_vote_state_locked_out_at_slot(
+    vote_state: VoteState,
+    slot: Slot,
+    slot_history: &SlotHistory,
+) -> bool {
+    let mut tower = Tower {
+        vote_state,
+        ..Tower::default()
+    };
+    if tower.vote_state.root_slot.is_none() {
+        // `adjust_lockouts_with_slot_history` requires a root slot, assume the worst case if the
+        // vote state is not currently rooted (unlikely)
+        tower.vote_state.root_slot = Some(0);
+    }
+    if let Err(err) = tower.adjust_lockouts_with_slot_history(slot_history) {
+        warn!(
+            "adjust_lockouts_with_slot_history failed, assuming locked out: {}",
+            err
+        );
+        return true;
+    }
+    tower.vote_state.root_slot = None; // Side step `ancestors` assert! in `is_locked_out`
+    tower.is_locked_out(slot, &HashSet::default())
+}
+
 #[derive(Error, Debug)]
 pub enum TowerError {
     #[error("IO Error: {0}")]
@@ -1425,17 +1471,22 @@ pub mod test {
         let vote = Vote::default();
         let mut decision = SwitchForkDecision::FailedSwitchThreshold(0, 1);
         assert!(decision
-            .to_vote_instruction(vote.clone(), &Pubkey::default(), &Pubkey::default())
+            .to_vote_instruction(vote.clone(), &Pubkey::default(), &Pubkey::default(), None)
             .is_none());
 
         decision = SwitchForkDecision::FailedSwitchDuplicateRollback(0);
         assert!(decision
-            .to_vote_instruction(vote.clone(), &Pubkey::default(), &Pubkey::default())
+            .to_vote_instruction(vote.clone(), &Pubkey::default(), &Pubkey::default(), None)
             .is_none());
 
         decision = SwitchForkDecision::SameFork;
         assert_eq!(
-            decision.to_vote_instruction(vote.clone(), &Pubkey::default(), &Pubkey::default()),
+            decision.to_vote_instruction(
+                vote.clone(),
+                &Pubkey::default(),
+                &Pubkey::default(),
+                None
+            ),
             Some(vote_instruction::vote(
                 &Pubkey::default(),
                 &Pubkey::default(),
@@ -1445,7 +1496,12 @@ pub mod test {
 
         decision = SwitchForkDecision::SwitchProof(Hash::default());
         assert_eq!(
-            decision.to_vote_instruction(vote.clone(), &Pubkey::default(), &Pubkey::default()),
+            decision.to_vote_instruction(
+                vote.clone(),
+                &Pubkey::default(),
+                &Pubkey::default(),
+                None
+            ),
             Some(vote_instruction::vote_switch(
                 &Pubkey::default(),
                 &Pubkey::default(),

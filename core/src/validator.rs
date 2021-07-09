@@ -7,6 +7,7 @@ use crate::{
     completed_data_sets_service::CompletedDataSetsService,
     consensus::{reconcile_blockstore_roots_with_tower, Tower},
     cost_model::CostModel,
+    replay_stage::ReplayStageState,
     rewards_recorder_service::{RewardsRecorderSender, RewardsRecorderService},
     sample_performance_service::SamplePerformanceService,
     serve_repair::ServeRepair,
@@ -141,6 +142,7 @@ pub struct ValidatorConfig {
     pub accounts_db_use_index_hash_calculation: bool,
     pub tpu_coalesce_ms: u64,
     pub validator_exit: Arc<RwLock<Exit>>,
+    pub acquire_node_instance_then_vote: bool,
     pub no_wait_for_vote_to_start_leader: bool,
     pub accounts_shrink_ratio: AccountShrinkThreshold,
 }
@@ -198,6 +200,7 @@ impl Default for ValidatorConfig {
             accounts_db_use_index_hash_calculation: true,
             tpu_coalesce_ms: DEFAULT_TPU_COALESCE_MS,
             validator_exit: Arc::new(RwLock::new(Exit::default())),
+            acquire_node_instance_then_vote: false,
             no_wait_for_vote_to_start_leader: true,
             accounts_shrink_ratio: AccountShrinkThreshold::default(),
         }
@@ -639,6 +642,8 @@ impl Validator {
 
         let wait_for_vote_to_start_leader =
             !waited_for_supermajority && !config.no_wait_for_vote_to_start_leader;
+        let acquire_node_instance_then_vote =
+            !waited_for_supermajority && config.acquire_node_instance_then_vote;
 
         let poh_service = PohService::new(
             poh_recorder.clone(),
@@ -670,6 +675,14 @@ impl Validator {
 
         let rpc_completed_slots_service =
             RpcCompletedSlotsService::spawn(completed_slots_receiver, rpc_subscriptions.clone());
+
+        let initial_replay_stage_state = if acquire_node_instance_then_vote {
+            ReplayStageState::NeedNodeInstance
+        } else if wait_for_vote_to_start_leader {
+            ReplayStageState::NeedRootedVote
+        } else {
+            ReplayStageState::Normal
+        };
 
         let tvu = Tvu::new(
             vote_account,
@@ -735,7 +748,7 @@ impl Validator {
                 use_index_hash_calculation: config.accounts_db_use_index_hash_calculation,
                 rocksdb_compaction_interval: config.rocksdb_compaction_interval,
                 rocksdb_max_compaction_jitter: config.rocksdb_compaction_interval,
-                wait_for_vote_to_start_leader,
+                initial_replay_stage_state,
                 accounts_shrink_ratio: config.accounts_shrink_ratio,
             },
             &max_slots,

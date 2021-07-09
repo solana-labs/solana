@@ -44,6 +44,7 @@ use solana_runtime::{
     bank_forks::BankForks, commitment::BlockCommitmentCache, vote_sender_types::ReplayVoteSender,
 };
 use solana_sdk::{
+    account::ReadableAccount,
     clock::{BankId, Slot, MAX_PROCESSING_AGE, NUM_CONSECUTIVE_LEADER_SLOTS},
     genesis_config::ClusterType,
     hash::Hash,
@@ -53,7 +54,7 @@ use solana_sdk::{
     timing::timestamp,
     transaction::Transaction,
 };
-use solana_vote_program::vote_state::Vote;
+use solana_vote_program::{node_instance, vote_state::Vote};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     result,
@@ -125,7 +126,7 @@ pub struct ReplayStageConfig {
     pub rewards_recorder_sender: Option<RewardsRecorderSender>,
     pub cache_block_meta_sender: Option<CacheBlockMetaSender>,
     pub bank_notification_sender: Option<BankNotificationSender>,
-    pub wait_for_vote_to_start_leader: bool,
+    pub initial_stage_state: ReplayStageState,
 }
 
 #[derive(Default)]
@@ -297,6 +298,19 @@ pub struct ReplayStage {
     commitment_service: AggregateCommitmentService,
 }
 
+#[derive(PartialEq, Clone, Copy, Debug)]
+pub enum ReplayStageState {
+    NeedNodeInstance, // not voting, attempting to acquire the NodeInstance
+    NeedRootedVote,   // voting but waiting for a vote to become rooted before producing blocks
+    Normal,           // voting and producing blocks normally
+}
+
+impl Default for ReplayStageState {
+    fn default() -> Self {
+        Self::Normal
+    }
+}
+
 impl ReplayStage {
     #[allow(clippy::new_ret_no_self, clippy::too_many_arguments)]
     pub fn new(
@@ -332,7 +346,7 @@ impl ReplayStage {
             rewards_recorder_sender,
             cache_block_meta_sender,
             bank_notification_sender,
-            wait_for_vote_to_start_leader,
+            initial_stage_state,
         } = config;
 
         trace!("replay stage");
@@ -351,6 +365,11 @@ impl ReplayStage {
                 let _exit = Finalizer::new(exit.clone());
                 let mut identity_keypair = cluster_info.keypair().clone();
                 let mut my_pubkey = identity_keypair.pubkey();
+                let mut instance_id = if initial_stage_state == ReplayStageState::NeedNodeInstance {
+                    Some((cluster_info.instance_id(), node_instance::get_node_instance_address(&my_pubkey)))
+                } else {
+                    None
+                };
                 let (
                     mut progress,
                     mut heaviest_subtree_fork_choice,
@@ -370,7 +389,7 @@ impl ReplayStage {
                 let mut unfrozen_gossip_verified_vote_hashes: UnfrozenGossipVerifiedVoteHashes = UnfrozenGossipVerifiedVoteHashes::default();
                 let mut latest_validator_votes_for_frozen_banks: LatestValidatorVotesForFrozenBanks = LatestValidatorVotesForFrozenBanks::default();
                 let mut voted_signatures = Vec::new();
-                let mut has_new_vote_been_rooted = !wait_for_vote_to_start_leader;
+                let mut stage_state = initial_stage_state;
                 let mut last_vote_refresh_time = LastVoteRefreshTime {
                     last_refresh_time: Instant::now(),
                     last_print_time: Instant::now(),
@@ -519,12 +538,13 @@ impl ReplayStage {
                                                     my_latest_landed_vote,
                                                     &vote_account,
                                                     &identity_keypair,
+                                                    instance_id.as_ref(),
                                                     &authorized_voter_keypairs.read().unwrap(),
                                                     &mut voted_signatures,
-                                                    has_new_vote_been_rooted, &mut
-                                                    last_vote_refresh_time,
+                                                    &mut stage_state,
+                                                    &mut last_vote_refresh_time,
                                                     &voting_sender,
-                                                    );
+                            );
                         }
                     }
 
@@ -588,6 +608,7 @@ impl ReplayStage {
                             &mut progress,
                             &vote_account,
                             &identity_keypair,
+                            instance_id.as_ref(),
                             &authorized_voter_keypairs.read().unwrap(),
                             &blockstore,
                             &leader_schedule_cache,
@@ -602,7 +623,7 @@ impl ReplayStage {
                             &mut gossip_duplicate_confirmed_slots,
                             &mut unfrozen_gossip_verified_vote_hashes,
                             &mut voted_signatures,
-                            &mut has_new_vote_been_rooted,
+                            &mut stage_state,
                             &mut replay_timing,
                             &voting_sender,
                         );
@@ -639,7 +660,19 @@ impl ReplayStage {
                                 let my_old_pubkey = my_pubkey;
                                 my_pubkey = identity_keypair.pubkey();
                                 tower.set_identity(my_pubkey);
-                                warn!("Identity changed from {} to {}", my_old_pubkey, my_pubkey);
+                                if instance_id.is_some() {
+                                    instance_id = Some((
+                                        cluster_info.instance_id(),
+                                        node_instance::get_node_instance_address(&my_pubkey)
+                                    ));
+                                }
+                                stage_state = initial_stage_state;
+                                warn!(
+                                    "Identity changed from {} to {} (instance id: {:?})",
+                                    my_old_pubkey,
+                                    my_pubkey,
+                                    instance_id
+                                );
                             }
 
                             Self::reset_poh_recorder(
@@ -714,7 +747,7 @@ impl ReplayStage {
                             &progress,
                             &retransmit_slots_sender,
                             &mut skipped_slots_info,
-                            has_new_vote_been_rooted,
+                            stage_state,
                         );
 
                         let poh_bank = poh_recorder.lock().unwrap().bank();
@@ -1220,7 +1253,7 @@ impl ReplayStage {
         progress_map: &ProgressMap,
         retransmit_slots_sender: &RetransmitSlotsSender,
         skipped_slots_info: &mut SkippedSlotsInfo,
-        has_new_vote_been_rooted: bool,
+        stage_state: ReplayStageState,
     ) {
         // all the individual calls to poh_recorder.lock() are designed to
         // increase granularity, decrease contention
@@ -1257,8 +1290,8 @@ impl ReplayStage {
         );
 
         if let Some(next_leader) = leader_schedule_cache.slot_leader_at(poh_slot, Some(&parent)) {
-            if !has_new_vote_been_rooted {
-                info!("Haven't landed a vote, so skipping my leader slot");
+            if stage_state != ReplayStageState::Normal {
+                info!("skipping my leader slot due to state {:?}", stage_state);
                 return;
             }
 
@@ -1439,6 +1472,7 @@ impl ReplayStage {
         progress: &mut ProgressMap,
         vote_account_pubkey: &Pubkey,
         identity_keypair: &Keypair,
+        instance_id: Option<&(node_instance::InstanceId, Pubkey)>,
         authorized_voter_keypairs: &[Arc<Keypair>],
         blockstore: &Arc<Blockstore>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
@@ -1453,7 +1487,7 @@ impl ReplayStage {
         gossip_duplicate_confirmed_slots: &mut GossipDuplicateConfirmedSlots,
         unfrozen_gossip_verified_vote_hashes: &mut UnfrozenGossipVerifiedVoteHashes,
         vote_signatures: &mut Vec<Signature>,
-        has_new_vote_been_rooted: &mut bool,
+        stage_state: &mut ReplayStageState,
         replay_timing: &mut ReplayTiming,
         voting_sender: &Sender<VoteOp>,
     ) {
@@ -1487,23 +1521,75 @@ impl ReplayStage {
             blockstore
                 .set_roots(rooted_slots.iter())
                 .expect("Ledger set roots failed");
-            let highest_confirmed_root = Some(
-                block_commitment_cache
-                    .read()
-                    .unwrap()
-                    .highest_confirmed_root(),
-            );
+            let highest_confirmed_root = block_commitment_cache
+                .read()
+                .unwrap()
+                .highest_confirmed_root();
+
+            if *stage_state == ReplayStageState::NeedNodeInstance {
+                let r_bank_forks = bank_forks.read().unwrap();
+                if let (
+                    Some(highest_confirmed_root_bank),
+                    Some((instance_id, node_instance_pubkey)),
+                ) = (r_bank_forks.get(highest_confirmed_root), instance_id)
+                {
+                    let node_instance_state = node_instance::NodeInstanceState::deserialize(
+                        highest_confirmed_root_bank
+                            .get_account(node_instance_pubkey)
+                            .unwrap_or_default()
+                            .data(),
+                    )
+                    .unwrap_or_default();
+
+                    let node_instance_acquired = node_instance_state.instance_id == *instance_id
+                        && node_instance_state.identity == identity_keypair.pubkey();
+
+                    if node_instance_acquired {
+                        info!(
+                            "Node instance acquired as of slot {}",
+                            node_instance_state.slot
+                        );
+
+                        if let Some((_stake, vote_account)) =
+                            highest_confirmed_root_bank.get_vote_account(vote_account_pubkey)
+                        {
+                            let vote_state = vote_account.vote_state();
+                            if let Ok(vote_state) = vote_state.as_ref() {
+                                // As of this root no instance is able to land votes, now
+                                // wait until any vote lockouts are cleared before starting to vote
+                                if crate::consensus::is_vote_state_locked_out_at_slot(
+                                    vote_state.clone(),
+                                    highest_confirmed_root,
+                                    &highest_confirmed_root_bank.get_slot_history(),
+                                ) {
+                                    warn!(
+                                        "Vote account is locked out as of confirmed slot {}",
+                                        highest_confirmed_root
+                                    );
+                                } else {
+                                    info!(
+                                        "Vote account not locked out at slot {}, moving to NeedRootedVote state",
+                                        highest_confirmed_root
+                                    );
+                                    *stage_state = ReplayStageState::NeedRootedVote;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             Self::handle_new_root(
                 new_root,
                 bank_forks,
                 progress,
                 accounts_background_request_sender,
-                highest_confirmed_root,
+                Some(highest_confirmed_root),
                 heaviest_subtree_fork_choice,
                 duplicate_slots_tracker,
                 gossip_duplicate_confirmed_slots,
                 unfrozen_gossip_verified_vote_hashes,
-                has_new_vote_been_rooted,
+                stage_state,
                 vote_signatures,
             );
             rpc_subscriptions.notify_roots(rooted_slots);
@@ -1534,11 +1620,12 @@ impl ReplayStage {
             bank,
             vote_account_pubkey,
             identity_keypair,
+            instance_id,
             authorized_voter_keypairs,
             tower,
             switch_fork_decision,
             vote_signatures,
-            *has_new_vote_been_rooted,
+            stage_state,
             replay_timing,
             voting_sender,
         );
@@ -1546,21 +1633,22 @@ impl ReplayStage {
 
     fn generate_vote_tx(
         node_keypair: &Keypair,
+        instance_id: Option<&(node_instance::InstanceId, Pubkey)>,
         bank: &Bank,
         vote_account_pubkey: &Pubkey,
         authorized_voter_keypairs: &[Arc<Keypair>],
         vote: Vote,
         switch_fork_decision: &SwitchForkDecision,
         vote_signatures: &mut Vec<Signature>,
-        has_new_vote_been_rooted: bool,
-    ) -> Option<Transaction> {
+        stage_state: &mut ReplayStageState,
+    ) -> Option<(Transaction, bool)> {
         if authorized_voter_keypairs.is_empty() {
             return None;
         }
         let vote_account = match bank.get_vote_account(vote_account_pubkey) {
             None => {
                 warn!(
-                    "Vote account {} does not exist.  Unable to vote",
+                    "Vote account {} does not exist. Unable to vote",
                     vote_account_pubkey,
                 );
                 return None;
@@ -1571,7 +1659,7 @@ impl ReplayStage {
         let vote_state = match vote_state.as_ref() {
             Err(_) => {
                 warn!(
-                    "Vote account {} is unreadable.  Unable to vote",
+                    "Vote account {} is unreadable. Unable to vote",
                     vote_account_pubkey,
                 );
                 return None;
@@ -1581,7 +1669,7 @@ impl ReplayStage {
 
         if vote_state.node_pubkey != node_keypair.pubkey() {
             info!(
-                "Vote account node_pubkey mismatch: {} (expected: {}).  Unable to vote",
+                "Vote account node_pubkey mismatch: {} (expected: {}). Unable to vote",
                 vote_state.node_pubkey,
                 node_keypair.pubkey()
             );
@@ -1593,7 +1681,7 @@ impl ReplayStage {
                 authorized_voter_pubkey
             } else {
                 warn!(
-                    "Vote account {} has no authorized voter for epoch {}.  Unable to vote",
+                    "Vote account {} has no authorized voter for epoch {}. Unable to vote",
                     vote_account_pubkey,
                     bank.epoch()
                 );
@@ -1605,12 +1693,61 @@ impl ReplayStage {
             .find(|keypair| keypair.pubkey() == authorized_voter_pubkey)
         {
             None => {
-                warn!("The authorized keypair {} for vote account {} is not available.  Unable to vote",
+                warn!("The authorized keypair {} for vote account {} is not available. Unable to vote",
                       authorized_voter_pubkey, vote_account_pubkey);
                 return None;
             }
             Some(authorized_voter_keypair) => authorized_voter_keypair,
         };
+
+        // If using an `instance_id` perform additional checks to ensure this instance is in the
+        // correct state to submit votes:
+        if let Some((instance_id, node_instance_pubkey)) = instance_id {
+            let node_instance_state = node_instance::NodeInstanceState::deserialize(
+                bank.get_account(node_instance_pubkey)
+                    .unwrap_or_default()
+                    .data(),
+            )
+            .unwrap_or_default();
+
+            let node_instance_acquired = node_instance_state.instance_id == *instance_id
+                && node_instance_state.identity == node_keypair.pubkey();
+
+            if !node_instance_acquired && *stage_state != ReplayStageState::NeedNodeInstance {
+                warn!("Node instance not held. Unable to vote");
+                return None;
+            }
+
+            if *stage_state == ReplayStageState::NeedNodeInstance {
+                if node_instance_acquired {
+                    warn!("My node instance detected, waiting for it to root. Unable to vote");
+                    return None;
+                }
+                info!(
+                    "Attempting to acquire node instance with id: {}). Current node instance state: {:?}",
+                    instance_id, node_instance_state
+                );
+                let instructions =
+                    if node_instance_state == node_instance::NodeInstanceState::default() {
+                        node_instance::create_and_acquire(
+                            &node_keypair.pubkey(),
+                            *instance_id,
+                            &bank.rent_collector().rent,
+                        )
+                    } else {
+                        vec![node_instance::acquire(&node_keypair.pubkey(), *instance_id)]
+                    };
+
+                let mut transaction =
+                    Transaction::new_with_payer(&instructions, Some(&node_keypair.pubkey()));
+
+                let blockhash = bank.last_blockhash();
+                transaction.sign(&[node_keypair], blockhash);
+                return Some((transaction, false));
+            }
+        } else {
+            assert_ne!(*stage_state, ReplayStageState::NeedNodeInstance);
+        }
 
         // Send our last few votes along with the new one
         let vote_ix = switch_fork_decision
@@ -1618,6 +1755,7 @@ impl ReplayStage {
                 vote,
                 vote_account_pubkey,
                 &authorized_voter_keypair.pubkey(),
+                instance_id,
             )
             .expect("Switch threshold failure should not lead to voting");
 
@@ -1627,7 +1765,7 @@ impl ReplayStage {
         vote_tx.partial_sign(&[node_keypair], blockhash);
         vote_tx.partial_sign(&[authorized_voter_keypair.as_ref()], blockhash);
 
-        if !has_new_vote_been_rooted {
+        if *stage_state == ReplayStageState::NeedRootedVote {
             vote_signatures.push(vote_tx.signatures[0]);
             if vote_signatures.len() > MAX_VOTE_SIGNATURES {
                 vote_signatures.remove(0);
@@ -1636,7 +1774,7 @@ impl ReplayStage {
             vote_signatures.clear();
         }
 
-        Some(vote_tx)
+        Some((vote_tx, true))
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1646,9 +1784,10 @@ impl ReplayStage {
         my_latest_landed_vote: Slot,
         vote_account_pubkey: &Pubkey,
         identity_keypair: &Keypair,
+        instance_id: Option<&(node_instance::InstanceId, Pubkey)>,
         authorized_voter_keypairs: &[Arc<Keypair>],
         vote_signatures: &mut Vec<Signature>,
-        has_new_vote_been_rooted: bool,
+        stage_state: &mut ReplayStageState,
         last_vote_refresh_time: &mut LastVoteRefreshTime,
         voting_sender: &Sender<VoteOp>,
     ) {
@@ -1686,17 +1825,18 @@ impl ReplayStage {
         // have changed from the original timestamp of the vote.
         let vote_tx = Self::generate_vote_tx(
             identity_keypair,
+            instance_id,
             heaviest_bank_on_same_fork,
             vote_account_pubkey,
             authorized_voter_keypairs,
             tower.last_vote(),
             &SwitchForkDecision::SameFork,
             vote_signatures,
-            has_new_vote_been_rooted,
+            stage_state,
         );
 
-        if let Some(vote_tx) = vote_tx {
-            let recent_blockhash = vote_tx.message.recent_blockhash;
+        if let Some((tx, true)) = vote_tx {
+            let recent_blockhash = tx.message.recent_blockhash;
             tower.refresh_last_vote_tx_blockhash(recent_blockhash);
 
             // Send the votes to the TPU and gossip for network propagation
@@ -1709,7 +1849,7 @@ impl ReplayStage {
             );
             voting_sender
                 .send(VoteOp::RefreshVote {
-                    tx: vote_tx,
+                    tx,
                     last_voted_slot,
                 })
                 .unwrap_or_else(|err| warn!("Error: {:?}", err));
@@ -1722,37 +1862,45 @@ impl ReplayStage {
         bank: &Bank,
         vote_account_pubkey: &Pubkey,
         identity_keypair: &Keypair,
+        instance_id: Option<&(node_instance::InstanceId, Pubkey)>,
         authorized_voter_keypairs: &[Arc<Keypair>],
         tower: &mut Tower,
         switch_fork_decision: &SwitchForkDecision,
         vote_signatures: &mut Vec<Signature>,
-        has_new_vote_been_rooted: bool,
+        stage_state: &mut ReplayStageState,
         replay_timing: &mut ReplayTiming,
         voting_sender: &Sender<VoteOp>,
     ) {
         let mut generate_time = Measure::start("generate_vote");
         let vote_tx = Self::generate_vote_tx(
             identity_keypair,
+            instance_id,
             bank,
             vote_account_pubkey,
             authorized_voter_keypairs,
             tower.last_vote(),
             switch_fork_decision,
             vote_signatures,
-            has_new_vote_been_rooted,
+            stage_state,
         );
         generate_time.stop();
         replay_timing.generate_vote_us += generate_time.as_us();
-        if let Some(vote_tx) = vote_tx {
-            tower.refresh_last_vote_tx_blockhash(vote_tx.message.recent_blockhash);
 
-            let tower_slots = tower.tower_slots();
-            voting_sender
-                .send(VoteOp::PushVote {
-                    tx: vote_tx,
-                    tower_slots,
-                })
-                .unwrap_or_else(|err| warn!("Error: {:?}", err));
+        match vote_tx {
+            Some((tx, true)) => {
+                tower.refresh_last_vote_tx_blockhash(tx.message.recent_blockhash);
+
+                let tower_slots = tower.tower_slots();
+                voting_sender
+                    .send(VoteOp::PushVote { tx, tower_slots })
+                    .unwrap_or_else(|err| warn!("Error: {:?}", err));
+            }
+            Some((tx, false)) => {
+                voting_sender
+                    .send(VoteOp::AcquireNodeInstance { tx })
+                    .unwrap_or_else(|err| warn!("Error: {:?}", err));
+            }
+            None => {}
         }
     }
 
@@ -2529,7 +2677,7 @@ impl ReplayStage {
         duplicate_slots_tracker: &mut DuplicateSlotsTracker,
         gossip_duplicate_confirmed_slots: &mut GossipDuplicateConfirmedSlots,
         unfrozen_gossip_verified_vote_hashes: &mut UnfrozenGossipVerifiedVoteHashes,
-        has_new_vote_been_rooted: &mut bool,
+        stage_state: &mut ReplayStageState,
         voted_signatures: &mut Vec<Signature>,
     ) {
         bank_forks.write().unwrap().set_root(
@@ -2539,17 +2687,19 @@ impl ReplayStage {
         );
         let r_bank_forks = bank_forks.read().unwrap();
         let new_root_bank = &r_bank_forks[new_root];
-        if !*has_new_vote_been_rooted {
+        if *stage_state == ReplayStageState::NeedRootedVote {
             for signature in voted_signatures.iter() {
                 if new_root_bank.get_signature_status(signature).is_some() {
-                    *has_new_vote_been_rooted = true;
+                    info!("Vote has rooted, moving to Normal state");
+                    *stage_state = ReplayStageState::Normal;
                     break;
                 }
             }
-            if *has_new_vote_been_rooted {
+            if *stage_state == ReplayStageState::Normal {
                 std::mem::take(voted_signatures);
             }
         }
+
         progress.handle_new_root(&r_bank_forks);
         heaviest_subtree_fork_choice.set_root((new_root, r_bank_forks.root_bank().hash()));
         let mut slots_ge_root = duplicate_slots_tracker.split_off(&new_root);
@@ -3006,7 +3156,7 @@ mod tests {
             &mut duplicate_slots_tracker,
             &mut gossip_duplicate_confirmed_slots,
             &mut unfrozen_gossip_verified_vote_hashes,
-            &mut true,
+            &mut ReplayStageState::Normal,
             &mut Vec::new(),
         );
         assert_eq!(bank_forks.read().unwrap().root(), root);
@@ -3077,7 +3227,7 @@ mod tests {
             &mut DuplicateSlotsTracker::default(),
             &mut GossipDuplicateConfirmedSlots::default(),
             &mut UnfrozenGossipVerifiedVoteHashes::default(),
-            &mut true,
+            &mut ReplayStageState::Normal,
             &mut Vec::new(),
         );
         assert_eq!(bank_forks.read().unwrap().root(), root);
@@ -5329,7 +5479,7 @@ mod tests {
             last_refresh_time: Instant::now(),
             last_print_time: Instant::now(),
         };
-        let has_new_vote_been_rooted = false;
+        let mut stage_stage = ReplayStageState::NeedRootedVote;
         let mut voted_signatures = vec![];
 
         let identity_keypair = cluster_info.keypair().clone();
@@ -5358,11 +5508,12 @@ mod tests {
             &bank0,
             &my_vote_pubkey,
             &identity_keypair,
+            None,
             &my_vote_keypair,
             &mut tower,
             &SwitchForkDecision::SameFork,
             &mut voted_signatures,
-            has_new_vote_been_rooted,
+            &mut stage_stage,
             &mut ReplayTiming::default(),
             &voting_sender,
         );
@@ -5393,9 +5544,10 @@ mod tests {
                 Tower::last_voted_slot_in_bank(refresh_bank, &my_vote_pubkey).unwrap(),
                 &my_vote_pubkey,
                 &identity_keypair,
+                None,
                 &my_vote_keypair,
                 &mut voted_signatures,
-                has_new_vote_been_rooted,
+                &mut stage_stage,
                 &mut last_vote_refresh_time,
                 &voting_sender,
             );
@@ -5415,11 +5567,12 @@ mod tests {
             &bank1,
             &my_vote_pubkey,
             &identity_keypair,
+            None,
             &my_vote_keypair,
             &mut tower,
             &SwitchForkDecision::SameFork,
             &mut voted_signatures,
-            has_new_vote_been_rooted,
+            &mut stage_stage,
             &mut ReplayTiming::default(),
             &voting_sender,
         );
@@ -5442,9 +5595,10 @@ mod tests {
             Tower::last_voted_slot_in_bank(&bank2, &my_vote_pubkey).unwrap(),
             &my_vote_pubkey,
             &identity_keypair,
+            None,
             &my_vote_keypair,
             &mut voted_signatures,
-            has_new_vote_been_rooted,
+            &mut stage_stage,
             &mut last_vote_refresh_time,
             &voting_sender,
         );
@@ -5479,9 +5633,10 @@ mod tests {
             Tower::last_voted_slot_in_bank(&expired_bank, &my_vote_pubkey).unwrap(),
             &my_vote_pubkey,
             &identity_keypair,
+            None,
             &my_vote_keypair,
             &mut voted_signatures,
-            has_new_vote_been_rooted,
+            &mut stage_stage,
             &mut last_vote_refresh_time,
             &voting_sender,
         );
@@ -5540,9 +5695,10 @@ mod tests {
             Tower::last_voted_slot_in_bank(&expired_bank_sibling, &my_vote_pubkey).unwrap(),
             &my_vote_pubkey,
             &identity_keypair,
+            None,
             &my_vote_keypair,
             &mut voted_signatures,
-            has_new_vote_been_rooted,
+            &mut stage_stage,
             &mut last_vote_refresh_time,
             &voting_sender,
         );

@@ -609,6 +609,10 @@ impl ClusterInfo {
         self.keypair.read().unwrap()
     }
 
+    pub fn instance_id(&self) -> u64 {
+        self.instance.read().unwrap().token
+    }
+
     pub fn set_keypair(&self, new_keypair: Arc<Keypair>) {
         let id = new_keypair.pubkey();
         {

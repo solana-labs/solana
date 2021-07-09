@@ -7,6 +7,9 @@ use std::{
 };
 
 pub enum VoteOp {
+    AcquireNodeInstance {
+        tx: Transaction,
+    },
     PushVote {
         tx: Transaction,
         tower_slots: Vec<Slot>,
@@ -20,6 +23,7 @@ pub enum VoteOp {
 impl VoteOp {
     fn tx(&self) -> &Transaction {
         match self {
+            VoteOp::AcquireNodeInstance { tx } => tx,
             VoteOp::PushVote { tx, tower_slots: _ } => tx,
             VoteOp::RefreshVote {
                 tx,
@@ -61,6 +65,7 @@ impl VotingService {
         );
 
         match vote_op {
+            VoteOp::AcquireNodeInstance { .. } => {}
             VoteOp::PushVote { tx, tower_slots } => {
                 cluster_info.push_vote(&tower_slots, tx);
             }

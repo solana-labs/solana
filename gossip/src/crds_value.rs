@@ -390,8 +390,8 @@ impl Version {
 pub struct NodeInstance {
     from: Pubkey,
     wallclock: u64,
-    timestamp: u64, // Timestamp when the instance was created.
-    token: u64,     // Randomly generated value at node instantiation.
+    timestamp: u64,        // Timestamp when the instance was created.
+    pub(crate) token: u64, // Randomly generated value at node instantiation.
 }
 
 impl NodeInstance {

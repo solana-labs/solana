@@ -1472,12 +1472,18 @@ pub fn main() {
                        supermajority of stake is visible on gossip before starting PoH"),
         )
         .arg(
+            Arg::with_name("acquire_node_instance_then_vote")
+                .long("acquire-node-instance-then-vote")
+                .help("Acquire the node instance lock before starting to vote.
+                      This helps prevents signing votes that could violate lockouts"),
+        )
+        .arg(
             Arg::with_name("no_wait_for_vote_to_start_leader")
                 .hidden(true)
                 .long("no-wait-for-vote-to-start-leader")
                 .help("If the validator starts up with no ledger, it will wait to start block
                       production until it sees a vote land in a rooted slot. This prevents
-                      double signing. Turn off to risk double signing a block."),
+                      double signing. Turn off to risk double signing a block"),
         )
         .arg(
             Arg::with_name("hard_forks")
@@ -2333,6 +2339,7 @@ pub fn main() {
         accounts_db_test_hash_calculation: matches.is_present("accounts_db_test_hash_calculation"),
         accounts_db_use_index_hash_calculation: matches.is_present("accounts_db_index_hashing"),
         tpu_coalesce_ms,
+        acquire_node_instance_then_vote: matches.is_present("acquire_node_instance_then_vote"),
         no_wait_for_vote_to_start_leader: matches.is_present("no_wait_for_vote_to_start_leader"),
         accounts_shrink_ratio,
         ..ValidatorConfig::default()

@@ -501,6 +501,7 @@ impl TestValidator {
             rocksdb_compaction_interval: Some(100), // Compact every 100 slots
             max_ledger_shreds: config.max_ledger_shreds,
             no_wait_for_vote_to_start_leader: true,
+            acquire_node_instance_then_vote: false,
             ..ValidatorConfig::default()
         };
 

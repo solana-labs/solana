@@ -91,7 +91,7 @@ pub struct TvuConfig {
     pub use_index_hash_calculation: bool,
     pub rocksdb_compaction_interval: Option<u64>,
     pub rocksdb_max_compaction_jitter: Option<u64>,
-    pub wait_for_vote_to_start_leader: bool,
+    pub initial_replay_stage_state: crate::replay_stage::ReplayStageState,
     pub accounts_shrink_ratio: AccountShrinkThreshold,
 }
 
@@ -272,7 +272,7 @@ impl Tvu {
             rewards_recorder_sender,
             cache_block_meta_sender,
             bank_notification_sender,
-            wait_for_vote_to_start_leader: tvu_config.wait_for_vote_to_start_leader,
+            initial_stage_state: tvu_config.initial_replay_stage_state,
         };
 
         let (voting_sender, voting_receiver) = channel();

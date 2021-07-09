@@ -55,6 +55,7 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         tpu_coalesce_ms: config.tpu_coalesce_ms,
         validator_exit: Arc::new(RwLock::new(Exit::default())),
         poh_hashes_per_batch: config.poh_hashes_per_batch,
+        acquire_node_instance_then_vote: config.acquire_node_instance_then_vote,
         no_wait_for_vote_to_start_leader: config.no_wait_for_vote_to_start_leader,
         accounts_shrink_ratio: config.accounts_shrink_ratio,
     }
