@@ -1,4 +1,4 @@
-//! `cost_tracker` keeps tracking tranasction cost per chained accounts as well as for entire block
+//! `cost_tracker` keeps tracking transaction cost per chained accounts as well as for entire block
 //! It aggregates `cost_model`, which provides service of calculating transaction cost.
 //! The main functions are:
 //! - would_transaction_fit(&tx), immutable function to test if `tx` would fit into current block

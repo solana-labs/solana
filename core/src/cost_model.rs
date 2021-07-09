@@ -92,7 +92,7 @@ impl CostModel {
 
     pub fn initialize_cost_table(&mut self, cost_table: &[(Pubkey, u64)]) {
         for (program_id, cost) in cost_table {
-            match self.upsert_instruction_cost(program_id, cost) {
+            match self.upsert_instruction_cost(program_id, *cost) {
                 Ok(c) => {
                     debug!(
                         "initiating cost table, instruction {:?} has cost {}",
@@ -147,7 +147,7 @@ impl CostModel {
     pub fn upsert_instruction_cost(
         &mut self,
         program_key: &Pubkey,
-        cost: &u64,
+        cost: u64,
     ) -> Result<u64, &'static str> {
         self.instruction_execution_cost_table
             .upsert(program_key, cost);
@@ -232,12 +232,12 @@ mod tests {
         let mut testee = CostModel::default();
 
         let known_key = Pubkey::from_str("known11111111111111111111111111111111111111").unwrap();
-        testee.upsert_instruction_cost(&known_key, &100).unwrap();
+        testee.upsert_instruction_cost(&known_key, 100).unwrap();
         // find cost for known programs
         assert_eq!(100, testee.find_instruction_cost(&known_key));
 
         testee
-            .upsert_instruction_cost(&bpf_loader::id(), &1999)
+            .upsert_instruction_cost(&bpf_loader::id(), 1999)
             .unwrap();
         assert_eq!(1999, testee.find_instruction_cost(&bpf_loader::id()));
 
@@ -267,7 +267,7 @@ mod tests {
 
         let mut testee = CostModel::default();
         testee
-            .upsert_instruction_cost(&system_program::id(), &expected_cost)
+            .upsert_instruction_cost(&system_program::id(), expected_cost)
             .unwrap();
         assert_eq!(
             expected_cost,
@@ -293,7 +293,7 @@ mod tests {
 
         let mut testee = CostModel::default();
         testee
-            .upsert_instruction_cost(&system_program::id(), &program_cost)
+            .upsert_instruction_cost(&system_program::id(), program_cost)
             .unwrap();
         assert_eq!(expected_cost, testee.find_transaction_cost(&tx));
     }
@@ -371,7 +371,7 @@ mod tests {
         );
 
         // insert instruction cost to table
-        assert!(cost_model.upsert_instruction_cost(&key1, &cost1).is_ok());
+        assert!(cost_model.upsert_instruction_cost(&key1, cost1).is_ok());
 
         // now it is known insturction with known cost
         assert_eq!(cost1, cost_model.find_instruction_cost(&key1));
@@ -390,7 +390,7 @@ mod tests {
 
         let mut cost_model = CostModel::default();
         cost_model
-            .upsert_instruction_cost(&system_program::id(), &expected_execution_cost)
+            .upsert_instruction_cost(&system_program::id(), expected_execution_cost)
             .unwrap();
         let tx_cost = cost_model.calculate_cost(&tx);
         assert_eq!(expected_account_cost, tx_cost.account_access_cost);
@@ -408,11 +408,11 @@ mod tests {
         let mut cost_model = CostModel::default();
 
         // insert instruction cost to table
-        assert!(cost_model.upsert_instruction_cost(&key1, &cost1).is_ok());
+        assert!(cost_model.upsert_instruction_cost(&key1, cost1).is_ok());
         assert_eq!(cost1, cost_model.find_instruction_cost(&key1));
 
         // update instruction cost
-        assert!(cost_model.upsert_instruction_cost(&key1, &cost2).is_ok());
+        assert!(cost_model.upsert_instruction_cost(&key1, cost2).is_ok());
         assert_eq!(updated_cost, cost_model.find_instruction_cost(&key1));
     }
 
@@ -454,8 +454,8 @@ mod tests {
                 if i == 5 {
                     thread::spawn(move || {
                         let mut cost_model = cost_model.write().unwrap();
-                        assert!(cost_model.upsert_instruction_cost(&prog1, &cost1).is_ok());
-                        assert!(cost_model.upsert_instruction_cost(&prog2, &cost2).is_ok());
+                        assert!(cost_model.upsert_instruction_cost(&prog1, cost1).is_ok());
+                        assert!(cost_model.upsert_instruction_cost(&prog2, cost2).is_ok());
                     })
                 } else {
                     thread::spawn(move || {

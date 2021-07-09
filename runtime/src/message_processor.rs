@@ -57,6 +57,12 @@ impl Executors {
 }
 
 #[derive(Default, Debug)]
+pub struct ProgramTiming {
+    pub accumulated_us: u64,
+    pub count: u32,
+}
+
+#[derive(Default, Debug)]
 pub struct ExecuteDetailsTimings {
     pub serialize_us: u64,
     pub create_vm_us: u64,
@@ -66,7 +72,7 @@ pub struct ExecuteDetailsTimings {
     pub total_account_count: u64,
     pub total_data_size: usize,
     pub data_size_changed: usize,
-    pub per_program_timings: HashMap<Pubkey, (u64, u32)>,
+    pub per_program_timings: HashMap<Pubkey, ProgramTiming>,
 }
 
 impl ExecuteDetailsTimings {
@@ -81,8 +87,8 @@ impl ExecuteDetailsTimings {
         self.data_size_changed += other.data_size_changed;
         for (id, other) in &other.per_program_timings {
             let time_count = self.per_program_timings.entry(*id).or_default();
-            time_count.0 += other.0;
-            time_count.1 += other.1;
+            time_count.accumulated_us += other.accumulated_us;
+            time_count.count += other.count;
         }
     }
 }
@@ -1244,8 +1250,8 @@ impl MessageProcessor {
 
             let program_id = instruction.program_id(&message.account_keys);
             let time_count = timings.per_program_timings.entry(*program_id).or_default();
-            time_count.0 += time.as_us();
-            time_count.1 += 1;
+            time_count.accumulated_us += time.as_us();
+            time_count.count += 1;
 
             err?;
         }
