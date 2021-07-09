@@ -1,8 +1,8 @@
 import BN from 'bn.js';
 import bs58 from 'bs58';
+import {Buffer} from 'buffer';
 import nacl from 'tweetnacl';
 import {sha256} from 'crypto-hash';
-import {Buffer} from 'buffer';
 
 import {Struct, SOLANA_SCHEMA} from './util/borsh-schema';
 import {toBuffer} from './util/to-buffer';

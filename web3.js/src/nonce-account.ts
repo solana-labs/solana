@@ -1,4 +1,5 @@
-import * as BufferLayout from 'buffer-layout';
+import * as BufferLayout from '@solana/buffer-layout';
+import {Buffer} from 'buffer';
 
 import type {Blockhash} from './blockhash';
 import * as Layout from './layout';

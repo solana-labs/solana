@@ -94,8 +94,8 @@ export class ValidatorInfo {
 
     if (configKeys[0].publicKey.equals(VALIDATOR_INFO_KEY)) {
       if (configKeys[1].isSigner) {
-        const rawInfo = Layout.rustString().decode(Buffer.from(byteArray));
-        const info = JSON.parse(rawInfo);
+        const rawInfo: any = Layout.rustString().decode(Buffer.from(byteArray));
+        const info = JSON.parse(rawInfo as string);
         assertType(info, InfoString);
         return new ValidatorInfo(configKeys[1].publicKey, info);
       }

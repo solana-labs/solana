@@ -2363,8 +2363,8 @@ describe('Connection', () => {
         ).value;
         if (accountInfo) {
           const data = accountInfo.data;
-          if (data instanceof Buffer) {
-            expect(data instanceof Buffer).to.eq(false);
+          if (Buffer.isBuffer(data)) {
+            expect(Buffer.isBuffer(data)).to.eq(false);
           } else {
             expect(data.program).to.eq('spl-token');
             expect(data.parsed).to.be.ok;
@@ -2379,8 +2379,8 @@ describe('Connection', () => {
         tokenAccounts.forEach(({account}) => {
           expect(account.owner).to.eql(TOKEN_PROGRAM_ID);
           const data = account.data;
-          if (data instanceof Buffer) {
-            expect(data instanceof Buffer).to.eq(false);
+          if (Buffer.isBuffer(data)) {
+            expect(Buffer.isBuffer(data)).to.eq(false);
           } else {
             expect(data.parsed).to.be.ok;
             expect(data.program).to.eq('spl-token');
@@ -2397,8 +2397,8 @@ describe('Connection', () => {
         tokenAccounts.forEach(({account}) => {
           expect(account.owner).to.eql(TOKEN_PROGRAM_ID);
           const data = account.data;
-          if (data instanceof Buffer) {
-            expect(data instanceof Buffer).to.eq(false);
+          if (Buffer.isBuffer(data)) {
+            expect(Buffer.isBuffer(data)).to.eq(false);
           } else {
             expect(data.parsed).to.be.ok;
             expect(data.program).to.eq('spl-token');

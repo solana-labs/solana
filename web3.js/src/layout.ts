@@ -1,17 +1,19 @@
 import {Buffer} from 'buffer';
-import * as BufferLayout from 'buffer-layout';
+import * as BufferLayout from '@solana/buffer-layout';
 
 /**
  * Layout for a public key
  */
-export const publicKey = (property: string = 'publicKey'): Object => {
+export const publicKey = (
+  property: string = 'publicKey',
+): BufferLayout.Layout => {
   return BufferLayout.blob(32, property);
 };
 
 /**
  * Layout for a 64bit unsigned value
  */
-export const uint64 = (property: string = 'uint64'): Object => {
+export const uint64 = (property: string = 'uint64'): BufferLayout.Layout => {
   return BufferLayout.blob(8, property);
 };
 
@@ -32,7 +34,7 @@ export const rustString = (property: string = 'string') => {
 
   rsl.decode = (buffer: any, offset: any) => {
     const data = _decode(buffer, offset);
-    return data.chars.toString('utf8');
+    return data['chars'].toString('utf8');
   };
 
   rsl.encode = (str: any, buffer: any, offset: any) => {
@@ -42,7 +44,7 @@ export const rustString = (property: string = 'string') => {
     return _encode(data, buffer, offset);
   };
 
-  rsl.alloc = (str: any) => {
+  (rsl as any).alloc = (str: any) => {
     return (
       BufferLayout.u32().span +
       BufferLayout.u32().span +

@@ -51,10 +51,11 @@ function generateConfig(configType, format) {
     // Prevent dependencies from being bundled
     config.external = [
       /@babel\/runtime/,
+      '@solana/buffer-layout',
       'bn.js',
       'borsh',
       'bs58',
-      'buffer-layout',
+      'buffer',
       'crypto-hash',
       'jayson/lib/client/browser',
       'js-sha3',
@@ -81,11 +82,11 @@ function generateConfig(configType, format) {
           // Prevent dependencies from being bundled
           config.external = [
             /@babel\/runtime/,
+            '@solana/buffer-layout',
             'bn.js',
             'borsh',
             'bs58',
             'buffer',
-            'buffer-layout',
             'crypto-hash',
             'jayson/lib/client/browser',
             'js-sha3',

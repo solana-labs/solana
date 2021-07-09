@@ -1,4 +1,5 @@
-import * as BufferLayout from 'buffer-layout';
+import * as BufferLayout from '@solana/buffer-layout';
+import type {Buffer} from 'buffer';
 
 import * as Layout from './layout';
 import {PublicKey} from './publickey';
