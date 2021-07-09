@@ -976,13 +976,23 @@ impl BankingStage {
     fn transactions_from_packets(
         msgs: &Packets,
         transaction_indexes: &[usize],
+<<<<<<< HEAD
         secp256k1_program_enabled: bool,
     ) -> (Vec<HashedTransaction<'static>>, Vec<usize>) {
         transaction_indexes
+=======
+        cost_tracker: &Arc<RwLock<CostTracker>>,
+        banking_stage_stats: &BankingStageStats,
+    ) -> (Vec<HashedTransaction<'static>>, Vec<usize>, Vec<usize>) {
+        let mut retryable_transaction_packet_indexes: Vec<usize> = vec![];
+
+        let verified_transactions_with_packet_indexes: Vec<_> = transaction_indexes
+>>>>>>> fd574dcb3 (Remove feature switch for secp256k1 program (#18467))
             .iter()
             .filter_map(|tx_index| {
                 let p = &msgs.packets[*tx_index];
                 let tx: Transaction = limited_deserialize(&p.data[0..p.meta.size]).ok()?;
+<<<<<<< HEAD
                 if secp256k1_program_enabled {
                     tx.verify_precompiles().ok()?;
                 }
@@ -992,6 +1002,10 @@ impl BankingStage {
                     HashedTransaction::new(Cow::Owned(tx), message_hash),
                     tx_index,
                 ))
+=======
+                tx.verify_precompiles().ok()?;
+                Some((tx, *tx_index))
+>>>>>>> fd574dcb3 (Remove feature switch for secp256k1 program (#18467))
             })
             .unzip()
     }
@@ -1046,11 +1060,21 @@ impl BankingStage {
         banking_stage_stats: &BankingStageStats,
     ) -> (usize, usize, Vec<usize>) {
         let mut packet_conversion_time = Measure::start("packet_conversion");
+<<<<<<< HEAD
         let (transactions, transaction_to_packet_indexes) = Self::transactions_from_packets(
             msgs,
             &packet_indexes,
             bank.secp256k1_program_enabled(),
         );
+=======
+        let (transactions, transaction_to_packet_indexes, retryable_packet_indexes) =
+            Self::transactions_from_packets(
+                msgs,
+                &packet_indexes,
+                cost_tracker,
+                banking_stage_stats,
+            );
+>>>>>>> fd574dcb3 (Remove feature switch for secp256k1 program (#18467))
         packet_conversion_time.stop();
 
         debug!(
@@ -1117,11 +1141,24 @@ impl BankingStage {
             }
         }
 
+<<<<<<< HEAD
         let (transactions, transaction_to_packet_indexes) = Self::transactions_from_packets(
             msgs,
             &transaction_indexes,
             bank.secp256k1_program_enabled(),
         );
+=======
+        let mut unprocessed_packet_conversion_time =
+            Measure::start("unprocessed_packet_conversion");
+        let (transactions, transaction_to_packet_indexes, retry_packet_indexes) =
+            Self::transactions_from_packets(
+                msgs,
+                transaction_indexes,
+                cost_tracker,
+                banking_stage_stats,
+            );
+        unprocessed_packet_conversion_time.stop();
+>>>>>>> fd574dcb3 (Remove feature switch for secp256k1 program (#18467))
 
         let tx_count = transaction_to_packet_indexes.len();
 
