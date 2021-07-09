@@ -159,6 +159,10 @@ pub mod updated_verify_policy {
     solana_sdk::declare_id!("k15tVxtkgsmo7dy6iJ56N5hBCxuQAtqRgYwoTDuwbia");
 }
 
+pub mod neon_evm_compute_budget {
+    solana_sdk::declare_id!("GLrVvDPkQi5PMYUrsYWT9doZhSHr1BVZXqj5DbFps3rS");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -198,6 +202,7 @@ lazy_static! {
         (dedupe_config_program_signers::id(), "dedupe config program signers"),
         (vote_stake_checked_instructions::id(), "vote/state program checked instructions #18345"),
         (updated_verify_policy::id(), "Update verify policy"),
+        (neon_evm_compute_budget::id(), "bump neon_evm's compute budget"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
