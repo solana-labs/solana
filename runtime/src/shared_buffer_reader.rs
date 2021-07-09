@@ -784,7 +784,10 @@ pub mod tests {
                 loop {
                     if let Some(handle) = bg_reader_.lock().unwrap().take() {
                         error!("before join: {} {}", file!(), line!());
-                        handle.join().unwrap(); // should be deadlock
+                        let j = handle.join();
+                        if j.is_err() {
+                            error!("error calling join: {:?}", j);
+                        }
                         error!("after join: {} {}", file!(), line!());
                         break;
                     }
