@@ -94,15 +94,16 @@ impl SharedBuffer {
         let handle = Builder::new()
             .name("solana-compressed_file_reader".to_string())
             .spawn(move || {
+                error!("before read: {} {}", file!(), line!());
                 instance_.read_entire_file_in_bg(reader);
                 // The bg thread is exiting, so nobody needs to wait on this thread to exit.
                 // Otherwise, this thread could end up trying to join itself if destroying instance_ below causes Drop to be called.
                 if let Some(handle) = instance_.bg_reader.lock().unwrap().take() {
                     handle.join().unwrap(); // should be deadlock
                 }
-        
                 instance_.bg_reader.lock().unwrap().take();
             });
+        error!("started bg thread: {} {}", file!(), line!());
         *instance.bg_reader.lock().unwrap() = Some(handle.unwrap());
         Self { instance }
     }
@@ -138,7 +139,9 @@ pub struct SharedBufferReader {
 
 impl Drop for SharedBufferInternal {
     fn drop(&mut self) {
+        error!("drop: {} {}", file!(), line!());
         if let Some(handle) = self.bg_reader.lock().unwrap().take() {
+            error!("drop: {} {}", file!(), line!());
             self.stop.store(true, Ordering::Relaxed);
             handle.join().unwrap();
         }
@@ -147,6 +150,7 @@ impl Drop for SharedBufferInternal {
 
 impl Drop for SharedBufferReader {
     fn drop(&mut self) {
+        error!("drop: {} {}", file!(), line!());
         self.client_done_reading();
     }
 }
@@ -619,6 +623,23 @@ pub mod tests {
     }
 
     #[test]
+    fn test_shared_buffer_no_readers() {
+        solana_logger::setup();
+        let (sender, receiver) = unbounded();
+        let file = SimpleReader::new(receiver);
+        let shared_buffer = SharedBuffer::new(file);
+        let done_signal = vec![];
+        drop(shared_buffer);
+        error!("dropped shared buffer: {} {}", file!(), line!());
+
+        // send done
+        error!("send done: {} {}", file!(), line!());
+        let _ = sender.send((done_signal, None));
+        error!("end of test: {} {}", file!(), line!());
+        std::thread::sleep(std::time::Duration::from_millis(20000));
+    }
+
+    #[test]
     fn test_shared_buffer_2_errors_after_read() {
         solana_logger::setup();
         let (sender, receiver) = unbounded();
@@ -747,6 +768,28 @@ pub mod tests {
     fn adjusted_buffer_size(total_buffer_budget: usize, chunk_size: usize) -> usize {
         let num_buffers = SharedBuffer::num_buffers(total_buffer_budget, chunk_size);
         num_buffers * chunk_size
+    }
+
+    #[test]
+    fn test_deadlock() {
+        solana_logger::setup();
+        let bg_reader = Arc::new(Mutex::new(None::<JoinHandle<_>>));
+        let bg_reader_ = bg_reader.clone();
+        let handle = Builder::new()
+            .name("solana-compressed_file_reader".to_string())
+            .spawn(move || {
+                error!("before read: {} {}", file!(), line!());
+                // The bg thread is exiting, so nobody needs to wait on this thread to exit.
+                // Otherwise, this thread could end up trying to join itself if destroying instance_ below causes Drop to be called.
+                loop {
+                    if let Some(handle) = bg_reader_.lock().unwrap().take() {
+                        handle.join().unwrap(); // should be deadlock
+                        break;
+                    }
+                }
+            });
+        *bg_reader.lock().unwrap() = Some(handle.unwrap());
+        std::thread::sleep(std::time::Duration::from_millis(20000));
     }
 
     #[test]
