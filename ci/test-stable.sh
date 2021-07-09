@@ -36,22 +36,45 @@ test-stable-bpf)
   test -d target/debug/bpf && find target/debug/bpf -name '*.d' -delete
   test -d target/release/bpf && find target/release/bpf -name '*.d' -delete
 
+  # rustfilt required for dumping BPF assembly listings
+  "$cargo" install rustfilt
+
   # solana-keygen required when building C programs
   _ "$cargo" build --manifest-path=keygen/Cargo.toml
   export PATH="$PWD/target/debug":$PATH
+  cargo_build_bpf="$(realpath ./cargo-build-bpf)"
 
   # BPF solana-sdk legacy compile test
-  ./cargo-build-bpf --manifest-path sdk/Cargo.toml
+  "$cargo_build_bpf" --manifest-path sdk/Cargo.toml
 
   # BPF Program unit tests
   "$cargo" test --manifest-path programs/bpf/Cargo.toml
-  cargo-build-bpf --manifest-path programs/bpf/Cargo.toml --bpf-sdk sdk/bpf
+  "$cargo_build_bpf" --manifest-path programs/bpf/Cargo.toml --bpf-sdk sdk/bpf
 
   # BPF program system tests
   _ make -C programs/bpf/c tests
   _ "$cargo" stable test \
     --manifest-path programs/bpf/Cargo.toml \
     --no-default-features --features=bpf_c,bpf_rust -- --nocapture
+
+  # Dump BPF program assembly listings
+  for bpf_test in programs/bpf/rust/*; do
+    if pushd "$bpf_test"; then
+      "$cargo_build_bpf" --dump
+      popd
+    fi
+  done
+
+  # BPF program instruction count assertion
+  bpf_target_path=programs/bpf/target
+  _ "$cargo" stable test \
+    --manifest-path programs/bpf/Cargo.toml \
+    --no-default-features --features=bpf_c,bpf_rust assert_instruction_count \
+    -- --nocapture &> "${bpf_target_path}"/deploy/instuction_counts.txt
+
+  bpf_dump_archive="bpf-dumps.tar.bz2"
+  rm -f "$bpf_dump_archive"
+  tar cjvf "$bpf_dump_archive" "${bpf_target_path}"/{deploy/*.txt,bpfel-unknown-unknown/release/*.so}
   ;;
 test-stable-perf)
   if [[ $(uname) = Linux ]]; then
