@@ -783,13 +783,16 @@ pub mod tests {
                 // Otherwise, this thread could end up trying to join itself if destroying instance_ below causes Drop to be called.
                 loop {
                     if let Some(handle) = bg_reader_.lock().unwrap().take() {
+                        error!("before join: {} {}", file!(), line!());
                         handle.join().unwrap(); // should be deadlock
+                        error!("after join: {} {}", file!(), line!());
                         break;
                     }
                 }
             });
         *bg_reader.lock().unwrap() = Some(handle.unwrap());
         std::thread::sleep(std::time::Duration::from_millis(20000));
+        error!("test over: {} {}", file!(), line!());
     }
 
     #[test]
