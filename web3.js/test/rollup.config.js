@@ -4,6 +4,7 @@ import commonjs from '@rollup/plugin-commonjs';
 import json from '@rollup/plugin-json';
 import multi from '@rollup/plugin-multi-entry';
 import nodeResolve from '@rollup/plugin-node-resolve';
+import nodePolyfills from 'rollup-plugin-node-polyfills';
 import replace from '@rollup/plugin-replace';
 
 const extensions = ['.js', '.ts'];
@@ -34,6 +35,7 @@ export default {
       babelHelpers: 'runtime',
       plugins: ['@babel/plugin-transform-runtime'],
     }),
+    nodePolyfills(),
     replace({
       'process.env.BROWSER': 'true',
       'process.env.TEST_LIVE': 'true',

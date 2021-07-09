@@ -1,4 +1,3 @@
-import assert from 'assert';
 import bs58 from 'bs58';
 import {Buffer} from 'buffer';
 import fetch, {Response} from 'node-fetch';
@@ -33,6 +32,7 @@ import {Signer} from './keypair';
 import {MS_PER_SLOT} from './timing';
 import {Transaction} from './transaction';
 import {Message} from './message';
+import assert from './util/assert';
 import {sleep} from './util/sleep';
 import {promiseTimeout} from './util/promise-timeout';
 import {toBuffer} from './util/to-buffer';

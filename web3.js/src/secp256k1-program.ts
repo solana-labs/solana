@@ -1,11 +1,11 @@
 import {Buffer} from 'buffer';
 import * as BufferLayout from '@solana/buffer-layout';
 import secp256k1 from 'secp256k1';
-import assert from 'assert';
 import {keccak_256} from 'js-sha3';
 
 import {PublicKey} from './publickey';
 import {TransactionInstruction} from './transaction';
+import assert from './util/assert';
 import {toBuffer} from './util/to-buffer';
 
 const {publicKeyCreate, ecdsaSign} = secp256k1;

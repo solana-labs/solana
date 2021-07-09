@@ -1,5 +1,4 @@
 import bs58 from 'bs58';
-import invariant from 'assert';
 import {Buffer} from 'buffer';
 import {Token, u64} from '@solana/spl-token';
 import {expect, use} from 'chai';
@@ -19,6 +18,7 @@ import {
   sendAndConfirmTransaction,
   Keypair,
 } from '../src';
+import invariant from '../src/util/assert';
 import {DEFAULT_TICKS_PER_SLOT, NUM_TICKS_PER_SECOND} from '../src/timing';
 import {MOCK_PORT, url} from './url';
 import {

@@ -51,7 +51,6 @@ function generateConfig(configType, format) {
     config.external = [
       /@babel\/runtime/,
       '@solana/buffer-layout',
-      'assert',
       'bn.js',
       'borsh',
       'bs58',
@@ -83,7 +82,6 @@ function generateConfig(configType, format) {
           config.external = [
             /@babel\/runtime/,
             '@solana/buffer-layout',
-            'assert',
             'bn.js',
             'borsh',
             'bs58',
