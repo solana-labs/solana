@@ -1,5 +1,4 @@
 import bs58 from 'bs58';
-import invariant from 'assert';
 import {Buffer} from 'buffer';
 import nacl from 'tweetnacl';
 import {expect} from 'chai';
@@ -10,6 +9,7 @@ import {Transaction} from '../src/transaction';
 import {StakeProgram} from '../src/stake-program';
 import {SystemProgram} from '../src/system-program';
 import {Message} from '../src/message';
+import invariant from '../src/util/assert';
 import {toBuffer} from '../src/util/to-buffer';
 
 describe('Transaction', () => {

@@ -1,10 +1,10 @@
 import bs58 from 'bs58';
 import BN from 'bn.js';
-import invariant from 'assert';
 import * as mockttp from 'mockttp';
 
 import {mockRpcMessage} from './rpc-websockets';
 import {Connection, PublicKey, Transaction, Signer} from '../../src';
+import invariant from '../../src/util/assert';
 import type {Commitment, HttpHeaders, RpcParams} from '../../src/connection';
 
 export const mockServer: mockttp.Mockttp | undefined =
@@ -150,7 +150,7 @@ const processTransaction = async ({
   transaction.sign(...signers);
 
   const encoded = transaction.serialize().toString('base64');
-  invariant(transaction.signature !== null);
+  invariant(transaction.signature);
   const signature = bs58.encode(transaction.signature);
   await mockRpcResponse({
     method: 'sendTransaction',
