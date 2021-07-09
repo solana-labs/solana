@@ -1,22 +1,24 @@
-use crate::{StoredExtendedRewards, StoredTransactionStatusMeta};
-use solana_account_decoder::parse_token::{real_number_string_trimmed, UiTokenAmount};
-use solana_sdk::{
-    hash::Hash,
-    instruction::CompiledInstruction,
-    instruction::InstructionError,
-    message::{Message, MessageHeader},
-    pubkey::Pubkey,
-    signature::Signature,
-    transaction::Transaction,
-    transaction::TransactionError,
-};
-use solana_transaction_status::{
-    ConfirmedBlock, InnerInstructions, Reward, RewardType, TransactionByAddrInfo,
-    TransactionStatusMeta, TransactionTokenBalance, TransactionWithStatusMeta,
-};
-use std::{
-    convert::{TryFrom, TryInto},
-    str::FromStr,
+use {
+    crate::{StoredExtendedRewards, StoredTransactionStatusMeta},
+    solana_account_decoder::parse_token::{real_number_string_trimmed, UiTokenAmount},
+    solana_sdk::{
+        hash::Hash,
+        instruction::CompiledInstruction,
+        instruction::InstructionError,
+        message::{Message, MessageHeader},
+        pubkey::Pubkey,
+        signature::Signature,
+        transaction::Transaction,
+        transaction::TransactionError,
+    },
+    solana_transaction_status::{
+        ConfirmedBlock, InnerInstructions, Reward, RewardType, TransactionByAddrInfo,
+        TransactionStatusMeta, TransactionTokenBalance, TransactionWithStatusMeta,
+    },
+    std::{
+        convert::{TryFrom, TryInto},
+        str::FromStr,
+    },
 };
 
 pub mod generated {
