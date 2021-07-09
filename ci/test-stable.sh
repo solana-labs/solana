@@ -21,10 +21,6 @@ export RUST_BACKTRACE=1
 export RUSTFLAGS="-D warnings"
 source scripts/ulimit-n.sh
 
-# Clear the C dependency files, if dependency moves these files are not regenerated
-test -d target/debug/bpf && find target/debug/bpf -name '*.d' -delete
-test -d target/release/bpf && find target/release/bpf -name '*.d' -delete
-
 # Limit compiler jobs to reduce memory usage
 # on machines with 2gb/thread of memory
 NPROC=$(nproc)
@@ -35,7 +31,11 @@ case $testName in
 test-stable)
   _ "$cargo" stable test --jobs "$NPROC" --all --exclude solana-local-cluster ${V:+--verbose} -- --nocapture
   ;;
-test-stable-perf)
+test-stable-bpf)
+  # Clear the C dependency files, if dependency moves these files are not regenerated
+  test -d target/debug/bpf && find target/debug/bpf -name '*.d' -delete
+  test -d target/release/bpf && find target/release/bpf -name '*.d' -delete
+
   # solana-keygen required when building C programs
   _ "$cargo" build --manifest-path=keygen/Cargo.toml
   export PATH="$PWD/target/debug":$PATH
@@ -52,7 +52,8 @@ test-stable-perf)
   _ "$cargo" stable test \
     --manifest-path programs/bpf/Cargo.toml \
     --no-default-features --features=bpf_c,bpf_rust -- --nocapture
-
+  ;;
+test-stable-perf)
   if [[ $(uname) = Linux ]]; then
     # Enable persistence mode to keep the CUDA kernel driver loaded, avoiding a
     # lengthy and unexpected delay the first time CUDA is involved when the driver
