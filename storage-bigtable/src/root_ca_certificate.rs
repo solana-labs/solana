@@ -1,5 +1,7 @@
-use std::{fs::File, io::Read};
-use tonic::transport::Certificate;
+use {
+    std::{fs::File, io::Read},
+    tonic::transport::Certificate,
+};
 
 pub fn load() -> Result<Certificate, String> {
     // Respect the standard GRPC_DEFAULT_SSL_ROOTS_FILE_PATH environment variable if present,

@@ -1,8 +1,10 @@
 fn main() -> Result<(), std::io::Error> {
     let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
 
-    let out_dir = manifest_dir.join("../proto");
-    let proto_files = manifest_dir.join("../src");
+    let out_dir = manifest_dir.join("proto");
+    let proto_files = manifest_dir.join("src");
+
+    std::fs::create_dir_all(out_dir.clone())?;
 
     println!("Protobuf directory: {}", proto_files.display());
     println!("output directory: {}", out_dir.display());
