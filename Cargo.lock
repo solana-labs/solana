@@ -2002,6 +2002,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "itertools"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "69ddb889f9d0d08a67338271fa9b62996bc788c7796a5c18cf057420aaed5eaf"
+dependencies = [
+ "either",
+]
+
+[[package]]
 name = "itoa"
 version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3107,11 +3116,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "600d2f334aa05acb02a755e217ef1ab6dea4d51b58b7846588b747edec04efba"
 dependencies = [
  "anyhow",
-<<<<<<< HEAD
- "itertools",
-=======
  "itertools 0.10.1",
->>>>>>> 761de8b1a (Bump prost, prost-types, and tonic (#18537))
  "proc-macro2 1.0.24",
  "quote 1.0.6",
  "syn 1.0.60",
@@ -4101,7 +4106,7 @@ name = "solana-bench-exchange"
 version = "1.6.17"
 dependencies = [
  "clap",
- "itertools",
+ "itertools 0.9.0",
  "log 0.4.11",
  "num-derive",
  "num-traits",
@@ -4383,7 +4388,7 @@ dependencies = [
  "flate2",
  "fs_extra",
  "indexmap",
- "itertools",
+ "itertools 0.9.0",
  "jsonrpc-core",
  "jsonrpc-core-client",
  "jsonrpc-derive",
@@ -4714,7 +4719,7 @@ dependencies = [
  "fs_extra",
  "futures 0.3.8",
  "futures-util",
- "itertools",
+ "itertools 0.9.0",
  "lazy_static",
  "libc",
  "log 0.4.11",
@@ -4767,7 +4772,7 @@ dependencies = [
  "futures 0.3.8",
  "futures-util",
  "histogram",
- "itertools",
+ "itertools 0.9.0",
  "log 0.4.11",
  "regex",
  "serde",
@@ -4798,7 +4803,7 @@ dependencies = [
  "crossbeam-channel 0.4.4",
  "fs_extra",
  "gag",
- "itertools",
+ "itertools 0.9.0",
  "log 0.4.11",
  "rand 0.7.3",
  "rayon",
@@ -5014,7 +5019,7 @@ dependencies = [
  "bv",
  "curve25519-dalek 2.1.0",
  "hex",
- "itertools",
+ "itertools 0.9.0",
  "lazy_static",
  "log 0.4.11",
  "num-derive",
@@ -5049,7 +5054,7 @@ dependencies = [
  "bv",
  "curve25519-dalek 2.1.0",
  "hex",
- "itertools",
+ "itertools 0.9.0",
  "lazy_static",
  "log 0.4.11",
  "num-derive",
@@ -5160,7 +5165,7 @@ dependencies = [
  "dir-diff",
  "flate2",
  "fnv",
- "itertools",
+ "itertools 0.9.0",
  "lazy_static",
  "libc",
  "libloading 0.6.2",
@@ -5221,7 +5226,7 @@ dependencies = [
  "generic-array 0.14.3",
  "hex",
  "hmac 0.10.1",
- "itertools",
+ "itertools 0.9.0",
  "lazy_static",
  "libsecp256k1",
  "log 0.4.11",
@@ -6402,15 +6407,9 @@ dependencies = [
 
 [[package]]
 name = "tonic"
-<<<<<<< HEAD
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3ba8f479158947373b6df40cf48f4779bb25c99ca3c661bd95e0ab1963ad8b0e"
-=======
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b584f064fdfc50017ec39162d5aebce49912f1eb16fd128e04b7f4ce4907c7e5"
->>>>>>> 761de8b1a (Bump prost, prost-types, and tonic (#18537))
 dependencies = [
  "async-stream",
  "async-trait",
@@ -6440,9 +6439,9 @@ dependencies = [
 
 [[package]]
 name = "tower"
-version = "0.4.4"
+version = "0.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5fd7b451959622e21de79261673d658a0944b835012c58c51878ea55957fb51a"
+checksum = "f60422bc7fefa2f3ec70359b8ff1caff59d785877eb70595904605bcc412470f"
 dependencies = [
  "futures-core",
  "futures-util",
@@ -6452,6 +6451,7 @@ dependencies = [
  "slab",
  "tokio 1.8.1",
  "tokio-stream",
+ "tokio-util 0.6.3",
  "tower-layer",
  "tower-service",
  "tracing",
@@ -7041,6 +7041,6 @@ checksum = "b89249644df056b522696b1bb9e7c18c87e8ffa3e2f0dc3b0155875d6498f01b"
 dependencies = [
  "cc",
  "glob",
- "itertools",
+ "itertools 0.9.0",
  "libc",
 ]
