@@ -14,7 +14,7 @@ use solana_clap_utils::{
         is_parsable, is_pubkey, is_pubkey_or_keypair, is_slot, is_valid_percentage,
     },
 };
-use solana_core::cost_model::{CostModel, ACCOUNT_MAX_COST, BLOCK_MAX_COST};
+use solana_core::cost_model::CostModel;
 use solana_core::cost_tracker::CostTracker;
 use solana_ledger::entry::Entry;
 use solana_ledger::{
@@ -27,10 +27,10 @@ use solana_ledger::{
 };
 use solana_runtime::{
     bank::{Bank, RewardCalculationEvent},
-    bank_forks::{ArchiveFormat, BankForks, SnapshotConfig},
+    bank_forks::BankForks,
     hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
-    snapshot_utils,
-    snapshot_utils::{SnapshotVersion, DEFAULT_MAX_SNAPSHOTS_TO_RETAIN},
+    snapshot_config::SnapshotConfig,
+    snapshot_utils::{self, ArchiveFormat, SnapshotVersion, DEFAULT_MAX_SNAPSHOTS_TO_RETAIN},
 };
 use solana_sdk::{
     account::{AccountSharedData, ReadableAccount, WritableAccount},
@@ -60,7 +60,7 @@ use std::{
     path::{Path, PathBuf},
     process::{exit, Command, Stdio},
     str::FromStr,
-    sync::Arc,
+    sync::{Arc, RwLock},
 };
 
 mod bigtable;
@@ -737,14 +737,14 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
     let mut transactions = 0;
     let mut programs = 0;
     let mut program_ids = HashMap::new();
-    let cost_model = CostModel::new(ACCOUNT_MAX_COST, BLOCK_MAX_COST);
-    let mut cost_tracker = CostTracker::new(
-        cost_model.get_account_cost_limit(),
-        cost_model.get_block_cost_limit(),
-    );
+    let mut cost_model = CostModel::default();
+    cost_model.initialize_cost_table(&blockstore.read_program_costs().unwrap());
+    let cost_model = Arc::new(RwLock::new(cost_model));
+    let mut cost_tracker = CostTracker::new(cost_model.clone());
 
     for entry in &entries {
         transactions += entry.transactions.len();
+        let mut cost_model = cost_model.write().unwrap();
         for transaction in &entry.transactions {
             programs += transaction.message().instructions.len();
             let tx_cost = cost_model.calculate_cost(transaction);
@@ -2385,13 +2385,13 @@ fn main() {
                             let mut store_failed_count = 0;
                             if force_enabled_count >= 1 {
                                 if base_bank
-                                    .get_account(&feature_set::secp256k1_program_enabled::id())
+                                    .get_account(&feature_set::spl_token_v2_multisig_fix::id())
                                     .is_some()
                                 {
                                     // steal some lamports from the pretty old feature not to affect
                                     // capitalizaion, which doesn't affect inflation behavior!
                                     base_bank.store_account(
-                                        &feature_set::secp256k1_program_enabled::id(),
+                                        &feature_set::spl_token_v2_multisig_fix::id(),
                                         &AccountSharedData::default(),
                                     );
                                     force_enabled_count -= 1;
@@ -2985,10 +2985,12 @@ fn main() {
                 eprintln!("{} slots to be rooted", roots_to_fix.len());
                 for chunk in roots_to_fix.chunks(100) {
                     eprintln!("{:?}", chunk);
-                    blockstore.set_roots(&roots_to_fix).unwrap_or_else(|err| {
-                        eprintln!("Unable to set roots {:?}: {}", roots_to_fix, err);
-                        exit(1);
-                    });
+                    blockstore
+                        .set_roots(roots_to_fix.iter())
+                        .unwrap_or_else(|err| {
+                            eprintln!("Unable to set roots {:?}: {}", roots_to_fix, err);
+                            exit(1);
+                        });
                 }
             } else {
                 println!(

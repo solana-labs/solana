@@ -74,12 +74,13 @@ impl TransactionStatusService {
                 } else {
                     Box::new(std::iter::repeat_with(|| None))
                 };
-                let transaction_logs_iter: Box<dyn Iterator<Item = TransactionLogMessages>> =
-                    if let Some(transaction_logs) = transaction_logs {
-                        Box::new(transaction_logs.into_iter())
-                    } else {
-                        Box::new(std::iter::repeat_with(Vec::new))
-                    };
+                let transaction_logs_iter: Box<
+                    dyn Iterator<Item = Option<TransactionLogMessages>>,
+                > = if let Some(transaction_logs) = transaction_logs {
+                    Box::new(transaction_logs.into_iter())
+                } else {
+                    Box::new(std::iter::repeat_with(|| None))
+                };
                 for (
                     transaction,
                     (status, nonce_rollback),
@@ -109,9 +110,8 @@ impl TransactionStatusService {
                             })
                             .expect("FeeCalculator must exist");
                         let fee = fee_calculator.calculate_fee(transaction.message());
-                        let (writable_keys, readonly_keys) = transaction
-                            .message
-                            .get_account_keys_by_lock_type(bank.demote_sysvar_write_locks());
+                        let (writable_keys, readonly_keys) =
+                            transaction.message.get_account_keys_by_lock_type();
 
                         let inner_instructions = inner_instructions.map(|inner_instructions| {
                             inner_instructions
@@ -125,7 +125,6 @@ impl TransactionStatusService {
                                 .collect()
                         });
 
-                        let log_messages = Some(log_messages);
                         let pre_token_balances = Some(pre_token_balances);
                         let post_token_balances = Some(post_token_balances);
                         let rewards = Some(

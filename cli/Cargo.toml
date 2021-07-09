@@ -18,13 +18,13 @@ criterion-stats = "0.3.0"
 ctrlc = { version = "3.1.9", features = ["termination"] }
 console = "0.14.1"
 dirs-next = "2.0.0"
-log = "0.4.11"
+log = "0.4.14"
 Inflector = "0.11.4"
 indicatif = "0.16.2"
 humantime = "2.0.1"
 num-traits = "0.2"
 pretty-hex = "0.2.1"
-reqwest = { version = "0.11.2", default-features = false, features = ["blocking", "rustls-tls", "json"] }
+reqwest = { version = "0.11.4", default-features = false, features = ["blocking", "rustls-tls", "json"] }
 serde = "1.0.126"
 serde_derive = "1.0.103"
 serde_json = "1.0.64"
@@ -38,16 +38,16 @@ solana-config-program = { path = "../programs/config", version = "=1.8.0" }
 solana-faucet = { path = "../faucet", version = "=1.8.0" }
 solana-logger = { path = "../logger", version = "=1.8.0" }
 solana-net-utils = { path = "../net-utils", version = "=1.8.0" }
-solana_rbpf = "=0.2.12"
+solana_rbpf = "=0.2.13"
 solana-remote-wallet = { path = "../remote-wallet", version = "=1.8.0" }
 solana-sdk = { path = "../sdk", version = "=1.8.0" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.8.0" }
 solana-version = { path = "../version", version = "=1.8.0" }
 solana-vote-program = { path = "../programs/vote", version = "=1.8.0" }
 spl-memo = { version = "=3.0.1", features = ["no-entrypoint"] }
-thiserror = "1.0.25"
+thiserror = "1.0.26"
 tiny-bip39 = "0.7.0"
-url = "2.1.1"
+url = "2.2.2"
 
 [dev-dependencies]
 solana-core = { path = "../core", version = "=1.8.0" }

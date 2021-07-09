@@ -19,8 +19,8 @@ use solana_sdk::{
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     epoch_schedule::EpochSchedule,
     feature_set::{
-        blake3_syscall_enabled, cpi_data_cost, demote_sysvar_write_locks,
-        enforce_aligned_host_addrs, keccak256_syscall_enabled, memory_ops_syscalls,
+        blake3_syscall_enabled, cpi_data_cost, enforce_aligned_host_addrs,
+        keccak256_syscall_enabled, memory_ops_syscalls, secp256k1_recover_syscall_enabled,
         sysvar_via_syscall, update_data_on_realloc,
     },
     hash::{Hasher, HASH_BYTES},
@@ -32,6 +32,9 @@ use solana_sdk::{
     process_instruction::{self, stable_log, ComputeMeter, InvokeContext, Logger},
     pubkey::{Pubkey, PubkeyError, MAX_SEEDS},
     rent::Rent,
+    secp256k1_recover::{
+        Secp256k1RecoverError, SECP256K1_PUBLIC_KEY_LENGTH, SECP256K1_SIGNATURE_LENGTH,
+    },
     sysvar::{self, fees::Fees, Sysvar, SysvarId},
 };
 use std::{
@@ -132,6 +135,11 @@ pub fn register_syscalls(
 
     if invoke_context.is_feature_active(&keccak256_syscall_enabled::id()) {
         syscall_registry.register_syscall_by_name(b"sol_keccak256", SyscallKeccak256::call)?;
+    }
+
+    if invoke_context.is_feature_active(&secp256k1_recover_syscall_enabled::id()) {
+        syscall_registry
+            .register_syscall_by_name(b"sol_secp256k1_recover", SyscallSecp256k1Recover::call)?;
     }
 
     if invoke_context.is_feature_active(&blake3_syscall_enabled::id()) {
@@ -326,6 +334,16 @@ pub fn bind_syscall_context_objects<'a>(
         Box::new(SyscallBlake3 {
             base_cost: bpf_compute_budget.sha256_base_cost,
             byte_cost: bpf_compute_budget.sha256_byte_cost,
+            compute_meter: invoke_context.get_compute_meter(),
+            loader_id,
+        }),
+    );
+
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        invoke_context.is_feature_active(&secp256k1_recover_syscall_enabled::id()),
+        Box::new(SyscallSecp256k1Recover {
+            cost: bpf_compute_budget.secp256k1_recover_cost,
             compute_meter: invoke_context.get_compute_meter(),
             loader_id,
         }),
@@ -1343,6 +1361,92 @@ impl<'a> SyscallObject<BpfError> for SyscallMemset<'a> {
     }
 }
 
+/// secp256k1_recover
+pub struct SyscallSecp256k1Recover<'a> {
+    cost: u64,
+    compute_meter: Rc<RefCell<dyn ComputeMeter>>,
+    loader_id: &'a Pubkey,
+}
+
+impl<'a> SyscallObject<BpfError> for SyscallSecp256k1Recover<'a> {
+    fn call(
+        &mut self,
+        hash_addr: u64,
+        recovery_id_val: u64,
+        signature_addr: u64,
+        result_addr: u64,
+        _arg5: u64,
+        memory_mapping: &MemoryMapping,
+        result: &mut Result<u64, EbpfError<BpfError>>,
+    ) {
+        question_mark!(self.compute_meter.consume(self.cost), result);
+
+        let hash = question_mark!(
+            translate_slice::<u8>(
+                memory_mapping,
+                hash_addr,
+                keccak::HASH_BYTES as u64,
+                self.loader_id,
+                true,
+            ),
+            result
+        );
+        let signature = question_mark!(
+            translate_slice::<u8>(
+                memory_mapping,
+                signature_addr,
+                SECP256K1_SIGNATURE_LENGTH as u64,
+                self.loader_id,
+                true,
+            ),
+            result
+        );
+        let secp256k1_recover_result = question_mark!(
+            translate_slice_mut::<u8>(
+                memory_mapping,
+                result_addr,
+                SECP256K1_PUBLIC_KEY_LENGTH as u64,
+                self.loader_id,
+                true,
+            ),
+            result
+        );
+
+        let message = match libsecp256k1::Message::parse_slice(hash) {
+            Ok(msg) => msg,
+            Err(_) => {
+                *result = Ok(Secp256k1RecoverError::InvalidHash.into());
+                return;
+            }
+        };
+        let recovery_id = match libsecp256k1::RecoveryId::parse(recovery_id_val as u8) {
+            Ok(id) => id,
+            Err(_) => {
+                *result = Ok(Secp256k1RecoverError::InvalidRecoveryId.into());
+                return;
+            }
+        };
+        let signature = match libsecp256k1::Signature::parse_standard_slice(signature) {
+            Ok(sig) => sig,
+            Err(_) => {
+                *result = Ok(Secp256k1RecoverError::InvalidSignature.into());
+                return;
+            }
+        };
+
+        let public_key = match libsecp256k1::recover(&message, &signature, &recovery_id) {
+            Ok(key) => key.serialize(),
+            Err(_) => {
+                *result = Ok(Secp256k1RecoverError::InvalidSignature.into());
+                return;
+            }
+        };
+
+        secp256k1_recover_result.copy_from_slice(&public_key[1..65]);
+        *result = Ok(SUCCESS);
+    }
+}
+
 // Blake3
 pub struct SyscallBlake3<'a> {
     base_cost: u64,
@@ -1417,7 +1521,7 @@ type TranslatedAccount<'a> = (
     Option<AccountReferences<'a>>,
 );
 type TranslatedAccounts<'a> = (
-    Vec<Rc<RefCell<AccountSharedData>>>,
+    Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>,
     Vec<Option<AccountReferences<'a>>>,
 );
 
@@ -2062,7 +2166,7 @@ where
 
         if i == program_account_index || account.borrow().executable() {
             // Use the known account
-            accounts.push(account);
+            accounts.push((**account_key, account));
             refs.push(None);
         } else if let Some(account_info) =
             account_info_keys
@@ -2077,7 +2181,7 @@ where
                 })
         {
             let (account, account_ref) = do_translate(account_info, invoke_context)?;
-            accounts.push(account);
+            accounts.push((**account_key, account));
             refs.push(account_ref);
         } else {
             ic_msg!(
@@ -2187,14 +2291,7 @@ fn call<'a>(
     signers_seeds_len: u64,
     memory_mapping: &MemoryMapping,
 ) -> Result<u64, EbpfError<BpfError>> {
-    let (
-        message,
-        executables,
-        accounts,
-        account_refs,
-        caller_write_privileges,
-        demote_sysvar_write_locks,
-    ) = {
+    let (message, executables, accounts, account_refs, caller_write_privileges) = {
         let invoke_context = syscall.get_context()?;
 
         invoke_context
@@ -2266,6 +2363,7 @@ fn call<'a>(
                 ic_msg!(invoke_context, "Unknown program {}", callee_program_id,);
                 SyscallError::InstructionError(InstructionError::MissingAccount)
             })?
+            .1
             .clone();
         let programdata_executable =
             get_upgradeable_executable(&callee_program_id, &program_account, &invoke_context)?;
@@ -2284,7 +2382,6 @@ fn call<'a>(
             accounts,
             account_refs,
             caller_write_privileges,
-            invoke_context.is_feature_active(&demote_sysvar_write_locks::id()),
         )
     };
 
@@ -2307,10 +2404,10 @@ fn call<'a>(
     // Copy results back to caller
     {
         let invoke_context = syscall.get_context()?;
-        for (i, (account, account_ref)) in accounts.iter().zip(account_refs).enumerate() {
+        for (i, ((_key, account), account_ref)) in accounts.iter().zip(account_refs).enumerate() {
             let account = account.borrow();
             if let Some(mut account_ref) = account_ref {
-                if message.is_writable(i, demote_sysvar_write_locks) && !account.executable() {
+                if message.is_writable(i) && !account.executable() {
                     *account_ref.lamports = account.lamports();
                     *account_ref.owner = *account.owner();
                     if account_ref.data.len() != account.data().len() {
@@ -2383,13 +2480,6 @@ mod tests {
     };
     use std::str::FromStr;
 
-    const DEFAULT_CONFIG: Config = Config {
-        max_call_depth: 20,
-        stack_frame_size: 4_096,
-        enable_instruction_meter: true,
-        enable_instruction_tracing: false,
-    };
-
     macro_rules! assert_access_violation {
         ($result:expr, $va:expr, $len:expr) => {
             match $result {
@@ -2405,9 +2495,10 @@ mod tests {
         const LENGTH: u64 = 1000;
         let data = vec![0u8; LENGTH as usize];
         let addr = data.as_ptr() as u64;
+        let config = Config::default();
         let memory_mapping = MemoryMapping::new::<UserError>(
             vec![MemoryRegion::new_from_slice(&data, START, 0, false)],
-            &DEFAULT_CONFIG,
+            &config,
         )
         .unwrap();
 
@@ -2444,6 +2535,7 @@ mod tests {
         // Pubkey
         let pubkey = solana_sdk::pubkey::new_rand();
         let addr = &pubkey as *const _ as u64;
+        let config = Config::default();
         let memory_mapping = MemoryMapping::new::<UserError>(
             vec![MemoryRegion {
                 host_addr: addr,
@@ -2452,7 +2544,7 @@ mod tests {
                 vm_gap_shift: 63,
                 is_writable: false,
             }],
-            &DEFAULT_CONFIG,
+            &config,
         )
         .unwrap();
         let translated_pubkey =
@@ -2474,7 +2566,7 @@ mod tests {
                 vm_gap_shift: 63,
                 is_writable: false,
             }],
-            &DEFAULT_CONFIG,
+            &config,
         )
         .unwrap();
         let translated_instruction =
@@ -2493,6 +2585,7 @@ mod tests {
         let data: Vec<u8> = vec![];
         assert_eq!(0x1 as *const u8, data.as_ptr());
         let addr = good_data.as_ptr() as *const _ as u64;
+        let config = Config::default();
         let memory_mapping = MemoryMapping::new::<UserError>(
             vec![MemoryRegion {
                 host_addr: addr,
@@ -2501,7 +2594,7 @@ mod tests {
                 vm_gap_shift: 63,
                 is_writable: false,
             }],
-            &DEFAULT_CONFIG,
+            &config,
         )
         .unwrap();
         let translated_data = translate_slice::<u8>(
@@ -2526,7 +2619,7 @@ mod tests {
                 vm_gap_shift: 63,
                 is_writable: false,
             }],
-            &DEFAULT_CONFIG,
+            &config,
         )
         .unwrap();
         let translated_data = translate_slice::<u8>(
@@ -2569,7 +2662,7 @@ mod tests {
                 vm_gap_shift: 63,
                 is_writable: false,
             }],
-            &DEFAULT_CONFIG,
+            &config,
         )
         .unwrap();
         let translated_data = translate_slice::<u64>(
@@ -2599,7 +2692,7 @@ mod tests {
                 vm_gap_shift: 63,
                 is_writable: false,
             }],
-            &DEFAULT_CONFIG,
+            &config,
         )
         .unwrap();
         let translated_data = translate_slice::<Pubkey>(
@@ -2619,6 +2712,7 @@ mod tests {
     fn test_translate_string_and_do() {
         let string = "Gaggablaghblagh!";
         let addr = string.as_ptr() as *const _ as u64;
+        let config = Config::default();
         let memory_mapping = MemoryMapping::new::<UserError>(
             vec![MemoryRegion {
                 host_addr: addr,
@@ -2627,7 +2721,7 @@ mod tests {
                 vm_gap_shift: 63,
                 is_writable: false,
             }],
-            &DEFAULT_CONFIG,
+            &config,
         )
         .unwrap();
         assert_eq!(
@@ -2650,9 +2744,9 @@ mod tests {
     #[test]
     #[should_panic(expected = "UserError(SyscallError(Abort))")]
     fn test_syscall_abort() {
+        let config = Config::default();
         let memory_mapping =
-            MemoryMapping::new::<UserError>(vec![MemoryRegion::default()], &DEFAULT_CONFIG)
-                .unwrap();
+            MemoryMapping::new::<UserError>(vec![MemoryRegion::default()], &config).unwrap();
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
         SyscallAbort::call(
             &mut SyscallAbort {},
@@ -2672,6 +2766,7 @@ mod tests {
     fn test_syscall_sol_panic() {
         let string = "Gaggablaghblagh!";
         let addr = string.as_ptr() as *const _ as u64;
+        let config = Config::default();
         let memory_mapping = MemoryMapping::new::<UserError>(
             vec![MemoryRegion {
                 host_addr: addr,
@@ -2680,7 +2775,7 @@ mod tests {
                 vm_gap_shift: 63,
                 is_writable: false,
             }],
-            &DEFAULT_CONFIG,
+            &config,
         )
         .unwrap();
 
@@ -2748,6 +2843,7 @@ mod tests {
             loader_id: &bpf_loader::id(),
             enforce_aligned_host_addrs: true,
         };
+        let config = Config::default();
         let memory_mapping = MemoryMapping::new::<UserError>(
             vec![MemoryRegion {
                 host_addr: addr,
@@ -2756,7 +2852,7 @@ mod tests {
                 vm_gap_shift: 63,
                 is_writable: false,
             }],
-            &DEFAULT_CONFIG,
+            &config,
         )
         .unwrap();
 
@@ -2861,7 +2957,8 @@ mod tests {
             compute_meter,
             logger,
         };
-        let memory_mapping = MemoryMapping::new::<UserError>(vec![], &DEFAULT_CONFIG).unwrap();
+        let config = Config::default();
+        let memory_mapping = MemoryMapping::new::<UserError>(vec![], &config).unwrap();
 
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
         syscall_sol_log_u64.call(1, 2, 3, 4, 5, &memory_mapping, &mut result);
@@ -2888,6 +2985,7 @@ mod tests {
             loader_id: &bpf_loader::id(),
             enforce_aligned_host_addrs: true,
         };
+        let config = Config::default();
         let memory_mapping = MemoryMapping::new::<UserError>(
             vec![MemoryRegion {
                 host_addr: addr,
@@ -2896,7 +2994,7 @@ mod tests {
                 vm_gap_shift: 63,
                 is_writable: false,
             }],
-            &DEFAULT_CONFIG,
+            &config,
         )
         .unwrap();
 
@@ -2931,6 +3029,7 @@ mod tests {
 
     #[test]
     fn test_syscall_sol_alloc_free() {
+        let config = Config::default();
         // large alloc
         {
             let heap = AlignedMemory::new_with_size(100, HOST_ALIGN);
@@ -2941,7 +3040,7 @@ mod tests {
                     0,
                     true,
                 )],
-                &DEFAULT_CONFIG,
+                &config,
             )
             .unwrap();
             let mut syscall = SyscallAllocFree {
@@ -2968,7 +3067,7 @@ mod tests {
                     0,
                     true,
                 )],
-                &DEFAULT_CONFIG,
+                &config,
             )
             .unwrap();
             let mut syscall = SyscallAllocFree {
@@ -2994,7 +3093,7 @@ mod tests {
                     0,
                     true,
                 )],
-                &DEFAULT_CONFIG,
+                &config,
             )
             .unwrap();
             let mut syscall = SyscallAllocFree {
@@ -3014,6 +3113,7 @@ mod tests {
 
         fn check_alignment<T>() {
             let heap = AlignedMemory::new_with_size(100, HOST_ALIGN);
+            let config = Config::default();
             let memory_mapping = MemoryMapping::new::<UserError>(
                 vec![MemoryRegion::new_from_slice(
                     heap.as_slice(),
@@ -3021,7 +3121,7 @@ mod tests {
                     0,
                     true,
                 )],
-                &DEFAULT_CONFIG,
+                &config,
             )
             .unwrap();
             let mut syscall = SyscallAllocFree {
@@ -3072,6 +3172,7 @@ mod tests {
         let ro_len = bytes_to_hash.len() as u64;
         let ro_va = 96;
         let rw_va = 192;
+        let config = Config::default();
         let memory_mapping = MemoryMapping::new::<UserError>(
             vec![
                 MemoryRegion {
@@ -3103,7 +3204,7 @@ mod tests {
                     is_writable: true,
                 },
             ],
-            &DEFAULT_CONFIG,
+            &config,
         )
         .unwrap();
         let compute_meter: Rc<RefCell<dyn ComputeMeter>> =
@@ -3169,6 +3270,7 @@ mod tests {
 
     #[test]
     fn test_syscall_get_sysvar() {
+        let config = Config::default();
         // Test clock sysvar
         {
             let got_clock = Clock::default();
@@ -3182,7 +3284,7 @@ mod tests {
                     vm_gap_shift: 63,
                     is_writable: true,
                 }],
-                &DEFAULT_CONFIG,
+                &config,
             )
             .unwrap();
 
@@ -3224,7 +3326,7 @@ mod tests {
                     vm_gap_shift: 63,
                     is_writable: true,
                 }],
-                &DEFAULT_CONFIG,
+                &config,
             )
             .unwrap();
 
@@ -3274,7 +3376,7 @@ mod tests {
                     vm_gap_shift: 63,
                     is_writable: true,
                 }],
-                &DEFAULT_CONFIG,
+                &config,
             )
             .unwrap();
 
@@ -3314,7 +3416,7 @@ mod tests {
                     vm_gap_shift: 63,
                     is_writable: true,
                 }],
-                &DEFAULT_CONFIG,
+                &config,
             )
             .unwrap();
 

@@ -17,3 +17,6 @@ sed -i '2s;^;declare module "@solana/web3.js" {\n;' lib/index.d.ts
 
 # Run prettier
 npx prettier --write lib/index.d.ts
+
+# Check result
+npx tsc lib/index.d.ts

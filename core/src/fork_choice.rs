@@ -10,13 +10,13 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-pub(crate) struct SelectVoteAndResetForkResult {
+pub struct SelectVoteAndResetForkResult {
     pub vote_bank: Option<(Arc<Bank>, SwitchForkDecision)>,
     pub reset_bank: Option<Arc<Bank>>,
     pub heaviest_fork_failures: Vec<HeaviestForkFailures>,
 }
 
-pub(crate) trait ForkChoice {
+pub trait ForkChoice {
     type ForkChoiceKey;
     fn compute_bank_stats(
         &mut self,

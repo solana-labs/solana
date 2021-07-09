@@ -1,7 +1,5 @@
-import {format as urlFormat, parse as urlParse} from 'url';
-
 export function makeWebsocketUrl(endpoint: string) {
-  let url = urlParse(endpoint);
+  let url = new URL(endpoint);
   const useHttps = url.protocol === 'https:';
 
   url.protocol = useHttps ? 'wss:' : 'ws:';
@@ -13,8 +11,8 @@ export function makeWebsocketUrl(endpoint: string) {
   // When the endpoint omits the port, we're connecting to the protocol
   // default ports: http(80) or https(443) and it's assumed we're behind a reverse
   // proxy which manages WebSocket upgrade and backend port redirection.
-  if (url.port !== null) {
+  if (url.port !== '') {
     url.port = String(Number(url.port) + 1);
   }
-  return urlFormat(url);
+  return url.toString();
 }

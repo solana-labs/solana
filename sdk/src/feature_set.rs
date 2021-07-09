@@ -10,10 +10,6 @@ pub mod instructions_sysvar_enabled {
     solana_sdk::declare_id!("EnvhHCLvg55P7PDtbvR1NwuTuAeodqpusV3MR5QEK8gs");
 }
 
-pub mod secp256k1_program_enabled {
-    solana_sdk::declare_id!("E3PHP7w8kB7np3CTQ1qQ2tW3KCtjRSXBQgW9vM2mWv2Y");
-}
-
 pub mod consistent_recent_blockhashes_sysvar {
     solana_sdk::declare_id!("3h1BQWPDS5veRsq6mDBWruEpgPxRJkfwGexg5iiQ9mYg");
 }
@@ -103,16 +99,8 @@ pub mod upgradeable_close_instruction {
     solana_sdk::declare_id!("FsPaByos3gA9bUEhp3EimQpQPCoSvCEigHod496NmABQ");
 }
 
-pub mod demote_sysvar_write_locks {
-    solana_sdk::declare_id!("86LJYRuq2zgtHuL3FccR6hqFJQMQkFoun4knAxcPiF1P");
-}
-
 pub mod sysvar_via_syscall {
     solana_sdk::declare_id!("7411E6gFQLDhQkdRjmpXwM1hzHMMoYQUjHicmvGPC1Nf");
-}
-
-pub mod check_duplicates_by_hash {
-    solana_sdk::declare_id!("8ZqTSYHgzyaYCcXJPMViRy6afCFSgNvYooPDeVdyj5GC");
 }
 
 pub mod enforce_aligned_host_addrs {
@@ -135,6 +123,10 @@ pub mod memory_ops_syscalls {
     solana_sdk::declare_id!("ENQi37wsVhTvFz2gUiZAAbqFEWGN2jwFsqdEDTE8A4MU");
 }
 
+pub mod secp256k1_recover_syscall_enabled {
+    solana_sdk::declare_id!("6RvdSWHh8oh72Dp7wMTS2DBkf3fRPtChfNrAo3cZZoXJ");
+}
+
 pub mod add_missing_program_error_mappings {
     solana_sdk::declare_id!("3QEUpjhgPEt92nz3Mqf6pABkHPGCQwSvKtyGMq4SuQyL");
 }
@@ -151,11 +143,34 @@ pub mod dedupe_config_program_signers {
     solana_sdk::declare_id!("8kEuAshXLsgkUEdcFVLqrjCGGHVWFW99ZZpxvAzzMtBp");
 }
 
+pub mod deterministic_shred_seed_enabled {
+    solana_sdk::declare_id!("FjSRMpFe7mofQ3WrEMT7Smjk2sME1XdAoRxcv55V6M44");
+}
+
+pub mod verify_tx_signatures_len {
+    solana_sdk::declare_id!("EVW9B5xD9FFK7vw1SBARwMA4s5eRo5eKJdKpsBikzKBz");
+}
+
+pub mod vote_stake_checked_instructions {
+    solana_sdk::declare_id!("BcWknVcgvonN8sL4HE4XFuEVgfcee5MwxWPAgP6ZV89X");
+}
+
+pub mod updated_verify_policy {
+    solana_sdk::declare_id!("k15tVxtkgsmo7dy6iJ56N5hBCxuQAtqRgYwoTDuwbia");
+}
+
+pub mod neon_evm_compute_budget {
+    solana_sdk::declare_id!("GLrVvDPkQi5PMYUrsYWT9doZhSHr1BVZXqj5DbFps3rS");
+}
+
+pub mod rent_for_sysvars {
+    solana_sdk::declare_id!("BKCPBQQBZqggVnFso5nQ8rQ4RwwogYwjuUt9biBjxwNF");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
         (instructions_sysvar_enabled::id(), "instructions sysvar"),
-        (secp256k1_program_enabled::id(), "secp256k1 program"),
         (consistent_recent_blockhashes_sysvar::id(), "consistent recentblockhashes sysvar"),
         (deprecate_rewards_sysvar::id(), "deprecate unused rewards sysvar"),
         (pico_inflation::id(), "pico inflation"),
@@ -177,18 +192,22 @@ lazy_static! {
         (require_stake_for_gossip::id(), "require stakes for propagating crds values through gossip #15561"),
         (cpi_data_cost::id(), "charge the compute budget for data passed via CPI"),
         (upgradeable_close_instruction::id(), "close upgradeable buffer accounts"),
-        (demote_sysvar_write_locks::id(), "demote builtins and sysvar write locks to readonly #15497"),
         (sysvar_via_syscall::id(), "provide sysvars via syscalls"),
-        (check_duplicates_by_hash::id(), "use transaction message hash for duplicate check"),
         (enforce_aligned_host_addrs::id(), "enforce aligned host addresses"),
         (update_data_on_realloc::id(), "Retain updated data values modified after realloc via CPI"),
         (keccak256_syscall_enabled::id(), "keccak256 syscall"),
         (stake_program_v4::id(), "solana_stake_program v4"),
         (memory_ops_syscalls::id(), "add syscalls for memory operations"),
+        (secp256k1_recover_syscall_enabled::id(), "secp256k1_recover syscall"),
         (add_missing_program_error_mappings::id(), "add missing program error mappings"),
         (system_transfer_zero_check::id(), "perform all checks for transfers of 0 lamports"),
         (blake3_syscall_enabled::id(), "blake3 syscall"),
         (dedupe_config_program_signers::id(), "dedupe config program signers"),
+        (deterministic_shred_seed_enabled::id(), "deterministic shred seed"),
+        (vote_stake_checked_instructions::id(), "vote/state program checked instructions #18345"),
+        (updated_verify_policy::id(), "Update verify policy"),
+        (neon_evm_compute_budget::id(), "bump neon_evm's compute budget"),
+        (rent_for_sysvars::id(), "collect rent from accounts owned by sysvars"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

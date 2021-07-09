@@ -65,7 +65,7 @@ if (process.env.TEST_LIVE) {
     });
 
     it('connect by websocket endpoint from options', async () => {
-      let connection = new Connection('', {
+      let connection = new Connection('http://localhost', {
         wsEndpoint: wsUrl,
       });
 

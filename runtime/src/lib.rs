@@ -27,13 +27,17 @@ pub mod loader_utils;
 pub mod log_collector;
 pub mod message_processor;
 mod native_loader;
+pub mod neon_evm_program;
 pub mod non_circulating_supply;
 mod pubkey_bins;
 mod read_only_accounts_cache;
 pub mod rent_collector;
 pub mod secondary_index;
 pub mod serde_snapshot;
+mod shared_buffer_reader;
+pub mod snapshot_config;
 pub mod snapshot_package;
+pub mod snapshot_runtime_info;
 pub mod snapshot_utils;
 pub mod sorted_storages;
 pub mod stake_weighted_timestamp;
@@ -43,6 +47,7 @@ mod system_instruction_processor;
 pub mod transaction_batch;
 pub mod vote_account;
 pub mod vote_sender_types;
+pub mod waitable_condvar;
 
 #[macro_use]
 extern crate solana_metrics;

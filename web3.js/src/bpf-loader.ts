@@ -1,3 +1,5 @@
+import type {Buffer} from 'buffer';
+
 import {PublicKey} from './publickey';
 import {Loader} from './loader';
 import type {Connection} from './connection';

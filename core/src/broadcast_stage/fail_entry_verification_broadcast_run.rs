@@ -1,4 +1,5 @@
 use super::*;
+use crate::cluster_nodes::ClusterNodes;
 use solana_ledger::shred::Shredder;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::Keypair;
@@ -130,18 +131,22 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
         receiver: &Arc<Mutex<TransmitReceiver>>,
         cluster_info: &ClusterInfo,
         sock: &UdpSocket,
+        bank_forks: &Arc<RwLock<BankForks>>,
     ) -> Result<()> {
         let ((stakes, shreds), _) = receiver.lock().unwrap().recv()?;
         // Broadcast data
-        let (peers, peers_and_stakes) = get_broadcast_peers(cluster_info, stakes.as_deref());
-
+        let cluster_nodes = ClusterNodes::<BroadcastStage>::new(
+            cluster_info,
+            stakes.as_deref().unwrap_or(&HashMap::default()),
+        );
         broadcast_shreds(
             sock,
             &shreds,
-            &peers_and_stakes,
-            &peers,
+            &cluster_nodes,
             &Arc::new(AtomicU64::new(0)),
             &mut TransmitShredsStats::default(),
+            cluster_info.id(),
+            bank_forks,
         )?;
 
         Ok(())

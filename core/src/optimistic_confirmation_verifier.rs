@@ -140,7 +140,7 @@ impl OptimisticConfirmationVerifier {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::consensus::test::VoteSimulator;
+    use crate::vote_simulator::VoteSimulator;
     use solana_ledger::get_tmp_ledger_path;
     use solana_runtime::bank::Bank;
     use solana_sdk::pubkey::Pubkey;
@@ -316,7 +316,7 @@ mod test {
             assert!(optimistic_confirmation_verifier.unchecked_slots.is_empty());
 
             // If we know set the root in blockstore, should return nothing
-            blockstore.set_roots(&[1, 3]).unwrap();
+            blockstore.set_roots(vec![1, 3].iter()).unwrap();
             optimistic_confirmation_verifier.add_new_optimistic_confirmed_slots(optimistic_slots);
             assert!(optimistic_confirmation_verifier
                 .verify_for_unrooted_optimistic_slots(&bank7, &blockstore)

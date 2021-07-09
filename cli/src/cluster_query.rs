@@ -1074,9 +1074,15 @@ pub fn process_get_epoch_info(rpc_client: &RpcClient, config: &CliConfig) -> Pro
             (secs as u64).saturating_mul(1000).checked_div(slots)
         })
         .unwrap_or(clock::DEFAULT_MS_PER_SLOT);
+    let start_block_time = rpc_client
+        .get_block_time(epoch_info.absolute_slot - epoch_info.slot_index)
+        .ok();
+    let current_block_time = rpc_client.get_block_time(epoch_info.absolute_slot).ok();
     let epoch_info = CliEpochInfo {
         epoch_info,
         average_slot_time_ms,
+        start_block_time,
+        current_block_time,
     };
     Ok(config.output_format.formatted_string(&epoch_info))
 }
@@ -1886,14 +1892,40 @@ pub fn process_show_validators(
         entry.delinquent_active_stake += validator.activated_stake;
     }
 
+    let validators: Vec<_> = current_validators
+        .into_iter()
+        .chain(delinquent_validators.into_iter())
+        .collect();
+
+    let (average_skip_rate, average_stake_weighted_skip_rate) = {
+        let mut skip_rate_len = 0;
+        let mut skip_rate_sum = 0.;
+        let mut skip_rate_weighted_sum = 0.;
+        for validator in validators.iter() {
+            if let Some(skip_rate) = validator.skip_rate {
+                skip_rate_sum += skip_rate;
+                skip_rate_len += 1;
+                skip_rate_weighted_sum += skip_rate * validator.activated_stake as f64;
+            }
+        }
+
+        if skip_rate_len > 0 && total_active_stake > 0 {
+            (
+                skip_rate_sum / skip_rate_len as f64,
+                skip_rate_weighted_sum / total_active_stake as f64,
+            )
+        } else {
+            (100., 100.) // Impossible?
+        }
+    };
+
     let cli_validators = CliValidators {
         total_active_stake,
         total_current_stake,
         total_delinquent_stake,
-        validators: current_validators
-            .into_iter()
-            .chain(delinquent_validators.into_iter())
-            .collect(),
+        validators,
+        average_skip_rate,
+        average_stake_weighted_skip_rate,
         validators_sort_order,
         validators_reverse_sort,
         number_validators,

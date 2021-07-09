@@ -2,11 +2,10 @@ use solana_sdk::{
     account::AccountSharedData,
     instruction::{CompiledInstruction, Instruction, InstructionError},
     keyed_account::{create_keyed_accounts_unified, KeyedAccount},
-    message::Message,
     pubkey::Pubkey,
     sysvar::Sysvar,
 };
-use std::{cell::RefCell, fmt::Debug, rc::Rc, sync::Arc};
+use std::{cell::RefCell, collections::HashSet, fmt::Debug, rc::Rc, sync::Arc};
 
 /// Prototype of a native loader entry point
 ///
@@ -62,10 +61,9 @@ pub trait InvokeContext {
     /// Verify and update PreAccount state based on program execution
     fn verify_and_update(
         &mut self,
-        message: &Message,
         instruction: &CompiledInstruction,
-        accounts: &[Rc<RefCell<AccountSharedData>>],
-        caller_pivileges: Option<&[bool]>,
+        accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        write_privileges: &[bool],
     ) -> Result<(), InstructionError>;
     /// Get the program ID of the currently executing program
     fn get_caller(&self) -> Result<&Pubkey, InstructionError>;
@@ -90,7 +88,7 @@ pub trait InvokeContext {
     fn record_instruction(&self, instruction: &Instruction);
     /// Get the bank's active feature set
     fn is_feature_active(&self, feature_id: &Pubkey) -> bool;
-    /// Get an account from a pre-account
+    /// Get an account by its key
     fn get_account(&self, pubkey: &Pubkey) -> Option<Rc<RefCell<AccountSharedData>>>;
     /// Update timing
     fn update_timing(
@@ -181,6 +179,10 @@ pub struct BpfComputeBudget {
     pub cpi_bytes_per_unit: u64,
     /// Base number of compute units consumed to get a sysvar
     pub sysvar_base_cost: u64,
+    /// Number of compute units consumed to call secp256k1_recover
+    pub secp256k1_recover_cost: u64,
+    /// Optional program heap region size, if `None` then loader default
+    pub heap_size: Option<usize>,
 }
 impl Default for BpfComputeBudget {
     fn default() -> Self {
@@ -204,6 +206,8 @@ impl BpfComputeBudget {
             max_cpi_instruction_size: 1280, // IPv6 Min MTU size
             cpi_bytes_per_unit: 250,        // ~50MB at 200,000 units
             sysvar_base_cost: 100,
+            secp256k1_recover_cost: 25_000,
+            heap_size: None,
         }
     }
 }
@@ -330,6 +334,7 @@ pub struct MockInvokeContext<'a> {
     pub programs: Vec<(Pubkey, ProcessInstructionWithContext)>,
     pub accounts: Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>,
     pub sysvars: Vec<(Pubkey, Option<Rc<Vec<u8>>>)>,
+    pub disabled_features: HashSet<Pubkey>,
 }
 impl<'a> MockInvokeContext<'a> {
     pub fn new(keyed_accounts: Vec<KeyedAccount<'a>>) -> Self {
@@ -344,6 +349,7 @@ impl<'a> MockInvokeContext<'a> {
             programs: vec![],
             accounts: vec![],
             sysvars: vec![],
+            disabled_features: HashSet::default(),
         };
         invoke_context
             .invoke_stack
@@ -393,10 +399,9 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
     }
     fn verify_and_update(
         &mut self,
-        _message: &Message,
         _instruction: &CompiledInstruction,
-        _accounts: &[Rc<RefCell<AccountSharedData>>],
-        _caller_pivileges: Option<&[bool]>,
+        _accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        _write_pivileges: &[bool],
     ) -> Result<(), InstructionError> {
         Ok(())
     }
@@ -438,8 +443,8 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
         None
     }
     fn record_instruction(&self, _instruction: &Instruction) {}
-    fn is_feature_active(&self, _feature_id: &Pubkey) -> bool {
-        true
+    fn is_feature_active(&self, feature_id: &Pubkey) -> bool {
+        !self.disabled_features.contains(feature_id)
     }
     fn get_account(&self, pubkey: &Pubkey) -> Option<Rc<RefCell<AccountSharedData>>> {
         for (key, account) in self.accounts.iter() {

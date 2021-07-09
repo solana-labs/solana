@@ -105,7 +105,7 @@ impl ContactInfo {
     }
 
     /// New random ContactInfo for tests and simulations.
-    pub(crate) fn new_rand<R: rand::Rng>(rng: &mut R, pubkey: Option<Pubkey>) -> Self {
+    pub fn new_rand<R: rand::Rng>(rng: &mut R, pubkey: Option<Pubkey>) -> Self {
         let delay = 10 * 60 * 1000; // 10 minutes
         let now = timestamp() - delay + rng.gen_range(0, 2 * delay);
         let pubkey = pubkey.unwrap_or_else(solana_sdk::pubkey::new_rand);

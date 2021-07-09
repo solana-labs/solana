@@ -1,7 +1,5 @@
-import assert from 'assert';
 import bs58 from 'bs58';
 import {Buffer} from 'buffer';
-import {parse as urlParse} from 'url';
 import fetch, {Response} from 'node-fetch';
 import {
   type as pick,
@@ -34,6 +32,7 @@ import {Signer} from './keypair';
 import {MS_PER_SLOT} from './timing';
 import {Transaction} from './transaction';
 import {Message} from './message';
+import assert from './util/assert';
 import {sleep} from './util/sleep';
 import {promiseTimeout} from './util/promise-timeout';
 import {toBuffer} from './util/to-buffer';
@@ -116,6 +115,21 @@ export type ConfirmOptions = {
  * Options for getConfirmedSignaturesForAddress2
  */
 export type ConfirmedSignaturesForAddress2Options = {
+  /**
+   * Start searching backwards from this transaction signature.
+   * @remark If not provided the search starts from the highest max confirmed block.
+   */
+  before?: TransactionSignature;
+  /** Search until this transaction signature is reached, if found before `limit`. */
+  until?: TransactionSignature;
+  /** Maximum transaction signatures to return (between 1 and 1,000, default: 1,000). */
+  limit?: number;
+};
+
+/**
+ * Options for getSignaturesForAddress
+ */
+export type SignaturesForAddressOptions = {
   /**
    * Start searching backwards from this transaction signature.
    * @remark If not provided the search starts from the highest max confirmed block.
@@ -1060,6 +1074,21 @@ const GetConfirmedSignaturesForAddress2RpcResult = jsonRpcResult(
   ),
 );
 
+/**
+ * Expected JSON RPC response for the "getSignaturesForAddress" message
+ */
+const GetSignaturesForAddressRpcResult = jsonRpcResult(
+  array(
+    pick({
+      signature: string(),
+      slot: number(),
+      err: TransactionErrorResult,
+      memo: nullable(string()),
+      blockTime: optional(nullable(number())),
+    }),
+  ),
+);
+
 /***
  * Expected JSON RPC response for the "accountNotification" message
  */
@@ -1695,6 +1724,7 @@ type ProgramAccountSubscriptionInfo = {
   callback: ProgramAccountChangeCallback;
   commitment?: Commitment;
   subscriptionId: SubscriptionId | null; // null when there's no current server subscription id
+  filters?: GetProgramAccountsFilter[];
 };
 
 /**
@@ -1994,7 +2024,7 @@ export class Connection {
     endpoint: string,
     commitmentOrConfig?: Commitment | ConnectionConfig,
   ) {
-    let url = urlParse(endpoint);
+    let url = new URL(endpoint);
     const useHttps = url.protocol === 'https:';
 
     let wsEndpoint;
@@ -2015,7 +2045,7 @@ export class Connection {
     this._rpcWsEndpoint = wsEndpoint || makeWebsocketUrl(endpoint);
 
     this._rpcClient = createRpcClient(
-      url.href,
+      url.toString(),
       useHttps,
       httpHeaders,
       fetchMiddleware,
@@ -3206,6 +3236,35 @@ export class Connection {
   }
 
   /**
+   * Returns confirmed signatures for transactions involving an
+   * address backwards in time from the provided signature or most recent confirmed block
+   *
+   *
+   * @param address queried address
+   * @param options
+   */
+  async getSignaturesForAddress(
+    address: PublicKey,
+    options?: SignaturesForAddressOptions,
+    commitment?: Finality,
+  ): Promise<Array<ConfirmedSignatureInfo>> {
+    const args = this._buildArgsAtLeastConfirmed(
+      [address.toBase58()],
+      commitment,
+      undefined,
+      options,
+    );
+    const unsafeRes = await this._rpcRequest('getSignaturesForAddress', args);
+    const res = create(unsafeRes, GetSignaturesForAddressRpcResult);
+    if ('error' in res) {
+      throw new Error(
+        'failed to get signatures for address: ' + res.error.message,
+      );
+    }
+    return res.result;
+  }
+
+  /**
    * Fetch the contents of a Nonce account from the cluster, return with context
    */
   async getNonceAndContext(
@@ -3649,7 +3708,9 @@ export class Connection {
       this._subscribe(
         sub,
         'programSubscribe',
-        this._buildArgs([sub.programId], sub.commitment, 'base64'),
+        this._buildArgs([sub.programId], sub.commitment, 'base64', {
+          filters: sub.filters,
+        }),
       );
     }
 
@@ -3771,12 +3832,14 @@ export class Connection {
    * @param programId Public key of the program to monitor
    * @param callback Function to invoke whenever the account is changed
    * @param commitment Specify the commitment level account changes must reach before notification
+   * @param filters The program account filters to pass into the RPC method
    * @return subscription id
    */
   onProgramAccountChange(
     programId: PublicKey,
     callback: ProgramAccountChangeCallback,
     commitment?: Commitment,
+    filters?: GetProgramAccountsFilter[],
   ): number {
     const id = ++this._programAccountChangeSubscriptionCounter;
     this._programAccountChangeSubscriptions[id] = {
@@ -3784,6 +3847,7 @@ export class Connection {
       callback,
       commitment,
       subscriptionId: null,
+      filters,
     };
     this._updateSubscriptions();
     return id;

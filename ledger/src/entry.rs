@@ -359,7 +359,7 @@ pub trait EntrySlice {
     fn verify_and_hash_transactions(
         &self,
         skip_verification: bool,
-        secp256k1_program_enabled: bool,
+        verify_tx_signatures_len: bool,
     ) -> Option<Vec<EntryType<'_>>>;
 }
 
@@ -514,7 +514,7 @@ impl EntrySlice for [Entry] {
     fn verify_and_hash_transactions<'a>(
         &'a self,
         skip_verification: bool,
-        secp256k1_program_enabled: bool,
+        verify_tx_signatures_len: bool,
     ) -> Option<Vec<EntryType<'a>>> {
         let verify_and_hash = |tx: &'a Transaction| -> Option<HashedTransaction<'a>> {
             let message_hash = if !skip_verification {
@@ -522,9 +522,9 @@ impl EntrySlice for [Entry] {
                 if size > PACKET_DATA_SIZE as u64 {
                     return None;
                 }
-                if secp256k1_program_enabled {
-                    // Verify tx precompiles if secp256k1 program is enabled.
-                    tx.verify_precompiles().ok()?;
+                tx.verify_precompiles().ok()?;
+                if verify_tx_signatures_len && !tx.verify_signatures_len() {
+                    return None;
                 }
                 tx.verify_and_hash_message().ok()?
             } else {
@@ -883,6 +883,62 @@ mod tests {
         bad_ticks.push(next_entry(&bad_ticks.last().unwrap().hash, 1, vec![tx1]));
         bad_ticks[1].hash = one;
         assert!(!bad_ticks.verify(&one)); // inductive step, bad
+    }
+
+    #[test]
+    fn test_verify_and_hash_transactions_sig_len() {
+        let mut rng = rand::thread_rng();
+        let recent_blockhash = hash_new_rand(&mut rng);
+        let from_keypair = Keypair::new();
+        let to_keypair = Keypair::new();
+        let from_pubkey = from_keypair.pubkey();
+        let to_pubkey = to_keypair.pubkey();
+
+        enum TestCase {
+            AddSignature,
+            RemoveSignature,
+        }
+
+        let make_transaction = |case: TestCase| {
+            let message = Message::new(
+                &[system_instruction::transfer(&from_pubkey, &to_pubkey, 1)],
+                Some(&from_pubkey),
+            );
+            let mut tx = Transaction::new(&[&from_keypair], message, recent_blockhash);
+            assert_eq!(tx.message.header.num_required_signatures, 1);
+            match case {
+                TestCase::AddSignature => {
+                    let signature = to_keypair.sign_message(&tx.message.serialize());
+                    tx.signatures.push(signature);
+                }
+                TestCase::RemoveSignature => {
+                    tx.signatures.remove(0);
+                }
+            }
+            tx
+        };
+        // No signatures.
+        {
+            let tx = make_transaction(TestCase::RemoveSignature);
+            let entries = vec![next_entry(&recent_blockhash, 1, vec![tx])];
+            assert!(entries[..]
+                .verify_and_hash_transactions(false, false)
+                .is_some());
+            assert!(entries[..]
+                .verify_and_hash_transactions(false, true)
+                .is_none());
+        }
+        // Too many signatures.
+        {
+            let tx = make_transaction(TestCase::AddSignature);
+            let entries = vec![next_entry(&recent_blockhash, 1, vec![tx])];
+            assert!(entries[..]
+                .verify_and_hash_transactions(false, false)
+                .is_some());
+            assert!(entries[..]
+                .verify_and_hash_transactions(false, true)
+                .is_none());
+        }
     }
 
     #[test]

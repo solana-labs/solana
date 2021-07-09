@@ -39,6 +39,7 @@ pub mod pubkey;
 pub mod rent;
 pub mod sanitize;
 pub mod secp256k1_program;
+pub mod secp256k1_recover;
 pub mod serialize_utils;
 pub mod short_vec;
 pub mod slot_hashes;
@@ -48,6 +49,18 @@ pub mod stake_history;
 pub mod system_instruction;
 pub mod system_program;
 pub mod sysvar;
+
+pub mod config {
+    pub mod program {
+        crate::declare_id!("Config1111111111111111111111111111111111111");
+    }
+}
+
+pub mod vote {
+    pub mod program {
+        crate::declare_id!("Vote111111111111111111111111111111111111111");
+    }
+}
 
 /// Convenience macro to declare a static public key and functions to interact with it
 ///

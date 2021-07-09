@@ -3,9 +3,10 @@ use crate::{
     progress_map::ProgressMap,
 };
 use solana_sdk::{clock::Slot, hash::Hash};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 pub(crate) type DuplicateSlotsTracker = BTreeSet<Slot>;
+pub(crate) type DuplicateSlotsToRepair = HashSet<(Slot, Hash)>;
 pub(crate) type GossipDuplicateConfirmedSlots = BTreeMap<Slot, Hash>;
 type SlotStateHandler = fn(Slot, &Hash, Option<&Hash>, bool, bool) -> Vec<ResultingStateChange>;
 
@@ -38,8 +39,6 @@ impl SlotStateUpdate {
         }
     }
 }
-
-fn repair_correct_version(_slot: Slot, _hash: &Hash) {}
 
 fn on_dead_slot(
     slot: Slot,
@@ -202,6 +201,7 @@ fn get_cluster_duplicate_confirmed_hash<'a>(
 fn apply_state_changes(
     slot: Slot,
     fork_choice: &mut HeaviestSubtreeForkChoice,
+    duplicate_slots_to_repair: &mut DuplicateSlotsToRepair,
     state_changes: Vec<ResultingStateChange>,
 ) {
     for state_change in state_changes {
@@ -212,9 +212,7 @@ fn apply_state_changes(
             ResultingStateChange::RepairDuplicateConfirmedVersion(
                 cluster_duplicate_confirmed_hash,
             ) => {
-                // TODO: Should consider moving the updating of the duplicate slots in the
-                // progress map from ReplayStage::confirm_forks to here.
-                repair_correct_version(slot, &cluster_duplicate_confirmed_hash);
+                duplicate_slots_to_repair.insert((slot, cluster_duplicate_confirmed_hash));
             }
             ResultingStateChange::DuplicateConfirmedSlotMatchesCluster(bank_frozen_hash) => {
                 fork_choice.mark_fork_valid_candidate(&(slot, bank_frozen_hash));
@@ -232,6 +230,7 @@ pub(crate) fn check_slot_agrees_with_cluster(
     gossip_duplicate_confirmed_slots: &GossipDuplicateConfirmedSlots,
     progress: &ProgressMap,
     fork_choice: &mut HeaviestSubtreeForkChoice,
+    duplicate_slots_to_repair: &mut HashSet<(Slot, Hash)>,
     slot_state_update: SlotStateUpdate,
 ) {
     info!(
@@ -300,17 +299,17 @@ pub(crate) fn check_slot_agrees_with_cluster(
         is_slot_duplicate,
         is_dead,
     );
-    apply_state_changes(slot, fork_choice, state_changes);
+    apply_state_changes(slot, fork_choice, duplicate_slots_to_repair, state_changes);
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::consensus::test::VoteSimulator;
+    use crate::vote_simulator::VoteSimulator;
     use solana_runtime::bank_forks::BankForks;
     use std::{
         collections::{HashMap, HashSet},
-        sync::RwLock,
+        sync::{Arc, RwLock},
     };
     use trees::tr;
 
@@ -318,7 +317,7 @@ mod test {
         heaviest_subtree_fork_choice: HeaviestSubtreeForkChoice,
         progress: ProgressMap,
         descendants: HashMap<Slot, HashSet<Slot>>,
-        bank_forks: RwLock<BankForks>,
+        bank_forks: Arc<RwLock<BankForks>>,
     }
 
     fn setup() -> InitialState {
@@ -613,6 +612,8 @@ mod test {
             ..
         } = setup();
 
+        let mut duplicate_slots_to_repair = DuplicateSlotsToRepair::default();
+
         // MarkSlotDuplicate should mark progress map and remove
         // the slot from fork choice
         let duplicate_slot = bank_forks.read().unwrap().root() + 1;
@@ -625,6 +626,7 @@ mod test {
         apply_state_changes(
             duplicate_slot,
             &mut heaviest_subtree_fork_choice,
+            &mut duplicate_slots_to_repair,
             vec![ResultingStateChange::MarkSlotDuplicate(duplicate_slot_hash)],
         );
         assert!(!heaviest_subtree_fork_choice
@@ -646,11 +648,13 @@ mod test {
                 duplicate_slot
             );
         }
+        assert!(duplicate_slots_to_repair.is_empty());
 
         // DuplicateConfirmedSlotMatchesCluster should re-enable fork choice
         apply_state_changes(
             duplicate_slot,
             &mut heaviest_subtree_fork_choice,
+            &mut duplicate_slots_to_repair,
             vec![ResultingStateChange::DuplicateConfirmedSlotMatchesCluster(
                 duplicate_slot_hash,
             )],
@@ -671,6 +675,22 @@ mod test {
         assert!(heaviest_subtree_fork_choice
             .is_candidate(&(duplicate_slot, duplicate_slot_hash))
             .unwrap());
+        assert!(duplicate_slots_to_repair.is_empty());
+
+        // Simulate detecting another hash that is the correct version,
+        // RepairDuplicateConfirmedVersion should add the slot to repair
+        // to `duplicate_slots_to_repair`
+        let correct_hash = Hash::new_unique();
+        apply_state_changes(
+            duplicate_slot,
+            &mut heaviest_subtree_fork_choice,
+            &mut duplicate_slots_to_repair,
+            vec![ResultingStateChange::RepairDuplicateConfirmedVersion(
+                correct_hash,
+            )],
+        );
+        assert_eq!(duplicate_slots_to_repair.len(), 1);
+        assert!(duplicate_slots_to_repair.contains(&(duplicate_slot, correct_hash)));
     }
 
     fn run_test_state_duplicate_then_bank_frozen(initial_bank_hash: Option<Hash>) {
@@ -689,6 +709,7 @@ mod test {
         let root = 0;
         let mut duplicate_slots_tracker = DuplicateSlotsTracker::default();
         let gossip_duplicate_confirmed_slots = GossipDuplicateConfirmedSlots::default();
+        let mut duplicate_slots_to_repair = DuplicateSlotsToRepair::default();
         let duplicate_slot = 2;
         check_slot_agrees_with_cluster(
             duplicate_slot,
@@ -698,6 +719,7 @@ mod test {
             &gossip_duplicate_confirmed_slots,
             &progress,
             &mut heaviest_subtree_fork_choice,
+            &mut duplicate_slots_to_repair,
             SlotStateUpdate::Duplicate,
         );
         assert!(duplicate_slots_tracker.contains(&duplicate_slot));
@@ -724,6 +746,7 @@ mod test {
             &gossip_duplicate_confirmed_slots,
             &progress,
             &mut heaviest_subtree_fork_choice,
+            &mut duplicate_slots_to_repair,
             SlotStateUpdate::Frozen,
         );
 
@@ -785,6 +808,7 @@ mod test {
             &gossip_duplicate_confirmed_slots,
             &progress,
             &mut heaviest_subtree_fork_choice,
+            &mut DuplicateSlotsToRepair::default(),
             SlotStateUpdate::DuplicateConfirmed,
         );
         assert!(heaviest_subtree_fork_choice
@@ -814,6 +838,7 @@ mod test {
             &gossip_duplicate_confirmed_slots,
             &progress,
             &mut heaviest_subtree_fork_choice,
+            &mut DuplicateSlotsToRepair::default(),
             SlotStateUpdate::Duplicate,
         );
         assert!(duplicate_slots_tracker.contains(&3));
@@ -872,6 +897,7 @@ mod test {
             &gossip_duplicate_confirmed_slots,
             &progress,
             &mut heaviest_subtree_fork_choice,
+            &mut DuplicateSlotsToRepair::default(),
             SlotStateUpdate::Duplicate,
         );
         assert!(duplicate_slots_tracker.contains(&2));
@@ -901,6 +927,7 @@ mod test {
             &gossip_duplicate_confirmed_slots,
             &progress,
             &mut heaviest_subtree_fork_choice,
+            &mut DuplicateSlotsToRepair::default(),
             SlotStateUpdate::DuplicateConfirmed,
         );
         for slot in 0..=3 {
@@ -936,6 +963,7 @@ mod test {
         let root = 0;
         let mut duplicate_slots_tracker = DuplicateSlotsTracker::default();
         let mut gossip_duplicate_confirmed_slots = GossipDuplicateConfirmedSlots::default();
+        let mut duplicate_slots_to_repair = DuplicateSlotsToRepair::default();
 
         // Mark 3 as duplicate confirmed
         gossip_duplicate_confirmed_slots.insert(3, slot3_hash);
@@ -947,6 +975,7 @@ mod test {
             &gossip_duplicate_confirmed_slots,
             &progress,
             &mut heaviest_subtree_fork_choice,
+            &mut duplicate_slots_to_repair,
             SlotStateUpdate::DuplicateConfirmed,
         );
         let verify_all_slots_duplicate_confirmed =
@@ -980,6 +1009,7 @@ mod test {
             &gossip_duplicate_confirmed_slots,
             &progress,
             &mut heaviest_subtree_fork_choice,
+            &mut duplicate_slots_to_repair,
             SlotStateUpdate::Duplicate,
         );
         assert!(duplicate_slots_tracker.contains(&1));

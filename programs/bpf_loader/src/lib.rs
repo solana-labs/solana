@@ -30,7 +30,7 @@ use solana_sdk::{
     bpf_loader, bpf_loader_deprecated,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     clock::Clock,
-    entrypoint::SUCCESS,
+    entrypoint::{HEAP_LENGTH, SUCCESS},
     feature_set::{add_missing_program_error_mappings, upgradeable_close_instruction},
     ic_logger_msg, ic_msg,
     instruction::InstructionError,
@@ -82,15 +82,20 @@ pub fn create_executor(
     let config = Config {
         max_call_depth: bpf_compute_budget.max_call_depth,
         stack_frame_size: bpf_compute_budget.stack_frame_size,
-        enable_instruction_meter: true,
         enable_instruction_tracing: log_enabled!(Trace),
+        ..Config::default()
     };
     let mut executable = {
         let keyed_accounts = invoke_context.get_keyed_accounts()?;
         let program = keyed_account_at_index(keyed_accounts, program_account_index)?;
         let account = program.try_account_ref()?;
         let data = &account.data()[program_data_offset..];
-        <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(data, None, config)
+        <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(
+            data,
+            None,
+            config,
+            syscall_registry,
+        )
     }
     .map_err(|e| map_ebpf_error(invoke_context, e))?;
     let (_, elf_bytes) = executable
@@ -98,7 +103,6 @@ pub fn create_executor(
         .map_err(|e| map_ebpf_error(invoke_context, e))?;
     verifier::check(elf_bytes)
         .map_err(|e| map_ebpf_error(invoke_context, EbpfError::UserError(e.into())))?;
-    executable.set_syscall_registry(syscall_registry);
     if use_jit {
         if let Err(err) = executable.jit_compile() {
             ic_msg!(invoke_context, "Failed to compile program {:?}", err);
@@ -138,10 +142,6 @@ fn check_loader_id(id: &Pubkey) -> bool {
         || bpf_loader_upgradeable::check_id(id)
 }
 
-/// Default program heap size, allocators
-/// are expected to enforce this
-const DEFAULT_HEAP_SIZE: usize = 32 * 1024;
-
 /// Create the BPF virtual machine
 pub fn create_vm<'a>(
     loader_id: &'a Pubkey,
@@ -149,7 +149,11 @@ pub fn create_vm<'a>(
     parameter_bytes: &mut [u8],
     invoke_context: &'a mut dyn InvokeContext,
 ) -> Result<EbpfVm<'a, BpfError, ThisInstructionMeter>, EbpfError<BpfError>> {
-    let heap = AlignedMemory::new_with_size(DEFAULT_HEAP_SIZE, HOST_ALIGN);
+    let bpf_compute_budget = invoke_context.get_bpf_compute_budget();
+    let heap = AlignedMemory::new_with_size(
+        bpf_compute_budget.heap_size.unwrap_or(HEAP_LENGTH),
+        HOST_ALIGN,
+    );
     let heap_region = MemoryRegion::new_from_slice(heap.as_slice(), MM_HEAP_START, 0, true);
     let mut vm = EbpfVm::new(program, parameter_bytes, &[heap_region])?;
     syscalls::bind_syscall_context_objects(loader_id, &mut vm, invoke_context, heap)?;
@@ -853,6 +857,7 @@ impl Executor for BpfExecutor {
 mod tests {
     use super::*;
     use rand::Rng;
+    use solana_rbpf::vm::SyscallRegistry;
     use solana_runtime::{bank::Bank, bank_client::BankClient};
     use solana_sdk::{
         account::{
@@ -905,9 +910,10 @@ mod tests {
         solana_rbpf::elf::register_bpf_function(&mut bpf_functions, 0, "entrypoint").unwrap();
         let program = <dyn Executable<BpfError, TestInstructionMeter>>::from_text_bytes(
             program,
-            bpf_functions,
             None,
             Config::default(),
+            SyscallRegistry::default(),
+            bpf_functions,
         )
         .unwrap();
         let mut vm =
@@ -1132,6 +1138,7 @@ mod tests {
             programs: vec![],
             accounts: vec![],
             sysvars: vec![],
+            disabled_features: vec![].into_iter().collect(),
         };
         assert_eq!(
             Err(InstructionError::ProgramFailedToComplete),
@@ -2192,8 +2199,10 @@ mod tests {
         let upgrade_authority_address = Pubkey::new_unique();
         let buffer_address = Pubkey::new_unique();
         let program_address = Pubkey::new_unique();
-        let (programdata_address, _) =
-            Pubkey::find_program_address(&[program_address.as_ref()], &id());
+        let (programdata_address, _) = Pubkey::find_program_address(
+            &[program_address.as_ref()],
+            &bpf_loader_upgradeable::id(),
+        );
         let spill_address = Pubkey::new_unique();
         let upgrade_authority_account = AccountSharedData::new_ref(1, 0, &Pubkey::new_unique());
         let rent_id = sysvar::rent::id();
@@ -2846,8 +2855,10 @@ mod tests {
         let new_upgrade_authority_address = Pubkey::new_unique();
         let new_upgrade_authority_account = AccountSharedData::new_ref(1, 0, &Pubkey::new_unique());
         let program_address = Pubkey::new_unique();
-        let (programdata_address, _) =
-            Pubkey::find_program_address(&[program_address.as_ref()], &id());
+        let (programdata_address, _) = Pubkey::find_program_address(
+            &[program_address.as_ref()],
+            &bpf_loader_upgradeable::id(),
+        );
         let programdata_account = AccountSharedData::new_ref(
             1,
             UpgradeableLoaderState::programdata_len(0).unwrap(),

@@ -753,6 +753,9 @@ impl From<TransactionError> for tx_by_addr::TransactionError {
                             InstructionError::UnsupportedSysvar => {
                                 tx_by_addr::InstructionErrorType::UnsupportedSysvar
                             }
+                            InstructionError::IllegalOwner => {
+                                tx_by_addr::InstructionErrorType::IllegalOwner
+                            }
                         } as i32,
                         custom: match instruction_error {
                             InstructionError::Custom(custom) => {

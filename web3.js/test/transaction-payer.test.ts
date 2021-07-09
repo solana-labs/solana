@@ -1,5 +1,4 @@
 import base58 from 'bs58';
-import invariant from 'assert';
 import {expect} from 'chai';
 
 import {
@@ -9,6 +8,7 @@ import {
   SystemProgram,
   LAMPORTS_PER_SOL,
 } from '../src';
+import invariant from '../src/util/assert';
 import {MOCK_PORT, url} from './url';
 import {helpers, mockRpcResponse, mockServer} from './mocks/rpc-http';
 import {stubRpcWebSocket, restoreRpcWebSocket} from './mocks/rpc-websockets';

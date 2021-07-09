@@ -18,13 +18,11 @@ use {
         crds_gossip_error::CrdsGossipError,
         crds_value::CrdsValue,
         ping_pong::PingCache,
+        weighted_shuffle::WeightedShuffle,
     },
     itertools::Itertools,
     lru::LruCache,
-    rand::{
-        distributions::{Distribution, WeightedIndex},
-        Rng,
-    },
+    rand::Rng,
     rayon::{prelude::*, ThreadPool},
     solana_runtime::bloom::{AtomicBloom, Bloom},
     solana_sdk::{
@@ -237,13 +235,10 @@ impl CrdsGossipPull {
         if peers.is_empty() {
             return Err(CrdsGossipError::NoPeers);
         }
-        let mut peers = {
-            let mut rng = rand::thread_rng();
-            let num_samples = peers.len() * 2;
-            let index = WeightedIndex::new(weights).unwrap();
-            let sample_peer = move || peers[index.sample(&mut rng)];
-            repeat_with(sample_peer).take(num_samples)
-        };
+        let mut rng = rand::thread_rng();
+        let mut peers = WeightedShuffle::new(&mut rng, &weights)
+            .unwrap()
+            .map(|i| peers[i]);
         let peer = {
             let mut rng = rand::thread_rng();
             let mut ping_cache = ping_cache.lock().unwrap();
@@ -275,7 +270,7 @@ impl CrdsGossipPull {
         now: u64,
         gossip_validators: Option<&HashSet<Pubkey>>,
         stakes: &HashMap<Pubkey, u64>,
-    ) -> Vec<(f32, &'a ContactInfo)> {
+    ) -> Vec<(u64, &'a ContactInfo)> {
         let mut rng = rand::thread_rng();
         let active_cutoff = now.saturating_sub(PULL_ACTIVE_TIMEOUT_MS);
         crds.get_nodes()
@@ -309,7 +304,9 @@ impl CrdsGossipPull {
                 let since = (now.saturating_sub(req_time).min(3600 * 1000) / 1024) as u32;
                 let stake = get_stake(&item.id, stakes);
                 let weight = get_weight(max_weight, since, stake);
-                (weight, item)
+                // Weights are bounded by max_weight defined above.
+                // So this type-cast should be safe.
+                ((weight * 100.0) as u64, item)
             })
             .collect()
     }
@@ -916,7 +913,7 @@ pub(crate) mod tests {
             &node_keypair.pubkey(),
             0,
         )));
-        let node = CrdsGossipPull::default();
+        let mut node = CrdsGossipPull::default();
         let mut pings = Vec::new();
         let ping_cache = Mutex::new(PingCache::new(
             Duration::from_secs(20 * 60), // ttl
@@ -954,25 +951,47 @@ pub(crate) mod tests {
             ),
             Err(CrdsGossipError::NoPeers)
         );
-        let new = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), 0);
+        let now = 1625029781069;
+        let new = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), now);
         ping_cache
             .lock()
             .unwrap()
             .mock_pong(new.id, new.gossip, Instant::now());
         let new = CrdsValue::new_unsigned(CrdsData::ContactInfo(new));
-        crds.insert(new.clone(), 0).unwrap();
+        crds.insert(new.clone(), now).unwrap();
         let req = node.new_pull_request(
             &thread_pool,
             &crds,
             &node_keypair,
             0,
-            0,
+            now,
             None,
             &HashMap::new(),
             PACKET_DATA_SIZE,
             &ping_cache,
             &mut pings,
         );
+        let (peer, _) = req.unwrap();
+        assert_eq!(peer, *new.contact_info().unwrap());
+
+        node.mark_pull_request_creation_time(new.contact_info().unwrap().id, now);
+        let offline = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), now);
+        let offline = CrdsValue::new_unsigned(CrdsData::ContactInfo(offline));
+        crds.insert(offline, now).unwrap();
+        let req = node.new_pull_request(
+            &thread_pool,
+            &crds,
+            &node_keypair,
+            0,
+            now,
+            None,
+            &HashMap::new(),
+            PACKET_DATA_SIZE,
+            &ping_cache,
+            &mut pings,
+        );
+        // Even though the offline node should have higher weight, we shouldn't request from it
+        // until we receive a ping.
         let (peer, _) = req.unwrap();
         assert_eq!(peer, *new.contact_info().unwrap());
     }

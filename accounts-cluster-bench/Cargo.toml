@@ -10,7 +10,7 @@ publish = false
 
 [dependencies]
 clap = "2.33.1"
-log = "0.4.11"
+log = "0.4.14"
 rand = "0.7.0"
 rayon = "1.5.1"
 solana-account-decoder = { path = "../account-decoder", version = "=1.8.0" }

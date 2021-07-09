@@ -80,6 +80,10 @@ impl Signer for Keypair {
     fn try_sign_message(&self, message: &[u8]) -> Result<Signature, SignerError> {
         Ok(self.sign_message(message))
     }
+
+    fn is_interactive(&self) -> bool {
+        false
+    }
 }
 
 impl<T> PartialEq<T> for Keypair

@@ -3,7 +3,7 @@ use solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey};
 use std::collections::{BTreeMap, HashMap};
 
 #[derive(Default)]
-pub(crate) struct UnfrozenGossipVerifiedVoteHashes {
+pub struct UnfrozenGossipVerifiedVoteHashes {
     pub votes_per_slot: BTreeMap<Slot, HashMap<Hash, Vec<Pubkey>>>,
 }
 
@@ -11,7 +11,7 @@ impl UnfrozenGossipVerifiedVoteHashes {
     // Update `latest_validator_votes_for_frozen_banks` if gossip has seen a newer vote
     // for a frozen bank.
     #[allow(dead_code)]
-    pub(crate) fn add_vote(
+    pub fn add_vote(
         &mut self,
         pubkey: Pubkey,
         vote_slot: Slot,
@@ -46,13 +46,13 @@ impl UnfrozenGossipVerifiedVoteHashes {
     }
 
     // Cleanup `votes_per_slot` based on new roots
-    pub(crate) fn set_root(&mut self, new_root: Slot) {
+    pub fn set_root(&mut self, new_root: Slot) {
         let mut slots_ge_root = self.votes_per_slot.split_off(&new_root);
         // `self.votes_per_slot` now only contains entries >= `new_root`
         std::mem::swap(&mut self.votes_per_slot, &mut slots_ge_root);
     }
 
-    pub(crate) fn remove_slot_hash(&mut self, slot: Slot, hash: &Hash) -> Option<Vec<Pubkey>> {
+    pub fn remove_slot_hash(&mut self, slot: Slot, hash: &Hash) -> Option<Vec<Pubkey>> {
         self.votes_per_slot.get_mut(&slot).and_then(|slot_hashes| {
             slot_hashes.remove(hash)
             // If `slot_hashes` becomes empty, it'll be removed by `set_root()` later

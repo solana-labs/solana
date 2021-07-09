@@ -6,7 +6,7 @@ use crate::{
     cluster_info_vote_listener::VoteTracker,
     completed_data_sets_service::CompletedDataSetsService,
     consensus::{reconcile_blockstore_roots_with_tower, Tower},
-    cost_model::{CostModel, ACCOUNT_MAX_COST, BLOCK_MAX_COST},
+    cost_model::CostModel,
     rewards_recorder_service::{RewardsRecorderSender, RewardsRecorderService},
     sample_performance_service::SamplePerformanceService,
     serve_repair::ServeRepair,
@@ -57,9 +57,10 @@ use solana_runtime::{
     accounts_db::AccountShrinkThreshold,
     accounts_index::AccountSecondaryIndexes,
     bank::Bank,
-    bank_forks::{BankForks, SnapshotConfig},
+    bank_forks::BankForks,
     commitment::BlockCommitmentCache,
     hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
+    snapshot_config::SnapshotConfig,
 };
 use solana_sdk::{
     clock::Slot,
@@ -259,6 +260,7 @@ pub struct Validator {
     tpu: Tpu,
     tvu: Tvu,
     ip_echo_server: Option<solana_net_utils::IpEchoServer>,
+    pub cluster_info: Arc<ClusterInfo>,
 }
 
 // in the distant future, get rid of ::new()/exit() and use Result properly...
@@ -278,7 +280,7 @@ pub(crate) fn abort() -> ! {
 impl Validator {
     pub fn new(
         mut node: Node,
-        identity_keypair: &Arc<Keypair>,
+        identity_keypair: Arc<Keypair>,
         ledger_path: &Path,
         vote_account: &Pubkey,
         authorized_voter_keypairs: Arc<RwLock<Vec<Arc<Keypair>>>>,
@@ -436,7 +438,7 @@ impl Validator {
             }
         }
 
-        let mut cluster_info = ClusterInfo::new(node.info.clone(), identity_keypair.clone());
+        let mut cluster_info = ClusterInfo::new(node.info.clone(), identity_keypair);
         cluster_info.set_contact_debug_interval(config.contact_debug_interval);
         cluster_info.set_entrypoints(cluster_entrypoints);
         cluster_info.restore_contact_info(ledger_path, config.contact_save_interval);
@@ -657,10 +659,9 @@ impl Validator {
             bank_forks.read().unwrap().root_bank().deref(),
         ));
 
-        let cost_model = Arc::new(RwLock::new(CostModel::new(
-            ACCOUNT_MAX_COST,
-            BLOCK_MAX_COST,
-        )));
+        let mut cost_model = CostModel::default();
+        cost_model.initialize_cost_table(&blockstore.read_program_costs().unwrap());
+        let cost_model = Arc::new(RwLock::new(cost_model));
 
         let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
         let (verified_vote_sender, verified_vote_receiver) = unbounded();
@@ -788,6 +789,7 @@ impl Validator {
             poh_recorder,
             ip_echo_server,
             validator_exit: config.validator_exit.clone(),
+            cluster_info,
         }
     }
 
@@ -827,6 +829,8 @@ impl Validator {
     }
 
     pub fn join(self) {
+        drop(self.cluster_info);
+
         self.poh_service.join().expect("poh_service");
         drop(self.poh_recorder);
 
@@ -1448,17 +1452,22 @@ fn report_target_features() {
         not(target_os = "macos")
     ))]
     {
-        // Validator binaries built on a machine with AVX support will generate invalid opcodes
-        // when run on machines without AVX causing a non-obvious process abort.  Instead detect
-        // the mismatch and error cleanly.
-        if is_x86_feature_detected!("avx") {
-            info!("AVX detected");
-        } else {
-            error!(
-                "Your machine does not have AVX support, please rebuild from source on your machine"
-            );
-            abort();
-        }
+        unsafe { check_avx() };
+    }
+}
+
+// Validator binaries built on a machine with AVX support will generate invalid opcodes
+// when run on machines without AVX causing a non-obvious process abort.  Instead detect
+// the mismatch and error cleanly.
+#[target_feature(enable = "avx")]
+unsafe fn check_avx() {
+    if is_x86_feature_detected!("avx") {
+        info!("AVX detected");
+    } else {
+        error!(
+            "Your machine does not have AVX support, please rebuild from source on your machine"
+        );
+        abort();
     }
 }
 
@@ -1596,7 +1605,7 @@ mod tests {
         let start_progress = Arc::new(RwLock::new(ValidatorStartProgress::default()));
         let validator = Validator::new(
             validator_node,
-            &Arc::new(validator_keypair),
+            Arc::new(validator_keypair),
             &validator_ledger_path,
             &voting_keypair.pubkey(),
             Arc::new(RwLock::new(vec![voting_keypair.clone()])),
@@ -1674,7 +1683,7 @@ mod tests {
                 };
                 Validator::new(
                     validator_node,
-                    &Arc::new(validator_keypair),
+                    Arc::new(validator_keypair),
                     &validator_ledger_path,
                     &vote_account_keypair.pubkey(),
                     Arc::new(RwLock::new(vec![Arc::new(vote_account_keypair)])),
