@@ -164,7 +164,7 @@ impl CrdsGossipPush {
     }
 
     /// process a push message to the network
-    pub fn process_push_message(
+    pub(crate) fn process_push_message(
         &mut self,
         crds: &mut Crds,
         from: &Pubkey,
