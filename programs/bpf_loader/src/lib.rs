@@ -1138,7 +1138,7 @@ mod tests {
             programs: vec![],
             accounts: vec![],
             sysvars: vec![],
-            feature_active: false,
+            disabled_features: vec![].into_iter().collect(),
         };
         assert_eq!(
             Err(InstructionError::ProgramFailedToComplete),

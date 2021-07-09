@@ -5,7 +5,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     sysvar::Sysvar,
 };
-use std::{cell::RefCell, fmt::Debug, rc::Rc, sync::Arc};
+use std::{cell::RefCell, collections::HashSet, fmt::Debug, rc::Rc, sync::Arc};
 
 /// Prototype of a native loader entry point
 ///
@@ -334,7 +334,7 @@ pub struct MockInvokeContext<'a> {
     pub programs: Vec<(Pubkey, ProcessInstructionWithContext)>,
     pub accounts: Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>,
     pub sysvars: Vec<(Pubkey, Option<Rc<Vec<u8>>>)>,
-    pub feature_active: bool,
+    pub disabled_features: HashSet<Pubkey>,
 }
 impl<'a> MockInvokeContext<'a> {
     pub fn new(keyed_accounts: Vec<KeyedAccount<'a>>) -> Self {
@@ -349,7 +349,7 @@ impl<'a> MockInvokeContext<'a> {
             programs: vec![],
             accounts: vec![],
             sysvars: vec![],
-            feature_active: true,
+            disabled_features: HashSet::default(),
         };
         invoke_context
             .invoke_stack
@@ -443,8 +443,8 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
         None
     }
     fn record_instruction(&self, _instruction: &Instruction) {}
-    fn is_feature_active(&self, _feature_id: &Pubkey) -> bool {
-        self.feature_active
+    fn is_feature_active(&self, feature_id: &Pubkey) -> bool {
+        !self.disabled_features.contains(feature_id)
     }
     fn get_account(&self, pubkey: &Pubkey) -> Option<Rc<RefCell<AccountSharedData>>> {
         for (key, account) in self.accounts.iter() {

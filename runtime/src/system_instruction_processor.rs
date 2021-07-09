@@ -941,7 +941,9 @@ mod tests {
             &sysvar::id(),
             &signers,
             &MockInvokeContext {
-                feature_active: false,
+                disabled_features: vec![feature_set::rent_for_sysvars::id()]
+                    .into_iter()
+                    .collect(),
                 ..MockInvokeContext::new(vec![])
             },
         );
@@ -1089,7 +1091,9 @@ mod tests {
                 &new_owner,
                 &[from].iter().cloned().collect::<HashSet<_>>(),
                 &MockInvokeContext {
-                    feature_active: false,
+                    disabled_features: vec![feature_set::rent_for_sysvars::id()]
+                        .into_iter()
+                        .collect(),
                     ..MockInvokeContext::new(vec![])
                 },
             ),
