@@ -35,8 +35,10 @@ echo --- build environment
   "$cargo" stable clippy --version --verbose
   "$cargo" nightly clippy --version --verbose
 
-  # audit is done only with stable
+  # audit is done only with "$cargo stable"
   "$cargo" stable audit --version
+
+  grcov --version
 )
 
 export RUST_BACKTRACE=1
