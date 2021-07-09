@@ -99,6 +99,7 @@ enum InstructionErrorType {
     INVALID_ACCOUNT_OWNER = 46;
     ARITHMETIC_OVERFLOW = 47;
     UNSUPPORTED_SYSVAR = 48;
+    ILLEGAL_OWNER = 49;
 }
 
 message UnixTimestamp {
