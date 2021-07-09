@@ -975,7 +975,12 @@ impl ClusterInfo {
             reset = true;
         }
         let mut gossip = self.gossip.write().unwrap();
-        gossip.process_push_message(&self_pubkey, entries, timestamp());
+        let now = timestamp();
+        for entry in entries {
+            if let Err(err) = gossip.crds.insert(entry, now) {
+                error!("push_epoch_slots failed: {:?}", err);
+            }
+        }
     }
 
     fn time_gossip_read_lock<'a>(
@@ -1034,10 +1039,10 @@ impl ClusterInfo {
         let vote = Vote::new(self_pubkey, vote, now);
         let vote = CrdsData::Vote(vote_index, vote);
         let vote = CrdsValue::new_signed(vote, &self.keypair());
-        self.gossip
-            .write()
-            .unwrap()
-            .process_push_message(&self_pubkey, vec![vote], now);
+        let mut gossip = self.gossip.write().unwrap();
+        if let Err(err) = gossip.crds.insert(vote, now) {
+            error!("push_vote failed: {:?}", err);
+        }
     }
 
     pub fn push_vote(&self, tower: &[Slot], vote: Transaction) {
@@ -1538,7 +1543,10 @@ impl ClusterInfo {
     pub fn flush_push_queue(&self) {
         let pending_push_messages = self.drain_push_queue();
         let mut gossip = self.gossip.write().unwrap();
-        gossip.process_push_message(&self.id(), pending_push_messages, timestamp());
+        let now = timestamp();
+        for entry in pending_push_messages {
+            let _ = gossip.crds.insert(entry, now);
+        }
     }
     fn new_push_requests(
         &self,
@@ -3541,7 +3549,6 @@ mod tests {
             None,            // payer
         );
         cluster_info.push_vote(&unrefresh_tower, unrefresh_tx.clone());
-        cluster_info.flush_push_queue();
         let mut cursor = Cursor::default();
         let (_, votes) = cluster_info.get_votes(&mut cursor);
         assert_eq!(votes, vec![unrefresh_tx.clone()]);
@@ -3563,7 +3570,6 @@ mod tests {
         // Trying to refresh vote when it doesn't yet exist in gossip
         // shouldn't add the vote
         cluster_info.refresh_vote(refresh_tx.clone(), refresh_slot);
-        cluster_info.flush_push_queue();
         let (_, votes) = cluster_info.get_votes(&mut cursor);
         assert_eq!(votes, vec![]);
         let (_, votes) = cluster_info.get_votes(&mut Cursor::default());
@@ -3572,7 +3578,6 @@ mod tests {
 
         // Push the new vote for `refresh_slot`
         cluster_info.push_vote(&refresh_tower, refresh_tx.clone());
-        cluster_info.flush_push_queue();
 
         // Should be two votes in gossip
         let (_, votes) = cluster_info.get_votes(&mut Cursor::default());
@@ -3598,8 +3603,6 @@ mod tests {
             );
             cluster_info.refresh_vote(latest_refresh_tx.clone(), refresh_slot);
         }
-        cluster_info.flush_push_queue();
-
         // The diff since `max_ts` should only be the latest refreshed vote
         let (_, votes) = cluster_info.get_votes(&mut cursor);
         assert_eq!(votes.len(), 1);
@@ -3640,7 +3643,6 @@ mod tests {
         );
         let tower = vec![7]; // Last slot in the vote.
         cluster_info.push_vote(&tower, tx.clone());
-        cluster_info.flush_push_queue();
 
         let (labels, votes) = cluster_info.get_votes(&mut cursor);
         assert_eq!(votes, vec![tx]);

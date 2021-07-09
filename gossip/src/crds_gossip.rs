@@ -61,16 +61,16 @@ impl CrdsGossip {
     }
 
     /// process a push message to the network
-    /// Returns origins' pubkeys of upserted values.
+    /// Returns unique origins' pubkeys of upserted values.
     pub fn process_push_message(
         &mut self,
         from: &Pubkey,
         values: Vec<CrdsValue>,
         now: u64,
-    ) -> Vec<Pubkey> {
+    ) -> HashSet<Pubkey> {
         values
             .into_iter()
-            .flat_map(|val| {
+            .filter_map(|val| {
                 let origin = val.pubkey();
                 self.push
                     .process_push_message(&mut self.crds, from, val, now)
@@ -106,8 +106,9 @@ impl CrdsGossip {
         pending_push_messages: Vec<CrdsValue>,
         now: u64,
     ) -> HashMap<Pubkey, Vec<CrdsValue>> {
-        let self_pubkey = self.id;
-        self.process_push_message(&self_pubkey, pending_push_messages, now);
+        for entry in pending_push_messages {
+            let _ = self.crds.insert(entry, now);
+        }
         self.push.new_push_messages(&self.crds, now)
     }
 
@@ -161,15 +162,17 @@ impl CrdsGossip {
         } else {
             offset
         };
-        let entries = chunks
-            .enumerate()
-            .map(|(k, chunk)| {
-                let index = (offset + k as DuplicateShredIndex) % MAX_DUPLICATE_SHREDS;
-                let data = CrdsData::DuplicateShred(index, chunk);
-                CrdsValue::new_signed(data, keypair)
-            })
-            .collect();
-        self.process_push_message(&pubkey, entries, timestamp());
+        let entries = chunks.enumerate().map(|(k, chunk)| {
+            let index = (offset + k as DuplicateShredIndex) % MAX_DUPLICATE_SHREDS;
+            let data = CrdsData::DuplicateShred(index, chunk);
+            CrdsValue::new_signed(data, keypair)
+        });
+        let now = timestamp();
+        for entry in entries {
+            if let Err(err) = self.crds.insert(entry, now) {
+                error!("push_duplicate_shred faild: {:?}", err);
+            }
+        }
         Ok(())
     }
 
