@@ -15,7 +15,7 @@
     "@testing-library/user-event": "^13.1.9",
     "@types/bn.js": "^5.1.0",
     "@types/bs58": "^4.0.1",
-    "@types/chai": "^4.2.20",
+    "@types/chai": "^4.2.21",
     "@types/chart.js": "^2.9.34",
     "@types/classnames": "^2.3.1",
     "@types/jest": "^26.0.24",
