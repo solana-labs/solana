@@ -95,6 +95,9 @@ impl SharedBuffer {
             .name("solana-compressed_file_reader".to_string())
             .spawn(move || {
                 instance_.read_entire_file_in_bg(reader);
+                // The bg thread is exiting, so nobody needs to wait on this thread to exit.
+                // Otherwise, this thread could end up trying to join itself if destroying instance_ below causes Drop to be called.
+                instance_.bg_reader.lock().unwrap().take();
             });
         *instance.bg_reader.lock().unwrap() = Some(handle.unwrap());
         Self { instance }
