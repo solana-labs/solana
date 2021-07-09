@@ -8,7 +8,10 @@ use crate::{
 use log::*;
 use std::time::{Duration, Instant};
 use thiserror::Error;
-use tonic::{metadata::MetadataValue, transport::ClientTlsConfig, Request};
+use tonic::{
+    codegen::InterceptedService, metadata::MetadataValue, transport::ClientTlsConfig, Request,
+    Status,
+};
 
 mod google {
     mod rpc {
@@ -93,6 +96,7 @@ impl std::convert::From<tonic::Status> for Error {
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
+type InterceptedRequestResult = std::result::Result<Request<()>, Status>;
 
 #[derive(Clone)]
 pub struct BigTableConnection {
@@ -177,12 +181,12 @@ impl BigTableConnection {
     ///
     /// Clients require `&mut self`, due to `Tonic::transport::Channel` limitations, however
     /// creating new clients is cheap and thus can be used as a work around for ease of use.
-    pub fn client(&self) -> BigTable {
-        let client = if let Some(access_token) = &self.access_token {
-            let access_token = access_token.clone();
-            bigtable_client::BigtableClient::with_interceptor(
-                self.channel.clone(),
-                move |mut req: Request<()>| {
+    pub fn client(&self) -> BigTable<impl FnMut(Request<()>) -> InterceptedRequestResult> {
+        let access_token = self.access_token.clone();
+        let client = bigtable_client::BigtableClient::with_interceptor(
+            self.channel.clone(),
+            move |mut req: Request<()>| {
+                if let Some(access_token) = &access_token {
                     match MetadataValue::from_str(&access_token.get()) {
                         Ok(authorization_header) => {
                             req.metadata_mut()
@@ -192,12 +196,10 @@ impl BigTableConnection {
                             warn!("Failed to set authorization header: {}", err);
                         }
                     }
-                    Ok(req)
-                },
-            )
-        } else {
-            bigtable_client::BigtableClient::new(self.channel.clone())
-        };
+                }
+                Ok(req)
+            },
+        );
         BigTable {
             access_token: self.access_token.clone(),
             client,
@@ -239,14 +241,14 @@ impl BigTableConnection {
     }
 }
 
-pub struct BigTable {
+pub struct BigTable<F: FnMut(Request<()>) -> InterceptedRequestResult> {
     access_token: Option<AccessToken>,
-    client: bigtable_client::BigtableClient<tonic::transport::Channel>,
+    client: bigtable_client::BigtableClient<InterceptedService<tonic::transport::Channel, F>>,
     table_prefix: String,
     timeout: Option<Duration>,
 }
 
-impl BigTable {
+impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
     async fn decode_read_rows_response(
         &self,
         mut rrr: tonic::codec::Streaming<ReadRowsResponse>,
