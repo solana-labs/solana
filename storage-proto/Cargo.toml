@@ -10,17 +10,10 @@ documentation = "https://docs.rs/solana-storage-proto"
 edition = "2018"
 
 [dependencies]
-<<<<<<< HEAD
 bincode = "1.2.1"
 bs58 = "0.3.1"
-prost = "0.7.0"
-serde = "1.0.122"
-=======
-bincode = "1.3.3"
-bs58 = "0.4.0"
 prost = "0.8.0"
-serde = "1.0.126"
->>>>>>> 761de8b1a (Bump prost, prost-types, and tonic (#18537))
+serde = "1.0.122"
 serde_derive = "1.0.103"
 solana-account-decoder = { path = "../account-decoder", version = "=1.7.5" }
 solana-sdk = { path = "../sdk", version = "=1.7.5" }
