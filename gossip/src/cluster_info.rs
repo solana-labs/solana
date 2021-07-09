@@ -1020,19 +1020,11 @@ impl ClusterInfo {
         let now = timestamp();
         let vote = Vote::new(self_pubkey, vote, now);
         let vote = CrdsData::Vote(vote_index, vote);
-<<<<<<< HEAD
         let vote = CrdsValue::new_signed(vote, &self.keypair);
-        self.gossip
-            .write()
-            .unwrap()
-            .process_push_message(&self_pubkey, vec![vote], now);
-=======
-        let vote = CrdsValue::new_signed(vote, &self.keypair());
         let mut gossip = self.gossip.write().unwrap();
         if let Err(err) = gossip.crds.insert(vote, now) {
             error!("push_vote failed: {:?}", err);
         }
->>>>>>> 27cc7577a (skips process_push_message for local messages (#18493))
     }
 
     pub fn push_vote(&self, tower: &[Slot], vote: Transaction) {
@@ -1527,14 +1519,10 @@ impl ClusterInfo {
     pub fn flush_push_queue(&self) {
         let pending_push_messages = self.drain_push_queue();
         let mut gossip = self.gossip.write().unwrap();
-<<<<<<< HEAD
-        gossip.process_push_message(&self.id, pending_push_messages, timestamp());
-=======
         let now = timestamp();
         for entry in pending_push_messages {
             let _ = gossip.crds.insert(entry, now);
         }
->>>>>>> 27cc7577a (skips process_push_message for local messages (#18493))
     }
     fn new_push_requests(
         &self,
