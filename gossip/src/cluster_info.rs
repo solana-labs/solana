@@ -681,28 +681,7 @@ impl ClusterInfo {
     }
 
     pub fn id(&self) -> Pubkey {
-<<<<<<< HEAD
         self.id
-=======
-        self.my_contact_info.read().unwrap().id
-    }
-
-    pub fn keypair(&self) -> RwLockReadGuard<Arc<Keypair>> {
-        self.keypair.read().unwrap()
-    }
-
-    pub fn set_keypair(&self, new_keypair: Arc<Keypair>) {
-        let id = new_keypair.pubkey();
-        {
-            let mut instance = self.instance.write().unwrap();
-            *instance = NodeInstance::new(&mut thread_rng(), id, timestamp());
-        }
-        *self.keypair.write().unwrap() = new_keypair;
-        self.my_contact_info.write().unwrap().id = id;
-
-        self.insert_self();
-        self.push_self(&HashMap::new(), None);
->>>>>>> 4e1333fbe (removes id and shred_version from CrdsGossip (#18505))
     }
 
     pub fn lookup_contact_info<F, Y>(&self, id: &Pubkey, map: F) -> Option<Y>
@@ -1496,12 +1475,8 @@ impl ClusterInfo {
             let gossip = self.time_gossip_read_lock("new_pull_reqs", &self.stats.new_pull_requests);
             match gossip.new_pull_request(
                 thread_pool,
-<<<<<<< HEAD
                 self.keypair.deref(),
-=======
-                self.keypair().deref(),
                 self.my_shred_version(),
->>>>>>> 4e1333fbe (removes id and shred_version from CrdsGossip (#18505))
                 now,
                 gossip_validators,
                 stakes,
@@ -3525,12 +3500,8 @@ mod tests {
             .unwrap()
             .new_pull_request(
                 &thread_pool,
-<<<<<<< HEAD
                 cluster_info.keypair.deref(),
-=======
-                cluster_info.keypair().deref(),
                 cluster_info.my_shred_version(),
->>>>>>> 4e1333fbe (removes id and shred_version from CrdsGossip (#18505))
                 timestamp(),
                 None,
                 &HashMap::new(),
