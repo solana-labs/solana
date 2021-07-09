@@ -93,7 +93,6 @@ pub struct BankingStageStats {
     current_buffered_packets_count: AtomicUsize,
     rebuffered_packets_count: AtomicUsize,
     consumed_buffered_packets_count: AtomicUsize,
-    reset_cost_tracker_count: AtomicUsize,
     cost_tracker_check_count: AtomicUsize,
     cost_forced_retry_transactions_count: AtomicUsize,
 
@@ -163,11 +162,6 @@ impl BankingStageStats {
                 (
                     "rebuffered_packets_count",
                     self.rebuffered_packets_count.swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
-                    "reset_cost_tracker_count",
-                    self.reset_cost_tracker_count.swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
                 (
@@ -377,17 +371,6 @@ impl BankingStage {
         has_more_unprocessed_transactions
     }
 
-    fn reset_cost_tracker_if_new_bank(
-        cost_tracker: &Arc<RwLock<CostTracker>>,
-        bank_slot: Slot,
-        banking_stage_stats: &BankingStageStats,
-    ) {
-        cost_tracker.write().unwrap().reset_if_new_bank(bank_slot);
-        banking_stage_stats
-            .reset_cost_tracker_count
-            .fetch_add(1, Ordering::Relaxed);
-    }
-
     #[allow(clippy::too_many_arguments)]
     pub fn consume_buffered_packets(
         my_pubkey: &Pubkey,
@@ -428,11 +411,6 @@ impl BankingStage {
             } else {
                 let bank_start = poh_recorder.lock().unwrap().bank_start();
                 if let Some((bank, bank_creation_time)) = bank_start {
-                    Self::reset_cost_tracker_if_new_bank(
-                        cost_tracker,
-                        bank.slot(),
-                        banking_stage_stats,
-                    );
                     let (processed, verified_txs_len, new_unprocessed_indexes) =
                         Self::process_packets_transactions(
                             &bank,
@@ -559,13 +537,6 @@ impl BankingStage {
         ) = {
             let poh = poh_recorder.lock().unwrap();
             bank_start = poh.bank_start();
-            if let Some((ref bank, _)) = bank_start {
-                Self::reset_cost_tracker_if_new_bank(
-                    cost_tracker,
-                    bank.slot(),
-                    banking_stage_stats,
-                );
-            };
             (
                 poh.leader_after_n_slots(FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET),
                 PohRecorder::get_bank_still_processing_txs(&bank_start),
@@ -909,6 +880,7 @@ impl BankingStage {
             );
             block_generation_cost_tracking_sender
                 .send(CommittedTransactionBatch {
+                    slot: bank.slot(),
                     transactions,
                     execution_results,
                 })
@@ -1199,6 +1171,9 @@ impl BankingStage {
         cost_tracker: &Arc<RwLock<CostTracker>>,
         block_generation_cost_tracking_sender: Sender<CommittedTransactionBatch>,
     ) -> (usize, usize, Vec<usize>) {
+        // in case this thread is ahead of block_generation_cost_tracking_services, reset
+        // the tracker if necessary.
+        cost_tracker.write().unwrap().reset_if_new_bank(bank.slot());
         let mut packet_conversion_time = Measure::start("packet_conversion");
         let (transactions, transaction_to_packet_indexes, retryable_packet_indexes) =
             Self::transactions_from_packets(
@@ -1290,6 +1265,7 @@ impl BankingStage {
 
         let mut unprocessed_packet_conversion_time =
             Measure::start("unprocessed_packet_conversion");
+        cost_tracker.write().unwrap().reset_if_new_bank(bank.slot());
         let (transactions, transaction_to_packet_indexes, retry_packet_indexes) =
             Self::transactions_from_packets(
                 msgs,
@@ -1396,7 +1372,6 @@ impl BankingStage {
                 continue;
             }
             let (bank, bank_creation_time) = bank_start.unwrap();
-            Self::reset_cost_tracker_if_new_bank(cost_tracker, bank.slot(), banking_stage_stats);
 
             let (processed, verified_txs_len, unprocessed_indexes) =
                 Self::process_packets_transactions(

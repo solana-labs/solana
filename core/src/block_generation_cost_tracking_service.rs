@@ -7,7 +7,7 @@
 use crate::cost_tracker::CostTracker;
 use solana_measure::measure::Measure;
 use solana_runtime::bank::TransactionExecutionResult;
-use solana_sdk::{timing::timestamp, transaction::Transaction};
+use solana_sdk::{clock::Slot, timing::timestamp, transaction::Transaction};
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -21,6 +21,7 @@ use std::{
 #[derive(Default)]
 pub struct BlockGenerationCostTrackingServiceStats {
     last_print: u64,
+    reset_cost_tracker_count: u64,
     cost_tracker_update_count: u64,
     cost_tracker_update_elapsed: u64,
 }
@@ -35,6 +36,11 @@ impl BlockGenerationCostTrackingServiceStats {
         if elapsed_ms > 1000 {
             datapoint_info!(
                 "cost-tracking-service-stats",
+                (
+                    "reset_cost_tracker_count",
+                    self.reset_cost_tracker_count as i64,
+                    i64
+                ),
                 (
                     "cost_tracker_update_count",
                     self.cost_tracker_update_count as i64,
@@ -54,6 +60,7 @@ impl BlockGenerationCostTrackingServiceStats {
 }
 
 pub struct CommittedTransactionBatch {
+    pub slot: Slot,
     pub transactions: Vec<Transaction>,
     pub execution_results: Vec<TransactionExecutionResult>,
 }
@@ -101,7 +108,7 @@ impl BlockGenerationCostTrackingService {
             let mut cost_tracker_update_count = 0_u64;
             for batch in cost_tracking_receiver.try_iter() {
                 cost_tracker_update_count += batch.transactions.len() as u64;
-                Self::process_batch(&cost_tracker, &batch);
+                Self::process_batch(&cost_tracker, &batch, &mut cost_tracking_service_stats);
             }
             cost_tracker_update_time.stop();
             debug!("cost_update_loop cleared update channel");
@@ -113,11 +120,34 @@ impl BlockGenerationCostTrackingService {
         }
     }
 
-    fn process_batch(cost_tracker: &RwLock<CostTracker>, batch: &CommittedTransactionBatch) {
+    fn process_batch(
+        cost_tracker: &RwLock<CostTracker>,
+        batch: &CommittedTransactionBatch,
+        cost_tracking_service_stats: &mut BlockGenerationCostTrackingServiceStats,
+    ) {
         debug!(
-            "cost_tracking_service processes a batch, size {}",
-            batch.transactions.len()
+            "cost_tracking_service processes a batch size {} slot {:?}",
+            batch.transactions.len(),
+            batch.slot
         );
+
+        let current_slot = cost_tracker.read().unwrap().get_current_slot();
+        if batch.slot < current_slot {
+            debug!(
+                "cost_tracking_service ignores update for old slot {:?}, current slot {:?}",
+                batch.slot, current_slot
+            );
+            return;
+        } else if batch.slot > current_slot {
+            debug!(
+                "cost_tracking_service received updates implicitly reset slot from {:?} to {:?}",
+                current_slot, batch.slot
+            );
+            cost_tracker.write().unwrap().reset_if_new_bank(batch.slot);
+            cost_tracking_service_stats.reset_cost_tracker_count += 1;
+            // continue to update tracker for new slot
+        }
+
         // only track the cost of transactions that were successfully executed and committed to
         // bank
         for ((result, _), tx) in batch
@@ -151,6 +181,7 @@ mod tests {
     fn test_cost_tracking_service_process_batch() {
         let mint_keypair = Keypair::new();
         let start_hash = Hash::new_unique();
+        let mut cost_tracking_service_stats = BlockGenerationCostTrackingServiceStats::default();
 
         // make three simple transfer transactions, the second one is not ok()
         let transactions: Vec<_> = vec![
@@ -164,6 +195,7 @@ mod tests {
             (Ok(()), None),
         ];
         let batch = CommittedTransactionBatch {
+            slot: 0_u64,
             transactions,
             execution_results,
         };
@@ -171,14 +203,105 @@ mod tests {
         let cost_tracker = Arc::new(RwLock::new(CostTracker::new(Arc::new(RwLock::new(
             CostModel::default(),
         )))));
-        BlockGenerationCostTrackingService::process_batch(&cost_tracker, &batch);
+        BlockGenerationCostTrackingService::process_batch(
+            &cost_tracker,
+            &batch,
+            &mut cost_tracking_service_stats,
+        );
         let cost_stats = cost_tracker.read().unwrap().get_stats();
 
+        assert_eq!(0, cost_stats.bank_slot);
         // each transfer tx has account access cost of 58 and 0 execution cost, 2 OK TXs
         assert_eq!(116, cost_stats.total_cost);
         // shared mint account, plus 2 transfer accounts
         assert_eq!(3, cost_stats.number_of_accounts);
         // the costest account is the mint account, which has both TXs
+        assert_eq!(116, cost_stats.costliest_account_cost);
+    }
+
+    #[test]
+    fn test_cost_tracking_old_slot_update() {
+        let mint_keypair = Keypair::new();
+        let start_hash = Hash::new_unique();
+        let mut cost_tracking_service_stats = BlockGenerationCostTrackingServiceStats::default();
+
+        // make three simple transfer transactions, the second one is not ok()
+        let transactions: Vec<_> = vec![
+            system_transaction::transfer(&mint_keypair, &Pubkey::new_unique(), 1, start_hash),
+            system_transaction::transfer(&mint_keypair, &Pubkey::new_unique(), 2, start_hash),
+            system_transaction::transfer(&mint_keypair, &Pubkey::new_unique(), 3, start_hash),
+        ];
+        let execution_results: Vec<TransactionExecutionResult> = vec![
+            (Ok(()), None),
+            (Err(TransactionError::AccountNotFound), None),
+            (Ok(()), None),
+        ];
+        // make an update with slot == 9
+        let batch = CommittedTransactionBatch {
+            slot: 9_u64,
+            transactions,
+            execution_results,
+        };
+
+        let cost_tracker = Arc::new(RwLock::new(CostTracker::new(Arc::new(RwLock::new(
+            CostModel::default(),
+        )))));
+        // set cost track curernt slot to 10
+        cost_tracker.write().unwrap().reset_if_new_bank(10_u64);
+
+        BlockGenerationCostTrackingService::process_batch(
+            &cost_tracker,
+            &batch,
+            &mut cost_tracking_service_stats,
+        );
+        let cost_stats = cost_tracker.read().unwrap().get_stats();
+
+        // update should be ignored
+        assert_eq!(10, cost_stats.bank_slot);
+        assert_eq!(0, cost_stats.total_cost);
+        assert_eq!(0, cost_stats.number_of_accounts);
+        assert_eq!(0, cost_stats.costliest_account_cost);
+    }
+
+    #[test]
+    fn test_cost_tracking_new_slot_update() {
+        let mint_keypair = Keypair::new();
+        let start_hash = Hash::new_unique();
+        let mut cost_tracking_service_stats = BlockGenerationCostTrackingServiceStats::default();
+
+        // make three simple transfer transactions, the second one is not ok()
+        let transactions: Vec<_> = vec![
+            system_transaction::transfer(&mint_keypair, &Pubkey::new_unique(), 1, start_hash),
+            system_transaction::transfer(&mint_keypair, &Pubkey::new_unique(), 2, start_hash),
+            system_transaction::transfer(&mint_keypair, &Pubkey::new_unique(), 3, start_hash),
+        ];
+        let execution_results: Vec<TransactionExecutionResult> = vec![
+            (Ok(()), None),
+            (Err(TransactionError::AccountNotFound), None),
+            (Ok(()), None),
+        ];
+        // make an update with slot == 9
+        let batch = CommittedTransactionBatch {
+            slot: 9_u64,
+            transactions,
+            execution_results,
+        };
+
+        let cost_tracker = Arc::new(RwLock::new(CostTracker::new(Arc::new(RwLock::new(
+            CostModel::default(),
+        )))));
+
+        BlockGenerationCostTrackingService::process_batch(
+            &cost_tracker,
+            &batch,
+            &mut cost_tracking_service_stats,
+        );
+        let cost_stats = cost_tracker.read().unwrap().get_stats();
+
+        // update should be ignored
+        assert_eq!(9, cost_stats.bank_slot);
+        assert_eq!(116, cost_stats.total_cost);
+        assert_eq!(3, cost_stats.number_of_accounts);
         assert_eq!(116, cost_stats.costliest_account_cost);
     }
 }
