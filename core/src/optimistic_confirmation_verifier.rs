@@ -140,7 +140,7 @@ impl OptimisticConfirmationVerifier {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::consensus::test::VoteSimulator;
+    use crate::vote_simulator::VoteSimulator;
     use solana_ledger::get_tmp_ledger_path;
     use solana_runtime::bank::Bank;
     use solana_sdk::pubkey::Pubkey;

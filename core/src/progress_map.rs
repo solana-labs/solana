@@ -14,10 +14,10 @@ use std::{
 
 type VotedSlot = Slot;
 type ExpirationSlot = Slot;
-pub(crate) type LockoutIntervals = BTreeMap<ExpirationSlot, Vec<(VotedSlot, Pubkey)>>;
+pub type LockoutIntervals = BTreeMap<ExpirationSlot, Vec<(VotedSlot, Pubkey)>>;
 
 #[derive(Default)]
-pub(crate) struct ReplaySlotStats(ConfirmationTiming);
+pub struct ReplaySlotStats(ConfirmationTiming);
 impl std::ops::Deref for ReplaySlotStats {
     type Target = ConfirmationTiming;
     fn deref(&self) -> &Self::Target {
@@ -139,7 +139,7 @@ impl ReplaySlotStats {
 }
 
 #[derive(Debug)]
-pub(crate) struct ValidatorStakeInfo {
+pub struct ValidatorStakeInfo {
     pub validator_vote_pubkey: Pubkey,
     pub stake: u64,
     pub total_epoch_stake: u64,
@@ -165,18 +165,18 @@ impl ValidatorStakeInfo {
     }
 }
 
-pub(crate) struct ForkProgress {
-    pub(crate) is_dead: bool,
-    pub(crate) fork_stats: ForkStats,
-    pub(crate) propagated_stats: PropagatedStats,
-    pub(crate) replay_stats: ReplaySlotStats,
-    pub(crate) replay_progress: ConfirmationProgress,
+pub struct ForkProgress {
+    pub is_dead: bool,
+    pub fork_stats: ForkStats,
+    pub propagated_stats: PropagatedStats,
+    pub replay_stats: ReplaySlotStats,
+    pub replay_progress: ConfirmationProgress,
     // Note `num_blocks_on_fork` and `num_dropped_blocks_on_fork` only
     // count new blocks replayed since last restart, which won't include
     // blocks already existing in the ledger/before snapshot at start,
     // so these stats do not span all of time
-    pub(crate) num_blocks_on_fork: u64,
-    pub(crate) num_dropped_blocks_on_fork: u64,
+    pub num_blocks_on_fork: u64,
+    pub num_dropped_blocks_on_fork: u64,
 }
 
 impl ForkProgress {
@@ -211,6 +211,7 @@ impl ForkProgress {
                 )
             })
             .unwrap_or((false, 0, HashSet::new(), false, 0));
+
         Self {
             is_dead: false,
             fork_stats: ForkStats::default(),
@@ -250,46 +251,51 @@ impl ForkProgress {
             }
         };
 
-        Self::new(
+        let mut new_progress = Self::new(
             bank.last_blockhash(),
             prev_leader_slot,
             validator_stake_info,
             num_blocks_on_fork,
             num_dropped_blocks_on_fork,
-        )
+        );
+
+        if bank.is_frozen() {
+            new_progress.fork_stats.bank_hash = Some(bank.hash());
+        }
+        new_progress
     }
 }
 
 #[derive(Debug, Clone, Default)]
-pub(crate) struct ForkStats {
-    pub(crate) weight: u128,
-    pub(crate) fork_weight: u128,
-    pub(crate) total_stake: Stake,
-    pub(crate) block_height: u64,
-    pub(crate) has_voted: bool,
-    pub(crate) is_recent: bool,
-    pub(crate) is_empty: bool,
-    pub(crate) vote_threshold: bool,
-    pub(crate) is_locked_out: bool,
-    pub(crate) voted_stakes: VotedStakes,
-    pub(crate) is_supermajority_confirmed: bool,
-    pub(crate) computed: bool,
-    pub(crate) lockout_intervals: LockoutIntervals,
-    pub(crate) bank_hash: Option<Hash>,
-    pub(crate) my_latest_landed_vote: Option<Slot>,
+pub struct ForkStats {
+    pub weight: u128,
+    pub fork_weight: u128,
+    pub total_stake: Stake,
+    pub block_height: u64,
+    pub has_voted: bool,
+    pub is_recent: bool,
+    pub is_empty: bool,
+    pub vote_threshold: bool,
+    pub is_locked_out: bool,
+    pub voted_stakes: VotedStakes,
+    pub is_supermajority_confirmed: bool,
+    pub computed: bool,
+    pub lockout_intervals: LockoutIntervals,
+    pub bank_hash: Option<Hash>,
+    pub my_latest_landed_vote: Option<Slot>,
 }
 
 #[derive(Clone, Default)]
-pub(crate) struct PropagatedStats {
-    pub(crate) propagated_validators: HashSet<Pubkey>,
-    pub(crate) propagated_node_ids: HashSet<Pubkey>,
-    pub(crate) propagated_validators_stake: u64,
-    pub(crate) is_propagated: bool,
-    pub(crate) is_leader_slot: bool,
-    pub(crate) prev_leader_slot: Option<Slot>,
-    pub(crate) slot_vote_tracker: Option<Arc<RwLock<SlotVoteTracker>>>,
-    pub(crate) cluster_slot_pubkeys: Option<Arc<RwLock<SlotPubkeys>>>,
-    pub(crate) total_epoch_stake: u64,
+pub struct PropagatedStats {
+    pub propagated_validators: HashSet<Pubkey>,
+    pub propagated_node_ids: HashSet<Pubkey>,
+    pub propagated_validators_stake: u64,
+    pub is_propagated: bool,
+    pub is_leader_slot: bool,
+    pub prev_leader_slot: Option<Slot>,
+    pub slot_vote_tracker: Option<Arc<RwLock<SlotVoteTracker>>>,
+    pub cluster_slot_pubkeys: Option<Arc<RwLock<SlotPubkeys>>>,
+    pub total_epoch_stake: u64,
 }
 
 impl PropagatedStats {
@@ -334,7 +340,7 @@ impl PropagatedStats {
 }
 
 #[derive(Default)]
-pub(crate) struct ProgressMap {
+pub struct ProgressMap {
     progress_map: HashMap<Slot, ForkProgress>,
 }
 

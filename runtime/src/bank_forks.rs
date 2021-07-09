@@ -90,6 +90,10 @@ impl BankForks {
         maybe_bank
     }
 
+    pub fn bank_hash(&self, slot: Slot) -> Option<Hash> {
+        self.get(slot).map(|bank| bank.hash())
+    }
+
     pub fn root_bank(&self) -> Arc<Bank> {
         self[self.root()].clone()
     }
