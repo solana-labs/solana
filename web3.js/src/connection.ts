@@ -1,7 +1,6 @@
 import assert from 'assert';
 import bs58 from 'bs58';
 import {Buffer} from 'buffer';
-import {parse as urlParse} from 'url';
 import fetch, {Response} from 'node-fetch';
 import {
   type as pick,
@@ -2025,7 +2024,7 @@ export class Connection {
     endpoint: string,
     commitmentOrConfig?: Commitment | ConnectionConfig,
   ) {
-    let url = urlParse(endpoint);
+    let url = new URL(endpoint);
     const useHttps = url.protocol === 'https:';
 
     let wsEndpoint;
@@ -2046,7 +2045,7 @@ export class Connection {
     this._rpcWsEndpoint = wsEndpoint || makeWebsocketUrl(endpoint);
 
     this._rpcClient = createRpcClient(
-      url.href,
+      url.toString(),
       useHttps,
       httpHeaders,
       fetchMiddleware,
