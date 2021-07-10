@@ -238,8 +238,7 @@ impl CrdsGossip {
     where
         I: IntoIterator<Item = CrdsValue>,
     {
-        self.pull
-            .process_pull_requests(&mut self.crds, callers, now);
+        CrdsGossipPull::process_pull_requests(&mut self.crds, callers, now);
     }
 
     pub fn generate_pull_responses(
@@ -248,8 +247,7 @@ impl CrdsGossip {
         output_size_limit: usize, // Limit number of crds values returned.
         now: u64,
     ) -> Vec<Vec<CrdsValue>> {
-        self.pull
-            .generate_pull_responses(&self.crds, filters, output_size_limit, now)
+        CrdsGossipPull::generate_pull_responses(&self.crds, filters, output_size_limit, now)
     }
 
     pub fn filter_pull_responses(
@@ -313,9 +311,7 @@ impl CrdsGossip {
             //sanity check
             assert_eq!(timeouts[self_pubkey], std::u64::MAX);
             assert!(timeouts.contains_key(&Pubkey::default()));
-            rv = self
-                .pull
-                .purge_active(thread_pool, &mut self.crds, now, timeouts);
+            rv = CrdsGossipPull::purge_active(thread_pool, &mut self.crds, now, timeouts);
         }
         self.crds
             .trim_purged(now.saturating_sub(5 * self.pull.crds_timeout));

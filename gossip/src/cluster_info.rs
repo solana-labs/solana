@@ -645,8 +645,14 @@ impl ClusterInfo {
         self.my_contact_info.read().unwrap().shred_version
     }
 
+<<<<<<< HEAD
     pub fn lookup_epoch_slots(&self, ix: EpochSlotsIndex) -> EpochSlots {
         let label = CrdsValueLabel::EpochSlots(ix, self.id());
+=======
+    fn lookup_epoch_slots(&self, ix: EpochSlotsIndex) -> EpochSlots {
+        let self_pubkey = self.id();
+        let label = CrdsValueLabel::EpochSlots(ix, self_pubkey);
+>>>>>>> 918b5c28b (removes redundant (mutable) self receivers (#18574))
         let gossip = self.gossip.read().unwrap();
         let entry = gossip.crds.get(&label);
         entry
@@ -1124,28 +1130,14 @@ impl ClusterInfo {
     }
 
     pub fn get_node_version(&self, pubkey: &Pubkey) -> Option<solana_version::Version> {
-        let version = self
-            .gossip
-            .read()
-            .unwrap()
-            .crds
-            .get(&CrdsValueLabel::Version(*pubkey))
-            .map(|x| x.value.version())
-            .flatten()
-            .map(|version| version.version.clone());
-
-        if version.is_none() {
-            self.gossip
-                .read()
-                .unwrap()
-                .crds
-                .get(&CrdsValueLabel::LegacyVersion(*pubkey))
-                .map(|x| x.value.legacy_version())
-                .flatten()
-                .map(|version| version.version.clone().into())
-        } else {
-            version
+        let gossip = self.gossip.read().unwrap();
+        let version = gossip.crds.get(&CrdsValueLabel::Version(*pubkey));
+        if let Some(version) = version.and_then(|v| v.value.version()) {
+            return Some(version.version.clone());
         }
+        let version = gossip.crds.get(&CrdsValueLabel::LegacyVersion(*pubkey))?;
+        let version = version.value.legacy_version()?;
+        Some(version.version.clone().into())
     }
 
     /// all validators that have a valid rpc port regardless of `shred_version`.
