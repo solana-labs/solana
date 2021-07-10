@@ -9,6 +9,7 @@ use solana_measure::measure::Measure;
 use solana_runtime::bank::TransactionExecutionResult;
 use solana_sdk::{clock::Slot, timing::timestamp, transaction::Transaction};
 use std::{
+    cmp,
     sync::{
         atomic::{AtomicBool, Ordering},
         mpsc::Receiver,
@@ -132,20 +133,24 @@ impl BlockGenerationCostTrackingService {
         );
 
         let current_slot = cost_tracker.read().unwrap().get_current_slot();
-        if batch.slot < current_slot {
-            debug!(
-                "cost_tracking_service ignores update for old slot {:?}, current slot {:?}",
-                batch.slot, current_slot
-            );
-            return;
-        } else if batch.slot > current_slot {
-            debug!(
-                "cost_tracking_service received updates implicitly reset slot from {:?} to {:?}",
-                current_slot, batch.slot
-            );
-            cost_tracker.write().unwrap().reset_if_new_bank(batch.slot);
-            cost_tracking_service_stats.reset_cost_tracker_count += 1;
-            // continue to update tracker for new slot
+        match batch.slot.cmp(&current_slot) {
+            cmp::Ordering::Less => {
+                debug!(
+                    "cost_tracking_service ignores update for old slot {:?}, current slot {:?}",
+                    batch.slot, current_slot
+                );
+                return;
+            }
+            cmp::Ordering::Greater => {
+                debug!(
+                    "cost_tracking_service received updates implicitly reset slot from {:?} to {:?}",
+                    current_slot, batch.slot
+                );
+                cost_tracker.write().unwrap().reset_if_new_bank(batch.slot);
+                cost_tracking_service_stats.reset_cost_tracker_count += 1;
+                // continue to update tracker for new slot
+            }
+            _ => (),
         }
 
         // only track the cost of transactions that were successfully executed and committed to
