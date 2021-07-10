@@ -23,15 +23,15 @@ use {
 
 pub mod generated {
     include!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        concat!("/proto/solana.storage.confirmed_block.rs")
+        env!("OUT_DIR"),
+        "/solana.storage.confirmed_block.rs"
     ));
 }
 
 pub mod tx_by_addr {
     include!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        concat!("/proto/solana.storage.transaction_by_addr.rs")
+        env!("OUT_DIR"),
+        "/solana.storage.transaction_by_addr.rs"
     ));
 }
 

@@ -1,24 +1,16 @@
 fn main() -> Result<(), std::io::Error> {
-    let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-
-    let out_dir = manifest_dir.join("proto");
-    let proto_files = manifest_dir.join("src");
-
-    std::fs::create_dir_all(out_dir.clone())?;
-
-    println!("Protobuf directory: {}", proto_files.display());
-    println!("output directory: {}", out_dir.display());
+    let proto_base_path = std::path::PathBuf::from("proto");
+    let proto_files = ["confirmed_block.proto", "transaction_by_addr.proto"];
+    let mut protos = Vec::new();
+    for proto_file in &proto_files {
+        let proto = proto_base_path.join(proto_file);
+        println!("cargo::rerun-if-changed={}", proto.display());
+        protos.push(proto);
+    }
 
     tonic_build::configure()
         .build_client(true)
         .build_server(false)
         .format(true)
-        .out_dir(&out_dir)
-        .compile(
-            &[
-                proto_files.join("confirmed_block.proto"),
-                proto_files.join("transaction_by_addr.proto"),
-            ],
-            &[proto_files],
-        )
+        .compile(&protos, &[proto_base_path])
 }
