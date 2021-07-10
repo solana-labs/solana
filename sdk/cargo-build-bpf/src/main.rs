@@ -433,7 +433,13 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
     env::set_var("OBJDUMP", llvm_bin.join("llvm-objdump"));
     env::set_var("OBJCOPY", llvm_bin.join("llvm-objcopy"));
     let rustflags = match env::var("RUSTFLAGS") {
-        Ok(rf) => rf + &" -C lto=no".to_string(),
+        Ok(rf) => {
+            if rf.contains("-C lto=no") {
+                rf
+            } else {
+                rf + &" -C lto=no".to_string()
+            }
+        }
         _ => "-C lto=no".to_string(),
     };
     if config.verbose {
