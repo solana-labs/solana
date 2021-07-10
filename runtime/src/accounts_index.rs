@@ -115,6 +115,7 @@ impl<T> AccountMapEntryInner<T> {
 pub struct ReadAccountMapEntry<T: 'static> {
     owned_entry: AccountMapEntry<T>,
     #[borrows(owned_entry)]
+    #[covariant]
     slot_list_guard: RwLockReadGuard<'this, SlotList<T>>,
 }
 
@@ -132,7 +133,7 @@ impl<T: Clone> ReadAccountMapEntry<T> {
     }
 
     pub fn ref_count(&self) -> &AtomicU64 {
-        &self.borrow_owned_entry_contents().ref_count
+        &self.borrow_owned_entry().ref_count
     }
 
     pub fn unref(&self) {
@@ -144,6 +145,7 @@ impl<T: Clone> ReadAccountMapEntry<T> {
 pub struct WriteAccountMapEntry<T: 'static> {
     owned_entry: AccountMapEntry<T>,
     #[borrows(owned_entry)]
+    #[covariant]
     slot_list_guard: RwLockWriteGuard<'this, SlotList<T>>,
 }
 
@@ -168,7 +170,7 @@ impl<T: 'static + Clone + IsCached> WriteAccountMapEntry<T> {
     }
 
     pub fn ref_count(&self) -> &AtomicU64 {
-        &self.borrow_owned_entry_contents().ref_count
+        &self.borrow_owned_entry().ref_count
     }
 
     // Try to update an item in the slot list the given `slot` If an item for the slot
