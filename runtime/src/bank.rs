@@ -632,7 +632,7 @@ impl NonceRollbackFull {
         } = partial;
         let fee_payer = (0..message.account_keys.len()).find_map(|i| {
             if let Some((k, a)) = &accounts.get(i) {
-                if message.is_non_loader_key(k, i) {
+                if message.is_non_loader_key(i) {
                     return Some((k, a));
                 }
             }

@@ -240,26 +240,6 @@ impl Sanitize for Message {
         Ok(())
     }
 }
-pub struct MessageProgramIdsCache<'a> {
-    program_ids: Option<Vec<&'a Pubkey>>,
-    message: &'a Message,
-}
-
-impl<'a> MessageProgramIdsCache<'a> {
-    pub fn new(message: &'a Message) -> Self {
-        Self {
-            program_ids: None,
-            message,
-        }
-    }
-    pub fn is_non_loader_key(&mut self, key: &Pubkey, key_index: usize) -> bool {
-        if self.program_ids.is_none() {
-            self.program_ids = Some(self.message.program_ids());
-        }
-        self.message
-            .is_non_loader_key_internal(self.program_ids.as_ref().unwrap(), key, key_index)
-    }
-}
 
 impl Message {
     pub fn new_with_compiled_instructions(
@@ -356,28 +336,28 @@ impl Message {
             .collect()
     }
 
-    pub fn is_key_passed_to_program(&self, index: usize) -> bool {
-        if let Ok(index) = u8::try_from(index) {
-            for ix in self.instructions.iter() {
-                if ix.accounts.contains(&index) {
-                    return true;
-                }
-            }
+    pub fn is_key_passed_to_program(&self, key_index: usize) -> bool {
+        if let Ok(key_index) = u8::try_from(key_index) {
+            self.instructions
+                .iter()
+                .any(|ix| ix.accounts.contains(&key_index))
+        } else {
+            false
         }
-        false
     }
 
-    pub(crate) fn is_non_loader_key_internal(
-        &self,
-        program_ids: &[&Pubkey],
-        key: &Pubkey,
-        key_index: usize,
-    ) -> bool {
-        !program_ids.contains(&key) || self.is_key_passed_to_program(key_index)
+    pub fn is_key_called_as_program(&self, key_index: usize) -> bool {
+        if let Ok(key_index) = u8::try_from(key_index) {
+            self.instructions
+                .iter()
+                .any(|ix| ix.program_id_index == key_index)
+        } else {
+            false
+        }
     }
 
-    pub fn is_non_loader_key(&self, key: &Pubkey, key_index: usize) -> bool {
-        self.is_non_loader_key_internal(&self.program_ids(), key, key_index)
+    pub fn is_non_loader_key(&self, key_index: usize) -> bool {
+        !self.is_key_called_as_program(key_index) || self.is_key_passed_to_program(key_index)
     }
 
     pub fn program_position(&self, index: usize) -> Option<usize> {
@@ -1029,14 +1009,9 @@ mod tests {
             Hash::default(),
             instructions,
         );
-        let mut helper = MessageProgramIdsCache::new(&message);
-
-        assert!(message.is_non_loader_key(&key0, 0));
-        assert!(message.is_non_loader_key(&key1, 1));
-        assert!(!message.is_non_loader_key(&loader2, 2));
-        assert!(helper.is_non_loader_key(&key0, 0));
-        assert!(helper.is_non_loader_key(&key1, 1));
-        assert!(!helper.is_non_loader_key(&loader2, 2));
+        assert!(message.is_non_loader_key(0));
+        assert!(message.is_non_loader_key(1));
+        assert!(!message.is_non_loader_key(2));
     }
 
     #[test]

@@ -201,7 +201,7 @@ pub fn write_transaction<W: io::Write>(
     }
     let mut fee_payer_index = None;
     for (account_index, account) in message.account_keys.iter().enumerate() {
-        if fee_payer_index.is_none() && message.is_non_loader_key(account, account_index) {
+        if fee_payer_index.is_none() && message.is_non_loader_key(account_index) {
             fee_payer_index = Some(account_index)
         }
         writeln!(
