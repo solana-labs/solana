@@ -645,20 +645,15 @@ impl ClusterInfo {
         self.my_contact_info.read().unwrap().shred_version
     }
 
-<<<<<<< HEAD
-    pub fn lookup_epoch_slots(&self, ix: EpochSlotsIndex) -> EpochSlots {
-        let label = CrdsValueLabel::EpochSlots(ix, self.id());
-=======
     fn lookup_epoch_slots(&self, ix: EpochSlotsIndex) -> EpochSlots {
         let self_pubkey = self.id();
         let label = CrdsValueLabel::EpochSlots(ix, self_pubkey);
->>>>>>> 918b5c28b (removes redundant (mutable) self receivers (#18574))
         let gossip = self.gossip.read().unwrap();
         let entry = gossip.crds.get(&label);
         entry
             .and_then(|v| v.value.epoch_slots())
             .cloned()
-            .unwrap_or_else(|| EpochSlots::new(self.id(), timestamp()))
+            .unwrap_or_else(|| EpochSlots::new(self_pubkey, timestamp()))
     }
 
     pub fn rpc_info_trace(&self) -> String {
