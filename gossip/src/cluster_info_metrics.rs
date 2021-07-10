@@ -169,7 +169,7 @@ pub(crate) fn submit_gossip_stats(
             gossip.crds.len(),
             gossip.crds.num_nodes(),
             gossip.crds.num_purged(),
-            gossip.pull.failed_inserts.len(),
+            gossip.pull.failed_inserts_size(),
         )
     };
     let num_nodes_staked = stakes.values().filter(|stake| **stake > 0).count();

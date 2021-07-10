@@ -1430,8 +1430,7 @@ impl ClusterInfo {
         let num_requests = pulls.iter().map(|(_, filters)| filters.len() as u64).sum();
         self.stats.new_pull_requests_count.add_relaxed(num_requests);
         {
-            let mut gossip =
-                self.time_gossip_write_lock("mark_pull", &self.stats.mark_pull_request);
+            let gossip = self.time_gossip_read_lock("mark_pull", &self.stats.mark_pull_request);
             for (peer, _) in &pulls {
                 gossip.mark_pull_request_creation_time(peer.id, now);
             }
@@ -4380,14 +4379,9 @@ mod tests {
                 .unwrap()
                 .mark_pull_request_creation_time(peer, now);
         }
+        let gossip = cluster_info.gossip.read().unwrap();
         assert_eq!(
-            cluster_info
-                .gossip
-                .read()
-                .unwrap()
-                .pull
-                .pull_request_time
-                .len(),
+            gossip.pull.pull_request_time().len(),
             CRDS_UNIQUE_PUBKEY_CAPACITY
         );
     }

@@ -313,19 +313,19 @@ pub fn cluster_info_scale() {
             let mut num_push_total = 0;
             let mut num_pushes = 0;
             let mut num_pulls = 0;
-            for node in nodes.iter() {
+            for (node, _, _) in nodes.iter() {
                 //if node.0.get_votes(0).1.len() != (num_nodes * num_votes) {
                 let has_tx = node
-                    .0
                     .get_votes(&mut Cursor::default())
                     .1
                     .iter()
                     .filter(|v| v.message.account_keys == tx.message.account_keys)
                     .count();
-                num_old += node.0.gossip.read().unwrap().push.num_old;
-                num_push_total += node.0.gossip.read().unwrap().push.num_total;
-                num_pushes += node.0.gossip.read().unwrap().push.num_pushes;
-                num_pulls += node.0.gossip.read().unwrap().pull.num_pulls;
+                let gossip = node.gossip.read().unwrap();
+                num_old += gossip.push.num_old;
+                num_push_total += gossip.push.num_total;
+                num_pushes += gossip.push.num_pushes;
+                num_pulls += gossip.pull.num_pulls.load(Ordering::Relaxed);
                 if has_tx == 0 {
                     not_done += 1;
                 }
@@ -347,11 +347,12 @@ pub fn cluster_info_scale() {
             num_votes, time, success
         );
         sleep(Duration::from_millis(200));
-        for node in nodes.iter() {
-            node.0.gossip.write().unwrap().push.num_old = 0;
-            node.0.gossip.write().unwrap().push.num_total = 0;
-            node.0.gossip.write().unwrap().push.num_pushes = 0;
-            node.0.gossip.write().unwrap().pull.num_pulls = 0;
+        for (node, _, _) in nodes.iter() {
+            let mut gossip = node.gossip.write().unwrap();
+            gossip.push.num_old = 0;
+            gossip.push.num_total = 0;
+            gossip.push.num_pushes = 0;
+            gossip.pull.num_pulls.store(0, Ordering::Relaxed);
         }
     }
 
