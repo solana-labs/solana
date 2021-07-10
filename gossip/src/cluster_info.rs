@@ -14,7 +14,9 @@
 //! Bank needs to provide an interface for us to query the stake weight
 use {
     crate::{
-        cluster_info_metrics::{submit_gossip_stats, Counter, GossipStats, ScopedTimer},
+        cluster_info_metrics::{
+            submit_gossip_stats, Counter, GossipStats, ScopedTimer, TimedGuard,
+        },
         contact_info::ContactInfo,
         crds::{Crds, Cursor},
         crds_gossip::CrdsGossip,
@@ -73,7 +75,7 @@ use {
         io::BufReader,
         iter::repeat,
         net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, UdpSocket},
-        ops::{Deref, DerefMut, Div},
+        ops::{Deref, Div},
         path::{Path, PathBuf},
         result::Result,
         sync::{
@@ -135,78 +137,6 @@ pub enum ClusterInfoError {
     NoLeader,
     BadContactInfo,
     BadGossipAddress,
-}
-
-struct GossipWriteLock<'a> {
-    gossip: RwLockWriteGuard<'a, CrdsGossip>,
-    timer: Measure,
-    counter: &'a Counter,
-}
-
-impl<'a> GossipWriteLock<'a> {
-    fn new(
-        gossip: RwLockWriteGuard<'a, CrdsGossip>,
-        label: &'static str,
-        counter: &'a Counter,
-    ) -> Self {
-        Self {
-            gossip,
-            timer: Measure::start(label),
-            counter,
-        }
-    }
-}
-
-impl<'a> Deref for GossipWriteLock<'a> {
-    type Target = RwLockWriteGuard<'a, CrdsGossip>;
-    fn deref(&self) -> &Self::Target {
-        &self.gossip
-    }
-}
-
-impl<'a> DerefMut for GossipWriteLock<'a> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.gossip
-    }
-}
-
-impl<'a> Drop for GossipWriteLock<'a> {
-    fn drop(&mut self) {
-        self.counter.add_measure(&mut self.timer);
-    }
-}
-
-struct GossipReadLock<'a> {
-    gossip: RwLockReadGuard<'a, CrdsGossip>,
-    timer: Measure,
-    counter: &'a Counter,
-}
-
-impl<'a> GossipReadLock<'a> {
-    fn new(
-        gossip: RwLockReadGuard<'a, CrdsGossip>,
-        label: &'static str,
-        counter: &'a Counter,
-    ) -> Self {
-        Self {
-            gossip,
-            timer: Measure::start(label),
-            counter,
-        }
-    }
-}
-
-impl<'a> Deref for GossipReadLock<'a> {
-    type Target = RwLockReadGuard<'a, CrdsGossip>;
-    fn deref(&self) -> &Self::Target {
-        &self.gossip
-    }
-}
-
-impl<'a> Drop for GossipReadLock<'a> {
-    fn drop(&mut self) {
-        self.counter.add_measure(&mut self.timer);
-    }
 }
 
 pub struct ClusterInfo {
@@ -986,16 +916,16 @@ impl ClusterInfo {
         &'a self,
         label: &'static str,
         counter: &'a Counter,
-    ) -> GossipReadLock<'a> {
-        GossipReadLock::new(self.gossip.read().unwrap(), label, counter)
+    ) -> TimedGuard<'a, RwLockReadGuard<CrdsGossip>> {
+        TimedGuard::new(self.gossip.read().unwrap(), label, counter)
     }
 
     fn time_gossip_write_lock<'a>(
         &'a self,
         label: &'static str,
         counter: &'a Counter,
-    ) -> GossipWriteLock<'a> {
-        GossipWriteLock::new(self.gossip.write().unwrap(), label, counter)
+    ) -> TimedGuard<'a, RwLockWriteGuard<CrdsGossip>> {
+        TimedGuard::new(self.gossip.write().unwrap(), label, counter)
     }
 
     pub fn push_message(&self, message: CrdsValue) {

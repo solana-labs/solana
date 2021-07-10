@@ -4,6 +4,7 @@ use {
     solana_sdk::pubkey::Pubkey,
     std::{
         collections::HashMap,
+        ops::{Deref, DerefMut},
         sync::{
             atomic::{AtomicU64, Ordering},
             RwLock,
@@ -28,6 +29,12 @@ impl Counter {
     }
 }
 
+pub(crate) struct TimedGuard<'a, T> {
+    guard: T,
+    timer: Measure,
+    counter: &'a Counter,
+}
+
 pub(crate) struct ScopedTimer<'a> {
     clock: Instant,
     metric: &'a AtomicU64,
@@ -49,6 +56,35 @@ impl Drop for ScopedTimer<'_> {
     fn drop(&mut self) {
         let micros = self.clock.elapsed().as_micros();
         self.metric.fetch_add(micros as u64, Ordering::Relaxed);
+    }
+}
+
+impl<'a, T> TimedGuard<'a, T> {
+    pub(crate) fn new(guard: T, label: &'static str, counter: &'a Counter) -> Self {
+        Self {
+            guard,
+            timer: Measure::start(label),
+            counter,
+        }
+    }
+}
+
+impl<'a, T> Deref for TimedGuard<'a, T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        &self.guard
+    }
+}
+
+impl<'a, T> DerefMut for TimedGuard<'a, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.guard
+    }
+}
+
+impl<'a, T> Drop for TimedGuard<'a, T> {
+    fn drop(&mut self) {
+        self.counter.add_measure(&mut self.timer);
     }
 }
 
