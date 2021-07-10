@@ -221,7 +221,7 @@ The public key of the [account](terminology.md#account) containing a [program](t
 
 A stack of proofs, each which proves that some data existed before the proof was created and that a precise duration of time passed before the previous proof. Like a [VDF](terminology.md#verifiable-delay-function), a Proof of History can be verified in less time than it took to produce.
 
-## public key
+## public key (pubkey)
 
 The public key of a [keypair](terminology.md#keypair).
 
