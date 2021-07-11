@@ -961,7 +961,7 @@ impl ClusterInfo {
         self.push_message(CrdsValue::new_signed(message, &self.keypair()));
     }
 
-    fn push_vote_at_index(&self, vote: Transaction, vote_index: u8) {
+    pub fn push_vote_at_index(&self, vote: Transaction, vote_index: u8) {
         assert!((vote_index as usize) < MAX_LOCKOUT_HISTORY);
         let self_pubkey = self.id();
         let now = timestamp();

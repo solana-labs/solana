@@ -1,8 +1,9 @@
 //! A stage to broadcast data from a leader node to validators
 #![allow(clippy::rc_buffer)]
 use self::{
-    broadcast_duplicates_run::BroadcastDuplicatesRun,
-    broadcast_fake_shreds_run::BroadcastFakeShredsRun, broadcast_metrics::*,
+    broadcast_duplicates_run::{BroadcastDuplicatesConfig, BroadcastDuplicatesRun},
+    broadcast_fake_shreds_run::BroadcastFakeShredsRun,
+    broadcast_metrics::*,
     fail_entry_verification_broadcast_run::FailEntryVerificationBroadcastRun,
     standard_broadcast_run::StandardBroadcastRun,
 };
@@ -34,7 +35,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-mod broadcast_duplicates_run;
+pub mod broadcast_duplicates_run;
 mod broadcast_fake_shreds_run;
 pub mod broadcast_metrics;
 pub(crate) mod broadcast_utils;
@@ -50,14 +51,6 @@ pub(crate) type TransmitReceiver = Receiver<(TransmitShreds, Option<BroadcastShr
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum BroadcastStageReturnType {
     ChannelDisconnected,
-}
-
-#[derive(PartialEq, Clone, Debug)]
-pub struct BroadcastDuplicatesConfig {
-    /// Percentage of stake to send different version of slots to
-    pub stake_partition: u8,
-    /// Number of slots to wait before sending duplicate shreds
-    pub duplicate_send_delay: usize,
 }
 
 #[derive(PartialEq, Clone, Debug)]
