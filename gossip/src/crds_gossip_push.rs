@@ -98,7 +98,7 @@ impl CrdsGossipPush {
         ((CRDS_GOSSIP_PRUNE_STAKE_THRESHOLD_PCT * min_path_stake as f64).round() as u64).max(1)
     }
 
-    pub fn prune_received_cache(
+    pub(crate) fn prune_received_cache(
         &mut self,
         self_pubkey: &Pubkey,
         origin: &Pubkey,
@@ -254,7 +254,7 @@ impl CrdsGossipPush {
 
     /// refresh the push active set
     /// * ratio - active_set.len()/ratio is the number of actives to rotate
-    pub fn refresh_push_active_set(
+    pub(crate) fn refresh_push_active_set(
         &mut self,
         crds: &Crds,
         stakes: &HashMap<Pubkey, u64>,
@@ -359,7 +359,7 @@ impl CrdsGossipPush {
     }
 
     /// purge received push message cache
-    pub fn purge_old_received_cache(&mut self, min_time: u64) {
+    pub(crate) fn purge_old_received_cache(&mut self, min_time: u64) {
         self.received_cache.retain(|_, v| {
             v.retain(|_, (_, t)| *t > min_time);
             !v.is_empty()
