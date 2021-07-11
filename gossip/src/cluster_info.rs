@@ -63,7 +63,7 @@ use {
     },
     solana_streamer::{
         packet,
-        sendmmsg::multicast,
+        sendmmsg::multi_target_send,
         streamer::{PacketReceiver, PacketSender},
     },
     solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY,
@@ -1288,26 +1288,32 @@ impl ClusterInfo {
         };
         let mut dests = &dests[..];
         let data = &packet.data[..packet.meta.size];
-        while !dests.is_empty() {
-            match multicast(s, data, dests) {
-                Ok(n) => dests = &dests[n..],
-                Err(err) => {
-                    inc_new_counter_error!("cluster_info-retransmit-send_to_error", dests.len(), 1);
-                    error!("retransmit multicast: {:?}", err);
-                    break;
+
+        let res = multi_target_send(s, data, dests);
+        // TODO log errors
+
+        /*
+                while !dests.is_empty() {
+                    match multicast(s, data, dests) {
+                        Ok(n) => dests = &dests[n..],
+                        Err(err) => {
+                            inc_new_counter_error!("cluster_info-retransmit-send_to_error", dests.len(), 1);
+                            error!("retransmit multicast: {:?}", err);
+                            break;
+                        }
+                    }
                 }
-            }
-        }
-        let mut errs = 0;
-        for dest in dests {
-            if let Err(err) = s.send_to(data, dest) {
-                error!("retransmit send: {}, {:?}", dest, err);
-                errs += 1;
-            }
-        }
-        if errs != 0 {
-            inc_new_counter_error!("cluster_info-retransmit-error", errs, 1);
-        }
+                let mut errs = 0;
+                for dest in dests {
+                    if let Err(err) = s.send_to(data, dest) {
+                        error!("retransmit send: {}, {:?}", dest, err);
+                        errs += 1;
+                    }
+                }
+                if errs != 0 {
+                    inc_new_counter_error!("cluster_info-retransmit-error", errs, 1);
+                }
+        */
     }
 
     fn insert_self(&self) {

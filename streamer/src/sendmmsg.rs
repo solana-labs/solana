@@ -14,10 +14,10 @@ pub fn send_mmsg(sock: &UdpSocket, packets: &[(&Vec<u8>, &SocketAddr)]) -> io::R
 }
 
 #[cfg(target_os = "linux")]
-use libc::{iovec, mmsghdr, sockaddr_in, sockaddr_in6};
+use libc::{iovec, mmsghdr, sockaddr_in, sockaddr_in6, sockaddr_storage};
 
 #[cfg(target_os = "linux")]
-fn mmsghdr_for_packet(
+fn mmsghdr_for_packet_old(
     packet: &[u8],
     dest: &SocketAddr,
     index: usize,
@@ -39,7 +39,7 @@ fn mmsghdr_for_packet(
     let mut hdr: mmsghdr = unsafe { mem::zeroed() };
     hdr.msg_hdr.msg_iov = &mut iovs[index];
     hdr.msg_hdr.msg_iovlen = 1;
-    hdr.msg_len = packet.len() as u32;
+    //    hdr.msg_len = packet.len() as u32; 0<----
 
     match InetAddr::from_std(dest) {
         InetAddr::V4(addr) => {
@@ -58,8 +58,123 @@ fn mmsghdr_for_packet(
     hdr
 }
 
+/*
+    pub fn send_to(&self, buf: &[u8], dst: &SocketAddr) -> io::Result<usize> {
+  let len = cmp::min(buf.len(), <wrlen_t>::MAX as usize) as wrlen_t;
+        let (dstp, dstlen) = dst.into_inner();
+        let ret = cvt(unsafe {
+            c::sendto(
+                *self.inner.as_inner(),
+                buf.as_ptr() as *const c_void,
+    len,
+                MSG_NOSIGNAL,
+                dstp,
+    dstlen,
+            )
+        })?;
+        Ok(ret as usize)
+    }
+*/
+
 #[cfg(target_os = "linux")]
-pub fn send_mmsg(sock: &UdpSocket, packets: &[(&Vec<u8>, &SocketAddr)]) -> io::Result<usize> {
+fn mmsghdr_for_packet(
+    packet: &[u8],
+    dest: &SocketAddr,
+    index: usize,
+    iovs: &mut Vec<iovec>,
+    addrs: &mut Vec<sockaddr_storage>,
+    hdrs: &mut Vec<mmsghdr>,
+) {
+    use libc::{c_void, socklen_t};
+    use nix::sys::socket::InetAddr;
+    use std::mem;
+
+    let addr_in_len = mem::size_of::<sockaddr_in>() as socklen_t;
+    let addr_in6_len = mem::size_of::<sockaddr_in6>() as socklen_t;
+
+    iovs[index].iov_base = packet.as_ptr() as *mut c_void;
+    iovs[index].iov_len = packet.len();
+    hdrs[index].msg_hdr.msg_iov = &mut iovs[index];
+    hdrs[index].msg_hdr.msg_iovlen = 1;
+
+    match InetAddr::from_std(dest) {
+        InetAddr::V4(addr) => {
+            unsafe {
+                core::ptr::write(&mut addrs[index] as *mut _ as *mut _, addr);
+            }
+            hdrs[index].msg_hdr.msg_name = &mut addrs[index] as *mut _ as *mut _;
+            hdrs[index].msg_hdr.msg_namelen = addr_in_len;
+        }
+        InetAddr::V6(addr) => {
+            unsafe {
+                core::ptr::write(&mut addrs[index] as *mut _ as *mut _, addr);
+            }
+            hdrs[index].msg_hdr.msg_name = &mut addrs[index] as *mut _ as *mut _;
+            hdrs[index].msg_hdr.msg_namelen = addr_in6_len;
+        }
+    };
+}
+
+#[cfg(target_os = "linux")]
+fn sendmmsg_retry(sock: &UdpSocket, hdrs: &mut Vec<mmsghdr>) -> io::Result<()> {
+    use libc::sendmmsg;
+    use std::os::unix::io::AsRawFd;
+
+    let sock_fd = sock.as_raw_fd();
+    let mut pktidx = 0;
+    let mut _total_sent = 0;
+    let mut err = None;
+
+    while pktidx < hdrs.len() {
+        let npkts =
+            match unsafe { sendmmsg(sock_fd, &mut hdrs[0], (hdrs.len() - pktidx) as u32, 0) } {
+                -1 => {
+                    err = Some(io::Error::last_os_error());
+                    0
+                }
+                n => n as usize,
+            };
+        if npkts < hdrs.len() - pktidx {
+            // skip the packet we failed to send
+            pktidx += 1;
+        }
+        pktidx += npkts;
+        _total_sent += npkts;
+        // TODO log errors
+    }
+
+    if err.is_some() {
+        // TODO log errors
+        Err(err.unwrap())
+    } else {
+        Ok(())
+    }
+}
+
+#[cfg(target_os = "linux")]
+pub fn batch_send(sock: &UdpSocket, packets: &[(&Vec<u8>, &SocketAddr)]) -> io::Result<()> {
+    // The vectors are allocated with capacity, as later code inserts elements
+    // at specific indices, and uses the address of the vector index in hdrs
+    let mut iovs: Vec<iovec> = Vec::with_capacity(packets.len());
+    let mut addrs: Vec<sockaddr_storage> = Vec::with_capacity(packets.len());
+    let mut hdrs: Vec<mmsghdr> = Vec::with_capacity(packets.len());
+
+    for i in 0..packets.len() {
+        mmsghdr_for_packet(
+            &packets[i].0,
+            &packets[i].1,
+            i,
+            &mut iovs,
+            &mut addrs,
+            &mut hdrs,
+        );
+    }
+
+    sendmmsg_retry(&sock, &mut hdrs)
+}
+
+#[cfg(target_os = "linux")]
+pub fn send_mmsg_old(sock: &UdpSocket, packets: &[(&Vec<u8>, &SocketAddr)]) -> io::Result<usize> {
     use libc::{sendmmsg, socklen_t};
     use std::mem;
     use std::os::unix::io::AsRawFd;
@@ -78,7 +193,7 @@ pub fn send_mmsg(sock: &UdpSocket, packets: &[(&Vec<u8>, &SocketAddr)]) -> io::R
         .iter()
         .enumerate()
         .map(|(i, (packet, dest))| {
-            mmsghdr_for_packet(
+            mmsghdr_for_packet_old(
                 packet,
                 dest,
                 i,
@@ -109,7 +224,22 @@ pub fn multicast(sock: &UdpSocket, packet: &[u8], dests: &[&SocketAddr]) -> io::
 }
 
 #[cfg(target_os = "linux")]
-pub fn multicast(sock: &UdpSocket, packet: &[u8], dests: &[&SocketAddr]) -> io::Result<usize> {
+pub fn multi_target_send(sock: &UdpSocket, packet: &[u8], dests: &[&SocketAddr]) -> io::Result<()> {
+    // The vectors are allocated with capacity, as later code inserts elements
+    // at specific indices, and uses the address of the vector index in hdrs
+    let mut iovs: Vec<iovec> = Vec::with_capacity(dests.len());
+    let mut addrs: Vec<sockaddr_storage> = Vec::with_capacity(dests.len());
+    let mut hdrs: Vec<mmsghdr> = Vec::with_capacity(dests.len());
+
+    for i in 0..dests.len() {
+        mmsghdr_for_packet(&packet, &dests[i], i, &mut iovs, &mut addrs, &mut hdrs);
+    }
+
+    sendmmsg_retry(&sock, &mut hdrs)
+}
+
+#[cfg(target_os = "linux")]
+pub fn multicast_old(sock: &UdpSocket, packet: &[u8], dests: &[&SocketAddr]) -> io::Result<usize> {
     use libc::{sendmmsg, socklen_t};
     use std::mem;
     use std::os::unix::io::AsRawFd;
@@ -128,7 +258,7 @@ pub fn multicast(sock: &UdpSocket, packet: &[u8], dests: &[&SocketAddr]) -> io::
         .iter()
         .enumerate()
         .map(|(i, dest)| {
-            mmsghdr_for_packet(
+            mmsghdr_for_packet_old(
                 packet,
                 dest,
                 i,
