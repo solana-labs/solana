@@ -8331,6 +8331,7 @@ pub mod tests {
                     lamports: 42 + i,
                     post_balance: std::u64::MAX,
                     reward_type: Some(RewardType::Fee),
+                    commission: None,
                 })
                 .collect();
             let protobuf_rewards: generated::Rewards = rewards.into();
@@ -8397,6 +8398,7 @@ pub mod tests {
                     lamports: -42,
                     post_balance: 42,
                     reward_type: Some(RewardType::Rent),
+                    commission: None,
                 }]),
             };
             let deprecated_status: StoredTransactionStatusMeta = status.clone().into();

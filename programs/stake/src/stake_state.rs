@@ -1029,14 +1029,13 @@ pub fn redeem_rewards(
     rewarded_epoch: Epoch,
     stake_account: &mut AccountSharedData,
     vote_account: &mut AccountSharedData,
+    vote_state: &VoteState,
     point_value: &PointValue,
     stake_history: Option<&StakeHistory>,
     inflation_point_calc_tracer: &mut Option<impl FnMut(&InflationPointCalculationEvent)>,
     fix_stake_deactivate: bool,
 ) -> Result<(u64, u64), InstructionError> {
     if let StakeState::Stake(meta, mut stake) = stake_account.state()? {
-        let vote_state: VoteState =
-            StateMut::<VoteStateVersions>::state(vote_account)?.convert_to_current();
         if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer {
             inflation_point_calc_tracer(
                 &InflationPointCalculationEvent::EffectiveStakeAtRewardedEpoch(stake.stake(
@@ -1056,7 +1055,7 @@ pub fn redeem_rewards(
         if let Some((stakers_reward, voters_reward)) = redeem_stake_rewards(
             &mut stake,
             point_value,
-            &vote_state,
+            vote_state,
             stake_history,
             inflation_point_calc_tracer,
             fix_stake_deactivate,

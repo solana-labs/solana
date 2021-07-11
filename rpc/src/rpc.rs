@@ -480,6 +480,7 @@ impl JsonRpcRequestProcessor {
                         effective_slot: first_confirmed_block_in_epoch,
                         amount: reward.lamports.abs() as u64,
                         post_balance: reward.post_balance,
+                        commission: reward.commission,
                     });
                 }
                 None

@@ -771,6 +771,7 @@ pub struct CliEpochReward {
     pub post_balance: u64, // lamports
     pub percent_change: f64,
     pub apr: Option<f64>,
+    pub commission: Option<u8>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -815,23 +816,27 @@ impl fmt::Display for CliKeyedEpochRewards {
         writeln!(f, "Epoch Rewards:")?;
         writeln!(
             f,
-            "  {:<44}  {:<18}  {:<18}  {:>14}  {:>14}",
-            "Address", "Amount", "New Balance", "Percent Change", "APR"
+            "  {:<44}  {:<18}  {:<18}  {:>14}  {:>14}  {:>10}",
+            "Address", "Amount", "New Balance", "Percent Change", "APR", "Commission"
         )?;
         for keyed_reward in &self.rewards {
             match &keyed_reward.reward {
                 Some(reward) => {
                     writeln!(
                         f,
-                        "  {:<44}  ◎{:<17.9}  ◎{:<17.9}  {:>13.2}%  {}",
+                        "  {:<44}  ◎{:<17.9}  ◎{:<17.9}  {:>13.9}%  {:>14}  {:>10}",
                         keyed_reward.address,
                         lamports_to_sol(reward.amount),
                         lamports_to_sol(reward.post_balance),
                         reward.percent_change,
                         reward
                             .apr
-                            .map(|apr| format!("{:>13.2}%", apr))
+                            .map(|apr| format!("{:.2}%", apr))
                             .unwrap_or_default(),
+                        reward
+                            .commission
+                            .map(|commission| format!("{}%", commission))
+                            .unwrap_or_else(|| "-".to_string())
                     )?;
                 }
                 None => {
@@ -948,13 +953,13 @@ fn show_epoch_rewards(
         writeln!(f, "Epoch Rewards:")?;
         writeln!(
             f,
-            "  {:<6}  {:<11}  {:<18}  {:<18}  {:>14}  {:>14}",
-            "Epoch", "Reward Slot", "Amount", "New Balance", "Percent Change", "APR"
+            "  {:<6}  {:<11}  {:<18}  {:<18}  {:>14}  {:>14}  {:>10}",
+            "Epoch", "Reward Slot", "Amount", "New Balance", "Percent Change", "APR", "Commission"
         )?;
         for reward in epoch_rewards {
             writeln!(
                 f,
-                "  {:<6}  {:<11}  ◎{:<17.9}  ◎{:<17.9}  {:>13.2}%  {}",
+                "  {:<6}  {:<11}  ◎{:<17.9}  ◎{:<17.9}  {:>13.9}%  {:>14}  {:>10}",
                 reward.epoch,
                 reward.effective_slot,
                 lamports_to_sol(reward.amount),
@@ -962,8 +967,12 @@ fn show_epoch_rewards(
                 reward.percent_change,
                 reward
                     .apr
-                    .map(|apr| format!("{:>13.2}%", apr))
+                    .map(|apr| format!("{:.2}%", apr))
                     .unwrap_or_default(),
+                reward
+                    .commission
+                    .map(|commission| format!("{}%", commission))
+                    .unwrap_or_else(|| "-".to_string())
             )?;
         }
     }
@@ -2178,8 +2187,8 @@ impl fmt::Display for CliBlock {
             writeln!(f, "Rewards:")?;
             writeln!(
                 f,
-                "  {:<44}  {:^15}  {:<15}  {:<20}  {:>14}",
-                "Address", "Type", "Amount", "New Balance", "Percent Change"
+                "  {:<44}  {:^15}  {:<15}  {:<20}  {:>14}  {:>10}",
+                "Address", "Type", "Amount", "New Balance", "Percent Change", "Commission"
             )?;
             for reward in rewards {
                 let sign = if reward.lamports < 0 { "-" } else { "" };
@@ -2187,7 +2196,7 @@ impl fmt::Display for CliBlock {
                 total_rewards += reward.lamports;
                 writeln!(
                     f,
-                    "  {:<44}  {:^15}  {:>15}  {}",
+                    "  {:<44}  {:^15}  {:>15}  {}  {}",
                     reward.pubkey,
                     if let Some(reward_type) = reward.reward_type {
                         format!("{}", reward_type)
@@ -2209,7 +2218,11 @@ impl fmt::Display for CliBlock {
                                 / (reward.post_balance as f64 - reward.lamports as f64))
                                 * 100.0
                         )
-                    }
+                    },
+                    reward
+                        .commission
+                        .map(|commission| format!("{:>9}%", commission))
+                        .unwrap_or_else(|| "    -".to_string())
                 )?;
             }
 
