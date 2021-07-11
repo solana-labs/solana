@@ -1112,7 +1112,6 @@ impl MessageProcessor {
             Err(InstructionError::MissingAccount)
         };
         instruction.visit_each_account(&mut work)?;
-        work(0, instruction.program_id_index as usize)?;
 
         // Verify that the total sum of all the lamports did not change
         if pre_sum != post_sum {
