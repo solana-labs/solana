@@ -238,6 +238,7 @@ impl From<StoredConfirmedBlockReward> for Reward {
             lamports,
             post_balance: 0,
             reward_type: None,
+            commission: None,
         }
     }
 }

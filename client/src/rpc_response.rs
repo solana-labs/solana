@@ -394,8 +394,9 @@ pub struct RpcPerfSample {
 pub struct RpcInflationReward {
     pub epoch: Epoch,
     pub effective_slot: Slot,
-    pub amount: u64,       // lamports
-    pub post_balance: u64, // lamports
+    pub amount: u64,            // lamports
+    pub post_balance: u64,      // lamports
+    pub commission: Option<u8>, // Vote account commission when the reward was credited
 }
 
 impl From<ConfirmedTransactionStatusWithSignature> for RpcConfirmedTransactionStatusWithSignature {
