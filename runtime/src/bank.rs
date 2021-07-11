@@ -39,6 +39,7 @@ use solana_sdk::{
         create_account_shared_data_with_fields as create_account, from_account, Account,
         AccountSharedData, InheritableAccountFields, ReadableAccount,
     },
+    account_utils::StateMut,
     clock::{
         Epoch, Slot, SlotCount, SlotIndex, UnixTimestamp, DEFAULT_TICKS_PER_SECOND,
         INITIAL_RENT_EPOCH, MAX_PROCESSING_AGE, MAX_RECENT_BLOCKHASHES,
@@ -72,10 +73,18 @@ use solana_sdk::{
     timing::years_as_slots,
     transaction::{self, Result, Transaction, TransactionError},
 };
+<<<<<<< HEAD
 use solana_stake_program::stake_state::{
     self, Delegation, InflationPointCalculationEvent, PointValue,
 };
 use solana_vote_program::vote_instruction::VoteInstruction;
+=======
+use solana_stake_program::stake_state::{self, InflationPointCalculationEvent, PointValue};
+use solana_vote_program::{
+    vote_instruction::VoteInstruction,
+    vote_state::{VoteState, VoteStateVersions},
+};
+>>>>>>> 4098af3b5 (Record vote account commission with voting/staking rewards and surface in RPC)
 use std::{
     borrow::Cow,
     cell::RefCell,
@@ -110,6 +119,7 @@ impl RentDebits {
                     reward_type: RewardType::Rent,
                     lamports: rent_debit,
                     post_balance,
+                    commission: None, // Not applicable
                 };
                 self.0.push((*account, reward_info));
             } else {
@@ -735,8 +745,9 @@ pub trait DropCallback: fmt::Debug {
 #[derive(Debug, PartialEq, Serialize, Deserialize, AbiExample, Clone, Copy)]
 pub struct RewardInfo {
     pub reward_type: RewardType,
-    pub lamports: i64,     // Reward amount
-    pub post_balance: u64, // Account balance in lamports after `lamports` was applied
+    pub lamports: i64,          // Reward amount
+    pub post_balance: u64,      // Account balance in lamports after `lamports` was applied
+    pub commission: Option<u8>, // Vote account commission when the reward was credited, only present for voting and staking rewards
 }
 
 #[derive(Debug, Default)]
@@ -1877,7 +1888,22 @@ impl Bank {
         // pay according to point value
         for (vote_pubkey, (stake_group, vote_account)) in stake_delegation_accounts.iter_mut() {
             let mut vote_account_changed = false;
+<<<<<<< HEAD
             let voters_account_pre_balance = vote_account.lamports;
+=======
+            let voters_account_pre_balance = vote_account.lamports();
+            let vote_state: VoteState = match StateMut::<VoteStateVersions>::state(vote_account) {
+                Ok(vote_state) => vote_state.convert_to_current(),
+                Err(err) => {
+                    debug!(
+                        "failed to deserialize vote account {}: {}",
+                        vote_pubkey, err
+                    );
+                    continue;
+                }
+            };
+            let commission = Some(vote_state.commission);
+>>>>>>> 4098af3b5 (Record vote account commission with voting/staking rewards and surface in RPC)
 
             for (stake_pubkey, stake_account) in stake_group.iter_mut() {
                 // curry closure to add the contextual stake_pubkey
@@ -1892,6 +1918,7 @@ impl Bank {
                     rewarded_epoch,
                     stake_account,
                     vote_account,
+                    &vote_state,
                     &point_value,
                     Some(&stake_history),
                     &mut reward_calc_tracer.as_mut(),
@@ -1907,7 +1934,12 @@ impl Bank {
                             RewardInfo {
                                 reward_type: RewardType::Staking,
                                 lamports: stakers_reward as i64,
+<<<<<<< HEAD
                                 post_balance: stake_account.lamports,
+=======
+                                post_balance: stake_account.lamports(),
+                                commission,
+>>>>>>> 4098af3b5 (Record vote account commission with voting/staking rewards and surface in RPC)
                             },
                         ));
                     }
@@ -1929,6 +1961,7 @@ impl Bank {
                             reward_type: RewardType::Voting,
                             lamports,
                             post_balance,
+                            commission,
                         },
                     ));
                 }
@@ -2031,6 +2064,7 @@ impl Bank {
                 unburned, collector_fees, burned
             );
 
+<<<<<<< HEAD
             let post_balance = self.deposit(&self.collector_id, unburned);
             if unburned != 0 {
                 self.rewards.write().unwrap().push((
@@ -2041,6 +2075,30 @@ impl Bank {
                         post_balance,
                     },
                 ));
+=======
+            match self.deposit(&self.collector_id, deposit) {
+                Ok(post_balance) => {
+                    if deposit != 0 {
+                        self.rewards.write().unwrap().push((
+                            self.collector_id,
+                            RewardInfo {
+                                reward_type: RewardType::Fee,
+                                lamports: deposit as i64,
+                                post_balance,
+                                commission: None,
+                            },
+                        ));
+                    }
+                }
+                Err(_) => {
+                    error!(
+                        "Burning {} fee instead of crediting {}",
+                        deposit, self.collector_id
+                    );
+                    inc_new_counter_error!("bank-burned_fee_lamports", deposit as usize);
+                    burn += deposit;
+                }
+>>>>>>> 4098af3b5 (Record vote account commission with voting/staking rewards and surface in RPC)
             }
             self.capitalization.fetch_sub(burned, Relaxed);
         }
@@ -3410,6 +3468,7 @@ impl Bank {
                     rent_share
                 };
                 if !enforce_fix || rent_to_be_paid > 0 {
+<<<<<<< HEAD
                     let mut account = self.get_account(&pubkey).unwrap_or_default();
                     account.lamports += rent_to_be_paid;
                     self.store_account(&pubkey, &account);
@@ -3421,6 +3480,34 @@ impl Bank {
                             post_balance: account.lamports,
                         },
                     ));
+=======
+                    let mut account = self
+                        .get_account_with_fixed_root(&pubkey)
+                        .unwrap_or_default();
+                    if account.checked_add_lamports(rent_to_be_paid).is_err() {
+                        // overflow adding lamports
+                        self.capitalization.fetch_sub(rent_to_be_paid, Relaxed);
+                        error!(
+                            "Burned {} rent lamports instead of sending to {}",
+                            rent_to_be_paid, pubkey
+                        );
+                        inc_new_counter_error!(
+                            "bank-burned_rent_lamports",
+                            rent_to_be_paid as usize
+                        );
+                    } else {
+                        self.store_account(&pubkey, &account);
+                        rewards.push((
+                            pubkey,
+                            RewardInfo {
+                                reward_type: RewardType::Rent,
+                                lamports: rent_to_be_paid as i64,
+                                post_balance: account.lamports(),
+                                commission: None,
+                            },
+                        ));
+                    }
+>>>>>>> 4098af3b5 (Record vote account commission with voting/staking rewards and surface in RPC)
                 }
             });
         self.rewards.write().unwrap().append(&mut rewards);
@@ -5135,7 +5222,6 @@ pub(crate) mod tests {
     use crossbeam_channel::bounded;
     use solana_sdk::{
         account::Account,
-        account_utils::StateMut,
         clock::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT},
         epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
         feature::Feature,
@@ -7131,6 +7217,7 @@ pub(crate) mod tests {
                     reward_type: RewardType::Staking,
                     lamports: (rewards.validator_point_value * validator_points as f64) as i64,
                     post_balance: bank1.get_balance(&stake_id),
+                    commission: Some(0),
                 }
             )]
         );
@@ -7631,6 +7718,7 @@ pub(crate) mod tests {
                     reward_type: RewardType::Fee,
                     lamports: expected_fee_collected as i64,
                     post_balance: initial_balance + expected_fee_collected,
+                    commission: None,
                 }
             )]
         );
@@ -7666,6 +7754,7 @@ pub(crate) mod tests {
                     reward_type: RewardType::Fee,
                     lamports: expected_fee_collected as i64,
                     post_balance: initial_balance + 2 * expected_fee_collected,
+                    commission: None,
                 }
             )]
         );
