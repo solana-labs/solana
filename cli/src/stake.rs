@@ -1832,6 +1832,7 @@ pub fn make_cli_reward(
             post_balance: reward.post_balance,
             percent_change: rate_change * 100.0,
             apr: Some(apr * 100.0),
+            commission: reward.commission,
         })
     } else {
         None

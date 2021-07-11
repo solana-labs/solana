@@ -402,6 +402,7 @@ The result field will be an object with the following fields:
     - `lamports: <i64>`- number of reward lamports credited or debited by the account, as a i64
     - `postBalance: <u64>` - account balance in lamports after the reward was applied
     - `rewardType: <string|undefined>` - type of reward: "fee", "rent", "voting", "staking"
+    - `commission: <u8|undefined>` - vote account commission when the reward was credited, only present for voting and staking rewards
   - `blockTime: <i64 | null>` - estimated production time, as Unix timestamp (seconds since the Unix epoch). null if not available
   - `blockHeight: <u64 | null>` - the number of blocks beneath this block
 
@@ -1372,6 +1373,7 @@ The result field will be a JSON array with the following fields:
 - `effectiveSlot: <u64>`, the slot in which the rewards are effective
 - `amount: <u64>`, reward amount in lamports
 - `postBalance: <u64>`, post balance of the account in lamports
+- `commission: <u8|undefined>` - vote account commission when the reward was credited
 
 #### Example
 
@@ -2820,6 +2822,7 @@ Returns transaction details for a confirmed transaction
       - `lamports: <i64>`- number of reward lamports credited or debited by the account, as a i64
       - `postBalance: <u64>` - account balance in lamports after the reward was applied
       - `rewardType: <string>` - type of reward: currently only "rent", other types may be added in the future
+      - `commission: <u8|undefined>` - vote account commission when the reward was credited, only present for voting and staking rewards
 
 
 #### Example:
@@ -4164,6 +4167,7 @@ The result field will be an object with the following fields:
     - `lamports: <i64>`- number of reward lamports credited or debited by the account, as a i64
     - `postBalance: <u64>` - account balance in lamports after the reward was applied
     - `rewardType: <string|undefined>` - type of reward: "fee", "rent", "voting", "staking"
+    - `commission: <u8|undefined>` - vote account commission when the reward was credited, only present for voting and staking rewards
   - `blockTime: <i64 | null>` - estimated production time, as Unix timestamp (seconds since the Unix epoch). null if not available
 
 #### Example:

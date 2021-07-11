@@ -79,14 +79,14 @@ fn output_slot_rewards(blockstore: &Blockstore, slot: Slot, method: &LedgerOutpu
             if !rewards.is_empty() {
                 println!("  Rewards:");
                 println!(
-                    "    {:<44}  {:^15}  {:<15}  {:<20}",
-                    "Address", "Type", "Amount", "New Balance"
+                    "    {:<44}  {:^15}  {:<15}  {:<20}  {:>10}",
+                    "Address", "Type", "Amount", "New Balance", "Commission",
                 );
 
                 for reward in rewards {
                     let sign = if reward.lamports < 0 { "-" } else { "" };
                     println!(
-                        "    {:<44}  {:^15}  {:<15}  {}",
+                        "    {:<44}  {:^15}  {:<15}  {}   {}",
                         reward.pubkey,
                         if let Some(reward_type) = reward.reward_type {
                             format!("{}", reward_type)
@@ -98,7 +98,11 @@ fn output_slot_rewards(blockstore: &Blockstore, slot: Slot, method: &LedgerOutpu
                             sign,
                             lamports_to_sol(reward.lamports.abs() as u64)
                         ),
-                        format!("◎{:<18.9}", lamports_to_sol(reward.post_balance))
+                        format!("◎{:<18.9}", lamports_to_sol(reward.post_balance)),
+                        reward
+                            .commission
+                            .map(|commission| format!("{:>9}%", commission))
+                            .unwrap_or_else(|| "    -".to_string())
                     );
                 }
             }
