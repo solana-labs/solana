@@ -160,7 +160,7 @@ pub fn batch_send(sock: &UdpSocket, packets: &[(&Vec<u8>, &SocketAddr)]) -> io::
     let mut hdrs: Vec<mmsghdr> = Vec::with_capacity(packets.len());
 
     for (i, (pkt, dest)) in packets.iter().enumerate() {
-        mmsghdr_for_packet(&pkt, &dest, i, &mut iovs, &mut addrs, &mut hdrs);
+        mmsghdr_for_packet(pkt, dest, i, &mut iovs, &mut addrs, &mut hdrs);
     }
 
     /*
@@ -176,7 +176,7 @@ pub fn batch_send(sock: &UdpSocket, packets: &[(&Vec<u8>, &SocketAddr)]) -> io::
         }
     */
 
-    sendmmsg_retry(&sock, &mut hdrs)
+    sendmmsg_retry(sock, &mut hdrs)
 }
 
 #[cfg(target_os = "linux")]
@@ -238,10 +238,10 @@ pub fn multi_target_send(sock: &UdpSocket, packet: &[u8], dests: &[&SocketAddr])
     let mut hdrs: Vec<mmsghdr> = Vec::with_capacity(dests.len());
 
     for (i, dest) in dests.iter().enumerate() {
-        mmsghdr_for_packet(&packet, &dest, i, &mut iovs, &mut addrs, &mut hdrs);
+        mmsghdr_for_packet(packet, dest, i, &mut iovs, &mut addrs, &mut hdrs);
     }
 
-    sendmmsg_retry(&sock, &mut hdrs)
+    sendmmsg_retry(sock, &mut hdrs)
 }
 
 #[cfg(target_os = "linux")]
