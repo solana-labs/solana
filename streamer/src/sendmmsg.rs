@@ -282,7 +282,7 @@ pub fn multicast_old(sock: &UdpSocket, packet: &[u8], dests: &[&SocketAddr]) -> 
 mod tests {
     use crate::packet::Packet;
     use crate::recvmmsg::recv_mmsg;
-    use crate::sendmmsg::{multicast, send_mmsg};
+    use crate::sendmmsg::{batch_send, multi_target_send};
     use solana_sdk::packet::PACKET_DATA_SIZE;
     use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, UdpSocket};
 
@@ -295,8 +295,8 @@ mod tests {
         let packets: Vec<_> = (0..32).map(|_| vec![0u8; PACKET_DATA_SIZE]).collect();
         let packet_refs: Vec<_> = packets.iter().map(|p| (p, &addr)).collect();
 
-        let sent = send_mmsg(&sender, &packet_refs).ok();
-        assert_eq!(sent, Some(32));
+        let sent = batch_send(&sender, &packet_refs).ok();
+        assert_eq!(sent, Some(()));
 
         let mut packets = vec![Packet::default(); 32];
         let recv = recv_mmsg(&reader, &mut packets[..]).unwrap().1;
@@ -320,8 +320,8 @@ mod tests {
             .map(|(i, p)| if i < 16 { (p, &addr) } else { (p, &addr2) })
             .collect();
 
-        let sent = send_mmsg(&sender, &packet_refs).ok();
-        assert_eq!(sent, Some(32));
+        let sent = batch_send(&sender, &packet_refs).ok();
+        assert_eq!(sent, Some(()));
 
         let mut packets = vec![Packet::default(); 32];
         let recv = recv_mmsg(&reader, &mut packets[..]).unwrap().1;
@@ -350,13 +350,13 @@ mod tests {
 
         let packet = Packet::default();
 
-        let sent = multicast(
+        let sent = multi_target_send(
             &sender,
             &packet.data[..packet.meta.size],
             &[&addr, &addr2, &addr3, &addr4],
         )
         .ok();
-        assert_eq!(sent, Some(4));
+        assert_eq!(sent, Some(()));
 
         let mut packets = vec![Packet::default(); 32];
         let recv = recv_mmsg(&reader, &mut packets[..]).unwrap().1;
@@ -382,6 +382,6 @@ mod tests {
         let ip6 = SocketAddr::new(IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0)), 8080);
         let packet_refs: Vec<_> = vec![(&packets[0], &ip4), (&packets[1], &ip6)];
         let sender = UdpSocket::bind("127.0.0.1:0").expect("bind");
-        send_mmsg(&sender, &packet_refs).unwrap();
+        batch_send(&sender, &packet_refs).unwrap();
     }
 }
