@@ -143,9 +143,9 @@ fn sendmmsg_retry(sock: &UdpSocket, hdrs: &mut Vec<mmsghdr>) -> io::Result<()> {
         // TODO log errors
     }
 
-    if err.is_some() {
+    if let Some(err) = err {
         // TODO log errors
-        Err(err.unwrap())
+        Err(err)
     } else {
         Ok(())
     }
@@ -159,16 +159,22 @@ pub fn batch_send(sock: &UdpSocket, packets: &[(&Vec<u8>, &SocketAddr)]) -> io::
     let mut addrs: Vec<sockaddr_storage> = Vec::with_capacity(packets.len());
     let mut hdrs: Vec<mmsghdr> = Vec::with_capacity(packets.len());
 
-    for i in 0..packets.len() {
-        mmsghdr_for_packet(
-            &packets[i].0,
-            &packets[i].1,
-            i,
-            &mut iovs,
-            &mut addrs,
-            &mut hdrs,
-        );
+    for (i, (pkt, dest)) in packets.iter().enumerate() {
+        mmsghdr_for_packet(&pkt, &dest, i, &mut iovs, &mut addrs, &mut hdrs);
     }
+
+    /*
+        for i in 0..packets.len() {
+            mmsghdr_for_packet(
+                &packets[i].0,
+                &packets[i].1,
+                i,
+                &mut iovs,
+                &mut addrs,
+                &mut hdrs,
+            );
+        }
+    */
 
     sendmmsg_retry(&sock, &mut hdrs)
 }
@@ -231,8 +237,8 @@ pub fn multi_target_send(sock: &UdpSocket, packet: &[u8], dests: &[&SocketAddr])
     let mut addrs: Vec<sockaddr_storage> = Vec::with_capacity(dests.len());
     let mut hdrs: Vec<mmsghdr> = Vec::with_capacity(dests.len());
 
-    for i in 0..dests.len() {
-        mmsghdr_for_packet(&packet, &dests[i], i, &mut iovs, &mut addrs, &mut hdrs);
+    for (i, dest) in dests.iter().enumerate() {
+        mmsghdr_for_packet(&packet, &dest, i, &mut iovs, &mut addrs, &mut hdrs);
     }
 
     sendmmsg_retry(&sock, &mut hdrs)

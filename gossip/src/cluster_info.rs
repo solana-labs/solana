@@ -1286,11 +1286,14 @@ impl ClusterInfo {
         } else {
             peers.iter().map(|peer| &peer.tvu).collect()
         };
-        let mut dests = &dests[..];
+        let dests = &dests[..];
         let data = &packet.data[..packet.meta.size];
 
-        let res = multi_target_send(s, data, dests);
-        // TODO log errors
+        if let Err(err) = multi_target_send(s, data, dests) {
+            // TODO log errors
+            inc_new_counter_error!("cluster_info-retransmit-send_to_error", dests.len(), 1);
+            error!("retransmit multicast: {:?}", err);
+        }
 
         /*
                 while !dests.is_empty() {

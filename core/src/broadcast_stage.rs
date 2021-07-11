@@ -429,17 +429,17 @@ pub fn broadcast_shreds(
 
     //    let mut sent = 0;
     let mut send_mmsg_time = Measure::start("send_mmsg");
-    let res = batch_send(s, &packets[..]); // TODO error checking
-                                           /*
-                                               while sent < packets.len() {
-                                                   match send_mmsg(s, &packets[sent..]) {
-                                                       Ok(n) => sent += n,
-                                                       Err(e) => {
-                                                           return Err(Error::Io(e));
-                                                       }
-                                                   }
-                                               }
-                                           */
+    let _res = batch_send(s, &packets[..]); // TODO error checking
+                                            /*
+                                                while sent < packets.len() {
+                                                    match send_mmsg(s, &packets[sent..]) {
+                                                        Ok(n) => sent += n,
+                                                        Err(e) => {
+                                                            return Err(Error::Io(e));
+                                                        }
+                                                    }
+                                                }
+                                            */
     send_mmsg_time.stop();
     transmit_stats.send_mmsg_elapsed += send_mmsg_time.as_us();
 
