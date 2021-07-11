@@ -56,12 +56,15 @@ The replica consists of the following major components.
 The `ReplRpcUpdatedSlotsRequestor`, this service is responsible for peridically sending the
 request `ReplRpcUpdatedSlotsRequest` to its peer validator or replica for the latest slots.
 It specifies the latest slot (last_replicated_slot) for which the replica has already
-fetched the accounts information for.
+fetched the accounts information for. This maintains the ReplWorkingSlotSet and manages
+the lifecycle of BankForks, BlockCommitmentCache (for the highest confirmed slot) and
+the optimistically confirmed bank.
 
 The `ReplRpcUpdatedSlotsServer`, this service is responsible for serving the
 `ReplRpcUpdatedSlotsRequest` and sends the `ReplRpcUpdatedSlotsResponse` back to the requestor.
 The response consists of a vector of new slots the validator knows of which is later than the
-specified last_replicated_slot. This services also runs in the main validator.
+specified last_replicated_slot. This services also runs in the main validator. This service
+gets the slots for replication from the BankForks, BlockCommitmentCache and OptimiscallyConfirmBank.
 
 The `ReplRpcAccountsRequestor`, this service is responsible for sending the request
 `ReplRpcAccountsRequest` to its peer validator or replica for the `ReplAccountInfo` for a
@@ -73,7 +76,15 @@ The `ReplRpcAccountsServer`, this service is reponsible for serving the `ReplRpc
 and sends `ReplRpcAccountsResponse` to the requestor. The response contains the count of the
 ReplAccountInfo and the vector of ReplAccountInfo. This service runs both in the validator
 and the replica relaying replication information. The server can stream the account information
-from its AccountCache or from the storage if already flushed.
+from its AccountCache or from the storage if already flushed. This is similar to how a snapshot
+package is created from the AccountsDb with the difference that the storage does not need to be
+flushed to the disk before streaming to the client. If the account data is in the cache, it can
+be directly streamed. Care must be taken to avoid the account data for a slot get cleaned while
+serving the streaming. During replication we also need to replicate the information of accounts
+who have been cleaned up due to zero lamports, i.e. we need to be able to tell the difference
+for the account in a given slot: it is not updated and hence no storage entry in that slot and
+the accounts have 0 lamports and have been cleaned up through the history. We may record this
+via some "Tombstone" mechanism -- recording the dead accounts cleaned up for a slot.  
 
 The `JsonRpcAccountsService`, this is the RPC service serving client requests for account
 information. The existing JsonRpcService serves other client calls than AccountsDb ones.
@@ -167,4 +178,5 @@ Action Items
 7. Develop the interface code JsonRpcAccountsService
 8. Detailed Implementation of JsonRpcAccountsService, refactor code to share with part of JsonRpcService.
 9. Integrate with the AccountsBackgroundService in the replica for shrinking, cleaning, snapshotting.
+10. Metrics and performance testing
 
