@@ -67,9 +67,6 @@ pub trait Sysvar:
         }
         bincode::deserialize(&account_info.data.borrow()).map_err(|_| ProgramError::InvalidArgument)
     }
-    fn to_account_info(&self, account_info: &mut AccountInfo) -> Option<()> {
-        bincode::serialize_into(&mut account_info.data.borrow_mut()[..], self).ok()
-    }
     fn get() -> Result<Self, ProgramError> {
         Err(ProgramError::UnsupportedSysvar)
     }
@@ -103,8 +100,7 @@ macro_rules! impl_sysvar_get {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{clock::Epoch, program_error::ProgramError, pubkey::Pubkey};
-    use std::{cell::RefCell, rc::Rc};
+    use crate::pubkey::Pubkey;
 
     #[repr(C)]
     #[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
@@ -118,38 +114,4 @@ mod tests {
         }
     }
     impl Sysvar for TestSysvar {}
-
-    #[test]
-    fn test_sysvar_account_info_to_from() {
-        let test_sysvar = TestSysvar::default();
-        let key = crate::sysvar::tests::id();
-        let wrong_key = Pubkey::new_unique();
-        let owner = Pubkey::new_unique();
-        let mut lamports = 42;
-        let mut data = vec![0_u8; TestSysvar::size_of()];
-        let mut account_info = AccountInfo::new(
-            &key,
-            false,
-            true,
-            &mut lamports,
-            &mut data,
-            &owner,
-            false,
-            Epoch::default(),
-        );
-
-        test_sysvar.to_account_info(&mut account_info).unwrap();
-        let new_test_sysvar = TestSysvar::from_account_info(&account_info).unwrap();
-        assert_eq!(test_sysvar, new_test_sysvar);
-
-        account_info.key = &wrong_key;
-        assert_eq!(
-            TestSysvar::from_account_info(&account_info),
-            Err(ProgramError::InvalidArgument)
-        );
-
-        let mut small_data = vec![];
-        account_info.data = Rc::new(RefCell::new(&mut small_data));
-        assert_eq!(test_sysvar.to_account_info(&mut account_info), None);
-    }
 }
