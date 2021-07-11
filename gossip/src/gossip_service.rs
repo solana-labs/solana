@@ -308,8 +308,13 @@ fn spy(
 
 /// Makes a spy or gossip node based on whether or not a gossip_addr was passed in
 /// Pass in a gossip addr to fully participate in gossip instead of relying on just pulls
+<<<<<<< HEAD
 fn make_gossip_node(
     keypair: Arc<Keypair>,
+=======
+pub fn make_gossip_node(
+    keypair: Keypair,
+>>>>>>> 175083c4c (Add updated duplicate broadcast test (#18506))
     entrypoint: Option<&SocketAddr>,
     exit: &Arc<AtomicBool>,
     gossip_addr: Option<&SocketAddr>,
