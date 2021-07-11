@@ -23,6 +23,8 @@ pub struct StoredExtendedReward {
     post_balance: u64,
     #[serde(deserialize_with = "default_on_eof")]
     reward_type: Option<RewardType>,
+    #[serde(deserialize_with = "default_on_eof")]
+    commission: Option<u8>,
 }
 
 impl From<StoredExtendedReward> for Reward {
@@ -32,12 +34,14 @@ impl From<StoredExtendedReward> for Reward {
             lamports,
             post_balance,
             reward_type,
+            commission,
         } = value;
         Self {
             pubkey,
             lamports,
             post_balance,
             reward_type,
+            commission,
         }
     }
 }
@@ -49,13 +53,14 @@ impl From<Reward> for StoredExtendedReward {
             lamports,
             post_balance,
             reward_type,
-            ..
+            commission,
         } = value;
         Self {
             pubkey,
             lamports,
             post_balance,
             reward_type,
+            commission,
         }
     }
 }
