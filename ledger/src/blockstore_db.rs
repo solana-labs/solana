@@ -48,7 +48,7 @@ const ERASURE_META_CF: &str = "erasure_meta";
 // Column family for orphans data
 const ORPHANS_CF: &str = "orphans";
 /// Column family for bank hashes
-const BANK_HASH_CF: &str = "bank_hash";
+const BANK_HASH_CF: &str = "bank_hashes";
 // Column family for root data
 const ROOT_CF: &str = "root";
 /// Column family for indexes

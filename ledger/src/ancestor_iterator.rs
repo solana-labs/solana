@@ -76,10 +76,7 @@ impl<'a> Iterator for AncestorIteratorWithHash<'a> {
 mod tests {
     use super::*;
     use solana_sdk::hash::Hash;
-    use std::{
-        collections::HashMap,
-        path::Path,
-    };
+    use std::{collections::HashMap, path::Path};
     use trees::tr;
 
     fn setup_forks(blockstore_path: &Path) -> Blockstore {
@@ -168,7 +165,8 @@ mod tests {
 
             // Test correctness
             assert!(
-                AncestorIteratorWithHash::from(AncestorIterator::new(0, &blockstore)).next()
+                AncestorIteratorWithHash::from(AncestorIterator::new(0, &blockstore))
+                    .next()
                     .is_none()
             );
             assert_eq!(

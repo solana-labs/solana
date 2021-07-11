@@ -269,6 +269,10 @@ impl Blockstore {
                 .compact_range(from_slot, to_slot)
                 .unwrap_or(false)
             && self
+                .bank_hash_cf
+                .compact_range(from_slot, to_slot)
+                .unwrap_or(false)
+            && self
                 .index_cf
                 .compact_range(from_slot, to_slot)
                 .unwrap_or(false)
