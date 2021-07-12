@@ -2725,7 +2725,18 @@ impl AccountsDb {
         pubkey: &Pubkey,
         load_hint: LoadHint,
     ) -> Option<(AccountSharedData, Slot)> {
-        self.do_load(ancestors, pubkey, None, load_hint)
+        let load_into_read_only_cache_only = false;
+        self.do_load(
+            ancestors,
+            pubkey,
+            None,
+            load_hint,
+            load_into_read_only_cache_only,
+        )
+    }
+
+    pub fn load_accounts_into_read_only_cache(&self, ancestors: &Ancestors, pubkey: &Pubkey) {
+        self.do_load(ancestors, pubkey, None, LoadHint::Unspecified, true);
     }
 
     pub fn load_with_fixed_root(
@@ -3070,6 +3081,7 @@ impl AccountsDb {
         pubkey: &Pubkey,
         max_root: Option<Slot>,
         load_hint: LoadHint,
+        load_into_read_only_cache_only: bool,
     ) -> Option<(AccountSharedData, Slot)> {
         #[cfg(not(test))]
         assert!(max_root.is_none());
@@ -3078,10 +3090,19 @@ impl AccountsDb {
             self.read_index_for_accessor_or_load_slow(ancestors, pubkey, max_root, false)?;
         // Notice the subtle `?` at previous line, we bail out pretty early if missing.
 
-        if self.caching_enabled && store_id != CACHE_VIRTUAL_STORAGE_ID {
-            let result = self.read_only_accounts_cache.load(pubkey, slot);
-            if let Some(account) = result {
-                return Some((account, slot));
+        if self.caching_enabled {
+            if load_into_read_only_cache_only {
+                if store_id == CACHE_VIRTUAL_STORAGE_ID {
+                    return None;
+                }
+                if self.read_only_accounts_cache.in_cache(pubkey, slot) {
+                    return None;
+                }
+            } else if store_id != CACHE_VIRTUAL_STORAGE_ID {
+                let result = self.read_only_accounts_cache.load(pubkey, slot);
+                if let Some(account) = result {
+                    return Some((account, slot));
+                }
             }
         }
 
@@ -10445,6 +10466,7 @@ pub mod tests {
                 &account_key,
                 Some(0),
                 LoadHint::Unspecified,
+                false,
             )
             .unwrap();
         assert_eq!(account.0.lamports(), 0);
@@ -10460,7 +10482,8 @@ pub mod tests {
                 &Ancestors::default(),
                 &account_key,
                 Some(0),
-                LoadHint::Unspecified
+                LoadHint::Unspecified,
+                false,
             )
             .is_none());
     }
@@ -10535,7 +10558,8 @@ pub mod tests {
                 &Ancestors::default(),
                 &zero_lamport_account_key,
                 max_root,
-                load_hint
+                load_hint,
+                false,
             )
             .unwrap()
             .0
@@ -10663,6 +10687,7 @@ pub mod tests {
                 &account_key,
                 Some(0),
                 LoadHint::Unspecified,
+                false,
             )
             .unwrap();
         assert_eq!(account.0.lamports(), zero_lamport_account.lamports());
@@ -10676,6 +10701,7 @@ pub mod tests {
                 &account_key,
                 Some(max_scan_root),
                 LoadHint::Unspecified,
+                false,
             )
             .unwrap();
         assert_eq!(account.0.lamports(), slot1_account.lamports());
@@ -10690,6 +10716,7 @@ pub mod tests {
                 &account_key,
                 Some(max_scan_root),
                 LoadHint::Unspecified,
+                false,
             )
             .unwrap();
         assert_eq!(account.0.lamports(), slot1_account.lamports());
@@ -10702,7 +10729,8 @@ pub mod tests {
                 &scan_ancestors,
                 &account_key,
                 Some(max_scan_root),
-                LoadHint::Unspecified
+                LoadHint::Unspecified,
+                false,
             )
             .is_none());
     }
@@ -10851,7 +10879,8 @@ pub mod tests {
                     &Ancestors::default(),
                     key,
                     Some(last_dead_slot),
-                    LoadHint::Unspecified
+                    LoadHint::Unspecified,
+                    false,
                 )
                 .is_some());
         }
@@ -10879,7 +10908,8 @@ pub mod tests {
                     &Ancestors::default(),
                     key,
                     Some(last_dead_slot),
-                    LoadHint::Unspecified
+                    LoadHint::Unspecified,
+                    false,
                 )
                 .is_none());
         }
@@ -11412,7 +11442,9 @@ pub mod tests {
                         .store(thread_rng().gen_range(0, 10) as u64, Ordering::Relaxed);
 
                     // Load should never be unable to find this key
-                    let loaded_account = db.do_load(&ancestors, &pubkey, None, load_hint).unwrap();
+                    let loaded_account = db
+                        .do_load(&ancestors, &pubkey, None, load_hint, false)
+                        .unwrap();
                     // slot + 1 == account.lamports because of the account-cache-flush thread
                     assert_eq!(
                         loaded_account.0.lamports(),
