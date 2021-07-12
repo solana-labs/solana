@@ -17,66 +17,6 @@ pub fn send_mmsg(sock: &UdpSocket, packets: &[(&Vec<u8>, &SocketAddr)]) -> io::R
 use libc::{iovec, mmsghdr, sockaddr_in, sockaddr_in6, sockaddr_storage};
 
 #[cfg(target_os = "linux")]
-fn mmsghdr_for_packet_old(
-    packet: &[u8],
-    dest: &SocketAddr,
-    index: usize,
-    addr_in_len: u32,
-    addr_in6_len: u32,
-    iovs: &mut Vec<iovec>,
-    addr_in: &mut Vec<sockaddr_in>,
-    addr_in6: &mut Vec<sockaddr_in6>,
-) -> mmsghdr {
-    use libc::c_void;
-    use nix::sys::socket::InetAddr;
-    use std::mem;
-
-    iovs.push(iovec {
-        iov_base: packet.as_ptr() as *mut c_void,
-        iov_len: packet.len(),
-    });
-
-    let mut hdr: mmsghdr = unsafe { mem::zeroed() };
-    hdr.msg_hdr.msg_iov = &mut iovs[index];
-    hdr.msg_hdr.msg_iovlen = 1;
-    //    hdr.msg_len = packet.len() as u32; 0<----
-
-    match InetAddr::from_std(dest) {
-        InetAddr::V4(addr) => {
-            let index = addr_in.len();
-            addr_in.push(addr);
-            hdr.msg_hdr.msg_name = &mut addr_in[index] as *mut _ as *mut _;
-            hdr.msg_hdr.msg_namelen = addr_in_len;
-        }
-        InetAddr::V6(addr) => {
-            let index = addr_in6.len();
-            addr_in6.push(addr);
-            hdr.msg_hdr.msg_name = &mut addr_in6[index] as *mut _ as *mut _;
-            hdr.msg_hdr.msg_namelen = addr_in6_len;
-        }
-    };
-    hdr
-}
-
-/*
-    pub fn send_to(&self, buf: &[u8], dst: &SocketAddr) -> io::Result<usize> {
-  let len = cmp::min(buf.len(), <wrlen_t>::MAX as usize) as wrlen_t;
-        let (dstp, dstlen) = dst.into_inner();
-        let ret = cvt(unsafe {
-            c::sendto(
-                *self.inner.as_inner(),
-                buf.as_ptr() as *const c_void,
-    len,
-                MSG_NOSIGNAL,
-                dstp,
-    dstlen,
-            )
-        })?;
-        Ok(ret as usize)
-    }
-*/
-
-#[cfg(target_os = "linux")]
 fn mmsghdr_for_packet(
     packet: &[u8],
     dest: &SocketAddr,
@@ -184,60 +124,7 @@ pub fn batch_send(sock: &UdpSocket, packets: &[(&Vec<u8>, &SocketAddr)]) -> io::
         mmsghdr_for_packet(pkt, dest, i, &mut iovs, &mut addrs, &mut hdrs);
     }
 
-    /*
-        for i in 0..packets.len() {
-            mmsghdr_for_packet(
-                &packets[i].0,
-                &packets[i].1,
-                i,
-                &mut iovs,
-                &mut addrs,
-                &mut hdrs,
-            );
-        }
-    */
-
     sendmmsg_retry(sock, &mut hdrs)
-}
-
-#[cfg(target_os = "linux")]
-pub fn send_mmsg_old(sock: &UdpSocket, packets: &[(&Vec<u8>, &SocketAddr)]) -> io::Result<usize> {
-    use libc::{sendmmsg, socklen_t};
-    use std::mem;
-    use std::os::unix::io::AsRawFd;
-
-    // The vectors are allocated with capacity, as later code inserts elements
-    // at specific indices, and uses the address of the vector index in hdrs
-    let mut iovs: Vec<iovec> = Vec::with_capacity(packets.len());
-    let mut addr_in: Vec<sockaddr_in> = Vec::with_capacity(packets.len());
-    let mut addr_in6: Vec<sockaddr_in6> = Vec::with_capacity(packets.len());
-
-    let addr_in_len = mem::size_of_val(&addr_in) as socklen_t;
-    let addr_in6_len = mem::size_of_val(&addr_in6) as socklen_t;
-    let sock_fd = sock.as_raw_fd();
-
-    let mut hdrs: Vec<mmsghdr> = packets
-        .iter()
-        .enumerate()
-        .map(|(i, (packet, dest))| {
-            mmsghdr_for_packet_old(
-                packet,
-                dest,
-                i,
-                addr_in_len as u32,
-                addr_in6_len as u32,
-                &mut iovs,
-                &mut addr_in,
-                &mut addr_in6,
-            )
-        })
-        .collect();
-
-    let npkts = match unsafe { sendmmsg(sock_fd, &mut hdrs[0], packets.len() as u32, 0) } {
-        -1 => return Err(io::Error::last_os_error()),
-        n => n as usize,
-    };
-    Ok(npkts)
 }
 
 #[cfg(not(target_os = "linux"))]
@@ -263,46 +150,6 @@ pub fn multi_target_send(sock: &UdpSocket, packet: &[u8], dests: &[&SocketAddr])
     }
 
     sendmmsg_retry(sock, &mut hdrs)
-}
-
-#[cfg(target_os = "linux")]
-pub fn multicast_old(sock: &UdpSocket, packet: &[u8], dests: &[&SocketAddr]) -> io::Result<usize> {
-    use libc::{sendmmsg, socklen_t};
-    use std::mem;
-    use std::os::unix::io::AsRawFd;
-
-    // The vectors are allocated with capacity, as later code inserts elements
-    // at specific indices, and uses the address of the vector index in hdrs
-    let mut iovs: Vec<iovec> = Vec::with_capacity(dests.len());
-    let mut addr_in: Vec<sockaddr_in> = Vec::with_capacity(dests.len());
-    let mut addr_in6: Vec<sockaddr_in6> = Vec::with_capacity(dests.len());
-
-    let addr_in_len = mem::size_of_val(&addr_in) as socklen_t;
-    let addr_in6_len = mem::size_of_val(&addr_in6) as socklen_t;
-    let sock_fd = sock.as_raw_fd();
-
-    let mut hdrs: Vec<mmsghdr> = dests
-        .iter()
-        .enumerate()
-        .map(|(i, dest)| {
-            mmsghdr_for_packet_old(
-                packet,
-                dest,
-                i,
-                addr_in_len as u32,
-                addr_in6_len as u32,
-                &mut iovs,
-                &mut addr_in,
-                &mut addr_in6,
-            )
-        })
-        .collect();
-
-    let npkts = match unsafe { sendmmsg(sock_fd, &mut hdrs[0], dests.len() as u32, 0) } {
-        -1 => return Err(io::Error::last_os_error()),
-        n => n as usize,
-    };
-    Ok(npkts)
 }
 
 #[cfg(test)]
