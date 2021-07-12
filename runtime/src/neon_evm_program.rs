@@ -6,6 +6,6 @@ pub mod tests {
 
     #[test]
     fn test_id() {
-        println!("{:?}", id());
+        id().log();
     }
 }
