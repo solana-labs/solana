@@ -421,7 +421,9 @@ pub fn broadcast_shreds(
     transmit_stats.shred_select += shred_select.as_us();
 
     let mut send_mmsg_time = Measure::start("send_mmsg");
-    let _res = batch_send(s, &packets[..]);
+    if let Err(err) = batch_send(s, &packets[..]) {
+        error!("broadcast_shreds batch_send error: {:?}", err);
+    }
     send_mmsg_time.stop();
     transmit_stats.send_mmsg_elapsed += send_mmsg_time.as_us();
 
