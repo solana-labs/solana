@@ -28,7 +28,7 @@ use solana_sdk::{
     fee_calculator::FeeCalculator,
     genesis_config::ClusterType,
     hash::Hash,
-    message::{Message, MessageProgramIdsCache},
+    message::Message,
     native_loader, nonce,
     pubkey::Pubkey,
     transaction::Result,
@@ -208,12 +208,11 @@ impl Accounts {
             let mut tx_rent: TransactionRent = 0;
             let mut accounts = Vec::with_capacity(message.account_keys.len());
             let mut account_deps = Vec::with_capacity(message.account_keys.len());
-            let mut key_check = MessageProgramIdsCache::new(message);
             let mut rent_debits = RentDebits::default();
             let rent_for_sysvars = feature_set.is_active(&feature_set::rent_for_sysvars::id());
 
             for (i, key) in message.account_keys.iter().enumerate() {
-                let account = if key_check.is_non_loader_key(key, i) {
+                let account = if message.is_non_loader_key(i) {
                     if payer_index.is_none() {
                         payer_index = Some(i);
                     }
@@ -981,7 +980,7 @@ impl Accounts {
             let mut fee_payer_index = None;
             for (i, (key, account)) in (0..message.account_keys.len())
                 .zip(loaded_transaction.accounts.iter_mut())
-                .filter(|(i, (key, _account))| message.is_non_loader_key(key, *i))
+                .filter(|(i, _account)| message.is_non_loader_key(*i))
             {
                 let is_nonce_account = prepare_if_nonce_account(
                     account,
