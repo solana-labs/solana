@@ -420,6 +420,10 @@ impl Transaction {
         }
     }
 
+    pub fn hash_message(&self) -> Hash {
+        Message::hash_raw_message(&self.message_data())
+    }
+
     pub fn verify_with_results(&self) -> Vec<bool> {
         self._verify_with_results(&self.message_data())
     }
