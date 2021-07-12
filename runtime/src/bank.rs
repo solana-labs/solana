@@ -73,18 +73,13 @@ use solana_sdk::{
     timing::years_as_slots,
     transaction::{self, Result, Transaction, TransactionError},
 };
-<<<<<<< HEAD
 use solana_stake_program::stake_state::{
     self, Delegation, InflationPointCalculationEvent, PointValue,
 };
-use solana_vote_program::vote_instruction::VoteInstruction;
-=======
-use solana_stake_program::stake_state::{self, InflationPointCalculationEvent, PointValue};
 use solana_vote_program::{
     vote_instruction::VoteInstruction,
     vote_state::{VoteState, VoteStateVersions},
 };
->>>>>>> 4098af3b5 (Record vote account commission with voting/staking rewards and surface in RPC)
 use std::{
     borrow::Cow,
     cell::RefCell,
@@ -1888,10 +1883,7 @@ impl Bank {
         // pay according to point value
         for (vote_pubkey, (stake_group, vote_account)) in stake_delegation_accounts.iter_mut() {
             let mut vote_account_changed = false;
-<<<<<<< HEAD
             let voters_account_pre_balance = vote_account.lamports;
-=======
-            let voters_account_pre_balance = vote_account.lamports();
             let vote_state: VoteState = match StateMut::<VoteStateVersions>::state(vote_account) {
                 Ok(vote_state) => vote_state.convert_to_current(),
                 Err(err) => {
@@ -1903,7 +1895,6 @@ impl Bank {
                 }
             };
             let commission = Some(vote_state.commission);
->>>>>>> 4098af3b5 (Record vote account commission with voting/staking rewards and surface in RPC)
 
             for (stake_pubkey, stake_account) in stake_group.iter_mut() {
                 // curry closure to add the contextual stake_pubkey
@@ -1934,12 +1925,8 @@ impl Bank {
                             RewardInfo {
                                 reward_type: RewardType::Staking,
                                 lamports: stakers_reward as i64,
-<<<<<<< HEAD
                                 post_balance: stake_account.lamports,
-=======
-                                post_balance: stake_account.lamports(),
                                 commission,
->>>>>>> 4098af3b5 (Record vote account commission with voting/staking rewards and surface in RPC)
                             },
                         ));
                     }
@@ -2064,7 +2051,6 @@ impl Bank {
                 unburned, collector_fees, burned
             );
 
-<<<<<<< HEAD
             let post_balance = self.deposit(&self.collector_id, unburned);
             if unburned != 0 {
                 self.rewards.write().unwrap().push((
@@ -2073,32 +2059,9 @@ impl Bank {
                         reward_type: RewardType::Fee,
                         lamports: unburned as i64,
                         post_balance,
+                        commission: None,
                     },
                 ));
-=======
-            match self.deposit(&self.collector_id, deposit) {
-                Ok(post_balance) => {
-                    if deposit != 0 {
-                        self.rewards.write().unwrap().push((
-                            self.collector_id,
-                            RewardInfo {
-                                reward_type: RewardType::Fee,
-                                lamports: deposit as i64,
-                                post_balance,
-                                commission: None,
-                            },
-                        ));
-                    }
-                }
-                Err(_) => {
-                    error!(
-                        "Burning {} fee instead of crediting {}",
-                        deposit, self.collector_id
-                    );
-                    inc_new_counter_error!("bank-burned_fee_lamports", deposit as usize);
-                    burn += deposit;
-                }
->>>>>>> 4098af3b5 (Record vote account commission with voting/staking rewards and surface in RPC)
             }
             self.capitalization.fetch_sub(burned, Relaxed);
         }
@@ -3468,7 +3431,6 @@ impl Bank {
                     rent_share
                 };
                 if !enforce_fix || rent_to_be_paid > 0 {
-<<<<<<< HEAD
                     let mut account = self.get_account(&pubkey).unwrap_or_default();
                     account.lamports += rent_to_be_paid;
                     self.store_account(&pubkey, &account);
@@ -3478,36 +3440,9 @@ impl Bank {
                             reward_type: RewardType::Rent,
                             lamports: rent_to_be_paid as i64,
                             post_balance: account.lamports,
+                            commission: None,
                         },
                     ));
-=======
-                    let mut account = self
-                        .get_account_with_fixed_root(&pubkey)
-                        .unwrap_or_default();
-                    if account.checked_add_lamports(rent_to_be_paid).is_err() {
-                        // overflow adding lamports
-                        self.capitalization.fetch_sub(rent_to_be_paid, Relaxed);
-                        error!(
-                            "Burned {} rent lamports instead of sending to {}",
-                            rent_to_be_paid, pubkey
-                        );
-                        inc_new_counter_error!(
-                            "bank-burned_rent_lamports",
-                            rent_to_be_paid as usize
-                        );
-                    } else {
-                        self.store_account(&pubkey, &account);
-                        rewards.push((
-                            pubkey,
-                            RewardInfo {
-                                reward_type: RewardType::Rent,
-                                lamports: rent_to_be_paid as i64,
-                                post_balance: account.lamports(),
-                                commission: None,
-                            },
-                        ));
-                    }
->>>>>>> 4098af3b5 (Record vote account commission with voting/staking rewards and surface in RPC)
                 }
             });
         self.rewards.write().unwrap().append(&mut rewards);
