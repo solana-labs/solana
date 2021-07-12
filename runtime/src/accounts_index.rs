@@ -7,7 +7,6 @@ use crate::{
 use bv::BitVec;
 use log::*;
 use ouroboros::self_referencing;
-use rayon::prelude::*;
 use solana_measure::measure::Measure;
 use solana_sdk::{
     clock::{BankId, Slot},
@@ -1400,7 +1399,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport + std::marker::Sync + std::mark
         let insertion_time = AtomicU64::new(0);
 
         let duplicate_keys = binned
-            .into_par_iter()
+            .into_iter()
             .map(|(pubkey_bin, items)| {
                 let mut _reclaims = SlotList::new();
 
