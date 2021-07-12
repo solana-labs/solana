@@ -4,13 +4,53 @@ use std::io;
 use std::net::{SocketAddr, UdpSocket};
 
 #[cfg(not(target_os = "linux"))]
-pub fn send_mmsg(sock: &UdpSocket, packets: &[(&Vec<u8>, &SocketAddr)]) -> io::Result<usize> {
-    let count = packets.len();
+pub fn batch_send(sock: &UdpSocket, packets: &[(&Vec<u8>, &SocketAddr)]) -> io::Result<()> {
+    let mut total_sent = 0;
+    let mut err = None;
     for (p, a) in packets {
-        sock.send_to(p, *a)?;
+        if let Err(e) = sock.send_to(p, *a) {
+            err = Some(e);
+        } else {
+            total_sent += 1;
+        }
     }
 
-    Ok(count)
+    if let Some(err) = err {
+        error!(
+            "batch_send failed to send some packets {}/{} error {:?}",
+            total_sent,
+            packets.len(),
+            err,
+        );
+        Err(err)
+    } else {
+        Ok(())
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn multi_target_send(sock: &UdpSocket, packet: &[u8], dests: &[&SocketAddr]) -> io::Result<()> {
+    let mut total_sent = 0;
+    let mut err = None;
+    for a in dests {
+        if let Err(e) = sock.send_to(packet, a) {
+            err = Some(e);
+        } else {
+            total_sent += 1;
+        }
+    }
+
+    if let Some(err) = err {
+        error!(
+            "multi_target_send failed to send some packets {}/{} error: {:?}",
+            total_sent,
+            dests.len(),
+            err,
+        );
+        Err(err)
+    } else {
+        Ok(())
+    }
 }
 
 #[cfg(target_os = "linux")]
@@ -69,11 +109,9 @@ fn sendmmsg_retry(sock: &UdpSocket, hdrs: &mut Vec<mmsghdr>) -> io::Result<()> {
     use libc::sendmmsg;
     use std::os::unix::io::AsRawFd;
 
-    solana_logger::setup();
-
     let sock_fd = sock.as_raw_fd();
     let mut pktidx = 0;
-    let mut _total_sent = 0;
+    let mut total_sent = 0;
     let mut err = None;
 
     while pktidx < hdrs.len() {
@@ -86,26 +124,26 @@ fn sendmmsg_retry(sock: &UdpSocket, hdrs: &mut Vec<mmsghdr>) -> io::Result<()> {
                 n => n as usize,
             };
         if npkts < hdrs.len() - pktidx {
-            error!(
-                "sendmmsg failed to send some packets {}/{}",
+            debug!(
+                "sendmmsg_retry failed to send some packets {}/{} error: {:?}",
                 npkts,
-                hdrs.len() - pktidx
+                hdrs.len() - pktidx,
+                err,
             );
             // skip the packet we failed to send
             pktidx += 1;
         }
         pktidx += npkts;
-        _total_sent += npkts;
-        // TODO log errors
+        total_sent += npkts;
     }
 
     if let Some(err) = err {
         error!(
-            "leaving sendmmsg_retry errors {}/{} sent",
-            _total_sent,
-            hdrs.len()
+            "leaving sendmmsg_retry errors {}/{} sent: {:?}",
+            total_sent,
+            hdrs.len(),
+            err,
         );
-        // TODO log errors
         Err(err)
     } else {
         Ok(())
@@ -125,16 +163,6 @@ pub fn batch_send(sock: &UdpSocket, packets: &[(&Vec<u8>, &SocketAddr)]) -> io::
     }
 
     sendmmsg_retry(sock, &mut hdrs)
-}
-
-#[cfg(not(target_os = "linux"))]
-pub fn multicast(sock: &UdpSocket, packet: &[u8], dests: &[&SocketAddr]) -> io::Result<usize> {
-    let count = dests.len();
-    for a in dests {
-        sock.send_to(packet, a)?;
-    }
-
-    Ok(count)
 }
 
 #[cfg(target_os = "linux")]
