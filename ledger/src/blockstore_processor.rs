@@ -926,7 +926,17 @@ pub fn confirm_slot(
         }
     };
     let check_start = Instant::now();
-    let mut entries = entry::verify_transactions(entries, Arc::new(verify_transaction))?;
+    let mut check_result = entries.start_verify_and_hash_transactions(
+        skip_verification,
+        bank.libsecp256k1_0_5_upgrade_enabled(),
+        bank.verify_tx_signatures_len_enabled(),
+        recyclers.clone(),
+    );
+    let check_result = check_result.entries();
+    if check_result.is_none() {
+        warn!("Ledger proof of history failed at slot: {}", slot);
+        return Err(BlockError::InvalidEntryHash.into());
+    }
     let transaction_duration_us = timing::duration_as_us(&check_start.elapsed());
 
     let mut replay_elapsed = Measure::start("replay_elapsed");
