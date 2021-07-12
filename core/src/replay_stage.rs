@@ -30,7 +30,9 @@ use solana_gossip::cluster_info::ClusterInfo;
 use solana_ledger::{
     block_error::BlockError,
     blockstore::Blockstore,
-    blockstore_processor::{self, BlockstoreProcessorError, TransactionStatusSender},
+    blockstore_processor::{
+        self, BlockstoreProcessorError, RpcAccountHistorySender, TransactionStatusSender,
+    },
     leader_schedule_cache::LeaderScheduleCache,
 };
 use solana_measure::measure::Measure;
@@ -125,6 +127,7 @@ pub struct ReplayStageConfig {
     pub transaction_status_sender: Option<TransactionStatusSender>,
     pub rewards_recorder_sender: Option<RewardsRecorderSender>,
     pub cache_block_meta_sender: Option<CacheBlockMetaSender>,
+    pub rpc_account_history_sender: Option<RpcAccountHistorySender>,
     pub bank_notification_sender: Option<BankNotificationSender>,
     pub wait_for_vote_to_start_leader: bool,
     pub ancestor_hashes_replay_update_sender: AncestorHashesReplayUpdateSender,
@@ -333,6 +336,7 @@ impl ReplayStage {
             transaction_status_sender,
             rewards_recorder_sender,
             cache_block_meta_sender,
+            rpc_account_history_sender,
             bank_notification_sender,
             wait_for_vote_to_start_leader,
             ancestor_hashes_replay_update_sender,
@@ -408,6 +412,7 @@ impl ReplayStage {
                         &mut progress,
                         transaction_status_sender.as_ref(),
                         cache_block_meta_sender.as_ref(),
+                        rpc_account_history_sender.as_ref(),
                         &verify_recyclers,
                         &mut heaviest_subtree_fork_choice,
                         &replay_vote_sender,
@@ -1858,6 +1863,7 @@ impl ReplayStage {
         progress: &mut ProgressMap,
         transaction_status_sender: Option<&TransactionStatusSender>,
         cache_block_meta_sender: Option<&CacheBlockMetaSender>,
+        rpc_account_history_sender: Option<&RpcAccountHistorySender>,
         verify_recyclers: &VerifyRecyclers,
         heaviest_subtree_fork_choice: &mut HeaviestSubtreeForkChoice,
         replay_vote_sender: &ReplayVoteSender,
@@ -1997,6 +2003,7 @@ impl ReplayStage {
                         .unwrap_or_else(|err| warn!("bank_notification_sender failed: {:?}", err));
                 }
                 blockstore_processor::cache_block_meta(&bank, cache_block_meta_sender);
+                blockstore_processor::cache_rpc_account_history(&bank, rpc_account_history_sender);
 
                 let bank_hash = bank.hash();
                 if let Some(new_frozen_voters) =

@@ -9,6 +9,7 @@ use {
         leader_schedule_cache::LeaderScheduleCache,
     },
     solana_rpc::{
+        account_history::{AccountHistory, AccountKeys},
         max_slots::MaxSlots,
         optimistically_confirmed_bank_tracker::{
             OptimisticallyConfirmedBank, OptimisticallyConfirmedBankTracker,
@@ -224,6 +225,8 @@ fn start_client_rpc_services(
             max_slots,
             leader_schedule_cache.clone(),
             max_complete_transaction_status_slot,
+            Arc::new(RwLock::new(AccountHistory::new())), // Replica nodes could support the RpcAccountHistoryService in the future
+            Arc::new(RwLock::new(AccountKeys::new())),
         )),
         Some(PubSubService::new(
             replica_config.pubsub_config.clone(),
