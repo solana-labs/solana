@@ -1,7 +1,7 @@
 export class SendTransactionError extends Error {
-  logs: string | undefined;
+  logs: string[] | undefined;
 
-  constructor(message: string, logs?: string) {
+  constructor(message: string, logs?: string[]) {
     super(message);
 
     this.logs = logs;
