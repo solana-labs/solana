@@ -92,8 +92,17 @@ fn mmsghdr_for_packet(
     let addr_in_len = mem::size_of::<sockaddr_in>() as socklen_t;
     let addr_in6_len = mem::size_of::<sockaddr_in6>() as socklen_t;
 
-    iovs[index].iov_base = packet.as_ptr() as *mut c_void;
-    iovs[index].iov_len = packet.len();
+    iovs.push(iovec {
+        iov_base: packet.as_ptr() as *mut c_void,
+        iov_len: packet.len(),
+    });
+
+    let hdr: mmsghdr = unsafe { mem::zeroed() };
+    hdrs.push(hdr);
+
+    let addr_storage: sockaddr_storage = unsafe { mem::zeroed() };
+    addrs.push(addr_storage);
+
     hdrs[index].msg_hdr.msg_iov = &mut iovs[index];
     hdrs[index].msg_hdr.msg_iovlen = 1;
 
@@ -120,6 +129,8 @@ fn sendmmsg_retry(sock: &UdpSocket, hdrs: &mut Vec<mmsghdr>) -> io::Result<()> {
     use libc::sendmmsg;
     use std::os::unix::io::AsRawFd;
 
+    solana_logger::setup();
+
     let sock_fd = sock.as_raw_fd();
     let mut pktidx = 0;
     let mut _total_sent = 0;
@@ -135,6 +146,11 @@ fn sendmmsg_retry(sock: &UdpSocket, hdrs: &mut Vec<mmsghdr>) -> io::Result<()> {
                 n => n as usize,
             };
         if npkts < hdrs.len() - pktidx {
+            error!(
+                "sendmmsg failed to send some packets {}/{}",
+                npkts,
+                hdrs.len() - pktidx
+            );
             // skip the packet we failed to send
             pktidx += 1;
         }
@@ -144,6 +160,11 @@ fn sendmmsg_retry(sock: &UdpSocket, hdrs: &mut Vec<mmsghdr>) -> io::Result<()> {
     }
 
     if let Some(err) = err {
+        error!(
+            "leaving sendmmsg_retry errors {}/{} sent",
+            _total_sent,
+            hdrs.len()
+        );
         // TODO log errors
         Err(err)
     } else {
@@ -384,10 +405,10 @@ mod tests {
     #[test]
     fn test_message_header_from_packet() {
         let packets: Vec<_> = (0..2).map(|_| vec![0u8; PACKET_DATA_SIZE]).collect();
-        let ip4 = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
-        let ip6 = SocketAddr::new(IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0)), 8080);
+        let ip4 = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8080);
+        let ip6 = SocketAddr::new(IpAddr::V6(Ipv6Addr::LOCALHOST), 8080);
         let packet_refs: Vec<_> = vec![(&packets[0], &ip4), (&packets[1], &ip6)];
-        let sender = UdpSocket::bind("127.0.0.1:0").expect("bind");
+        let sender = UdpSocket::bind(":::0").expect("bind");
         batch_send(&sender, &packet_refs).unwrap();
     }
 }
