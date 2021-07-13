@@ -28,6 +28,19 @@ pub const BLOCK_MAX_COST: u64 = 2_500_000_000;
 
 const MAX_WRITABLE_ACCOUNTS: usize = 256;
 
+#[derive(Debug, Clone)]
+pub enum CostModelError {
+    /// transaction that would fail sanitize, cost model is not able to process
+    /// such transaction.
+    InvalidTransaction,
+
+    /// would exceed block max limit
+    WouldExceedBlockMaxLimit,
+
+    /// would exceed account max limit
+    WouldExceedAccountMaxLimit,
+}
+
 // cost of transaction is made of account_access_cost and instruction execution_cost
 // where
 // account_access_cost is the sum of read/write/sign all accounts included in the transaction
@@ -113,9 +126,16 @@ impl CostModel {
         );
     }
 
-    pub fn calculate_cost(&mut self, transaction: &Transaction) -> &TransactionCost {
+    pub fn calculate_cost(
+        &mut self,
+        transaction: &Transaction,
+    ) -> Result<&TransactionCost, CostModelError> {
         self.transaction_cost.reset();
 
+        // calculate transaction exeution cost
+        self.transaction_cost.execution_cost = self.find_transaction_cost(transaction)?;
+
+        // calculate account access cost
         let message = transaction.message();
         message.account_keys.iter().enumerate().for_each(|(i, k)| {
             let is_signer = message.is_signer(i);
@@ -135,12 +155,11 @@ impl CostModel {
                     NON_SIGNED_READONLY_ACCOUNT_ACCESS_COST;
             }
         });
-        self.transaction_cost.execution_cost = self.find_transaction_cost(transaction);
         debug!(
             "transaction {:?} has cost {:?}",
             transaction, self.transaction_cost
         );
-        &self.transaction_cost
+        Ok(&self.transaction_cost)
     }
 
     // To update or insert instruction cost to table.
@@ -175,10 +194,15 @@ impl CostModel {
         }
     }
 
-    fn find_transaction_cost(&self, transaction: &Transaction) -> u64 {
+    fn find_transaction_cost(&self, transaction: &Transaction) -> Result<u64, CostModelError> {
         let mut cost: u64 = 0;
 
         for instruction in &transaction.message().instructions {
+            // The Transaction may not be sanitized at this point
+            if instruction.program_id_index as usize >= transaction.message().account_keys.len() {
+                return Err(CostModelError::InvalidTransaction);
+            }
+
             let program_id =
                 transaction.message().account_keys[instruction.program_id_index as usize];
             let instruction_cost = self.find_instruction_cost(&program_id);
@@ -189,7 +213,7 @@ impl CostModel {
             );
             cost += instruction_cost;
         }
-        cost
+        Ok(cost)
     }
 }
 
@@ -271,7 +295,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             expected_cost,
-            testee.find_transaction_cost(&simple_transaction)
+            testee.find_transaction_cost(&simple_transaction).unwrap()
         );
     }
 
@@ -295,7 +319,7 @@ mod tests {
         testee
             .upsert_instruction_cost(&system_program::id(), program_cost)
             .unwrap();
-        assert_eq!(expected_cost, testee.find_transaction_cost(&tx));
+        assert_eq!(expected_cost, testee.find_transaction_cost(&tx).unwrap());
     }
 
     #[test]
@@ -321,7 +345,7 @@ mod tests {
         debug!("many random transaction {:?}", tx);
 
         let testee = CostModel::default();
-        let result = testee.find_transaction_cost(&tx);
+        let result = testee.find_transaction_cost(&tx).unwrap();
 
         // expected cost for two random/unknown program is
         let expected_cost = testee.instruction_execution_cost_table.get_mode() * 2;
@@ -350,7 +374,7 @@ mod tests {
         );
 
         let mut cost_model = CostModel::default();
-        let tx_cost = cost_model.calculate_cost(&tx);
+        let tx_cost = cost_model.calculate_cost(&tx).unwrap();
         assert_eq!(2 + 2, tx_cost.writable_accounts.len());
         assert_eq!(signer1.pubkey(), tx_cost.writable_accounts[0]);
         assert_eq!(signer2.pubkey(), tx_cost.writable_accounts[1]);
@@ -392,7 +416,7 @@ mod tests {
         cost_model
             .upsert_instruction_cost(&system_program::id(), expected_execution_cost)
             .unwrap();
-        let tx_cost = cost_model.calculate_cost(&tx);
+        let tx_cost = cost_model.calculate_cost(&tx).unwrap();
         assert_eq!(expected_account_cost, tx_cost.account_access_cost);
         assert_eq!(expected_execution_cost, tx_cost.execution_cost);
         assert_eq!(2, tx_cost.writable_accounts.len());
@@ -460,7 +484,7 @@ mod tests {
                 } else {
                     thread::spawn(move || {
                         let mut cost_model = cost_model.write().unwrap();
-                        let tx_cost = cost_model.calculate_cost(&tx);
+                        let tx_cost = cost_model.calculate_cost(&tx).unwrap();
                         assert_eq!(3, tx_cost.writable_accounts.len());
                         assert_eq!(expected_account_cost, tx_cost.account_access_cost);
                     })

@@ -1217,7 +1217,14 @@ impl BankingStage {
                 cost_tracker
                     .write()
                     .unwrap()
-                    .add_transaction_cost(tx.transaction());
+                    .add_transaction_cost(tx.transaction())
+                    .unwrap_or_else(|err| {
+                        warn!(
+                            "failed to track transaction cost, err {:?}, tx {:?}",
+                            err,
+                            tx.transaction()
+                        )
+                    });
             }
         });
         cost_tracking_time.stop();
