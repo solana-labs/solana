@@ -6049,9 +6049,9 @@ impl AccountsDb {
             .accounts_index
             .account_maps
             .par_iter()
-            .map(|i| {
+            .map(|bin_map| {
                 let mut stored_sizes_and_counts = HashMap::new();
-                i.read().unwrap().values().for_each(|entry| {
+                bin_map.read().unwrap().values().for_each(|entry| {
                     entry
                         .slot_list
                         .read()
