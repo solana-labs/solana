@@ -4690,9 +4690,11 @@ impl AccountsDb {
         slot: Slot,
         ancestors: &Ancestors,
         check_hash: bool,
-        can_cached_slot_be_unflushed: bool,
+        _can_cached_slot_be_unflushed: bool,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         if !use_index {
+            Ok((Hash::default(), 1))
+            /*
             let accounts_cache_and_ancestors = if can_cached_slot_be_unflushed {
                 Some((&self.accounts_cache, ancestors, &self.accounts_index))
             } else {
@@ -4724,7 +4726,7 @@ impl AccountsDb {
                 timings,
                 check_hash,
                 accounts_cache_and_ancestors,
-            )
+            )*/
         } else {
             self.calculate_accounts_hash(slot, ancestors, check_hash)
         }
