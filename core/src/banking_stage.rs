@@ -985,16 +985,15 @@ impl BankingStage {
     fn transactions_from_packets(
         msgs: &Packets,
         transaction_indexes: &[usize],
-        secp256k1_program_enabled: bool,
+        libsecp256k1_0_5_upgrade_enabled: bool,
     ) -> (Vec<HashedTransaction<'static>>, Vec<usize>) {
         transaction_indexes
             .iter()
             .filter_map(|tx_index| {
                 let p = &msgs.packets[*tx_index];
                 let tx: Transaction = limited_deserialize(&p.data[0..p.meta.size]).ok()?;
-                if secp256k1_program_enabled {
-                    tx.verify_precompiles().ok()?;
-                }
+                tx.verify_precompiles(libsecp256k1_0_5_upgrade_enabled)
+                    .ok()?;
                 let message_bytes = Self::packet_message(p)?;
                 let message_hash = Message::hash_raw_message(message_bytes);
                 Some((
@@ -1058,7 +1057,7 @@ impl BankingStage {
         let (transactions, transaction_to_packet_indexes) = Self::transactions_from_packets(
             msgs,
             &packet_indexes,
-            bank.secp256k1_program_enabled(),
+            bank.libsecp256k1_0_5_upgrade_enabled(),
         );
         packet_conversion_time.stop();
 
@@ -1129,7 +1128,7 @@ impl BankingStage {
         let (transactions, transaction_to_packet_indexes) = Self::transactions_from_packets(
             msgs,
             &transaction_indexes,
-            bank.secp256k1_program_enabled(),
+            bank.libsecp256k1_0_5_upgrade_enabled(),
         );
 
         let tx_count = transaction_to_packet_indexes.len();

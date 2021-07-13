@@ -49,7 +49,7 @@ use solana_sdk::{
     epoch_schedule::EpochSchedule,
     feature,
     feature_set::{self, FeatureSet},
-    fee_calculator::{FeeCalculator, FeeConfig, FeeRateGovernor},
+    fee_calculator::{FeeCalculator, FeeRateGovernor},
     genesis_config::{ClusterType, GenesisConfig},
     hard_forks::HardForks,
     hash::{extend_and_hash, hashv, Hash},
@@ -3210,10 +3210,6 @@ impl Bank {
         let hash_queue = self.blockhash_queue.read().unwrap();
         let mut fees = 0;
 
-        let fee_config = FeeConfig {
-            secp256k1_program_enabled: self.secp256k1_program_enabled(),
-        };
-
         let results = txs
             .zip(executed)
             .map(|(tx, (res, nonce_rollback))| {
@@ -3231,7 +3227,7 @@ impl Bank {
                     });
                 let fee_calculator = fee_calculator.ok_or(TransactionError::BlockhashNotFound)?;
 
-                let fee = fee_calculator.calculate_fee_with_config(tx.message(), &fee_config);
+                let fee = fee_calculator.calculate_fee(tx.message());
 
                 let message = tx.message();
                 match *res {
@@ -4826,11 +4822,6 @@ impl Bank {
         self.rc.accounts.accounts_db.shrink_candidate_slots()
     }
 
-    pub fn secp256k1_program_enabled(&self) -> bool {
-        self.feature_set
-            .is_active(&feature_set::secp256k1_program_enabled::id())
-    }
-
     pub fn no_overflow_rent_distribution_enabled(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::no_overflow_rent_distribution::id())
@@ -4849,6 +4840,11 @@ impl Bank {
     pub fn check_duplicates_by_hash_enabled(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::check_duplicates_by_hash::id())
+    }
+
+    pub fn libsecp256k1_0_5_upgrade_enabled(&self) -> bool {
+        self.feature_set
+            .is_active(&feature_set::libsecp256k1_0_5_upgrade_enabled::id())
     }
 
     // Check if the wallclock time from bank creation to now has exceeded the allotted
@@ -5394,7 +5390,7 @@ pub(crate) mod tests {
             cluster_type: ClusterType::MainnetBeta,
             ..GenesisConfig::default()
         }));
-        let sysvar_and_native_proram_delta0 = 10;
+        let sysvar_and_native_proram_delta0 = 11;
         assert_eq!(
             bank0.capitalization(),
             42 * 42 + sysvar_and_native_proram_delta0
@@ -7066,10 +7062,10 @@ pub(crate) mod tests {
         // not being eagerly-collected for exact rewards calculation
         bank0.restore_old_behavior_for_fragile_tests();
 
-        let sysvar_and_native_proram_delta0 = 10;
+        let sysvar_and_native_program_delta0 = 11;
         assert_eq!(
             bank0.capitalization(),
-            42 * 1_000_000_000 + sysvar_and_native_proram_delta0
+            42 * 1_000_000_000 + sysvar_and_native_program_delta0
         );
         assert!(bank0.rewards.read().unwrap().is_empty());
 
@@ -7190,7 +7186,7 @@ pub(crate) mod tests {
         // not being eagerly-collected for exact rewards calculation
         bank.restore_old_behavior_for_fragile_tests();
 
-        let sysvar_and_native_proram_delta = 10;
+        let sysvar_and_native_proram_delta = 11;
         assert_eq!(
             bank.capitalization(),
             42 * 1_000_000_000 + sysvar_and_native_proram_delta
@@ -10410,25 +10406,25 @@ pub(crate) mod tests {
             if bank.slot == 0 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "6oxxAqridoSSPQ1rnEh8qBhQpMmLUve3X4fsNNr2gExE"
+                    "46i22T7axvpksuZ6k4XXwdzuX9957qtLWrhE2Kar97ys",
                 );
             }
             if bank.slot == 32 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "7AkMgAb2v4tuoiSf3NnVgaBxSvp7XidbrSwsPEn4ENTp"
+                    "235cgdycjuz57eea3doYDiu2QYXPXKmxcfLnLAgBYjcG",
                 );
             }
             if bank.slot == 64 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "2JzWWRBtQgdXboaACBRXNNKsHeBtn57uYmqH1AgGUkdG"
+                    "BTMBZpzx4ifH87neeZ7EubrHHGShCs3v7E4ZxnB1SGyk",
                 );
             }
             if bank.slot == 128 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "FQnVhDVjhCyfBxFb3bdm3CLiuCePvWuW5TGDsLBZnKAo"
+                    "EcYx7YkUczHBUDuuVqfZYfZNfpsbKqe8JhSs7pwwWAUj",
                 );
                 break;
             }
@@ -10574,7 +10570,7 @@ pub(crate) mod tests {
         // No more slots should be shrunk
         assert_eq!(bank2.shrink_candidate_slots(), 0);
         // alive_counts represents the count of alive accounts in the three slots 0,1,2
-        assert_eq!(alive_counts, vec![9, 1, 7]);
+        assert_eq!(alive_counts, vec![10, 1, 7]);
     }
 
     #[test]
@@ -10622,7 +10618,7 @@ pub(crate) mod tests {
             .map(|_| bank.process_stale_slot_with_budget(0, force_to_return_alive_account))
             .sum();
         // consumed_budgets represents the count of alive accounts in the three slots 0,1,2
-        assert_eq!(consumed_budgets, 10);
+        assert_eq!(consumed_budgets, 11);
     }
 
     #[test]

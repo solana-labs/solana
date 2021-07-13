@@ -46,7 +46,7 @@ pub mod test {
             Hash::default(),
         );
 
-        assert!(tx.verify_precompiles().is_ok());
+        assert!(tx.verify_precompiles(false).is_ok());
 
         let index = thread_rng().gen_range(0, secp_instruction.data.len());
         secp_instruction.data[index] = secp_instruction.data[index].wrapping_add(12);
@@ -56,6 +56,6 @@ pub mod test {
             &[&mint_keypair],
             Hash::default(),
         );
-        assert!(tx.verify_precompiles().is_err());
+        assert!(tx.verify_precompiles(false).is_err());
     }
 }

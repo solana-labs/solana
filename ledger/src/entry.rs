@@ -367,7 +367,7 @@ pub trait EntrySlice {
     fn verify_and_hash_transactions(
         &self,
         skip_verification: bool,
-        secp256k1_program_enabled: bool,
+        libsecp256k1_0_5_upgrade_enabled: bool,
     ) -> Option<Vec<EntryType<'_>>>;
 }
 
@@ -522,7 +522,7 @@ impl EntrySlice for [Entry] {
     fn verify_and_hash_transactions<'a>(
         &'a self,
         skip_verification: bool,
-        secp256k1_program_enabled: bool,
+        libsecp256k1_0_5_upgrade_enabled: bool,
     ) -> Option<Vec<EntryType<'a>>> {
         let verify_and_hash = |tx: &'a Transaction| -> Option<HashedTransaction<'a>> {
             let message_hash = if !skip_verification {
@@ -530,10 +530,8 @@ impl EntrySlice for [Entry] {
                 if size > PACKET_DATA_SIZE as u64 {
                     return None;
                 }
-                if secp256k1_program_enabled {
-                    // Verify tx precompiles if secp256k1 program is enabled.
-                    tx.verify_precompiles().ok()?;
-                }
+                tx.verify_precompiles(libsecp256k1_0_5_upgrade_enabled)
+                    .ok()?;
                 tx.verify_and_hash_message().ok()?
             } else {
                 tx.message().hash()
