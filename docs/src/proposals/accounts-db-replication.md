@@ -80,11 +80,18 @@ from its AccountCache or from the storage if already flushed. This is similar to
 package is created from the AccountsDb with the difference that the storage does not need to be
 flushed to the disk before streaming to the client. If the account data is in the cache, it can
 be directly streamed. Care must be taken to avoid the account data for a slot get cleaned while
-serving the streaming. During replication we also need to replicate the information of accounts
+serving the streaming. When attempting a replication of a slot, if the slot is already cleaned
+up with accounts data cleaned as result of update in later rooted slots, the replica should 
+forsake this slot and try the later uncleaned root slot.
+
+During replication we also need to replicate the information of accounts
 who have been cleaned up due to zero lamports, i.e. we need to be able to tell the difference
 for the account in a given slot: it is not updated and hence no storage entry in that slot and
 the accounts have 0 lamports and have been cleaned up through the history. We may record this
-via some "Tombstone" mechanism -- recording the dead accounts cleaned up for a slot.  
+via some "Tombstone" mechanism -- recording the dead accounts cleaned up for a slot. The
+tombstones themselves can be removed after exceeding retention period expressed as epochs.
+And attempt to replicate slots with tombstones removed will fail and the replica should skip
+this slot and try later ones.
 
 The `JsonRpcAccountsService`, this is the RPC service serving client requests for account
 information. The existing JsonRpcService serves other client calls than AccountsDb ones.
