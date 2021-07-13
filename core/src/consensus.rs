@@ -119,6 +119,8 @@ pub struct Tower {
     last_vote_tx_blockhash: Hash,
     last_timestamp: BlockTimestamp,
     #[serde(skip)]
+    ledger_path: PathBuf,
+    #[serde(skip)]
     path: PathBuf,
     #[serde(skip)]
     tmp_path: PathBuf, // used before atomic fs::rename()
@@ -144,6 +146,7 @@ impl Default for Tower {
             last_vote: Vote::default(),
             last_timestamp: BlockTimestamp::default(),
             last_vote_tx_blockhash: Hash::default(),
+            ledger_path: PathBuf::default(),
             path: PathBuf::default(),
             tmp_path: PathBuf::default(),
             stray_restored_slot: Option::default(),
@@ -161,19 +164,23 @@ impl Tower {
         vote_account_pubkey: &Pubkey,
         root: Slot,
         bank: &Bank,
-        path: &Path,
+        ledger_path: &Path,
     ) -> Self {
-        let path = Self::get_filename(path, node_pubkey);
-        let tmp_path = Self::get_tmp_filename(&path);
-        let mut tower = Self {
-            node_pubkey: *node_pubkey,
-            path,
-            tmp_path,
+        let mut tower = Tower {
+            ledger_path: ledger_path.into(),
             ..Tower::default()
         };
+        tower.set_identity(*node_pubkey);
         tower.initialize_lockouts_from_bank(vote_account_pubkey, root, bank);
-
         tower
+    }
+
+    pub(crate) fn set_identity(&mut self, node_pubkey: Pubkey) {
+        let path = Self::get_filename(&self.ledger_path, &node_pubkey);
+        let tmp_path = Self::get_tmp_filename(&path);
+        self.node_pubkey = node_pubkey;
+        self.path = path;
+        self.tmp_path = tmp_path;
     }
 
     #[cfg(test)]
@@ -188,7 +195,7 @@ impl Tower {
     pub fn new_from_bankforks(
         bank_forks: &BankForks,
         ledger_path: &Path,
-        my_pubkey: &Pubkey,
+        node_pubkey: &Pubkey,
         vote_account: &Pubkey,
     ) -> Self {
         let root_bank = bank_forks.root_bank();
@@ -196,7 +203,7 @@ impl Tower {
             crate::replay_stage::ReplayStage::initialize_progress_and_fork_choice(
                 root_bank.deref(),
                 bank_forks.frozen_banks().values().cloned().collect(),
-                my_pubkey,
+                node_pubkey,
                 vote_account,
             );
         let root = root_bank.slot();
@@ -209,7 +216,7 @@ impl Tower {
             )
             .clone();
 
-        Self::new(my_pubkey, vote_account, root, &heaviest_bank, ledger_path)
+        Self::new(node_pubkey, vote_account, root, &heaviest_bank, ledger_path)
     }
 
     pub(crate) fn collect_vote_lockouts<F>(
@@ -1165,12 +1172,8 @@ impl Tower {
             self.initialize_lockouts(|v| v.slot > root);
             trace!(
                 "Lockouts in tower for {} is initialized using bank {}",
-                self.node_pubkey,
+                self.vote_state.node_pubkey,
                 bank.slot(),
-            );
-            assert_eq!(
-                self.vote_state.node_pubkey, self.node_pubkey,
-                "vote account's node_pubkey doesn't match",
             );
         } else {
             self.initialize_root(root);
@@ -1231,8 +1234,8 @@ impl Tower {
         Ok(())
     }
 
-    pub fn restore(path: &Path, node_pubkey: &Pubkey) -> Result<Self> {
-        let filename = Self::get_filename(path, node_pubkey);
+    pub fn restore(ledger_path: &Path, node_pubkey: &Pubkey) -> Result<Self> {
+        let filename = Self::get_filename(ledger_path, node_pubkey);
 
         // Ensure to create parent dir here, because restore() precedes save() always
         fs::create_dir_all(&filename.parent().unwrap())?;
@@ -1245,6 +1248,7 @@ impl Tower {
             return Err(TowerError::InvalidSignature);
         }
         let mut tower = saved_tower.deserialize()?;
+        tower.ledger_path = ledger_path.into();
         tower.path = filename;
         tower.tmp_path = Self::get_tmp_filename(&tower.path);
 
@@ -1925,7 +1929,7 @@ pub mod test {
     fn test_switch_threshold_votes() {
         // Init state
         let mut vote_simulator = VoteSimulator::new(4);
-        let my_pubkey = vote_simulator.node_pubkeys[0];
+        let node_pubkey = vote_simulator.node_pubkeys[0];
         let mut tower = Tower::default();
         let forks = tr(0)
             / (tr(1)
@@ -1947,7 +1951,7 @@ pub mod test {
 
         // Vote on the first minor fork at slot 14, should succeed
         assert!(vote_simulator
-            .simulate_vote(14, &my_pubkey, &mut tower,)
+            .simulate_vote(14, &node_pubkey, &mut tower,)
             .is_empty());
 
         // The other two validators voted at slots 46, 47, which
@@ -1960,7 +1964,7 @@ pub mod test {
             48,
             &cluster_votes,
             &votes_to_simulate,
-            &my_pubkey,
+            &node_pubkey,
             &mut tower,
         );
         for slot in 46..=48 {
@@ -2519,7 +2523,8 @@ pub mod test {
 
         // Use values that will not match the default derived from BankForks
         let mut tower = Tower::new_for_tests(10, 0.9);
-        tower.path = Tower::get_filename(&dir.path().to_path_buf(), &identity_keypair.pubkey());
+        tower.ledger_path = dir.path().to_path_buf();
+        tower.path = Tower::get_filename(&tower.ledger_path, &identity_keypair.pubkey());
         tower.tmp_path = Tower::get_tmp_filename(&tower.path);
 
         modify_original(&mut tower, &identity_keypair.pubkey());
