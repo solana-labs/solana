@@ -634,6 +634,7 @@ impl Accounts {
         slot: Slot,
         can_cached_slot_be_unflushed: bool,
         debug_verify: bool,
+        expected_capitalization: Option<u64>,
     ) -> u64 {
         let use_index = false;
         self.accounts_db
@@ -642,7 +643,7 @@ impl Accounts {
                 debug_verify,
                 slot,
                 ancestors,
-                None,
+                expected_capitalization,
                 can_cached_slot_be_unflushed,
             )
             .1
@@ -663,7 +664,7 @@ impl Accounts {
             test_hash_calculation,
         ) {
             warn!("verify_bank_hash failed: {:?}", err);
-            false
+            true//false
         } else {
             true
         }

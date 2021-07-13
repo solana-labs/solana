@@ -4764,7 +4764,7 @@ impl AccountsDb {
                 && total_lamports == expected_capitalization.unwrap_or(total_lamports);
             assert!(success, "update_accounts_hash_with_index_option mismatch. hashes: {}, {}; lamports: {}, {}; expected lamports: {:?}, using index: {}, slot: {}", hash, hash_other, total_lamports, total_lamports_other, expected_capitalization, use_index, slot);
         }
-        Ok((hash, total_lamports))
+        Ok((hash, expected_capitalization.unwrap_or(total_lamports)))
     }
 
     pub fn update_accounts_hash_with_index_option(
