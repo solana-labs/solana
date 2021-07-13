@@ -10,8 +10,7 @@ if [[ -n $4 ]]; then
   export RUST_LOG="$4"
 fi
 benchTpsExtraArgs="$5"
-benchExchangeExtraArgs="$6"
-clientIndex="$7"
+clientIndex="$6"
 
 missing() {
   echo "Error: $1 not specified"
@@ -54,23 +53,6 @@ solana-bench-tps)
       --sustained \
       --threads $threadCount \
       $benchTpsExtraArgs \
-      --read-client-keys ./client-accounts.yml \
-  "
-  ;;
-solana-bench-exchange)
-  solana-keygen new --no-passphrase -fso bench.keypair
-  net/scripts/rsync-retry.sh -vPrc \
-    "$entrypointIp":~/solana/config/bench-exchange"$clientIndex".yml ./client-accounts.yml
-  clientCommand="\
-    solana-bench-exchange \
-      --entrypoint $entrypointIp:8001 \
-      --faucet $entrypointIp:9900 \
-      --threads $threadCount \
-      --batch-size 1000 \
-      --fund-amount 20000 \
-      --duration 7500 \
-      --identity bench.keypair \
-      $benchExchangeExtraArgs \
       --read-client-keys ./client-accounts.yml \
   "
   ;;

@@ -1,9 +1,6 @@
 //! A command-line executable for generating the chain's genesis config.
 #![allow(clippy::integer_arithmetic)]
 
-#[macro_use]
-extern crate solana_exchange_program;
-
 use clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg, ArgMatches};
 use solana_clap_utils::{
     input_parsers::{cluster_type_of, pubkey_of, pubkeys_of, unix_timestamp_from_rfc3339_datetime},
@@ -490,14 +487,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         matches.is_present("enable_warmup_epochs"),
     );
 
-    let native_instruction_processors = if cluster_type == ClusterType::Development {
-        vec![solana_exchange_program!()]
-    } else {
-        vec![]
-    };
-
     let mut genesis_config = GenesisConfig {
-        native_instruction_processors,
+        native_instruction_processors: vec![],
         ticks_per_slot,
         poh_config,
         fee_rate_governor,

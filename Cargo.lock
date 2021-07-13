@@ -4296,35 +4296,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-bench-exchange"
-version = "1.8.0"
-dependencies = [
- "clap 2.33.3",
- "itertools 0.10.1",
- "log 0.4.14",
- "num-derive",
- "num-traits",
- "rand 0.7.3",
- "rayon",
- "serde_json",
- "serde_yaml",
- "solana-clap-utils",
- "solana-client",
- "solana-core",
- "solana-exchange-program",
- "solana-faucet",
- "solana-genesis",
- "solana-gossip",
- "solana-local-cluster",
- "solana-logger 1.8.0",
- "solana-metrics",
- "solana-net-utils",
- "solana-runtime",
- "solana-sdk",
- "solana-version",
-]
-
-[[package]]
 name = "solana-bench-streamer"
 version = "1.8.0"
 dependencies = [
@@ -4686,23 +4657,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-exchange-program"
-version = "1.8.0"
-dependencies = [
- "bincode",
- "log 0.4.14",
- "num-derive",
- "num-traits",
- "serde",
- "serde_derive",
- "solana-logger 1.8.0",
- "solana-metrics",
- "solana-runtime",
- "solana-sdk",
- "thiserror",
-]
-
-[[package]]
 name = "solana-failure-program"
 version = "1.8.0"
 dependencies = [
@@ -4803,7 +4757,6 @@ dependencies = [
  "serde_yaml",
  "solana-clap-utils",
  "solana-cli-config",
- "solana-exchange-program",
  "solana-ledger",
  "solana-logger 1.8.0",
  "solana-runtime",
@@ -5022,7 +4975,6 @@ dependencies = [
  "solana-config-program",
  "solana-core",
  "solana-download-utils",
- "solana-exchange-program",
  "solana-faucet",
  "solana-gossip",
  "solana-ledger",

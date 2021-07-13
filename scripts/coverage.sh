@@ -106,7 +106,6 @@ find target/cov -type f -name '*.gcda' -newer target/cov/before-test ! -newer ta
     --ignore bench-tps\*
     --ignore upload-perf\*
     --ignore bench-streamer\*
-    --ignore bench-exchange\*
     --ignore local-cluster\*
   )
 

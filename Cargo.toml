@@ -1,7 +1,6 @@
 [workspace]
 members = [
     "accounts-cluster-bench",
-    "bench-exchange",
     "bench-streamer",
     "bench-tps",
     "accounts-bench",
@@ -44,7 +43,6 @@ members = [
     "program-test",
     "programs/bpf_loader",
     "programs/config",
-    "programs/exchange",
     "programs/failure",
     "programs/noop",
     "programs/ownable",
