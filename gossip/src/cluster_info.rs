@@ -820,13 +820,8 @@ impl ClusterInfo {
         if min > last {
             let now = timestamp();
             let entry = CrdsValue::new_signed(
-<<<<<<< HEAD
-                CrdsData::LowestSlot(0, LowestSlot::new(id, min, now)),
-                &self.keypair,
-=======
                 CrdsData::LowestSlot(0, LowestSlot::new(self_pubkey, min, now)),
-                &self.keypair(),
->>>>>>> c90af3cd6 (removes id from push_lowest_slot args (#18645))
+                &self.keypair,
             );
             self.local_message_pending_push_queue
                 .lock()
