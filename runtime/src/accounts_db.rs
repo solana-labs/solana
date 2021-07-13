@@ -4749,7 +4749,7 @@ impl AccountsDb {
             check_hash,
             can_cached_slot_be_unflushed,
         )?;
-        if debug_verify {
+        if false && debug_verify {
             // calculate the other way (store or non-store) and verify results match.
             let (hash_other, total_lamports_other) = self.calculate_accounts_hash_helper(
                 !use_index,
