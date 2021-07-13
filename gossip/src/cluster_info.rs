@@ -807,21 +807,26 @@ impl ClusterInfo {
         )
     }
 
-    pub fn push_lowest_slot(&self, id: Pubkey, min: Slot) {
-        let now = timestamp();
-        let last = self
-            .gossip
-            .read()
-            .unwrap()
-            .crds
-            .get(&CrdsValueLabel::LowestSlot(self.id()))
-            .and_then(|x| x.value.lowest_slot())
-            .map(|x| x.lowest)
-            .unwrap_or(0);
+    pub fn push_lowest_slot(&self, min: Slot) {
+        let self_pubkey = self.id();
+        let last = {
+            let gossip = self.gossip.read().unwrap();
+            gossip
+                .crds
+                .get_lowest_slot(self_pubkey)
+                .map(|x| x.lowest)
+                .unwrap_or_default()
+        };
         if min > last {
+            let now = timestamp();
             let entry = CrdsValue::new_signed(
+<<<<<<< HEAD
                 CrdsData::LowestSlot(0, LowestSlot::new(id, min, now)),
                 &self.keypair,
+=======
+                CrdsData::LowestSlot(0, LowestSlot::new(self_pubkey, min, now)),
+                &self.keypair(),
+>>>>>>> c90af3cd6 (removes id from push_lowest_slot args (#18645))
             );
             self.local_message_pending_push_queue
                 .lock()
