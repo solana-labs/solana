@@ -3454,7 +3454,10 @@ export class Connection {
           console.error(res.error.message, logTrace);
         }
       }
-      throw new SendTransactionError('failed to simulate transaction: ' + res.error.message, logs);
+      throw new SendTransactionError(
+        'failed to simulate transaction: ' + res.error.message,
+        logs,
+      );
     }
     return res.result;
   }
@@ -3547,7 +3550,10 @@ export class Connection {
           console.error(res.error.message, logTrace);
         }
       }
-      throw new SendTransactionError('failed to send transaction: ' + res.error.message, logs);
+      throw new SendTransactionError(
+        'failed to send transaction: ' + res.error.message,
+        logs,
+      );
     }
     return res.result;
   }
