@@ -1899,12 +1899,15 @@ impl JsonRpcRequestProcessor {
     }
 }
 
-fn verify_transaction(transaction: &Transaction) -> Result<()> {
+fn verify_transaction(
+    transaction: &Transaction,
+    libsecp256k1_0_5_upgrade_enabled: bool,
+) -> Result<()> {
     if transaction.verify().is_err() {
         return Err(RpcCustomError::TransactionSignatureVerificationFailure.into());
     }
 
-    if let Err(e) = transaction.verify_precompiles() {
+    if let Err(e) = transaction.verify_precompiles(libsecp256k1_0_5_upgrade_enabled) {
         return Err(RpcCustomError::TransactionPrecompileVerificationFailure(e).into());
     }
 
@@ -3001,7 +3004,10 @@ pub mod rpc_full {
             }
 
             if !config.skip_preflight {
-                if let Err(e) = verify_transaction(&transaction) {
+                if let Err(e) = verify_transaction(
+                    &transaction,
+                    preflight_bank.libsecp256k1_0_5_upgrade_enabled(),
+                ) {
                     return Err(e);
                 }
 
@@ -3064,6 +3070,7 @@ pub mod rpc_full {
             let encoding = config.encoding.unwrap_or(UiTransactionEncoding::Base58);
             let (_, mut transaction) = deserialize_transaction(data, encoding)?;
 
+            let bank = &*meta.bank(config.commitment);
             if config.sig_verify {
                 if config.replace_recent_blockhash {
                     return Err(Error::invalid_params(
@@ -3071,11 +3078,12 @@ pub mod rpc_full {
                     ));
                 }
 
-                if let Err(e) = verify_transaction(&transaction) {
+                if let Err(e) =
+                    verify_transaction(&transaction, bank.libsecp256k1_0_5_upgrade_enabled())
+                {
                     return Err(e);
                 }
             }
-            let bank = &*meta.bank(config.commitment);
             if config.replace_recent_blockhash {
                 transaction.message.recent_blockhash = bank.last_blockhash();
             }

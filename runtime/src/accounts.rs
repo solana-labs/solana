@@ -25,7 +25,7 @@ use solana_sdk::{
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     clock::{BankId, Slot, INITIAL_RENT_EPOCH},
     feature_set::{self, FeatureSet},
-    fee_calculator::{FeeCalculator, FeeConfig},
+    fee_calculator::FeeCalculator,
     genesis_config::ClusterType,
     hash::Hash,
     message::Message,
@@ -424,10 +424,6 @@ impl Accounts {
         rent_collector: &RentCollector,
         feature_set: &FeatureSet,
     ) -> Vec<TransactionLoadResult> {
-        let fee_config = FeeConfig {
-            secp256k1_program_enabled: feature_set
-                .is_active(&feature_set::secp256k1_program_enabled::id()),
-        };
         txs.zip(lock_results)
             .map(|etx| match etx {
                 (tx, (Ok(()), nonce_rollback)) => {
@@ -440,7 +436,7 @@ impl Accounts {
                                 .cloned()
                         });
                     let fee = if let Some(fee_calculator) = fee_calculator {
-                        fee_calculator.calculate_fee_with_config(tx.message(), &fee_config)
+                        fee_calculator.calculate_fee(tx.message())
                     } else {
                         return (Err(TransactionError::BlockhashNotFound), None);
                     };
