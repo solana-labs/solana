@@ -1059,6 +1059,7 @@ impl BankingStage {
     fn transactions_from_packets(
         msgs: &Packets,
         transaction_indexes: &[usize],
+        secp256k1_program_enabled: bool,
         cost_tracker: &Arc<RwLock<CostTracker>>,
         banking_stage_stats: &BankingStageStats,
     ) -> (Vec<HashedTransaction<'static>>, Vec<usize>, Vec<usize>) {
@@ -1069,7 +1070,9 @@ impl BankingStage {
             .filter_map(|tx_index| {
                 let p = &msgs.packets[*tx_index];
                 let tx: Transaction = limited_deserialize(&p.data[0..p.meta.size]).ok()?;
-                tx.verify_precompiles().ok()?;
+                if secp256k1_program_enabled {
+                    tx.verify_precompiles().ok()?;
+                }
                 Some((tx, *tx_index))
             })
             .collect();
@@ -1177,6 +1180,7 @@ impl BankingStage {
             Self::transactions_from_packets(
                 msgs,
                 &packet_indexes,
+                bank.secp256k1_program_enabled(),
                 cost_tracker,
                 banking_stage_stats,
             );
@@ -1288,6 +1292,7 @@ impl BankingStage {
             Self::transactions_from_packets(
                 msgs,
                 transaction_indexes,
+                bank.secp256k1_program_enabled(),
                 cost_tracker,
                 banking_stage_stats,
             );
