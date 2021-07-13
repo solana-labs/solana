@@ -11,7 +11,7 @@ pub use solana_banks_interface::{BanksClient as TarpcClient, TransactionStatus};
 use solana_banks_interface::{BanksRequest, BanksResponse};
 use solana_program::{
     clock::Slot, fee_calculator::FeeCalculator, hash::Hash, program_pack::Pack, pubkey::Pubkey,
-    rent::Rent, sysvar,
+    rent::Rent, sysvar::Sysvar,
 };
 use solana_sdk::{
     account::{from_account, Account},
@@ -124,15 +124,19 @@ impl BanksClient {
         self.get_fees_with_commitment_and_context(context::current(), CommitmentLevel::default())
     }
 
+    /// Return the cluster Sysvar
+    pub fn get_sysvar<T: Sysvar>(&mut self) -> impl Future<Output = io::Result<T>> + '_ {
+        self.get_account(T::id()).map(|result| {
+            let sysvar = result?
+                .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Sysvar not present"))?;
+            from_account::<T, _>(&sysvar)
+                .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Failed to deserialize sysvar"))
+        })
+    }
+
     /// Return the cluster rent
     pub fn get_rent(&mut self) -> impl Future<Output = io::Result<Rent>> + '_ {
-        self.get_account(sysvar::rent::id()).map(|result| {
-            let rent_sysvar = result?
-                .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Rent sysvar not present"))?;
-            from_account::<Rent, _>(&rent_sysvar).ok_or_else(|| {
-                io::Error::new(io::ErrorKind::Other, "Failed to deserialize Rent sysvar")
-            })
-        })
+        self.get_sysvar::<Rent>()
     }
 
     /// Return a recent, rooted blockhash from the server. The cluster will only accept
