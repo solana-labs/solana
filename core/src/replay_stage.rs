@@ -3680,8 +3680,7 @@ mod tests {
     fn test_same_weight_select_lower_slot() {
         // Init state
         let mut vote_simulator = VoteSimulator::new(1);
-        let my_node_pubkey = vote_simulator.node_pubkeys[0];
-        let tower = Tower::new_with_key(&my_node_pubkey);
+        let tower = Tower::default();
 
         // Create the tree of banks in a BankForks object
         let forks = tr(0) / (tr(1)) / (tr(2));
@@ -3753,7 +3752,7 @@ mod tests {
         // Init state
         let mut vote_simulator = VoteSimulator::new(1);
         let my_node_pubkey = vote_simulator.node_pubkeys[0];
-        let mut tower = Tower::new_with_key(&my_node_pubkey);
+        let mut tower = Tower::default();
 
         // Create the tree of banks in a BankForks object
         let forks = tr(0) / (tr(1) / (tr(2) / (tr(3))));
