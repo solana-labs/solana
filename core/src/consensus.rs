@@ -177,14 +177,6 @@ impl Tower {
     }
 
     #[cfg(test)]
-    pub fn new_with_key(node_pubkey: &Pubkey) -> Self {
-        Self {
-            node_pubkey: *node_pubkey,
-            ..Tower::default()
-        }
-    }
-
-    #[cfg(test)]
     pub fn new_for_tests(threshold_depth: usize, threshold_size: f64) -> Self {
         Self {
             threshold_depth,
@@ -1205,7 +1197,7 @@ impl Tower {
             .with_extension("bin")
     }
 
-    pub fn get_tmp_filename(path: &Path) -> PathBuf {
+    fn get_tmp_filename(path: &Path) -> PathBuf {
         path.with_extension("bin.new")
     }
 
@@ -1464,7 +1456,7 @@ pub mod test {
         // Init state
         let mut vote_simulator = VoteSimulator::new(1);
         let node_pubkey = vote_simulator.node_pubkeys[0];
-        let mut tower = Tower::new_with_key(&node_pubkey);
+        let mut tower = Tower::default();
 
         // Create the tree of banks
         let forks = tr(0) / (tr(1) / (tr(2) / (tr(3) / (tr(4) / tr(5)))));
@@ -1547,7 +1539,7 @@ pub mod test {
             .unwrap()
             .descendants()
             .clone();
-        let mut tower = Tower::new_with_key(&vote_simulator.node_pubkeys[0]);
+        let mut tower = Tower::default();
 
         // Last vote is 47
         tower.record_vote(
@@ -1653,7 +1645,7 @@ pub mod test {
             .unwrap()
             .descendants()
             .clone();
-        let mut tower = Tower::new_with_key(&vote_simulator.node_pubkeys[0]);
+        let mut tower = Tower::default();
         let other_vote_account = vote_simulator.vote_pubkeys[1];
 
         // Last vote is 47
@@ -1833,7 +1825,7 @@ pub mod test {
             .unwrap()
             .descendants()
             .clone();
-        let mut tower = Tower::new_with_key(&vote_simulator.node_pubkeys[0]);
+        let mut tower = Tower::default();
         let other_vote_account = vote_simulator.vote_pubkeys[1];
 
         // Last vote is 47
@@ -1934,7 +1926,7 @@ pub mod test {
         // Init state
         let mut vote_simulator = VoteSimulator::new(4);
         let my_pubkey = vote_simulator.node_pubkeys[0];
-        let mut tower = Tower::new_with_key(&my_pubkey);
+        let mut tower = Tower::default();
         let forks = tr(0)
             / (tr(1)
                 / (tr(2)
@@ -1989,7 +1981,7 @@ pub mod test {
         let mut vote_simulator = VoteSimulator::new(2);
         let node_pubkey = vote_simulator.node_pubkeys[0];
         let vote_pubkey = vote_simulator.vote_pubkeys[0];
-        let mut tower = Tower::new_with_key(&node_pubkey);
+        let mut tower = Tower::default();
 
         let num_slots_to_try = 200;
         // Create the tree of banks
@@ -2544,7 +2536,6 @@ pub mod test {
         solana_logger::setup();
         // Init state
         let mut vote_simulator = VoteSimulator::new(2);
-        let my_pubkey = vote_simulator.node_pubkeys[0];
         let other_vote_account = vote_simulator.vote_pubkeys[1];
         let bank0 = vote_simulator
             .bank_forks
@@ -2583,7 +2574,7 @@ pub mod test {
             .unwrap()
             .descendants()
             .clone();
-        let mut tower = Tower::new_with_key(&my_pubkey);
+        let mut tower = Tower::default();
 
         tower.record_vote(43, Hash::default());
         tower.record_vote(44, Hash::default());
@@ -2763,7 +2754,7 @@ pub mod test {
     #[test]
     fn test_load_tower_wrong_identity() {
         let identity_keypair = Arc::new(Keypair::new());
-        let tower = Tower::new_with_key(&Pubkey::default());
+        let tower = Tower::default();
         assert_matches!(
             tower.save(&identity_keypair),
             Err(TowerError::WrongTower(_))
@@ -2834,7 +2825,7 @@ pub mod test {
             assert!(!blockstore.is_root(3));
             assert!(!blockstore.is_root(4));
 
-            let mut tower = Tower::new_with_key(&Pubkey::default());
+            let mut tower = Tower::default();
             tower.vote_state.root_slot = Some(4);
             reconcile_blockstore_roots_with_tower(&tower, &blockstore).unwrap();
 
@@ -2866,7 +2857,7 @@ pub mod test {
             assert!(blockstore.is_root(3));
             assert!(!blockstore.is_root(4));
 
-            let mut tower = Tower::new_with_key(&Pubkey::default());
+            let mut tower = Tower::default();
             tower.vote_state.root_slot = Some(4);
             reconcile_blockstore_roots_with_tower(&tower, &blockstore).unwrap();
         }
@@ -2888,7 +2879,7 @@ pub mod test {
             assert!(!blockstore.is_root(1));
             assert!(!blockstore.is_root(3));
 
-            let mut tower = Tower::new_with_key(&Pubkey::default());
+            let mut tower = Tower::default();
             tower.vote_state.root_slot = Some(4);
             assert_eq!(blockstore.last_root(), 0);
             reconcile_blockstore_roots_with_tower(&tower, &blockstore).unwrap();
