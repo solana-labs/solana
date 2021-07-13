@@ -2404,13 +2404,13 @@ fn main() {
                             let mut store_failed_count = 0;
                             if force_enabled_count >= 1 {
                                 if base_bank
-                                    .get_account(&feature_set::spl_token_v2_multisig_fix::id())
+                                    .get_account(&feature_set::secp256k1_program_enabled::id())
                                     .is_some()
                                 {
                                     // steal some lamports from the pretty old feature not to affect
                                     // capitalizaion, which doesn't affect inflation behavior!
                                     base_bank.store_account(
-                                        &feature_set::spl_token_v2_multisig_fix::id(),
+                                        &feature_set::secp256k1_program_enabled::id(),
                                         &AccountSharedData::default(),
                                     );
                                     force_enabled_count -= 1;
