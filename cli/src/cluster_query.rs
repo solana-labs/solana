@@ -24,11 +24,12 @@ use solana_client::{
     pubsub_client::PubsubClient,
     rpc_client::{GetConfirmedSignaturesForAddress2Config, RpcClient},
     rpc_config::{
-        RpcAccountInfoConfig, RpcBlockConfig, RpcLargestAccountsConfig, RpcLargestAccountsFilter,
-        RpcProgramAccountsConfig, RpcTransactionConfig, RpcTransactionLogsConfig,
-        RpcTransactionLogsFilter,
+        RpcAccountInfoConfig, RpcBlockConfig, RpcGetVoteAccountsConfig, RpcLargestAccountsConfig,
+        RpcLargestAccountsFilter, RpcProgramAccountsConfig, RpcTransactionConfig,
+        RpcTransactionLogsConfig, RpcTransactionLogsFilter,
     },
     rpc_filter,
+    rpc_request::DELINQUENT_VALIDATOR_SLOT_DISTANCE,
     rpc_response::SlotInfo,
 };
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
@@ -176,7 +177,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                     .takes_value(true)
                     .value_name("EPOCH")
                     .validator(is_epoch)
-                    .help("Epoch to show leader schedule for. (default: current)")
+                    .help("Epoch to show leader schedule for. [default: current]")
             )
         )
         .subcommand(
@@ -382,6 +383,25 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         ])
                         .default_value("stake")
                         .help("Sort order (does not affect JSON output)"),
+                )
+                .arg(
+                    Arg::with_name("keep_unstaked_delinquents")
+                        .long("keep-unstaked-delinquents")
+                        .takes_value(false)
+                        .help("Don't discard unstaked, delinquent validators")
+                )
+                .arg(
+                    Arg::with_name("delinquent_slot_distance")
+                        .long("delinquent-slot-distance")
+                        .takes_value(true)
+                        .value_name("SLOT_DISTANCE")
+                        .validator(is_slot)
+                        .help(
+                            concatcp!(
+                                "Minimum slot distance from the tip to consider a validator delinquent. [default: ",
+                                DELINQUENT_VALIDATOR_SLOT_DISTANCE,
+                                "]",
+                        ))
                 ),
         )
         .subcommand(
@@ -617,6 +637,8 @@ pub fn parse_show_validators(matches: &ArgMatches<'_>) -> Result<CliCommandInfo,
     let use_lamports_unit = matches.is_present("lamports");
     let number_validators = matches.is_present("number");
     let reverse_sort = matches.is_present("reverse");
+    let keep_unstaked_delinquents = matches.is_present("keep_unstaked_delinquents");
+    let delinquent_slot_distance = value_of(matches, "delinquent_slot_distance");
 
     let sort_order = match value_t_or_exit!(matches, "sort", String).as_str() {
         "delinquent" => CliValidatorsSortOrder::Delinquent,
@@ -637,6 +659,8 @@ pub fn parse_show_validators(matches: &ArgMatches<'_>) -> Result<CliCommandInfo,
             sort_order,
             reverse_sort,
             number_validators,
+            keep_unstaked_delinquents,
+            delinquent_slot_distance,
         },
         signers: vec![],
     })
@@ -1790,11 +1814,17 @@ pub fn process_show_validators(
     validators_sort_order: CliValidatorsSortOrder,
     validators_reverse_sort: bool,
     number_validators: bool,
+    keep_unstaked_delinquents: bool,
+    delinquent_slot_distance: Option<Slot>,
 ) -> ProcessResult {
     let progress_bar = new_spinner_progress_bar();
     progress_bar.set_message("Fetching vote accounts...");
     let epoch_info = rpc_client.get_epoch_info()?;
-    let vote_accounts = rpc_client.get_vote_accounts()?;
+    let vote_accounts = rpc_client.get_vote_accounts_with_config(RpcGetVoteAccountsConfig {
+        keep_unstaked_delinquents: Some(keep_unstaked_delinquents),
+        delinquent_slot_distance,
+        ..RpcGetVoteAccountsConfig::default()
+    })?;
 
     progress_bar.set_message("Fetching block production...");
     let skip_rate: HashMap<_, _> = rpc_client
