@@ -1272,16 +1272,16 @@ impl ClusterInfo {
         } else {
             peers.iter().map(|peer| &peer.tvu).collect()
         };
-        let dests = &dests[..];
         let data = &packet.data[..packet.meta.size];
 
-        if let Err(err) = multi_target_send(s, data, dests) {
-            inc_new_counter_error!(
-                "cluster_info-retransmit_to-multi_target_send_error",
+        if let Err((ioerr, num_sent)) = multi_target_send(s, data, &dests) {
+            inc_new_counter_error!("cluster_info-retransmit-error", dests.len() - num_sent, 1);
+            info!(
+                "retransmit_to multi_target_send error: {:?}, {}/{} packets sent",
+                ioerr,
+                num_sent,
                 dests.len(),
-                1
             );
-            error!("retransmit_to multi_target_send error: {:?}", err);
         }
     }
 

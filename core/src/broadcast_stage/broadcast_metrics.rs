@@ -19,6 +19,7 @@ pub struct TransmitShredsStats {
     pub get_peers_elapsed: u64,
     pub shred_select: u64,
     pub num_shreds: usize,
+    pub dropped_packets: usize,
 }
 
 impl BroadcastStats for TransmitShredsStats {
@@ -28,6 +29,7 @@ impl BroadcastStats for TransmitShredsStats {
         self.get_peers_elapsed += new_stats.get_peers_elapsed;
         self.num_shreds += new_stats.num_shreds;
         self.shred_select += new_stats.shred_select;
+        self.dropped_packets += new_stats.dropped_packets;
     }
     fn report_stats(&mut self, slot: Slot, slot_start: Instant) {
         datapoint_info!(
@@ -45,6 +47,7 @@ impl BroadcastStats for TransmitShredsStats {
             ("get_peers_elapsed", self.get_peers_elapsed as i64, i64),
             ("num_shreds", self.num_shreds as i64, i64),
             ("shred_select", self.shred_select as i64, i64),
+            ("dropped_packets", self.dropped_packets as i64, i64),
         );
     }
 }
