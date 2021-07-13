@@ -55,43 +55,49 @@ mod tests {
     use super::*;
     use crate::genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo};
     use solana_sdk::{signature::Keypair, system_transaction};
+    use std::convert::TryFrom;
 
     #[test]
     fn test_transaction_batch() {
         let (bank, txs) = setup();
 
         // Test getting locked accounts
-        let batch = bank.prepare_batch(txs.iter());
+        let batch = bank.prepare_batch(txs.iter()).unwrap();
 
         // Grab locks
         assert!(batch.lock_results().iter().all(|x| x.is_ok()));
 
         // Trying to grab locks again should fail
-        let batch2 = bank.prepare_batch(txs.iter());
+        let batch2 = bank.prepare_batch(txs.iter()).unwrap();
         assert!(batch2.lock_results().iter().all(|x| x.is_err()));
 
         // Drop the first set of locks
         drop(batch);
 
         // Now grabbing locks should work again
-        let batch2 = bank.prepare_batch(txs.iter());
+        let batch2 = bank.prepare_batch(txs.iter()).unwrap();
         assert!(batch2.lock_results().iter().all(|x| x.is_ok()));
     }
 
     #[test]
     fn test_simulation_batch() {
         let (bank, txs) = setup();
+        let txs = txs
+            .into_iter()
+            .map(HashedTransaction::try_from)
+            .collect::<Result<Vec<_>>>()
+            .unwrap();
 
         // Prepare batch without locks
-        let batch = bank.prepare_simulation_batch(&txs[0]);
+        let batch = bank.prepare_hashed_batch(txs[0].clone());
         assert!(batch.lock_results().iter().all(|x| x.is_ok()));
 
         // Grab locks
-        let batch2 = bank.prepare_batch(txs.iter());
+        let batch2 = bank.prepare_sanitized_batch(&txs);
         assert!(batch2.lock_results().iter().all(|x| x.is_ok()));
 
         // Prepare another batch without locks
-        let batch3 = bank.prepare_simulation_batch(&txs[0]);
+        let batch3 = bank.prepare_hashed_batch(txs[0].clone());
         assert!(batch3.lock_results().iter().all(|x| x.is_ok()));
     }
 

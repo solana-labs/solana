@@ -1070,6 +1070,9 @@ impl BankingStage {
                 let p = &msgs.packets[*tx_index];
                 let tx: Transaction = limited_deserialize(&p.data[0..p.meta.size]).ok()?;
                 tx.verify_precompiles().ok()?;
+                let message_bytes = Self::packet_message(p)?;
+                let message_hash = Message::hash_raw_message(message_bytes);
+                let tx = HashedTransaction::try_create(Cow::Owned(tx), message_hash).ok()?;
                 Some((tx, *tx_index))
             })
             .collect();
@@ -1079,36 +1082,23 @@ impl BankingStage {
         );
 
         let mut cost_tracker_check_time = Measure::start("cost_tracker_check_time");
-        let filtered_transactions_with_packet_indexes: Vec<_> = {
+        let (filtered_transactions, filter_transaction_packet_indexes) = {
             let cost_tracker_readonly = cost_tracker.read().unwrap();
             verified_transactions_with_packet_indexes
                 .into_iter()
-                .filter_map(|(tx, tx_index)| {
-                    let result = cost_tracker_readonly.would_transaction_fit(&tx);
+                .filter_map(|(hashed_tx, tx_index)| {
+                    let tx = hashed_tx.transaction();
+                    let result = cost_tracker_readonly.would_transaction_fit(tx);
                     if result.is_err() {
                         debug!("transaction {:?} would exceed limit: {:?}", tx, result);
                         retryable_transaction_packet_indexes.push(tx_index);
                         return None;
                     }
-                    Some((tx, tx_index))
+                    Some((hashed_tx, tx_index))
                 })
-                .collect()
+                .unzip()
         };
         cost_tracker_check_time.stop();
-
-        let (filtered_transactions, filter_transaction_packet_indexes) =
-            filtered_transactions_with_packet_indexes
-                .into_iter()
-                .filter_map(|(tx, tx_index)| {
-                    let p = &msgs.packets[tx_index];
-                    let message_bytes = Self::packet_message(p)?;
-                    let message_hash = Message::hash_raw_message(message_bytes);
-                    Some((
-                        HashedTransaction::new(Cow::Owned(tx), message_hash),
-                        tx_index,
-                    ))
-                })
-                .unzip();
 
         banking_stage_stats
             .cost_tracker_check_elapsed
@@ -1598,6 +1588,7 @@ mod tests {
     };
     use solana_transaction_status::TransactionWithStatusMeta;
     use std::{
+        convert::TryInto,
         net::SocketAddr,
         path::Path,
         sync::{
@@ -1813,7 +1804,8 @@ mod tests {
                 if !entries.is_empty() {
                     blockhash = entries.last().unwrap().hash;
                     for entry in entries {
-                        bank.process_transactions(&entry.transactions)
+                        let batch = bank.prepare_batch(entry.transactions.iter()).unwrap();
+                        bank.process_transaction_batch(&batch)
                             .iter()
                             .for_each(|x| assert_eq!(*x, Ok(())));
                     }
@@ -1927,7 +1919,8 @@ mod tests {
 
             let bank = Bank::new_no_wallclock_throttle(&genesis_config);
             for entry in &entries {
-                bank.process_transactions(&entry.transactions)
+                let batch = bank.prepare_batch(entry.transactions.iter()).unwrap();
+                bank.process_transaction_batch(&batch)
                     .iter()
                     .for_each(|x| assert_eq!(*x, Ok(())));
             }
@@ -2219,7 +2212,8 @@ mod tests {
         let transactions =
             vec![
                 system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_config.hash())
-                    .into(),
+                    .try_into()
+                    .unwrap(),
             ];
 
         let start = Arc::new(Instant::now());
@@ -2288,7 +2282,8 @@ mod tests {
                 2,
                 genesis_config.hash(),
             )
-            .into()];
+            .try_into()
+            .unwrap()];
 
             assert_matches!(
                 BankingStage::process_and_record_transactions(
@@ -2349,8 +2344,12 @@ mod tests {
         let pubkey1 = solana_sdk::pubkey::new_rand();
 
         let transactions = vec![
-            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_config.hash()).into(),
-            system_transaction::transfer(&mint_keypair, &pubkey1, 1, genesis_config.hash()).into(),
+            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_config.hash())
+                .try_into()
+                .unwrap(),
+            system_transaction::transfer(&mint_keypair, &pubkey1, 1, genesis_config.hash())
+                .try_into()
+                .unwrap(),
         ];
 
         let start = Arc::new(Instant::now());
@@ -2463,7 +2462,8 @@ mod tests {
         let transactions =
             vec![
                 system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_config.hash())
-                    .into(),
+                    .try_into()
+                    .unwrap(),
             ];
 
         let ledger_path = get_tmp_ledger_path!();
@@ -2540,7 +2540,11 @@ mod tests {
         let entry_3 = next_entry(&entry_2.hash, 1, vec![fail_tx.clone()]);
         let entries = vec![entry_1, entry_2, entry_3];
 
-        let transactions = vec![success_tx.into(), ix_error_tx.into(), fail_tx.into()];
+        let transactions = vec![
+            success_tx.try_into().unwrap(),
+            ix_error_tx.try_into().unwrap(),
+            fail_tx.try_into().unwrap(),
+        ];
         bank.transfer(4, &mint_keypair, &keypair1.pubkey()).unwrap();
 
         let start = Arc::new(Instant::now());

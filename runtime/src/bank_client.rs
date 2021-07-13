@@ -280,7 +280,8 @@ impl BankClient {
             while let Ok(tx) = transaction_receiver.try_recv() {
                 transactions.push(tx);
             }
-            let _ = bank.process_transactions(&transactions);
+            let batch = bank.prepare_batch(transactions.iter()).unwrap();
+            let _ = bank.process_transaction_batch(&batch);
         }
     }
 
