@@ -4,7 +4,7 @@
 //! - would_transaction_fit(&tx), immutable function to test if `tx` would fit into current block
 //! - add_transaction_cost(&tx), mutable function to accumulate `tx` cost to tracker.
 //!
-use crate::cost_model::{CostModel, TransactionCost};
+use crate::cost_model::{CostModel, CostModelError, TransactionCost};
 use solana_sdk::{clock::Slot, pubkey::Pubkey, transaction::Transaction};
 use std::{
     collections::HashMap,
@@ -43,18 +43,21 @@ impl CostTracker {
         }
     }
 
-    pub fn would_transaction_fit(&self, transaction: &Transaction) -> Result<(), &'static str> {
+    pub fn would_transaction_fit(&self, transaction: &Transaction) -> Result<(), CostModelError> {
         let mut cost_model = self.cost_model.write().unwrap();
-        let tx_cost = cost_model.calculate_cost(transaction);
+        let tx_cost = cost_model.calculate_cost(transaction)?;
         self.would_fit(
             &tx_cost.writable_accounts,
             &(tx_cost.account_access_cost + tx_cost.execution_cost),
         )
     }
 
-    pub fn add_transaction_cost(&mut self, transaction: &Transaction) {
+    pub fn add_transaction_cost(
+        &mut self,
+        transaction: &Transaction,
+    ) -> Result<(), CostModelError> {
         let mut cost_model = self.cost_model.write().unwrap();
-        let tx_cost = cost_model.calculate_cost(transaction);
+        let tx_cost = cost_model.calculate_cost(transaction)?;
         let cost = tx_cost.account_access_cost + tx_cost.execution_cost;
         for account_key in tx_cost.writable_accounts.iter() {
             *self
@@ -63,6 +66,7 @@ impl CostTracker {
                 .or_insert(0) += cost;
         }
         self.block_cost += cost;
+        Ok(())
     }
 
     pub fn reset_if_new_bank(&mut self, slot: Slot) {
@@ -73,7 +77,7 @@ impl CostTracker {
         }
     }
 
-    pub fn try_add(&mut self, transaction_cost: &TransactionCost) -> Result<u64, &'static str> {
+    pub fn try_add(&mut self, transaction_cost: &TransactionCost) -> Result<u64, CostModelError> {
         let cost = transaction_cost.account_access_cost + transaction_cost.execution_cost;
         self.would_fit(&transaction_cost.writable_accounts, &cost)?;
 
@@ -81,15 +85,15 @@ impl CostTracker {
         Ok(self.block_cost)
     }
 
-    fn would_fit(&self, keys: &[Pubkey], cost: &u64) -> Result<(), &'static str> {
+    fn would_fit(&self, keys: &[Pubkey], cost: &u64) -> Result<(), CostModelError> {
         // check against the total package cost
         if self.block_cost + cost > self.block_cost_limit {
-            return Err("would exceed block cost limit");
+            return Err(CostModelError::WouldExceedBlockMaxLimit);
         }
 
         // check if the transaction itself is more costly than the account_cost_limit
         if *cost > self.account_cost_limit {
-            return Err("Transaction is too expansive, exceeds account cost limit");
+            return Err(CostModelError::WouldExceedAccountMaxLimit);
         }
 
         // check each account against account_cost_limit,
@@ -97,7 +101,7 @@ impl CostTracker {
             match self.cost_by_writable_accounts.get(account_key) {
                 Some(chained_cost) => {
                     if chained_cost + cost > self.account_cost_limit {
-                        return Err("would exceed account cost limit");
+                        return Err(CostModelError::WouldExceedAccountMaxLimit);
                     } else {
                         continue;
                     }
