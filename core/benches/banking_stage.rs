@@ -193,11 +193,14 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
     });
     bank.clear_signatures();
     //sanity check, make sure all the transactions can execute in parallel
-    let res = bank.process_transactions(&transactions);
-    for r in res {
-        assert!(r.is_ok(), "sanity parallel execution");
+    {
+        let batch = bank.prepare_batch(transactions.iter()).unwrap();
+        let res = bank.process_transaction_batch(&batch);
+        for r in res {
+            assert!(r.is_ok(), "sanity parallel execution");
+        }
+        bank.clear_signatures();
     }
-    bank.clear_signatures();
     let verified: Vec<_> = to_packets_chunked(&transactions, PACKETS_PER_BATCH);
     let ledger_path = get_tmp_ledger_path!();
     {
