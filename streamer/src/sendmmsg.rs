@@ -27,31 +27,6 @@ pub fn batch_send(
     }
 }
 
-#[cfg(not(target_os = "linux"))]
-pub fn multi_target_send(
-    sock: &UdpSocket,
-    packet: &[u8],
-    dests: &[&SocketAddr],
-) -> Result<(), (io::Error, usize)> {
-    let mut total_sent = 0;
-    let mut erropt = None;
-    for a in dests {
-        if let Err(e) = sock.send_to(packet, a) {
-            if erropt.is_none() {
-                erropt = Some(e);
-            }
-        } else {
-            total_sent += 1;
-        }
-    }
-
-    if let Some(err) = erropt {
-        Err((err, total_sent))
-    } else {
-        Ok(())
-    }
-}
-
 #[cfg(target_os = "linux")]
 use libc::{iovec, mmsghdr, sockaddr_in, sockaddr_in6, sockaddr_storage};
 
@@ -159,7 +134,6 @@ pub fn batch_send(
     sendmmsg_retry(sock, &mut hdrs)
 }
 
-#[cfg(target_os = "linux")]
 pub fn multi_target_send(
     sock: &UdpSocket,
     packet: &[u8],
