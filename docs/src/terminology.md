@@ -6,15 +6,15 @@ The following terms are used throughout the documentation.
 
 ## account
 
-A record in the Solana ledger that either holds data or is an executable program. 
+A record in the Solana ledger that either holds data or is an executable program.
 
-Like an account at a traditional bank, a Solana account may hold funds called [lamports](terminology.md#lamport). Like a file in Linux, it is addressable by a [key](terminology.md#public-key) (public key or pubkey). 
+Like an account at a traditional bank, a Solana account may hold funds called [lamports](terminology.md#lamport). Like a file in Linux, it is addressable by a [key](terminology.md#public-key) (public key or pubkey).
 
 ## account owner
 
-The public key (pubkey) that owns an account. 
+The public key (pubkey) that owns an account.
 
-This notion of 'owner' is different from private key ownership that allows you to sign transactions affecting an account. 
+This notion of 'owner' is different from private key ownership that allows you to sign transactions affecting an account.
 
 An account owner can be the system program or any program such as a token program. An account in a wallet is owned by the system program.
 
@@ -42,7 +42,7 @@ The number of [blocks](terminology.md#block) beneath the current block. The firs
 
 The server node ([validator](terminology.md#validator)) that produces the genesis (first) [block](terminology.md#block) of a block chain.
 
-## BPF loader 
+## BPF loader
 
 The Solana program that owns and loads (BPF) smart contract programs, allowing the program to interface with the runtime
 
@@ -52,7 +52,7 @@ The smallest encrypted chunk of ledger, an encrypted ledger segment would be mad
 
 ## client
 
-A computer program that accesses the Solana server network [cluster](terminology.md#cluster).    
+A computer program that accesses the Solana server network [cluster](terminology.md#cluster).
 
 ## cluster
 
@@ -211,7 +211,7 @@ The code that interprets [instructions](terminology.md#instruction).
 
 ## program derived account (PDA)
 
-An account whose owner is a program and thus is not controlled by a private key like other accounts.   For example, associated token accounts are have a separate owner field which is the token program that controls debits to the account.  
+An account whose owner is a program and thus is not controlled by a private key like other accounts.   For example, associated token accounts are have a separate owner field which is the token program that controls debits to the account.
 
 ## program id
 
@@ -233,7 +233,7 @@ A [block](terminology.md#block) or [slot](terminology.md#slot) that has reached 
 
 The component of a [validator](terminology.md#validator) responsible for [program](terminology.md#program) execution.
 
-##Sealevel 
+##Sealevel
 
 Solana's parallel smart contracts run-time.
 
