@@ -27,7 +27,6 @@ use solana_runtime::{
     transaction_batch::TransactionBatch,
     vote_sender_types::ReplayVoteSender,
 };
-use solana_sdk::hashed_transaction::HashedTransaction;
 use solana_sdk::{
     clock::{
         Slot, DEFAULT_TICKS_PER_SLOT, MAX_PROCESSING_AGE, MAX_TRANSACTION_FORWARDING_DELAY,
@@ -35,6 +34,7 @@ use solana_sdk::{
     },
     message::Message,
     pubkey::Pubkey,
+    sanitized_transaction::SanitizedTransaction,
     short_vec::decode_shortu16_len,
     signature::Signature,
     timing::{duration_as_ms, timestamp},
@@ -863,11 +863,11 @@ impl BankingStage {
         record_time.stop();
 
         let mut commit_time = Measure::start("commit_time");
-        let hashed_txs = batch.hashed_transactions();
+        let sanitized_txs = batch.sanitized_transactions();
         let num_to_commit = num_to_commit.unwrap();
         if num_to_commit != 0 {
             let tx_results = bank.commit_transactions(
-                hashed_txs,
+                sanitized_txs,
                 &mut loaded_accounts,
                 &results,
                 tx_count,
@@ -875,7 +875,7 @@ impl BankingStage {
                 &mut execute_timings,
             );
 
-            bank_utils::find_and_send_votes(hashed_txs, &tx_results, Some(gossip_vote_sender));
+            bank_utils::find_and_send_votes(sanitized_txs, &tx_results, Some(gossip_vote_sender));
             if let Some(transaction_status_sender) = transaction_status_sender {
                 let txs = batch.transactions_iter().cloned().collect();
                 let post_balances = bank.collect_balances(batch);
@@ -902,7 +902,7 @@ impl BankingStage {
             load_execute_time.as_us(),
             record_time.as_us(),
             commit_time.as_us(),
-            hashed_txs.len(),
+            sanitized_txs.len(),
         );
 
         debug!(
@@ -915,7 +915,7 @@ impl BankingStage {
 
     pub fn process_and_record_transactions(
         bank: &Arc<Bank>,
-        txs: &[HashedTransaction],
+        txs: &[SanitizedTransaction],
         poh: &TransactionRecorder,
         chunk_offset: usize,
         transaction_status_sender: Option<TransactionStatusSender>,
@@ -924,7 +924,7 @@ impl BankingStage {
         let mut lock_time = Measure::start("lock_time");
         // Once accounts are locked, other threads cannot encode transactions that will modify the
         // same account state
-        let batch = bank.prepare_hashed_batch(txs);
+        let batch = bank.prepare_sanitized_batch(txs);
         lock_time.stop();
 
         let (result, mut retryable_txs) = Self::process_and_record_transactions_locked(
@@ -959,7 +959,7 @@ impl BankingStage {
     fn process_transactions(
         bank: &Arc<Bank>,
         bank_creation_time: &Instant,
-        transactions: &[HashedTransaction],
+        transactions: &[SanitizedTransaction],
         poh: &TransactionRecorder,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
@@ -1062,7 +1062,7 @@ impl BankingStage {
         libsecp256k1_0_5_upgrade_enabled: bool,
         cost_tracker: &Arc<RwLock<CostTracker>>,
         banking_stage_stats: &BankingStageStats,
-    ) -> (Vec<HashedTransaction<'static>>, Vec<usize>, Vec<usize>) {
+    ) -> (Vec<SanitizedTransaction<'static>>, Vec<usize>, Vec<usize>) {
         let mut retryable_transaction_packet_indexes: Vec<usize> = vec![];
 
         let verified_transactions_with_packet_indexes: Vec<_> = transaction_indexes
@@ -1074,7 +1074,7 @@ impl BankingStage {
                     .ok()?;
                 let message_bytes = Self::packet_message(p)?;
                 let message_hash = Message::hash_raw_message(message_bytes);
-                let tx = HashedTransaction::try_create(Cow::Owned(tx), message_hash).ok()?;
+                let tx = SanitizedTransaction::try_create(Cow::Owned(tx), message_hash).ok()?;
                 Some((tx, *tx_index))
             })
             .collect();
@@ -1088,15 +1088,15 @@ impl BankingStage {
             let cost_tracker_readonly = cost_tracker.read().unwrap();
             verified_transactions_with_packet_indexes
                 .into_iter()
-                .filter_map(|(hashed_tx, tx_index)| {
-                    let tx = hashed_tx.transaction();
+                .filter_map(|(sanitized_tx, tx_index)| {
+                    let tx = sanitized_tx.transaction();
                     let result = cost_tracker_readonly.would_transaction_fit(tx);
                     if result.is_err() {
                         debug!("transaction {:?} would exceed limit: {:?}", tx, result);
                         retryable_transaction_packet_indexes.push(tx_index);
                         return None;
                     }
-                    Some((hashed_tx, tx_index))
+                    Some((sanitized_tx, tx_index))
                 })
                 .unzip()
         };
@@ -1120,7 +1120,7 @@ impl BankingStage {
     /// * `pending_indexes` - identifies which indexes in the `transactions` list are still pending
     fn filter_pending_packets_from_pending_txs(
         bank: &Arc<Bank>,
-        transactions: &[HashedTransaction],
+        transactions: &[SanitizedTransaction],
         transaction_to_packet_indexes: &[usize],
         pending_indexes: &[usize],
     ) -> Vec<usize> {

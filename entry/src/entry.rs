@@ -18,8 +18,8 @@ use solana_perf::perf_libs;
 use solana_perf::recycler::Recycler;
 use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::hash::Hash;
-use solana_sdk::hashed_transaction::HashedTransaction;
 use solana_sdk::packet::PACKET_DATA_SIZE;
+use solana_sdk::sanitized_transaction::SanitizedTransaction;
 use solana_sdk::timing;
 use solana_sdk::transaction::{Result, Transaction, TransactionError};
 use std::borrow::Cow;
@@ -123,7 +123,7 @@ pub struct Entry {
 
 /// Typed entry to distinguish between transaction and tick entries
 pub enum EntryType<'a> {
-    Transactions(Vec<HashedTransaction<'a>>),
+    Transactions(Vec<SanitizedTransaction<'a>>),
     Tick(Hash),
 }
 
@@ -137,7 +137,7 @@ impl<'a> TryFrom<&'a Entry> for EntryType<'a> {
                 entry
                     .transactions
                     .iter()
-                    .map(HashedTransaction::try_from)
+                    .map(SanitizedTransaction::try_from)
                     .collect::<Result<_>>()?,
             ))
         }
@@ -520,7 +520,7 @@ impl EntrySlice for [Entry] {
         libsecp256k1_0_5_upgrade_enabled: bool,
         verify_tx_signatures_len: bool,
     ) -> Result<Vec<EntryType<'a>>> {
-        let verify_and_hash = |tx: &'a Transaction| -> Result<HashedTransaction<'a>> {
+        let verify_and_hash = |tx: &'a Transaction| -> Result<SanitizedTransaction<'a>> {
             let message_hash = if !skip_verification {
                 let size =
                     bincode::serialized_size(tx).map_err(|_| TransactionError::SanitizeFailure)?;
@@ -536,7 +536,7 @@ impl EntrySlice for [Entry] {
                 tx.message().hash()
             };
 
-            HashedTransaction::try_create(Cow::Borrowed(tx), message_hash)
+            SanitizedTransaction::try_create(Cow::Borrowed(tx), message_hash)
         };
 
         PAR_THREAD_POOL.with(|thread_pool| {
