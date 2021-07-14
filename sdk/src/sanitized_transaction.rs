@@ -5,7 +5,7 @@ use crate::{
     sanitize::Sanitize,
     transaction::{Result, Transaction, TransactionError},
 };
-use std::{borrow::Cow, convert::TryFrom};
+use std::{borrow::Cow, convert::TryFrom, ops::Deref};
 
 /// Sanitized transaction and the hash of its message
 #[derive(Debug, Clone)]
@@ -40,9 +40,12 @@ impl<'a> SanitizedTransaction<'a> {
         }
         false
     }
+}
 
-    pub fn transaction(&self) -> &Transaction {
-        self.transaction.as_ref()
+impl Deref for SanitizedTransaction<'_> {
+    type Target = Transaction;
+    fn deref(&self) -> &Self::Target {
+        &self.transaction
     }
 }
 
@@ -68,7 +71,7 @@ pub trait SanitizedTransactionSlice<'a> {
 
 impl<'a> SanitizedTransactionSlice<'a> for [SanitizedTransaction<'a>] {
     fn as_transactions_iter(&'a self) -> Box<dyn Iterator<Item = &'a Transaction> + '_> {
-        Box::new(self.iter().map(|h| h.transaction.as_ref()))
+        Box::new(self.iter().map(Deref::deref))
     }
 }
 

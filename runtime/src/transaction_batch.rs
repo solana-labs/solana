@@ -4,6 +4,7 @@ use solana_sdk::{
     transaction::{Result, Transaction},
 };
 use std::borrow::Cow;
+use std::ops::Deref;
 
 // Represents the results of trying to lock a set of accounts
 pub struct TransactionBatch<'a, 'b> {
@@ -37,7 +38,7 @@ impl<'a, 'b> TransactionBatch<'a, 'b> {
     }
 
     pub fn transactions_iter(&self) -> impl Iterator<Item = &Transaction> {
-        self.sanitized_txs.iter().map(|h| h.transaction())
+        self.sanitized_txs.iter().map(Deref::deref)
     }
 
     pub fn bank(&self) -> &Bank {
