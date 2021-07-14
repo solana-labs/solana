@@ -869,93 +869,10 @@ pub struct BankFromArchiveTimings {
 // From testing, 4 seems to be a sweet spot for ranges of 60M-360M accounts and 16-64 cores. This may need to be tuned later.
 const PARALLEL_UNTAR_READERS_DEFAULT: usize = 4;
 
-/// Rebuild a bank from a snapshot archive
-#[allow(clippy::too_many_arguments)]
-pub fn bank_from_snapshot_archive<P>(
-    account_paths: &[PathBuf],
-    frozen_account_pubkeys: &[Pubkey],
-    snapshots_dir: &Path,
-    snapshot_tar: P,
-    archive_format: ArchiveFormat,
-    genesis_config: &GenesisConfig,
-    debug_keys: Option<Arc<HashSet<Pubkey>>>,
-    additional_builtins: Option<&Builtins>,
-    account_secondary_indexes: AccountSecondaryIndexes,
-    accounts_db_caching_enabled: bool,
-    limit_load_slot_count_from_snapshot: Option<usize>,
-    shrink_ratio: AccountShrinkThreshold,
-    test_hash_calculation: bool,
-    verify_index: bool,
-) -> Result<(Bank, BankFromArchiveTimings)>
-where
-    P: AsRef<Path> + std::marker::Sync,
-{
-    do_bank_from_snapshot_archives::<_, &Path>(
-        account_paths,
-        frozen_account_pubkeys,
-        snapshots_dir,
-        snapshot_tar,
-        None,
-        archive_format,
-        genesis_config,
-        debug_keys,
-        additional_builtins,
-        account_secondary_indexes,
-        accounts_db_caching_enabled,
-        limit_load_slot_count_from_snapshot,
-        shrink_ratio,
-        test_hash_calculation,
-        verify_index,
-    )
-}
-
-/// Rebuild a bank from full and incremental snapshot archives
-#[cfg(test)]
-#[allow(clippy::too_many_arguments)]
-fn bank_from_incremental_snapshot_archive<P, Q>(
-    account_paths: &[PathBuf],
-    frozen_account_pubkeys: &[Pubkey],
-    snapshots_dir: &Path,
-    full_snapshot_archive_path: P,
-    incremental_snapshot_archive_path: Q,
-    archive_format: ArchiveFormat,
-    genesis_config: &GenesisConfig,
-    debug_keys: Option<Arc<HashSet<Pubkey>>>,
-    additional_builtins: Option<&Builtins>,
-    account_secondary_indexes: AccountSecondaryIndexes,
-    accounts_db_caching_enabled: bool,
-    limit_load_slot_count_from_snapshot: Option<usize>,
-    shrink_ratio: AccountShrinkThreshold,
-    test_hash_calculation: bool,
-    verify_index: bool,
-) -> Result<(Bank, BankFromArchiveTimings)>
-where
-    P: AsRef<Path> + std::marker::Sync,
-    Q: AsRef<Path> + std::marker::Sync,
-{
-    do_bank_from_snapshot_archives(
-        account_paths,
-        frozen_account_pubkeys,
-        snapshots_dir,
-        full_snapshot_archive_path,
-        Some(incremental_snapshot_archive_path),
-        archive_format,
-        genesis_config,
-        debug_keys,
-        additional_builtins,
-        account_secondary_indexes,
-        accounts_db_caching_enabled,
-        limit_load_slot_count_from_snapshot,
-        shrink_ratio,
-        test_hash_calculation,
-        verify_index,
-    )
-}
-
-/// Rebuild a bank from snapshot archives.  Handle either just a full snapshot, or both a full
+/// Rebuild bank from snapshot archives.  Handles either just a full snapshot, or both a full
 /// snapshot and an incremental snapshot.
 #[allow(clippy::too_many_arguments)]
-fn do_bank_from_snapshot_archives<P, Q>(
+pub fn bank_from_snapshot_archives<P, Q>(
     account_paths: &[PathBuf],
     frozen_account_pubkeys: &[Pubkey],
     snapshots_dir: &Path,
@@ -2494,11 +2411,12 @@ mod tests {
         )
         .unwrap();
 
-        let (roundtrip_bank, _) = bank_from_snapshot_archive(
+        let (roundtrip_bank, _) = bank_from_snapshot_archives::<_, &Path>(
             &[PathBuf::from(accounts_dir.path())],
             &[],
             snapshot_dir.path(),
             &snapshot_archive_path,
+            None,
             snapshot_archive_format,
             &genesis_config,
             None,
@@ -2583,11 +2501,12 @@ mod tests {
         )
         .unwrap();
 
-        let (roundtrip_bank, _) = bank_from_snapshot_archive(
+        let (roundtrip_bank, _) = bank_from_snapshot_archives::<_, &Path>(
             &[PathBuf::from(accounts_dir.path())],
             &[],
             snapshot_dir.path(),
             &full_snapshot_archive_path,
+            None,
             snapshot_archive_format,
             &genesis_config,
             None,
@@ -2691,12 +2610,12 @@ mod tests {
         )
         .unwrap();
 
-        let (roundtrip_bank, _) = bank_from_incremental_snapshot_archive(
+        let (roundtrip_bank, _) = bank_from_snapshot_archives(
             &[PathBuf::from(accounts_dir.path())],
             &[],
             snapshot_dir.path(),
             &full_snapshot_archive_path,
-            &incremental_snapshot_archive_path,
+            Some(&incremental_snapshot_archive_path),
             snapshot_archive_format,
             &genesis_config,
             None,

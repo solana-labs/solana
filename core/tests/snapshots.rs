@@ -148,7 +148,7 @@ mod tests {
         let old_last_bank = old_bank_forks.get(old_last_slot).unwrap();
 
         let check_hash_calculation = false;
-        let (deserialized_bank, _timing) = snapshot_utils::bank_from_snapshot_archive(
+        let (deserialized_bank, _timing) = snapshot_utils::bank_from_snapshot_archives::<_, &Path>(
             account_paths,
             &[],
             &old_bank_forks
@@ -162,6 +162,7 @@ mod tests {
                 &old_last_bank.get_accounts_hash(),
                 ArchiveFormat::TarBzip2,
             ),
+            None,
             ArchiveFormat::TarBzip2,
             old_genesis_config,
             None,

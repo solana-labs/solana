@@ -126,11 +126,12 @@ fn load_from_snapshot(
         process::exit(1);
     }
 
-    let (deserialized_bank, timings) = snapshot_utils::bank_from_snapshot_archive(
+    let (deserialized_bank, timings) = snapshot_utils::bank_from_snapshot_archives::<_, &Path>(
         &account_paths,
         &process_options.frozen_accounts,
         &snapshot_config.snapshot_path,
         &snapshot_archive_info.path,
+        None,
         snapshot_archive_info.archive_format,
         genesis_config,
         process_options.debug_keys.clone(),
