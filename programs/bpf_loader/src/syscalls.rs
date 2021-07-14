@@ -19,9 +19,9 @@ use solana_sdk::{
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     epoch_schedule::EpochSchedule,
     feature_set::{
-        cpi_data_cost, enforce_aligned_host_addrs, keccak256_syscall_enabled, memory_ops_syscalls,
-        secp256k1_recover_syscall_enabled, set_upgrade_authority_via_cpi_enabled,
-        sysvar_via_syscall, update_data_on_realloc,
+        cpi_data_cost, enforce_aligned_host_addrs, keccak256_syscall_enabled,
+        libsecp256k1_0_5_upgrade_enabled, memory_ops_syscalls, secp256k1_recover_syscall_enabled,
+        set_upgrade_authority_via_cpi_enabled, sysvar_via_syscall, update_data_on_realloc,
     },
     hash::{Hasher, HASH_BYTES},
     ic_msg,
@@ -332,6 +332,8 @@ pub fn bind_syscall_context_objects<'a>(
             cost: bpf_compute_budget.secp256k1_recover_cost,
             compute_meter: invoke_context.get_compute_meter(),
             loader_id,
+            libsecp256k1_0_5_upgrade_enabled: invoke_context
+                .is_feature_active(&libsecp256k1_0_5_upgrade_enabled::id()),
         }),
     );
 
@@ -1352,6 +1354,7 @@ pub struct SyscallSecp256k1Recover<'a> {
     cost: u64,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     loader_id: &'a Pubkey,
+    libsecp256k1_0_5_upgrade_enabled: bool,
 }
 
 impl<'a> SyscallObject<BpfError> for SyscallSecp256k1Recover<'a> {
@@ -1412,7 +1415,13 @@ impl<'a> SyscallObject<BpfError> for SyscallSecp256k1Recover<'a> {
                 return;
             }
         };
-        let signature = match libsecp256k1::Signature::parse_standard_slice(signature) {
+        let sig_parse_result = if self.libsecp256k1_0_5_upgrade_enabled {
+            libsecp256k1::Signature::parse_standard_slice(signature)
+        } else {
+            libsecp256k1::Signature::parse_overflowing_slice(signature)
+        };
+
+        let signature = match sig_parse_result {
             Ok(sig) => sig,
             Err(_) => {
                 *result = Ok(Secp256k1RecoverError::InvalidSignature.into());
