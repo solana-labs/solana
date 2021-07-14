@@ -123,17 +123,6 @@ function MintAccountCard({
             )}
           </td>
         </tr>
-        {tokenPriceInfo?.price && (
-          <tr>
-            <td>Current Price</td>
-            <td className="text-lg-right">
-              $
-              {tokenPriceInfo.price.toLocaleString("en-US", {
-                minimumFractionDigits: 2,
-              })}
-            </td>
-          </tr>
-        )}
         {tokenInfo?.extensions?.website && (
           <tr>
             <td>Website</td>

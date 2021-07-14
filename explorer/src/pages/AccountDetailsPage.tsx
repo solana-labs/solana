@@ -34,6 +34,8 @@ import { TransactionHistoryCard } from "components/account/history/TransactionHi
 import { TokenTransfersCard } from "components/account/history/TokenTransfersCard";
 import { TokenInstructionsCard } from "components/account/history/TokenInstructionsCard";
 import { RewardsCard } from "components/account/RewardsCard";
+import { CoingeckoStatus, useCoinGecko } from "utils/coingecko";
+import { abbreviatedNumber } from "utils";
 
 const IDENTICON_WIDTH = 64;
 
@@ -152,9 +154,16 @@ export function AccountHeader({
   const data = account?.details?.data;
   const isToken = data?.program === "spl-token" && data?.parsed.type === "mint";
 
+  const coinInfo = useCoinGecko(tokenDetails?.extensions?.coingeckoId);
+
+  let tokenInfo;
+  if (coinInfo?.status === CoingeckoStatus.Success) {
+    tokenInfo = coinInfo.coinInfo;
+  }
+
   if (tokenDetails || isToken) {
     return (
-      <div className="row align-items-end">
+      <div className="row align-items-center">
         <div className="col-auto">
           <div className="avatar avatar-lg header-avatar-top">
             {tokenDetails?.logoURI ? (
@@ -179,6 +188,48 @@ export function AccountHeader({
             {tokenDetails?.name || "Unknown Token"}
           </h2>
         </div>
+
+        {tokenInfo && (
+          <div className="col-auto">
+            <div className="card mb-0 price-card price-card-small">
+              <div className="card-body">
+                {tokenInfo && (
+                  <div className="p-2 flex-fill">
+                    <h5>
+                      Price{" "}
+                      <span className="ml-2 badge badge-primary rank">
+                        Rank #{tokenInfo.market_cap_rank}
+                      </span>
+                    </h5>
+                    <h2 className="mb-3">
+                      <em>${tokenInfo.price.toFixed(2)}</em>{" "}
+                      {tokenInfo.price_change_percentage_24h > 0 && (
+                        <small className="change-positive">
+                          &uarr;{" "}
+                          {tokenInfo.price_change_percentage_24h.toFixed(2)}%
+                        </small>
+                      )}
+                      {tokenInfo.price_change_percentage_24h < 0 && (
+                        <small className="change-negative">
+                          &darr;{" "}
+                          {tokenInfo.price_change_percentage_24h.toFixed(2)}%
+                        </small>
+                      )}
+                      {tokenInfo.price_change_percentage_24h === 0 && (
+                        <small>0%</small>
+                      )}
+                    </h2>
+                    <h5 className="mb-0">
+                      24h Vol:{" "}
+                      <em>${abbreviatedNumber(tokenInfo.volume_24)}</em> MCap:{" "}
+                      <em>${abbreviatedNumber(tokenInfo.market_cap)}</em>
+                    </h5>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
