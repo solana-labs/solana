@@ -142,7 +142,7 @@ See [cross-program invocation](terminology.md#cross-program-invocation).
 
 ## instruction
 
-The code that a [client](terminology.md#client) can include in a [transaction](terminology.md#transaction). 
+The code that a [client](terminology.md#client) can include in a [transaction](terminology.md#transaction).
 
 ## keypair
 
@@ -321,7 +321,7 @@ A set of [transactions](terminology.md#transaction) that may be executed in para
 
 ## validator
 
-A full participant in a Solana network [cluster](terminology.md#cluster) that produces new [blocks](terminology.md#block).  A validator validates the transactions added to the [ledger](terminology.md#ledger) 
+A full participant in a Solana network [cluster](terminology.md#cluster) that produces new [blocks](terminology.md#block).  A validator validates the transactions added to the [ledger](terminology.md#ledger)
 
 ## VDF
 
