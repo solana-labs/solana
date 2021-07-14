@@ -102,6 +102,7 @@ pub fn construct_eth_pubkey(
 pub fn verify_eth_addresses(
     data: &[u8],
     instruction_datas: &[&[u8]],
+    libsecp256k1_0_5_upgrade_enabled: bool,
 ) -> Result<(), Secp256k1Error> {
     if data.is_empty() {
         return Err(Secp256k1Error::InvalidInstructionDataSize);
@@ -133,10 +134,18 @@ pub fn verify_eth_addresses(
         if sig_end >= signature_instruction.len() {
             return Err(Secp256k1Error::InvalidSignature);
         }
-        let signature = libsecp256k1::Signature::parse_standard_slice(
-            &signature_instruction[sig_start..sig_end],
-        )
-        .map_err(|_| Secp256k1Error::InvalidSignature)?;
+
+        let sig_parse_result = if libsecp256k1_0_5_upgrade_enabled {
+            libsecp256k1::Signature::parse_standard_slice(
+                &signature_instruction[sig_start..sig_end],
+            )
+        } else {
+            libsecp256k1::Signature::parse_overflowing_slice(
+                &signature_instruction[sig_start..sig_end],
+            )
+        };
+
+        let signature = sig_parse_result.map_err(|_| Secp256k1Error::InvalidSignature)?;
 
         let recovery_id = libsecp256k1::RecoveryId::parse(signature_instruction[sig_end])
             .map_err(|_| Secp256k1Error::InvalidRecoveryId)?;
@@ -206,7 +215,7 @@ pub mod test {
         let writer = std::io::Cursor::new(&mut instruction_data[1..]);
         bincode::serialize_into(writer, &offsets).unwrap();
 
-        verify_eth_addresses(&instruction_data, &[&[0u8; 100]])
+        verify_eth_addresses(&instruction_data, &[&[0u8; 100]], false)
     }
 
     #[test]
@@ -221,7 +230,7 @@ pub mod test {
         instruction_data.truncate(instruction_data.len() - 1);
 
         assert_eq!(
-            verify_eth_addresses(&instruction_data, &[&[0u8; 100]]),
+            verify_eth_addresses(&instruction_data, &[&[0u8; 100]], false),
             Err(Secp256k1Error::InvalidInstructionDataSize)
         );
 
