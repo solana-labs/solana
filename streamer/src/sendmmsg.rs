@@ -122,7 +122,7 @@ fn sendmmsg_retry(sock: &UdpSocket, hdrs: &mut Vec<mmsghdr>) -> Result<(), (io::
                     erropt = Some(io::Error::last_os_error());
                 }
                 // skip over the failing packet
-                1 as usize
+                1_usize
             }
             n => {
                 // if we fail to send all packets we advance to the failing
