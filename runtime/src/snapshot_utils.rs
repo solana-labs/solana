@@ -905,6 +905,7 @@ where
         limit_load_slot_count_from_snapshot,
         shrink_ratio,
         test_hash_calculation,
+        verify_index,
     )
 }
 
@@ -926,6 +927,7 @@ fn bank_from_incremental_snapshot_archive<P, Q>(
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
     test_hash_calculation: bool,
+    verify_index: bool,
 ) -> Result<(Bank, BankFromArchiveTimings)>
 where
     P: AsRef<Path> + std::marker::Sync,
@@ -946,6 +948,7 @@ where
         limit_load_slot_count_from_snapshot,
         shrink_ratio,
         test_hash_calculation,
+        verify_index,
     )
 }
 
@@ -967,6 +970,7 @@ fn do_bank_from_snapshot_archives<P, Q>(
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
     test_hash_calculation: bool,
+    verify_index: bool,
 ) -> Result<(Bank, BankFromArchiveTimings)>
 where
     P: AsRef<Path> + std::marker::Sync,
@@ -2701,6 +2705,7 @@ mod tests {
             false,
             None,
             AccountShrinkThreshold::default(),
+            false,
             false,
         )
         .unwrap();
