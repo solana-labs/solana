@@ -114,7 +114,7 @@ native machine code before execting it in the virtual machine.",
                 .takes_value(true)
                 .value_name("VALUE")
                 .possible_values(&["cfg", "disassembler", "interpreter", "jit"])
-                .default_value("interpreter"),
+                .default_value("jit"),
         )
         .arg(
             Arg::new("instruction limit")
