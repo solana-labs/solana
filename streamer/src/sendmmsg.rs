@@ -261,14 +261,6 @@ mod tests {
         ];
         let dest_refs: Vec<_> = vec![&ip4, &ip6, &ip4];
 
-        let sender = UdpSocket::bind(":::0").expect("bind");
-        if let Err((_ioerror, num_sent)) = batch_send(&sender, &packet_refs[..]) {
-            assert_eq!(num_sent, 1);
-        }
-        if let Err((_ioerror, num_sent)) = multi_target_send(&sender, &packets[0], &dest_refs) {
-            assert_eq!(num_sent, 1);
-        }
-
         let sender = UdpSocket::bind("0.0.0.0:0").expect("bind");
         if let Err((_ioerror, num_sent)) = batch_send(&sender, &packet_refs[..]) {
             assert_eq!(num_sent, 2);
