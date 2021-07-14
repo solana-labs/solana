@@ -1168,7 +1168,11 @@ where
 {
     match fs::read_dir(&snapshot_output_dir) {
         Err(err) => {
-            info!("Unable to read snapshot directory: {}", err);
+            info!(
+                "Unable to read snapshot directory: err: {}, path: {}",
+                err,
+                snapshot_output_dir.as_ref().display()
+            );
             vec![]
         }
         Ok(files) => files
@@ -1218,7 +1222,11 @@ where
 {
     match fs::read_dir(&snapshot_output_dir) {
         Err(err) => {
-            info!("Unable to read snapshot directory: {}", err);
+            info!(
+                "Unable to read snapshot directory: err: {}, path: {}",
+                err,
+                snapshot_output_dir.as_ref().display()
+            );
             vec![]
         }
         Ok(files) => files
