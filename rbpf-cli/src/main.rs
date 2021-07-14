@@ -19,6 +19,7 @@ use solana_sdk::{
     pubkey::Pubkey,
 };
 use std::{cell::RefCell, fs::File, io::Read, io::Seek, io::SeekFrom, path::Path};
+use time::Instant;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Account {
@@ -227,11 +228,13 @@ native machine code before execting it in the virtual machine.",
 
     let id = bpf_loader::id();
     let mut vm = create_vm(&id, executable.as_ref(), &mut mem, &mut invoke_context).unwrap();
+    let start_time = Instant::now();
     let result = if matches.value_of("use").unwrap() == "interpreter" {
         vm.execute_program_interpreted(&mut instruction_meter)
     } else {
         vm.execute_program_jit(&mut instruction_meter)
     };
+    let duration = Instant::now() - start_time;
     if logger.log.borrow().len() > 0 {
         println!("Program output:");
         for s in logger.log.borrow_mut().iter() {
@@ -241,6 +244,7 @@ native machine code before execting it in the virtual machine.",
     }
     println!("Result: {:?}", result);
     println!("Instruction Count: {}", vm.get_total_instruction_count());
+    println!("Execution time: {} us", duration.whole_microseconds());
     if matches.is_present("trace") {
         println!("Trace is saved in trace.out");
         let mut file = File::create("trace.out").unwrap();
