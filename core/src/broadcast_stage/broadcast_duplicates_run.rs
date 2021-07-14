@@ -1,5 +1,6 @@
 use super::*;
-use solana_ledger::{entry::Entry, shred::Shredder};
+use solana_entry::entry::Entry;
+use solana_ledger::shred::Shredder;
 use solana_runtime::blockhash_queue::BlockhashQueue;
 use solana_sdk::{
     hash::Hash,
