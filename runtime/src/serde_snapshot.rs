@@ -401,8 +401,12 @@ where
                 .collect::<HashMap<_, _>>()
         });
 
-    assert!(incremental_snapshot_storage.iter().all(|storage_entry| !full_snapshot_storage.contains_key(storage_entry.0)),
-    "There must not be any overlap in the slots of storages between the full snapshot and the incremental snapshot");
+    // There must not be any overlap in the slots of storages between the full snapshot and the incremental snapshot
+    incremental_snapshot_storage
+        .iter()
+        .all(|storage_entry| !full_snapshot_storage.contains_key(storage_entry.0)).then(|| ()).ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidData, "Snapshots are incompatible: There are storages for the same slot in both the full snapshot and the incremental snapshot!")
+        })?;
 
     // Ensure all account paths exist
     for path in &accounts_db.paths {
