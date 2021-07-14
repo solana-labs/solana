@@ -14,7 +14,11 @@ use solana_runtime::{
     snapshot_utils::{self, SnapshotArchiveInfo},
 };
 use solana_sdk::{clock::Slot, genesis_config::GenesisConfig, hash::Hash};
-use std::{fs, path::PathBuf, process, result};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    process, result,
+};
 
 pub type LoadResult = result::Result<
     (BankForks, LeaderScheduleCache, Option<(Slot, Hash)>),

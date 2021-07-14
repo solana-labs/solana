@@ -63,7 +63,7 @@ mod tests {
     use std::{
         collections::HashSet,
         fs,
-        path::PathBuf,
+        path::{Path, PathBuf},
         sync::{
             atomic::{AtomicBool, Ordering},
             mpsc::channel,
