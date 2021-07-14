@@ -6009,8 +6009,8 @@ impl AccountsDb {
                 .accounts_index
                 .account_maps
                 .iter()
-                .map(|i| {
-                    let len = i.read().unwrap().len();
+                .map(|map_bin| {
+                    let len = map_bin.read().unwrap().len();
                     min_bin_size = std::cmp::min(min_bin_size, len);
                     max_bin_size = std::cmp::max(max_bin_size, len);
                     len
