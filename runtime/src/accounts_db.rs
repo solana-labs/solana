@@ -5919,6 +5919,9 @@ impl AccountsDb {
         if let Some(limit) = limit_load_slot_count_from_snapshot {
             slots.truncate(limit); // get rid of the newer slots and keep just the older
         }
+        // this is only called at startup
+        let threads = std::cmp::max(1, num_cpus::get() / 4);
+
         // pass == 0 always runs and generates the index
         // pass == 1 only runs if verify == true.
         // verify checks that all the expected items are in the accounts index and measures how long it takes to look them all up
@@ -5926,7 +5929,7 @@ impl AccountsDb {
         for pass in 0..passes {
             let total_processed_slots_across_all_threads = AtomicU64::new(0);
             let outer_slots_len = slots.len();
-            let chunk_size = (outer_slots_len / 7) + 1; // approximately 400k slots in a snapshot
+            let chunk_size = (outer_slots_len / threads) + 1; // approximately 400k slots in a snapshot
             let mut index_time = Measure::start("index");
             let insertion_time_us = AtomicU64::new(0);
             let scan_time: u64 = slots
