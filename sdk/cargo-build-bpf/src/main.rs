@@ -759,8 +759,7 @@ fn main() {
         features: values_t!(matches, "features", String)
             .ok()
             .unwrap_or_else(Vec::new),
-        generate_child_script_on_failure: matches
-            .is_present("generate_child_script_on_failure"),
+        generate_child_script_on_failure: matches.is_present("generate_child_script_on_failure"),
         no_default_features: matches.is_present("no_default_features"),
         offline: matches.is_present("offline"),
         verbose: matches.is_present("verbose"),
