@@ -159,6 +159,15 @@ struct SnapshotRootPaths {
     incremental_snapshot_root_file_path: Option<PathBuf>,
 }
 
+/// Helper type to bundle up the results from `do_snapshot_unarchive_preparation()`
+#[derive(Debug)]
+struct UnarchivePreparationResult {
+    unpack_dir: TempDir,
+    unpacked_append_vec_map: UnpackedAppendVecMap,
+    unpacked_snapshots_dir_and_version: UnpackedSnapshotsDirAndVersion,
+    measure_untar: Measure,
+}
+
 /// Helper type for passing around the unpacked snapshots dir and the snapshot version together
 #[derive(Debug)]
 struct UnpackedSnapshotsDirAndVersion {
@@ -898,12 +907,7 @@ where
         std::cmp::max(1, num_cpus::get() / 4),
     );
 
-    let (
-        _full_snapshot_unpack_dir,
-        full_snapshot_unpacked_append_vec_map,
-        full_snapshot_unpacked_snapshots_dir_and_version,
-        full_snapshot_measure_untar,
-    ) = do_snapshot_unarchive_preparation(
+    let full_snapshot_unarchive_preparation_result = do_snapshot_unarchive_preparation(
         snapshots_dir,
         TMP_SNAPSHOT_PREFIX,
         &full_snapshot_archive_path,
@@ -913,52 +917,45 @@ where
         parallel_divisions,
     )?;
 
-    let (
-        _incremental_snapshot_unpack_dir,
-        incremental_snapshot_unpacked_append_vec_map,
-        incremental_snapshot_unpacked_snapshots_dir_and_version,
-        incremental_snapshot_measure_untar,
-    ) = if let Some(incremental_snapshot_archive_path) = incremental_snapshot_archive_path {
-        check_are_snapshots_compatible(
-            &full_snapshot_archive_path,
-            &incremental_snapshot_archive_path,
-        )?;
+    let mut incremental_snapshot_unarchive_preparation_result =
+        if let Some(incremental_snapshot_archive_path) = incremental_snapshot_archive_path {
+            check_are_snapshots_compatible(
+                &full_snapshot_archive_path,
+                &incremental_snapshot_archive_path,
+            )?;
 
-        let (
-            incremental_snapshot_unpack_dir,
-            incremental_snapshot_unpacked_append_vec_map,
-            incremental_snapshot_unpacked_snapshots_dir_and_version,
-            incremental_snapshot_measure_untar,
-        ) = do_snapshot_unarchive_preparation(
-            snapshots_dir,
-            TMP_INCREMENTAL_SNAPSHOT_PREFIX,
-            &incremental_snapshot_archive_path,
-            "incremental snapshot untar",
-            account_paths,
-            archive_format,
-            parallel_divisions,
-        )?;
-        (
-            Some(incremental_snapshot_unpack_dir),
-            Some(incremental_snapshot_unpacked_append_vec_map),
-            Some(incremental_snapshot_unpacked_snapshots_dir_and_version),
-            Some(incremental_snapshot_measure_untar),
-        )
-    } else {
-        (None, None, None, None)
-    };
+            let unarchive_preparation_result = do_snapshot_unarchive_preparation(
+                snapshots_dir,
+                TMP_INCREMENTAL_SNAPSHOT_PREFIX,
+                &incremental_snapshot_archive_path,
+                "incremental snapshot untar",
+                account_paths,
+                archive_format,
+                parallel_divisions,
+            )?;
+            Some(unarchive_preparation_result)
+        } else {
+            None
+        };
 
-    let mut unpacked_append_vec_map = full_snapshot_unpacked_append_vec_map;
-    unpacked_append_vec_map.extend(
-        incremental_snapshot_unpacked_append_vec_map
-            .unwrap_or_default()
-            .into_iter(),
-    );
+    let mut unpacked_append_vec_map =
+        full_snapshot_unarchive_preparation_result.unpacked_append_vec_map;
+    if let Some(ref mut unarchive_preparation_result) =
+        incremental_snapshot_unarchive_preparation_result
+    {
+        let incremental_snapshot_unpacked_append_vec_map =
+            std::mem::take(&mut unarchive_preparation_result.unpacked_append_vec_map);
+        unpacked_append_vec_map.extend(incremental_snapshot_unpacked_append_vec_map.into_iter());
+    }
 
     let mut measure_rebuild = Measure::start("rebuild bank from snapshots");
     let bank = rebuild_bank_from_snapshots(
-        &full_snapshot_unpacked_snapshots_dir_and_version,
-        incremental_snapshot_unpacked_snapshots_dir_and_version.as_ref(),
+        &full_snapshot_unarchive_preparation_result.unpacked_snapshots_dir_and_version,
+        incremental_snapshot_unarchive_preparation_result
+            .as_ref()
+            .map(|unarchive_preparation_result| {
+                &unarchive_preparation_result.unpacked_snapshots_dir_and_version
+            }),
         frozen_account_pubkeys,
         account_paths,
         unpacked_append_vec_map,
@@ -984,8 +981,13 @@ where
 
     let timings = BankFromArchiveTimings {
         rebuild_bank_from_snapshots_us: measure_rebuild.as_us(),
-        untar_us: full_snapshot_measure_untar.as_us()
-            + incremental_snapshot_measure_untar.map_or(0, |measure| measure.as_us()),
+        untar_us: full_snapshot_unarchive_preparation_result
+            .measure_untar
+            .as_us()
+            + incremental_snapshot_unarchive_preparation_result
+                .map_or(0, |unarchive_preparation_result| {
+                    unarchive_preparation_result.measure_untar.as_us()
+                }),
         verify_snapshot_bank_us: measure_verify.as_us(),
     };
     Ok((bank, timings))
@@ -1002,12 +1004,7 @@ fn do_snapshot_unarchive_preparation<P, Q>(
     account_paths: &[PathBuf],
     archive_format: ArchiveFormat,
     parallel_divisions: usize,
-) -> Result<(
-    TempDir,
-    UnpackedAppendVecMap,
-    UnpackedSnapshotsDirAndVersion,
-    Measure,
-)>
+) -> Result<UnarchivePreparationResult>
 where
     P: AsRef<Path>,
     Q: AsRef<Path>,
@@ -1032,15 +1029,15 @@ where
     let mut snapshot_version = String::new();
     File::open(unpacked_version_file).and_then(|mut f| f.read_to_string(&mut snapshot_version))?;
 
-    Ok((
+    Ok(UnarchivePreparationResult {
         unpack_dir,
         unpacked_append_vec_map,
-        UnpackedSnapshotsDirAndVersion {
+        unpacked_snapshots_dir_and_version: UnpackedSnapshotsDirAndVersion {
             unpacked_snapshots_dir,
             snapshot_version,
         },
         measure_untar,
-    ))
+    })
 }
 
 /// Check if an incremental snapshot is compatible with a full snapshot.  This function parses the
