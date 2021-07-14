@@ -5654,7 +5654,6 @@ version = "1.8.0"
 dependencies = [
  "libc",
  "log 0.4.14",
- "matches",
  "nix",
  "solana-logger 1.8.0",
  "solana-measure",
