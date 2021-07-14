@@ -129,6 +129,7 @@ In case of request failures, the replica shall retry the requests.
 Following are the client RPC APIs supported by the replica node in JsonRpcAccountsService.
 
 - getAccountInfo
+- getBlockCommitment
 - getMultipleAccounts
 - getProgramAccounts
 - getMinimumBalanceForRentExemption
@@ -154,7 +155,6 @@ Following APIs are not included:
 - getEpochSchedule
 - getClusterNodes
 - getRecentPerformanceSamples
-- getBlockCommitment
 - getGenesisHash
 - getSignatueStatuses
 - getMaxRetransmitSlot
