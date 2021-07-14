@@ -118,8 +118,11 @@ function MintAccountCard({
             {info.mintAuthority === null ? "Fixed Supply" : "Current Supply"}
           </td>
           <td className="text-lg-right">
-            {normalizeTokenAmount(info.supply, info.decimals).toFixed(
-              info.decimals
+            {normalizeTokenAmount(info.supply, info.decimals).toLocaleString(
+              "en-US",
+              {
+                minimumFractionDigits: info.decimals,
+              }
             )}
           </td>
         </tr>
