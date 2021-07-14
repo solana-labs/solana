@@ -105,7 +105,6 @@ pub fn secp256k1_recover(
             .map_err(|_| Secp256k1RecoverError::InvalidRecoveryId)?;
         let signature = libsecp256k1::Signature::parse_standard_slice(signature)
             .map_err(|_| Secp256k1RecoverError::InvalidSignature)?;
-
         let secp256k1_key = libsecp256k1::recover(&message, &signature, &recovery_id)
             .map_err(|_| Secp256k1RecoverError::InvalidSignature)?;
         Ok(Secp256k1Pubkey::new(&secp256k1_key.serialize()[1..65]))
