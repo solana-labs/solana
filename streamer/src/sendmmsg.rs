@@ -264,10 +264,10 @@ mod tests {
         let sender = UdpSocket::bind(":::0").expect("bind");
         if let Err((_ioerror, num_sent)) = batch_send(&sender, &packet_refs[..]) {
             error!("failed {:?} {}/{}", _ioerror, num_sent, packet_refs.len());
-            assert_eq!(num_sent, 1);
+            assert_eq!(num_sent, 2);
         }
         if let Err((_ioerror, num_sent)) = multi_target_send(&sender, &packets[0], &dest_refs) {
-            assert_eq!(num_sent, 1);
+            assert_eq!(num_sent, 2);
         }
 
         let sender = UdpSocket::bind("0.0.0.0:0").expect("bind");
