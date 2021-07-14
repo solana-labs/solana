@@ -2288,7 +2288,8 @@ impl AccountsDb {
                 .skipped_shrink
                 .fetch_add(1, Ordering::Relaxed);
             for pubkey in unrefed_pubkeys {
-                if let Some(locked_entry) = self.accounts_index.get_account_write_entry(pubkey) {
+                if let Some(mut locked_entry) = self.accounts_index.get_account_write_entry(pubkey)
+                {
                     locked_entry.addref();
                 }
             }

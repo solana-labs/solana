@@ -109,13 +109,13 @@ impl AccountSecondaryIndexes {
 
 #[derive(Debug)]
 pub struct AccountMapEntry<T> {
-    ref_count: AtomicU64,
+    ref_count: u64,
     pub slot_list: SlotList<T>,
 }
 
 impl<T: Clone> AccountMapEntry<T> {
     pub fn ref_count(&self) -> u64 {
-        self.ref_count.load(Ordering::Relaxed)
+        self.ref_count
     }
 }
 
@@ -172,21 +172,8 @@ impl<'a, T: Clone> ReadAccountMapEntry<'a, T> {
     }
 
     pub fn ref_count(&self) -> RefCount {
-        self.get().ref_count.load(Ordering::Relaxed)
+        self.get().ref_count
     }
-    /*
-    pub fn unref(&self) {
-        self.borrow_owned_entry()
-            .ref_count
-            .fetch_sub(1, Ordering::Relaxed);
-    }
-
-    pub fn addref(&self) {
-        self.borrow_owned_entry()
-            .ref_count
-            .fetch_add(1, Ordering::Relaxed);
-    }
-    */
 }
 
 #[self_referencing]
@@ -221,10 +208,6 @@ impl<'a, 'b: 'a, T: IsCached> WriteAccountMapEntry<'a, 'b, T> {
         } else {
             None
         }
-    }
-
-    pub fn addref(&self) {
-        self.ref_count().fetch_add(1, Ordering::Relaxed);
     }
 
     pub fn destroy(self) -> AccountMapsWriteLock<'b, T> {
@@ -274,12 +257,28 @@ impl<'a, 'b: 'a, T: IsCached> WriteAccountMapEntry<'a, 'b, T> {
         })
     }
 
-    pub fn ref_count(&self) -> &AtomicU64 {
-        &self.get().unwrap().get().ref_count
+    pub fn ref_count(&self) -> RefCount {
+        self.get().unwrap().get().ref_count
     }
 
-    pub fn unref(&self) {
-        self.ref_count().fetch_sub(1, Ordering::Relaxed);
+    pub fn unref(&mut self) {
+        self.with_mut(|fields| {
+            let f = fields.owned_entry;
+            f.0.as_mut().map(|entry| {
+                let x = entry.get_mut();
+                x.ref_count -= 1;
+            })
+        });
+    }
+
+    pub fn addref(&mut self) {
+        self.with_mut(|fields| {
+            let f = fields.owned_entry;
+            f.0.as_mut().map(|entry| {
+                let x = entry.get_mut();
+                x.ref_count += 1;
+            })
+        });
     }
 
     // create an entry that is equivalent to this process:
@@ -289,13 +288,9 @@ impl<'a, 'b: 'a, T: IsCached> WriteAccountMapEntry<'a, 'b, T> {
     pub fn new_entry_after_update(slot: Slot, account_info: T) -> AccountMapEntry<T> {
         let ref_count = if account_info.is_cached() { 0 } else { 1 };
         AccountMapEntry {
-            ref_count: AtomicU64::new(ref_count),
+            ref_count,
             slot_list: vec![(slot, account_info)],
         }
-    }
-
-    fn addref2(item: &AtomicU64) {
-        item.fetch_add(1, Ordering::Relaxed);
     }
 
     pub fn upsert(
@@ -360,7 +355,7 @@ impl<'a, 'b: 'a, T: IsCached> WriteAccountMapEntry<'a, 'b, T> {
             previous_slot_entry_was_cached,
         );
         if addref {
-            Self::addref2(&current.ref_count);
+            current.ref_count += 1;
         }
     }
 
@@ -423,7 +418,7 @@ impl<'a, 'b: 'a, T: IsCached> WriteAccountMapEntry<'a, 'b, T> {
         });
         if addref {
             // If it's the first non-cache insert, also bump the stored ref count
-            self.ref_count().fetch_add(1, Ordering::Relaxed);
+            self.addref();
         }
     }
 }
@@ -858,7 +853,7 @@ type AccountMapsReadLock<'a, T> = RwLockReadGuard<'a, MapType<T>>;
 #[derive(Debug, Default)]
 pub struct ScanSlotTracker {
     is_removed: bool,
-    ref_count: u64,
+    ref_count: RefCount,
 }
 
 impl ScanSlotTracker {
@@ -1224,12 +1219,11 @@ impl<T: IsCached> AccountsIndex<T> {
                 } else {
                     continue;
                 }
-                drop(list_r);
                 let result = result.unwrap();
 
                 let mut load_account_timer = Measure::start("load_account");
-                //let list_item = &slot_list[index];
                 func(&pubkey, (&result.1, result.0));
+                drop(list_r);
                 load_account_timer.stop();
                 load_account_elapsed += load_account_timer.as_us();
             }
@@ -1796,7 +1790,7 @@ impl<T: IsCached> AccountsIndex<T> {
     }
 
     pub fn unref_from_storage(&self, pubkey: &Pubkey) {
-        if let Some(locked_entry) = self.get_account_write_entry(pubkey) {
+        if let Some(mut locked_entry) = self.get_account_write_entry(pubkey) {
             locked_entry.unref();
         }
     }
@@ -2967,7 +2961,7 @@ pub mod tests {
         let account_info = AccountInfoTest::default();
 
         let new_entry = WriteAccountMapEntry::new_entry_after_update(slot, account_info);
-        assert_eq!(new_entry.ref_count.load(Ordering::Relaxed), 0);
+        assert_eq!(new_entry.ref_count, 0);
         assert_eq!(new_entry.slot_list.capacity(), 1);
         assert_eq!(new_entry.slot_list.to_vec(), vec![(slot, account_info)]);
 
@@ -2975,7 +2969,7 @@ pub mod tests {
         let account_info = true;
 
         let new_entry = WriteAccountMapEntry::new_entry_after_update(slot, account_info);
-        assert_eq!(new_entry.ref_count.load(Ordering::Relaxed), 1);
+        assert_eq!(new_entry.ref_count, 1);
         assert_eq!(new_entry.slot_list.capacity(), 1);
         assert_eq!(new_entry.slot_list.to_vec(), vec![(slot, account_info)]);
     }
