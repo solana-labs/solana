@@ -7,14 +7,14 @@ use crate::{
 };
 use std::{borrow::Cow, convert::TryFrom};
 
-/// Transaction and the hash of its message
+/// Sanitized transaction and the hash of its message
 #[derive(Debug, Clone)]
-pub struct HashedTransaction<'a> {
+pub struct SanitizedTransaction<'a> {
     transaction: Cow<'a, Transaction>,
     pub message_hash: Hash,
 }
 
-impl<'a> HashedTransaction<'a> {
+impl<'a> SanitizedTransaction<'a> {
     pub fn try_create(transaction: Cow<'a, Transaction>, message_hash: Hash) -> Result<Self> {
         transaction.sanitize()?;
         if Self::has_duplicates(&transaction.message.account_keys) {
@@ -46,7 +46,7 @@ impl<'a> HashedTransaction<'a> {
     }
 }
 
-impl<'a> TryFrom<Transaction> for HashedTransaction<'_> {
+impl<'a> TryFrom<Transaction> for SanitizedTransaction<'_> {
     type Error = TransactionError;
     fn try_from(transaction: Transaction) -> Result<Self> {
         let message_hash = transaction.message().hash();
@@ -54,7 +54,7 @@ impl<'a> TryFrom<Transaction> for HashedTransaction<'_> {
     }
 }
 
-impl<'a> TryFrom<&'a Transaction> for HashedTransaction<'a> {
+impl<'a> TryFrom<&'a Transaction> for SanitizedTransaction<'a> {
     type Error = TransactionError;
     fn try_from(transaction: &'a Transaction) -> Result<Self> {
         let message_hash = transaction.message().hash();
@@ -62,11 +62,11 @@ impl<'a> TryFrom<&'a Transaction> for HashedTransaction<'a> {
     }
 }
 
-pub trait HashedTransactionSlice<'a> {
+pub trait SanitizedTransactionSlice<'a> {
     fn as_transactions_iter(&'a self) -> Box<dyn Iterator<Item = &'a Transaction> + '_>;
 }
 
-impl<'a> HashedTransactionSlice<'a> for [HashedTransaction<'a>] {
+impl<'a> SanitizedTransactionSlice<'a> for [SanitizedTransaction<'a>] {
     fn as_transactions_iter(&'a self) -> Box<dyn Iterator<Item = &'a Transaction> + '_> {
         Box::new(self.iter().map(|h| h.transaction.as_ref()))
     }
@@ -78,7 +78,7 @@ mod tests {
 
     #[test]
     fn test_has_duplicates() {
-        assert!(!HashedTransaction::has_duplicates(&[1, 2]));
-        assert!(HashedTransaction::has_duplicates(&[1, 2, 1]));
+        assert!(!SanitizedTransaction::has_duplicates(&[1, 2]));
+        assert!(SanitizedTransaction::has_duplicates(&[1, 2, 1]));
     }
 }

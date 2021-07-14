@@ -127,7 +127,11 @@ fn execute_batch(
             timings,
         );
 
-    bank_utils::find_and_send_votes(batch.hashed_transactions(), &tx_results, replay_vote_sender);
+    bank_utils::find_and_send_votes(
+        batch.sanitized_transactions(),
+        &tx_results,
+        replay_vote_sender,
+    );
 
     let TransactionResults {
         fee_collection_results,
@@ -280,7 +284,7 @@ fn process_entries_with_callback(
 
                 loop {
                     // try to lock the accounts
-                    let batch = bank.prepare_hashed_batch(transactions);
+                    let batch = bank.prepare_sanitized_batch(transactions);
                     let first_lock_err = first_err(batch.lock_results());
 
                     // if locking worked

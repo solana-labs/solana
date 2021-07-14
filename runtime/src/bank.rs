@@ -84,7 +84,6 @@ use solana_sdk::{
     genesis_config::{ClusterType, GenesisConfig},
     hard_forks::HardForks,
     hash::{extend_and_hash, hashv, Hash},
-    hashed_transaction::{HashedTransaction, HashedTransactionSlice},
     incinerator,
     inflation::Inflation,
     instruction::CompiledInstruction,
@@ -97,6 +96,7 @@ use solana_sdk::{
     program_utils::limited_deserialize,
     pubkey::Pubkey,
     recent_blockhashes_account,
+    sanitized_transaction::{SanitizedTransaction, SanitizedTransactionSlice},
     signature::{Keypair, Signature},
     slot_hashes::SlotHashes,
     slot_history::SlotHistory,
@@ -2587,19 +2587,19 @@ impl Bank {
 
     fn update_transaction_statuses(
         &self,
-        hashed_txs: &[HashedTransaction],
+        sanitized_txs: &[SanitizedTransaction],
         res: &[TransactionExecutionResult],
     ) {
         let mut status_cache = self.src.status_cache.write().unwrap();
-        assert_eq!(hashed_txs.len(), res.len());
-        for (hashed_tx, (res, _nonce_rollback)) in hashed_txs.iter().zip(res) {
-            let tx = hashed_tx.transaction();
+        assert_eq!(sanitized_txs.len(), res.len());
+        for (sanitized_tx, (res, _nonce_rollback)) in sanitized_txs.iter().zip(res) {
+            let tx = sanitized_tx.transaction();
             if Self::can_commit(res) && !tx.signatures.is_empty() {
                 // Add the message hash to the status cache to ensure that this message
                 // won't be processed again with a different signature.
                 status_cache.insert(
                     &tx.message().recent_blockhash,
-                    &hashed_tx.message_hash,
+                    &sanitized_tx.message_hash,
                     self.slot(),
                     res.clone(),
                 );
@@ -2654,34 +2654,34 @@ impl Bank {
         &'a self,
         txs: impl Iterator<Item = &'b Transaction>,
     ) -> Result<TransactionBatch<'a, 'b>> {
-        let hashed_txs: Vec<HashedTransaction> = txs
-            .map(HashedTransaction::try_from)
+        let sanitized_txs: Vec<SanitizedTransaction> = txs
+            .map(SanitizedTransaction::try_from)
             .collect::<Result<_>>()?;
         let lock_results = self
             .rc
             .accounts
-            .lock_accounts(hashed_txs.as_transactions_iter());
+            .lock_accounts(sanitized_txs.as_transactions_iter());
         Ok(TransactionBatch::new(
             lock_results,
             self,
-            Cow::Owned(hashed_txs),
+            Cow::Owned(sanitized_txs),
         ))
     }
 
-    pub fn prepare_hashed_batch<'a, 'b>(
+    pub fn prepare_sanitized_batch<'a, 'b>(
         &'a self,
-        hashed_txs: &'b [HashedTransaction],
+        sanitized_txs: &'b [SanitizedTransaction],
     ) -> TransactionBatch<'a, 'b> {
         let lock_results = self
             .rc
             .accounts
-            .lock_accounts(hashed_txs.as_transactions_iter());
-        TransactionBatch::new(lock_results, self, Cow::Borrowed(hashed_txs))
+            .lock_accounts(sanitized_txs.as_transactions_iter());
+        TransactionBatch::new(lock_results, self, Cow::Borrowed(sanitized_txs))
     }
 
     pub(crate) fn prepare_simulation_batch<'a, 'b>(
         &'a self,
-        tx: HashedTransaction<'b>,
+        tx: SanitizedTransaction<'b>,
     ) -> TransactionBatch<'a, 'b> {
         let mut batch = TransactionBatch::new(vec![Ok(())], self, Cow::Owned(vec![tx]));
         batch.needs_unlock = false;
@@ -2699,8 +2699,8 @@ impl Bank {
     ) {
         assert!(self.is_frozen(), "simulation bank must be frozen");
 
-        let batch = match HashedTransaction::try_from(transaction) {
-            Ok(hashed_tx) => self.prepare_simulation_batch(hashed_tx),
+        let batch = match SanitizedTransaction::try_from(transaction) {
+            Ok(sanitized_tx) => self.prepare_simulation_batch(sanitized_tx),
             Err(err) => return (Err(err), vec![], vec![]),
         };
 
@@ -2790,11 +2790,11 @@ impl Bank {
 
     fn is_tx_already_processed(
         &self,
-        hashed_tx: &HashedTransaction,
+        sanitized_tx: &SanitizedTransaction,
         status_cache: &StatusCache<Result<()>>,
     ) -> bool {
-        let key = &hashed_tx.message_hash;
-        let transaction_blockhash = &hashed_tx.transaction().message().recent_blockhash;
+        let key = &sanitized_tx.message_hash;
+        let transaction_blockhash = &sanitized_tx.transaction().message().recent_blockhash;
         status_cache
             .get_status(key, transaction_blockhash, &self.ancestors)
             .is_some()
@@ -2802,16 +2802,16 @@ impl Bank {
 
     fn check_status_cache(
         &self,
-        hashed_txs: &[HashedTransaction],
+        sanitized_txs: &[SanitizedTransaction],
         lock_results: Vec<TransactionCheckResult>,
         error_counters: &mut ErrorCounters,
     ) -> Vec<TransactionCheckResult> {
         let rcache = self.src.status_cache.read().unwrap();
-        hashed_txs
+        sanitized_txs
             .iter()
             .zip(lock_results)
-            .map(|(hashed_tx, (lock_res, nonce_rollback))| {
-                if lock_res.is_ok() && self.is_tx_already_processed(hashed_tx, &rcache) {
+            .map(|(sanitized_tx, (lock_res, nonce_rollback))| {
+                if lock_res.is_ok() && self.is_tx_already_processed(sanitized_tx, &rcache) {
                     error_counters.already_processed += 1;
                     return (Err(TransactionError::AlreadyProcessed), None);
                 }
@@ -2876,22 +2876,23 @@ impl Bank {
 
     pub fn check_transactions(
         &self,
-        hashed_txs: &[HashedTransaction],
+        sanitized_txs: &[SanitizedTransaction],
         lock_results: &[Result<()>],
         max_age: usize,
         mut error_counters: &mut ErrorCounters,
     ) -> Vec<TransactionCheckResult> {
         let age_results = self.check_age(
-            hashed_txs.as_transactions_iter(),
+            sanitized_txs.as_transactions_iter(),
             lock_results.to_vec(),
             max_age,
             &mut error_counters,
         );
-        let cache_results = self.check_status_cache(hashed_txs, age_results, &mut error_counters);
+        let cache_results =
+            self.check_status_cache(sanitized_txs, age_results, &mut error_counters);
         if self.upgrade_epoch() {
             // Reject all non-vote transactions
             self.filter_by_vote_transactions(
-                hashed_txs.as_transactions_iter(),
+                sanitized_txs.as_transactions_iter(),
                 cache_results,
                 &mut error_counters,
             )
@@ -3126,9 +3127,9 @@ impl Bank {
         u64,
         u64,
     ) {
-        let hashed_txs = batch.hashed_transactions();
-        debug!("processing transactions: {}", hashed_txs.len());
-        inc_new_counter_info!("bank-process_transactions", hashed_txs.len());
+        let sanitized_txs = batch.sanitized_transactions();
+        debug!("processing transactions: {}", sanitized_txs.len());
+        inc_new_counter_info!("bank-process_transactions", sanitized_txs.len());
         let mut error_counters = ErrorCounters::default();
 
         let retryable_txs: Vec<_> = batch
@@ -3147,7 +3148,7 @@ impl Bank {
 
         let mut check_time = Measure::start("check_transactions");
         let check_results = self.check_transactions(
-            hashed_txs,
+            sanitized_txs,
             batch.lock_results(),
             max_age,
             &mut error_counters,
@@ -3157,7 +3158,7 @@ impl Bank {
         let mut load_time = Measure::start("accounts_load");
         let mut loaded_txs = self.rc.accounts.load_accounts(
             &self.ancestors,
-            hashed_txs.as_transactions_iter(),
+            sanitized_txs.as_transactions_iter(),
             check_results,
             &self.blockhash_queue.read().unwrap(),
             &mut error_counters,
@@ -3169,16 +3170,16 @@ impl Bank {
         let mut execution_time = Measure::start("execution_time");
         let mut signature_count: u64 = 0;
         let mut inner_instructions: Vec<Option<InnerInstructionsList>> =
-            Vec::with_capacity(hashed_txs.len());
+            Vec::with_capacity(sanitized_txs.len());
         let mut transaction_log_messages: Vec<Option<Vec<String>>> =
-            Vec::with_capacity(hashed_txs.len());
+            Vec::with_capacity(sanitized_txs.len());
         let bpf_compute_budget = self
             .bpf_compute_budget
             .unwrap_or_else(BpfComputeBudget::new);
 
         let executed: Vec<TransactionExecutionResult> = loaded_txs
             .iter_mut()
-            .zip(hashed_txs.as_transactions_iter())
+            .zip(sanitized_txs.as_transactions_iter())
             .map(|(accs, tx)| match accs {
                 (Err(e), _nonce_rollback) => {
                     inner_instructions.push(None);
@@ -3265,7 +3266,7 @@ impl Bank {
             check_time.as_us(),
             load_time.as_us(),
             execution_time.as_us(),
-            hashed_txs.len(),
+            sanitized_txs.len(),
         );
         timings.check_us += check_time.as_us();
         timings.load_us += load_time.as_us();
@@ -3276,8 +3277,10 @@ impl Bank {
         let transaction_log_collector_config =
             self.transaction_log_collector_config.read().unwrap();
 
-        for (i, ((r, _nonce_rollback), hashed_tx)) in executed.iter().zip(hashed_txs).enumerate() {
-            let tx = hashed_tx.transaction();
+        for (i, ((r, _nonce_rollback), sanitized_tx)) in
+            executed.iter().zip(sanitized_txs).enumerate()
+        {
+            let tx = sanitized_tx.transaction();
             if let Some(debug_keys) = &self.transaction_debug_keys {
                 for key in &tx.message.account_keys {
                     if debug_keys.contains(key) {
@@ -3418,7 +3421,7 @@ impl Bank {
 
     pub fn commit_transactions(
         &self,
-        hashed_txs: &[HashedTransaction],
+        sanitized_txs: &[SanitizedTransaction],
         loaded_txs: &mut [TransactionLoadResult],
         executed: &[TransactionExecutionResult],
         tx_count: u64,
@@ -3436,8 +3439,8 @@ impl Bank {
         inc_new_counter_info!("bank-process_transactions-txs", tx_count as usize);
         inc_new_counter_info!("bank-process_transactions-sigs", signature_count as usize);
 
-        if !hashed_txs.is_empty() {
-            let processed_tx_count = hashed_txs.len() as u64;
+        if !sanitized_txs.is_empty() {
+            let processed_tx_count = sanitized_txs.len() as u64;
             let failed_tx_count = processed_tx_count.saturating_sub(tx_count);
             self.transaction_error_count
                 .fetch_add(failed_tx_count, Relaxed);
@@ -3456,7 +3459,7 @@ impl Bank {
         let mut write_time = Measure::start("write_time");
         self.rc.accounts.store_cached(
             self.slot(),
-            hashed_txs.as_transactions_iter(),
+            sanitized_txs.as_transactions_iter(),
             executed,
             loaded_txs,
             &self.rent_collector,
@@ -3467,19 +3470,19 @@ impl Bank {
         let rent_debits = self.collect_rent(executed, loaded_txs);
 
         let overwritten_vote_accounts =
-            self.update_cached_accounts(hashed_txs.as_transactions_iter(), executed, loaded_txs);
+            self.update_cached_accounts(sanitized_txs.as_transactions_iter(), executed, loaded_txs);
 
         // once committed there is no way to unroll
         write_time.stop();
         debug!(
             "store: {}us txs_len={}",
             write_time.as_us(),
-            hashed_txs.len()
+            sanitized_txs.len()
         );
         timings.store_us += write_time.as_us();
-        self.update_transaction_statuses(hashed_txs, executed);
-        let fee_collection_results =
-            self.filter_program_errors_and_collect_fee(hashed_txs.as_transactions_iter(), executed);
+        self.update_transaction_statuses(sanitized_txs, executed);
+        let fee_collection_results = self
+            .filter_program_errors_and_collect_fee(sanitized_txs.as_transactions_iter(), executed);
 
         TransactionResults {
             fee_collection_results,
@@ -4110,7 +4113,7 @@ impl Bank {
         );
 
         let results = self.commit_transactions(
-            batch.hashed_transactions(),
+            batch.sanitized_transactions(),
             &mut loaded_txs,
             &executed,
             tx_count,
