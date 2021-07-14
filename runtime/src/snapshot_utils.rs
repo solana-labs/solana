@@ -871,7 +871,8 @@ where
 #[derive(Debug, Default)]
 pub struct BankFromArchiveTimings {
     pub rebuild_bank_from_snapshots_us: u64,
-    pub untar_us: u64,
+    pub full_snapshot_untar_us: u64,
+    pub incremental_snapshot_untar_us: u64,
     pub verify_snapshot_bank_us: u64,
 }
 
@@ -981,13 +982,13 @@ where
 
     let timings = BankFromArchiveTimings {
         rebuild_bank_from_snapshots_us: measure_rebuild.as_us(),
-        untar_us: full_snapshot_unarchive_preparation_result
+        full_snapshot_untar_us: full_snapshot_unarchive_preparation_result
             .measure_untar
-            .as_us()
-            + incremental_snapshot_unarchive_preparation_result
-                .map_or(0, |unarchive_preparation_result| {
-                    unarchive_preparation_result.measure_untar.as_us()
-                }),
+            .as_us(),
+        incremental_snapshot_untar_us: incremental_snapshot_unarchive_preparation_result
+            .map_or(0, |unarchive_preparation_result| {
+                unarchive_preparation_result.measure_untar.as_us()
+            }),
         verify_snapshot_bank_us: measure_verify.as_us(),
     };
     Ok((bank, timings))
