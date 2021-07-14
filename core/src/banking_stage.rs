@@ -1088,15 +1088,14 @@ impl BankingStage {
             let cost_tracker_readonly = cost_tracker.read().unwrap();
             verified_transactions_with_packet_indexes
                 .into_iter()
-                .filter_map(|(sanitized_tx, tx_index)| {
-                    let tx = sanitized_tx.transaction();
-                    let result = cost_tracker_readonly.would_transaction_fit(tx);
+                .filter_map(|(tx, tx_index)| {
+                    let result = cost_tracker_readonly.would_transaction_fit(&tx);
                     if result.is_err() {
                         debug!("transaction {:?} would exceed limit: {:?}", tx, result);
                         retryable_transaction_packet_indexes.push(tx_index);
                         return None;
                     }
-                    Some((sanitized_tx, tx_index))
+                    Some((tx, tx_index))
                 })
                 .unzip()
         };
@@ -1211,12 +1210,11 @@ impl BankingStage {
                 cost_tracker
                     .write()
                     .unwrap()
-                    .add_transaction_cost(tx.transaction())
+                    .add_transaction_cost(tx)
                     .unwrap_or_else(|err| {
                         warn!(
                             "failed to track transaction cost, err {:?}, tx {:?}",
-                            err,
-                            tx.transaction()
+                            err, tx
                         )
                     });
             }

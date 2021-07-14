@@ -2592,14 +2592,13 @@ impl Bank {
     ) {
         let mut status_cache = self.src.status_cache.write().unwrap();
         assert_eq!(sanitized_txs.len(), res.len());
-        for (sanitized_tx, (res, _nonce_rollback)) in sanitized_txs.iter().zip(res) {
-            let tx = sanitized_tx.transaction();
+        for (tx, (res, _nonce_rollback)) in sanitized_txs.iter().zip(res) {
             if Self::can_commit(res) && !tx.signatures.is_empty() {
                 // Add the message hash to the status cache to ensure that this message
                 // won't be processed again with a different signature.
                 status_cache.insert(
                     &tx.message().recent_blockhash,
-                    &sanitized_tx.message_hash,
+                    &tx.message_hash,
                     self.slot(),
                     res.clone(),
                 );
@@ -2794,7 +2793,7 @@ impl Bank {
         status_cache: &StatusCache<Result<()>>,
     ) -> bool {
         let key = &sanitized_tx.message_hash;
-        let transaction_blockhash = &sanitized_tx.transaction().message().recent_blockhash;
+        let transaction_blockhash = &sanitized_tx.message().recent_blockhash;
         status_cache
             .get_status(key, transaction_blockhash, &self.ancestors)
             .is_some()
@@ -3277,10 +3276,7 @@ impl Bank {
         let transaction_log_collector_config =
             self.transaction_log_collector_config.read().unwrap();
 
-        for (i, ((r, _nonce_rollback), sanitized_tx)) in
-            executed.iter().zip(sanitized_txs).enumerate()
-        {
-            let tx = sanitized_tx.transaction();
+        for (i, ((r, _nonce_rollback), tx)) in executed.iter().zip(sanitized_txs).enumerate() {
             if let Some(debug_keys) = &self.transaction_debug_keys {
                 for key in &tx.message.account_keys {
                     if debug_keys.contains(key) {

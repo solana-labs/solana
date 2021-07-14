@@ -41,7 +41,7 @@ pub fn find_and_send_votes(
             assert!(execution_results[old_account.transaction_result_index]
                 .0
                 .is_ok());
-            let transaction = sanitized_txs[old_account.transaction_index].transaction();
+            let transaction = &sanitized_txs[old_account.transaction_index];
             if let Some(parsed_vote) = vote_transaction::parse_vote_transaction(transaction) {
                 if parsed_vote.1.slots.last().is_some() {
                     let _ = vote_sender.send(parsed_vote);
