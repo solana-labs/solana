@@ -1500,7 +1500,7 @@ fn rebuild_bank_from_snapshots(
             (None, None)
         };
     info!(
-        "Loading bank from {} and {:?}",
+        "Loading bank from full snapshot {} and incremental snapshot {:?}",
         full_snapshot_root_paths.snapshot_path.display(),
         incremental_snapshot_root_paths
             .as_ref()
