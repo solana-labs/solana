@@ -26,14 +26,14 @@ use {
     std::{
         collections::{HashMap, HashSet},
         net::SocketAddr,
-        sync::Mutex,
+        sync::{Mutex, RwLock},
         time::Duration,
     },
 };
 
 #[derive(Default)]
 pub struct CrdsGossip {
-    pub crds: Crds,
+    pub crds: RwLock<Crds>,
     pub push: CrdsGossipPush,
     pub pull: CrdsGossipPull,
 }
@@ -42,13 +42,13 @@ impl CrdsGossip {
     /// process a push message to the network
     /// Returns unique origins' pubkeys of upserted values.
     pub fn process_push_message(
-        &mut self,
+        &self,
         from: &Pubkey,
         values: Vec<CrdsValue>,
         now: u64,
     ) -> HashSet<Pubkey> {
         self.push
-            .process_push_message(&mut self.crds, from, values, now)
+            .process_push_message(&self.crds, from, values, now)
             .into_iter()
             .filter_map(Result::ok)
             .collect()
@@ -69,18 +69,21 @@ impl CrdsGossip {
     }
 
     pub fn new_push_messages(
-        &mut self,
+        &self,
         pending_push_messages: Vec<CrdsValue>,
         now: u64,
     ) -> HashMap<Pubkey, Vec<CrdsValue>> {
-        for entry in pending_push_messages {
-            let _ = self.crds.insert(entry, now);
+        {
+            let mut crds = self.crds.write().unwrap();
+            for entry in pending_push_messages {
+                let _ = crds.insert(entry, now);
+            }
         }
         self.push.new_push_messages(&self.crds, now)
     }
 
     pub(crate) fn push_duplicate_shred(
-        &mut self,
+        &self,
         keypair: &Keypair,
         shred: &Shred,
         other_payload: &[u8],
@@ -91,8 +94,8 @@ impl CrdsGossip {
         let pubkey = keypair.pubkey();
         // Skip if there are already records of duplicate shreds for this slot.
         let shred_slot = shred.slot();
-        if self
-            .crds
+        let mut crds = self.crds.write().unwrap();
+        if crds
             .get_records(&pubkey)
             .any(|value| match &value.value.data {
                 CrdsData::DuplicateShred(_, value) => value.slot == shred_slot,
@@ -111,8 +114,7 @@ impl CrdsGossip {
         )?;
         // Find the index of oldest duplicate shred.
         let mut num_dup_shreds = 0;
-        let offset = self
-            .crds
+        let offset = crds
             .get_records(&pubkey)
             .filter_map(|value| match &value.value.data {
                 CrdsData::DuplicateShred(ix, value) => {
@@ -136,7 +138,7 @@ impl CrdsGossip {
         });
         let now = timestamp();
         for entry in entries {
-            if let Err(err) = self.crds.insert(entry, now) {
+            if let Err(err) = crds.insert(entry, now) {
                 error!("push_duplicate_shred faild: {:?}", err);
             }
         }
@@ -174,13 +176,14 @@ impl CrdsGossip {
         stakes: &HashMap<Pubkey, u64>,
         gossip_validators: Option<&HashSet<Pubkey>>,
     ) {
+        let network_size = self.crds.read().unwrap().num_nodes();
         self.push.refresh_push_active_set(
             &self.crds,
             stakes,
             gossip_validators,
             self_pubkey,
             self_shred_version,
-            self.crds.num_nodes(),
+            network_size,
             CRDS_GOSSIP_NUM_ACTIVE,
         )
     }
@@ -221,11 +224,11 @@ impl CrdsGossip {
         self.pull.mark_pull_request_creation_time(from, now)
     }
     /// process a pull request and create a response
-    pub fn process_pull_requests<I>(&mut self, callers: I, now: u64)
+    pub fn process_pull_requests<I>(&self, callers: I, now: u64)
     where
         I: IntoIterator<Item = CrdsValue>,
     {
-        CrdsGossipPull::process_pull_requests(&mut self.crds, callers, now);
+        CrdsGossipPull::process_pull_requests(&self.crds, callers, now);
     }
 
     pub fn generate_pull_responses(
@@ -254,7 +257,7 @@ impl CrdsGossip {
 
     /// process a pull response
     pub fn process_pull_responses(
-        &mut self,
+        &self,
         from: &Pubkey,
         responses: Vec<CrdsValue>,
         responses_expired_timeout: Vec<CrdsValue>,
@@ -263,7 +266,7 @@ impl CrdsGossip {
         process_pull_stats: &mut ProcessPullStats,
     ) {
         self.pull.process_pull_responses(
-            &mut self.crds,
+            &self.crds,
             from,
             responses,
             responses_expired_timeout,
@@ -283,7 +286,7 @@ impl CrdsGossip {
     }
 
     pub fn purge(
-        &mut self,
+        &self,
         self_pubkey: &Pubkey,
         thread_pool: &ThreadPool,
         now: u64,
@@ -298,9 +301,11 @@ impl CrdsGossip {
             //sanity check
             assert_eq!(timeouts[self_pubkey], std::u64::MAX);
             assert!(timeouts.contains_key(&Pubkey::default()));
-            rv = CrdsGossipPull::purge_active(thread_pool, &mut self.crds, now, timeouts);
+            rv = CrdsGossipPull::purge_active(thread_pool, &self.crds, now, timeouts);
         }
         self.crds
+            .write()
+            .unwrap()
             .trim_purged(now.saturating_sub(5 * self.pull.crds_timeout));
         self.pull.purge_failed_inserts(now);
         rv
@@ -308,8 +313,9 @@ impl CrdsGossip {
 
     // Only for tests and simulations.
     pub(crate) fn mock_clone(&self) -> Self {
+        let crds = self.crds.read().unwrap().clone();
         Self {
-            crds: self.crds.clone(),
+            crds: RwLock::new(crds),
             push: self.push.mock_clone(),
             pull: self.pull.mock_clone(),
         }
@@ -343,12 +349,14 @@ mod test {
 
     #[test]
     fn test_prune_errors() {
-        let mut crds_gossip = CrdsGossip::default();
+        let crds_gossip = CrdsGossip::default();
         let id = Pubkey::new(&[0; 32]);
         let ci = ContactInfo::new_localhost(&Pubkey::new(&[1; 32]), 0);
         let prune_pubkey = Pubkey::new(&[2; 32]);
         crds_gossip
             .crds
+            .write()
+            .unwrap()
             .insert(
                 CrdsValue::new_unsigned(CrdsData::ContactInfo(ci.clone())),
                 0,
