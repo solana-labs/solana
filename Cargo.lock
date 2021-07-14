@@ -3542,6 +3542,7 @@ dependencies = [
  "solana-logger 1.8.0",
  "solana-sdk",
  "solana_rbpf",
+ "time 0.2.25",
 ]
 
 [[package]]
