@@ -200,7 +200,9 @@ fn main() {
         });
         bank.clear_signatures();
         //sanity check, make sure all the transactions can execute in parallel
-        let res = bank.process_transactions(&transactions);
+
+        let batch = bank.prepare_batch(transactions.iter()).unwrap();
+        let res = bank.process_transaction_batch(&batch);
         for r in res {
             assert!(r.is_ok(), "sanity parallel execution error: {:?}", r);
         }
