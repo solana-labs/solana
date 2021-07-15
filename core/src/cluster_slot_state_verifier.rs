@@ -55,45 +55,38 @@ impl SlotStateUpdate {
 fn check_duplicate_confirmed_hash_against_frozen_hash(
     state_changes: &mut Vec<ResultingStateChange>,
     slot: Slot,
-    cluster_duplicate_confirmed_hash: Option<Hash>,
+    cluster_duplicate_confirmed_hash: Hash,
     bank_frozen_hash: Hash,
     is_dead: bool,
-    is_slot_duplicate: bool,
 ) {
-    if let Some(cluster_duplicate_confirmed_hash) = cluster_duplicate_confirmed_hash {
-        // If the cluster duplicate_confirmed some version of this slot, then
-        // confirm our version agrees with the cluster,
-        if cluster_duplicate_confirmed_hash != bank_frozen_hash {
-            if is_dead {
-                // If the cluster duplicate confirmed some version of this slot, then
-                // there's another version of our dead slot
-                warn!(
-                    "Cluster duplicate_confirmed slot {} with hash {}, but we marked slot dead",
-                    slot, cluster_duplicate_confirmed_hash
-                );
-            } else {
-                // The duplicate confirmed slot hash does not match our frozen hash.
-                // Modify fork choice rule to exclude our version from being voted
-                // on and also repair the correct version
-                warn!(
-                    "Cluster duplicate_confirmed slot {} with hash {}, but we froze slot with hash {}",
-                    slot, cluster_duplicate_confirmed_hash, bank_frozen_hash
-                );
-            }
-            state_changes.push(ResultingStateChange::MarkSlotDuplicate(bank_frozen_hash));
-            state_changes.push(ResultingStateChange::RepairDuplicateConfirmedVersion(
-                cluster_duplicate_confirmed_hash,
-            ));
+    if cluster_duplicate_confirmed_hash != bank_frozen_hash {
+        if is_dead {
+            // If the cluster duplicate confirmed some version of this slot, then
+            // there's another version of our dead slot
+            warn!(
+                "Cluster duplicate_confirmed slot {} with hash {}, but we marked slot dead",
+                slot, cluster_duplicate_confirmed_hash
+            );
         } else {
-            // If the versions match, then add the slot to the candidate
-            // set to account for the case where it was removed earlier
-            // by the `on_duplicate_slot()` handler
-            state_changes.push(ResultingStateChange::DuplicateConfirmedSlotMatchesCluster(
-                bank_frozen_hash,
-            ));
+            // The duplicate confirmed slot hash does not match our frozen hash.
+            // Modify fork choice rule to exclude our version from being voted
+            // on and also repair the correct version
+            warn!(
+                "Cluster duplicate_confirmed slot {} with hash {}, but we froze slot with hash {}",
+                slot, cluster_duplicate_confirmed_hash, bank_frozen_hash
+            );
         }
-    } else if is_slot_duplicate && bank_frozen_hash != Hash::default() {
         state_changes.push(ResultingStateChange::MarkSlotDuplicate(bank_frozen_hash));
+        state_changes.push(ResultingStateChange::RepairDuplicateConfirmedVersion(
+            cluster_duplicate_confirmed_hash,
+        ));
+    } else {
+        // If the versions match, then add the slot to the candidate
+        // set to account for the case where it was removed earlier
+        // by the `on_duplicate_slot()` handler
+        state_changes.push(ResultingStateChange::DuplicateConfirmedSlotMatchesCluster(
+            bank_frozen_hash,
+        ));
     }
 }
 
@@ -103,7 +96,6 @@ fn on_dead_slot(args: SlotStateHandlerArgs) -> Vec<ResultingStateChange> {
         bank_frozen_hash,
         cluster_duplicate_confirmed_hash,
         is_dead,
-        is_slot_duplicate,
         ..
     } = args;
 
@@ -112,14 +104,17 @@ fn on_dead_slot(args: SlotStateHandlerArgs) -> Vec<ResultingStateChange> {
     assert_eq!(bank_frozen_hash, Hash::default());
 
     let mut state_changes = vec![];
-    check_duplicate_confirmed_hash_against_frozen_hash(
-        &mut state_changes,
-        slot,
-        cluster_duplicate_confirmed_hash,
-        bank_frozen_hash,
-        is_dead,
-        is_slot_duplicate,
-    );
+    if let Some(cluster_duplicate_confirmed_hash) = cluster_duplicate_confirmed_hash {
+        // If the cluster duplicate_confirmed some version of this slot, then
+        // confirm our version agrees with the cluster,
+        check_duplicate_confirmed_hash_against_frozen_hash(
+            &mut state_changes,
+            slot,
+            cluster_duplicate_confirmed_hash,
+            bank_frozen_hash,
+            is_dead,
+        );
+    }
 
     state_changes
 }
@@ -139,14 +134,19 @@ fn on_frozen_slot(args: SlotStateHandlerArgs) -> Vec<ResultingStateChange> {
     assert!(!is_dead);
 
     let mut state_changes = vec![ResultingStateChange::BankFrozen(bank_frozen_hash)];
-    check_duplicate_confirmed_hash_against_frozen_hash(
-        &mut state_changes,
-        slot,
-        cluster_duplicate_confirmed_hash,
-        bank_frozen_hash,
-        is_dead,
-        is_slot_duplicate,
-    );
+    if let Some(cluster_duplicate_confirmed_hash) = cluster_duplicate_confirmed_hash {
+        // If the cluster duplicate_confirmed some version of this slot, then
+        // confirm our version agrees with the cluster,
+        check_duplicate_confirmed_hash_against_frozen_hash(
+            &mut state_changes,
+            slot,
+            cluster_duplicate_confirmed_hash,
+            bank_frozen_hash,
+            is_dead,
+        );
+    } else if is_slot_duplicate && bank_frozen_hash != Hash::default() {
+        state_changes.push(ResultingStateChange::MarkSlotDuplicate(bank_frozen_hash));
+    }
 
     state_changes
 }
@@ -157,11 +157,10 @@ fn on_duplicate_confirmed(args: SlotStateHandlerArgs) -> Vec<ResultingStateChang
         bank_frozen_hash,
         cluster_duplicate_confirmed_hash,
         is_dead,
-        is_slot_duplicate,
         ..
     } = args;
 
-    assert!(cluster_duplicate_confirmed_hash.is_some());
+    let cluster_duplicate_confirmed_hash = cluster_duplicate_confirmed_hash.unwrap();
     if !is_dead && bank_frozen_hash == Hash::default() {
         return vec![];
     }
@@ -173,7 +172,6 @@ fn on_duplicate_confirmed(args: SlotStateHandlerArgs) -> Vec<ResultingStateChang
         cluster_duplicate_confirmed_hash,
         bank_frozen_hash,
         is_dead,
-        is_slot_duplicate,
     );
 
     state_changes
@@ -191,26 +189,20 @@ fn on_duplicate(args: SlotStateHandlerArgs) -> Vec<ResultingStateChange> {
         return vec![];
     }
 
+    // If the cluster duplicate_confirmed some version of this slot that matches our
+    // version, ignore this duplicate signal
     if let Some(cluster_duplicate_confirmed_hash) = cluster_duplicate_confirmed_hash {
-        // If the cluster duplicate_confirmed some version of this slot, then
-        // confirm our version agrees with the cluster,
-        if cluster_duplicate_confirmed_hash != bank_frozen_hash {
-            // If we detected a duplicate, but have not yet seen any version
-            // of the slot duplicate_confirmed (i.e. block above did not execute), then
-            // remove the slot from fork choice until we get confirmation.
-
-            // If we get here, we either detected duplicate from
-            // 1) WindowService
-            // 2) A gossip duplicate_confirmed version that didn't match our frozen
-            // version.
-            // In both cases, mark the progress map for this slot as duplicate
-            return vec![ResultingStateChange::MarkSlotDuplicate(bank_frozen_hash)];
+        if cluster_duplicate_confirmed_hash == bank_frozen_hash {
+            return vec![];
         }
-    } else {
-        return vec![ResultingStateChange::MarkSlotDuplicate(bank_frozen_hash)];
     }
 
-    vec![]
+    // If we either:
+    // 1) Have not yet seen any version of the slot duplicate_confirmed,
+    // 2) Our version of the slot does not match the duplicate_confirmed version,
+
+    // Then mark the slot as duplicate
+    vec![ResultingStateChange::MarkSlotDuplicate(bank_frozen_hash)]
 }
 
 fn get_cluster_duplicate_confirmed_hash(
@@ -770,7 +762,7 @@ mod test {
         duplicate_state_update_2: {
             // Slot must be marked duplicate
             let is_slot_duplicate = true;
-            // Slot is frozen, so mark the duplicate
+            // Slot is frozen but same hash so no action
             let cluster_duplicate_confirmed_hash = Some(Hash::new_unique());
             let bank_frozen_hash = cluster_duplicate_confirmed_hash.unwrap();
             (

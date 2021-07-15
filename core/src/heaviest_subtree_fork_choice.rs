@@ -1012,13 +1012,13 @@ impl ForkChoice for HeaviestSubtreeForkChoice {
             "marking fork starting at: {:?} valid candidate",
             valid_slot_hash_key
         );
-        let mut prev_not_confirmed_ancestors = vec![];
+        let mut newly_duplicate_confirmed_ancestors = vec![];
 
         for ancestor_key in std::iter::once(*valid_slot_hash_key)
             .chain(self.ancestor_iterator(*valid_slot_hash_key))
         {
             if !self.is_duplicate_confirmed(&ancestor_key).unwrap() {
-                prev_not_confirmed_ancestors.push(ancestor_key);
+                newly_duplicate_confirmed_ancestors.push(ancestor_key);
             }
         }
 
@@ -1035,7 +1035,7 @@ impl ForkChoice for HeaviestSubtreeForkChoice {
         // Aggregate across all ancestors to find the new best slots including this fork
         self.insert_aggregate_operations(&mut update_operations, *valid_slot_hash_key);
         self.process_update_operations(update_operations);
-        prev_not_confirmed_ancestors
+        newly_duplicate_confirmed_ancestors
     }
 }
 
