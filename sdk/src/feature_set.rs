@@ -12,8 +12,8 @@
 //!      through these steps, the PR process will facilitate a keypair holder being picked. That
 //!      person will generate the keypair, provide pubkey for PR, and ultimately enable the feature.
 //! 2. Add a public module for the feature, specifying keypair pubkey as the id with
-//!    solana_sdk::declare_id!() within the module.
-//!    Additionally, add an entry to FEATURE_NAMES map.
+//!    `solana_sdk::declare_id!()` within the module.
+//!    Additionally, add an entry to `FEATURE_NAMES` map.
 //! 3. Add desired logic to check for and switch on feature availability.
 //!
 //! For more information on how features are picked up, see comments for `Feature`.
