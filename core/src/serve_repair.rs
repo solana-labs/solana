@@ -19,12 +19,14 @@ use solana_gossip::{
 use solana_ledger::{
     ancestor_iterator::{AncestorIterator, AncestorIteratorWithHash},
     blockstore::Blockstore,
-    shred::{Nonce, Shred},
+    shred::{Nonce, Shred, SIZE_OF_NONCE},
 };
 use solana_measure::measure::Measure;
 use solana_metrics::inc_new_counter_debug;
 use solana_perf::packet::{limited_deserialize, Packets, PacketsRecycler};
-use solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey, timing::duration_as_ms};
+use solana_sdk::{
+    clock::Slot, hash::Hash, packet::PACKET_DATA_SIZE, pubkey::Pubkey, timing::duration_as_ms,
+};
 use solana_streamer::streamer::{PacketReceiver, PacketSender};
 use std::{
     collections::HashSet,
@@ -35,13 +37,21 @@ use std::{
     time::{Duration, Instant},
 };
 
+type SlotHash = (Slot, Hash);
+
 /// the number of slots to respond with when responding to `Orphan` requests
 pub const MAX_ORPHAN_REPAIR_RESPONSES: usize = 10;
 // Number of slots to cache their respective repair peers and sampling weights.
 pub(crate) const REPAIR_PEERS_CACHE_CAPACITY: usize = 128;
 // Limit cache entries ttl in order to avoid re-using outdated data.
 const REPAIR_PEERS_CACHE_TTL: Duration = Duration::from_secs(10);
-pub const MAX_ANCESTOR_RESPONSES: usize = 25;
+pub const MAX_ANCESTOR_BYTES_IN_PACKET: usize =
+    PACKET_DATA_SIZE -
+    SIZE_OF_NONCE -
+    4 /*(response version enum discriminator)*/ -
+    4 /*slot_hash length*/;
+pub const MAX_ANCESTOR_RESPONSES: usize =
+    MAX_ANCESTOR_BYTES_IN_PACKET / std::mem::size_of::<SlotHash>();
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum ShredRepairType {
@@ -85,17 +95,17 @@ impl RequestResponse for ShredRepairType {
 pub struct AncestorHashesRepair(Slot);
 #[derive(Serialize, Deserialize)]
 pub enum AncestorHashesResponseVersion {
-    Current(Vec<(Slot, Hash)>),
+    Current(Vec<SlotHash>),
 }
 impl AncestorHashesResponseVersion {
     #[cfg(test)]
-    fn into_slot_hashes(self) -> Vec<(Slot, Hash)> {
+    fn into_slot_hashes(self) -> Vec<SlotHash> {
         match self {
             AncestorHashesResponseVersion::Current(slot_hashes) => slot_hashes,
         }
     }
 
-    fn slot_hashes(&self) -> &[(Slot, Hash)] {
+    fn slot_hashes(&self) -> &[SlotHash] {
         match self {
             AncestorHashesResponseVersion::Current(slot_hashes) => slot_hashes,
         }
@@ -712,12 +722,12 @@ mod tests {
     use super::*;
     use crate::{repair_response, result::Error};
     use solana_gossip::{socketaddr, socketaddr_any};
+    use solana_ledger::get_tmp_ledger_path;
     use solana_ledger::{
         blockstore::make_many_slot_entries,
         blockstore_processor::fill_blockstore_slot_with_ticks,
         shred::{max_ticks_per_n_shreds, Shred},
     };
-    use solana_ledger::{get_tmp_ledger_path, shred::SIZE_OF_NONCE};
     use solana_perf::packet::Packet;
     use solana_sdk::{hash::Hash, pubkey::Pubkey, timing::timestamp};
 
@@ -1310,7 +1320,7 @@ mod tests {
     fn test_verify_ancestor_response() {
         let request_slot = MAX_ANCESTOR_RESPONSES as Slot;
         let repair = AncestorHashesRepair(request_slot);
-        let mut response: Vec<(Slot, Hash)> = (0..request_slot)
+        let mut response: Vec<SlotHash> = (0..request_slot)
             .into_iter()
             .map(|slot| (slot, Hash::new_unique()))
             .collect();
