@@ -73,13 +73,13 @@ pub struct RequestStatus<T> {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
-    use crate::serve_repair::RepairType;
+    use crate::serve_repair::ShredRepairType;
     use solana_ledger::shred::Shred;
     use solana_sdk::timing::timestamp;
 
     #[test]
     fn test_add_request() {
-        let repair_type = RepairType::Orphan(9);
+        let repair_type = ShredRepairType::Orphan(9);
         let mut outstanding_requests = OutstandingRequests::default();
         let nonce = outstanding_requests.add_request(repair_type, timestamp());
         let request_status = outstanding_requests.requests.get(&nonce).unwrap();
@@ -92,7 +92,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_timeout_expired_remove() {
-        let repair_type = RepairType::Orphan(9);
+        let repair_type = ShredRepairType::Orphan(9);
         let mut outstanding_requests = OutstandingRequests::default();
         let nonce = outstanding_requests.add_request(repair_type, timestamp());
         let shred = Shred::new_empty_data_shred();
@@ -109,7 +109,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_register_response() {
-        let repair_type = RepairType::Orphan(9);
+        let repair_type = ShredRepairType::Orphan(9);
         let mut outstanding_requests = OutstandingRequests::default();
         let nonce = outstanding_requests.add_request(repair_type, timestamp());
 

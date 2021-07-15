@@ -806,7 +806,7 @@ mod test {
 
     #[test]
     fn test_prune_shreds() {
-        use crate::serve_repair::RepairType;
+        use crate::serve_repair::ShredRepairType;
         use std::net::{IpAddr, Ipv4Addr};
         solana_logger::setup();
         let (common, coding) = Shredder::new_coding_shred_header(5, 5, 5, 6, 6, 0);
@@ -818,7 +818,7 @@ mod test {
             nonce: 0,
         };
         let outstanding_requests = Arc::new(RwLock::new(OutstandingRepairs::default()));
-        let repair_type = RepairType::Orphan(9);
+        let repair_type = ShredRepairType::Orphan(9);
         let nonce = outstanding_requests
             .write()
             .unwrap()
