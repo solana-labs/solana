@@ -1806,8 +1806,7 @@ mod tests {
                 if !entries.is_empty() {
                     blockhash = entries.last().unwrap().hash;
                     for entry in entries {
-                        let batch = bank.prepare_batch(entry.transactions.iter()).unwrap();
-                        bank.process_transaction_batch(&batch)
+                        bank.process_transactions(entry.transactions.iter())
                             .iter()
                             .for_each(|x| assert_eq!(*x, Ok(())));
                     }
@@ -1921,8 +1920,7 @@ mod tests {
 
             let bank = Bank::new_no_wallclock_throttle(&genesis_config);
             for entry in &entries {
-                let batch = bank.prepare_batch(entry.transactions.iter()).unwrap();
-                bank.process_transaction_batch(&batch)
+                bank.process_transactions(entry.transactions.iter())
                     .iter()
                     .for_each(|x| assert_eq!(*x, Ok(())));
             }

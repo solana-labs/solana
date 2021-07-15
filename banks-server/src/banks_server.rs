@@ -70,9 +70,7 @@ impl BanksServer {
                 .map(|info| deserialize(&info.wire_transaction).unwrap())
                 .collect();
             let bank = bank_forks.read().unwrap().working_bank();
-            if let Ok(batch) = bank.prepare_batch(transactions.iter()) {
-                let _ = bank.process_transaction_batch(&batch);
-            };
+            let _ = bank.try_process_transactions(transactions.iter());
         }
     }
 
