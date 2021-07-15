@@ -82,6 +82,7 @@ serde_json = "1.0.56"
 serial_test = "0.5.1"
 solana-stake-program = { path = "../programs/stake", version = "=1.8.0" }
 solana-version = { path = "../version", version = "=1.8.0" }
+static_assertions = "1.1.0"
 symlink = "0.1.0"
 systemstat = "0.1.8"
 tokio_02 = { version = "0.2", package = "tokio", features = ["full"] }

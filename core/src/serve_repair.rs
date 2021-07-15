@@ -52,6 +52,8 @@ pub const MAX_ANCESTOR_BYTES_IN_PACKET: usize =
     4 /*slot_hash length*/;
 pub const MAX_ANCESTOR_RESPONSES: usize =
     MAX_ANCESTOR_BYTES_IN_PACKET / std::mem::size_of::<SlotHash>();
+#[cfg(test)]
+static_assertions::const_assert_eq!(MAX_ANCESTOR_RESPONSES, 30);
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum ShredRepairType {

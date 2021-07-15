@@ -4613,6 +4613,7 @@ dependencies = [
  "solana-transaction-status",
  "solana-version",
  "solana-vote-program",
+ "static_assertions",
  "symlink",
  "systemstat",
  "tempfile",
