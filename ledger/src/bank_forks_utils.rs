@@ -14,7 +14,11 @@ use solana_runtime::{
     snapshot_utils::{self, SnapshotArchiveInfo},
 };
 use solana_sdk::{clock::Slot, genesis_config::GenesisConfig, hash::Hash};
-use std::{fs, path::PathBuf, process, result};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    process, result,
+};
 
 pub type LoadResult = result::Result<
     (BankForks, LeaderScheduleCache, Option<(Slot, Hash)>),
@@ -126,11 +130,12 @@ fn load_from_snapshot(
         process::exit(1);
     }
 
-    let (deserialized_bank, timings) = snapshot_utils::bank_from_snapshot_archive(
+    let (deserialized_bank, timings) = snapshot_utils::bank_from_snapshot_archives::<_, &Path>(
         &account_paths,
         &process_options.frozen_accounts,
         &snapshot_config.snapshot_path,
         &snapshot_archive_info.path,
+        None,
         snapshot_archive_info.archive_format,
         genesis_config,
         process_options.debug_keys.clone(),
