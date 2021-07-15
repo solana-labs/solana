@@ -11,7 +11,6 @@ import * as web3 from '@solana/web3.js';
 
   // Generate a new random public key
   var to = web3.Keypair.generate();
-  await connection.requestAirdrop(to.publicKey, 1000000000);
 
   //waiting 1000 miliseconds to make the the airdrop transactions are complete
   setTimeout(async function () {
