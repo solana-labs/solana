@@ -83,7 +83,7 @@ impl Signable for CrdsValue {
 pub enum CrdsData {
     ContactInfo(ContactInfo),
     Vote(VoteIndex, Vote),
-    LowestSlot(u8, LowestSlot),
+    LowestSlot(/*DEPRECATED:*/ u8, LowestSlot),
     SnapshotHashes(SnapshotHash),
     AccountsHashes(SnapshotHash),
     EpochSlots(EpochSlotsIndex, EpochSlots),
