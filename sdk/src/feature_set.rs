@@ -167,6 +167,10 @@ pub mod rent_for_sysvars {
     solana_sdk::declare_id!("BKCPBQQBZqggVnFso5nQ8rQ4RwwogYwjuUt9biBjxwNF");
 }
 
+pub mod tx_wide_compute_cap {
+    solana_sdk::declare_id!("5ekBxc8itEnPv4NzGJtr8BVVQLNMQuLMNQQj7pHoLNZ9");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -208,6 +212,7 @@ lazy_static! {
         (updated_verify_policy::id(), "Update verify policy"),
         (neon_evm_compute_budget::id(), "bump neon_evm's compute budget"),
         (rent_for_sysvars::id(), "collect rent from accounts owned by sysvars"),
+        (tx_wide_compute_cap::id(), "Transaction wide compute cap"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
