@@ -112,6 +112,7 @@ fn monitor_validator(ledger_path: &Path) {
 
 fn wait_for_restart_window(
     ledger_path: &Path,
+    identity: Option<Pubkey>,
     min_idle_time_in_minutes: usize,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sleep_interval = Duration::from_secs(5);
@@ -129,7 +130,9 @@ fn wait_for_restart_window(
         Some(rpc_addr) => RpcClient::new_socket(rpc_addr),
     };
 
-    let identity = rpc_client.get_identity()?;
+    let my_identity = rpc_client.get_identity()?;
+    let identity = identity.unwrap_or(my_identity);
+    let monitoring_another_validator = identity != my_identity;
     println_name_value("Identity:", &identity.to_string());
     println_name_value(
         "Minimum Idle Time:",
@@ -282,7 +285,7 @@ fn wait_for_restart_window(
                             restart_snapshot = snapshot_slot;
                         }
 
-                        if restart_snapshot == snapshot_slot {
+                        if restart_snapshot == snapshot_slot && !monitoring_another_validator {
                             "Waiting for a new snapshot".to_string()
                         } else if delinquent_stake_percentage >= min_delinquency_percentage {
                             style("Delinquency too high").red().to_string()
@@ -295,8 +298,13 @@ fn wait_for_restart_window(
             }
         };
 
+<<<<<<< HEAD
         progress_bar.set_message(&format!(
             "{} | Processed Slot: {} | Snapshot Slot: {} | {:.2}% delinquent stake | {}",
+=======
+        progress_bar.set_message(format!(
+            "{} | Processed Slot: {} {} | {:.2}% delinquent stake | {}",
+>>>>>>> c418e8f37 (wait-for-restart-window command now accepts an optional --identity argument)
             {
                 let elapsed =
                     chrono::Duration::from_std(monitor_start_time.elapsed().unwrap()).unwrap();
@@ -309,9 +317,16 @@ fn wait_for_restart_window(
                 )
             },
             epoch_info.absolute_slot,
-            snapshot_slot
-                .map(|s| s.to_string())
-                .unwrap_or_else(|| "-".to_string()),
+            if monitoring_another_validator {
+                "".to_string()
+            } else {
+                format!(
+                    "| Snapshot Slot: {}",
+                    snapshot_slot
+                        .map(|s| s.to_string())
+                        .unwrap_or_else(|| "-".to_string())
+                )
+            },
             delinquent_stake_percentage * 100.,
             status
         ));
@@ -1943,8 +1958,8 @@ pub fn main() {
                 Arg::with_name("min_idle_time")
                     .takes_value(true)
                     .long("min-idle-time")
-                    .value_name("MINUTES")
                     .validator(is_parsable::<usize>)
+                    .value_name("MINUTES")
                     .default_value("10")
                     .help("Minimum time that the validator should not be leader before restarting")
             )
@@ -2009,6 +2024,14 @@ pub fn main() {
                     .value_name("MINUTES")
                     .default_value("10")
                     .help("Minimum time that the validator should not be leader before restarting")
+            )
+            .arg(
+                Arg::with_name("identity")
+                    .long("identity")
+                    .value_name("ADDRESS")
+                    .takes_value(true)
+                    .validator(is_pubkey_or_keypair)
+                    .help("Validator identity to monitor [default: your validator]")
             )
             .after_help("Note: If this command exits with a non-zero status \
                          then this not a good time for a restart")
@@ -2078,7 +2101,7 @@ pub fn main() {
             let monitor = subcommand_matches.is_present("monitor");
 
             if !force {
-                wait_for_restart_window(&ledger_path, min_idle_time).unwrap_or_else(|err| {
+                wait_for_restart_window(&ledger_path, None, min_idle_time).unwrap_or_else(|err| {
                     println!("{}", err);
                     exit(1);
                 });
@@ -2115,7 +2138,8 @@ pub fn main() {
         }
         ("wait-for-restart-window", Some(subcommand_matches)) => {
             let min_idle_time = value_t_or_exit!(subcommand_matches, "min_idle_time", usize);
-            wait_for_restart_window(&ledger_path, min_idle_time).unwrap_or_else(|err| {
+            let identity = pubkey_of(subcommand_matches, "identity");
+            wait_for_restart_window(&ledger_path, identity, min_idle_time).unwrap_or_else(|err| {
                 println!("{}", err);
                 exit(1);
             });
