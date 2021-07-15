@@ -48,6 +48,8 @@ use solana_runtime::{
 };
 use solana_sdk::{
     clock::{Slot, MAX_PROCESSING_AGE, NUM_CONSECUTIVE_LEADER_SLOTS},
+    clock::{BankId, Slot, MAX_PROCESSING_AGE, NUM_CONSECUTIVE_LEADER_SLOTS},
+    feature_set,
     genesis_config::ClusterType,
     hash::Hash,
     pubkey::Pubkey,
@@ -1829,9 +1831,17 @@ impl ReplayStage {
         }
 
         // send accumulated excute-timings to cost_update_service
-        cost_update_sender
-            .send(execute_timings)
-            .unwrap_or_else(|err| warn!("cost_update_sender failed: {:?}", err));
+        if bank_forks
+            .read()
+            .unwrap()
+            .root_bank()
+            .feature_set
+            .is_active(&feature_set::cost_model::id())
+        {
+            cost_update_sender
+                .send(execute_timings)
+                .unwrap_or_else(|err| warn!("cost_update_sender failed: {:?}", err));
+        }
 
         inc_new_counter_info!("replay_stage-replay_transactions", tx_count);
         did_complete_bank
