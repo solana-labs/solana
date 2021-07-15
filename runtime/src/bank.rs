@@ -2720,12 +2720,13 @@ impl Bank {
         Result<()>,
         TransactionLogMessages,
         Vec<(Pubkey, AccountSharedData)>,
+        u64,
     ) {
         assert!(self.is_frozen(), "simulation bank must be frozen");
 
         let batch = match SanitizedTransaction::try_from(transaction) {
             Ok(sanitized_tx) => self.prepare_simulation_batch(sanitized_tx),
-            Err(err) => return (Err(err), vec![], vec![]),
+            Err(err) => return (Err(err), vec![], vec![], 0),
         };
 
         let mut timings = ExecuteTimings::default();
@@ -2762,7 +2763,20 @@ impl Bank {
 
         debug!("simulate_transaction: {:?}", timings);
 
-        (transaction_result, log_messages, post_transaction_accounts)
+        let transaction_cost = timings
+            .details
+            .per_program_timings
+            .iter()
+            .fold(0, |acc, (_, program_timing)| {
+                acc + program_timing.accumulated_units
+            });
+
+        (
+            transaction_result,
+            log_messages,
+            post_transaction_accounts,
+            transaction_cost,
+        )
     }
 
     pub fn unlock_accounts(&self, batch: &mut TransactionBatch) {
