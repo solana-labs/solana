@@ -12,8 +12,6 @@ import * as web3 from '@solana/web3.js';
   // Generate a new random public key
   var to = web3.Keypair.generate();
 
-  //waiting 1000 miliseconds to make the the airdrop transactions are complete
-  setTimeout(async function () {
     // Add transfer instruction to transaction
     var transaction = new web3.Transaction().add(
       web3.SystemProgram.transfer({
@@ -28,8 +26,6 @@ import * as web3 from '@solana/web3.js';
       connection,
       transaction,
       [from],
-      {commitment: 'confirmed'},
     );
     console.log('SIGNATURE', signature);
-  }, 1000);
 })();
