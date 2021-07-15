@@ -362,20 +362,25 @@ pre.json-wrap {
   max-width: 36rem;
 }
 
-.staking-card {
+.staking-card, .price-card {
   h1 {
     margin-bottom: 0.75rem;
     small {
       font-size: 1rem;
     }
   }
-  h5 {
-    margin-bottom: 0;
-  }
   em {
     font-style: normal;
     color: $primary;
   }
+}
+
+.price-card-small .card-body {
+  padding: .75rem;
+}
+
+.staking-card h5 {
+  margin-bottom: 0;
 }
 
 p.updated-time {

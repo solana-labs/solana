@@ -77,6 +77,8 @@ export function useCoinGecko(coinId?: string): CoinGeckoResult | undefined {
       interval = setInterval(() => {
         getCoinInfo();
       }, PRICE_REFRESH);
+    } else {
+      setCoinInfo(undefined);
     }
     return () => {
       if (interval) {
