@@ -6,7 +6,8 @@ import * as web3 from '@solana/web3.js';
 
   // Generate a new random public key
   var from = web3.Keypair.generate();
-  await connection.requestAirdrop(from.publicKey, 1000000000);
+  var airdropSignature = await connection.requestAirdrop(from.publicKey, web3.LAMPORTS_PER_SOL);
+  await connection.confirmTransaction(airdropSignature);
 
   // Generate a new random public key
   var to = web3.Keypair.generate();
