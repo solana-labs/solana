@@ -128,10 +128,13 @@ impl BanksServer {
     }
 }
 
-fn verify_transaction(transaction: &Transaction) -> transaction::Result<()> {
+fn verify_transaction(
+    transaction: &Transaction,
+    libsecp256k1_0_5_upgrade_enabled: bool,
+) -> transaction::Result<()> {
     if let Err(err) = transaction.verify() {
         Err(err)
-    } else if let Err(err) = transaction.verify_precompiles() {
+    } else if let Err(err) = transaction.verify_precompiles(libsecp256k1_0_5_upgrade_enabled) {
         Err(err)
     } else {
         Ok(())
@@ -212,7 +215,10 @@ impl Banks for BanksServer {
         transaction: Transaction,
         commitment: CommitmentLevel,
     ) -> Option<transaction::Result<()>> {
-        if let Err(err) = verify_transaction(&transaction) {
+        if let Err(err) = verify_transaction(
+            &transaction,
+            self.bank(commitment).libsecp256k1_0_5_upgrade_enabled(),
+        ) {
             return Some(Err(err));
         }
 

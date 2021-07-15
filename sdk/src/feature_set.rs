@@ -167,6 +167,10 @@ pub mod rent_for_sysvars {
     solana_sdk::declare_id!("BKCPBQQBZqggVnFso5nQ8rQ4RwwogYwjuUt9biBjxwNF");
 }
 
+pub mod libsecp256k1_0_5_upgrade_enabled {
+    solana_sdk::declare_id!("DhsYfRjxfnh2g7HKJYSzT79r74Afa1wbHkAgHndrA1oy");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -208,6 +212,7 @@ lazy_static! {
         (updated_verify_policy::id(), "Update verify policy"),
         (neon_evm_compute_budget::id(), "bump neon_evm's compute budget"),
         (rent_for_sysvars::id(), "collect rent from accounts owned by sysvars"),
+        (libsecp256k1_0_5_upgrade_enabled::id(), "upgrade libsecp256k1 to v0.5.0"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

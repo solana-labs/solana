@@ -103,7 +103,10 @@ pub fn secp256k1_recover(
             .map_err(|_| Secp256k1RecoverError::InvalidHash)?;
         let recovery_id = libsecp256k1::RecoveryId::parse(recovery_id)
             .map_err(|_| Secp256k1RecoverError::InvalidRecoveryId)?;
-        let signature = libsecp256k1::Signature::parse_standard_slice(signature)
+
+        // Switch below to `parse_standard_slice` when removing
+        // libsecp256k1_0_5_upgrade_enabled feature gate
+        let signature = libsecp256k1::Signature::parse_overflowing_slice(signature)
             .map_err(|_| Secp256k1RecoverError::InvalidSignature)?;
 
         let secp256k1_key = libsecp256k1::recover(&message, &signature, &recovery_id)

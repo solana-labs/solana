@@ -5111,6 +5111,11 @@ impl Bank {
             .is_active(&feature_set::verify_tx_signatures_len::id())
     }
 
+    pub fn libsecp256k1_0_5_upgrade_enabled(&self) -> bool {
+        self.feature_set
+            .is_active(&feature_set::libsecp256k1_0_5_upgrade_enabled::id())
+    }
+
     // Check if the wallclock time from bank creation to now has exceeded the allotted
     // time for transaction processing
     pub fn should_bank_still_be_processing_txs(
