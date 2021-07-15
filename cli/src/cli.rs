@@ -137,6 +137,8 @@ pub enum CliCommand {
         sort_order: CliValidatorsSortOrder,
         reverse_sort: bool,
         number_validators: bool,
+        keep_unstaked_delinquents: bool,
+        delinquent_slot_distance: Option<Slot>,
     },
     Supply {
         print_accounts: bool,
@@ -1397,6 +1399,8 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             sort_order,
             reverse_sort,
             number_validators,
+            keep_unstaked_delinquents,
+            delinquent_slot_distance,
         } => process_show_validators(
             &rpc_client,
             config,
@@ -1404,6 +1408,8 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             *sort_order,
             *reverse_sort,
             *number_validators,
+            *keep_unstaked_delinquents,
+            *delinquent_slot_distance,
         ),
         CliCommand::Supply { print_accounts } => {
             process_supply(&rpc_client, config, *print_accounts)
