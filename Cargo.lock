@@ -1324,6 +1324,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "env_logger"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b2cf0344971ee6c64c31be0d530793fba457d322dfec2810c453d0ef228f9c3"
+dependencies = [
+ "atty",
+ "humantime",
+ "log 0.4.14",
+ "regex",
+ "termcolor",
+]
+
+[[package]]
 name = "failure"
 version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5054,7 +5067,7 @@ version = "1.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7ea5932e186629f47859924b3773cfd8bcb4b8796898ac85c1fa0a6a2024e5c6"
 dependencies = [
- "env_logger",
+ "env_logger 0.8.4",
  "lazy_static",
  "log 0.4.14",
 ]
@@ -5063,7 +5076,7 @@ dependencies = [
 name = "solana-logger"
 version = "1.8.0"
 dependencies = [
- "env_logger",
+ "env_logger 0.9.0",
  "lazy_static",
  "log 0.4.14",
 ]
@@ -5103,7 +5116,7 @@ dependencies = [
 name = "solana-metrics"
 version = "1.8.0"
 dependencies = [
- "env_logger",
+ "env_logger 0.9.0",
  "gethostname",
  "lazy_static",
  "log 0.4.14",
