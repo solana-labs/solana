@@ -425,6 +425,7 @@ impl ReplayStage {
                     let mut process_gossip_duplicate_confirmed_slots_time = Measure::start("process_gossip_duplicate_confirmed_slots");
                     Self::process_gossip_duplicate_confirmed_slots(
                         &gossip_duplicate_confirmed_slots_receiver,
+                        &blockstore,
                         &mut duplicate_slots_tracker,
                         &mut gossip_duplicate_confirmed_slots,
                         &bank_forks,
@@ -453,6 +454,7 @@ impl ReplayStage {
                     let mut process_duplicate_slots_time = Measure::start("process_duplicate_slots");
                     if !tpu_has_bank {
                         Self::process_duplicate_slots(
+                            &blockstore,
                             &duplicate_slots_receiver,
                             &mut duplicate_slots_tracker,
                             &gossip_duplicate_confirmed_slots,
@@ -501,7 +503,7 @@ impl ReplayStage {
                             &bank_forks,
                         );
 
-                        Self::mark_slots_confirmed(&confirmed_forks, &bank_forks, &mut progress, &mut duplicate_slots_tracker, &mut heaviest_subtree_fork_choice,  &mut duplicate_slots_to_repair);
+                        Self::mark_slots_confirmed(&confirmed_forks, &blockstore, &bank_forks, &mut progress, &mut duplicate_slots_tracker, &mut heaviest_subtree_fork_choice,  &mut duplicate_slots_to_repair);
                     }
                     compute_slot_stats_time.stop();
 
@@ -1045,6 +1047,7 @@ impl ReplayStage {
     // for duplicate slot recovery.
     fn process_gossip_duplicate_confirmed_slots(
         gossip_duplicate_confirmed_slots_receiver: &GossipDuplicateConfirmedSlotsReceiver,
+        blockstore: &Blockstore,
         duplicate_slots_tracker: &mut DuplicateSlotsTracker,
         gossip_duplicate_confirmed_slots: &mut GossipDuplicateConfirmedSlots,
         bank_forks: &RwLock<BankForks>,
@@ -1068,6 +1071,7 @@ impl ReplayStage {
                 check_slot_agrees_with_cluster(
                     confirmed_slot,
                     root,
+                    blockstore,
                     bank_forks.read().unwrap().bank_hash(confirmed_slot),
                     duplicate_slots_tracker,
                     gossip_duplicate_confirmed_slots,
@@ -1101,6 +1105,7 @@ impl ReplayStage {
 
     // Checks for and handle forks with duplicate slots.
     fn process_duplicate_slots(
+        blockstore: &Blockstore,
         duplicate_slots_receiver: &DuplicateSlotReceiver,
         duplicate_slots_tracker: &mut DuplicateSlotsTracker,
         gossip_duplicate_confirmed_slots: &GossipDuplicateConfirmedSlots,
@@ -1126,6 +1131,7 @@ impl ReplayStage {
             check_slot_agrees_with_cluster(
                 duplicate_slot,
                 root_slot,
+                blockstore,
                 bank_hash,
                 duplicate_slots_tracker,
                 gossip_duplicate_confirmed_slots,
@@ -1417,6 +1423,7 @@ impl ReplayStage {
         check_slot_agrees_with_cluster(
             slot,
             root,
+            blockstore,
             Some(bank.hash()),
             duplicate_slots_tracker,
             gossip_duplicate_confirmed_slots,
@@ -1931,13 +1938,14 @@ impl ReplayStage {
                 check_slot_agrees_with_cluster(
                     bank.slot(),
                     bank_forks.read().unwrap().root(),
+                    blockstore,
                     Some(bank.hash()),
                     duplicate_slots_tracker,
                     gossip_duplicate_confirmed_slots,
                     progress,
                     heaviest_subtree_fork_choice,
                     duplicate_slots_to_repair,
-                    SlotStateUpdate::Frozen,
+                    SlotStateUpdate::BankFrozen,
                 );
                 if let Some(sender) = bank_notification_sender {
                     sender
@@ -2447,6 +2455,7 @@ impl ReplayStage {
 
     fn mark_slots_confirmed(
         confirmed_forks: &[Slot],
+        blockstore: &Blockstore,
         bank_forks: &RwLock<BankForks>,
         progress: &mut ProgressMap,
         duplicate_slots_tracker: &mut DuplicateSlotsTracker,
@@ -2472,6 +2481,7 @@ impl ReplayStage {
                 check_slot_agrees_with_cluster(
                     *slot,
                     root_slot,
+                    blockstore,
                     bank_hash,
                     duplicate_slots_tracker,
                     // Don't need to pass the gossip confirmed slots since `slot`
@@ -2675,7 +2685,7 @@ impl ReplayStage {
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use super::*;
     use crate::{
         consensus::Tower,
@@ -4789,6 +4799,7 @@ mod tests {
         check_slot_agrees_with_cluster(
             4,
             bank_forks.read().unwrap().root(),
+            &blockstore,
             Some(bank4_hash),
             &mut duplicate_slots_tracker,
             &gossip_duplicate_confirmed_slots,
@@ -4815,6 +4826,7 @@ mod tests {
         check_slot_agrees_with_cluster(
             2,
             bank_forks.read().unwrap().root(),
+            &blockstore,
             Some(bank2_hash),
             &mut duplicate_slots_tracker,
             &gossip_duplicate_confirmed_slots,
@@ -4844,6 +4856,7 @@ mod tests {
         check_slot_agrees_with_cluster(
             4,
             bank_forks.read().unwrap().root(),
+            &blockstore,
             Some(bank4_hash),
             &mut duplicate_slots_tracker,
             &gossip_duplicate_confirmed_slots,
@@ -4984,6 +4997,7 @@ mod tests {
         check_slot_agrees_with_cluster(
             2,
             bank_forks.read().unwrap().root(),
+            blockstore,
             Some(our_bank2_hash),
             &mut duplicate_slots_tracker,
             &gossip_duplicate_confirmed_slots,
@@ -5603,7 +5617,7 @@ mod tests {
 
     type GenerateVotes = Box<dyn Fn(Vec<Pubkey>) -> HashMap<Pubkey, Vec<Slot>>>;
 
-    fn setup_forks_from_tree(
+    pub fn setup_forks_from_tree(
         tree: Tree<Slot>,
         num_keys: usize,
         generate_votes: Option<GenerateVotes>,
