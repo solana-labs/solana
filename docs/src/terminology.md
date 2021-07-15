@@ -12,11 +12,7 @@ Like an account at a traditional bank, a Solana account may hold funds called [l
 
 ## account owner
 
-The public key (pubkey) that owns an account.
-
-This notion of 'owner' is different from private key ownership that allows you to sign transactions affecting an account.
-
-An account owner can be the system program or any program such as a token program. An account in a wallet is owned by the system program.
+The public key of the program that owns the account. Only the owning program is capable of modifying the account.
 
 ## app
 
@@ -142,7 +138,7 @@ See [cross-program invocation](terminology.md#cross-program-invocation).
 
 ## instruction
 
-The code that a [client](terminology.md#client) can include in a [transaction](terminology.md#transaction).
+The smallest contiguous unit of execution logic in a [program](terminology.md#program). An instruction specifies which program it is calling, which accounts it wants to read or modify, and additional data that serves as auxiliary input to the program. A [client](terminology.md#client) can include one or multiple instructions in a [transaction](terminology.md#transaction). An instruction may contain one or more [cross-program invocations](terminology.md#cross-program-invocation).
 
 ## keypair
 
@@ -261,7 +257,7 @@ Collectively, slots create a logical clock. Slots are ordered sequentially and n
 
 ## smart contract
 
-A program on a blockchain.
+A program on a blockchain that can read and modify accounts over which it has control.
 
 ## sol
 
