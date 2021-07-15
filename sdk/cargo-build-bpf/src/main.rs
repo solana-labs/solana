@@ -26,6 +26,7 @@ struct Config<'a> {
     bpf_sdk: PathBuf,
     dump: bool,
     features: Vec<String>,
+    generate_child_script_on_failure: bool,
     no_default_features: bool,
     offline: bool,
     verbose: bool,
@@ -46,6 +47,7 @@ impl Default for Config<'_> {
             bpf_out_dir: None,
             dump: false,
             features: vec![],
+            generate_child_script_on_failure: false,
             no_default_features: false,
             offline: false,
             verbose: false,
@@ -54,13 +56,13 @@ impl Default for Config<'_> {
     }
 }
 
-fn spawn<I, S>(program: &Path, args: I) -> String
+fn spawn<I, S>(program: &Path, args: I, generate_child_script_on_failure: bool) -> String
 where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
 {
     let args = args.into_iter().collect::<Vec<_>>();
-    print!("Running: {}", program.display());
+    print!("cargo-build-bpf child: {}", program.display());
     for arg in args.iter() {
         print!(" {}", arg.as_ref().to_str().unwrap_or("?"));
     }
@@ -77,6 +79,29 @@ where
 
     let output = child.wait_with_output().expect("failed to wait on child");
     if !output.status.success() {
+        if !generate_child_script_on_failure {
+            exit(1);
+        }
+        eprintln!("cargo-build-bpf exited on command execution failure");
+        let script_name = format!(
+            "cargo-build-bpf-child-script-{}.sh",
+            program.file_name().unwrap().to_str().unwrap(),
+        );
+        let file = File::create(&script_name).unwrap();
+        let mut out = BufWriter::new(file);
+        for (key, value) in env::vars() {
+            writeln!(out, "{}=\"{}\" \\", key, value).unwrap();
+        }
+        write!(out, "{}", program.display()).unwrap();
+        for arg in args.iter() {
+            write!(out, " {}", arg.as_ref().to_str().unwrap_or("?")).unwrap();
+        }
+        writeln!(out).unwrap();
+        out.flush().unwrap();
+        eprintln!(
+            "To rerun the failed command for debugging use {}",
+            script_name,
+        );
         exit(1);
     }
     output
@@ -276,7 +301,11 @@ fn check_undefined_symbols(config: &Config, program: &Path) {
         .join("llvm-readelf");
     let mut readelf_args = vec!["--dyn-symbols"];
     readelf_args.push(program.to_str().unwrap());
-    let output = spawn(&readelf, &readelf_args);
+    let output = spawn(
+        &readelf,
+        &readelf_args,
+        config.generate_child_script_on_failure,
+    );
     if config.verbose {
         println!("{}", output);
     }
@@ -309,7 +338,11 @@ fn link_bpf_toolchain(config: &Config) {
         .join("rust");
     let rustup = PathBuf::from("rustup");
     let rustup_args = vec!["toolchain", "list", "-v"];
-    let rustup_output = spawn(&rustup, &rustup_args);
+    let rustup_output = spawn(
+        &rustup,
+        &rustup_args,
+        config.generate_child_script_on_failure,
+    );
     if config.verbose {
         println!("{}", rustup_output);
     }
@@ -321,7 +354,11 @@ fn link_bpf_toolchain(config: &Config) {
             let path = it.next();
             if path.unwrap() != toolchain_path.to_str().unwrap() {
                 let rustup_args = vec!["toolchain", "uninstall", "bpf"];
-                let output = spawn(&rustup, &rustup_args);
+                let output = spawn(
+                    &rustup,
+                    &rustup_args,
+                    config.generate_child_script_on_failure,
+                );
                 if config.verbose {
                     println!("{}", output);
                 }
@@ -333,7 +370,11 @@ fn link_bpf_toolchain(config: &Config) {
     }
     if do_link {
         let rustup_args = vec!["toolchain", "link", "bpf", toolchain_path.to_str().unwrap()];
-        let output = spawn(&rustup, &rustup_args);
+        let output = spawn(
+            &rustup,
+            &rustup_args,
+            config.generate_child_script_on_failure,
+        );
         if config.verbose {
             println!("{}", output);
         }
@@ -475,7 +516,11 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
             cargo_build_args.push(arg);
         }
     }
-    let output = spawn(&cargo_build, &cargo_build_args);
+    let output = spawn(
+        &cargo_build,
+        &cargo_build_args,
+        config.generate_child_script_on_failure,
+    );
     if config.verbose {
         println!("{}", output);
     }
@@ -520,6 +565,7 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
             let output = spawn(
                 &config.bpf_sdk.join("scripts").join("strip.sh"),
                 &[&program_unstripped_so, &program_so],
+                config.generate_child_script_on_failure,
             );
             if config.verbose {
                 println!("{}", output);
@@ -530,6 +576,7 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
             let output = spawn(
                 &config.bpf_sdk.join("scripts").join("dump.sh"),
                 &[&program_unstripped_so, &program_dump],
+                config.generate_child_script_on_failure,
             );
             if config.verbose {
                 println!("{}", output);
@@ -644,6 +691,12 @@ fn main() {
                 .help("Space-separated list of features to activate"),
         )
         .arg(
+            Arg::with_name("generate_child_script_on_failure")
+                .long("generate-child-script-on-failure")
+                .takes_value(false)
+                .help("Generate rerun-script.sh to rerun test command on failure"),
+        )
+        .arg(
             Arg::with_name("manifest_path")
                 .long("manifest-path")
                 .value_name("PATH")
@@ -706,6 +759,7 @@ fn main() {
         features: values_t!(matches, "features", String)
             .ok()
             .unwrap_or_else(Vec::new),
+        generate_child_script_on_failure: matches.is_present("generate_child_script_on_failure"),
         no_default_features: matches.is_present("no_default_features"),
         offline: matches.is_present("offline"),
         verbose: matches.is_present("verbose"),
