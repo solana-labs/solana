@@ -41,7 +41,7 @@ pub const MAX_ORPHAN_REPAIR_RESPONSES: usize = 10;
 pub(crate) const REPAIR_PEERS_CACHE_CAPACITY: usize = 128;
 // Limit cache entries ttl in order to avoid re-using outdated data.
 const REPAIR_PEERS_CACHE_TTL: Duration = Duration::from_secs(10);
-pub const MAX_ANCESTOR_RESPONSES: usize = 20;
+pub const MAX_ANCESTOR_RESPONSES: usize = 25;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum ShredRepairType {
@@ -88,6 +88,7 @@ pub enum AncestorHashesResponseVersion {
     Current(Vec<(Slot, Hash)>),
 }
 impl AncestorHashesResponseVersion {
+    #[cfg(test)]
     fn into_slot_hashes(self) -> Vec<(Slot, Hash)> {
         match self {
             AncestorHashesResponseVersion::Current(slot_hashes) => slot_hashes,
@@ -682,7 +683,6 @@ impl ServeRepair {
         let ancestor_slot_hashes = if blockstore.is_duplicate_confirmed(slot) {
             let ancestor_iterator =
                 AncestorIteratorWithHash::from(AncestorIterator::new_inclusive(slot, blockstore));
-            // TODO: figure out the maximum that can fit in MTU, write test
             ancestor_iterator.take(MAX_ANCESTOR_RESPONSES).collect()
         } else {
             // If this slot is not duplicate confirmed, return nothing
@@ -712,12 +712,12 @@ mod tests {
     use super::*;
     use crate::{repair_response, result::Error};
     use solana_gossip::{socketaddr, socketaddr_any};
-    use solana_ledger::get_tmp_ledger_path;
     use solana_ledger::{
         blockstore::make_many_slot_entries,
         blockstore_processor::fill_blockstore_slot_with_ticks,
         shred::{max_ticks_per_n_shreds, Shred},
     };
+    use solana_ledger::{get_tmp_ledger_path, shred::SIZE_OF_NONCE};
     use solana_perf::packet::Packet;
     use solana_sdk::{hash::Hash, pubkey::Pubkey, timing::timestamp};
 
@@ -1092,6 +1092,85 @@ mod tests {
     }
 
     #[test]
+    fn test_run_ancestor_hashes() {
+        solana_logger::setup();
+        let recycler = PacketsRecycler::default();
+        let ledger_path = get_tmp_ledger_path!();
+        {
+            let slot = 0;
+            let num_slots = MAX_ANCESTOR_RESPONSES as u64;
+            let nonce = 10;
+
+            let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+
+            // Create slots [slot, slot + num_slots) with 5 shreds apiece
+            let (shreds, _) = make_many_slot_entries(slot, num_slots, 5);
+
+            blockstore
+                .insert_shreds(shreds, None, false)
+                .expect("Expect successful ledger write");
+
+            // We don't have slot `slot + num_slots`, so we return empty
+            let rv = ServeRepair::run_ancestor_hashes(
+                &recycler,
+                &socketaddr_any!(),
+                Some(&blockstore),
+                slot + num_slots,
+                nonce,
+            )
+            .expect("run_ancestor_hashes packets")
+            .packets;
+            assert_eq!(rv.len(), 1);
+            let packet = &rv[0];
+            let ancestor_hashes_response: AncestorHashesResponseVersion =
+                limited_deserialize(&packet.data[..packet.meta.size - SIZE_OF_NONCE]).unwrap();
+            assert!(ancestor_hashes_response.into_slot_hashes().is_empty());
+
+            // `slot + num_slots - 1` is not marked duplicate confirmed so nothing should return
+            // empty
+            let rv = ServeRepair::run_ancestor_hashes(
+                &recycler,
+                &socketaddr_any!(),
+                Some(&blockstore),
+                slot + num_slots - 1,
+                nonce,
+            )
+            .expect("run_ancestor_hashes packets")
+            .packets;
+            assert_eq!(rv.len(), 1);
+            let packet = &rv[0];
+            let ancestor_hashes_response: AncestorHashesResponseVersion =
+                limited_deserialize(&packet.data[..packet.meta.size - SIZE_OF_NONCE]).unwrap();
+            assert!(ancestor_hashes_response.into_slot_hashes().is_empty());
+
+            // Set duplicate confirmed
+            let mut expected_ancestors = Vec::with_capacity(num_slots as usize);
+            expected_ancestors.resize(num_slots as usize, (0, Hash::default()));
+            for (i, duplicate_confirmed_slot) in (slot..slot + num_slots).enumerate() {
+                let frozen_hash = Hash::new_unique();
+                expected_ancestors[num_slots as usize - i - 1] = (duplicate_confirmed_slot, frozen_hash);
+                blockstore.insert_bank_hash(duplicate_confirmed_slot, frozen_hash, true);
+            }
+            let rv = ServeRepair::run_ancestor_hashes(
+                &recycler,
+                &socketaddr_any!(),
+                Some(&blockstore),
+                slot + num_slots - 1,
+                nonce,
+            )
+            .expect("run_ancestor_hashes packets")
+            .packets;
+            assert_eq!(rv.len(), 1);
+            let packet = &rv[0];
+            let ancestor_hashes_response: AncestorHashesResponseVersion =
+                limited_deserialize(&packet.data[..packet.meta.size - SIZE_OF_NONCE]).unwrap();
+            assert_eq!(ancestor_hashes_response.into_slot_hashes(), expected_ancestors);
+        }
+
+        Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
     fn test_repair_with_repair_validators() {
         let cluster_slots = ClusterSlots::default();
         let me = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
@@ -1164,7 +1243,7 @@ mod tests {
     }
 
     #[test]
-    fn test_verify_response() {
+    fn test_verify_shred_response() {
         let repair = ShredRepairType::Orphan(9);
         // Ensure new options are addded to this test
         match repair {
@@ -1221,5 +1300,20 @@ mod tests {
             let shred = Shred::new_from_serialized_shred(shred_payload).unwrap();
             request.verify_response(&shred);
         }
+    }
+
+    #[test]
+    fn test_verify_ancestor_response() {
+        let request_slot = MAX_ANCESTOR_RESPONSES as Slot;
+        let repair = AncestorHashesRepair(request_slot);
+        let mut response: Vec<(Slot, Hash)> = (0..request_slot)
+            .into_iter()
+            .map(|slot| (slot, Hash::new_unique()))
+            .collect();
+        assert!(repair.verify_response(&AncestorHashesResponseVersion::Current(response.clone())));
+
+        // over the allowed limit, should fail
+        response.push((request_slot, Hash::new_unique()));
+        assert!(!repair.verify_response(&AncestorHashesResponseVersion::Current(response)));
     }
 }
