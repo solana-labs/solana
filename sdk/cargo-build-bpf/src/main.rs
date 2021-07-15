@@ -694,7 +694,7 @@ fn main() {
             Arg::with_name("generate_child_script_on_failure")
                 .long("generate-child-script-on-failure")
                 .takes_value(false)
-                .help("Generate rerun-script.sh to rerun test command on failure"),
+                .help("Generate a shell script to rerun a failed subcommand"),
         )
         .arg(
             Arg::with_name("manifest_path")
