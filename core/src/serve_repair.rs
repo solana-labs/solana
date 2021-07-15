@@ -97,7 +97,7 @@ impl AncestorHashesResponseVersion {
 
     fn slot_hashes(&self) -> &[(Slot, Hash)] {
         match self {
-            AncestorHashesResponseVersion::Current(slot_hashes) => &slot_hashes,
+            AncestorHashesResponseVersion::Current(slot_hashes) => slot_hashes,
         }
     }
 
@@ -279,7 +279,7 @@ impl ServeRepair {
                 RepairProtocol::AncestorHashes(_, slot, nonce) => {
                     stats.ancestor_hashes += 1;
                     (
-                        Self::run_ancestor_hashes(recycler, &from_addr, blockstore, *slot, *nonce),
+                        Self::run_ancestor_hashes(recycler, from_addr, blockstore, *slot, *nonce),
                         "AncestorHashes",
                     )
                 }
@@ -1148,7 +1148,8 @@ mod tests {
             expected_ancestors.resize(num_slots as usize, (0, Hash::default()));
             for (i, duplicate_confirmed_slot) in (slot..slot + num_slots).enumerate() {
                 let frozen_hash = Hash::new_unique();
-                expected_ancestors[num_slots as usize - i - 1] = (duplicate_confirmed_slot, frozen_hash);
+                expected_ancestors[num_slots as usize - i - 1] =
+                    (duplicate_confirmed_slot, frozen_hash);
                 blockstore.insert_bank_hash(duplicate_confirmed_slot, frozen_hash, true);
             }
             let rv = ServeRepair::run_ancestor_hashes(
@@ -1164,7 +1165,10 @@ mod tests {
             let packet = &rv[0];
             let ancestor_hashes_response: AncestorHashesResponseVersion =
                 limited_deserialize(&packet.data[..packet.meta.size - SIZE_OF_NONCE]).unwrap();
-            assert_eq!(ancestor_hashes_response.into_slot_hashes(), expected_ancestors);
+            assert_eq!(
+                ancestor_hashes_response.into_slot_hashes(),
+                expected_ancestors
+            );
         }
 
         Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
