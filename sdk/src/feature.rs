@@ -1,3 +1,5 @@
+//! Methods for working with `Feature` accounts.
+
 use crate::account::{AccountSharedData, ReadableAccount, WritableAccount};
 pub use solana_program::feature::*;
 
