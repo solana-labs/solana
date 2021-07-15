@@ -1,3 +1,14 @@
+//! Collection of all runtime features.
+//!
+//! Steps to add a new feature:
+//! 1. Generate a new keypair with `solana-keygen`.
+//! 2. Add a public module for the feature, specifying keypair pubkey as and id with
+//!    solana_sdk::declare_id!() within the module.
+//!    Additionally, add an entry to FEATURE_NAMES map.
+//! 3. Add logic to check for and switch on feature availability.
+//!
+//! For more information on how features are picked up, see comments for `Feature`.
+
 use lazy_static::lazy_static;
 use solana_sdk::{
     clock::Slot,
