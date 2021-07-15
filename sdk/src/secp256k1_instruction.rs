@@ -29,18 +29,18 @@ pub struct SecpSignatureOffsets {
 }
 
 pub fn new_secp256k1_instruction(
-    priv_key: &secp256k1::SecretKey,
+    priv_key: &libsecp256k1::SecretKey,
     message_arr: &[u8],
 ) -> Instruction {
-    let secp_pubkey = secp256k1::PublicKey::from_secret_key(priv_key);
+    let secp_pubkey = libsecp256k1::PublicKey::from_secret_key(priv_key);
     let eth_pubkey = construct_eth_pubkey(&secp_pubkey);
     let mut hasher = sha3::Keccak256::new();
     hasher.update(&message_arr);
     let message_hash = hasher.finalize();
     let mut message_hash_arr = [0u8; 32];
     message_hash_arr.copy_from_slice(&message_hash.as_slice());
-    let message = secp256k1::Message::parse(&message_hash_arr);
-    let (signature, recovery_id) = secp256k1::sign(&message, priv_key);
+    let message = libsecp256k1::Message::parse(&message_hash_arr);
+    let (signature, recovery_id) = libsecp256k1::sign(&message, priv_key);
     let signature_arr = signature.serialize();
     assert_eq!(signature_arr.len(), SIGNATURE_SERIALIZED_SIZE);
 
@@ -84,7 +84,9 @@ pub fn new_secp256k1_instruction(
     }
 }
 
-pub fn construct_eth_pubkey(pubkey: &secp256k1::PublicKey) -> [u8; HASHED_PUBKEY_SERIALIZED_SIZE] {
+pub fn construct_eth_pubkey(
+    pubkey: &libsecp256k1::PublicKey,
+) -> [u8; HASHED_PUBKEY_SERIALIZED_SIZE] {
     let mut addr = [0u8; HASHED_PUBKEY_SERIALIZED_SIZE];
     addr.copy_from_slice(&sha3::Keccak256::digest(&pubkey.serialize()[1..])[12..]);
     assert_eq!(addr.len(), HASHED_PUBKEY_SERIALIZED_SIZE);
@@ -125,7 +127,7 @@ pub fn verify_eth_addresses(
             secp256k1::Signature::parse_slice(&signature_instruction[sig_start..sig_end])
                 .map_err(|_| Secp256k1Error::InvalidSignature)?;
 
-        let recovery_id = secp256k1::RecoveryId::parse(signature_instruction[sig_end])
+        let recovery_id = libsecp256k1::RecoveryId::parse(signature_instruction[sig_end])
             .map_err(|_| Secp256k1Error::InvalidRecoveryId)?;
 
         // Parse out pubkey
@@ -148,8 +150,8 @@ pub fn verify_eth_addresses(
         hasher.update(message_slice);
         let message_hash = hasher.finalize();
 
-        let pubkey = secp256k1::recover(
-            &secp256k1::Message::parse_slice(&message_hash).unwrap(),
+        let pubkey = libsecp256k1::recover(
+            &libsecp256k1::Message::parse_slice(&message_hash).unwrap(),
             &signature,
             &recovery_id,
         )
