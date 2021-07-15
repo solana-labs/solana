@@ -17,6 +17,7 @@ use std::{
         btree_map::{self, BTreeMap, Entry},
         HashSet,
     },
+    fmt::Debug,
     ops::{
         Bound,
         Bound::{Excluded, Included, Unbounded},
@@ -675,8 +676,9 @@ impl<T> Default for AccountsIndex<T> {
     }
 }
 
-impl<T: 'static + Clone + IsCached + ZeroLamport + std::marker::Sync + std::marker::Send>
-    AccountsIndex<T>
+impl<
+        T: 'static + Clone + IsCached + ZeroLamport + std::marker::Sync + std::marker::Send + Debug,
+    > AccountsIndex<T>
 {
     fn iter<R>(&self, range: Option<R>) -> AccountsIndexIterator<T>
     where
