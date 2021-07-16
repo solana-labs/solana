@@ -17,7 +17,8 @@ import * as web3 from '@solana/web3.js';
   //wait for airdrop confirmation
   await connection.confirmTransaction(airdropSignature);
 
-  //get account info
+  // get account info
+  // account data is bytecode that needs to be deserialized
   let account = await connection.getAccountInfo(wallet.publicKey);
   console.log(account);
 })();
