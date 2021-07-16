@@ -4545,6 +4545,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-compute-budget-program"
+version = "1.8.0"
+dependencies = [
+ "solana-sdk",
+]
+
+[[package]]
 name = "solana-config-program"
 version = "1.8.0"
 dependencies = [
@@ -5450,6 +5457,7 @@ dependencies = [
  "rustc_version 0.4.0",
  "serde",
  "serde_derive",
+ "solana-compute-budget-program",
  "solana-config-program",
  "solana-frozen-abi 1.8.0",
  "solana-frozen-abi-macro 1.8.0",
@@ -5483,6 +5491,8 @@ version = "1.8.0"
 dependencies = [
  "assert_matches",
  "bincode",
+ "borsh 0.9.1",
+ "borsh-derive 0.9.1",
  "bs58 0.4.0",
  "bv",
  "byteorder",
