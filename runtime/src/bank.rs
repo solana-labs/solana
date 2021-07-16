@@ -169,12 +169,16 @@ pub struct ExecuteTimings {
 }
 impl ExecuteTimings {
     pub fn accumulate(&mut self, other: &ExecuteTimings) {
-        self.check_us += other.check_us;
-        self.load_us += other.load_us;
-        self.execute_us += other.execute_us;
-        self.store_us += other.store_us;
-        self.total_batches_len += other.total_batches_len;
-        self.num_execute_batches += other.num_execute_batches;
+        self.check_us = self.check_us.saturating_add(other.check_us);
+        self.load_us = self.load_us.saturating_add(other.load_us);
+        self.execute_us = self.execute_us.saturating_add(other.execute_us);
+        self.store_us = self.store_us.saturating_add(other.store_us);
+        self.total_batches_len = self
+            .total_batches_len
+            .saturating_add(other.total_batches_len);
+        self.num_execute_batches = self
+            .num_execute_batches
+            .saturating_add(other.num_execute_batches);
         self.details.accumulate(&other.details);
     }
 }
@@ -2768,8 +2772,8 @@ impl Bank {
             .details
             .per_program_timings
             .iter()
-            .fold(0, |acc, (_, program_timing)| {
-                acc + program_timing.accumulated_units
+            .fold(0, |acc: u64, (_, program_timing)| {
+                acc.saturating_add(program_timing.accumulated_units)
             });
 
         debug!("simulate_transaction: {:?}", timings);
@@ -3329,9 +3333,9 @@ impl Bank {
             execution_time.as_us(),
             sanitized_txs.len(),
         );
-        timings.check_us += check_time.as_us();
-        timings.load_us += load_time.as_us();
-        timings.execute_us += execution_time.as_us();
+        timings.check_us = timings.check_us.saturating_add(check_time.as_us());
+        timings.load_us = timings.load_us.saturating_add(load_time.as_us());
+        timings.execute_us = timings.execute_us.saturating_add(execution_time.as_us());
 
         let mut tx_count: u64 = 0;
         let err_count = &mut error_counters.total;
@@ -3537,7 +3541,7 @@ impl Bank {
             write_time.as_us(),
             sanitized_txs.len()
         );
-        timings.store_us += write_time.as_us();
+        timings.store_us = timings.store_us.saturating_add(write_time.as_us());
         self.update_transaction_statuses(sanitized_txs, executed);
         let fee_collection_results = self
             .filter_program_errors_and_collect_fee(sanitized_txs.as_transactions_iter(), executed);
