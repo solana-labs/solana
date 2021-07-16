@@ -152,8 +152,6 @@ pub struct BpfComputeBudget {
     /// Number of compute units that an instruction is allowed.  Compute units
     /// are consumed by program execution, resources they use, etc...
     pub max_units: u64,
-    /// Number of compute units consumed by a log call
-    pub log_units: u64,
     /// Number of compute units consumed by a log_u64 call
     pub log_64_units: u64,
     /// Number of compute units consumed by a create_program_address call
@@ -193,7 +191,6 @@ impl BpfComputeBudget {
     pub fn new() -> Self {
         BpfComputeBudget {
             max_units: 200_000,
-            log_units: 100,
             log_64_units: 100,
             create_program_address_units: 1500,
             invoke_units: 1000,
