@@ -1,4 +1,5 @@
-//! Crds Gossip
+//! Crds Gossip.
+//!
 //! This module ties together Crds and the push and pull gossip overlays.  The interface is
 //! designed to run with a simulator or over a UDP network connection with messages up to a
 //! packet::PACKET_DATA_SIZE size.
@@ -39,7 +40,8 @@ pub struct CrdsGossip {
 }
 
 impl CrdsGossip {
-    /// process a push message to the network
+    /// Process a push message to the network.
+    ///
     /// Returns unique origins' pubkeys of upserted values.
     pub fn process_push_message(
         &self,
@@ -54,7 +56,7 @@ impl CrdsGossip {
             .collect()
     }
 
-    /// remove redundant paths in the network
+    /// Remove redundant paths in the network.
     pub fn prune_received_cache<I>(
         &self,
         self_pubkey: &Pubkey,
@@ -145,7 +147,7 @@ impl CrdsGossip {
         Ok(())
     }
 
-    /// add the `from` to the peer's filter of nodes
+    /// Add the `from` to the peer's filter of nodes.
     pub fn process_prune_msg(
         &self,
         self_pubkey: &Pubkey,
@@ -167,8 +169,7 @@ impl CrdsGossip {
         }
     }
 
-    /// refresh the push active set
-    /// * ratio - number of actives to rotate
+    /// Refresh the push active set.
     pub fn refresh_push_active_set(
         &self,
         self_pubkey: &Pubkey,
@@ -188,7 +189,7 @@ impl CrdsGossip {
         )
     }
 
-    /// generate a random request
+    /// Generate a random request.
     #[allow(clippy::too_many_arguments)]
     pub fn new_pull_request(
         &self,
@@ -216,14 +217,15 @@ impl CrdsGossip {
         )
     }
 
-    /// time when a request to `from` was initiated
+    /// Time when a request to `from` was initiated.
+    ///
     /// This is used for weighted random selection during `new_pull_request`
     /// It's important to use the local nodes request creation time as the weight
     /// instead of the response received time otherwise failed nodes will increase their weight.
     pub fn mark_pull_request_creation_time(&self, from: Pubkey, now: u64) {
         self.pull.mark_pull_request_creation_time(from, now)
     }
-    /// process a pull request and create a response
+    /// Process a pull request and create a response.
     pub fn process_pull_requests<I>(&self, callers: I, now: u64)
     where
         I: IntoIterator<Item = CrdsValue>,
@@ -255,7 +257,7 @@ impl CrdsGossip {
             .filter_pull_responses(&self.crds, timeouts, response, now, process_pull_stats)
     }
 
-    /// process a pull response
+    /// Process a pull response.
     pub fn process_pull_responses(
         &self,
         from: &Pubkey,
@@ -322,14 +324,15 @@ impl CrdsGossip {
     }
 }
 
-/// Computes a normalized(log of actual stake) stake
+/// Computes a normalized (log of actual stake) stake.
 pub fn get_stake<S: std::hash::BuildHasher>(id: &Pubkey, stakes: &HashMap<Pubkey, u64, S>) -> f32 {
     // cap the max balance to u32 max (it should be plenty)
     let bal = f64::from(u32::max_value()).min(*stakes.get(id).unwrap_or(&0) as f64);
     1_f32.max((bal as f32).ln())
 }
 
-/// Computes bounded weight given some max, a time since last selected, and a stake value
+/// Computes bounded weight given some max, a time since last selected, and a stake value.
+///
 /// The minimum stake is 1 and not 0 to allow 'time since last' picked to factor in.
 pub fn get_weight(max_weight: f32, time_since_last_selected: u32, stake: f32) -> f32 {
     let mut weight = time_since_last_selected as f32 * stake;
