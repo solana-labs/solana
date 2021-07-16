@@ -41,7 +41,7 @@ use solana_runtime::{
     },
     accounts_db::AccountShrinkThreshold,
     bank::ExecuteTimings,
-    bank_forks::BankForks,
+    bank_forks::{BankForks, SnapshotConfig},
     commitment::BlockCommitmentCache,
     vote_sender_types::ReplayVoteSender,
 };
