@@ -56,7 +56,6 @@ $ solana-validator \
 ## Testnet（测试网）
 
 - Testnet是我们在实时群集上重点测试最新发布功能的地方，尤其侧重于网络性能，稳定性和验证程序行为。
-- 集群[Tour de SOL](tour-de-sol.md)计划在Testnet上运行，在该计划中，我们接受恶意行为和对网络的攻击，以帮助我们发现和消除错误或网络漏洞。
 - Testnet代币**不是真实的**
 - Testnet可能会重置账本。
 - Testnet包括用于空投的代币水龙头，用于应用程序测试
