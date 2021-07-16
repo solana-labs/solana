@@ -1275,14 +1275,13 @@ impl BankingStage {
 
         // applying cost of processed transactions to shared cost_tracker
         let mut cost_tracking_time = Measure::start("cost_tracking_time");
-        transactions.iter().enumerate().for_each(|(index, tx)| {
-            if unprocessed_tx_indexes.iter().all(|&i| i != index) {
-                cost_tracker
-                    .write()
-                    .unwrap()
-                    .add_transaction_cost(tx.transaction());
-            }
-        });
+        if cost_model_enabled {
+            transactions.iter().enumerate().for_each(|(index, tx)| {
+                if unprocessed_tx_indexes.iter().all(|&i| i != index) {
+                    cost_tracker.write().unwrap().add_transaction_cost(tx);
+                }
+            });
+        }
         cost_tracking_time.stop();
 
         let mut filter_pending_packets_time = Measure::start("filter_pending_packets_time");
