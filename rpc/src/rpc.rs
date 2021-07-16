@@ -43,7 +43,7 @@ use {
     solana_runtime::{
         accounts::AccountAddressFilter,
         accounts_index::{AccountIndex, AccountSecondaryIndexes, IndexKey},
-        bank::Bank,
+        bank::{Bank, TransactionSimulationResult},
         bank_forks::BankForks,
         commitment::{BlockCommitmentArray, BlockCommitmentCache, CommitmentSlots},
         inline_spl_token_v2_0::{SPL_TOKEN_ACCOUNT_MINT_OFFSET, SPL_TOKEN_ACCOUNT_OWNER_OFFSET},
@@ -3029,8 +3029,12 @@ pub mod rpc_full {
                     }
                 }
 
-                if let (Err(err), logs, _, units_consumed) =
-                    preflight_bank.simulate_transaction(&transaction)
+                if let TransactionSimulationResult {
+                    result: Err(err),
+                    logs,
+                    post_simulation_accounts: _,
+                    units_consumed,
+                } = preflight_bank.simulate_transaction(&transaction)
                 {
                     match err {
                         TransactionError::BlockhashNotFound => {
@@ -3046,7 +3050,7 @@ pub mod rpc_full {
                             err: Some(err),
                             logs: Some(logs),
                             accounts: None,
-                            units_consumed,
+                            units_consumed: Some(units_consumed),
                         },
                     }
                     .into());
@@ -3090,8 +3094,12 @@ pub mod rpc_full {
             if config.replace_recent_blockhash {
                 transaction.message.recent_blockhash = bank.last_blockhash();
             }
-            let (result, logs, post_simulation_accounts, units_consumed) =
-                bank.simulate_transaction(&transaction);
+            let TransactionSimulationResult {
+                result,
+                logs,
+                post_simulation_accounts,
+                units_consumed,
+            } = bank.simulate_transaction(&transaction);
 
             let accounts = if let Some(config_accounts) = config.accounts {
                 let accounts_encoding = config_accounts
@@ -3146,7 +3154,7 @@ pub mod rpc_full {
                     err: result.err(),
                     logs: Some(logs),
                     accounts,
-                    units_consumed,
+                    units_consumed: Some(units_consumed),
                 },
             ))
         }
