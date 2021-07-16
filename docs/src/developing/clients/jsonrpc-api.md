@@ -3028,6 +3028,8 @@ Returns the account info and associated stake for all the voting accounts in the
 - `<object>` - (optional) Configuration object containing the following field:
   - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
   - (optional) `votePubkey: <string>` - Only return results for this validator vote address (base-58 encoded)
+  - (optional) `keepUnstakedDelinquents: <bool>` - Do not filter out delinquent validators with no stake
+  - (optional) `delinquentSlotDistance: <u64>` - Specify the number of slots behind the tip that a validator must fall to be considered delinquent. **NOTE:** For the sake of consistency between ecosystem products, _it is **not** recommended that this argument be specified._
 
 #### Results:
 
