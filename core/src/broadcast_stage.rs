@@ -23,7 +23,10 @@ use solana_poh::poh_recorder::WorkingBankEntry;
 use solana_runtime::{bank::Bank, bank_forks::BankForks};
 use solana_sdk::timing::timestamp;
 use solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Keypair};
-use solana_streamer::sendmmsg::{batch_send, SendPktsError};
+use solana_streamer::{
+    sendmmsg::{batch_send, SendPktsError},
+    socket::is_global,
+};
 use std::sync::atomic::AtomicU64;
 use std::{
     collections::HashMap,
@@ -415,7 +418,11 @@ pub fn broadcast_shreds(
         .filter_map(|shred| {
             let seed = shred.seed(Some(self_pubkey), &root_bank);
             let node = cluster_nodes.get_broadcast_peer(seed)?;
-            Some((&shred.payload[..], &node.tvu))
+            if is_global(&node.tvu) {
+                Some((&shred.payload[..], &node.tvu))
+            } else {
+                None
+            }
         })
         .collect();
     shred_select.stop();

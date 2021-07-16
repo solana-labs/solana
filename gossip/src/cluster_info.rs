@@ -64,6 +64,7 @@ use {
     solana_streamer::{
         packet,
         sendmmsg::{multi_target_send, SendPktsError},
+        socket::is_global,
         streamer::{PacketReceiver, PacketSender},
     },
     solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY,
@@ -1178,7 +1179,7 @@ impl ClusterInfo {
             .filter(|node| {
                 node.id != self_pubkey
                     && node.shred_version == self_shred_version
-                    && ContactInfo::is_valid_address(&node.tvu)
+                    && ContactInfo::is_valid_tvu_address(&node.tvu)
             })
             .cloned()
             .collect()
@@ -1235,9 +1236,14 @@ impl ClusterInfo {
                 .iter()
                 .map(|peer| &peer.tvu_forwards)
                 .filter(|addr| ContactInfo::is_valid_address(addr))
+                .filter(|addr| is_global(addr))
                 .collect()
         } else {
-            peers.iter().map(|peer| &peer.tvu).collect()
+            peers
+                .iter()
+                .map(|peer| &peer.tvu)
+                .filter(|addr| is_global(addr))
+                .collect()
         };
         let data = &packet.data[..packet.meta.size];
 
