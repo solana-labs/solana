@@ -1468,6 +1468,20 @@ fn main() {
                 .about("Output statistics in JSON format about \
                         all column families in the ledger rocksdb")
         )
+        .subcommand(
+            SubCommand::with_name("compute-slot-cost")
+            .about("runs cost_model over the block at the given slots, \
+                   computes how expensive a block was based on cost_model")
+            .arg(
+                Arg::with_name("slots")
+                    .index(1)
+                    .value_name("SLOTS")
+                    .validator(is_slot)
+                    .multiple(true)
+                    .takes_value(true)
+                    .help("Slots that their blocks are computed for cost, default to all slots in ledger"),
+            )
+        )
         .get_matches();
 
     info!("{} {}", crate_name!(), solana_version::version!());
@@ -3017,6 +3031,28 @@ fn main() {
                 AccessType::TryPrimaryThenSecondary,
             ));
             println!("Ok.");
+        }
+        ("compute-slot-cost", Some(arg_matches)) => {
+            let blockstore = open_blockstore(
+                &ledger_path,
+                AccessType::TryPrimaryThenSecondary,
+                wal_recovery_mode,
+            );
+
+            let mut slots: Vec<u64> = vec![];
+            if !arg_matches.is_present("slots") {
+                if let Ok(metas) = blockstore.slot_meta_iterator(0) {
+                    slots = metas.map(|(slot, _)| slot).collect();
+                }
+            } else {
+                slots = values_t_or_exit!(arg_matches, "slots", Slot);
+            }
+
+            for slot in slots {
+                if let Err(err) = compute_slot_cost(&blockstore, slot) {
+                    eprintln!("{}", err);
+                }
+            }
         }
         ("", _) => {
             eprintln!("{}", matches.usage());
