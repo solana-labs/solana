@@ -48,7 +48,6 @@ use solana_runtime::{
 };
 use solana_sdk::{
     clock::{Slot, MAX_PROCESSING_AGE, NUM_CONSECUTIVE_LEADER_SLOTS},
-    clock::{BankId, Slot, MAX_PROCESSING_AGE, NUM_CONSECUTIVE_LEADER_SLOTS},
     feature_set,
     genesis_config::ClusterType,
     hash::Hash,
