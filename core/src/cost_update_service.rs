@@ -223,6 +223,7 @@ mod tests {
         // add new program
         {
             let accumulated_us: u64 = 1000;
+            let accumulated_units: u64 = 100;
             let count: u32 = 10;
             expected_cost = accumulated_units / count as u64;
 
@@ -230,6 +231,7 @@ mod tests {
                 program_key_1,
                 ProgramTiming {
                     accumulated_us,
+                    accumulated_units,
                     count,
                 },
             );
@@ -255,6 +257,7 @@ mod tests {
         // update program
         {
             let accumulated_us: u64 = 2000;
+            let accumulated_units: u64 = 200;
             let count: u32 = 10;
             // to expect new cost is Average(new_value, existing_value)
             expected_cost = ((accumulated_units / count as u64) + expected_cost) / 2;
@@ -263,6 +266,7 @@ mod tests {
                 program_key_1,
                 ProgramTiming {
                     accumulated_us,
+                    accumulated_units,
                     count,
                 },
             );

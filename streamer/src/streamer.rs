@@ -6,7 +6,7 @@ use crate::{
     recvmmsg::NUM_RCVMMSGS,
     socket::SocketAddrSpace,
 };
-use solana_sdk::timing::{duration_as_ms, timestamp};
+use solana_sdk::timing::timestamp;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, SendError, Sender};
