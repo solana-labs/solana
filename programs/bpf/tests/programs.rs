@@ -293,7 +293,7 @@ fn process_transaction_and_record_inner(
 ) -> (Result<(), TransactionError>, Vec<Vec<CompiledInstruction>>) {
     let signature = tx.signatures.get(0).unwrap().clone();
     let txs = vec![tx];
-    let tx_batch = bank.prepare_batch(txs.iter());
+    let tx_batch = bank.prepare_batch(txs.iter()).unwrap();
     let (mut results, _, mut inner_instructions, _transaction_logs) = bank
         .load_execute_and_commit_transactions(
             &tx_batch,
@@ -316,7 +316,7 @@ fn process_transaction_and_record_inner(
 }
 
 fn execute_transactions(bank: &Bank, txs: &[Transaction]) -> Vec<ConfirmedTransaction> {
-    let batch = bank.prepare_batch(txs.iter());
+    let batch = bank.prepare_batch(txs.iter()).unwrap();
     let mut timings = ExecuteTimings::default();
     let mut mint_decimals = HashMap::new();
     let tx_pre_token_balances = collect_token_balances(&bank, &batch, &mut mint_decimals);

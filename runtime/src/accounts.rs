@@ -165,19 +165,6 @@ impl Accounts {
         }
     }
 
-    /// Return true if the slice has any duplicate elements
-    pub fn has_duplicates<T: PartialEq>(xs: &[T]) -> bool {
-        // Note: This is an O(n^2) algorithm, but requires no heap allocations. The benchmark
-        // `bench_has_duplicates` in benches/message_processor.rs shows that this implementation is
-        // ~50 times faster than using HashSet for very short slices.
-        for i in 1..xs.len() {
-            if xs[i..].contains(&xs[i - 1]) {
-                return true;
-            }
-        }
-        false
-    }
-
     fn construct_instructions_account(message: &Message) -> AccountSharedData {
         let mut data = message.serialize_instructions();
         // add room for current instruction index.
@@ -858,25 +845,13 @@ impl Accounts {
     #[must_use]
     #[allow(clippy::needless_collect)]
     pub fn lock_accounts<'a>(&self, txs: impl Iterator<Item = &'a Transaction>) -> Vec<Result<()>> {
-        use solana_sdk::sanitize::Sanitize;
-        let keys: Vec<Result<_>> = txs
-            .map(|tx| {
-                tx.sanitize().map_err(TransactionError::from)?;
-
-                if Self::has_duplicates(&tx.message.account_keys) {
-                    return Err(TransactionError::AccountLoadedTwice);
-                }
-
-                Ok(tx.message().get_account_keys_by_lock_type())
-            })
+        let keys: Vec<_> = txs
+            .map(|tx| tx.message().get_account_keys_by_lock_type())
             .collect();
         let mut account_locks = &mut self.account_locks.lock().unwrap();
         keys.into_iter()
-            .map(|result| match result {
-                Ok((writable_keys, readonly_keys)) => {
-                    self.lock_account(&mut account_locks, writable_keys, readonly_keys)
-                }
-                Err(e) => Err(e),
+            .map(|(writable_keys, readonly_keys)| {
+                self.lock_account(&mut account_locks, writable_keys, readonly_keys)
             })
             .collect()
     }
@@ -2033,12 +2008,6 @@ mod tests {
                 .unwrap(),
             1
         );
-    }
-
-    #[test]
-    fn test_has_duplicates() {
-        assert!(!Accounts::has_duplicates(&[1, 2]));
-        assert!(Accounts::has_duplicates(&[1, 2, 1]));
     }
 
     #[test]

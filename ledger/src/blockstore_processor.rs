@@ -45,6 +45,7 @@ use solana_transaction_status::token_balances::{
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
+    convert::TryFrom,
     path::PathBuf,
     result,
     sync::Arc,
@@ -126,7 +127,11 @@ fn execute_batch(
             timings,
         );
 
-    bank_utils::find_and_send_votes(batch.hashed_transactions(), &tx_results, replay_vote_sender);
+    bank_utils::find_and_send_votes(
+        batch.sanitized_transactions(),
+        &tx_results,
+        replay_vote_sender,
+    );
 
     let TransactionResults {
         fee_collection_results,
@@ -216,7 +221,10 @@ pub fn process_entries(
     replay_vote_sender: Option<&ReplayVoteSender>,
 ) -> Result<()> {
     let mut timings = ExecuteTimings::default();
-    let mut entry_types: Vec<_> = entries.iter().map(EntryType::from).collect();
+    let mut entry_types: Vec<_> = entries
+        .iter()
+        .map(EntryType::try_from)
+        .collect::<Result<_>>()?;
     let result = process_entries_with_callback(
         bank,
         &mut entry_types,
@@ -276,7 +284,7 @@ fn process_entries_with_callback(
 
                 loop {
                     // try to lock the accounts
-                    let batch = bank.prepare_hashed_batch(transactions);
+                    let batch = bank.prepare_sanitized_batch(transactions);
                     let first_lock_err = first_err(batch.lock_results());
 
                     // if locking worked
@@ -791,18 +799,13 @@ pub fn confirm_slot(
     };
 
     let check_start = Instant::now();
-    let check_result = entries.verify_and_hash_transactions(
+    let mut entries = entries.verify_and_hash_transactions(
         skip_verification,
         bank.libsecp256k1_0_5_upgrade_enabled(),
         bank.verify_tx_signatures_len_enabled(),
-    );
-    if check_result.is_none() {
-        warn!("Ledger proof of history failed at slot: {}", slot);
-        return Err(BlockError::InvalidEntryHash.into());
-    }
+    )?;
     let transaction_duration_us = timing::duration_as_us(&check_start.elapsed());
 
-    let mut entries = check_result.unwrap();
     let mut replay_elapsed = Measure::start("replay_elapsed");
     let mut execute_timings = ExecuteTimings::default();
     // Note: This will shuffle entries' transactions in-place.
@@ -2410,13 +2413,13 @@ pub mod tests {
         // Check all accounts are unlocked
         let txs1 = &entry_1_to_mint.transactions[..];
         let txs2 = &entry_2_to_3_mint_to_1.transactions[..];
-        let batch1 = bank.prepare_batch(txs1.iter());
+        let batch1 = bank.prepare_batch(txs1.iter()).unwrap();
         for result in batch1.lock_results() {
             assert!(result.is_ok());
         }
         // txs1 and txs2 have accounts that conflict, so we must drop txs1 first
         drop(batch1);
-        let batch2 = bank.prepare_batch(txs2.iter());
+        let batch2 = bank.prepare_batch(txs2.iter()).unwrap();
         for result in batch2.lock_results() {
             assert!(result.is_ok());
         }
@@ -3173,15 +3176,14 @@ pub mod tests {
             bank.last_blockhash(),
         );
         let account_not_found_sig = account_not_found_tx.signatures[0];
-        let mut account_loaded_twice = system_transaction::transfer(
+        let invalid_blockhash_tx = system_transaction::transfer(
             &mint_keypair,
             &solana_sdk::pubkey::new_rand(),
             42,
-            bank.last_blockhash(),
+            Hash::default(),
         );
-        account_loaded_twice.message.account_keys[1] = mint_keypair.pubkey();
-        let transactions = [account_not_found_tx, account_loaded_twice];
-        let batch = bank.prepare_batch(transactions.iter());
+        let transactions = [account_not_found_tx, invalid_blockhash_tx];
+        let batch = bank.prepare_batch(transactions.iter()).unwrap();
         let (
             TransactionResults {
                 fee_collection_results,
@@ -3199,7 +3201,6 @@ pub mod tests {
             &mut ExecuteTimings::default(),
         );
         let (err, signature) = get_first_error(&batch, fee_collection_results).unwrap();
-        // First error found should be for the 2nd transaction, due to iteration_order
         assert_eq!(err.unwrap_err(), TransactionError::AccountNotFound);
         assert_eq!(signature, account_not_found_sig);
     }
