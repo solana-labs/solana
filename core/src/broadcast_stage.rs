@@ -23,7 +23,7 @@ use solana_metrics::{inc_new_counter_error, inc_new_counter_info};
 use solana_runtime::bank::Bank;
 use solana_sdk::timing::timestamp;
 use solana_sdk::{clock::Slot, pubkey::Pubkey};
-use solana_streamer::sendmmsg::send_mmsg;
+use solana_streamer::{sendmmsg::send_mmsg, socket::is_global};
 use std::sync::atomic::AtomicU64;
 use std::{
     collections::HashMap,
@@ -387,10 +387,15 @@ pub fn broadcast_shreds(
     let mut shred_select = Measure::start("shred_select");
     let packets: Vec<_> = shreds
         .iter()
-        .map(|shred| {
+        .filter_map(|shred| {
             let broadcast_index = weighted_best(&peers_and_stakes, shred.seed());
+            let node = &peers[broadcast_index];
 
-            (&shred.payload, &peers[broadcast_index].tvu)
+            if is_global(&node.tvu) {
+                Some((&shred.payload, &node.tvu))
+            } else {
+                None
+            }
         })
         .collect();
     shred_select.stop();
