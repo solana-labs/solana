@@ -65,19 +65,23 @@ pub struct DeadState {
 }
 
 impl DeadState {
-    pub fn new(
+    pub fn new_from_state(
         slot: Slot,
         duplicate_slots_tracker: &mut DuplicateSlotsTracker,
         gossip_duplicate_confirmed_slots: &GossipDuplicateConfirmedSlots,
         fork_choice: &mut HeaviestSubtreeForkChoice,
     ) -> Self {
-        let duplicate_confirmed_hash = get_cluster_duplicate_confirmed_hash_from_state(
+        let duplicate_confirmed_hash = get_duplicate_confirmed_hash_from_state(
             slot,
             gossip_duplicate_confirmed_slots,
             fork_choice,
-            Hash::default(),
+            Some(Hash::default()),
         );
         let is_slot_duplicate = duplicate_slots_tracker.contains(&slot);
+        Self::new(duplicate_confirmed_hash, is_slot_duplicate)
+    }
+
+    fn new(duplicate_confirmed_hash: Option<Hash>, is_slot_duplicate: bool) -> Self {
         Self {
             duplicate_confirmed_hash,
             is_slot_duplicate,
@@ -95,21 +99,29 @@ pub struct BankFrozenState {
 }
 
 impl BankFrozenState {
-    pub fn new(
+    pub fn new_from_state(
         slot: Slot,
         frozen_hash: Hash,
         duplicate_slots_tracker: &mut DuplicateSlotsTracker,
         gossip_duplicate_confirmed_slots: &GossipDuplicateConfirmedSlots,
         fork_choice: &mut HeaviestSubtreeForkChoice,
     ) -> Self {
-        assert!(frozen_hash != Hash::default());
-        let duplicate_confirmed_hash = get_cluster_duplicate_confirmed_hash_from_state(
+        let duplicate_confirmed_hash = get_duplicate_confirmed_hash_from_state(
             slot,
             gossip_duplicate_confirmed_slots,
             fork_choice,
-            frozen_hash,
+            Some(frozen_hash),
         );
         let is_slot_duplicate = duplicate_slots_tracker.contains(&slot);
+        Self::new(frozen_hash, duplicate_confirmed_hash, is_slot_duplicate)
+    }
+
+    fn new(
+        frozen_hash: Hash,
+        duplicate_confirmed_hash: Option<Hash>,
+        is_slot_duplicate: bool,
+    ) -> Self {
+        assert!(frozen_hash != Hash::default());
         Self {
             frozen_hash,
             duplicate_confirmed_hash,
@@ -122,18 +134,23 @@ impl BankFrozenState {
 pub struct DuplicateConfirmedState {
     // Keep fields private, forces construction
     // via constructor
-    bank_status: BankStatus,
     duplicate_confirmed_hash: Hash,
+    bank_status: BankStatus,
 }
 impl DuplicateConfirmedState {
-    pub fn new(
+    pub fn new_from_state(
         duplicate_confirmed_hash: Hash,
         is_dead: impl Fn() -> bool,
         get_hash: impl Fn() -> Option<Hash>,
     ) -> Self {
+        let bank_status = BankStatus::new(is_dead, get_hash);
+        Self::new(duplicate_confirmed_hash, bank_status)
+    }
+
+    fn new(duplicate_confirmed_hash: Hash, bank_status: BankStatus) -> Self {
         Self {
             duplicate_confirmed_hash,
-            bank_status: BankStatus::new(is_dead, get_hash),
+            bank_status,
         }
     }
 }
@@ -142,11 +159,11 @@ impl DuplicateConfirmedState {
 pub struct DuplicateState {
     // Keep fields private, forces construction
     // via constructor
-    bank_status: BankStatus,
     duplicate_confirmed_hash: Option<Hash>,
+    bank_status: BankStatus,
 }
 impl DuplicateState {
-    pub fn new(
+    pub fn new_from_state(
         slot: Slot,
         gossip_duplicate_confirmed_slots: &GossipDuplicateConfirmedSlots,
         fork_choice: &mut HeaviestSubtreeForkChoice,
@@ -154,15 +171,19 @@ impl DuplicateState {
         get_hash: impl Fn() -> Option<Hash>,
     ) -> Self {
         let bank_status = BankStatus::new(is_dead, get_hash);
-        let duplicate_confirmed_hash = get_cluster_duplicate_confirmed_hash_from_state(
+        let duplicate_confirmed_hash = get_duplicate_confirmed_hash_from_state(
             slot,
             gossip_duplicate_confirmed_slots,
             fork_choice,
-            bank_status.bank_hash().unwrap_or_default(),
+            bank_status.bank_hash(),
         );
+        Self::new(duplicate_confirmed_hash, bank_status)
+    }
+
+    fn new(duplicate_confirmed_hash: Option<Hash>, bank_status: BankStatus) -> Self {
         Self {
-            bank_status,
             duplicate_confirmed_hash,
+            bank_status,
         }
     }
 }
@@ -226,17 +247,17 @@ impl SlotStateUpdate {
 fn check_duplicate_confirmed_hash_against_frozen_hash(
     state_changes: &mut Vec<ResultingStateChange>,
     slot: Slot,
-    cluster_duplicate_confirmed_hash: Hash,
+    duplicate_confirmed_hash: Hash,
     bank_frozen_hash: Hash,
     is_dead: bool,
 ) {
-    if cluster_duplicate_confirmed_hash != bank_frozen_hash {
+    if duplicate_confirmed_hash != bank_frozen_hash {
         if is_dead {
             // If the cluster duplicate confirmed some version of this slot, then
             // there's another version of our dead slot
             warn!(
                 "Cluster duplicate_confirmed slot {} with hash {}, but we marked slot dead",
-                slot, cluster_duplicate_confirmed_hash
+                slot, duplicate_confirmed_hash
             );
         } else {
             // The duplicate confirmed slot hash does not match our frozen hash.
@@ -244,12 +265,12 @@ fn check_duplicate_confirmed_hash_against_frozen_hash(
             // on and also repair the correct version
             warn!(
                 "Cluster duplicate_confirmed slot {} with hash {}, but we froze slot with hash {}",
-                slot, cluster_duplicate_confirmed_hash, bank_frozen_hash
+                slot, duplicate_confirmed_hash, bank_frozen_hash
             );
         }
         state_changes.push(ResultingStateChange::MarkSlotDuplicate(bank_frozen_hash));
         state_changes.push(ResultingStateChange::RepairDuplicateConfirmedVersion(
-            cluster_duplicate_confirmed_hash,
+            duplicate_confirmed_hash,
         ));
     } else {
         // If the versions match, then add the slot to the candidate
@@ -376,20 +397,24 @@ fn on_duplicate(duplicate_state: DuplicateState) -> Vec<ResultingStateChange> {
     vec![ResultingStateChange::MarkSlotDuplicate(bank_hash)]
 }
 
-fn get_cluster_duplicate_confirmed_hash_from_state(
+fn get_duplicate_confirmed_hash_from_state(
     slot: Slot,
     gossip_duplicate_confirmed_slots: &GossipDuplicateConfirmedSlots,
     fork_choice: &mut HeaviestSubtreeForkChoice,
-    bank_frozen_hash: Hash,
+    bank_frozen_hash: Option<Hash>,
 ) -> Option<Hash> {
     let gossip_duplicate_confirmed_hash = gossip_duplicate_confirmed_slots.get(&slot).cloned();
     // If the bank hasn't been frozen yet, then we haven't duplicate confirmed a local version
     // this slot through replay yet.
-    let is_local_replay_duplicate_confirmed = fork_choice
-        .is_duplicate_confirmed(&(slot, bank_frozen_hash))
-        .unwrap_or(false);
+    let is_local_replay_duplicate_confirmed = if let Some(bank_frozen_hash) = bank_frozen_hash {
+        fork_choice
+            .is_duplicate_confirmed(&(slot, bank_frozen_hash))
+            .unwrap_or(false)
+    } else {
+        false
+    };
 
-    get_cluster_duplicate_confirmed_hash(
+    get_duplicate_confirmed_hash(
         slot,
         gossip_duplicate_confirmed_hash,
         bank_frozen_hash,
@@ -397,16 +422,17 @@ fn get_cluster_duplicate_confirmed_hash_from_state(
     )
 }
 
-fn get_cluster_duplicate_confirmed_hash(
+fn get_duplicate_confirmed_hash(
     slot: Slot,
     gossip_duplicate_confirmed_hash: Option<Hash>,
-    bank_frozen_hash: Hash,
+    bank_frozen_hash: Option<Hash>,
     is_local_replay_duplicate_confirmed: bool,
 ) -> Option<Hash> {
     let local_duplicate_confirmed_hash = if is_local_replay_duplicate_confirmed {
         // If local replay has duplicate_confirmed this slot, this slot must have
         // descendants with votes for this slot, hence this slot must be
         // frozen.
+        let bank_frozen_hash = bank_frozen_hash.unwrap();
         assert!(bank_frozen_hash != Hash::default());
         Some(bank_frozen_hash)
     } else {
@@ -425,7 +451,7 @@ fn get_cluster_duplicate_confirmed_hash(
                     slot, gossip_duplicate_confirmed_hash, local_duplicate_confirmed_hash
                 );
             }
-            Some(bank_frozen_hash)
+            Some(local_duplicate_confirmed_hash)
         }
         (Some(bank_frozen_hash), None) => Some(bank_frozen_hash),
         _ => gossip_duplicate_confirmed_hash,
@@ -455,10 +481,8 @@ fn apply_state_changes(
             ResultingStateChange::MarkSlotDuplicate(bank_frozen_hash) => {
                 fork_choice.mark_fork_invalid_candidate(&(slot, bank_frozen_hash));
             }
-            ResultingStateChange::RepairDuplicateConfirmedVersion(
-                cluster_duplicate_confirmed_hash,
-            ) => {
-                duplicate_slots_to_repair.insert((slot, cluster_duplicate_confirmed_hash));
+            ResultingStateChange::RepairDuplicateConfirmedVersion(duplicate_confirmed_hash) => {
+                duplicate_slots_to_repair.insert((slot, duplicate_confirmed_hash));
             }
             ResultingStateChange::DuplicateConfirmedSlotMatchesCluster(bank_frozen_hash) => {
                 not_duplicate_confirmed_frozen_hash = None;
@@ -538,8 +562,9 @@ mod test {
         $(
             #[test]
             fn $name() {
-                let (state_args, state_update, expected) = $value;
-                assert_eq!(expected, state_update.to_handler()(state_args));
+                let slot = 10;
+                let (state_update, expected) = $value;
+                assert_eq!(expected, state_update.into_state_changes(slot));
             }
         )*
         }
@@ -548,454 +573,271 @@ mod test {
     state_update_tests! {
         bank_frozen_state_update_0: {
             // frozen hash has to be non-default for frozen state transition
-            let bank_frozen_hash = Hash::new_unique();
-            // cannot be frozen and dead
-            let is_dead = false;
-            let cluster_duplicate_confirmed_hash = None;
+            let frozen_hash = Hash::new_unique();
+            let duplicate_confirmed_hash = None;
+            let is_slot_duplicate = false;
+            let bank_frozen_state = BankFrozenState::new(
+                frozen_hash,
+                duplicate_confirmed_hash,
+                is_slot_duplicate,
+            );
             (
-                CommonStateArgs {
-                    slot: 1,
-                    bank_frozen_hash,
-                    cluster_duplicate_confirmed_hash,
-                    is_dead,
-                    is_slot_duplicate: false,
-                },
-                SlotStateUpdate::BankFrozen,
-                vec![ResultingStateChange::BankFrozen(bank_frozen_hash)]
+                SlotStateUpdate::BankFrozen(bank_frozen_state),
+                vec![ResultingStateChange::BankFrozen(frozen_hash)]
             )
         },
         bank_frozen_state_update_1: {
             // frozen hash has to be non-default for frozen state transition
-            let bank_frozen_hash = Hash::new_unique();
-            // cannot be frozen and dead
-            let is_dead = false;
-            let cluster_duplicate_confirmed_hash = None;
+            let frozen_hash = Hash::new_unique();
+            let duplicate_confirmed_hash = None;
+            let is_slot_duplicate = true;
+            let bank_frozen_state = BankFrozenState::new(
+                frozen_hash,
+                duplicate_confirmed_hash,
+                is_slot_duplicate,
+            );
             (
-                CommonStateArgs {
-                    slot: 1,
-                    bank_frozen_hash,
-                    cluster_duplicate_confirmed_hash,
-                    is_dead,
-                    is_slot_duplicate: true,
-                },
-                SlotStateUpdate::BankFrozen,
-                vec![ResultingStateChange::BankFrozen(bank_frozen_hash), ResultingStateChange::MarkSlotDuplicate(bank_frozen_hash)]
+                SlotStateUpdate::BankFrozen(bank_frozen_state),
+                vec![ResultingStateChange::BankFrozen(frozen_hash), ResultingStateChange::MarkSlotDuplicate(frozen_hash)]
             )
         },
         bank_frozen_state_update_2: {
             // frozen hash has to be non-default for frozen state transition
-            let bank_frozen_hash = Hash::new_unique();
-            // cannot be frozen and dead
-            let is_dead = false;
-            let cluster_duplicate_confirmed_hash = Some(bank_frozen_hash);
+            let frozen_hash = Hash::new_unique();
+            let duplicate_confirmed_hash = Some(frozen_hash);
+            let is_slot_duplicate = false;
+            let bank_frozen_state = BankFrozenState::new(
+                frozen_hash,
+                duplicate_confirmed_hash,
+                is_slot_duplicate,
+            );
             (
-                CommonStateArgs {
-                    slot: 1,
-                    bank_frozen_hash,
-                    cluster_duplicate_confirmed_hash,
-                    is_dead,
-                    is_slot_duplicate: false,
-                },
-                SlotStateUpdate::BankFrozen,
-                vec![ResultingStateChange::BankFrozen(bank_frozen_hash),
-                ResultingStateChange::DuplicateConfirmedSlotMatchesCluster(bank_frozen_hash)]
+                SlotStateUpdate::BankFrozen(bank_frozen_state),
+                vec![ResultingStateChange::BankFrozen(frozen_hash),
+                ResultingStateChange::DuplicateConfirmedSlotMatchesCluster(frozen_hash)]
             )
         },
         bank_frozen_state_update_3: {
             // frozen hash has to be non-default for frozen state transition
-            let bank_frozen_hash = Hash::new_unique();
-            // cannot be frozen and dead
-            let is_dead = false;
-            let cluster_duplicate_confirmed_hash = Some(bank_frozen_hash);
+            let frozen_hash = Hash::new_unique();
+            let duplicate_confirmed_hash = Some(frozen_hash);
+            let is_slot_duplicate = true;
+            let bank_frozen_state = BankFrozenState::new(
+                frozen_hash,
+                duplicate_confirmed_hash,
+                is_slot_duplicate,
+            );
             (
-                CommonStateArgs {
-                    slot: 1,
-                    bank_frozen_hash,
-                    cluster_duplicate_confirmed_hash,
-                    is_dead,
-                    is_slot_duplicate: true,
-                },
-                SlotStateUpdate::BankFrozen,
-                vec![ResultingStateChange::BankFrozen(bank_frozen_hash),
-                ResultingStateChange::DuplicateConfirmedSlotMatchesCluster(bank_frozen_hash)]
+                SlotStateUpdate::BankFrozen(bank_frozen_state),
+                vec![ResultingStateChange::BankFrozen(frozen_hash),
+                ResultingStateChange::DuplicateConfirmedSlotMatchesCluster(frozen_hash)]
             )
         },
         bank_frozen_state_update_4: {
             // frozen hash has to be non-default for frozen state transition
-            let bank_frozen_hash = Hash::new_unique();
-            // cannot be frozen and dead
-            let is_dead = false;
-            let cluster_duplicate_confirmed_hash = Some(Hash::new_unique());
+            let frozen_hash = Hash::new_unique();
+            let duplicate_confirmed_hash = Some(Hash::new_unique());
+            let is_slot_duplicate = false;
+            let bank_frozen_state = BankFrozenState::new(
+                frozen_hash,
+                duplicate_confirmed_hash,
+                is_slot_duplicate,
+            );
             (
-                CommonStateArgs {
-                    slot: 1,
-                    bank_frozen_hash,
-                    cluster_duplicate_confirmed_hash,
-                    is_dead,
-                    is_slot_duplicate: false,
-                },
-                SlotStateUpdate::BankFrozen,
-                vec![ResultingStateChange::BankFrozen(bank_frozen_hash),
-                ResultingStateChange::MarkSlotDuplicate(bank_frozen_hash),
-                ResultingStateChange::RepairDuplicateConfirmedVersion(cluster_duplicate_confirmed_hash.unwrap())],
+                SlotStateUpdate::BankFrozen(bank_frozen_state),
+                vec![ResultingStateChange::BankFrozen(frozen_hash),
+                ResultingStateChange::MarkSlotDuplicate(frozen_hash),
+                ResultingStateChange::RepairDuplicateConfirmedVersion(duplicate_confirmed_hash.unwrap())],
             )
         },
         bank_frozen_state_update_5: {
             // frozen hash has to be non-default for frozen state transition
-            let bank_frozen_hash = Hash::new_unique();
-            // cannot be frozen and dead
-            let is_dead = false;
-            let cluster_duplicate_confirmed_hash = Some(Hash::new_unique());
+            let frozen_hash = Hash::new_unique();
+            let duplicate_confirmed_hash = Some(Hash::new_unique());
+            let is_slot_duplicate = true;
+            let bank_frozen_state = BankFrozenState::new(
+                frozen_hash,
+                duplicate_confirmed_hash,
+                is_slot_duplicate,
+            );
             (
-                CommonStateArgs {
-                    slot: 1,
-                    bank_frozen_hash,
-                    cluster_duplicate_confirmed_hash,
-                    is_dead,
-                    is_slot_duplicate: true,
-                },
-                SlotStateUpdate::BankFrozen,
-                vec![ResultingStateChange::BankFrozen(bank_frozen_hash),
-                ResultingStateChange::MarkSlotDuplicate(bank_frozen_hash),
-                ResultingStateChange::RepairDuplicateConfirmedVersion(cluster_duplicate_confirmed_hash.unwrap())],
+                SlotStateUpdate::BankFrozen(bank_frozen_state),
+                vec![ResultingStateChange::BankFrozen(frozen_hash),
+                ResultingStateChange::MarkSlotDuplicate(frozen_hash),
+                ResultingStateChange::RepairDuplicateConfirmedVersion(duplicate_confirmed_hash.unwrap())],
             )
         },
         duplicate_confirmed_state_update_0: {
-            // Duplicate confirmed state has to be Some
-            let cluster_duplicate_confirmed_hash = Some(Hash::new_unique());
-            let bank_frozen_hash = Hash::default();
+            let duplicate_confirmed_hash = Hash::new_unique();
+            let bank_status = BankStatus::Unprocessed;
+            let duplicate_confirmed_state = DuplicateConfirmedState::new(
+                duplicate_confirmed_hash,
+                bank_status,
+            );
             (
-                CommonStateArgs {
-                    slot: 1,
-                    bank_frozen_hash,
-                    cluster_duplicate_confirmed_hash,
-                    is_dead: false,
-                    is_slot_duplicate: false,
-                },
-                SlotStateUpdate::DuplicateConfirmed,
+                SlotStateUpdate::DuplicateConfirmed(duplicate_confirmed_state),
                 Vec::<ResultingStateChange>::new()
             )
         },
         duplicate_confirmed_state_update_1: {
-            // Duplicate confirmed state has to be Some
-            let cluster_duplicate_confirmed_hash = Some(Hash::new_unique());
-            let bank_frozen_hash = Hash::default();
+            let duplicate_confirmed_hash = Hash::new_unique();
+            let bank_status = BankStatus::Dead;
+            let duplicate_confirmed_state = DuplicateConfirmedState::new(
+                duplicate_confirmed_hash,
+                bank_status,
+            );
             (
-                CommonStateArgs {
-                    slot: 1,
-                    bank_frozen_hash,
-                    cluster_duplicate_confirmed_hash,
-                    is_dead: false,
-                    is_slot_duplicate: true,
-                },
-                SlotStateUpdate::DuplicateConfirmed,
-                Vec::<ResultingStateChange>::new()
+                SlotStateUpdate::DuplicateConfirmed(duplicate_confirmed_state),
+                vec![
+                ResultingStateChange::MarkSlotDuplicate(Hash::default()),
+                ResultingStateChange::RepairDuplicateConfirmedVersion(duplicate_confirmed_hash)],
             )
         },
         duplicate_confirmed_state_update_2: {
-            // Duplicate confirmed state has to be Some
-            let cluster_duplicate_confirmed_hash = Some(Hash::new_unique());
-            let bank_frozen_hash = cluster_duplicate_confirmed_hash.unwrap();
+            let duplicate_confirmed_hash = Hash::new_unique();
+            let bank_status = BankStatus::Frozen(duplicate_confirmed_hash);
+            let duplicate_confirmed_state = DuplicateConfirmedState::new(
+                duplicate_confirmed_hash,
+                bank_status,
+            );
             (
-                CommonStateArgs {
-                    slot: 1,
-                    bank_frozen_hash,
-                    cluster_duplicate_confirmed_hash,
-                    is_dead: false,
-                    is_slot_duplicate: false,
-                },
-                SlotStateUpdate::DuplicateConfirmed,
+                SlotStateUpdate::DuplicateConfirmed(duplicate_confirmed_state),
                 vec![
-                ResultingStateChange::DuplicateConfirmedSlotMatchesCluster(bank_frozen_hash)]
+                ResultingStateChange::DuplicateConfirmedSlotMatchesCluster(duplicate_confirmed_hash)]
             )
         },
         duplicate_confirmed_state_update_3: {
-            // Duplicate confirmed state has to be Some
-            let cluster_duplicate_confirmed_hash = Some(Hash::new_unique());
-            let bank_frozen_hash = cluster_duplicate_confirmed_hash.unwrap();
+            let duplicate_confirmed_hash = Hash::new_unique();
+            let frozen_hash = Hash::new_unique();
+            let bank_status = BankStatus::Frozen(frozen_hash);
+            let duplicate_confirmed_state = DuplicateConfirmedState::new(
+                duplicate_confirmed_hash,
+                bank_status,
+            );
             (
-                CommonStateArgs {
-                    slot: 1,
-                    bank_frozen_hash,
-                    cluster_duplicate_confirmed_hash,
-                    is_dead: true,
-                    is_slot_duplicate: true,
-                },
-                SlotStateUpdate::DuplicateConfirmed,
+                SlotStateUpdate::DuplicateConfirmed(duplicate_confirmed_state),
                 vec![
-                ResultingStateChange::DuplicateConfirmedSlotMatchesCluster(bank_frozen_hash)]
-            )
-        },
-        duplicate_confirmed_state_update_4: {
-            // Duplicate confirmed state has to be Some
-            let cluster_duplicate_confirmed_hash = Some(Hash::new_unique());
-            let bank_frozen_hash = Hash::new_unique();
-            (
-                CommonStateArgs {
-                    slot: 1,
-                    bank_frozen_hash,
-                    cluster_duplicate_confirmed_hash,
-                    is_dead: false,
-                    is_slot_duplicate: false,
-                },
-                SlotStateUpdate::DuplicateConfirmed,
-                vec![
-                ResultingStateChange::MarkSlotDuplicate(bank_frozen_hash),
-                ResultingStateChange::RepairDuplicateConfirmedVersion(cluster_duplicate_confirmed_hash.unwrap())],
-            )
-        },
-        duplicate_confirmed_state_update_5: {
-            // Duplicate confirmed state has to be Some
-            let cluster_duplicate_confirmed_hash = Some(Hash::new_unique());
-            let bank_frozen_hash = Hash::new_unique();
-            (
-                CommonStateArgs {
-                    slot: 1,
-                    bank_frozen_hash,
-                    cluster_duplicate_confirmed_hash,
-                    is_dead: false,
-                    is_slot_duplicate: true,
-                },
-                SlotStateUpdate::DuplicateConfirmed,
-                vec![
-                ResultingStateChange::MarkSlotDuplicate(bank_frozen_hash),
-                ResultingStateChange::RepairDuplicateConfirmedVersion(cluster_duplicate_confirmed_hash.unwrap())],
-            )
-        },
-        duplicate_confirmed_state_update_6: {
-            // Duplicate confirmed state has to be Some
-            let cluster_duplicate_confirmed_hash = Some(Hash::new_unique());
-            let bank_frozen_hash = Hash::default();
-            (
-                CommonStateArgs {
-                    slot: 1,
-                    bank_frozen_hash,
-                    cluster_duplicate_confirmed_hash,
-                    is_dead: true,
-                    is_slot_duplicate: false,
-                },
-                SlotStateUpdate::DuplicateConfirmed,
-                vec![
-                ResultingStateChange::MarkSlotDuplicate(bank_frozen_hash),
-                ResultingStateChange::RepairDuplicateConfirmedVersion(cluster_duplicate_confirmed_hash.unwrap())],
-            )
-        },
-        duplicate_confirmed_state_update_7: {
-            // Duplicate confirmed state has to be Some
-            let cluster_duplicate_confirmed_hash = Some(Hash::new_unique());
-            let bank_frozen_hash = Hash::default();
-            (
-                CommonStateArgs {
-                    slot: 1,
-                    bank_frozen_hash,
-                    cluster_duplicate_confirmed_hash,
-                    is_dead: true,
-                    is_slot_duplicate: true,
-                },
-                SlotStateUpdate::DuplicateConfirmed,
-                vec![
-                ResultingStateChange::MarkSlotDuplicate(bank_frozen_hash),
-                ResultingStateChange::RepairDuplicateConfirmedVersion(cluster_duplicate_confirmed_hash.unwrap())],
+                ResultingStateChange::MarkSlotDuplicate(frozen_hash),
+                ResultingStateChange::RepairDuplicateConfirmedVersion(duplicate_confirmed_hash)],
             )
         },
         dead_state_update_0: {
-            let is_dead=true;
-            // Bank hash has to be default for dead slots
-            let bank_frozen_hash = Hash::default();
-            let cluster_duplicate_confirmed_hash = None;
+            let duplicate_confirmed_hash = None;
+            let is_slot_duplicate = false;
+            let dead_state = DeadState::new(
+                duplicate_confirmed_hash,
+                is_slot_duplicate,
+            );
             (
-                CommonStateArgs {
-                    slot: 1,
-                    bank_frozen_hash,
-                    cluster_duplicate_confirmed_hash,
-                    is_dead,
-                    is_slot_duplicate: false,
-                },
-                SlotStateUpdate::Dead,
+                SlotStateUpdate::Dead(dead_state),
                 Vec::<ResultingStateChange>::new()
             )
         },
         dead_state_update_1: {
-            let is_dead=true;
-            // Bank hash has to be default for dead slots
-            let bank_frozen_hash = Hash::default();
-            let cluster_duplicate_confirmed_hash = None;
+            let duplicate_confirmed_hash = None;
+            let is_slot_duplicate = true;
+            let dead_state = DeadState::new(
+                duplicate_confirmed_hash,
+                is_slot_duplicate,
+            );
             (
-                CommonStateArgs {
-                    slot: 1,
-                    bank_frozen_hash,
-                    cluster_duplicate_confirmed_hash,
-                    is_dead,
-                    is_slot_duplicate: true,
-                },
-                SlotStateUpdate::Dead,
-                Vec::<ResultingStateChange>::new()
+                SlotStateUpdate::Dead(dead_state),
+                vec![ResultingStateChange::MarkSlotDuplicate(Hash::default())],
             )
         },
         dead_state_update_2: {
-            let is_dead=true;
-            // Bank hash has to be default for dead slots
-            let bank_frozen_hash = Hash::default();
-            let cluster_duplicate_confirmed_hash = Some(Hash::new_unique());
+            let duplicate_confirmed_hash = Some(Hash::new_unique());
+            let is_slot_duplicate = false;
+            let dead_state = DeadState::new(
+                duplicate_confirmed_hash,
+                is_slot_duplicate,
+            );
             (
-                CommonStateArgs {
-                    slot: 1,
-                    bank_frozen_hash,
-                    cluster_duplicate_confirmed_hash,
-                    is_dead,
-                    is_slot_duplicate: false,
-                },
-                SlotStateUpdate::Dead,
+                SlotStateUpdate::Dead(dead_state),
                 vec![
-                ResultingStateChange::MarkSlotDuplicate(bank_frozen_hash),
-                ResultingStateChange::RepairDuplicateConfirmedVersion(cluster_duplicate_confirmed_hash.unwrap())],
+                ResultingStateChange::MarkSlotDuplicate(Hash::default()),
+                ResultingStateChange::RepairDuplicateConfirmedVersion(duplicate_confirmed_hash.unwrap())],
             )
         },
         dead_state_update_3: {
-            let is_dead=true;
-            // Bank hash has to be default for dead slots
-            let bank_frozen_hash = Hash::default();
-            let cluster_duplicate_confirmed_hash = Some(Hash::new_unique());
+            let duplicate_confirmed_hash = Some(Hash::new_unique());
+            let is_slot_duplicate = true;
+            let dead_state = DeadState::new(
+                duplicate_confirmed_hash,
+                is_slot_duplicate,
+            );
             (
-                CommonStateArgs {
-                    slot: 1,
-                    bank_frozen_hash,
-                    cluster_duplicate_confirmed_hash,
-                    is_dead,
-                    is_slot_duplicate: true,
-                },
-                SlotStateUpdate::Dead,
+                SlotStateUpdate::Dead(dead_state),
                 vec![
-                ResultingStateChange::MarkSlotDuplicate(bank_frozen_hash),
-                ResultingStateChange::RepairDuplicateConfirmedVersion(cluster_duplicate_confirmed_hash.unwrap())],
+                ResultingStateChange::MarkSlotDuplicate(Hash::default()),
+                ResultingStateChange::RepairDuplicateConfirmedVersion(duplicate_confirmed_hash.unwrap())],
             )
         },
         duplicate_state_update_0: {
-            // Slot must be marked duplicate
-            let is_slot_duplicate = true;
-            // Slot is not frozen and not dead, so no action can be taken
-            let cluster_duplicate_confirmed_hash = Some(Hash::new_unique());
-            let bank_frozen_hash = Hash::default();
+            let duplicate_confirmed_hash = None;
+            let bank_status = BankStatus::Unprocessed;
+            let duplicate_state = DuplicateState::new(duplicate_confirmed_hash, bank_status);
             (
-                CommonStateArgs {
-                    slot: 1,
-                    bank_frozen_hash,
-                    cluster_duplicate_confirmed_hash,
-                    is_dead: false,
-                    is_slot_duplicate,
-                },
-                SlotStateUpdate::Duplicate,
+                SlotStateUpdate::Duplicate(duplicate_state),
                 Vec::<ResultingStateChange>::new()
             )
         },
         duplicate_state_update_1: {
-            // Slot must be marked duplicate
-            let is_slot_duplicate = true;
-            // Slot is dead, so no action can be taken
-            let cluster_duplicate_confirmed_hash = Some(Hash::new_unique());
-            let bank_frozen_hash = Hash::default();
+            let duplicate_confirmed_hash = None;
+            let bank_status = BankStatus::Dead;
+            let duplicate_state = DuplicateState::new(duplicate_confirmed_hash, bank_status);
             (
-                CommonStateArgs {
-                    slot: 1,
-                    bank_frozen_hash,
-                    cluster_duplicate_confirmed_hash,
-                    is_dead: true,
-                    is_slot_duplicate,
-                },
-                SlotStateUpdate::Duplicate,
-                vec![
-                ResultingStateChange::MarkSlotDuplicate(bank_frozen_hash)],
+                SlotStateUpdate::Duplicate(duplicate_state),
+                vec![ResultingStateChange::MarkSlotDuplicate(Hash::default())],
             )
         },
         duplicate_state_update_2: {
-            // Slot must be marked duplicate
-            let is_slot_duplicate = true;
-            // Slot is frozen but same hash so no action
-            let cluster_duplicate_confirmed_hash = Some(Hash::new_unique());
-            let bank_frozen_hash = cluster_duplicate_confirmed_hash.unwrap();
+            let duplicate_confirmed_hash = None;
+            let bank_hash = Hash::new_unique();
+            let bank_status = BankStatus::Frozen(bank_hash);
+            let duplicate_state = DuplicateState::new(duplicate_confirmed_hash, bank_status);
             (
-                CommonStateArgs {
-                    slot: 1,
-                    bank_frozen_hash,
-                    cluster_duplicate_confirmed_hash,
-                    is_dead: false,
-                    is_slot_duplicate,
-                },
-                SlotStateUpdate::Duplicate,
-                Vec::<ResultingStateChange>::new()
+                SlotStateUpdate::Duplicate(duplicate_state),
+                vec![ResultingStateChange::MarkSlotDuplicate(bank_hash)],
             )
         },
         duplicate_state_update_3: {
-            // Slot must be marked duplicate
-            let is_slot_duplicate = true;
-            // Slot is frozen, so mark the duplicate
-            let cluster_duplicate_confirmed_hash = Some(Hash::new_unique());
-            let bank_frozen_hash = Hash::new_unique();
+            let duplicate_confirmed_hash = Some(Hash::new_unique());
+            let bank_status = BankStatus::Unprocessed;
+            let duplicate_state = DuplicateState::new(duplicate_confirmed_hash, bank_status);
             (
-                CommonStateArgs {
-                    slot: 1,
-                    bank_frozen_hash,
-                    cluster_duplicate_confirmed_hash,
-                    is_dead: false,
-                    is_slot_duplicate,
-                },
-                SlotStateUpdate::Duplicate,
-                vec![
-                ResultingStateChange::MarkSlotDuplicate(bank_frozen_hash)],
+                SlotStateUpdate::Duplicate(duplicate_state),
+                Vec::<ResultingStateChange>::new(),
             )
         },
         duplicate_state_update_4: {
-            // Slot must be marked duplicate
-            let is_slot_duplicate = true;
-            // Slot is not frozen and not dead, so no action can be taken
-            let cluster_duplicate_confirmed_hash = None;
-            let bank_frozen_hash = Hash::default();
+            let duplicate_confirmed_hash = Some(Hash::new_unique());
+            let bank_status = BankStatus::Dead;
+            let duplicate_state = DuplicateState::new(duplicate_confirmed_hash, bank_status);
             (
-                CommonStateArgs {
-                    slot: 1,
-                    bank_frozen_hash,
-                    cluster_duplicate_confirmed_hash,
-                    is_dead: false,
-                    is_slot_duplicate,
-                },
-                SlotStateUpdate::Duplicate,
-                Vec::<ResultingStateChange>::new()
+                SlotStateUpdate::Duplicate(duplicate_state),
+                vec![
+                ResultingStateChange::MarkSlotDuplicate(Hash::default())],
             )
         },
         duplicate_state_update_5: {
-            // Slot must be marked duplicate
-            let is_slot_duplicate = true;
-            // Slot is dead, so mark the duplicate
-            let cluster_duplicate_confirmed_hash = None;
-            let bank_frozen_hash = Hash::default();
+            let duplicate_confirmed_hash = Some(Hash::new_unique());
+            let bank_status = BankStatus::Frozen(duplicate_confirmed_hash.unwrap());
+            let duplicate_state = DuplicateState::new(duplicate_confirmed_hash, bank_status);
             (
-                CommonStateArgs {
-                    slot: 1,
-                    bank_frozen_hash,
-                    cluster_duplicate_confirmed_hash,
-                    is_dead: true,
-                    is_slot_duplicate,
-                },
-                SlotStateUpdate::Duplicate,
-                vec![ResultingStateChange::MarkSlotDuplicate(bank_frozen_hash)],
+                SlotStateUpdate::Duplicate(duplicate_state),
+                Vec::<ResultingStateChange>::new()
             )
         },
         duplicate_state_update_6: {
-            // Slot must be marked duplicate
-            let is_slot_duplicate = true;
-            // Slot is frozen, so mark the duplicate
-            let cluster_duplicate_confirmed_hash = None;
-            let bank_frozen_hash = Hash::new_unique();
+            let duplicate_confirmed_hash = Some(Hash::new_unique());
+            let frozen_hash = Hash::new_unique();
+            let bank_status = BankStatus::Frozen(frozen_hash);
+            let duplicate_state = DuplicateState::new(duplicate_confirmed_hash, bank_status);
             (
-                CommonStateArgs {
-                    slot: 1,
-                    bank_frozen_hash,
-                    cluster_duplicate_confirmed_hash,
-                    is_dead: false,
-                    is_slot_duplicate,
-                },
-                SlotStateUpdate::Duplicate,
-                vec![ResultingStateChange::MarkSlotDuplicate(bank_frozen_hash)],
+                SlotStateUpdate::Duplicate(duplicate_state),
+                vec![
+                ResultingStateChange::MarkSlotDuplicate(frozen_hash)],
             )
         },
     }
@@ -1252,15 +1094,21 @@ mod test {
         let gossip_duplicate_confirmed_slots = GossipDuplicateConfirmedSlots::default();
         let mut duplicate_slots_to_repair = DuplicateSlotsToRepair::default();
         let duplicate_slot = 2;
+        let duplicate_state = DuplicateState::new_from_state(
+            duplicate_slot,
+            &gossip_duplicate_confirmed_slots,
+            &mut heaviest_subtree_fork_choice,
+            || progress.is_dead(duplicate_slot).unwrap_or(false),
+            || initial_bank_hash,
+        );
         check_slot_agrees_with_cluster(
             duplicate_slot,
             root,
             &blockstore,
-            initial_bank_hash,
             &mut duplicate_slots_tracker,
             &mut heaviest_subtree_fork_choice,
             &mut duplicate_slots_to_repair,
-            SlotStateUpdate::Duplicate,
+            SlotStateUpdate::Duplicate(duplicate_state),
         );
         assert!(duplicate_slots_tracker.contains(&duplicate_slot));
         // Nothing should be applied yet to fork choice, since bank was not yet frozen
@@ -1278,15 +1126,21 @@ mod test {
             .get(duplicate_slot)
             .unwrap()
             .hash();
+        let bank_frozen_state = BankFrozenState::new_from_state(
+            duplicate_slot,
+            frozen_duplicate_slot_hash,
+            &mut duplicate_slots_tracker,
+            &gossip_duplicate_confirmed_slots,
+            &mut heaviest_subtree_fork_choice,
+        );
         check_slot_agrees_with_cluster(
             duplicate_slot,
             root,
             &blockstore,
-            Some(frozen_duplicate_slot_hash),
             &mut duplicate_slots_tracker,
             &mut heaviest_subtree_fork_choice,
             &mut duplicate_slots_to_repair,
-            SlotStateUpdate::BankFrozen,
+            SlotStateUpdate::BankFrozen(bank_frozen_state),
         );
 
         // Progress map should have the correct updates, fork choice should mark duplicate
@@ -1340,15 +1194,19 @@ mod test {
         // Mark slot 2 as duplicate confirmed
         let slot2_hash = bank_forks.read().unwrap().get(2).unwrap().hash();
         gossip_duplicate_confirmed_slots.insert(2, slot2_hash);
+        let duplicate_confirmed_state = DuplicateConfirmedState::new_from_state(
+            slot2_hash,
+            || progress.is_dead(2).unwrap_or(false),
+            || Some(slot2_hash),
+        );
         check_slot_agrees_with_cluster(
             2,
             root,
             &blockstore,
-            Some(slot2_hash),
             &mut duplicate_slots_tracker,
             &mut heaviest_subtree_fork_choice,
             &mut DuplicateSlotsToRepair::default(),
-            SlotStateUpdate::DuplicateConfirmed,
+            SlotStateUpdate::DuplicateConfirmed(duplicate_confirmed_state),
         );
         assert!(heaviest_subtree_fork_choice
             .is_duplicate_confirmed(&(2, slot2_hash))
@@ -1369,15 +1227,21 @@ mod test {
 
         // Mark 3 as duplicate, should not remove the duplicate confirmed slot 2 from
         // fork choice
+        let duplicate_state = DuplicateState::new_from_state(
+            3,
+            &gossip_duplicate_confirmed_slots,
+            &mut heaviest_subtree_fork_choice,
+            || progress.is_dead(3).unwrap_or(false),
+            || Some(slot3_hash),
+        );
         check_slot_agrees_with_cluster(
             3,
             root,
             &blockstore,
-            Some(slot3_hash),
             &mut duplicate_slots_tracker,
             &mut heaviest_subtree_fork_choice,
             &mut DuplicateSlotsToRepair::default(),
-            SlotStateUpdate::Duplicate,
+            SlotStateUpdate::Duplicate(duplicate_state),
         );
         assert!(duplicate_slots_tracker.contains(&3));
         assert_eq!(
@@ -1428,15 +1292,22 @@ mod test {
         let mut gossip_duplicate_confirmed_slots = GossipDuplicateConfirmedSlots::default();
 
         // Mark 2 as duplicate
+        let slot2_hash = bank_forks.read().unwrap().get(2).unwrap().hash();
+        let duplicate_state = DuplicateState::new_from_state(
+            2,
+            &gossip_duplicate_confirmed_slots,
+            &mut heaviest_subtree_fork_choice,
+            || progress.is_dead(2).unwrap_or(false),
+            || Some(slot2_hash),
+        );
         check_slot_agrees_with_cluster(
             2,
             root,
             &blockstore,
-            Some(bank_forks.read().unwrap().get(2).unwrap().hash()),
             &mut duplicate_slots_tracker,
             &mut heaviest_subtree_fork_choice,
             &mut DuplicateSlotsToRepair::default(),
-            SlotStateUpdate::Duplicate,
+            SlotStateUpdate::Duplicate(duplicate_state),
         );
         assert!(duplicate_slots_tracker.contains(&2));
         for slot in 2..=3 {
@@ -1457,15 +1328,19 @@ mod test {
 
         // Mark slot 3 as duplicate confirmed, should mark slot 2 as duplicate confirmed as well
         gossip_duplicate_confirmed_slots.insert(3, slot3_hash);
+        let duplicate_confirmed_state = DuplicateConfirmedState::new_from_state(
+            slot3_hash,
+            || progress.is_dead(3).unwrap_or(false),
+            || Some(slot3_hash),
+        );
         check_slot_agrees_with_cluster(
             3,
             root,
             &blockstore,
-            Some(slot3_hash),
             &mut duplicate_slots_tracker,
             &mut heaviest_subtree_fork_choice,
             &mut DuplicateSlotsToRepair::default(),
-            SlotStateUpdate::DuplicateConfirmed,
+            SlotStateUpdate::DuplicateConfirmed(duplicate_confirmed_state),
         );
         for slot in 0..=3 {
             let slot_hash = bank_forks.read().unwrap().get(slot).unwrap().hash();
@@ -1505,15 +1380,19 @@ mod test {
 
         // Mark 3 as duplicate confirmed
         gossip_duplicate_confirmed_slots.insert(3, slot3_hash);
+        let duplicate_confirmed_state = DuplicateConfirmedState::new_from_state(
+            slot3_hash,
+            || progress.is_dead(3).unwrap_or(false),
+            || Some(slot3_hash),
+        );
         check_slot_agrees_with_cluster(
             3,
             root,
             &blockstore,
-            Some(slot3_hash),
             &mut duplicate_slots_tracker,
             &mut heaviest_subtree_fork_choice,
             &mut duplicate_slots_to_repair,
-            SlotStateUpdate::DuplicateConfirmed,
+            SlotStateUpdate::DuplicateConfirmed(duplicate_confirmed_state),
         );
         let verify_all_slots_duplicate_confirmed =
             |bank_forks: &RwLock<BankForks>,
@@ -1538,15 +1417,21 @@ mod test {
         // slot 1 was duplicate confirmed by the confirmation on its
         // descendant, 3.
         let slot1_hash = bank_forks.read().unwrap().get(1).unwrap().hash();
+        let duplicate_state = DuplicateState::new_from_state(
+            1,
+            &gossip_duplicate_confirmed_slots,
+            &mut heaviest_subtree_fork_choice,
+            || progress.is_dead(1).unwrap_or(false),
+            || Some(slot1_hash),
+        );
         check_slot_agrees_with_cluster(
             1,
             root,
             &blockstore,
-            Some(slot1_hash),
             &mut duplicate_slots_tracker,
             &mut heaviest_subtree_fork_choice,
             &mut duplicate_slots_to_repair,
-            SlotStateUpdate::Duplicate,
+            SlotStateUpdate::Duplicate(duplicate_state),
         );
         assert!(duplicate_slots_tracker.contains(&1));
         verify_all_slots_duplicate_confirmed(&bank_forks, &heaviest_subtree_fork_choice);

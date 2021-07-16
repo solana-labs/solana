@@ -1067,7 +1067,7 @@ impl ReplayStage {
                     return;
                 }
 
-                let duplicate_confirmed_state = DuplicateConfirmedState::new(
+                let duplicate_confirmed_state = DuplicateConfirmedState::new_from_state(
                     duplicate_confirmed_hash,
                     || progress.is_dead(confirmed_slot).unwrap_or(false),
                     || bank_forks.read().unwrap().bank_hash(confirmed_slot),
@@ -1129,7 +1129,7 @@ impl ReplayStage {
             new_duplicate_slots.into_iter().zip(bank_hashes.into_iter())
         {
             // WindowService should only send the signal once per slot
-            let duplicate_state = DuplicateState::new(
+            let duplicate_state = DuplicateState::new_from_state(
                 duplicate_slot,
                 gossip_duplicate_confirmed_slots,
                 fork_choice,
@@ -1425,7 +1425,7 @@ impl ReplayStage {
             err: format!("error: {:?}", err),
             timestamp: timestamp(),
         });
-        let dead_state = DeadState::new(
+        let dead_state = DeadState::new_from_state(
             slot,
             duplicate_slots_tracker,
             gossip_duplicate_confirmed_slots,
@@ -1933,7 +1933,7 @@ impl ReplayStage {
                     .get_fork_stats_mut(bank.slot())
                     .expect("All frozen banks must exist in the Progress map")
                     .bank_hash = Some(bank.hash());
-                let bank_frozen_state = BankFrozenState::new(
+                let bank_frozen_state = BankFrozenState::new_from_state(
                     bank.slot(),
                     bank.hash(),
                     duplicate_slots_tracker,
@@ -2487,7 +2487,7 @@ impl ReplayStage {
                 let duplicate_confirmed_hash = maybe_bank_hash.unwrap();
                 assert!(duplicate_confirmed_hash != Hash::default());
 
-                let duplicate_confirmed_state = DuplicateConfirmedState::new(
+                let duplicate_confirmed_state = DuplicateConfirmedState::new_from_state(
                     duplicate_confirmed_hash,
                     || false,
                     || maybe_bank_hash,
@@ -4806,15 +4806,21 @@ pub mod tests {
         let mut gossip_duplicate_confirmed_slots = GossipDuplicateConfirmedSlots::default();
         let bank4_hash = bank_forks.read().unwrap().bank_hash(4).unwrap();
         assert_ne!(bank4_hash, Hash::default());
+        let duplicate_state = DuplicateState::new_from_state(
+            4,
+            &gossip_duplicate_confirmed_slots,
+            &mut vote_simulator.heaviest_subtree_fork_choice,
+            || progress.is_dead(4).unwrap_or(false),
+            || Some(bank4_hash),
+        );
         check_slot_agrees_with_cluster(
             4,
             bank_forks.read().unwrap().root(),
             &blockstore,
-            Some(bank4_hash),
             &mut duplicate_slots_tracker,
             &mut vote_simulator.heaviest_subtree_fork_choice,
             &mut DuplicateSlotsToRepair::default(),
-            SlotStateUpdate::Duplicate,
+            SlotStateUpdate::Duplicate(duplicate_state),
         );
 
         let (vote_fork, reset_fork) = run_compute_and_select_forks(
@@ -4831,15 +4837,21 @@ pub mod tests {
         blockstore.store_duplicate_slot(2, vec![], vec![]).unwrap();
         let bank2_hash = bank_forks.read().unwrap().bank_hash(2).unwrap();
         assert_ne!(bank2_hash, Hash::default());
+        let duplicate_state = DuplicateState::new_from_state(
+            2,
+            &gossip_duplicate_confirmed_slots,
+            &mut vote_simulator.heaviest_subtree_fork_choice,
+            || progress.is_dead(2).unwrap_or(false),
+            || Some(bank2_hash),
+        );
         check_slot_agrees_with_cluster(
             2,
             bank_forks.read().unwrap().root(),
             &blockstore,
-            Some(bank2_hash),
             &mut duplicate_slots_tracker,
             &mut vote_simulator.heaviest_subtree_fork_choice,
             &mut DuplicateSlotsToRepair::default(),
-            SlotStateUpdate::Duplicate,
+            SlotStateUpdate::Duplicate(duplicate_state),
         );
 
         let (vote_fork, reset_fork) = run_compute_and_select_forks(
@@ -4859,15 +4871,19 @@ pub mod tests {
         // then slot 4 is now the heaviest bank again
         let mut duplicate_slots_to_repair = HashSet::new();
         gossip_duplicate_confirmed_slots.insert(4, bank4_hash);
+        let duplicate_confirmed_state = DuplicateConfirmedState::new_from_state(
+            bank4_hash,
+            || progress.is_dead(4).unwrap_or(false),
+            || Some(bank4_hash),
+        );
         check_slot_agrees_with_cluster(
             4,
             bank_forks.read().unwrap().root(),
             &blockstore,
-            Some(bank4_hash),
             &mut duplicate_slots_tracker,
             &mut vote_simulator.heaviest_subtree_fork_choice,
             &mut duplicate_slots_to_repair,
-            SlotStateUpdate::DuplicateConfirmed,
+            SlotStateUpdate::DuplicateConfirmed(duplicate_confirmed_state),
         );
         // The confirmed hash is detected in `progress`, which means
         // it's confirmation on the replayed block. This means we have
@@ -4998,15 +5014,19 @@ pub mod tests {
 
         // Mark fork choice branch as invalid so select forks below doesn't panic
         // on a nonexistent `heaviest_bank_on_same_fork` after we dump the duplciate fork.
+        let duplicate_confirmed_state = DuplicateConfirmedState::new_from_state(
+            duplicate_confirmed_bank2_hash,
+            || progress.is_dead(2).unwrap_or(false),
+            || Some(our_bank2_hash),
+        );
         check_slot_agrees_with_cluster(
             2,
             bank_forks.read().unwrap().root(),
             blockstore,
-            Some(our_bank2_hash),
             &mut duplicate_slots_tracker,
             heaviest_subtree_fork_choice,
             &mut duplicate_slots_to_repair,
-            SlotStateUpdate::DuplicateConfirmed,
+            SlotStateUpdate::DuplicateConfirmed(duplicate_confirmed_state),
         );
         assert!(duplicate_slots_to_repair.contains(&(2, duplicate_confirmed_bank2_hash)));
         let mut ancestors = bank_forks.read().unwrap().ancestors();
