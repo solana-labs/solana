@@ -101,35 +101,6 @@ module.exports = {
       "running-validator/validator-stake",
       "running-validator/validator-monitor",
       "running-validator/validator-info",
-      {
-        type: "category",
-        label: "Incenvitized Testnet",
-        items: [
-          "tour-de-sol",
-          {
-            type: "category",
-            label: "Registration",
-            items: [
-              "tour-de-sol/registration/how-to-register",
-              "tour-de-sol/registration/terms-of-participation",
-              "tour-de-sol/registration/rewards",
-              "tour-de-sol/registration/confidentiality",
-              "tour-de-sol/registration/validator-registration-and-rewards-faq",
-            ],
-          },
-          {
-            type: "category",
-            label: "Participation",
-            items: [
-              "tour-de-sol/participation/validator-technical-requirements",
-              "tour-de-sol/participation/validator-public-key-registration",
-              "tour-de-sol/participation/steps-to-create-a-validator",
-            ],
-          },
-          "tour-de-sol/useful-links",
-          "tour-de-sol/submitting-bugs",
-        ],
-      },
       "running-validator/validator-troubleshoot",
     ],
     Clusters: [
