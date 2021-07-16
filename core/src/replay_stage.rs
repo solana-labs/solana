@@ -2456,7 +2456,7 @@ impl ReplayStage {
     }
 
     fn mark_slots_confirmed(
-        confirmed_forks: &[Slot],
+        confirmed_forks: &[(Slot, Hash)],
         blockstore: &Blockstore,
         bank_forks: &RwLock<BankForks>,
         progress: &mut ProgressMap,
@@ -2464,16 +2464,8 @@ impl ReplayStage {
         fork_choice: &mut HeaviestSubtreeForkChoice,
         duplicate_slots_to_repair: &mut DuplicateSlotsToRepair,
     ) {
-        let (root_slot, bank_hashes) = {
-            let r_bank_forks = bank_forks.read().unwrap();
-            let bank_hashes: Vec<Option<Hash>> = confirmed_forks
-                .iter()
-                .map(|slot| r_bank_forks.bank_hash(*slot))
-                .collect();
-
-            (r_bank_forks.root(), bank_hashes)
-        };
-        for (slot, maybe_bank_hash) in confirmed_forks.iter().zip(bank_hashes.into_iter()) {
+        let root_slot = bank_forks.read().unwrap().root();
+        for (slot, frozen_hash) in confirmed_forks.iter() {
             // This case should be guaranteed as false by confirm_forks()
             if let Some(false) = progress.is_supermajority_confirmed(*slot) {
                 // Because supermajority confirmation will iterate through and update the
@@ -2482,15 +2474,12 @@ impl ReplayStage {
                 progress.set_supermajority_confirmed_slot(*slot);
                 // If the slot was confirmed, then it must be frozen. Otherwise, we couldn't
                 // have replayed any of its descendants and figured out it was confirmed.
-                // Furthermore, because the slot exists in the progress map, it must exist
-                // in bank forks, so cannot be None here.
-                let duplicate_confirmed_hash = maybe_bank_hash.unwrap();
-                assert!(duplicate_confirmed_hash != Hash::default());
+                assert!(*frozen_hash != Hash::default());
 
                 let duplicate_confirmed_state = DuplicateConfirmedState::new_from_state(
-                    duplicate_confirmed_hash,
+                    *frozen_hash,
                     || false,
-                    || maybe_bank_hash,
+                    || Some(*frozen_hash),
                 );
                 check_slot_agrees_with_cluster(
                     *slot,
@@ -2511,7 +2500,7 @@ impl ReplayStage {
         total_stake: Stake,
         progress: &ProgressMap,
         bank_forks: &RwLock<BankForks>,
-    ) -> Vec<Slot> {
+    ) -> Vec<(Slot, Hash)> {
         let mut confirmed_forks = vec![];
         for (slot, prog) in progress.iter() {
             if !prog.fork_stats.is_supermajority_confirmed {
@@ -2525,7 +2514,7 @@ impl ReplayStage {
                 if bank.is_frozen() && tower.is_slot_confirmed(*slot, voted_stakes, total_stake) {
                     info!("validator fork confirmed {} {}ms", *slot, duration);
                     datapoint_info!("validator-confirmation", ("duration_ms", duration, i64));
-                    confirmed_forks.push(*slot);
+                    confirmed_forks.push((*slot, bank.hash()));
                 } else {
                     debug!(
                         "validator fork not confirmed {} {}ms {:?}",
@@ -3679,7 +3668,7 @@ pub mod tests {
                 &bank_forks,
             );
             // No new stats should have been computed
-            assert_eq!(confirmed_forks, vec![0]);
+            assert_eq!(confirmed_forks, vec![(0, bank0.hash())]);
         }
 
         let ancestors = bank_forks.read().unwrap().ancestors();
