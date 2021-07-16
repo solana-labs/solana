@@ -14,7 +14,7 @@ scripts/increment-cargo-version.sh check
 
 # Disallow uncommitted Cargo.lock changes
 (
-  _ scripts/cargo-for-all-lock-files.sh tree
+  _ scripts/cargo-for-all-lock-files.sh tree >/dev/null
   set +e
   if ! _ git diff --exit-code; then
     echo -e "\nError: Uncommitted Cargo.lock changes" 1>&2
