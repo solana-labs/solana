@@ -54,7 +54,7 @@ use solana_sdk::{
 };
 use solana_vote_program::vote_state::Vote;
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{HashMap, HashSet},
     result,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -1056,28 +1056,30 @@ impl ReplayStage {
     ) {
         let root = bank_forks.read().unwrap().root();
         for new_confirmed_slots in gossip_duplicate_confirmed_slots_receiver.try_iter() {
-            for (confirmed_slot, confirmed_hash) in new_confirmed_slots {
+            for (confirmed_slot, duplicate_confirmed_hash) in new_confirmed_slots {
                 if confirmed_slot <= root {
                     continue;
-                } else if let Some(prev_hash) =
-                    gossip_duplicate_confirmed_slots.insert(confirmed_slot, confirmed_hash)
+                } else if let Some(prev_hash) = gossip_duplicate_confirmed_slots
+                    .insert(confirmed_slot, duplicate_confirmed_hash)
                 {
-                    assert_eq!(prev_hash, confirmed_hash);
+                    assert_eq!(prev_hash, duplicate_confirmed_hash);
                     // Already processed this signal
                     return;
                 }
 
+                let duplicate_confirmed_state = DuplicateConfirmedState::new(
+                    duplicate_confirmed_hash,
+                    || progress.is_dead(confirmed_slot).unwrap_or(false),
+                    || bank_forks.read().unwrap().bank_hash(confirmed_slot),
+                );
                 check_slot_agrees_with_cluster(
                     confirmed_slot,
                     root,
                     blockstore,
-                    bank_forks.read().unwrap().bank_hash(confirmed_slot),
                     duplicate_slots_tracker,
-                    gossip_duplicate_confirmed_slots,
-                    progress,
                     fork_choice,
                     duplicate_slots_to_repair,
-                    SlotStateUpdate::DuplicateConfirmed,
+                    SlotStateUpdate::DuplicateConfirmed(duplicate_confirmed_state),
                 );
             }
         }
@@ -1127,17 +1129,21 @@ impl ReplayStage {
             new_duplicate_slots.into_iter().zip(bank_hashes.into_iter())
         {
             // WindowService should only send the signal once per slot
+            let duplicate_state = DuplicateState::new(
+                duplicate_slot,
+                gossip_duplicate_confirmed_slots,
+                fork_choice,
+                || progress.is_dead(duplicate_slot).unwrap_or(false),
+                || bank_hash,
+            );
             check_slot_agrees_with_cluster(
                 duplicate_slot,
                 root_slot,
                 blockstore,
-                bank_hash,
                 duplicate_slots_tracker,
-                gossip_duplicate_confirmed_slots,
-                progress,
                 fork_choice,
                 duplicate_slots_to_repair,
-                SlotStateUpdate::Duplicate,
+                SlotStateUpdate::Duplicate(duplicate_state),
             );
         }
     }
@@ -1419,17 +1425,20 @@ impl ReplayStage {
             err: format!("error: {:?}", err),
             timestamp: timestamp(),
         });
+        let dead_state = DeadState::new(
+            slot,
+            duplicate_slots_tracker,
+            gossip_duplicate_confirmed_slots,
+            heaviest_subtree_fork_choice,
+        );
         check_slot_agrees_with_cluster(
             slot,
             root,
             blockstore,
-            Some(bank.hash()),
             duplicate_slots_tracker,
-            gossip_duplicate_confirmed_slots,
-            progress,
             heaviest_subtree_fork_choice,
             duplicate_slots_to_repair,
-            SlotStateUpdate::Dead,
+            SlotStateUpdate::Dead(dead_state),
         );
     }
 
@@ -1924,17 +1933,21 @@ impl ReplayStage {
                     .get_fork_stats_mut(bank.slot())
                     .expect("All frozen banks must exist in the Progress map")
                     .bank_hash = Some(bank.hash());
+                let bank_frozen_state = BankFrozenState::new(
+                    bank.slot(),
+                    bank.hash(),
+                    duplicate_slots_tracker,
+                    gossip_duplicate_confirmed_slots,
+                    heaviest_subtree_fork_choice,
+                );
                 check_slot_agrees_with_cluster(
                     bank.slot(),
                     bank_forks.read().unwrap().root(),
                     blockstore,
-                    Some(bank.hash()),
                     duplicate_slots_tracker,
-                    gossip_duplicate_confirmed_slots,
-                    progress,
                     heaviest_subtree_fork_choice,
                     duplicate_slots_to_repair,
-                    SlotStateUpdate::BankFrozen,
+                    SlotStateUpdate::BankFrozen(bank_frozen_state),
                 );
                 if let Some(sender) = bank_notification_sender {
                     sender
@@ -2460,26 +2473,33 @@ impl ReplayStage {
 
             (r_bank_forks.root(), bank_hashes)
         };
-        for (slot, bank_hash) in confirmed_forks.iter().zip(bank_hashes.into_iter()) {
+        for (slot, maybe_bank_hash) in confirmed_forks.iter().zip(bank_hashes.into_iter()) {
             // This case should be guaranteed as false by confirm_forks()
             if let Some(false) = progress.is_supermajority_confirmed(*slot) {
                 // Because supermajority confirmation will iterate through and update the
                 // subtree in fork choice, only incur this cost if the slot wasn't already
                 // confirmed
                 progress.set_supermajority_confirmed_slot(*slot);
+                // If the slot was confirmed, then it must be frozen. Otherwise, we couldn't
+                // have replayed any of its descendants and figured out it was confirmed.
+                // Furthermore, because the slot exists in the progress map, it must exist
+                // in bank forks, so cannot be None here.
+                let duplicate_confirmed_hash = maybe_bank_hash.unwrap();
+                assert!(duplicate_confirmed_hash != Hash::default());
+
+                let duplicate_confirmed_state = DuplicateConfirmedState::new(
+                    duplicate_confirmed_hash,
+                    || false,
+                    || maybe_bank_hash,
+                );
                 check_slot_agrees_with_cluster(
                     *slot,
                     root_slot,
                     blockstore,
-                    bank_hash,
                     duplicate_slots_tracker,
-                    // Don't need to pass the gossip confirmed slots since `slot`
-                    // is already marked as confirmed in progress
-                    &BTreeMap::new(),
-                    progress,
                     fork_choice,
                     duplicate_slots_to_repair,
-                    SlotStateUpdate::DuplicateConfirmed,
+                    SlotStateUpdate::DuplicateConfirmed(duplicate_confirmed_state),
                 );
             }
         }
@@ -4792,8 +4812,6 @@ pub mod tests {
             &blockstore,
             Some(bank4_hash),
             &mut duplicate_slots_tracker,
-            &gossip_duplicate_confirmed_slots,
-            &progress,
             &mut vote_simulator.heaviest_subtree_fork_choice,
             &mut DuplicateSlotsToRepair::default(),
             SlotStateUpdate::Duplicate,
@@ -4819,8 +4837,6 @@ pub mod tests {
             &blockstore,
             Some(bank2_hash),
             &mut duplicate_slots_tracker,
-            &gossip_duplicate_confirmed_slots,
-            &progress,
             &mut vote_simulator.heaviest_subtree_fork_choice,
             &mut DuplicateSlotsToRepair::default(),
             SlotStateUpdate::Duplicate,
@@ -4849,8 +4865,6 @@ pub mod tests {
             &blockstore,
             Some(bank4_hash),
             &mut duplicate_slots_tracker,
-            &gossip_duplicate_confirmed_slots,
-            &progress,
             &mut vote_simulator.heaviest_subtree_fork_choice,
             &mut duplicate_slots_to_repair,
             SlotStateUpdate::DuplicateConfirmed,
@@ -4990,8 +5004,6 @@ pub mod tests {
             blockstore,
             Some(our_bank2_hash),
             &mut duplicate_slots_tracker,
-            &gossip_duplicate_confirmed_slots,
-            progress,
             heaviest_subtree_fork_choice,
             &mut duplicate_slots_to_repair,
             SlotStateUpdate::DuplicateConfirmed,
