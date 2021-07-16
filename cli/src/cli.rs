@@ -44,11 +44,7 @@ use solana_sdk::{
     message::Message,
     pubkey::Pubkey,
     signature::{Signature, Signer, SignerError},
-    stake::{
-        self,
-        instruction::LockupArgs,
-        state::{Lockup, StakeAuthorize},
-    },
+    stake::{self, instruction::LockupArgs, state::Lockup},
     system_instruction::{self, SystemError},
     system_program,
     transaction::{Transaction, TransactionError},
@@ -63,6 +59,7 @@ use thiserror::Error;
 
 pub const DEFAULT_RPC_TIMEOUT_SECONDS: &str = "30";
 pub const DEFAULT_CONFIRM_TX_TIMEOUT_SECONDS: &str = "5";
+const CHECKED: bool = true;
 
 #[derive(Debug, PartialEq)]
 #[allow(clippy::large_enum_variant)]
@@ -198,6 +195,7 @@ pub enum CliCommand {
         seed: Option<String>,
         staker: Option<Pubkey>,
         withdrawer: Option<Pubkey>,
+        withdrawer_signer: Option<SignerIndex>,
         lockup: Lockup,
         amount: SpendAmount,
         sign_only: bool,
@@ -271,7 +269,7 @@ pub enum CliCommand {
     },
     StakeAuthorize {
         stake_account_pubkey: Pubkey,
-        new_authorizations: Vec<(StakeAuthorize, Pubkey, SignerIndex)>,
+        new_authorizations: Vec<StakeAuthorizationIndexed>,
         sign_only: bool,
         dump_transaction_message: bool,
         blockhash_query: BlockhashQuery,
@@ -286,6 +284,7 @@ pub enum CliCommand {
         stake_account_pubkey: Pubkey,
         lockup: LockupArgs,
         custodian: SignerIndex,
+        new_custodian_signer: Option<SignerIndex>,
         sign_only: bool,
         dump_transaction_message: bool,
         blockhash_query: BlockhashQuery,
@@ -343,6 +342,8 @@ pub enum CliCommand {
         new_authorized_pubkey: Pubkey,
         vote_authorize: VoteAuthorize,
         memo: Option<String>,
+        authorized: SignerIndex,
+        new_authorized: Option<SignerIndex>,
     },
     VoteUpdateValidator {
         vote_account_pubkey: Pubkey,
@@ -719,7 +720,10 @@ pub fn parse_command(
         }
         // Stake Commands
         ("create-stake-account", Some(matches)) => {
-            parse_create_stake_account(matches, default_signer, wallet_manager)
+            parse_create_stake_account(matches, default_signer, wallet_manager, !CHECKED)
+        }
+        ("create-stake-account-checked", Some(matches)) => {
+            parse_create_stake_account(matches, default_signer, wallet_manager, CHECKED)
         }
         ("delegate-stake", Some(matches)) => {
             parse_stake_delegate_stake(matches, default_signer, wallet_manager)
@@ -737,10 +741,16 @@ pub fn parse_command(
             parse_merge_stake(matches, default_signer, wallet_manager)
         }
         ("stake-authorize", Some(matches)) => {
-            parse_stake_authorize(matches, default_signer, wallet_manager)
+            parse_stake_authorize(matches, default_signer, wallet_manager, !CHECKED)
+        }
+        ("stake-authorize-checked", Some(matches)) => {
+            parse_stake_authorize(matches, default_signer, wallet_manager, CHECKED)
         }
         ("stake-set-lockup", Some(matches)) => {
-            parse_stake_set_lockup(matches, default_signer, wallet_manager)
+            parse_stake_set_lockup(matches, default_signer, wallet_manager, !CHECKED)
+        }
+        ("stake-set-lockup-checked", Some(matches)) => {
+            parse_stake_set_lockup(matches, default_signer, wallet_manager, CHECKED)
         }
         ("stake-account", Some(matches)) => parse_show_stake_account(matches, wallet_manager),
         ("stake-history", Some(matches)) => parse_show_stake_history(matches),
@@ -767,12 +777,28 @@ pub fn parse_command(
             default_signer,
             wallet_manager,
             VoteAuthorize::Voter,
+            !CHECKED,
         ),
         ("vote-authorize-withdrawer", Some(matches)) => parse_vote_authorize(
             matches,
             default_signer,
             wallet_manager,
             VoteAuthorize::Withdrawer,
+            !CHECKED,
+        ),
+        ("vote-authorize-voter-checked", Some(matches)) => parse_vote_authorize(
+            matches,
+            default_signer,
+            wallet_manager,
+            VoteAuthorize::Voter,
+            CHECKED,
+        ),
+        ("vote-authorize-withdrawer-checked", Some(matches)) => parse_vote_authorize(
+            matches,
+            default_signer,
+            wallet_manager,
+            VoteAuthorize::Withdrawer,
+            CHECKED,
         ),
         ("vote-account", Some(matches)) => parse_vote_get_account_command(matches, wallet_manager),
         ("withdraw-from-vote-account", Some(matches)) => {
@@ -1533,6 +1559,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             seed,
             staker,
             withdrawer,
+            withdrawer_signer,
             lockup,
             amount,
             sign_only,
@@ -1550,6 +1577,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             seed,
             staker,
             withdrawer,
+            *withdrawer_signer,
             lockup,
             *amount,
             *sign_only,
@@ -1711,8 +1739,9 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         ),
         CliCommand::StakeSetLockup {
             stake_account_pubkey,
-            mut lockup,
+            lockup,
             custodian,
+            new_custodian_signer,
             sign_only,
             dump_transaction_message,
             blockhash_query,
@@ -1724,7 +1753,8 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             &rpc_client,
             config,
             stake_account_pubkey,
-            &mut lockup,
+            lockup,
+            *new_custodian_signer,
             *custodian,
             *sign_only,
             *dump_transaction_message,
@@ -1838,12 +1868,16 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             new_authorized_pubkey,
             vote_authorize,
             memo,
+            authorized,
+            new_authorized,
         } => process_vote_authorize(
             &rpc_client,
             config,
             vote_account_pubkey,
             new_authorized_pubkey,
             *vote_authorize,
+            *authorized,
+            *new_authorized,
             memo.as_ref(),
         ),
         CliCommand::VoteUpdateValidator {
@@ -2645,6 +2679,8 @@ mod tests {
             new_authorized_pubkey,
             vote_authorize: VoteAuthorize::Voter,
             memo: None,
+            authorized: 0,
+            new_authorized: None,
         };
         let result = process_command(&config);
         assert!(result.is_ok());
@@ -2668,6 +2704,7 @@ mod tests {
             seed: None,
             staker: None,
             withdrawer: None,
+            withdrawer_signer: None,
             lockup: Lockup {
                 epoch: 0,
                 unix_timestamp: 0,
@@ -2840,6 +2877,8 @@ mod tests {
             new_authorized_pubkey: bob_pubkey,
             vote_authorize: VoteAuthorize::Voter,
             memo: None,
+            authorized: 0,
+            new_authorized: None,
         };
         assert!(process_command(&config).is_err());
 
