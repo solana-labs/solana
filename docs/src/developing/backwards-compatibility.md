@@ -31,7 +31,7 @@ updates of a particular `MINOR` version release.
 #### Release Channels
 
 - `edge` software that contains cutting-edge features with no backward compatibility policy
-- `beta` software that runs on the Solana Tour de SOL testnet cluster
+- `beta` software that runs on the Solana Testnet cluster
 - `stable` software that run on the Solana Mainnet Beta and Devnet clusters
 
 #### Major Releases (x.0.0)
@@ -43,7 +43,7 @@ that were enabled in the previous `MAJOR` version.
 #### Minor Releases (1.x.0)
 
 New features and proposal implementations are added to _new_ `MINOR` version
-releases (e.g. 1.4.0) and are first run on Solana's Tour de SOL testnet cluster. While running
+releases (e.g. 1.4.0) and are first run on Solana's Testnet cluster. While running
 on the testnet, `MINOR` versions are considered to be in the `beta` release channel. After
 those changes have been patched as needed and proven to be reliable, the `MINOR` version will
 be upgraded to the `stable` release channel and deployed to the Mainnet Beta cluster.
