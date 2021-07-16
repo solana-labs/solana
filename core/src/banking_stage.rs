@@ -1220,17 +1220,7 @@ impl BankingStage {
         if cost_model_enabled {
             transactions.iter().enumerate().for_each(|(index, tx)| {
                 if unprocessed_tx_indexes.iter().all(|&i| i != index) {
-                    cost_tracker
-                        .write()
-                        .unwrap()
-                        .add_transaction_cost(tx)
-                        .unwrap_or_else(|err| {
-                            warn!(
-                                "failed to track transaction cost, err {:?}, tx {:?}",
-                                err,
-                                tx
-                            )
-                        });
+                    cost_tracker.write().unwrap().add_transaction_cost(tx);
                 }
             });
         }
