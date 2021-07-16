@@ -5,7 +5,7 @@
 //! - add_transaction_cost(&tx), mutable function to accumulate `tx` cost to tracker.
 //!
 use crate::cost_model::{CostModel, CostModelError, TransactionCost};
-use solana_sdk::{clock::Slot, pubkey::Pubkey, transaction::Transaction};
+use solana_sdk::{clock::Slot, pubkey::Pubkey, sanitized_transaction::SanitizedTransaction};
 use std::{
     collections::HashMap,
     sync::{Arc, RwLock},
@@ -43,21 +43,21 @@ impl CostTracker {
         }
     }
 
-    pub fn would_transaction_fit(&self, transaction: &Transaction) -> Result<(), CostModelError> {
+    pub fn would_transaction_fit(
+        &self,
+        transaction: &SanitizedTransaction,
+    ) -> Result<(), CostModelError> {
         let mut cost_model = self.cost_model.write().unwrap();
-        let tx_cost = cost_model.calculate_cost(transaction)?;
+        let tx_cost = cost_model.calculate_cost(transaction);
         self.would_fit(
             &tx_cost.writable_accounts,
             &(tx_cost.account_access_cost + tx_cost.execution_cost),
         )
     }
 
-    pub fn add_transaction_cost(
-        &mut self,
-        transaction: &Transaction,
-    ) -> Result<(), CostModelError> {
+    pub fn add_transaction_cost(&mut self, transaction: &SanitizedTransaction) {
         let mut cost_model = self.cost_model.write().unwrap();
-        let tx_cost = cost_model.calculate_cost(transaction)?;
+        let tx_cost = cost_model.calculate_cost(transaction);
         let cost = tx_cost.account_access_cost + tx_cost.execution_cost;
         for account_key in tx_cost.writable_accounts.iter() {
             *self
@@ -66,7 +66,6 @@ impl CostTracker {
                 .or_insert(0) += cost;
         }
         self.block_cost += cost;
-        Ok(())
     }
 
     pub fn reset_if_new_bank(&mut self, slot: Slot) {

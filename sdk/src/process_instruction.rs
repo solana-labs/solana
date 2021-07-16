@@ -147,13 +147,11 @@ pub fn get_sysvar<T: Sysvar>(
     })
 }
 
-#[derive(Clone, Copy, Debug, AbiExample)]
+#[derive(Clone, Copy, Debug, AbiExample, PartialEq)]
 pub struct BpfComputeBudget {
     /// Number of compute units that an instruction is allowed.  Compute units
     /// are consumed by program execution, resources they use, etc...
     pub max_units: u64,
-    /// Number of compute units consumed by a log call
-    pub log_units: u64,
     /// Number of compute units consumed by a log_u64 call
     pub log_64_units: u64,
     /// Number of compute units consumed by a create_program_address call
@@ -193,7 +191,6 @@ impl BpfComputeBudget {
     pub fn new() -> Self {
         BpfComputeBudget {
             max_units: 200_000,
-            log_units: 100,
             log_64_units: 100,
             create_program_address_units: 1500,
             invoke_units: 1000,
@@ -243,7 +240,10 @@ pub mod stable_log {
     /// Log a program invoke.
     ///
     /// The general form is:
-    ///     "Program <address> invoke [<depth>]"
+    ///
+    /// ```notrust
+    /// "Program <address> invoke [<depth>]"
+    /// ```
     pub fn program_invoke(
         logger: &Rc<RefCell<dyn Logger>>,
         program_id: &Pubkey,
@@ -255,7 +255,11 @@ pub mod stable_log {
     /// Log a message from the program itself.
     ///
     /// The general form is:
-    ///     "Program log: <program-generated output>"
+    ///
+    /// ```notrust
+    /// "Program log: <program-generated output>"
+    /// ```
+    ///
     /// That is, any program-generated output is guaranteed to be prefixed by "Program log: "
     pub fn program_log(logger: &Rc<RefCell<dyn Logger>>, message: &str) {
         ic_logger_msg!(logger, "Program log: {}", message);
@@ -264,7 +268,10 @@ pub mod stable_log {
     /// Log successful program execution.
     ///
     /// The general form is:
-    ///     "Program <address> success"
+    ///
+    /// ```notrust
+    /// "Program <address> success"
+    /// ```
     pub fn program_success(logger: &Rc<RefCell<dyn Logger>>, program_id: &Pubkey) {
         ic_logger_msg!(logger, "Program {} success", program_id);
     }
@@ -272,7 +279,10 @@ pub mod stable_log {
     /// Log program execution failure
     ///
     /// The general form is:
-    ///     "Program <address> failed: <program error details>"
+    ///
+    /// ```notrust
+    /// "Program <address> failed: <program error details>"
+    /// ```
     pub fn program_failure(
         logger: &Rc<RefCell<dyn Logger>>,
         program_id: &Pubkey,

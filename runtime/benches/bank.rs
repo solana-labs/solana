@@ -84,7 +84,7 @@ pub fn create_native_loader_transactions(
 }
 
 fn sync_bencher(bank: &Arc<Bank>, _bank_client: &BankClient, transactions: &[Transaction]) {
-    let results = bank.process_transactions(transactions);
+    let results = bank.process_transactions(transactions.iter());
     assert!(results.iter().all(Result::is_ok));
 }
 
@@ -136,7 +136,7 @@ fn do_bench_transactions(
     let transactions = create_transactions(&bank_client, &mint_keypair);
 
     // Do once to fund accounts, load modules, etc...
-    let results = bank.process_transactions(&transactions);
+    let results = bank.process_transactions(transactions.iter());
     assert!(results.iter().all(Result::is_ok));
 
     bencher.iter(|| {

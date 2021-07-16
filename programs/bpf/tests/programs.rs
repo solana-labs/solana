@@ -34,6 +34,7 @@ use solana_sdk::{
     bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
     client::SyncClient,
     clock::MAX_PROCESSING_AGE,
+    compute_budget,
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
     keyed_account::KeyedAccount,
@@ -293,7 +294,7 @@ fn process_transaction_and_record_inner(
 ) -> (Result<(), TransactionError>, Vec<Vec<CompiledInstruction>>) {
     let signature = tx.signatures.get(0).unwrap().clone();
     let txs = vec![tx];
-    let tx_batch = bank.prepare_batch(txs.iter());
+    let tx_batch = bank.prepare_batch(txs.iter()).unwrap();
     let (mut results, _, mut inner_instructions, _transaction_logs) = bank
         .load_execute_and_commit_transactions(
             &tx_batch,
@@ -316,7 +317,7 @@ fn process_transaction_and_record_inner(
 }
 
 fn execute_transactions(bank: &Bank, txs: &[Transaction]) -> Vec<ConfirmedTransaction> {
-    let batch = bank.prepare_batch(txs.iter());
+    let batch = bank.prepare_batch(txs.iter()).unwrap();
     let mut timings = ExecuteTimings::default();
     let mut mint_decimals = HashMap::new();
     let tx_pre_token_balances = collect_token_balances(&bank, &batch, &mut mint_decimals);
@@ -1234,8 +1235,6 @@ fn test_program_bpf_call_depth() {
 
     solana_logger::setup();
 
-    println!("Test program: solana_bpf_rust_call_depth");
-
     let GenesisConfigInfo {
         genesis_config,
         mint_keypair,
@@ -1267,6 +1266,40 @@ fn test_program_bpf_call_depth() {
     );
     let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
     assert!(result.is_err());
+}
+
+#[cfg(feature = "bpf_rust")]
+#[test]
+fn test_program_bpf_compute_budget() {
+    solana_logger::setup();
+
+    let GenesisConfigInfo {
+        genesis_config,
+        mint_keypair,
+        ..
+    } = create_genesis_config(50);
+    let mut bank = Bank::new(&genesis_config);
+    let (name, id, entrypoint) = solana_bpf_loader_program!();
+    bank.add_builtin(&name, id, entrypoint);
+    let bank_client = BankClient::new(bank);
+    let program_id = load_bpf_program(
+        &bank_client,
+        &bpf_loader::id(),
+        &mint_keypair,
+        "solana_bpf_rust_noop",
+    );
+    let message = Message::new(
+        &[
+            compute_budget::request_units(1),
+            Instruction::new_with_bincode(program_id, &0, vec![]),
+        ],
+        Some(&mint_keypair.pubkey()),
+    );
+    let result = bank_client.send_and_confirm_message(&[&mint_keypair], message);
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        TransactionError::InstructionError(1, InstructionError::ProgramFailedToComplete),
+    );
 }
 
 #[test]

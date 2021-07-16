@@ -328,6 +328,7 @@ pub struct RpcSimulateTransactionResult {
     pub err: Option<TransactionError>,
     pub logs: Option<Vec<String>>,
     pub accounts: Option<Vec<Option<UiAccount>>>,
+    pub units_consumed: Option<u64>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

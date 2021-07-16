@@ -1,9 +1,12 @@
-//! Crds Gossip Push overlay
+//! Crds Gossip Push overlay.
+//!
 //! This module is used to propagate recently created CrdsValues across the network
-//! Eager push strategy is based on Plumtree
-//! http://asc.di.fct.unl.pt/~jleitao/pdf/srds07-leitao.pdf
+//! Eager push strategy is based on [Plumtree].
+//!
+//! [Plumtree]: http://asc.di.fct.unl.pt/~jleitao/pdf/srds07-leitao.pdf
 //!
 //! Main differences are:
+//!
 //! 1. There is no `max hop`.  Messages are signed with a local wallclock.  If they are outside of
 //!    the local nodes wallclock window they are dropped silently.
 //! 2. The prune set is stored in a Bloom filter.
@@ -50,14 +53,15 @@ pub const CRDS_GOSSIP_PRUNE_MIN_INGRESS_NODES: usize = 3;
 const PUSH_ACTIVE_TIMEOUT_MS: u64 = 60_000;
 
 pub struct CrdsGossipPush {
-    /// max bytes per message
+    /// Max bytes per message
     max_bytes: usize,
-    /// active set of validators for push
+    /// Active set of validators for push
     active_set: RwLock<IndexMap<Pubkey, AtomicBloom<Pubkey>>>,
     /// Cursor into the crds table for values to push.
     crds_cursor: Mutex<Cursor>,
     /// Cache that tracks which validators a message was received from
     /// bool indicates it has been pruned.
+    ///
     /// This cache represents a lagging view of which validators
     /// currently have this node in their `active_set`
     #[allow(clippy::type_complexity)]
@@ -199,7 +203,8 @@ impl CrdsGossipPush {
         now.saturating_sub(self.msg_timeout)..=now.saturating_add(self.msg_timeout)
     }
 
-    /// process a push message to the network
+    /// Process a push message to the network.
+    ///
     /// Returns origins' pubkeys of upserted values.
     pub(crate) fn process_push_message(
         &self,
@@ -246,6 +251,7 @@ impl CrdsGossipPush {
     }
 
     /// New push message to broadcast to peers.
+    ///
     /// Returns a list of Pubkeys for the selected peers and a list of values to send to all the
     /// peers.
     /// The list of push messages is created such that all the randomly selected peers have not
@@ -306,7 +312,7 @@ impl CrdsGossipPush {
         push_messages
     }
 
-    /// add the `from` to the peer's filter of nodes
+    /// Add the `from` to the peer's filter of nodes.
     pub fn process_prune_msg(&self, self_pubkey: &Pubkey, peer: &Pubkey, origins: &[Pubkey]) {
         if let Some(filter) = self.active_set.read().unwrap().get(peer) {
             for origin in origins {
@@ -322,7 +328,10 @@ impl CrdsGossipPush {
         cmp::min(num_active, (num_active - active_set_len) + num)
     }
 
-    /// refresh the push active set
+    /// Refresh the push active set.
+    ///
+    /// # Arguments
+    ///
     /// * ratio - active_set.len()/ratio is the number of actives to rotate
     pub(crate) fn refresh_push_active_set(
         &self,
@@ -429,7 +438,7 @@ impl CrdsGossipPush {
             .collect()
     }
 
-    /// purge received push message cache
+    /// Purge received push message cache
     pub(crate) fn purge_old_received_cache(&self, min_time: u64) {
         self.received_cache.lock().unwrap().retain(|_, v| {
             v.retain(|_, (_, t)| *t > min_time);

@@ -9,7 +9,7 @@
 //!
 use crate::execute_cost_table::ExecuteCostTable;
 use log::*;
-use solana_sdk::{pubkey::Pubkey, transaction::Transaction};
+use solana_sdk::{pubkey::Pubkey, sanitized_transaction::SanitizedTransaction};
 use std::collections::HashMap;
 
 // Guestimated from mainnet-beta data, sigver averages 1us, average read 7us and average write 25us
@@ -126,14 +126,11 @@ impl CostModel {
         );
     }
 
-    pub fn calculate_cost(
-        &mut self,
-        transaction: &Transaction,
-    ) -> Result<&TransactionCost, CostModelError> {
+    pub fn calculate_cost(&mut self, transaction: &SanitizedTransaction) -> &TransactionCost {
         self.transaction_cost.reset();
 
         // calculate transaction exeution cost
-        self.transaction_cost.execution_cost = self.find_transaction_cost(transaction)?;
+        self.transaction_cost.execution_cost = self.find_transaction_cost(transaction);
 
         // calculate account access cost
         let message = transaction.message();
@@ -159,7 +156,7 @@ impl CostModel {
             "transaction {:?} has cost {:?}",
             transaction, self.transaction_cost
         );
-        Ok(&self.transaction_cost)
+        &self.transaction_cost
     }
 
     // To update or insert instruction cost to table.
@@ -194,15 +191,10 @@ impl CostModel {
         }
     }
 
-    fn find_transaction_cost(&self, transaction: &Transaction) -> Result<u64, CostModelError> {
+    fn find_transaction_cost(&self, transaction: &SanitizedTransaction) -> u64 {
         let mut cost: u64 = 0;
 
         for instruction in &transaction.message().instructions {
-            // The Transaction may not be sanitized at this point
-            if instruction.program_id_index as usize >= transaction.message().account_keys.len() {
-                return Err(CostModelError::InvalidTransaction);
-            }
-
             let program_id =
                 transaction.message().account_keys[instruction.program_id_index as usize];
             let instruction_cost = self.find_instruction_cost(&program_id);
@@ -213,7 +205,7 @@ impl CostModel {
             );
             cost += instruction_cost;
         }
-        Ok(cost)
+        cost
     }
 }
 
@@ -232,8 +224,10 @@ mod tests {
         signature::{Keypair, Signer},
         system_instruction::{self},
         system_program, system_transaction,
+        transaction::Transaction,
     };
     use std::{
+        convert::{TryFrom, TryInto},
         str::FromStr,
         sync::{Arc, RwLock},
         thread::{self, JoinHandle},
@@ -279,8 +273,10 @@ mod tests {
         let (mint_keypair, start_hash) = test_setup();
 
         let keypair = Keypair::new();
-        let simple_transaction =
-            system_transaction::transfer(&mint_keypair, &keypair.pubkey(), 2, start_hash);
+        let simple_transaction: SanitizedTransaction =
+            system_transaction::transfer(&mint_keypair, &keypair.pubkey(), 2, start_hash)
+                .try_into()
+                .unwrap();
         debug!(
             "system_transaction simple_transaction {:?}",
             simple_transaction
@@ -295,7 +291,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             expected_cost,
-            testee.find_transaction_cost(&simple_transaction).unwrap()
+            testee.find_transaction_cost(&simple_transaction)
         );
     }
 
@@ -308,7 +304,9 @@ mod tests {
         let instructions =
             system_instruction::transfer_many(&mint_keypair.pubkey(), &[(key1, 1), (key2, 1)]);
         let message = Message::new(&instructions, Some(&mint_keypair.pubkey()));
-        let tx = Transaction::new(&[&mint_keypair], message, start_hash);
+        let tx: SanitizedTransaction = Transaction::new(&[&mint_keypair], message, start_hash)
+            .try_into()
+            .unwrap();
         debug!("many transfer transaction {:?}", tx);
 
         // expected cost for two system transfer instructions
@@ -319,7 +317,7 @@ mod tests {
         testee
             .upsert_instruction_cost(&system_program::id(), program_cost)
             .unwrap();
-        assert_eq!(expected_cost, testee.find_transaction_cost(&tx).unwrap());
+        assert_eq!(expected_cost, testee.find_transaction_cost(&tx));
     }
 
     #[test]
@@ -335,17 +333,19 @@ mod tests {
             CompiledInstruction::new(3, &(), vec![0, 1]),
             CompiledInstruction::new(4, &(), vec![0, 2]),
         ];
-        let tx = Transaction::new_with_compiled_instructions(
+        let tx: SanitizedTransaction = Transaction::new_with_compiled_instructions(
             &[&mint_keypair],
             &[key1, key2],
             start_hash,
             vec![prog1, prog2],
             instructions,
-        );
+        )
+        .try_into()
+        .unwrap();
         debug!("many random transaction {:?}", tx);
 
         let testee = CostModel::default();
-        let result = testee.find_transaction_cost(&tx).unwrap();
+        let result = testee.find_transaction_cost(&tx);
 
         // expected cost for two random/unknown program is
         let expected_cost = testee.instruction_execution_cost_table.get_mode() * 2;
@@ -365,16 +365,18 @@ mod tests {
             CompiledInstruction::new(4, &(), vec![0, 2]),
             CompiledInstruction::new(5, &(), vec![1, 3]),
         ];
-        let tx = Transaction::new_with_compiled_instructions(
+        let tx: SanitizedTransaction = Transaction::new_with_compiled_instructions(
             &[&signer1, &signer2],
             &[key1, key2],
             Hash::new_unique(),
             vec![prog1, prog2],
             instructions,
-        );
+        )
+        .try_into()
+        .unwrap();
 
         let mut cost_model = CostModel::default();
-        let tx_cost = cost_model.calculate_cost(&tx).unwrap();
+        let tx_cost = cost_model.calculate_cost(&tx);
         assert_eq!(2 + 2, tx_cost.writable_accounts.len());
         assert_eq!(signer1.pubkey(), tx_cost.writable_accounts[0]);
         assert_eq!(signer2.pubkey(), tx_cost.writable_accounts[1]);
@@ -404,8 +406,10 @@ mod tests {
     #[test]
     fn test_cost_model_calculate_cost() {
         let (mint_keypair, start_hash) = test_setup();
-        let tx =
-            system_transaction::transfer(&mint_keypair, &Keypair::new().pubkey(), 2, start_hash);
+        let tx: SanitizedTransaction =
+            system_transaction::transfer(&mint_keypair, &Keypair::new().pubkey(), 2, start_hash)
+                .try_into()
+                .unwrap();
 
         let expected_account_cost = SIGNED_WRITABLE_ACCOUNT_ACCESS_COST
             + NON_SIGNED_WRITABLE_ACCOUNT_ACCESS_COST
@@ -416,7 +420,7 @@ mod tests {
         cost_model
             .upsert_instruction_cost(&system_program::id(), expected_execution_cost)
             .unwrap();
-        let tx_cost = cost_model.calculate_cost(&tx).unwrap();
+        let tx_cost = cost_model.calculate_cost(&tx);
         assert_eq!(expected_account_cost, tx_cost.account_access_cost);
         assert_eq!(expected_execution_cost, tx_cost.execution_cost);
         assert_eq!(2, tx_cost.writable_accounts.len());
@@ -452,13 +456,16 @@ mod tests {
             CompiledInstruction::new(3, &(), vec![0, 1]),
             CompiledInstruction::new(4, &(), vec![0, 2]),
         ];
-        let tx = Arc::new(Transaction::new_with_compiled_instructions(
-            &[&mint_keypair],
-            &[key1, key2],
-            start_hash,
-            vec![prog1, prog2],
-            instructions,
-        ));
+        let tx = Arc::new(
+            SanitizedTransaction::try_from(Transaction::new_with_compiled_instructions(
+                &[&mint_keypair],
+                &[key1, key2],
+                start_hash,
+                vec![prog1, prog2],
+                instructions,
+            ))
+            .unwrap(),
+        );
 
         let number_threads = 10;
         let expected_account_cost = SIGNED_WRITABLE_ACCOUNT_ACCESS_COST
@@ -484,7 +491,7 @@ mod tests {
                 } else {
                     thread::spawn(move || {
                         let mut cost_model = cost_model.write().unwrap();
-                        let tx_cost = cost_model.calculate_cost(&tx).unwrap();
+                        let tx_cost = cost_model.calculate_cost(&tx);
                         assert_eq!(3, tx_cost.writable_accounts.len());
                         assert_eq!(expected_account_cost, tx_cost.account_access_cost);
                     })

@@ -43,6 +43,7 @@ use solana_sdk::{
     native_token::{lamports_to_sol, sol_to_lamports, Sol},
     pubkey::Pubkey,
     rent::Rent,
+    sanitized_transaction::SanitizedTransaction,
     shred_version::compute_shred_version,
     stake::{self, state::StakeState},
     system_program,
@@ -53,6 +54,7 @@ use solana_vote_program::{
     vote_state::{self, VoteState},
 };
 use std::{
+    borrow::Cow,
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     ffi::OsStr,
     fs::{self, File},
@@ -751,16 +753,19 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
         let mut cost_model = cost_model.write().unwrap();
         for transaction in &entry.transactions {
             programs += transaction.message().instructions.len();
-            let tx_cost = match cost_model.calculate_cost(transaction) {
-                Err(err) => {
-                    warn!(
-                        "failed to calculate transaction cost, err {:?}, tx {:?}",
-                        err, transaction
-                    );
-                    continue;
-                }
-                Ok(cost) => cost,
-            };
+            let transaction =
+                match SanitizedTransaction::try_create(Cow::Borrowed(transaction), Hash::default())
+                {
+                    Ok(tx) => tx,
+                    Err(err) => {
+                        warn!(
+                            "failed to sanitize transaction, err {:?}, tx {:?}",
+                            err, transaction
+                        );
+                        continue;
+                    }
+                };
+            let tx_cost = cost_model.calculate_cost(&transaction);
             if cost_tracker.try_add(tx_cost).is_err() {
                 println!(
                     "Slot: {}, CostModel rejected transaction {:?}, stats {:?}!",
