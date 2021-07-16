@@ -1,5 +1,8 @@
 //! The `packet` module defines data structures and methods to pull data from the network.
-use crate::recvmmsg::{recv_mmsg, NUM_RCVMMSGS};
+use crate::{
+    recvmmsg::{recv_mmsg, NUM_RCVMMSGS},
+    socket::is_global,
+};
 pub use solana_perf::packet::{
     limited_deserialize, to_packets_chunked, Packets, PacketsRecycler, NUM_PACKETS,
     PACKETS_PER_BATCH,
@@ -56,8 +59,10 @@ pub fn recv_from(obj: &mut Packets, socket: &UdpSocket, max_wait_ms: u64) -> Res
 
 pub fn send_to(obj: &Packets, socket: &UdpSocket) -> Result<()> {
     for p in &obj.packets {
-        let a = p.meta.addr();
-        socket.send_to(&p.data[..p.meta.size], &a)?;
+        let addr = p.meta.addr();
+        if is_global(&addr) {
+            socket.send_to(&p.data[..p.meta.size], &addr)?;
+        }
     }
     Ok(())
 }
