@@ -752,8 +752,8 @@ pub fn confirm_slot(
     };
 
     let check_start = Instant::now();
-    let check_result =
-        entries.verify_and_hash_transactions(skip_verification, bank.secp256k1_program_enabled());
+    let check_result = entries
+        .verify_and_hash_transactions(skip_verification, bank.libsecp256k1_0_5_upgrade_enabled());
     if check_result.is_none() {
         warn!("Ledger proof of history failed at slot: {}", slot);
         return Err(BlockError::InvalidEntryHash.into());
