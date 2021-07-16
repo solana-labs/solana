@@ -67,7 +67,8 @@ _ ci/order-crates-for-publishing.py
 
 # -Z... is needed because of clippy bug: https://github.com/rust-lang/rust-clippy/issues/4612
 # run nightly clippy for `sdk/` as there's a moderate amount of nightly-only code there
-_ "$cargo" nightly clippy -Zunstable-options --workspace --all-targets -- --deny=warnings --deny=clippy::integer_arithmetic
+_ "$cargo" nightly clippy -Zunstable-options --workspace --all-targets -- \
+  --deny=warnings --deny=clippy::integer_arithmetic --allow=clippy::inconsistent_struct_constructor
 
 _ "$cargo" stable fmt --all -- --check
 
