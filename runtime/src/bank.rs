@@ -138,7 +138,6 @@ pub const MAX_LEADER_SCHEDULE_STAKES: Epoch = 5;
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct RentDebits(pub Vec<(Pubkey, RewardInfo)>);
-
 impl RentDebits {
     pub fn push(&mut self, account: &Pubkey, rent: u64, post_balance: u64) {
         if rent != 0 {
@@ -168,7 +167,6 @@ pub struct ExecuteTimings {
     pub num_execute_batches: u64,
     pub details: ExecuteDetailsTimings,
 }
-
 impl ExecuteTimings {
     pub fn accumulate(&mut self, other: &ExecuteTimings) {
         self.check_us += other.check_us;
@@ -415,15 +413,15 @@ impl CachedExecutors {
     }
 }
 
-pub struct TxComputeMeter {
+pub struct TransactionComputeMeter {
     remaining: u64,
 }
-impl TxComputeMeter {
+impl TransactionComputeMeter {
     pub fn new(cap: u64) -> Self {
         Self { remaining: cap }
     }
 }
-impl ComputeMeter for TxComputeMeter {
+impl ComputeMeter for TransactionComputeMeter {
     fn consume(&mut self, amount: u64) -> std::result::Result<(), InstructionError> {
         let exceeded = self.remaining < amount;
         self.remaining = self.remaining.saturating_sub(amount);
@@ -523,6 +521,12 @@ pub struct TransactionResults {
     pub execution_results: Vec<TransactionExecutionResult>,
     pub overwritten_vote_accounts: Vec<OverwrittenVoteAccount>,
     pub rent_debits: Vec<RentDebits>,
+}
+pub struct TransactionSimulationResult {
+    pub result: Result<()>,
+    pub logs: TransactionLogMessages,
+    pub post_simulation_accounts: Vec<(Pubkey, AccountSharedData)>,
+    pub units_consumed: u64,
 }
 pub struct TransactionBalancesSet {
     pub pre_balances: TransactionBalances,
@@ -2705,36 +2709,36 @@ impl Bank {
 
     pub(crate) fn prepare_simulation_batch<'a, 'b>(
         &'a self,
-        tx: SanitizedTransaction<'b>,
+        transaction: SanitizedTransaction<'b>,
     ) -> TransactionBatch<'a, 'b> {
-        let mut batch = TransactionBatch::new(vec![Ok(())], self, Cow::Owned(vec![tx]));
+        let mut batch = TransactionBatch::new(vec![Ok(())], self, Cow::Owned(vec![transaction]));
         batch.needs_unlock = false;
         batch
     }
 
     /// Run transactions against a frozen bank without committing the results
-    pub fn simulate_transaction(
-        &self,
-        transaction: &Transaction,
-    ) -> (
-        Result<()>,
-        TransactionLogMessages,
-        Vec<(Pubkey, AccountSharedData)>,
-    ) {
+    pub fn simulate_transaction(&self, transaction: &Transaction) -> TransactionSimulationResult {
         assert!(self.is_frozen(), "simulation bank must be frozen");
 
         let batch = match SanitizedTransaction::try_from(transaction) {
             Ok(sanitized_tx) => self.prepare_simulation_batch(sanitized_tx),
-            Err(err) => return (Err(err), vec![], vec![]),
+            Err(err) => {
+                return TransactionSimulationResult {
+                    result: Err(err),
+                    logs: vec![],
+                    post_simulation_accounts: vec![],
+                    units_consumed: 0,
+                }
+            }
         };
 
         let mut timings = ExecuteTimings::default();
 
         let (
-            loaded_txs,
+            loaded_transactions,
             executed,
             _inner_instructions,
-            log_messages,
+            logs,
             _retryable_transactions,
             _transaction_count,
             _signature_count,
@@ -2749,9 +2753,9 @@ impl Bank {
             &mut timings,
         );
 
-        let transaction_result = executed[0].0.clone().map(|_| ());
-        let log_messages = log_messages.get(0).cloned().flatten().unwrap_or_default();
-        let post_transaction_accounts = loaded_txs
+        let result = executed[0].0.clone().map(|_| ());
+        let logs = logs.get(0).cloned().flatten().unwrap_or_default();
+        let post_simulation_accounts = loaded_transactions
             .into_iter()
             .next()
             .unwrap()
@@ -2760,9 +2764,22 @@ impl Bank {
             .map(|loaded_transaction| loaded_transaction.accounts.into_iter().collect::<Vec<_>>())
             .unwrap_or_default();
 
+        let units_consumed = timings
+            .details
+            .per_program_timings
+            .iter()
+            .fold(0, |acc, (_, program_timing)| {
+                acc + program_timing.accumulated_units
+            });
+
         debug!("simulate_transaction: {:?}", timings);
 
-        (transaction_result, log_messages, post_transaction_accounts)
+        TransactionSimulationResult {
+            result,
+            logs,
+            post_simulation_accounts,
+            units_consumed,
+        }
     }
 
     pub fn unlock_accounts(&self, batch: &mut TransactionBatch) {
@@ -3245,7 +3262,7 @@ impl Bank {
                             None
                         };
 
-                        let compute_meter = Rc::new(RefCell::new(TxComputeMeter::new(
+                        let compute_meter = Rc::new(RefCell::new(TransactionComputeMeter::new(
                             bpf_compute_budget.max_units,
                         )));
 

@@ -43,7 +43,7 @@ use {
     solana_runtime::{
         accounts::AccountAddressFilter,
         accounts_index::{AccountIndex, AccountSecondaryIndexes, IndexKey},
-        bank::Bank,
+        bank::{Bank, TransactionSimulationResult},
         bank_forks::BankForks,
         commitment::{BlockCommitmentArray, BlockCommitmentCache, CommitmentSlots},
         inline_spl_token_v2_0::{SPL_TOKEN_ACCOUNT_MINT_OFFSET, SPL_TOKEN_ACCOUNT_OWNER_OFFSET},
@@ -3029,7 +3029,13 @@ pub mod rpc_full {
                     }
                 }
 
-                if let (Err(err), logs, _) = preflight_bank.simulate_transaction(&transaction) {
+                if let TransactionSimulationResult {
+                    result: Err(err),
+                    logs,
+                    post_simulation_accounts: _,
+                    units_consumed,
+                } = preflight_bank.simulate_transaction(&transaction)
+                {
                     match err {
                         TransactionError::BlockhashNotFound => {
                             inc_new_counter_info!("rpc-send-tx_err-blockhash-not-found", 1);
@@ -3044,6 +3050,7 @@ pub mod rpc_full {
                             err: Some(err),
                             logs: Some(logs),
                             accounts: None,
+                            units_consumed: Some(units_consumed),
                         },
                     }
                     .into());
@@ -3087,7 +3094,12 @@ pub mod rpc_full {
             if config.replace_recent_blockhash {
                 transaction.message.recent_blockhash = bank.last_blockhash();
             }
-            let (result, logs, post_simulation_accounts) = bank.simulate_transaction(&transaction);
+            let TransactionSimulationResult {
+                result,
+                logs,
+                post_simulation_accounts,
+                units_consumed,
+            } = bank.simulate_transaction(&transaction);
 
             let accounts = if let Some(config_accounts) = config.accounts {
                 let accounts_encoding = config_accounts
@@ -3142,6 +3154,7 @@ pub mod rpc_full {
                     err: result.err(),
                     logs: Some(logs),
                     accounts,
+                    units_consumed: Some(units_consumed),
                 },
             ))
         }
@@ -5183,7 +5196,8 @@ pub mod tests {
                     "logs":[
                         "Program 11111111111111111111111111111111 invoke [1]",
                         "Program 11111111111111111111111111111111 success"
-                    ]
+                    ],
+                    "unitsConsumed":0
                 }
             },
             "id": 1,
@@ -5262,10 +5276,15 @@ pub mod tests {
             "jsonrpc": "2.0",
             "result": {
                 "context":{"slot":0},
-                "value":{"accounts": null, "err":null, "logs":[
-                    "Program 11111111111111111111111111111111 invoke [1]",
-                    "Program 11111111111111111111111111111111 success"
-                ]}
+                "value":{
+                    "accounts":null,
+                    "err":null,
+                    "logs":[
+                        "Program 11111111111111111111111111111111 invoke [1]",
+                        "Program 11111111111111111111111111111111 success"
+                    ],
+                    "unitsConsumed":0
+                }
             },
             "id": 1,
         });
@@ -5285,10 +5304,15 @@ pub mod tests {
             "jsonrpc": "2.0",
             "result": {
                 "context":{"slot":0},
-                "value":{"accounts": null, "err":null, "logs":[
-                    "Program 11111111111111111111111111111111 invoke [1]",
-                    "Program 11111111111111111111111111111111 success"
-                ]}
+                "value":{
+                    "accounts":null,
+                    "err":null,
+                    "logs":[
+                        "Program 11111111111111111111111111111111 invoke [1]",
+                        "Program 11111111111111111111111111111111 success"
+                    ],
+                    "unitsConsumed":0
+                }
             },
             "id": 1,
         });
@@ -5333,7 +5357,12 @@ pub mod tests {
             "jsonrpc":"2.0",
             "result": {
                 "context":{"slot":0},
-                "value":{"err": "BlockhashNotFound", "accounts": null, "logs":[]}
+                "value":{
+                    "err":"BlockhashNotFound",
+                    "accounts":null,
+                    "logs":[],
+                    "unitsConsumed":0
+                }
             },
             "id":1
         });
@@ -5354,10 +5383,15 @@ pub mod tests {
             "jsonrpc": "2.0",
             "result": {
                 "context":{"slot":0},
-                "value":{"accounts": null, "err":null, "logs":[
-                    "Program 11111111111111111111111111111111 invoke [1]",
-                    "Program 11111111111111111111111111111111 success"
-                ]}
+                "value":{
+                    "accounts":null,
+                    "err":null,
+                    "logs":[
+                        "Program 11111111111111111111111111111111 invoke [1]",
+                        "Program 11111111111111111111111111111111 success"
+                    ],
+                    "unitsConsumed":0
+                }
             },
             "id": 1,
         });
@@ -5698,7 +5732,7 @@ pub mod tests {
         assert_eq!(
             res,
             Some(
-                r#"{"jsonrpc":"2.0","error":{"code":-32002,"message":"Transaction simulation failed: Blockhash not found","data":{"accounts":null,"err":"BlockhashNotFound","logs":[]}},"id":1}"#.to_string(),
+                r#"{"jsonrpc":"2.0","error":{"code":-32002,"message":"Transaction simulation failed: Blockhash not found","data":{"accounts":null,"err":"BlockhashNotFound","logs":[],"unitsConsumed":0}},"id":1}"#.to_string(),
             )
         );
 
