@@ -34,6 +34,10 @@ export rust_stable_docker_image=solanalabs/rust:"$stable_version"
 export rust_nightly=nightly-"$nightly_version"
 export rust_nightly_docker_image=solanalabs/rust-nightly:"$nightly_version"
 
+if [[ -n $CI ]]; then
+  rustup set profile default
+fi
+
 [[ -z $1 ]] || (
 
   rustup_install() {
