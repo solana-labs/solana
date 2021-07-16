@@ -148,5 +148,4 @@ jobs:
         - readlink -f .
       script:
         - source ci/env.sh
-        - rustup set profile default
         - ci/publish-tarball.sh
