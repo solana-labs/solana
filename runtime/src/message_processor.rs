@@ -1228,7 +1228,6 @@ impl MessageProcessor {
                     instruction,
                     &loaders[instruction_index],
                     accounts,
-                    account_deps,
                     rent_collector,
                     log_collector.clone(),
                     executors.clone(),
@@ -1237,7 +1236,6 @@ impl MessageProcessor {
                     feature_set.clone(),
                     bpf_compute_budget,
                     timings,
-                    demote_sysvar_write_locks,
                     account_db.clone(),
                     ancestors,
                 )
