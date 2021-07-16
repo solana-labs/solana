@@ -60,6 +60,7 @@ impl Executors {
 #[derive(Default, Debug)]
 pub struct ProgramTiming {
     pub accumulated_us: u64,
+    pub accumulated_units: u64,
     pub count: u32,
 }
 
@@ -87,9 +88,10 @@ impl ExecuteDetailsTimings {
         self.total_data_size += other.total_data_size;
         self.data_size_changed += other.data_size_changed;
         for (id, other) in &other.per_program_timings {
-            let time_count = self.per_program_timings.entry(*id).or_default();
-            time_count.accumulated_us += other.accumulated_us;
-            time_count.count += other.count;
+            let program_timing = self.per_program_timings.entry(*id).or_default();
+            program_timing.accumulated_us += other.accumulated_us;
+            program_timing.accumulated_units += other.accumulated_units;
+            program_timing.count += other.count;
         }
     }
 }
@@ -1234,6 +1236,7 @@ impl MessageProcessor {
     ) -> Result<(), TransactionError> {
         for (instruction_index, instruction) in message.instructions.iter().enumerate() {
             let mut time = Measure::start("execute_instruction");
+            let pre_remaining_units = compute_meter.borrow().get_remaining();
             let instruction_recorder = instruction_recorders
                 .as_ref()
                 .map(|recorders| recorders[instruction_index].clone());
@@ -1257,11 +1260,13 @@ impl MessageProcessor {
                 )
                 .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err));
             time.stop();
+            let post_remaining_units = compute_meter.borrow().get_remaining();
 
             let program_id = instruction.program_id(&message.account_keys);
-            let time_count = timings.per_program_timings.entry(*program_id).or_default();
-            time_count.accumulated_us += time.as_us();
-            time_count.count += 1;
+            let program_timing = timings.per_program_timings.entry(*program_id).or_default();
+            program_timing.accumulated_us += time.as_us();
+            program_timing.accumulated_units += pre_remaining_units - post_remaining_units;
+            program_timing.count += 1;
 
             err?;
         }
