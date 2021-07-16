@@ -22,7 +22,10 @@ use solana_poh::poh_recorder::WorkingBankEntry;
 use solana_runtime::{bank::Bank, bank_forks::BankForks};
 use solana_sdk::timing::{timestamp, AtomicInterval};
 use solana_sdk::{clock::Slot, pubkey::Pubkey};
-use solana_streamer::{sendmmsg::send_mmsg, socket::SocketAddrSpace};
+use solana_streamer::{
+    sendmmsg::{batch_send, SendPktsError},
+    socket::SocketAddrSpace,
+};
 use std::{
     collections::HashMap,
     net::UdpSocket,
@@ -394,10 +397,11 @@ pub fn broadcast_shreds(
     self_pubkey: Pubkey,
     bank_forks: &Arc<RwLock<BankForks>>,
 ) -> Result<()> {
+    let mut result = Ok(());
     let broadcast_len = cluster_nodes.num_peers();
     if broadcast_len == 0 {
         update_peer_stats(1, 1, last_datapoint_submit);
-        return Ok(());
+        return result;
     }
     let mut shred_select = Measure::start("shred_select");
     let root_bank = bank_forks.read().unwrap().root_bank();
@@ -407,7 +411,7 @@ pub fn broadcast_shreds(
             let seed = shred.seed(Some(self_pubkey), &root_bank);
             let node = cluster_nodes.get_broadcast_peer(seed)?;
             if socket_addr_space.check(&node.tvu) {
-                Some((&shred.payload, &node.tvu))
+                Some((&shred.payload[..], &node.tvu))
             } else {
                 None
             }
@@ -416,18 +420,14 @@ pub fn broadcast_shreds(
     shred_select.stop();
     transmit_stats.shred_select += shred_select.as_us();
 
-    let mut sent = 0;
     let mut send_mmsg_time = Measure::start("send_mmsg");
-    while sent < packets.len() {
-        match send_mmsg(s, &packets[sent..]) {
-            Ok(n) => sent += n,
-            Err(e) => {
-                return Err(Error::Io(e));
-            }
-        }
+    if let Err(SendPktsError::IoError(ioerr, num_failed)) = batch_send(s, &packets[..]) {
+        transmit_stats.dropped_packets += num_failed;
+        result = Err(Error::Io(ioerr));
     }
     send_mmsg_time.stop();
     transmit_stats.send_mmsg_elapsed += send_mmsg_time.as_us();
+    transmit_stats.total_packets += packets.len();
 
     let num_live_peers = cluster_nodes.num_peers_live(timestamp()) as i64;
     update_peer_stats(
@@ -435,7 +435,7 @@ pub fn broadcast_shreds(
         broadcast_len as i64 + 1,
         last_datapoint_submit,
     );
-    Ok(())
+    result
 }
 
 #[cfg(test)]
