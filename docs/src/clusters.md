@@ -62,9 +62,6 @@ The `--trusted-validator`s is operated by Solana
 - Testnet is where we stress test recent release features on a live
   cluster, particularly focused on network performance, stability and validator
   behavior.
-- [Tour de SOL](tour-de-sol.md) initiative runs on Testnet, where we
-  encourage malicious behavior and attacks on the network to help us find and
-  squash bugs or network vulnerabilities.
 - Testnet tokens are **not real**
 - Testnet may be subject to ledger resets.
 - Testnet includes a token faucet for airdrops for application testing
