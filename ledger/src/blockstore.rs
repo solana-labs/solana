@@ -125,6 +125,7 @@ pub struct BlockstoreSignals {
 //
 // NOTE: allowing dead_code only because stubbing bank_hash_cf and program_cost_cf
 // to 1.6 for rocksdb backward compatibility
+#[allow(dead_code)]
 pub struct Blockstore {
     ledger_path: PathBuf,
     db: Arc<Database>,
