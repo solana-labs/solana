@@ -5486,6 +5486,7 @@ dependencies = [
  "solana-rpc",
  "solana-runtime",
  "solana-sdk",
+ "solana-validator",
  "solana-version",
 ]
 
