@@ -13,6 +13,9 @@ pull_request_rules:
       label:
         add:
           - community
+      request_reviews:
+        teams:
+          - "@solana-labs/community-pr-subscribers"
   - name: automatic merge (squash) on CI success
     conditions:
       - status-success=buildkite/solana
