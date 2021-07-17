@@ -466,12 +466,70 @@ impl RpcClient {
         Ok(request)
     }
 
+
+    /// # Examples
+    ///
+    /// ```
+    /// # use solana_client::{
+    /// #     client_error::ClientError,
+    /// #     rpc_client::RpcClient,
+    /// #     rpc_config::RpcSimulateTransactionConfig,
+    /// # };
+    /// # use solana_sdk::{
+    /// #     signature::Signature,
+    /// #     signer::keypair::Keypair,
+    /// #     hash::Hash,
+    /// #     system_transaction,
+    /// # };
+    /// # let rpc_client = RpcClient::new_mock("succeeds".to_string());
+    /// // Transfer lamports from some account to a random account
+    /// let key = Keypair::new();
+    /// let to = solana_sdk::pubkey::new_rand();
+    /// let lamports = 50;
+    /// # let recent_blockhash = Hash::default();
+    /// let tx = system_transaction::transfer(&key, &to, lamports, recent_blockhash);
+    /// let signature = rpc_client.send_transaction(&tx)?;
+    /// let confirmed = rpc_client.confirm_transaction(&signature)?;
+    /// assert!(confirmed);
+    /// # Ok::<(), ClientError>(())
+    /// ```
     pub fn confirm_transaction(&self, signature: &Signature) -> ClientResult<bool> {
         Ok(self
             .confirm_transaction_with_commitment(signature, self.commitment())?
             .value)
     }
 
+    /// # Examples
+    ///
+    /// ```
+    /// # use solana_client::{
+    /// #     client_error::ClientError,
+    /// #     rpc_client::RpcClient,
+    /// #     rpc_config::RpcSimulateTransactionConfig,
+    /// # };
+    /// # use solana_sdk::{
+    /// #     commitment_config::CommitmentConfig,
+    /// #     signature::Signature,
+    /// #     signer::keypair::Keypair,
+    /// #     hash::Hash,
+    /// #     system_transaction,
+    /// # };
+    /// # let rpc_client = RpcClient::new_mock("succeeds".to_string());
+    /// // Transfer lamports from some account to a random account
+    /// let key = Keypair::new();
+    /// let to = solana_sdk::pubkey::new_rand();
+    /// let lamports = 50;
+    /// # let recent_blockhash = Hash::default();
+    /// let tx = system_transaction::transfer(&key, &to, lamports, recent_blockhash);
+    /// let signature = rpc_client.send_transaction(&tx)?;
+    /// let commitment_config = CommitmentConfig::confirmed();
+    /// let confirmed = rpc_client.confirm_transaction_with_commitment(
+    ///     &signature,
+    ///     commitment_config,
+    /// )?;
+    /// assert!(confirmed.value);
+    /// # Ok::<(), ClientError>(())
+    /// ```
     pub fn confirm_transaction_with_commitment(
         &self,
         signature: &Signature,
@@ -489,6 +547,31 @@ impl RpcClient {
         })
     }
 
+    /// # Examples
+    ///
+    /// ```
+    /// # use solana_client::{
+    /// #     client_error::ClientError,
+    /// #     rpc_client::RpcClient,
+    /// # };
+    /// # use solana_sdk::{
+    /// #     signature::Signature,
+    /// #     signer::keypair::Keypair,
+    /// #     hash::Hash,
+    /// #     system_transaction,
+    /// # };
+    /// # let rpc_client = RpcClient::new_mock("succeeds".to_string());
+    /// // Transfer lamports from some account to a random account
+    /// let key = Keypair::new();
+    /// let to = solana_sdk::pubkey::new_rand();
+    /// let lamports = 50;
+    /// # let recent_blockhash = Hash::default();
+    /// let tx = system_transaction::transfer(&key, &to, lamports, recent_blockhash);
+    /// let signature = rpc_client.send_transaction(&tx)?;
+    /// let confirmed = rpc_client.confirm_transaction(&signature)?;
+    /// assert!(confirmed);
+    /// # Ok::<(), ClientError>(())
+    /// ```
     pub fn send_transaction(&self, transaction: &Transaction) -> ClientResult<Signature> {
         self.send_transaction_with_config(
             transaction,
@@ -509,6 +592,39 @@ impl RpcClient {
         }
     }
 
+    /// # Examples
+    ///
+    /// ```
+    /// # use solana_client::{
+    /// #     client_error::ClientError,
+    /// #     rpc_client::RpcClient,
+    /// #     rpc_config::RpcSendTransactionConfig,
+    /// # };
+    /// # use solana_sdk::{
+    /// #     signature::Signature,
+    /// #     signer::keypair::Keypair,
+    /// #     hash::Hash,
+    /// #     system_transaction,
+    /// # };
+    /// # let rpc_client = RpcClient::new_mock("succeeds".to_string());
+    /// // Transfer lamports from some account to a random account
+    /// let key = Keypair::new();
+    /// let to = solana_sdk::pubkey::new_rand();
+    /// let lamports = 50;
+    /// # let recent_blockhash = Hash::default();
+    /// let tx = system_transaction::transfer(&key, &to, lamports, recent_blockhash);
+    /// let config = RpcSendTransactionConfig {
+    ///     skip_preflight: true,
+    ///     .. RpcSendTransactionConfig::default()
+    /// };
+    /// let signature = rpc_client.send_transaction_with_config(
+    ///     &tx,
+    ///     config,
+    /// )?;
+    /// let confirmed = rpc_client.confirm_transaction(&signature)?;
+    /// assert!(confirmed);
+    /// # Ok::<(), ClientError>(())
+    /// ```
     pub fn send_transaction_with_config(
         &self,
         transaction: &Transaction,
@@ -576,6 +692,31 @@ impl RpcClient {
         }
     }
 
+    /// # Examples
+    ///
+    /// ```
+    /// # use solana_client::{
+    /// #     client_error::ClientError,
+    /// #     rpc_client::RpcClient,
+    /// #     rpc_response::RpcSimulateTransactionResult,
+    /// # };
+    /// # use solana_sdk::{
+    /// #     signature::Signature,
+    /// #     signer::keypair::Keypair,
+    /// #     hash::Hash,
+    /// #     system_transaction,
+    /// # };
+    /// # let rpc_client = RpcClient::new_mock("succeeds".to_string());
+    /// // Transfer lamports from some account to a random account
+    /// let key = Keypair::new();
+    /// let to = solana_sdk::pubkey::new_rand();
+    /// let lamports = 50;
+    /// # let recent_blockhash = Hash::default();
+    /// let tx = system_transaction::transfer(&key, &to, lamports, recent_blockhash);
+    /// let result = rpc_client.simulate_transaction(&tx)?;
+    /// assert!(result.value.err.is_none());
+    /// # Ok::<(), ClientError>(())
+    /// ```
     pub fn simulate_transaction(
         &self,
         transaction: &Transaction,
@@ -589,6 +730,39 @@ impl RpcClient {
         )
     }
 
+    /// # Examples
+    ///
+    /// ```
+    /// # use solana_client::{
+    /// #     client_error::ClientError,
+    /// #     rpc_client::RpcClient,
+    /// #     rpc_config::RpcSimulateTransactionConfig,
+    /// #     rpc_response::RpcSimulateTransactionResult,
+    /// # };
+    /// # use solana_sdk::{
+    /// #     signature::Signature,
+    /// #     signer::keypair::Keypair,
+    /// #     hash::Hash,
+    /// #     system_transaction,
+    /// # };
+    /// # let rpc_client = RpcClient::new_mock("succeeds".to_string());
+    /// // Transfer lamports from some account to a random account
+    /// let key = Keypair::new();
+    /// let to = solana_sdk::pubkey::new_rand();
+    /// let lamports = 50;
+    /// # let recent_blockhash = Hash::default();
+    /// let tx = system_transaction::transfer(&key, &to, lamports, recent_blockhash);
+    /// let config = RpcSimulateTransactionConfig {
+    ///     sig_verify: false,
+    ///     .. RpcSimulateTransactionConfig::default()
+    /// };
+    /// let result = rpc_client.simulate_transaction_with_config(
+    ///     &tx,
+    ///     config,
+    /// )?;
+    /// assert!(result.value.err.is_none());
+    /// # Ok::<(), ClientError>(())
+    /// ```
     pub fn simulate_transaction_with_config(
         &self,
         transaction: &Transaction,
