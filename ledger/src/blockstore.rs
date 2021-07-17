@@ -122,6 +122,10 @@ pub struct BlockstoreSignals {
 }
 
 // ledger window
+//
+// NOTE: allowing dead_code only because stubbing bank_hash_cf and program_cost_cf
+// to 1.6 for rocksdb backward compatibility
+#[allow(dead_code)]
 pub struct Blockstore {
     ledger_path: PathBuf,
     db: Arc<Database>,
@@ -141,6 +145,8 @@ pub struct Blockstore {
     blocktime_cf: LedgerColumn<cf::Blocktime>,
     perf_samples_cf: LedgerColumn<cf::PerfSamples>,
     block_height_cf: LedgerColumn<cf::BlockHeight>,
+    program_costs_cf: LedgerColumn<cf::ProgramCosts>,
+    bank_hash_cf: LedgerColumn<cf::BankHash>,
     last_root: Arc<RwLock<Slot>>,
     insert_shreds_lock: Arc<Mutex<()>>,
     pub new_shreds_signals: Vec<SyncSender<bool>>,
@@ -312,6 +318,8 @@ impl Blockstore {
         let blocktime_cf = db.column();
         let perf_samples_cf = db.column();
         let block_height_cf = db.column();
+        let program_costs_cf = db.column();
+        let bank_hash_cf = db.column();
 
         let db = Arc::new(db);
 
@@ -360,6 +368,8 @@ impl Blockstore {
             blocktime_cf,
             perf_samples_cf,
             block_height_cf,
+            program_costs_cf,
+            bank_hash_cf,
             new_shreds_signals: vec![],
             completed_slots_senders: vec![],
             insert_shreds_lock: Arc::new(Mutex::new(())),
