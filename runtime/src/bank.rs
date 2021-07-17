@@ -4865,20 +4865,24 @@ impl Bank {
         info!("cleaning..");
         let mut clean_time = Measure::start("clean");
         if self.slot() > 0 {
-            self.clean_accounts(true, true);
+            //self.clean_accounts(true, true);
         }
         clean_time.stop();
 
         info!("shrinking..");
         let mut shrink_all_slots_time = Measure::start("shrink_all_slots");
         if self.slot() > 0 {
-            self.shrink_all_slots(true);
+            //self.shrink_all_slots(true);
         }
         shrink_all_slots_time.stop();
 
         info!("verify_bank_hash..");
         let mut verify_time = Measure::start("verify_bank_hash");
-        let mut verify = self.verify_bank_hash(test_hash_calculation);
+        let verify = self.verify_bank_hash(test_hash_calculation);
+        info!("verify_bank_hash..2");
+        let verify = self.verify_bank_hash(test_hash_calculation); // temporarily run multiple times
+        info!("verify_bank_hash..3");
+        let mut verify = self.verify_bank_hash(test_hash_calculation); // temporarily run multiple times
         verify_time.stop();
 
         info!("verify_hash..");
