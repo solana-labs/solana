@@ -573,6 +573,8 @@ fn do_process_blockstore_from_root(
     );
 
     info!("ledger processing timing: {:?}", timing);
+    bank_forks.root_bank().report_store_timings();
+
     info!(
         "ledger processed in {}. root slot is {}, {} fork{} at {}, with {} frozen bank{}",
         HumanTime::from(chrono::Duration::from_std(processing_time).unwrap())

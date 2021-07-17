@@ -72,6 +72,7 @@ pub struct ExecuteDetailsTimings {
     pub total_account_count: u64,
     pub total_data_size: usize,
     pub data_size_changed: usize,
+    pub collect_rent_us: u64,
     pub per_program_timings: HashMap<Pubkey, ProgramTiming>,
 }
 
@@ -85,6 +86,7 @@ impl ExecuteDetailsTimings {
         self.total_account_count += other.total_account_count;
         self.total_data_size += other.total_data_size;
         self.data_size_changed += other.data_size_changed;
+        self.collect_rent_us += other.collect_rent_us;
         for (id, other) in &other.per_program_timings {
             let time_count = self.per_program_timings.entry(*id).or_default();
             time_count.accumulated_us += other.accumulated_us;
