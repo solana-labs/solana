@@ -1,3 +1,12 @@
+//! Communication with a Solana node over RPC.
+//!
+//! Software that interacts with the Solana blockchain,
+//! whether querying its state or submitting transactions,
+//! communicates with a Solana node over [JSON-RPC],
+//! using the [`RpcClient`] type.
+//!
+//! [JSON-RPC]: https://www.jsonrpc.org/specification
+
 #[allow(deprecated)]
 use crate::rpc_deprecated_config::{
     RpcConfirmedBlockConfig, RpcConfirmedTransactionConfig,
@@ -64,6 +73,49 @@ impl RpcClientConfig {
     }
 }
 
+/// A client of a remote Solana node.
+///
+/// `RpcClient` communicates with a Solana node over [JSON-RPC],
+/// with the [Solana JSON-RPC protocol][jsonprot]. It is the primary
+/// Rust interface for querying and transacting with the network
+/// from external programs.
+///
+/// `RpcClient`s generally communicate over HTTP on port 8899,
+/// a typical server URL being "http://localhost:8899".
+///
+/// By default,
+/// requests to confirm transactions are only completed
+/// once those transactions are finalized,
+/// meaning they are definitely permanently committed.
+/// Transactions can be confirmed with less finality by
+/// creating `RpcClient` with an explicit [`CommitmentConfig`],
+/// or by calling the various `_with_commitment` methods,
+/// like [`RpcClient::confirm_transaction_with_commitment`].
+///
+/// Requests may timeout,
+/// in which case they return a [`ClientError`]
+/// where the [`ClientErrorKind`]
+/// is [`ClientErrorKind::Reqwest`],
+/// and where the interior [`reqwest::Error`](crate::client_error::reqwest::Error)s
+/// [`is_timeout`](crate::client_error::reqwest::Error::is_timeout)
+/// method returns `true`.
+/// The default timeout is 30 seconds,
+/// and may be changed by calling an appropriate constructor
+/// with a `timeout` parameter.
+///
+/// `RpcClient` encapsulates an [`RpcSender`],
+/// which implements the underlying RPC protocol.
+/// On top of `RpcSender` it adds methods for common tasks,
+/// while re-exposing the underlying RPC sending functionality
+/// through the [`send`][RpcClient::send] method.
+///
+/// [jsonprot]: https://docs.solana.com/developing/clients/jsonrpc-api
+/// [JSON-RPC]: https://www.jsonrpc.org/specification
+///
+/// While `RpcClient` encapsulates an abstract `RpcSender`,
+/// it is most commonly created with an [`HttpSender`],
+/// communicating over HTTP, usually on port 8899.
+/// It can also be created with [`MockSender`] during testing.
 pub struct RpcClient {
     sender: Box<dyn RpcSender + Send + Sync + 'static>,
     config: RpcClientConfig,
@@ -71,6 +123,13 @@ pub struct RpcClient {
 }
 
 impl RpcClient {
+    /// Create an `RpcClient` from an [`RpcSender`] and an [`RpcClientConfig`].
+    ///
+    /// This is the basic constructor, allowing construction with any type of `RpcSender`.
+    /// Most applications should use one of the other constructors,
+    /// such as [`new`] and [`new_mock`],
+    /// which create an `RpcClient` encapsulating an
+    /// [`HttpSender`] and [`MockSender`] respectively.
     fn new_sender<T: RpcSender + Send + Sync + 'static>(
         sender: T,
         config: RpcClientConfig,
@@ -82,10 +141,42 @@ impl RpcClient {
         }
     }
 
+    /// Create an HTTP `RpcClient`.
+    ///
+    /// The URL is an HTTP URL, usually for port 8899,
+    /// as in "http://localhost:8899".
+    ///
+    /// The client has a default timeout of 30 seconds,
+    /// and a default commitment level of [`Finalized`](CommitmentLevel::Finalized).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use solana_client::rpc_client::RpcClient;
+    /// let url = "http://localhost:8899".to_string();
+    /// let client = RpcClient::new(url);
+    /// ```
     pub fn new(url: String) -> Self {
         Self::new_with_commitment(url, CommitmentConfig::default())
     }
 
+    /// Create an HTTP `RpcClient` with specified commitment level.
+    ///
+    /// The URL is an HTTP URL, usually for port 8899,
+    /// as in "http://localhost:8899".
+    ///
+    /// The client has a default timeout of 30 seconds,
+    /// and a user-specified [`CommitmentLevel`] via [`CommitmentConfig`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use solana_sdk::commitment_config::CommitmentConfig;
+    /// # use solana_client::rpc_client::RpcClient;
+    /// let url = "http://localhost:8899".to_string();
+    /// let commitment_config = CommitmentConfig::processed();
+    /// let client = RpcClient::new_with_commitment(url, commitment_config);
+    /// ```
     pub fn new_with_commitment(url: String, commitment_config: CommitmentConfig) -> Self {
         Self::new_sender(
             HttpSender::new(url),
@@ -93,6 +184,22 @@ impl RpcClient {
         )
     }
 
+    /// Create an HTTP `RpcClient` with specified timeout.
+    ///
+    /// The URL is an HTTP URL, usually for port 8899,
+    /// as in "http://localhost:8899".
+    ///
+    /// The client has and a default commitment level of [`Finalized`](CommitmentLevel::Finalized).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use std::time::Duration;
+    /// # use solana_client::rpc_client::RpcClient;
+    /// let url = "http://localhost::8899".to_string();
+    /// let timeout = Duration::from_secs(1);
+    /// let client = RpcClient::new_with_timeout(url, timeout);
+    /// ```
     pub fn new_with_timeout(url: String, timeout: Duration) -> Self {
         Self::new_sender(
             HttpSender::new_with_timeout(url, timeout),
@@ -100,6 +207,26 @@ impl RpcClient {
         )
     }
 
+    /// Create an HTTP `RpcClient` with specified timeout and commitment level.
+    ///
+    /// The URL is an HTTP URL, usually for port 8899,
+    /// as in "http://localhost:8899".
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use std::time::Duration;
+    /// # use solana_client::rpc_client::RpcClient;
+    /// # use solana_sdk::commitment_config::CommitmentConfig;
+    /// let url = "http://localhost::8899".to_string();
+    /// let timeout = Duration::from_secs(1);
+    /// let commitment_config = CommitmentConfig::processed();
+    /// let client = RpcClient::new_with_timeout_and_commitment(
+    ///     url,
+    ///     timeout,
+    ///     commitment_config,
+    /// );
+    /// ```
     pub fn new_with_timeout_and_commitment(
         url: String,
         timeout: Duration,
@@ -111,6 +238,37 @@ impl RpcClient {
         )
     }
 
+    /// Create an HTTP `RpcClient` with specified timeout and commitment level.
+    ///
+    /// The URL is an HTTP URL, usually for port 8899,
+    /// as in "http://localhost:8899".
+    ///
+    /// The `confirm_transaction_initial_timeout` argument specifies,
+    /// when confirming a transaction via one of the `_with_spinner` methods,
+    /// like [`RpcClient::send_and_confirm_transaction_with_spinner`],
+    /// the amount of time to allow for the server to initially process a transaction.
+    /// In other words,
+    /// setting `confirm_transaction_initial_timeout` to > 0
+    /// allows `RpcClient` to wait for confirmation of a transaction
+    /// that the server has not "seen" yet.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use std::time::Duration;
+    /// # use solana_client::rpc_client::RpcClient;
+    /// # use solana_sdk::commitment_config::CommitmentConfig;
+    /// let url = "http://localhost::8899".to_string();
+    /// let timeout = Duration::from_secs(1);
+    /// let commitment_config = CommitmentConfig::processed();
+    /// let confirm_transaction_initial_timeout = Duration::from_secs(10);
+    /// let client = RpcClient::new_with_timeouts_and_commitment(
+    ///     url,
+    ///     timeout,
+    ///     commitment_config,
+    ///     confirm_transaction_initial_timeout,
+    /// );
+    /// ```
     pub fn new_with_timeouts_and_commitment(
         url: String,
         timeout: Duration,
@@ -126,6 +284,26 @@ impl RpcClient {
         )
     }
 
+    /// Create a mock `RpcClient`.
+    ///
+    /// See the [`MockSender`] documentation for an explanation of
+    /// how it treats the `url` argument.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use solana_client::rpc_client::RpcClient;
+    /// // Create an `RpcClient` that always succeeds
+    /// let url = "succeeds".to_string();
+    /// let successful_client = RpcClient::new_mock(url);
+    /// ```
+    ///
+    /// ```
+    /// # use solana_client::rpc_client::RpcClient;
+    /// // Create an `RpcClient` that always fails
+    /// let url = "fails".to_string();
+    /// let successful_client = RpcClient::new_mock(url);
+    /// ```
     pub fn new_mock(url: String) -> Self {
         Self::new_sender(
             MockSender::new(url),
@@ -133,6 +311,34 @@ impl RpcClient {
         )
     }
 
+    /// Create a mock `RpcClient`.
+    ///
+    /// See the [`MockSender`] documentation for an explanation of
+    /// how it treats the `url` argument.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use solana_client::{
+    /// #     rpc_client::RpcClient,
+    /// #     rpc_request::RpcRequest,
+    /// # };
+    /// # use std::collections::HashMap;
+    /// # use serde_json::json;
+    /// use solana_client::rpc_response::{Response, RpcResponseContext};
+    ///
+    /// // Create a mock with a custom repsonse to the `GetBalance` request
+    /// let account_balance = 50;
+    /// let account_balance_response = json!(Response {
+    ///     context: RpcResponseContext { slot: 1 },
+    ///     value: json!(account_balance),
+    /// });
+    ///
+    /// let mut mocks = HashMap::new();
+    /// mocks.insert(RpcRequest::GetBalance, account_balance_response);
+    /// let url = "succeeds".to_string();
+    /// let client = RpcClient::new_mock_with_mocks(url, mocks);
+    /// ```
     pub fn new_mock_with_mocks(url: String, mocks: Mocks) -> Self {
         Self::new_sender(
             MockSender::new_with_mocks(url, mocks),
@@ -140,10 +346,41 @@ impl RpcClient {
         )
     }
 
+    /// Create an HTTP `RpcClient` from a [`SocketAddr`].
+    ///
+    /// The client has a default timeout of 30 seconds,
+    /// and a default commitment level of [`Finalized`](CommitmentLevel::Finalized).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use std::net::SocketAddr;
+    /// # use solana_client::rpc_client::RpcClient;
+    /// let addr = SocketAddr::from(([127, 0, 0, 1], 8899));
+    /// let client = RpcClient::new_socket(addr);
+    /// ```
     pub fn new_socket(addr: SocketAddr) -> Self {
         Self::new(get_rpc_request_str(addr, false))
     }
 
+    /// Create an HTTP `RpcClient` from a [`SocketAddr`] with specified commitment level.
+    ///
+    /// The client has a default timeout of 30 seconds,
+    /// and a user-specified [`CommitmentLevel`] via [`CommitmentConfig`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use std::net::SocketAddr;
+    /// # use solana_client::rpc_client::RpcClient;
+    /// # use solana_sdk::commitment_config::CommitmentConfig;
+    /// let addr = SocketAddr::from(([127, 0, 0, 1], 8899));
+    /// let commitment_config = CommitmentConfig::processed();
+    /// let client = RpcClient::new_socket_with_commitment(
+    ///     addr,
+    ///     commitment_config
+    /// );
+    /// ```
     pub fn new_socket_with_commitment(
         addr: SocketAddr,
         commitment_config: CommitmentConfig,
@@ -151,6 +388,20 @@ impl RpcClient {
         Self::new_with_commitment(get_rpc_request_str(addr, false), commitment_config)
     }
 
+    /// Create an HTTP `RpcClient` from a [`SocketAddr`] with specified timeout.
+    ///
+    /// The client has and a default commitment level of [`Finalized`](CommitmentLevel::Finalized).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use std::net::SocketAddr;
+    /// # use std::time::Duration;
+    /// # use solana_client::rpc_client::RpcClient;
+    /// let addr = SocketAddr::from(([127, 0, 0, 1], 8899));
+    /// let timeout = Duration::from_secs(1);
+    /// let client = RpcClient::new_socket_with_timeout(addr, timeout);
+    /// ```
     pub fn new_socket_with_timeout(addr: SocketAddr, timeout: Duration) -> Self {
         let url = get_rpc_request_str(addr, false);
         Self::new_with_timeout(url, timeout)
