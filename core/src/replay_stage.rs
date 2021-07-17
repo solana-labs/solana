@@ -3256,14 +3256,14 @@ pub mod tests {
     #[test]
     fn test_dead_fork_trailing_entry() {
         let keypair = Keypair::new();
-        let res = check_dead_fork(|genesis_keypair, bank| {
+        let res = check_dead_fork(|funded_keypair, bank| {
             let blockhash = bank.last_blockhash();
             let slot = bank.slot();
             let hashes_per_tick = bank.hashes_per_tick().unwrap_or(0);
             let mut entries =
                 entry::create_ticks(bank.ticks_per_slot(), hashes_per_tick, blockhash);
             let last_entry_hash = entries.last().unwrap().hash;
-            let tx = system_transaction::transfer(genesis_keypair, &keypair.pubkey(), 2, blockhash);
+            let tx = system_transaction::transfer(funded_keypair, &keypair.pubkey(), 2, blockhash);
             let trailing_entry = entry::next_entry(&last_entry_hash, 1, vec![tx]);
             entries.push(trailing_entry);
             entries_to_test_shreds(entries, slot, slot.saturating_sub(1), true, 0)
@@ -3279,14 +3279,19 @@ pub mod tests {
     #[test]
     fn test_dead_fork_entry_deserialize_failure() {
         // Insert entry that causes deserialization failure
-        let res = check_dead_fork(|_, _| {
+        let res = check_dead_fork(|_, bank| {
             let gibberish = [0xa5u8; PACKET_DATA_SIZE];
             let mut data_header = DataShredHeader::default();
             data_header.flags |= DATA_COMPLETE_SHRED;
             // Need to provide the right size for Shredder::deshred.
             data_header.size = SIZE_OF_DATA_SHRED_PAYLOAD as u16;
+            data_header.parent_offset = (bank.slot() - bank.parent_slot()) as u16;
+            let shred_common_header = ShredCommonHeader {
+                slot: bank.slot(),
+                ..ShredCommonHeader::default()
+            };
             let mut shred = Shred::new_empty_from_header(
-                ShredCommonHeader::default(),
+                shred_common_header,
                 data_header,
                 CodingShredHeader::default(),
             );
@@ -3315,37 +3320,43 @@ pub mod tests {
         let ledger_path = get_tmp_ledger_path!();
         let (replay_vote_sender, _replay_vote_receiver) = unbounded();
         let res = {
-            let blockstore = Arc::new(
-                Blockstore::open(&ledger_path)
-                    .expect("Expected to be able to open database ledger"),
-            );
-            let GenesisConfigInfo {
-                mut genesis_config,
-                mint_keypair,
+            let ReplayBlockstoreComponents {
+                blockstore,
+                vote_simulator,
                 ..
-            } = create_genesis_config(1000);
-            genesis_config.poh_config.hashes_per_tick = Some(2);
-            let bank_forks = BankForks::new(Bank::new(&genesis_config));
-            let bank0 = bank_forks.working_bank();
-            let mut progress = ProgressMap::default();
-            let last_blockhash = bank0.last_blockhash();
-            let mut bank0_progress = progress
-                .entry(bank0.slot())
-                .or_insert_with(|| ForkProgress::new(last_blockhash, None, None, 0, 0));
-            let shreds = shred_to_insert(&mint_keypair, bank0.clone());
+            } = replay_blockstore_components(Some(tr(0)), 1, None);
+            let VoteSimulator {
+                mut progress,
+                bank_forks,
+                mut heaviest_subtree_fork_choice,
+                validator_keypairs,
+                ..
+            } = vote_simulator;
+
+            let bank0 = bank_forks.read().unwrap().get(0).cloned().unwrap();
+            assert!(bank0.is_frozen());
+            assert_eq!(bank0.tick_height(), bank0.max_tick_height());
+            let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+            bank_forks.write().unwrap().insert(bank1);
+            let bank1 = bank_forks.read().unwrap().get(1).cloned().unwrap();
+            let mut bank1_progress = progress
+                .entry(bank1.slot())
+                .or_insert_with(|| ForkProgress::new(bank1.last_blockhash(), None, None, 0, 0));
+            let shreds = shred_to_insert(
+                &validator_keypairs.values().next().unwrap().node_keypair,
+                bank1.clone(),
+            );
             blockstore.insert_shreds(shreds, None, false).unwrap();
             let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
-            let bank_forks = Arc::new(RwLock::new(bank_forks));
             let exit = Arc::new(AtomicBool::new(false));
             let res = ReplayStage::replay_blockstore_into_bank(
-                &bank0,
+                &bank1,
                 &blockstore,
-                &mut bank0_progress,
+                &mut bank1_progress,
                 None,
                 &replay_vote_sender,
                 &VerifyRecyclers::default(),
             );
-
             let rpc_subscriptions = Arc::new(RpcSubscriptions::new(
                 &exit,
                 bank_forks.clone(),
@@ -3355,26 +3366,26 @@ pub mod tests {
             if let Err(err) = &res {
                 ReplayStage::mark_dead_slot(
                     &blockstore,
-                    &bank0,
+                    &bank1,
                     0,
                     err,
                     &rpc_subscriptions,
                     &mut DuplicateSlotsTracker::default(),
                     &GossipDuplicateConfirmedSlots::default(),
                     &mut progress,
-                    &mut HeaviestSubtreeForkChoice::new((0, Hash::default())),
+                    &mut heaviest_subtree_fork_choice,
                     &mut DuplicateSlotsToRepair::default(),
                 );
             }
 
             // Check that the erroring bank was marked as dead in the progress map
             assert!(progress
-                .get(&bank0.slot())
+                .get(&bank1.slot())
                 .map(|b| b.is_dead)
                 .unwrap_or(false));
 
             // Check that the erroring bank was marked as dead in blockstore
-            assert!(blockstore.is_dead(bank0.slot()));
+            assert!(blockstore.is_dead(bank1.slot()));
             res.map(|_| ())
         };
         let _ignored = remove_dir_all(&ledger_path);
