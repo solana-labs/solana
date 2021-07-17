@@ -44,8 +44,10 @@ pub fn calculate_non_circulating_supply(bank: &Arc<Bank>) -> ScanResult<NonCircu
             |account| account.owner() == &stake::program::id(),
         )?
     } else {
+        error!("gpa");
         bank.get_program_accounts(&stake::program::id())?
     };
+    error!("stake accounts: {:?}", stake_accounts);
 
     for (pubkey, account) in stake_accounts.iter() {
         let stake_account = stake_state::from(account).unwrap_or_default();
@@ -84,7 +86,7 @@ solana_sdk::pubkeys!(
     non_circulating_accounts,
     [
         "9huDUZfxoJ7wGMTffUE7vh1xePqef7gyrLJu9NApncqA",
-        "GK2zqSsXLA2rwVZk347RYhh6jJpRsCA69FjLW93ZGi3B",
+        "GK2zqSsXLA2rwVZk347RYhh6jJpRsCA69FjLW93ZGi3B",/*
         "CWeRmXme7LmbaUWTZWFLt6FMnpzLCHaQLuR2TdgFn4Lq",
         "HCV5dGFJXRrJ3jhDYA4DCeb9TEDTwGGYXtT3wHksu2Zr",
         "14FUT96s9swbmH7ZjpDvfEDywnAYy9zaNhv4xvezySGu",
@@ -191,7 +193,7 @@ solana_sdk::pubkeys!(
         "GmyW1nqYcrw7P7JqrcyP9ivU9hYNbrgZ1r5SYJJH41Fs",
         "E8jcgWvrvV7rwYHJThwfiBeQ8VAH4FgNEEMG9aAuCMAq",
         "CY7X5o3Wi2eQhTocLmUS6JSWyx1NinBfW7AXRrkRCpi8",
-        "HQJtLqvEGGxgNYfRXUurfxV8E1swvCnsbC3456ik27HY",
+        "HQJtLqvEGGxgNYfRXUurfxV8E1swvCnsbC3456ik27HY",*/
     ]
 );
 
@@ -229,9 +231,10 @@ mod tests {
 
     #[test]
     fn test_calculate_non_circulating_supply() {
+        solana_logger::setup();
         let mut accounts: BTreeMap<Pubkey, Account> = BTreeMap::new();
         let balance = 10;
-        let num_genesis_accounts = 10;
+        let num_genesis_accounts = 1;
         for _ in 0..num_genesis_accounts {
             accounts.insert(
                 solana_sdk::pubkey::new_rand(),
@@ -281,6 +284,10 @@ mod tests {
         );
 
         let non_circulating_supply = calculate_non_circulating_supply(&bank).unwrap();
+        error!("results: {}, {}", non_circulating_supply.lamports,
+        (num_non_circulating_accounts + num_stake_accounts) * balance);
+        error!("results: {}, {}", non_circulating_supply.accounts.len(),
+        num_non_circulating_accounts as usize + num_stake_accounts as usize);
         assert_eq!(
             non_circulating_supply.lamports,
             (num_non_circulating_accounts + num_stake_accounts) * balance

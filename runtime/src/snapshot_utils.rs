@@ -1150,6 +1150,7 @@ pub fn process_accounts_package_pre(
             crate::accounts_hash::HashStats::default(),
             false,
             None,
+            None, // cache manager
         )
         .unwrap();
 
