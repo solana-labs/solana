@@ -227,7 +227,7 @@ impl SlotStateUpdate {
         let bank_frozen_hash = self.bank_hash();
         if bank_frozen_hash == None {
             // If the bank hasn't been frozen yet, then there's nothing to do
-            // replay of the slot hasn't finished yet.
+            // since replay of the slot hasn't finished yet.
             return vec![];
         }
 
@@ -381,20 +381,17 @@ fn on_duplicate(duplicate_state: DuplicateState) -> Vec<ResultingStateChange> {
 
     let bank_hash = bank_status.bank_hash().expect("bank hash must exist");
 
-    // If the cluster duplicate_confirmed some version of this slot that matches our
-    // version, ignore this duplicate signal
-    if let Some(duplicate_confirmed_hash) = duplicate_confirmed_hash {
-        if duplicate_confirmed_hash == bank_hash {
-            return vec![];
-        }
+    // If the cluster duplicate_confirmed some version of this slot
+    // then either the `SlotStateUpdate::DuplicateConfirmed`, `SlotStateUpdate::BankFrozen`,
+    // or `SlotStateUpdate::Dead` state transitions will take care of marking the fork as
+    // duplicate if there's a mismatch with our local version.
+    if duplicate_confirmed_hash.is_none() {
+        // If we have not yet seen any version of the slot duplicate confirmed, then mark
+        // the slot as duplicate
+        return vec![ResultingStateChange::MarkSlotDuplicate(bank_hash)];
     }
 
-    // If we either:
-    // 1) Have not yet seen any version of the slot duplicate_confirmed,
-    // 2) Our version of the slot does not match the duplicate_confirmed version,
-
-    // Then mark the slot as duplicate
-    vec![ResultingStateChange::MarkSlotDuplicate(bank_hash)]
+    vec![]
 }
 
 fn get_duplicate_confirmed_hash_from_state(
@@ -816,8 +813,7 @@ mod test {
             let duplicate_state = DuplicateState::new(duplicate_confirmed_hash, bank_status);
             (
                 SlotStateUpdate::Duplicate(duplicate_state),
-                vec![
-                ResultingStateChange::MarkSlotDuplicate(Hash::default())],
+                Vec::<ResultingStateChange>::new()
             )
         },
         duplicate_state_update_5: {
@@ -836,8 +832,7 @@ mod test {
             let duplicate_state = DuplicateState::new(duplicate_confirmed_hash, bank_status);
             (
                 SlotStateUpdate::Duplicate(duplicate_state),
-                vec![
-                ResultingStateChange::MarkSlotDuplicate(frozen_hash)],
+                Vec::<ResultingStateChange>::new(),
             )
         },
     }
