@@ -4,7 +4,9 @@ use {
     crate::{
         client_error::Result,
         rpc_request::RpcRequest,
-        rpc_response::{Response, RpcResponseContext, RpcVersionInfo, RpcSimulateTransactionResult},
+        rpc_response::{
+            Response, RpcResponseContext, RpcSimulateTransactionResult, RpcVersionInfo,
+        },
         rpc_sender::RpcSender,
     },
     serde_json::{json, Number, Value},
@@ -166,16 +168,14 @@ impl RpcSender for MockSender {
                 };
                 Value::String(signature)
             }
-            RpcRequest::SimulateTransaction => {
-                serde_json::to_value(Response {
-                    context: RpcResponseContext { slot: 1 },
-                    value: RpcSimulateTransactionResult {
-                        err: None,
-                        logs: None,
-                        accounts: None,
-                    },
-                })?
-            }
+            RpcRequest::SimulateTransaction => serde_json::to_value(Response {
+                context: RpcResponseContext { slot: 1 },
+                value: RpcSimulateTransactionResult {
+                    err: None,
+                    logs: None,
+                    accounts: None,
+                },
+            })?,
             RpcRequest::GetMinimumBalanceForRentExemption => Value::Number(Number::from(20)),
             RpcRequest::GetVersion => {
                 let version = Version::default();

@@ -466,7 +466,6 @@ impl RpcClient {
         Ok(request)
     }
 
-
     /// # Examples
     ///
     /// ```
