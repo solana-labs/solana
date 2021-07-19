@@ -6192,11 +6192,8 @@ impl AccountsDb {
                     self.accounts_index.add_root(*slot, false);
                 }
 
-                self.initialize_storage_count_and_alive_bytes(&mut timings);
-            }
-            timings.report();
-
-            if pass == 0 {
+                error!("distribution prior to flush");
+                self.accounts_index.account_maps.first().unwrap().read().unwrap().distribution();
                 let mut m = Measure::start("flush_index");
                 self.accounts_index.account_maps.par_iter().for_each(|i| {
                     i.write().unwrap().flush();});
@@ -6215,7 +6212,11 @@ impl AccountsDb {
 
                 error!("flush_us: {}, total items after flush: {}", m.as_us(), total_items);
                 self.accounts_index.account_maps.first().unwrap().read().unwrap().distribution();
+
+                self.initialize_storage_count_and_alive_bytes(&mut timings);
             }
+
+            timings.report();
         }
     }
 
