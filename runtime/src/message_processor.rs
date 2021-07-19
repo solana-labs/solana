@@ -76,7 +76,6 @@ pub struct ExecuteDetailsTimings {
     pub data_size_changed: usize,
     pub per_program_timings: HashMap<Pubkey, ProgramTiming>,
 }
-
 impl ExecuteDetailsTimings {
     pub fn accumulate(&mut self, other: &ExecuteDetailsTimings) {
         self.serialize_us += other.serialize_us;
@@ -89,10 +88,20 @@ impl ExecuteDetailsTimings {
         self.data_size_changed += other.data_size_changed;
         for (id, other) in &other.per_program_timings {
             let program_timing = self.per_program_timings.entry(*id).or_default();
-            program_timing.accumulated_us += other.accumulated_us;
-            program_timing.accumulated_units += other.accumulated_units;
-            program_timing.count += other.count;
+            program_timing.accumulated_us = program_timing
+                .accumulated_us
+                .saturating_add(other.accumulated_us);
+            program_timing.accumulated_units = program_timing
+                .accumulated_units
+                .saturating_add(other.accumulated_units);
+            program_timing.count = program_timing.count.saturating_add(other.count);
         }
+    }
+    pub fn accumulate_program(&mut self, program_id: &Pubkey, us: u64, units: u64) {
+        let program_timing = self.per_program_timings.entry(*program_id).or_default();
+        program_timing.accumulated_us = program_timing.accumulated_us.saturating_add(us);
+        program_timing.accumulated_units = program_timing.accumulated_units.saturating_add(units);
+        program_timing.count = program_timing.count.saturating_add(1);
     }
 }
 
@@ -1262,11 +1271,11 @@ impl MessageProcessor {
             time.stop();
             let post_remaining_units = compute_meter.borrow().get_remaining();
 
-            let program_id = instruction.program_id(&message.account_keys);
-            let program_timing = timings.per_program_timings.entry(*program_id).or_default();
-            program_timing.accumulated_us += time.as_us();
-            program_timing.accumulated_units += pre_remaining_units - post_remaining_units;
-            program_timing.count += 1;
+            timings.accumulate_program(
+                instruction.program_id(&message.account_keys),
+                time.as_us(),
+                pre_remaining_units - post_remaining_units,
+            );
 
             err?;
         }
