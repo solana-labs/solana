@@ -123,9 +123,11 @@ impl<V: 'static + Clone + Debug> BucketMapWriteHolder<V> {
     {
         if current_value.is_none() {
             // we are an insert
+            if true {
             // send straight to disk. if we try to keep it in the write cache, then 'keys' will be incorrect
             self.disk.update(key, updatefn);
-            /*
+            }
+            else {
             let result = updatefn(None);
             if let Some(result) = result {
                 // stick this in the write cache and flush it later
@@ -136,7 +138,7 @@ impl<V: 'static + Clone + Debug> BucketMapWriteHolder<V> {
                     ref_count: result.1
                 });
             }
-            */
+        }
         }
         else {
             let entry = current_value.unwrap();
