@@ -242,7 +242,7 @@ impl CacheHashData {
         accumulator: &mut Vec<Vec<CalculateHashIntermediate>>,
         start_bin_index: usize,
         bin_calculator: &PubkeyBinCalculator16,
-        preexisting: &RwLock<PreExistingCacheFiles>,
+        pre_existing_cache_files: Option<&RwLock<PreExistingCacheFiles>>,
         manager: &CacheHashDataManager,
     ) -> Result<(SavedType, CacheHashDataStats), std::io::Error> {
         let mut m = Measure::start("overall");
@@ -298,13 +298,15 @@ impl CacheHashData {
         stats.open_mmap_us = m1.as_us();
         stats.cache_file_size += capacity as usize;
 
-        let found = preexisting.write().unwrap().remove(&file_name);
-        if !found {
-            error!(
-                "tried to mark {:?} as used, but it wasn't in the set: {:?}",
-                file_name,
-                preexisting.read().unwrap().iter().next()
-            );
+        if let Some(pre_existing_cache_files) = pre_existing_cache_files {
+            let found = pre_existing_cache_files.write().unwrap().remove(&file_name);
+            if !found {
+                error!(
+                    "tried to mark {:?} as used, but it wasn't in the set: {:?}",
+                    file_name,
+                    pre_existing_cache_files.read().unwrap().iter().next()
+                );
+            }
         }
 
         stats.entries_loaded_from_cache += sum;
@@ -475,7 +477,7 @@ impl CacheHashData {
 
 #[cfg(test)]
 pub mod tests {
-    use super::test_utils::*;
+    //use super::test_utils::*;
     use super::*;
     use assert_matches::assert_matches;
     use rand::{thread_rng, Rng};
