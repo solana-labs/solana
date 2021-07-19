@@ -5,224 +5,136 @@ use solana_runtime::bank_forks::BankForks;
 #[cfg(test)]
 use std::sync::RwLock;
 use {
-    crate::rpc_subscriptions::{RpcSubscriptions, RpcVote},
+    crate::{
+        rpc_pubsub_service::PubSubConfig,
+        rpc_subscription_tracker::{
+            AccountSubscriptionParams, LogsSubscriptionKind, LogsSubscriptionParams,
+            ProgramSubscriptionParams, SignatureSubscriptionParams, SubscriptionId,
+            SubscriptionParams, SubscriptionToken,
+        },
+        rpc_subscriptions::RpcSubscriptions,
+    },
+    dashmap::DashMap,
     jsonrpc_core::{Error, ErrorCode, Result},
     jsonrpc_derive::rpc,
-    jsonrpc_pubsub::{typed::Subscriber, Session, SubscriptionId},
-    solana_account_decoder::UiAccount,
-    solana_client::{
-        rpc_config::{
-            RpcAccountInfoConfig, RpcProgramAccountsConfig, RpcSignatureSubscribeConfig,
-            RpcTransactionLogsConfig, RpcTransactionLogsFilter,
-        },
-        rpc_response::{
-            Response as RpcResponse, RpcKeyedAccount, RpcLogsResponse, RpcSignatureResult,
-            SlotInfo, SlotUpdate,
-        },
+    solana_account_decoder::UiAccountEncoding,
+    solana_client::rpc_config::{
+        RpcAccountInfoConfig, RpcProgramAccountsConfig, RpcSignatureSubscribeConfig,
+        RpcTransactionLogsConfig, RpcTransactionLogsFilter,
     },
-    solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature},
-    std::{
-        str::FromStr,
-        sync::{atomic, Arc},
-    },
+    solana_sdk::{pubkey::Pubkey, signature::Signature},
+    std::{str::FromStr, sync::Arc},
 };
 
-pub const MAX_ACTIVE_SUBSCRIPTIONS: usize = 100_000;
-
-// Suppress needless_return due to
-//   https://github.com/paritytech/jsonrpc/blob/2d38e6424d8461cdf72e78425ce67d51af9c6586/derive/src/lib.rs#L204
-// Once https://github.com/paritytech/jsonrpc/issues/418 is resolved, try to remove this clippy allow
-#[allow(clippy::needless_return)]
 #[rpc]
 pub trait RpcSolPubSub {
-    type Metadata;
-
     // Get notification every time account data is changed
     // Accepts pubkey parameter as base-58 encoded string
-    #[pubsub(
-        subscription = "accountNotification",
-        subscribe,
-        name = "accountSubscribe"
-    )]
+    #[rpc(name = "accountSubscribe")]
     fn account_subscribe(
         &self,
-        meta: Self::Metadata,
-        subscriber: Subscriber<RpcResponse<UiAccount>>,
         pubkey_str: String,
         config: Option<RpcAccountInfoConfig>,
-    );
+    ) -> Result<SubscriptionId>;
 
     // Unsubscribe from account notification subscription.
-    #[pubsub(
-        subscription = "accountNotification",
-        unsubscribe,
-        name = "accountUnsubscribe"
-    )]
-    fn account_unsubscribe(&self, meta: Option<Self::Metadata>, id: SubscriptionId)
-        -> Result<bool>;
+    #[rpc(name = "accountUnsubscribe")]
+    fn account_unsubscribe(&self, id: SubscriptionId) -> Result<bool>;
 
     // Get notification every time account data owned by a particular program is changed
     // Accepts pubkey parameter as base-58 encoded string
-    #[pubsub(
-        subscription = "programNotification",
-        subscribe,
-        name = "programSubscribe"
-    )]
+    #[rpc(name = "programSubscribe")]
     fn program_subscribe(
         &self,
-        meta: Self::Metadata,
-        subscriber: Subscriber<RpcResponse<RpcKeyedAccount>>,
         pubkey_str: String,
         config: Option<RpcProgramAccountsConfig>,
-    );
+    ) -> Result<SubscriptionId>;
 
     // Unsubscribe from account notification subscription.
-    #[pubsub(
-        subscription = "programNotification",
-        unsubscribe,
-        name = "programUnsubscribe"
-    )]
-    fn program_unsubscribe(&self, meta: Option<Self::Metadata>, id: SubscriptionId)
-        -> Result<bool>;
+    #[rpc(name = "programUnsubscribe")]
+    fn program_unsubscribe(&self, id: SubscriptionId) -> Result<bool>;
 
     // Get logs for all transactions that reference the specified address
-    #[pubsub(subscription = "logsNotification", subscribe, name = "logsSubscribe")]
+    #[rpc(name = "logsSubscribe")]
     fn logs_subscribe(
         &self,
-        meta: Self::Metadata,
-        subscriber: Subscriber<RpcResponse<RpcLogsResponse>>,
         filter: RpcTransactionLogsFilter,
         config: Option<RpcTransactionLogsConfig>,
-    );
+    ) -> Result<SubscriptionId>;
 
     // Unsubscribe from logs notification subscription.
-    #[pubsub(
-        subscription = "logsNotification",
-        unsubscribe,
-        name = "logsUnsubscribe"
-    )]
-    fn logs_unsubscribe(&self, meta: Option<Self::Metadata>, id: SubscriptionId) -> Result<bool>;
+    #[rpc(name = "logsUnsubscribe")]
+    fn logs_unsubscribe(&self, id: SubscriptionId) -> Result<bool>;
 
     // Get notification when signature is verified
     // Accepts signature parameter as base-58 encoded string
-    #[pubsub(
-        subscription = "signatureNotification",
-        subscribe,
-        name = "signatureSubscribe"
-    )]
+    #[rpc(name = "signatureSubscribe")]
     fn signature_subscribe(
         &self,
-        meta: Self::Metadata,
-        subscriber: Subscriber<RpcResponse<RpcSignatureResult>>,
         signature_str: String,
         config: Option<RpcSignatureSubscribeConfig>,
-    );
+    ) -> Result<SubscriptionId>;
 
     // Unsubscribe from signature notification subscription.
-    #[pubsub(
-        subscription = "signatureNotification",
-        unsubscribe,
-        name = "signatureUnsubscribe"
-    )]
-    fn signature_unsubscribe(
-        &self,
-        meta: Option<Self::Metadata>,
-        id: SubscriptionId,
-    ) -> Result<bool>;
+    #[rpc(name = "signatureUnsubscribe")]
+    fn signature_unsubscribe(&self, id: SubscriptionId) -> Result<bool>;
 
     // Get notification when slot is encountered
-    #[pubsub(subscription = "slotNotification", subscribe, name = "slotSubscribe")]
-    fn slot_subscribe(&self, meta: Self::Metadata, subscriber: Subscriber<SlotInfo>);
+    #[rpc(name = "slotSubscribe")]
+    fn slot_subscribe(&self) -> Result<SubscriptionId>;
 
     // Unsubscribe from slot notification subscription.
-    #[pubsub(
-        subscription = "slotNotification",
-        unsubscribe,
-        name = "slotUnsubscribe"
-    )]
-    fn slot_unsubscribe(&self, meta: Option<Self::Metadata>, id: SubscriptionId) -> Result<bool>;
+    #[rpc(name = "slotUnsubscribe")]
+    fn slot_unsubscribe(&self, id: SubscriptionId) -> Result<bool>;
 
     // Get series of updates for all slots
-    #[pubsub(
-        subscription = "slotsUpdatesNotification",
-        subscribe,
-        name = "slotsUpdatesSubscribe"
-    )]
-    fn slots_updates_subscribe(
-        &self,
-        meta: Self::Metadata,
-        subscriber: Subscriber<Arc<SlotUpdate>>,
-    );
+    #[rpc(name = "slotsUpdatesSubscribe")]
+    fn slots_updates_subscribe(&self) -> Result<SubscriptionId>;
 
     // Unsubscribe from slots updates notification subscription.
-    #[pubsub(
-        subscription = "slotsUpdatesNotification",
-        unsubscribe,
-        name = "slotsUpdatesUnsubscribe"
-    )]
-    fn slots_updates_unsubscribe(
-        &self,
-        meta: Option<Self::Metadata>,
-        id: SubscriptionId,
-    ) -> Result<bool>;
+    #[rpc(name = "slotsUpdatesUnsubscribe")]
+    fn slots_updates_unsubscribe(&self, id: SubscriptionId) -> Result<bool>;
 
     // Get notification when vote is encountered
-    #[pubsub(subscription = "voteNotification", subscribe, name = "voteSubscribe")]
-    fn vote_subscribe(&self, meta: Self::Metadata, subscriber: Subscriber<RpcVote>);
+    #[rpc(name = "voteSubscribe")]
+    fn vote_subscribe(&self) -> Result<SubscriptionId>;
 
     // Unsubscribe from vote notification subscription.
-    #[pubsub(
-        subscription = "voteNotification",
-        unsubscribe,
-        name = "voteUnsubscribe"
-    )]
-    fn vote_unsubscribe(&self, meta: Option<Self::Metadata>, id: SubscriptionId) -> Result<bool>;
+    #[rpc(name = "voteUnsubscribe")]
+    fn vote_unsubscribe(&self, id: SubscriptionId) -> Result<bool>;
 
     // Get notification when a new root is set
-    #[pubsub(subscription = "rootNotification", subscribe, name = "rootSubscribe")]
-    fn root_subscribe(&self, meta: Self::Metadata, subscriber: Subscriber<Slot>);
+    #[rpc(name = "rootSubscribe")]
+    fn root_subscribe(&self) -> Result<SubscriptionId>;
 
     // Unsubscribe from slot notification subscription.
-    #[pubsub(
-        subscription = "rootNotification",
-        unsubscribe,
-        name = "rootUnsubscribe"
-    )]
-    fn root_unsubscribe(&self, meta: Option<Self::Metadata>, id: SubscriptionId) -> Result<bool>;
+    #[rpc(name = "rootUnsubscribe")]
+    fn root_unsubscribe(&self, id: SubscriptionId) -> Result<bool>;
 }
 
 pub struct RpcSolPubSubImpl {
-    uid: Arc<atomic::AtomicUsize>,
+    config: PubSubConfig,
     subscriptions: Arc<RpcSubscriptions>,
-    max_active_subscriptions: usize,
+    current_subscriptions: Arc<DashMap<SubscriptionId, SubscriptionToken>>,
 }
 
 impl RpcSolPubSubImpl {
-    pub fn new(subscriptions: Arc<RpcSubscriptions>, max_active_subscriptions: usize) -> Self {
-        let uid = Arc::new(atomic::AtomicUsize::default());
+    pub fn new(
+        config: PubSubConfig,
+        subscriptions: Arc<RpcSubscriptions>,
+        current_subscriptions: Arc<DashMap<SubscriptionId, SubscriptionToken>>,
+    ) -> Self {
         Self {
-            uid,
+            config,
             subscriptions,
-            max_active_subscriptions,
-        }
-    }
-
-    #[cfg(test)]
-    fn default_with_bank_forks(bank_forks: Arc<RwLock<BankForks>>) -> Self {
-        let uid = Arc::new(atomic::AtomicUsize::default());
-        let subscriptions = Arc::new(RpcSubscriptions::default_with_bank_forks(bank_forks));
-        let max_active_subscriptions = MAX_ACTIVE_SUBSCRIPTIONS;
-        Self {
-            uid,
-            subscriptions,
-            max_active_subscriptions,
+            current_subscriptions,
         }
     }
 
     fn check_subscription_count(&self) -> Result<()> {
         let num_subscriptions = self.subscriptions.total();
         debug!("Total existing subscriptions: {}", num_subscriptions);
-        if num_subscriptions >= self.max_active_subscriptions {
+        if num_subscriptions >= self.config.max_active_subscriptions {
             info!("Node subscription limit reached");
             datapoint_info!("rpc-subscription", ("total", num_subscriptions, i64));
             inc_new_counter_info!("rpc-subscription-refused-limit-reached", 1);
@@ -237,6 +149,25 @@ impl RpcSolPubSubImpl {
             Ok(())
         }
     }
+
+    fn subscribe(&self, params: SubscriptionParams) -> SubscriptionId {
+        let token = self.subscriptions.subscribe(params);
+        let id = token.id();
+        self.current_subscriptions.insert(id, token);
+        id
+    }
+
+    fn unsubscribe(&self, id: SubscriptionId) -> Result<bool> {
+        if self.current_subscriptions.remove(&id).is_some() {
+            Ok(true)
+        } else {
+            Err(Error {
+                code: ErrorCode::InvalidParams,
+                message: "Invalid subscription id.".into(),
+                data: None,
+            })
+        }
+    }
 }
 
 fn param<T: FromStr>(param_str: &str, thing: &str) -> Result<T> {
@@ -248,308 +179,140 @@ fn param<T: FromStr>(param_str: &str, thing: &str) -> Result<T> {
 }
 
 impl RpcSolPubSub for RpcSolPubSubImpl {
-    type Metadata = Arc<Session>;
-
     fn account_subscribe(
         &self,
-        _meta: Self::Metadata,
-        subscriber: Subscriber<RpcResponse<UiAccount>>,
         pubkey_str: String,
         config: Option<RpcAccountInfoConfig>,
-    ) {
-        if let Err(err) = self.check_subscription_count() {
-            subscriber.reject(err).unwrap_or_default();
-            return;
-        }
-        match param::<Pubkey>(&pubkey_str, "pubkey") {
-            Ok(pubkey) => {
-                let id = self.uid.fetch_add(1, atomic::Ordering::Relaxed);
-                let sub_id = SubscriptionId::Number(id as u64);
-                info!("account_subscribe: account={:?} id={:?}", pubkey, sub_id);
-                self.subscriptions
-                    .add_account_subscription(pubkey, config, sub_id, subscriber)
-            }
-            Err(e) => subscriber.reject(e).unwrap_or_default(),
-        }
+    ) -> Result<SubscriptionId> {
+        self.check_subscription_count()?;
+        let config = config.unwrap_or_default();
+        let params = AccountSubscriptionParams {
+            pubkey: param::<Pubkey>(&pubkey_str, "pubkey")?,
+            commitment: config.commitment.unwrap_or_default(),
+            data_slice: config.data_slice,
+            encoding: config.encoding.unwrap_or(UiAccountEncoding::Binary),
+        };
+        Ok(self.subscribe(SubscriptionParams::Account(params)))
     }
 
-    fn account_unsubscribe(
-        &self,
-        _meta: Option<Self::Metadata>,
-        id: SubscriptionId,
-    ) -> Result<bool> {
-        info!("account_unsubscribe: id={:?}", id);
-        if self.subscriptions.remove_account_subscription(&id) {
-            Ok(true)
-        } else {
-            Err(Error {
-                code: ErrorCode::InvalidParams,
-                message: "Invalid Request: Subscription id does not exist".into(),
-                data: None,
-            })
-        }
+    fn account_unsubscribe(&self, id: SubscriptionId) -> Result<bool> {
+        self.unsubscribe(id)
     }
 
     fn program_subscribe(
         &self,
-        _meta: Self::Metadata,
-        subscriber: Subscriber<RpcResponse<RpcKeyedAccount>>,
         pubkey_str: String,
         config: Option<RpcProgramAccountsConfig>,
-    ) {
-        if let Err(err) = self.check_subscription_count() {
-            subscriber.reject(err).unwrap_or_default();
-            return;
-        }
-        match param::<Pubkey>(&pubkey_str, "pubkey") {
-            Ok(pubkey) => {
-                let id = self.uid.fetch_add(1, atomic::Ordering::Relaxed);
-                let sub_id = SubscriptionId::Number(id as u64);
-                info!("program_subscribe: account={:?} id={:?}", pubkey, sub_id);
-                self.subscriptions
-                    .add_program_subscription(pubkey, config, sub_id, subscriber)
-            }
-            Err(e) => subscriber.reject(e).unwrap_or_default(),
-        }
+    ) -> Result<SubscriptionId> {
+        self.check_subscription_count()?;
+        let config = config.unwrap_or_default();
+        let params = ProgramSubscriptionParams {
+            pubkey: param::<Pubkey>(&pubkey_str, "pubkey")?,
+            filters: config.filters.unwrap_or_default(),
+            encoding: config
+                .account_config
+                .encoding
+                .unwrap_or(UiAccountEncoding::Binary),
+            data_slice: config.account_config.data_slice,
+            commitment: config.account_config.commitment.unwrap_or_default(),
+            with_context: config.with_context.unwrap_or_default(),
+        };
+        Ok(self.subscribe(SubscriptionParams::Program(params)))
     }
 
-    fn program_unsubscribe(
-        &self,
-        _meta: Option<Self::Metadata>,
-        id: SubscriptionId,
-    ) -> Result<bool> {
-        info!("program_unsubscribe: id={:?}", id);
-        if self.subscriptions.remove_program_subscription(&id) {
-            Ok(true)
-        } else {
-            Err(Error {
-                code: ErrorCode::InvalidParams,
-                message: "Invalid Request: Subscription id does not exist".into(),
-                data: None,
-            })
-        }
+    fn program_unsubscribe(&self, id: SubscriptionId) -> Result<bool> {
+        self.unsubscribe(id)
     }
 
     fn logs_subscribe(
         &self,
-        _meta: Self::Metadata,
-        subscriber: Subscriber<RpcResponse<RpcLogsResponse>>,
         filter: RpcTransactionLogsFilter,
         config: Option<RpcTransactionLogsConfig>,
-    ) {
-        info!("logs_subscribe");
-        if let Err(err) = self.check_subscription_count() {
-            subscriber.reject(err).unwrap_or_default();
-            return;
-        }
-
-        let (address, include_votes) = match filter {
-            RpcTransactionLogsFilter::All => (None, false),
-            RpcTransactionLogsFilter::AllWithVotes => (None, true),
-            RpcTransactionLogsFilter::Mentions(addresses) => {
-                match addresses.len() {
-                    1 => match param::<Pubkey>(&addresses[0], "mentions") {
-                        Ok(address) => (Some(address), false),
-                        Err(e) => {
-                            subscriber.reject(e).unwrap_or_default();
-                            return;
-                        }
-                    },
-                    _ => {
-                        // Room is reserved in the API to support multiple addresses, but for now
-                        // the implementation only supports one
-                        subscriber
-                            .reject(Error {
-                                code: ErrorCode::InvalidParams,
-                                message: "Invalid Request: Only 1 address supported".into(),
-                                data: None,
-                            })
-                            .unwrap_or_default();
-                        return;
+    ) -> Result<SubscriptionId> {
+        self.check_subscription_count()?;
+        let params = LogsSubscriptionParams {
+            kind: match filter {
+                RpcTransactionLogsFilter::All => LogsSubscriptionKind::All,
+                RpcTransactionLogsFilter::AllWithVotes => LogsSubscriptionKind::AllWithVotes,
+                RpcTransactionLogsFilter::Mentions(keys) => {
+                    if keys.len() != 1 {
+                        return Err(Error {
+                            code: ErrorCode::InvalidParams,
+                            message: "Invalid Request: Only 1 address supported".into(),
+                            data: None,
+                        });
                     }
+                    LogsSubscriptionKind::Single(param::<Pubkey>(&keys[0], "mentions")?)
                 }
-            }
+            },
+            commitment: config.and_then(|c| c.commitment).unwrap_or_default(),
         };
-
-        let id = self.uid.fetch_add(1, atomic::Ordering::Relaxed);
-        let sub_id = SubscriptionId::Number(id as u64);
-        self.subscriptions.add_logs_subscription(
-            address,
-            include_votes,
-            config.and_then(|config| config.commitment),
-            sub_id,
-            subscriber,
-        )
+        Ok(self.subscribe(SubscriptionParams::Logs(params)))
     }
 
-    fn logs_unsubscribe(&self, _meta: Option<Self::Metadata>, id: SubscriptionId) -> Result<bool> {
-        info!("logs_unsubscribe: id={:?}", id);
-        if self.subscriptions.remove_logs_subscription(&id) {
-            Ok(true)
-        } else {
-            Err(Error {
-                code: ErrorCode::InvalidParams,
-                message: "Invalid Request: Subscription id does not exist".into(),
-                data: None,
-            })
-        }
+    fn logs_unsubscribe(&self, id: SubscriptionId) -> Result<bool> {
+        self.unsubscribe(id)
     }
 
     fn signature_subscribe(
         &self,
-        _meta: Self::Metadata,
-        subscriber: Subscriber<RpcResponse<RpcSignatureResult>>,
         signature_str: String,
-        signature_subscribe_config: Option<RpcSignatureSubscribeConfig>,
-    ) {
-        info!("signature_subscribe");
-        if let Err(err) = self.check_subscription_count() {
-            subscriber.reject(err).unwrap_or_default();
-            return;
-        }
-        match param::<Signature>(&signature_str, "signature") {
-            Ok(signature) => {
-                let id = self.uid.fetch_add(1, atomic::Ordering::Relaxed);
-                let sub_id = SubscriptionId::Number(id as u64);
-                info!(
-                    "signature_subscribe: signature={:?} id={:?}",
-                    signature, sub_id
-                );
-                self.subscriptions.add_signature_subscription(
-                    signature,
-                    signature_subscribe_config,
-                    sub_id,
-                    subscriber,
-                );
-            }
-            Err(e) => subscriber.reject(e).unwrap_or_default(),
-        }
+        config: Option<RpcSignatureSubscribeConfig>,
+    ) -> Result<SubscriptionId> {
+        self.check_subscription_count()?;
+        let config = config.unwrap_or_default();
+        let params = SignatureSubscriptionParams {
+            signature: param::<Signature>(&signature_str, "signature")?,
+            commitment: config.commitment.unwrap_or_default(),
+            enable_received_notification: config.enable_received_notification.unwrap_or_default(),
+        };
+        Ok(self.subscribe(SubscriptionParams::Signature(params)))
     }
 
-    fn signature_unsubscribe(
-        &self,
-        _meta: Option<Self::Metadata>,
-        id: SubscriptionId,
-    ) -> Result<bool> {
-        info!("signature_unsubscribe");
-        if self.subscriptions.remove_signature_subscription(&id) {
-            Ok(true)
-        } else {
-            Err(Error {
-                code: ErrorCode::InvalidParams,
-                message: "Invalid Request: Subscription id does not exist".into(),
-                data: None,
-            })
-        }
+    fn signature_unsubscribe(&self, id: SubscriptionId) -> Result<bool> {
+        self.unsubscribe(id)
     }
 
-    fn slot_subscribe(&self, _meta: Self::Metadata, subscriber: Subscriber<SlotInfo>) {
-        info!("slot_subscribe");
-        if let Err(err) = self.check_subscription_count() {
-            subscriber.reject(err).unwrap_or_default();
-            return;
-        }
-        let id = self.uid.fetch_add(1, atomic::Ordering::Relaxed);
-        let sub_id = SubscriptionId::Number(id as u64);
-        info!("slot_subscribe: id={:?}", sub_id);
-        self.subscriptions.add_slot_subscription(sub_id, subscriber);
+    fn slot_subscribe(&self) -> Result<SubscriptionId> {
+        self.check_subscription_count()?;
+        Ok(self.subscribe(SubscriptionParams::Slot))
     }
 
-    fn slot_unsubscribe(&self, _meta: Option<Self::Metadata>, id: SubscriptionId) -> Result<bool> {
-        info!("slot_unsubscribe");
-        if self.subscriptions.remove_slot_subscription(&id) {
-            Ok(true)
-        } else {
-            Err(Error {
-                code: ErrorCode::InvalidParams,
-                message: "Invalid Request: Subscription id does not exist".into(),
-                data: None,
-            })
-        }
+    fn slot_unsubscribe(&self, id: SubscriptionId) -> Result<bool> {
+        self.unsubscribe(id)
     }
 
-    fn slots_updates_subscribe(
-        &self,
-        _meta: Self::Metadata,
-        subscriber: Subscriber<Arc<SlotUpdate>>,
-    ) {
-        info!("slots_updates_subscribe");
-        if let Err(err) = self.check_subscription_count() {
-            subscriber.reject(err).unwrap_or_default();
-            return;
-        }
-        let id = self.uid.fetch_add(1, atomic::Ordering::Relaxed);
-        let sub_id = SubscriptionId::Number(id as u64);
-        info!("slots_updates_subscribe: id={:?}", sub_id);
-        self.subscriptions
-            .add_slots_updates_subscription(sub_id, subscriber);
+    fn slots_updates_subscribe(&self) -> Result<SubscriptionId> {
+        self.check_subscription_count()?;
+        Ok(self.subscribe(SubscriptionParams::SlotsUpdates))
     }
 
-    fn slots_updates_unsubscribe(
-        &self,
-        _meta: Option<Self::Metadata>,
-        id: SubscriptionId,
-    ) -> Result<bool> {
-        info!("slots_updates_unsubscribe");
-        if self.subscriptions.remove_slots_updates_subscription(&id) {
-            Ok(true)
-        } else {
-            Err(Error {
-                code: ErrorCode::InvalidParams,
-                message: "Invalid Request: Subscription id does not exist".into(),
-                data: None,
-            })
-        }
+    fn slots_updates_unsubscribe(&self, id: SubscriptionId) -> Result<bool> {
+        self.unsubscribe(id)
     }
 
-    fn vote_subscribe(&self, _meta: Self::Metadata, subscriber: Subscriber<RpcVote>) {
-        info!("vote_subscribe");
-        if let Err(err) = self.check_subscription_count() {
-            subscriber.reject(err).unwrap_or_default();
-            return;
+    fn vote_subscribe(&self) -> Result<SubscriptionId> {
+        if !self.config.enable_vote_subscription {
+            return Err(Error::new(jsonrpc_core::ErrorCode::MethodNotFound));
         }
-        let id = self.uid.fetch_add(1, atomic::Ordering::Relaxed);
-        let sub_id = SubscriptionId::Number(id as u64);
-        info!("vote_subscribe: id={:?}", sub_id);
-        self.subscriptions.add_vote_subscription(sub_id, subscriber);
+        self.check_subscription_count()?;
+        Ok(self.subscribe(SubscriptionParams::Vote))
     }
 
-    fn vote_unsubscribe(&self, _meta: Option<Self::Metadata>, id: SubscriptionId) -> Result<bool> {
-        info!("vote_unsubscribe");
-        if self.subscriptions.remove_vote_subscription(&id) {
-            Ok(true)
-        } else {
-            Err(Error {
-                code: ErrorCode::InvalidParams,
-                message: "Invalid Request: Subscription id does not exist".into(),
-                data: None,
-            })
+    fn vote_unsubscribe(&self, id: SubscriptionId) -> Result<bool> {
+        if !self.config.enable_vote_subscription {
+            return Err(Error::new(jsonrpc_core::ErrorCode::MethodNotFound));
         }
+        self.unsubscribe(id)
     }
 
-    fn root_subscribe(&self, _meta: Self::Metadata, subscriber: Subscriber<Slot>) {
-        info!("root_subscribe");
-        if let Err(err) = self.check_subscription_count() {
-            subscriber.reject(err).unwrap_or_default();
-            return;
-        }
-        let id = self.uid.fetch_add(1, atomic::Ordering::Relaxed);
-        let sub_id = SubscriptionId::Number(id as u64);
-        info!("root_subscribe: id={:?}", sub_id);
-        self.subscriptions.add_root_subscription(sub_id, subscriber);
+    fn root_subscribe(&self) -> Result<SubscriptionId> {
+        self.check_subscription_count()?;
+        Ok(self.subscribe(SubscriptionParams::Root))
     }
 
-    fn root_unsubscribe(&self, _meta: Option<Self::Metadata>, id: SubscriptionId) -> Result<bool> {
-        info!("root_unsubscribe");
-        if self.subscriptions.remove_root_subscription(&id) {
-            Ok(true)
-        } else {
-            Err(Error {
-                code: ErrorCode::InvalidParams,
-                message: "Invalid Request: Subscription id does not exist".into(),
-                data: None,
-            })
-        }
+    fn root_unsubscribe(&self, id: SubscriptionId) -> Result<bool> {
+        self.unsubscribe(id)
     }
 }
 
