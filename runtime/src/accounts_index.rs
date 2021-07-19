@@ -1889,7 +1889,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport + std::marker::Sync + std::mark
     pub fn purge_roots(&self, pubkey: &Pubkey) -> (SlotList<T>, bool) {
         let mut write_account_map_entry = self.get_account_write_entry(pubkey).unwrap();
         write_account_map_entry
-            .slot_list_mut(|slot_list: &mut SlotList<T>| {
+            .slot_list_mut(|slot_list: &mut SlotList<T>, ref_count| {
                 let reclaims = self.get_rooted_entries(slot_list, None);
                 slot_list.retain(|(slot, _)| !self.is_root(*slot));
                 (reclaims, slot_list.is_empty())
@@ -3800,7 +3800,7 @@ pub mod tests {
         index
             .get_account_write_entry(&account_key)
             .unwrap()
-            .slot_list_mut(|slot_list| slot_list.clear());
+            .slot_list_mut(|slot_list, ref_count| slot_list.clear());
 
         // Everything should be deleted
         index.handle_dead_keys(&[&account_key], &secondary_indexes);
@@ -3903,7 +3903,7 @@ pub mod tests {
         index
             .get_account_write_entry(&account_key)
             .unwrap()
-            .slot_list_mut(|slot_list| {
+            .slot_list_mut(|slot_list, ref_count| {
                 index.purge_older_root_entries(slot_list, &mut vec![], None)
             });
 
