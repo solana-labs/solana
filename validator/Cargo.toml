@@ -17,7 +17,7 @@ chrono = { version = "0.4.11", features = ["serde"] }
 clap = "2.33.1"
 console = "0.14.1"
 core_affinity = "0.5.10"
-fd-lock = "2.0.0"
+fd-lock = "3.0.0"
 indicatif = "0.16.2"
 jsonrpc-core = "17.1.0"
 jsonrpc-core-client = { version = "17.1.0", features = ["ipc", "ws"] }

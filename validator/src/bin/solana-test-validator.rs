@@ -1,6 +1,5 @@
 use {
     clap::{value_t, value_t_or_exit, App, Arg},
-    fd_lock::FdLock,
     solana_clap_utils::{
         input_parsers::{pubkey_of, pubkeys_of, value_of},
         input_validators::{
@@ -402,8 +401,8 @@ fn main() {
         });
     }
 
-    let mut ledger_fd_lock = FdLock::new(fs::File::open(&ledger_path).unwrap());
-    let _ledger_lock = ledger_fd_lock.try_lock().unwrap_or_else(|_| {
+    let mut ledger_fd_lock = fd_lock::RwLock::new(fs::File::open(&ledger_path).unwrap());
+    let _ledger_lock = ledger_fd_lock.try_write().unwrap_or_else(|_| {
         println!(
             "Error: Unable to lock {} directory. Check if another validator is running",
             ledger_path.display()
