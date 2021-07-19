@@ -393,8 +393,11 @@ pub fn broadcast_shreds(
         return Ok(());
     }
     let mut shred_select = Measure::start("shred_select");
+    use rayon::iter::IntoParallelRefIterator;
+    use rayon::iter::ParallelIterator;
+
     let packets: Vec<_> = shreds
-        .iter()
+        .par_iter()
         .filter_map(|shred| {
             let node = cluster_nodes.get_broadcast_peer(shred.seed())?;
             if is_global(&node.tvu) {
