@@ -104,6 +104,9 @@ impl VoteSimulator {
                         .any(|lockout| lockout.slot == parent));
                 }
             }
+            while new_bank.tick_height() < new_bank.max_tick_height() {
+                new_bank.register_tick(&Hash::new_unique());
+            }
             new_bank.freeze();
             self.progress
                 .get_fork_stats_mut(new_bank.slot())
@@ -324,7 +327,7 @@ pub fn initialize_state(
 ) -> (BankForks, ProgressMap, HeaviestSubtreeForkChoice) {
     let validator_keypairs: Vec<_> = validator_keypairs_map.values().collect();
     let GenesisConfigInfo {
-        genesis_config,
+        mut genesis_config,
         mint_keypair,
         voting_keypair: _,
     } = create_genesis_config_with_vote_accounts(
@@ -333,12 +336,16 @@ pub fn initialize_state(
         vec![stake; validator_keypairs.len()],
     );
 
+    genesis_config.poh_config.hashes_per_tick = Some(2);
     let bank0 = Bank::new(&genesis_config);
 
     for pubkey in validator_keypairs_map.keys() {
         bank0.transfer(10_000, &mint_keypair, pubkey).unwrap();
     }
 
+    while bank0.tick_height() < bank0.max_tick_height() {
+        bank0.register_tick(&Hash::new_unique());
+    }
     bank0.freeze();
     let mut progress = ProgressMap::default();
     progress.insert(

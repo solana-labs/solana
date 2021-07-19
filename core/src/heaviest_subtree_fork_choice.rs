@@ -1007,11 +1007,21 @@ impl ForkChoice for HeaviestSubtreeForkChoice {
         }
     }
 
-    fn mark_fork_valid_candidate(&mut self, valid_slot_hash_key: &SlotHashKey) {
+    fn mark_fork_valid_candidate(&mut self, valid_slot_hash_key: &SlotHashKey) -> Vec<SlotHashKey> {
         info!(
             "marking fork starting at: {:?} valid candidate",
             valid_slot_hash_key
         );
+        let mut newly_duplicate_confirmed_ancestors = vec![];
+
+        for ancestor_key in std::iter::once(*valid_slot_hash_key)
+            .chain(self.ancestor_iterator(*valid_slot_hash_key))
+        {
+            if !self.is_duplicate_confirmed(&ancestor_key).unwrap() {
+                newly_duplicate_confirmed_ancestors.push(ancestor_key);
+            }
+        }
+
         let mut update_operations = UpdateOperations::default();
         // Notify all the children of this node that a parent was marked as valid
         for child_hash_key in self.subtree_diff(*valid_slot_hash_key, SlotHashKey::default()) {
@@ -1025,6 +1035,7 @@ impl ForkChoice for HeaviestSubtreeForkChoice {
         // Aggregate across all ancestors to find the new best slots including this fork
         self.insert_aggregate_operations(&mut update_operations, *valid_slot_hash_key);
         self.process_update_operations(update_operations);
+        newly_duplicate_confirmed_ancestors
     }
 }
 

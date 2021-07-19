@@ -40,5 +40,10 @@ pub trait ForkChoice {
 
     fn mark_fork_invalid_candidate(&mut self, invalid_slot: &Self::ForkChoiceKey);
 
-    fn mark_fork_valid_candidate(&mut self, valid_slot: &Self::ForkChoiceKey);
+    /// Returns any newly duplicate confirmed ancestors of `valid_slot` up to and including
+    /// `valid_slot` itself
+    fn mark_fork_valid_candidate(
+        &mut self,
+        valid_slot: &Self::ForkChoiceKey,
+    ) -> Vec<Self::ForkChoiceKey>;
 }
