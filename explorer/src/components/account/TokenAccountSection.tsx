@@ -145,6 +145,12 @@ function MintAccountCard({
                 <h1 className="mb-0">
                   ${abbreviatedNumber(tokenPriceInfo.market_cap)}
                 </h1>
+                <p className="updated-time updated-time-absolute text-muted mr-4">
+                  Updated at{" "}
+                  {displayTimestampWithoutDate(
+                    tokenPriceInfo.last_updated.getTime()
+                  )}
+                </p>
               </div>
             </div>
           </div>
@@ -254,12 +260,6 @@ function MintAccountCard({
             </tr>
           )}
         </TableCardBody>
-        {tokenPriceInfo && (
-          <p className="updated-time text-muted mr-4">
-            Price updated at{" "}
-            {displayTimestampWithoutDate(tokenPriceInfo.last_updated.getTime())}
-          </p>
-        )}
       </div>
     </>
   );

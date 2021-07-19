@@ -383,6 +383,12 @@ p.updated-time {
   text-align: right;
 }
 
+.updated-time-absolute {
+  position: absolute;
+  right: 0;
+  bottom: .25rem;
+}
+
 .change-positive {
   color: $success;
 }
