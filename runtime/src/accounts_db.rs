@@ -4515,6 +4515,10 @@ impl AccountsDb {
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         use BankHashVerificationError::*;
         let mut collect = Measure::start("collect");
+        // maybe required at some point:
+        self.accounts_index.account_maps.par_iter().for_each(|i| {
+            i.write().unwrap().flush();});
+
         let keys: Vec<_> = self
             .accounts_index
             .account_maps
