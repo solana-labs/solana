@@ -84,7 +84,7 @@ console.log(solanaWeb3);
 console.log(solanaWeb3);
 ```
 
-_## Examples_
+## Examples
 
 Example scripts for the web3.js repo and native programs:
 
