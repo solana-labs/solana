@@ -25,20 +25,22 @@ This is the Solana Javascript API built on the Solana [JSON RPC API](https://doc
 
 [Latest API Documentation](https://solana-labs.github.io/solana-web3.js/)
 
-
 ## Installation
 
 ### Yarn
+
 ```
 $ yarn add @solana/web3.js
 ```
 
 ### npm
+
 ```
 $ npm install --save @solana/web3.js
 ```
 
 ### Browser bundle
+
 ```html
 <!-- Development (un-minified) -->
 <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.js"></script>
@@ -62,22 +64,35 @@ Install the latest Solana release from https://docs.solana.com/cli/install-solan
 ## Usage
 
 ### Javascript
+
 ```js
 const solanaWeb3 = require('@solana/web3.js');
 console.log(solanaWeb3);
 ```
 
 ### ES6
+
 ```js
 import * as solanaWeb3 from '@solana/web3.js';
 console.log(solanaWeb3);
 ```
 
 ### Browser bundle
+
 ```js
 // `solanaWeb3` is provided in the global namespace by the `solanaWeb3.min.js` script bundle.
 console.log(solanaWeb3);
 ```
+
+## Examples
+
+Example scripts for the web3.js repo and native programs:
+
+- [Web3 Examples](./examples)
+
+Example scripts for the Solana Program Library:
+
+- [Token Program Examples](https://github.com/solana-labs/solana-program-library/tree/master/token/js/examples)
 
 ## Flow
 
@@ -85,12 +100,14 @@ A [Flow library definition](https://flow.org/en/docs/libdefs/) is provided at
 https://unpkg.com/@solana/web3.js@latest/module.flow.js.
 Download the file and add the following line under the [libs] section of your project's `.flowconfig` to
 activate it:
+
 ```ini
 [libs]
 node_modules/@solana/web3.js/module.flow.js
 ```
 
 ## Releases
+
 Releases are available on [Github](https://github.com/solana-labs/solana-web3.js/releases)
 and [npmjs.com](https://www.npmjs.com/package/@solana/web3.js)
 
