@@ -3282,6 +3282,7 @@ The result will be an RpcResponse JSON object with `value` set to a JSON object 
     - `data: <[string, encoding]|object>`, data associated with the account, either as encoded binary data or JSON format `{<program>: <state>}`, depending on encoding parameter
     - `executable: <bool>`, boolean indicating if the account contains a program \(and is strictly read-only\)
     - `rentEpoch: <u64>`, the epoch at which this account will next owe rent, as u64
+- `unitsConsumed: <u64 | undefined>`, The number of compute budget units consumed during the processing of this transaction
 
 #### Example:
 
