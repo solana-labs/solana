@@ -436,7 +436,7 @@ mod test {
         assert_eq!(index.num_shreds(), 0);
 
         // Check boundary conditions; start is inclusive, end is inclusive
-        index.set_many_present((5..10 as u64).zip(repeat(true)));
+        index.set_many_present((5..10_u64).zip(repeat(true)));
         assert_eq!(index.present_in_bounds(0..5), 0);
         assert_eq!(index.present_in_bounds(2..7), 2);
         assert_eq!(index.present_in_bounds(5..10), 5);
