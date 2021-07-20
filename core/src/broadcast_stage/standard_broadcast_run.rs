@@ -28,11 +28,14 @@ pub struct StandardBroadcastRun {
     last_datapoint_submit: Arc<AtomicU64>,
     num_batches: usize,
     cluster_nodes: Arc<RwLock<ClusterNodes<BroadcastStage>>>,
-    updater_spawned: Arc<AtomicBool>,
+    updater_spawned: Arc<std::sync::atomic::AtomicUsize>,
+    send: Arc<Mutex<Sender<(Arc<ClusterInfo>, Option<Arc<HashMap<Pubkey, u64>>>)>>>,
+    recv: Arc<Mutex<Receiver<(Arc<ClusterInfo>, Option<Arc<HashMap<Pubkey, u64>>>)>>>,
 }
 
 impl StandardBroadcastRun {
     pub(super) fn new(keypair: Arc<Keypair>, shred_version: u16) -> Self {
+        let (send, recv) = channel();
         Self {
             process_shreds_stats: ProcessShredsStats::default(),
             transmit_shreds_stats: Arc::default(),
@@ -46,6 +49,8 @@ impl StandardBroadcastRun {
             num_batches: 0,
             cluster_nodes: Arc::default(),
             updater_spawned: Arc::default(),
+            send: Arc::new(Mutex::new(send)),
+            recv: Arc::new(Mutex::new(recv)),
         }
     }
 
@@ -340,38 +345,55 @@ impl StandardBroadcastRun {
         trace!("Broadcasting {:?} shreds", shreds.len());
         // Get the list of peers to broadcast to
         let mut get_peers_time = Measure::start("broadcast::get_peers");
+        self.send
+            .lock()
+            .unwrap()
+            .send((cluster_info.clone(), stakes))
+            .unwrap();
         #[allow(deprecated)]
-        if !self
+        if self
             .updater_spawned
-            .compare_and_swap(false, true, Ordering::Relaxed)
+            .compare_and_swap(0, 1, Ordering::Relaxed)
+            == 0
         {
             let cn = self.cluster_nodes.clone();
-            let ci = cluster_info.clone();
-            let ss = stakes; // NOT SAFE for cross epochs
+            let recv = self.recv.clone();
+            let us = self.updater_spawned.clone();
 
-            // leaks thread...
+            // leaks this single thread...
             Builder::new()
                 .name("sol-bc-cn-updater".to_string())
-                .spawn(move || loop {
-                    let mut update_time = Measure::start("cluster-node-update");
-                    *cn.write().unwrap() =
-                        ClusterNodes::<BroadcastStage>::new(&ci, &ss.clone().unwrap_or_default());
-                    update_time.stop();
-                    datapoint_info!(
-                        "broadcast-cluster-node-update",
-                        ("update_us", update_time.as_us(), i64),
-                    );
-                    std::thread::sleep(Duration::from_millis(BROADCAST_PEER_UPDATE_INTERVAL_MS));
+                .spawn(move || {
+                    let mut now = Instant::now();
+                    loop {
+                        let (ci, ss) = recv.lock().unwrap().recv().unwrap();
+                        if now.elapsed().as_secs() > BROADCAST_PEER_UPDATE_INTERVAL_MS / 1000 {
+                            now = Instant::now();
+
+                            let mut update_time = Measure::start("cluster-node-update");
+
+                            *cn.write().unwrap() = ClusterNodes::<BroadcastStage>::new(
+                                &ci,
+                                &ss.clone().unwrap_or_default(),
+                            );
+                            us.store(2, Ordering::Relaxed);
+
+                            update_time.stop();
+
+                            datapoint_info!(
+                                "broadcast-cluster-node-update",
+                                ("update_us", update_time.as_us(), i64),
+                            );
+                        }
+                    }
                 })
                 .unwrap();
         }
-        let mut cluster_nodes = self.cluster_nodes.read().unwrap();
-        // wait until initialized at least....
-        while cluster_nodes.num_peers() == 0 {
-            drop(cluster_nodes);
-            std::thread::sleep(Duration::from_millis(BROADCAST_PEER_UPDATE_INTERVAL_MS));
-            cluster_nodes = self.cluster_nodes.read().unwrap();
+        // wait until initialized once at least....
+        while self.updater_spawned.load(Ordering::Relaxed) != 2 {
+            std::thread::sleep(Duration::from_millis(1000));
         }
+        let cluster_nodes = self.cluster_nodes.read().unwrap();
         get_peers_time.stop();
 
         let mut transmit_stats = TransmitShredsStats::default();
