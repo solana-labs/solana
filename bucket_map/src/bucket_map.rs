@@ -294,10 +294,16 @@ impl IndexEntry {
 
     fn read_value<'a, T>(&self, bucket: &'a Bucket<T>) -> Option<(&'a [T], u64)> {
         let data_bucket = &bucket.data[self.data_bucket as usize];
+        let slice = if self.num_slots > 0 {
         let loc = self.data_loc(data_bucket);
         let uid = Self::key_uid(&self.key);
         assert_eq!(uid, bucket.data[self.data_bucket as usize].uid(loc));
-        let slice = bucket.data[self.data_bucket as usize].get_cell_slice(loc, self.num_slots);
+            bucket.data[self.data_bucket as usize].get_cell_slice(loc, self.num_slots)}
+        else {
+            // num_slots is 0. This means we don't have an actual allocation.
+            // can we trust that the data_bucket is even safe?
+            bucket.data[self.data_bucket as usize].get_empty_cell_slice()
+        };
         Some((slice, self.ref_count))
     }
     fn key_uid(key: &Pubkey) -> u64 {
