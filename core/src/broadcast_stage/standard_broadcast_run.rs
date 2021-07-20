@@ -359,7 +359,7 @@ impl StandardBroadcastRun {
                     update_time.stop();
                     datapoint_info!(
                         "broadcast-cluster-node-update",
-                        ("receive_time", update_time.as_us(), i64),
+                        ("update_us", update_time.as_us(), i64),
                     );
                     std::thread::sleep(Duration::from_millis(BROADCAST_PEER_UPDATE_INTERVAL_MS));
                 })
