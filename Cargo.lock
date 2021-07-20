@@ -5836,9 +5836,9 @@ checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
 
 [[package]]
 name = "spl-associated-token-account"
-version = "1.0.2"
+version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4adc47eebe5d2b662cbaaba1843719c28a67e5ec5d0460bc3ca60900a51f74e2"
+checksum = "393e2240d521c3dd770806bff25c2c00d761ac962be106e14e22dd912007f428"
 dependencies = [
  "solana-program 1.7.6",
  "spl-token",
