@@ -216,13 +216,31 @@ impl<V: 'static + Clone + Debug> BucketMapWriteHolder<V> {
         }
         self.disk.delete_key(key)
     }
-    pub fn distribution(&self) -> Vec<usize> {
+    pub fn distribution(&self) {
         let mut ct = 0;
         for i in 0..self.bins {
             ct += self.write_cache[i].read().unwrap().len();
         }
         error!("{} items in write cache", ct);
-        self.disk.distribution()
+        
+        let dist = self.disk.distribution();
+        let mut sum = 0;
+        let mut min = usize::MAX;
+        let mut max = 0;
+        for d in &dist {
+            let d = *d;
+            sum += d;
+            min = std::cmp::min(min, d);
+            max = std::cmp::max(max, d);
+        }
+        datapoint_info!(
+            "AccountIndexLayer",
+            ("items_in_write_cache", ct, i64),
+            ("min", min, i64),
+            ("max", max, i64),
+            ("sum", sum, i64),
+            ("buckets", self.num_buckets(), i64),
+        );
     }
 }
 
@@ -432,23 +450,7 @@ impl<V: 'static + Clone + Debug> HybridBTreeMap<V> {
         }*/
     }
     pub fn distribution(&self) {
-        let dist = self.disk.distribution();
-        let mut sum = 0;
-        let mut min = usize::MAX;
-        let mut max = 0;
-        for d in &dist {
-            let d = *d;
-            sum += d;
-            min = std::cmp::min(min, d);
-            max = std::cmp::max(max, d);
-        }
-        error!(
-            "distribution: sum: {}, min: {}, max: {}, bins: {}",
-            sum,
-            min,
-            max,
-            dist.len()
-        );
+        self.disk.distribution();
     }
     fn bound<'a, T>(bound: Bound<&'a T>, unbounded: &'a T) -> &'a T {
         match bound {
