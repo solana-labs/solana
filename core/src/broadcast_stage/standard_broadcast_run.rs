@@ -335,24 +335,32 @@ impl StandardBroadcastRun {
         shreds: Arc<Vec<Shred>>,
         broadcast_shred_batch_info: Option<BroadcastShredBatchInfo>,
     ) -> Result<()> {
-        const BROADCAST_PEER_UPDATE_INTERVAL_MS: u64 = 1000;
+        // according to light investigation, this seems to take awhile, even considering duplicate time counting for each sock
+        const BROADCAST_PEER_UPDATE_INTERVAL_MS: u64 = 10_000;
         trace!("Broadcasting {:?} shreds", shreds.len());
         // Get the list of peers to broadcast to
         let mut get_peers_time = Measure::start("broadcast::get_peers");
+        #[allow(deprecated)]
         if !self
             .updater_spawned
             .compare_and_swap(true, false, Ordering::Relaxed)
         {
-            // initialize cluster_nodes at first run..
-            *self.cluster_nodes.write().unwrap() = ClusterNodes::<BroadcastStage>::new(
-                cluster_info,
-                &stakes.clone().unwrap_or_default(),
-            );
+            {
+                // there is race between the above cas and the below w lock acquisition
+                let mut w = self.cluster_nodes.write().unwrap();
+
+                // initialize cluster_nodes at first run..
+                *w = ClusterNodes::<BroadcastStage>::new(
+                    cluster_info,
+                    &stakes.clone().unwrap_or_default(),
+                );
+            }
 
             let cn = self.cluster_nodes.clone();
             let ci = cluster_info.clone();
             let ss = stakes; // NOT SAFE for cross epochs
 
+            // leaks thread...
             Builder::new()
                 .spawn(move || loop {
                     *cn.write().unwrap() =
