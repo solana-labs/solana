@@ -136,7 +136,7 @@ trait BroadcastRun {
     fn transmit(
         &mut self,
         receiver: &Arc<Mutex<TransmitReceiver>>,
-        cluster_info: &ClusterInfo,
+        cluster_info: &Arc<ClusterInfo>,
         sock: &UdpSocket,
     ) -> Result<()>;
     fn record(
