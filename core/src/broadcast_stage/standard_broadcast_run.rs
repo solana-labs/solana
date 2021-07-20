@@ -358,10 +358,12 @@ impl StandardBroadcastRun {
                 })
                 .unwrap();
         }
-        let cluster_nodes = self.cluster_nodes.read().unwrap();
+        let mut cluster_nodes = self.cluster_nodes.read().unwrap();
         // wait until initialized at least....
         while cluster_nodes.num_peers() == 0 {
+            drop(cluster_nodes);
             std::thread::sleep(Duration::from_millis(BROADCAST_PEER_UPDATE_INTERVAL_MS));
+            cluster_nodes = self.cluster_nodes.read().unwrap();
         }
         get_peers_time.stop();
 
