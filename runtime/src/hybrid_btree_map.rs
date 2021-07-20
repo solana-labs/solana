@@ -111,6 +111,7 @@ impl<V: 'static + Clone + Debug> BucketMapWriteHolder<V> {
     }
     pub fn values(&self, ix: usize) -> Option<Vec<Vec<SlotT<V>>>> {
         // only valid when write cache is empty
+        assert!(self.write_cache[ix].read().unwrap().is_empty());
         self.disk.values(ix)
     }
 
