@@ -353,8 +353,14 @@ impl StandardBroadcastRun {
             Builder::new()
                 .name("sol-cn-updater".to_string())
                 .spawn(move || loop {
+                    let mut update_time = Measure::start("cluster-node-update");
                     *cn.write().unwrap() =
                         ClusterNodes::<BroadcastStage>::new(&ci, &ss.clone().unwrap_or_default());
+                    update_time.stop();
+                    datapoint_info!(
+                        "broadcast-cluster-node-update",
+                        ("receive_time", update_time.as_us(), i64),
+                    );
                     std::thread::sleep(Duration::from_millis(BROADCAST_PEER_UPDATE_INTERVAL_MS));
                 })
                 .unwrap();
