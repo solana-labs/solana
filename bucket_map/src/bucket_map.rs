@@ -42,7 +42,8 @@ impl<T: Clone + std::fmt::Debug> Default for BucketMap<T>  {
 */
 
 impl<T: Clone + std::fmt::Debug> BucketMap<T> {
-    pub fn new(num_buckets_pow2: u8, drives: Arc<Vec<PathBuf>>) -> Self {
+    pub fn new(mut num_buckets_pow2: u8, drives: Arc<Vec<PathBuf>>) -> Self {
+        Self::delete_previous(&drives);
         let count = 1 << num_buckets_pow2;
         let mut buckets = Vec::with_capacity(count);
         buckets.resize_with(count, || RwLock::new(None));
@@ -68,7 +69,25 @@ impl<T: Clone + std::fmt::Debug> BucketMap<T> {
         sizes
     }
 
-    fn default_drives() -> Arc<Vec<PathBuf>> {
+    fn delete_previous(drives: &Arc<Vec<PathBuf>>) {
+        for d in drives.iter() {
+            if d.is_dir() {
+                let dir = fs::read_dir(d.clone());
+                if let Ok(dir) = dir {
+                    for entry in dir {
+                        if let Ok(entry) = entry {
+                            let result_ = fs::remove_file(entry.path().clone());
+                            if result_.is_err() {
+                                error!("failed to remove: {:?}", entry.path());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn default_drives() -> Arc<Vec<PathBuf>> {
         let tmpdir2 = PathBuf::from("accounts_index_buckets");
         error!("folder: {:?}", tmpdir2);
         let paths: Vec<PathBuf> = [tmpdir2]
