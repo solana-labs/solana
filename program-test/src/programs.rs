@@ -18,7 +18,7 @@ mod spl_associated_token_account {
 }
 
 static SPL_PROGRAMS: &[(Pubkey, &[u8])] = &[
-    (spl_token::ID, include_bytes!("programs/spl_token-3.1.0.so")),
+    (spl_token::ID, include_bytes!("programs/spl_token-3.2.0.so")),
     (
         spl_memo_1_0::ID,
         include_bytes!("programs/spl_memo-1.0.0.so"),
