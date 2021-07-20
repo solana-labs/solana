@@ -654,6 +654,28 @@ mod tests {
     }
 
     #[test]
+    fn bucket_map_test_update_to_0_len() {
+        solana_logger::setup();
+        let key = Pubkey::new_unique();
+        let tmpdir = std::env::temp_dir().join("bucket_map_test_update");
+        std::fs::create_dir_all(tmpdir.clone()).unwrap();
+        let drives = Arc::new(vec![tmpdir.clone()]);
+        let index = BucketMap::new(1, drives);
+        index.update(&key, |_| Some((vec![0], 1)));
+        assert_eq!(index.read_value(&key), Some((vec![0], 1)));
+        // sets len to 0, updates in place
+        index.update(&key, |_| Some((vec![], 1)));
+        assert_eq!(index.read_value(&key), Some((vec![], 1)));
+        // sets len to 0, doesn't update in place - finds a new place, which causes us to no longer have an allocation in data
+        index.update(&key, |_| Some((vec![], 2)));
+        assert_eq!(index.read_value(&key), Some((vec![], 2)));
+        // sets len to 1, doesn't update in place - finds a new place
+        index.update(&key, |_| Some((vec![1], 2)));
+        assert_eq!(index.read_value(&key), Some((vec![1], 2)));
+        std::fs::remove_dir_all(tmpdir).unwrap();
+    }
+
+    #[test]
     fn bucket_map_test_delete() {
         let tmpdir = std::env::temp_dir().join("bucket_map_test_delete");
         std::fs::create_dir_all(tmpdir.clone()).unwrap();
