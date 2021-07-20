@@ -343,9 +343,16 @@ impl StandardBroadcastRun {
             .updater_spawned
             .compare_and_swap(true, false, Ordering::Relaxed)
         {
+            // initialize cluster_nodes at first run..
+            *self.cluster_nodes.write().unwrap() = ClusterNodes::<BroadcastStage>::new(
+                cluster_info,
+                &stakes.clone().unwrap_or_default(),
+            );
+
             let cn = self.cluster_nodes.clone();
             let ci = cluster_info.clone();
             let ss = stakes; // NOT SAFE for cross epochs
+
             Builder::new()
                 .spawn(move || loop {
                     *cn.write().unwrap() =
