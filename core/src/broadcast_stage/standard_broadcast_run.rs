@@ -351,6 +351,7 @@ impl StandardBroadcastRun {
 
             // leaks thread...
             Builder::new()
+                .name("sol-cn-updater".to_string())
                 .spawn(move || loop {
                     *cn.write().unwrap() =
                         ClusterNodes::<BroadcastStage>::new(&ci, &ss.clone().unwrap_or_default());
