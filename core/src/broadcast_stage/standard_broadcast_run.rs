@@ -345,17 +345,6 @@ impl StandardBroadcastRun {
             .updater_spawned
             .compare_and_swap(true, false, Ordering::Relaxed)
         {
-            {
-                // there is race between the above cas and the below w lock acquisition
-                let mut w = self.cluster_nodes.write().unwrap();
-
-                // initialize cluster_nodes at first run..
-                *w = ClusterNodes::<BroadcastStage>::new(
-                    cluster_info,
-                    &stakes.clone().unwrap_or_default(),
-                );
-            }
-
             let cn = self.cluster_nodes.clone();
             let ci = cluster_info.clone();
             let ss = stakes; // NOT SAFE for cross epochs
@@ -369,8 +358,12 @@ impl StandardBroadcastRun {
                 })
                 .unwrap();
         }
-        get_peers_time.stop();
         let cluster_nodes = self.cluster_nodes.read().unwrap();
+        // wait until initialized at least....
+        while cluster_nodes.num_peers() == 0 {
+            std::thread::sleep(Duration::from_millis(BROADCAST_PEER_UPDATE_INTERVAL_MS));
+        }
+        get_peers_time.stop();
 
         let mut transmit_stats = TransmitShredsStats::default();
         // Broadcast the shreds
