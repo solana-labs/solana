@@ -110,9 +110,10 @@ impl CacheHashDataManager {
         let cache_path = ledger_path.as_ref().join("calculate_cache_hash");
         std::fs::create_dir_all(cache_path.clone())?;
         info!("CacheHash folder: {:?}", cache_path);
-        Ok(Self { cache_path,
+        Ok(Self {
+            cache_path,
             stats: RwLock::new(CacheHashDataStats::default()),
-         })
+        })
     }
     pub fn update_stats(&self, stats: &CacheHashDataStats) {
         self.stats.write().unwrap().merge(stats);
@@ -120,6 +121,30 @@ impl CacheHashDataManager {
     pub fn report_stats(&self) {
         let mut stats = self.stats.write().unwrap();
         info!("hash calculation cache stats: {:?}", stats);
+
+        datapoint_info!(
+            "CacheHashDataStats",
+            ("storage_size", stats.storage_size, i64),
+            ("cache_file_size", stats.cache_file_size, i64),
+            ("cache_file_count", stats.cache_file_count, i64),
+            ("entries", stats.entries, i64),
+            ("loaded_from_cache", stats.loaded_from_cache, i64),
+            (
+                "entries_loaded_from_cache",
+                stats.entries_loaded_from_cache,
+                i64
+            ),
+            ("save_us", stats.save_us, i64),
+            ("write_to_mmap_us", stats.write_to_mmap_us, i64),
+            ("create_save_us", stats.create_save_us, i64),
+            ("load_total_us", stats.load_total_us, i64),
+            ("open_mmap_us", stats.open_mmap_us, i64),
+            ("decode_us", stats.decode_us, i64),
+            ("calc_path_us", stats.calc_path_us, i64),
+            ("merge_us", stats.merge_us, i64),
+            ("new_cache_files", stats.new_cache_files, i64),
+            ("files_purged", stats.files_purged, i64),
+        );
         *stats = CacheHashDataStats::default();
     }
     fn cache_path(&self) -> &PathBuf {
