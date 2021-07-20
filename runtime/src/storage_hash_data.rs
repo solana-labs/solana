@@ -20,15 +20,12 @@ use std::sync::{Arc, RwLock};
 use std::time::UNIX_EPOCH;
 use std::{io::Read, ops::Range, path::Path};
 
-use crate::accounts_db::{num_scan_passes, BINS_PER_PASS, PUBKEY_BINS_FOR_CALCULATING_HASHES};
-
 pub type SavedType = Vec<Vec<CalculateHashIntermediate>>;
 
 #[repr(C)]
 pub struct Header {
     lock: AtomicU64,
     count: usize,
-    //bin_sizes: [u64; BINS_PER_PASS],
 }
 
 impl Header {
