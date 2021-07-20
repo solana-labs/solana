@@ -41,7 +41,6 @@ use {
         sync::{mpsc::channel, Arc, Mutex, RwLock},
         thread::{self, Builder, JoinHandle},
     },
-    tokio::runtime,
     tokio_util::codec::{BytesCodec, FramedRead},
 };
 
@@ -120,10 +119,8 @@ impl RpcRequestMiddleware {
     }
 
     #[cfg(unix)]
-    async fn open_no_follow(path: impl AsRef<Path>) -> std::io::Result<tokio_02::fs::File> {
-        // Stuck on tokio 0.2 until the jsonrpc crates upgrade
-        use tokio_02::fs::os::unix::OpenOptionsExt;
-        tokio_02::fs::OpenOptions::new()
+    async fn open_no_follow(path: impl AsRef<Path>) -> std::io::Result<tokio::fs::File> {
+        tokio::fs::OpenOptions::new()
             .read(true)
             .write(false)
             .create(false)
@@ -133,10 +130,9 @@ impl RpcRequestMiddleware {
     }
 
     #[cfg(not(unix))]
-    async fn open_no_follow(path: impl AsRef<Path>) -> std::io::Result<tokio_02::fs::File> {
+    async fn open_no_follow(path: impl AsRef<Path>) -> std::io::Result<tokio::fs::File> {
         // TODO: Is there any way to achieve the same on Windows?
-        // Stuck on tokio 0.2 until the jsonrpc crates upgrade
-        tokio_02::fs::File::open(path).await
+        tokio::fs::File::open(path).await
     }
 
     fn process_file_get(&self, path: &str) -> RequestMiddlewareAction {
@@ -310,7 +306,7 @@ impl JsonRpcService {
 
         let tpu_address = cluster_info.my_contact_info().tpu;
         let runtime = Arc::new(
-            runtime::Builder::new_multi_thread()
+            tokio::runtime::Builder::new_multi_thread()
                 .thread_name("rpc-runtime")
                 .enable_all()
                 .build()
@@ -399,14 +395,12 @@ impl JsonRpcService {
         // so that we avoid the single-threaded event loops from being created automatically by
         // jsonrpc for threads when .threads(N > 1) is given.
         let event_loop = {
-            // Stuck on tokio 0.2 until the jsonrpc crates upgrade
-            tokio_02::runtime::Builder::new()
-                .core_threads(rpc_threads)
-                .threaded_scheduler()
-                .enable_all()
+            tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(rpc_threads)
                 .thread_name("sol-rpc-el")
+                .enable_all()
                 .build()
-                .unwrap()
+                .expect("Runtime")
         };
 
         let (close_handle_sender, close_handle_receiver) = channel();
@@ -510,6 +504,7 @@ mod tests {
             io::Write,
             net::{IpAddr, Ipv4Addr},
         },
+        tokio::runtime::Runtime,
     };
 
     #[test]
@@ -644,7 +639,7 @@ mod tests {
 
     #[test]
     fn test_process_file_get() {
-        let mut runtime = tokio_02::runtime::Runtime::new().unwrap();
+        let runtime = Runtime::new().unwrap();
 
         let ledger_path = get_tmp_ledger_path!();
         std::fs::create_dir(&ledger_path).unwrap();
