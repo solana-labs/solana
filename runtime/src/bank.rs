@@ -11782,7 +11782,7 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn test_spl_token_v2_self_transfer_fix() {
+    fn test_spl_token_v2_replacement() {
         let (genesis_config, _mint_keypair) = create_genesis_config(0);
         let mut bank = Bank::new(&genesis_config);
 
@@ -11812,7 +11812,7 @@ pub(crate) mod tests {
 
         let original_capitalization = bank.capitalization();
 
-        bank.apply_spl_token_v2_self_transfer_fix();
+        bank.apply_spl_token_v2_set_authority_fix();
 
         // New token account is now empty
         assert_eq!(
