@@ -172,6 +172,7 @@ impl RpcSender for MockSender {
                     err: None,
                     logs: None,
                     accounts: None,
+                    units_consumed: None,
                 },
             })?,
             RpcRequest::GetMinimumBalanceForRentExemption => Value::Number(Number::from(20)),
