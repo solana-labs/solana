@@ -1068,11 +1068,7 @@ mod test {
         );
 
         // Test SyncNative
-        let sync_native_ix = sync_native(
-            &spl_token_v2_0::id(),
-            &convert_pubkey(keys[0]),
-        )
-        .unwrap();
+        let sync_native_ix = sync_native(&spl_token_v2_0::id(), &convert_pubkey(keys[0])).unwrap();
         let message = Message::new(&[sync_native_ix], None);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
@@ -1450,11 +1446,7 @@ mod test {
         assert!(parse_token(&compiled_instruction, &keys).is_err());
 
         // Test SyncNative
-        let sync_native_ix = sync_native(
-            &spl_token_v2_0::id(),
-            &convert_pubkey(keys[0]),
-        )
-        .unwrap();
+        let sync_native_ix = sync_native(&spl_token_v2_0::id(), &convert_pubkey(keys[0])).unwrap();
         let message = Message::new(&[sync_native_ix], None);
         let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert!(parse_token(&compiled_instruction, &[]).is_err());
