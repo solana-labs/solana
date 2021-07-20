@@ -149,6 +149,15 @@ impl DataBucket {
         }
     }
 
+    pub fn get_empty_cell_slice<T: Sized>(&self) -> &[T] {
+        let len = 0;
+        let item_slice: &[u8] = &self.mmap[0..0];
+        unsafe {
+            let item = item_slice.as_ptr() as *const T;
+            std::slice::from_raw_parts(item, len as usize)
+        }
+    }
+
     pub fn get_cell_slice<T: Sized>(&self, ix: u64, len: u64) -> &[T] {
         if ix >= self.num_cells() {
             panic!("bad index size");
