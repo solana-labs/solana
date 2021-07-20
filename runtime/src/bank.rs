@@ -4895,8 +4895,8 @@ impl Bank {
             self.rent_collector.rent.burn_percent = 50; // 50% rent burn
         }
 
-        if new_feature_activations.contains(&feature_set::spl_token_v2_self_transfer_fix::id()) {
-            self.apply_spl_token_v2_self_transfer_fix();
+        if new_feature_activations.contains(&feature_set::spl_token_v2_set_authority_fix::id()) {
+            self.apply_spl_token_v2_set_authority_fix();
         }
         // Remove me after a while around v1.6
         if !self.no_stake_rewrite.load(Relaxed)
@@ -4984,13 +4984,13 @@ impl Bank {
         }
     }
 
-    fn apply_spl_token_v2_self_transfer_fix(&mut self) {
+    fn apply_spl_token_v2_set_authority_fix(&mut self) {
         if let Some(old_account) = self.get_account(&inline_spl_token_v2_0::id()) {
             if let Some(new_account) =
                 self.get_account(&inline_spl_token_v2_0::new_token_program::id())
             {
                 datapoint_info!(
-                    "bank-apply_spl_token_v2_self_transfer_fix",
+                    "bank-apply_spl_token_v2_set_authority_fix",
                     ("slot", self.slot, i64),
                 );
 
