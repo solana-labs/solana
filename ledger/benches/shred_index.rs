@@ -2,7 +2,7 @@
 
 extern crate test;
 use rand::seq::SliceRandom;
-use solana_ledger::blockstore_meta::ShredIndex;
+use solana_ledger::blockstore_meta::ShredIndex2;
 use test::Bencher;
 
 fn get_shuffled_vector(size: usize) -> Vec<u64> {
@@ -18,7 +18,7 @@ fn get_shuffled_vector(size: usize) -> Vec<u64> {
 fn bench_shred_index_is_present(bencher: &mut Bencher) {
     let values = get_shuffled_vector(500);
     bencher.iter(|| {
-        let index = ShredIndex::default();
+        let index = ShredIndex2::default();
         for value in values.iter() {
             index.is_present(*value);
         }
@@ -29,7 +29,7 @@ fn bench_shred_index_is_present(bencher: &mut Bencher) {
 fn bench_shred_index_set_present(bencher: &mut Bencher) {
     let values = get_shuffled_vector(500);
     bencher.iter(|| {
-        let mut index = ShredIndex::default();
+        let mut index = ShredIndex2::default();
         for value in values.iter() {
             index.set_present(*value, true);
         }
