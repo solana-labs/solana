@@ -343,7 +343,7 @@ impl StandardBroadcastRun {
         #[allow(deprecated)]
         if !self
             .updater_spawned
-            .compare_and_swap(true, false, Ordering::Relaxed)
+            .compare_and_swap(false, true, Ordering::Relaxed)
         {
             let cn = self.cluster_nodes.clone();
             let ci = cluster_info.clone();
@@ -351,7 +351,7 @@ impl StandardBroadcastRun {
 
             // leaks thread...
             Builder::new()
-                .name("sol-cn-updater".to_string())
+                .name("sol-bc-cn-updater".to_string())
                 .spawn(move || loop {
                     let mut update_time = Measure::start("cluster-node-update");
                     *cn.write().unwrap() =
