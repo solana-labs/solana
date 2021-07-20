@@ -40,13 +40,18 @@ impl<T:Clone + Debug> RealEntry<T> for T {
 pub type SlotT<T> = (Slot, T);
 
 pub type WriteCache<V> = HashMap<Pubkey, V>;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, AtomicU64};
 use crate::waitable_condvar::WaitableCondvar;
 use std::time::Duration;
 #[derive(Debug)]
 pub struct BucketMapWriteHolder<V> {
     pub disk: BucketMap<SlotT<V>>,
     pub write_cache: Vec<RwLock<WriteCache<V2<V>>>>,
+    pub write_cache_flushes: AtomicU64,
+    pub gets: AtomicU64,
+    pub updates: AtomicU64,
+    pub inserts: AtomicU64,
+    pub deletes: AtomicU64,
     pub bins: usize,
     pub wait: WaitableCondvar,
 }
@@ -77,6 +82,11 @@ impl<V: 'static + Clone + Debug> BucketMapWriteHolder<V> {
         }
     }
     fn new(bucket_map: BucketMap<SlotT<V>>) -> Self{
+        let write_cache_flushes = AtomicU64::new(0);
+        let gets = AtomicU64::new(0);
+        let updates = AtomicU64::new(0);
+        let inserts = AtomicU64::new(0);
+        let deletes = AtomicU64::new(0);
         let mut write_cache = vec![];
         let bins = bucket_map.num_buckets();
         write_cache = (0..bins).map(|i| RwLock::new(WriteCache::default())).collect::<Vec<_>>();
@@ -87,11 +97,17 @@ impl<V: 'static + Clone + Debug> BucketMapWriteHolder<V> {
             write_cache,
             bins,
             wait,
+            gets,
+            deletes,
+            write_cache_flushes,
+            updates,
+            inserts,
         }
     }
     pub fn flush(&self, ix: usize) {
         if ix < self.write_cache.len() {
             let wc = &mut self.write_cache[ix].write().unwrap();
+            self.write_cache_flushes.fetch_add(wc.len() as u64, Ordering::Relaxed);
             for (k,v) in wc.iter() {
                 self.disk.update(k, |_previous| {
                     Some((v.slot_list.clone(), v.ref_count))
@@ -123,6 +139,7 @@ impl<V: 'static + Clone + Debug> BucketMapWriteHolder<V> {
         F: Fn(Option<(&[SlotT<V>], u64)>) -> Option<(Vec<SlotT<V>>, u64)>,
     {
         if current_value.is_none() {
+            self.inserts.fetch_add(1, Ordering::Relaxed);
             // we are an insert
             if true {
             // send straight to disk. if we try to keep it in the write cache, then 'keys' will be incorrect
@@ -142,6 +159,7 @@ impl<V: 'static + Clone + Debug> BucketMapWriteHolder<V> {
         }
         }
         else {
+            self.updates.fetch_add(1, Ordering::Relaxed);
             let entry = current_value.unwrap();
             let current_value = Some((&entry.slot_list[..], entry.ref_count));
             // we are an update
@@ -169,6 +187,7 @@ impl<V: 'static + Clone + Debug> BucketMapWriteHolder<V> {
         }
     }
     pub fn get(&self, key: &Pubkey) -> Option<(u64, Vec<SlotT<V>>)> {
+        self.gets.fetch_add(1, Ordering::Relaxed);
         let ix = self.disk.bucket_ix(key);
         let wc = &mut self.write_cache[ix].read().unwrap();
         let res = wc.get(key);
@@ -209,6 +228,7 @@ impl<V: 'static + Clone + Debug> BucketMapWriteHolder<V> {
         }
     }
     fn delete_key(&self, key: &Pubkey) {
+        self.deletes.fetch_add(1, Ordering::Relaxed);
         let ix = self.disk.bucket_ix(key);
         {
             let wc = &mut self.write_cache[ix].write().unwrap();
@@ -239,7 +259,12 @@ impl<V: 'static + Clone + Debug> BucketMapWriteHolder<V> {
             ("min", min, i64),
             ("max", max, i64),
             ("sum", sum, i64),
-            ("buckets", self.num_buckets(), i64),
+            ("updates", self.updates.swap(0, Ordering::Relaxed), i64),
+            ("inserts", self.inserts.swap(0, Ordering::Relaxed), i64),
+            ("deletes", self.deletes.swap(0, Ordering::Relaxed), i64),
+            ("gets", self.gets.swap(0, Ordering::Relaxed), i64),
+            ("flushes", self.write_cache_flushes.swap(0, Ordering::Relaxed), i64),
+            //("buckets", self.num_buckets(), i64),
         );
     }
 }
