@@ -9,6 +9,7 @@ const CoinGeckoClient = new CoinGecko();
 export enum CoingeckoStatus {
   Success,
   FetchFailed,
+  Loading,
 }
 
 export interface CoinInfo {
@@ -50,6 +51,9 @@ export function useCoinGecko(coinId?: string): CoinGeckoResult | undefined {
     let interval: NodeJS.Timeout | undefined;
     if (coinId) {
       const getCoinInfo = () => {
+        setCoinInfo({
+          status: CoingeckoStatus.Loading,
+        });
         CoinGeckoClient.coins
           .fetch(coinId)
           .then((info: CoinInfoResult) => {

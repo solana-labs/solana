@@ -19,6 +19,7 @@ import { BigNumber } from "bignumber.js";
 import { Copyable } from "components/common/Copyable";
 import { CoingeckoStatus, useCoinGecko } from "utils/coingecko";
 import { displayTimestampWithoutDate } from "utils/date";
+import { LoadingCard } from "components/common/LoadingCard";
 
 const getEthAddress = (link?: string) => {
   let address = "";
@@ -96,6 +97,10 @@ function MintAccountCard({
 
   return (
     <>
+      {tokenInfo?.extensions?.coingeckoId &&
+        coinInfo?.status === CoingeckoStatus.Loading && (
+          <LoadingCard message="Loading token price data" />
+        )}
       {tokenPriceInfo && (
         <div className="row">
           <div className="col-12 col-lg-4 col-xl">
@@ -145,7 +150,7 @@ function MintAccountCard({
                 <h1 className="mb-0">
                   ${abbreviatedNumber(tokenPriceInfo.market_cap)}
                 </h1>
-                <p className="updated-time updated-time-absolute text-muted mr-4">
+                <p className="updated-time text-muted">
                   Updated at{" "}
                   {displayTimestampWithoutDate(
                     tokenPriceInfo.last_updated.getTime()
