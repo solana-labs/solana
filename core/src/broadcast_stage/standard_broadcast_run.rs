@@ -148,15 +148,15 @@ impl StandardBroadcastRun {
     #[cfg(test)]
     fn test_process_receive_results(
         &mut self,
-        cluster_info: &ClusterInfo,
-        sock: &UdpSocket,
+        _cluster_info: &ClusterInfo,
+        _sock: &UdpSocket,
         blockstore: &Arc<Blockstore>,
         receive_results: ReceiveResults,
     ) -> Result<()> {
         let (bsend, brecv) = channel();
         let (ssend, srecv) = channel();
         self.process_receive_results(blockstore, &ssend, &bsend, receive_results)?;
-        let srecv = Arc::new(Mutex::new(srecv));
+        let _srecv = Arc::new(Mutex::new(srecv));
         let brecv = Arc::new(Mutex::new(brecv));
         //data
         //let _ = self.transmit(&srecv, cluster_info, sock);
