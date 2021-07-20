@@ -13,6 +13,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::{
+    fs,
     sync::{atomic::Ordering},
 };
 pub struct BucketMap<T> {
