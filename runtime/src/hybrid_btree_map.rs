@@ -71,6 +71,7 @@ impl<V: 'static + Clone + Debug> BucketMapWriteHolder<V> {
                 if !self.write_cache[ix].read().unwrap().is_empty() {
                     found_one = true;
                     let mut wc = self.write_cache[ix].write().unwrap();
+                    self.write_cache_flushes.fetch_add(wc.len() as u64, Ordering::Relaxed);
                     for (k,v) in wc.iter() {
                         self.disk.update(k, |_current| {
                             Some((v.slot_list.clone(), v.ref_count))
