@@ -339,17 +339,17 @@ impl StandardBroadcastRun {
         trace!("Broadcasting {:?} shreds", shreds.len());
         // Get the list of peers to broadcast to
         let mut get_peers_time = Measure::start("broadcast::get_peers");
-        if !self.updater_spawned.load(Ordering::Relaxed) {
-            self.updater_spawned.store(true, Ordering::Relaxed);
-
+        if !self
+            .updater_spawned
+            .compare_and_swap(true, false, Ordering::Relaxed)
+        {
             let cn = self.cluster_nodes.clone();
             let ci = cluster_info.clone();
+            let ss = stakes; // NOT SAFE for cross epochs
             Builder::new()
                 .spawn(move || loop {
-                    *cn.write().unwrap() = ClusterNodes::<BroadcastStage>::new(
-                        &ci,
-                        &stakes.clone().unwrap_or_default(),
-                    );
+                    *cn.write().unwrap() =
+                        ClusterNodes::<BroadcastStage>::new(&ci, &ss.clone().unwrap_or_default());
                     std::thread::sleep(Duration::from_millis(BROADCAST_PEER_UPDATE_INTERVAL_MS));
                 })
                 .unwrap();
