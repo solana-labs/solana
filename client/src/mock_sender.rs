@@ -36,29 +36,27 @@ pub struct MockSender {
 ///
 /// This is primarily for internal use.
 ///
-/// Unless directed otherwise,
-/// it will generally return a reasonable default response,
-/// at least for [`RpcRequest`] values for which responses have
-/// been implemented.
+/// Unless directed otherwise, it will generally return a reasonable default
+/// response, at least for [`RpcRequest`] values for which responses have been
+/// implemented.
 ///
 /// The behavior can be customized in two ways:
 ///
-/// 1) The `url` constructor argument is not actually a URL,
-///    but a simple string directive that changes `MockSender`s behavior
-///    in specific scenarios.
+/// 1) The `url` constructor argument is not actually a URL, but a simple string
+///    directive that changes `MockSender`s behavior in specific scenarios.
 ///
 ///    If `url` is "fails" then any call to `send` will return `Ok(Value::Null)`.
 ///
 ///    It is customary to set the `url` to "succeeds" for mocks that should
 ///    return sucessfully, though this value is not actually interpreted.
 ///
-///    Other possible values of `url` are specific to different `RpcRequest` values.
-///    Read the implementation for specifics.
+///    Other possible values of `url` are specific to different `RpcRequest`
+///    values. Read the implementation for specifics.
 ///
-/// 2) Custom responses can be configured by providing [`Mocks`]
-///    to the [`MockSender::new_with_mocks`] constructor. This type
-///    is a [`HashMap`] from [`RpcRequest`] to a JSON [`Value`] response,
-///    Any entries in this map override the default behavior for the given request.
+/// 2) Custom responses can be configured by providing [`Mocks`] to the
+///    [`MockSender::new_with_mocks`] constructor. This type is a [`HashMap`]
+///    from [`RpcRequest`] to a JSON [`Value`] response, Any entries in this map
+///    override the default behavior for the given request.
 impl MockSender {
     pub fn new(url: String) -> Self {
         Self::new_with_mocks(url, Mocks::default())

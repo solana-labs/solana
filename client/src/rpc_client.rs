@@ -1,9 +1,8 @@
 //! Communication with a Solana node over RPC.
 //!
-//! Software that interacts with the Solana blockchain,
-//! whether querying its state or submitting transactions,
-//! communicates with a Solana node over [JSON-RPC],
-//! using the [`RpcClient`] type.
+//! Software that interacts with the Solana blockchain, whether querying its
+//! state or submitting transactions, communicates with a Solana node over
+//! [JSON-RPC], using the [`RpcClient`] type.
 //!
 //! [JSON-RPC]: https://www.jsonrpc.org/specification
 
@@ -75,47 +74,38 @@ impl RpcClientConfig {
 
 /// A client of a remote Solana node.
 ///
-/// `RpcClient` communicates with a Solana node over [JSON-RPC],
-/// with the [Solana JSON-RPC protocol][jsonprot]. It is the primary
-/// Rust interface for querying and transacting with the network
-/// from external programs.
+/// `RpcClient` communicates with a Solana node over [JSON-RPC], with the
+/// [Solana JSON-RPC protocol][jsonprot]. It is the primary Rust interface for
+/// querying and transacting with the network from external programs.
 ///
-/// `RpcClient`s generally communicate over HTTP on port 8899,
-/// a typical server URL being "http://localhost:8899".
+/// `RpcClient`s generally communicate over HTTP on port 8899, a typical server
+/// URL being "http://localhost:8899".
 ///
-/// By default,
-/// requests to confirm transactions are only completed
-/// once those transactions are finalized,
-/// meaning they are definitely permanently committed.
-/// Transactions can be confirmed with less finality by
-/// creating `RpcClient` with an explicit [`CommitmentConfig`],
-/// or by calling the various `_with_commitment` methods,
-/// like [`RpcClient::confirm_transaction_with_commitment`].
+/// By default, requests to confirm transactions are only completed once those
+/// transactions are finalized, meaning they are definitely permanently
+/// committed. Transactions can be confirmed with less finality by creating
+/// `RpcClient` with an explicit [`CommitmentConfig`], or by calling the various
+/// `_with_commitment` methods, like
+/// [`RpcClient::confirm_transaction_with_commitment`].
 ///
-/// Requests may timeout,
-/// in which case they return a [`ClientError`]
-/// where the [`ClientErrorKind`]
-/// is [`ClientErrorKind::Reqwest`],
-/// and where the interior [`reqwest::Error`](crate::client_error::reqwest::Error)s
-/// [`is_timeout`](crate::client_error::reqwest::Error::is_timeout)
-/// method returns `true`.
-/// The default timeout is 30 seconds,
-/// and may be changed by calling an appropriate constructor
-/// with a `timeout` parameter.
+/// Requests may timeout, in which case they return a [`ClientError`] where the
+/// [`ClientErrorKind`] is [`ClientErrorKind::Reqwest`], and where the interior
+/// [`reqwest::Error`](crate::client_error::reqwest::Error)s
+/// [`is_timeout`](crate::client_error::reqwest::Error::is_timeout) method
+/// returns `true`. The default timeout is 30 seconds, and may be changed by
+/// calling an appropriate constructor with a `timeout` parameter.
 ///
-/// `RpcClient` encapsulates an [`RpcSender`],
-/// which implements the underlying RPC protocol.
-/// On top of `RpcSender` it adds methods for common tasks,
-/// while re-exposing the underlying RPC sending functionality
-/// through the [`send`][RpcClient::send] method.
+/// `RpcClient` encapsulates an [`RpcSender`], which implements the underlying
+/// RPC protocol. On top of `RpcSender` it adds methods for common tasks, while
+/// re-exposing the underlying RPC sending functionality through the
+/// [`send`][RpcClient::send] method.
 ///
 /// [jsonprot]: https://docs.solana.com/developing/clients/jsonrpc-api
 /// [JSON-RPC]: https://www.jsonrpc.org/specification
 ///
-/// While `RpcClient` encapsulates an abstract `RpcSender`,
-/// it is most commonly created with an [`HttpSender`],
-/// communicating over HTTP, usually on port 8899.
-/// It can also be created with [`MockSender`] during testing.
+/// While `RpcClient` encapsulates an abstract `RpcSender`, it is most commonly
+/// created with an [`HttpSender`], communicating over HTTP, usually on port
+/// 8899. It can also be created with [`MockSender`] during testing.
 pub struct RpcClient {
     sender: Box<dyn RpcSender + Send + Sync + 'static>,
     config: RpcClientConfig,
@@ -125,11 +115,10 @@ pub struct RpcClient {
 impl RpcClient {
     /// Create an `RpcClient` from an [`RpcSender`] and an [`RpcClientConfig`].
     ///
-    /// This is the basic constructor, allowing construction with any type of `RpcSender`.
-    /// Most applications should use one of the other constructors,
-    /// such as [`new`] and [`new_mock`],
-    /// which create an `RpcClient` encapsulating an
-    /// [`HttpSender`] and [`MockSender`] respectively.
+    /// This is the basic constructor, allowing construction with any type of
+    /// `RpcSender`. Most applications should use one of the other constructors,
+    /// such as [`new`] and [`new_mock`], which create an `RpcClient`
+    /// encapsulating an [`HttpSender`] and [`MockSender`] respectively.
     fn new_sender<T: RpcSender + Send + Sync + 'static>(
         sender: T,
         config: RpcClientConfig,
@@ -143,11 +132,11 @@ impl RpcClient {
 
     /// Create an HTTP `RpcClient`.
     ///
-    /// The URL is an HTTP URL, usually for port 8899,
-    /// as in "http://localhost:8899".
+    /// The URL is an HTTP URL, usually for port 8899, as in
+    /// "http://localhost:8899".
     ///
-    /// The client has a default timeout of 30 seconds,
-    /// and a default commitment level of [`Finalized`](CommitmentLevel::Finalized).
+    /// The client has a default timeout of 30 seconds, and a default commitment
+    /// level of [`Finalized`](CommitmentLevel::Finalized).
     ///
     /// # Examples
     ///
@@ -162,11 +151,11 @@ impl RpcClient {
 
     /// Create an HTTP `RpcClient` with specified commitment level.
     ///
-    /// The URL is an HTTP URL, usually for port 8899,
-    /// as in "http://localhost:8899".
+    /// The URL is an HTTP URL, usually for port 8899, as in
+    /// "http://localhost:8899".
     ///
-    /// The client has a default timeout of 30 seconds,
-    /// and a user-specified [`CommitmentLevel`] via [`CommitmentConfig`].
+    /// The client has a default timeout of 30 seconds, and a user-specified
+    /// [`CommitmentLevel`] via [`CommitmentConfig`].
     ///
     /// # Examples
     ///
@@ -186,10 +175,11 @@ impl RpcClient {
 
     /// Create an HTTP `RpcClient` with specified timeout.
     ///
-    /// The URL is an HTTP URL, usually for port 8899,
-    /// as in "http://localhost:8899".
+    /// The URL is an HTTP URL, usually for port 8899, as in
+    /// "http://localhost:8899".
     ///
-    /// The client has and a default commitment level of [`Finalized`](CommitmentLevel::Finalized).
+    /// The client has and a default commitment level of
+    /// [`Finalized`](CommitmentLevel::Finalized).
     ///
     /// # Examples
     ///
@@ -209,8 +199,8 @@ impl RpcClient {
 
     /// Create an HTTP `RpcClient` with specified timeout and commitment level.
     ///
-    /// The URL is an HTTP URL, usually for port 8899,
-    /// as in "http://localhost:8899".
+    /// The URL is an HTTP URL, usually for port 8899, as in
+    /// "http://localhost:8899".
     ///
     /// # Examples
     ///
@@ -240,17 +230,16 @@ impl RpcClient {
 
     /// Create an HTTP `RpcClient` with specified timeout and commitment level.
     ///
-    /// The URL is an HTTP URL, usually for port 8899,
-    /// as in "http://localhost:8899".
+    /// The URL is an HTTP URL, usually for port 8899, as in
+    /// "http://localhost:8899".
     ///
-    /// The `confirm_transaction_initial_timeout` argument specifies,
-    /// when confirming a transaction via one of the `_with_spinner` methods,
-    /// like [`RpcClient::send_and_confirm_transaction_with_spinner`],
-    /// the amount of time to allow for the server to initially process a transaction.
-    /// In other words,
-    /// setting `confirm_transaction_initial_timeout` to > 0
-    /// allows `RpcClient` to wait for confirmation of a transaction
-    /// that the server has not "seen" yet.
+    /// The `confirm_transaction_initial_timeout` argument specifies, when
+    /// confirming a transaction via one of the `_with_spinner` methods, like
+    /// [`RpcClient::send_and_confirm_transaction_with_spinner`], the amount of
+    /// time to allow for the server to initially process a transaction. In
+    /// other words, setting `confirm_transaction_initial_timeout` to > 0 allows
+    /// `RpcClient` to wait for confirmation of a transaction that the server
+    /// has not "seen" yet.
     ///
     /// # Examples
     ///
@@ -313,8 +302,8 @@ impl RpcClient {
 
     /// Create a mock `RpcClient`.
     ///
-    /// See the [`MockSender`] documentation for an explanation of
-    /// how it treats the `url` argument.
+    /// See the [`MockSender`] documentation for an explanation of how it treats
+    /// the `url` argument.
     ///
     /// # Examples
     ///
@@ -348,8 +337,8 @@ impl RpcClient {
 
     /// Create an HTTP `RpcClient` from a [`SocketAddr`].
     ///
-    /// The client has a default timeout of 30 seconds,
-    /// and a default commitment level of [`Finalized`](CommitmentLevel::Finalized).
+    /// The client has a default timeout of 30 seconds, and a default commitment
+    /// level of [`Finalized`](CommitmentLevel::Finalized).
     ///
     /// # Examples
     ///
@@ -365,8 +354,8 @@ impl RpcClient {
 
     /// Create an HTTP `RpcClient` from a [`SocketAddr`] with specified commitment level.
     ///
-    /// The client has a default timeout of 30 seconds,
-    /// and a user-specified [`CommitmentLevel`] via [`CommitmentConfig`].
+    /// The client has a default timeout of 30 seconds, and a user-specified
+    /// [`CommitmentLevel`] via [`CommitmentConfig`].
     ///
     /// # Examples
     ///

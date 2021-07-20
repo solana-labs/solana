@@ -34,9 +34,8 @@ pub struct HttpSender {
 impl HttpSender {
     /// Create an HTTP RPC sender.
     ///
-    /// The URL is an HTTP URL, usually for port 8899,
-    /// as in "http://localhost:8899".
-    /// The sender has a default timeout of 30 seconds.
+    /// The URL is an HTTP URL, usually for port 8899, as in
+    /// "http://localhost:8899". The sender has a default timeout of 30 seconds.
     pub fn new(url: String) -> Self {
         Self::new_with_timeout(url, Duration::from_secs(30))
     }

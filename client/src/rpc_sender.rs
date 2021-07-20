@@ -4,12 +4,11 @@ use crate::{client_error::Result, rpc_request::RpcRequest};
 
 /// A transport for RPC calls.
 ///
-/// `RpcSender` implements the underlying transport of requests to,
-/// and responses from, a Solana node, and is used primarily
-/// by [`RpcClient`].
+/// `RpcSender` implements the underlying transport of requests to, and
+/// responses from, a Solana node, and is used primarily by [`RpcClient`].
 ///
-/// It is typically implemented by [`HttpSender`] in production,
-/// and [`MockSender`] in unit tests.
+/// It is typically implemented by [`HttpSender`] in production, and
+/// [`MockSender`] in unit tests.
 ///
 /// [`RpcClient`]: crate::rpc_client::RpcClient
 /// [`HttpSender`]: crate::http_sender::HttpSender
