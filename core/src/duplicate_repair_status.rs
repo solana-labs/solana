@@ -248,14 +248,14 @@ impl DeadSlotAncestorRequestStatus {
                 // ancestors of our version of `self.requested_mismatched_slot`
                 //
                 //  ```
-                //       1 - 2 - 3 - 5 - 6 (our current fork)
+                //       1 - 2 - 3 - 5' - 6' (our current fork)
                 //     /
                 //  0
                 //     \
                 //       1 - 2 - 4 - 5 - 6 (cluster agreed fork)
                 // ```
                 //
-                // In this case, if we make a AncestorsHashes(6) request for a dead slot 6, we may
+                // In this case, if we make a AncestorsHashes(6) request for our dead slot 6', we may
                 // get a response with slot `4` in it, which is a slot that doesn't have a frozen
                 // hash in blockstore yet because either:
                 //

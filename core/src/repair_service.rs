@@ -19,11 +19,7 @@ use solana_ledger::{
 use solana_measure::measure::Measure;
 use solana_runtime::{bank_forks::BankForks, contains::Contains};
 use solana_sdk::{
-    clock::{BankId, Slot},
-    epoch_schedule::EpochSchedule,
-    hash::Hash,
-    pubkey::Pubkey,
-    timing::timestamp,
+    clock::Slot, epoch_schedule::EpochSchedule, hash::Hash, pubkey::Pubkey, timing::timestamp,
 };
 use std::{
     collections::{HashMap, HashSet},
@@ -533,34 +529,6 @@ impl RepairService {
     }
 
     #[allow(dead_code)]
-    fn process_new_duplicate_slots(
-        new_duplicate_slots: &[(Slot, BankId)],
-        duplicate_slot_repair_statuses: &mut HashMap<Slot, DuplicateSlotRepairStatus>,
-        cluster_slots: &ClusterSlots,
-        serve_repair: &ServeRepair,
-        repair_validators: &Option<HashSet<Pubkey>>,
-    ) {
-        for (duplicate_slot, _bank_id) in new_duplicate_slots {
-            warn!(
-                "Cluster confirmed slot: {}, dumping our current version and repairing",
-                duplicate_slot
-            );
-
-            // TODO: When we get to the point where we ALSO support a specific version of
-            // a slot hash to repair, then it's of note that we could feasibly get the same
-            // duplicate slot, but a more specific hash to repair via this channel if the
-            // state of this slot were to go from EpochSlotsFrozen (Hash::default()) to
-            // DuplicateConfirmed (a specific hash) in ReplayStage.
-            Self::initiate_repair_for_duplicate_slot(
-                *duplicate_slot,
-                duplicate_slot_repair_statuses,
-                cluster_slots,
-                serve_repair,
-                repair_validators,
-            );
-        }
-    }
-
     fn initiate_repair_for_duplicate_slot(
         slot: Slot,
         duplicate_slot_repair_statuses: &mut HashMap<Slot, DuplicateSlotRepairStatus>,
