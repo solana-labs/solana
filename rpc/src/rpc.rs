@@ -1206,7 +1206,7 @@ impl JsonRpcRequestProcessor {
         Some(status)
     }
 
-    pub fn get_signature_statuses(
+    pub async fn get_signature_statuses(
         &self,
         signatures: Vec<Signature>,
         config: Option<RpcSignatureStatusConfig>,
@@ -1226,7 +1226,8 @@ impl JsonRpcRequestProcessor {
             let status = if let Some(status) = self.get_transaction_status(signature, &bank) {
                 Some(status)
             } else if self.config.enable_rpc_transaction_history && search_transaction_history {
-                self.blockstore
+                if let Some(status) = self
+                    .blockstore
                     .get_rooted_transaction_status(signature)
                     .map_err(|_| Error::internal_error())?
                     .filter(|(slot, _status_meta)| {
@@ -1246,16 +1247,17 @@ impl JsonRpcRequestProcessor {
                             confirmation_status: Some(TransactionConfirmationStatus::Finalized),
                         }
                     })
-                    .or_else(|| {
-                        if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
-                            self.runtime
-                                .block_on(bigtable_ledger_storage.get_signature_status(&signature))
-                                .map(Some)
-                                .unwrap_or(None)
-                        } else {
-                            None
-                        }
-                    })
+                {
+                    Some(status)
+                } else if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
+                    bigtable_ledger_storage
+                        .get_signature_status(&signature)
+                        .await
+                        .map(Some)
+                        .unwrap_or(None)
+                } else {
+                    None
+                }
             } else {
                 None
             };
@@ -2981,7 +2983,7 @@ pub mod rpc_full {
             meta: Self::Metadata,
             signature_strs: Vec<String>,
             config: Option<RpcSignatureStatusConfig>,
-        ) -> Result<RpcResponse<Vec<Option<TransactionStatus>>>>;
+        ) -> BoxFuture<Result<RpcResponse<Vec<Option<TransactionStatus>>>>>;
 
         #[rpc(meta, name = "getMaxRetransmitSlot")]
         fn get_max_retransmit_slot(&self, meta: Self::Metadata) -> Result<Slot>;
@@ -3158,22 +3160,27 @@ pub mod rpc_full {
             meta: Self::Metadata,
             signature_strs: Vec<String>,
             config: Option<RpcSignatureStatusConfig>,
-        ) -> Result<RpcResponse<Vec<Option<TransactionStatus>>>> {
+        ) -> BoxFuture<Result<RpcResponse<Vec<Option<TransactionStatus>>>>> {
             debug!(
                 "get_signature_statuses rpc request received: {:?}",
                 signature_strs.len()
             );
             if signature_strs.len() > MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS {
-                return Err(Error::invalid_params(format!(
+                return Box::pin(future::err(Error::invalid_params(format!(
                     "Too many inputs provided; max {}",
                     MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS
-                )));
+                ))));
             }
             let mut signatures: Vec<Signature> = vec![];
             for signature_str in signature_strs {
-                signatures.push(verify_signature(&signature_str)?);
+                match verify_signature(&signature_str) {
+                    Ok(signature) => {
+                        signatures.push(signature);
+                    }
+                    Err(err) => return Box::pin(future::err(err)),
+                }
             }
-            meta.get_signature_statuses(signatures, config)
+            Box::pin(async move { meta.get_signature_statuses(signatures, config).await })
         }
 
         fn get_max_retransmit_slot(&self, meta: Self::Metadata) -> Result<Slot> {
