@@ -51,8 +51,8 @@ pub trait Rox: Debug + Send + Sync {
     fn insert(&self, pubkey: &Pubkey, value: &AccountMapEntrySerialize);
     fn update(&self, pubkey: &Pubkey, value: &AccountMapEntrySerialize);
     fn delete(&self, pubkey: &Pubkey);
-    fn addref(&self, pubkey: &Pubkey, info: &SlotList<AccountInfo>);
-    fn unref(&self, pubkey: &Pubkey, info: &SlotList<AccountInfo>);
+    fn addref(&self, pubkey: &Pubkey, ref_count: RefCount, info: &SlotList<AccountInfo>);
+    fn unref(&self, pubkey: &Pubkey, ref_count: RefCount, info: &SlotList<AccountInfo>);
     fn keys(&self, range: Option<&PubkeyRange>) -> Option<Vec<Pubkey>>;
     fn values(&self, range: Option<&PubkeyRange>)
         -> Option<Vec<AccountMapEntrySerialize>>;
@@ -80,6 +80,129 @@ impl Guts for AccountInfo {
     {
         info.clone()
     }
+}
+
+#[repr(C)]
+struct Header {
+    ref_count: u64,
+    len: u64,
+}
+
+#[repr(C)]
+struct PerSlot {
+    slot: Slot,
+    info: AccountInfo,
+}
+
+#[derive(Debug)]
+pub struct Sled {
+    pub db: sled::Db,
+}
+impl Sled {
+    pub fn new() -> Self {
+        let db: sled::Db = sled::open("my_db").unwrap();
+        Self {
+            db
+        }
+    }
+
+    fn get(data: &[u8]) -> AccountMapEntrySerialize {
+        let after_header_start = std::mem::size_of::<Header>();
+        let header: &Header =
+        unsafe {
+            let item = data[0..after_header_start].as_ptr() as *const Header;
+            &*item
+        };
+        let per_slot_size = std::mem::size_of::<PerSlot>();
+        let mut start = after_header_start;
+
+        let mut slot_list = SlotList::default();
+        for i in 0..header.len {
+            let end = start + per_slot_size;
+            let per_slot: &PerSlot = unsafe {
+                let item = (&data[start..end]).as_ptr() as *const PerSlot;
+                &*item
+            };
+            start = end;
+            slot_list.push((per_slot.slot, per_slot.info.clone()));
+        }
+
+        AccountMapEntrySerialize{
+            slot_list,
+            ref_count: header.ref_count,
+        }
+    }
+    fn set(data: &AccountMapEntrySerialize) -> Vec<u8> {
+        let after_header_start = std::mem::size_of::<Header>();
+        let per_slot_size = std::mem::size_of::<PerSlot>();
+/*
+        let items = data.len();
+        let sz = after_header_start + items * per_slot_size;
+        let mut data = vec![0u8; sz];
+
+        let header: &mut Header =
+        unsafe {
+            let item = data[0..after_header_start].as_ptr() as *mut Header;
+            &mut *item
+        };
+        header.len = items;
+        header.ref_count = data.ref_count;
+
+        let mut start = after_header_start;
+        for item in data.slot_list.iter() {
+            let end = start + per_slot_size;
+            let per_slot: &mut PerSlot = unsafe {
+                let item = (&data[start..end]).as_ptr() as *mut PerSlot;
+                &mut *item
+            };
+            start = end;
+            per_slot.slot = item.slot;
+            per_slot.info = item.info.clone();
+        }
+
+        data
+        */
+        panic!("");
+    }
+}
+
+use sled::IVec;
+impl Rox for Sled {
+    fn get(&self, pubkey: &Pubkey) -> Option<AccountMapEntrySerialize> {
+        let get = self.db.get(pubkey.as_ref());
+        if get.is_err() {
+            error!("get returned err");
+            return None;
+        }
+        let get = get.unwrap();
+        get.and_then(|item| {
+            let item: IVec = item;
+            let slice: &[u8] = item.borrow();
+            Some(Sled::get(slice))
+        })
+    }
+    fn insert(&self, pubkey: &Pubkey, value: &AccountMapEntrySerialize) {
+        let value = 
+        self.db.insert(pubkey.as_ref(), Sled::set(value));
+    }
+    fn update(&self, pubkey: &Pubkey, value: &AccountMapEntrySerialize) {
+        panic!("");
+    }
+    fn delete(&self, pubkey: &Pubkey) {
+        panic!("");
+    }
+    fn addref(&self, pubkey: &Pubkey, ref_count: RefCount, info: &SlotList<AccountInfo>) {
+        panic!("");
+    }
+    fn unref(&self, pubkey: &Pubkey, ref_count: RefCount, info: &SlotList<AccountInfo>) {
+        panic!("");
+    }
+    fn keys(&self, range: Option<&PubkeyRange>) -> Option<Vec<Pubkey>> {
+        panic!("");
+    }
+    fn values(&self, range: Option<&PubkeyRange>) -> Option<Vec<AccountMapEntrySerialize>> {
+        panic!("");
+    }    
 }
 
 pub type SlotT<T> = (Slot, T);
@@ -355,10 +478,10 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
             self.disk.get(key)
         }
     }
-    pub fn addref(&self, key: &Pubkey, slot_list: &Vec<SlotT<V>>) {
+    pub fn addref(&self, key: &Pubkey, ref_count: RefCount, slot_list: &Vec<SlotT<V>>) {
         // todo: measure this and unref
         if use_rox {
-            self.db.read().unwrap().as_ref().unwrap().addref(key, &V::get_info2(&slot_list));
+            self.db.read().unwrap().as_ref().unwrap().addref(key, ref_count, &V::get_info2(&slot_list));
             return;
             }
         let ix = self.disk.bucket_ix(key);
@@ -375,9 +498,9 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
         }
     }
 
-    pub fn unref(&self, key: &Pubkey, slot_list: &Vec<SlotT<V>>) {
+    pub fn unref(&self, key: &Pubkey, ref_count: RefCount, slot_list: &Vec<SlotT<V>>) {
         if use_rox {
-            self.db.read().unwrap().as_ref().unwrap().unref(key, &V::get_info2(&slot_list));
+            self.db.read().unwrap().as_ref().unwrap().unref(key, ref_count, &V::get_info2(&slot_list));
             return;
             }
         let ix = self.disk.bucket_ix(key);
@@ -577,12 +700,12 @@ impl<'a, V: 'a + Clone + Debug + Guts> HybridOccupiedEntry<'a, V> {
     }
     pub fn addref(&mut self) {
         self.entry.ref_count += 1;
-        let result = self.map.disk.addref(&self.pubkey, &self.entry.slot_list);
+        let result = self.map.disk.addref(&self.pubkey, self.entry.ref_count, &self.entry.slot_list);
         //error!("addref: {}, {}, {:?}", self.pubkey, self.entry.ref_count(), result);
     }
     pub fn unref(&mut self) {
         self.entry.ref_count -= 1;
-        let result = self.map.disk.unref(&self.pubkey, &self.entry.slot_list);
+        let result = self.map.disk.unref(&self.pubkey, self.entry.ref_count ,&self.entry.slot_list);
         //error!("addref: {}, {}, {:?}", self.pubkey, self.entry.ref_count(), result);
     }
     /*

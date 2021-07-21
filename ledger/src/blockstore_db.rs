@@ -1359,6 +1359,7 @@ fn get_cf_options<C: 'static + Column + ColumnName>(
 ) -> Options {
     let mut options = Options::default();
     // 256 * 8 = 2GB. 6 of these columns should take at most 12GB of RAM
+    // tune rocks here
     options.set_max_write_buffer_number(8);
     options.set_write_buffer_size(MAX_WRITE_BUFFER_SIZE as usize);
     let file_num_compaction_trigger = 4;
