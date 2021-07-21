@@ -1646,8 +1646,10 @@ export type GetProgramAccountsFilter = MemcmpFilter | DataSizeFilter;
 export type GetProgramAccountsConfig = {
   /** Optional commitment level */
   commitment?: Commitment;
-  /** Optional encoding for account data (default base64) */
-  encoding?: 'base64' | 'jsonParsed';
+  /** Optional encoding for account data (default base64)
+   * To use "jsonParsed" encoding, please refer to `getParsedProgramAccounts` in connection.ts
+   * */
+  encoding?: 'base64';
   /** Optional data slice to limit the returned account data */
   dataSlice?: DataSlice;
   /** Optional array of filters to apply to accounts */
