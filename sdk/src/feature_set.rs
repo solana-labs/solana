@@ -171,6 +171,10 @@ pub mod merge_nonce_error_into_system_error {
     solana_sdk::declare_id!("21AWDosvp3pBamFW91KB35pNoaoZVTM7ess8nr2nt53B");
 }
 
+pub mod spl_token_v2_set_authority_fix {
+    solana_sdk::declare_id!("FToKNBYyiF4ky9s8WsmLBXHCht17Ek7RXaLZGHzzQhJ1");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -212,7 +216,12 @@ lazy_static! {
         (neon_evm_compute_budget::id(), "bump neon_evm's compute budget"),
         (rent_for_sysvars::id(), "collect rent from accounts owned by sysvars"),
         (libsecp256k1_0_5_upgrade_enabled::id(), "upgrade libsecp256k1 to v0.5.0"),
+<<<<<<< HEAD
         (merge_nonce_error_into_system_error::id(), "merge NonceError into SystemError"),
+=======
+        (tx_wide_compute_cap::id(), "Transaction wide compute cap"),
+        (spl_token_v2_set_authority_fix::id(), "spl-token set_authority fix"),
+>>>>>>> 51f3b9aa7 (feature: add new token program feature (#18780))
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
