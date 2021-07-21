@@ -9,7 +9,7 @@ use {
         send_transaction_service::{SendTransactionService, TransactionInfo},
     },
     bincode::{config::Options, serialize},
-    jsonrpc_core::{types::error, Error, Metadata, Result},
+    jsonrpc_core::{types::error, BoxFuture, Error, Metadata, Result},
     jsonrpc_derive::rpc,
     serde::{Deserialize, Serialize},
     solana_account_decoder::{
@@ -1149,7 +1149,7 @@ impl JsonRpcRequestProcessor {
         Ok(blocks)
     }
 
-    pub fn get_block_time(&self, slot: Slot) -> Result<Option<UnixTimestamp>> {
+    pub async fn get_block_time(&self, slot: Slot) -> Result<Option<UnixTimestamp>> {
         if slot
             <= self
                 .block_commitment_cache
@@ -1161,9 +1161,7 @@ impl JsonRpcRequestProcessor {
             self.check_blockstore_root(&result, slot)?;
             if result.is_err() || matches!(result, Ok(None)) {
                 if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
-                    let bigtable_result = self
-                        .runtime
-                        .block_on(bigtable_ledger_storage.get_confirmed_block(slot));
+                    let bigtable_result = bigtable_ledger_storage.get_confirmed_block(slot).await;
                     self.check_bigtable_result(&bigtable_result)?;
                     return Ok(bigtable_result
                         .ok()
@@ -3006,8 +3004,11 @@ pub mod rpc_full {
         ) -> Result<Option<UiConfirmedBlock>>;
 
         #[rpc(meta, name = "getBlockTime")]
-        fn get_block_time(&self, meta: Self::Metadata, slot: Slot)
-            -> Result<Option<UnixTimestamp>>;
+        fn get_block_time(
+            &self,
+            meta: Self::Metadata,
+            slot: Slot,
+        ) -> BoxFuture<Result<Option<UnixTimestamp>>>;
 
         #[rpc(meta, name = "getBlocks")]
         fn get_blocks(
@@ -3448,8 +3449,8 @@ pub mod rpc_full {
             &self,
             meta: Self::Metadata,
             slot: Slot,
-        ) -> Result<Option<UnixTimestamp>> {
-            meta.get_block_time(slot)
+        ) -> BoxFuture<Result<Option<UnixTimestamp>>> {
+            Box::pin(async move { meta.get_block_time(slot).await })
         }
 
         fn get_transaction(
