@@ -6311,6 +6311,7 @@ impl AccountsDb {
         stored_sizes_and_counts: HashMap<usize, (usize, usize)>,
         timings: &mut GenerateIndexTimings,
     ) {
+        assert!(stored_sizes_and_counts.is_empty());
         // store count and size for each storage
         let mut storage_size_storages_time = Measure::start("storage_size_storages");
         for slot_stores in self.storage.0.iter() {

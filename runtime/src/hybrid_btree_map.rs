@@ -753,6 +753,7 @@ impl<V: 'static + Clone + Debug + Guts> HybridBTreeMap<V> {
             .for_each(|ix| values.append(&mut self.disk.values(ix, None::<&Range<Pubkey>>).unwrap_or_default()));
         //error!("getting values: {}, bin: {}, bins: {}, start: {}, end: {}", values.len(), self.bin_index, self.bins, start, end);
         //keys.sort_unstable();
+        error!("getting values: {}", values.len());
         Values { values, index: 0 }
     }
     pub fn len_inaccurate(&self) -> usize {
