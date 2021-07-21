@@ -7,7 +7,7 @@ use crate::{
     completed_data_sets_service::CompletedDataSetsSender,
     outstanding_requests::OutstandingRequests,
     repair_response,
-    repair_service::{OutstandingRepairs, RepairInfo, RepairService},
+    repair_service::{OutstandingShredRepairs, RepairInfo, RepairService},
     result::{Error, Result},
 };
 use crossbeam_channel::{
@@ -125,7 +125,7 @@ fn run_check_duplicate(
 }
 
 fn verify_repair(
-    outstanding_requests: &mut OutstandingRepairs,
+    outstanding_requests: &mut OutstandingShredRepairs,
     shred: &Shred,
     repair_meta: &Option<RepairMeta>,
 ) -> bool {
@@ -144,7 +144,7 @@ fn verify_repair(
 fn prune_shreds_invalid_repair(
     shreds: &mut Vec<Shred>,
     repair_infos: &mut Vec<Option<RepairMeta>>,
-    outstanding_requests: &Arc<RwLock<OutstandingRepairs>>,
+    outstanding_requests: &Arc<RwLock<OutstandingShredRepairs>>,
 ) {
     assert_eq!(shreds.len(), repair_infos.len());
     let mut i = 0;
@@ -175,7 +175,7 @@ fn run_insert<F>(
     handle_duplicate: F,
     metrics: &mut BlockstoreInsertionMetrics,
     completed_data_sets_sender: &CompletedDataSetsSender,
-    outstanding_requests: &Arc<RwLock<OutstandingRepairs>>,
+    outstanding_requests: &Arc<RwLock<OutstandingShredRepairs>>,
 ) -> Result<()>
 where
     F: Fn(Shred),
@@ -372,7 +372,7 @@ impl WindowService {
             + std::marker::Send
             + std::marker::Sync,
     {
-        let outstanding_requests: Arc<RwLock<OutstandingRepairs>> =
+        let outstanding_requests: Arc<RwLock<OutstandingShredRepairs>> =
             Arc::new(RwLock::new(OutstandingRequests::default()));
 
         let bank_forks = repair_info.bank_forks.clone();
@@ -468,7 +468,7 @@ impl WindowService {
         insert_receiver: CrossbeamReceiver<(Vec<Shred>, Vec<Option<RepairMeta>>)>,
         check_duplicate_sender: CrossbeamSender<Shred>,
         completed_data_sets_sender: CompletedDataSetsSender,
-        outstanding_requests: Arc<RwLock<OutstandingRepairs>>,
+        outstanding_requests: Arc<RwLock<OutstandingShredRepairs>>,
     ) -> JoinHandle<()> {
         let exit = exit.clone();
         let blockstore = blockstore.clone();
@@ -817,7 +817,7 @@ mod test {
             _from_addr,
             nonce: 0,
         };
-        let outstanding_requests = Arc::new(RwLock::new(OutstandingRepairs::default()));
+        let outstanding_requests = Arc::new(RwLock::new(OutstandingShredRepairs::default()));
         let repair_type = ShredRepairType::Orphan(9);
         let nonce = outstanding_requests
             .write()
