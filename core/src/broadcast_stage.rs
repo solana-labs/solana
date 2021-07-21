@@ -22,7 +22,7 @@ use solana_poh::poh_recorder::WorkingBankEntry;
 use solana_runtime::bank::Bank;
 use solana_sdk::timing::timestamp;
 use solana_sdk::{clock::Slot, pubkey::Pubkey};
-use solana_streamer::{sendmmsg::send_mmsg, socket::is_global};
+use solana_streamer::sendmmsg::send_mmsg;
 use std::sync::atomic::AtomicU64;
 use std::{
     collections::HashMap,
@@ -400,11 +400,7 @@ pub fn broadcast_shreds(
         .par_iter()
         .filter_map(|shred| {
             let node = cluster_nodes.get_broadcast_peer(shred.seed())?;
-            if is_global(&node.tvu) {
-                Some((&shred.payload, &node.tvu))
-            } else {
-                None
-            }
+            Some((&shred.payload, &node.tvu))
         })
         .collect();
     shred_select.stop();
