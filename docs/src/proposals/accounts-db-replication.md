@@ -46,7 +46,7 @@ a particular slot, the information provided is consistent with that of its peer 
 for commitment levels confirmed and finalized. For V1, we only support queries at these two
 levels.
 
-### Solana RPC Node
+### Solana Replica Node
 A new node named solana-replica-node will be introduced whose main responsibility is to maintain
 the AccountsDb replica. The RPC node or replica node is used interchangeably in this document.
 It will be a separate executable from the validator.
