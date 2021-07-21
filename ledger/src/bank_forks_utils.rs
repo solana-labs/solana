@@ -144,9 +144,9 @@ fn load_from_snapshot(
         process_options.shrink_ratio,
         process_options.accounts_db_test_hash_calculation,
         process_options.verify_index,
+        &blockstore.account_index,
     )
     .expect("Load from snapshot failed");
-    deserialized_bank.set_account_index_db(blockstore.account_index.clone());
     if let Some(shrink_paths) = shrink_paths {
         deserialized_bank.set_shrink_paths(shrink_paths);
     }
