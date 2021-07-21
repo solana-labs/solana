@@ -630,7 +630,7 @@ impl<V: 'static + Clone + Debug + Guts> HybridBTreeMap<V> {
             in_memory: BTreeMap::default(),
             disk: bucket_map.clone(),
             bin_index,
-            bins,
+            bins: bucket_map.num_buckets(),
         }
     }
     pub fn new_bucket_map() -> Arc<BucketMapWriteHolder<V>> {
