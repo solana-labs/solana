@@ -362,6 +362,10 @@ impl Rocks {
             ProgramCosts::NAME,
             get_cf_options::<ProgramCosts>(&access_type, &oldest_slot),
         );
+        let account_index_cf_descriptor = ColumnFamilyDescriptor::new(
+            AccountIndex::NAME,
+            get_cf_options::<AccountIndex>(&access_type, &oldest_slot),
+        );
         // Don't forget to add to both run_purge_with_stats() and
         // compact_storage() in ledger/src/blockstore/blockstore_purge.rs!!
 
@@ -387,6 +391,7 @@ impl Rocks {
             (PerfSamples::NAME, perf_samples_cf_descriptor),
             (BlockHeight::NAME, block_height_cf_descriptor),
             (ProgramCosts::NAME, program_costs_cf_descriptor),
+            (AccountIndex::NAME, account_index_cf_descriptor),
         ];
         let cf_names: Vec<_> = cfs.iter().map(|c| c.0).collect();
 
