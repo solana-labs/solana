@@ -20,12 +20,12 @@ metadata information about the replication and the accounts update from the vali
 The main validator supports only one replica node. A replica node can relay the
 information to 1 or more other replicas forming a replication tree.
 
-At the initial start of the replica node, it downloads the latest snapspshot
+At the initial start of the replica node, it downloads the latest snapshot
 from a validator and constructs the bank and AccountsDb from it. After that, it queries
-its main validator for new slots and request the validator to send the updated
+its main validator for new slots and requests the validator to send the updated
 accounts for that slot and update to its own AccountsDb.
 
-The same RPC replication mechansim can be used between a replica to another replica.
+The same RPC replication mechanism can be used between a replica to another replica.
 This requires the replica to serve both the client and server in the replication model.
 
 On the client RPC serving side, `JsonRpcAccountsService` is responsible for serving
@@ -36,80 +36,76 @@ The replica will also take snapshots periodically so that it can start quickly a
 a restart if the snapshot is not too old.
 
 ## Detailed Solution
-The following sections provides more details of the design.
+The following sections provide more details of the design.
 
 ### Consistency Model
 The AccountsDb information is replicated asynchronously from the main validator to the replica.
 When a query against the replica's AccountsDb is made, the replica may not have the latest
-information of the latest slot. In this regard, it will be eventually consistent. However, for
-a particular slot, the information provided is consistent with the that of its peer validator
+information of the latest slot. In this regard, it will eventually be consistent. However, for
+a particular slot, the information provided is consistent with that of its peer validator
 for commitment levels confirmed and finalized. For V1, we only support queries at these two
 levels.
 
 ### Solana RPC Node
-A new node named solana-rpc-node will be introduced whose main responsibility is to maintain
-the AccountsDb replica. The RPC node or replica node is used interchangebly in this document.
-It will be a separate exectuable from the validator.
+A new node named solana-replica-node will be introduced whose main responsibility is to maintain
+the AccountsDb replica. The RPC node or replica node is used interchangeably in this document.
+It will be a separate executable from the validator.
 
-The replica consists of the following major components.
+The replica consists of the following major components:
 
-The `ReplRpcUpdatedSlotsRequestor`, this service is responsible for peridically sending the
-request `ReplRpcUpdatedSlotsRequest` to its peer validator or replica for the latest slots.
+The `ReplicaUpdatedSlotsRequestor`: this service is responsible for periodically sending the
+request `ReplicaUpdatedSlotsRequest` to its peer validator or replica for the latest slots.
 It specifies the latest slot (last_replicated_slot) for which the replica has already
 fetched the accounts information for. This maintains the ReplWorkingSlotSet and manages
 the lifecycle of BankForks, BlockCommitmentCache (for the highest confirmed slot) and
 the optimistically confirmed bank.
 
-The `ReplRpcUpdatedSlotsServer`, this service is responsible for serving the
-`ReplRpcUpdatedSlotsRequest` and sends the `ReplRpcUpdatedSlotsResponse` back to the requestor.
+The `ReplicaUpdatedSlotsServer`: this service is responsible for serving the
+`ReplicaUpdatedSlotsRequest` and sends the `ReplicaUpdatedSlotsResponse` back to the requestor.
 The response consists of a vector of new slots the validator knows of which is later than the
-specified last_replicated_slot. This services also runs in the main validator. This service
+specified last_replicated_slot. This service also runs in the main validator. This service
 gets the slots for replication from the BankForks, BlockCommitmentCache and OptimiscallyConfirmBank.
 
-The `ReplRpcAccountsRequestor`, this service is responsible for sending the request
-`ReplRpcAccountsRequest` to its peer validator or replica for the `ReplAccountInfo` for a
+The `ReplicaAccountsRequestor`: this service is responsible for sending the request
+`ReplicaAccountsRequest` to its peer validator or replica for the `ReplAccountInfo` for a
 slot for which it has not completed accounts db replication. The `ReplAccountInfo` contains
 the `ReplAccountMeta`, Hash and the AccountData. The `ReplAccountMeta` contains info about
 the existing `AccountMeta` in addition to the account data length in bytes.
 
-The `ReplRpcAccountsServer`, this service is reponsible for serving the `ReplRpcAccountsRequest`
-and sends `ReplRpcAccountsResponse` to the requestor. The response contains the count of the
+The `ReplicaAccountsServer`: this service is reponsible for serving the `ReplicaAccountsRequest`
+and sends `ReplicaAccountsResponse` to the requestor. The response contains the count of the
 ReplAccountInfo and the vector of ReplAccountInfo. This service runs both in the validator
 and the replica relaying replication information. The server can stream the account information
 from its AccountCache or from the storage if already flushed. This is similar to how a snapshot
 package is created from the AccountsDb with the difference that the storage does not need to be
 flushed to the disk before streaming to the client. If the account data is in the cache, it can
-be directly streamed. Care must be taken to avoid the account data for a slot get cleaned while
+be directly streamed. Care must be taken to avoid account data for a slot being cleaned while
 serving the streaming. When attempting a replication of a slot, if the slot is already cleaned
-up with accounts data cleaned as result of update in later rooted slots, the replica should 
+up with accounts data cleaned as result of update in later rooted slots, the replica should
 forsake this slot and try the later uncleaned root slot.
 
 During replication we also need to replicate the information of accounts
-who have been cleaned up due to zero lamports, i.e. we need to be able to tell the difference
-for the account in a given slot: it is not updated and hence no storage entry in that slot and
-the accounts have 0 lamports and have been cleaned up through the history. We may record this
-via some "Tombstone" mechanism -- recording the dead accounts cleaned up for a slot. The
-tombstones themselves can be removed after exceeding retention period expressed as epochs.
-And attempt to replicate slots with tombstones removed will fail and the replica should skip
-this slot and try later ones.
+that have been cleaned up due to zero lamports, i.e. we need to be able to tell the difference
+between an account in a given slot which was not updated and hence has no storage entry in that slot, and one that holds 0 lamports and has been cleaned up through the history. We may record this via
+some "Tombstone" mechanism -- recording the dead accounts cleaned up fora slot. The tombstones themselves can be removed after exceeding the retention period expressed as epochs. Any attempt to replicate slots with tombstones removed will fail and the replica should skip this slot and try later ones.
 
-The `JsonRpcAccountsService`, this is the RPC service serving client requests for account
+The `JsonRpcAccountsService`: this is the RPC service serving client requests for account
 information. The existing JsonRpcService serves other client calls than AccountsDb ones.
 The replica node only serves the AccountsDb calls.
 
 The existing JsonRpcService requires `BankForks`, `OptimisticallyConfirmedBank` and
-`BlockCommitmentCache` to load the Bank. The JsonRpcAccountsService will need to use 
-information obtained from ReplRpcUpdatedSlotsResponse to construct the AccountsDb. Question,
+`BlockCommitmentCache` to load the Bank. The JsonRpcAccountsService will need to use
+information obtained from ReplicaUpdatedSlotsResponse to construct the AccountsDb. Question,
 do we still need the Bank in the replica?
 
 
-The `AccountsBackgroundService`, this service also runs in the replica which is responsible
+The `AccountsBackgroundService`: this service also runs in the replica which is responsible
 for taking snapshots periodically and shrinking the AccountsDb and doing accounts cleaning.
 The existing code also uses BankForks which we need to keep in the replica.
 
 ### Compatibility Consideration
 
-For protocol compatiblilty considerations, all the requests have the replication version which is
+For protocol compatibility considerations, all the requests have the replication version which is
 initially set to 1. Alternatively, we can use the validator's version. The RPC server side
 shall check the request version and fail if it is not supported.
 
@@ -121,7 +117,7 @@ configured with the validator which can serve its requests.
 
 ### Fault Tolerance
 The main responsibility of making sure the replication is tolerant of faults lies with the replica.
-In case of request failures, the replica shall retry the requests. 
+In case of request failures, the replica shall retry the requests.
 
 
 ### Interface
@@ -152,7 +148,6 @@ Following are the client RPC APIs supported by the replica node in JsonRpcAccoun
 Following APIs are not included:
 
 - getInflationReward
-- getEpochSchedule
 - getClusterNodes
 - getRecentPerformanceSamples
 - getGenesisHash
@@ -177,11 +172,11 @@ Following APIs are not included:
 Action Items
 
 1. Build the replica framework and executable
-2. Integrate snapshot restore code for bootstrap the accountsdb.
-3. Develop the ReplRpcUpdatedSlotsRequestor and ReplRpcUpdatedSlotsServer interface code
-4. Develop the ReplRpcUpdatedSlotsRequestor and ReplRpcUpdatedSlotsServer detailed implementations: managing the ReplEligibleSlotSet lifecycle: adding new roots and deleting root to it. And interfaces managing ReplWorkingSlotSet interface: adding and removing. Develop component synthesising information from BankForks, BlockCommitmentCache and OptimistcallyConfirmedBank on the server side and maintaining information on the client side. 
-5. Develop the interface code for ReplRpcAccountsRequestor and ReplRpcAccountsServer
-6. Develop detailed implementation for ReplRpcAccountsRequestor and ReplRpcAccountsServer and develop the replication account storage serializer and deserializer.
+2. Integrate snapshot restore code for bootstrap the AccountsDb.
+3. Develop the ReplicaUpdatedSlotsRequestor and ReplicaUpdatedSlotsServer interface code
+4. Develop the ReplicaUpdatedSlotsRequestor and ReplicaUpdatedSlotsServer detailed implementations: managing the ReplEligibleSlotSet lifecycle: adding new roots and deleting root to it. And interfaces managing ReplWorkingSlotSet interface: adding and removing. Develop component synthesising information from BankForks, BlockCommitmentCache and OptimistcallyConfirmedBank on the server side and maintaining information on the client side.
+5. Develop the interface code for ReplicaAccountsRequestor and ReplicaAccountsServer
+6. Develop detailed implementation for ReplicaAccountsRequestor and ReplicaAccountsServer and develop the replication account storage serializer and deserializer.
 7. Develop the interface code JsonRpcAccountsService
 8. Detailed Implementation of JsonRpcAccountsService, refactor code to share with part of JsonRpcService.
 9. Integrate with the AccountsBackgroundService in the replica for shrinking, cleaning, snapshotting.
