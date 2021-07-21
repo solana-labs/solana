@@ -1,73 +1,77 @@
 #![allow(clippy::integer_arithmetic)]
-use assert_matches::assert_matches;
-use crossbeam_channel::{unbounded, Receiver};
-use gag::BufferRedirect;
-use log::*;
-use serial_test::serial;
-use solana_client::{
-    pubsub_client::PubsubClient,
-    rpc_client::RpcClient,
-    rpc_config::{RpcProgramAccountsConfig, RpcSignatureSubscribeConfig},
-    rpc_response::RpcSignatureResult,
-    thin_client::{create_client, ThinClient},
+use {
+    assert_matches::assert_matches,
+    crossbeam_channel::{unbounded, Receiver},
+    gag::BufferRedirect,
+    log::*,
+    serial_test::serial,
+    solana_client::{
+        pubsub_client::PubsubClient,
+        rpc_client::RpcClient,
+        rpc_config::{RpcProgramAccountsConfig, RpcSignatureSubscribeConfig},
+        rpc_response::RpcSignatureResult,
+        thin_client::{create_client, ThinClient},
+    },
+    solana_core::{
+        broadcast_stage::{
+            broadcast_duplicates_run::BroadcastDuplicatesConfig, BroadcastStageType,
+        },
+        consensus::{FileTowerStorage, Tower, SWITCH_FORK_THRESHOLD, VOTE_THRESHOLD_DEPTH},
+        optimistic_confirmation_verifier::OptimisticConfirmationVerifier,
+        replay_stage::DUPLICATE_THRESHOLD,
+        validator::ValidatorConfig,
+    },
+    solana_download_utils::download_snapshot,
+    solana_gossip::{
+        cluster_info::VALIDATOR_PORT_RANGE,
+        crds::Cursor,
+        gossip_service::{self, discover_cluster},
+    },
+    solana_ledger::{
+        ancestor_iterator::AncestorIterator,
+        blockstore::{Blockstore, PurgeType},
+        blockstore_db::AccessType,
+        leader_schedule::FixedSchedule,
+        leader_schedule::LeaderSchedule,
+    },
+    solana_local_cluster::{
+        cluster::{Cluster, ClusterValidatorInfo},
+        cluster_tests,
+        local_cluster::{ClusterConfig, LocalCluster},
+        validator_configs::*,
+    },
+    solana_runtime::{
+        snapshot_config::SnapshotConfig,
+        snapshot_utils::{self, ArchiveFormat},
+    },
+    solana_sdk::{
+        account::AccountSharedData,
+        client::{AsyncClient, SyncClient},
+        clock::{self, Slot, DEFAULT_MS_PER_SLOT, DEFAULT_TICKS_PER_SLOT, MAX_RECENT_BLOCKHASHES},
+        commitment_config::CommitmentConfig,
+        epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
+        genesis_config::ClusterType,
+        hash::Hash,
+        poh_config::PohConfig,
+        pubkey::Pubkey,
+        signature::{Keypair, Signer},
+        system_program, system_transaction,
+    },
+    solana_streamer::socket::SocketAddrSpace,
+    solana_vote_program::{vote_state::MAX_LOCKOUT_HISTORY, vote_transaction},
+    std::{
+        collections::{BTreeSet, HashMap, HashSet},
+        fs,
+        io::Read,
+        iter,
+        path::{Path, PathBuf},
+        sync::atomic::{AtomicBool, Ordering},
+        sync::Arc,
+        thread::{sleep, Builder, JoinHandle},
+        time::{Duration, Instant},
+    },
+    tempfile::TempDir,
 };
-use solana_core::{
-    broadcast_stage::{broadcast_duplicates_run::BroadcastDuplicatesConfig, BroadcastStageType},
-    consensus::{Tower, SWITCH_FORK_THRESHOLD, VOTE_THRESHOLD_DEPTH},
-    optimistic_confirmation_verifier::OptimisticConfirmationVerifier,
-    replay_stage::DUPLICATE_THRESHOLD,
-    validator::ValidatorConfig,
-};
-use solana_download_utils::download_snapshot;
-use solana_gossip::{
-    cluster_info::VALIDATOR_PORT_RANGE,
-    crds::Cursor,
-    gossip_service::{self, discover_cluster},
-};
-use solana_ledger::{
-    ancestor_iterator::AncestorIterator,
-    blockstore::{Blockstore, PurgeType},
-    blockstore_db::AccessType,
-    leader_schedule::FixedSchedule,
-    leader_schedule::LeaderSchedule,
-};
-use solana_local_cluster::{
-    cluster::{Cluster, ClusterValidatorInfo},
-    cluster_tests,
-    local_cluster::{ClusterConfig, LocalCluster},
-    validator_configs::*,
-};
-use solana_runtime::{
-    snapshot_config::SnapshotConfig,
-    snapshot_utils::{self, ArchiveFormat},
-};
-use solana_sdk::{
-    account::AccountSharedData,
-    client::{AsyncClient, SyncClient},
-    clock::{self, Slot, DEFAULT_MS_PER_SLOT, DEFAULT_TICKS_PER_SLOT, MAX_RECENT_BLOCKHASHES},
-    commitment_config::CommitmentConfig,
-    epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
-    genesis_config::ClusterType,
-    hash::Hash,
-    poh_config::PohConfig,
-    pubkey::Pubkey,
-    signature::{Keypair, Signer},
-    system_program, system_transaction,
-};
-use solana_streamer::socket::SocketAddrSpace;
-use solana_vote_program::{vote_state::MAX_LOCKOUT_HISTORY, vote_transaction};
-use std::{
-    collections::{BTreeSet, HashMap, HashSet},
-    fs,
-    io::Read,
-    iter,
-    path::{Path, PathBuf},
-    sync::atomic::{AtomicBool, Ordering},
-    sync::Arc,
-    thread::{sleep, Builder, JoinHandle},
-    time::{Duration, Instant},
-};
-use tempfile::TempDir;
 
 const RUST_LOG_FILTER: &str =
     "error,solana_core::replay_stage=warn,solana_local_cluster=info,local_cluster=info";
@@ -2484,6 +2488,8 @@ fn test_validator_saves_tower() {
         .ledger_path
         .clone();
 
+    let file_tower_storage = FileTowerStorage::new(ledger_path.clone());
+
     // Wait for some votes to be generated
     let mut last_replayed_root;
     loop {
@@ -2500,7 +2506,7 @@ fn test_validator_saves_tower() {
 
     // Stop validator and check saved tower
     let validator_info = cluster.exit_node(&validator_id);
-    let tower1 = Tower::restore(&ledger_path, &validator_id).unwrap();
+    let tower1 = Tower::restore(&file_tower_storage, &validator_id).unwrap();
     trace!("tower1: {:?}", tower1);
     assert_eq!(tower1.root(), 0);
 
@@ -2528,14 +2534,16 @@ fn test_validator_saves_tower() {
         .get_slot_with_commitment(CommitmentConfig::processed())
         .unwrap();
     let validator_info = cluster.exit_node(&validator_id);
-    let tower2 = Tower::restore(&ledger_path, &validator_id).unwrap();
+    let tower2 = Tower::restore(&file_tower_storage, &validator_id).unwrap();
     trace!("tower2: {:?}", tower2);
     assert_eq!(tower2.root(), last_replayed_root);
     last_replayed_root = recent_slot;
 
     // Rollback saved tower to `tower1` to simulate a validator starting from a newer snapshot
     // without having to wait for that snapshot to be generated in this test
-    tower1.save(&validator_identity_keypair).unwrap();
+    tower1
+        .save(&file_tower_storage, &validator_identity_keypair)
+        .unwrap();
 
     cluster.restart_node(&validator_id, validator_info, SocketAddrSpace::Unspecified);
     let validator_client = cluster.get_validator_client(&validator_id).unwrap();
@@ -2560,7 +2568,7 @@ fn test_validator_saves_tower() {
 
     // Check the new root is reflected in the saved tower state
     let mut validator_info = cluster.exit_node(&validator_id);
-    let tower3 = Tower::restore(&ledger_path, &validator_id).unwrap();
+    let tower3 = Tower::restore(&file_tower_storage, &validator_id).unwrap();
     trace!("tower3: {:?}", tower3);
     assert!(tower3.root() > last_replayed_root);
 
@@ -2588,7 +2596,7 @@ fn test_validator_saves_tower() {
 
     cluster.close_preserve_ledgers();
 
-    let tower4 = Tower::restore(&ledger_path, &validator_id).unwrap();
+    let tower4 = Tower::restore(&file_tower_storage, &validator_id).unwrap();
     trace!("tower4: {:?}", tower4);
     // should tower4 advance 1 slot compared to tower3????
     assert_eq!(tower4.root(), tower3.root() + 1);
@@ -2606,8 +2614,10 @@ fn purge_slots(blockstore: &Blockstore, start_slot: Slot, slot_count: Slot) {
     blockstore.purge_slots(start_slot, start_slot + slot_count, PurgeType::Exact);
 }
 
-fn restore_tower(ledger_path: &Path, node_pubkey: &Pubkey) -> Option<Tower> {
-    let tower = Tower::restore(ledger_path, node_pubkey);
+fn restore_tower(tower_path: &Path, node_pubkey: &Pubkey) -> Option<Tower> {
+    let file_tower_storage = FileTowerStorage::new(tower_path.to_path_buf());
+
+    let tower = Tower::restore(&file_tower_storage, node_pubkey);
     if let Err(tower_err) = tower {
         if tower_err.is_file_missing() {
             return None;
@@ -2616,19 +2626,20 @@ fn restore_tower(ledger_path: &Path, node_pubkey: &Pubkey) -> Option<Tower> {
         }
     }
     // actually saved tower must have at least one vote.
-    Tower::restore(ledger_path, node_pubkey).ok()
+    Tower::restore(&file_tower_storage, node_pubkey).ok()
 }
 
-fn last_vote_in_tower(ledger_path: &Path, node_pubkey: &Pubkey) -> Option<(Slot, Hash)> {
-    restore_tower(ledger_path, node_pubkey).map(|tower| tower.last_voted_slot_hash().unwrap())
+fn last_vote_in_tower(tower_path: &Path, node_pubkey: &Pubkey) -> Option<(Slot, Hash)> {
+    restore_tower(tower_path, node_pubkey).map(|tower| tower.last_voted_slot_hash().unwrap())
 }
 
-fn root_in_tower(ledger_path: &Path, node_pubkey: &Pubkey) -> Option<Slot> {
-    restore_tower(ledger_path, node_pubkey).map(|tower| tower.root())
+fn root_in_tower(tower_path: &Path, node_pubkey: &Pubkey) -> Option<Slot> {
+    restore_tower(tower_path, node_pubkey).map(|tower| tower.root())
 }
 
-fn remove_tower(ledger_path: &Path, node_pubkey: &Pubkey) {
-    fs::remove_file(Tower::get_filename(ledger_path, node_pubkey)).unwrap();
+fn remove_tower(tower_path: &Path, node_pubkey: &Pubkey) {
+    let file_tower_storage = FileTowerStorage::new(tower_path.to_path_buf());
+    fs::remove_file(file_tower_storage.filename(node_pubkey)).unwrap();
 }
 
 // A bit convoluted test case; but this roughly follows this test theoretical scenario:

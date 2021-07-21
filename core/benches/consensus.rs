@@ -3,48 +3,49 @@
 extern crate solana_core;
 extern crate test;
 
-use solana_core::{consensus::Tower, vote_simulator::VoteSimulator};
-use solana_runtime::bank::Bank;
-use solana_runtime::bank_forks::BankForks;
-use solana_sdk::{
-    pubkey::Pubkey,
-    signature::{Keypair, Signer},
+use {
+    solana_core::{
+        consensus::{FileTowerStorage, Tower},
+        vote_simulator::VoteSimulator,
+    },
+    solana_runtime::bank::Bank,
+    solana_runtime::bank_forks::BankForks,
+    solana_sdk::{
+        pubkey::Pubkey,
+        signature::{Keypair, Signer},
+    },
+    std::{
+        collections::{HashMap, HashSet},
+        sync::Arc,
+    },
+    tempfile::TempDir,
+    test::Bencher,
+    trees::tr,
 };
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
-use tempfile::TempDir;
-use test::Bencher;
-use trees::tr;
 
 #[bench]
 fn bench_save_tower(bench: &mut Bencher) {
     let dir = TempDir::new().unwrap();
-    let path = dir.path();
 
     let vote_account_pubkey = &Pubkey::default();
     let node_keypair = Arc::new(Keypair::new());
     let heaviest_bank = BankForks::new(Bank::default_for_tests()).working_bank();
+    let tower_storage = FileTowerStorage::new(dir.path().to_path_buf());
     let tower = Tower::new(
         &node_keypair.pubkey(),
         vote_account_pubkey,
         0,
         &heaviest_bank,
-        path,
     );
 
     bench.iter(move || {
-        tower.save(&node_keypair).unwrap();
+        tower.save(&tower_storage, &node_keypair).unwrap();
     });
 }
 
 #[bench]
 #[ignore]
 fn bench_generate_ancestors_descendants(bench: &mut Bencher) {
-    let dir = TempDir::new().unwrap();
-    let path = dir.path();
-
     let vote_account_pubkey = &Pubkey::default();
     let node_keypair = Arc::new(Keypair::new());
     let heaviest_bank = BankForks::new(Bank::default_for_tests()).working_bank();
@@ -53,7 +54,6 @@ fn bench_generate_ancestors_descendants(bench: &mut Bencher) {
         vote_account_pubkey,
         0,
         &heaviest_bank,
-        path,
     );
 
     let num_banks = 500;
