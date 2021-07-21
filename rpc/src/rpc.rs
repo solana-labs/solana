@@ -443,10 +443,13 @@ impl JsonRpcRequestProcessor {
                 slot: first_slot_in_epoch,
             })?;
 
-        let first_confirmed_block = if let Ok(Some(first_confirmed_block)) = self.get_block(
-            first_confirmed_block_in_epoch,
-            Some(RpcBlockConfig::rewards_with_commitment(config.commitment).into()),
-        ) {
+        let first_confirmed_block = if let Ok(Some(first_confirmed_block)) = self
+            .get_block(
+                first_confirmed_block_in_epoch,
+                Some(RpcBlockConfig::rewards_with_commitment(config.commitment).into()),
+            )
+            .await
+        {
             first_confirmed_block
         } else {
             return Err(RpcCustomError::BlockNotAvailable {
@@ -930,7 +933,7 @@ impl JsonRpcRequestProcessor {
         Ok(())
     }
 
-    pub fn get_block(
+    pub async fn get_block(
         &self,
         slot: Slot,
         config: Option<RpcEncodingConfigWrapper<RpcBlockConfig>>,
@@ -957,9 +960,8 @@ impl JsonRpcRequestProcessor {
                 self.check_blockstore_root(&result, slot)?;
                 if result.is_err() {
                     if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
-                        let bigtable_result = self
-                            .runtime
-                            .block_on(bigtable_ledger_storage.get_confirmed_block(slot));
+                        let bigtable_result =
+                            bigtable_ledger_storage.get_confirmed_block(slot).await;
                         self.check_bigtable_result(&bigtable_result)?;
                         return Ok(bigtable_result.ok().map(|confirmed_block| {
                             confirmed_block.configure(encoding, transaction_details, show_rewards)
@@ -2999,7 +3001,7 @@ pub mod rpc_full {
             meta: Self::Metadata,
             slot: Slot,
             config: Option<RpcEncodingConfigWrapper<RpcBlockConfig>>,
-        ) -> Result<Option<UiConfirmedBlock>>;
+        ) -> BoxFuture<Result<Option<UiConfirmedBlock>>>;
 
         #[rpc(meta, name = "getBlockTime")]
         fn get_block_time(
@@ -3408,9 +3410,9 @@ pub mod rpc_full {
             meta: Self::Metadata,
             slot: Slot,
             config: Option<RpcEncodingConfigWrapper<RpcBlockConfig>>,
-        ) -> Result<Option<UiConfirmedBlock>> {
+        ) -> BoxFuture<Result<Option<UiConfirmedBlock>>> {
             debug!("get_block rpc request received: {:?}", slot);
-            meta.get_block(slot, config)
+            Box::pin(async move { meta.get_block(slot, config).await })
         }
 
         fn get_blocks(
@@ -3545,7 +3547,7 @@ pub mod rpc_deprecated_v1_7 {
             meta: Self::Metadata,
             slot: Slot,
             config: Option<RpcEncodingConfigWrapper<RpcConfirmedBlockConfig>>,
-        ) -> Result<Option<UiConfirmedBlock>>;
+        ) -> BoxFuture<Result<Option<UiConfirmedBlock>>>;
 
         // DEPRECATED
         #[rpc(meta, name = "getConfirmedBlocks")]
@@ -3595,9 +3597,12 @@ pub mod rpc_deprecated_v1_7 {
             meta: Self::Metadata,
             slot: Slot,
             config: Option<RpcEncodingConfigWrapper<RpcConfirmedBlockConfig>>,
-        ) -> Result<Option<UiConfirmedBlock>> {
+        ) -> BoxFuture<Result<Option<UiConfirmedBlock>>> {
             debug!("get_confirmed_block rpc request received: {:?}", slot);
-            meta.get_block(slot, config.map(|config| config.convert()))
+            Box::pin(async move {
+                meta.get_block(slot, config.map(|config| config.convert()))
+                    .await
+            })
         }
 
         fn get_confirmed_blocks(
