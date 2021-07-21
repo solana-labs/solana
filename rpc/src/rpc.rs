@@ -9,7 +9,7 @@ use {
         send_transaction_service::{SendTransactionService, TransactionInfo},
     },
     bincode::{config::Options, serialize},
-    jsonrpc_core::{types::error, BoxFuture, Error, Metadata, Result},
+    jsonrpc_core::{futures::future, types::error, BoxFuture, Error, Metadata, Result},
     jsonrpc_derive::rpc,
     serde::{Deserialize, Serialize},
     solana_account_decoder::{
@@ -404,7 +404,7 @@ impl JsonRpcRequestProcessor {
         })
     }
 
-    pub fn get_inflation_reward(
+    pub async fn get_inflation_reward(
         &self,
         addresses: Vec<Pubkey>,
         config: Option<RpcEpochConfig>,
@@ -436,7 +436,8 @@ impl JsonRpcRequestProcessor {
         }
 
         let first_confirmed_block_in_epoch = *self
-            .get_blocks_with_limit(first_slot_in_epoch, 1, config.commitment)?
+            .get_blocks_with_limit(first_slot_in_epoch, 1, config.commitment)
+            .await?
             .get(0)
             .ok_or(RpcCustomError::BlockNotAvailable {
                 slot: first_slot_in_epoch,
@@ -1082,7 +1083,7 @@ impl JsonRpcRequestProcessor {
         Ok(blocks)
     }
 
-    pub fn get_blocks_with_limit(
+    pub async fn get_blocks_with_limit(
         &self,
         start_slot: Slot,
         limit: usize,
@@ -1105,9 +1106,9 @@ impl JsonRpcRequestProcessor {
             // range can be fetched from BigTable. This range should not ever run into unfinalized
             // confirmed blocks due to MAX_GET_CONFIRMED_BLOCKS_RANGE
             if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
-                return Ok(self
-                    .runtime
-                    .block_on(bigtable_ledger_storage.get_confirmed_blocks(start_slot, limit))
+                return Ok(bigtable_ledger_storage
+                    .get_confirmed_blocks(start_slot, limit)
+                    .await
                     .unwrap_or_default());
             }
         }
@@ -2935,7 +2936,7 @@ pub mod rpc_full {
             meta: Self::Metadata,
             address_strs: Vec<String>,
             config: Option<RpcEpochConfig>,
-        ) -> Result<Vec<Option<RpcInflationReward>>>;
+        ) -> BoxFuture<Result<Vec<Option<RpcInflationReward>>>>;
 
         #[rpc(meta, name = "getClusterNodes")]
         fn get_cluster_nodes(&self, meta: Self::Metadata) -> Result<Vec<RpcContactInfo>>;
@@ -3023,7 +3024,7 @@ pub mod rpc_full {
             start_slot: Slot,
             limit: usize,
             commitment: Option<CommitmentConfig>,
-        ) -> Result<Vec<Slot>>;
+        ) -> BoxFuture<Result<Vec<Slot>>>;
 
         #[rpc(meta, name = "getTransaction")]
         fn get_transaction(
@@ -3437,12 +3438,15 @@ pub mod rpc_full {
             start_slot: Slot,
             limit: usize,
             commitment: Option<CommitmentConfig>,
-        ) -> Result<Vec<Slot>> {
+        ) -> BoxFuture<Result<Vec<Slot>>> {
             debug!(
                 "get_blocks_with_limit rpc request received: {}-{}",
                 start_slot, limit,
             );
-            meta.get_blocks_with_limit(start_slot, limit, commitment)
+            Box::pin(async move {
+                meta.get_blocks_with_limit(start_slot, limit, commitment)
+                    .await
+            })
         }
 
         fn get_block_time(
@@ -3505,7 +3509,7 @@ pub mod rpc_full {
             meta: Self::Metadata,
             address_strs: Vec<String>,
             config: Option<RpcEpochConfig>,
-        ) -> Result<Vec<Option<RpcInflationReward>>> {
+        ) -> BoxFuture<Result<Vec<Option<RpcInflationReward>>>> {
             debug!(
                 "get_inflation_reward rpc request received: {:?}",
                 address_strs.len()
@@ -3513,10 +3517,15 @@ pub mod rpc_full {
 
             let mut addresses: Vec<Pubkey> = vec![];
             for address_str in address_strs {
-                addresses.push(verify_pubkey(&address_str)?);
+                match verify_pubkey(&address_str) {
+                    Ok(pubkey) => {
+                        addresses.push(pubkey);
+                    }
+                    Err(err) => return Box::pin(future::err(err)),
+                }
             }
 
-            meta.get_inflation_reward(addresses, config)
+            Box::pin(async move { meta.get_inflation_reward(addresses, config).await })
         }
     }
 }
@@ -3556,7 +3565,7 @@ pub mod rpc_deprecated_v1_7 {
             start_slot: Slot,
             limit: usize,
             commitment: Option<CommitmentConfig>,
-        ) -> Result<Vec<Slot>>;
+        ) -> BoxFuture<Result<Vec<Slot>>>;
 
         // DEPRECATED
         #[rpc(meta, name = "getConfirmedTransaction")]
@@ -3616,12 +3625,15 @@ pub mod rpc_deprecated_v1_7 {
             start_slot: Slot,
             limit: usize,
             commitment: Option<CommitmentConfig>,
-        ) -> Result<Vec<Slot>> {
+        ) -> BoxFuture<Result<Vec<Slot>>> {
             debug!(
                 "get_confirmed_blocks_with_limit rpc request received: {}-{}",
                 start_slot, limit,
             );
-            meta.get_blocks_with_limit(start_slot, limit, commitment)
+            Box::pin(async move {
+                meta.get_blocks_with_limit(start_slot, limit, commitment)
+                    .await
+            })
         }
 
         fn get_confirmed_transaction(
