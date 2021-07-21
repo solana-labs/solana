@@ -158,7 +158,7 @@ pub struct Blockstore {
 }
 
 use solana_runtime::accounts_db::AccountInfo;
-use solana_runtime::accounts_index::{AccountMapEntrySerialize, SlotList};
+use solana_runtime::accounts_index::{AccountMapEntrySerialize, SlotList, RefCount};
 use solana_runtime::hybrid_btree_map::PubkeyRange;
 
 pub struct AccountIndexRoxAdapter {
@@ -179,7 +179,7 @@ impl solana_runtime::hybrid_btree_map::Rox for AccountIndexRoxAdapter {
         if use_hashmap {
             self.backing.read().unwrap().get(pubkey).cloned()
         } else {
-            panic!("");
+            self.account_index_cf.get(*pubkey).unwrap()
         }
     }
     fn insert(&self, pubkey: &Pubkey, value: &AccountMapEntrySerialize) {
@@ -189,7 +189,7 @@ impl solana_runtime::hybrid_btree_map::Rox for AccountIndexRoxAdapter {
                 .unwrap()
                 .insert(pubkey.clone(), value.clone());
         } else {
-            panic!("");
+            self.account_index_cf.put(*pubkey, value).unwrap()
         }
     }
     fn update(&self, pubkey: &Pubkey, value: &AccountMapEntrySerialize) {
@@ -203,17 +203,17 @@ impl solana_runtime::hybrid_btree_map::Rox for AccountIndexRoxAdapter {
                 }
             }
         } else {
-            panic!("");
+            self.account_index_cf.put(*pubkey, value).unwrap();
         }
     }
     fn delete(&self, pubkey: &Pubkey) {
         if use_hashmap {
             self.backing.write().unwrap().remove(pubkey);
         } else {
-            panic!("");
+            self.account_index_cf.delete(*pubkey).unwrap();
         }
     }
-    fn addref(&self, pubkey: &Pubkey, info: &SlotList<AccountInfo>) {
+    fn addref(&self, pubkey: &Pubkey, ref_count: RefCount, info: &SlotList<AccountInfo>) {
         if use_hashmap {
             match self.backing.write().unwrap().entry(pubkey.clone()) {
                 HashMapEntry::Occupied(mut occupied) => {
@@ -224,10 +224,13 @@ impl solana_runtime::hybrid_btree_map::Rox for AccountIndexRoxAdapter {
                 }
             }
         } else {
-            panic!("");
+            let value = AccountMapEntrySerialize {
+                slot_list: info.clone(), ref_count: ref_count
+            };
+            self.account_index_cf.put(*pubkey, &value).unwrap();
         }
     }
-    fn unref(&self, pubkey: &Pubkey, info: &SlotList<AccountInfo>) {
+    fn unref(&self, pubkey: &Pubkey, ref_count: RefCount, info: &SlotList<AccountInfo>) {
         if use_hashmap {
             match self.backing.write().unwrap().entry(pubkey.clone()) {
                 HashMapEntry::Occupied(mut occupied) => {
@@ -238,7 +241,10 @@ impl solana_runtime::hybrid_btree_map::Rox for AccountIndexRoxAdapter {
                 }
             }
         } else {
-            panic!("");
+            let value = AccountMapEntrySerialize {
+                slot_list: info.clone(), ref_count: ref_count
+            };
+            self.account_index_cf.put(*pubkey, &value).unwrap();
         }
     }
     fn keys(&self, range: Option<&PubkeyRange>) -> Option<Vec<Pubkey>> {
@@ -247,7 +253,7 @@ impl solana_runtime::hybrid_btree_map::Rox for AccountIndexRoxAdapter {
             let k2 = keys.keys();
             Some(k2.cloned().collect())
         } else {
-            panic!("");
+            Some(self.account_index_cf.iter(IteratorMode::Start).unwrap().map(|d| d.0).collect::<Vec<_>>())
         }
     }
     fn values(&self, range: Option<&PubkeyRange>) -> Option<Vec<AccountMapEntrySerialize>> {
@@ -257,7 +263,12 @@ impl solana_runtime::hybrid_btree_map::Rox for AccountIndexRoxAdapter {
             error!("valus: {}", k2.len());
             Some(k2.cloned().collect())
         } else {
-            panic!("");
+            let keys = self.keys(None).unwrap();
+            let mut result = Vec::default();
+            for k in keys {
+                result.push(self.get(&k).unwrap());
+            }
+            Some(result)
         }
     }
 }
