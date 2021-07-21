@@ -73,7 +73,7 @@ solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.8.0" }
 trees = "0.4.2"
 
 [dev-dependencies]
-jsonrpc-core = "17.1.0"
+jsonrpc-core = "18.0.0"
 jsonrpc-core-client = { version = "17.1.0", features = ["ipc", "ws"] }
 matches = "0.1.6"
 num_cpus = "1.13.0"

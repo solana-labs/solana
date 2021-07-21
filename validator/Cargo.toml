@@ -19,7 +19,7 @@ console = "0.14.1"
 core_affinity = "0.5.10"
 fd-lock = "3.0.0"
 indicatif = "0.16.2"
-jsonrpc-core = "17.1.0"
+jsonrpc-core = "18.0.0"
 jsonrpc-core-client = { version = "17.1.0", features = ["ipc", "ws"] }
 jsonrpc-derive = "17.1.0"
 jsonrpc-ipc-server = "17.1.0"
