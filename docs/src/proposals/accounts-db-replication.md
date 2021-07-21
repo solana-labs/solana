@@ -181,4 +181,3 @@ Action Items
 8. Detailed Implementation of JsonRpcAccountsService, refactor code to share with part of JsonRpcService.
 9. Integrate with the AccountsBackgroundService in the replica for shrinking, cleaning, snapshotting.
 10. Metrics and performance testing
-
