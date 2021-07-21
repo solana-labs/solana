@@ -216,12 +216,8 @@ lazy_static! {
         (neon_evm_compute_budget::id(), "bump neon_evm's compute budget"),
         (rent_for_sysvars::id(), "collect rent from accounts owned by sysvars"),
         (libsecp256k1_0_5_upgrade_enabled::id(), "upgrade libsecp256k1 to v0.5.0"),
-<<<<<<< HEAD
         (merge_nonce_error_into_system_error::id(), "merge NonceError into SystemError"),
-=======
-        (tx_wide_compute_cap::id(), "Transaction wide compute cap"),
         (spl_token_v2_set_authority_fix::id(), "spl-token set_authority fix"),
->>>>>>> 51f3b9aa7 (feature: add new token program feature (#18780))
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
