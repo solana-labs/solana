@@ -102,7 +102,7 @@ pub struct BucketMapWriteHolder<V> {
     pub db: Arc<RwLock<Option<Arc<Box<dyn Rox>>>>>,
 }
 
-const use_rox: bool = true;
+pub const use_rox: bool = true;
 
 impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
     pub fn set_account_index_db(&self, db: Arc<Box<dyn Rox>>) {
@@ -224,6 +224,9 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
     }
 
     pub fn num_buckets(&self) -> usize {
+        if use_rox {
+            return 1;
+        }
         self.disk.num_buckets()
     }
     pub fn update<F>(&self, key: &Pubkey, updatefn: F, current_value: Option<&V2<V>>)
@@ -675,6 +678,9 @@ impl<V: 'static + Clone + Debug + Guts> HybridBTreeMap<V> {
         R: RangeBounds<Pubkey>,
     {
         let num_buckets = self.disk.num_buckets();
+        if self.bin_index != 0 && num_buckets == 1 {
+            return Keys {keys: vec![], index: 0};
+        }
         let mut start = self
             .disk
             .bucket_ix(Self::bound(range.start_bound(), &Pubkey::default()));
@@ -707,7 +713,7 @@ impl<V: 'static + Clone + Debug + Guts> HybridBTreeMap<V> {
         Keys { keys, index: 0 }
     }
 
-    pub fn keys(&self) -> Keys { // used still?
+    pub fn keys2(&self) -> Keys { // used still?
         let num_buckets = self.disk.num_buckets();
         let start = num_buckets * self.bin_index / self.bins;
         let end = num_buckets * (self.bin_index + 1) / self.bins;
@@ -723,8 +729,11 @@ impl<V: 'static + Clone + Debug + Guts> HybridBTreeMap<V> {
         Keys { keys, index: 0 }
     }
     pub fn values(&self) -> Values<V> {
-        // todo: this may be unsafe if we are asking for things with an update cache active. thankfully, we only call values at startup right now
         let num_buckets = self.disk.num_buckets();
+        if self.bin_index != 0 && num_buckets == 1 {
+            return Values { values: vec![], index: 0 };
+        }
+        // todo: this may be unsafe if we are asking for things with an update cache active. thankfully, we only call values at startup right now
         let start = num_buckets * self.bin_index / self.bins;
         let end = num_buckets * (self.bin_index + 1) / self.bins;
         let len = (start..end)

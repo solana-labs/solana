@@ -648,6 +648,8 @@ pub struct AccountsIndexIterator<'a, T: 'static + Clone + std::fmt::Debug + Guts
     is_finished: bool,
 }
 
+use crate::hybrid_btree_map::use_rox;
+
 impl<'a, T: Clone + std::fmt::Debug + Guts> AccountsIndexIterator<'a, T> {
     fn clone_bound(bound: Bound<&Pubkey>) -> Bound<Pubkey> {
         match bound {
@@ -665,6 +667,9 @@ impl<'a, T: Clone + std::fmt::Debug + Guts> AccountsIndexIterator<'a, T> {
     }
 
     fn start_bin(&self) -> usize {
+        if use_rox {
+            return 0; // hack for if we're using rox
+        }
         // start in bin where 'start_bound' would exist
         Self::bin_from_bound(&self.start_bound, 0)
     }
