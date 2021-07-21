@@ -377,10 +377,8 @@ impl StandardBroadcastRun {
 
                             let mut update_time = Measure::start("cluster-node-update");
 
-                            *cn.write().unwrap() = ClusterNodes::<BroadcastStage>::new(
-                                &ci,
-                                &ss.clone().unwrap_or_default(),
-                            );
+                            *cn.write().unwrap() =
+                                ClusterNodes::<BroadcastStage>::new(&ci, &ss.unwrap_or_default());
                             us.store(2, Ordering::Relaxed);
 
                             update_time.stop();
