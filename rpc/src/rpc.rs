@@ -411,7 +411,7 @@ impl JsonRpcRequestProcessor {
     ) -> Result<Vec<Option<RpcInflationReward>>> {
         let config = config.unwrap_or_default();
         let epoch_schedule = self.get_epoch_schedule();
-        let first_available_block = self.get_first_available_block();
+        let first_available_block = self.get_first_available_block().await;
         let epoch = config.epoch.unwrap_or_else(|| {
             epoch_schedule
                 .get_epoch(self.get_slot(config.commitment))
@@ -1465,16 +1465,16 @@ impl JsonRpcRequestProcessor {
         }
     }
 
-    pub fn get_first_available_block(&self) -> Slot {
+    pub async fn get_first_available_block(&self) -> Slot {
         let slot = self
             .blockstore
             .get_first_available_block()
             .unwrap_or_default();
 
         if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
-            let bigtable_slot = self
-                .runtime
-                .block_on(bigtable_ledger_storage.get_first_available_block())
+            let bigtable_slot = bigtable_ledger_storage
+                .get_first_available_block()
+                .await
                 .unwrap_or(None)
                 .unwrap_or(slot);
 
@@ -3045,7 +3045,7 @@ pub mod rpc_full {
         ) -> Result<Vec<RpcConfirmedTransactionStatusWithSignature>>;
 
         #[rpc(meta, name = "getFirstAvailableBlock")]
-        fn get_first_available_block(&self, meta: Self::Metadata) -> Result<Slot>;
+        fn get_first_available_block(&self, meta: Self::Metadata) -> BoxFuture<Result<Slot>>;
     }
 
     pub struct FullImpl;
@@ -3501,9 +3501,9 @@ pub mod rpc_full {
             meta.get_signatures_for_address(address, before, until, limit, config.commitment)
         }
 
-        fn get_first_available_block(&self, meta: Self::Metadata) -> Result<Slot> {
+        fn get_first_available_block(&self, meta: Self::Metadata) -> BoxFuture<Result<Slot>> {
             debug!("get_first_available_block rpc request received");
-            Ok(meta.get_first_available_block())
+            Box::pin(async move { Ok(meta.get_first_available_block().await) })
         }
 
         fn get_inflation_reward(
