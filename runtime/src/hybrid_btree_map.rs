@@ -205,10 +205,12 @@ impl Rox for Sled {
         self.db.insert(pubkey.as_ref(), Sled::set(&value));
     }
     fn keys(&self, range: Option<&PubkeyRange>) -> Option<Vec<Pubkey>> {
-        self.db.iter()
+        panic!("");
+        //self.db.iter()
     }
     fn values(&self, range: Option<&PubkeyRange>) -> Option<Vec<AccountMapEntrySerialize>> {
-        self.db.iter()
+        panic!("");
+        //self.db.iter()
     }    
 }
 
