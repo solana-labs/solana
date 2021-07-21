@@ -254,6 +254,7 @@ impl solana_runtime::hybrid_btree_map::Rox for AccountIndexRoxAdapter {
         if use_hashmap {
             let keys = self.backing.read().unwrap();
             let k2 = keys.values();
+            error!("valus: {}", k2.len());
             Some(k2.cloned().collect())
         } else {
             panic!("");
