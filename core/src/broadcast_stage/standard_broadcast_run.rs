@@ -364,11 +364,16 @@ impl StandardBroadcastRun {
             Builder::new()
                 .name("sol-bc-cn-updater".to_string())
                 .spawn(move || {
-                    let mut now = Instant::now();
+                    let mut now = None;
                     loop {
                         let (ci, ss) = recv.lock().unwrap().recv().unwrap();
-                        if now.elapsed().as_secs() > BROADCAST_PEER_UPDATE_INTERVAL_MS / 1000 {
-                            now = Instant::now();
+                        if now
+                            .map(|n: Instant| {
+                                n.elapsed().as_secs() > BROADCAST_PEER_UPDATE_INTERVAL_MS / 1000
+                            })
+                            .unwrap_or(true)
+                        {
+                            now = Some(Instant::now());
 
                             let mut update_time = Measure::start("cluster-node-update");
 
