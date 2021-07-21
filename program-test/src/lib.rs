@@ -521,7 +521,7 @@ impl ProgramTest {
         self.prefer_bpf = prefer_bpf;
     }
 
-    /// Override the BPF compute budget
+    /// Override the default maximum compute units
     pub fn set_compute_max_units(&mut self, compute_max_units: u64) {
         self.compute_max_units = Some(compute_max_units);
     }
