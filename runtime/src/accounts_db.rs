@@ -3691,6 +3691,7 @@ impl AccountsDb {
 
         {
             // Slots that are currently being flushed by flush_slot_cache()
+
             let mut currently_contended_slots = slots_under_contention.lock().unwrap();
 
             // Slots that are currently being flushed by flush_slot_cache() AND
@@ -4245,7 +4246,7 @@ impl AccountsDb {
         };
 
         if !is_being_purged {
-            self.accounts_cache.slot_cache(slot).map(|slot_cache| {
+            let flush_stats = self.accounts_cache.slot_cache(slot).map(|slot_cache| {
                 #[cfg(test)]
                 {
                     // Give some time for cache flushing to occur here for unit tests
@@ -4255,23 +4256,24 @@ impl AccountsDb {
                 // still exists in the cache, we know the slot cannot be removed
                 // by any other threads past this point. We are now responsible for
                 // flushing this slot.
-                let flush_stats = self.do_flush_slot_cache(slot, &slot_cache, should_flush_f);
-                // Nobody else should have been purging this slot, so should not have been removed
-                // from `self.remove_unrooted_slots_synchronization`.
-                assert!(self
-                    .remove_unrooted_slots_synchronization
-                    .slots_under_contention
-                    .lock()
-                    .unwrap()
-                    .remove(&slot));
+                self.do_flush_slot_cache(slot, &slot_cache, should_flush_f)
+            });
 
-                // Signal to any threads blocked on `remove_unrooted_slots(slot)` that we have finished
-                // flushing
-                self.remove_unrooted_slots_synchronization
-                    .signal
-                    .notify_all();
-                flush_stats
-            })
+            // Nobody else should have been purging this slot, so should not have been removed
+            // from `self.remove_unrooted_slots_synchronization`.
+            assert!(self
+                .remove_unrooted_slots_synchronization
+                .slots_under_contention
+                .lock()
+                .unwrap()
+                .remove(&slot));
+
+            // Signal to any threads blocked on `remove_unrooted_slots(slot)` that we have finished
+            // flushing
+            self.remove_unrooted_slots_synchronization
+                .signal
+                .notify_all();
+            flush_stats
         } else {
             None
         }
@@ -11691,12 +11693,14 @@ pub mod tests {
             // flushes. If we were to dump the entire chunk at once, then this reduces the possibility
             // of the flush occurring first since the dumping logic reserves all the slots it's about
             // to dump immediately.
+
             for chunks in slots_to_dump.chunks(slots_to_dump.len() / 2) {
                 db.remove_unrooted_slots(chunks);
             }
 
             // Check that all the slots in `slots_to_dump` were completely removed from the
             // cache, storage, and index
+
             for (slot, _) in slots_to_dump {
                 assert!(db.storage.get_slot_storage_entries(*slot).is_none());
                 assert!(db.accounts_cache.slot_cache(*slot).is_none());
@@ -11708,6 +11712,7 @@ pub mod tests {
             }
 
             // Wait for flush to finish before starting next trial
+
             flush_done_receiver.recv().unwrap();
 
             for (slot, bank_id) in slots_to_keep {
@@ -11728,6 +11733,7 @@ pub mod tests {
         exit.store(true, Ordering::Relaxed);
         drop(new_trial_start_sender);
         t_flush_cache.join().unwrap();
+
         t_spurious_signal.join().unwrap();
     }
 
