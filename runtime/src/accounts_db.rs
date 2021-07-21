@@ -206,8 +206,7 @@ impl GenerateIndexTimings {
         );
     }
 }
-
-#[derive(Default, Debug, PartialEq, Clone)]
+#[derive(Default, Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct AccountInfo {
     /// index identifying the append storage
     store_id: AppendVecId,
@@ -4471,6 +4470,10 @@ impl AccountsDb {
 
     pub fn checked_sum_for_capitalization<T: Iterator<Item = u64>>(balances: T) -> u64 {
         AccountsHash::checked_cast_for_capitalization(balances.map(|b| b as u128).sum::<u128>())
+    }
+
+    pub fn set_account_index_db(&self, db: Arc<Box<dyn crate::hybrid_btree_map::Rox>>) {
+        self.accounts_index.account_maps.first().unwrap().read().unwrap().set_account_index_db(db);
     }
 
     fn calculate_accounts_hash(

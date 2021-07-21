@@ -152,6 +152,80 @@ pub struct Blockstore {
     pub lowest_cleanup_slot: Arc<RwLock<Slot>>,
     no_compaction: bool,
     slots_stats: Arc<Mutex<SlotsStats>>,
+    pub account_index: Arc<Box<dyn solana_runtime::hybrid_btree_map::Rox>>,
+}
+
+use solana_runtime::accounts_index::{SlotList, AccountMapEntrySerialize};
+use solana_runtime::hybrid_btree_map::PubkeyRange;
+use solana_runtime::accounts_db::AccountInfo;
+
+pub struct AccountIndexRoxAdapter {
+    pub db: Arc<Database>,
+    pub account_index_cf: LedgerColumn<cf::AccountIndex>,
+    pub backing: RwLock<HashMap<Pubkey, AccountMapEntrySerialize>>,
+}
+
+impl std::fmt::Debug for AccountIndexRoxAdapter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Ok(())
+    }
+}
+use std::collections::{hash_map::Entry as HashMapEntry};
+impl solana_runtime::hybrid_btree_map::Rox for AccountIndexRoxAdapter {
+    fn get(&self, pubkey: &Pubkey) -> Option<AccountMapEntrySerialize> {
+        self.backing.read().unwrap().get(pubkey).cloned()
+    }
+    fn insert(&self, pubkey: &Pubkey, value: &AccountMapEntrySerialize) {
+        self.backing.write().unwrap().insert(pubkey.clone(), value.clone());
+    }
+    fn update(&self, pubkey: &Pubkey, value: &AccountMapEntrySerialize)
+    {
+        match self.backing.write().unwrap().entry(pubkey.clone()) {
+            HashMapEntry::Occupied(mut occupied) => {
+                *occupied.get_mut() = value.clone();
+            },
+            HashMapEntry::Vacant(vacant) => {
+                vacant.insert(value.clone());
+            },
+        }
+    }
+    fn delete(&self, pubkey: &Pubkey) {
+        self.backing.write().unwrap().remove(pubkey);
+    }
+    fn addref(&self, pubkey: &Pubkey, info: &SlotList<AccountInfo>) {
+        match self.backing.write().unwrap().entry(pubkey.clone()) {
+            HashMapEntry::Occupied(mut occupied) => {
+                occupied.get_mut().ref_count += 1;
+            },
+            HashMapEntry::Vacant(vacant) => {
+                panic!("");
+            },
+        }
+    }
+    fn unref(&self, pubkey: &Pubkey, info: &SlotList<AccountInfo>) {
+        match self.backing.write().unwrap().entry(pubkey.clone()) {
+            HashMapEntry::Occupied(mut occupied) => {
+                occupied.get_mut().ref_count -= 1;
+            },
+            HashMapEntry::Vacant(vacant) => {
+                panic!("");
+            },
+        }
+    }
+    fn keys(&self, pubkey: &Pubkey, range: &PubkeyRange) -> Option<Vec<Pubkey>> {
+        let keys = self.backing.write().unwrap();
+        let k2 = keys.keys();
+        Some(k2.cloned().collect())
+    }
+    fn values(
+        &self,
+        pubkey: &Pubkey,
+        range: &PubkeyRange,
+    ) -> Option<Vec<AccountMapEntrySerialize>> {
+        let keys = self.backing.write().unwrap();
+        let k2 = keys.values();
+        Some(k2.cloned().collect())
+    }
 }
 
 struct SlotsStats {
@@ -346,8 +420,15 @@ impl Blockstore {
         let block_height_cf = db.column();
         let program_costs_cf = db.column();
         let bank_hash_cf = db.column();
+        let account_index_cf = db.column();
 
         let db = Arc::new(db);
+        let backing = RwLock::new(HashMap::new());
+        let account_index = AccountIndexRoxAdapter {
+            db: db.clone(),
+            account_index_cf,
+            backing,
+        };
 
         // Get max root or 0 if it doesn't exist
         let max_root = db
@@ -403,6 +484,7 @@ impl Blockstore {
             lowest_cleanup_slot: Arc::new(RwLock::new(0)),
             no_compaction: false,
             slots_stats: Arc::new(Mutex::new(SlotsStats::default())),
+            account_index: Arc::new(Box::new(account_index)),
         };
         if initialize_transaction_status_index {
             blockstore.initialize_transaction_status_index()?;
@@ -2691,7 +2773,7 @@ impl Blockstore {
     pub fn write_perf_sample(&self, index: Slot, perf_sample: &PerfSample) -> Result<()> {
         self.perf_samples_cf.put(index, perf_sample)
     }
-
+    // read/write
     pub fn read_program_costs(&self) -> Result<Vec<(Pubkey, u64)>> {
         Ok(self
             .db
