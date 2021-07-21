@@ -270,8 +270,7 @@ where
     let (shreds, repair_infos): (Vec<_>, Vec<_>) = thread_pool.install(|| {
         packets
             .par_iter_mut()
-            .flat_map(|packet| &mut packet.packets)
-            .filter_map(handle_packet)
+            .flat_map_iter(|packet| packet.packets.iter_mut().filter_map(handle_packet))
             .unzip()
     });
 
