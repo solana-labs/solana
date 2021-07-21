@@ -214,15 +214,14 @@ impl solana_runtime::hybrid_btree_map::Rox for AccountIndexRoxAdapter {
             },
         }
     }
-    fn keys(&self, pubkey: &Pubkey, range: &PubkeyRange) -> Option<Vec<Pubkey>> {
+    fn keys(&self, range: Option<&PubkeyRange>) -> Option<Vec<Pubkey>> {
         let keys = self.backing.write().unwrap();
         let k2 = keys.keys();
         Some(k2.cloned().collect())
     }
     fn values(
         &self,
-        pubkey: &Pubkey,
-        range: &PubkeyRange,
+        range: Option<&PubkeyRange>,
     ) -> Option<Vec<AccountMapEntrySerialize>> {
         let keys = self.backing.write().unwrap();
         let k2 = keys.values();

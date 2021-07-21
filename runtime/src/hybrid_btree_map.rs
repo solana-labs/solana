@@ -17,6 +17,7 @@ use std::sync::RwLock;
 use std::time::Instant;
 type K = Pubkey;
 use std::collections::{hash_map::Entry as HashMapEntry, HashMap};
+use std::ops::Bound::{Excluded, Included, Unbounded};
 
 #[derive(Clone, Debug)]
 pub struct HybridAccountEntry<V: Clone + Debug> {
@@ -38,6 +39,7 @@ impl<T:Clone + Debug> RealEntry<T> for T {
 }
 */
 
+#[derive(Debug, Default)]
 pub struct PubkeyRange {
     pub start_pubkey_include: Option<Pubkey>,
     pub start_pubkey_exclude: Option<Pubkey>,
@@ -51,8 +53,8 @@ pub trait Rox: Debug + Send + Sync {
     fn delete(&self, pubkey: &Pubkey);
     fn addref(&self, pubkey: &Pubkey, info: &SlotList<AccountInfo>);
     fn unref(&self, pubkey: &Pubkey, info: &SlotList<AccountInfo>);
-    fn keys(&self, pubkey: &Pubkey, range: &PubkeyRange) -> Option<Vec<Pubkey>>;
-    fn values(&self, pubkey: &Pubkey, range: &PubkeyRange)
+    fn keys(&self, range: Option<&PubkeyRange>) -> Option<Vec<Pubkey>>;
+    fn values(&self, range: Option<&PubkeyRange>)
         -> Option<Vec<AccountMapEntrySerialize>>;
 }
 use crate::accounts_db::AccountInfo;
@@ -184,13 +186,36 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
     }
     pub fn keys<R: RangeBounds<Pubkey>>(&self, ix: usize, range: Option<&R>) -> Option<Vec<Pubkey>> {
         if use_rox {
-            return None; // todo
+            let mut range_use = PubkeyRange::default();
+            if let Some(range) = range {
+                match range.start_bound() {
+                    Included(pubkey) => {range_use.start_pubkey_include = Some(pubkey.clone());},
+                    Excluded(pubkey) => {range_use.start_pubkey_exclude = Some(pubkey.clone());},
+                    Unbounded => {},
+                }
+                match range.end_bound() {
+                    Included(pubkey) => {panic!("");},
+                    Excluded(pubkey) => {range_use.end_pubkey_exclude = Some(pubkey.clone());},
+                    Unbounded => {},
+                }
+            }
+            return self.db
+            .read()
+            .unwrap()
+            .as_ref()
+            .unwrap()
+            .keys(Some(&range_use)); // todo range
         }
         self.disk.keys(ix)
     }
     pub fn values<R: RangeBounds<Pubkey>>(&self, ix: usize, range: Option<&R>) -> Option<Vec<Vec<SlotT<V>>>> {
         if use_rox {
-            return None; // todo
+            return self.db
+            .read()
+            .unwrap()
+            .as_ref()
+            .unwrap()
+            .values(None).map(|x| x.into_iter().map(|x| V::get_copy2(&x.slot_list)).collect());
         }
 
         // only valid when write cache is empty
