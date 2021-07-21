@@ -125,6 +125,9 @@ pub enum SnapshotError {
 
     #[error("accounts package send error")]
     AccountsPackageSendError(#[from] AccountsPackageSendError),
+
+    #[error("source({1}) - I/O error: {0}")]
+    IoWithSource(std::io::Error, &'static str),
 }
 pub type Result<T> = std::result::Result<T, SnapshotError>;
 
@@ -246,7 +249,8 @@ pub fn archive_snapshot_package(snapshot_package: &AccountsPackage) -> Result<()
         .parent()
         .expect("Tar output path is invalid");
 
-    fs::create_dir_all(tar_dir)?;
+    fs::create_dir_all(tar_dir)
+        .map_err(|e| SnapshotError::IoWithSource(e, "create archive path"))?;
 
     // Create the staging directories
     let staging_dir = tempfile::Builder::new()
@@ -254,18 +258,21 @@ pub fn archive_snapshot_package(snapshot_package: &AccountsPackage) -> Result<()
             "{}{}-",
             TMP_SNAPSHOT_PREFIX, snapshot_package.slot
         ))
-        .tempdir_in(tar_dir)?;
+        .tempdir_in(tar_dir)
+        .map_err(|e| SnapshotError::IoWithSource(e, "create archive tempdir"))?;
 
     let staging_accounts_dir = staging_dir.path().join("accounts");
     let staging_snapshots_dir = staging_dir.path().join("snapshots");
     let staging_version_file = staging_dir.path().join("version");
-    fs::create_dir_all(&staging_accounts_dir)?;
+    fs::create_dir_all(&staging_accounts_dir)
+        .map_err(|e| SnapshotError::IoWithSource(e, "create staging path"))?;
 
     // Add the snapshots to the staging directory
     symlink::symlink_dir(
         snapshot_package.snapshot_links.path(),
         &staging_snapshots_dir,
-    )?;
+    )
+    .map_err(|e| SnapshotError::IoWithSource(e, "create staging symlinks"))?;
 
     // Add the AppendVecs into the compressible list
     for storage in snapshot_package.storages.iter().flatten() {
@@ -280,7 +287,8 @@ pub fn archive_snapshot_package(snapshot_package: &AccountsPackage) -> Result<()
         // `output_path` - The file path where the AppendVec will be placed in the staging directory.
         let storage_path =
             fs::canonicalize(storage_path).expect("Could not get absolute path for accounts");
-        symlink::symlink_file(storage_path, &output_path)?;
+        symlink::symlink_file(storage_path, &output_path)
+            .map_err(|e| SnapshotError::IoWithSource(e, "create storage symlink"))?;
         if !output_path.is_file() {
             return Err(SnapshotError::StoragePathSymlinkInvalid);
         }
@@ -288,8 +296,10 @@ pub fn archive_snapshot_package(snapshot_package: &AccountsPackage) -> Result<()
 
     // Write version file
     {
-        let mut f = fs::File::create(staging_version_file)?;
-        f.write_all(snapshot_package.snapshot_version.as_str().as_bytes())?;
+        let mut f = fs::File::create(staging_version_file)
+            .map_err(|e| SnapshotError::IoWithSource(e, "create version file"))?;
+        f.write_all(snapshot_package.snapshot_version.as_str().as_bytes())
+            .map_err(|e| SnapshotError::IoWithSource(e, "write version file"))?;
     }
 
     let file_ext = get_archive_ext(snapshot_package.archive_format);
@@ -314,7 +324,8 @@ pub fn archive_snapshot_package(snapshot_package: &AccountsPackage) -> Result<()
         .stdin(process::Stdio::null())
         .stdout(process::Stdio::piped())
         .stderr(process::Stdio::inherit())
-        .spawn()?;
+        .spawn()
+        .map_err(|e| SnapshotError::IoWithSource(e, "tar process spawn"))?;
 
     match &mut tar.stdout {
         None => {
@@ -351,15 +362,19 @@ pub fn archive_snapshot_package(snapshot_package: &AccountsPackage) -> Result<()
         }
     }
 
-    let tar_exit_status = tar.wait()?;
+    let tar_exit_status = tar
+        .wait()
+        .map_err(|e| SnapshotError::IoWithSource(e, "tar process wait"))?;
     if !tar_exit_status.success() {
         warn!("tar command failed with exit code: {}", tar_exit_status);
         return Err(SnapshotError::ArchiveGenerationFailure(tar_exit_status));
     }
 
     // Atomically move the archive into position for other validators to find
-    let metadata = fs::metadata(&archive_path)?;
-    fs::rename(&archive_path, &snapshot_package.tar_output_file)?;
+    let metadata = fs::metadata(&archive_path)
+        .map_err(|e| SnapshotError::IoWithSource(e, "archive path stat"))?;
+    fs::rename(&archive_path, &snapshot_package.tar_output_file)
+        .map_err(|e| SnapshotError::IoWithSource(e, "archive path rename"))?;
 
     purge_old_snapshot_archives(snapshot_package.tar_output_file.parent().unwrap());
 
