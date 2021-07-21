@@ -39,7 +39,7 @@ url = "2.2.2"
 
 [dev-dependencies]
 assert_matches = "1.5.0"
-jsonrpc-http-server = "17.0.0"
+jsonrpc-http-server = "18.0.0"
 solana-logger = { path = "../logger", version = "=1.8.0" }
 
 [package.metadata.docs.rs]
