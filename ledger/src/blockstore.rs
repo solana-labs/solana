@@ -638,11 +638,11 @@ impl Blockstore {
         index: &'a Index,
         slot: Slot,
         erasure_meta: &'a ErasureMeta,
-        prev_inserted_datas: &'a mut HashMap<(Slot, /*shred index:*/ u64), Shred>,
+        prev_inserted_datas: &'a HashMap<(Slot, /*shred index:*/ u64), Shred>,
     ) -> impl Iterator<Item = Shred> + 'a {
         erasure_meta.data_shreds_indices().filter_map(move |i| {
-            if let Some(shred) = prev_inserted_datas.remove(&(slot, i)) {
-                return Some(shred);
+            if let Some(shred) = prev_inserted_datas.get(&(slot, i)) {
+                return Some(shred.clone());
             }
             if !index.data().is_present(i) {
                 return None;
@@ -685,7 +685,7 @@ impl Blockstore {
         &self,
         index: &mut Index,
         erasure_meta: &ErasureMeta,
-        prev_inserted_datas: &mut HashMap<(Slot, /*shred index:*/ u64), Shred>,
+        prev_inserted_datas: &HashMap<(Slot, /*shred index:*/ u64), Shred>,
         prev_inserted_codes: &HashMap<(Slot, /*shred index:*/ u64), Shred>,
         recovered_data_shreds: &mut Vec<Shred>,
     ) {
@@ -734,7 +734,7 @@ impl Blockstore {
         &self,
         erasure_metas: &HashMap<(Slot, /*fec set index:*/ u64), ErasureMeta>,
         index_working_set: &mut HashMap<u64, IndexMetaWorkingSetEntry>,
-        prev_inserted_datas: &mut HashMap<(Slot, /*shred index:*/ u64), Shred>,
+        prev_inserted_datas: &HashMap<(Slot, /*shred index:*/ u64), Shred>,
         prev_inserted_codes: &HashMap<(Slot, /*shred index:*/ u64), Shred>,
     ) -> Vec<Shred> {
         let mut recovered_data_shreds = vec![];
@@ -867,7 +867,7 @@ impl Blockstore {
             let recovered_data_shreds = self.try_shred_recovery(
                 &erasure_metas,
                 &mut index_working_set,
-                &mut just_inserted_data_shreds,
+                &just_inserted_data_shreds,
                 &just_inserted_coding_shreds,
             );
 
