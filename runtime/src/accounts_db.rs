@@ -2222,7 +2222,21 @@ impl AccountsDb {
         ancestors: &Ancestors,
         pubkey: &Pubkey,
     ) -> Option<(AccountSharedData, Slot)> {
-        self.do_load(ancestors, pubkey, None)
+        use crate::inline_spl_token_v2_0;
+        if *pubkey == inline_spl_token_v2_0::id() {
+            error!(
+                "REDIRECT {} to {}",
+                pubkey,
+                inline_spl_token_v2_0::new_token_program::id()
+            );
+            self.do_load(
+                ancestors,
+                &inline_spl_token_v2_0::new_token_program::id(),
+                None,
+            )
+        } else {
+            self.do_load(ancestors, pubkey, None)
+        }
     }
 
     fn do_load(
