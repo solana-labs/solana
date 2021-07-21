@@ -241,7 +241,7 @@ impl solana_runtime::hybrid_btree_map::Rox for AccountIndexRoxAdapter {
     }
     fn keys(&self, range: Option<&PubkeyRange>) -> Option<Vec<Pubkey>> {
         if use_hashmap {
-            let keys = self.backing.write().unwrap();
+            let keys = self.backing.read().unwrap();
             let k2 = keys.keys();
             Some(k2.cloned().collect())
         } else {
@@ -250,7 +250,7 @@ impl solana_runtime::hybrid_btree_map::Rox for AccountIndexRoxAdapter {
     }
     fn values(&self, range: Option<&PubkeyRange>) -> Option<Vec<AccountMapEntrySerialize>> {
         if use_hashmap {
-            let keys = self.backing.write().unwrap();
+            let keys = self.backing.read().unwrap();
             let k2 = keys.values();
             Some(k2.cloned().collect())
         } else {
