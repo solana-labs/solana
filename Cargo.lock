@@ -354,62 +354,22 @@ checksum = "8d696c370c750c948ada61c69a0ee2cbbb9c50b1019ddb86d9317157a99c2cae"
 
 [[package]]
 name = "borsh"
-<<<<<<< HEAD
-version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a5a26c53ddf60281f18e7a29b20db7ba3db82a9d81b9650bfaa02d646f50d364"
-dependencies = [
- "borsh-derive 0.8.1",
- "hashbrown 0.9.1",
-]
-
-[[package]]
-name = "borsh"
 version = "0.9.0"
-=======
-version = "0.9.1"
->>>>>>> 51f3b9aa7 (feature: add new token program feature (#18780))
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4fcabb02816fdadf90866dc9a7824491ccb63d69f55375a266dc03509ac68d36"
 dependencies = [
-<<<<<<< HEAD
- "borsh-derive 0.9.0",
-=======
  "borsh-derive",
->>>>>>> 51f3b9aa7 (feature: add new token program feature (#18780))
  "hashbrown 0.9.1",
 ]
 
 [[package]]
 name = "borsh-derive"
-<<<<<<< HEAD
-version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b637a47728b78a78cd7f4b85bf06d71ef4221840e059a38f048be2422bf673b2"
-dependencies = [
- "borsh-derive-internal 0.8.1",
- "borsh-schema-derive-internal 0.8.1",
- "proc-macro-crate",
- "proc-macro2 1.0.24",
- "syn 1.0.60",
-]
-
-[[package]]
-name = "borsh-derive"
 version = "0.9.0"
-=======
-version = "0.9.1"
->>>>>>> 51f3b9aa7 (feature: add new token program feature (#18780))
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4bd16f0729b89f0a212b0e2e1d19cc6593df63f771161a11863967780e2d033d"
 dependencies = [
-<<<<<<< HEAD
- "borsh-derive-internal 0.9.0",
- "borsh-schema-derive-internal 0.9.0",
-=======
  "borsh-derive-internal",
  "borsh-schema-derive-internal",
->>>>>>> 51f3b9aa7 (feature: add new token program feature (#18780))
  "proc-macro-crate",
  "proc-macro2 1.0.24",
  "syn 1.0.60",
@@ -417,22 +377,7 @@ dependencies = [
 
 [[package]]
 name = "borsh-derive-internal"
-<<<<<<< HEAD
-version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d813fa25eb0bed78c36492cff4415f38c760d6de833d255ba9095bd8ebb7d725"
-dependencies = [
- "proc-macro2 1.0.24",
- "quote 1.0.9",
- "syn 1.0.60",
-]
-
-[[package]]
-name = "borsh-derive-internal"
 version = "0.9.0"
-=======
-version = "0.9.1"
->>>>>>> 51f3b9aa7 (feature: add new token program feature (#18780))
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e321a130a3ac4b88eb59a6d670bde11eec9721a397b77e0f2079060e2a1b785"
 dependencies = [
@@ -443,22 +388,7 @@ dependencies = [
 
 [[package]]
 name = "borsh-schema-derive-internal"
-<<<<<<< HEAD
-version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dcf78ee4a98c8cb9eba1bac3d3e2a1ea3d7673c719ce691e67b5cbafc472d3b7"
-dependencies = [
- "proc-macro2 1.0.24",
- "quote 1.0.9",
- "syn 1.0.60",
-]
-
-[[package]]
-name = "borsh-schema-derive-internal"
 version = "0.9.0"
-=======
-version = "0.9.1"
->>>>>>> 51f3b9aa7 (feature: add new token program feature (#18780))
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "15151a485164b319cc7a5160fe4316dc469a27993f71b73d7617dc9032ff0fd7"
 dependencies = [
@@ -4187,17 +4117,10 @@ name = "solana-banks-client"
 version = "1.7.7"
 dependencies = [
  "bincode",
-<<<<<<< HEAD
- "borsh 0.9.0",
- "borsh-derive 0.9.0",
- "futures 0.3.8",
- "mio 0.7.6",
-=======
  "borsh",
  "borsh-derive",
- "futures 0.3.15",
- "mio 0.7.13",
->>>>>>> 51f3b9aa7 (feature: add new token program feature (#18780))
+ "futures 0.3.8",
+ "mio 0.7.6",
  "solana-banks-interface",
  "solana-banks-server",
  "solana-program 1.7.7",
@@ -4686,15 +4609,9 @@ dependencies = [
  "rustc_version",
  "serde",
  "serde_derive",
-<<<<<<< HEAD
  "sha2 0.9.2",
- "solana-frozen-abi-macro 1.7.1",
- "solana-logger 1.7.1",
-=======
- "sha2 0.9.5",
  "solana-frozen-abi-macro 1.7.6",
  "solana-logger 1.7.6",
->>>>>>> 51f3b9aa7 (feature: add new token program feature (#18780))
  "thiserror",
 ]
 
@@ -5189,26 +5106,16 @@ checksum = "3bfe6a5dfc5372c0a946018ecdd8115e38af78cea8275bac48cf3d105c6b1fb3"
 dependencies = [
  "bincode",
  "blake3",
-<<<<<<< HEAD
- "borsh 0.8.1",
- "borsh-derive 0.8.1",
- "bs58",
-=======
  "borsh",
  "borsh-derive",
- "bs58 0.3.1",
->>>>>>> 51f3b9aa7 (feature: add new token program feature (#18780))
+ "bs58",
  "bv",
  "curve25519-dalek 2.1.0",
  "hex",
  "itertools 0.9.0",
  "lazy_static",
-<<<<<<< HEAD
- "log 0.4.11",
-=======
  "libsecp256k1",
- "log 0.4.14",
->>>>>>> 51f3b9aa7 (feature: add new token program feature (#18780))
+ "log 0.4.11",
  "num-derive",
  "num-traits",
  "rand 0.7.3",
@@ -5233,15 +5140,9 @@ dependencies = [
  "assert_matches",
  "bincode",
  "blake3",
-<<<<<<< HEAD
- "borsh 0.9.0",
- "borsh-derive 0.9.0",
- "bs58",
-=======
  "borsh",
  "borsh-derive",
- "bs58 0.4.0",
->>>>>>> 51f3b9aa7 (feature: add new token program feature (#18780))
+ "bs58",
  "bv",
  "curve25519-dalek 2.1.0",
  "hex",
@@ -5432,13 +5333,7 @@ version = "1.7.7"
 dependencies = [
  "assert_matches",
  "bincode",
-<<<<<<< HEAD
  "bs58",
-=======
- "borsh",
- "borsh-derive",
- "bs58 0.4.0",
->>>>>>> 51f3b9aa7 (feature: add new token program feature (#18780))
  "bv",
  "byteorder",
  "chrono",
