@@ -67,9 +67,9 @@ specified last_replicated_slot. This service also runs in the main validator. Th
 gets the slots for replication from the BankForks, BlockCommitmentCache and OptimiscallyConfirmBank.
 
 The `ReplicaAccountsRequestor`: this service is responsible for sending the request
-`ReplicaAccountsRequest` to its peer validator or replica for the `ReplAccountInfo` for a
-slot for which it has not completed accounts db replication. The `ReplAccountInfo` contains
-the `ReplAccountMeta`, Hash and the AccountData. The `ReplAccountMeta` contains info about
+`ReplicaAccountsRequest` to its peer validator or replica for the `ReplicaAccountInfo` for a
+slot for which it has not completed accounts db replication. The `ReplicaAccountInfo` contains
+the `ReplicaAccountMeta`, Hash and the AccountData. The `ReplicaAccountMeta` contains info about
 the existing `AccountMeta` in addition to the account data length in bytes.
 
 The `ReplicaAccountsServer`: this service is reponsible for serving the `ReplicaAccountsRequest`
