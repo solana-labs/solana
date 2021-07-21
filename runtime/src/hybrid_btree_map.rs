@@ -39,7 +39,7 @@ impl<T:Clone + Debug> RealEntry<T> for T {
 }
 */
 
-pub const bucket_bins: usize = 64;
+pub const bucket_bins: usize = 4096;
 
 #[derive(Debug, Default)]
 pub struct PubkeyRange {
@@ -185,22 +185,30 @@ impl Rox for Sled {
         self.db.insert(pubkey.as_ref(), Sled::set(value));
     }
     fn update(&self, pubkey: &Pubkey, value: &AccountMapEntrySerialize) {
-        panic!("");
+        self.db.insert(pubkey.as_ref(), Sled::set(value));
     }
     fn delete(&self, pubkey: &Pubkey) {
-        panic!("");
+        self.db.remove(pubkey);
     }
     fn addref(&self, pubkey: &Pubkey, ref_count: RefCount, info: &SlotList<AccountInfo>) {
-        panic!("");
+        let value = AccountMapEntrySerialize {
+            slot_list: info.clone(),
+            ref_count,
+        };
+        self.db.insert(pubkey.as_ref(), Sled::set(&value));
     }
     fn unref(&self, pubkey: &Pubkey, ref_count: RefCount, info: &SlotList<AccountInfo>) {
-        panic!("");
+        let value = AccountMapEntrySerialize {
+            slot_list: info.clone(),
+            ref_count,
+        };
+        self.db.insert(pubkey.as_ref(), Sled::set(&value));
     }
     fn keys(&self, range: Option<&PubkeyRange>) -> Option<Vec<Pubkey>> {
-        panic!("");
+        self.db.iter()
     }
     fn values(&self, range: Option<&PubkeyRange>) -> Option<Vec<AccountMapEntrySerialize>> {
-        panic!("");
+        self.db.iter()
     }    
 }
 
