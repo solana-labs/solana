@@ -1301,7 +1301,7 @@ impl JsonRpcRequestProcessor {
         })
     }
 
-    pub fn get_transaction(
+    pub async fn get_transaction(
         &self,
         signature: Signature,
         config: Option<RpcEncodingConfigWrapper<RpcTransactionConfig>>,
@@ -1349,9 +1349,9 @@ impl JsonRpcRequestProcessor {
                 }
                 None => {
                     if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
-                        return Ok(self
-                            .runtime
-                            .block_on(bigtable_ledger_storage.get_confirmed_transaction(&signature))
+                        return Ok(bigtable_ledger_storage
+                            .get_confirmed_transaction(&signature)
+                            .await
                             .unwrap_or(None)
                             .map(|confirmed| confirmed.encode(encoding)));
                     }
@@ -3034,7 +3034,7 @@ pub mod rpc_full {
             meta: Self::Metadata,
             signature_str: String,
             config: Option<RpcEncodingConfigWrapper<RpcTransactionConfig>>,
-        ) -> Result<Option<EncodedConfirmedTransaction>>;
+        ) -> BoxFuture<Result<Option<EncodedConfirmedTransaction>>>;
 
         #[rpc(meta, name = "getSignaturesForAddress")]
         fn get_signatures_for_address(
@@ -3464,10 +3464,13 @@ pub mod rpc_full {
             meta: Self::Metadata,
             signature_str: String,
             config: Option<RpcEncodingConfigWrapper<RpcTransactionConfig>>,
-        ) -> Result<Option<EncodedConfirmedTransaction>> {
+        ) -> BoxFuture<Result<Option<EncodedConfirmedTransaction>>> {
             debug!("get_transaction rpc request received: {:?}", signature_str);
-            let signature = verify_signature(&signature_str)?;
-            meta.get_transaction(signature, config)
+            let signature = verify_signature(&signature_str);
+            if let Err(err) = signature {
+                return Box::pin(future::err(err));
+            }
+            Box::pin(async move { meta.get_transaction(signature.unwrap(), config).await })
         }
 
         fn get_signatures_for_address(
@@ -3576,7 +3579,7 @@ pub mod rpc_deprecated_v1_7 {
             meta: Self::Metadata,
             signature_str: String,
             config: Option<RpcEncodingConfigWrapper<RpcConfirmedTransactionConfig>>,
-        ) -> Result<Option<EncodedConfirmedTransaction>>;
+        ) -> BoxFuture<Result<Option<EncodedConfirmedTransaction>>>;
 
         // DEPRECATED
         #[rpc(meta, name = "getConfirmedSignaturesForAddress2")]
@@ -3646,13 +3649,19 @@ pub mod rpc_deprecated_v1_7 {
             meta: Self::Metadata,
             signature_str: String,
             config: Option<RpcEncodingConfigWrapper<RpcConfirmedTransactionConfig>>,
-        ) -> Result<Option<EncodedConfirmedTransaction>> {
+        ) -> BoxFuture<Result<Option<EncodedConfirmedTransaction>>> {
             debug!(
                 "get_confirmed_transaction rpc request received: {:?}",
                 signature_str
             );
-            let signature = verify_signature(&signature_str)?;
-            meta.get_transaction(signature, config.map(|config| config.convert()))
+            let signature = verify_signature(&signature_str);
+            if let Err(err) = signature {
+                return Box::pin(future::err(err));
+            }
+            Box::pin(async move {
+                meta.get_transaction(signature.unwrap(), config.map(|config| config.convert()))
+                    .await
+            })
         }
 
         fn get_confirmed_signatures_for_address2(
