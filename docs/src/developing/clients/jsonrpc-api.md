@@ -2474,6 +2474,9 @@ The result will be an RpcResponse JSON object with `value` equal to a JSON objec
 - `uiAmount: <number | null>` - the balance, using mint-prescribed decimals **DEPRECATED**
 - `uiAmountString: <string>` - the balance as a string, using mint-prescribed decimals
 
+For more details on returned data: The
+[Token Balances Structure](jsonrpc-api.md#token-balances-structure) response from [getBlock](jsonrpc-api.md#getblock) follows a similar structure.
+
 #### Example:
 
 Request:
@@ -4314,9 +4317,9 @@ Result:
 ```
 
 For more details on returned data:
-[Transaction Structure](jsonrpc-api.md#transactionstructure)
-[Inner Instructions Structure](jsonrpc-api.md#innerinstructionsstructure)
-[Token Balances Structure](jsonrpc-api.md#tokenbalancesstructure)
+[Transaction Structure](jsonrpc-api.md#transaction-structure)
+[Inner Instructions Structure](jsonrpc-api.md#inner-instructions-structure)
+[Token Balances Structure](jsonrpc-api.md#token-balances-structure)
 
 ### getConfirmedBlocks
 
