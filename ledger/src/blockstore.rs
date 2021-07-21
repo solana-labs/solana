@@ -173,7 +173,7 @@ impl std::fmt::Debug for AccountIndexRoxAdapter {
     }
 }
 use std::collections::hash_map::Entry as HashMapEntry;
-const use_hashmap: bool = true;
+const use_hashmap: bool = false;
 impl solana_runtime::hybrid_btree_map::Rox for AccountIndexRoxAdapter {
     fn get(&self, pubkey: &Pubkey) -> Option<AccountMapEntrySerialize> {
         if use_hashmap {
