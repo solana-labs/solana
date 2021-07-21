@@ -1,3 +1,5 @@
+#![cfg(feature = "full")]
+
 use solana_sdk::{
     account::AccountSharedData,
     compute_budget::ComputeBudget,
