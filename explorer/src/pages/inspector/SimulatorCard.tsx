@@ -230,6 +230,13 @@ function useSimulator(message: Message) {
               }
               depth--;
             } else {
+              if (depth === 0) {
+                instructionLogs.push({
+                  logs: [],
+                  failed: false,
+                });
+                depth++;
+              }
               // system transactions don't start with "Program log:"
               instructionLogs[instructionLogs.length - 1].logs.push({
                 prefix: prefixBuilder(depth),
