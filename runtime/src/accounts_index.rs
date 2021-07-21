@@ -707,7 +707,7 @@ impl<'a, T: 'static + Clone + std::fmt::Debug + Guts> Iterator for AccountsIndex
         let mut chunk: Vec<Pubkey> = Vec::with_capacity(ITER_BATCH_SIZE);
         'outer: for i in self.account_maps.iter().skip(start_bin) {
             for pubkey in
-                i.read().unwrap().range((self.start_bound, self.end_bound))
+                i.read().unwrap().range(Some((self.start_bound, self.end_bound)))
             {
                 if chunk.len() >= ITER_BATCH_SIZE {
                     break 'outer;

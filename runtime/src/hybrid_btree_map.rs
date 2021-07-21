@@ -182,6 +182,9 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
         self.disk.bucket_len(ix)
     }
     pub fn bucket_ix(&self, key: &Pubkey) -> usize {
+        if use_rox {
+            return 0;
+        }
         self.disk.bucket_ix(key)
     }
     pub fn keys<R: RangeBounds<Pubkey>>(&self, ix: usize, range: Option<&R>) -> Option<Vec<Pubkey>> {
@@ -673,7 +676,7 @@ impl<V: 'static + Clone + Debug + Guts> HybridBTreeMap<V> {
             _ => unbounded,
         }
     }
-    pub fn range<R>(&self, range: R) -> Keys
+    pub fn range<R>(&self, range: Option<R>) -> Keys
     where
         R: RangeBounds<Pubkey>,
     {
@@ -681,16 +684,20 @@ impl<V: 'static + Clone + Debug + Guts> HybridBTreeMap<V> {
         if self.bin_index != 0 && num_buckets == 1 {
             return Keys {keys: vec![], index: 0};
         }
-        let mut start = self
-            .disk
-            .bucket_ix(Self::bound(range.start_bound(), &Pubkey::default()));
-        // end is exclusive, so it is end + 1 we care about here
-        let mut end = std::cmp::min(
-            num_buckets,
-            1 + self
+        let mut start = 0;
+        let mut end = num_buckets;
+        if let Some(range) = &range {
+            start = self
                 .disk
-                .bucket_ix(Self::bound(range.end_bound(), &Pubkey::new(&[0xff; 32]))),
-        ); // ugly
+                .bucket_ix(Self::bound(range.start_bound(), &Pubkey::default()));
+            // end is exclusive, so it is end + 1 we care about here
+            end = std::cmp::min(
+                num_buckets,
+                1 + self
+                    .disk
+                    .bucket_ix(Self::bound(range.end_bound(), &Pubkey::new(&[0xff; 32]))),
+            ); // ugly
+        }
         let len = (start..end)
             .into_iter()
             .map(|ix| self.disk.bucket_len(ix) as usize)
@@ -702,9 +709,9 @@ impl<V: 'static + Clone + Debug + Guts> HybridBTreeMap<V> {
         end = std::cmp::min(end, myend);
         let mut keys = Vec::with_capacity(len);
         (start..end).into_iter().for_each(|ix| {
-            let ks = self.disk.keys(ix, Some(&range)).unwrap_or_default();
+            let ks = self.disk.keys(ix, range.as_ref()).unwrap_or_default();
             for k in ks.into_iter() {
-                if range.contains(&k) {
+                if range.is_none() || range.as_ref().unwrap().contains(&k) {
                     keys.push(k);
                 }
             }
