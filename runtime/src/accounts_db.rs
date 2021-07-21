@@ -4482,6 +4482,8 @@ impl AccountsDb {
         ancestors: &Ancestors,
         check_hash: bool,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
+        panic!("");
+        /*
         use BankHashVerificationError::*;
         let mut collect = Measure::start("collect");
         // maybe required at some point:
@@ -4592,6 +4594,7 @@ impl AccountsDb {
             ("collect", collect.as_us(), i64),
         );
         Ok((accumulated_hash, total_lamports))
+        */
     }
 
     pub fn get_accounts_hash(&self, slot: Slot) -> Hash {
