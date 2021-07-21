@@ -1387,7 +1387,7 @@ impl JsonRpcRequestProcessor {
         }
     }
 
-    pub fn get_signatures_for_address(
+    pub async fn get_signatures_for_address(
         &self,
         address: Pubkey,
         mut before: Option<Signature>,
@@ -1423,14 +1423,14 @@ impl JsonRpcRequestProcessor {
                         before = results.last().map(|x| x.signature);
                     }
 
-                    let bigtable_results = self.runtime.block_on(
-                        bigtable_ledger_storage.get_confirmed_signatures_for_address(
+                    let bigtable_results = bigtable_ledger_storage
+                        .get_confirmed_signatures_for_address(
                             &address,
                             before.as_ref(),
                             until.as_ref(),
                             limit,
-                        ),
-                    );
+                        )
+                        .await;
                     match bigtable_results {
                         Ok(bigtable_results) => {
                             results.extend(bigtable_results.into_iter().map(|x| x.0));
@@ -1953,6 +1953,28 @@ fn verify_token_account_filter(
             Ok(TokenAccountsFilter::ProgramId(program_id))
         }
     }
+}
+
+fn verify_and_parse_signatures_for_address_params(
+    address: String,
+    before: Option<String>,
+    until: Option<String>,
+    limit: Option<usize>,
+) -> Result<(Pubkey, Option<Signature>, Option<Signature>, usize)> {
+    let address = verify_pubkey(&address)?;
+    let before = before
+        .map(|ref before| verify_signature(before))
+        .transpose()?;
+    let until = until.map(|ref until| verify_signature(until)).transpose()?;
+    let limit = limit.unwrap_or(MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS2_LIMIT);
+
+    if limit == 0 || limit > MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS2_LIMIT {
+        return Err(Error::invalid_params(format!(
+            "Invalid limit; max {}",
+            MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS2_LIMIT
+        )));
+    }
+    Ok((address, before, until, limit))
 }
 
 fn check_is_at_least_confirmed(commitment: CommitmentConfig) -> Result<()> {
@@ -3042,7 +3064,7 @@ pub mod rpc_full {
             meta: Self::Metadata,
             address: String,
             config: Option<RpcSignaturesForAddressConfig>,
-        ) -> Result<Vec<RpcConfirmedTransactionStatusWithSignature>>;
+        ) -> BoxFuture<Result<Vec<RpcConfirmedTransactionStatusWithSignature>>>;
 
         #[rpc(meta, name = "getFirstAvailableBlock")]
         fn get_first_available_block(&self, meta: Self::Metadata) -> BoxFuture<Result<Slot>>;
@@ -3478,30 +3500,23 @@ pub mod rpc_full {
             meta: Self::Metadata,
             address: String,
             config: Option<RpcSignaturesForAddressConfig>,
-        ) -> Result<Vec<RpcConfirmedTransactionStatusWithSignature>> {
-            let address = verify_pubkey(&address)?;
-
+        ) -> BoxFuture<Result<Vec<RpcConfirmedTransactionStatusWithSignature>>> {
             let config = config.unwrap_or_default();
-            let before = config
-                .before
-                .map(|ref before| verify_signature(before))
-                .transpose()?;
-            let until = config
-                .until
-                .map(|ref until| verify_signature(until))
-                .transpose()?;
-            let limit = config
-                .limit
-                .unwrap_or(MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS2_LIMIT);
+            let commitment = config.commitment;
+            let verification = verify_and_parse_signatures_for_address_params(
+                address,
+                config.before,
+                config.until,
+                config.limit,
+            );
 
-            if limit == 0 || limit > MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS2_LIMIT {
-                return Err(Error::invalid_params(format!(
-                    "Invalid limit; max {}",
-                    MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS2_LIMIT
-                )));
+            match verification {
+                Err(err) => Box::pin(future::err(err)),
+                Ok((address, before, until, limit)) => Box::pin(async move {
+                    meta.get_signatures_for_address(address, before, until, limit, commitment)
+                        .await
+                }),
             }
-
-            meta.get_signatures_for_address(address, before, until, limit, config.commitment)
         }
 
         fn get_first_available_block(&self, meta: Self::Metadata) -> BoxFuture<Result<Slot>> {
@@ -3588,7 +3603,7 @@ pub mod rpc_deprecated_v1_7 {
             meta: Self::Metadata,
             address: String,
             config: Option<RpcGetConfirmedSignaturesForAddress2Config>,
-        ) -> Result<Vec<RpcConfirmedTransactionStatusWithSignature>>;
+        ) -> BoxFuture<Result<Vec<RpcConfirmedTransactionStatusWithSignature>>>;
     }
 
     pub struct DeprecatedV1_7Impl;
@@ -3669,30 +3684,23 @@ pub mod rpc_deprecated_v1_7 {
             meta: Self::Metadata,
             address: String,
             config: Option<RpcGetConfirmedSignaturesForAddress2Config>,
-        ) -> Result<Vec<RpcConfirmedTransactionStatusWithSignature>> {
-            let address = verify_pubkey(&address)?;
-
+        ) -> BoxFuture<Result<Vec<RpcConfirmedTransactionStatusWithSignature>>> {
             let config = config.unwrap_or_default();
-            let before = config
-                .before
-                .map(|ref before| verify_signature(before))
-                .transpose()?;
-            let until = config
-                .until
-                .map(|ref until| verify_signature(until))
-                .transpose()?;
-            let limit = config
-                .limit
-                .unwrap_or(MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS2_LIMIT);
+            let commitment = config.commitment;
+            let verification = verify_and_parse_signatures_for_address_params(
+                address,
+                config.before,
+                config.until,
+                config.limit,
+            );
 
-            if limit == 0 || limit > MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS2_LIMIT {
-                return Err(Error::invalid_params(format!(
-                    "Invalid limit; max {}",
-                    MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS2_LIMIT
-                )));
+            match verification {
+                Err(err) => Box::pin(future::err(err)),
+                Ok((address, before, until, limit)) => Box::pin(async move {
+                    meta.get_signatures_for_address(address, before, until, limit, commitment)
+                        .await
+                }),
             }
-
-            meta.get_signatures_for_address(address, before, until, limit, config.commitment)
         }
     }
 }
