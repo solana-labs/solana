@@ -6326,7 +6326,7 @@ impl AccountsDb {
                     store.alive_bytes.store(*stored_size, Ordering::SeqCst);
                 } else {
                     // this is usually an error: error!("clearing count: id: {}, slot: {}", id, store.slot());
-                    trace!("id: {} clearing count", id);
+                    error!("id: {} clearing count", id);
                     store.count_and_status.write().unwrap().0 = 0;
                 }
             }

@@ -157,9 +157,9 @@ pub struct Blockstore {
     pub account_index: Arc<Box<dyn solana_runtime::hybrid_btree_map::Rox>>,
 }
 
-use solana_runtime::accounts_index::{SlotList, AccountMapEntrySerialize};
-use solana_runtime::hybrid_btree_map::PubkeyRange;
 use solana_runtime::accounts_db::AccountInfo;
+use solana_runtime::accounts_index::{AccountMapEntrySerialize, SlotList};
+use solana_runtime::hybrid_btree_map::PubkeyRange;
 
 pub struct AccountIndexRoxAdapter {
     pub db: Arc<Database>,
@@ -172,60 +172,92 @@ impl std::fmt::Debug for AccountIndexRoxAdapter {
         Ok(())
     }
 }
-use std::collections::{hash_map::Entry as HashMapEntry};
+use std::collections::hash_map::Entry as HashMapEntry;
+const use_hashmap: bool = true;
 impl solana_runtime::hybrid_btree_map::Rox for AccountIndexRoxAdapter {
     fn get(&self, pubkey: &Pubkey) -> Option<AccountMapEntrySerialize> {
-        self.backing.read().unwrap().get(pubkey).cloned()
+        if use_hashmap {
+            self.backing.read().unwrap().get(pubkey).cloned()
+        } else {
+            panic!("");
+        }
     }
     fn insert(&self, pubkey: &Pubkey, value: &AccountMapEntrySerialize) {
-        self.backing.write().unwrap().insert(pubkey.clone(), value.clone());
+        if use_hashmap {
+            self.backing
+                .write()
+                .unwrap()
+                .insert(pubkey.clone(), value.clone());
+        } else {
+            panic!("");
+        }
     }
-    fn update(&self, pubkey: &Pubkey, value: &AccountMapEntrySerialize)
-    {
-        match self.backing.write().unwrap().entry(pubkey.clone()) {
-            HashMapEntry::Occupied(mut occupied) => {
-                *occupied.get_mut() = value.clone();
-            },
-            HashMapEntry::Vacant(vacant) => {
-                vacant.insert(value.clone());
-            },
+    fn update(&self, pubkey: &Pubkey, value: &AccountMapEntrySerialize) {
+        if use_hashmap {
+            match self.backing.write().unwrap().entry(pubkey.clone()) {
+                HashMapEntry::Occupied(mut occupied) => {
+                    *occupied.get_mut() = value.clone();
+                }
+                HashMapEntry::Vacant(vacant) => {
+                    vacant.insert(value.clone());
+                }
+            }
+        } else {
+            panic!("");
         }
     }
     fn delete(&self, pubkey: &Pubkey) {
-        self.backing.write().unwrap().remove(pubkey);
+        if use_hashmap {
+            self.backing.write().unwrap().remove(pubkey);
+        } else {
+            panic!("");
+        }
     }
     fn addref(&self, pubkey: &Pubkey, info: &SlotList<AccountInfo>) {
-        match self.backing.write().unwrap().entry(pubkey.clone()) {
-            HashMapEntry::Occupied(mut occupied) => {
-                occupied.get_mut().ref_count += 1;
-            },
-            HashMapEntry::Vacant(vacant) => {
-                panic!("");
-            },
+        if use_hashmap {
+            match self.backing.write().unwrap().entry(pubkey.clone()) {
+                HashMapEntry::Occupied(mut occupied) => {
+                    occupied.get_mut().ref_count += 1;
+                }
+                HashMapEntry::Vacant(vacant) => {
+                    panic!("");
+                }
+            }
+        } else {
+            panic!("");
         }
     }
     fn unref(&self, pubkey: &Pubkey, info: &SlotList<AccountInfo>) {
-        match self.backing.write().unwrap().entry(pubkey.clone()) {
-            HashMapEntry::Occupied(mut occupied) => {
-                occupied.get_mut().ref_count -= 1;
-            },
-            HashMapEntry::Vacant(vacant) => {
-                panic!("");
-            },
+        if use_hashmap {
+            match self.backing.write().unwrap().entry(pubkey.clone()) {
+                HashMapEntry::Occupied(mut occupied) => {
+                    occupied.get_mut().ref_count -= 1;
+                }
+                HashMapEntry::Vacant(vacant) => {
+                    panic!("");
+                }
+            }
+        } else {
+            panic!("");
         }
     }
     fn keys(&self, range: Option<&PubkeyRange>) -> Option<Vec<Pubkey>> {
-        let keys = self.backing.write().unwrap();
-        let k2 = keys.keys();
-        Some(k2.cloned().collect())
+        if use_hashmap {
+            let keys = self.backing.write().unwrap();
+            let k2 = keys.keys();
+            Some(k2.cloned().collect())
+        } else {
+            panic!("");
+        }
     }
-    fn values(
-        &self,
-        range: Option<&PubkeyRange>,
-    ) -> Option<Vec<AccountMapEntrySerialize>> {
-        let keys = self.backing.write().unwrap();
-        let k2 = keys.values();
-        Some(k2.cloned().collect())
+    fn values(&self, range: Option<&PubkeyRange>) -> Option<Vec<AccountMapEntrySerialize>> {
+        if use_hashmap {
+            let keys = self.backing.write().unwrap();
+            let k2 = keys.values();
+            Some(k2.cloned().collect())
+        } else {
+            panic!("");
+        }
     }
 }
 

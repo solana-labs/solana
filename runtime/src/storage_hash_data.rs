@@ -120,8 +120,6 @@ impl CacheHashDataManager {
     }
     pub fn report_stats(&self) {
         let mut stats = self.stats.write().unwrap();
-        info!("hash calculation cache stats: {:?}", stats);
-
         datapoint_info!(
             "CacheHashDataStats",
             ("storage_size", stats.storage_size, i64),
