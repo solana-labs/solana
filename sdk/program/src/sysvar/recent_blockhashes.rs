@@ -14,10 +14,6 @@ use std::{cmp::Ordering, collections::BinaryHeap, iter::FromIterator, ops::Deref
 )]
 pub const MAX_ENTRIES: usize = 150;
 
-#[deprecated(
-    since = "1.8.0",
-    note = "Please do not use, will no longer be available in the future"
-)]
 declare_deprecated_sysvar_id!(
     "SysvarRecentB1ockHashes11111111111111111111",
     RecentBlockhashes
