@@ -109,12 +109,21 @@ impl AccountSecondaryIndexes {
         }
     }
 }
+use serde::ser::*;
+use serde::{Serialize, Deserialize};
 
-#[derive(Debug)]
-pub struct AccountMapEntry<T> {
+#[derive(Debug)]//, Serialize, Deserialize)]
+pub struct AccountMapEntry<T> {// }: Serialize + Deserialize> {
     pub ref_count: RefCount,
     pub slot_list: SlotList<T>,
 }
+use crate::accounts_db::AccountInfo;
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AccountMapEntrySerialize {// }: Serialize + Deserialize> {
+    pub ref_count: RefCount,
+    pub slot_list: SlotList<AccountInfo>,
+}
+
 
 impl<T: 'static + Clone + std::fmt::Debug> Clone for AccountMapEntry<T> {
     fn clone(&self) -> Self {
@@ -152,7 +161,7 @@ pub struct ReadAccountMapEntry<'a, T: 'static + Clone + std::fmt::Debug> {
     owned_entry: Option<AccountMapEntry<T>>, // used to be: &'this 
 }
 
-impl<'a, T: Clone + std::fmt::Debug> ReadAccountMapEntry<'a, T> {
+impl<'a, T: Clone + std::fmt::Debug + Guts> ReadAccountMapEntry<'a, T> {
     pub fn new_with_lock(
         pubkey: &'a Pubkey,
         lock: AccountMapsReadLock<'a, T>,
@@ -190,7 +199,7 @@ impl<'a, T: Clone + std::fmt::Debug> ReadAccountMapEntry<'a, T> {
 }
 
 #[self_referencing]
-pub struct WriteAccountMapEntry<'a, 'b: 'a, T: 'static + Clone + std::fmt::Debug> {
+pub struct WriteAccountMapEntry<'a, 'b: 'a, T: 'static + Clone + std::fmt::Debug + Guts> {
     lock: AccountMapsWriteLock<'b, T>,
     pubkey: &'a Pubkey,
     #[borrows(mut lock, pubkey)]
@@ -201,7 +210,7 @@ pub struct WriteAccountMapEntry<'a, 'b: 'a, T: 'static + Clone + std::fmt::Debug
     ),
 }
 
-impl<'a, 'b: 'a, T: 'static + Clone + IsCached + std::fmt::Debug> WriteAccountMapEntry<'a, 'b, T> {
+impl<'a, 'b: 'a, T: 'static + Clone + IsCached + std::fmt::Debug + Guts> WriteAccountMapEntry<'a, 'b, T> {
     pub fn new_with_lock(
         pubkey: &'a Pubkey,
         lock: AccountMapsWriteLock<'b, T>,
@@ -632,14 +641,14 @@ pub struct AccountsIndexRootsStats {
     pub unrooted_cleaned_count: usize,
 }
 
-pub struct AccountsIndexIterator<'a, T: 'static + Clone + std::fmt::Debug> {
+pub struct AccountsIndexIterator<'a, T: 'static + Clone + std::fmt::Debug + Guts> {
     account_maps: &'a LockMapTypeSlice<T>,
     start_bound: Bound<Pubkey>,
     end_bound: Bound<Pubkey>,
     is_finished: bool,
 }
 
-impl<'a, T: Clone + std::fmt::Debug> AccountsIndexIterator<'a, T> {
+impl<'a, T: Clone + std::fmt::Debug + Guts> AccountsIndexIterator<'a, T> {
     fn clone_bound(bound: Bound<&Pubkey>) -> Bound<Pubkey> {
         match bound {
             Unbounded => Unbounded,
@@ -700,7 +709,7 @@ impl<'a, T: Clone + std::fmt::Debug> AccountsIndexIterator<'a, T> {
     }
 }
 
-impl<'a, T: 'static + Clone + std::fmt::Debug> Iterator for AccountsIndexIterator<'a, T> {
+impl<'a, T: 'static + Clone + std::fmt::Debug + Guts> Iterator for AccountsIndexIterator<'a, T> {
     type Item = Vec<Pubkey>;
     fn next(&mut self) -> Option<Self::Item> {
         if self.is_finished {
@@ -761,13 +770,14 @@ impl ScanSlotTracker {
 }
 
 #[derive(Debug)]
-pub struct AccountsIndex<T: 'static + Clone + std::fmt::Debug> {
+pub struct AccountsIndex<T: 'static + Clone + std::fmt::Debug + Guts> {
     pub account_maps: LockMapType<T>,
     program_id_index: SecondaryIndex<DashMapSecondaryIndexEntry>,
     spl_token_mint_index: SecondaryIndex<DashMapSecondaryIndexEntry>,
     spl_token_owner_index: SecondaryIndex<RwLockSecondaryIndexEntry>,
     roots_tracker: RwLock<RootsTracker>,
     ongoing_scan_roots: RwLock<BTreeMap<Slot, u64>>,
+
     // Each scan has some latest slot `S` that is the tip of the fork the scan
     // is iterating over. The unique id of that slot `S` is recorded here (note we don't use
     // `S` as the id because there can be more than one version of a slot `S`). If a fork
@@ -782,8 +792,8 @@ pub struct AccountsIndex<T: 'static + Clone + std::fmt::Debug> {
     pub flusher: JoinHandle<()>,
     exit: Arc<AtomicBool>,
 }
-
-impl<T: Clone + std::fmt::Debug + Sync + Send> Default for AccountsIndex<T> {
+use crate::hybrid_btree_map::Guts;
+impl<T: Clone + std::fmt::Debug + Sync + Send + Guts> Default for AccountsIndex<T> {
     fn default() -> Self {
         let exit = Arc::new(AtomicBool::new(false));
         let exit_ = exit.clone();
@@ -820,7 +830,7 @@ impl<T: Clone + std::fmt::Debug + Sync + Send> Default for AccountsIndex<T> {
 }
 
 impl<
-        T: 'static + Clone + IsCached + ZeroLamport + std::marker::Sync + std::marker::Send + Debug,
+        T: 'static + Clone + IsCached + ZeroLamport + std::marker::Sync + std::marker::Send + Debug + Guts,
     > AccountsIndex<T>
 {
     /*

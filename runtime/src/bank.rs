@@ -1046,6 +1046,9 @@ impl Default for BlockhashQueue {
 }
 
 impl Bank {
+    pub fn set_account_index_db(&self, db: Arc<Box<dyn crate::hybrid_btree_map::Rox>>) {//} LedgerColumn<cf::AccountIndex>) {
+        self.rc.accounts.accounts_db.set_account_index_db(db);
+    }
     pub fn new(genesis_config: &GenesisConfig) -> Self {
         Self::new_with_paths(
             genesis_config,

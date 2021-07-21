@@ -75,6 +75,8 @@ const PERF_SAMPLES_CF: &str = "perf_samples";
 const BLOCK_HEIGHT_CF: &str = "block_height";
 /// Column family for ProgramCosts
 const PROGRAM_COSTS_CF: &str = "program_costs";
+/// Column family for AccountIndex
+const ACCOUNT_INDEX_CF: &str = "account_index";
 
 // 1 day is chosen for the same reasoning of DEFAULT_COMPACTION_SLOT_INTERVAL
 const PERIODIC_COMPACTION_SECONDS: u64 = 60 * 60 * 24;
@@ -186,6 +188,10 @@ pub mod columns {
     #[derive(Debug)]
     // The program costs column
     pub struct ProgramCosts;
+
+    #[derive(Debug)]
+    // account index
+    pub struct AccountIndex;
 }
 
 pub enum AccessType {
@@ -500,6 +506,7 @@ impl Rocks {
             PerfSamples::NAME,
             BlockHeight::NAME,
             ProgramCosts::NAME,
+            AccountIndex::NAME,
         ]
     }
 
@@ -778,6 +785,39 @@ impl TypedColumn for columns::ProgramCosts {
     type Type = blockstore_meta::ProgramCost;
 }
 impl Column for columns::ProgramCosts {
+    type Index = Pubkey;
+
+    fn key(pubkey: Pubkey) -> Vec<u8> {
+        let mut key = vec![0; 32]; // size_of Pubkey
+        key[0..32].clone_from_slice(&pubkey.as_ref()[0..32]);
+        key
+    }
+
+    fn index(key: &[u8]) -> Self::Index {
+        Pubkey::new(&key[0..32])
+    }
+
+    fn primary_index(_index: Self::Index) -> u64 {
+        unimplemented!()
+    }
+
+    fn slot(_index: Self::Index) -> Slot {
+        unimplemented!()
+    }
+
+    #[allow(clippy::wrong_self_convention)]
+    fn as_index(_index: u64) -> Self::Index {
+        Pubkey::default()
+    }
+}
+
+impl ColumnName for columns::AccountIndex {
+    const NAME: &'static str = ACCOUNT_INDEX_CF;
+}
+impl TypedColumn for columns::AccountIndex {
+    type Type = solana_runtime::accounts_index::AccountMapEntrySerialize;
+}
+impl Column for columns::AccountIndex {
     type Index = Pubkey;
 
     fn key(pubkey: Pubkey) -> Vec<u8> {
