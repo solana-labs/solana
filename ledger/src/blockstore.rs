@@ -496,10 +496,20 @@ impl Blockstore {
         let block_height_cf = db.column();
         let program_costs_cf = db.column();
         let bank_hash_cf = db.column();
+        {
+            let mut batch = db.batch().unwrap();
+            let start = Pubkey::default();
+            let end = Pubkey::new(Pubkey::new(&[0xffu8; 32]).as_ref());
+            let cf = db.cf_handle::<cf::AccountIndex>();
+            /*let from_index = cf::AccountIndex::as_index(start);
+            let to_index = cf::AccountIndex::as_index(end);*/
+            batch.delete_range_cf::<cf::AccountIndex>(cf, start, end).unwrap();
+        }
         let account_index_cf = db.column();
 
         let db = Arc::new(db);
         let backing = RwLock::new(HashMap::new());
+        
         let account_index = AccountIndexRoxAdapter {
             db: db.clone(),
             account_index_cf,
