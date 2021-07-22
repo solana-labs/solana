@@ -360,7 +360,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
     }
     pub fn bucket_ix(&self, key: &Pubkey) -> usize {
         let b = self.binner.bin_from_pubkey(key);
-        assert_eq!(b, self.disk.bucket_ix(key));
+        assert_eq!(b, self.bucket_ix(key));
         b
     }
     pub fn keys<R: RangeBounds<Pubkey>>(
@@ -455,7 +455,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
                 let result = updatefn(None);
                 if let Some(result) = result {
                     // stick this in the write cache and flush it later
-                    let ix = self.disk.bucket_ix(key);
+                    let ix = self.bucket_ix(key);
                     let wc = &mut self.write_cache[ix].write().unwrap();
                     wc.insert(
                         key.clone(),
@@ -509,7 +509,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
                 let result = updatefn(current_value);
                 if let Some(result) = result {
                     // stick this in the write cache and flush it later
-                    let ix = self.disk.bucket_ix(key);
+                    let ix = self.bucket_ix(key);
                     let wc = &mut self.write_cache[ix].write().unwrap();
 
                     match wc.entry(key.clone()) {
@@ -535,7 +535,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
     pub fn get(&self, key: &Pubkey) -> Option<(u64, Vec<SlotT<V>>)> {
         self.gets.fetch_add(1, Ordering::Relaxed);
 
-        let ix = self.disk.bucket_ix(key);
+        let ix = self.bucket_ix(key);
         let wc = &mut self.write_cache[ix].read().unwrap();
         let res = wc.get(key);
         if let Some(res) = res {
@@ -552,7 +552,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
             self.db.read().unwrap()[ix].addref(key, ref_count, &V::get_info2(&slot_list));
             return;
         }
-        let ix = self.disk.bucket_ix(key);
+        let ix = self.bucket_ix(key);
         let wc = &mut self.write_cache[ix].write().unwrap();
 
         match wc.entry(key.clone()) {
@@ -572,7 +572,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
             self.db.read().unwrap()[ix].unref(key, ref_count, &V::get_info2(&slot_list));
             return;
         }
-        let ix = self.disk.bucket_ix(key);
+        let ix = self.bucket_ix(key);
         let wc = &mut self.write_cache[ix].write().unwrap();
 
         match wc.entry(key.clone()) {
@@ -592,7 +592,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
             return;
         }
         self.deletes.fetch_add(1, Ordering::Relaxed);
-        let ix = self.disk.bucket_ix(key);
+        let ix = self.bucket_ix(key);
         {
             let wc = &mut self.write_cache[ix].write().unwrap();
             wc.remove(key);
