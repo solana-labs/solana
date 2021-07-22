@@ -506,6 +506,10 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
     where
         F: Fn(Option<(&[SlotT<V>], u64)>) -> Option<(Vec<SlotT<V>>, u64)>,
     {
+        if !insert_caching && verify_get_on_insert {
+            assert!(!self.get(key).is_some());
+        }
+
         let entry = current_value.unwrap();
         let current_value = Some((&entry.slot_list[..], entry.ref_count));
         // we are an update
