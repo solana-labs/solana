@@ -42,7 +42,7 @@ impl<T:Clone + Debug> RealEntry<T> for T {
 }
 */
 
-pub const verify_get_on_insert: bool = true;
+pub const verify_get_on_insert: bool = false;
 pub const bucket_bins: usize = BINS;
 pub const use_trait: bool = true;
 pub const use_rox: bool = true;
