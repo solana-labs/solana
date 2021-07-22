@@ -188,27 +188,28 @@ impl Rox for Sled {
         })
     }
     fn insert(&self, pubkey: &Pubkey, value: &AccountMapEntrySerialize) {
-        self.db.insert(pubkey.as_ref(), Sled::set(value));
+        self.db.insert(pubkey.as_ref(), Sled::set(value)).unwrap();
+        assert!(self.get(pubkey).is_some());
     }
     fn update(&self, pubkey: &Pubkey, value: &AccountMapEntrySerialize) {
-        self.db.insert(pubkey.as_ref(), Sled::set(value));
+        self.db.insert(pubkey.as_ref(), Sled::set(value)).unwrap();
     }
     fn delete(&self, pubkey: &Pubkey) {
-        self.db.remove(pubkey);
+        self.db.remove(pubkey).unwrap();
     }
     fn addref(&self, pubkey: &Pubkey, ref_count: RefCount, info: &SlotList<AccountInfo>) {
         let value = AccountMapEntrySerialize {
             slot_list: info.clone(),
             ref_count,
         };
-        self.db.insert(pubkey.as_ref(), Sled::set(&value));
+        self.db.insert(pubkey.as_ref(), Sled::set(&value)).unwrap();
     }
     fn unref(&self, pubkey: &Pubkey, ref_count: RefCount, info: &SlotList<AccountInfo>) {
         let value = AccountMapEntrySerialize {
             slot_list: info.clone(),
             ref_count,
         };
-        self.db.insert(pubkey.as_ref(), Sled::set(&value));
+        self.db.insert(pubkey.as_ref(), Sled::set(&value)).unwrap();
     }
     fn keys(&self, range: Option<&PubkeyRange>) -> Option<Vec<Pubkey>> {
         Some(self.db.iter().map(|x| {
