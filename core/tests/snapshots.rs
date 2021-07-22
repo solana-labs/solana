@@ -49,7 +49,9 @@ mod tests {
         bank_forks::BankForks,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         snapshot_config::SnapshotConfig,
-        snapshot_utils::{self, ArchiveFormat, SnapshotVersion, DEFAULT_MAX_SNAPSHOTS_TO_RETAIN},
+        snapshot_utils::{
+            self, ArchiveFormat, SnapshotVersion, DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+        },
         status_cache::MAX_CACHE_ENTRIES,
     };
     use solana_sdk::{
@@ -119,7 +121,7 @@ mod tests {
                 snapshot_path: PathBuf::from(snapshot_dir.path()),
                 archive_format: ArchiveFormat::TarBzip2,
                 snapshot_version,
-                maximum_snapshots_to_retain: DEFAULT_MAX_SNAPSHOTS_TO_RETAIN,
+                maximum_snapshots_to_retain: DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
             };
             bank_forks.set_snapshot_config(Some(snapshot_config.clone()));
             SnapshotTestConfig {
@@ -148,7 +150,7 @@ mod tests {
         let old_last_bank = old_bank_forks.get(old_last_slot).unwrap();
 
         let check_hash_calculation = false;
-        let (deserialized_bank, _timing) = snapshot_utils::bank_from_snapshot_archive(
+        let (deserialized_bank, _timing) = snapshot_utils::bank_from_snapshot_archives(
             account_paths,
             &[],
             &old_bank_forks
@@ -156,12 +158,13 @@ mod tests {
                 .as_ref()
                 .unwrap()
                 .snapshot_path,
-            snapshot_utils::build_snapshot_archive_path(
+            snapshot_utils::build_full_snapshot_archive_path(
                 snapshot_package_output_path.to_path_buf(),
                 old_last_bank.slot(),
                 &old_last_bank.get_accounts_hash(),
                 ArchiveFormat::TarBzip2,
             ),
+            None,
             ArchiveFormat::TarBzip2,
             old_genesis_config,
             None,
@@ -181,10 +184,10 @@ mod tests {
             .clone();
         assert_eq!(*bank, deserialized_bank);
 
-        let slot_snapshot_paths = snapshot_utils::get_snapshot_paths(&snapshot_path);
+        let bank_snapshot_infos = snapshot_utils::get_bank_snapshots(&snapshot_path);
 
-        for p in slot_snapshot_paths {
-            snapshot_utils::remove_snapshot(p.slot, &snapshot_path).unwrap();
+        for p in bank_snapshot_infos {
+            snapshot_utils::remove_bank_snapshot(p.slot, &snapshot_path).unwrap();
         }
     }
 
@@ -235,12 +238,11 @@ mod tests {
         let last_bank = bank_forks.get(last_slot).unwrap();
         let snapshot_config = &snapshot_test_config.snapshot_config;
         let snapshot_path = &snapshot_config.snapshot_path;
-        let last_slot_snapshot_path = snapshot_utils::get_snapshot_paths(snapshot_path)
-            .pop()
+        let last_bank_snapshot_info = snapshot_utils::get_highest_bank_snapshot_info(snapshot_path)
             .expect("no snapshots found in path");
-        let snapshot_package = snapshot_utils::package_snapshot(
+        let snapshot_package = snapshot_utils::package_full_snapshot(
             last_bank,
-            &last_slot_snapshot_path,
+            &last_bank_snapshot_info,
             snapshot_path,
             last_bank.src.slot_deltas(&last_bank.src.roots()),
             &snapshot_config.snapshot_package_output_path,
@@ -253,10 +255,11 @@ mod tests {
         let snapshot_package = snapshot_utils::process_accounts_package_pre(
             snapshot_package,
             Some(last_bank.get_thread_pool()),
+            None,
         );
         snapshot_utils::archive_snapshot_package(
             &snapshot_package,
-            DEFAULT_MAX_SNAPSHOTS_TO_RETAIN,
+            DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
         )
         .unwrap();
 
@@ -325,7 +328,8 @@ mod tests {
         // Take snapshot of zeroth bank
         let bank0 = bank_forks.get(0).unwrap();
         let storages = bank0.get_snapshot_storages();
-        snapshot_utils::add_snapshot(snapshot_path, bank0, &storages, snapshot_version).unwrap();
+        snapshot_utils::add_bank_snapshot(snapshot_path, bank0, &storages, snapshot_version)
+            .unwrap();
 
         // Set up snapshotting channels
         let (sender, receiver) = channel();
@@ -343,7 +347,7 @@ mod tests {
         let saved_slot = 4;
         let mut saved_archive_path = None;
 
-        for forks in 0..snapshot_utils::MAX_SNAPSHOTS + 2 {
+        for forks in 0..snapshot_utils::MAX_BANK_SNAPSHOTS + 2 {
             let bank = Bank::new_from_parent(
                 &bank_forks[forks as u64],
                 &Pubkey::default(),
@@ -420,7 +424,7 @@ mod tests {
                 let options = CopyOptions::new();
                 fs_extra::dir::copy(&last_snapshot_path, &saved_snapshots_dir, &options).unwrap();
 
-                saved_archive_path = Some(snapshot_utils::build_snapshot_archive_path(
+                saved_archive_path = Some(snapshot_utils::build_full_snapshot_archive_path(
                     snapshot_package_output_path.to_path_buf(),
                     slot,
                     &accounts_hash,
@@ -431,11 +435,14 @@ mod tests {
 
         // Purge all the outdated snapshots, including the ones needed to generate the package
         // currently sitting in the channel
-        snapshot_utils::purge_old_snapshots(snapshot_path);
-        assert!(snapshot_utils::get_snapshot_paths(&snapshots_dir)
+        snapshot_utils::purge_old_bank_snapshots(snapshot_path);
+
+        let mut bank_snapshot_infos = snapshot_utils::get_bank_snapshots(&snapshots_dir);
+        bank_snapshot_infos.sort_unstable();
+        assert!(bank_snapshot_infos
             .into_iter()
             .map(|path| path.slot)
-            .eq(3..=snapshot_utils::MAX_SNAPSHOTS as u64 + 2));
+            .eq(3..=snapshot_utils::MAX_BANK_SNAPSHOTS as u64 + 2));
 
         // Create a SnapshotPackagerService to create tarballs from all the pending
         // SnapshotPackage's on the channel. By the time this service starts, we have already
@@ -453,7 +460,7 @@ mod tests {
             None,
             &exit,
             &cluster_info,
-            DEFAULT_MAX_SNAPSHOTS_TO_RETAIN,
+            DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
         );
 
         let thread_pool = accounts_db::make_min_priority_thread_pool();
@@ -471,6 +478,7 @@ mod tests {
                         solana_runtime::snapshot_utils::process_accounts_package_pre(
                             snapshot_package,
                             Some(&thread_pool),
+                            None,
                         );
                     *pending_snapshot_package.lock().unwrap() = Some(snapshot_package);
                 }
