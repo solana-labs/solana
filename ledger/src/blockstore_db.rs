@@ -22,7 +22,7 @@ use solana_sdk::{
 };
 use solana_storage_proto::convert::generated;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     ffi::{CStr, CString},
     fs,
     marker::PhantomData,
@@ -421,9 +421,9 @@ impl Rocks {
         // this is only needed for LedgerCleanupService. so guard with PrimaryOnly (i.e. running solana-validator)
         if matches!(access_type, AccessType::PrimaryOnly) {
             for cf_name in cf_names {
-                // this special column family must be excluded from LedgerCleanupService's rocksdb
+                // these special column families must be excluded from LedgerCleanupService's rocksdb
                 // compactions
-                if cf_name == TransactionStatusIndex::NAME {
+                if excludes_from_compaction(cf_name) {
                     continue;
                 }
 
@@ -1319,9 +1319,7 @@ fn get_cf_options<C: 'static + Column + ColumnName>(
 
     // TransactionStatusIndex must be excluded from LedgerCleanupService's rocksdb
     // compactions....
-    if matches!(access_type, AccessType::PrimaryOnly)
-        && C::NAME != columns::TransactionStatusIndex::NAME
-    {
+    if matches!(access_type, AccessType::PrimaryOnly) && !excludes_from_compaction(C::NAME) {
         options.set_compaction_filter_factory(PurgedSlotFilterFactory::<C> {
             oldest_slot: oldest_slot.clone(),
             name: CString::new(format!("purged_slot_filter_factory({})", C::NAME)).unwrap(),
@@ -1359,6 +1357,18 @@ fn get_db_options(access_type: &AccessType) -> Options {
     }
 
     options
+}
+
+fn excludes_from_compaction(cf_name: &str) -> bool {
+    // list of Column Families must be excluded from compaction:
+    let no_compaction_cfs: HashSet<&'static str> = vec![
+        columns::TransactionStatusIndex::NAME,
+        columns::ProgramCosts::NAME,
+    ]
+    .into_iter()
+    .collect();
+
+    no_compaction_cfs.get(cf_name).is_some()
 }
 
 #[cfg(test)]
@@ -1412,5 +1422,15 @@ pub mod tests {
             compaction_filter.filter(dummy_level, &key, &dummy_value),
             CompactionDecision::Keep
         );
+    }
+
+    #[test]
+    fn test_excludes_from_compaction() {
+        // currently there are two CFs are excluded from compaction:
+        assert!(excludes_from_compaction(
+            columns::TransactionStatusIndex::NAME
+        ));
+        assert!(excludes_from_compaction(columns::ProgramCosts::NAME));
+        assert!(!excludes_from_compaction("something else"));
     }
 }
