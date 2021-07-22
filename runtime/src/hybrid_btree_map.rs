@@ -100,6 +100,7 @@ struct PerSlot {
 pub struct Sled {
     pub db: sled::Db,
 }
+use std::fs;
 impl Sled {
     pub fn new() -> Self {
         let _ = fs::remove_dir_all("my_db");
