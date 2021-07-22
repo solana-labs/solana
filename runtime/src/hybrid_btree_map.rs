@@ -236,7 +236,7 @@ pub type SlotT<T> = (Slot, T);
 
 pub type WriteCache<V> = HashMap<Pubkey, V>;
 use crate::waitable_condvar::WaitableCondvar;
-use std::sync::atomic::{AtomicBool, AtomicU64};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8};
 use std::time::Duration;
 
 pub struct WriteCacheEntry<V> {
