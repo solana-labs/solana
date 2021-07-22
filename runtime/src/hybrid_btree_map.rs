@@ -565,7 +565,13 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
         if let Some(res) = res {
             Some((res.ref_count, res.slot_list.clone()))
         } else {
-            self.disk.get(key)
+            if use_trait {
+                let ix = self.bucket_ix(key);
+                let r = self.db.read().unwrap()[ix].get(key)
+                return r;
+            }
+    
+            self.disk.get(key);
         }
     }
     pub fn addref(&self, key: &Pubkey, ref_count: RefCount, slot_list: &Vec<SlotT<V>>) {
