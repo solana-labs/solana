@@ -2,7 +2,7 @@
 solana_sdk::declare_id!("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 
 pub(crate) mod new_token_program {
-    solana_sdk::declare_id!("NToKV6K2hAz79S73NtC9vVWrAGn77mBduBn95xQFGSZ");
+    solana_sdk::declare_id!("nTokHfnBtpt4V6xiEbBSduiGCrQ6wSF3rxC8WeWAQ9F");
 }
 
 /*
