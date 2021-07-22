@@ -344,7 +344,7 @@ impl StandardBroadcastRun {
         if now - last > BROADCAST_PEER_UPDATE_INTERVAL_MS
             && self
                 .last_peer_update
-                .compare_and_swap(now, last, Ordering::Relaxed)
+                .compare_and_swap(last, now, Ordering::Relaxed)
                 == last
         {
             *self.cluster_nodes.write().unwrap() = ClusterNodes::<BroadcastStage>::new(
