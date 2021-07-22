@@ -83,6 +83,7 @@ pub mod unfrozen_gossip_verified_vote_hashes;
 pub mod validator;
 pub mod verified_vote_packets;
 pub mod vote_stake_tracker;
+pub mod voting_service;
 pub mod weighted_shuffle;
 pub mod window_service;
 
