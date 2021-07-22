@@ -39,10 +39,13 @@ impl<T:Clone + Debug> RealEntry<T> for T {
 }
 */
 
+pub const verify_get_on_insert: bool = true;
 pub const bucket_bins: usize = BINS;
+pub const use_trait: bool = true;
 pub const use_rox: bool = true;
+pub const use_sled: bool = false;
 pub const update_caching: bool = true;
-pub const insert_caching: bool = true;
+pub const insert_caching: bool = false;
 
 #[derive(Debug, Default)]
 pub struct PubkeyRange {
@@ -189,7 +192,6 @@ impl Rox for Sled {
     }
     fn insert(&self, pubkey: &Pubkey, value: &AccountMapEntrySerialize) {
         self.db.insert(pubkey.as_ref(), Sled::set(value)).unwrap();
-        assert!(self.get(pubkey).is_some());
     }
     fn update(&self, pubkey: &Pubkey, value: &AccountMapEntrySerialize) {
         self.db.insert(pubkey.as_ref(), Sled::set(value)).unwrap();
@@ -251,10 +253,20 @@ pub struct BucketMapWriteHolder<V> {
 
 impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
     pub fn set_account_index_db(&self, mut db: Arc<Box<dyn Rox>>) {
-        let x = Sled::new();
-        let x:  Arc<Box<dyn Rox>> = Arc::new(Box::new(x));
-        let db = x;//Arc::new(Box::new(x)); // use sled
-        *self.db.write().unwrap()=(0..bucket_bins).into_iter().map(|_| db.clone()).collect();
+        if use_trait {
+            assert!(use_rox || use_sled);
+            assert!(!use_rox || !use_sled);
+            if use_sled {
+                error!("using sled");
+                let x = Sled::new();
+                let x:  Arc<Box<dyn Rox>> = Arc::new(Box::new(x));
+                db = x;//Arc::new(Box::new(x)); // use sled
+            }
+            else {
+                error!("using rocks");
+            }
+            *self.db.write().unwrap()=(0..bucket_bins).into_iter().map(|_| db.clone()).collect();
+        }
         //*self.db.write().unwrap() = Some(db);
     }
 
@@ -306,7 +318,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
         let wait = WaitableCondvar::default();
         let db = RwLock::new(vec![]);//Arc::new(RwLock::new(None));
         let binner = PubkeyBinCalculator16::new(bucket_bins);
-        let unified_backing = use_rox;
+        let unified_backing = use_trait;
 
         Self {
             disk: bucket_map,
@@ -339,13 +351,13 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
         self.disk.bucket_len(ix)
     }
     pub fn bucket_ix(&self, key: &Pubkey) -> usize {
-        if use_rox {
+        if use_trait {
             return self.binner.bin_from_pubkey(key);
         }
         self.disk.bucket_ix(key)
     }
     pub fn keys<R: RangeBounds<Pubkey>>(&self, ix: usize, range: Option<&R>) -> Option<Vec<Pubkey>> {
-        if use_rox {
+        if use_trait {
             let mut range_use = PubkeyRange::default();
             if let Some(range) = range {
                 match range.start_bound() {
@@ -366,7 +378,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
     }
     pub fn values<R: RangeBounds<Pubkey>>(&self, ix: usize, range: Option<&R>) -> Option<Vec<Vec<SlotT<V>>>> {
         //error!("values");
-        if use_rox {
+        if use_trait {
             return self.db.read().unwrap()[ix]
             .values(None).map(|x| x.into_iter().map(|x| V::get_copy2(&x.slot_list)).collect());
         }
@@ -377,7 +389,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
     }
 
     pub fn num_buckets(&self) -> usize {
-        if use_rox {
+        if use_trait {
             return bucket_bins;
         }
         assert_eq!(bucket_bins, self.disk.num_buckets());
@@ -390,7 +402,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
     {
         if current_value.is_none() {
 
-            if use_rox {
+            if use_trait {
                 let result = updatefn(None).unwrap();
                 let result = AccountMapEntrySerialize {
                     slot_list: result
@@ -403,6 +415,12 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
                 let ix = self.bucket_ix(key);
                 self.db.read().unwrap()[ix]
                     .insert(key, &result);
+                    if verify_get_on_insert {
+                    let g = self.db.read().unwrap()[ix]
+                        .get(key);
+                        assert!(g.is_some());
+                    }
+
                 return;
             }
             if true {
@@ -428,7 +446,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
         } else {
             // update
             let entry = current_value.unwrap();
-            if use_rox {
+            if use_trait {
                 let current_value = Some((&entry.slot_list[..], entry.ref_count));
                 let result = updatefn(current_value).unwrap();
                 let result = AccountMapEntrySerialize {
@@ -509,7 +527,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
     }
     pub fn addref(&self, key: &Pubkey, ref_count: RefCount, slot_list: &Vec<SlotT<V>>) {
         // todo: measure this and unref
-        if use_rox {
+        if use_trait {
             let ix = self.bucket_ix(key);
 
             self.db.read().unwrap()[ix].addref(key, ref_count, &V::get_info2(&slot_list));
@@ -530,7 +548,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
     }
 
     pub fn unref(&self, key: &Pubkey, ref_count: RefCount, slot_list: &Vec<SlotT<V>>) {
-        if use_rox {
+        if use_trait {
             let ix = self.bucket_ix(key);
             self.db.read().unwrap()[ix].unref(key, ref_count, &V::get_info2(&slot_list));
             return;
@@ -549,7 +567,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
         }
     }
     fn delete_key(&self, key: &Pubkey) {
-        if use_rox {
+        if use_trait {
             let ix = self.bucket_ix(key);
             self.db.read().unwrap()[ix].delete(key);
             return;
