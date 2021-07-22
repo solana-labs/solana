@@ -360,7 +360,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
     }
     pub fn bucket_ix(&self, key: &Pubkey) -> usize {
         let b = self.binner.bin_from_pubkey(key);
-        assert_eq!(b, self.bucket_ix(key));
+        assert_eq!(b, self.disk.bucket_ix(key));
         b
     }
     pub fn keys<R: RangeBounds<Pubkey>>(
