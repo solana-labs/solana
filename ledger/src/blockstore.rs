@@ -284,7 +284,9 @@ impl solana_runtime::hybrid_btree_map::Rox for AccountIndexRoxAdapter {
         if use_hashmap {
             let keys = self.backing.read().unwrap();
             let k2 = keys.values();
-            error!("valus: while ignoring range {}", k2.len());
+            if range.is_some() {
+                panic!("values: while ignoring range {}", k2.len());
+            }
             Some(k2.cloned().collect())
         } else {
             let keys = self.keys(None).unwrap();
@@ -292,7 +294,9 @@ impl solana_runtime::hybrid_btree_map::Rox for AccountIndexRoxAdapter {
             for k in keys {
                 result.push(self.get(&k).unwrap());
             }
-            error!("valus: while ignoring range {}", result.len());
+            if range.is_some() {
+                panic!("values: while ignoring range {}", result.len());
+            }
             Some(result)
         }
     }
