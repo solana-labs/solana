@@ -1130,8 +1130,12 @@ where
     info!("{}", measure_untar);
 
     let unpacked_version_file = unpack_dir.path().join("version");
-    let mut snapshot_version = String::new();
-    File::open(unpacked_version_file).and_then(|mut f| f.read_to_string(&mut snapshot_version))?;
+    let snapshot_version = {
+        let mut snapshot_version = String::new();
+        File::open(unpacked_version_file)
+            .and_then(|mut f| f.read_to_string(&mut snapshot_version))?;
+        snapshot_version.trim().to_string()
+    };
 
     Ok(UnarchivedSnapshot {
         unpack_dir,
@@ -1517,16 +1521,19 @@ fn untar_snapshot_in<P: AsRef<Path>>(
 fn verify_unpacked_snapshots_dir_and_version(
     unpacked_snapshots_dir_and_version: &UnpackedSnapshotsDirAndVersion,
 ) -> Result<(SnapshotVersion, BankSnapshotInfo)> {
-    let snapshot_version_str = unpacked_snapshots_dir_and_version.snapshot_version.trim();
-    info!("snapshot version: {}", snapshot_version_str);
+    info!(
+        "snapshot version: {}",
+        &unpacked_snapshots_dir_and_version.snapshot_version
+    );
 
     let snapshot_version =
-        SnapshotVersion::maybe_from_string(snapshot_version_str).ok_or_else(|| {
-            get_io_error(&format!(
-                "unsupported snapshot version: {}",
-                snapshot_version_str
-            ))
-        })?;
+        SnapshotVersion::maybe_from_string(&unpacked_snapshots_dir_and_version.snapshot_version)
+            .ok_or_else(|| {
+                get_io_error(&format!(
+                    "unsupported snapshot version: {}",
+                    &unpacked_snapshots_dir_and_version.snapshot_version,
+                ))
+            })?;
     let mut bank_snapshot_infos =
         get_bank_snapshots(&unpacked_snapshots_dir_and_version.unpacked_snapshots_dir);
     if bank_snapshot_infos.len() > 1 {
