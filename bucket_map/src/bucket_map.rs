@@ -241,8 +241,13 @@ impl<T: Clone + std::fmt::Debug> BucketMap<T> {
         }
     }
     pub fn bucket_ix(&self, key: &Pubkey) -> usize {
-        let location = read_be_u64(key.as_ref());
-        (location >> (64 - self.bits)) as usize
+        if self.bits > 0 {
+            let location = read_be_u64(key.as_ref());
+            (location >> (64 - self.bits)) as usize
+        }
+        else {
+            0
+        }
     }
 
     pub fn addref(&self, key: &Pubkey) -> Option<u64> {
