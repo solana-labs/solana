@@ -62,8 +62,7 @@ pub trait Rox: Debug + Send + Sync {
     fn addref(&self, pubkey: &Pubkey, ref_count: RefCount, info: &SlotList<AccountInfo>);
     fn unref(&self, pubkey: &Pubkey, ref_count: RefCount, info: &SlotList<AccountInfo>);
     fn keys(&self, range: Option<&PubkeyRange>) -> Option<Vec<Pubkey>>;
-    fn values(&self, range: Option<&PubkeyRange>)
-        -> Option<Vec<AccountMapEntrySerialize>>;
+    fn values(&self, range: Option<&PubkeyRange>) -> Option<Vec<AccountMapEntrySerialize>>;
 }
 use crate::accounts_db::AccountInfo;
 pub trait Guts: Sized {
@@ -80,12 +79,10 @@ impl Guts for AccountInfo {
     fn get_copy(info: &AccountInfo) -> Self {
         info.clone()
     }
-    fn get_info2(info: &SlotList<Self>) -> SlotList<AccountInfo>
-    {
+    fn get_info2(info: &SlotList<Self>) -> SlotList<AccountInfo> {
         info.clone()
     }
-    fn get_copy2(info: &SlotList<AccountInfo>) -> SlotList<Self>
-    {
+    fn get_copy2(info: &SlotList<AccountInfo>) -> SlotList<Self> {
         info.clone()
     }
 }
@@ -112,15 +109,12 @@ impl Sled {
         let _ = fs::remove_dir_all("my_db");
         let db: sled::Db = sled::open("my_db").unwrap();
         error!("created sled");
-        Self {
-            db
-        }
+        Self { db }
     }
 
     fn get(data: &[u8]) -> AccountMapEntrySerialize {
         let after_header_start = std::mem::size_of::<Header>();
-        let header: &Header =
-        unsafe {
+        let header: &Header = unsafe {
             let item = data[0..after_header_start].as_ptr() as *const Header;
             &*item
         };
@@ -138,7 +132,7 @@ impl Sled {
             slot_list.push((per_slot.slot, per_slot.info.clone()));
         }
 
-        AccountMapEntrySerialize{
+        AccountMapEntrySerialize {
             slot_list,
             ref_count: header.ref_count,
         }
@@ -151,8 +145,7 @@ impl Sled {
         let sz = after_header_start + items * per_slot_size;
         let mut data = vec![0u8; sz];
 
-        let header: &mut Header =
-        unsafe {
+        let header: &mut Header = unsafe {
             let item = data[0..after_header_start].as_ptr() as *mut Header;
             &mut *item
         };
@@ -214,19 +207,29 @@ impl Rox for Sled {
         self.db.insert(pubkey.as_ref(), Sled::set(&value)).unwrap();
     }
     fn keys(&self, range: Option<&PubkeyRange>) -> Option<Vec<Pubkey>> {
-        Some(self.db.iter().map(|x| {
-            let (k,v) = x.unwrap();
-            let slice: &[u8] = k.borrow();
-            Pubkey::new(slice)
-        }).collect())
+        Some(
+            self.db
+                .iter()
+                .map(|x| {
+                    let (k, v) = x.unwrap();
+                    let slice: &[u8] = k.borrow();
+                    Pubkey::new(slice)
+                })
+                .collect(),
+        )
     }
     fn values(&self, range: Option<&PubkeyRange>) -> Option<Vec<AccountMapEntrySerialize>> {
-        Some(self.db.iter().map(|x| {
-            let (k,v) = x.unwrap();
-            let slice: &[u8] = v.borrow();
-            Sled::get(slice)
-        }).collect())
-    }    
+        Some(
+            self.db
+                .iter()
+                .map(|x| {
+                    let (k, v) = x.unwrap();
+                    let slice: &[u8] = v.borrow();
+                    Sled::get(slice)
+                })
+                .collect(),
+        )
+    }
 }
 
 pub type SlotT<T> = (Slot, T);
@@ -259,13 +262,12 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
             if use_sled {
                 error!("using sled");
                 let x = Sled::new();
-                let x:  Arc<Box<dyn Rox>> = Arc::new(Box::new(x));
-                db = x;//Arc::new(Box::new(x)); // use sled
-            }
-            else {
+                let x: Arc<Box<dyn Rox>> = Arc::new(Box::new(x));
+                db = x; //Arc::new(Box::new(x)); // use sled
+            } else {
                 error!("using rocks");
             }
-            *self.db.write().unwrap()=(0..bucket_bins).into_iter().map(|_| db.clone()).collect();
+            *self.db.write().unwrap() = (0..bucket_bins).into_iter().map(|_| db.clone()).collect();
         }
         //*self.db.write().unwrap() = Some(db);
     }
@@ -285,21 +287,9 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
                 continue;
             }
             found_one = false;
-            let ignored = AccountMapEntry {
-                slot_list: vec![],
-                ref_count: 0,
-            };
-
             for ix in 0..self.bins {
-                if !self.write_cache[ix].read().unwrap().is_empty() {
+                if self.flush(ix) {
                     found_one = true;
-                    let mut wc = self.write_cache[ix].write().unwrap();
-                    self.write_cache_flushes
-                        .fetch_add(wc.len() as u64, Ordering::Relaxed);
-                    for (k, v) in wc.iter() {
-                        self.update_no_cache(k, |_current| Some((v.slot_list.clone(), v.ref_count)), Some(&ignored));
-                    }
-                    wc.clear();
                 }
             }
         }
@@ -316,7 +306,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
             .map(|i| RwLock::new(WriteCache::default()))
             .collect::<Vec<_>>();
         let wait = WaitableCondvar::default();
-        let db = RwLock::new(vec![]);//Arc::new(RwLock::new(None));
+        let db = RwLock::new(vec![]); //Arc::new(RwLock::new(None));
         let binner = PubkeyBinCalculator16::new(bucket_bins);
         let unified_backing = use_trait;
 
@@ -335,16 +325,23 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
             unified_backing,
         }
     }
-    pub fn flush(&self, ix: usize) {
-        if ix < self.write_cache.len() {
-            let wc = &mut self.write_cache[ix].write().unwrap();
+    pub fn flush(&self, ix: usize) -> bool {
+        if !self.write_cache[ix].read().unwrap().is_empty() {
+            let mut wc = self.write_cache[ix].write().unwrap();
             self.write_cache_flushes
                 .fetch_add(wc.len() as u64, Ordering::Relaxed);
             for (k, v) in wc.iter() {
-                self.disk
-                    .update(k, |_previous| Some((v.slot_list.clone(), v.ref_count)));
+                self.update_no_cache(
+                    k,
+                    |_current| Some((v.slot_list.clone(), v.ref_count)),
+                    None,
+                    true,
+                );
             }
             wc.clear();
+            true
+        } else {
+            false
         }
     }
     pub fn bucket_len(&self, ix: usize) -> u64 {
@@ -356,31 +353,47 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
         }
         self.disk.bucket_ix(key)
     }
-    pub fn keys<R: RangeBounds<Pubkey>>(&self, ix: usize, range: Option<&R>) -> Option<Vec<Pubkey>> {
+    pub fn keys<R: RangeBounds<Pubkey>>(
+        &self,
+        ix: usize,
+        range: Option<&R>,
+    ) -> Option<Vec<Pubkey>> {
         if use_trait {
             let mut range_use = PubkeyRange::default();
             if let Some(range) = range {
                 match range.start_bound() {
-                    Included(pubkey) => {range_use.start_pubkey_include = Some(pubkey.clone());},
-                    Excluded(pubkey) => {range_use.start_pubkey_exclude = Some(pubkey.clone());},
-                    Unbounded => {},
+                    Included(pubkey) => {
+                        range_use.start_pubkey_include = Some(pubkey.clone());
+                    }
+                    Excluded(pubkey) => {
+                        range_use.start_pubkey_exclude = Some(pubkey.clone());
+                    }
+                    Unbounded => {}
                 }
                 match range.end_bound() {
-                    Included(pubkey) => {panic!("");},
-                    Excluded(pubkey) => {range_use.end_pubkey_exclude = Some(pubkey.clone());},
-                    Unbounded => {},
+                    Included(pubkey) => {
+                        panic!("");
+                    }
+                    Excluded(pubkey) => {
+                        range_use.end_pubkey_exclude = Some(pubkey.clone());
+                    }
+                    Unbounded => {}
                 }
             }
-            return self.db.read().unwrap()[ix]
-            .keys(Some(&range_use)); // todo range
+            return self.db.read().unwrap()[ix].keys(Some(&range_use)); // todo range
         }
         self.disk.keys(ix)
     }
-    pub fn values<R: RangeBounds<Pubkey>>(&self, ix: usize, range: Option<&R>) -> Option<Vec<Vec<SlotT<V>>>> {
+    pub fn values<R: RangeBounds<Pubkey>>(
+        &self,
+        ix: usize,
+        range: Option<&R>,
+    ) -> Option<Vec<Vec<SlotT<V>>>> {
         //error!("values");
         if use_trait {
             return self.db.read().unwrap()[ix]
-            .values(None).map(|x| x.into_iter().map(|x| V::get_copy2(&x.slot_list)).collect());
+                .values(None)
+                .map(|x| x.into_iter().map(|x| V::get_copy2(&x.slot_list)).collect());
         }
 
         // only valid when write cache is empty
@@ -396,12 +409,16 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
         self.disk.num_buckets()
     }
 
-    pub fn update_no_cache<F>(&self, key: &Pubkey, updatefn: F, current_value: Option<&V2<V>>)
-    where
+    pub fn update_no_cache<F>(
+        &self,
+        key: &Pubkey,
+        updatefn: F,
+        current_value: Option<&V2<V>>,
+        force_not_insert: bool,
+    ) where
         F: Fn(Option<(&[SlotT<V>], u64)>) -> Option<(Vec<SlotT<V>>, u64)>,
     {
-        if current_value.is_none() {
-
+        if current_value.is_none() && !force_not_insert {
             if use_trait {
                 let result = updatefn(None).unwrap();
                 let result = AccountMapEntrySerialize {
@@ -413,13 +430,12 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
                     ref_count: result.1,
                 };
                 let ix = self.bucket_ix(key);
-                self.db.read().unwrap()[ix]
-                    .insert(key, &result);
-                    if verify_get_on_insert {
-                    let g = self.db.read().unwrap()[ix]
-                        .get(key);
-                        assert!(g.is_some());
-                    }
+                self.db.read().unwrap()[ix].insert(key, &result);
+                if verify_get_on_insert {
+                    let g = self.db.read().unwrap()[ix].get(key);
+                    error!("verified");
+                    assert!(g.is_some());
+                }
 
                 return;
             }
@@ -445,9 +461,8 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
             }
         } else {
             // update
-            let entry = current_value.unwrap();
+            let current_value = current_value.map(|entry| (&entry.slot_list[..], entry.ref_count));
             if use_trait {
-                let current_value = Some((&entry.slot_list[..], entry.ref_count));
                 let result = updatefn(current_value).unwrap();
                 let result = AccountMapEntrySerialize {
                     slot_list: result
@@ -458,15 +473,12 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
                     ref_count: result.1,
                 };
                 let ix = self.bucket_ix(key);
-                self.db.read().unwrap()[ix]
-                    .update(key, &result);
+                self.db.read().unwrap()[ix].update(key, &result);
                 return;
             }
 
-            let current_value = Some((&entry.slot_list[..], entry.ref_count));
-            let v = updatefn(current_value).unwrap();
-            self.disk
-                .update(key, |_current| Some((v.0.clone(), v.1)));
+            //let v = updatefn(current_value).unwrap();
+            self.disk.update(key, updatefn); //|_current| Some((v.0.clone(), v.1)));
         }
     }
 
@@ -478,9 +490,8 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
             // we are an insert
             self.inserts.fetch_add(1, Ordering::Relaxed);
 
-            self.update_no_cache(key, updatefn, current_value);
+            self.update_no_cache(key, updatefn, current_value, false);
         } else {
-
             self.updates.fetch_add(1, Ordering::Relaxed);
             let entry = current_value.unwrap();
             if update_caching {
@@ -507,9 +518,8 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
                         }
                     }
                 }
-            }
-            else {
-                self.update_no_cache(key, updatefn, current_value);
+            } else {
+                self.update_no_cache(key, updatefn, current_value, false);
             }
         }
     }
@@ -532,7 +542,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
 
             self.db.read().unwrap()[ix].addref(key, ref_count, &V::get_info2(&slot_list));
             return;
-            }
+        }
         let ix = self.disk.bucket_ix(key);
         let wc = &mut self.write_cache[ix].write().unwrap();
 
@@ -552,7 +562,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
             let ix = self.bucket_ix(key);
             self.db.read().unwrap()[ix].unref(key, ref_count, &V::get_info2(&slot_list));
             return;
-            }
+        }
         let ix = self.disk.bucket_ix(key);
         let wc = &mut self.write_cache[ix].write().unwrap();
 
@@ -571,7 +581,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
             let ix = self.bucket_ix(key);
             self.db.read().unwrap()[ix].delete(key);
             return;
-            }
+        }
         self.deletes.fetch_add(1, Ordering::Relaxed);
         let ix = self.disk.bucket_ix(key);
         {
@@ -582,7 +592,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
     }
     pub fn distribution(&self) {}
     pub fn distribution2(&self) {
-            let mut ct = 0;
+        let mut ct = 0;
         for i in 0..self.bins {
             ct += self.write_cache[i].read().unwrap().len();
         }
@@ -747,12 +757,18 @@ impl<'a, V: 'a + Clone + Debug + Guts> HybridOccupiedEntry<'a, V> {
     }
     pub fn addref(&mut self) {
         self.entry.ref_count += 1;
-        let result = self.map.disk.addref(&self.pubkey, self.entry.ref_count, &self.entry.slot_list);
+        let result =
+            self.map
+                .disk
+                .addref(&self.pubkey, self.entry.ref_count, &self.entry.slot_list);
         //error!("addref: {}, {}, {:?}", self.pubkey, self.entry.ref_count(), result);
     }
     pub fn unref(&mut self) {
         self.entry.ref_count -= 1;
-        let result = self.map.disk.unref(&self.pubkey, self.entry.ref_count ,&self.entry.slot_list);
+        let result = self
+            .map
+            .disk
+            .unref(&self.pubkey, self.entry.ref_count, &self.entry.slot_list);
         //error!("addref: {}, {}, {:?}", self.pubkey, self.entry.ref_count(), result);
     }
     /*
@@ -800,14 +816,14 @@ impl<V: 'static + Clone + Debug + Guts> HybridBTreeMap<V> {
             in_memory: BTreeMap::default(),
             disk: bucket_map.clone(),
             bin_index,
-            bins: bins,//bucket_map.num_buckets(),
+            bins: bins, //bucket_map.num_buckets(),
         }
     }
     pub fn new_bucket_map() -> Arc<BucketMapWriteHolder<V>> {
         let mut buckets = PubkeyBinCalculator16::log_2(bucket_bins as u32) as u8; // make more buckets to try to spread things out
-                                                                           // 15 hopefully avoids too many files open problem
-        //buckets = std::cmp::min(buckets + 11, 15); // max # that works with open file handles and such
-        //buckets = 
+                                                                                  // 15 hopefully avoids too many files open problem
+                                                                                  //buckets = std::cmp::min(buckets + 11, 15); // max # that works with open file handles and such
+                                                                                  //buckets =
         error!("creating: {} for {}", buckets, bucket_bins);
         Arc::new(BucketMapWriteHolder::new(BucketMap::new_buckets(buckets)))
     }
@@ -853,7 +869,10 @@ impl<V: 'static + Clone + Debug + Guts> HybridBTreeMap<V> {
     {
         let num_buckets = self.disk.num_buckets();
         if self.bin_index != 0 && self.disk.unified_backing {
-            return Keys {keys: vec![], index: 0};
+            return Keys {
+                keys: vec![],
+                index: 0,
+            };
         }
         let mut start = 0;
         let mut end = num_buckets;
@@ -891,7 +910,8 @@ impl<V: 'static + Clone + Debug + Guts> HybridBTreeMap<V> {
         Keys { keys, index: 0 }
     }
 
-    pub fn keys2(&self) -> Keys { // used still?
+    pub fn keys2(&self) -> Keys {
+        // used still?
         let num_buckets = self.disk.num_buckets();
         let start = num_buckets * self.bin_index / self.bins;
         let end = num_buckets * (self.bin_index + 1) / self.bins;
@@ -900,16 +920,24 @@ impl<V: 'static + Clone + Debug + Guts> HybridBTreeMap<V> {
             .map(|ix| self.disk.bucket_len(ix) as usize)
             .sum::<usize>();
         let mut keys = Vec::with_capacity(len);
-        let len = (start..end)
-            .into_iter()
-            .for_each(|ix| keys.append(&mut self.disk.keys(ix, None::<&Range<Pubkey>>).unwrap_or_default()));
+        let len = (start..end).into_iter().for_each(|ix| {
+            keys.append(
+                &mut self
+                    .disk
+                    .keys(ix, None::<&Range<Pubkey>>)
+                    .unwrap_or_default(),
+            )
+        });
         keys.sort_unstable();
         Keys { keys, index: 0 }
     }
     pub fn values(&self) -> Values<V> {
         let num_buckets = self.disk.num_buckets();
         if self.bin_index != 0 && self.disk.unified_backing {
-            return Values { values: vec![], index: 0 };
+            return Values {
+                values: vec![],
+                index: 0,
+            };
         }
         // todo: this may be unsafe if we are asking for things with an update cache active. thankfully, we only call values at startup right now
         let start = num_buckets * self.bin_index / self.bins;
@@ -919,9 +947,14 @@ impl<V: 'static + Clone + Debug + Guts> HybridBTreeMap<V> {
             .map(|ix| self.disk.bucket_len(ix) as usize)
             .sum::<usize>();
         let mut values = Vec::with_capacity(len);
-        (start..end)
-            .into_iter()
-            .for_each(|ix| values.append(&mut self.disk.values(ix, None::<&Range<Pubkey>>).unwrap_or_default()));
+        (start..end).into_iter().for_each(|ix| {
+            values.append(
+                &mut self
+                    .disk
+                    .values(ix, None::<&Range<Pubkey>>)
+                    .unwrap_or_default(),
+            )
+        });
         //error!("getting values: {}, bin: {}, bins: {}, start: {}, end: {}", values.len(), self.bin_index, self.bins, start, end);
         //keys.sort_unstable();
         if self.bin_index == 0 {
