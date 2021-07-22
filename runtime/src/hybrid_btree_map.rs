@@ -245,7 +245,6 @@ pub struct WriteCacheEntry<V> {
     pub dirty: AtomicBool,
 }
 
-
 pub struct WriteCacheEntryArc<V> {
     pub instance: Arc<WriteCacheEntry<V>>
 }
