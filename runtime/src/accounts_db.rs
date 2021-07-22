@@ -6199,34 +6199,31 @@ impl AccountsDb {
                 for slot in &slots {
                     self.accounts_index.add_root(*slot, false);
                 }
-
-                //error!("distribution prior to flush");
-                self.accounts_index.account_maps.first().unwrap().read().unwrap().distribution();
-                let mut m = Measure::start("flush_index");
-                self.accounts_index.account_maps.par_iter().for_each(|i| {
-                    i.write().unwrap().flush();});
-                m.stop();
-                let total_items = self
-                .accounts_index
-                .account_maps
-                .iter()
-                .map(|i| {
-                    let len = i.read().unwrap().len_inaccurate();
-                    min_bin_size = std::cmp::min(min_bin_size, len);
-                    max_bin_size = std::cmp::max(max_bin_size, len);
-                    len
-                })
-                .sum::<usize>();
-
-                error!("flush_us: {}, total items after flush: {}", m.as_us(), total_items);
-                self.accounts_index.account_maps.first().unwrap().read().unwrap().distribution();
-
-                self.initialize_storage_count_and_alive_bytes(&mut timings);
             }
-            else {
-                // we want to flush again to keep things out of the cache
-                error!("flush_us: {}, total items after flush: {}", m.as_us(), total_items);
-                self.accounts_index.account_maps.first().unwrap().read().unwrap().distribution();
+
+            //error!("distribution prior to flush");
+            self.accounts_index.account_maps.first().unwrap().read().unwrap().distribution();
+            let mut m = Measure::start("flush_index");
+            self.accounts_index.account_maps.par_iter().for_each(|i| {
+                i.write().unwrap().flush();});
+            m.stop();
+            let total_items = self
+            .accounts_index
+            .account_maps
+            .iter()
+            .map(|i| {
+                let len = i.read().unwrap().len_inaccurate();
+                min_bin_size = std::cmp::min(min_bin_size, len);
+                max_bin_size = std::cmp::max(max_bin_size, len);
+                len
+            })
+            .sum::<usize>();
+
+            error!("flush_us: {}, total items after flush: {}", m.as_us(), total_items);
+            self.accounts_index.account_maps.first().unwrap().read().unwrap().distribution();
+
+            if pass == 0 {
+                self.initialize_storage_count_and_alive_bytes(&mut timings);
             }
 
             timings.report();
