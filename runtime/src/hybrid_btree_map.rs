@@ -438,13 +438,10 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
     ) where
         F: Fn(Option<(&[SlotT<V>], u64)>) -> Option<(Vec<SlotT<V>>, u64)>,
     {
-        let k = Pubkey::from_str("D5vcuUjK4uPSg1Cy9hoTPWCodFcLv6MyfWFNmRtbEofL").unwrap();
+        //let k = Pubkey::from_str("D5vcuUjK4uPSg1Cy9hoTPWCodFcLv6MyfWFNmRtbEofL").unwrap();
         if current_value.is_none() && !force_not_insert {
 
             if use_trait {
-                if k == *key {
-                    error!("update_no_cache: trait {}", k);
-                }
                         let result = updatefn(None).unwrap();
                 let result = AccountMapEntrySerialize {
                     slot_list: result
@@ -457,16 +454,12 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
                 let ix = self.bucket_ix(key);
                 self.db.read().unwrap()[ix].insert(key, &result);
                 if verify_get_on_insert {
-                    let g = self.db.read().unwrap()[ix].get(key);
-                    assert!(g.is_some());
+                    assert!(self.get(key).is_some());
                 }
 
                 return;
             }
             if true {
-                if k == *key {
-                    error!("update_no_cache: disk {}", k);
-                }
                 // send straight to disk. if we try to keep it in the write cache, then 'keys' will be incorrect
                 self.disk.update(key, updatefn);
             } else {
@@ -490,9 +483,6 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
             // update
             let current_value = current_value.map(|entry| (&entry.slot_list[..], entry.ref_count));
             if use_trait {
-                if k == *key {
-                    error!("update_no_cache: update trait {}", k);
-                }
                 let result = updatefn(current_value).unwrap();
                 let result = AccountMapEntrySerialize {
                     slot_list: result
@@ -505,10 +495,6 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
                 let ix = self.bucket_ix(key);
                 self.db.read().unwrap()[ix].update(key, &result);
                 return;
-            }
-
-            if k == *key {
-                error!("update_no_cache: update disk {}", k);
             }
         //let v = updatefn(current_value).unwrap();
             self.disk.update(key, updatefn); //|_current| Some((v.0.clone(), v.1)));
@@ -567,11 +553,11 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
         } else {
             if use_trait {
                 let ix = self.bucket_ix(key);
-                let r = self.db.read().unwrap()[ix].get(key)
-                return r;
+                let r = self.db.read().unwrap()[ix].get(key);
+                return r.map(|x| (x.ref_count, V::get_copy2(&x.slot_list)));
             }
     
-            self.disk.get(key);
+            self.disk.get(key)
         }
     }
     pub fn addref(&self, key: &Pubkey, ref_count: RefCount, slot_list: &Vec<SlotT<V>>) {
