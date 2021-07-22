@@ -11,16 +11,16 @@ use std::fmt::Debug;
 use std::marker::{Send, Sync};
 use std::ops::Bound;
 use std::ops::{Range, RangeBounds};
+use std::str::FromStr;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::time::Instant;
-use std::str::FromStr;
 
 type K = Pubkey;
 use std::collections::{hash_map::Entry as HashMapEntry, HashMap};
-use std::ops::Bound::{Excluded, Included, Unbounded};
 use std::convert::TryInto;
+use std::ops::Bound::{Excluded, Included, Unbounded};
 
 #[derive(Clone, Debug)]
 pub struct HybridAccountEntry<V: Clone + Debug> {
@@ -249,7 +249,7 @@ pub struct WriteCacheEntry<V> {
 }
 
 pub struct WriteCacheEntryArc<V> {
-    pub instance: Arc<WriteCacheEntry<V>>
+    pub instance: Arc<WriteCacheEntry<V>>,
 }
 
 #[derive(Debug)]
@@ -365,12 +365,14 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
         assert!(input.len() >= std::mem::size_of::<u64>());
         u64::from_be_bytes(input[0..std::mem::size_of::<u64>()].try_into().unwrap())
     }
-    
     pub fn bucket_ix(&self, key: &Pubkey) -> usize {
         let b = self.binner.bin_from_pubkey(key);
-        assert_eq!(b, self.disk.bucket_ix(key), "be {}",
-        Self::read_be_u64(key.as_ref()),
-);
+        assert_eq!(
+            b,
+            self.disk.bucket_ix(key),
+            "be {}",
+            Self::read_be_u64(key.as_ref()),
+        );
         b
     }
     pub fn keys<R: RangeBounds<Pubkey>>(
@@ -440,9 +442,8 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
     {
         //let k = Pubkey::from_str("D5vcuUjK4uPSg1Cy9hoTPWCodFcLv6MyfWFNmRtbEofL").unwrap();
         if current_value.is_none() && !force_not_insert {
-
             if use_trait {
-                        let result = updatefn(None).unwrap();
+                let result = updatefn(None).unwrap();
                 let result = AccountMapEntrySerialize {
                     slot_list: result
                         .0
@@ -496,8 +497,40 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
                 self.db.read().unwrap()[ix].update(key, &result);
                 return;
             }
-        //let v = updatefn(current_value).unwrap();
+            //let v = updatefn(current_value).unwrap();
             self.disk.update(key, updatefn); //|_current| Some((v.0.clone(), v.1)));
+        }
+    }
+
+    fn upsert_in_cache<F>(&self, key: &Pubkey, updatefn: F, current_value: Option<&V2<V>>)
+    where
+        F: Fn(Option<(&[SlotT<V>], u64)>) -> Option<(Vec<SlotT<V>>, u64)>,
+    {
+        let entry = current_value.unwrap();
+        let current_value = Some((&entry.slot_list[..], entry.ref_count));
+        // we are an update
+        let result = updatefn(current_value);
+        if let Some(result) = result {
+            // stick this in the write cache and flush it later
+            let ix = self.bucket_ix(key);
+            let wc = &mut self.write_cache[ix].write().unwrap();
+
+            match wc.entry(key.clone()) {
+                HashMapEntry::Occupied(mut occupied) => {
+                    let mut gm = occupied.get_mut();
+                    gm.slot_list = result.0;
+                    gm.ref_count = result.1;
+                }
+                HashMapEntry::Vacant(vacant) => {
+                    vacant.insert(AccountMapEntry {
+                        slot_list: result.0,
+                        ref_count: result.1,
+                    });
+                    self.wait.notify_all(); // we have put something in the write cache that needs to be flushed sometime
+                }
+            }
+        } else {
+            panic!("expected value");
         }
     }
 
@@ -509,34 +542,15 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
             // we are an insert
             self.inserts.fetch_add(1, Ordering::Relaxed);
 
-            self.update_no_cache(key, updatefn, current_value, false);
+            if insert_caching {
+                self.upsert_in_cache(key, updatefn, current_value);
+            } else {
+                self.update_no_cache(key, updatefn, current_value, false);
+            }
         } else {
             self.updates.fetch_add(1, Ordering::Relaxed);
-            let entry = current_value.unwrap();
             if update_caching {
-                let current_value = Some((&entry.slot_list[..], entry.ref_count));
-                // we are an update
-                let result = updatefn(current_value);
-                if let Some(result) = result {
-                    // stick this in the write cache and flush it later
-                    let ix = self.bucket_ix(key);
-                    let wc = &mut self.write_cache[ix].write().unwrap();
-
-                    match wc.entry(key.clone()) {
-                        HashMapEntry::Occupied(mut occupied) => {
-                            let mut gm = occupied.get_mut();
-                            gm.slot_list = result.0;
-                            gm.ref_count = result.1;
-                        }
-                        HashMapEntry::Vacant(vacant) => {
-                            vacant.insert(AccountMapEntry {
-                                slot_list: result.0,
-                                ref_count: result.1,
-                            });
-                            self.wait.notify_all(); // we have put something in the write cache that needs to be flushed sometime
-                        }
-                    }
-                }
+                self.upsert_in_cache(key, updatefn, current_value);
             } else {
                 self.update_no_cache(key, updatefn, current_value, false);
             }
@@ -556,7 +570,6 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
                 let r = self.db.read().unwrap()[ix].get(key);
                 return r.map(|x| (x.ref_count, V::get_copy2(&x.slot_list)));
             }
-    
             self.disk.get(key)
         }
     }
