@@ -47,7 +47,7 @@ pub const bucket_bins: usize = BINS;
 pub const use_trait: bool = true;
 pub const use_rox: bool = true;
 pub const use_sled: bool = false;
-pub const update_caching: bool = true;
+pub const update_caching: bool = false;
 pub const insert_caching: bool = false;
 
 #[derive(Debug, Default)]
