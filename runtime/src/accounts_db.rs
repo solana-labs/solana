@@ -6231,7 +6231,7 @@ impl AccountsDb {
                     self.accounts_index.add_root(*slot, false);
                 }
 
-                error!("distribution prior to flush");
+                //error!("distribution prior to flush");
                 self.accounts_index.account_maps.first().unwrap().read().unwrap().distribution();
                 let mut m = Measure::start("flush_index");
                 self.accounts_index.account_maps.par_iter().for_each(|i| {

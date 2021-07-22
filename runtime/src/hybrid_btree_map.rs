@@ -40,6 +40,9 @@ impl<T:Clone + Debug> RealEntry<T> for T {
 */
 
 pub const bucket_bins: usize = 4096;
+pub const use_rox: bool = true;
+pub const update_caching: bool = true;
+pub const insert_caching: bool = true;
 
 #[derive(Debug, Default)]
 pub struct PubkeyRange {
@@ -245,8 +248,6 @@ pub struct BucketMapWriteHolder<V> {
     pub unified_backing: bool,
 }
 
-pub const use_rox: bool = false;
-
 impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
     pub fn set_account_index_db(&self, mut db: Arc<Box<dyn Rox>>) {
         let x = Sled::new();
@@ -363,7 +364,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
         self.disk.keys(ix)
     }
     pub fn values<R: RangeBounds<Pubkey>>(&self, ix: usize, range: Option<&R>) -> Option<Vec<Vec<SlotT<V>>>> {
-        error!("values");
+        //error!("values");
         if use_rox {
             return self.db.read().unwrap()[ix]
             .values(None).map(|x| x.into_iter().map(|x| V::get_copy2(&x.slot_list)).collect());
@@ -462,28 +463,33 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
 
             self.updates.fetch_add(1, Ordering::Relaxed);
             let entry = current_value.unwrap();
-            let current_value = Some((&entry.slot_list[..], entry.ref_count));
-            // we are an update
-            let result = updatefn(current_value);
-            if let Some(result) = result {
-                // stick this in the write cache and flush it later
-                let ix = self.disk.bucket_ix(key);
-                let wc = &mut self.write_cache[ix].write().unwrap();
+            if update_caching {
+                let current_value = Some((&entry.slot_list[..], entry.ref_count));
+                // we are an update
+                let result = updatefn(current_value);
+                if let Some(result) = result {
+                    // stick this in the write cache and flush it later
+                    let ix = self.disk.bucket_ix(key);
+                    let wc = &mut self.write_cache[ix].write().unwrap();
 
-                match wc.entry(key.clone()) {
-                    HashMapEntry::Occupied(mut occupied) => {
-                        let mut gm = occupied.get_mut();
-                        gm.slot_list = result.0;
-                        gm.ref_count = result.1;
-                    }
-                    HashMapEntry::Vacant(vacant) => {
-                        vacant.insert(AccountMapEntry {
-                            slot_list: result.0,
-                            ref_count: result.1,
-                        });
-                        self.wait.notify_all(); // we have put something in the write cache that needs to be flushed sometime
+                    match wc.entry(key.clone()) {
+                        HashMapEntry::Occupied(mut occupied) => {
+                            let mut gm = occupied.get_mut();
+                            gm.slot_list = result.0;
+                            gm.ref_count = result.1;
+                        }
+                        HashMapEntry::Vacant(vacant) => {
+                            vacant.insert(AccountMapEntry {
+                                slot_list: result.0,
+                                ref_count: result.1,
+                            });
+                            self.wait.notify_all(); // we have put something in the write cache that needs to be flushed sometime
+                        }
                     }
                 }
+            }
+            else {
+                self.update_no_cache(key, updatefn, current_value);
             }
         }
     }
@@ -556,14 +562,10 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
     }
     pub fn distribution(&self) {}
     pub fn distribution2(&self) {
-        if use_rox {
-            return;
-        }
             let mut ct = 0;
         for i in 0..self.bins {
             ct += self.write_cache[i].read().unwrap().len();
         }
-        error!("{} items in write cache", ct);
         let dist = self.disk.distribution();
         let mut sum = 0;
         let mut min = usize::MAX;
@@ -901,7 +903,9 @@ impl<V: 'static + Clone + Debug + Guts> HybridBTreeMap<V> {
             .for_each(|ix| values.append(&mut self.disk.values(ix, None::<&Range<Pubkey>>).unwrap_or_default()));
         //error!("getting values: {}, bin: {}, bins: {}, start: {}, end: {}", values.len(), self.bin_index, self.bins, start, end);
         //keys.sort_unstable();
-        error!("getting values: {}, {}, {}", values.len(), start, end);
+        if self.bin_index == 0 {
+            error!("getting values: {}, {}, {}", values.len(), start, end);
+        }
         Values { values, index: 0 }
     }
     pub fn len_inaccurate(&self) -> usize {
