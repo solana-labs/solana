@@ -6223,6 +6223,11 @@ impl AccountsDb {
 
                 self.initialize_storage_count_and_alive_bytes(&mut timings);
             }
+            else {
+                // we want to flush again to keep things out of the cache
+                error!("flush_us: {}, total items after flush: {}", m.as_us(), total_items);
+                self.accounts_index.account_maps.first().unwrap().read().unwrap().distribution();
+            }
 
             timings.report();
         }
