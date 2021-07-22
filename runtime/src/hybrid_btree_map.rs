@@ -55,6 +55,7 @@ pub struct PubkeyRange {
     pub start_pubkey_include: Option<Pubkey>,
     pub start_pubkey_exclude: Option<Pubkey>,
     pub end_pubkey_exclude: Option<Pubkey>,
+    pub end_pubkey_include: Option<Pubkey>,
 }
 
 pub trait Rox: Debug + Send + Sync {
@@ -394,7 +395,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
                 }
                 match range.end_bound() {
                     Included(pubkey) => {
-                        panic!("");
+                        range_use.end_pubkey_include = Some(pubkey.clone());
                     }
                     Excluded(pubkey) => {
                         range_use.end_pubkey_exclude = Some(pubkey.clone());
