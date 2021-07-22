@@ -506,10 +506,6 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
     where
         F: Fn(Option<(&[SlotT<V>], u64)>) -> Option<(Vec<SlotT<V>>, u64)>,
     {
-        if !insert_caching && verify_get_on_insert {
-            assert!(!self.get(key).is_some());
-        }
-
         let entry = current_value.unwrap();
         let current_value = Some((&entry.slot_list[..], entry.ref_count));
         // we are an update
@@ -547,11 +543,16 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
             self.inserts.fetch_add(1, Ordering::Relaxed);
 
             if insert_caching {
+                panic!("not supported");
                 self.upsert_in_cache(key, updatefn, current_value);
             } else {
                 self.update_no_cache(key, updatefn, current_value, false);
             }
         } else {
+            if verify_get_on_insert {
+                assert!(self.get(key).is_some());
+            }
+    
             self.updates.fetch_add(1, Ordering::Relaxed);
             if update_caching {
                 self.upsert_in_cache(key, updatefn, current_value);
