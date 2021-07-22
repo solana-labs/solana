@@ -6170,6 +6170,8 @@ impl AccountsDb {
                 .sum();
             index_time.stop();
 
+            let mut min_bin_size = usize::MAX;
+            let mut max_bin_size = usize::MIN;
             let total_items = self
                 .accounts_index
                 .account_maps
@@ -6206,7 +6208,7 @@ impl AccountsDb {
                 i.write().unwrap().flush();});
             m.stop();
 
-            error!("flush_us: {}, total items after flush: {}", m.as_us(), total_items);
+            error!("flush_us: {}", m.as_us());
             self.accounts_index.account_maps.first().unwrap().read().unwrap().distribution();
 
             if pass == 0 {
