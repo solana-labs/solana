@@ -2890,7 +2890,7 @@ fn do_test_future_tower(cluster_mode: ClusterMode) {
     let slots_per_epoch = 2048;
     let node_stakes = match cluster_mode {
         ClusterMode::MasterOnly => vec![100],
-        ClusterMode::MasterSlave => vec![100, 0],
+        ClusterMode::MasterSlave => vec![100, 1],
     };
 
     let validator_keys = vec![
