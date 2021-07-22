@@ -238,6 +238,12 @@ pub type WriteCache<V> = HashMap<Pubkey, V>;
 use crate::waitable_condvar::WaitableCondvar;
 use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::time::Duration;
+
+pub struct WriteCacheEntry<V> {
+    pub data: V2<V>,
+    //pub 
+}
+
 #[derive(Debug)]
 pub struct BucketMapWriteHolder<V> {
     pub disk: BucketMap<SlotT<V>>,
@@ -433,7 +439,6 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
                 self.db.read().unwrap()[ix].insert(key, &result);
                 if verify_get_on_insert {
                     let g = self.db.read().unwrap()[ix].get(key);
-                    error!("verified");
                     assert!(g.is_some());
                 }
 
