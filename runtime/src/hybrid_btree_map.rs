@@ -39,7 +39,7 @@ impl<T:Clone + Debug> RealEntry<T> for T {
 }
 */
 
-pub const bucket_bins: usize = 4096;
+pub const bucket_bins: usize = BINS;
 pub const use_rox: bool = true;
 pub const update_caching: bool = true;
 pub const insert_caching: bool = true;
@@ -379,6 +379,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
         if use_rox {
             return bucket_bins;
         }
+        assert_eq!(bucket_bins, self.disk.num_buckets());
         self.disk.num_buckets()
     }
 
@@ -784,10 +785,11 @@ impl<V: 'static + Clone + Debug + Guts> HybridBTreeMap<V> {
         }
     }
     pub fn new_bucket_map() -> Arc<BucketMapWriteHolder<V>> {
-        let mut buckets = PubkeyBinCalculator16::log_2(BINS as u32) as u8; // make more buckets to try to spread things out
+        let mut buckets = PubkeyBinCalculator16::log_2(bucket_bins as u32) as u8; // make more buckets to try to spread things out
                                                                            // 15 hopefully avoids too many files open problem
-        buckets = std::cmp::min(buckets + 11, 15); // max # that works with open file handles and such
-        error!("creating: {} for {}", buckets, BINS);
+        //buckets = std::cmp::min(buckets + 11, 15); // max # that works with open file handles and such
+        //buckets = 
+        error!("creating: {} for {}", buckets, bucket_bins);
         Arc::new(BucketMapWriteHolder::new(BucketMap::new_buckets(buckets)))
     }
 
