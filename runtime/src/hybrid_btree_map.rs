@@ -42,7 +42,7 @@ impl<T:Clone + Debug> RealEntry<T> for T {
 }
 */
 
-pub const verify_get_on_insert: bool = false;
+pub const verify_get_on_insert: bool = true;
 pub const bucket_bins: usize = BINS;
 pub const use_trait: bool = true;
 pub const use_rox: bool = true;
@@ -381,6 +381,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
         ix: usize,
         range: Option<&R>,
     ) -> Option<Vec<Pubkey>> {
+        self.flush(ix);
         if use_trait {
             let mut range_use = PubkeyRange::default();
             if let Some(range) = range {
@@ -412,15 +413,13 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
         ix: usize,
         range: Option<&R>,
     ) -> Option<Vec<Vec<SlotT<V>>>> {
+        self.flush(ix);
         //error!("values");
         if use_trait {
             return self.db.read().unwrap()[ix]
                 .values(None)
                 .map(|x| x.into_iter().map(|x| V::get_copy2(&x.slot_list)).collect());
         }
-
-        // only valid when write cache is empty
-        assert!(self.write_cache[ix].read().unwrap().is_empty());
         self.disk.values(ix)
     }
 
