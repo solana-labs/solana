@@ -48,7 +48,7 @@ pub const use_trait: bool = false;
 pub const use_rox: bool = true;
 pub const use_sled: bool = false;
 pub const update_caching: bool = true;
-pub const insert_caching: bool = true;
+pub const insert_caching: bool = false;
 
 #[derive(Debug, Default)]
 pub struct PubkeyRange {
