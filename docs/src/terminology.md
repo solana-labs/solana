@@ -60,7 +60,7 @@ The wallclock duration between a [leader](terminology.md#leader) creating a [tic
 
 ## confirmed block
 
-A [block](terminology.md#block) that has received a [supermajority](terminology.md#supermajority) of [ledger votes](terminology.md#ledger-vote) that matches the leader's.
+A [block](terminology.md#block) that has received a [supermajority](terminology.md#supermajority) of [ledger votes](terminology.md#ledger-vote).
 
 ## control plane
 
