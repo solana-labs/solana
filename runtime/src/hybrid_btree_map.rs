@@ -42,13 +42,15 @@ impl<T:Clone + Debug> RealEntry<T> for T {
 }
 */
 
+pub const default_age: u8 = 10;
 pub const verify_get_on_insert: bool = false;
 pub const bucket_bins: usize = BINS;
 pub const use_trait: bool = false;
 pub const use_rox: bool = true;
 pub const use_sled: bool = false;
 pub const update_caching: bool = true;
-pub const insert_caching: bool = false;
+pub const insert_caching: bool = true;
+pub const get_caching: bool = false;
 
 #[derive(Debug, Default)]
 pub struct PubkeyRange {
@@ -243,20 +245,22 @@ use crate::waitable_condvar::WaitableCondvar;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8};
 use std::time::Duration;
 
+#[derive(Debug)]
 pub struct WriteCacheEntry<V> {
     pub data: V2<V>,
     pub age: AtomicU8,
     pub dirty: AtomicBool,
 }
 
+#[derive(Debug)]
 pub struct WriteCacheEntryArc<V> {
-    pub instance: Arc<WriteCacheEntry<V>>,
+    pub instance: WriteCacheEntry<V>,//Arc<WriteCacheEntry<V>>,
 }
 
 #[derive(Debug)]
 pub struct BucketMapWriteHolder<V> {
     pub disk: BucketMap<SlotT<V>>,
-    pub write_cache: Vec<RwLock<WriteCache<V2<V>>>>,
+    pub write_cache: Vec<RwLock<WriteCache<WriteCacheEntryArc<V>>>>,
     pub write_cache_flushes: AtomicU64,
     pub gets: AtomicU64,
     pub updates: AtomicU64,
@@ -348,7 +352,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
             for (k, v) in wc.iter() {
                 self.update_no_cache(
                     k,
-                    |_current| Some((v.slot_list.clone(), v.ref_count)),
+                    |_current| Some((v.instance.data.slot_list.clone(), v.instance.data.ref_count)),
                     None,
                     true,
                 );
@@ -471,10 +475,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
                     let wc = &mut self.write_cache[ix].write().unwrap();
                     wc.insert(
                         key.clone(),
-                        AccountMapEntry {
-                            slot_list: result.0,
-                            ref_count: result.1,
-                        },
+                        Self::allocate(&result.0, result.1, true)
                     );
                 } else {
                     panic!("should have returned a value from updatefn");
@@ -502,6 +503,22 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
         }
     }
 
+    fn allocate(slot_list: &SlotList<V>, ref_count: RefCount, dirty: bool) -> WriteCacheEntryArc<V> {
+        WriteCacheEntryArc {
+            instance: //Arc::new(
+                WriteCacheEntry {
+                    data:                         AccountMapEntry {
+                        slot_list: slot_list.clone(),
+                        ref_count,
+                    },
+                    dirty: AtomicBool::new(dirty),
+                    age: AtomicU8::new(default_age),
+                }
+
+            //)
+        }
+    }
+
     fn upsert_in_cache<F>(&self, key: &Pubkey, updatefn: F, current_value: Option<&V2<V>>)
     where
         F: Fn(Option<(&[SlotT<V>], u64)>) -> Option<(Vec<SlotT<V>>, u64)>,
@@ -517,14 +534,11 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
             match wc.entry(key.clone()) {
                 HashMapEntry::Occupied(mut occupied) => {
                     let mut gm = occupied.get_mut();
-                    gm.slot_list = result.0;
-                    gm.ref_count = result.1;
+                    *gm = Self::allocate(&result.0, result.1, true);
                 }
                 HashMapEntry::Vacant(vacant) => {
-                    vacant.insert(AccountMapEntry {
-                        slot_list: result.0,
-                        ref_count: result.1,
-                    });
+                    vacant.insert(Self::allocate(&result.0,result.1, true)
+                    );
                     self.wait.notify_all(); // we have put something in the write cache that needs to be flushed sometime
                 }
             }
@@ -566,7 +580,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
         let wc = &mut self.write_cache[ix].read().unwrap();
         let res = wc.get(key);
         if let Some(res) = res {
-            Some((res.ref_count, res.slot_list.clone()))
+            Some((res.instance.data.ref_count, res.instance.data.slot_list.clone()))
         } else {
             if use_trait {
                 let ix = self.bucket_ix(key);
@@ -590,7 +604,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
         match wc.entry(key.clone()) {
             HashMapEntry::Occupied(mut occupied) => {
                 let mut gm = occupied.get_mut();
-                gm.ref_count += 1;
+                gm.instance.data.ref_count += 1;
             }
             HashMapEntry::Vacant(vacant) => {
                 self.disk.addref(key);
@@ -610,7 +624,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
         match wc.entry(key.clone()) {
             HashMapEntry::Occupied(mut occupied) => {
                 let mut gm = occupied.get_mut();
-                gm.ref_count -= 1;
+                gm.instance.data.ref_count -= 1;
             }
             HashMapEntry::Vacant(vacant) => {
                 self.disk.unref(key);

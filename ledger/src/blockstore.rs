@@ -494,6 +494,7 @@ impl Blockstore {
         let block_height_cf = db.column();
         let program_costs_cf = db.column();
         let bank_hash_cf = db.column();
+        if false
         {
             let mut batch = db.batch().unwrap();
             let start = Pubkey::default();
