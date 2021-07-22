@@ -102,7 +102,9 @@ pub struct Sled {
 }
 impl Sled {
     pub fn new() -> Self {
+        let _ = fs::remove_dir_all("my_db");
         let db: sled::Db = sled::open("my_db").unwrap();
+        error!("created sled");
         Self {
             db
         }
@@ -205,12 +207,18 @@ impl Rox for Sled {
         self.db.insert(pubkey.as_ref(), Sled::set(&value));
     }
     fn keys(&self, range: Option<&PubkeyRange>) -> Option<Vec<Pubkey>> {
-        panic!("");
-        //self.db.iter()
+        Some(self.db.iter().map(|x| {
+            let (k,v) = x.unwrap();
+            let slice: &[u8] = k.borrow();
+            Pubkey::new(slice)
+        }).collect())
     }
     fn values(&self, range: Option<&PubkeyRange>) -> Option<Vec<AccountMapEntrySerialize>> {
-        panic!("");
-        //self.db.iter()
+        Some(self.db.iter().map(|x| {
+            let (k,v) = x.unwrap();
+            let slice: &[u8] = v.borrow();
+            Sled::get(slice)
+        }).collect())
     }    
 }
 
@@ -239,7 +247,10 @@ pub struct BucketMapWriteHolder<V> {
 pub const use_rox: bool = true;
 
 impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
-    pub fn set_account_index_db(&self, db: Arc<Box<dyn Rox>>) {
+    pub fn set_account_index_db(&self, mut db: Arc<Box<dyn Rox>>) {
+        let x = Sled::new();
+        let x:  Arc<Box<dyn Rox>> = Arc::new(Box::new(x));
+        let db = x;//Arc::new(Box::new(x)); // use sled
         *self.db.write().unwrap()=(0..bucket_bins).into_iter().map(|_| db.clone()).collect();
         //*self.db.write().unwrap() = Some(db);
     }
