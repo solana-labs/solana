@@ -350,7 +350,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
             let mut delete_keys = Vec::with_capacity(wc.len());
             for (k, mut v) in wc.iter_mut() {
                 let mut instance = v.instance.write().unwrap();
-                if instance.dirty || instance.age <= 1 {
+                if !bg || instance.dirty || instance.age <= 1 {
                     if instance.dirty {
                         self.update_no_cache(
                             k,
