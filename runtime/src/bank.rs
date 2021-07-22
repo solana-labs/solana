@@ -76,7 +76,7 @@ use solana_sdk::{
         INITIAL_RENT_EPOCH, MAX_PROCESSING_AGE, MAX_RECENT_BLOCKHASHES,
         MAX_TRANSACTION_FORWARDING_DELAY, SECONDS_PER_DAY,
     },
-    compute_budget,
+    compute_budget::ComputeBudget,
     epoch_info::EpochInfo,
     epoch_schedule::EpochSchedule,
     feature,
@@ -93,9 +93,7 @@ use solana_sdk::{
     native_loader,
     native_token::sol_to_lamports,
     nonce, nonce_account,
-    process_instruction::{
-        BpfComputeBudget, ComputeMeter, Executor, ProcessInstructionWithContext,
-    },
+    process_instruction::{ComputeMeter, Executor, ProcessInstructionWithContext},
     program_utils::limited_deserialize,
     pubkey::Pubkey,
     recent_blockhashes_account,
@@ -1001,7 +999,7 @@ pub struct Bank {
     /// The Message processor
     message_processor: MessageProcessor,
 
-    bpf_compute_budget: Option<BpfComputeBudget>,
+    compute_budget: Option<ComputeBudget>,
 
     /// Builtin programs activated dynamically by feature
     #[allow(clippy::rc_buffer)]
@@ -1236,7 +1234,7 @@ impl Bank {
             tick_height: AtomicU64::new(parent.tick_height.load(Relaxed)),
             signature_count: AtomicU64::new(0),
             message_processor: parent.message_processor.clone(),
-            bpf_compute_budget: parent.bpf_compute_budget,
+            compute_budget: parent.compute_budget,
             feature_builtins: parent.feature_builtins.clone(),
             hard_forks: parent.hard_forks.clone(),
             last_vote_sync: AtomicU64::new(parent.last_vote_sync.load(Relaxed)),
@@ -1396,7 +1394,7 @@ impl Bank {
             epoch_stakes: fields.epoch_stakes,
             is_delta: AtomicBool::new(fields.is_delta),
             message_processor: new(),
-            bpf_compute_budget: None,
+            compute_budget: None,
             feature_builtins: new(),
             last_vote_sync: new(),
             rewards: new(),
@@ -3232,12 +3230,10 @@ impl Bank {
                     let feature_set = self.feature_set.clone();
                     signature_count += u64::from(tx.message().header.num_required_signatures);
 
-                    let mut bpf_compute_budget = self
-                        .bpf_compute_budget
-                        .unwrap_or_else(BpfComputeBudget::new);
+                    let mut compute_budget = self.compute_budget.unwrap_or_else(ComputeBudget::new);
 
                     let mut process_result = if feature_set.is_active(&tx_wide_compute_cap::id()) {
-                        compute_budget::process_request(&mut bpf_compute_budget, tx)
+                        compute_budget.process_transaction(tx)
                     } else {
                         Ok(())
                     };
@@ -3267,7 +3263,7 @@ impl Bank {
                         };
 
                         let compute_meter = Rc::new(RefCell::new(TransactionComputeMeter::new(
-                            bpf_compute_budget.max_units,
+                            compute_budget.max_units,
                         )));
 
                         process_result = self.message_processor.process_message(
@@ -3279,7 +3275,7 @@ impl Bank {
                             executors.clone(),
                             instruction_recorders.as_deref(),
                             feature_set,
-                            bpf_compute_budget,
+                            compute_budget,
                             compute_meter,
                             &mut timings.details,
                             self.rc.accounts.clone(),
@@ -4434,8 +4430,17 @@ impl Bank {
         *self.inflation.write().unwrap() = inflation;
     }
 
-    pub fn set_bpf_compute_budget(&mut self, bpf_compute_budget: Option<BpfComputeBudget>) {
-        self.bpf_compute_budget = bpf_compute_budget;
+    pub fn set_compute_budget(&mut self, compute_budget: Option<ComputeBudget>) {
+        self.compute_budget = compute_budget;
+    }
+
+    #[allow(deprecated)]
+    #[deprecated(since = "1.8.0", note = "please use `set_compute_budget` instead")]
+    pub fn set_bpf_compute_budget(
+        &mut self,
+        bpf_compute_budget: Option<solana_sdk::process_instruction::BpfComputeBudget>,
+    ) {
+        self.compute_budget = bpf_compute_budget.map(|budget| budget.into());
     }
 
     pub fn hard_forks(&self) -> Arc<RwLock<HardForks>> {
@@ -5556,7 +5561,7 @@ pub(crate) mod tests {
     use solana_sdk::{
         account::Account,
         clock::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT},
-        compute_budget,
+        compute_budget::ComputeBudgetInstruction,
         epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
         feature::Feature,
         genesis_config::create_genesis_config,
@@ -13795,12 +13800,12 @@ pub(crate) mod tests {
             _data: &[u8],
             invoke_context: &mut dyn InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
-            let compute_budget = invoke_context.get_bpf_compute_budget();
+            let compute_budget = invoke_context.get_compute_budget();
             assert_eq!(
                 *compute_budget,
-                BpfComputeBudget {
+                ComputeBudget {
                     max_units: 1,
-                    ..BpfComputeBudget::default()
+                    ..ComputeBudget::default()
                 }
             );
             Ok(())
@@ -13810,7 +13815,7 @@ pub(crate) mod tests {
 
         let message = Message::new(
             &[
-                compute_budget::request_units(1),
+                ComputeBudgetInstruction::request_units(1),
                 Instruction::new_with_bincode(program_id, &0, vec![]),
             ],
             Some(&mint_keypair.pubkey()),
