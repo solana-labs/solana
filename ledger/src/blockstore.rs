@@ -171,7 +171,7 @@ impl std::fmt::Debug for AccountIndexRoxAdapter {
     }
 }
 use std::collections::hash_map::Entry as HashMapEntry;
-const use_hashmap: bool = true;
+const use_hashmap: bool = false;
 impl solana_runtime::hybrid_btree_map::Rox for AccountIndexRoxAdapter {
     fn get(&self, pubkey: &Pubkey) -> Option<AccountMapEntrySerialize> {
         if use_hashmap {
@@ -246,12 +246,37 @@ impl solana_runtime::hybrid_btree_map::Rox for AccountIndexRoxAdapter {
         }
     }
     fn keys(&self, range: Option<&PubkeyRange>) -> Option<Vec<Pubkey>> {
+        error!("keys while ignoring range");
         if use_hashmap {
+            // use iter here
             let keys = self.backing.read().unwrap();
             let k2 = keys.keys();
             Some(k2.cloned().collect())
         } else {
-            Some(self.account_index_cf.iter(IteratorMode::Start).unwrap().map(|d| d.0).collect::<Vec<_>>())
+            let mut iter = IteratorMode::Start;
+            if let Some(range) = range {
+                if let Some(start_include) = range.start_pubkey_include {
+                    iter = IteratorMode::From(start_include, IteratorDirection::Forward)
+                }
+                else if let Some(start_exclude) = range.start_pubkey_exclude {
+                    let mut start_include = start_exclude.clone();
+                    let mut m = start_include.as_mut();
+                    for i in 0..32 {
+                        let idx = 31 - i;
+                        let v = m[idx];
+                        if v == u8::MAX {
+                            m[idx] = 0;
+                            // loop again to bump the next byte
+                        }
+                        else {
+                            m[idx] += 1;
+                        }
+                    }
+                    iter = IteratorMode::From(start_include, IteratorDirection::Forward)
+                }
+            }
+            // fix iter... todo
+            Some(self.account_index_cf.iter(iter).unwrap().map(|d| d.0).collect::<Vec<_>>())
         }
     }
     fn values(&self, range: Option<&PubkeyRange>) -> Option<Vec<AccountMapEntrySerialize>> {
