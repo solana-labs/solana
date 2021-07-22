@@ -44,11 +44,11 @@ impl<T:Clone + Debug> RealEntry<T> for T {
 
 pub const verify_get_on_insert: bool = false;
 pub const bucket_bins: usize = BINS;
-pub const use_trait: bool = true;
+pub const use_trait: bool = false;
 pub const use_rox: bool = true;
 pub const use_sled: bool = false;
-pub const update_caching: bool = false;
-pub const insert_caching: bool = false;
+pub const update_caching: bool = true;
+pub const insert_caching: bool = true;
 
 #[derive(Debug, Default)]
 pub struct PubkeyRange {
