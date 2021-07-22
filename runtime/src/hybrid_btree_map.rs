@@ -41,7 +41,7 @@ impl<T:Clone + Debug> RealEntry<T> for T {
 
 pub const verify_get_on_insert: bool = true;
 pub const bucket_bins: usize = BINS;
-pub const use_trait: bool = true;
+pub const use_trait: bool = false;
 pub const use_rox: bool = true;
 pub const use_sled: bool = false;
 pub const update_caching: bool = true;
@@ -241,7 +241,13 @@ use std::time::Duration;
 
 pub struct WriteCacheEntry<V> {
     pub data: V2<V>,
-    //pub 
+    pub age: AtomicU8,
+    pub dirty: AtomicBool,
+}
+
+
+pub struct WriteCacheEntryArc<V> {
+    pub instance: Arc<WriteCacheEntry<V>>
 }
 
 #[derive(Debug)]
