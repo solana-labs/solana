@@ -6174,7 +6174,9 @@ impl AccountsDb {
                             for account in accounts_map.into_iter() {
                                 let (key, account_info) = account;
                                 let lock = self.accounts_index.get_account_maps_read_lock(&key);
-                                let x = lock.get(&key).unwrap();
+                                let x = lock.get(&key);
+                                assert!(x.is_some(), "not in index: {}", key);
+                                let x = x.unwrap();
                                 let sl = &x.slot_list;
                                 let mut count = 0;
                                 for (slot2, account_info2) in sl.iter() {
