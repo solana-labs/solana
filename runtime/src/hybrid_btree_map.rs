@@ -18,6 +18,7 @@ use std::time::Instant;
 type K = Pubkey;
 use std::collections::{hash_map::Entry as HashMapEntry, HashMap};
 use std::ops::Bound::{Excluded, Included, Unbounded};
+use std::convert::TryInto;
 
 #[derive(Clone, Debug)]
 pub struct HybridAccountEntry<V: Clone + Debug> {
@@ -358,9 +359,17 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
     pub fn bucket_len(&self, ix: usize) -> u64 {
         self.disk.bucket_len(ix)
     }
+    fn read_be_u64(input: &[u8]) -> u64 {
+        assert!(input.len() >= std::mem::size_of::<u64>());
+        u64::from_be_bytes(input[0..std::mem::size_of::<u64>()].try_into().unwrap())
+    }
+    
     pub fn bucket_ix(&self, key: &Pubkey) -> usize {
         let b = self.binner.bin_from_pubkey(key);
-        assert_eq!(b, self.disk.bucket_ix(key));
+        assert_eq!(b, self.disk.bucket_ix(key), "be {}, shift {}",
+        Self::read_be_u64(key.as_ref()),
+        (Self::read_be_u64(key.as_ref()) >> 0) as usize
+);
         b
     }
     pub fn keys<R: RangeBounds<Pubkey>>(
