@@ -506,8 +506,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
     where
         F: Fn(Option<(&[SlotT<V>], u64)>) -> Option<(Vec<SlotT<V>>, u64)>,
     {
-        let entry = current_value.unwrap();
-        let current_value = Some((&entry.slot_list[..], entry.ref_count));
+        let current_value = current_value.map(|entry| (&entry.slot_list[..], entry.ref_count));
         // we are an update
         let result = updatefn(current_value);
         if let Some(result) = result {
