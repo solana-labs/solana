@@ -797,7 +797,7 @@ impl<T: Clone + std::fmt::Debug + Sync + Send + Guts> Default for AccountsIndex<
         Self {
             account_maps: (0..BINS)
                 .into_iter()
-                .map(|bin| RwLock::new(AccountMap::new(&bucket_map, bin, BINS)))
+                .map(|bin| RwLock::new(AccountMap::new2(&bucket_map, bin, BINS)))
                 .collect::<Vec<_>>(),
             program_id_index: SecondaryIndex::<DashMapSecondaryIndexEntry>::new(
                 "program_id_index_stats",

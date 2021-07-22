@@ -245,7 +245,7 @@ pub struct BucketMapWriteHolder<V> {
     pub unified_backing: bool,
 }
 
-pub const use_rox: bool = true;
+pub const use_rox: bool = false;
 
 impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
     pub fn set_account_index_db(&self, mut db: Arc<Box<dyn Rox>>) {
@@ -271,6 +271,11 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
                 continue;
             }
             found_one = false;
+            let ignored = AccountMapEntry {
+                slot_list: vec![],
+                ref_count: 0,
+            };
+
             for ix in 0..self.bins {
                 if !self.write_cache[ix].read().unwrap().is_empty() {
                     found_one = true;
@@ -278,8 +283,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
                     self.write_cache_flushes
                         .fetch_add(wc.len() as u64, Ordering::Relaxed);
                     for (k, v) in wc.iter() {
-                        self.disk
-                            .update(k, |_current| Some((v.slot_list.clone(), v.ref_count)));
+                        self.update_no_cache(k, |_current| Some((v.slot_list.clone(), v.ref_count)), Some(&ignored));
                     }
                     wc.clear();
                 }
@@ -376,13 +380,12 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
         }
         self.disk.num_buckets()
     }
-    pub fn update<F>(&self, key: &Pubkey, updatefn: F, current_value: Option<&V2<V>>)
+
+    pub fn update_no_cache<F>(&self, key: &Pubkey, updatefn: F, current_value: Option<&V2<V>>)
     where
         F: Fn(Option<(&[SlotT<V>], u64)>) -> Option<(Vec<SlotT<V>>, u64)>,
     {
         if current_value.is_none() {
-            // we are an insert
-            self.inserts.fetch_add(1, Ordering::Relaxed);
 
             if use_rox {
                 let result = updatefn(None).unwrap();
@@ -421,8 +424,8 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
             }
         } else {
             // update
+            let entry = current_value.unwrap();
             if use_rox {
-                let entry = current_value.unwrap();
                 let current_value = Some((&entry.slot_list[..], entry.ref_count));
                 let result = updatefn(current_value).unwrap();
                 let result = AccountMapEntrySerialize {
@@ -438,6 +441,24 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
                     .update(key, &result);
                 return;
             }
+
+            let current_value = Some((&entry.slot_list[..], entry.ref_count));
+            let v = updatefn(current_value).unwrap();
+            self.disk
+                .update(key, |_current| Some((v.0.clone(), v.1)));
+        }
+    }
+
+    pub fn update<F>(&self, key: &Pubkey, updatefn: F, current_value: Option<&V2<V>>)
+    where
+        F: Fn(Option<(&[SlotT<V>], u64)>) -> Option<(Vec<SlotT<V>>, u64)>,
+    {
+        if current_value.is_none() {
+            // we are an insert
+            self.inserts.fetch_add(1, Ordering::Relaxed);
+
+            self.update_no_cache(key, updatefn, current_value);
+        } else {
 
             self.updates.fetch_add(1, Ordering::Relaxed);
             let entry = current_value.unwrap();
@@ -468,22 +489,6 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
     }
     pub fn get(&self, key: &Pubkey) -> Option<(u64, Vec<SlotT<V>>)> {
         self.gets.fetch_add(1, Ordering::Relaxed);
-
-        if use_rox {
-            let ix = self.bucket_ix(key);
-            let result = self.db.read().unwrap()[ix].get(key);
-            let result = result.map(|result| {
-                (
-                    result.ref_count,
-                    result
-                        .slot_list
-                        .into_iter()
-                        .map(|(slot, info)| (slot, V::get_copy(&info)))
-                        .collect(), // bad
-                )
-            });
-            return result;
-        }
 
         let ix = self.disk.bucket_ix(key);
         let wc = &mut self.write_cache[ix].read().unwrap();
@@ -764,7 +769,7 @@ impl<'a, V: 'a + Clone + Debug + Guts> HybridVacantEntry<'a, V> {
 
 impl<V: 'static + Clone + Debug + Guts> HybridBTreeMap<V> {
     /// Creates an empty `BTreeMap`.
-    pub fn new(
+    pub fn new2(
         bucket_map: &Arc<BucketMapWriteHolder<V>>,
         bin_index: usize,
         bins: usize,
@@ -773,7 +778,7 @@ impl<V: 'static + Clone + Debug + Guts> HybridBTreeMap<V> {
             in_memory: BTreeMap::default(),
             disk: bucket_map.clone(),
             bin_index,
-            bins: bucket_map.num_buckets(),
+            bins: bins,//bucket_map.num_buckets(),
         }
     }
     pub fn new_bucket_map() -> Arc<BucketMapWriteHolder<V>> {
