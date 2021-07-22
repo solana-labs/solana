@@ -368,7 +368,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
         let b = self.binner.bin_from_pubkey(key);
         assert_eq!(b, self.disk.bucket_ix(key), "be {}, shift {}",
         Self::read_be_u64(key.as_ref()),
-        (Self::read_be_u64(key.as_ref()) >> 0) as usize
+        (Self::read_be_u64(key.as_ref()) >> 64) as usize
 );
         b
     }
