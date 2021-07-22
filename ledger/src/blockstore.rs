@@ -246,13 +246,14 @@ impl solana_runtime::hybrid_btree_map::Rox for AccountIndexRoxAdapter {
         }
     }
     fn keys(&self, range: Option<&PubkeyRange>) -> Option<Vec<Pubkey>> {
-        error!("keys while ignoring range");
         if use_hashmap {
+            error!("keys while ignoring range");
             // use iter here
             let keys = self.backing.read().unwrap();
             let k2 = keys.keys();
             Some(k2.cloned().collect())
         } else {
+            error!("keys while ignoring END range");
             let mut iter = IteratorMode::Start;
             if let Some(range) = range {
                 if let Some(start_include) = range.start_pubkey_include {
@@ -283,7 +284,7 @@ impl solana_runtime::hybrid_btree_map::Rox for AccountIndexRoxAdapter {
         if use_hashmap {
             let keys = self.backing.read().unwrap();
             let k2 = keys.values();
-            error!("valus: {}", k2.len());
+            error!("valus: while ignoring range {}", k2.len());
             Some(k2.cloned().collect())
         } else {
             let keys = self.keys(None).unwrap();
@@ -291,6 +292,7 @@ impl solana_runtime::hybrid_btree_map::Rox for AccountIndexRoxAdapter {
             for k in keys {
                 result.push(self.get(&k).unwrap());
             }
+            error!("valus: while ignoring range {}", result.len());
             Some(result)
         }
     }
