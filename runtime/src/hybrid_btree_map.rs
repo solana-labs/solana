@@ -543,7 +543,6 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
             self.inserts.fetch_add(1, Ordering::Relaxed);
 
             if insert_caching {
-                panic!("not supported");
                 self.upsert_in_cache(key, updatefn, current_value);
             } else {
                 self.update_no_cache(key, updatefn, current_value, false);
