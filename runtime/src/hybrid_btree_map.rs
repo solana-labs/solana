@@ -590,19 +590,42 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
         self.gets.fetch_add(1, Ordering::Relaxed);
 
         let ix = self.bucket_ix(key);
-        let wc = &mut self.write_cache[ix].read().unwrap();
-        let res = wc.get(key);
-        if let Some(mut res) = res {
-            let mut instance = res.instance.write().unwrap();
-            instance.age = default_age;
-            Some((instance.data.ref_count, instance.data.slot_list.clone()))
-        } else {
-            if use_trait {
-                let ix = self.bucket_ix(key);
-                let r = self.db.read().unwrap()[ix].get(key);
-                return r.map(|x| (x.ref_count, V::get_copy2(&x.slot_list)));
+        {
+            let wc = &mut self.write_cache[ix].read().unwrap();
+            let res = wc.get(key);
+            if let Some(mut res) = res {
+                let mut instance = res.instance.write().unwrap();
+                instance.age = default_age;
+                return Some((instance.data.ref_count, instance.data.slot_list.clone()))
             }
-            self.disk.get(key)
+        }
+        {
+            let mut wc = &mut self.write_cache[ix].write().unwrap();
+            match wc.entry(key.clone()) {
+                HashMapEntry::Occupied(occupied) => {
+                    let mut instance = occupied.get().instance.write().unwrap();
+                    instance.age = default_age;
+                    return Some((instance.data.ref_count, instance.data.slot_list.clone()));
+                }
+                HashMapEntry::Vacant(vacant) => {
+                    let r =
+                    if use_trait {
+                        let ix = self.bucket_ix(key);
+                        let r = self.db.read().unwrap()[ix].get(key);
+                        r.map(|x| (x.ref_count, V::get_copy2(&x.slot_list)))
+                    }
+                    else {
+                        self.disk.get(key)
+                    };
+                    if get_caching {
+                        r.as_ref().and_then(|loaded| {
+                            vacant.insert(Self::allocate(&loaded.1, loaded.0, false));
+                            Some(())
+                        });
+                    }
+                    r
+                }
+            }
         }
     }
     pub fn addref(&self, key: &Pubkey, ref_count: RefCount, slot_list: &Vec<SlotT<V>>) {
