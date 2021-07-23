@@ -50,7 +50,7 @@ pub const use_rox: bool = true;
 pub const use_sled: bool = false;
 pub const update_caching: bool = true;
 pub const insert_caching: bool = true;
-pub const get_caching: bool = true;
+pub const get_caching: bool = false;
 
 #[derive(Debug, Default)]
 pub struct PubkeyRange {
@@ -598,6 +598,15 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
             }
         }
     }
+    pub fn get_no_cache(&self, key: &Pubkey) -> Option<(u64, Vec<SlotT<V>>)> {
+        if use_trait {
+            let ix = self.bucket_ix(key);
+            let r = self.db.read().unwrap()[ix].get(key);
+            r.map(|x| (x.ref_count, V::get_copy2(&x.slot_list)))
+        } else {
+            self.disk.get(key)
+        }
+    }
     pub fn get(&self, key: &Pubkey) -> Option<(u64, Vec<SlotT<V>>)> {
         self.gets.fetch_add(1, Ordering::Relaxed);
 
@@ -610,7 +619,11 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
                 instance.age = default_age;
                 return Some((instance.data.ref_count, instance.data.slot_list.clone()));
             }
+            if !get_caching {
+                return self.get_no_cache(key);
+            }
         }
+        // get caching
         {
             let mut wc = &mut self.write_cache[ix].write().unwrap();
             match wc.entry(key.clone()) {
@@ -620,19 +633,11 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
                     return Some((instance.data.ref_count, instance.data.slot_list.clone()));
                 }
                 HashMapEntry::Vacant(vacant) => {
-                    let r = if use_trait {
-                        let ix = self.bucket_ix(key);
-                        let r = self.db.read().unwrap()[ix].get(key);
-                        r.map(|x| (x.ref_count, V::get_copy2(&x.slot_list)))
-                    } else {
-                        self.disk.get(key)
-                    };
-                    if get_caching {
-                        r.as_ref().and_then(|loaded| {
-                            vacant.insert(Self::allocate(&loaded.1, loaded.0, false));
-                            Some(())
-                        });
-                    }
+                    let r = self.get_no_cache(key);
+                    r.as_ref().and_then(|loaded| {
+                        vacant.insert(Self::allocate(&loaded.1, loaded.0, false));
+                        Some(())
+                    });
                     r
                 }
             }
