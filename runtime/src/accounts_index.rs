@@ -802,6 +802,7 @@ impl<T: Clone + std::fmt::Debug + Sync + Send + Guts> Default for AccountsIndex<
     fn default() -> Self {
         let exit = Arc::new(AtomicBool::new(false));
         let exit_ = exit.clone();
+        error!("{} {}", file!(), line!());
         let bucket_map = HybridBTreeMap::new_bucket_map();
         let bucket_map_ = bucket_map.clone();
         let flusher = Builder::new()

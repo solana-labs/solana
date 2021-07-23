@@ -48,7 +48,7 @@ impl<T: Clone + std::fmt::Debug> BucketMap<T> {
         let count = 1 << num_buckets_pow2;
         let mut buckets = Vec::with_capacity(count);
         buckets.resize_with(count, || RwLock::new(None));
-        error!("# buckets: {}", count);
+        error!("# buckets: {} in {:?}", count, drives);
         Self {
             buckets,
             drives,
@@ -90,7 +90,6 @@ impl<T: Clone + std::fmt::Debug> BucketMap<T> {
 
     pub fn default_drives() -> Arc<Vec<PathBuf>> {
         let tmpdir2 = PathBuf::from("accounts_index_buckets");
-        error!("folder: {:?}", tmpdir2);
         let paths: Vec<PathBuf> = [tmpdir2]
             .iter()
             .filter(|x| std::fs::create_dir_all(x).is_ok())
