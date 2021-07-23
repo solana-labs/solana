@@ -17,7 +17,7 @@ crossbeam-channel = "0.5"
 itertools = "0.10.1"
 jsonrpc-core = "17.1.0"
 jsonrpc-core-client = { version = "17.1.0", features = ["ipc", "ws"] }
-jsonrpc-derive = "17.1.0"
+jsonrpc-derive = "18.0.0"
 jsonrpc-http-server = "17.1.0"
 jsonrpc-pubsub = "17.1.0"
 jsonrpc-ws-server = "17.1.0"
