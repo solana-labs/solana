@@ -122,6 +122,81 @@ impl Guts for AccountInfo {
     }
 }
 
+impl Guts for bool {
+    fn get_info(&self) -> AccountInfo {
+        panic!("");
+        AccountInfo::default()
+    }
+    fn get_copy(info: &AccountInfo) -> Self {
+        panic!("");
+        true
+    }
+    fn get_info2(info: &SlotList<Self>) -> SlotList<AccountInfo> {
+        panic!("");
+vec![]
+    }
+    fn get_copy2(info: &SlotList<AccountInfo>) -> SlotList<Self> {
+        panic!("");
+        vec![]
+    }
+}
+
+impl Guts for f64 {
+    fn get_info(&self) -> AccountInfo {
+        panic!("");
+        AccountInfo::default()
+    }
+    fn get_copy(info: &AccountInfo) -> Self {
+        panic!("");
+        0.0
+    }
+    fn get_info2(info: &SlotList<Self>) -> SlotList<AccountInfo> {
+        panic!("");
+vec![]
+    }
+    fn get_copy2(info: &SlotList<AccountInfo>) -> SlotList<Self> {
+        panic!("");
+        vec![]
+    }
+}
+
+impl Guts for u64 {
+    fn get_info(&self) -> AccountInfo {
+        panic!("");
+        AccountInfo::default()
+    }
+    fn get_copy(info: &AccountInfo) -> Self {
+        panic!("");
+        0
+    }
+    fn get_info2(info: &SlotList<Self>) -> SlotList<AccountInfo> {
+        panic!("");
+vec![]
+    }
+    fn get_copy2(info: &SlotList<AccountInfo>) -> SlotList<Self> {
+        panic!("");
+        vec![]
+    }
+}
+impl Guts for i8 {
+    fn get_info(&self) -> AccountInfo {
+        panic!("");
+        AccountInfo::default()
+    }
+    fn get_copy(info: &AccountInfo) -> Self {
+        panic!("");
+        0
+    }
+    fn get_info2(info: &SlotList<Self>) -> SlotList<AccountInfo> {
+        panic!("");
+vec![]
+    }
+    fn get_copy2(info: &SlotList<AccountInfo>) -> SlotList<Self> {
+        panic!("");
+        vec![]
+    }
+}
+
 #[repr(C)]
 struct Header {
     ref_count: u64,
@@ -370,6 +445,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
         let db = RwLock::new(vec![]); //Arc::new(RwLock::new(None));
         let binner = PubkeyBinCalculator16::new(bucket_bins);
         let unified_backing = use_trait;
+        assert_eq!(bucket_bins, bucket_map.num_buckets());
 
         Self {
             disk: bucket_map,
@@ -390,8 +466,8 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
         }
     }
     pub fn flush(&self, ix: usize, bg: bool, age: bool) -> bool {
-        self.flush_calls.fetch_add(1, Ordering::Relaxed);
         if !self.write_cache[ix].read().unwrap().is_empty() {
+            self.flush_calls.fetch_add(1, Ordering::Relaxed);
             let mut wc = self.write_cache[ix].write().unwrap();
             let mut delete_keys = Vec::with_capacity(wc.len());
             let mut flushed = 0;
@@ -506,7 +582,6 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
         if use_trait {
             return bucket_bins;
         }
-        assert_eq!(bucket_bins, self.disk.num_buckets());
         self.disk.num_buckets()
     }
 
