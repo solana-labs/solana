@@ -384,19 +384,14 @@ impl JsonRpcRequestProcessor {
             if program_id == &spl_token_id_v2_0() && encoding == UiAccountEncoding::JsonParsed {
                 get_parsed_token_accounts(bank.clone(), keyed_accounts.into_iter()).collect()
             } else {
-                keyed_accounts
-                    .into_iter()
-                    .map(|(pubkey, account)| RpcKeyedAccount {
+                let mut encoded_accounts = vec![];
+                for (pubkey, account) in keyed_accounts {
+                    encoded_accounts.push(RpcKeyedAccount {
                         pubkey: pubkey.to_string(),
-                        account: UiAccount::encode(
-                            &pubkey,
-                            &account,
-                            encoding,
-                            None,
-                            data_slice_config,
-                        ),
-                    })
-                    .collect()
+                        account: encode_account(&account, &pubkey, encoding, data_slice_config)?,
+                    });
+                }
+                encoded_accounts
             };
         Ok(result).map(|result| match with_context {
             true => OptionalContext::Context(new_response(&bank, result)),
