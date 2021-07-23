@@ -50,12 +50,17 @@ pub struct MyHasher {
 
 impl Hasher for MyHasher {
     fn write(&mut self, bytes: &[u8]) {
-        error!("hash bytes: {}", bytes.len());
+        let len = bytes.len();
+        let start = len - 8;
+        self.hash ^= u64::from_be_bytes(bytes[start..].try_into().unwrap());
+        //error!("hash bytes: {}", bytes.len());
         //assert_eq!(self.hash, 0);
         //self.hash = u64::from_be_bytes(bytes[24..32].try_into().unwrap());
+        /*
         for i in 0..bytes.len() {
             self.hash = (self.hash << 1) ^ (bytes[i] as u64);
         }
+        */
     }
 
     fn finish(&self) -> u64 {
