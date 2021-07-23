@@ -2824,7 +2824,8 @@ pub mod tests {
             + IsCached
             + ZeroLamport
             + std::cmp::PartialEq
-            + std::fmt::Debug,
+            + std::fmt::Debug
+            + Guts,
     >(
         account_infos: [T; 2],
         is_cached: bool,

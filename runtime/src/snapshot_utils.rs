@@ -1510,6 +1510,7 @@ mod tests {
             AccountShrinkThreshold::default(),
             false,
             false,
+            None,
         )
         .unwrap();
 
@@ -1599,6 +1600,7 @@ mod tests {
             AccountShrinkThreshold::default(),
             false,
             false,
+            None,
         )
         .unwrap();
 

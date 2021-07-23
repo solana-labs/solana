@@ -76,6 +76,7 @@ where
         None,
         AccountShrinkThreshold::default(),
         false,
+        None,
     )
 }
 
@@ -233,6 +234,7 @@ fn test_bank_serialize_style(serde_style: SerdeStyle) {
         None,
         AccountShrinkThreshold::default(),
         false,
+        None,
     )
     .unwrap();
     dbank.src = ref_sc;
