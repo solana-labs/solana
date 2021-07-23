@@ -24,6 +24,7 @@ use {
         rent::Rent,
         signature::{read_keypair_file, write_keypair_file, Keypair, Signer},
     },
+    solana_streamer::socket::SocketAddrSpace,
     std::{
         collections::HashMap,
         fs::remove_dir_all,
@@ -263,8 +264,9 @@ impl TestValidatorGenesis {
     pub fn start_with_mint_address(
         &self,
         mint_address: Pubkey,
+        socket_addr_space: SocketAddrSpace,
     ) -> Result<TestValidator, Box<dyn std::error::Error>> {
-        TestValidator::start(mint_address, self)
+        TestValidator::start(mint_address, self, socket_addr_space)
     }
 
     /// Start a test validator
@@ -273,9 +275,9 @@ impl TestValidatorGenesis {
     /// created at genesis.
     ///
     /// This function panics on initialization failure.
-    pub fn start(&self) -> (TestValidator, Keypair) {
+    pub fn start(&self, socket_addr_space: SocketAddrSpace) -> (TestValidator, Keypair) {
         let mint_keypair = Keypair::new();
-        TestValidator::start(mint_keypair.pubkey(), self)
+        TestValidator::start(mint_keypair.pubkey(), self, socket_addr_space)
             .map(|test_validator| (test_validator, mint_keypair))
             .expect("Test validator failed to start")
     }
@@ -297,7 +299,11 @@ impl TestValidator {
     /// Faucet optional.
     ///
     /// This function panics on initialization failure.
-    pub fn with_no_fees(mint_address: Pubkey, faucet_addr: Option<SocketAddr>) -> Self {
+    pub fn with_no_fees(
+        mint_address: Pubkey,
+        faucet_addr: Option<SocketAddr>,
+        socket_addr_space: SocketAddrSpace,
+    ) -> Self {
         TestValidatorGenesis::default()
             .fee_rate_governor(FeeRateGovernor::new(0, 0))
             .rent(Rent {
@@ -306,7 +312,7 @@ impl TestValidator {
                 ..Rent::default()
             })
             .faucet_addr(faucet_addr)
-            .start_with_mint_address(mint_address)
+            .start_with_mint_address(mint_address, socket_addr_space)
             .expect("validator start failed")
     }
 
@@ -318,6 +324,7 @@ impl TestValidator {
         mint_address: Pubkey,
         target_lamports_per_signature: u64,
         faucet_addr: Option<SocketAddr>,
+        socket_addr_space: SocketAddrSpace,
     ) -> Self {
         TestValidatorGenesis::default()
             .fee_rate_governor(FeeRateGovernor::new(target_lamports_per_signature, 0))
@@ -327,7 +334,7 @@ impl TestValidator {
                 ..Rent::default()
             })
             .faucet_addr(faucet_addr)
-            .start_with_mint_address(mint_address)
+            .start_with_mint_address(mint_address, socket_addr_space)
             .expect("validator start failed")
     }
 
@@ -430,6 +437,7 @@ impl TestValidator {
     fn start(
         mint_address: Pubkey,
         config: &TestValidatorGenesis,
+        socket_addr_space: SocketAddrSpace,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let preserve_ledger = config.ledger_path.is_some();
         let ledger_path = TestValidator::initialize_ledger(mint_address, config)?;
@@ -513,11 +521,12 @@ impl TestValidator {
             &validator_config,
             true, // should_check_duplicate_instance
             config.start_progress.clone(),
+            socket_addr_space,
         ));
 
         // Needed to avoid panics in `solana-responder-gossip` in tests that create a number of
         // test validators concurrently...
-        discover_cluster(&gossip, 1)
+        discover_cluster(&gossip, 1, socket_addr_space)
             .map_err(|err| format!("TestValidator startup failed: {:?}", err))?;
 
         // This is a hack to delay until the fees are non-zero for test consistency

@@ -675,17 +675,34 @@ impl RepairService {
 #[cfg(test)]
 mod test {
     use super::*;
+<<<<<<< HEAD
     use crossbeam_channel::unbounded;
     use solana_gossip::cluster_info::Node;
+=======
+    use solana_gossip::{cluster_info::Node, contact_info::ContactInfo};
+>>>>>>> d2d5f36a3 (adds validator flag to allow private ip addresses (#18850))
     use solana_ledger::blockstore::{
         make_chaining_slot_entries, make_many_slot_entries, make_slot_entries,
     };
     use solana_ledger::shred::max_ticks_per_n_shreds;
     use solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path};
+<<<<<<< HEAD
     use solana_runtime::genesis_utils::{self, GenesisConfigInfo, ValidatorVoteKeypairs};
     use solana_sdk::signature::Signer;
     use solana_vote_program::vote_transaction;
+=======
+    use solana_sdk::signature::Keypair;
+    use solana_streamer::socket::SocketAddrSpace;
+>>>>>>> d2d5f36a3 (adds validator flag to allow private ip addresses (#18850))
     use std::collections::HashSet;
+
+    fn new_test_cluster_info(contact_info: ContactInfo) -> ClusterInfo {
+        ClusterInfo::new(
+            contact_info,
+            Arc::new(Keypair::new()),
+            SocketAddrSpace::Unspecified,
+        )
+    }
 
     #[test]
     pub fn test_repair_orphan() {
@@ -978,8 +995,14 @@ mod test {
         let blockstore_path = get_tmp_ledger_path!();
         let blockstore = Blockstore::open(&blockstore_path).unwrap();
         let cluster_slots = ClusterSlots::default();
+<<<<<<< HEAD
         let serve_repair = ServeRepair::new_with_invalid_keypair(Node::new_localhost().info);
         let mut duplicate_slot_repair_statuses = HashMap::new();
+=======
+        let serve_repair =
+            ServeRepair::new(Arc::new(new_test_cluster_info(Node::new_localhost().info)));
+        let mut ancestor_hashes_request_statuses = HashMap::new();
+>>>>>>> d2d5f36a3 (adds validator flag to allow private ip addresses (#18850))
         let dead_slot = 9;
         let receive_socket = &UdpSocket::bind("0.0.0.0:0").unwrap();
         let duplicate_status = DuplicateSlotRepairStatus {
@@ -1060,9 +1083,7 @@ mod test {
             Pubkey::default(),
             UdpSocket::bind("0.0.0.0:0").unwrap().local_addr().unwrap(),
         ));
-        let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(
-            Node::new_localhost().info,
-        ));
+        let cluster_info = Arc::new(new_test_cluster_info(Node::new_localhost().info));
         let serve_repair = ServeRepair::new(cluster_info.clone());
         let valid_repair_peer = Node::new_localhost().info;
 

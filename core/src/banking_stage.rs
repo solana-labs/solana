@@ -1388,7 +1388,12 @@ mod tests {
     use super::*;
     use crossbeam_channel::unbounded;
     use itertools::Itertools;
+<<<<<<< HEAD
     use solana_gossip::cluster_info::Node;
+=======
+    use solana_entry::entry::{next_entry, Entry, EntrySlice};
+    use solana_gossip::{cluster_info::Node, contact_info::ContactInfo};
+>>>>>>> d2d5f36a3 (adds validator flag to allow private ip addresses (#18850))
     use solana_ledger::{
         blockstore::{entries_to_test_shreds, Blockstore},
         entry::{next_entry, Entry, EntrySlice},
@@ -1411,6 +1416,7 @@ mod tests {
         system_transaction,
         transaction::TransactionError,
     };
+    use solana_streamer::socket::SocketAddrSpace;
     use solana_transaction_status::TransactionWithStatusMeta;
     use std::{
         net::SocketAddr,
@@ -1421,6 +1427,14 @@ mod tests {
         },
         thread::sleep,
     };
+
+    fn new_test_cluster_info(contact_info: ContactInfo) -> ClusterInfo {
+        ClusterInfo::new(
+            contact_info,
+            Arc::new(Keypair::new()),
+            SocketAddrSpace::Unspecified,
+        )
+    }
 
     #[test]
     fn test_banking_stage_shutdown1() {
@@ -1437,7 +1451,7 @@ mod tests {
             );
             let (exit, poh_recorder, poh_service, _entry_receiever) =
                 create_test_recorder(&bank, &blockstore, None);
-            let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
+            let cluster_info = new_test_cluster_info(Node::new_localhost().info);
             let cluster_info = Arc::new(cluster_info);
             let banking_stage = BankingStage::new(
                 &cluster_info,
@@ -1480,7 +1494,7 @@ mod tests {
             };
             let (exit, poh_recorder, poh_service, entry_receiver) =
                 create_test_recorder(&bank, &blockstore, Some(poh_config));
-            let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
+            let cluster_info = new_test_cluster_info(Node::new_localhost().info);
             let cluster_info = Arc::new(cluster_info);
             let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
 
@@ -1549,7 +1563,7 @@ mod tests {
             };
             let (exit, poh_recorder, poh_service, entry_receiver) =
                 create_test_recorder(&bank, &blockstore, Some(poh_config));
-            let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
+            let cluster_info = new_test_cluster_info(Node::new_localhost().info);
             let cluster_info = Arc::new(cluster_info);
             let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
 
@@ -1697,8 +1711,7 @@ mod tests {
                 };
                 let (exit, poh_recorder, poh_service, entry_receiver) =
                     create_test_recorder(&bank, &blockstore, Some(poh_config));
-                let cluster_info =
-                    ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
+                let cluster_info = new_test_cluster_info(Node::new_localhost().info);
                 let cluster_info = Arc::new(cluster_info);
                 let _banking_stage = BankingStage::new_num_threads(
                     &cluster_info,

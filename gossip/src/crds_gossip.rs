@@ -24,6 +24,7 @@ use {
         signature::{Keypair, Signer},
         timing::timestamp,
     },
+    solana_streamer::socket::SocketAddrSpace,
     std::{
         collections::{HashMap, HashSet},
         net::SocketAddr,
@@ -186,6 +187,7 @@ impl CrdsGossip {
         self_shred_version: u16,
         stakes: &HashMap<Pubkey, u64>,
         gossip_validators: Option<&HashSet<Pubkey>>,
+        socket_addr_space: &SocketAddrSpace,
     ) {
         self.push.refresh_push_active_set(
             &self.crds,
@@ -195,6 +197,7 @@ impl CrdsGossip {
             self_shred_version,
             self.crds.num_nodes(),
             CRDS_GOSSIP_NUM_ACTIVE,
+            socket_addr_space,
         )
     }
 
@@ -211,6 +214,7 @@ impl CrdsGossip {
         bloom_size: usize,
         ping_cache: &Mutex<PingCache>,
         pings: &mut Vec<(SocketAddr, Ping)>,
+        socket_addr_space: &SocketAddrSpace,
     ) -> Result<(ContactInfo, Vec<CrdsFilter>), CrdsGossipError> {
         self.pull.new_pull_request(
             thread_pool,
@@ -223,6 +227,7 @@ impl CrdsGossip {
             bloom_size,
             ping_cache,
             pings,
+            socket_addr_space,
         )
     }
 
@@ -379,6 +384,7 @@ mod test {
             0,               // shred version
             &HashMap::new(), // stakes
             None,            // gossip validators
+            &SocketAddrSpace::Unspecified,
         );
         let now = timestamp();
         //incorrect dest

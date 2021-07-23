@@ -21,8 +21,16 @@ use solana_metrics::{inc_new_counter_error, inc_new_counter_info};
 use solana_poh::poh_recorder::WorkingBankEntry;
 use solana_runtime::bank::Bank;
 use solana_sdk::timing::timestamp;
+<<<<<<< HEAD
 use solana_sdk::{clock::Slot, pubkey::Pubkey};
 use solana_streamer::{sendmmsg::send_mmsg, socket::is_global};
+=======
+use solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Keypair};
+use solana_streamer::{
+    sendmmsg::{batch_send, SendPktsError},
+    socket::SocketAddrSpace,
+};
+>>>>>>> d2d5f36a3 (adds validator flag to allow private ip addresses (#18850))
 use std::sync::atomic::AtomicU64;
 use std::{
     collections::HashMap,
@@ -386,6 +394,12 @@ pub fn broadcast_shreds(
     cluster_nodes: &ClusterNodes<BroadcastStage>,
     last_datapoint_submit: &Arc<AtomicU64>,
     transmit_stats: &mut TransmitShredsStats,
+<<<<<<< HEAD
+=======
+    self_pubkey: Pubkey,
+    bank_forks: &Arc<RwLock<BankForks>>,
+    socket_addr_space: &SocketAddrSpace,
+>>>>>>> d2d5f36a3 (adds validator flag to allow private ip addresses (#18850))
 ) -> Result<()> {
     let broadcast_len = cluster_nodes.num_peers();
     if broadcast_len == 0 {
@@ -396,9 +410,16 @@ pub fn broadcast_shreds(
     let packets: Vec<_> = shreds
         .iter()
         .filter_map(|shred| {
+<<<<<<< HEAD
             let node = cluster_nodes.get_broadcast_peer(shred.seed())?;
             if is_global(&node.tvu) {
                 Some((&shred.payload, &node.tvu))
+=======
+            let seed = shred.seed(Some(self_pubkey), &root_bank);
+            let node = cluster_nodes.get_broadcast_peer(seed)?;
+            if socket_addr_space.check(&node.tvu) {
+                Some((&shred.payload[..], &node.tvu))
+>>>>>>> d2d5f36a3 (adds validator flag to allow private ip addresses (#18850))
             } else {
                 None
             }
@@ -585,7 +606,11 @@ pub mod test {
         let broadcast_buddy = Node::new_localhost_with_pubkey(&buddy_keypair.pubkey());
 
         // Fill the cluster_info with the buddy's info
-        let cluster_info = ClusterInfo::new_with_invalid_keypair(leader_info.info.clone());
+        let cluster_info = ClusterInfo::new(
+            leader_info.info.clone(),
+            Arc::new(Keypair::new()),
+            SocketAddrSpace::Unspecified,
+        );
         cluster_info.insert_info(broadcast_buddy.info);
         let cluster_info = Arc::new(cluster_info);
 

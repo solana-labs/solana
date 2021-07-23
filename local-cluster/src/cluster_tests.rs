@@ -28,6 +28,11 @@ use solana_sdk::{
     timing::duration_as_ms,
     transport::TransportError,
 };
+<<<<<<< HEAD
+=======
+use solana_streamer::socket::SocketAddrSpace;
+use solana_vote_program::vote_transaction;
+>>>>>>> d2d5f36a3 (adds validator flag to allow private ip addresses (#18850))
 use std::{
     collections::{HashMap, HashSet},
     path::Path,
@@ -42,8 +47,10 @@ pub fn spend_and_verify_all_nodes<S: ::std::hash::BuildHasher + Sync + Send>(
     funding_keypair: &Keypair,
     nodes: usize,
     ignore_nodes: HashSet<Pubkey, S>,
+    socket_addr_space: SocketAddrSpace,
 ) {
-    let cluster_nodes = discover_cluster(&entry_point_info.gossip, nodes).unwrap();
+    let cluster_nodes =
+        discover_cluster(&entry_point_info.gossip, nodes, socket_addr_space).unwrap();
     assert!(cluster_nodes.len() >= nodes);
     let ignore_nodes = Arc::new(ignore_nodes);
     cluster_nodes.par_iter().for_each(|ingress_node| {
@@ -182,9 +189,11 @@ pub fn kill_entry_and_spend_and_verify_rest(
     funding_keypair: &Keypair,
     nodes: usize,
     slot_millis: u64,
+    socket_addr_space: SocketAddrSpace,
 ) {
     info!("kill_entry_and_spend_and_verify_rest...");
-    let cluster_nodes = discover_cluster(&entry_point_info.gossip, nodes).unwrap();
+    let cluster_nodes =
+        discover_cluster(&entry_point_info.gossip, nodes, socket_addr_space).unwrap();
     assert!(cluster_nodes.len() >= nodes);
     let client = create_client(entry_point_info.client_facing_addr(), VALIDATOR_PORT_RANGE);
     // sleep long enough to make sure we are in epoch 3
@@ -406,3 +415,39 @@ fn verify_slot_ticks(
     }
     entries.last().unwrap().hash
 }
+<<<<<<< HEAD
+=======
+
+pub fn submit_vote_to_cluster_gossip(
+    node_keypair: &Keypair,
+    vote_keypair: &Keypair,
+    vote_slot: Slot,
+    vote_hash: Hash,
+    blockhash: Hash,
+    gossip_addr: SocketAddr,
+    socket_addr_space: &SocketAddrSpace,
+) -> Result<(), GossipError> {
+    let vote_tx = vote_transaction::new_vote_transaction(
+        vec![vote_slot],
+        vote_hash,
+        blockhash,
+        node_keypair,
+        vote_keypair,
+        vote_keypair,
+        None,
+    );
+
+    cluster_info::push_messages_to_peer(
+        vec![CrdsValue::new_signed(
+            CrdsData::Vote(
+                0,
+                crds_value::Vote::new(node_keypair.pubkey(), vote_tx, timestamp()),
+            ),
+            node_keypair,
+        )],
+        node_keypair.pubkey(),
+        gossip_addr,
+        socket_addr_space,
+    )
+}
+>>>>>>> d2d5f36a3 (adds validator flag to allow private ip addresses (#18850))

@@ -362,6 +362,11 @@ pub mod tests {
     use solana_poh::poh_recorder::create_test_recorder;
     use solana_rpc::optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank;
     use solana_runtime::bank::Bank;
+<<<<<<< HEAD
+=======
+    use solana_sdk::signature::{Keypair, Signer};
+    use solana_streamer::socket::SocketAddrSpace;
+>>>>>>> d2d5f36a3 (adds validator flag to allow private ip addresses (#18850))
     use std::sync::atomic::Ordering;
 
     #[ignore]
@@ -379,7 +384,11 @@ pub mod tests {
         let bank_forks = BankForks::new(Bank::new(&genesis_config));
 
         //start cluster_info1
-        let cluster_info1 = ClusterInfo::new_with_invalid_keypair(target1.info.clone());
+        let cluster_info1 = ClusterInfo::new(
+            target1.info.clone(),
+            Arc::new(Keypair::new()),
+            SocketAddrSpace::Unspecified,
+        );
         cluster_info1.insert_info(leader.info);
         let cref1 = Arc::new(cluster_info1);
 

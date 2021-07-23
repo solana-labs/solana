@@ -57,6 +57,7 @@ use {
         pubkey::Pubkey,
         signature::{Keypair, Signer},
     },
+    solana_streamer::socket::SocketAddrSpace,
     solana_validator::{
         admin_rpc_service, dashboard::Dashboard, new_spinner_progress_bar, println_name_value,
         redirect_stderr_to_file,
@@ -357,6 +358,7 @@ fn start_gossip_node(
     expected_shred_version: Option<u16>,
     gossip_validators: Option<HashSet<Pubkey>>,
     should_check_duplicate_instance: bool,
+    socket_addr_space: SocketAddrSpace,
 ) -> (Arc<ClusterInfo>, Arc<AtomicBool>, GossipService) {
     let mut cluster_info = ClusterInfo::new(
         ClusterInfo::gossip_contact_info(
@@ -366,6 +368,10 @@ fn start_gossip_node(
         ),
         identity_keypair.clone(),
     );
+<<<<<<< HEAD
+=======
+    let mut cluster_info = ClusterInfo::new(contact_info, identity_keypair, socket_addr_space);
+>>>>>>> d2d5f36a3 (adds validator flag to allow private ip addresses (#18850))
     cluster_info.set_entrypoints(cluster_entrypoints.to_vec());
     cluster_info.restore_contact_info(ledger_path, 0);
     let cluster_info = Arc::new(cluster_info);
@@ -659,24 +665,25 @@ fn verify_reachable_ports(
     node: &Node,
     cluster_entrypoint: &ContactInfo,
     validator_config: &ValidatorConfig,
+    socket_addr_space: &SocketAddrSpace,
 ) -> bool {
     let mut udp_sockets = vec![&node.sockets.gossip, &node.sockets.repair];
 
-    if ContactInfo::is_valid_address(&node.info.serve_repair) {
+    if ContactInfo::is_valid_address(&node.info.serve_repair, socket_addr_space) {
         udp_sockets.push(&node.sockets.serve_repair);
     }
-    if ContactInfo::is_valid_address(&node.info.tpu) {
+    if ContactInfo::is_valid_address(&node.info.tpu, socket_addr_space) {
         udp_sockets.extend(node.sockets.tpu.iter());
     }
-    if ContactInfo::is_valid_address(&node.info.tpu_forwards) {
+    if ContactInfo::is_valid_address(&node.info.tpu_forwards, socket_addr_space) {
         udp_sockets.extend(node.sockets.tpu_forwards.iter());
     }
-    if ContactInfo::is_valid_address(&node.info.tvu) {
+    if ContactInfo::is_valid_address(&node.info.tvu, socket_addr_space) {
         udp_sockets.extend(node.sockets.tvu.iter());
         udp_sockets.extend(node.sockets.broadcast.iter());
         udp_sockets.extend(node.sockets.retransmit_sockets.iter());
     }
-    if ContactInfo::is_valid_address(&node.info.tvu_forwards) {
+    if ContactInfo::is_valid_address(&node.info.tvu_forwards, socket_addr_space) {
         udp_sockets.extend(node.sockets.tvu_forwards.iter());
     }
 
@@ -686,7 +693,7 @@ fn verify_reachable_ports(
             ("RPC", rpc_addr, &node.info.rpc),
             ("RPC pubsub", rpc_pubsub_addr, &node.info.rpc_pubsub),
         ] {
-            if ContactInfo::is_valid_address(public_addr) {
+            if ContactInfo::is_valid_address(public_addr, socket_addr_space) {
                 tcp_listeners.push((
                     bind_addr.port(),
                     TcpListener::bind(bind_addr).unwrap_or_else(|err| {
@@ -751,14 +758,19 @@ fn rpc_bootstrap(
     start_progress: &Arc<RwLock<ValidatorStartProgress>>,
     minimal_snapshot_download_speed: f32,
     maximum_snapshot_download_abort: u64,
+    socket_addr_space: SocketAddrSpace,
 ) {
     if !no_port_check {
         let mut order: Vec<_> = (0..cluster_entrypoints.len()).collect();
         order.shuffle(&mut thread_rng());
-        if order
-            .into_iter()
-            .all(|i| !verify_reachable_ports(node, &cluster_entrypoints[i], validator_config))
-        {
+        if order.into_iter().all(|i| {
+            !verify_reachable_ports(
+                node,
+                &cluster_entrypoints[i],
+                validator_config,
+                &socket_addr_space,
+            )
+        }) {
             exit(1);
         }
     }
@@ -783,6 +795,7 @@ fn rpc_bootstrap(
                 validator_config.expected_shred_version,
                 validator_config.gossip_validators.clone(),
                 should_check_duplicate_instance,
+                socket_addr_space,
             ));
         }
 
@@ -1848,6 +1861,13 @@ pub fn main() {
                 .help("Disables duplicate instance check")
                 .hidden(true),
         )
+        .arg(
+            Arg::with_name("allow_private_addr")
+                .long("allow-private-addr")
+                .takes_value(false)
+                .help("Allow contacting private ip addresses")
+                .hidden(true),
+        )
         .after_help("The default subcommand is run")
         .subcommand(
             SubCommand::with_name("exit")
@@ -1942,6 +1962,7 @@ pub fn main() {
         )
         .get_matches();
 
+    let socket_addr_space = SocketAddrSpace::new(matches.is_present("allow_private_addr"));
     let ledger_path = PathBuf::from(matches.value_of("ledger_path").unwrap());
 
     let operation = match matches.subcommand() {
@@ -2602,6 +2623,7 @@ pub fn main() {
             &start_progress,
             minimal_snapshot_download_speed,
             maximum_snapshot_download_abort,
+            socket_addr_space,
         );
         *start_progress.write().unwrap() = ValidatorStartProgress::Initializing;
     }
@@ -2621,6 +2643,7 @@ pub fn main() {
         &validator_config,
         should_check_duplicate_instance,
         start_progress,
+        socket_addr_space,
     );
 
     if let Some(filename) = init_complete_file {

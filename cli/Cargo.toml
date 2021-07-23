@@ -51,8 +51,14 @@ tiny-bip39 = "0.7.0"
 url = "2.1.1"
 
 [dev-dependencies]
+<<<<<<< HEAD
 solana-core = { path = "../core", version = "=1.7.9" }
 tempfile = "3.1.0"
+=======
+solana-core = { path = "../core", version = "=1.8.0" }
+solana-streamer = { path = "../streamer", version = "=1.8.0" }
+tempfile = "3.2.0"
+>>>>>>> d2d5f36a3 (adds validator flag to allow private ip addresses (#18850))
 
 [[bin]]
 name = "solana"

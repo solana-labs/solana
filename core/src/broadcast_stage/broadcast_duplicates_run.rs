@@ -300,6 +300,7 @@ impl BroadcastRun for BroadcastDuplicatesRun {
         };
 
         let ((stakes, shreds), _) = receiver.lock().unwrap().recv()?;
+<<<<<<< HEAD
         let stakes = stakes.unwrap();
         for peer in cluster_info.tvu_peers() {
             // Forward shreds to circumvent gossip
@@ -318,6 +319,23 @@ impl BroadcastRun for BroadcastDuplicatesRun {
                 }
             }
         }
+=======
+        // Broadcast data
+        let cluster_nodes = ClusterNodes::<BroadcastStage>::new(
+            cluster_info,
+            stakes.as_deref().unwrap_or(&HashMap::default()),
+        );
+        broadcast_shreds(
+            sock,
+            &shreds,
+            &cluster_nodes,
+            &Arc::new(AtomicU64::new(0)),
+            &mut TransmitShredsStats::default(),
+            cluster_info.id(),
+            bank_forks,
+            cluster_info.socket_addr_space(),
+        )?;
+>>>>>>> d2d5f36a3 (adds validator flag to allow private ip addresses (#18850))
 
         Ok(())
     }
