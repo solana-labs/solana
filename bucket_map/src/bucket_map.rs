@@ -1,6 +1,6 @@
 //! BucketMap is a mostly contention free concurrent map backed by MmapMut
 
-use crate::data_bucket::DataBucket;
+use crate::data_bucket::{DataBucket, BucketStats, BucketMapStats};
 use log::*;
 use rand::thread_rng;
 use rand::Rng;
@@ -17,24 +17,11 @@ use std::{
     sync::{atomic::{Ordering, AtomicU64}},
 };
 
-#[derive(Debug, Default)]
-pub struct BucketStats {
-    pub resizes: AtomicU64,
-    pub max_size: AtomicU64,
-    pub resize_us: AtomicU64,
-}
-
-#[derive(Debug, Default)]
-pub struct BucketMapStats {
-    pub index: BucketStats,
-    pub data: BucketStats,
-}
-
 pub struct BucketMap<T> {
     buckets: Vec<RwLock<Option<Bucket<T>>>>,
     drives: Arc<Vec<PathBuf>>,
     bits: u8,
-    pub stats: BucketMapStats,
+    pub stats: Arc<BucketMapStats>,
 }
 
 impl<T> std::fmt::Debug for BucketMap<T> {
@@ -64,7 +51,7 @@ impl<T: Clone + std::fmt::Debug> BucketMap<T> {
         let mut buckets = Vec::with_capacity(count);
         buckets.resize_with(count, || RwLock::new(None));
         error!("# buckets: {} in {:?}", count, drives);
-        let stats = BucketMapStats::default();
+        let stats = Arc::new(BucketMapStats::default());
         Self {
             buckets,
             drives,
@@ -188,7 +175,7 @@ impl<T: Clone + std::fmt::Debug> BucketMap<T> {
             }
             let mut bucket = self.buckets[ix].write().unwrap();
             if bucket.is_none() {
-                *bucket = Some(Bucket::new(self.drives.clone()));
+                *bucket = Some(Bucket::new(self.drives.clone(), self.stats.clone()));
             }
             let bucket = bucket.as_mut().unwrap();
             for key in per_bucket {
@@ -229,7 +216,7 @@ impl<T: Clone + std::fmt::Debug> BucketMap<T> {
         let ix = self.bucket_ix(key);
         let mut bucket = self.buckets[ix].write().unwrap();
         if bucket.is_none() {
-            *bucket = Some(Bucket::new(self.drives.clone()));
+            *bucket = Some(Bucket::new(self.drives.clone(), self.stats.clone()));
         }
         let bucket = bucket.as_mut().unwrap();
         let current = bucket.read_value(key);
@@ -294,6 +281,7 @@ struct Bucket<T> {
     //data buckets to store SlotSlice up to a power of 2 in len
     data: Vec<DataBucket>,
     _phantom: PhantomData<T>,
+    stats: Arc<BucketMapStats>,
 }
 
 #[repr(C)]
@@ -337,14 +325,15 @@ impl IndexEntry {
 const MAX_SEARCH: u64 = 16;
 
 impl<T: Clone> Bucket<T> {
-    fn new(drives: Arc<Vec<PathBuf>>) -> Self {
-        let index = DataBucket::new(drives.clone(), 1, std::mem::size_of::<IndexEntry>() as u64);
+    fn new(drives: Arc<Vec<PathBuf>>, stats: Arc<BucketMapStats>) -> Self {
+        let index = DataBucket::new(drives.clone(), 1, std::mem::size_of::<IndexEntry>() as u64, stats.index.clone());
         Self {
             random: thread_rng().gen(),
             drives,
             index,
             data: vec![],
             _phantom: PhantomData::default(),
+            stats,
         }
     }
 
@@ -570,6 +559,7 @@ impl<T: Clone> Bucket<T> {
                     1,
                     std::mem::size_of::<IndexEntry>() as u64,
                     self.index.capacity + i * 2,
+                    self.stats.index.clone(),
                 );
                 let random = thread_rng().gen();
                 let rvs: Vec<bool> = (0..self.index.num_cells())
@@ -615,7 +605,7 @@ impl<T: Clone> Bucket<T> {
                     self.drives.clone(),
                     1 << i,
                     std::mem::size_of::<T>() as u64,
-                ))
+                self.stats.data.clone(),))
             }
         }
         if self.data[sz.0 as usize].capacity == sz.1 {

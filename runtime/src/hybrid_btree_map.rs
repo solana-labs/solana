@@ -380,8 +380,10 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
                         // clear the cache of things that have aged out
                         delete_keys.push(*k);
                         get_purges += 1;
+                        error!("purged from age: {}, {}", k, instance.age);
                     } else {
                         instance.age -= 1;
+                        error!("aging: {}, {}", k, instance.age);
                     }
                 }
             }
@@ -627,9 +629,15 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
             let wc = &mut self.write_cache[ix].read().unwrap();
             let res = wc.get(key);
             if let Some(mut res) = res {
-                let mut instance = res.instance.write().unwrap();
-                instance.age = default_age;
-                return Some((instance.data.ref_count, instance.data.slot_list.clone()));
+                if get_caching {
+                    let mut instance = res.instance.write().unwrap();
+                    instance.age = default_age;
+                    return Some((instance.data.ref_count, instance.data.slot_list.clone()));
+                }
+                else {
+                    let mut instance = res.instance.read().unwrap();
+                    return Some((instance.data.ref_count, instance.data.slot_list.clone()));
+                }
             }
             if !get_caching {
                 return self.get_no_cache(key);
