@@ -58,7 +58,7 @@ impl Hasher for MyHasher {
         self.hash
     }
 }
-
+/*
 pub struct myhash {
 
 }
@@ -68,8 +68,8 @@ impl BuildHasher for myhash {
     {
         MyHasher::default()
     }
-}
-
+}*/
+type MyBuildHasher = BuildHasherDefault<MyHasher>;
 
 pub const default_age: u8 = 5;
 pub const verify_get_on_insert: bool = false;
@@ -269,7 +269,7 @@ impl Rox for Sled {
 
 pub type SlotT<T> = (Slot, T);
 
-pub type WriteCache<V> = HashMap<Pubkey, V>;
+pub type WriteCache<V> = HashMap<Pubkey, V, MyBuildHasher>;
 use crate::waitable_condvar::WaitableCondvar;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8};
 use std::time::Duration;
