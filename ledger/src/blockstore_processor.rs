@@ -265,7 +265,7 @@ fn process_entries_with_callback(
     let mut tick_hashes = vec![];
     let mut rng = thread_rng();
 
-    self.prefetch_accounts(bank, entries);
+    prefetch_accounts(bank, entries);
 
     for entry in entries {
         match entry {

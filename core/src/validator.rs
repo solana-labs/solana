@@ -396,7 +396,7 @@ impl Validator {
 
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
         let bank = bank_forks.working_bank();
-        bank.set_account_index_db(blockstore.account_index.clone());
+        //blockstore.map(|blockstore| bank.set_account_index_db(blockstore.account_index.clone()));
         if let Some(ref shrink_paths) = config.account_shrink_paths {
             bank.set_shrink_paths(shrink_paths.clone());
         }

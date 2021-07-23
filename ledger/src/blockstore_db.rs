@@ -391,7 +391,7 @@ impl Rocks {
             (PerfSamples::NAME, perf_samples_cf_descriptor),
             (BlockHeight::NAME, block_height_cf_descriptor),
             (ProgramCosts::NAME, program_costs_cf_descriptor),
-            (AccountIndex::NAME, account_index_cf_descriptor),
+            //(AccountIndex::NAME, account_index_cf_descriptor),
         ];
         let cf_names: Vec<_> = cfs.iter().map(|c| c.0).collect();
 

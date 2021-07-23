@@ -152,7 +152,7 @@ pub struct Blockstore {
     pub lowest_cleanup_slot: Arc<RwLock<Slot>>,
     no_compaction: bool,
     slots_stats: Arc<Mutex<SlotsStats>>,
-    pub account_index: Arc<Box<dyn solana_runtime::hybrid_btree_map::Rox>>,
+    //pub account_index: Arc<Box<dyn solana_runtime::hybrid_btree_map::Rox>>,
 }
 
 use solana_runtime::accounts_db::AccountInfo;
@@ -504,16 +504,17 @@ impl Blockstore {
             let to_index = cf::AccountIndex::as_index(end);*/
             batch.delete_range_cf::<cf::AccountIndex>(cf, start, end).unwrap();
         }
+        let db = Arc::new(db);
+        /*
         let account_index_cf = db.column();
 
-        let db = Arc::new(db);
         let backing = RwLock::new(HashMap::new());
         
         let account_index = AccountIndexRoxAdapter {
             db: db.clone(),
             account_index_cf,
             backing,
-        };
+        };*/
 
         // Get max root or 0 if it doesn't exist
         let max_root = db
@@ -569,7 +570,7 @@ impl Blockstore {
             lowest_cleanup_slot: Arc::new(RwLock::new(0)),
             no_compaction: false,
             slots_stats: Arc::new(Mutex::new(SlotsStats::default())),
-            account_index: Arc::new(Box::new(account_index)),
+            //account_index: Arc::new(Box::new(account_index)),
         };
         if initialize_transaction_status_index {
             blockstore.initialize_transaction_status_index()?;
