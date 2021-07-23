@@ -42,18 +42,34 @@ impl<T:Clone + Debug> RealEntry<T> for T {
     }
 }
 */
-/*
+use std::hash::{BuildHasherDefault, Hasher};
+#[derive(Debug, Default)]
+pub struct MyHasher {
+    hash: u64,
+}
+
+impl Hasher for MyHasher {
+    fn write(&mut self, bytes: &[u8]) {
+        assert_eq!(self.hash, 0);
+        self.hash = u64::from_be_bytes(bytes[24..32].try_into().unwrap());
+    }
+
+    fn finish(&self) -> u64 {
+        self.hash
+    }
+}
+
 pub struct myhash {
 
 }
 impl BuildHasher for myhash {
-    type Hasher: Hasher;
+    type Hasher = MyHasher;
     fn build_hasher(&self) -> Self::Hasher
     {
-
+        MyHasher::default()
     }
 }
-*/
+
 
 pub const default_age: u8 = 5;
 pub const verify_get_on_insert: bool = false;
