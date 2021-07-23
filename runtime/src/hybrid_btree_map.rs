@@ -16,6 +16,7 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::time::Instant;
+use std::hash::BuildHasher;
 
 type K = Pubkey;
 use std::collections::{hash_map::Entry as HashMapEntry, HashMap};
@@ -38,6 +39,18 @@ impl<T:Clone + Debug> RealEntry<T> for T {
     fn real_entry(&self) -> T
     {
         self
+    }
+}
+*/
+/*
+pub struct myhash {
+
+}
+impl BuildHasher for myhash {
+    type Hasher: Hasher;
+    fn build_hasher(&self) -> Self::Hasher
+    {
+
     }
 }
 */
@@ -264,7 +277,8 @@ pub struct BucketMapWriteHolder<V> {
     pub write_cache_flushes: AtomicU64,
     pub flush_calls: AtomicU64,
     pub get_purges: AtomicU64,
-    pub gets: AtomicU64,
+    pub gets_from_disk: AtomicU64,
+    pub gets_from_cache: AtomicU64,
     pub updates: AtomicU64,
     pub inserts: AtomicU64,
     pub deletes: AtomicU64,
@@ -326,7 +340,8 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
         let write_cache_flushes = AtomicU64::new(0);
         let flush_calls = AtomicU64::new(0);
         let get_purges = AtomicU64::new(0);
-        let gets = AtomicU64::new(0);
+        let gets_from_disk = AtomicU64::new(0);
+        let gets_from_cache = AtomicU64::new(0);
         let updates = AtomicU64::new(0);
         let inserts = AtomicU64::new(0);
         let deletes = AtomicU64::new(0);
@@ -345,7 +360,8 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
             write_cache,
             bins,
             wait,
-            gets,
+            gets_from_cache,
+            gets_from_disk,
             deletes,
             write_cache_flushes,
             updates,
@@ -613,6 +629,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
         }
     }
     pub fn get_no_cache(&self, key: &Pubkey) -> Option<(u64, Vec<SlotT<V>>)> {
+        self.gets_from_disk.fetch_add(1, Ordering::Relaxed);
         if use_trait {
             let ix = self.bucket_ix(key);
             let r = self.db.read().unwrap()[ix].get(key);
@@ -622,7 +639,6 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
         }
     }
     pub fn get(&self, key: &Pubkey) -> Option<(u64, Vec<SlotT<V>>)> {
-        self.gets.fetch_add(1, Ordering::Relaxed);
 
         let ix = self.bucket_ix(key);
         {
@@ -632,9 +648,11 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
                 if get_caching {
                     let mut instance = res.instance.write().unwrap();
                     instance.age = default_age;
+                    self.gets_from_cache.fetch_add(1, Ordering::Relaxed);
                     return Some((instance.data.ref_count, instance.data.slot_list.clone()));
                 } else {
                     let mut instance = res.instance.read().unwrap();
+                    self.gets_from_cache.fetch_add(1, Ordering::Relaxed);
                     return Some((instance.data.ref_count, instance.data.slot_list.clone()));
                 }
             }
@@ -649,6 +667,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
                 HashMapEntry::Occupied(occupied) => {
                     let mut instance = occupied.get().instance.write().unwrap();
                     instance.age = default_age;
+                    self.gets_from_cache.fetch_add(1, Ordering::Relaxed);
                     return Some((instance.data.ref_count, instance.data.slot_list.clone()));
                 }
                 HashMapEntry::Vacant(vacant) => {
@@ -742,7 +761,8 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
             ("updates", self.updates.swap(0, Ordering::Relaxed), i64),
             ("inserts", self.inserts.swap(0, Ordering::Relaxed), i64),
             ("deletes", self.deletes.swap(0, Ordering::Relaxed), i64),
-            ("gets", self.gets.swap(0, Ordering::Relaxed), i64),
+            ("gets_from_disk", self.gets_from_disk.swap(0, Ordering::Relaxed), i64),
+            ("gets_from_cache", self.gets_from_cache.swap(0, Ordering::Relaxed), i64),
             (
                 "bucket_index_resizes",
                 self.disk.stats.index.resizes.swap(0, Ordering::Relaxed),
