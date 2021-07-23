@@ -25,6 +25,13 @@ pub struct BucketMap<T> {
     pub stats: Arc<BucketMapStats>,
 }
 
+impl<T> Drop for BucketMap<T> {
+    fn drop(&mut self) {
+        error!("dropping bucket map");
+    }
+}
+
+
 impl<T> std::fmt::Debug for BucketMap<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "BucketMap TODO")?;
