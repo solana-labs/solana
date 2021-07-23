@@ -14,12 +14,27 @@ use std::sync::Arc;
 use std::sync::RwLock;
 use std::{
     fs,
-    sync::{atomic::Ordering},
+    sync::{atomic::{Ordering, AtomicU64}},
 };
+
+#[derive(Debug, Default)]
+pub struct BucketStats {
+    pub resizes: AtomicU64,
+    pub max_size: AtomicU64,
+    pub resize_us: AtomicU64,
+}
+
+#[derive(Debug, Default)]
+pub struct BucketMapStats {
+    pub index: BucketStats,
+    pub data: BucketStats,
+}
+
 pub struct BucketMap<T> {
     buckets: Vec<RwLock<Option<Bucket<T>>>>,
     drives: Arc<Vec<PathBuf>>,
     bits: u8,
+    pub stats: BucketMapStats,
 }
 
 impl<T> std::fmt::Debug for BucketMap<T> {
@@ -49,10 +64,12 @@ impl<T: Clone + std::fmt::Debug> BucketMap<T> {
         let mut buckets = Vec::with_capacity(count);
         buckets.resize_with(count, || RwLock::new(None));
         error!("# buckets: {} in {:?}", count, drives);
+        let stats = BucketMapStats::default();
         Self {
             buckets,
             drives,
             bits: num_buckets_pow2,
+            stats,
         }
     }
 
