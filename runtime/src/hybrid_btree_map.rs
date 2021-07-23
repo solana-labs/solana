@@ -313,11 +313,13 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
                 continue;
             }
             found_one = false;
+            error!("starting bg flush");
             for ix in 0..self.bins {
                 if self.flush(ix, true, age) {
                     found_one = true;
                 }
             }
+            error!("ending bg flush");
         }
     }
     fn new(bucket_map: BucketMap<SlotT<V>>) -> Self {
