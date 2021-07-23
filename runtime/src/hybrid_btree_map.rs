@@ -17,6 +17,7 @@ use std::sync::Arc;
 use std::sync::RwLock;
 use std::time::Instant;
 use std::hash::BuildHasher;
+use solana_measure::measure::Measure;
 
 type K = Pubkey;
 use std::collections::{hash_map::Entry as HashMapEntry, HashMap};
@@ -374,6 +375,10 @@ pub struct WriteCacheEntryArc<V> {
 pub struct BucketMapWriteHolder<V> {
     pub disk: BucketMap<SlotT<V>>,
     pub write_cache: Vec<RwLock<WriteCache<WriteCacheEntryArc<V>>>>,
+    pub get_disk_us: AtomicU64,
+    pub update_dist_us: AtomicU64,
+    pub get_cache_us: AtomicU64,
+    pub update_cache_us: AtomicU64,
     pub write_cache_flushes: AtomicU64,
     pub flush_calls: AtomicU64,
     pub get_purges: AtomicU64,
@@ -437,6 +442,11 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
         }
     }
     fn new(bucket_map: BucketMap<SlotT<V>>) -> Self {
+        let get_disk_us = AtomicU64::new(0);
+        let update_dist_us = AtomicU64::new(0);
+        let get_cache_us = AtomicU64::new(0);
+        let update_cache_us = AtomicU64::new(0);
+    
         let write_cache_flushes = AtomicU64::new(0);
         let flush_calls = AtomicU64::new(0);
         let get_purges = AtomicU64::new(0);
@@ -472,6 +482,11 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
             unified_backing,
             get_purges,
             flush_calls,
+            get_disk_us,
+            update_dist_us,
+            get_cache_us,
+            update_cache_us,
+        
         }
     }
     pub fn flush(&self, ix: usize, bg: bool, age: bool) -> bool {
@@ -730,26 +745,38 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
     }
     pub fn get_no_cache(&self, key: &Pubkey) -> Option<(u64, Vec<SlotT<V>>)> {
         self.gets_from_disk.fetch_add(1, Ordering::Relaxed);
+        let mut m1 = Measure::start("");
+        let r =
         if use_trait {
             let ix = self.bucket_ix(key);
             let r = self.db.read().unwrap()[ix].get(key);
             r.map(|x| (x.ref_count, V::get_copy2(&x.slot_list)))
         } else {
             self.disk.get(key)
-        }
+        };
+        m1.stop();
+        self.get_disk_us.fetch_add(m1.as_ns(), Ordering::Relaxed);
+        r
     }
     pub fn get(&self, key: &Pubkey) -> Option<(u64, Vec<SlotT<V>>)> {
 
         let ix = self.bucket_ix(key);
         {
+            let mut m1 = Measure::start("");
             let wc = &mut self.write_cache[ix].read().unwrap();
             let res = wc.get(key);
+            m1.stop();
             if let Some(mut res) = res {
                 if get_caching {
                     let mut instance = res.instance.write().unwrap();
                     instance.age = default_age;
                     self.gets_from_cache.fetch_add(1, Ordering::Relaxed);
-                    return Some((instance.data.ref_count, instance.data.slot_list.clone()));
+                    let r = Some((instance.data.ref_count, instance.data.slot_list.clone()));
+                    drop(res);
+                    drop(instance);
+                    drop(wc);
+                    self.get_cache_us.fetch_add(m1.as_ns(), Ordering::Relaxed);
+                    return r
                 } else {
                     let mut instance = res.instance.read().unwrap();
                     self.gets_from_cache.fetch_add(1, Ordering::Relaxed);
@@ -762,12 +789,16 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
         }
         // get caching
         {
+            let mut m1 = Measure::start("");
             let mut wc = &mut self.write_cache[ix].write().unwrap();
-            match wc.entry(key.clone()) {
+            let res = wc.entry(key.clone());
+            match res {
                 HashMapEntry::Occupied(occupied) => {
                     let mut instance = occupied.get().instance.write().unwrap();
                     instance.age = default_age;
                     self.gets_from_cache.fetch_add(1, Ordering::Relaxed);
+                    m1.stop();
+                    self.update_cache_us.fetch_add(m1.as_ns(), Ordering::Relaxed);
                     return Some((instance.data.ref_count, instance.data.slot_list.clone()));
                 }
                 HashMapEntry::Vacant(vacant) => {
@@ -776,51 +807,61 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
                         vacant.insert(Self::allocate(&loaded.1, loaded.0, false));
                         Some(())
                     });
+                    m1.stop();
+                    self.update_cache_us.fetch_add(m1.as_ns(), Ordering::Relaxed);
                     r
                 }
             }
         }
     }
-    pub fn addref(&self, key: &Pubkey, ref_count: RefCount, slot_list: &Vec<SlotT<V>>) {
+    fn addunref(&self, key: &Pubkey, ref_count: RefCount, slot_list: &Vec<SlotT<V>>, add: bool) {
         // todo: measure this and unref
         if use_trait {
             let ix = self.bucket_ix(key);
 
-            self.db.read().unwrap()[ix].addref(key, ref_count, &V::get_info2(&slot_list));
+            if add {
+                self.db.read().unwrap()[ix].addref(key, ref_count, &V::get_info2(&slot_list));
+            }
+            else {
+                self.db.read().unwrap()[ix].unref(key, ref_count, &V::get_info2(&slot_list));
+            }
             return;
         }
         let ix = self.bucket_ix(key);
+        let mut m1 = Measure::start("");
         let wc = &mut self.write_cache[ix].write().unwrap();
 
-        match wc.entry(key.clone()) {
+        let res = wc.entry(key.clone());
+        m1.stop();
+        self.get_cache_us.fetch_add(m1.as_ns(), Ordering::Relaxed);
+        match res {
             HashMapEntry::Occupied(mut occupied) => {
+                self.gets_from_cache.fetch_add(1, Ordering::Relaxed);
                 let mut gm = occupied.get_mut();
-                gm.instance.write().unwrap().data.ref_count += 1;
+                if add {
+                    gm.instance.write().unwrap().data.ref_count += 1;
+                }
+                else {
+                    gm.instance.write().unwrap().data.ref_count -= 1;
+                }
             }
             HashMapEntry::Vacant(vacant) => {
-                self.disk.addref(key);
+                self.gets_from_disk.fetch_add(1, Ordering::Relaxed);
+                if add {
+                    self.disk.addref(key);
+                }
+                else {
+                    self.disk.unref(key);
+                }
             }
         }
     }
+    pub fn addref(&self, key: &Pubkey, ref_count: RefCount, slot_list: &Vec<SlotT<V>>) {
+        self.addunref(key, ref_count, slot_list, true);
+    }
 
     pub fn unref(&self, key: &Pubkey, ref_count: RefCount, slot_list: &Vec<SlotT<V>>) {
-        if use_trait {
-            let ix = self.bucket_ix(key);
-            self.db.read().unwrap()[ix].unref(key, ref_count, &V::get_info2(&slot_list));
-            return;
-        }
-        let ix = self.bucket_ix(key);
-        let wc = &mut self.write_cache[ix].write().unwrap();
-
-        match wc.entry(key.clone()) {
-            HashMapEntry::Occupied(mut occupied) => {
-                let mut gm = occupied.get_mut();
-                gm.instance.write().unwrap().data.ref_count -= 1;
-            }
-            HashMapEntry::Vacant(vacant) => {
-                self.disk.unref(key);
-            }
-        }
+        self.addunref(key, ref_count, slot_list, false);
     }
     fn delete_key(&self, key: &Pubkey) {
         if use_trait {
@@ -908,6 +949,13 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
                 self.get_purges.swap(0, Ordering::Relaxed),
                 i64
             ),
+("get_disk_us", self.get_disk_us.swap(0, Ordering::Relaxed)/ 1000, i64),
+("update_dist_us", self.update_dist_us.swap(0, Ordering::Relaxed)/ 1000, i64),
+("get_cache_us", self.get_cache_us.swap(0, Ordering::Relaxed)/ 1000, i64),
+("update_cache_us", self.update_cache_us.swap(0, Ordering::Relaxed)/ 1000, i64),
+        
+            ("get", self.updates.swap(0, Ordering::Relaxed), i64),
+
             //("buckets", self.num_buckets(), i64),
         );
     }
