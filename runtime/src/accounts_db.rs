@@ -6237,8 +6237,8 @@ impl AccountsDb {
             //error!("distribution prior to flush");
             self.accounts_index.account_maps.first().unwrap().read().unwrap().distribution();
             let mut m = Measure::start("flush_index");
-            self.accounts_index.account_maps.par_iter().for_each(|i| {
-                i.write().unwrap().flush();});
+            self.accounts_index.account_maps.par_iter().for_each(|bin_map| {
+                bin_map.write().unwrap().flush();});
             m.stop();
 
             error!("flush_us: {}", m.as_us());

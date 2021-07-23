@@ -305,6 +305,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
             if aging.elapsed().as_millis() > 400 {
                 // time of 1 slot
                 age = true;
+                error!("aging");
                 aging = Instant::now();
             }
             if exit.load(Ordering::Relaxed) {
@@ -385,7 +386,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
                     }
                 }
             }
-            let cleared = if bg {
+            let cleared = if !bg {
                 let len = wc.len();
                 wc.clear();
                 len
