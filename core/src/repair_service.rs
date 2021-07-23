@@ -1,7 +1,7 @@
 //! The `repair_service` module implements the tools necessary to generate a thread which
 //! regularly finds missing shreds in the ledger and sends repair requests for those shreds
 use crate::{
-    ancestor_hashes_service::AncestorHashesService,
+    ancestor_hashes_service::{AncestorHashesReplayUpdateReceiver, AncestorHashesService},
     cluster_info_vote_listener::VerifiedVoteReceiver,
     cluster_slots::ClusterSlots,
     duplicate_repair_status::DuplicateSlotRepairStatus,
@@ -155,6 +155,7 @@ impl RepairService {
         repair_info: RepairInfo,
         verified_vote_receiver: VerifiedVoteReceiver,
         outstanding_requests: Arc<RwLock<OutstandingShredRepairs>>,
+        ancestor_hashes_replay_update_receiver: AncestorHashesReplayUpdateReceiver,
     ) -> Self {
         let t_repair = {
             let blockstore = blockstore.clone();
@@ -181,6 +182,7 @@ impl RepairService {
             blockstore,
             ancestor_hashes_request_socket,
             repair_info,
+            ancestor_hashes_replay_update_receiver,
         );
 
         RepairService {

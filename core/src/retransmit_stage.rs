@@ -2,6 +2,7 @@
 #![allow(clippy::rc_buffer)]
 
 use crate::{
+    ancestor_hashes_service::AncestorHashesReplayUpdateReceiver,
     cluster_info_vote_listener::VerifiedVoteReceiver,
     cluster_nodes::ClusterNodes,
     cluster_slots::ClusterSlots,
@@ -545,6 +546,7 @@ impl RetransmitStage {
         max_slots: &Arc<MaxSlots>,
         rpc_subscriptions: Option<Arc<RpcSubscriptions>>,
         duplicate_slots_sender: Sender<Slot>,
+        ancestor_hashes_replay_update_receiver: AncestorHashesReplayUpdateReceiver,
     ) -> Self {
         let (retransmit_sender, retransmit_receiver) = channel();
 
@@ -603,6 +605,7 @@ impl RetransmitStage {
             verified_vote_receiver,
             completed_data_sets_sender,
             duplicate_slots_sender,
+            ancestor_hashes_replay_update_receiver,
         );
 
         Self {

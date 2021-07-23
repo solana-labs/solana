@@ -6,6 +6,7 @@ use crate::{
     result::{Error, Result},
     serve_repair::AncestorHashesRepairType,
 };
+use crossbeam_channel::{Receiver, Sender};
 use dashmap::{mapref::entry::Entry::Occupied, DashMap};
 use solana_ledger::{blockstore::Blockstore, shred::SIZE_OF_NONCE};
 use solana_measure::measure::Measure;
@@ -29,7 +30,16 @@ use std::{
     time::{Duration, Instant},
 };
 
+#[derive(Debug, PartialEq)]
+pub enum AncestorHashesReplayUpdate {
+    Dead(Slot),
+    DeadDuplicateConfirmed(Slot),
+}
+
 pub const MAX_ANCESTOR_HASHES_SLOT_REQUESTS_PER_SECOND: usize = 2;
+
+pub type AncestorHashesReplayUpdateSender = Sender<AncestorHashesReplayUpdate>;
+pub type AncestorHashesReplayUpdateReceiver = Receiver<AncestorHashesReplayUpdate>;
 type OutstandingAncestorHashesRepairs = OutstandingRequests<AncestorHashesRepairType>;
 
 #[derive(Default)]
@@ -114,6 +124,7 @@ impl AncestorHashesService {
         blockstore: Arc<Blockstore>,
         ancestor_hashes_request_socket: Arc<UdpSocket>,
         repair_info: RepairInfo,
+        _ancestor_hashes_replay_update_receiver: AncestorHashesReplayUpdateReceiver,
     ) -> Self {
         let outstanding_requests: Arc<RwLock<OutstandingAncestorHashesRepairs>> =
             Arc::new(RwLock::new(OutstandingAncestorHashesRepairs::default()));
