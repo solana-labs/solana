@@ -22,7 +22,7 @@ indicatif = "0.16.2"
 jsonrpc-core = "17.1.0"
 jsonrpc-core-client = { version = "17.1.0", features = ["ipc", "ws"] }
 jsonrpc-derive = "17.1.0"
-jsonrpc-ipc-server = "17.1.0"
+jsonrpc-ipc-server = "18.0.0"
 jsonrpc-server-utils= "17.1.0"
 log = "0.4.14"
 num_cpus = "1.13.0"
