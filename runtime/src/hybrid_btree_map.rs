@@ -355,6 +355,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
         if !self.write_cache[ix].read().unwrap().is_empty() {
             let mut wc = self.write_cache[ix].write().unwrap();
             let mut delete_keys = Vec::with_capacity(wc.len());
+            let mut flushed = 0;
             for (k, mut v) in wc.iter_mut() {
                 let mut instance = v.instance.write().unwrap();
                 if instance.dirty {
@@ -365,6 +366,8 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
                         true,
                     );
                     instance.age = default_age; // keep newly updated stuff around
+                    instance.dirty = false;
+                    flushed += 1;
                 }
                 if age {
                     if instance.age <= 1 {
@@ -386,7 +389,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
                 delete_keys.len()
             };
             self.write_cache_flushes
-                .fetch_add(cleared as u64, Ordering::Relaxed);
+                .fetch_add(flushed as u64, Ordering::Relaxed);
             true
         } else {
             false
@@ -700,7 +703,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
     }
     pub fn distribution(&self) {}
     pub fn distribution2(&self) {
-        error!("starting accounts_index metrics")
+        error!("starting accounts_index metrics");
         let mut ct = 0;
         for i in 0..self.bins {
             ct += self.write_cache[i].read().unwrap().len();
