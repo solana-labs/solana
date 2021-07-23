@@ -16,6 +16,7 @@ use std::{
     fs,
     sync::{atomic::{Ordering, AtomicU64}},
 };
+use solana_measure::measure::Measure;
 
 pub struct BucketMap<T> {
     buckets: Vec<RwLock<Option<Bucket<T>>>>,
@@ -549,6 +550,7 @@ impl<T: Clone> Bucket<T> {
 
     fn grow_index(&mut self, sz: u8) {
         if self.index.capacity == sz {
+            let mut m = Measure::start("");
             debug!("GROW_INDEX: {}", sz);
             for i in 1.. {
                 //increasing the capacity by ^4 reduces the
@@ -591,6 +593,15 @@ impl<T: Clone> Bucket<T> {
                     break;
                 }
             }
+            m.stop();
+            let sz = 1 << self.index.capacity;
+            {
+                let mut max = self.stats.index.max_size.lock().unwrap();
+                *max = std::cmp::max(*max, sz);
+            }
+                self.stats.index.resizes.fetch_add(1, Ordering::Relaxed);
+            self.stats.index.resize_us.fetch_add(m.as_us(), Ordering::Relaxed);
+
         }
     }
 
