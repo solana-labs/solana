@@ -262,6 +262,7 @@ pub struct BucketMapWriteHolder<V> {
     pub disk: BucketMap<SlotT<V>>,
     pub write_cache: Vec<RwLock<WriteCache<WriteCacheEntryArc<V>>>>,
     pub write_cache_flushes: AtomicU64,
+    pub flush_calls: AtomicU64,
     pub get_purges: AtomicU64,
     pub gets: AtomicU64,
     pub updates: AtomicU64,
@@ -323,6 +324,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
     }
     fn new(bucket_map: BucketMap<SlotT<V>>) -> Self {
         let write_cache_flushes = AtomicU64::new(0);
+        let flush_calls = AtomicU64::new(0);
         let get_purges = AtomicU64::new(0);
         let gets = AtomicU64::new(0);
         let updates = AtomicU64::new(0);
@@ -352,9 +354,11 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
             binner,
             unified_backing,
             get_purges,
+            flush_calls,
         }
     }
     pub fn flush(&self, ix: usize, bg: bool, age: bool) -> bool {
+        self.flush_calls.fetch_add(1, Ordering::Relaxed);
         if !self.write_cache[ix].read().unwrap().is_empty() {
             let mut wc = self.write_cache[ix].write().unwrap();
             let mut delete_keys = Vec::with_capacity(wc.len());
@@ -629,8 +633,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
                     let mut instance = res.instance.write().unwrap();
                     instance.age = default_age;
                     return Some((instance.data.ref_count, instance.data.slot_list.clone()));
-                }
-                else {
+                } else {
                     let mut instance = res.instance.read().unwrap();
                     return Some((instance.data.ref_count, instance.data.slot_list.clone()));
                 }
@@ -740,15 +743,44 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
             ("inserts", self.inserts.swap(0, Ordering::Relaxed), i64),
             ("deletes", self.deletes.swap(0, Ordering::Relaxed), i64),
             ("gets", self.gets.swap(0, Ordering::Relaxed), i64),
-            ("bucket_index_resizes", self.disk.stats.index.resizes.swap(0, Ordering::Relaxed), i64),
-            ("bucket_index_resize_us", self.disk.stats.index.resize_us.swap(0, Ordering::Relaxed), i64),
-            ("bucket_index_max", *self.disk.stats.index.max_size.lock().unwrap(), i64),
-            ("bucket_data_resizes", self.disk.stats.data.resizes.swap(0, Ordering::Relaxed), i64),
-            ("bucket_data_resize_us", self.disk.stats.data.resize_us.swap(0, Ordering::Relaxed), i64),
-            ("bucket_data_max", *self.disk.stats.data.max_size.lock().unwrap(), i64),
+            (
+                "bucket_index_resizes",
+                self.disk.stats.index.resizes.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "bucket_index_resize_us",
+                self.disk.stats.index.resize_us.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "bucket_index_max",
+                *self.disk.stats.index.max_size.lock().unwrap(),
+                i64
+            ),
+            (
+                "bucket_data_resizes",
+                self.disk.stats.data.resizes.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "bucket_data_resize_us",
+                self.disk.stats.data.resize_us.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "bucket_data_max",
+                *self.disk.stats.data.max_size.lock().unwrap(),
+                i64
+            ),
             (
                 "flushes",
                 self.write_cache_flushes.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "bin_flush_calls",
+                self.flush_calls.swap(0, Ordering::Relaxed),
                 i64
             ),
             (
