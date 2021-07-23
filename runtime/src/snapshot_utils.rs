@@ -1007,7 +1007,7 @@ pub fn bank_from_snapshot_archives<P>(
     shrink_ratio: AccountShrinkThreshold,
     test_hash_calculation: bool,
     verify_index: bool,
-    blockstore: &Arc<Box<dyn crate::hybrid_btree_map::Rox>>,
+    blockstore: Option<&Arc<Box<dyn crate::hybrid_btree_map::Rox>>>,
 ) -> Result<(Bank, BankFromArchiveTimings)>
 where
     P: AsRef<Path> + std::marker::Sync,
@@ -1565,7 +1565,7 @@ fn rebuild_bank_from_snapshots(
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
     verify_index: bool,
-    blockstore: &Arc<Box<dyn crate::hybrid_btree_map::Rox>>,
+    blockstore: Option<&Arc<Box<dyn crate::hybrid_btree_map::Rox>>>,
 ) -> Result<Bank> {
     let (full_snapshot_version, full_snapshot_root_paths) =
         verify_unpacked_snapshots_dir_and_version(

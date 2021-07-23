@@ -1,9 +1,10 @@
 //! BucketMap is a mostly contention free concurrent map backed by MmapMut
 
-use crate::data_bucket::{DataBucket, BucketStats, BucketMapStats};
+use crate::data_bucket::{BucketMapStats, BucketStats, DataBucket};
 use log::*;
 use rand::thread_rng;
 use rand::Rng;
+use solana_measure::measure::Measure;
 use solana_sdk::pubkey::Pubkey;
 use std::collections::hash_map::DefaultHasher;
 use std::convert::TryInto;
@@ -14,9 +15,8 @@ use std::sync::Arc;
 use std::sync::RwLock;
 use std::{
     fs,
-    sync::{atomic::{Ordering, AtomicU64}},
+    sync::atomic::{AtomicU64, Ordering},
 };
-use solana_measure::measure::Measure;
 
 pub struct BucketMap<T> {
     buckets: Vec<RwLock<Option<Bucket<T>>>>,
@@ -64,7 +64,7 @@ impl<T: Clone + std::fmt::Debug> BucketMap<T> {
     pub fn distribution(&self) -> Vec<usize> {
         let mut sizes = vec![];
         for ix in 0..self.num_buckets() {
-            let mut len =0;
+            let mut len = 0;
             if let Ok(bucket) = self.buckets[ix].read() {
                 if let Some(bucket) = bucket.as_ref() {
                     len = bucket.index.used.load(Ordering::Relaxed) as usize;
@@ -113,7 +113,12 @@ impl<T: Clone + std::fmt::Debug> BucketMap<T> {
         Some(self.buckets[ix].read().unwrap().as_ref()?.keys())
     }
     pub fn bucket_len(&self, ix: usize) -> u64 {
-        self.buckets[ix].read().unwrap().as_ref().map(|entry| entry.index.used.load(Ordering::Relaxed)).unwrap_or_default()
+        self.buckets[ix]
+            .read()
+            .unwrap()
+            .as_ref()
+            .map(|entry| entry.index.used.load(Ordering::Relaxed))
+            .unwrap_or_default()
     }
     pub fn values(&self, ix: usize) -> Option<Vec<Vec<T>>> {
         Some(self.buckets[ix].read().unwrap().as_ref()?.values())
@@ -180,7 +185,7 @@ impl<T: Clone + std::fmt::Debug> BucketMap<T> {
             }
             let bucket = bucket.as_mut().unwrap();
             for key in per_bucket {
-                let current = None;// will never find this key: bucket.read_value(key);
+                let current = None; // will never find this key: bucket.read_value(key);
 
                 let new = updatefn(current, key, usize::MAX);
                 if new.is_none() {
@@ -248,8 +253,7 @@ impl<T: Clone + std::fmt::Debug> BucketMap<T> {
         if self.bits > 0 {
             let location = read_be_u64(key.as_ref());
             (location >> (64 - self.bits)) as usize
-        }
-        else {
+        } else {
             0
         }
     }
@@ -305,11 +309,11 @@ impl IndexEntry {
     fn read_value<'a, T>(&self, bucket: &'a Bucket<T>) -> Option<(&'a [T], u64)> {
         let data_bucket = &bucket.data[self.data_bucket as usize];
         let slice = if self.num_slots > 0 {
-        let loc = self.data_loc(data_bucket);
-        let uid = Self::key_uid(&self.key);
-        assert_eq!(uid, bucket.data[self.data_bucket as usize].uid(loc));
-            bucket.data[self.data_bucket as usize].get_cell_slice(loc, self.num_slots)}
-        else {
+            let loc = self.data_loc(data_bucket);
+            let uid = Self::key_uid(&self.key);
+            assert_eq!(uid, bucket.data[self.data_bucket as usize].uid(loc));
+            bucket.data[self.data_bucket as usize].get_cell_slice(loc, self.num_slots)
+        } else {
             // num_slots is 0. This means we don't have an actual allocation.
             // can we trust that the data_bucket is even safe?
             bucket.data[self.data_bucket as usize].get_empty_cell_slice()
@@ -327,7 +331,12 @@ const MAX_SEARCH: u64 = 16;
 
 impl<T: Clone> Bucket<T> {
     fn new(drives: Arc<Vec<PathBuf>>, stats: Arc<BucketMapStats>) -> Self {
-        let index = DataBucket::new(drives.clone(), 1, std::mem::size_of::<IndexEntry>() as u64, stats.index.clone());
+        let index = DataBucket::new(
+            drives.clone(),
+            1,
+            std::mem::size_of::<IndexEntry>() as u64,
+            stats.index.clone(),
+        );
         Self {
             random: thread_rng().gen(),
             drives,
@@ -460,7 +469,13 @@ impl<T: Clone> Bucket<T> {
     }
 
     fn create_key(&self, key: &Pubkey, ref_count: u64) -> Result<u64, BucketMapError> {
-        Self::bucket_create_key(&self.index, key, IndexEntry::key_uid(key), self.random, ref_count)
+        Self::bucket_create_key(
+            &self.index,
+            key,
+            IndexEntry::key_uid(key),
+            self.random,
+            ref_count,
+        )
     }
 
     pub fn read_value(&self, key: &Pubkey) -> Option<(&[T], u64)> {
@@ -469,7 +484,12 @@ impl<T: Clone> Bucket<T> {
         elem.read_value(self)
     }
 
-    fn try_write(&mut self, key: &Pubkey, data: &[T], ref_count: u64) -> Result<(), BucketMapError> {
+    fn try_write(
+        &mut self,
+        key: &Pubkey,
+        data: &[T],
+        ref_count: u64,
+    ) -> Result<(), BucketMapError> {
         let mut index_entry = self.find_entry_mut(key);
         let (elem, elem_ix) = if index_entry.is_none() {
             let ii = self.create_key(key, ref_count)?;
@@ -571,7 +591,8 @@ impl<T: Clone> Bucket<T> {
                             let elem: &IndexEntry = self.index.get(ix);
                             let uid = self.index.uid(ix);
                             let ref_count = 0; // ??? TODO
-                            let new_ix = Self::bucket_create_key(&index, &elem.key, uid, random, ref_count);
+                            let new_ix =
+                                Self::bucket_create_key(&index, &elem.key, uid, random, ref_count);
                             if new_ix.is_err() {
                                 return false;
                             }
@@ -599,9 +620,11 @@ impl<T: Clone> Bucket<T> {
                 let mut max = self.stats.index.max_size.lock().unwrap();
                 *max = std::cmp::max(*max, sz);
             }
-                self.stats.index.resizes.fetch_add(1, Ordering::Relaxed);
-            self.stats.index.resize_us.fetch_add(m.as_us(), Ordering::Relaxed);
-
+            self.stats.index.resizes.fetch_add(1, Ordering::Relaxed);
+            self.stats
+                .index
+                .resize_us
+                .fetch_add(m.as_us(), Ordering::Relaxed);
         }
     }
 
@@ -616,7 +639,8 @@ impl<T: Clone> Bucket<T> {
                     self.drives.clone(),
                     1 << i,
                     std::mem::size_of::<T>() as u64,
-                self.stats.data.clone(),))
+                    self.stats.data.clone(),
+                ))
             }
         }
         if self.data[sz.0 as usize].capacity == sz.1 {

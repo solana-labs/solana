@@ -1,3 +1,5 @@
+#[cfg(RUSTC_WITH_SPECIALIZATION)]
+use solana_frozen_abi::abi_example::IgnoreAsHelper;
 use {
     crate::{
         accounts::Accounts,
@@ -40,8 +42,6 @@ use {
         sync::{atomic::Ordering, Arc, RwLock},
     },
 };
-#[cfg(RUSTC_WITH_SPECIALIZATION)]
-use solana_frozen_abi::abi_example::IgnoreAsHelper;
 
 mod common;
 mod future;
@@ -196,7 +196,7 @@ pub(crate) fn bank_from_streams<R>(
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
     verify_index: bool,
-    blockstore: &Arc<Box<dyn crate::hybrid_btree_map::Rox>>,
+    blockstore: Option<&Arc<Box<dyn crate::hybrid_btree_map::Rox>>>,
 ) -> std::result::Result<Bank, Error>
 where
     R: Read,
@@ -327,7 +327,7 @@ fn reconstruct_bank_from_fields<E>(
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
     verify_index: bool,
-    blockstore: &Arc<Box<dyn crate::hybrid_btree_map::Rox>>,
+    blockstore: Option<&Arc<Box<dyn crate::hybrid_btree_map::Rox>>>,
 ) -> Result<Bank, Error>
 where
     E: SerializableStorage + std::marker::Sync,
@@ -393,7 +393,7 @@ fn reconstruct_accountsdb_from_fields<E>(
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
     verify_index: bool,
-    blockstore: &Arc<Box<dyn crate::hybrid_btree_map::Rox>>,
+    blockstore: Option<&Arc<Box<dyn crate::hybrid_btree_map::Rox>>>,
 ) -> Result<AccountsDb, Error>
 where
     E: SerializableStorage + std::marker::Sync,
@@ -482,7 +482,7 @@ where
     accounts_db
         .write_version
         .fetch_add(snapshot_version, Ordering::Relaxed);
-    accounts_db.set_account_index_db(blockstore.clone());
+    blockstore.map(|blockstore| accounts_db.set_account_index_db(blockstore.clone()));
 
     accounts_db.generate_index(limit_load_slot_count_from_snapshot, verify_index);
     Ok(accounts_db)
