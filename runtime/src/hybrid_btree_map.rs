@@ -700,6 +700,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
     }
     pub fn distribution(&self) {}
     pub fn distribution2(&self) {
+        error!("starting accounts_index metrics")
         let mut ct = 0;
         for i in 0..self.bins {
             ct += self.write_cache[i].read().unwrap().len();
@@ -715,7 +716,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
             max = std::cmp::max(max, d);
         }
         datapoint_info!(
-            "AccountIndexLayer",
+            "accounts_index",
             ("items_in_write_cache", ct, i64),
             ("min", min, i64),
             ("max", max, i64),
