@@ -511,7 +511,7 @@ impl Rocks {
             PerfSamples::NAME,
             BlockHeight::NAME,
             ProgramCosts::NAME,
-            AccountIndex::NAME,
+            //AccountIndex::NAME,
         ]
     }
 
