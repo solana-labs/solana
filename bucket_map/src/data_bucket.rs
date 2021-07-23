@@ -6,13 +6,14 @@ use std::io::Seek;
 use std::io::SeekFrom;
 use std::io::Write;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Mutex, atomic::{AtomicU64, Ordering}};
 use std::sync::Arc;
+use solana_measure::measure::Measure;
 
 #[derive(Debug, Default)]
 pub struct BucketStats {
     pub resizes: AtomicU64,
-    pub max_size: AtomicU64,
+    pub max_size: Mutex<u64>,
     pub resize_us: AtomicU64,
 }
 
@@ -251,6 +252,7 @@ impl DataBucket {
     }
 
     pub fn grow(&mut self) {
+        let mut m = Measure::start("grow");
         let old_cap = self.num_cells();
         let old_map = &self.mmap;
         let old_file = self.path.clone();
@@ -272,6 +274,15 @@ impl DataBucket {
         self.path = new_file;
         self.capacity = self.capacity + 1;
         remove_file(old_file).unwrap();
+        m.stop();
+        let sz = 1 << self.capacity;
+        {
+            let mut max = self.stats.max_size.lock().unwrap();
+            *max = std::cmp::max(*max, sz);
+        }
+        self.stats.resizes.fetch_add(1, Ordering::Relaxed);
+        self.stats.resize_us.fetch_add(m.as_us(), Ordering::Relaxed);
+
     }
     pub fn num_cells(&self) -> u64 {
         1u64 << self.capacity
