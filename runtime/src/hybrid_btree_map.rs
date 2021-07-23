@@ -745,6 +745,9 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
             ("inserts", self.inserts.swap(0, Ordering::Relaxed), i64),
             ("deletes", self.deletes.swap(0, Ordering::Relaxed), i64),
             ("gets", self.gets.swap(0, Ordering::Relaxed), i64),
+            ("bucket_index_resizes", self.disk.stats.index.resizes.swap(0, Ordering::Relaxed), i64),
+            ("bucket_index_resize_us", self.disk.stats.index.resizes.swap(0, Ordering::Relaxed), i64),
+            ("bucket_index_max", *self.disk.stats.index.max_size.lock().unwrap(), i64),
             (
                 "flushes",
                 self.write_cache_flushes.swap(0, Ordering::Relaxed),
