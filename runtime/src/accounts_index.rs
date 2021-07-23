@@ -794,11 +794,19 @@ pub struct AccountsIndex<T: 'static + Clone + std::fmt::Debug + Guts> {
     // on any of these slots fails. This is safe to purge once the associated Bank is dropped and
     // scanning the fork with that Bank at the tip is no longer possible.
     pub removed_bank_ids: Mutex<HashSet<BankId>>,
-    pub flusher: JoinHandle<()>,
+    pub flusher: Option<JoinHandle<()>>,
     exit: Arc<AtomicBool>,
 }
 use rand::thread_rng;
 use rand::Rng;
+
+impl<T: Clone + std::fmt::Debug + Guts> Drop for AccountsIndex<T> {
+    fn drop(&mut self) {
+        self.exit.store(true, Ordering::Relaxed);
+        self.flusher.take().map(|j| j.join());
+    }
+}
+
 use crate::hybrid_btree_map::Guts;
 impl<T: Clone + std::fmt::Debug + Sync + Send + Guts> Default for AccountsIndex<T> {
     fn default() -> Self {
@@ -806,12 +814,12 @@ impl<T: Clone + std::fmt::Debug + Sync + Send + Guts> Default for AccountsIndex<
         let exit_ = exit.clone();
         let bucket_map = HybridBTreeMap::new_bucket_map();
         let bucket_map_ = bucket_map.clone();
-        let flusher = Builder::new()
+        let flusher = Some(Builder::new()
             .name("solana-index-flusher".to_string())
             .spawn(move || {
                 bucket_map_.bg_flusher(exit_);
             })
-            .unwrap();
+            .unwrap());
 
         Self {
             account_maps: (0..BINS)
