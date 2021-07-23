@@ -50,7 +50,7 @@ pub const use_rox: bool = true;
 pub const use_sled: bool = false;
 pub const update_caching: bool = true;
 pub const insert_caching: bool = true;
-pub const get_caching: bool = false;
+pub const get_caching: bool = true;
 
 #[derive(Debug, Default)]
 pub struct PubkeyRange {
