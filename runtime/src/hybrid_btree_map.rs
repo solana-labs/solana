@@ -42,7 +42,7 @@ impl<T:Clone + Debug> RealEntry<T> for T {
 }
 */
 
-pub const default_age: u8 = 1;
+pub const default_age: u8 = 5;
 pub const verify_get_on_insert: bool = false;
 pub const bucket_bins: usize = BINS;
 pub const use_trait: bool = false;
@@ -310,7 +310,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
             if exit.load(Ordering::Relaxed) {
                 break;
             }
-            if age || found_one || self.wait.wait_timeout(Duration::from_millis(500)) {
+            if !age && (found_one || self.wait.wait_timeout(Duration::from_millis(500))) {
                 continue;
             }
             found_one = false;
@@ -380,10 +380,8 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
                         // clear the cache of things that have aged out
                         delete_keys.push(*k);
                         get_purges += 1;
-                        error!("purged from age: {}, {}", k, instance.age);
                     } else {
                         instance.age -= 1;
-                        error!("aging: {}, {}", k, instance.age);
                     }
                 }
             }
@@ -720,7 +718,6 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
     }
     pub fn distribution(&self) {}
     pub fn distribution2(&self) {
-        error!("starting accounts_index metrics");
         let mut ct = 0;
         for i in 0..self.bins {
             ct += self.write_cache[i].read().unwrap().len();
