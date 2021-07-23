@@ -50,8 +50,12 @@ pub struct MyHasher {
 
 impl Hasher for MyHasher {
     fn write(&mut self, bytes: &[u8]) {
-        assert_eq!(self.hash, 0);
-        self.hash = u64::from_be_bytes(bytes[24..32].try_into().unwrap());
+        error!("hash bytes: {}", bytes.len());
+        //assert_eq!(self.hash, 0);
+        //self.hash = u64::from_be_bytes(bytes[24..32].try_into().unwrap());
+        for i in 0..bytes.len() {
+            self.hash = (self.hash << 1) ^ (bytes[i] as u64);
+        }
     }
 
     fn finish(&self) -> u64 {
@@ -344,7 +348,7 @@ impl Rox for Sled {
 
 pub type SlotT<T> = (Slot, T);
 
-pub type WriteCache<V> = HashMap<Pubkey, V>;//, MyBuildHasher>;
+pub type WriteCache<V> = HashMap<Pubkey, V, MyBuildHasher>;
 use crate::waitable_condvar::WaitableCondvar;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8};
 use std::time::Duration;
