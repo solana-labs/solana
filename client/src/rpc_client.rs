@@ -2575,6 +2575,7 @@ mod tests {
         let signature = rpc_client.send_transaction(&tx);
         assert!(signature.is_err());
     }
+
     #[test]
     fn test_get_recent_blockhash() {
         let rpc_client = RpcClient::new_mock("succeeds".to_string());
@@ -2587,6 +2588,20 @@ mod tests {
         let rpc_client = RpcClient::new_mock("fails".to_string());
 
         assert!(rpc_client.get_recent_blockhash().is_err());
+    }
+
+    #[test]
+    fn test_custom_request() {
+        let rpc_client = RpcClient::new_mock("succeeds".to_string());
+
+        let slot = rpc_client.get_slot().unwrap();
+        assert_eq!(slot, 0);
+
+        let custom_slot = rpc_client
+            .send::<Slot>(RpcRequest::Custom { method: "getSlot" }, Value::Null)
+            .unwrap();
+
+        assert_eq!(slot, custom_slot);
     }
 
     #[test]
