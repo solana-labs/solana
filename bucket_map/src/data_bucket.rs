@@ -9,6 +9,19 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
+#[derive(Debug, Default)]
+pub struct BucketStats {
+    pub resizes: AtomicU64,
+    pub max_size: AtomicU64,
+    pub resize_us: AtomicU64,
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct BucketMapStats {
+    pub index: Arc<BucketStats>,
+    pub data: Arc<BucketStats>,
+}
+
 const DEFAULT_CAPACITY: u8 = 4;
 
 #[repr(C)]
@@ -42,6 +55,7 @@ pub struct DataBucket {
     //power of 2
     pub capacity: u8,
     pub used: AtomicU64,
+    pub stats: Arc<BucketStats>,
 }
 
 #[derive(Debug)]
@@ -64,6 +78,7 @@ impl DataBucket {
         num_elems: u64,
         elem_size: u64,
         capacity: u8,
+        stats: Arc<BucketStats>,
     ) -> Self {
         let cell_size = elem_size * num_elems + std::mem::size_of::<Header>() as u64;
         let (mmap, path) = Self::new_map(&drives, cell_size as usize, capacity);
@@ -74,11 +89,12 @@ impl DataBucket {
             cell_size,
             used: AtomicU64::new(0),
             capacity,
+            stats,
         }
     }
 
-    pub fn new(drives: Arc<Vec<PathBuf>>, num_elems: u64, elem_size: u64) -> Self {
-        Self::new_with_capacity(drives, num_elems, elem_size, DEFAULT_CAPACITY)
+    pub fn new(drives: Arc<Vec<PathBuf>>, num_elems: u64, elem_size: u64, stats: Arc<BucketStats>) -> Self {
+        Self::new_with_capacity(drives, num_elems, elem_size, DEFAULT_CAPACITY, stats)
     }
 
     pub fn uid(&self, ix: u64) -> u64 {
