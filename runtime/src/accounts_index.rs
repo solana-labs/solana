@@ -780,12 +780,19 @@ pub struct AccountsIndex<T: 'static + Clone + std::fmt::Debug + Guts> {
     pub flusher: JoinHandle<()>,
     exit: Arc<AtomicBool>,
 }
+use rand::thread_rng;
+use rand::Rng;
 use crate::hybrid_btree_map::Guts;
 impl<T: Clone + std::fmt::Debug + Sync + Send + Guts> Default for AccountsIndex<T> {
     fn default() -> Self {
         let exit = Arc::new(AtomicBool::new(false));
         let exit_ = exit.clone();
-        panic!("{} {}", file!(), line!());
+        
+        
+        
+        if thread_rng().gen_range(0, 5u8) != 0 {
+            panic!("{} {}", file!(), line!());
+        }
         let bucket_map = HybridBTreeMap::new_bucket_map();
         let bucket_map_ = bucket_map.clone();
         let flusher = Builder::new()
