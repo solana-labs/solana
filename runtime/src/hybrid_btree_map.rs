@@ -262,6 +262,7 @@ pub struct BucketMapWriteHolder<V> {
     pub disk: BucketMap<SlotT<V>>,
     pub write_cache: Vec<RwLock<WriteCache<WriteCacheEntryArc<V>>>>,
     pub write_cache_flushes: AtomicU64,
+    pub get_purges: AtomicU64,
     pub gets: AtomicU64,
     pub updates: AtomicU64,
     pub inserts: AtomicU64,
@@ -324,6 +325,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
     }
     fn new(bucket_map: BucketMap<SlotT<V>>) -> Self {
         let write_cache_flushes = AtomicU64::new(0);
+        let get_purges = AtomicU64::new(0);
         let gets = AtomicU64::new(0);
         let updates = AtomicU64::new(0);
         let inserts = AtomicU64::new(0);
@@ -351,6 +353,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
             db,
             binner,
             unified_backing,
+            get_purges,
         }
     }
     pub fn flush(&self, ix: usize, bg: bool, age: bool) -> bool {
@@ -358,6 +361,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
             let mut wc = self.write_cache[ix].write().unwrap();
             let mut delete_keys = Vec::with_capacity(wc.len());
             let mut flushed = 0;
+            let mut get_purges = 0;
             for (k, mut v) in wc.iter_mut() {
                 let mut instance = v.instance.write().unwrap();
                 if instance.dirty {
@@ -375,6 +379,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
                     if instance.age <= 1 {
                         // clear the cache of things that have aged out
                         delete_keys.push(*k);
+                        get_purges += 1;
                     } else {
                         instance.age -= 1;
                     }
@@ -392,6 +397,8 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
             };
             self.write_cache_flushes
                 .fetch_add(flushed as u64, Ordering::Relaxed);
+            self.get_purges
+                .fetch_add(get_purges as u64, Ordering::Relaxed);
             true
         } else {
             false
@@ -733,6 +740,11 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
             (
                 "flushes",
                 self.write_cache_flushes.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "get_purges",
+                self.get_purges.swap(0, Ordering::Relaxed),
                 i64
             ),
             //("buckets", self.num_buckets(), i64),
