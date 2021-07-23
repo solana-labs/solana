@@ -1081,7 +1081,9 @@ impl Bank {
         shrink_ratio: AccountShrinkThreshold,
         debug_do_not_add_builtins: bool,
     ) -> Self {
+        error!("bank default1");
         let mut bank = Self::default();
+        error!("bank default2");
         bank.ancestors = Ancestors::from(vec![bank.slot()]);
         bank.transaction_debug_keys = debug_keys;
         bank.cluster_type = Some(genesis_config.cluster_type);
