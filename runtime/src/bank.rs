@@ -1081,12 +1081,13 @@ impl Bank {
         shrink_ratio: AccountShrinkThreshold,
         debug_do_not_add_builtins: bool,
     ) -> Self {
-        error!("bank default1");
+        error!("bank default1, {}, {}", file!(), line!());
         let mut bank = Self::default();
-        error!("bank default2");
+        error!("bank default1, {}, {}", file!(), line!());
         bank.ancestors = Ancestors::from(vec![bank.slot()]);
         bank.transaction_debug_keys = debug_keys;
         bank.cluster_type = Some(genesis_config.cluster_type);
+        error!("bank default1, {}, {}", file!(), line!());
 
         bank.rc.accounts = Arc::new(Accounts::new_with_config(
             paths,
@@ -1095,13 +1096,16 @@ impl Bank {
             accounts_db_caching_enabled,
             shrink_ratio,
         ));
+        error!("bank default1, {}, {}", file!(), line!());
         bank.process_genesis_config(genesis_config);
+        error!("bank default1, {}, {}", file!(), line!());
         bank.finish_init(
             genesis_config,
             additional_builtins,
             debug_do_not_add_builtins,
         );
 
+        error!("bank default1, {}, {}", file!(), line!());
         // Freeze accounts after process_genesis_config creates the initial append vecs
         Arc::get_mut(&mut Arc::get_mut(&mut bank.rc.accounts).unwrap().accounts_db)
             .unwrap()
