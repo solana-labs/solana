@@ -26,7 +26,6 @@ serde = "1.0.112"
 solana-clap-utils = { path = "../clap-utils", version = "=1.8.0" }
 solana-cli-config = { path = "../cli-config", version = "=1.8.0" }
 solana-client = { path = "../client", version = "=1.8.0" }
-solana-core = { path = "../core", version = "=1.8.0" }
 solana-download-utils = { path = "../download-utils", version = "=1.8.0" }
 solana-genesis-utils = { path = "../genesis-utils", version = "=1.8.0" }
 solana-gossip = { path = "../gossip", version = "=1.8.0" }
@@ -43,6 +42,10 @@ solana-validator = { path = "../validator", version = "=1.8.0" }
 [dev-dependencies]
 solana-local-cluster = { path = "../local-cluster", version = "=1.8.0" }
 tempdir = "0.3.7"
+serial_test = "0.5.1"
+assert_matches = "1.5.0"
+tempfile = "3.2.0"
+
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

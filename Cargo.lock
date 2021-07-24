@@ -5411,6 +5411,7 @@ dependencies = [
 name = "solana-replica-node"
 version = "1.8.0"
 dependencies = [
+ "assert_matches",
  "bincode",
  "chrono",
  "clap 2.33.3",
@@ -5424,10 +5425,10 @@ dependencies = [
  "log 0.4.14",
  "rand 0.7.3",
  "serde",
+ "serial_test 0.5.1",
  "solana-clap-utils",
  "solana-cli-config",
  "solana-client",
- "solana-core",
  "solana-download-utils",
  "solana-genesis-utils",
  "solana-gossip",
@@ -5442,6 +5443,7 @@ dependencies = [
  "solana-validator",
  "solana-version",
  "tempdir",
+ "tempfile",
 ]
 
 [[package]]
