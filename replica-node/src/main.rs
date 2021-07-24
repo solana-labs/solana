@@ -106,7 +106,6 @@ impl Default for ReplicaNodeConfig {
     }
 }
 
-
 struct ReplicaNode {
     json_rpc_service: Option<JsonRpcService>,
     pubsub_service: Option<PubSubService>,
@@ -179,9 +178,10 @@ fn initialize_from_snapshot(
 
     fs::create_dir_all(&snapshot_config.snapshot_path).expect("Couldn't create snapshot directory");
 
-    let archive_info =
-        snapshot_utils::get_highest_full_snapshot_archive_info(replica_config.snapshot_output_dir.to_path_buf())
-            .unwrap();
+    let archive_info = snapshot_utils::get_highest_full_snapshot_archive_info(
+        replica_config.snapshot_output_dir.to_path_buf(),
+    )
+    .unwrap();
 
     let process_options = blockstore_processor::ProcessOptions {
         account_indexes: replica_config.account_indexes.clone(),
@@ -233,12 +233,15 @@ fn initialize_from_snapshot(
 }
 
 fn start_client_rpc_services(
-    replica_config: &ReplicaNodeConfig,    
+    replica_config: &ReplicaNodeConfig,
     genesis_config: &GenesisConfig,
     cluster_info: Arc<ClusterInfo>,
     bank_info: &ReplicaBankInfo,
-) -> (Option<JsonRpcService>, Option<PubSubService>,
-    Option<OptimisticallyConfirmedBankTracker>) {
+) -> (
+    Option<JsonRpcService>,
+    Option<PubSubService>,
+    Option<OptimisticallyConfirmedBankTracker>,
+) {
     let ReplicaBankInfo {
         bank_forks,
         optimistically_confirmed_bank,
@@ -246,10 +249,14 @@ fn start_client_rpc_services(
         block_commitment_cache,
     } = bank_info;
     let blockstore = Arc::new(
-        Blockstore::open_with_access_type(&replica_config.ledger_path, AccessType::PrimaryOnly, None, false)
-            .unwrap(),
+        Blockstore::open_with_access_type(
+            &replica_config.ledger_path,
+            AccessType::PrimaryOnly,
+            None,
+            false,
+        )
+        .unwrap(),
     );
-
 
     let max_complete_transaction_status_slot = Arc::new(AtomicU64::new(0));
 
@@ -265,9 +272,13 @@ fn start_client_rpc_services(
 
     let rpc_override_health_check = Arc::new(AtomicBool::new(false));
     if ContactInfo::is_valid_address(&replica_config.rpc_addr) {
-        assert!(ContactInfo::is_valid_address(&replica_config.rpc_pubsub_addr));
+        assert!(ContactInfo::is_valid_address(
+            &replica_config.rpc_pubsub_addr
+        ));
     } else {
-        assert!(!ContactInfo::is_valid_address(&replica_config.rpc_pubsub_addr));
+        assert!(!ContactInfo::is_valid_address(
+            &replica_config.rpc_pubsub_addr
+        ));
     }
 
     let (_bank_notification_sender, bank_notification_receiver) = unbounded();
@@ -515,8 +526,7 @@ fn get_rpc_peer_info(
 }
 
 impl ReplicaNode {
-    pub fn new(replica_config: ReplicaNodeConfig) -> Self {  
-   
+    pub fn new(replica_config: ReplicaNodeConfig) -> Self {
         let genesis_config = download_then_check_genesis_hash(
             &replica_config.rpc_source_addr,
             &replica_config.ledger_path,
@@ -526,30 +536,28 @@ impl ReplicaNode {
             true,
         )
         .unwrap();
-    
+
         let snapshot_config = SnapshotConfig {
             snapshot_interval_slots: std::u64::MAX,
             snapshot_package_output_path: replica_config.snapshot_output_dir.clone(),
             snapshot_path: replica_config.snapshot_path.clone(),
             archive_format: ArchiveFormat::TarBzip2,
             snapshot_version: snapshot_utils::SnapshotVersion::default(),
-            maximum_snapshots_to_retain: snapshot_utils::DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+            maximum_snapshots_to_retain:
+                snapshot_utils::DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
         };
-    
-        let bank_info = initialize_from_snapshot(
-            &replica_config,
-            &snapshot_config,
-            &genesis_config,
-        );
-    
-        let (json_rpc_service, pubsub_service, optimistically_confirmed_bank_tracker)
-            = start_client_rpc_services(
+
+        let bank_info =
+            initialize_from_snapshot(&replica_config, &snapshot_config, &genesis_config);
+
+        let (json_rpc_service, pubsub_service, optimistically_confirmed_bank_tracker) =
+            start_client_rpc_services(
                 &replica_config,
                 &genesis_config,
                 replica_config.cluster_info.clone(),
                 &bank_info,
             );
-    
+
         ReplicaNode {
             json_rpc_service,
             pubsub_service,
@@ -558,7 +566,6 @@ impl ReplicaNode {
     }
 
     pub fn join(self) {
-
         if let Some(json_rpc_service) = self.json_rpc_service {
             json_rpc_service.join().expect("rpc_service");
         }
