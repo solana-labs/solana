@@ -3,10 +3,7 @@ use {
     log::*,
     solana_download_utils::download_snapshot,
     solana_genesis_utils::download_then_check_genesis_hash,
-    solana_gossip::{
-        cluster_info::ClusterInfo,
-        contact_info::ContactInfo,
-    },
+    solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
     solana_ledger::{
         blockstore::Blockstore, blockstore_db::AccessType, blockstore_processor,
         leader_schedule_cache::LeaderScheduleCache,
@@ -29,16 +26,11 @@ use {
         snapshot_config::SnapshotConfig,
         snapshot_utils::{self, ArchiveFormat},
     },
-    solana_sdk::{
-        clock::Slot,
-        exit::Exit,
-        genesis_config::GenesisConfig,
-        hash::Hash,
-    },
+    solana_sdk::{clock::Slot, exit::Exit, genesis_config::GenesisConfig, hash::Hash},
     std::{
         fs,
-        net::{SocketAddr},
-        path::{PathBuf},
+        net::SocketAddr,
+        path::PathBuf,
         sync::{
             atomic::{AtomicBool, AtomicU64},
             Arc, RwLock,
@@ -266,9 +258,6 @@ fn start_client_rpc_services(
         )),
     )
 }
-
-
-
 
 impl ReplicaNode {
     pub fn new(replica_config: ReplicaNodeConfig) -> Self {

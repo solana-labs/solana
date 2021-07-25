@@ -2,16 +2,12 @@
 use log::*;
 use serial_test::serial;
 
-use solana_core::{
-    validator::ValidatorConfig,
-};
+use solana_core::validator::ValidatorConfig;
 
-use solana_gossip::{
-    cluster_info::ClusterInfo,
-};
+use solana_gossip::cluster_info::ClusterInfo;
 
 use solana_local_cluster::{
-    cluster::{Cluster},
+    cluster::Cluster,
     local_cluster::{ClusterConfig, LocalCluster},
     validator_configs::*,
 };
@@ -20,23 +16,20 @@ use solana_runtime::{
     snapshot_utils::{self, ArchiveFormat},
 };
 use solana_sdk::{
-    client::{SyncClient},
-    clock::{Slot},
-    epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
-    commitment_config::CommitmentConfig,
-    hash::Hash,
+    client::SyncClient, clock::Slot, commitment_config::CommitmentConfig,
+    epoch_schedule::MINIMUM_SLOTS_PER_EPOCH, hash::Hash,
 };
 
 use std::{
     net::{IpAddr, SocketAddr, UdpSocket},
     path::{Path, PathBuf},
     sync::Arc,
-    thread::{sleep},
-    time::{Duration},
+    thread::sleep,
+    time::Duration,
 };
 use tempfile::TempDir;
 
-use solana_replica_node::{replica_node::{ReplicaNode, ReplicaNodeConfig}};
+use solana_replica_node::replica_node::{ReplicaNode, ReplicaNodeConfig};
 
 const RUST_LOG_FILTER: &str =
     "error,solana_core::replay_stage=warn,solana_local_cluster=info,local_cluster=info";
@@ -85,7 +78,7 @@ fn wait_for_next_snapshot(
         sleep(Duration::from_millis(1000));
     }
 }
-    
+
 fn farf_dir() -> PathBuf {
     std::env::var("FARF_DIR")
         .unwrap_or_else(|_| "farf".to_string())
@@ -149,10 +142,7 @@ fn test_local_cluster_start_and_exit_with_config() {
     solana_logger::setup();
     const NUM_NODES: usize = 1;
     let mut config = ClusterConfig {
-        validator_configs: make_identical_validator_configs(
-            &ValidatorConfig::default(),
-            NUM_NODES,
-        ),
+        validator_configs: make_identical_validator_configs(&ValidatorConfig::default(), NUM_NODES),
         node_stakes: vec![3; NUM_NODES],
         cluster_lamports: 100,
         ticks_per_slot: 8,

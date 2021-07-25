@@ -299,6 +299,8 @@ impl LocalCluster {
     }
 
     pub fn exit(&mut self) {
+        println!("Eeeeeeeeeee exiting");
+        panic!("exiting");
         for node in self.validators.values_mut() {
             if let Some(ref mut v) = node.validator {
                 v.exit();
