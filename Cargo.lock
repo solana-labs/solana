@@ -5429,6 +5429,7 @@ dependencies = [
  "solana-clap-utils",
  "solana-cli-config",
  "solana-client",
+ "solana-core",
  "solana-download-utils",
  "solana-genesis-utils",
  "solana-gossip",
@@ -5442,6 +5443,7 @@ dependencies = [
  "solana-sdk",
  "solana-validator",
  "solana-version",
+ "solana-vote-program",
  "tempdir",
  "tempfile",
 ]

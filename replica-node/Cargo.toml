@@ -40,10 +40,12 @@ solana-version = { path = "../version", version = "=1.8.0" }
 solana-validator = { path = "../validator", version = "=1.8.0" }
 
 [dev-dependencies]
+solana-core = { path = "../core", version = "=1.8.0" }
 solana-local-cluster = { path = "../local-cluster", version = "=1.8.0" }
-tempdir = "0.3.7"
-serial_test = "0.5.1"
+solana-vote-program = { path = "../programs/vote", version = "=1.8.0" }
 assert_matches = "1.5.0"
+serial_test = "0.5.1"
+tempdir = "0.3.7"
 tempfile = "3.2.0"
 
 

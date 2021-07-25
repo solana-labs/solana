@@ -5,7 +5,6 @@
 
 use {
     clap::{crate_description, crate_name, value_t, values_t, App, AppSettings, Arg},
-    crossbeam_channel::unbounded,
     log::*,
     rand::{seq::SliceRandom, thread_rng, Rng},
     solana_clap_utils::{
@@ -13,39 +12,17 @@ use {
         input_validators::{is_keypair_or_ask_keyword, is_parsable, is_pubkey},
         keypair::SKIP_SEED_PHRASE_VALIDATION_ARG,
     },
-    solana_download_utils::download_snapshot,
-    solana_genesis_utils::download_then_check_genesis_hash,
     solana_gossip::{
         cluster_info::{ClusterInfo, Node, VALIDATOR_PORT_RANGE},
         contact_info::ContactInfo,
         gossip_service::GossipService,
     },
-    solana_ledger::{
-        blockstore::Blockstore, blockstore_db::AccessType, blockstore_processor,
-        leader_schedule_cache::LeaderScheduleCache,
-    },
-    solana_rpc::{
-        max_slots::MaxSlots,
-        optimistically_confirmed_bank_tracker::{
-            OptimisticallyConfirmedBank, OptimisticallyConfirmedBankTracker,
-        },
-        rpc::JsonRpcConfig,
-        rpc_pubsub_service::{PubSubConfig, PubSubService},
-        rpc_service::JsonRpcService,
-        rpc_subscriptions::RpcSubscriptions,
-    },
+    solana_replica_node::{replica_node::{ReplicaNodeConfig, ReplicaNode}},
     solana_runtime::{
-        accounts_index::AccountSecondaryIndexes,
-        bank_forks::BankForks,
-        commitment::BlockCommitmentCache,
-        hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
-        snapshot_config::SnapshotConfig,
-        snapshot_utils::{self, ArchiveFormat},
+        snapshot_utils,
     },
     solana_sdk::{
         clock::Slot,
-        exit::Exit,
-        genesis_config::GenesisConfig,
         hash::Hash,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
@@ -53,272 +30,18 @@ use {
     solana_validator::port_range_validator,
     std::{
         collections::HashSet,
-        env, fs,
+        env,
         net::{IpAddr, SocketAddr, UdpSocket},
         path::{Path, PathBuf},
         process::exit,
         sync::{
-            atomic::{AtomicBool, AtomicU64},
-            Arc, RwLock,
+            atomic::{AtomicBool},
+            Arc,
         },
         thread::sleep,
         time::{Duration, Instant},
     },
 };
-
-struct ReplicaNodeConfig {
-    pub rpc_source_addr: SocketAddr,
-    pub rpc_addr: SocketAddr,
-    pub rpc_pubsub_addr: SocketAddr,
-    pub ledger_path: PathBuf,
-    pub snapshot_output_dir: PathBuf,
-    pub snapshot_path: PathBuf,
-    pub account_paths: Vec<PathBuf>,
-    pub snapshot_info: (Slot, Hash),
-    pub cluster_info: Arc<ClusterInfo>,
-    pub rpc_config: JsonRpcConfig,
-    pub snapshot_config: Option<SnapshotConfig>,
-    pub pubsub_config: PubSubConfig,
-    pub account_indexes: AccountSecondaryIndexes,
-    pub accounts_db_caching_enabled: bool,
-    pub replica_exit: Arc<RwLock<Exit>>,
-}
-
-impl Default for ReplicaNodeConfig {
-    fn default() -> Self {
-        Self {
-            rpc_source_addr: SocketAddr::from(([127, 0, 0, 1], 8001)),
-            rpc_addr: SocketAddr::from(([127, 0, 0, 1], 8001)),
-            rpc_pubsub_addr: SocketAddr::from(([127, 0, 0, 1], 8001)),
-            ledger_path: PathBuf::default(),
-            snapshot_output_dir: PathBuf::default(),
-            snapshot_path: PathBuf::default(),
-            account_paths: vec![],
-            snapshot_info: (0, Hash::default()),
-            cluster_info: Arc::new(ClusterInfo::default()),
-            rpc_config: JsonRpcConfig::default(),
-            snapshot_config: None,
-            pubsub_config: PubSubConfig::default(),
-            account_indexes: AccountSecondaryIndexes::default(),
-            accounts_db_caching_enabled: false,
-            replica_exit: Arc::new(RwLock::new(Exit::default())),
-        }
-    }
-}
-
-struct ReplicaNode {
-    json_rpc_service: Option<JsonRpcService>,
-    pubsub_service: Option<PubSubService>,
-    optimistically_confirmed_bank_tracker: Option<OptimisticallyConfirmedBankTracker>,
-}
-
-fn start_gossip_node(
-    identity_keypair: Arc<Keypair>,
-    cluster_entrypoints: &[ContactInfo],
-    ledger_path: &Path,
-    gossip_addr: &SocketAddr,
-    gossip_socket: UdpSocket,
-    expected_shred_version: Option<u16>,
-    gossip_validators: Option<HashSet<Pubkey>>,
-    should_check_duplicate_instance: bool,
-) -> (Arc<ClusterInfo>, Arc<AtomicBool>, GossipService) {
-    let contact_info = ClusterInfo::gossip_contact_info(
-        identity_keypair.pubkey(),
-        *gossip_addr,
-        expected_shred_version.unwrap_or(0),
-    );
-    let mut cluster_info = ClusterInfo::new(contact_info, identity_keypair);
-    cluster_info.set_entrypoints(cluster_entrypoints.to_vec());
-    cluster_info.restore_contact_info(ledger_path, 0);
-    let cluster_info = Arc::new(cluster_info);
-
-    let gossip_exit_flag = Arc::new(AtomicBool::new(false));
-    let gossip_service = GossipService::new(
-        &cluster_info,
-        None,
-        gossip_socket,
-        gossip_validators,
-        should_check_duplicate_instance,
-        &gossip_exit_flag,
-    );
-    info!("Started gossip node");
-    (cluster_info, gossip_exit_flag, gossip_service)
-}
-
-// Struct maintaining information about banks
-struct ReplicaBankInfo {
-    bank_forks: Arc<RwLock<BankForks>>,
-    optimistically_confirmed_bank: Arc<RwLock<OptimisticallyConfirmedBank>>,
-    leader_schedule_cache: Arc<LeaderScheduleCache>,
-    block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
-}
-
-// Initialize the replica by downloading snapshot from the peer, initialize
-// the BankForks, OptimisticallyConfirmedBank, LeaderScheduleCache and
-// BlockCommitmentCache and return the info wrapped as ReplicaBankInfo.
-fn initialize_from_snapshot(
-    replica_config: &ReplicaNodeConfig,
-    snapshot_config: &SnapshotConfig,
-    genesis_config: &GenesisConfig,
-) -> ReplicaBankInfo {
-    info!(
-        "Downloading snapshot from the peer into {:?}",
-        replica_config.snapshot_output_dir
-    );
-
-    download_snapshot(
-        &replica_config.rpc_source_addr,
-        &replica_config.snapshot_output_dir,
-        replica_config.snapshot_info,
-        false,
-        snapshot_config.maximum_snapshots_to_retain,
-        &mut None,
-    )
-    .unwrap();
-
-    fs::create_dir_all(&snapshot_config.snapshot_path).expect("Couldn't create snapshot directory");
-
-    let archive_info = snapshot_utils::get_highest_full_snapshot_archive_info(
-        replica_config.snapshot_output_dir.to_path_buf(),
-    )
-    .unwrap();
-
-    let process_options = blockstore_processor::ProcessOptions {
-        account_indexes: replica_config.account_indexes.clone(),
-        accounts_db_caching_enabled: replica_config.accounts_db_caching_enabled,
-        ..blockstore_processor::ProcessOptions::default()
-    };
-
-    info!(
-        "Build bank from snapshot archive: {:?}",
-        &snapshot_config.snapshot_path
-    );
-    let (bank0, _) = snapshot_utils::bank_from_snapshot_archives(
-        &replica_config.account_paths,
-        &[],
-        &snapshot_config.snapshot_path,
-        archive_info.path(),
-        None,
-        *archive_info.archive_format(),
-        genesis_config,
-        process_options.debug_keys.clone(),
-        None,
-        process_options.account_indexes.clone(),
-        process_options.accounts_db_caching_enabled,
-        process_options.limit_load_slot_count_from_snapshot,
-        process_options.shrink_ratio,
-        process_options.accounts_db_test_hash_calculation,
-        process_options.verify_index,
-    )
-    .unwrap();
-
-    let bank0_slot = bank0.slot();
-    let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank0));
-
-    let bank_forks = Arc::new(RwLock::new(BankForks::new(bank0)));
-
-    let optimistically_confirmed_bank =
-        OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
-
-    let mut block_commitment_cache = BlockCommitmentCache::default();
-    block_commitment_cache.initialize_slots(bank0_slot);
-    let block_commitment_cache = Arc::new(RwLock::new(block_commitment_cache));
-
-    ReplicaBankInfo {
-        bank_forks,
-        optimistically_confirmed_bank,
-        leader_schedule_cache,
-        block_commitment_cache,
-    }
-}
-
-fn start_client_rpc_services(
-    replica_config: &ReplicaNodeConfig,
-    genesis_config: &GenesisConfig,
-    cluster_info: Arc<ClusterInfo>,
-    bank_info: &ReplicaBankInfo,
-) -> (
-    Option<JsonRpcService>,
-    Option<PubSubService>,
-    Option<OptimisticallyConfirmedBankTracker>,
-) {
-    let ReplicaBankInfo {
-        bank_forks,
-        optimistically_confirmed_bank,
-        leader_schedule_cache,
-        block_commitment_cache,
-    } = bank_info;
-    let blockstore = Arc::new(
-        Blockstore::open_with_access_type(
-            &replica_config.ledger_path,
-            AccessType::PrimaryOnly,
-            None,
-            false,
-        )
-        .unwrap(),
-    );
-
-    let max_complete_transaction_status_slot = Arc::new(AtomicU64::new(0));
-
-    let max_slots = Arc::new(MaxSlots::default());
-    let exit = Arc::new(AtomicBool::new(false));
-
-    let subscriptions = Arc::new(RpcSubscriptions::new(
-        &exit,
-        bank_forks.clone(),
-        block_commitment_cache.clone(),
-        optimistically_confirmed_bank.clone(),
-    ));
-
-    let rpc_override_health_check = Arc::new(AtomicBool::new(false));
-    if ContactInfo::is_valid_address(&replica_config.rpc_addr) {
-        assert!(ContactInfo::is_valid_address(
-            &replica_config.rpc_pubsub_addr
-        ));
-    } else {
-        assert!(!ContactInfo::is_valid_address(
-            &replica_config.rpc_pubsub_addr
-        ));
-    }
-
-    let (_bank_notification_sender, bank_notification_receiver) = unbounded();
-    (
-        Some(JsonRpcService::new(
-            replica_config.rpc_addr,
-            replica_config.rpc_config.clone(),
-            replica_config.snapshot_config.clone(),
-            bank_forks.clone(),
-            block_commitment_cache.clone(),
-            blockstore,
-            cluster_info,
-            None,
-            genesis_config.hash(),
-            &replica_config.ledger_path,
-            replica_config.replica_exit.clone(),
-            None,
-            rpc_override_health_check,
-            optimistically_confirmed_bank.clone(),
-            0,
-            0,
-            max_slots,
-            leader_schedule_cache.clone(),
-            max_complete_transaction_status_slot,
-        )),
-        Some(PubSubService::new(
-            replica_config.pubsub_config.clone(),
-            &subscriptions,
-            replica_config.rpc_pubsub_addr,
-            &exit,
-        )),
-        Some(OptimisticallyConfirmedBankTracker::new(
-            bank_notification_receiver,
-            &exit,
-            bank_forks.clone(),
-            optimistically_confirmed_bank.clone(),
-            subscriptions.clone(),
-        )),
-    )
-}
 
 fn get_cluster_shred_version(entrypoints: &[SocketAddr]) -> Option<u16> {
     let entrypoints = {
@@ -525,64 +248,39 @@ fn get_rpc_peer_info(
     )
 }
 
-impl ReplicaNode {
-    pub fn new(replica_config: ReplicaNodeConfig) -> Self {
-        let genesis_config = download_then_check_genesis_hash(
-            &replica_config.rpc_source_addr,
-            &replica_config.ledger_path,
-            None,
-            MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
-            false,
-            true,
-        )
-        .unwrap();
+fn start_gossip_node(
+    identity_keypair: Arc<Keypair>,
+    cluster_entrypoints: &[ContactInfo],
+    ledger_path: &Path,
+    gossip_addr: &SocketAddr,
+    gossip_socket: UdpSocket,
+    expected_shred_version: Option<u16>,
+    gossip_validators: Option<HashSet<Pubkey>>,
+    should_check_duplicate_instance: bool,
+) -> (Arc<ClusterInfo>, Arc<AtomicBool>, GossipService) {
+    let contact_info = ClusterInfo::gossip_contact_info(
+        identity_keypair.pubkey(),
+        *gossip_addr,
+        expected_shred_version.unwrap_or(0),
+    );
+    let mut cluster_info = ClusterInfo::new(contact_info, identity_keypair);
+    cluster_info.set_entrypoints(cluster_entrypoints.to_vec());
+    cluster_info.restore_contact_info(ledger_path, 0);
+    let cluster_info = Arc::new(cluster_info);
 
-        let snapshot_config = SnapshotConfig {
-            snapshot_interval_slots: std::u64::MAX,
-            snapshot_package_output_path: replica_config.snapshot_output_dir.clone(),
-            snapshot_path: replica_config.snapshot_path.clone(),
-            archive_format: ArchiveFormat::TarBzip2,
-            snapshot_version: snapshot_utils::SnapshotVersion::default(),
-            maximum_snapshots_to_retain:
-                snapshot_utils::DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
-        };
-
-        let bank_info =
-            initialize_from_snapshot(&replica_config, &snapshot_config, &genesis_config);
-
-        let (json_rpc_service, pubsub_service, optimistically_confirmed_bank_tracker) =
-            start_client_rpc_services(
-                &replica_config,
-                &genesis_config,
-                replica_config.cluster_info.clone(),
-                &bank_info,
-            );
-
-        ReplicaNode {
-            json_rpc_service,
-            pubsub_service,
-            optimistically_confirmed_bank_tracker,
-        }
-    }
-
-    pub fn join(self) {
-        if let Some(json_rpc_service) = self.json_rpc_service {
-            json_rpc_service.join().expect("rpc_service");
-        }
-
-        if let Some(pubsub_service) = self.pubsub_service {
-            pubsub_service.join().expect("pubsub_service");
-        }
-
-        if let Some(optimistically_confirmed_bank_tracker) =
-            self.optimistically_confirmed_bank_tracker
-        {
-            optimistically_confirmed_bank_tracker
-                .join()
-                .expect("optimistically_confirmed_bank_tracker");
-        }
-    }
+    let gossip_exit_flag = Arc::new(AtomicBool::new(false));
+    let gossip_service = GossipService::new(
+        &cluster_info,
+        None,
+        gossip_socket,
+        gossip_validators,
+        should_check_duplicate_instance,
+        &gossip_exit_flag,
+    );
+    info!("Started gossip node");
+    (cluster_info, gossip_exit_flag, gossip_service)
 }
+
 
 pub fn main() {
     let default_dynamic_port_range =
