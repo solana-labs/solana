@@ -1168,6 +1168,12 @@ impl<
         }
 
         total_elapsed_timer.stop();
+
+        if metric_name.is_empty() {
+            error!("empty metric name! {} {}", file!(), line!());
+            panic!("empty metric name");
+        }
+
         if !metric_name.is_empty() {
             datapoint_info!(
                 metric_name,
@@ -1177,10 +1183,6 @@ impl<
                 ("iterator_elapsed", iterator_elapsed, i64),
                 ("num_keys_iterated", num_keys_iterated, i64),
             )
-        }
-        else {
-            error!("empty metric name! {} {}", file!(), line!());
-            panic!("empty metric name");
         }
     }
 
