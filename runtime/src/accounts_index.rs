@@ -1962,6 +1962,13 @@ pub mod tests {
         }
     }
     
+    impl IsCached for i8 {
+        fn is_cached(&self) -> bool {
+            true
+        }
+    }
+
+
     impl Guts for i8 {
         fn get_info(&self) -> AccountInfo {
             panic!("");
@@ -1980,7 +1987,7 @@ pub mod tests {
             vec![]
         }
     }
-        
+
     pub enum SecondaryIndexTypes<'a> {
         RwLock(&'a SecondaryIndex<RwLockSecondaryIndexEntry>),
         DashMap(&'a SecondaryIndex<DashMapSecondaryIndexEntry>),
@@ -2004,7 +2011,7 @@ pub mod tests {
         }
     }
 
-    impl<'a, T: 'static + Clone + Debug> AccountIndexGetResult<'a, T> {
+    impl<'a, T: 'static + Clone + IsCached + Debug> AccountIndexGetResult<'a, T> {
         pub fn unwrap(self) -> (ReadAccountMapEntry<'a, T>, usize) {
             match self {
                 AccountIndexGetResult::Found(lock, size) => (lock, size),
