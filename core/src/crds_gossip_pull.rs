@@ -9,6 +9,7 @@
 //! with random hash functions.  So each subsequent request will have a different distribution
 //! of false positives.
 
+<<<<<<< HEAD:core/src/crds_gossip_pull.rs
 use crate::{
     cluster_info::{Ping, CRDS_UNIQUE_PUBKEY_CAPACITY},
     contact_info::ContactInfo,
@@ -35,6 +36,40 @@ use std::{
     net::SocketAddr,
     sync::Mutex,
     time::{Duration, Instant},
+=======
+use {
+    crate::{
+        cluster_info::{Ping, CRDS_UNIQUE_PUBKEY_CAPACITY},
+        contact_info::ContactInfo,
+        crds::{Crds, VersionedCrdsValue},
+        crds_gossip::{get_stake, get_weight},
+        crds_gossip_error::CrdsGossipError,
+        crds_value::CrdsValue,
+        ping_pong::PingCache,
+        weighted_shuffle::WeightedShuffle,
+    },
+    lru::LruCache,
+    rand::Rng,
+    rayon::{prelude::*, ThreadPool},
+    solana_runtime::bloom::{AtomicBloom, Bloom},
+    solana_sdk::{
+        hash::{hash, Hash},
+        pubkey::Pubkey,
+        signature::{Keypair, Signer},
+    },
+    solana_streamer::socket::SocketAddrSpace,
+    std::{
+        collections::{HashMap, HashSet, VecDeque},
+        convert::TryInto,
+        iter::{repeat, repeat_with},
+        net::SocketAddr,
+        sync::{
+            atomic::{AtomicI64, AtomicUsize, Ordering},
+            Mutex, RwLock,
+        },
+        time::{Duration, Instant},
+    },
+>>>>>>> f1198fc6d (filters crds values in parallel when responding to gossip pull-requests (#18877)):gossip/src/crds_gossip_pull.rs
 };
 
 pub const CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS: u64 = 15000;
@@ -331,14 +366,24 @@ impl CrdsGossipPull {
     }
 
     /// Create gossip responses to pull requests
+<<<<<<< HEAD:core/src/crds_gossip_pull.rs
     pub fn generate_pull_responses(
         &self,
         crds: &Crds,
+=======
+    pub(crate) fn generate_pull_responses(
+        thread_pool: &ThreadPool,
+        crds: &RwLock<Crds>,
+>>>>>>> f1198fc6d (filters crds values in parallel when responding to gossip pull-requests (#18877)):gossip/src/crds_gossip_pull.rs
         requests: &[(CrdsValue, CrdsFilter)],
         output_size_limit: usize, // Limit number of crds values returned.
         now: u64,
     ) -> Vec<Vec<CrdsValue>> {
+<<<<<<< HEAD:core/src/crds_gossip_pull.rs
         self.filter_crds_values(crds, requests, output_size_limit, now)
+=======
+        Self::filter_crds_values(thread_pool, crds, requests, output_size_limit, now)
+>>>>>>> f1198fc6d (filters crds values in parallel when responding to gossip pull-requests (#18877)):gossip/src/crds_gossip_pull.rs
     }
 
     // Checks if responses should be inserted and
@@ -471,10 +516,15 @@ impl CrdsGossipPull {
 
     /// filter values that fail the bloom filter up to max_bytes
     fn filter_crds_values(
+<<<<<<< HEAD:core/src/crds_gossip_pull.rs
         &self,
         crds: &Crds,
+=======
+        thread_pool: &ThreadPool,
+        crds: &RwLock<Crds>,
+>>>>>>> f1198fc6d (filters crds values in parallel when responding to gossip pull-requests (#18877)):gossip/src/crds_gossip_pull.rs
         filters: &[(CrdsValue, CrdsFilter)],
-        mut output_size_limit: usize, // Limit number of crds values returned.
+        output_size_limit: usize, // Limit number of crds values returned.
         now: u64,
     ) -> Vec<Vec<CrdsValue>> {
         let msg_timeout = CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS;
@@ -482,6 +532,7 @@ impl CrdsGossipPull {
         //skip filters from callers that are too old
         let caller_wallclock_window =
             now.saturating_sub(msg_timeout)..now.saturating_add(msg_timeout);
+<<<<<<< HEAD:core/src/crds_gossip_pull.rs
         let mut dropped_requests = 0;
         let mut total_skipped = 0;
         let ret: Vec<_> = filters
@@ -517,11 +568,59 @@ impl CrdsGossipPull {
             })
             .while_some()
             .collect();
+=======
+        let dropped_requests = AtomicUsize::default();
+        let total_skipped = AtomicUsize::default();
+        let output_size_limit = output_size_limit.try_into().unwrap_or(i64::MAX);
+        let output_size_limit = AtomicI64::new(output_size_limit);
+        let crds = crds.read().unwrap();
+        let apply_filter = |caller: &CrdsValue, filter: &CrdsFilter| {
+            if output_size_limit.load(Ordering::Relaxed) <= 0 {
+                return Vec::default();
+            }
+            let caller_wallclock = caller.wallclock();
+            if !caller_wallclock_window.contains(&caller_wallclock) {
+                dropped_requests.fetch_add(1, Ordering::Relaxed);
+                return Vec::default();
+            }
+            let caller_pubkey = caller.pubkey();
+            let caller_wallclock = caller_wallclock.checked_add(jitter).unwrap_or(0);
+            let pred = |entry: &&VersionedCrdsValue| {
+                debug_assert!(filter.test_mask(&entry.value_hash));
+                // Skip values that are too new.
+                if entry.value.wallclock() > caller_wallclock {
+                    total_skipped.fetch_add(1, Ordering::Relaxed);
+                    false
+                } else {
+                    !filter.filter_contains(&entry.value_hash)
+                        && (entry.value.pubkey() != caller_pubkey
+                            || entry.value.should_force_push(&caller_pubkey))
+                }
+            };
+            let out: Vec<_> = crds
+                .filter_bitmask(filter.mask, filter.mask_bits)
+                .filter(pred)
+                .map(|entry| entry.value.clone())
+                .take(output_size_limit.load(Ordering::Relaxed).max(0) as usize)
+                .collect();
+            output_size_limit.fetch_sub(out.len() as i64, Ordering::Relaxed);
+            out
+        };
+        let ret: Vec<_> = thread_pool.install(|| {
+            filters
+                .par_iter()
+                .map(|(caller, filter)| apply_filter(caller, filter))
+                .collect()
+        });
+>>>>>>> f1198fc6d (filters crds values in parallel when responding to gossip pull-requests (#18877)):gossip/src/crds_gossip_pull.rs
         inc_new_counter_info!(
             "gossip_filter_crds_values-dropped_requests",
-            dropped_requests + filters.len() - ret.len()
+            dropped_requests.into_inner()
         );
-        inc_new_counter_info!("gossip_filter_crds_values-dropped_values", total_skipped);
+        inc_new_counter_info!(
+            "gossip_filter_crds_values-dropped_values",
+            total_skipped.into_inner()
+        );
         ret
     }
 
@@ -1097,11 +1196,16 @@ pub(crate) mod tests {
         let dest = CrdsGossipPull::default();
         let (_, filters) = req.unwrap();
         let mut filters: Vec<_> = filters.into_iter().map(|f| (caller.clone(), f)).collect();
+<<<<<<< HEAD:core/src/crds_gossip_pull.rs
         let rsp = dest.generate_pull_responses(
+=======
+        let rsp = CrdsGossipPull::generate_pull_responses(
+            &thread_pool,
+>>>>>>> f1198fc6d (filters crds values in parallel when responding to gossip pull-requests (#18877)):gossip/src/crds_gossip_pull.rs
             &dest_crds,
             &filters,
-            /*output_size_limit=*/ usize::MAX,
-            0,
+            usize::MAX, // output_size_limit
+            0,          // now
         );
 
         assert_eq!(rsp[0].len(), 0);
@@ -1115,11 +1219,16 @@ pub(crate) mod tests {
             .unwrap();
 
         //should skip new value since caller is to old
+<<<<<<< HEAD:core/src/crds_gossip_pull.rs
         let rsp = dest.generate_pull_responses(
+=======
+        let rsp = CrdsGossipPull::generate_pull_responses(
+            &thread_pool,
+>>>>>>> f1198fc6d (filters crds values in parallel when responding to gossip pull-requests (#18877)):gossip/src/crds_gossip_pull.rs
             &dest_crds,
             &filters,
-            /*output_size_limit=*/ usize::MAX,
-            CRDS_GOSSIP_PULL_MSG_TIMEOUT_MS,
+            usize::MAX,                      // output_size_limit
+            CRDS_GOSSIP_PULL_MSG_TIMEOUT_MS, // now
         );
         assert_eq!(rsp[0].len(), 0);
         assert_eq!(filters.len(), MIN_NUM_BLOOM_FILTERS);
@@ -1133,10 +1242,15 @@ pub(crate) mod tests {
                 .map(|(_, filter)| (caller.clone(), filter.clone()))
                 .collect::<Vec<_>>()
         });
+<<<<<<< HEAD:core/src/crds_gossip_pull.rs
         let rsp = dest.generate_pull_responses(
+=======
+        let rsp = CrdsGossipPull::generate_pull_responses(
+            &thread_pool,
+>>>>>>> f1198fc6d (filters crds values in parallel when responding to gossip pull-requests (#18877)):gossip/src/crds_gossip_pull.rs
             &dest_crds,
             &filters,
-            /*output_size_limit=*/ usize::MAX,
+            usize::MAX, // output_size_limit
             CRDS_GOSSIP_PULL_MSG_TIMEOUT_MS,
         );
         assert_eq!(rsp.len(), 2 * MIN_NUM_BLOOM_FILTERS);
@@ -1185,11 +1299,16 @@ pub(crate) mod tests {
         let mut dest = CrdsGossipPull::default();
         let (_, filters) = req.unwrap();
         let filters: Vec<_> = filters.into_iter().map(|f| (caller.clone(), f)).collect();
+<<<<<<< HEAD:core/src/crds_gossip_pull.rs
         let rsp = dest.generate_pull_responses(
+=======
+        let rsp = CrdsGossipPull::generate_pull_responses(
+            &thread_pool,
+>>>>>>> f1198fc6d (filters crds values in parallel when responding to gossip pull-requests (#18877)):gossip/src/crds_gossip_pull.rs
             &dest_crds,
             &filters,
-            /*output_size_limit=*/ usize::MAX,
-            0,
+            usize::MAX, // output_size_limit
+            0,          // now
         );
         dest.process_pull_requests(
             &mut dest_crds,
@@ -1257,11 +1376,16 @@ pub(crate) mod tests {
             );
             let (_, filters) = req.unwrap();
             let filters: Vec<_> = filters.into_iter().map(|f| (caller.clone(), f)).collect();
+<<<<<<< HEAD:core/src/crds_gossip_pull.rs
             let rsp = dest.generate_pull_responses(
+=======
+            let rsp = CrdsGossipPull::generate_pull_responses(
+                &thread_pool,
+>>>>>>> f1198fc6d (filters crds values in parallel when responding to gossip pull-requests (#18877)):gossip/src/crds_gossip_pull.rs
                 &dest_crds,
                 &filters,
-                /*output_size_limit=*/ usize::MAX,
-                0,
+                usize::MAX, // output_size_limit
+                0,          // now
             );
             dest.process_pull_requests(
                 &mut dest_crds,

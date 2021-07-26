@@ -51,6 +51,7 @@ impl GossipService {
             "gossip_receiver",
             1,
         );
+<<<<<<< HEAD:core/src/gossip_service.rs
         let (response_sender, response_receiver) = channel();
         let (consume_sender, listen_receiver) = channel();
         let t_socket_consume = cluster_info.clone().start_socket_consume_thread(
@@ -60,18 +61,29 @@ impl GossipService {
         );
         let t_listen = ClusterInfo::listen(
             cluster_info.clone(),
+=======
+        let (consume_sender, listen_receiver) = channel();
+        // https://github.com/rust-lang/rust/issues/39364#issuecomment-634545136
+        let _consume_sender = consume_sender.clone();
+        let t_socket_consume = cluster_info.clone().start_socket_consume_thread(
+            request_receiver,
+            consume_sender,
+            exit.clone(),
+        );
+        let (response_sender, response_receiver) = channel();
+        let t_listen = cluster_info.clone().listen(
+>>>>>>> f1198fc6d (filters crds values in parallel when responding to gossip pull-requests (#18877)):gossip/src/gossip_service.rs
             bank_forks.clone(),
             listen_receiver,
             response_sender.clone(),
             should_check_duplicate_instance,
-            exit,
+            exit.clone(),
         );
-        let t_gossip = ClusterInfo::gossip(
-            cluster_info.clone(),
+        let t_gossip = cluster_info.clone().gossip(
             bank_forks,
             response_sender,
             gossip_validators,
-            exit,
+            exit.clone(),
         );
         // To work around:
         // https://github.com/rust-lang/rust/issues/54267
