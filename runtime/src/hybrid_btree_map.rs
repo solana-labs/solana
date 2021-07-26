@@ -484,38 +484,40 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
         let read_lock = self.write_cache[ix].read().unwrap();
         error!("start flusha: {}", ix);
         let mut had_dirty = false;
-        if !read_lock.is_empty() {
-            error!("start flush: {}", ix);
-            let (age_comp, do_age, next_age) = age
-                .map(|age| (age, true, Self::add_age(age, default_age)))
-                .unwrap_or((0, false, 0));
-            self.bucket_flush_calls.fetch_add(1, Ordering::Relaxed);
-            let len = read_lock.len();
-            let mut keys_to_flush = Vec::with_capacity(len);
-            let mut delete_keys = Vec::with_capacity(len);
-            let mut flushed = 0;
-            let mut get_purges = 0;
-            for (k, mut v) in read_lock.iter() {
-                let mut instance = v.instance.read().unwrap();
-                let mut flush = instance.dirty;
-                if bg && (Self::in_cache(&instance.data.slot_list) || instance.data.slot_list.len() > 1) {
-                    // for all account indexes that are in the write cache instead of storage, don't write them to disk yet - they will be updated soon
-                    flush = false;
-                }
-                if flush {
-                    keys_to_flush.push(*k);
-                    had_dirty = true;
-                }
-                if do_age {
-                    if instance.age == age_comp {
-                        // clear the cache of things that have aged out
-                        delete_keys.push(*k);
-                        get_purges += 1;
+        if read_lock.is_empty() {
+            return false;
+        }
 
-                        // if we should age this key out, then go ahead and flush it
-                        if !flush && instance.dirty {
-                            keys_to_flush.push(*k);
-                        }
+        error!("start flush: {}", ix);
+        let (age_comp, do_age, next_age) = age
+            .map(|age| (age, true, Self::add_age(age, default_age)))
+            .unwrap_or((0, false, 0));
+        self.bucket_flush_calls.fetch_add(1, Ordering::Relaxed);
+        let len = read_lock.len();
+        let mut keys_to_flush = Vec::with_capacity(len);
+        let mut delete_keys = Vec::with_capacity(len);
+        let mut flushed = 0;
+        let mut get_purges = 0;
+        for (k, mut v) in read_lock.iter() {
+            let mut instance = v.instance.read().unwrap();
+            let mut flush = instance.dirty;
+            if bg && (Self::in_cache(&instance.data.slot_list) || instance.data.slot_list.len() > 1) {
+                // for all account indexes that are in the write cache instead of storage, don't write them to disk yet - they will be updated soon
+                flush = false;
+            }
+            if flush {
+                keys_to_flush.push(*k);
+                had_dirty = true;
+            }
+            if do_age {
+                if instance.age == age_comp {
+                    // clear the cache of things that have aged out
+                    delete_keys.push(*k);
+                    get_purges += 1;
+
+                    // if we should age this key out, then go ahead and flush it
+                    if !flush && instance.dirty {
+                        keys_to_flush.push(*k);
                     }
                 }
             }
