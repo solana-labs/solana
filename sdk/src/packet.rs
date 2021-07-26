@@ -1,5 +1,6 @@
 use crate::clock::Slot;
 use bincode::Result;
+use libc::{sockaddr_storage, sockaddr_in, sockaddr_in6};
 use serde::Serialize;
 use std::{
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
@@ -19,9 +20,10 @@ pub struct Meta {
     pub forward: bool,
     pub repair: bool,
     pub discard: bool,
-    pub addr: [u16; 8],
-    pub port: u16,
-    pub v6: bool,
+    pub addr: sockaddr_storage,
+//    pub addr: [u16; 8],
+//    pub port: u16,
+//    pub v6: bool,
     pub seed: [u8; 32],
     pub slot: Slot,
     pub is_tracer_tx: bool,
