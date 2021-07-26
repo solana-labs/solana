@@ -861,6 +861,11 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
         r
     }
 
+    fn set_age_to_future(&self, age: &mut u8) {
+        let current_age = self.current_age.load(Ordering::Relaxed);
+        *age = Self::add_age(current_age, default_age)
+    }
+
     pub fn get(&self, key: &Pubkey) -> Option<(u64, Vec<SlotT<V>>)> {
         let k = Pubkey::from_str("5x3NHJ4VEu2abiZJ5EHEibTc2iqW22Lc245Z3fCwCxRS").unwrap();
         if key == &k {
@@ -875,7 +880,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
             if let Some(mut res) = res {
                 if get_caching {
                     let mut instance = res.instance.write().unwrap();
-                    instance.age = default_age;
+                    self.set_age_to_future(&mut instance.age);
                     self.gets_from_cache.fetch_add(1, Ordering::Relaxed);
                     let r = Some((instance.data.ref_count, instance.data.slot_list.clone()));
                     drop(res);
@@ -901,7 +906,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
             match res {
                 HashMapEntry::Occupied(occupied) => {
                     let mut instance = occupied.get().instance.write().unwrap();
-                    instance.age = default_age;
+                    self.set_age_to_future(&mut instance.age);
                     self.gets_from_cache.fetch_add(1, Ordering::Relaxed);
                     m1.stop();
                     self.update_cache_us
@@ -910,9 +915,8 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
                 }
                 HashMapEntry::Vacant(vacant) => {
                     let r = self.get_no_cache(key);
-                    r.as_ref().and_then(|loaded| {
+                    r.as_ref().map(|loaded| {
                         vacant.insert(self.allocate(&loaded.1, loaded.0, false, false));
-                        Some(())
                     });
                     m1.stop();
                     self.update_cache_us
