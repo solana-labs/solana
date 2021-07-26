@@ -4789,14 +4789,14 @@ impl Bank {
         info!("cleaning..");
         let mut clean_time = Measure::start("clean");
         if self.slot() > 0 {
-            //self.clean_accounts(true, true);
+            self.clean_accounts(true, true);
         }
         clean_time.stop();
 
         info!("shrinking..");
         let mut shrink_all_slots_time = Measure::start("shrink_all_slots");
         if self.slot() > 0 {
-            //self.shrink_all_slots(true);
+            self.shrink_all_slots(true);
         }
         shrink_all_slots_time.stop();
 
