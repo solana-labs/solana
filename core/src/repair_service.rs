@@ -290,7 +290,7 @@ impl RepairService {
             build_repairs_batch_elapsed.stop();
 
             let mut batch_send_repairs_elapsed = Measure::start("batch_send_repairs_elapsed");
-            if batch.len() > 0 {
+            if !batch.is_empty() {
                 if let Err(SendPktsError::IoError(err, num_failed)) =
                     batch_send(repair_socket, &batch)
                 {

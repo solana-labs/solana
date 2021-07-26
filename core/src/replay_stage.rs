@@ -1024,7 +1024,8 @@ impl ReplayStage {
                 let mut slots_stats = blockstore.slots_stats.lock().unwrap();
                 slots_stats.broadcast_only_slots.remove(&slot)
             };
-            datapoint_info!("purge_unconfirmed_duplicate_slot",
+            datapoint_info!(
+                "purge_unconfirmed_duplicate_slot",
                 ("slot", slot, i64),
                 ("broadcast_only", broadcast_only, bool),
             );
