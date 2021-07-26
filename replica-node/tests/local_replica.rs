@@ -234,11 +234,11 @@ fn test_replica_bootstrap() {
     let (cluster_info, _rpc_contact_info, _snapshot_info) = replica_util::get_rpc_peer_info(
         identity_keypair,
         &entry_points,
-        &ledger_path,
+        ledger_path,
         &node,
         None,
         &contact_info.id,
-        &snapshot_output_path,
+        snapshot_output_path,
     );
 
     info!("The cluster info:\n{:?}", cluster_info.contact_info_trace());
