@@ -1176,6 +1176,9 @@ impl<
                 ("num_keys_iterated", num_keys_iterated, i64),
             )
         }
+        else {
+            panic!("empty metric name");
+        }
     }
 
     fn do_scan_secondary_index<
