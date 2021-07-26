@@ -2190,15 +2190,7 @@ impl AccountsDb {
 
         // This shouldn't happen if alive_bytes/approx_stored_count are accurate
         if Self::should_not_shrink(aligned_total, original_bytes, num_stores) {
-            self.shrink_stats
-                .skipped_shrink
-                .fetch_add(1, Ordering::Relaxed);
-            for pubkey in unrefed_pubkeys {
-                if let Some(locked_entry) = self.accounts_index.get_account_read_entry(pubkey) {
-                    locked_entry.addref();
-                }
-            }
-            return 0;
+            panic!("skipped shrink: alive_bytes/approx_stored_count is not accurate");
         }
 
         let total_starting_accounts = stored_accounts.len();
