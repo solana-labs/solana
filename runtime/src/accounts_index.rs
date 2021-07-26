@@ -1177,6 +1177,7 @@ impl<
             )
         }
         else {
+            error!("empty metric name!");
             panic!("empty metric name");
         }
     }
@@ -1351,7 +1352,7 @@ impl<
     {
         // Pass "" not to log metrics, so RPC doesn't get spammy
         self.do_checked_scan_accounts(
-            "",
+            "index_scan_accounts",
             ancestors,
             scan_bank_id,
             func,
@@ -3141,7 +3142,7 @@ pub mod tests {
 
         let ancestors = Ancestors::default();
         let mut scanned_keys = HashSet::new();
-        index.range_scan_accounts("", &ancestors, pubkey_range, |pubkey, _index| {
+        index.range_scan_accounts("run_test_range", &ancestors, pubkey_range, |pubkey, _index| {
             scanned_keys.insert(*pubkey);
         });
 
