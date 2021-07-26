@@ -339,6 +339,7 @@ pub struct WriteCacheEntryArc<V> {
 
 #[derive(Debug)]
 pub struct BucketMapWriteHolder<V> {
+    pub current_age: AtomicU8,
     pub disk: BucketMap<SlotT<V>>,
     pub write_cache: Vec<RwLock<WriteCache<WriteCacheEntryArc<V>>>>,
     pub get_disk_us: AtomicU64,
@@ -346,7 +347,7 @@ pub struct BucketMapWriteHolder<V> {
     pub get_cache_us: AtomicU64,
     pub update_cache_us: AtomicU64,
     pub write_cache_flushes: AtomicU64,
-    pub flush_calls: AtomicU64,
+    pub bucket_flush_calls: AtomicU64,
     pub get_purges: AtomicU64,
     pub gets_from_disk: AtomicU64,
     pub gets_from_disk_empty: AtomicU64,
@@ -383,25 +384,32 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
         //*self.db.write().unwrap() = Some(db);
     }
 
+    fn add_age(age: u8, inc: u8) -> u8 {
+        age.wrapping_add(inc)
+    }
+
     pub fn bg_flusher(&self, exit: Arc<AtomicBool>) {
         let mut found_one = false;
         let mut last = Instant::now();
         let mut aging = Instant::now();
+        let mut current_age: u8 = 0;
         loop {
             if last.elapsed().as_millis() > 1000 {
                 self.distribution2();
                 last = Instant::now();
             }
-            let mut age = false;
+            let mut age = None;
             if aging.elapsed().as_millis() > 400 {
                 // time of 1 slot
-                age = true;
+                current_age = Self::add_age(current_age, 1);
+                self.current_age.store(current_age, Ordering::Relaxed);
+                age = Some(current_age);
                 aging = Instant::now();
             }
             if exit.load(Ordering::Relaxed) {
                 break;
             }
-            if !age && (found_one || self.wait.wait_timeout(Duration::from_millis(500))) {
+            if age.is_none() && (found_one || self.wait.wait_timeout(Duration::from_millis(500))) {
                 continue;
             }
             found_one = false;
@@ -413,6 +421,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
         }
     }
     fn new(bucket_map: BucketMap<SlotT<V>>) -> Self {
+        let current_age = AtomicU8::new(0);
         let get_disk_us = AtomicU64::new(0);
         let update_dist_us = AtomicU64::new(0);
         let get_cache_us = AtomicU64::new(0);
@@ -423,7 +432,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
         let range = AtomicU64::new(0);
         let keys = AtomicU64::new(0);
         let write_cache_flushes = AtomicU64::new(0);
-        let flush_calls = AtomicU64::new(0);
+        let bucket_flush_calls = AtomicU64::new(0);
         let get_purges = AtomicU64::new(0);
         let gets_from_disk = AtomicU64::new(0);
         let gets_from_disk_empty = AtomicU64::new(0);
@@ -443,6 +452,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
         assert_eq!(bucket_bins, bucket_map.num_buckets());
 
         Self {
+            current_age,
             disk: bucket_map,
             write_cache,
             bins,
@@ -458,7 +468,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
             binner,
             unified_backing,
             get_purges,
-            flush_calls,
+            bucket_flush_calls,
             get_disk_us,
             update_dist_us,
             get_cache_us,
@@ -469,51 +479,75 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
             keys,
         }
     }
-    pub fn flush(&self, ix: usize, bg: bool, age: bool) -> bool {
-        if !self.write_cache[ix].read().unwrap().is_empty() {
-            self.flush_calls.fetch_add(1, Ordering::Relaxed);
-            let mut wc = self.write_cache[ix].write().unwrap();
-            let mut delete_keys = Vec::with_capacity(wc.len());
+    pub fn flush(&self, ix: usize, bg: bool, age: Option<u8>) -> bool {
+        let read_lock = self.write_cache[ix].read().unwrap();
+        let mut had_dirty = false;
+        if !read_lock.is_empty() {
+            let (age_comp, do_age, next_age) = age
+                .map(|age| (age, true, Self::add_age(age, default_age)))
+                .unwrap_or((0, false, 0));
+            self.bucket_flush_calls.fetch_add(1, Ordering::Relaxed);
+            let len = read_lock.len();
+            let mut keys_to_flush = Vec::with_capacity(len);
+            let mut delete_keys = Vec::with_capacity(len);
             let mut flushed = 0;
             let mut get_purges = 0;
-            for (k, mut v) in wc.iter_mut() {
-                let mut instance = v.instance.write().unwrap();
+            for (k, mut v) in read_lock.iter() {
+                let mut instance = v.instance.read().unwrap();
                 if instance.dirty {
-                    self.update_no_cache(
-                        k,
-                        |_current| Some((instance.data.slot_list.clone(), instance.data.ref_count)),
-                        None,
-                        true,
-                    );
-                    instance.age = default_age; // keep newly updated stuff around
-                    instance.dirty = false;
-                    flushed += 1;
+                    keys_to_flush.push(*k);
+                    had_dirty = true;
                 }
-                if age {
-                    if instance.age <= 1 {
+                if do_age {
+                    if instance.age == age_comp {
                         // clear the cache of things that have aged out
                         delete_keys.push(*k);
                         get_purges += 1;
-                    } else {
-                        instance.age -= 1;
                     }
                 }
             }
-            let cleared = if !bg {
-                let len = wc.len();
+            drop(read_lock);
+
+            let mut wc = &mut self.write_cache[ix].write().unwrap(); // maybe get lock for each item?
+            for k in keys_to_flush.into_iter() {
+                match wc.entry(k) {
+                    HashMapEntry::Occupied(occupied) => {
+                        let mut instance = occupied.get().instance.write().unwrap();
+                        if instance.dirty {
+                            self.update_no_cache(
+                                occupied.key(),
+                                |_current| {
+                                    Some((instance.data.slot_list.clone(), instance.data.ref_count))
+                                },
+                                None,
+                                true,
+                            );
+                            instance.age = next_age; // keep newly updated stuff around
+                            instance.dirty = false;
+                            flushed += 1;
+                        }
+                    }
+                    HashMapEntry::Vacant(vacant) => { // do nothing, item is no longer in cache somehow, so obviously not dirty
+                    }
+                }
+            }
+            if !bg {
                 wc.clear();
-                len
             } else {
                 for k in delete_keys.iter() {
                     wc.remove(k);
                 }
-                delete_keys.len()
-            };
-            self.write_cache_flushes
-                .fetch_add(flushed as u64, Ordering::Relaxed);
-            self.get_purges
-                .fetch_add(get_purges as u64, Ordering::Relaxed);
-            true
+            }
+            drop(wc);
+            if flushed != 0 {
+                self.write_cache_flushes
+                    .fetch_add(flushed as u64, Ordering::Relaxed);
+            }
+            if get_purges != 0 {
+                self.get_purges
+                    .fetch_add(get_purges as u64, Ordering::Relaxed);
+            }
+            had_dirty
         } else {
             false
         }
@@ -541,7 +575,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
         range: Option<&R>,
     ) -> Option<Vec<Pubkey>> {
         self.keys.fetch_add(1, Ordering::Relaxed);
-        self.flush(ix, false, false);
+        self.flush(ix, false, None);
         if use_trait {
             let mut range_use = PubkeyRange::default();
             if let Some(range) = range {
@@ -573,7 +607,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
         ix: usize,
         range: Option<&R>,
     ) -> Option<Vec<Vec<SlotT<V>>>> {
-        self.flush(ix, false, false);
+        self.flush(ix, false, None);
         //error!("values");
         if use_trait {
             return self.db.read().unwrap()[ix]
@@ -639,15 +673,19 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
                     if addref {
                         current.0 += 1;
                     }
-                    vacant.insert(Self::allocate(&current.1, current.0, true, false));
+                    vacant.insert(self.allocate(&current.1, current.0, true, false));
                     m1.stop();
                     self.update_cache_us
                         .fetch_add(m1.as_ns(), Ordering::Relaxed);
-                }
-                else {
+                } else {
                     // not on disk, not in cache, so add to cache
                     self.inserts.fetch_add(1, Ordering::Relaxed);
-                    vacant.insert(Self::allocate(&new_value.slot_list, new_value.ref_count, true, true));
+                    vacant.insert(self.allocate(
+                        &new_value.slot_list,
+                        new_value.ref_count,
+                        true,
+                        true,
+                    ));
                 }
             }
         }
@@ -691,7 +729,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
                     // stick this in the write cache and flush it later
                     let ix = self.bucket_ix(key);
                     let wc = &mut self.write_cache[ix].write().unwrap();
-                    wc.insert(key.clone(), Self::allocate(&result.0, result.1, true, true));
+                    wc.insert(key.clone(), self.allocate(&result.0, result.1, true, true));
                 } else {
                     panic!("should have returned a value from updatefn");
                 }
@@ -719,12 +757,14 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
     }
 
     fn allocate(
+        &self,
         slot_list: &SlotList<V>,
         ref_count: RefCount,
         dirty: bool,
         insert: bool,
     ) -> WriteCacheEntryArc<V> {
         assert!(!(insert && !dirty));
+        let current_age = self.current_age.load(Ordering::Relaxed);
         WriteCacheEntryArc {
             instance: RwLock::new(WriteCacheEntry {
                 data: AccountMapEntry {
@@ -732,7 +772,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
                     ref_count,
                 },
                 dirty: dirty,     //AtomicBool::new(dirty),
-                age: default_age, //AtomicU8::new(default_age),
+                age: Self::add_age(current_age, default_age), //AtomicU8::new(default_age),)
                 insert,
             }),
         }
@@ -753,10 +793,10 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
             match wc.entry(key.clone()) {
                 HashMapEntry::Occupied(mut occupied) => {
                     let mut gm = occupied.get_mut();
-                    *gm = Self::allocate(&result.0, result.1, true, false);
+                    *gm = self.allocate(&result.0, result.1, true, false);
                 }
                 HashMapEntry::Vacant(vacant) => {
-                    vacant.insert(Self::allocate(&result.0, result.1, true, true));
+                    vacant.insert(self.allocate(&result.0, result.1, true, true));
                     self.wait.notify_all(); // we have put something in the write cache that needs to be flushed sometime
                 }
             }
@@ -803,8 +843,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
         self.get_disk_us.fetch_add(m1.as_ns(), Ordering::Relaxed);
         if r.is_some() {
             self.gets_from_disk.fetch_add(1, Ordering::Relaxed);
-        }
-        else {
+        } else {
             self.gets_from_disk_empty.fetch_add(1, Ordering::Relaxed);
         }
         r
@@ -856,7 +895,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
                 HashMapEntry::Vacant(vacant) => {
                     let r = self.get_no_cache(key);
                     r.as_ref().and_then(|loaded| {
-                        vacant.insert(Self::allocate(&loaded.1, loaded.0, false, false));
+                        vacant.insert(self.allocate(&loaded.1, loaded.0, false, false));
                         Some(())
                     });
                     m1.stop();
@@ -1006,7 +1045,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
             ),
             (
                 "bin_flush_calls",
-                self.flush_calls.swap(0, Ordering::Relaxed),
+                self.bucket_flush_calls.swap(0, Ordering::Relaxed),
                 i64
             ),
             (
@@ -1251,7 +1290,7 @@ impl<V: 'static + Clone + Debug + IsCached + Guts> HybridBTreeMap<V> {
         let mystart = num_buckets * self.bin_index / self.bins;
         let myend = num_buckets * (self.bin_index + 1) / self.bins;
         (mystart..myend).for_each(|ix| {
-            self.disk.flush(ix, false, false);
+            self.disk.flush(ix, false, None);
         });
 
         /*
