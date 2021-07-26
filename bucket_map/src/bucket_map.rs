@@ -58,7 +58,7 @@ impl<T: Clone + std::fmt::Debug> BucketMap<T> {
         let count = 1 << num_buckets_pow2;
         let mut buckets = Vec::with_capacity(count);
         buckets.resize_with(count, || RwLock::new(None));
-        error!("# buckets: {} in {:?}", count, drives);
+        //error!("# buckets: {} in {:?}", count, drives);
         let stats = Arc::new(BucketMapStats::default());
         Self {
             buckets,
