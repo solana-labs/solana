@@ -673,7 +673,7 @@ impl AccountStorageEntry {
 
     fn get_stored_account_meta(&self, offset: usize) -> Option<StoredAccountMeta> {
         let r = self.accounts.get_account(offset);
-        error!("get_stored_account_meta: {}, {}", r.is_some(), offset);
+        //error!("get_stored_account_meta: {}, {}", r.is_some(), offset);
         Some(r?.0)
     }
 
