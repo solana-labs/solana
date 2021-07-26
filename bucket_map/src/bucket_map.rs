@@ -27,7 +27,7 @@ pub struct BucketMap<T> {
 
 impl<T> Drop for BucketMap<T> {
     fn drop(&mut self) {
-        error!("dropping bucket map");
+        //error!("dropping bucket map");
     }
 }
 

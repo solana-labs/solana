@@ -1129,7 +1129,7 @@ impl<
         F: FnMut(&Pubkey, (&T, Slot)),
         R: RangeBounds<Pubkey> + Debug,
     {
-        error!("do_scan_accounts, {}, {}, {}, range: {:?}", file!(), line!(), metric_name, range);
+        //error!("do_scan_accounts, {}, {}, {}, range: {:?}", file!(), line!(), metric_name, range);
 
         // TODO: expand to use mint index to find the `pubkey_list` below more efficiently
         // instead of scanning the entire range
@@ -1173,7 +1173,7 @@ impl<
 
         if metric_name.is_empty() {
             error!("empty metric name! {} {}", file!(), line!());
-            panic!("empty metric name");
+            //panic!("empty metric name");
         }
 
         if !metric_name.is_empty() {
