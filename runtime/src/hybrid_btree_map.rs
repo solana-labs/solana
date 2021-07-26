@@ -3,11 +3,13 @@ use crate::accounts_index::{AccountMapEntrySerialize, IsCached, RefCount, SlotLi
 use crate::pubkey_bins::PubkeyBinCalculator16;
 use log::*;
 use solana_bucket_map::bucket_map::BucketMap;
+use solana_measure::measure::Measure;
 use solana_sdk::clock::Slot;
 use solana_sdk::pubkey::Pubkey;
 use std::borrow::Borrow;
 use std::collections::btree_map::BTreeMap;
 use std::fmt::Debug;
+use std::hash::BuildHasher;
 use std::marker::{Send, Sync};
 use std::ops::Bound;
 use std::ops::{Range, RangeBounds};
@@ -16,8 +18,6 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::time::Instant;
-use std::hash::BuildHasher;
-use solana_measure::measure::Measure;
 
 type K = Pubkey;
 use std::collections::{hash_map::Entry as HashMapEntry, HashMap};
@@ -143,7 +143,7 @@ impl Guts for bool {
     }
     fn get_info2(info: &SlotList<Self>) -> SlotList<AccountInfo> {
         panic!("");
-vec![]
+        vec![]
     }
     fn get_copy2(info: &SlotList<AccountInfo>) -> SlotList<Self> {
         panic!("");
@@ -162,7 +162,7 @@ impl Guts for u64 {
     }
     fn get_info2(info: &SlotList<Self>) -> SlotList<AccountInfo> {
         panic!("");
-vec![]
+        vec![]
     }
     fn get_copy2(info: &SlotList<AccountInfo>) -> SlotList<Self> {
         panic!("");
@@ -349,6 +349,10 @@ pub struct BucketMapWriteHolder<V> {
     pub gets_from_disk: AtomicU64,
     pub gets_from_cache: AtomicU64,
     pub updates: AtomicU64,
+    pub addrefs: AtomicU64,
+    pub unrefs: AtomicU64,
+    pub range: AtomicU64,
+    pub keys: AtomicU64,
     pub inserts: AtomicU64,
     pub deletes: AtomicU64,
     pub bins: usize,
@@ -410,7 +414,11 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
         let update_dist_us = AtomicU64::new(0);
         let get_cache_us = AtomicU64::new(0);
         let update_cache_us = AtomicU64::new(0);
-    
+
+        let addrefs = AtomicU64::new(0);
+        let unrefs = AtomicU64::new(0);
+        let range = AtomicU64::new(0);
+        let keys = AtomicU64::new(0);
         let write_cache_flushes = AtomicU64::new(0);
         let flush_calls = AtomicU64::new(0);
         let get_purges = AtomicU64::new(0);
@@ -450,7 +458,10 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
             update_dist_us,
             get_cache_us,
             update_cache_us,
-        
+            addrefs,
+            unrefs,
+            range,
+            keys,
         }
     }
     pub fn flush(&self, ix: usize, bg: bool, age: bool) -> bool {
@@ -519,11 +530,12 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
         );
         b
     }
-    pub fn keys<R: RangeBounds<Pubkey>>(
+    pub fn keys3<R: RangeBounds<Pubkey>>(
         &self,
         ix: usize,
         range: Option<&R>,
     ) -> Option<Vec<Pubkey>> {
+        self.keys.fetch_add(1, Ordering::Relaxed);
         self.flush(ix, false, false);
         if use_trait {
             let mut range_use = PubkeyRange::default();
@@ -712,8 +724,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
     pub fn get_no_cache(&self, key: &Pubkey) -> Option<(u64, Vec<SlotT<V>>)> {
         self.gets_from_disk.fetch_add(1, Ordering::Relaxed);
         let mut m1 = Measure::start("");
-        let r =
-        if use_trait {
+        let r = if use_trait {
             let ix = self.bucket_ix(key);
             let r = self.db.read().unwrap()[ix].get(key);
             r.map(|x| (x.ref_count, V::get_copy2(&x.slot_list)))
@@ -725,7 +736,6 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
         r
     }
     pub fn get(&self, key: &Pubkey) -> Option<(u64, Vec<SlotT<V>>)> {
-
         let ix = self.bucket_ix(key);
         {
             let mut m1 = Measure::start("");
@@ -742,7 +752,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
                     drop(instance);
                     drop(wc);
                     self.get_cache_us.fetch_add(m1.as_ns(), Ordering::Relaxed);
-                    return r
+                    return r;
                 } else {
                     let mut instance = res.instance.read().unwrap();
                     self.gets_from_cache.fetch_add(1, Ordering::Relaxed);
@@ -764,7 +774,8 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
                     instance.age = default_age;
                     self.gets_from_cache.fetch_add(1, Ordering::Relaxed);
                     m1.stop();
-                    self.update_cache_us.fetch_add(m1.as_ns(), Ordering::Relaxed);
+                    self.update_cache_us
+                        .fetch_add(m1.as_ns(), Ordering::Relaxed);
                     return Some((instance.data.ref_count, instance.data.slot_list.clone()));
                 }
                 HashMapEntry::Vacant(vacant) => {
@@ -774,7 +785,8 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
                         Some(())
                     });
                     m1.stop();
-                    self.update_cache_us.fetch_add(m1.as_ns(), Ordering::Relaxed);
+                    self.update_cache_us
+                        .fetch_add(m1.as_ns(), Ordering::Relaxed);
                     r
                 }
             }
@@ -787,8 +799,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
 
             if add {
                 self.db.read().unwrap()[ix].addref(key, ref_count, &V::get_info2(&slot_list));
-            }
-            else {
+            } else {
                 self.db.read().unwrap()[ix].unref(key, ref_count, &V::get_info2(&slot_list));
             }
             return;
@@ -806,8 +817,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
                 let mut gm = occupied.get_mut();
                 if add {
                     gm.instance.write().unwrap().data.ref_count += 1;
-                }
-                else {
+                } else {
                     gm.instance.write().unwrap().data.ref_count -= 1;
                 }
             }
@@ -815,27 +825,28 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
                 self.gets_from_disk.fetch_add(1, Ordering::Relaxed);
                 if add {
                     self.disk.addref(key);
-                }
-                else {
+                } else {
                     self.disk.unref(key);
                 }
             }
         }
     }
     pub fn addref(&self, key: &Pubkey, ref_count: RefCount, slot_list: &Vec<SlotT<V>>) {
+        self.addrefs.fetch_add(1, Ordering::Relaxed);
         self.addunref(key, ref_count, slot_list, true);
     }
 
     pub fn unref(&self, key: &Pubkey, ref_count: RefCount, slot_list: &Vec<SlotT<V>>) {
+        self.unrefs.fetch_add(1, Ordering::Relaxed);
         self.addunref(key, ref_count, slot_list, false);
     }
     fn delete_key(&self, key: &Pubkey) {
+        self.deletes.fetch_add(1, Ordering::Relaxed);
         if use_trait {
             let ix = self.bucket_ix(key);
             self.db.read().unwrap()[ix].delete(key);
             return;
         }
-        self.deletes.fetch_add(1, Ordering::Relaxed);
         let ix = self.bucket_ix(key);
         {
             let wc = &mut self.write_cache[ix].write().unwrap();
@@ -868,8 +879,16 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
             ("updates", self.updates.swap(0, Ordering::Relaxed), i64),
             ("inserts", self.inserts.swap(0, Ordering::Relaxed), i64),
             ("deletes", self.deletes.swap(0, Ordering::Relaxed), i64),
-            ("gets_from_disk", self.gets_from_disk.swap(0, Ordering::Relaxed), i64),
-            ("gets_from_cache", self.gets_from_cache.swap(0, Ordering::Relaxed), i64),
+            (
+                "gets_from_disk",
+                self.gets_from_disk.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "gets_from_cache",
+                self.gets_from_cache.swap(0, Ordering::Relaxed),
+                i64
+            ),
             (
                 "bucket_index_resizes",
                 self.disk.stats.index.resizes.swap(0, Ordering::Relaxed),
@@ -915,13 +934,31 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
                 self.get_purges.swap(0, Ordering::Relaxed),
                 i64
             ),
-("get_disk_us", self.get_disk_us.swap(0, Ordering::Relaxed)/ 1000, i64),
-("update_dist_us", self.update_dist_us.swap(0, Ordering::Relaxed)/ 1000, i64),
-("get_cache_us", self.get_cache_us.swap(0, Ordering::Relaxed)/ 1000, i64),
-("update_cache_us", self.update_cache_us.swap(0, Ordering::Relaxed)/ 1000, i64),
-        
+            (
+                "get_disk_us",
+                self.get_disk_us.swap(0, Ordering::Relaxed) / 1000,
+                i64
+            ),
+            (
+                "update_dist_us",
+                self.update_dist_us.swap(0, Ordering::Relaxed) / 1000,
+                i64
+            ),
+            (
+                "get_cache_us",
+                self.get_cache_us.swap(0, Ordering::Relaxed) / 1000,
+                i64
+            ),
+            (
+                "update_cache_us",
+                self.update_cache_us.swap(0, Ordering::Relaxed) / 1000,
+                i64
+            ),
+            ("addrefs", self.addrefs.swap(0, Ordering::Relaxed), i64),
+            ("unrefs", self.unrefs.swap(0, Ordering::Relaxed), i64),
+            ("range", self.range.swap(0, Ordering::Relaxed), i64),
+            ("keys", self.keys.swap(0, Ordering::Relaxed), i64),
             ("get", self.updates.swap(0, Ordering::Relaxed), i64),
-
             //("buckets", self.num_buckets(), i64),
         );
     }
@@ -1168,6 +1205,8 @@ impl<V: 'static + Clone + Debug + IsCached + Guts> HybridBTreeMap<V> {
     where
         R: RangeBounds<Pubkey>,
     {
+        self.disk.range.fetch_add(1, Ordering::Relaxed);
+
         let num_buckets = self.disk.num_buckets();
         if self.bin_index != 0 && self.disk.unified_backing {
             return Keys {
@@ -1200,7 +1239,7 @@ impl<V: 'static + Clone + Debug + IsCached + Guts> HybridBTreeMap<V> {
         end = std::cmp::min(end, myend);
         let mut keys = Vec::with_capacity(len);
         (start..end).into_iter().for_each(|ix| {
-            let ks = self.disk.keys(ix, range.as_ref()).unwrap_or_default();
+            let ks = self.disk.keys3(ix, range.as_ref()).unwrap_or_default();
             for k in ks.into_iter() {
                 if range.is_none() || range.as_ref().unwrap().contains(&k) {
                     keys.push(k);
@@ -1225,7 +1264,7 @@ impl<V: 'static + Clone + Debug + IsCached + Guts> HybridBTreeMap<V> {
             keys.append(
                 &mut self
                     .disk
-                    .keys(ix, None::<&Range<Pubkey>>)
+                    .keys3(ix, None::<&Range<Pubkey>>)
                     .unwrap_or_default(),
             )
         });
