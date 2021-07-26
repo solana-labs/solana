@@ -480,10 +480,12 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
         }
     }
     pub fn flush(&self, ix: usize, bg: bool, age: Option<u8>) -> bool {
+        error!("start flusha: {}", ix);
         let read_lock = self.write_cache[ix].read().unwrap();
+        error!("start flusha: {}", ix);
         let mut had_dirty = false;
         if !read_lock.is_empty() {
-            error!("start flush");
+            error!("start flush: {}", ix);
             let (age_comp, do_age, next_age) = age
                 .map(|age| (age, true, Self::add_age(age, default_age)))
                 .unwrap_or((0, false, 0));
@@ -518,6 +520,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
                 }
             }
             drop(read_lock);
+            error!("mid flush: {}", ix);
 
             let mut wc = &mut self.write_cache[ix].write().unwrap(); // maybe get lock for each item?
             if !bg {
@@ -581,7 +584,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
                 self.get_purges
                     .fetch_add(get_purges as u64, Ordering::Relaxed);
             }
-            error!("end flush");
+            error!("end flush: {}", ix);
 
             had_dirty
         } else {
