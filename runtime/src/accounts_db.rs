@@ -11227,6 +11227,7 @@ pub mod tests {
 
     #[test]
     fn test_accounts_db_cache_clean_max_root_with_scan() {
+        solana_logger::setup();
         let requested_flush_root = 5;
         run_test_accounts_db_cache_clean_max_root(
             10,
