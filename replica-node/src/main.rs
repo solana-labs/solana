@@ -56,6 +56,13 @@ pub fn main() {
                 .help("Use DIR as ledger location"),
         )
         .arg(
+            Arg::with_name("snapshots")
+                .long("snapshots")
+                .value_name("DIR")
+                .takes_value(true)
+                .help("Use DIR as snapshot location [default: --ledger value]"),
+        )
+        .arg(
             Arg::with_name("peer")
                 .long("peer")
                 .value_name("IP:PORT")
