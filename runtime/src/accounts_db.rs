@@ -2604,7 +2604,7 @@ impl AccountsDb {
                 // meaning no other subsystems can invalidate the account_info before making their
                 // changes to the index entry.
                 // For details, see the comment in retry_to_get_account_accessor()
-                error!("{} {} {}, {:?}", file!(), line!(), pubkey, (account_info, slot));
+                //error!("{} {} {}, {:?}", file!(), line!(), pubkey, (account_info, slot));
                 let account_slot = self
                     .get_account_accessor(slot, pubkey, account_info.store_id, account_info.offset)
                     .get_loaded_account()

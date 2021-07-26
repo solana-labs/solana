@@ -2276,18 +2276,18 @@ impl Bank {
         // committed before this write lock can be obtained here.
         let mut hash = self.hash.write().unwrap();
         if *hash == Hash::default() {
-            error!("{} {}", file!(), line!());
+            //error!("{} {}", file!(), line!());
             // finish up any deferred changes to account state
             self.collect_rent_eagerly();
-            error!("{} {}", file!(), line!());
+            //error!("{} {}", file!(), line!());
             self.collect_fees();
-            error!("{} {}", file!(), line!());
+            //error!("{} {}", file!(), line!());
             self.distribute_rent();
-            error!("{} {}", file!(), line!());
+            //error!("{} {}", file!(), line!());
             self.update_slot_history();
-            error!("{} {}", file!(), line!());
+            //error!("{} {}", file!(), line!());
             self.run_incinerator();
-            error!("{} {}", file!(), line!());
+            //error!("{} {}", file!(), line!());
 
             // freeze is a one-way trip, idempotent
             self.freeze_started.store(true, Relaxed);
@@ -3752,14 +3752,14 @@ impl Bank {
 
     fn collect_rent_in_partition(&self, partition: Partition) {
         let subrange = Self::pubkey_range_from_partition(partition);
-        error!("bank default1, {}, {}", file!(), line!());
+        //error!("bank default1, {}, {}", file!(), line!());
 
         let accounts = self
             .rc
             .accounts
             .load_to_collect_rent_eagerly(&self.ancestors, subrange);
         let account_count = accounts.len();
-        error!("bank default1, {}, {}", file!(), line!());
+        //error!("bank default1, {}, {}", file!(), line!());
 
         // parallelize?
         let rent_for_sysvars = self.rent_for_sysvars();
