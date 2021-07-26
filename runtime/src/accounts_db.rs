@@ -12086,8 +12086,9 @@ pub mod tests {
         ];
         // make sure accounts are in 2 different bins
         assert!(
-            crate::accounts_index::get_bin_pubkey(&keys[0])
-                != crate::accounts_index::get_bin_pubkey(&keys[1])
+            (crate::accounts_index::BINS ==1) ^
+            (crate::accounts_index::get_bin_pubkey(&keys[0])
+                != crate::accounts_index::get_bin_pubkey(&keys[1]))
         );
         let account = AccountSharedData::new(1, 1, AccountSharedData::default().owner());
         let account_big = AccountSharedData::new(1, 1000, AccountSharedData::default().owner());
