@@ -1454,7 +1454,7 @@ impl<V: 'static + Clone + Debug + IsCached + Guts> HybridBTreeMap<V> {
     pub fn upsert(
         &mut self,
         pubkey: Pubkey,
-        mut new_value: AccountMapEntry<V>,
+        new_value: AccountMapEntry<V>,
         reclaims: &mut SlotList<V>,
     ) {
         self.disk.upsert(pubkey, new_value, reclaims);
