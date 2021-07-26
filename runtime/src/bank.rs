@@ -7081,7 +7081,7 @@ pub(crate) mod tests {
 
     
     #[test]
-    #[should_panic(expected = "range start is greater than range end in BTreeMap")]
+    #[should_panic(expected = "range start is greater than range end")]
     fn test_rent_eager_bad_range() {
         let test_map = map_to_test_bad_range();
         test_map.range(
