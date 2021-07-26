@@ -1351,16 +1351,21 @@ impl<V: 'static + Clone + Debug + IsCached + Guts> HybridBTreeMap<V> {
         let mut start = 0;
         let mut end = num_buckets;
         if let Some(range) = &range {
+            let default = Pubkey::default();
+            let max = Pubkey::new(&[0xff; 32]);
+            let start_bound = Self::bound(range.start_bound(), &default);
             start = self
                 .disk
-                .bucket_ix(Self::bound(range.start_bound(), &Pubkey::default()));
+                .bucket_ix(start_bound);
             // end is exclusive, so it is end + 1 we care about here
+            let end_bound = Self::bound(range.end_bound(), &max);
             end = std::cmp::min(
                 num_buckets,
                 1 + self
                     .disk
-                    .bucket_ix(Self::bound(range.end_bound(), &Pubkey::new(&[0xff; 32]))),
+                    .bucket_ix(end_bound),
             ); // ugly
+            assert!(start_bound <= end_bound, "range start is greater than range end");
         }
         let len = (start..end)
             .into_iter()
