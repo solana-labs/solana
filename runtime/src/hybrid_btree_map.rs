@@ -494,7 +494,9 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
             let mut get_purges = 0;
             for (k, mut v) in read_lock.iter() {
                 let mut instance = v.instance.read().unwrap();
-                if instance.dirty {
+                let mut flush = instance.dirty;
+                //if bg && in_cache
+                if flush {
                     keys_to_flush.push(*k);
                     had_dirty = true;
                 }
@@ -509,33 +511,56 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
             drop(read_lock);
 
             let mut wc = &mut self.write_cache[ix].write().unwrap(); // maybe get lock for each item?
-            for k in keys_to_flush.into_iter() {
-                match wc.entry(k) {
-                    HashMapEntry::Occupied(occupied) => {
-                        let mut instance = occupied.get().instance.write().unwrap();
-                        if instance.dirty {
-                            self.update_no_cache(
-                                occupied.key(),
-                                |_current| {
-                                    Some((instance.data.slot_list.clone(), instance.data.ref_count))
-                                },
-                                None,
-                                true,
-                            );
-                            instance.age = next_age; // keep newly updated stuff around
-                            instance.dirty = false;
-                            flushed += 1;
-                        }
-                    }
-                    HashMapEntry::Vacant(vacant) => { // do nothing, item is no longer in cache somehow, so obviously not dirty
+            if !bg {
+                for (k, v) in wc.drain() {
+                    let mut instance = v.instance.read().unwrap();
+                    if instance.dirty {
+                        self.update_no_cache(
+                            &k,
+                            |_current| {
+                                Some((instance.data.slot_list.clone(), instance.data.ref_count))
+                            },
+                            None,
+                            true,
+                        );
                     }
                 }
-            }
-            if !bg {
-                wc.clear();
             } else {
+                for k in keys_to_flush.into_iter() {
+                    match wc.entry(k) {
+                        HashMapEntry::Occupied(occupied) => {
+                            let mut instance = occupied.get().instance.write().unwrap();
+                            if instance.dirty {
+                                self.update_no_cache(
+                                    occupied.key(),
+                                    |_current| {
+                                        Some((
+                                            instance.data.slot_list.clone(),
+                                            instance.data.ref_count,
+                                        ))
+                                    },
+                                    None,
+                                    true,
+                                );
+                                instance.age = next_age; // keep newly updated stuff around
+                                instance.dirty = false;
+                                flushed += 1;
+                            }
+                        }
+                        HashMapEntry::Vacant(vacant) => { // do nothing, item is no longer in cache somehow, so obviously not dirty
+                        }
+                    }
+                }
                 for k in delete_keys.iter() {
-                    wc.remove(k);
+                    if let Some(item) = wc.remove(k) {
+                        let instance = item.instance.write().unwrap();
+                        // if someone else dirtied it or aged it newer, so re-insert it into the cache
+                        if instance.dirty || (do_age && instance.age != age_comp) {
+                            drop(instance);
+                            wc.insert(*k, item);
+                        }
+                        // otherwise, we were ok to delete that key from the cache
+                    }
                 }
             }
             drop(wc);
@@ -697,6 +722,10 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
         }
     }
 
+    fn in_cache(slot_list: &SlotList<V>) -> bool {
+        slot_list.iter().any(|(slot, info)| info.is_cached())
+    }
+
     pub fn update_no_cache<F>(
         &self,
         key: &Pubkey,
@@ -777,7 +806,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
                     slot_list: slot_list.clone(),
                     ref_count,
                 },
-                dirty: dirty,     //AtomicBool::new(dirty),
+                dirty: dirty,                                 //AtomicBool::new(dirty),
                 age: Self::add_age(current_age, default_age), //AtomicU8::new(default_age),)
                 insert,
             }),
@@ -984,7 +1013,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
         {
             let wc = &mut self.write_cache[ix].write().unwrap();
             wc.remove(key);
-            //error!("remove: {}", key);            
+            //error!("remove: {}", key);
         }
         self.disk.delete_key(key)
     }
@@ -1301,7 +1330,7 @@ impl<V: 'static + Clone + Debug + IsCached + Guts> HybridBTreeMap<V> {
                                                                                   // 15 hopefully avoids too many files open problem
                                                                                   //buckets = std::cmp::min(buckets + 11, 15); // max # that works with open file handles and such
                                                                                   //buckets =
-        //error!("creating: {} for {}", buckets, bucket_bins);
+                                                                                  //error!("creating: {} for {}", buckets, bucket_bins);
         Arc::new(BucketMapWriteHolder::new(BucketMap::new_buckets(buckets)))
     }
 
@@ -1359,18 +1388,14 @@ impl<V: 'static + Clone + Debug + IsCached + Guts> HybridBTreeMap<V> {
             let default = Pubkey::default();
             let max = Pubkey::new(&[0xff; 32]);
             let start_bound = Self::bound(range.start_bound(), &default);
-            start = self
-                .disk
-                .bucket_ix(start_bound);
+            start = self.disk.bucket_ix(start_bound);
             // end is exclusive, so it is end + 1 we care about here
             let end_bound = Self::bound(range.end_bound(), &max);
-            end = std::cmp::min(
-                num_buckets,
-                1 + self
-                    .disk
-                    .bucket_ix(end_bound),
-            ); // ugly
-            assert!(start_bound <= end_bound, "range start is greater than range end");
+            end = std::cmp::min(num_buckets, 1 + self.disk.bucket_ix(end_bound)); // ugly
+            assert!(
+                start_bound <= end_bound,
+                "range start is greater than range end"
+            );
         }
         let len = (start..end)
             .into_iter()
