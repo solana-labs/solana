@@ -1129,6 +1129,8 @@ impl<
         F: FnMut(&Pubkey, (&T, Slot)),
         R: RangeBounds<Pubkey>,
     {
+        error!("do_scan_accounts, {}, {}, {}", file!(), line!(), metric_name);
+
         // TODO: expand to use mint index to find the `pubkey_list` below more efficiently
         // instead of scanning the entire range
         let mut total_elapsed_timer = Measure::start("total");
@@ -1177,7 +1179,7 @@ impl<
             )
         }
         else {
-            error!("empty metric name!");
+            error!("empty metric name! {} {}", file!(), line!());
             panic!("empty metric name");
         }
     }
