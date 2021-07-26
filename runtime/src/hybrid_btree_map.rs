@@ -1432,7 +1432,7 @@ impl<V: 'static + Clone + Debug + IsCached + Guts> HybridBTreeMap<V> {
         //error!("getting values: {}, bin: {}, bins: {}, start: {}, end: {}", values.len(), self.bin_index, self.bins, start, end);
         //keys.sort_unstable();
         if self.bin_index == 0 {
-            error!("getting values: {}, {}, {}", values.len(), start, end);
+            //error!("getting values: {}, {}, {}", values.len(), start, end);
         }
         Values { values, index: 0 }
     }
