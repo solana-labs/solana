@@ -30,7 +30,10 @@ use solana_sdk::{
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     clock::Clock,
     entrypoint::{HEAP_LENGTH, SUCCESS},
-    feature_set::{add_missing_program_error_mappings, upgradeable_close_instruction},
+    feature_set::{
+        add_missing_program_error_mappings, stop_verify_mul64_imm_nonzero,
+        upgradeable_close_instruction,
+    },
     ic_logger_msg, ic_msg,
     instruction::InstructionError,
     keyed_account::{from_keyed_account, keyed_account_at_index},
@@ -82,7 +85,8 @@ pub fn create_executor(
         max_call_depth: compute_budget.max_call_depth,
         stack_frame_size: compute_budget.stack_frame_size,
         enable_instruction_tracing: log_enabled!(Trace),
-        verify_mul64_imm_nonzero: true, // TODO: Feature gate and then remove me
+        verify_mul64_imm_nonzero: !invoke_context
+            .is_feature_active(&stop_verify_mul64_imm_nonzero::id()), // TODO: Feature gate and then remove me
         ..Config::default()
     };
     let mut executable = {
