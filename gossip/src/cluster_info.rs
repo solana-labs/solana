@@ -1917,25 +1917,13 @@ impl ClusterInfo {
         };
         let now = timestamp();
         let self_id = self.id();
-<<<<<<< HEAD
 
         let mut pull_responses = self
             .time_gossip_read_lock(
                 "generate_pull_responses",
                 &self.stats.generate_pull_responses,
             )
-            .generate_pull_responses(&caller_and_filters, output_size_limit, now);
-=======
-        let mut pull_responses = {
-            let _st = ScopedTimer::from(&self.stats.generate_pull_responses);
-            self.gossip.generate_pull_responses(
-                thread_pool,
-                &caller_and_filters,
-                output_size_limit,
-                now,
-            )
-        };
->>>>>>> f1198fc6d (filters crds values in parallel when responding to gossip pull-requests (#18877))
+            .generate_pull_responses(thread_pool, &caller_and_filters, output_size_limit, now);
         if require_stake_for_gossip {
             for resp in &mut pull_responses {
                 retain_staked(resp, stakes);

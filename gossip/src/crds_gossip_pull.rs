@@ -34,14 +34,10 @@ use {
         convert::TryInto,
         iter::repeat_with,
         net::SocketAddr,
-<<<<<<< HEAD
-        sync::Mutex,
-=======
         sync::{
             atomic::{AtomicI64, AtomicUsize, Ordering},
-            Mutex, RwLock,
+            Mutex,
         },
->>>>>>> f1198fc6d (filters crds values in parallel when responding to gossip pull-requests (#18877))
         time::{Duration, Instant},
     },
 };
@@ -340,12 +336,8 @@ impl CrdsGossipPull {
 
     /// Create gossip responses to pull requests
     pub(crate) fn generate_pull_responses(
-<<<<<<< HEAD
-        crds: &Crds,
-=======
         thread_pool: &ThreadPool,
-        crds: &RwLock<Crds>,
->>>>>>> f1198fc6d (filters crds values in parallel when responding to gossip pull-requests (#18877))
+        crds: &Crds,
         requests: &[(CrdsValue, CrdsFilter)],
         output_size_limit: usize, // Limit number of crds values returned.
         now: u64,
@@ -483,12 +475,8 @@ impl CrdsGossipPull {
 
     /// filter values that fail the bloom filter up to max_bytes
     fn filter_crds_values(
-<<<<<<< HEAD
-        crds: &Crds,
-=======
         thread_pool: &ThreadPool,
-        crds: &RwLock<Crds>,
->>>>>>> f1198fc6d (filters crds values in parallel when responding to gossip pull-requests (#18877))
+        crds: &Crds,
         filters: &[(CrdsValue, CrdsFilter)],
         output_size_limit: usize, // Limit number of crds values returned.
         now: u64,
@@ -498,25 +486,10 @@ impl CrdsGossipPull {
         //skip filters from callers that are too old
         let caller_wallclock_window =
             now.saturating_sub(msg_timeout)..now.saturating_add(msg_timeout);
-<<<<<<< HEAD
-        let mut dropped_requests = 0;
-        let mut total_skipped = 0;
-        let ret: Vec<_> = filters
-            .iter()
-            .map(|(caller, filter)| {
-                if output_size_limit == 0 {
-                    return None;
-                }
-                let caller_wallclock = caller.wallclock();
-                if !caller_wallclock_window.contains(&caller_wallclock) {
-                    dropped_requests += 1;
-                    return Some(vec![]);
-=======
         let dropped_requests = AtomicUsize::default();
         let total_skipped = AtomicUsize::default();
         let output_size_limit = output_size_limit.try_into().unwrap_or(i64::MAX);
         let output_size_limit = AtomicI64::new(output_size_limit);
-        let crds = crds.read().unwrap();
         let apply_filter = |caller: &CrdsValue, filter: &CrdsFilter| {
             if output_size_limit.load(Ordering::Relaxed) <= 0 {
                 return Vec::default();
@@ -538,7 +511,6 @@ impl CrdsGossipPull {
                     !filter.filter_contains(&entry.value_hash)
                         && (entry.value.pubkey() != caller_pubkey
                             || entry.value.should_force_push(&caller_pubkey))
->>>>>>> f1198fc6d (filters crds values in parallel when responding to gossip pull-requests (#18877))
                 }
             };
             let out: Vec<_> = crds
