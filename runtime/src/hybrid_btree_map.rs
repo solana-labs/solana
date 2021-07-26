@@ -1,5 +1,7 @@
 use crate::accounts_index::AccountMapEntry;
-use crate::accounts_index::{AccountMapEntrySerialize, IsCached, RefCount, SlotList, BINS};
+use crate::accounts_index::{
+    AccountMapEntrySerialize, IsCached, RefCount, SlotList, WriteAccountMapEntry, BINS,
+};
 use crate::pubkey_bins::PubkeyBinCalculator16;
 use log::*;
 use solana_bucket_map::bucket_map::BucketMap;
@@ -588,6 +590,69 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
         self.disk.num_buckets()
     }
 
+    pub fn upsert(
+        &self,
+        key: Pubkey,
+        mut new_value: AccountMapEntry<V>,
+        reclaims: &mut SlotList<V>,
+        //reclaims_must_be_empty: bool,
+    ) {
+        let ix = self.bucket_ix(&key);
+        let mut m1 = Measure::start("");
+        let mut wc = &mut self.write_cache[ix].write().unwrap();
+        let res = wc.entry(key.clone());
+        match res {
+            HashMapEntry::Occupied(occupied) => {
+                // already in cache, so call update_static function
+                let mut instance = occupied.get().instance.write().unwrap();
+                instance.age = default_age;
+                self.updates.fetch_add(1, Ordering::Relaxed);
+
+                let mut current = &mut instance.data;
+                let (slot, new_entry) = new_value.slot_list.remove(0);
+                let addref = WriteAccountMapEntry::update_static(
+                    &mut current.slot_list,
+                    slot,
+                    new_entry,
+                    reclaims,
+                    //reclaims_must_be_empty,
+                );
+                if addref {
+                    current.ref_count += 1;
+                }
+                m1.stop();
+                self.update_cache_us
+                    .fetch_add(m1.as_ns(), Ordering::Relaxed);
+            }
+            HashMapEntry::Vacant(vacant) => {
+                let r = self.get_no_cache(&key);
+                if let Some(mut current) = r {
+                    self.updates.fetch_add(1, Ordering::Relaxed);
+                    let (slot, new_entry) = new_value.slot_list.remove(0);
+                    let addref = WriteAccountMapEntry::update_static(
+                        &mut current.1,
+                        slot,
+                        new_entry,
+                        reclaims,
+                        //reclaims_must_be_empty,
+                    );
+                    if addref {
+                        current.0 += 1;
+                    }
+                    vacant.insert(Self::allocate(&current.1, current.0, true, false));
+                    m1.stop();
+                    self.update_cache_us
+                        .fetch_add(m1.as_ns(), Ordering::Relaxed);
+                }
+                else {
+                    // not on disk, not in cache, so add to cache
+                    self.inserts.fetch_add(1, Ordering::Relaxed);
+                    vacant.insert(Self::allocate(&new_value.slot_list, new_value.ref_count, true, true));
+                }
+            }
+        }
+    }
+
     pub fn update_no_cache<F>(
         &self,
         key: &Pubkey,
@@ -659,6 +724,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
         dirty: bool,
         insert: bool,
     ) -> WriteCacheEntryArc<V> {
+        assert!(!(insert && !dirty));
         WriteCacheEntryArc {
             instance: RwLock::new(WriteCacheEntry {
                 data: AccountMapEntry {
@@ -743,6 +809,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
         }
         r
     }
+
     pub fn get(&self, key: &Pubkey) -> Option<(u64, Vec<SlotT<V>>)> {
         let ix = self.bucket_ix(key);
         {
@@ -1319,6 +1386,16 @@ impl<V: 'static + Clone + Debug + IsCached + Guts> HybridBTreeMap<V> {
         1 // ??? wrong
           //self.in_memory.len()
     }
+
+    pub fn upsert(
+        &mut self,
+        pubkey: Pubkey,
+        mut new_value: AccountMapEntry<V>,
+        reclaims: &mut SlotList<V>,
+    ) {
+        self.disk.upsert(pubkey, new_value, reclaims);
+    }
+
     pub fn entry(&mut self, key: K) -> HybridEntry<'_, V> {
         match self.disk.get(&key) {
             Some(entry) => HybridEntry::Occupied(HybridOccupiedEntry {
