@@ -102,6 +102,9 @@ impl<T: Clone + std::fmt::Debug> BucketMap<T> {
 
     pub fn default_drives() -> Arc<Vec<PathBuf>> {
         let tmpdir2 = PathBuf::from("accounts_index_buckets");
+        let random = PathBuf::from(format!("folder{}", thread_rng().gen::<usize>()));
+        let tmpdir2 = random.join(tmpdir2);
+        
         let paths: Vec<PathBuf> = [tmpdir2]
             .iter()
             .filter(|x| std::fs::create_dir_all(x).is_ok())
