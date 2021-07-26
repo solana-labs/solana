@@ -3531,6 +3531,7 @@ pub mod tests {
             + IsCached
             + ZeroLamport
             + std::cmp::PartialEq
+            + Guts
             + std::fmt::Debug,
     >(
         index: &AccountsIndex<T>,
