@@ -75,7 +75,7 @@ pub fn main() {
                 .long("peer-pubkey")
                 .validator(is_pubkey)
                 .value_name("The peer validator/replica IDENTITY")
-                .multiple(true)
+                .required(true)
                 .takes_value(true)
                 .help("The pubkey for the target validator."),
         )

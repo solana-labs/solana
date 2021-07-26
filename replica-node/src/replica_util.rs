@@ -240,7 +240,7 @@ pub fn get_rpc_peer_info(
 ) -> (Arc<ClusterInfo>, ContactInfo, Option<(Slot, Hash)>) {
     let identity_keypair = Arc::new(identity_keypair);
 
-    let gossip = Some(start_gossip_node(
+    let gossip = start_gossip_node(
         identity_keypair,
         cluster_entrypoints,
         ledger_path,
@@ -249,10 +249,10 @@ pub fn get_rpc_peer_info(
         expected_shred_version,
         None,
         true,
-    ));
+    );
 
     let rpc_node_details = get_rpc_peer_node(
-        &gossip.as_ref().unwrap().0,
+        &gossip.0,
         cluster_entrypoints,
         expected_shred_version,
         peer_pubkey,
@@ -260,9 +260,5 @@ pub fn get_rpc_peer_info(
     );
     let rpc_node_details = rpc_node_details.unwrap();
 
-    (
-        gossip.as_ref().unwrap().0.clone(),
-        rpc_node_details.0,
-        rpc_node_details.1,
-    )
+    (gossip.0.clone(), rpc_node_details.0, rpc_node_details.1)
 }
