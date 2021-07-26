@@ -1173,7 +1173,7 @@ impl<
 
         if metric_name.is_empty() {
             error!("empty metric name! {} {}", file!(), line!());
-            //panic!("empty metric name");
+            panic!("empty metric name");
         }
 
         if !metric_name.is_empty() {
