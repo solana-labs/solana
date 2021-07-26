@@ -386,7 +386,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
         let mut last = Instant::now();
         let mut aging = Instant::now();
         loop {
-            if last.elapsed().as_millis() > 5000 {
+            if last.elapsed().as_millis() > 1000 {
                 self.distribution2();
                 last = Instant::now();
             }
