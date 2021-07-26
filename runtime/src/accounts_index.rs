@@ -3546,7 +3546,7 @@ pub mod tests {
         index
             .account_maps
             .iter()
-            .map(|bin_map| bin_map.read().unwrap().len())
+            .map(|bin_map| bin_map.read().unwrap().len_inaccurate())
             .sum()
     }
 
