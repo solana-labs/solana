@@ -3705,11 +3705,13 @@ impl Bank {
         if !self.enable_eager_rent_collection() {
             return;
         }
+        error!("bank default1, {}, {}", file!(), line!());
 
         let mut measure = Measure::start("collect_rent_eagerly-ms");
         for partition in self.rent_collection_partitions() {
             self.collect_rent_in_partition(partition);
         }
+        error!("bank default1, {}, {}", file!(), line!());
         measure.stop();
         inc_new_counter_info!("collect_rent_eagerly-ms", measure.as_ms() as usize);
     }
@@ -3750,12 +3752,14 @@ impl Bank {
 
     fn collect_rent_in_partition(&self, partition: Partition) {
         let subrange = Self::pubkey_range_from_partition(partition);
+        error!("bank default1, {}, {}", file!(), line!());
 
         let accounts = self
             .rc
             .accounts
             .load_to_collect_rent_eagerly(&self.ancestors, subrange);
         let account_count = accounts.len();
+        error!("bank default1, {}, {}", file!(), line!());
 
         // parallelize?
         let rent_for_sysvars = self.rent_for_sysvars();
