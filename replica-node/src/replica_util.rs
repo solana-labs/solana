@@ -60,7 +60,7 @@ fn get_rpc_peer_node(
     let mut retry_reason = None;
     loop {
         sleep(Duration::from_secs(1));
-        info!("Searching for the rpc peer node and latest snapshot information.");
+        info!("Searching for the rpc peer node and latest snapshot information with shred_version {:?}.", expected_shred_version);
         info!("\n{}", cluster_info.rpc_info_trace());
 
         let shred_version =
@@ -189,8 +189,6 @@ fn get_rpc_peer_node(
     }
 }
 
-// Get the RPC peer info given the peer's Pubkey
-// Returns the ClusterInfo, the peer's ContactInfo and the initial snapshot info
 fn start_gossip_node(
     identity_keypair: Arc<Keypair>,
     cluster_entrypoints: &[ContactInfo],
@@ -221,9 +219,13 @@ fn start_gossip_node(
         &gossip_exit_flag,
     );
     info!("Started gossip node");
+    info!("The cluster contact info:\n{}", cluster_info.contact_info_trace());
+
     (cluster_info, gossip_exit_flag, gossip_service)
 }
 
+// Get the RPC peer info given the peer's Pubkey
+// Returns the ClusterInfo, the peer's ContactInfo and the initial snapshot info
 pub fn get_rpc_peer_info(
     identity_keypair: Keypair,
     cluster_entrypoints: &[ContactInfo],

@@ -4,13 +4,19 @@ use serial_test::serial;
 
 use solana_core::validator::ValidatorConfig;
 
-use solana_gossip::cluster_info::ClusterInfo;
+use solana_gossip::{
+    cluster_info::{Node, VALIDATOR_PORT_RANGE},
+    cluster_info::ClusterInfo,
+    contact_info::ContactInfo,
+};
 
 use solana_local_cluster::{
     cluster::Cluster,
     local_cluster::{ClusterConfig, LocalCluster},
     validator_configs::*,
 };
+use solana_replica_node::replica_util;
+
 use solana_runtime::{
     snapshot_config::SnapshotConfig,
     snapshot_utils::{self, ArchiveFormat},
@@ -18,6 +24,7 @@ use solana_runtime::{
 use solana_sdk::{
     client::SyncClient, clock::Slot, commitment_config::CommitmentConfig,
     epoch_schedule::MINIMUM_SLOTS_PER_EPOCH, hash::Hash,
+    signature::{Keypair, Signer},
 };
 
 use std::{
@@ -183,7 +190,7 @@ fn test_replica_bootstrap() {
     let mut cluster = LocalCluster::new(&mut config);
 
     assert_eq!(cluster.validators.len(), 1);
-    let contact_info = &cluster.entry_point_info;
+    let contact_info = &cluster.validators.values().next().unwrap().info.contact_info;
 
     println!("Contact info: {:?}", contact_info);
 
@@ -194,10 +201,13 @@ fn test_replica_bootstrap() {
         .as_ref()
         .unwrap()
         .snapshot_package_output_path;
-    trace!("Waiting for snapshot");
+    info!("Waiting for snapshot");
     let (archive_filename, archive_snapshot_hash) =
         wait_for_next_snapshot(&cluster, snapshot_package_output_path);
-    trace!("found: {:?}", archive_filename);
+    info!("found: {:?}", archive_filename);
+
+    let expected_shred_version = contact_info.shred_version;
+    let identity_keypair = Keypair::new();
 
     // now bring up a replica to talk to it.
     let rpc_addr: SocketAddr = "127.0.0.1:8301".parse().unwrap();
@@ -208,6 +218,31 @@ fn test_replica_bootstrap() {
     let snapshot_output_path = snapshot_output_dir.path();
     let snapshot_path = snapshot_output_path.join("snapshot");
     let account_paths: Vec<PathBuf> = vec![ledger_path.join("accounts")];
+
+    let gossip_addr: SocketAddr = "127.0.0.1:8303".parse().unwrap();
+    let dynamic_port_range = solana_net_utils::parse_port_range("8300-8400").unwrap();
+    let bind_address = solana_net_utils::parse_host("127.0.0.1").unwrap();
+    let node = Node::new_with_external_ip(
+        &identity_keypair.pubkey(),
+        &gossip_addr,
+        dynamic_port_range,
+        bind_address,
+    );
+
+    info!("The peer id: {:?}", &contact_info.id);
+    let entry_points = vec![ContactInfo::new_gossip_entry_point(&contact_info.gossip)];
+    let (cluster_info, rpc_contact_info, snapshot_info) = replica_util::get_rpc_peer_info(
+        identity_keypair,
+        &entry_points,
+        &ledger_path,
+        &node,
+        None,
+        &contact_info.id,
+        &snapshot_output_path,
+    );
+
+    info!("The cluster info:\n{:?}", cluster_info.contact_info_trace());
+
     let config = ReplicaNodeConfig {
         rpc_source_addr: contact_info.rpc,
         rpc_addr,
@@ -217,9 +252,8 @@ fn test_replica_bootstrap() {
         snapshot_path,
         account_paths,
         snapshot_info: archive_snapshot_hash,
-        cluster_info: Arc::new(ClusterInfo::default()),
+        cluster_info,
         ..ReplicaNodeConfig::default()
     };
-    let replica_node = ReplicaNode::new(config);
-    replica_node.join();
+    let _replica_node = ReplicaNode::new(config);
 }
