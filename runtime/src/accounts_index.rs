@@ -1152,6 +1152,7 @@ impl<
                 let result;
                 if let AccountIndexGetResult::Found(locked_entry, index) = &list_r {
                     let slot_list = locked_entry.slot_list();
+                    error!("list: {:?}", slot_list);
                     result = Some(slot_list[*index].clone())
                 } else {
                     continue;
