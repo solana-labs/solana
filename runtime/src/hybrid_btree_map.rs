@@ -389,7 +389,6 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
     }
 
     pub fn bg_flusher(&self, exit: Arc<AtomicBool>) {
-        return;
         let mut found_one = false;
         let mut last = Instant::now();
         let mut aging = Instant::now();
@@ -414,11 +413,13 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
                 continue;
             }
             found_one = false;
+            error!("start flushing");
             for ix in 0..self.bins {
                 if self.flush(ix, true, age) {
                     found_one = true;
                 }
             }
+            error!("stop flushing");
         }
     }
     fn new(bucket_map: BucketMap<SlotT<V>>) -> Self {
