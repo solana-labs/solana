@@ -53,8 +53,16 @@ impl WindowServiceMetrics {
             metric_name,
             ("run_insert_count", self.run_insert_count as i64, i64),
             ("num_shreds_received", self.num_shreds_received as i64, i64),
-            ("shred_receiver_elapsed_us", self.shred_receiver_elapsed_us as i64, i64),
-            ("prune_shreds_elapsed_us", self.prune_shreds_elapsed_us as i64, i64),
+            (
+                "shred_receiver_elapsed_us",
+                self.shred_receiver_elapsed_us as i64,
+                i64
+            ),
+            (
+                "prune_shreds_elapsed_us",
+                self.prune_shreds_elapsed_us as i64,
+                i64
+            ),
         );
     }
 }
