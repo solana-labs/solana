@@ -347,6 +347,7 @@ pub struct BucketMapWriteHolder<V> {
     pub flush_calls: AtomicU64,
     pub get_purges: AtomicU64,
     pub gets_from_disk: AtomicU64,
+    pub gets_from_disk_empty: AtomicU64,
     pub gets_from_cache: AtomicU64,
     pub updates: AtomicU64,
     pub addrefs: AtomicU64,
@@ -423,6 +424,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
         let flush_calls = AtomicU64::new(0);
         let get_purges = AtomicU64::new(0);
         let gets_from_disk = AtomicU64::new(0);
+        let gets_from_disk_empty = AtomicU64::new(0);
         let gets_from_cache = AtomicU64::new(0);
         let updates = AtomicU64::new(0);
         let inserts = AtomicU64::new(0);
@@ -445,6 +447,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
             wait,
             gets_from_cache,
             gets_from_disk,
+            gets_from_disk_empty,
             deletes,
             write_cache_flushes,
             updates,
@@ -722,7 +725,6 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
         }
     }
     pub fn get_no_cache(&self, key: &Pubkey) -> Option<(u64, Vec<SlotT<V>>)> {
-        self.gets_from_disk.fetch_add(1, Ordering::Relaxed);
         let mut m1 = Measure::start("");
         let r = if use_trait {
             let ix = self.bucket_ix(key);
@@ -733,6 +735,12 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
         };
         m1.stop();
         self.get_disk_us.fetch_add(m1.as_ns(), Ordering::Relaxed);
+        if r.is_some() {
+            self.gets_from_disk.fetch_add(1, Ordering::Relaxed);
+        }
+        else {
+            self.gets_from_disk_empty.fetch_add(1, Ordering::Relaxed);
+        }
         r
     }
     pub fn get(&self, key: &Pubkey) -> Option<(u64, Vec<SlotT<V>>)> {
@@ -879,6 +887,11 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
             ("updates", self.updates.swap(0, Ordering::Relaxed), i64),
             ("inserts", self.inserts.swap(0, Ordering::Relaxed), i64),
             ("deletes", self.deletes.swap(0, Ordering::Relaxed), i64),
+            (
+                "gets_from_disk_empty",
+                self.gets_from_disk_empty.swap(0, Ordering::Relaxed),
+                i64
+            ),
             (
                 "gets_from_disk",
                 self.gets_from_disk.swap(0, Ordering::Relaxed),
