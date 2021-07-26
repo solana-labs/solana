@@ -888,7 +888,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport + std::marker::Sync + std::mark
     ) -> Result<(), ScanError>
     where
         F: FnMut(&Pubkey, (&T, Slot)),
-        R: RangeBounds<Pubkey>,
+        R: RangeBounds<Pubkey> + Debug,
     {
         {
             let locked_removed_bank_ids = self.removed_bank_ids.lock().unwrap();
@@ -1103,7 +1103,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport + std::marker::Sync + std::mark
         range: Option<R>,
     ) where
         F: FnMut(&Pubkey, (&T, Slot)),
-        R: RangeBounds<Pubkey>,
+        R: RangeBounds<Pubkey> + Debug,
     {
         self.do_scan_accounts(metric_name, ancestors, func, range, None);
     }
@@ -1120,9 +1120,9 @@ impl<T: 'static + Clone + IsCached + ZeroLamport + std::marker::Sync + std::mark
         max_root: Option<Slot>,
     ) where
         F: FnMut(&Pubkey, (&T, Slot)),
-        R: RangeBounds<Pubkey>,
+        R: RangeBounds<Pubkey> + Debug,
     {
-        error!("do_scan_accounts, {}, {}, {}", file!(), line!(), metric_name);
+        error!("do_scan_accounts, {}, {}, {}, range: {:?}", file!(), line!(), metric_name, range);
 
         // TODO: expand to use mint index to find the `pubkey_list` below more efficiently
         // instead of scanning the entire range
@@ -1136,6 +1136,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport + std::marker::Sync + std::mark
             iterator_timer.stop();
             iterator_elapsed += iterator_timer.as_us();
             for pubkey in pubkey_list {
+                error!("pubkey: {}", pubkey);
                 num_keys_iterated += 1;
                 let mut read_lock_timer = Measure::start("read_lock");
                 let list_r = self.get(&pubkey, Some(ancestors), max_root);
@@ -1330,7 +1331,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport + std::marker::Sync + std::mark
         func: F,
     ) where
         F: FnMut(&Pubkey, (&T, Slot)),
-        R: RangeBounds<Pubkey>,
+        R: RangeBounds<Pubkey> + Debug,
     {
         // Only the rent logic should be calling this, which doesn't need the safety checks
         self.do_unchecked_scan_accounts(metric_name, ancestors, func, Some(range));
