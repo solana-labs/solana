@@ -520,13 +520,14 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
                 }
             }
             drop(read_lock);
-            error!("mid flush: {}", ix);
+            error!("mid flush: {}, {}", ix, line!());
 
             let mut wc = &mut self.write_cache[ix].write().unwrap(); // maybe get lock for each item?
             if !bg {
                 for (k, v) in wc.drain() {
                     let mut instance = v.instance.read().unwrap();
                     if instance.dirty {
+                        error!("mid flush: {}, {}", ix, line!());
                         self.update_no_cache(
                             &k,
                             |_current| {
@@ -535,14 +536,17 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
                             None,
                             true,
                         );
+                        error!("mid flush: {}, {}", ix, line!());
                     }
                 }
             } else {
                 for k in keys_to_flush.into_iter() {
                     match wc.entry(k) {
                         HashMapEntry::Occupied(occupied) => {
+                            error!("mid flush: {}, {}", ix, line!());
                             let mut instance = occupied.get().instance.write().unwrap();
                             if instance.dirty {
+                                error!("mid flush: {}, {}", ix, line!());
                                 self.update_no_cache(
                                     occupied.key(),
                                     |_current| {
@@ -554,6 +558,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
                                     None,
                                     true,
                                 );
+                                error!("mid flush: {}, {}", ix, line!());
                                 instance.age = next_age; // keep newly updated stuff around
                                 instance.dirty = false;
                                 flushed += 1;
@@ -565,7 +570,9 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
                 }
                 for k in delete_keys.iter() {
                     if let Some(item) = wc.remove(k) {
+                        error!("mid flush: {}, {}", ix, line!());
                         let instance = item.instance.write().unwrap();
+                        error!("mid flush: {}, {}", ix, line!());
                         // if someone else dirtied it or aged it newer, so re-insert it into the cache
                         if instance.dirty || (do_age && instance.age != age_comp) {
                             drop(instance);
