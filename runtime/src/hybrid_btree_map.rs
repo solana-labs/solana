@@ -631,6 +631,11 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
         reclaims: &mut SlotList<V>,
         //reclaims_must_be_empty: bool,
     ) {
+        let k = Pubkey::from_str("5wuJB1pg8nQE6tHcntjSAUfhrVZi7J2Cpgqx26ee95Vo").unwrap();
+        if key == k {
+            error!("{} {} upsert {}, {:?}", file!(), line!(), key, new_value);
+        }
+
         let ix = self.bucket_ix(&key);
         let mut m1 = Measure::start("");
         let mut wc = &mut self.write_cache[ix].write().unwrap();
@@ -809,6 +814,11 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
     where
         F: Fn(Option<(&[SlotT<V>], u64)>) -> Option<(Vec<SlotT<V>>, u64)>,
     {
+        let k = Pubkey::from_str("5wuJB1pg8nQE6tHcntjSAUfhrVZi7J2Cpgqx26ee95Vo").unwrap();
+        if key == &k {
+            error!("{} {} update {}", file!(), line!(), key);
+        }
+
         if current_value.is_none() {
             // we are an insert
             self.inserts.fetch_add(1, Ordering::Relaxed);
@@ -850,6 +860,10 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
     }
 
     pub fn get(&self, key: &Pubkey) -> Option<(u64, Vec<SlotT<V>>)> {
+        let k = Pubkey::from_str("5wuJB1pg8nQE6tHcntjSAUfhrVZi7J2Cpgqx26ee95Vo").unwrap();
+        if key == &k {
+            error!("{} {} get {}", file!(), line!(), key);
+        }
         let ix = self.bucket_ix(key);
         {
             let mut m1 = Measure::start("");
