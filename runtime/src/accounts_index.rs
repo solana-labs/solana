@@ -141,19 +141,19 @@ impl<T: Clone + std::fmt::Debug> AccountMapEntry<T> {
     }
 }
 
-pub enum AccountIndexGetResult<'a, T: 'static + Clone + std::fmt::Debug> {
+pub enum AccountIndexGetResult<'a, T: 'static + Clone + IsCached + std::fmt::Debug> {
     Found(ReadAccountMapEntry<'a, T>, usize),
     NotFoundOnFork,
     Missing(AccountMapsReadLock<'a, T>),
 }
 
-pub enum AccountIndexGetResultInternal<'a, T: 'static + Clone + std::fmt::Debug> {
+pub enum AccountIndexGetResultInternal<'a, T: 'static + Clone + IsCached + std::fmt::Debug> {
     Found(ReadAccountMapEntry<'a, T>),
     Missing(AccountMapsReadLock<'a, T>),
 }
 
 #[self_referencing]
-pub struct ReadAccountMapEntry<'a, T: 'static + Clone + std::fmt::Debug> {
+pub struct ReadAccountMapEntry<'a, T: 'static + Clone + IsCached + std::fmt::Debug> {
     lock: AccountMapsReadLock<'a, T>,
     pubkey: &'a Pubkey,
     #[borrows(lock, pubkey)]
@@ -161,7 +161,7 @@ pub struct ReadAccountMapEntry<'a, T: 'static + Clone + std::fmt::Debug> {
     owned_entry: Option<AccountMapEntry<T>>, // used to be: &'this 
 }
 
-impl<'a, T: Clone + std::fmt::Debug + Guts> ReadAccountMapEntry<'a, T> {
+impl<'a, T: Clone + std::fmt::Debug + IsCached + Guts> ReadAccountMapEntry<'a, T> {
     pub fn new_with_lock(
         pubkey: &'a Pubkey,
         lock: AccountMapsReadLock<'a, T>,
@@ -199,7 +199,7 @@ impl<'a, T: Clone + std::fmt::Debug + Guts> ReadAccountMapEntry<'a, T> {
 }
 
 #[self_referencing]
-pub struct WriteAccountMapEntry<'a, 'b: 'a, T: 'static + Clone + std::fmt::Debug + Guts> {
+pub struct WriteAccountMapEntry<'a, 'b: 'a, T: 'static + Clone + IsCached + std::fmt::Debug + Guts> {
     lock: AccountMapsWriteLock<'b, T>,
     pubkey: &'a Pubkey,
     #[borrows(mut lock, pubkey)]
@@ -210,7 +210,7 @@ pub struct WriteAccountMapEntry<'a, 'b: 'a, T: 'static + Clone + std::fmt::Debug
     ),
 }
 
-impl<'a, 'b: 'a, T: 'static + Clone + IsCached + std::fmt::Debug + Guts> WriteAccountMapEntry<'a, 'b, T> {
+impl<'a, 'b: 'a, T: 'static + Clone + IsCached + std::fmt::Debug + IsCached + Guts> WriteAccountMapEntry<'a, 'b, T> {
     pub fn new_with_lock(
         pubkey: &'a Pubkey,
         lock: AccountMapsWriteLock<'b, T>,
@@ -641,7 +641,7 @@ pub struct AccountsIndexRootsStats {
     pub unrooted_cleaned_count: usize,
 }
 
-pub struct AccountsIndexIterator<'a, T: 'static + Clone + std::fmt::Debug + Guts> {
+pub struct AccountsIndexIterator<'a, T: 'static + Clone + IsCached + std::fmt::Debug + Guts> {
     account_maps: &'a LockMapTypeSlice<T>,
     start_bound: Bound<Pubkey>,
     end_bound: Bound<Pubkey>,
@@ -650,7 +650,7 @@ pub struct AccountsIndexIterator<'a, T: 'static + Clone + std::fmt::Debug + Guts
 
 use crate::hybrid_btree_map::use_rox;
 
-impl<'a, T: Clone + std::fmt::Debug + Guts> AccountsIndexIterator<'a, T> {
+impl<'a, T: Clone + std::fmt::Debug + IsCached + Guts> AccountsIndexIterator<'a, T> {
     fn clone_bound(bound: Bound<&Pubkey>) -> Bound<Pubkey> {
         match bound {
             Unbounded => Unbounded,
@@ -691,7 +691,7 @@ impl<'a, T: Clone + std::fmt::Debug + Guts> AccountsIndexIterator<'a, T> {
     }
 }
 
-impl<'a, T: 'static + Clone + std::fmt::Debug + Guts> Iterator for AccountsIndexIterator<'a, T> {
+impl<'a, T: 'static + Clone + std::fmt::Debug + IsCached + Guts> Iterator for AccountsIndexIterator<'a, T> {
     type Item = Vec<Pubkey>;
     fn next(&mut self) -> Option<Self::Item> {
         if self.is_finished {
@@ -758,7 +758,7 @@ impl ScanSlotTracker {
 }
 
 #[derive(Debug)]
-pub struct AccountsIndex<T: 'static + Clone + std::fmt::Debug + Guts> {
+pub struct AccountsIndex<T: 'static + Clone + std::fmt::Debug + IsCached + Guts> {
     pub account_maps: LockMapType<T>,
     program_id_index: SecondaryIndex<DashMapSecondaryIndexEntry>,
     spl_token_mint_index: SecondaryIndex<DashMapSecondaryIndexEntry>,
@@ -1929,6 +1929,44 @@ pub mod tests {
     use solana_sdk::signature::{Keypair, Signer};
     use std::ops::RangeInclusive;
 
+    impl Guts for f64 {
+        fn get_info(&self) -> AccountInfo {
+            panic!("");
+            AccountInfo::default()
+        }
+        fn get_copy(info: &AccountInfo) -> Self {
+            panic!("");
+            0.0
+        }
+        fn get_info2(info: &SlotList<Self>) -> SlotList<AccountInfo> {
+            panic!("");
+    vec![]
+        }
+        fn get_copy2(info: &SlotList<AccountInfo>) -> SlotList<Self> {
+            panic!("");
+            vec![]
+        }
+    }
+    
+    impl Guts for i8 {
+        fn get_info(&self) -> AccountInfo {
+            panic!("");
+            AccountInfo::default()
+        }
+        fn get_copy(info: &AccountInfo) -> Self {
+            panic!("");
+            0
+        }
+        fn get_info2(info: &SlotList<Self>) -> SlotList<AccountInfo> {
+            panic!("");
+    vec![]
+        }
+        fn get_copy2(info: &SlotList<AccountInfo>) -> SlotList<Self> {
+            panic!("");
+            vec![]
+        }
+    }
+        
     pub enum SecondaryIndexTypes<'a> {
         RwLock(&'a SecondaryIndex<RwLockSecondaryIndexEntry>),
         DashMap(&'a SecondaryIndex<DashMapSecondaryIndexEntry>),
