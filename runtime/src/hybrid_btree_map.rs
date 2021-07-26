@@ -389,6 +389,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
     }
 
     pub fn bg_flusher(&self, exit: Arc<AtomicBool>) {
+        return;
         let mut found_one = false;
         let mut last = Instant::now();
         let mut aging = Instant::now();

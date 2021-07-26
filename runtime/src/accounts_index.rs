@@ -3544,7 +3544,8 @@ pub mod tests {
     }
 
     #[test]
-    fn test_purge() {
+    fn test_purge33() {
+        solana_logger::setup();
         let key = Keypair::new();
         let index = AccountsIndex::<u64>::default();
         let mut gc = Vec::new();
