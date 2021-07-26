@@ -4,11 +4,7 @@ use serial_test::serial;
 
 use solana_core::validator::ValidatorConfig;
 
-use solana_gossip::{
-    cluster_info::{Node, VALIDATOR_PORT_RANGE},
-    cluster_info::ClusterInfo,
-    contact_info::ContactInfo,
-};
+use solana_gossip::{cluster_info::Node, contact_info::ContactInfo};
 
 use solana_local_cluster::{
     cluster::Cluster,
@@ -22,15 +18,17 @@ use solana_runtime::{
     snapshot_utils::{self, ArchiveFormat},
 };
 use solana_sdk::{
-    client::SyncClient, clock::Slot, commitment_config::CommitmentConfig,
-    epoch_schedule::MINIMUM_SLOTS_PER_EPOCH, hash::Hash,
+    client::SyncClient,
+    clock::Slot,
+    commitment_config::CommitmentConfig,
+    epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
+    hash::Hash,
     signature::{Keypair, Signer},
 };
 
 use std::{
-    net::{IpAddr, SocketAddr, UdpSocket},
+    net::SocketAddr,
     path::{Path, PathBuf},
-    sync::Arc,
     thread::sleep,
     time::Duration,
 };
@@ -173,9 +171,12 @@ fn test_replica_bootstrap() {
 
     let leader_snapshot_test_config =
         setup_snapshot_validator_config(snapshot_interval_slots, num_account_paths);
-    let validator_snapshot_test_config =
-        setup_snapshot_validator_config(snapshot_interval_slots, num_account_paths);
 
+    info!(
+        "Snapshot config for the leader: accounts: {:?}, snapshot: {:?}",
+        leader_snapshot_test_config.account_storage_dirs,
+        leader_snapshot_test_config.snapshot_archives_dir
+    );
     let stake = 10_000;
     let mut config = ClusterConfig {
         node_stakes: vec![stake],
@@ -187,12 +188,12 @@ fn test_replica_bootstrap() {
         ..ClusterConfig::default()
     };
 
-    let mut cluster = LocalCluster::new(&mut config);
+    let cluster = LocalCluster::new(&mut config);
 
     assert_eq!(cluster.validators.len(), 1);
-    let contact_info = &cluster.validators.values().next().unwrap().info.contact_info;
+    let contact_info = &cluster.entry_point_info;
 
-    println!("Contact info: {:?}", contact_info);
+    info!("Contact info: {:?}", contact_info);
 
     // Get slot after which this was generated
     let snapshot_package_output_path = &leader_snapshot_test_config
@@ -206,7 +207,6 @@ fn test_replica_bootstrap() {
         wait_for_next_snapshot(&cluster, snapshot_package_output_path);
     info!("found: {:?}", archive_filename);
 
-    let expected_shred_version = contact_info.shred_version;
     let identity_keypair = Keypair::new();
 
     // now bring up a replica to talk to it.
@@ -231,7 +231,7 @@ fn test_replica_bootstrap() {
 
     info!("The peer id: {:?}", &contact_info.id);
     let entry_points = vec![ContactInfo::new_gossip_entry_point(&contact_info.gossip)];
-    let (cluster_info, rpc_contact_info, snapshot_info) = replica_util::get_rpc_peer_info(
+    let (cluster_info, _rpc_contact_info, _snapshot_info) = replica_util::get_rpc_peer_info(
         identity_keypair,
         &entry_points,
         &ledger_path,

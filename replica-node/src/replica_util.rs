@@ -219,7 +219,10 @@ fn start_gossip_node(
         &gossip_exit_flag,
     );
     info!("Started gossip node");
-    info!("The cluster contact info:\n{}", cluster_info.contact_info_trace());
+    info!(
+        "The cluster contact info:\n{}",
+        cluster_info.contact_info_trace()
+    );
 
     (cluster_info, gossip_exit_flag, gossip_service)
 }
