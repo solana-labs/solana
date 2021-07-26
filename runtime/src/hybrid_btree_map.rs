@@ -480,15 +480,15 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
         }
     }
     pub fn flush(&self, ix: usize, bg: bool, age: Option<u8>) -> bool {
-        error!("start flusha: {}", ix);
+        //error!("start flusha: {}", ix);
         let read_lock = self.write_cache[ix].read().unwrap();
-        error!("start flusha: {}", ix);
+        //error!("start flusha: {}", ix);
         let mut had_dirty = false;
         if read_lock.is_empty() {
             return false;
         }
 
-        error!("start flush: {}", ix);
+        //error!("start flush: {}", ix);
         let (age_comp, do_age, next_age) = age
             .map(|age| (age, true, Self::add_age(age, default_age)))
             .unwrap_or((0, false, 0));
@@ -521,84 +521,82 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
                     }
                 }
             }
-            drop(read_lock);
-            error!("mid flush: {}, {}", ix, line!());
-
-            let mut wc = &mut self.write_cache[ix].write().unwrap(); // maybe get lock for each item?
-            if !bg {
-                for (k, v) in wc.drain() {
-                    let mut instance = v.instance.read().unwrap();
-                    if instance.dirty {
-                        error!("mid flush: {}, {}", ix, line!());
-                        self.update_no_cache(
-                            &k,
-                            |_current| {
-                                Some((instance.data.slot_list.clone(), instance.data.ref_count))
-                            },
-                            None,
-                            true,
-                        );
-                        error!("mid flush: {}, {}", ix, line!());
-                    }
-                }
-            } else {
-                for k in keys_to_flush.into_iter() {
-                    match wc.entry(k) {
-                        HashMapEntry::Occupied(occupied) => {
-                            error!("mid flush: {}, {}", ix, line!());
-                            let mut instance = occupied.get().instance.write().unwrap();
-                            if instance.dirty {
-                                error!("mid flush: {}, {}", ix, line!());
-                                self.update_no_cache(
-                                    occupied.key(),
-                                    |_current| {
-                                        Some((
-                                            instance.data.slot_list.clone(),
-                                            instance.data.ref_count,
-                                        ))
-                                    },
-                                    None,
-                                    true,
-                                );
-                                error!("mid flush: {}, {}", ix, line!());
-                                instance.age = next_age; // keep newly updated stuff around
-                                instance.dirty = false;
-                                flushed += 1;
-                            }
-                        }
-                        HashMapEntry::Vacant(vacant) => { // do nothing, item is no longer in cache somehow, so obviously not dirty
-                        }
-                    }
-                }
-                for k in delete_keys.iter() {
-                    if let Some(item) = wc.remove(k) {
-                        error!("mid flush: {}, {}", ix, line!());
-                        let instance = item.instance.write().unwrap();
-                        error!("mid flush: {}, {}", ix, line!());
-                        // if someone else dirtied it or aged it newer, so re-insert it into the cache
-                        if instance.dirty || (do_age && instance.age != age_comp) {
-                            drop(instance);
-                            wc.insert(*k, item);
-                        }
-                        // otherwise, we were ok to delete that key from the cache
-                    }
-                }
-            }
-            drop(wc);
-            if flushed != 0 {
-                self.write_cache_flushes
-                    .fetch_add(flushed as u64, Ordering::Relaxed);
-            }
-            if get_purges != 0 {
-                self.get_purges
-                    .fetch_add(get_purges as u64, Ordering::Relaxed);
-            }
-            error!("end flush: {}", ix);
-
-            had_dirty
-        } else {
-            false
         }
+        drop(read_lock);
+        //error!("mid flush: {}, {}", ix, line!());
+
+        let mut wc = &mut self.write_cache[ix].write().unwrap(); // maybe get lock for each item?
+        if !bg {
+            for (k, v) in wc.drain() {
+                let mut instance = v.instance.read().unwrap();
+                if instance.dirty {
+                    //error!("mid flush: {}, {}", ix, line!());
+                    self.update_no_cache(
+                        &k,
+                        |_current| {
+                            Some((instance.data.slot_list.clone(), instance.data.ref_count))
+                        },
+                        None,
+                        true,
+                    );
+                    //error!("mid flush: {}, {}", ix, line!());
+                }
+            }
+        } else {
+            for k in keys_to_flush.into_iter() {
+                match wc.entry(k) {
+                    HashMapEntry::Occupied(occupied) => {
+                        //error!("mid flush: {}, {}", ix, line!());
+                        let mut instance = occupied.get().instance.write().unwrap();
+                        if instance.dirty {
+                            //error!("mid flush: {}, {}", ix, line!());
+                            self.update_no_cache(
+                                occupied.key(),
+                                |_current| {
+                                    Some((
+                                        instance.data.slot_list.clone(),
+                                        instance.data.ref_count,
+                                    ))
+                                },
+                                None,
+                                true,
+                            );
+                            //error!("mid flush: {}, {}", ix, line!());
+                            instance.age = next_age; // keep newly updated stuff around
+                            instance.dirty = false;
+                            flushed += 1;
+                        }
+                    }
+                    HashMapEntry::Vacant(vacant) => { // do nothing, item is no longer in cache somehow, so obviously not dirty
+                    }
+                }
+            }
+            for k in delete_keys.iter() {
+                if let Some(item) = wc.remove(k) {
+                    //error!("mid flush: {}, {}", ix, line!());
+                    let instance = item.instance.write().unwrap();
+                    //error!("mid flush: {}, {}", ix, line!());
+                    // if someone else dirtied it or aged it newer, so re-insert it into the cache
+                    if instance.dirty || (do_age && instance.age != age_comp) {
+                        drop(instance);
+                        wc.insert(*k, item);
+                    }
+                    // otherwise, we were ok to delete that key from the cache
+                }
+            }
+        }
+        drop(wc);
+        if flushed != 0 {
+            self.write_cache_flushes
+                .fetch_add(flushed as u64, Ordering::Relaxed);
+        }
+        if get_purges != 0 {
+            self.get_purges
+                .fetch_add(get_purges as u64, Ordering::Relaxed);
+        }
+        //error!("end flush: {}", ix);
+
+        had_dirty
     }
     pub fn bucket_len(&self, ix: usize) -> u64 {
         self.disk.bucket_len(ix)
