@@ -1,5 +1,5 @@
 use crate::accounts_index::AccountMapEntry;
-use crate::accounts_index::{AccountMapEntrySerialize, RefCount, SlotList, BINS};
+use crate::accounts_index::{AccountMapEntrySerialize, IsCached, RefCount, SlotList, BINS};
 use crate::pubkey_bins::PubkeyBinCalculator16;
 use log::*;
 use solana_bucket_map::bucket_map::BucketMap;
@@ -110,7 +110,7 @@ pub trait Rox: Debug + Send + Sync {
     fn values(&self, range: Option<&PubkeyRange>) -> Option<Vec<AccountMapEntrySerialize>>;
 }
 use crate::accounts_db::AccountInfo;
-pub trait Guts: Sized {
+pub trait Guts: Sized + IsCached {
     fn get_info(&self) -> AccountInfo;
     fn get_info2(info: &SlotList<Self>) -> SlotList<AccountInfo>;
     fn get_copy(info: &AccountInfo) -> Self;
@@ -151,44 +151,7 @@ vec![]
     }
 }
 
-impl Guts for f64 {
-    fn get_info(&self) -> AccountInfo {
-        panic!("");
-        AccountInfo::default()
-    }
-    fn get_copy(info: &AccountInfo) -> Self {
-        panic!("");
-        0.0
-    }
-    fn get_info2(info: &SlotList<Self>) -> SlotList<AccountInfo> {
-        panic!("");
-vec![]
-    }
-    fn get_copy2(info: &SlotList<AccountInfo>) -> SlotList<Self> {
-        panic!("");
-        vec![]
-    }
-}
-
 impl Guts for u64 {
-    fn get_info(&self) -> AccountInfo {
-        panic!("");
-        AccountInfo::default()
-    }
-    fn get_copy(info: &AccountInfo) -> Self {
-        panic!("");
-        0
-    }
-    fn get_info2(info: &SlotList<Self>) -> SlotList<AccountInfo> {
-        panic!("");
-vec![]
-    }
-    fn get_copy2(info: &SlotList<AccountInfo>) -> SlotList<Self> {
-        panic!("");
-        vec![]
-    }
-}
-impl Guts for i8 {
     fn get_info(&self) -> AccountInfo {
         panic!("");
         AccountInfo::default()
@@ -364,6 +327,7 @@ pub struct WriteCacheEntry<V> {
     pub data: V2<V>,
     pub age: u8,
     pub dirty: bool,
+    pub insert: bool,
 }
 
 #[derive(Debug)]
@@ -394,7 +358,7 @@ pub struct BucketMapWriteHolder<V> {
     pub unified_backing: bool,
 }
 
-impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
+impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
     pub fn set_account_index_db(&self, mut db: Arc<Box<dyn Rox>>) {
         if use_trait {
             assert!(use_rox || use_sled);
@@ -647,7 +611,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
                     // stick this in the write cache and flush it later
                     let ix = self.bucket_ix(key);
                     let wc = &mut self.write_cache[ix].write().unwrap();
-                    wc.insert(key.clone(), Self::allocate(&result.0, result.1, true));
+                    wc.insert(key.clone(), Self::allocate(&result.0, result.1, true, true));
                 } else {
                     panic!("should have returned a value from updatefn");
                 }
@@ -678,6 +642,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
         slot_list: &SlotList<V>,
         ref_count: RefCount,
         dirty: bool,
+        insert: bool,
     ) -> WriteCacheEntryArc<V> {
         WriteCacheEntryArc {
             instance: RwLock::new(WriteCacheEntry {
@@ -687,6 +652,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
                 },
                 dirty: dirty,     //AtomicBool::new(dirty),
                 age: default_age, //AtomicU8::new(default_age),
+                insert,
             }),
         }
     }
@@ -706,10 +672,10 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
             match wc.entry(key.clone()) {
                 HashMapEntry::Occupied(mut occupied) => {
                     let mut gm = occupied.get_mut();
-                    *gm = Self::allocate(&result.0, result.1, true);
+                    *gm = Self::allocate(&result.0, result.1, true, false);
                 }
                 HashMapEntry::Vacant(vacant) => {
-                    vacant.insert(Self::allocate(&result.0, result.1, true));
+                    vacant.insert(Self::allocate(&result.0, result.1, true, true));
                     self.wait.notify_all(); // we have put something in the write cache that needs to be flushed sometime
                 }
             }
@@ -804,7 +770,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
                 HashMapEntry::Vacant(vacant) => {
                     let r = self.get_no_cache(key);
                     r.as_ref().and_then(|loaded| {
-                        vacant.insert(Self::allocate(&loaded.1, loaded.0, false));
+                        vacant.insert(Self::allocate(&loaded.1, loaded.0, false, false));
                         Some(())
                     });
                     m1.stop();
@@ -962,7 +928,7 @@ impl<V: 'static + Clone + Debug + Guts> BucketMapWriteHolder<V> {
 }
 
 #[derive(Debug)]
-pub struct HybridBTreeMap<V: 'static + Clone + Debug> {
+pub struct HybridBTreeMap<V: 'static + Clone + IsCached + Debug> {
     in_memory: BTreeMap<K, V2<V>>,
     disk: Arc<BucketMapWriteHolder<V>>,
     bin_index: usize,
@@ -1013,7 +979,7 @@ impl<'a, K: 'a, V: 'a> Iterator for HybridBTreeMap<'a, V> {
 }
 */
 
-pub enum HybridEntry<'a, V: 'static + Clone + Debug + Guts> {
+pub enum HybridEntry<'a, V: 'static + Clone + IsCached + Debug + Guts> {
     /// A vacant entry.
     Vacant(HybridVacantEntry<'a, V>),
 
@@ -1060,17 +1026,17 @@ impl<V: Clone + std::fmt::Debug> Iterator for Values<V> {
     }
 }
 
-pub struct HybridOccupiedEntry<'a, V: 'static + Clone + Debug + Guts> {
+pub struct HybridOccupiedEntry<'a, V: 'static + Clone + IsCached + Debug + Guts> {
     pubkey: Pubkey,
     entry: V2<V>,
     map: &'a HybridBTreeMap<V>,
 }
-pub struct HybridVacantEntry<'a, V: 'static + Clone + Debug + Guts> {
+pub struct HybridVacantEntry<'a, V: 'static + Clone + IsCached + Debug + Guts> {
     pubkey: Pubkey,
     map: &'a HybridBTreeMap<V>,
 }
 
-impl<'a, V: 'a + Clone + Debug + Guts> HybridOccupiedEntry<'a, V> {
+impl<'a, V: 'a + Clone + IsCached + Debug + Guts> HybridOccupiedEntry<'a, V> {
     pub fn get(&self) -> &V2<V> {
         &self.entry
     }
@@ -1119,7 +1085,7 @@ impl<'a, V: 'a + Clone + Debug + Guts> HybridOccupiedEntry<'a, V> {
     }
 }
 
-impl<'a, V: 'a + Clone + Debug + Guts> HybridVacantEntry<'a, V> {
+impl<'a, V: 'a + Clone + Debug + IsCached + Guts> HybridVacantEntry<'a, V> {
     pub fn insert(self, value: V2<V>) {
         // -> &'a mut V2<V> {
         /*
@@ -1140,7 +1106,7 @@ impl<'a, V: 'a + Clone + Debug + Guts> HybridVacantEntry<'a, V> {
     }
 }
 
-impl<V: 'static + Clone + Debug + Guts> HybridBTreeMap<V> {
+impl<V: 'static + Clone + Debug + IsCached + Guts> HybridBTreeMap<V> {
     /// Creates an empty `BTreeMap`.
     pub fn new2(
         bucket_map: &Arc<BucketMapWriteHolder<V>>,
