@@ -1296,7 +1296,7 @@ impl<V: 'static + Clone + Debug + IsCached + Guts> HybridBTreeMap<V> {
                                                                                   // 15 hopefully avoids too many files open problem
                                                                                   //buckets = std::cmp::min(buckets + 11, 15); // max # that works with open file handles and such
                                                                                   //buckets =
-        error!("creating: {} for {}", buckets, bucket_bins);
+        //error!("creating: {} for {}", buckets, bucket_bins);
         Arc::new(BucketMapWriteHolder::new(BucketMap::new_buckets(buckets)))
     }
 
