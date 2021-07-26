@@ -1143,7 +1143,7 @@ impl<
             iterator_timer.stop();
             iterator_elapsed += iterator_timer.as_us();
             for pubkey in pubkey_list {
-                error!("pubkey: {}", pubkey);
+                //error!("pubkey: {}", pubkey);
                 num_keys_iterated += 1;
                 let mut read_lock_timer = Measure::start("read_lock");
                 let list_r = self.get(&pubkey, Some(ancestors), max_root);
@@ -1152,7 +1152,7 @@ impl<
                 let result;
                 if let AccountIndexGetResult::Found(locked_entry, index) = &list_r {
                     let slot_list = locked_entry.slot_list();
-                    error!("list: {:?}", slot_list);
+                    //error!("list: {:?}", slot_list);
                     result = Some(slot_list[*index].clone())
                 } else {
                     continue;

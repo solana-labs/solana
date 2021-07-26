@@ -979,7 +979,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
         {
             let wc = &mut self.write_cache[ix].write().unwrap();
             wc.remove(key);
-            error!("remove: {}", key);            
+            //error!("remove: {}", key);            
         }
         self.disk.delete_key(key)
     }
