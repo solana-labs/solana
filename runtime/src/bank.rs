@@ -4799,7 +4799,7 @@ impl Bank {
         info!("cleaning..");
         let mut clean_time = Measure::start("clean");
         if self.slot() > 0 {
-            self.clean_accounts(true, true);
+            //self.clean_accounts(true, true);
         }
         clean_time.stop();
 
