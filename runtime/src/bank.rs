@@ -4902,7 +4902,7 @@ impl Bank {
         info!("shrinking..");
         let mut shrink_all_slots_time = Measure::start("shrink_all_slots");
         if self.slot() > 0 {
-            self.shrink_all_slots(true);
+            //self.shrink_all_slots(true);
         }
         shrink_all_slots_time.stop();
 
