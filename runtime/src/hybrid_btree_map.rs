@@ -403,7 +403,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
                 // time of 1 slot
                 current_age = Self::add_age(current_age, 1);
                 self.current_age.store(current_age, Ordering::Relaxed);
-                age = Some(current_age);
+                //age = Some(current_age);
                 aging = Instant::now();
             }
             if exit.load(Ordering::Relaxed) {
