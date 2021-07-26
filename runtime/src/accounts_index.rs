@@ -1216,7 +1216,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport + std::marker::Sync + std::mark
         w_account_maps: AccountMapsWriteLock<'a, T>,
         mut new_entry: AccountMapEntry<T>,
         reclaims: &mut SlotList<T>,
-    ) -> (bool, AccountMapsWriteLock<'a, T>) {
+    ) {
         let allow_vacant = true;
         let mut result =
             WriteAccountMapEntry::new_with_lock(&pubkey, w_account_maps, allow_vacant).unwrap();
@@ -1224,10 +1224,9 @@ impl<T: 'static + Clone + IsCached + ZeroLamport + std::marker::Sync + std::mark
         if result.is_occupied() {
             let (slot, account_info) = new_entry.slot_list.remove(0);
             result.update(slot, account_info, reclaims);
-            (false, result.destroy())
         } else {
             // entry did not exist
-            (true, result.insert(new_entry))
+            let _ = result.insert(new_entry);
         }
     }
 
@@ -1634,26 +1633,22 @@ impl<T: 'static + Clone + IsCached + ZeroLamport + std::marker::Sync + std::mark
         account_indexes: &AccountSecondaryIndexes,
         account_info: T,
         reclaims: &mut SlotList<T>,
-    ) -> bool {
-        let is_newly_inserted = {
-            // We don't atomically update both primary index and secondary index together.
-            // This certainly creates small time window with inconsistent state across the two indexes.
-            // However, this is acceptable because:
-            //
-            //  - A strict consistent view at any given moment of time is not necessary, because the only
-            //  use case for the secondary index is `scan`, and `scans` are only supported/require consistency
-            //  on frozen banks, and this inconsistency is only possible on working banks.
-            //
-            //  - The secondary index is never consulted as primary source of truth for gets/stores.
-            //  So, what the accounts_index sees alone is sufficient as a source of truth for other non-scan
-            //  account operations.
-            let new_item = WriteAccountMapEntry::new_entry_after_update(slot, account_info);
-            let w_account_maps = self.get_account_maps_write_lock(pubkey);
-            self.upsert_with_lock(*pubkey, w_account_maps, new_item, reclaims)
-        }
-        .0;
+    ) {
+        // We don't atomically update both primary index and secondary index together.
+        // This certainly creates small time window with inconsistent state across the two indexes.
+        // However, this is acceptable because:
+        //
+        //  - A strict consistent view at any given moment of time is not necessary, because the only
+        //  use case for the secondary index is `scan`, and `scans` are only supported/require consistency
+        //  on frozen banks, and this inconsistency is only possible on working banks.
+        //
+        //  - The secondary index is never consulted as primary source of truth for gets/stores.
+        //  So, what the accounts_index sees alone is sufficient as a source of truth for other non-scan
+        //  account operations.
+        let new_item = WriteAccountMapEntry::new_entry_after_update(slot, account_info);
+        let w_account_maps = self.get_account_maps_write_lock(pubkey);
+        self.upsert_with_lock(*pubkey, w_account_maps, new_item, reclaims);
         self.update_secondary_indexes(pubkey, account_owner, account_data, account_indexes);
-        is_newly_inserted
     }
 
     pub fn unref_from_storage(&self, pubkey: &Pubkey) {
@@ -2990,13 +2985,14 @@ pub mod tests {
 
         let new_entry = WriteAccountMapEntry::new_entry_after_update(slot, account_info);
         let w_account_maps = index.get_account_maps_write_lock(&key.pubkey());
+        assert_eq!(0, account_maps_len_expensive(&index));
         let write = index.upsert_with_lock(
             key.pubkey(),
             w_account_maps,
             new_entry,
             &mut SlotList::default(),
         );
-        assert!(write.0);
+        assert_eq!(1, account_maps_len_expensive(&index));
         drop(write);
 
         let mut ancestors = Ancestors::default();
@@ -3512,31 +3508,53 @@ pub mod tests {
         assert!(found_key);
     }
 
+    fn account_maps_len_expensive<
+        T: 'static
+            + Sync
+            + Send
+            + Clone
+            + IsCached
+            + ZeroLamport
+            + std::cmp::PartialEq
+            + std::fmt::Debug,
+    >(
+        index: &AccountsIndex<T>,
+    ) -> usize {
+        index
+            .account_maps
+            .iter()
+            .map(|bin_map| bin_map.read().unwrap().len())
+            .sum()
+    }
+
     #[test]
     fn test_purge() {
         let key = Keypair::new();
         let index = AccountsIndex::<u64>::default();
         let mut gc = Vec::new();
         let key = &key.pubkey();
-        assert!(index.upsert(
+        assert_eq!(0, account_maps_len_expensive(&index));
+        index.upsert(
             1,
             key,
             &Pubkey::default(),
             &[],
             &AccountSecondaryIndexes::default(),
             12,
-            &mut gc
-        ));
+            &mut gc,
+        );
+        assert_eq!(1, account_maps_len_expensive(&index));
 
-        assert!(!index.upsert(
+        index.upsert(
             1,
             key,
             &Pubkey::default(),
             &[],
             &AccountSecondaryIndexes::default(),
             10,
-            &mut gc
-        ));
+            &mut gc,
+        );
+        assert_eq!(1, account_maps_len_expensive(&index));
 
         let purges = index.purge_roots(key);
         assert_eq!(purges, (vec![], false));
@@ -3545,15 +3563,17 @@ pub mod tests {
         let purges = index.purge_roots(key);
         assert_eq!(purges, (vec![(1, 10)], true));
 
-        assert!(!index.upsert(
+        assert_eq!(1, account_maps_len_expensive(&index));
+        index.upsert(
             1,
             key,
             &Pubkey::default(),
             &[],
             &AccountSecondaryIndexes::default(),
             9,
-            &mut gc
-        ));
+            &mut gc,
+        );
+        assert_eq!(1, account_maps_len_expensive(&index));
     }
 
     #[test]
