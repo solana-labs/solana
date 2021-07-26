@@ -2306,12 +2306,18 @@ impl Bank {
         // committed before this write lock can be obtained here.
         let mut hash = self.hash.write().unwrap();
         if *hash == Hash::default() {
+            error!("{} {}", file!(), line!());
             // finish up any deferred changes to account state
             self.collect_rent_eagerly();
+            error!("{} {}", file!(), line!());
             self.collect_fees();
+            error!("{} {}", file!(), line!());
             self.distribute_rent();
+            error!("{} {}", file!(), line!());
             self.update_slot_history();
+            error!("{} {}", file!(), line!());
             self.run_incinerator();
+            error!("{} {}", file!(), line!());
 
             // freeze is a one-way trip, idempotent
             self.freeze_started.store(true, Relaxed);
