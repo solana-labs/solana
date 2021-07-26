@@ -8813,6 +8813,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_bank_get_account_modified_since_parent_with_fixed_root() {
+        solana_logger::setup();
         let pubkey = solana_sdk::pubkey::new_rand();
 
         let (genesis_config, mint_keypair) = create_genesis_config(500);
