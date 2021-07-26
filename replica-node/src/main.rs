@@ -165,9 +165,8 @@ pub fn main() {
     let bind_address = solana_net_utils::parse_host(matches.value_of("bind_address").unwrap())
         .expect("invalid bind_address");
 
-    let rpc_bind_address = if matches.is_present("rpc_bind_address") {
-        solana_net_utils::parse_host(matches.value_of("rpc_bind_address").unwrap())
-            .expect("invalid rpc_bind_address")
+    let rpc_bind_address = if let Some(rpc_bind_address) = matches.value_of("rpc_bind_address") {
+        solana_net_utils::parse_host(rpc_bind_address).expect("invalid rpc_bind_address")
     } else {
         bind_address
     };
