@@ -1161,6 +1161,12 @@ impl<T: 'static + Clone + IsCached + ZeroLamport + std::marker::Sync + std::mark
         }
 
         total_elapsed_timer.stop();
+
+        if metric_name.is_empty() {
+            error!("empty metric name! {} {}", file!(), line!());
+            panic!("empty metric name");
+        }
+
         if !metric_name.is_empty() {
             datapoint_info!(
                 metric_name,
@@ -1170,10 +1176,6 @@ impl<T: 'static + Clone + IsCached + ZeroLamport + std::marker::Sync + std::mark
                 ("iterator_elapsed", iterator_elapsed, i64),
                 ("num_keys_iterated", num_keys_iterated, i64),
             )
-        }
-        else {
-            error!("empty metric name! {} {}", file!(), line!());
-            panic!("empty metric name");
         }
     }
 
