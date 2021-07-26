@@ -1234,7 +1234,7 @@ impl<
         w_account_maps: AccountMapsWriteLock<'a, T>,
         mut new_entry: AccountMapEntry<T>,
         reclaims: &mut SlotList<T>,
-    ) -> (bool, AccountMapsWriteLock<'a, T>) {
+    ) {
         let allow_vacant = true;
         let mut result =
             WriteAccountMapEntry::new_with_lock(&pubkey, w_account_maps, allow_vacant).unwrap();
@@ -1242,10 +1242,9 @@ impl<
         if result.is_occupied() {
             let (slot, account_info) = new_entry.slot_list.remove(0);
             result.update(slot, account_info, reclaims);
-            (false, result.destroy())
         } else {
             // entry did not exist
-            (true, result.insert(new_entry))
+            let _ = result.insert(new_entry);
         }
     }
 
@@ -3004,13 +3003,14 @@ pub mod tests {
 
         let new_entry = WriteAccountMapEntry::new_entry_after_update(slot, account_info);
         let w_account_maps = index.get_account_maps_write_lock(&key.pubkey());
+        assert_eq!(0, account_maps_len_expensive(&index));
         let write = index.upsert_with_lock(
             key.pubkey(),
             w_account_maps,
             new_entry,
             &mut SlotList::default(),
         );
-        assert!(write.0);
+        assert_eq!(1, account_maps_len_expensive(&index));
         drop(write);
 
         let mut ancestors = Ancestors::default();
@@ -3550,6 +3550,7 @@ pub mod tests {
         let key = Keypair::new();
         let index = AccountsIndex::<u64>::default();
         let mut gc = Vec::new();
+        let key = &key.pubkey();
         assert_eq!(0, account_maps_len_expensive(&index));
         index.upsert(
             1,
