@@ -647,6 +647,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
                 // already in cache, so call update_static function
                 let mut instance = occupied.get().instance.write().unwrap();
                 instance.age = default_age;
+                instance.dirty = true;
                 self.updates.fetch_add(1, Ordering::Relaxed);
 
                 let mut current = &mut instance.data;
