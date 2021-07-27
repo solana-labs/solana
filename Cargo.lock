@@ -99,6 +99,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cff77d8686867eceff3105329d4698d96c2391c176d5d03adc90c7389162b5b8"
 
 [[package]]
+name = "arrayvec"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "be4dc07131ffa69b8072d35f5007352af944213cde02545e2103680baed38fcd"
+
+[[package]]
 name = "ascii"
 version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -308,7 +314,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d8fb2d74254a3a0b5cac33ac9f8ed0e44aa50378d9dbb2e5d83bd21ed1dc2c8a"
 dependencies = [
  "arrayref",
- "arrayvec",
+ "arrayvec 0.5.1",
  "constant_time_eq",
 ]
 
@@ -319,11 +325,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b64485778c4f16a6a5a9d335e80d449ac6c70cdd6a06d2af18a6f6f775a125b3"
 dependencies = [
  "arrayref",
- "arrayvec",
+ "arrayvec 0.5.1",
  "cc",
  "cfg-if 0.1.10",
  "constant_time_eq",
  "crypto-mac 0.8.0",
+ "digest 0.9.0",
+]
+
+[[package]]
+name = "blake3"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dcd555c66291d5f836dbb6883b48660ece810fe25a31f3bdfb911945dff2691f"
+dependencies = [
+ "arrayref",
+ "arrayvec 0.7.1",
+ "cc",
+ "cfg-if 1.0.0",
+ "constant_time_eq",
  "digest 0.9.0",
 ]
 
@@ -731,9 +751,9 @@ checksum = "28b9d6de7f49e22cf97ad17fc4036ece69300032f45f78f30b4a4482cdc3f4a6"
 
 [[package]]
 name = "const_format"
-version = "0.2.14"
+version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c75ea7d6aeb2ebd1ee24f7b7e1b23242ef5a56b3a693733b99bfbe5ef31d0306"
+checksum = "74cd0be51cd9ea39adba1f11b1a82d0fb41674c800540e2817d510da21bf9508"
 dependencies = [
  "const_format_proc_macros",
 ]
@@ -2191,7 +2211,7 @@ version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6607c62aa161d23d17a9072cc5da0be67cdfc89d3afb1e8d9c842bebc2525ffe"
 dependencies = [
- "arrayvec",
+ "arrayvec 0.5.1",
  "bitflags",
  "cfg-if 1.0.0",
  "ryu",
@@ -3852,7 +3872,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e0bccbcf40c8938196944a3da0e133e031a33f4d6b72db3bda3cc556e361905d"
 dependencies = [
  "lazy_static",
- "parking_lot 0.10.2",
+ "parking_lot 0.11.1",
  "serial_test_derive 0.5.1",
 ]
 
@@ -4421,7 +4441,7 @@ dependencies = [
  "ahash 0.7.4",
  "base64 0.12.3",
  "bincode",
- "blake3",
+ "blake3 1.0.0",
  "bs58 0.4.0",
  "bv",
  "byteorder",
@@ -5113,7 +5133,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3bfe6a5dfc5372c0a946018ecdd8115e38af78cea8275bac48cf3d105c6b1fb3"
 dependencies = [
  "bincode",
- "blake3",
+ "blake3 0.3.8",
  "borsh",
  "borsh-derive",
  "bs58 0.3.1",
@@ -5147,7 +5167,7 @@ version = "1.8.0"
 dependencies = [
  "assert_matches",
  "bincode",
- "blake3",
+ "blake3 0.3.8",
  "borsh",
  "borsh-derive",
  "bs58 0.4.0",
@@ -5284,7 +5304,7 @@ dependencies = [
  "arrayref",
  "assert_matches",
  "bincode",
- "blake3",
+ "blake3 1.0.0",
  "bv",
  "byteorder",
  "bzip2",
