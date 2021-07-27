@@ -1131,6 +1131,11 @@ impl<
     {
         //error!("do_scan_accounts, {}, {}, {}, range: {:?}", file!(), line!(), metric_name, range);
 
+        if metric_name.is_empty() {
+            error!("empty metric name! {} {}, range: {:?}", file!(), line!(), range);
+            //panic!("empty metric name");
+        }
+
         // TODO: expand to use mint index to find the `pubkey_list` below more efficiently
         // instead of scanning the entire range
         let mut total_elapsed_timer = Measure::start("total");
@@ -1170,11 +1175,6 @@ impl<
         }
 
         total_elapsed_timer.stop();
-
-        if metric_name.is_empty() {
-            error!("empty metric name! {} {}, range: {:?}", file!(), line!(), range);
-            //panic!("empty metric name");
-        }
 
         if !metric_name.is_empty() {
             datapoint_info!(
