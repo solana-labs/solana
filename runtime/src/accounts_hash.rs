@@ -67,7 +67,7 @@ impl HashStats {
     }
 }
 
-#[derive(Default, Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, PartialEq, Clone)]
 pub struct CalculateHashIntermediate {
     pub hash: Hash,
     pub lamports: u64,
