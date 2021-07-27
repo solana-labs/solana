@@ -28,10 +28,9 @@ pub struct Meta {
 }
 
 impl Default for Meta {
-    #[allow(clippy::uninit_assumed_init)]
     fn default() -> Meta {
         let mut m = Meta {
-            addr: unsafe { mem::MaybeUninit::uninit().assume_init() },
+            addr: unsafe { mem::zeroed() },
             seed: unsafe { mem::zeroed() },
             slot: Slot::default(),
             size: usize::default(),
@@ -101,7 +100,6 @@ pub struct Packet {
 }
 
 impl Packet {
-    #[allow(clippy::uninit_assumed_init)]
     pub fn new(data: [u8; PACKET_DATA_SIZE], meta: Meta) -> Self {
         Self { data, meta }
     }
