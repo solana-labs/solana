@@ -267,8 +267,8 @@ pub fn main() {
     );
 
     let ledger_path = PathBuf::from(matches.value_of("ledger_path").unwrap());
-    let snapshot_output_dir = if matches.is_present("snapshots") {
-        PathBuf::from(matches.value_of("snapshots").unwrap())
+    let snapshot_output_dir = if let Some(snapshots) = matches.value_of("snapshots") {
+        PathBuf::from(snapshots)
     } else {
         ledger_path.clone()
     };
