@@ -494,7 +494,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
             .unwrap_or((0, false, 0));
         self.bucket_flush_calls.fetch_add(1, Ordering::Relaxed);
         let len = read_lock.len();
-        let mut keys_to_flush = Vec::with_capacity(len);
+        let mut flush_keys = Vec::with_capacity(len);
         let mut delete_keys = Vec::with_capacity(len);
         let mut flushed = 0;
         let mut get_purges = 0;
@@ -506,7 +506,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
                 flush = false;
             }
             if flush {
-                keys_to_flush.push(*k);
+                flush_keys.push(*k);
                 had_dirty = true;
             }
             if do_age {
@@ -517,33 +517,16 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
 
                     // if we should age this key out, then go ahead and flush it
                     if !flush && instance.dirty {
-                        keys_to_flush.push(*k);
+                        flush_keys.push(*k);
                     }
                 }
             }
         }
         drop(read_lock);
-        //error!("mid flush: {}, {}", ix, line!());
 
-        let mut wc = &mut self.write_cache[ix].write().unwrap(); // maybe get lock for each item?
-        if !bg {
-            for (k, v) in wc.drain() {
-                let mut instance = v.instance.read().unwrap();
-                if instance.dirty {
-                    //error!("mid flush: {}, {}", ix, line!());
-                    self.update_no_cache(
-                        &k,
-                        |_current| {
-                            Some((instance.data.slot_list.clone(), instance.data.ref_count))
-                        },
-                        None,
-                        true,
-                    );
-                    //error!("mid flush: {}, {}", ix, line!());
-                }
-            }
-        } else {
-            for k in keys_to_flush.into_iter() {
+        {
+            let mut wc = &mut self.write_cache[ix].write().unwrap(); // maybe get lock for each item?
+            for k in flush_keys.into_iter() {
                 match wc.entry(k) {
                     HashMapEntry::Occupied(occupied) => {
                         //error!("mid flush: {}, {}", ix, line!());
@@ -571,6 +554,9 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
                     }
                 }
             }
+        }
+        {
+            let mut wc = &mut self.write_cache[ix].write().unwrap(); // maybe get lock for each item?
             for k in delete_keys.iter() {
                 if let Some(item) = wc.remove(k) {
                     //error!("mid flush: {}, {}", ix, line!());
@@ -585,7 +571,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
                 }
             }
         }
-        drop(wc);
+
         if flushed != 0 {
             self.write_cache_flushes
                 .fetch_add(flushed as u64, Ordering::Relaxed);
