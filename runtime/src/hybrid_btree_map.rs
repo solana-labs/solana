@@ -401,9 +401,9 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
             let mut age = None;
             if aging.elapsed().as_millis() > 400 {
                 // time of 1 slot
-                current_age = Self::add_age(current_age, 1);
+                current_age = Self::add_age(current_age, 1) % default_age; // no reason to pass by something too often if we accidentally miss it...
                 self.current_age.store(current_age, Ordering::Relaxed);
-                //age = Some(current_age);
+                age = Some(current_age);
                 aging = Instant::now();
             }
             if exit.load(Ordering::Relaxed) {
@@ -1400,7 +1400,7 @@ impl<V: 'static + Clone + Debug + IsCached + Guts> HybridBTreeMap<V> {
     where
         R: RangeBounds<Pubkey>,
     {
-        self.disk.range.fetch_add(1, Ordering::Relaxed);
+        //self.disk.range.fetch_add(1, Ordering::Relaxed);
 
         let num_buckets = self.disk.num_buckets();
         if self.bin_index != 0 && self.disk.unified_backing {
