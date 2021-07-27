@@ -117,10 +117,9 @@ fn initialize_from_snapshot(
 
     fs::create_dir_all(&snapshot_config.snapshot_path).expect("Couldn't create snapshot directory");
 
-    let archive_info = snapshot_utils::get_highest_full_snapshot_archive_info(
-        &replica_config.snapshot_output_dir,
-    )
-    .unwrap();
+    let archive_info =
+        snapshot_utils::get_highest_full_snapshot_archive_info(&replica_config.snapshot_output_dir)
+            .unwrap();
 
     let process_options = blockstore_processor::ProcessOptions {
         account_indexes: replica_config.account_indexes.clone(),
