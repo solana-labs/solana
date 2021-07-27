@@ -85,7 +85,7 @@ mod tests {
         let packets = vec![Packet::default()];
         let mut msgs = Packets::new(packets);
         msgs.set_addr(&send_addr);
-        assert_eq!(msgs.packets[0].meta.addr(), send_addr);
+        assert_eq!(msgs.packets[0].addr(), send_addr);
     }
 
     #[test]
@@ -100,7 +100,7 @@ mod tests {
         p.packets.resize(10, Packet::default());
 
         for m in p.packets.iter_mut() {
-            m.meta.set_addr(&addr);
+            m.set_addr(&addr);
             m.meta.size = PACKET_DATA_SIZE;
         }
         send_to(&p, &send_socket, &SocketAddrSpace::Unspecified).unwrap();
@@ -111,7 +111,7 @@ mod tests {
 
         for m in &p.packets {
             assert_eq!(m.meta.size, PACKET_DATA_SIZE);
-            assert_eq!(m.meta.addr(), saddr);
+            assert_eq!(m.addr(), saddr);
         }
     }
 

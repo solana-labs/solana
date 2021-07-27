@@ -1,6 +1,6 @@
 use crate::clock::Slot;
 use bincode::Result;
-use libc::{iovec, sockaddr_in, sockaddr_in6, sockaddr_storage, AF_INET, AF_INET6, sa_family_t};
+use libc::{sa_family_t, sockaddr_in, sockaddr_in6, sockaddr_storage, AF_INET, AF_INET6};
 use serde::Serialize;
 use std::{
     mem,
@@ -14,8 +14,7 @@ use std::{
 ///   8 bytes is the size of the fragment header
 pub const PACKET_DATA_SIZE: usize = 1280 - 40 - 8;
 
-
-#[derive(Clone, Default, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 #[repr(C)]
 pub struct Meta {
     pub size: usize,
@@ -25,52 +24,23 @@ pub struct Meta {
     pub seed: [u8; 32],
     pub slot: Slot,
     pub is_tracer_tx: bool,
-}
-
-#[derive(Clone)]
-#[repr(C)]
-pub struct Packet {
-    pub data: [u8; PACKET_DATA_SIZE],
-    pub meta: Meta,
     pub addr: sockaddr_storage,
-//    pub iov: iovec,
 }
 
-impl Packet {
+impl Default for Meta {
     #[allow(clippy::uninit_assumed_init)]
-    pub fn new(data: [u8; PACKET_DATA_SIZE], meta: Meta) -> Self {
-        let mut p = Self {
-            data,
-            meta,
+    fn default() -> Meta {
+        let mut m = Meta {
             addr: unsafe { mem::MaybeUninit::uninit().assume_init() },
-//            iov: unsafe { mem::zeroed() },
+            ..Default::default()
         };
         let unspecified_v4 = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0);
-        p.set_addr(&unspecified_v4);
-        p
+        m.set_addr(&unspecified_v4);
+        m
     }
+}
 
-    pub fn from_data<T: Serialize>(dest: Option<&SocketAddr>, data: T) -> Result<Self> {
-        let mut packet = Packet::default();
-        Self::populate_packet(&mut packet, dest, &data)?;
-        Ok(packet)
-    }
-
-    pub fn populate_packet<T: Serialize>(
-        packet: &mut Packet,
-        dest: Option<&SocketAddr>,
-        data: &T,
-    ) -> Result<()> {
-        let mut wr = io::Cursor::new(&mut packet.data[..]);
-        bincode::serialize_into(&mut wr, data)?;
-        let len = wr.position() as usize;
-        packet.meta.size = len;
-        if let Some(dest) = dest {
-            packet.set_addr(dest);
-        }
-        Ok(())
-    }
-
+impl Meta {
     pub fn addr(&self) -> SocketAddr {
         if self.addr.ss_family == AF_INET as sa_family_t {
             unsafe {
@@ -115,13 +85,53 @@ impl Packet {
     }
 }
 
+#[derive(Clone)]
+#[repr(C)]
+pub struct Packet {
+    pub data: [u8; PACKET_DATA_SIZE],
+    pub meta: Meta,
+    //pub iov: iovec,
+}
+
+impl Packet {
+    #[allow(clippy::uninit_assumed_init)]
+    pub fn new(data: [u8; PACKET_DATA_SIZE], meta: Meta) -> Self {
+        Self {
+            data,
+            meta,
+            //iov: unsafe { mem::zeroed() },
+        }
+    }
+
+    pub fn from_data<T: Serialize>(dest: Option<&SocketAddr>, data: T) -> Result<Self> {
+        let mut packet = Packet::default();
+        Self::populate_packet(&mut packet, dest, &data)?;
+        Ok(packet)
+    }
+
+    pub fn populate_packet<T: Serialize>(
+        packet: &mut Packet,
+        dest: Option<&SocketAddr>,
+        data: &T,
+    ) -> Result<()> {
+        let mut wr = io::Cursor::new(&mut packet.data[..]);
+        bincode::serialize_into(&mut wr, data)?;
+        let len = wr.position() as usize;
+        packet.meta.size = len;
+        if let Some(dest) = dest {
+            packet.meta.set_addr(dest);
+        }
+        Ok(())
+    }
+}
+
 impl fmt::Debug for Packet {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
             "Packet {{ size: {:?}, addr: {:?} }}",
             self.meta.size,
-            self.addr()
+            self.meta.addr()
         )
     }
 }
@@ -129,15 +139,11 @@ impl fmt::Debug for Packet {
 #[allow(clippy::uninit_assumed_init)]
 impl Default for Packet {
     fn default() -> Packet {
-        let mut p = Packet {
+        Packet {
             data: unsafe { std::mem::MaybeUninit::uninit().assume_init() },
             meta: Meta::default(),
-            addr: unsafe { mem::MaybeUninit::uninit().assume_init() },
-//            iov: unsafe { mem::zeroed() },
-        };
-        let unspecified_v4 = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0);
-        p.set_addr(&unspecified_v4);
-        p
+            //iov: unsafe { mem::zeroed() },
+        }
     }
 }
 
