@@ -108,7 +108,7 @@ fn get_rpc_peer_node(
             rpc_peers_total, rpc_peers_trusted
         );
 
-        let mut highest_snapshot_hash: Option<(Slot, Hash)> =
+        let mut highest_snapshot_info: Option<(Slot, Hash)> =
             snapshot_utils::get_highest_full_snapshot_archive_info(snapshot_output_dir).map(
                 |snapshot_archive_info| {
                     (*snapshot_archive_info.slot(), *snapshot_archive_info.hash())
@@ -123,26 +123,26 @@ fn get_rpc_peer_node(
                 }
                 cluster_info.get_snapshot_hash_for_node(&rpc_peer.id, |snapshot_hashes| {
                     for snapshot_hash in snapshot_hashes {
-                        if highest_snapshot_hash.is_none()
-                            || snapshot_hash.0 > highest_snapshot_hash.unwrap().0
+                        if highest_snapshot_info.is_none()
+                            || snapshot_hash.0 > highest_snapshot_info.unwrap().0
                         {
                             // Found a higher snapshot, remove all nodes with a lower snapshot
                             eligible_rpc_peers.clear();
-                            highest_snapshot_hash = Some(*snapshot_hash)
+                            highest_snapshot_info = Some(*snapshot_hash)
                         }
 
-                        if Some(*snapshot_hash) == highest_snapshot_hash {
+                        if Some(*snapshot_hash) == highest_snapshot_info {
                             eligible_rpc_peers.push(rpc_peer.clone());
                         }
                     }
                 });
             }
 
-            match highest_snapshot_hash {
+            match highest_snapshot_info {
                 None => {
                     assert!(eligible_rpc_peers.is_empty());
                 }
-                Some(highest_snapshot_hash) => {
+                Some(highest_snapshot_info) => {
                     if eligible_rpc_peers.is_empty() {
                         match newer_cluster_snapshot_timeout {
                             None => newer_cluster_snapshot_timeout = Some(Instant::now()),
@@ -155,14 +155,14 @@ fn get_rpc_peer_node(
                         }
                         retry_reason = Some(format!(
                             "Wait for newer snapshot than local: {:?}",
-                            highest_snapshot_hash
+                            highest_snapshot_info
                         ));
                         continue;
                     }
 
                     info!(
                         "Highest available snapshot slot is {}, available from {} node{}: {:?}",
-                        highest_snapshot_hash.0,
+                        highest_snapshot_info.0,
                         eligible_rpc_peers.len(),
                         if eligible_rpc_peers.len() > 1 {
                             "s"
@@ -182,7 +182,7 @@ fn get_rpc_peer_node(
         if !eligible_rpc_peers.is_empty() {
             let contact_info =
                 &eligible_rpc_peers[thread_rng().gen_range(0, eligible_rpc_peers.len())];
-            return Some((contact_info.clone(), highest_snapshot_hash));
+            return Some((contact_info.clone(), highest_snapshot_info));
         } else {
             retry_reason = Some("No snapshots available".to_owned());
         }
