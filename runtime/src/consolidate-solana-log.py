@@ -31,7 +31,10 @@ min_count = 1000000000
 
 with open(input_file) as fh:
     for line in fh.readlines():
-        time = get_time(line)
+        try:
+            time = get_time(line)
+        except:
+            continue
         if not last_time:
             last_time = time
         datapoint_str = "datapoint:"
