@@ -6079,14 +6079,7 @@ impl AccountsDb {
 
                     //error!("distribution prior to flush");
                     self.accounts_index.account_maps.first().unwrap().read().unwrap().distribution();
-                    let mut m = Measure::start("flush_index");
-                    self.accounts_index.account_maps.iter().for_each(|bin_map| {
-                        bin_map.write().unwrap().flush();});
-                    m.stop();
-                    stop.store(true, Ordering::Relaxed); // stop the flushers now that we have flushed everything
-
-                    error!("flush_us: {}", m.as_us());
-                    self.accounts_index.account_maps.first().unwrap().read().unwrap().distribution();
+                    stop.store(true, Ordering::Relaxed); // stop the flushers now that we have added everything. Scanning the index values below will flush.
 
                     if pass == 0 {
                         self.initialize_storage_count_and_alive_bytes(&mut timings);
