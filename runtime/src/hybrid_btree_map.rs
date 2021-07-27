@@ -692,7 +692,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
             HashMapEntry::Occupied(occupied) => {
                 // already in cache, so call update_static function
                 let mut instance = occupied.get().instance.write().unwrap();
-                instance.age = default_age;
+                instance.age = self.set_age_to_future();
                 instance.dirty = true;
                 self.updates.fetch_add(1, Ordering::Relaxed);
 
@@ -830,7 +830,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
                     ref_count,
                 },
                 dirty: dirty,                                 //AtomicBool::new(dirty),
-                age: Self::add_age(current_age, default_age), //AtomicU8::new(default_age),)
+                age: self.set_age_to_future(),
                 insert,
             }),
         }
@@ -914,9 +914,9 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
         r
     }
 
-    fn set_age_to_future(&self, age: &mut u8) {
+    fn set_age_to_future(&self) -> u8 {
         let current_age = self.current_age.load(Ordering::Relaxed);
-        *age = Self::add_age(current_age, default_age)
+        Self::add_age(current_age, default_age)
     }
 
     pub fn get(&self, key: &Pubkey) -> Option<(u64, Vec<SlotT<V>>)> {
@@ -935,7 +935,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
             if let Some(mut res) = res {
                 if get_caching {
                     let mut instance = res.instance.write().unwrap();
-                    self.set_age_to_future(&mut instance.age);
+                    instance.age = self.set_age_to_future();
                     self.gets_from_cache.fetch_add(1, Ordering::Relaxed);
                     let r = Some((instance.data.ref_count, instance.data.slot_list.clone()));
                     drop(res);
@@ -961,7 +961,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
             match res {
                 HashMapEntry::Occupied(occupied) => {
                     let mut instance = occupied.get().instance.write().unwrap();
-                    self.set_age_to_future(&mut instance.age);
+                    instance.age = self.set_age_to_future();
                     self.gets_from_cache.fetch_add(1, Ordering::Relaxed);
                     m1.stop();
                     self.update_cache_us
