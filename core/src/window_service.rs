@@ -2,6 +2,7 @@
 //!   blockstore and retransmitting where required
 //!
 use crate::{
+    ancestor_hashes_service::AncestorHashesReplayUpdateReceiver,
     cluster_info_vote_listener::VerifiedVoteReceiver,
     completed_data_sets_service::CompletedDataSetsSender,
     outstanding_requests::OutstandingRequests,
@@ -341,6 +342,7 @@ impl WindowService {
         verified_vote_receiver: VerifiedVoteReceiver,
         completed_data_sets_sender: CompletedDataSetsSender,
         duplicate_slots_sender: DuplicateSlotSender,
+        ancestor_hashes_replay_update_receiver: AncestorHashesReplayUpdateReceiver,
     ) -> WindowService
     where
         F: 'static
@@ -362,6 +364,7 @@ impl WindowService {
             repair_info,
             verified_vote_receiver,
             outstanding_requests.clone(),
+            ancestor_hashes_replay_update_receiver,
         );
 
         let (insert_sender, insert_receiver) = unbounded();
