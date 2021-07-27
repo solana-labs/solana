@@ -12,6 +12,11 @@ use log::*;
 use solana_sdk::{pubkey::Pubkey, sanitized_transaction::SanitizedTransaction};
 use std::collections::HashMap;
 
+// TODO TAO - change this to after determine what the flat fee is determined
+/*
+1. flat fee per signature
+2. flat fee for each write lock
+// */
 // Guestimated from mainnet-beta data, sigver averages 1us, average read 7us and average write 25us
 const SIGVER_COST: u64 = 1;
 const NON_SIGNED_READONLY_ACCOUNT_ACCESS_COST: u64 = 7;

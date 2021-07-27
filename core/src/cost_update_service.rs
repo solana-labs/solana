@@ -137,9 +137,11 @@ impl CostUpdateService {
         let mut dirty = false;
         {
             let mut cost_model_mutable = cost_model.write().unwrap();
-            for (program_id, tining) in &execute_timings.details.per_program_timings {
-                let cost = tining.accumulated_us / tining.count as u64;
-                match cost_model_mutable.upsert_instruction_cost(program_id, cost) {
+            for (program_id, timing) in &execute_timings.details.per_program_timings {
+                let costs = timing.accumulated_us / timing.count as u64;
+                let units = timing.accumulated_units / timing.count as u64;
+                debug!("update cost, instruction {:?} costs {} units {} cu/us ratio {}", program_id, costs, units, costs/units);
+                match cost_model_mutable.upsert_instruction_cost(program_id, costs) {
                     Ok(c) => {
                         debug!(
                             "after replayed into bank, instruction {:?} has averaged cost {}",
