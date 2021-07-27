@@ -564,6 +564,8 @@ impl<'a, T> AccountsIndexIterator<'a, T> {
         let end_bin_inclusive = self.end_bin_inclusive();
         let bin_range = if start_bin > end_bin_inclusive {
             0 // empty range
+        } else if end_bin_inclusive == usize::MAX {
+            usize::MAX
         } else {
             // the range is end_inclusive + 1 - start
             // end_inclusive could be usize::MAX already if no bound was specified
@@ -3841,10 +3843,7 @@ pub mod tests {
         assert_eq!((0, usize::MAX), iter.bin_start_and_range());
         let iter =
             AccountsIndexIterator::new(&index.account_maps, Some((Included(key_ff), Unbounded)));
-        assert_eq!(
-            (BINS - 1, usize::MAX - (BINS - 1)),
-            iter.bin_start_and_range()
-        );
+        assert_eq!((BINS - 1, usize::MAX), iter.bin_start_and_range());
 
         assert_eq!(
             (0..2)
