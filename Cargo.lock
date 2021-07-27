@@ -5167,7 +5167,7 @@ version = "1.8.0"
 dependencies = [
  "assert_matches",
  "bincode",
- "blake3 0.3.8",
+ "blake3 1.0.0",
  "borsh",
  "borsh-derive",
  "bs58 0.4.0",
