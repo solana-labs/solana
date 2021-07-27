@@ -3,7 +3,9 @@ use {
     log::*,
     solana_download_utils::download_snapshot,
     solana_genesis_utils::download_then_check_genesis_hash,
-    solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
+    solana_gossip::{
+        cluster_info::ClusterInfo, contact_info::ContactInfo, socketaddr, socketaddr_any,
+    },
     solana_ledger::{
         blockstore::Blockstore, blockstore_db::AccessType, blockstore_processor,
         leader_schedule_cache::LeaderScheduleCache,
@@ -59,9 +61,9 @@ pub struct ReplicaNodeConfig {
 impl Default for ReplicaNodeConfig {
     fn default() -> Self {
         Self {
-            rpc_source_addr: SocketAddr::from(([127, 0, 0, 1], 8001)),
-            rpc_addr: SocketAddr::from(([127, 0, 0, 1], 8001)),
-            rpc_pubsub_addr: SocketAddr::from(([127, 0, 0, 1], 8001)),
+            rpc_source_addr: socketaddr_any!(),
+            rpc_addr: socketaddr_any!(),
+            rpc_pubsub_addr: socketaddr_any!(),
             ledger_path: PathBuf::default(),
             snapshot_output_dir: PathBuf::default(),
             snapshot_path: PathBuf::default(),
