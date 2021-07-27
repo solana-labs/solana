@@ -1347,7 +1347,7 @@ impl<V: 'static + Clone + Debug + IsCached + Guts> HybridBTreeMap<V> {
         Arc::new(BucketMapWriteHolder::new(BucketMap::new_buckets(buckets)))
     }
 
-    pub fn flush(&mut self) {
+    pub fn flush(&self) {
         let num_buckets = self.disk.num_buckets();
         let mystart = num_buckets * self.bin_index / self.bins;
         let myend = num_buckets * (self.bin_index + 1) / self.bins;
