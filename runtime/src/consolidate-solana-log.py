@@ -60,7 +60,10 @@ with open(input_file) as fh:
                 break
             #print(x)
             name = x[0]
-            value = int(x[1].strip("\ni"))
+            try:
+                value = int(x[1].strip("\ni"))
+            except:
+                break
             if name in stats:
                 stats[name] += value
             else:
