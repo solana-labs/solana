@@ -33,7 +33,7 @@ pub struct Packet {
     pub data: [u8; PACKET_DATA_SIZE],
     pub meta: Meta,
     pub addr: sockaddr_storage,
-    pub iov: iovec,
+//    pub iov: iovec,
 }
 
 impl Packet {
@@ -43,7 +43,7 @@ impl Packet {
             data,
             meta,
             addr: unsafe { mem::MaybeUninit::uninit().assume_init() },
-            iov: unsafe { mem::zeroed() },
+//            iov: unsafe { mem::zeroed() },
         };
         let unspecified_v4 = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0);
         p.set_addr(&unspecified_v4);
@@ -133,7 +133,7 @@ impl Default for Packet {
             data: unsafe { std::mem::MaybeUninit::uninit().assume_init() },
             meta: Meta::default(),
             addr: unsafe { mem::MaybeUninit::uninit().assume_init() },
-            iov: unsafe { mem::zeroed() },
+//            iov: unsafe { mem::zeroed() },
         };
         let unspecified_v4 = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0);
         p.set_addr(&unspecified_v4);
