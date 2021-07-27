@@ -260,5 +260,5 @@ pub fn get_rpc_peer_info(
     );
     let rpc_node_details = rpc_node_details.unwrap();
 
-    (gossip.0.clone(), rpc_node_details.0, rpc_node_details.1)
+    (gossip.0, rpc_node_details.0, rpc_node_details.1)
 }
