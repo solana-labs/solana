@@ -5971,7 +5971,6 @@ impl AccountsDb {
             slots.truncate(limit); // get rid of the newer slots and keep just the older
         }
 
-        let count = 8;
         let stop = Arc::new(AtomicBool::new(false));
         let stop_ = stop.clone();
         (0..2).into_par_iter().for_each(|fork| {
@@ -6098,6 +6097,7 @@ impl AccountsDb {
                 stop.store(true, Ordering::Relaxed);
             }
             else {
+                let count = 2;
                 (0..count).into_par_iter().for_each(|_| {
                     let stop = stop_.clone();
 
