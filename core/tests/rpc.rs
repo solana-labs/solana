@@ -316,9 +316,7 @@ fn test_rpc_subscriptions() {
     });
 
     // Wait for signature subscriptions
-    if Err(e) = ready_receiver.recv_timeout(Duration::from_secs(2)) {
-        error!("recv_timeout: {:?}", e);
-    }
+    ready_receiver.recv_timeout(Duration::from_secs(2)).unwrap();
 
     let rpc_client = RpcClient::new(test_validator.rpc_url());
     let mut mint_balance = rpc_client

@@ -32,7 +32,13 @@ impl Default for Meta {
     fn default() -> Meta {
         let mut m = Meta {
             addr: unsafe { mem::MaybeUninit::uninit().assume_init() },
-            ..Self::default()
+            seed: unsafe { mem::zeroed() },
+            slot: Slot::default(),
+            size: usize::default(),
+            forward: bool::default(),
+            repair: bool::default(),
+            discard: bool::default(),
+            is_tracer_tx: bool::default(),
         };
         let unspecified_v4 = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0);
         m.set_addr(&unspecified_v4);
