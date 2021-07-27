@@ -78,7 +78,9 @@ impl Meta {
                 unsafe {
                     let mut p: *mut sockaddr_in6 = &mut self.addr as *mut _ as *mut _;
                     (*p).sin6_port = v6.port();
+                    (*p).sin6_flowinfo = 0u32;
                     (*p).sin6_addr.s6_addr = v6.ip().octets();
+                    (*p).sin6_scope_id = 0u32;
                 }
             }
         }
@@ -90,17 +92,12 @@ impl Meta {
 pub struct Packet {
     pub data: [u8; PACKET_DATA_SIZE],
     pub meta: Meta,
-    //pub iov: iovec,
 }
 
 impl Packet {
     #[allow(clippy::uninit_assumed_init)]
     pub fn new(data: [u8; PACKET_DATA_SIZE], meta: Meta) -> Self {
-        Self {
-            data,
-            meta,
-            //iov: unsafe { mem::zeroed() },
-        }
+        Self { data, meta }
     }
 
     pub fn from_data<T: Serialize>(dest: Option<&SocketAddr>, data: T) -> Result<Self> {
@@ -142,7 +139,6 @@ impl Default for Packet {
         Packet {
             data: unsafe { std::mem::MaybeUninit::uninit().assume_init() },
             meta: Meta::default(),
-            //iov: unsafe { mem::zeroed() },
         }
     }
 }
