@@ -27,7 +27,7 @@ use solana_sdk::{
 };
 
 use std::{
-    net::SocketAddr,
+    net::{IpAddr, Ipv4Addr, SocketAddr},
     path::{Path, PathBuf},
     thread::sleep,
     time::Duration,
@@ -210,8 +210,13 @@ fn test_replica_bootstrap() {
     let identity_keypair = Keypair::new();
 
     // now bring up a replica to talk to it.
-    let rpc_addr: SocketAddr = "127.0.0.1:8301".parse().unwrap();
-    let rpc_pubsub_addr: SocketAddr = "127.0.0.1:8302".parse().unwrap();
+    let ip_addr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
+    let port = solana_net_utils::find_available_port_in_range(ip_addr, (8101, 8200)).unwrap();
+    let rpc_addr = SocketAddr::new(ip_addr, port);
+
+    let port = solana_net_utils::find_available_port_in_range(ip_addr, (8201, 8300)).unwrap();
+
+    let rpc_pubsub_addr = SocketAddr::new(ip_addr, port);
     let ledger_dir = tempfile::tempdir_in(farf_dir()).unwrap();
     let ledger_path = ledger_dir.path();
     let snapshot_output_dir = tempfile::tempdir_in(farf_dir()).unwrap();
@@ -219,8 +224,10 @@ fn test_replica_bootstrap() {
     let snapshot_path = snapshot_output_path.join("snapshot");
     let account_paths: Vec<PathBuf> = vec![ledger_path.join("accounts")];
 
-    let gossip_addr: SocketAddr = "127.0.0.1:8303".parse().unwrap();
-    let dynamic_port_range = solana_net_utils::parse_port_range("8300-8400").unwrap();
+    let port = solana_net_utils::find_available_port_in_range(ip_addr, (8301, 8400)).unwrap();
+    let gossip_addr = SocketAddr::new(ip_addr, port);
+
+    let dynamic_port_range = solana_net_utils::parse_port_range("8401-8500").unwrap();
     let bind_address = solana_net_utils::parse_host("127.0.0.1").unwrap();
     let node = Node::new_with_external_ip(
         &identity_keypair.pubkey(),
