@@ -32,7 +32,7 @@ impl Default for Meta {
     fn default() -> Meta {
         let mut m = Meta {
             addr: unsafe { mem::MaybeUninit::uninit().assume_init() },
-            ..Default::default()
+            ..Self::default()
         };
         let unspecified_v4 = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0);
         m.set_addr(&unspecified_v4);
