@@ -2415,7 +2415,9 @@ mod tests {
                     (0..32)
                         .map(|packet_id| {
                             let mut p = Packet::default();
-                            p.meta.port = packets_id << 8 | packet_id;
+                            let mut addr = p.meta.addr();
+                            addr.set_port(packets_id << 8 | packet_id);
+                            p.meta.set_addr(&addr);
                             p
                         })
                         .collect_vec(),
@@ -2437,7 +2439,7 @@ mod tests {
             .map(|(index, p)| {
                 let packets_id = index / 16;
                 let packet_id = (index % 16) * 2 + 1;
-                assert_eq!(p.meta.port, (packets_id << 8 | packet_id) as u16);
+                assert_eq!(p.meta.addr().port(), (packets_id << 8 | packet_id) as u16);
             })
             .collect_vec();
 
