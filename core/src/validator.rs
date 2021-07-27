@@ -1438,6 +1438,25 @@ fn wait_for_supermajority(
     Ok(true)
 }
 
+fn is_rosetta_emulated() -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        use std::str::FromStr;
+        std::process::Command::new("sysctl")
+            .args(&["-in", "sysctl.proc_translated"])
+            .output()
+            .map_err(|_| ())
+            .and_then(|output| String::from_utf8(output.stdout).map_err(|_| ()))
+            .and_then(|stdout| u8::from_str(stdout.trim()).map_err(|_| ()))
+            .map(|enabled| enabled == 1)
+            .unwrap_or(false)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        false
+    }
+}
+
 fn report_target_features() {
     warn!(
         "CUDA is {}abled",
@@ -1448,21 +1467,7 @@ fn report_target_features() {
         }
     );
 
-    // We exclude Mac OS here to be compatible with computers that have Mac M1 chips.
-    // For these computers, one must install rust/cargo/brew etc. using Rosetta 2,
-    // which allows them to run software targeted for x86_64 on an aarch64.
-    // Hence the code below will run on these machines (target_arch="x86_64")
-    // if we don't exclude with target_os="macos".
-    //
-    // It's going to require more more work to get Solana building
-    // on Mac M1's without Rosetta,
-    // and when that happens we should remove this
-    // (the feature flag for code targeting that is target_arch="aarch64")
-    #[cfg(all(
-        any(target_arch = "x86", target_arch = "x86_64"),
-        not(target_os = "macos")
-    ))]
-    {
+    if !is_rosetta_emulated() {
         unsafe { check_avx() };
     }
 }
@@ -1470,7 +1475,7 @@ fn report_target_features() {
 // Validator binaries built on a machine with AVX support will generate invalid opcodes
 // when run on machines without AVX causing a non-obvious process abort.  Instead detect
 // the mismatch and error cleanly.
-#[allow(dead_code)]
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[target_feature(enable = "avx")]
 unsafe fn check_avx() {
     if is_x86_feature_detected!("avx") {
@@ -1482,6 +1487,9 @@ unsafe fn check_avx() {
         abort();
     }
 }
+
+#[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+unsafe fn check_avx() {}
 
 // Get the activated stake percentage (based on the provided bank) that is visible in gossip
 fn get_stake_percent_in_gossip(bank: &Bank, cluster_info: &ClusterInfo, log: bool) -> u64 {
