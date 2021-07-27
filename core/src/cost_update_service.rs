@@ -135,22 +135,27 @@ impl CostUpdateService {
 
     fn update_cost_model(cost_model: &RwLock<CostModel>, execute_timings: &ExecuteTimings) -> bool {
         let mut dirty = false;
-        let mut cost_model_mutable = cost_model.write().unwrap();
-        for (program_id, stats) in &execute_timings.details.per_program_timings {
-            let cost = stats.0 / stats.1 as u64;
-            match cost_model_mutable.upsert_instruction_cost(program_id, &cost) {
-                Ok(c) => {
-                    debug!(
-                        "after replayed into bank, instruction {:?} has averaged cost {}",
-                        program_id, c
-                    );
-                    dirty = true;
+        {
+            let mut cost_model_mutable = cost_model.write().unwrap();
+            for (program_id, timing) in &execute_timings.details.per_program_timings {
+                if timing.count < 1 {
+                    continue;
                 }
-                Err(err) => {
-                    debug!(
+                let units = timing.accumulated_units / timing.count as u64;
+                match cost_model_mutable.upsert_instruction_cost(program_id, units) {
+                    Ok(c) => {
+                        debug!(
+                            "after replayed into bank, instruction {:?} has averaged cost {}",
+                            program_id, c
+                        );
+                        dirty = true;
+                    }
+                    Err(err) => {
+                        debug!(
                         "after replayed into bank, instruction {:?} failed to update cost, err: {}",
                         program_id, err
                     );
+                    }
                 }
             }
         }
@@ -217,7 +222,7 @@ mod tests {
         {
             let accumulated_us: u64 = 1000;
             let count: u32 = 10;
-            expected_cost = accumulated_us / count as u64;
+            expected_cost = accumulated_units / count as u64;
 
             execute_timings
                 .details
@@ -247,7 +252,7 @@ mod tests {
             let accumulated_us: u64 = 2000;
             let count: u32 = 10;
             // to expect new cost is Average(new_value, existing_value)
-            expected_cost = ((accumulated_us / count as u64) + expected_cost) / 2;
+            expected_cost = ((accumulated_units / count as u64) + expected_cost) / 2;
 
             execute_timings
                 .details
