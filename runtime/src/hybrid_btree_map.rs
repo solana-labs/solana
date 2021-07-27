@@ -83,7 +83,7 @@ impl BuildHasher for myhash {
 }*/
 type MyBuildHasher = BuildHasherDefault<MyHasher>;
 
-pub const default_age: u8 = 30;
+pub const default_age: u8 = 25;
 pub const verify_get_on_insert: bool = false;
 pub const bucket_bins: usize = BINS;
 pub const use_trait: bool = false;
