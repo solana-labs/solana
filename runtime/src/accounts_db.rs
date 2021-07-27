@@ -4867,6 +4867,7 @@ impl AccountsDb {
         can_cached_slot_be_unflushed: bool,
     ) -> (Hash, u64) {
         let check_hash = false;
+        error!("hash_total update_accounts_hash_with_index_option: {}", debug_verify);
         let (hash, total_lamports) = self
             .calculate_accounts_hash_helper_with_verify(
                 use_index,
