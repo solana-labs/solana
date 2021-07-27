@@ -353,6 +353,7 @@ pub struct BucketMapWriteHolder<V> {
     pub gets_from_disk_empty: AtomicU64,
     pub gets_from_cache: AtomicU64,
     pub updates: AtomicU64,
+    pub updates_in_cache: AtomicU64,
     pub addrefs: AtomicU64,
     pub unrefs: AtomicU64,
     pub range: AtomicU64,
@@ -437,6 +438,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
         let gets_from_disk = AtomicU64::new(0);
         let gets_from_disk_empty = AtomicU64::new(0);
         let gets_from_cache = AtomicU64::new(0);
+        let updates_in_cache = AtomicU64::new(0);
         let updates = AtomicU64::new(0);
         let inserts = AtomicU64::new(0);
         let deletes = AtomicU64::new(0);
@@ -458,6 +460,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
             bins,
             wait,
             gets_from_cache,
+            updates_in_cache,
             gets_from_disk,
             gets_from_disk_empty,
             deletes,
@@ -680,7 +683,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
                 let mut instance = occupied.get().instance.write().unwrap();
                 instance.age = self.set_age_to_future();
                 instance.dirty = true;
-                self.updates.fetch_add(1, Ordering::Relaxed);
+                self.updates_in_cache.fetch_add(1, Ordering::Relaxed);
 
                 let mut current = &mut instance.data;
                 let (slot, new_entry) = new_value.slot_list.remove(0);
@@ -1052,7 +1055,8 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
             ("min", min, i64),
             ("max", max, i64),
             ("sum", sum, i64),
-            ("updates", self.updates.swap(0, Ordering::Relaxed), i64),
+            ("updates_not_in_cache", self.updates.swap(0, Ordering::Relaxed), i64),
+            ("updates_in_cache", self.updates_in_cache.swap(0, Ordering::Relaxed), i64),
             ("inserts", self.inserts.swap(0, Ordering::Relaxed), i64),
             ("deletes", self.deletes.swap(0, Ordering::Relaxed), i64),
             (
