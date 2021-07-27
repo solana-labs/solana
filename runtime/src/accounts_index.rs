@@ -317,11 +317,13 @@ impl<'a, 'b: 'a, T: 'static + Clone + IsCached + std::fmt::Debug + IsCached + Gu
 
     pub fn upsert(
         w_account_maps: AccountMapsReadLock<'a, T>,
-        pubkey: Pubkey,
+        pubkey: &Pubkey,
         mut new_value: AccountMapEntry<T>,
         reclaims: &mut SlotList<T>,
+        reclaims_must_be_empty: bool,
     ) {
-        w_account_maps.upsert(pubkey, new_value, reclaims);
+        w_account_maps.upsert(pubkey, new_value, reclaims        ,reclaims_must_be_empty,
+        );
     }
 
     // modifies slot_list
@@ -331,6 +333,7 @@ impl<'a, 'b: 'a, T: 'static + Clone + IsCached + std::fmt::Debug + IsCached + Gu
         slot: Slot,
         account_info: T,
         reclaims: &mut SlotList<T>,
+        reclaims_must_be_empty: bool,
     ) -> bool {
         let mut addref = !account_info.is_cached();
 
@@ -338,11 +341,17 @@ impl<'a, 'b: 'a, T: 'static + Clone + IsCached + std::fmt::Debug + IsCached + Gu
         for list_index in 0..list.len() {
             let (s, previous_update_value) = &list[list_index];
             if *s == slot {
-                addref = addref && previous_update_value.is_cached();
+                let previous_cached = previous_update_value.is_cached();
+                addref = addref && previous_cached;
 
                 let mut new_item = (slot, account_info);
                 std::mem::swap(&mut new_item, &mut list[list_index]);
-                reclaims.push(new_item);
+                if reclaims_must_be_empty {
+                    assert!(previous_cached);
+                }
+                else {
+                    reclaims.push(new_item);
+                }
                 list[(list_index + 1)..]
                     .iter()
                     .for_each(|item| assert!(item.0 != slot));
@@ -360,7 +369,7 @@ impl<'a, 'b: 'a, T: 'static + Clone + IsCached + std::fmt::Debug + IsCached + Gu
     // the new item.
     pub fn update(&mut self, slot: Slot, account_info: T, reclaims: &mut SlotList<T>) {
         self.slot_list_mut(|list, refcount| {
-            if Self::update_static(list, slot, account_info, reclaims) {
+            if Self::update_static(list, slot, account_info, reclaims, false) {
                 *refcount += 1;
             }
         });
@@ -1647,6 +1656,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport + std::marker::Sync + std::mark
         account_indexes: &AccountSecondaryIndexes,
         account_info: T,
         reclaims: &mut SlotList<T>,
+        reclaims_must_be_empty: bool,
     ) {
         // We don't atomically update both primary index and secondary index together.
         // This certainly creates small time window with inconsistent state across the two indexes.
@@ -1662,7 +1672,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport + std::marker::Sync + std::mark
         let new_item = WriteAccountMapEntry::new_entry_after_update(slot, account_info);
         {
             let w_account_maps = self.get_account_maps_read_lock(pubkey);
-            WriteAccountMapEntry::upsert(w_account_maps, *pubkey, new_item, reclaims);
+            WriteAccountMapEntry::upsert(w_account_maps, pubkey, new_item, reclaims, reclaims_must_be_empty);
         }
         self.update_secondary_indexes(pubkey, account_owner, account_data, account_indexes);
     }
