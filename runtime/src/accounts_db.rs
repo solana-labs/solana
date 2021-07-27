@@ -5982,122 +5982,149 @@ impl AccountsDb {
         if let Some(limit) = limit_load_slot_count_from_snapshot {
             slots.truncate(limit); // get rid of the newer slots and keep just the older
         }
-        // pass == 0 always runs and generates the index
-        // pass == 1 only runs if verify == true.
-        // verify checks that all the expected items are in the accounts index and measures how long it takes to look them all up
-        let passes = if verify { 2 } else { 1 };
-        for pass in 0..passes {
-            let total_processed_slots_across_all_threads = AtomicU64::new(0);
-            let outer_slots_len = slots.len();
-            let chunk_size = (outer_slots_len / 16) + 1; // approximately 400k slots in a snapshot
-            let mut index_time = Measure::start("index");
-            let insertion_time_us = AtomicU64::new(0);
-            let scan_time: u64 = slots
-                .par_chunks(chunk_size)
-                .map(|slots| {
-                    let mut log_status = MultiThreadProgress::new(
-                        &total_processed_slots_across_all_threads,
-                        2,
-                        outer_slots_len as u64,
-                    );
-                    let mut scan_time_sum = 0;
-                    for (index, slot) in slots.iter().enumerate() {
-                        let mut scan_time = Measure::start("scan");
-                        log_status.report(index as u64);
-                        let storage_maps: Vec<Arc<AccountStorageEntry>> = self
-                            .storage
-                            .get_slot_storage_entries(*slot)
-                            .unwrap_or_default();
-                        let accounts_map = Self::process_storage_slot(&storage_maps);
-                        scan_time.stop();
-                        scan_time_sum += scan_time.as_us();
 
-                        let insert_us = if pass == 0 {
-                            // generate index
-                            self.generate_index_for_slot(accounts_map, slot)
-                        } else {
-                            // verify index matches expected and measure the time to get all items
-                            assert!(verify);
-                            let mut lookup_time = Measure::start("lookup_time");
-                            for account in accounts_map.into_iter() {
-                                let (key, account_info) = account;
-                                let lock = self.accounts_index.get_account_maps_read_lock(&key);
-                                let x = lock.get(&key);
-                                assert!(x.is_some(), "not in index: {}", key);
-                                let x = x.unwrap();
-                                let sl = &x.slot_list;
-                                let mut count = 0;
-                                for (slot2, account_info2) in sl.iter() {
-                                    if slot2 == slot {
-                                        count += 1;
-                                        let ai = AccountInfo {
-                                            store_id: account_info.1,
-                                            offset: account_info.2.offset,
-                                            stored_size: account_info.2.stored_size,
-                                            lamports: account_info.2.account_meta.lamports,
-                                        };
-                                        assert_eq!(&ai, account_info2);
+        let count = 8;
+        let stop = Arc::new(AtomicBool::new(false));
+        let stop_ = stop.clone();
+        (0..2).into_par_iter().for_each(|fork| {
+
+            if fork == 0 {
+                // pass == 0 always runs and generates the index
+                // pass == 1 only runs if verify == true.
+                // verify checks that all the expected items are in the accounts index and measures how long it takes to look them all up
+                let passes = if verify { 2 } else { 1 };
+                for pass in 0..passes {
+                    
+                    let total_processed_slots_across_all_threads = AtomicU64::new(0);
+                    let outer_slots_len = slots.len();
+                    let chunk_size = (outer_slots_len / 16) + 1; // approximately 400k slots in a snapshot
+                    let mut index_time = Measure::start("index");
+                    let insertion_time_us = AtomicU64::new(0);
+                    let scan_time: u64 = slots
+                        .par_chunks(chunk_size)
+                        .map(|slots| {
+                            let mut log_status = MultiThreadProgress::new(
+                                &total_processed_slots_across_all_threads,
+                                2,
+                                outer_slots_len as u64,
+                            );
+                            let mut scan_time_sum = 0;
+                            for (index, slot) in slots.iter().enumerate() {
+                                let mut scan_time = Measure::start("scan");
+                                log_status.report(index as u64);
+                                let storage_maps: Vec<Arc<AccountStorageEntry>> = self
+                                    .storage
+                                    .get_slot_storage_entries(*slot)
+                                    .unwrap_or_default();
+                                let accounts_map = Self::process_storage_slot(&storage_maps);
+                                scan_time.stop();
+                                scan_time_sum += scan_time.as_us();
+
+                                let insert_us = if pass == 0 {
+                                    // generate index
+                                    self.generate_index_for_slot(accounts_map, slot)
+                                } else {
+                                    // verify index matches expected and measure the time to get all items
+                                    assert!(verify);
+                                    let mut lookup_time = Measure::start("lookup_time");
+                                    for account in accounts_map.into_iter() {
+                                        let (key, account_info) = account;
+                                        let lock = self.accounts_index.get_account_maps_read_lock(&key);
+                                        let x = lock.get(&key);
+                                        assert!(x.is_some(), "not in index: {}", key);
+                                        let x = x.unwrap();
+                                        let sl = &x.slot_list;
+                                        let mut count = 0;
+                                        for (slot2, account_info2) in sl.iter() {
+                                            if slot2 == slot {
+                                                count += 1;
+                                                let ai = AccountInfo {
+                                                    store_id: account_info.1,
+                                                    offset: account_info.2.offset,
+                                                    stored_size: account_info.2.stored_size,
+                                                    lamports: account_info.2.account_meta.lamports,
+                                                };
+                                                assert_eq!(&ai, account_info2);
+                                            }
+                                        }
+                                        assert_eq!(1, count);
                                     }
-                                }
-                                assert_eq!(1, count);
+                                    lookup_time.stop();
+                                    lookup_time.as_us()
+                                };
+                                insertion_time_us.fetch_add(insert_us, Ordering::Relaxed);
                             }
-                            lookup_time.stop();
-                            lookup_time.as_us()
-                        };
-                        insertion_time_us.fetch_add(insert_us, Ordering::Relaxed);
+                            scan_time_sum
+                        })
+                        .sum();
+                    index_time.stop();
+
+                    let mut min_bin_size = usize::MAX;
+                    let mut max_bin_size = usize::MIN;
+                    let total_items = self
+                        .accounts_index
+                        .account_maps
+                        .iter()
+                        .map(|i| {
+                            let len = i.read().unwrap().len_inaccurate();
+                            min_bin_size = std::cmp::min(min_bin_size, len);
+                            max_bin_size = std::cmp::max(max_bin_size, len);
+                            len
+                        })
+                        .sum();
+
+                    let mut timings = GenerateIndexTimings {
+                        scan_time,
+                        index_time: index_time.as_us(),
+                        insertion_time_us: insertion_time_us.load(Ordering::Relaxed),
+                        min_bin_size,
+                        max_bin_size,
+                        total_items,
+                        ..GenerateIndexTimings::default()
+                    };
+
+                    if pass == 0 {
+                        // Need to add these last, otherwise older updates will be cleaned
+                        for slot in &slots {
+                            self.accounts_index.add_root(*slot, false);
+                        }
                     }
-                    scan_time_sum
-                })
-                .sum();
-            index_time.stop();
 
-            let mut min_bin_size = usize::MAX;
-            let mut max_bin_size = usize::MIN;
-            let total_items = self
-                .accounts_index
-                .account_maps
-                .iter()
-                .map(|i| {
-                    let len = i.read().unwrap().len_inaccurate();
-                    min_bin_size = std::cmp::min(min_bin_size, len);
-                    max_bin_size = std::cmp::max(max_bin_size, len);
-                    len
-                })
-                .sum();
+                    //error!("distribution prior to flush");
+                    self.accounts_index.account_maps.first().unwrap().read().unwrap().distribution();
+                    let mut m = Measure::start("flush_index");
+                    self.accounts_index.account_maps.iter().for_each(|bin_map| {
+                        bin_map.write().unwrap().flush();});
+                    m.stop();
+                    stop.store(true, Ordering::Relaxed); // stop the flushers now that we have flushed everything
 
-            let mut timings = GenerateIndexTimings {
-                scan_time,
-                index_time: index_time.as_us(),
-                insertion_time_us: insertion_time_us.load(Ordering::Relaxed),
-                min_bin_size,
-                max_bin_size,
-                total_items,
-                ..GenerateIndexTimings::default()
-            };
+                    error!("flush_us: {}", m.as_us());
+                    self.accounts_index.account_maps.first().unwrap().read().unwrap().distribution();
 
-            if pass == 0 {
-                // Need to add these last, otherwise older updates will be cleaned
-                for slot in &slots {
-                    self.accounts_index.add_root(*slot, false);
+                    if pass == 0 {
+                        self.initialize_storage_count_and_alive_bytes(&mut timings);
+                    }
+
+                    timings.report();
                 }
+                stop.store(true, Ordering::Relaxed);
             }
+            else {
+                (0..count).into_par_iter().for_each(|_| {
+                    let stop = stop_.clone();
 
-            //error!("distribution prior to flush");
-            self.accounts_index.account_maps.first().unwrap().read().unwrap().distribution();
-            let mut m = Measure::start("flush_index");
-            self.accounts_index.account_maps.par_iter().for_each(|bin_map| {
-                bin_map.write().unwrap().flush();});
-            m.stop();
-
-            error!("flush_us: {}", m.as_us());
-            self.accounts_index.account_maps.first().unwrap().read().unwrap().distribution();
-
-            if pass == 0 {
-                self.initialize_storage_count_and_alive_bytes(&mut timings);
+                    loop {
+                        let skip = thread_rng().gen_range(0, self.accounts_index.account_maps.len());
+                        self.accounts_index.account_maps.iter().skip(skip).for_each(|bin_map| {
+                            if stop.load(Ordering::Relaxed) {
+                                return;
+                            }
+                            bin_map.read().unwrap().flush();
+                        });
+                    }
+                });
             }
-
-            timings.report();
-        }
+        });
     }
 
     fn calculate_storage_count_and_alive_bytes(
