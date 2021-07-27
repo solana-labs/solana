@@ -316,7 +316,7 @@ impl<'a, 'b: 'a, T: 'static + Clone + IsCached + std::fmt::Debug + IsCached + Gu
     }
 
     pub fn upsert(
-        mut w_account_maps: AccountMapsWriteLock<'a, T>,
+        w_account_maps: AccountMapsReadLock<'a, T>,
         pubkey: Pubkey,
         mut new_value: AccountMapEntry<T>,
         reclaims: &mut SlotList<T>,
@@ -1668,7 +1668,7 @@ impl<
         //  account operations.
         let new_item = WriteAccountMapEntry::new_entry_after_update(slot, account_info);
         {
-            let w_account_maps = self.get_account_maps_write_lock(pubkey);
+            let w_account_maps = self.get_account_maps_read_lock(pubkey);
             WriteAccountMapEntry::upsert(w_account_maps, *pubkey, new_item, reclaims);
         }
         self.update_secondary_indexes(pubkey, account_owner, account_data, account_indexes);

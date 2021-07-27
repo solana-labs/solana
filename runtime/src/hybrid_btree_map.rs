@@ -1494,7 +1494,7 @@ impl<V: 'static + Clone + Debug + IsCached + Guts> HybridBTreeMap<V> {
     }
 
     pub fn upsert(
-        &mut self,
+        &self,
         pubkey: Pubkey,
         new_value: AccountMapEntry<V>,
         reclaims: &mut SlotList<V>,
