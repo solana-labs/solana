@@ -558,6 +558,20 @@ impl<'a, T> AccountsIndexIterator<'a, T> {
         Self::bin_from_bound(&self.end_bound, usize::MAX)
     }
 
+    fn bin_start_and_range(&self) -> (usize, usize) {
+        let start_bin = self.start_bin();
+        // calculate the max range of bins to look in
+        let end_bin_inclusive = self.end_bin_inclusive();
+        let bin_range = if start_bin > end_bin_inclusive {
+            0 // empty range
+        } else {
+            // the range is end_inclusive + 1 - start
+            // end_inclusive could be usize::MAX already if no bound was specified
+            end_bin_inclusive.saturating_add(1) - start_bin
+        };
+        (start_bin, bin_range)
+    }
+
     pub fn new<R>(account_maps: &'a LockMapTypeSlice<T>, range: Option<R>) -> Self
     where
         R: RangeBounds<Pubkey>,
@@ -583,17 +597,7 @@ impl<'a, T: 'static + Clone> Iterator for AccountsIndexIterator<'a, T> {
         if self.is_finished {
             return None;
         }
-
-        let start_bin = self.start_bin();
-        // calculate the max range of bins to look in
-        let end_bin_inclusive = self.end_bin_inclusive();
-        let bin_range = if start_bin > end_bin_inclusive {
-            0 // empty range
-        } else {
-            // the range is end_inclusive + 1 - start
-            // end_inclusive could be usize::MAX already if no bound was specified
-            end_bin_inclusive.saturating_add(1) - start_bin
-        };
+        let (start_bin, bin_range) = self.bin_start_and_range();
         let mut chunk: Vec<(Pubkey, AccountMapEntry<T>)> = Vec::with_capacity(ITER_BATCH_SIZE);
         'outer: for i in self.account_maps.iter().skip(start_bin).take(bin_range) {
             for (pubkey, account_map_entry) in
@@ -3811,6 +3815,45 @@ pub mod tests {
         fn is_zero_lamport(&self) -> bool {
             false
         }
+    }
+
+    #[test]
+    fn test_bin_start_and_range() {
+        let index = AccountsIndex::<bool>::default();
+        let iter = AccountsIndexIterator::new(&index.account_maps, None::<RangeInclusive<Pubkey>>);
+        assert_eq!((0, usize::MAX), iter.bin_start_and_range());
+
+        let key_0 = Pubkey::new(&[0; 32]);
+        let key_ff = Pubkey::new(&[0xff; 32]);
+
+        let iter = AccountsIndexIterator::new(
+            &index.account_maps,
+            Some(RangeInclusive::new(key_0, key_ff)),
+        );
+        assert_eq!((0, BINS), iter.bin_start_and_range());
+        let iter = AccountsIndexIterator::new(
+            &index.account_maps,
+            Some(RangeInclusive::new(key_ff, key_0)),
+        );
+        assert_eq!((BINS - 1, 0), iter.bin_start_and_range());
+        let iter =
+            AccountsIndexIterator::new(&index.account_maps, Some((Included(key_0), Unbounded)));
+        assert_eq!((0, usize::MAX), iter.bin_start_and_range());
+        let iter =
+            AccountsIndexIterator::new(&index.account_maps, Some((Included(key_ff), Unbounded)));
+        assert_eq!(
+            (BINS - 1, usize::MAX - (BINS - 1)),
+            iter.bin_start_and_range()
+        );
+
+        assert_eq!(
+            (0..2)
+                .into_iter()
+                .skip(1)
+                .take(usize::MAX)
+                .collect::<Vec<_>>(),
+            vec![1]
+        );
     }
 
     #[test]
