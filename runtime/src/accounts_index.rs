@@ -3001,9 +3001,9 @@ pub mod tests {
 
         let new_entry = WriteAccountMapEntry::new_entry_after_update(slot, account_info);
         assert_eq!(0, account_maps_len_expensive(&index));
-        let w_account_maps = index.get_account_maps_write_lock(&key.pubkey());
+        let r_account_maps = index.get_account_maps_read_lock(&key.pubkey());
         WriteAccountMapEntry::upsert(
-            w_account_maps,
+            r_account_maps,
             key.pubkey(),
             new_entry,
             &mut SlotList::default(),

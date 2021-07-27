@@ -6477,7 +6477,7 @@ pub mod tests {
             bin_range: &Range<usize>,
             check_hash: bool,
         ) -> Result<Vec<Vec<Vec<CalculateHashIntermediate>>>, BankHashVerificationError> {
-            Self::scan_snapshot_stores_with_cache(storage, stats, bins, bin_range, check_hash, None, None, None)
+            Self::scan_snapshot_stores_with_cache(storage, stats, bins, bin_range, check_hash, None,/* None, None*/)
         }
     }
 
@@ -6818,7 +6818,7 @@ pub mod tests {
             None,
             HashStats::default(),
             false,
-            None,None,
+            None,//None,
         )
         .unwrap();
         let expected_hash = Hash::from_str("GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn").unwrap();
@@ -6840,7 +6840,7 @@ pub mod tests {
             None,
             HashStats::default(),
             false,
-            None,None,
+            None,//None,
         )
         .unwrap();
 
@@ -6890,15 +6890,16 @@ pub mod tests {
         let result = AccountsDb::scan_account_storage_no_bank(
             None,
             &get_storage_refs(&storages),
-            |loaded_account: LoadedAccount, accum: &mut Vec<u64>, slot: Slot, _| {
+            |loaded_account: LoadedAccount, accum: &mut Vec<u64>, slot: Slot| {
                 calls.fetch_add(1, Ordering::Relaxed);
                 assert_eq!(loaded_account.pubkey(), &pubkey);
                 assert_eq!(slot_expected, slot);
                 accum.push(expected);
             },
             |a| a,
+            /*
             |_, _, _, _| (true, false),
-            |_, _, _, _| {},
+            |_, _, _, _| {},*/
         );
         assert_eq!(calls.load(Ordering::Relaxed), 1);
         assert_eq!(result, vec![vec![expected]]);
@@ -6934,7 +6935,7 @@ pub mod tests {
 
         let calls = AtomicU64::new(0);
         let mut accum = Vec::new();
-        let scan_func = |loaded_account: LoadedAccount, accum: &mut Vec<u64>, slot: Slot, _| {
+        let scan_func = |loaded_account: LoadedAccount, accum: &mut Vec<u64>, slot: Slot, /*_*/| {
             calls.fetch_add(1, Ordering::Relaxed);
             assert_eq!(loaded_account.pubkey(), &pubkey);
             assert_eq!(slot_expected, slot);
@@ -6945,7 +6946,7 @@ pub mod tests {
             &scan_func,
             slot_expected,
             &mut accum,
-            false,
+            //false,
         );
         assert_eq!(calls.load(Ordering::Relaxed), 1);
         assert_eq!(accum, vec![expected]);
@@ -7002,7 +7003,7 @@ pub mod tests {
                 storages[..].swap(0, 1);
             }
             let calls = AtomicU64::new(0);
-            let scan_func = |loaded_account: LoadedAccount, accum: &mut Vec<u64>, slot: Slot, _| {
+            let scan_func = |loaded_account: LoadedAccount, accum: &mut Vec<u64>, slot: Slot, /*_*/| {
                 calls.fetch_add(1, Ordering::Relaxed);
                 let write_version = loaded_account.write_version();
                 let first = loaded_account.pubkey() == &pubkey1 && write_version == write_version1;
@@ -7023,7 +7024,7 @@ pub mod tests {
                 &scan_func,
                 slot_expected,
                 &mut accum,
-                false,
+                //false,
             );
             assert_eq!(calls.load(Ordering::Relaxed), storages.len() as u64);
             assert_eq!(accum, vec![write_version1, write_version2]);
