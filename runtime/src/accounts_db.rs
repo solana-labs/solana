@@ -6102,6 +6102,8 @@ impl AccountsDb {
                             }
                             bin_map.read().unwrap().flush();
                         });
+                        if stop.load(Ordering::Relaxed) {
+                            break;
                     }
                 });
             }
