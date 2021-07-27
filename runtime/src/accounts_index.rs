@@ -1165,8 +1165,8 @@ impl<T: 'static + Clone + IsCached + ZeroLamport + std::marker::Sync + std::mark
         total_elapsed_timer.stop();
 
         if metric_name.is_empty() {
-            error!("empty metric name! {} {}", file!(), line!());
-            panic!("empty metric name");
+            error!("empty metric name! {} {}, range: {:?}", file!(), line!(), range);
+            //panic!("empty metric name");
         }
 
         if !metric_name.is_empty() {
