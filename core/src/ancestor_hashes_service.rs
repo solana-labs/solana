@@ -391,10 +391,11 @@ impl AncestorHashesService {
         ancestor_hashes_request_statuses: &DashMap<Slot, DeadSlotAncestorRequestStatus>,
         dead_slot_pool: &mut HashSet<Slot>,
         repairable_dead_slot_pool: &mut HashSet<Slot>,
+        root_slot: Slot,
     ) {
         for update in ancestor_hashes_replay_update_receiver.try_iter() {
             let slot = update.slot();
-            if ancestor_hashes_request_statuses.contains_key(&slot) {
+            if slot <= root_slot || ancestor_hashes_request_statuses.contains_key(&slot) {
                 return;
             }
             match update {
@@ -468,13 +469,14 @@ impl AncestorHashesService {
         repairable_dead_slot_pool: &mut HashSet<Slot>,
         request_throttle: &mut Vec<u64>,
     ) {
+        let root_bank = repair_info.bank_forks.read().unwrap().root_bank();
         Self::process_replay_updates(
             ancestor_hashes_replay_update_receiver,
             ancestor_hashes_request_statuses,
             dead_slot_pool,
             repairable_dead_slot_pool,
+            root_bank.slot(),
         );
-        let root_bank = repair_info.bank_forks.read().unwrap().root_bank();
 
         Self::find_epoch_slots_frozen_dead_slots(
             &repair_info.cluster_slots,
@@ -483,8 +485,14 @@ impl AncestorHashesService {
             &root_bank,
         );
 
+        dead_slot_pool.retain(|slot| *slot > root_bank.slot());
+
+        repairable_dead_slot_pool.retain(|slot| *slot > root_bank.slot());
+
         ancestor_hashes_request_statuses.retain(|slot, status| {
-            if status.is_expired() {
+            if *slot <= root_bank.slot() {
+                false
+            } else if status.is_expired() {
                 // Add the slot back to the repairable pool to retry
                 repairable_dead_slot_pool.insert(*slot);
                 false
@@ -504,14 +512,13 @@ impl AncestorHashesService {
         for _ in 0..number_of_allowed_requests {
             let slot = repairable_dead_slot_pool.iter().next().cloned();
             if let Some(slot) = slot {
-                repairable_dead_slot_pool.take(&slot).unwrap();
                 warn!(
                     "Cluster froze slot: {}, but we marked it as dead.
                     Initiating protocol to sample cluster for dead slot ancestors.",
                     slot
                 );
 
-                Self::initiate_ancestor_hashes_requests_for_duplicate_slot(
+                if Self::initiate_ancestor_hashes_requests_for_duplicate_slot(
                     ancestor_hashes_request_statuses,
                     ancestor_hashes_request_socket,
                     &repair_info.cluster_slots,
@@ -520,9 +527,10 @@ impl AncestorHashesService {
                     slot,
                     repair_stats,
                     outstanding_requests,
-                );
-
-                request_throttle.push(timestamp());
+                ) {
+                    request_throttle.push(timestamp());
+                    repairable_dead_slot_pool.take(&slot).unwrap();
+                }
             } else {
                 break;
             }
@@ -578,6 +586,8 @@ impl AncestorHashesService {
         })
     }
 
+    /// Returns true if a request was successfully made and the status
+    /// added to `ancestor_hashes_request_statuses`
     fn initiate_ancestor_hashes_requests_for_duplicate_slot(
         ancestor_hashes_request_statuses: &DashMap<Slot, DeadSlotAncestorRequestStatus>,
         ancestor_hashes_request_socket: &UdpSocket,
@@ -587,7 +597,7 @@ impl AncestorHashesService {
         duplicate_slot: Slot,
         repair_stats: &mut AncestorRepairRequestsStats,
         outstanding_requests: &RwLock<OutstandingAncestorHashesRepairs>,
-    ) {
+    ) -> bool {
         let sampled_validators = serve_repair.repair_request_ancestor_hashes_sample_peers(
             duplicate_slot,
             cluster_slots,
@@ -618,6 +628,9 @@ impl AncestorHashesService {
             );
             assert!(!ancestor_hashes_request_statuses.contains_key(&duplicate_slot));
             ancestor_hashes_request_statuses.insert(duplicate_slot, ancestor_request_status);
+            true
+        } else {
+            false
         }
     }
 }
@@ -629,6 +642,7 @@ mod test {
     use crossbeam_channel::unbounded;
     use solana_gossip::cluster_info::{ClusterInfo, Node};
     use solana_ledger::{blockstore::make_many_slot_entries, get_tmp_ledger_path};
+    use solana_runtime::accounts_background_service::AbsRequestSender;
     use solana_sdk::{hash::Hash, signature::Keypair};
     use solana_streamer::socket::SocketAddrSpace;
     use std::sync::mpsc::channel;
@@ -641,8 +655,9 @@ mod test {
         let mut dead_slot_pool = HashSet::new();
         let mut repairable_dead_slot_pool = HashSet::new();
         let slot = 10;
+        let mut root_slot = 0;
 
-        // Getting a dead signal should only add the slot to the dead pool
+        // 1) Getting a dead signal should only add the slot to the dead pool
         ancestor_hashes_replay_update_sender
             .send(AncestorHashesReplayUpdate::Dead(slot))
             .unwrap();
@@ -651,11 +666,12 @@ mod test {
             &ancestor_hashes_request_statuses,
             &mut dead_slot_pool,
             &mut repairable_dead_slot_pool,
+            root_slot,
         );
         assert!(dead_slot_pool.contains(&slot));
-        assert!(!repairable_dead_slot_pool.contains(&slot));
+        assert!(repairable_dead_slot_pool.is_empty());
 
-        // Getting a duplicate confirmed dead slot should move the slot
+        // 2) Getting a duplicate confirmed dead slot should move the slot
         // from the dead pool to the repairable pool
         ancestor_hashes_replay_update_sender
             .send(AncestorHashesReplayUpdate::DeadDuplicateConfirmed(slot))
@@ -665,11 +681,12 @@ mod test {
             &ancestor_hashes_request_statuses,
             &mut dead_slot_pool,
             &mut repairable_dead_slot_pool,
+            root_slot,
         );
-        assert!(!dead_slot_pool.contains(&slot));
+        assert!(dead_slot_pool.is_empty());
         assert!(repairable_dead_slot_pool.contains(&slot));
 
-        // Getting another dead signal should not add it back to the dead pool
+        // 3) Getting another dead signal should not add it back to the dead pool
         ancestor_hashes_replay_update_sender
             .send(AncestorHashesReplayUpdate::Dead(slot))
             .unwrap();
@@ -678,11 +695,12 @@ mod test {
             &ancestor_hashes_request_statuses,
             &mut dead_slot_pool,
             &mut repairable_dead_slot_pool,
+            root_slot,
         );
-        assert!(!dead_slot_pool.contains(&slot));
+        assert!(dead_slot_pool.is_empty());
         assert!(repairable_dead_slot_pool.contains(&slot));
 
-        // If an outstanding request for a slot already exists, should
+        // 4) If an outstanding request for a slot already exists, should
         // ignore any signals from replay stage
         ancestor_hashes_request_statuses.insert(slot, DeadSlotAncestorRequestStatus::default());
         dead_slot_pool.clear();
@@ -698,9 +716,33 @@ mod test {
             &ancestor_hashes_request_statuses,
             &mut dead_slot_pool,
             &mut repairable_dead_slot_pool,
+            root_slot,
         );
-        assert!(!dead_slot_pool.contains(&slot));
-        assert!(!repairable_dead_slot_pool.contains(&slot));
+        assert!(dead_slot_pool.is_empty());
+        assert!(repairable_dead_slot_pool.is_empty());
+
+        // 5) If we get any signals for slots <= root_slot, they should be ignored
+        root_slot = 15;
+        ancestor_hashes_request_statuses.clear();
+        dead_slot_pool.clear();
+        repairable_dead_slot_pool.clear();
+        ancestor_hashes_replay_update_sender
+            .send(AncestorHashesReplayUpdate::Dead(root_slot - 1))
+            .unwrap();
+        ancestor_hashes_replay_update_sender
+            .send(AncestorHashesReplayUpdate::DeadDuplicateConfirmed(
+                root_slot - 2,
+            ))
+            .unwrap();
+        AncestorHashesService::process_replay_updates(
+            &ancestor_hashes_replay_update_receiver,
+            &ancestor_hashes_request_statuses,
+            &mut dead_slot_pool,
+            &mut repairable_dead_slot_pool,
+            root_slot,
+        );
+        assert!(dead_slot_pool.is_empty());
+        assert!(repairable_dead_slot_pool.is_empty());
     }
 
     #[test]
@@ -765,7 +807,7 @@ mod test {
     }
 
     #[test]
-    fn test_initiate_ancestor_hashes_requests_for_duplicate_slot() {
+    fn test_ancestor_hashes_service_initiate_ancestor_hashes_requests_for_duplicate_slot() {
         let ancestor_hashes_request_statuses = DashMap::new();
         let ancestor_hashes_request_socket = Arc::new(UdpSocket::bind("0.0.0.0:0").unwrap());
         let responder_node = Node::new_localhost();
@@ -854,6 +896,7 @@ mod test {
                 &outstanding_requests,
             );
 
+            assert_eq!(ancestor_hashes_request_statuses.len(), 1);
             assert!(ancestor_hashes_request_statuses.contains_key(&slot_to_query));
 
             // Should have received valid response
@@ -874,10 +917,228 @@ mod test {
                 DuplicateAncestorDecision::AncestorsAllMatch
             );
 
+            // Should have removed the ancestor status on successful
+            // completion
+            assert!(ancestor_hashes_request_statuses.is_empty());
+
             exit.store(true, Ordering::Relaxed);
             t_request_receiver.join().unwrap();
             t_listen.join().unwrap();
         }
         Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    fn test_ancestor_hashes_service_manage_ancestor_requests() {
+        let vote_simulator = VoteSimulator::new(3);
+        let ancestor_hashes_request_statuses = DashMap::new();
+        let ancestor_hashes_request_socket = Arc::new(UdpSocket::bind("0.0.0.0:0").unwrap());
+        let responder_node = Node::new_localhost();
+        let my_node = Node::new_localhost();
+        let cluster_info = Arc::new(ClusterInfo::new(
+            my_node.info,
+            Arc::new(Keypair::new()),
+            SocketAddrSpace::Unspecified,
+        ));
+        cluster_info.insert_info(responder_node.info);
+        let serve_repair = ServeRepair::new(cluster_info.clone());
+        let epoch_schedule = *vote_simulator
+            .bank_forks
+            .read()
+            .unwrap()
+            .root_bank()
+            .epoch_schedule();
+        let (duplicate_slots_reset_sender, _duplicate_slots_reset_receiver) = unbounded();
+        let repair_info = RepairInfo {
+            bank_forks: vote_simulator.bank_forks,
+            cluster_info,
+            cluster_slots: Arc::new(ClusterSlots::default()),
+            epoch_schedule,
+            duplicate_slots_reset_sender,
+            repair_validators: None,
+        };
+
+        let outstanding_requests = RwLock::new(OutstandingAncestorHashesRepairs::default());
+        let (ancestor_hashes_replay_update_sender, ancestor_hashes_replay_update_receiver) =
+            unbounded();
+        let mut dead_slot_pool = HashSet::new();
+        let mut repairable_dead_slot_pool = HashSet::new();
+        let mut request_throttle = vec![];
+
+        // 1) No signals from ReplayStage, no requests should be made
+        AncestorHashesService::manage_ancestor_requests(
+            &ancestor_hashes_request_statuses,
+            &ancestor_hashes_request_socket,
+            &repair_info,
+            &outstanding_requests,
+            &ancestor_hashes_replay_update_receiver,
+            &serve_repair,
+            &mut AncestorRepairRequestsStats::default(),
+            &mut dead_slot_pool,
+            &mut repairable_dead_slot_pool,
+            &mut request_throttle,
+        );
+
+        assert!(dead_slot_pool.is_empty());
+        assert!(repairable_dead_slot_pool.is_empty());
+        assert!(ancestor_hashes_request_statuses.is_empty());
+
+        // 2) Simulate signals from ReplayStage, should make a request
+        // for `dead_duplicate_confirmed_slot`
+        let dead_slot = 10;
+        let dead_duplicate_confirmed_slot = 14;
+        ancestor_hashes_replay_update_sender
+            .send(AncestorHashesReplayUpdate::Dead(dead_slot))
+            .unwrap();
+        ancestor_hashes_replay_update_sender
+            .send(AncestorHashesReplayUpdate::DeadDuplicateConfirmed(
+                dead_duplicate_confirmed_slot,
+            ))
+            .unwrap();
+        ancestor_hashes_replay_update_sender
+            .send(AncestorHashesReplayUpdate::DeadDuplicateConfirmed(
+                dead_duplicate_confirmed_slot,
+            ))
+            .unwrap();
+        AncestorHashesService::manage_ancestor_requests(
+            &ancestor_hashes_request_statuses,
+            &ancestor_hashes_request_socket,
+            &repair_info,
+            &outstanding_requests,
+            &ancestor_hashes_replay_update_receiver,
+            &serve_repair,
+            &mut AncestorRepairRequestsStats::default(),
+            &mut dead_slot_pool,
+            &mut repairable_dead_slot_pool,
+            &mut request_throttle,
+        );
+
+        assert_eq!(dead_slot_pool.len(), 1);
+        assert!(dead_slot_pool.contains(&dead_slot));
+        assert!(repairable_dead_slot_pool.is_empty());
+        assert_eq!(ancestor_hashes_request_statuses.len(), 1);
+        assert!(ancestor_hashes_request_statuses.contains_key(&dead_duplicate_confirmed_slot));
+
+        // 3) Simulate an outstanding request timing out
+        ancestor_hashes_request_statuses
+            .get_mut(&dead_duplicate_confirmed_slot)
+            .unwrap()
+            .value_mut()
+            .make_expired();
+
+        // If the request timed out, we should remove the slot from `ancestor_hashes_request_statuses`,
+        // and add it to `repairable_dead_slot_pool`. Because the request_throttle is at its limit,
+        // we should not immediately retry the timed request.
+        request_throttle.resize(MAX_ANCESTOR_HASHES_SLOT_REQUESTS_PER_SECOND, std::u64::MAX);
+        AncestorHashesService::manage_ancestor_requests(
+            &ancestor_hashes_request_statuses,
+            &ancestor_hashes_request_socket,
+            &repair_info,
+            &outstanding_requests,
+            &ancestor_hashes_replay_update_receiver,
+            &serve_repair,
+            &mut AncestorRepairRequestsStats::default(),
+            &mut dead_slot_pool,
+            &mut repairable_dead_slot_pool,
+            &mut request_throttle,
+        );
+
+        assert_eq!(dead_slot_pool.len(), 1);
+        assert!(dead_slot_pool.contains(&dead_slot));
+        assert_eq!(repairable_dead_slot_pool.len(), 1);
+        assert!(repairable_dead_slot_pool.contains(&dead_duplicate_confirmed_slot));
+        assert!(ancestor_hashes_request_statuses.is_empty());
+
+        // 4) If the throttle only has expired timestamps from more than a second ago,
+        // then on the next iteration, we should clear the entries in the throttle
+        // and retry a request for the timed out request
+        request_throttle.clear();
+        request_throttle.resize(
+            MAX_ANCESTOR_HASHES_SLOT_REQUESTS_PER_SECOND,
+            timestamp() - 1001,
+        );
+        AncestorHashesService::manage_ancestor_requests(
+            &ancestor_hashes_request_statuses,
+            &ancestor_hashes_request_socket,
+            &repair_info,
+            &outstanding_requests,
+            &ancestor_hashes_replay_update_receiver,
+            &serve_repair,
+            &mut AncestorRepairRequestsStats::default(),
+            &mut dead_slot_pool,
+            &mut repairable_dead_slot_pool,
+            &mut request_throttle,
+        );
+        assert_eq!(dead_slot_pool.len(), 1);
+        assert!(dead_slot_pool.contains(&dead_slot));
+        assert!(repairable_dead_slot_pool.is_empty());
+        assert_eq!(ancestor_hashes_request_statuses.len(), 1);
+        assert!(ancestor_hashes_request_statuses.contains_key(&dead_duplicate_confirmed_slot));
+        // Request throttle includes one item for the request we just made
+        assert_eq!(
+            request_throttle.len(),
+            ancestor_hashes_request_statuses.len()
+        );
+
+        // 5) If we've reached the throttle limit, no requests should be made,
+        // but should still read off the channel for replay updates
+        request_throttle.clear();
+        request_throttle.resize(MAX_ANCESTOR_HASHES_SLOT_REQUESTS_PER_SECOND, std::u64::MAX);
+        let dead_duplicate_confirmed_slot_2 = 15;
+        ancestor_hashes_replay_update_sender
+            .send(AncestorHashesReplayUpdate::DeadDuplicateConfirmed(
+                dead_duplicate_confirmed_slot_2,
+            ))
+            .unwrap();
+        AncestorHashesService::manage_ancestor_requests(
+            &ancestor_hashes_request_statuses,
+            &ancestor_hashes_request_socket,
+            &repair_info,
+            &outstanding_requests,
+            &ancestor_hashes_replay_update_receiver,
+            &serve_repair,
+            &mut AncestorRepairRequestsStats::default(),
+            &mut dead_slot_pool,
+            &mut repairable_dead_slot_pool,
+            &mut request_throttle,
+        );
+
+        assert_eq!(dead_slot_pool.len(), 1);
+        assert!(dead_slot_pool.contains(&dead_slot));
+        assert_eq!(repairable_dead_slot_pool.len(), 1);
+        assert!(repairable_dead_slot_pool.contains(&dead_duplicate_confirmed_slot_2));
+        assert_eq!(ancestor_hashes_request_statuses.len(), 1);
+        assert!(ancestor_hashes_request_statuses.contains_key(&dead_duplicate_confirmed_slot));
+
+        // 6) If root moves past slot, should remove it from all state
+        let bank_forks = &repair_info.bank_forks;
+        let root_bank = bank_forks.read().unwrap().root_bank();
+        let new_root_slot = dead_duplicate_confirmed_slot_2 + 1;
+        let new_root_bank = Bank::new_from_parent(&root_bank, &Pubkey::default(), new_root_slot);
+        new_root_bank.freeze();
+        {
+            let mut w_bank_forks = bank_forks.write().unwrap();
+            w_bank_forks.insert(new_root_bank);
+            w_bank_forks.set_root(new_root_slot, &AbsRequestSender::default(), None);
+        }
+        assert!(!dead_slot_pool.is_empty());
+        assert!(!repairable_dead_slot_pool.is_empty());
+        assert!(!ancestor_hashes_request_statuses.is_empty());
+        request_throttle.clear();
+        AncestorHashesService::manage_ancestor_requests(
+            &ancestor_hashes_request_statuses,
+            &ancestor_hashes_request_socket,
+            &repair_info,
+            &outstanding_requests,
+            &ancestor_hashes_replay_update_receiver,
+            &serve_repair,
+            &mut AncestorRepairRequestsStats::default(),
+            &mut dead_slot_pool,
+            &mut repairable_dead_slot_pool,
+            &mut request_throttle,
+        );
+        assert!(dead_slot_pool.is_empty());
+        assert!(repairable_dead_slot_pool.is_empty());
+        assert!(ancestor_hashes_request_statuses.is_empty());
     }
 }
