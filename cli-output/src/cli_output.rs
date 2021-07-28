@@ -8,6 +8,7 @@ use {
         QuietDisplay, VerboseDisplay,
     },
     chrono::{Local, TimeZone},
+    clap::ArgMatches,
     console::{style, Emoji},
     inflector::cases::titlecase::to_title_case,
     serde::{Deserialize, Serialize},
@@ -47,7 +48,7 @@ use {
 
 static WARNING: Emoji = Emoji("⚠️", "!");
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub enum OutputFormat {
     Display,
     Json,
@@ -76,6 +77,21 @@ impl OutputFormat {
             OutputFormat::Json => serde_json::to_string_pretty(item).unwrap(),
             OutputFormat::JsonCompact => serde_json::to_value(item).unwrap().to_string(),
         }
+    }
+
+    pub fn from_matches(matches: &ArgMatches<'_>, output_name: &str, verbose: bool) -> Self {
+        matches
+            .value_of(output_name)
+            .map(|value| match value {
+                "json" => OutputFormat::Json,
+                "json-compact" => OutputFormat::JsonCompact,
+                _ => unreachable!(),
+            })
+            .unwrap_or(if verbose {
+                OutputFormat::DisplayVerbose
+            } else {
+                OutputFormat::Display
+            })
     }
 }
 
@@ -1572,7 +1588,7 @@ impl fmt::Display for CliInflation {
     }
 }
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Serialize, Deserialize, Default, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct CliSignOnlyData {
     pub blockhash: String,
@@ -2024,6 +2040,11 @@ pub fn return_signers_with_config(
     output_format: &OutputFormat,
     config: &ReturnSignersConfig,
 ) -> Result<String, Box<dyn std::error::Error>> {
+    let cli_command = return_signers_data(tx, config);
+    Ok(output_format.formatted_string(&cli_command))
+}
+
+pub fn return_signers_data(tx: &Transaction, config: &ReturnSignersConfig) -> CliSignOnlyData {
     let verify_results = tx.verify_with_results();
     let mut signers = Vec::new();
     let mut absent = Vec::new();
@@ -2048,15 +2069,13 @@ pub fn return_signers_with_config(
         None
     };
 
-    let cli_command = CliSignOnlyData {
+    CliSignOnlyData {
         blockhash: tx.message.recent_blockhash.to_string(),
         message,
         signers,
         absent,
         bad_sig,
-    };
-
-    Ok(output_format.formatted_string(&cli_command))
+    }
 }
 
 pub fn parse_sign_only_reply_string(reply: &str) -> SignOnly {
@@ -2438,6 +2457,7 @@ impl VerboseDisplay for CliGossipNodes {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use clap::{App, Arg};
     use solana_sdk::{
         message::Message,
         pubkey::Pubkey,
@@ -2498,6 +2518,22 @@ mod tests {
         assert_eq!(sign_only.absent_signers[0], absent.pubkey());
         assert_eq!(sign_only.bad_signers[0], bad.pubkey());
 
+        let res_data = return_signers_data(&tx, &ReturnSignersConfig::default());
+        assert_eq!(
+            res_data,
+            CliSignOnlyData {
+                blockhash: blockhash.to_string(),
+                message: None,
+                signers: vec![format!(
+                    "{}={}",
+                    present.pubkey().to_string(),
+                    tx.signatures[1]
+                )],
+                absent: vec![absent.pubkey().to_string()],
+                bad_sig: vec![bad.pubkey().to_string()],
+            }
+        );
+
         let expected_msg = "AwECBwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDgTl3Dqh9\
             F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5QEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE\
             BAQEBAYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBQUFBQUFBQUFBQUFBQUFBQUF\
@@ -2511,10 +2547,26 @@ mod tests {
         let res = return_signers_with_config(&tx, &OutputFormat::JsonCompact, &config).unwrap();
         let sign_only = parse_sign_only_reply_string(&res);
         assert_eq!(sign_only.blockhash, blockhash);
-        assert_eq!(sign_only.message, Some(expected_msg));
+        assert_eq!(sign_only.message, Some(expected_msg.clone()));
         assert_eq!(sign_only.present_signers[0].0, present.pubkey());
         assert_eq!(sign_only.absent_signers[0], absent.pubkey());
         assert_eq!(sign_only.bad_signers[0], bad.pubkey());
+
+        let res_data = return_signers_data(&tx, &config);
+        assert_eq!(
+            res_data,
+            CliSignOnlyData {
+                blockhash: blockhash.to_string(),
+                message: Some(expected_msg),
+                signers: vec![format!(
+                    "{}={}",
+                    present.pubkey().to_string(),
+                    tx.signatures[1]
+                )],
+                absent: vec![absent.pubkey().to_string()],
+                bad_sig: vec![bad.pubkey().to_string()],
+            }
+        );
     }
 
     #[test]
@@ -2561,6 +2613,52 @@ mod tests {
         assert_eq!(
             &OutputFormat::DisplayVerbose.formatted_string(&f),
             "verbose"
+        );
+    }
+
+    #[test]
+    fn test_output_format_from_matches() {
+        let app = App::new("test").arg(
+            Arg::with_name("output_format")
+                .long("output")
+                .value_name("FORMAT")
+                .global(true)
+                .takes_value(true)
+                .possible_values(&["json", "json-compact"])
+                .help("Return information in specified output format"),
+        );
+        let matches = app
+            .clone()
+            .get_matches_from(vec!["test", "--output", "json"]);
+        assert_eq!(
+            OutputFormat::from_matches(&matches, "output_format", false),
+            OutputFormat::Json
+        );
+        assert_eq!(
+            OutputFormat::from_matches(&matches, "output_format", true),
+            OutputFormat::Json
+        );
+
+        let matches = app
+            .clone()
+            .get_matches_from(vec!["test", "--output", "json-compact"]);
+        assert_eq!(
+            OutputFormat::from_matches(&matches, "output_format", false),
+            OutputFormat::JsonCompact
+        );
+        assert_eq!(
+            OutputFormat::from_matches(&matches, "output_format", true),
+            OutputFormat::JsonCompact
+        );
+
+        let matches = app.clone().get_matches_from(vec!["test"]);
+        assert_eq!(
+            OutputFormat::from_matches(&matches, "output_format", false),
+            OutputFormat::Display
+        );
+        assert_eq!(
+            OutputFormat::from_matches(&matches, "output_format", true),
+            OutputFormat::DisplayVerbose
         );
     }
 }
