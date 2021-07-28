@@ -3,7 +3,8 @@
 use {
     crate::{
         rpc_pubsub::{RpcSolPubSub, RpcSolPubSubImpl},
-        rpc_subscriptions::RpcSubscriptions,
+        rpc_subscription_tracker::{SubscriptionId, SubscriptionToken},
+        rpc_subscriptions::{RpcNotification, RpcSubscriptions},
     },
     dashmap::DashMap,
     jsonrpc_core::IoHandler,
@@ -81,6 +82,86 @@ impl PubSubService {
 
 type StdResult<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
+struct BroadcastHandler {
+    current_subscriptions: Arc<DashMap<SubscriptionId, SubscriptionToken>>,
+}
+
+impl BroadcastHandler {
+    fn handle(&self, notification: RpcNotification) -> Option<Arc<str>> {
+        if self
+            .current_subscriptions
+            .contains_key(&notification.subscription_id)
+        {
+            if notification.is_final {
+                self.current_subscriptions
+                    .remove(&notification.subscription_id);
+            }
+            Some(notification.json)
+        } else {
+            None
+        }
+    }
+}
+
+#[cfg(test)]
+pub struct TestBroadcastReceiver {
+    handler: BroadcastHandler,
+    inner: tokio::sync::broadcast::Receiver<RpcNotification>,
+}
+
+#[cfg(test)]
+impl TestBroadcastReceiver {
+    pub fn recv(&mut self) -> String {
+        use std::thread::sleep;
+        use std::time::{Duration, Instant};
+        use tokio::sync::broadcast::error::TryRecvError;
+
+        let timeout = Duration::from_millis(100);
+        let started = Instant::now();
+
+        loop {
+            match self.inner.try_recv() {
+                Ok(notification) => {
+                    if let Some(json) = self.handler.handle(notification) {
+                        return json.to_string();
+                    }
+                }
+                Err(TryRecvError::Empty) => {
+                    if started.elapsed() > timeout {
+                        panic!("TestBroadcastReceiver: no data, timeout reached");
+                    }
+                    sleep(Duration::from_millis(50));
+                }
+                Err(err) => panic!("broadcast receiver error: {}", err),
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+pub fn test_connection(
+    subscriptions: &Arc<RpcSubscriptions>,
+) -> (RpcSolPubSubImpl, TestBroadcastReceiver) {
+    let current_subscriptions = Arc::new(DashMap::new());
+    let broadcast_receiver = subscriptions.broadcast_receiver();
+    let rpc_impl = RpcSolPubSubImpl::new(
+        PubSubConfig {
+            enable_vote_subscription: true,
+            ..PubSubConfig::default()
+        },
+        Arc::clone(subscriptions),
+        Arc::clone(&current_subscriptions),
+    );
+    let broadcast_handler = BroadcastHandler {
+        current_subscriptions,
+    };
+    let receiver = TestBroadcastReceiver {
+        inner: broadcast_receiver,
+        handler: broadcast_handler,
+    };
+    (rpc_impl, receiver)
+}
+
 async fn handle_connection(
     socket: TcpStream,
     subscriptions: Arc<RpcSubscriptions>,
@@ -103,6 +184,9 @@ async fn handle_connection(
     let mut json_rpc_handler = IoHandler::new();
     let rpc_impl = RpcSolPubSubImpl::new(config, subscriptions, Arc::clone(&current_subscriptions));
     json_rpc_handler.extend_with(rpc_impl.to_delegate());
+    let broadcast_handler = BroadcastHandler {
+        current_subscriptions,
+    };
     loop {
         // Extra block for dropping `receive_future`.
         {
@@ -119,11 +203,9 @@ async fn handle_connection(
                     },
                     result = broadcast_receiver.recv() => match result {
                         Ok(notification) => {
-                            if current_subscriptions.contains_key(&notification.subscription_id) {
-                                sender.send_text(&notification.json).await?;
-                                if notification.is_final {
-                                    current_subscriptions.remove(&notification.subscription_id);
-                                }
+                            if let Some(json) = broadcast_handler.handle(notification) {
+                                sender.send_text(&json).await?;
+
                             }
                         }
                         // In both possible error cases (closed or lagged) we disconnect the client.
@@ -194,7 +276,7 @@ mod tests {
         },
         std::{
             net::{IpAddr, Ipv4Addr},
-            sync::RwLock,
+            sync::{atomic::AtomicBool, RwLock},
         },
     };
 
@@ -213,8 +295,8 @@ mod tests {
             Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests())),
             optimistically_confirmed_bank,
         ));
-        let pubsub_service =
-            PubSubService::new(PubSubConfig::default(), &subscriptions, pubsub_addr, &exit);
+        let (_trigger, pubsub_service) =
+            PubSubService::new(PubSubConfig::default(), &subscriptions, pubsub_addr);
         let thread = pubsub_service.thread_hdl.thread();
         assert_eq!(thread.name().unwrap(), "solana-pubsub");
     }

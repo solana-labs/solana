@@ -104,8 +104,8 @@ fn test_slot_subscription() {
         Arc::new(RwLock::new(BlockCommitmentCache::default())),
         optimistically_confirmed_bank,
     ));
-    let pubsub_service =
-        PubSubService::new(PubSubConfig::default(), &subscriptions, pubsub_addr, &exit);
+    let (trigger, pubsub_service) =
+        PubSubService::new(PubSubConfig::default(), &subscriptions, pubsub_addr);
     std::thread::sleep(Duration::from_millis(400));
 
     let (mut client, receiver) =
@@ -138,6 +138,7 @@ fn test_slot_subscription() {
     }
 
     exit.store(true, Ordering::Relaxed);
+    trigger.cancel();
     client.shutdown().unwrap();
     pubsub_service.close().unwrap();
 

@@ -4491,6 +4491,8 @@ dependencies = [
  "itertools 0.10.1",
  "jsonrpc-core",
  "jsonrpc-core-client",
+ "jsonrpc-derive",
+ "jsonrpc-pubsub",
  "log 0.4.14",
  "lru",
  "matches",
