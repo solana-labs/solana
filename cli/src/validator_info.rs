@@ -408,7 +408,7 @@ pub fn process_get_validator_info(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cli::app;
+    use crate::clap_app::get_clap_app;
     use bincode::{serialize, serialized_size};
     use serde_json::json;
 
@@ -432,7 +432,7 @@ mod tests {
 
     #[test]
     fn test_parse_args() {
-        let matches = app("test", "desc", "version").get_matches_from(vec![
+        let matches = get_clap_app("test", "desc", "version").get_matches_from(vec![
             "test",
             "validator-info",
             "publish",
