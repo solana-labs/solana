@@ -2143,7 +2143,7 @@ pub fn process_calculate_rent(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cli::{app, parse_command};
+    use crate::{clap_app::get_clap_app, cli::parse_command};
     use solana_sdk::signature::{write_keypair, Keypair};
     use std::str::FromStr;
     use tempfile::NamedTempFile;
@@ -2155,7 +2155,7 @@ mod tests {
 
     #[test]
     fn test_parse_command() {
-        let test_commands = app("test", "desc", "version");
+        let test_commands = get_clap_app("test", "desc", "version");
         let default_keypair = Keypair::new();
         let (default_keypair_file, mut tmp_file) = make_tmp_file();
         write_keypair(&default_keypair, tmp_file.as_file_mut()).unwrap();

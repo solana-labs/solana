@@ -1,18 +1,15 @@
-use clap::{
-    crate_description, crate_name, value_t_or_exit, AppSettings, Arg, ArgGroup, ArgMatches,
-    SubCommand,
-};
+use clap::{crate_description, crate_name, value_t_or_exit, ArgMatches};
 use console::style;
 use solana_clap_utils::{
-    input_validators::{is_url, is_url_or_moniker, normalize_to_url_if_moniker},
-    keypair::{CliSigners, DefaultSigner, SKIP_SEED_PHRASE_VALIDATION_ARG},
+    input_validators::normalize_to_url_if_moniker,
+    keypair::{CliSigners, DefaultSigner},
     DisplayError,
 };
-use solana_cli::cli::{
-    app, parse_command, process_command, CliCommandInfo, CliConfig, SettingType,
-    DEFAULT_CONFIRM_TX_TIMEOUT_SECONDS, DEFAULT_RPC_TIMEOUT_SECONDS,
+use solana_cli::{
+    clap_app::get_clap_app,
+    cli::{parse_command, process_command, CliCommandInfo, CliConfig, SettingType},
 };
-use solana_cli_config::{Config, CONFIG_FILE};
+use solana_cli_config::Config;
 use solana_cli_output::{display::println_name_value, OutputFormat};
 use solana_client::rpc_config::RpcSendTransactionConfig;
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
@@ -238,177 +235,10 @@ pub fn parse_args<'a>(
 
 fn main() -> Result<(), Box<dyn error::Error>> {
     solana_logger::setup_with_default("off");
-    let matches = app(
+    let matches = get_clap_app(
         crate_name!(),
         crate_description!(),
         solana_version::version!(),
-    )
-    .arg({
-        let arg = Arg::with_name("config_file")
-            .short("C")
-            .long("config")
-            .value_name("FILEPATH")
-            .takes_value(true)
-            .global(true)
-            .help("Configuration file to use");
-        if let Some(ref config_file) = *CONFIG_FILE {
-            arg.default_value(config_file)
-        } else {
-            arg
-        }
-    })
-    .arg(
-        Arg::with_name("json_rpc_url")
-            .short("u")
-            .long("url")
-            .value_name("URL_OR_MONIKER")
-            .takes_value(true)
-            .global(true)
-            .validator(is_url_or_moniker)
-            .help(
-                "URL for Solana's JSON RPC or moniker (or their first letter): \
-                   [mainnet-beta, testnet, devnet, localhost]",
-            ),
-    )
-    .arg(
-        Arg::with_name("websocket_url")
-            .long("ws")
-            .value_name("URL")
-            .takes_value(true)
-            .global(true)
-            .validator(is_url)
-            .help("WebSocket URL for the solana cluster"),
-    )
-    .arg(
-        Arg::with_name("keypair")
-            .short("k")
-            .long("keypair")
-            .value_name("KEYPAIR")
-            .global(true)
-            .takes_value(true)
-            .help("Filepath or URL to a keypair"),
-    )
-    .arg(
-        Arg::with_name("commitment")
-            .long("commitment")
-            .takes_value(true)
-            .possible_values(&[
-                "processed",
-                "confirmed",
-                "finalized",
-                "recent", // Deprecated as of v1.5.5
-                "single", // Deprecated as of v1.5.5
-                "singleGossip", // Deprecated as of v1.5.5
-                "root", // Deprecated as of v1.5.5
-                "max", // Deprecated as of v1.5.5
-            ])
-            .value_name("COMMITMENT_LEVEL")
-            .hide_possible_values(true)
-            .global(true)
-            .help("Return information at the selected commitment level [possible values: processed, confirmed, finalized]"),
-    )
-    .arg(
-        Arg::with_name("verbose")
-            .long("verbose")
-            .short("v")
-            .global(true)
-            .help("Show additional information"),
-    )
-    .arg(
-        Arg::with_name("no_address_labels")
-            .long("no-address-labels")
-            .global(true)
-            .help("Do not use address labels in the output"),
-    )
-    .arg(
-        Arg::with_name("output_format")
-            .long("output")
-            .value_name("FORMAT")
-            .global(true)
-            .takes_value(true)
-            .possible_values(&["json", "json-compact"])
-            .help("Return information in specified output format"),
-    )
-    .arg(
-        Arg::with_name(SKIP_SEED_PHRASE_VALIDATION_ARG.name)
-            .long(SKIP_SEED_PHRASE_VALIDATION_ARG.long)
-            .global(true)
-            .help(SKIP_SEED_PHRASE_VALIDATION_ARG.help),
-    )
-    .arg(
-        Arg::with_name("rpc_timeout")
-            .long("rpc-timeout")
-            .value_name("SECONDS")
-            .takes_value(true)
-            .default_value(DEFAULT_RPC_TIMEOUT_SECONDS)
-            .global(true)
-            .hidden(true)
-            .help("Timeout value for RPC requests"),
-    )
-    .arg(
-        Arg::with_name("confirm_transaction_initial_timeout")
-            .long("confirm-timeout")
-            .value_name("SECONDS")
-            .takes_value(true)
-            .default_value(DEFAULT_CONFIRM_TX_TIMEOUT_SECONDS)
-            .global(true)
-            .hidden(true)
-            .help("Timeout value for initial transaction status"),
-    )
-    .subcommand(
-        SubCommand::with_name("config")
-            .about("Solana command-line tool configuration settings")
-            .aliases(&["get", "set"])
-            .setting(AppSettings::SubcommandRequiredElseHelp)
-            .subcommand(
-                SubCommand::with_name("get")
-                    .about("Get current config settings")
-                    .arg(
-                        Arg::with_name("specific_setting")
-                            .index(1)
-                            .value_name("CONFIG_FIELD")
-                            .takes_value(true)
-                            .possible_values(&[
-                                "json_rpc_url",
-                                "websocket_url",
-                                "keypair",
-                                "commitment",
-                            ])
-                            .help("Return a specific config setting"),
-                    ),
-            )
-            .subcommand(
-                SubCommand::with_name("set")
-                    .about("Set a config setting")
-                    .group(
-                        ArgGroup::with_name("config_settings")
-                            .args(&["json_rpc_url", "websocket_url", "keypair", "commitment"])
-                            .multiple(true)
-                            .required(true),
-                    ),
-            )
-            .subcommand(
-                SubCommand::with_name("import-address-labels")
-                    .about("Import a list of address labels")
-                    .arg(
-                        Arg::with_name("filename")
-                            .index(1)
-                            .value_name("FILENAME")
-                            .takes_value(true)
-                            .help("YAML file of address labels"),
-                    ),
-            )
-            .subcommand(
-                SubCommand::with_name("export-address-labels")
-                    .about("Export the current address labels")
-                    .arg(
-                        Arg::with_name("filename")
-                            .index(1)
-                            .value_name("FILENAME")
-                            .takes_value(true)
-                            .help("YAML file to receive the current address labels"),
-                    ),
-            ),
     )
     .get_matches();
 
