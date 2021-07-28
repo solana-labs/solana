@@ -138,10 +138,11 @@ impl CostUpdateService {
         {
             let mut cost_model_mutable = cost_model.write().unwrap();
             for (program_id, timing) in &execute_timings.details.per_program_timings {
-                let costs = timing.accumulated_us / timing.count as u64;
+                if timing.count < 1 {
+                    continue;
+                }
                 let units = timing.accumulated_units / timing.count as u64;
-                debug!("update cost, instruction {:?} costs {} units {} cu/us ratio {}", program_id, costs, units, costs/units);
-                match cost_model_mutable.upsert_instruction_cost(program_id, costs) {
+                match cost_model_mutable.upsert_instruction_cost(program_id, units) {
                     Ok(c) => {
                         debug!(
                             "after replayed into bank, instruction {:?} has averaged cost {}",
@@ -222,7 +223,7 @@ mod tests {
             let accumulated_us: u64 = 1000;
             let accumulated_units: u64 = 100;
             let count: u32 = 10;
-            expected_cost = accumulated_us / count as u64;
+            expected_cost = accumulated_units / count as u64;
 
             execute_timings.details.per_program_timings.insert(
                 program_key_1,
@@ -257,7 +258,7 @@ mod tests {
             let accumulated_units: u64 = 200;
             let count: u32 = 10;
             // to expect new cost is Average(new_value, existing_value)
-            expected_cost = ((accumulated_us / count as u64) + expected_cost) / 2;
+            expected_cost = ((accumulated_units / count as u64) + expected_cost) / 2;
 
             execute_timings.details.per_program_timings.insert(
                 program_key_1,
