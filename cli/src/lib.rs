@@ -24,6 +24,7 @@ extern crate const_format;
 extern crate serde_derive;
 
 pub mod checks;
+pub mod clap_app;
 pub mod cli;
 pub mod cluster_query;
 pub mod feature;
@@ -36,4 +37,3 @@ pub mod stake;
 pub mod test_utils;
 pub mod validator_info;
 pub mod vote;
-pub mod clap_app;

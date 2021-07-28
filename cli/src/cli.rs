@@ -1,6 +1,6 @@
 use crate::{
-    cluster_query::*, feature::*, inflation::*, memo::*, nonce::*, program::*, spend_utils::*,
-    stake::*, validator_info::*, vote::*, clap_app::*
+    clap_app::*, cluster_query::*, feature::*, inflation::*, memo::*, nonce::*, program::*,
+    spend_utils::*, stake::*, validator_info::*, vote::*,
 };
 use clap::{crate_description, crate_name, value_t_or_exit, ArgMatches, Shell};
 use log::*;
@@ -8,14 +8,8 @@ use num_traits::FromPrimitive;
 use serde_json::{self, Value};
 use solana_account_decoder::{UiAccount, UiAccountEncoding};
 use solana_clap_utils::{
-    self,
-    fee_payer::FEE_PAYER_ARG,
-    input_parsers::*,
-    input_validators::*,
-    keypair::*,
-    memo::MEMO_ARG,
-    nonce::*,
-    offline::*,
+    self, fee_payer::FEE_PAYER_ARG, input_parsers::*, input_validators::*, keypair::*,
+    memo::MEMO_ARG, nonce::*, offline::*,
 };
 use solana_cli_output::{
     display::{build_balance_message, println_name_value},
@@ -53,7 +47,7 @@ use solana_sdk::{
 use solana_transaction_status::{EncodedTransaction, UiTransactionEncoding};
 use solana_vote_program::vote_state::VoteAuthorize;
 use std::{
-    collections::HashMap, error, fmt::Write as FmtWrite, fs::File, io::Write, io::stdout,
+    collections::HashMap, error, fmt::Write as FmtWrite, fs::File, io::stdout, io::Write,
     str::FromStr, sync::Arc, time::Duration,
 };
 use thiserror::Error;
@@ -958,12 +952,14 @@ pub fn parse_command(
                 Some("elvish") => Shell::Elvish,
                 // This is safe, since we assign default_value and possible_values
                 // are restricted
-                _ => unreachable!()
+                _ => unreachable!(),
             };
             get_clap_app(
-                crate_name!(), crate_description!(),
-                solana_version::version!()
-            ).gen_completions_to("solana", shell_choice, &mut stdout());
+                crate_name!(),
+                crate_description!(),
+                solana_version::version!(),
+            )
+            .gen_completions_to("solana", shell_choice, &mut stdout());
             std::process::exit(0);
         }
         //

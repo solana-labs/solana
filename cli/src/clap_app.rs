@@ -1,18 +1,13 @@
 use crate::{
-    cluster_query::*, feature::*, inflation::*, nonce::*, program::*, stake::*,
-    validator_info::*, vote::*, cli::*
+    cli::*, cluster_query::*, feature::*, inflation::*, nonce::*, program::*, stake::*,
+    validator_info::*, vote::*,
 };
-use clap::{App, AppSettings, Arg, SubCommand, ArgGroup};
-use solana_cli_config::CONFIG_FILE;
+use clap::{App, AppSettings, Arg, ArgGroup, SubCommand};
 use solana_clap_utils::{
-    self,
-    fee_payer::fee_payer_arg,
-    input_validators::*,
-    keypair::*,
-    memo::memo_arg,
-    nonce::*,
+    self, fee_payer::fee_payer_arg, input_validators::*, keypair::*, memo::memo_arg, nonce::*,
     offline::*,
 };
+use solana_cli_config::CONFIG_FILE;
 
 pub fn get_clap_app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, 'v> {
     App::new(name)

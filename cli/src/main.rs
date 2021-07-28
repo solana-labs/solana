@@ -1,17 +1,15 @@
-use clap::{
-    crate_description, crate_name, value_t_or_exit, ArgMatches
-};
+use clap::{crate_description, crate_name, value_t_or_exit, ArgMatches};
 use console::style;
 use solana_clap_utils::{
-    input_validators::{normalize_to_url_if_moniker},
+    input_validators::normalize_to_url_if_moniker,
     keypair::{CliSigners, DefaultSigner},
-    DisplayError
+    DisplayError,
 };
 use solana_cli::{
+    clap_app::get_clap_app,
     cli::{parse_command, process_command, CliCommandInfo, CliConfig, SettingType},
-    clap_app::get_clap_app
 };
-use solana_cli_config::{Config};
+use solana_cli_config::Config;
 use solana_cli_output::{display::println_name_value, OutputFormat};
 use solana_client::rpc_config::RpcSendTransactionConfig;
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
@@ -252,7 +250,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         crate_name!(),
         crate_description!(),
         solana_version::version!(),
-    ).get_matches();
+    )
+    .get_matches();
 
     do_main(&matches).map_err(|err| DisplayError::new_as_boxed(err).into())
 }

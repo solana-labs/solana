@@ -2119,8 +2119,8 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
 mod tests {
     use super::*;
     use crate::{
+        clap_app::get_clap_app,
         cli::{parse_command, process_command},
-        clap_app::get_clap_app
     };
     use serde_json::Value;
     use solana_cli_output::OutputFormat;
