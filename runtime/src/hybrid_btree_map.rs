@@ -355,6 +355,8 @@ pub struct BucketMapWriteHolder<V> {
     pub gets_from_disk_empty: AtomicU64,
     pub gets_from_cache: AtomicU64,
     pub updates: AtomicU64,
+    pub using_empty_get: AtomicU64,
+    pub insert_without_lookup: AtomicU64,
     pub updates_in_cache: AtomicU64,
     pub addrefs: AtomicU64,
     pub unrefs: AtomicU64,
@@ -440,6 +442,8 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
         let get_purges = AtomicU64::new(0);
         let gets_from_disk = AtomicU64::new(0);
         let gets_from_disk_empty = AtomicU64::new(0);
+        let using_empty_get = AtomicU64::new(0);
+        let insert_without_lookup = AtomicU64::new(0);
         let gets_from_cache = AtomicU64::new(0);
         let updates_in_cache = AtomicU64::new(0);
         let inserts_without_checking_disk = AtomicU64::new(0);
@@ -463,6 +467,8 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
             write_cache,
             bins,
             wait,
+            using_empty_get,
+            insert_without_lookup,
             gets_from_cache,
             updates_in_cache,
             inserts_without_checking_disk,
@@ -692,6 +698,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
         instance.age = self.set_age_to_future();
         instance.dirty = true;
         if instance.confirmed_not_on_disk {
+            self.using_empty_get.fetch_add(1, Ordering::Relaxed);
             instance.data.ref_count = 0;
             assert!(instance.data.slot_list.is_empty());
         }
@@ -755,6 +762,9 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
                 return;
             }
             HashMapEntry::Vacant(vacant) => {
+                if reclaims_must_be_empty {
+                    self.insert_without_lookup.fetch_add(1, Ordering::Relaxed);
+                }
                 if reclaims_must_be_empty && false { // todo
                     // we don't have to go to disk to look this thing up yet
                     // not on disk, not in cache, so add to cache
@@ -1153,6 +1163,8 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
             ("inserts", self.inserts.swap(0, Ordering::Relaxed), i64),
             ("inserts_without_checking_disk", self.inserts_without_checking_disk.swap(0, Ordering::Relaxed), i64),
             ("deletes", self.deletes.swap(0, Ordering::Relaxed), i64),
+            ("using_empty_get", self.using_empty_get.swap(0, Ordering::Relaxed), i64),
+            ("insert_without_lookup", self.insert_without_lookup.swap(0, Ordering::Relaxed), i64),
             (
                 "gets_from_disk_empty",
                 self.gets_from_disk_empty.swap(0, Ordering::Relaxed),
