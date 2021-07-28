@@ -515,7 +515,8 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
         for (k, mut v) in read_lock.iter() {
             let mut instance = v.instance.read().unwrap();
             let mut flush = instance.dirty;
-            if bg && (Self::in_cache(&instance.data.slot_list) || instance.data.slot_list.len() > 1) {
+            let mut keep_this_in_cache = (Self::in_cache(&instance.data.slot_list) || instance.data.slot_list.len() > 1);
+            if bg && keep_this_in_cache {
                 // for all account indexes that are in the write cache instead of storage, don't write them to disk yet - they will be updated soon
                 flush = false;
             }
@@ -524,7 +525,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
                 had_dirty = true;
             }
             if do_age {
-                if instance.age == age_comp {
+                if instance.age == age_comp && !keep_this_in_cache {
                     // clear the cache of things that have aged out
                     delete_keys.push(*k);
                     get_purges += 1;
@@ -1163,15 +1164,15 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
             ("min", min, i64),
             ("max", max, i64),
             ("sum", sum, i64),
-            //("updates_not_in_cache", self.updates.swap(0, Ordering::Relaxed), i64),
-            ("updates_not_in_cache", self.updates.load(Ordering::Relaxed), i64),
+            ("updates_not_in_cache", self.updates.swap(0, Ordering::Relaxed), i64),
+            //("updates_not_in_cache", self.updates.load(Ordering::Relaxed), i64),
             ("updates_in_cache", self.updates_in_cache.swap(0, Ordering::Relaxed), i64),
             ("inserts", self.inserts.swap(0, Ordering::Relaxed), i64),
             ("inserts_without_checking_disk", self.inserts_without_checking_disk.swap(0, Ordering::Relaxed), i64),
             ("deletes", self.deletes.swap(0, Ordering::Relaxed), i64),
             ("using_empty_get", self.using_empty_get.swap(0, Ordering::Relaxed), i64),
-            //("insert_without_lookup", self.insert_without_lookup.swap(0, Ordering::Relaxed), i64),
-            ("insert_without_lookup", self.insert_without_lookup.load(Ordering::Relaxed), i64),
+            ("insert_without_lookup", self.insert_without_lookup.swap(0, Ordering::Relaxed), i64),
+            //("insert_without_lookup", self.insert_without_lookup.load(Ordering::Relaxed), i64),
             (
                 "gets_from_disk_empty",
                 self.gets_from_disk_empty.swap(0, Ordering::Relaxed),
