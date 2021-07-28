@@ -2358,7 +2358,10 @@ pub fn is_stake_program_v2_enabled(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cli::{get_clap_app, parse_command};
+    use crate::{
+        cli::parse_command,
+        clap_app::get_clap_app
+    };
     use solana_client::blockhash_query;
     use solana_sdk::{
         hash::Hash,

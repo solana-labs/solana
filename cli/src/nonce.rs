@@ -576,7 +576,10 @@ pub fn process_withdraw_from_nonce_account(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cli::{get_clap_app, parse_command};
+    use crate::{
+        cli::parse_command,
+        clap_app::get_clap_app
+    };
     use solana_sdk::{
         account::Account,
         account_utils::StateMut,

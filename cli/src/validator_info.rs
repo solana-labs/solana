@@ -408,7 +408,7 @@ pub fn process_get_validator_info(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cli::get_clap_app;
+    use crate::clap_app::get_clap_app;
     use bincode::{serialize, serialized_size};
     use serde_json::json;
 

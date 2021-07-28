@@ -2143,7 +2143,10 @@ pub fn process_calculate_rent(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cli::{get_clap_app, parse_command};
+    use crate::{
+        cli::parse_command,
+        clap_app::get_clap_app
+    };
     use solana_sdk::signature::{write_keypair, Keypair};
     use std::str::FromStr;
     use tempfile::NamedTempFile;

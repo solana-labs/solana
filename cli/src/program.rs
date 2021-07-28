@@ -2118,7 +2118,10 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cli::{get_clap_app, parse_command, process_command};
+    use crate::{
+        cli::{parse_command, process_command},
+        clap_app::get_clap_app
+    };
     use serde_json::Value;
     use solana_cli_output::OutputFormat;
     use solana_sdk::signature::write_keypair_file;
