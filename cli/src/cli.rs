@@ -1,33 +1,23 @@
 use crate::{
-    clap_app::*, cluster_query::*, feature::*, inflation::*, memo::*, nonce::*, program::*,
-    spend_utils::*, stake::*, validator_info::*, vote::*,
+    clap_app::*, cluster_query::*, feature::*, inflation::*, nonce::*, program::*, spend_utils::*,
+    stake::*, validator_info::*, vote::*, wallet::*,
 };
 use clap::{crate_description, crate_name, value_t_or_exit, ArgMatches, Shell};
 use log::*;
 use num_traits::FromPrimitive;
 use serde_json::{self, Value};
-use solana_account_decoder::{UiAccount, UiAccountEncoding};
-use solana_clap_utils::{
-    self, fee_payer::FEE_PAYER_ARG, input_parsers::*, input_validators::*, keypair::*,
-    memo::MEMO_ARG, nonce::*, offline::*,
-};
+use solana_clap_utils::{self, input_parsers::*, input_validators::*, keypair::*};
 use solana_cli_output::{
-    display::{build_balance_message, println_name_value},
-    return_signers_with_config, CliAccount, CliSignature, CliSignatureVerificationStatus,
-    CliTransaction, CliTransactionConfirmation, CliValidatorsSortOrder, OutputFormat,
-    ReturnSignersConfig,
+    display::println_name_value, CliSignature, CliValidatorsSortOrder, OutputFormat,
 };
 use solana_client::{
     blockhash_query::BlockhashQuery,
     client_error::{ClientError, ClientErrorKind, Result as ClientResult},
     nonce_utils,
     rpc_client::RpcClient,
-    rpc_config::{
-        RpcLargestAccountsFilter, RpcSendTransactionConfig, RpcTransactionConfig,
-        RpcTransactionLogsFilter,
-    },
+    rpc_config::{RpcLargestAccountsFilter, RpcSendTransactionConfig, RpcTransactionLogsFilter},
     rpc_request::{RpcError, RpcResponseErrorData},
-    rpc_response::{RpcKeyedAccount, RpcSimulateTransactionResult},
+    rpc_response::RpcSimulateTransactionResult,
 };
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
@@ -36,20 +26,13 @@ use solana_sdk::{
     decode_error::DecodeError,
     hash::Hash,
     instruction::InstructionError,
-    message::Message,
     pubkey::Pubkey,
     signature::{Signature, Signer, SignerError},
-    stake::{self, instruction::LockupArgs, state::Lockup},
-    system_instruction::{self, SystemError},
-    system_program,
+    stake::{instruction::LockupArgs, state::Lockup},
     transaction::{Transaction, TransactionError},
 };
-use solana_transaction_status::{EncodedTransaction, UiTransactionEncoding};
 use solana_vote_program::vote_state::VoteAuthorize;
-use std::{
-    collections::HashMap, error, fmt::Write as FmtWrite, fs::File, io::stdout, io::Write,
-    str::FromStr, sync::Arc, time::Duration,
-};
+use std::{collections::HashMap, error, io::stdout, str::FromStr, sync::Arc, time::Duration};
 use thiserror::Error;
 
 pub const DEFAULT_RPC_TIMEOUT_SECONDS: &str = "30";
@@ -69,11 +52,6 @@ pub enum CliCommand {
     },
     ClusterDate,
     ClusterVersion,
-    CreateAddressWithSeed {
-        from_pubkey: Option<Pubkey>,
-        seed: String,
-        program_id: Pubkey,
-    },
     Feature(FeatureCliCommand),
     Inflation(InflationCliCommand),
     Fees {
@@ -363,6 +341,11 @@ pub enum CliCommand {
         use_lamports_unit: bool,
     },
     Confirm(Signature),
+    CreateAddressWithSeed {
+        from_pubkey: Option<Pubkey>,
+        seed: String,
+        program_id: Pubkey,
+    },
     DecodeTransaction(Transaction),
     ResolveSigner(Option<String>),
     ShowAccount {
@@ -610,7 +593,31 @@ pub fn parse_command(
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, Box<dyn error::Error>> {
     let response = match matches.subcommand() {
+        // Autocompletion Command
+        ("completion", Some(matches)) => {
+            let shell_choice = match matches.value_of("shell") {
+                Some("bash") => Shell::Bash,
+                Some("fish") => Shell::Fish,
+                Some("zsh") => Shell::Zsh,
+                Some("powershell") => Shell::PowerShell,
+                Some("elvish") => Shell::Elvish,
+                // This is safe, since we assign default_value and possible_values
+                // are restricted
+                _ => unreachable!(),
+            };
+            get_clap_app(
+                crate_name!(),
+                crate_description!(),
+                solana_version::version!(),
+            )
+            .gen_completions_to("solana", shell_choice, &mut stdout());
+            std::process::exit(0);
+        }
         // Cluster Query Commands
+        ("block", Some(matches)) => parse_get_block(matches),
+        ("block-height", Some(matches)) => parse_get_block_height(matches),
+        ("block-production", Some(matches)) => parse_show_block_production(matches),
+        ("block-time", Some(matches)) => parse_get_block_time(matches),
         ("catchup", Some(matches)) => parse_catchup(matches, wallet_manager),
         ("cluster-date", Some(_matches)) => Ok(CliCommandInfo {
             command: CliCommand::ClusterDate,
@@ -620,9 +627,8 @@ pub fn parse_command(
             command: CliCommand::ClusterVersion,
             signers: vec![],
         }),
-        ("create-address-with-seed", Some(matches)) => {
-            parse_create_address_with_seed(matches, default_signer, wallet_manager)
-        }
+        ("epoch", Some(matches)) => parse_get_epoch(matches),
+        ("epoch-info", Some(matches)) => parse_get_epoch_info(matches),
         ("feature", Some(matches)) => {
             parse_feature_subcommand(matches, default_signer, wallet_manager)
         }
@@ -637,40 +643,47 @@ pub fn parse_command(
             command: CliCommand::FirstAvailableBlock,
             signers: vec![],
         }),
-        ("block", Some(matches)) => parse_get_block(matches),
-        ("block-time", Some(matches)) => parse_get_block_time(matches),
-        ("epoch-info", Some(matches)) => parse_get_epoch_info(matches),
         ("genesis-hash", Some(_matches)) => Ok(CliCommandInfo {
             command: CliCommand::GetGenesisHash,
             signers: vec![],
         }),
-        ("epoch", Some(matches)) => parse_get_epoch(matches),
-        ("slot", Some(matches)) => parse_get_slot(matches),
-        ("block-height", Some(matches)) => parse_get_block_height(matches),
+        ("gossip", Some(_matches)) => Ok(CliCommandInfo {
+            command: CliCommand::ShowGossip,
+            signers: vec![],
+        }),
         ("inflation", Some(matches)) => {
             parse_inflation_subcommand(matches, default_signer, wallet_manager)
         }
         ("largest-accounts", Some(matches)) => parse_largest_accounts(matches),
-        ("supply", Some(matches)) => parse_supply(matches),
-        ("total-supply", Some(matches)) => parse_total_supply(matches),
-        ("transaction-count", Some(matches)) => parse_get_transaction_count(matches),
         ("leader-schedule", Some(matches)) => parse_leader_schedule(matches),
-        ("ping", Some(matches)) => parse_cluster_ping(matches, default_signer, wallet_manager),
         ("live-slots", Some(_matches)) => Ok(CliCommandInfo {
             command: CliCommand::LiveSlots,
             signers: vec![],
         }),
         ("logs", Some(matches)) => parse_logs(matches, wallet_manager),
-        ("block-production", Some(matches)) => parse_show_block_production(matches),
-        ("gossip", Some(_matches)) => Ok(CliCommandInfo {
-            command: CliCommand::ShowGossip,
-            signers: vec![],
-        }),
+        ("ping", Some(matches)) => parse_cluster_ping(matches, default_signer, wallet_manager),
+        ("rent", Some(matches)) => {
+            let data_length = value_of::<RentLengthValue>(matches, "data_length")
+                .unwrap()
+                .length();
+            let use_lamports_unit = matches.is_present("lamports");
+            Ok(CliCommandInfo {
+                command: CliCommand::Rent {
+                    data_length,
+                    use_lamports_unit,
+                },
+                signers: vec![],
+            })
+        }
+        ("slot", Some(matches)) => parse_get_slot(matches),
         ("stakes", Some(matches)) => parse_show_stakes(matches, wallet_manager),
-        ("validators", Some(matches)) => parse_show_validators(matches),
+        ("supply", Some(matches)) => parse_supply(matches),
+        ("total-supply", Some(matches)) => parse_total_supply(matches),
+        ("transaction-count", Some(matches)) => parse_get_transaction_count(matches),
         ("transaction-history", Some(matches)) => {
             parse_transaction_history(matches, wallet_manager)
         }
+        ("validators", Some(matches)) => parse_show_validators(matches),
         // Nonce Commands
         ("authorize-nonce-account", Some(matches)) => {
             parse_authorize_nonce_account(matches, default_signer, wallet_manager)
@@ -800,38 +813,13 @@ pub fn parse_command(
             parse_withdraw_from_vote_account(matches, default_signer, wallet_manager)
         }
         // Wallet Commands
+        ("account", Some(matches)) => parse_account(matches, wallet_manager),
         ("address", Some(matches)) => Ok(CliCommandInfo {
             command: CliCommand::Address,
             signers: vec![default_signer.signer_from_path(matches, wallet_manager)?],
         }),
-        ("airdrop", Some(matches)) => {
-            let pubkey = pubkey_of_signer(matches, "to", wallet_manager)?;
-            let signers = if pubkey.is_some() {
-                vec![]
-            } else {
-                vec![default_signer.signer_from_path(matches, wallet_manager)?]
-            };
-            let lamports = lamports_of_sol(matches, "amount").unwrap();
-            Ok(CliCommandInfo {
-                command: CliCommand::Airdrop { pubkey, lamports },
-                signers,
-            })
-        }
-        ("balance", Some(matches)) => {
-            let pubkey = pubkey_of_signer(matches, "pubkey", wallet_manager)?;
-            let signers = if pubkey.is_some() {
-                vec![]
-            } else {
-                vec![default_signer.signer_from_path(matches, wallet_manager)?]
-            };
-            Ok(CliCommandInfo {
-                command: CliCommand::Balance {
-                    pubkey,
-                    use_lamports_unit: matches.is_present("lamports"),
-                },
-                signers,
-            })
-        }
+        ("airdrop", Some(matches)) => parse_airdrop(matches, default_signer, wallet_manager),
+        ("balance", Some(matches)) => parse_balance(matches, default_signer, wallet_manager),
         ("confirm", Some(matches)) => match matches.value_of("signature").unwrap().parse() {
             Ok(signature) => Ok(CliCommandInfo {
                 command: CliCommand::Confirm(signature),
@@ -839,40 +827,10 @@ pub fn parse_command(
             }),
             _ => Err(CliError::BadParameter("Invalid signature".to_string())),
         },
-        ("decode-transaction", Some(matches)) => {
-            let blob = value_t_or_exit!(matches, "transaction", String);
-            let encoding = match matches.value_of("encoding").unwrap() {
-                "base58" => UiTransactionEncoding::Base58,
-                "base64" => UiTransactionEncoding::Base64,
-                _ => unreachable!(),
-            };
-
-            let encoded_transaction = EncodedTransaction::Binary(blob, encoding);
-            if let Some(transaction) = encoded_transaction.decode() {
-                Ok(CliCommandInfo {
-                    command: CliCommand::DecodeTransaction(transaction),
-                    signers: vec![],
-                })
-            } else {
-                Err(CliError::BadParameter(
-                    "Unable to decode transaction".to_string(),
-                ))
-            }
+        ("create-address-with-seed", Some(matches)) => {
+            parse_create_address_with_seed(matches, default_signer, wallet_manager)
         }
-        ("account", Some(matches)) => {
-            let account_pubkey =
-                pubkey_of_signer(matches, "account_pubkey", wallet_manager)?.unwrap();
-            let output_file = matches.value_of("output_file");
-            let use_lamports_unit = matches.is_present("lamports");
-            Ok(CliCommandInfo {
-                command: CliCommand::ShowAccount {
-                    pubkey: account_pubkey,
-                    output_file: output_file.map(ToString::to_string),
-                    use_lamports_unit,
-                },
-                signers: vec![],
-            })
-        }
+        ("decode-transaction", Some(matches)) => parse_decode_transaction(matches),
         ("resolve-signer", Some(matches)) => {
             let signer_path = resolve_signer(matches, "signer", wallet_manager)?;
             Ok(CliCommandInfo {
@@ -880,88 +838,7 @@ pub fn parse_command(
                 signers: vec![],
             })
         }
-        ("transfer", Some(matches)) => {
-            let amount = SpendAmount::new_from_matches(matches, "amount");
-            let to = pubkey_of_signer(matches, "to", wallet_manager)?.unwrap();
-            let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
-            let dump_transaction_message = matches.is_present(DUMP_TRANSACTION_MESSAGE.name);
-            let no_wait = matches.is_present("no_wait");
-            let blockhash_query = BlockhashQuery::new_from_matches(matches);
-            let nonce_account = pubkey_of_signer(matches, NONCE_ARG.name, wallet_manager)?;
-            let (nonce_authority, nonce_authority_pubkey) =
-                signer_of(matches, NONCE_AUTHORITY_ARG.name, wallet_manager)?;
-            let memo = matches.value_of(MEMO_ARG.name).map(String::from);
-            let (fee_payer, fee_payer_pubkey) =
-                signer_of(matches, FEE_PAYER_ARG.name, wallet_manager)?;
-            let (from, from_pubkey) = signer_of(matches, "from", wallet_manager)?;
-            let allow_unfunded_recipient = matches.is_present("allow_unfunded_recipient");
-
-            let mut bulk_signers = vec![fee_payer, from];
-            if nonce_account.is_some() {
-                bulk_signers.push(nonce_authority);
-            }
-
-            let signer_info =
-                default_signer.generate_unique_signers(bulk_signers, matches, wallet_manager)?;
-
-            let derived_address_seed = matches
-                .value_of("derived_address_seed")
-                .map(|s| s.to_string());
-            let derived_address_program_id =
-                resolve_derived_address_program_id(matches, "derived_address_program_id");
-
-            Ok(CliCommandInfo {
-                command: CliCommand::Transfer {
-                    amount,
-                    to,
-                    sign_only,
-                    dump_transaction_message,
-                    allow_unfunded_recipient,
-                    no_wait,
-                    blockhash_query,
-                    nonce_account,
-                    nonce_authority: signer_info.index_of(nonce_authority_pubkey).unwrap(),
-                    memo,
-                    fee_payer: signer_info.index_of(fee_payer_pubkey).unwrap(),
-                    from: signer_info.index_of(from_pubkey).unwrap(),
-                    derived_address_seed,
-                    derived_address_program_id,
-                },
-                signers: signer_info.signers,
-            })
-        }
-        ("rent", Some(matches)) => {
-            let data_length = value_of::<RentLengthValue>(matches, "data_length")
-                .unwrap()
-                .length();
-            let use_lamports_unit = matches.is_present("lamports");
-            Ok(CliCommandInfo {
-                command: CliCommand::Rent {
-                    data_length,
-                    use_lamports_unit,
-                },
-                signers: vec![],
-            })
-        }
-        ("completion", Some(matches)) => {
-            let shell_choice = match matches.value_of("shell") {
-                Some("bash") => Shell::Bash,
-                Some("fish") => Shell::Fish,
-                Some("zsh") => Shell::Zsh,
-                Some("powershell") => Shell::PowerShell,
-                Some("elvish") => Shell::Elvish,
-                // This is safe, since we assign default_value and possible_values
-                // are restricted
-                _ => unreachable!(),
-            };
-            get_clap_app(
-                crate_name!(),
-                crate_description!(),
-                solana_version::version!(),
-            )
-            .gen_completions_to("solana", shell_choice, &mut stdout());
-            std::process::exit(0);
-        }
+        ("transfer", Some(matches)) => parse_transfer(matches, default_signer, wallet_manager),
         //
         ("", None) => {
             eprintln!("{}", matches.usage());
@@ -975,349 +852,6 @@ pub fn parse_command(
 }
 
 pub type ProcessResult = Result<String, Box<dyn std::error::Error>>;
-
-fn resolve_derived_address_program_id(matches: &ArgMatches<'_>, arg_name: &str) -> Option<Pubkey> {
-    matches.value_of(arg_name).and_then(|v| match v {
-        "NONCE" => Some(system_program::id()),
-        "STAKE" => Some(stake::program::id()),
-        "VOTE" => Some(solana_vote_program::id()),
-        _ => pubkey_of(matches, arg_name),
-    })
-}
-
-pub fn parse_create_address_with_seed(
-    matches: &ArgMatches<'_>,
-    default_signer: &DefaultSigner,
-    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
-) -> Result<CliCommandInfo, CliError> {
-    let from_pubkey = pubkey_of_signer(matches, "from", wallet_manager)?;
-    let signers = if from_pubkey.is_some() {
-        vec![]
-    } else {
-        vec![default_signer.signer_from_path(matches, wallet_manager)?]
-    };
-
-    let program_id = resolve_derived_address_program_id(matches, "program_id").unwrap();
-
-    let seed = matches.value_of("seed").unwrap().to_string();
-
-    Ok(CliCommandInfo {
-        command: CliCommand::CreateAddressWithSeed {
-            from_pubkey,
-            seed,
-            program_id,
-        },
-        signers,
-    })
-}
-
-fn process_create_address_with_seed(
-    config: &CliConfig,
-    from_pubkey: Option<&Pubkey>,
-    seed: &str,
-    program_id: &Pubkey,
-) -> ProcessResult {
-    let from_pubkey = if let Some(pubkey) = from_pubkey {
-        *pubkey
-    } else {
-        config.pubkey()?
-    };
-    let address = Pubkey::create_with_seed(&from_pubkey, seed, program_id)?;
-    Ok(address.to_string())
-}
-
-fn process_airdrop(
-    rpc_client: &RpcClient,
-    config: &CliConfig,
-    pubkey: &Option<Pubkey>,
-    lamports: u64,
-) -> ProcessResult {
-    let pubkey = if let Some(pubkey) = pubkey {
-        *pubkey
-    } else {
-        config.pubkey()?
-    };
-    println!(
-        "Requesting airdrop of {}",
-        build_balance_message(lamports, false, true),
-    );
-
-    let pre_balance = rpc_client.get_balance(&pubkey)?;
-
-    let result = request_and_confirm_airdrop(rpc_client, config, &pubkey, lamports);
-    if let Ok(signature) = result {
-        let signature_cli_message = log_instruction_custom_error::<SystemError>(result, config)?;
-        println!("{}", signature_cli_message);
-
-        let current_balance = rpc_client.get_balance(&pubkey)?;
-
-        if current_balance < pre_balance.saturating_add(lamports) {
-            println!("Balance unchanged");
-            println!("Run `solana confirm -v {:?}` for more info", signature);
-            Ok("".to_string())
-        } else {
-            Ok(build_balance_message(current_balance, false, true))
-        }
-    } else {
-        log_instruction_custom_error::<SystemError>(result, config)
-    }
-}
-
-fn process_balance(
-    rpc_client: &RpcClient,
-    config: &CliConfig,
-    pubkey: &Option<Pubkey>,
-    use_lamports_unit: bool,
-) -> ProcessResult {
-    let pubkey = if let Some(pubkey) = pubkey {
-        *pubkey
-    } else {
-        config.pubkey()?
-    };
-    let balance = rpc_client.get_balance(&pubkey)?;
-    Ok(build_balance_message(balance, use_lamports_unit, true))
-}
-
-fn process_confirm(
-    rpc_client: &RpcClient,
-    config: &CliConfig,
-    signature: &Signature,
-) -> ProcessResult {
-    match rpc_client.get_signature_statuses_with_history(&[*signature]) {
-        Ok(status) => {
-            let cli_transaction = if let Some(transaction_status) = &status.value[0] {
-                let mut transaction = None;
-                let mut get_transaction_error = None;
-                if config.verbose {
-                    match rpc_client.get_transaction_with_config(
-                        signature,
-                        RpcTransactionConfig {
-                            encoding: Some(UiTransactionEncoding::Base64),
-                            commitment: Some(CommitmentConfig::confirmed()),
-                        },
-                    ) {
-                        Ok(confirmed_transaction) => {
-                            let decoded_transaction = confirmed_transaction
-                                .transaction
-                                .transaction
-                                .decode()
-                                .expect("Successful decode");
-                            let json_transaction = EncodedTransaction::encode(
-                                decoded_transaction.clone(),
-                                UiTransactionEncoding::Json,
-                            );
-
-                            transaction = Some(CliTransaction {
-                                transaction: json_transaction,
-                                meta: confirmed_transaction.transaction.meta,
-                                block_time: confirmed_transaction.block_time,
-                                slot: Some(confirmed_transaction.slot),
-                                decoded_transaction,
-                                prefix: "  ".to_string(),
-                                sigverify_status: vec![],
-                            });
-                        }
-                        Err(err) => {
-                            get_transaction_error = Some(format!("{:?}", err));
-                        }
-                    }
-                }
-                CliTransactionConfirmation {
-                    confirmation_status: Some(transaction_status.confirmation_status()),
-                    transaction,
-                    get_transaction_error,
-                    err: transaction_status.err.clone(),
-                }
-            } else {
-                CliTransactionConfirmation {
-                    confirmation_status: None,
-                    transaction: None,
-                    get_transaction_error: None,
-                    err: None,
-                }
-            };
-            Ok(config.output_format.formatted_string(&cli_transaction))
-        }
-        Err(err) => Err(CliError::RpcRequestError(format!("Unable to confirm: {}", err)).into()),
-    }
-}
-
-#[allow(clippy::unnecessary_wraps)]
-fn process_decode_transaction(config: &CliConfig, transaction: &Transaction) -> ProcessResult {
-    let sigverify_status = CliSignatureVerificationStatus::verify_transaction(transaction);
-    let decode_transaction = CliTransaction {
-        decoded_transaction: transaction.clone(),
-        transaction: EncodedTransaction::encode(transaction.clone(), UiTransactionEncoding::Json),
-        meta: None,
-        block_time: None,
-        slot: None,
-        prefix: "".to_string(),
-        sigverify_status,
-    };
-    Ok(config.output_format.formatted_string(&decode_transaction))
-}
-
-fn process_show_account(
-    rpc_client: &RpcClient,
-    config: &CliConfig,
-    account_pubkey: &Pubkey,
-    output_file: &Option<String>,
-    use_lamports_unit: bool,
-) -> ProcessResult {
-    let account = rpc_client.get_account(account_pubkey)?;
-    let data = account.data.clone();
-    let cli_account = CliAccount {
-        keyed_account: RpcKeyedAccount {
-            pubkey: account_pubkey.to_string(),
-            account: UiAccount::encode(
-                account_pubkey,
-                &account,
-                UiAccountEncoding::Base64,
-                None,
-                None,
-            ),
-        },
-        use_lamports_unit,
-    };
-
-    let mut account_string = config.output_format.formatted_string(&cli_account);
-
-    if config.output_format == OutputFormat::Display
-        || config.output_format == OutputFormat::DisplayVerbose
-    {
-        if let Some(output_file) = output_file {
-            let mut f = File::create(output_file)?;
-            f.write_all(&data)?;
-            writeln!(&mut account_string)?;
-            writeln!(&mut account_string, "Wrote account data to {}", output_file)?;
-        } else if !data.is_empty() {
-            use pretty_hex::*;
-            writeln!(&mut account_string, "{:?}", data.hex_dump())?;
-        }
-    }
-
-    Ok(account_string)
-}
-
-#[allow(clippy::too_many_arguments)]
-fn process_transfer(
-    rpc_client: &RpcClient,
-    config: &CliConfig,
-    amount: SpendAmount,
-    to: &Pubkey,
-    from: SignerIndex,
-    sign_only: bool,
-    dump_transaction_message: bool,
-    allow_unfunded_recipient: bool,
-    no_wait: bool,
-    blockhash_query: &BlockhashQuery,
-    nonce_account: Option<&Pubkey>,
-    nonce_authority: SignerIndex,
-    memo: Option<&String>,
-    fee_payer: SignerIndex,
-    derived_address_seed: Option<String>,
-    derived_address_program_id: Option<&Pubkey>,
-) -> ProcessResult {
-    let from = config.signers[from];
-    let mut from_pubkey = from.pubkey();
-
-    let (recent_blockhash, fee_calculator) =
-        blockhash_query.get_blockhash_and_fee_calculator(rpc_client, config.commitment)?;
-
-    if !sign_only && !allow_unfunded_recipient {
-        let recipient_balance = rpc_client
-            .get_balance_with_commitment(to, config.commitment)?
-            .value;
-        if recipient_balance == 0 {
-            return Err(format!(
-                "The recipient address ({}) is not funded. \
-                                Add `--allow-unfunded-recipient` to complete the transfer \
-                               ",
-                to
-            )
-            .into());
-        }
-    }
-
-    let nonce_authority = config.signers[nonce_authority];
-    let fee_payer = config.signers[fee_payer];
-
-    let derived_parts = derived_address_seed.zip(derived_address_program_id);
-    let with_seed = if let Some((seed, program_id)) = derived_parts {
-        let base_pubkey = from_pubkey;
-        from_pubkey = Pubkey::create_with_seed(&base_pubkey, &seed, program_id)?;
-        Some((base_pubkey, seed, program_id, from_pubkey))
-    } else {
-        None
-    };
-
-    let build_message = |lamports| {
-        let ixs = if let Some((base_pubkey, seed, program_id, from_pubkey)) = with_seed.as_ref() {
-            vec![system_instruction::transfer_with_seed(
-                from_pubkey,
-                base_pubkey,
-                seed.clone(),
-                program_id,
-                to,
-                lamports,
-            )]
-            .with_memo(memo)
-        } else {
-            vec![system_instruction::transfer(&from_pubkey, to, lamports)].with_memo(memo)
-        };
-
-        if let Some(nonce_account) = &nonce_account {
-            Message::new_with_nonce(
-                ixs,
-                Some(&fee_payer.pubkey()),
-                nonce_account,
-                &nonce_authority.pubkey(),
-            )
-        } else {
-            Message::new(&ixs, Some(&fee_payer.pubkey()))
-        }
-    };
-
-    let (message, _) = resolve_spend_tx_and_check_account_balances(
-        rpc_client,
-        sign_only,
-        amount,
-        &fee_calculator,
-        &from_pubkey,
-        &fee_payer.pubkey(),
-        build_message,
-        config.commitment,
-    )?;
-    let mut tx = Transaction::new_unsigned(message);
-
-    if sign_only {
-        tx.try_partial_sign(&config.signers, recent_blockhash)?;
-        return_signers_with_config(
-            &tx,
-            &config.output_format,
-            &ReturnSignersConfig {
-                dump_transaction_message,
-            },
-        )
-    } else {
-        if let Some(nonce_account) = &nonce_account {
-            let nonce_account = nonce_utils::get_account_with_commitment(
-                rpc_client,
-                nonce_account,
-                config.commitment,
-            )?;
-            check_nonce_account(&nonce_account, &nonce_authority.pubkey(), &recent_blockhash)?;
-        }
-
-        tx.try_sign(&config.signers, recent_blockhash)?;
-        let result = if no_wait {
-            rpc_client.send_transaction(&tx)
-        } else {
-            rpc_client.send_and_confirm_transaction_with_spinner(&tx)
-        };
-        log_instruction_custom_error::<SystemError>(result, config)
-    }
-}
 
 pub fn process_command(config: &CliConfig) -> ProcessResult {
     if config.verbose && config.output_format == OutputFormat::DisplayVerbose {
@@ -2066,6 +1600,7 @@ mod tests {
     use solana_sdk::{
         pubkey::Pubkey,
         signature::{keypair_from_seed, read_keypair_file, write_keypair_file, Keypair, Presigner},
+        stake, system_program,
         transaction::TransactionError,
     };
     use solana_transaction_status::TransactionConfirmationStatus;

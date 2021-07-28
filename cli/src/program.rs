@@ -371,6 +371,39 @@ impl ProgramSubCommands for App<'_, '_> {
                         ),
                 )
         )
+        .subcommand(
+            SubCommand::with_name("deploy")
+                .about("Deploy a program")
+                .arg(
+                    Arg::with_name("program_location")
+                        .index(1)
+                        .value_name("PROGRAM_FILEPATH")
+                        .takes_value(true)
+                        .required(true)
+                        .help("/path/to/program.o"),
+                )
+                .arg(
+                    Arg::with_name("address_signer")
+                        .index(2)
+                        .value_name("PROGRAM_ADDRESS_SIGNER")
+                        .takes_value(true)
+                        .validator(is_valid_signer)
+                        .help("The signer for the desired address of the program [default: new random address]")
+                )
+                .arg(
+                    Arg::with_name("use_deprecated_loader")
+                        .long("use-deprecated-loader")
+                        .takes_value(false)
+                        .hidden(true) // Don't document this argument to discourage its use
+                        .help("Use the deprecated BPF loader")
+                )
+                .arg(
+                    Arg::with_name("allow_excessive_balance")
+                        .long("allow-excessive-deploy-account-balance")
+                        .takes_value(false)
+                        .help("Use the designated program id, even if the account already holds a large balance of SOL")
+                ),
+        )
     }
 }
 
