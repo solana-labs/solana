@@ -1588,7 +1588,7 @@ impl fmt::Display for CliInflation {
     }
 }
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Serialize, Deserialize, Default, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct CliSignOnlyData {
     pub blockhash: String,
@@ -2040,6 +2040,11 @@ pub fn return_signers_with_config(
     output_format: &OutputFormat,
     config: &ReturnSignersConfig,
 ) -> Result<String, Box<dyn std::error::Error>> {
+    let cli_command = return_signers_data(tx, config);
+    Ok(output_format.formatted_string(&cli_command))
+}
+
+pub fn return_signers_data(tx: &Transaction, config: &ReturnSignersConfig) -> CliSignOnlyData {
     let verify_results = tx.verify_with_results();
     let mut signers = Vec::new();
     let mut absent = Vec::new();
@@ -2064,15 +2069,13 @@ pub fn return_signers_with_config(
         None
     };
 
-    let cli_command = CliSignOnlyData {
+    CliSignOnlyData {
         blockhash: tx.message.recent_blockhash.to_string(),
         message,
         signers,
         absent,
         bad_sig,
-    };
-
-    Ok(output_format.formatted_string(&cli_command))
+    }
 }
 
 pub fn parse_sign_only_reply_string(reply: &str) -> SignOnly {
@@ -2515,6 +2518,22 @@ mod tests {
         assert_eq!(sign_only.absent_signers[0], absent.pubkey());
         assert_eq!(sign_only.bad_signers[0], bad.pubkey());
 
+        let res_data = return_signers_data(&tx, &ReturnSignersConfig::default());
+        assert_eq!(
+            res_data,
+            CliSignOnlyData {
+                blockhash: blockhash.to_string(),
+                message: None,
+                signers: vec![format!(
+                    "{}={}",
+                    present.pubkey().to_string(),
+                    tx.signatures[1]
+                )],
+                absent: vec![absent.pubkey().to_string()],
+                bad_sig: vec![bad.pubkey().to_string()],
+            }
+        );
+
         let expected_msg = "AwECBwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDgTl3Dqh9\
             F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5QEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE\
             BAQEBAYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBQUFBQUFBQUFBQUFBQUFBQUF\
@@ -2528,10 +2547,26 @@ mod tests {
         let res = return_signers_with_config(&tx, &OutputFormat::JsonCompact, &config).unwrap();
         let sign_only = parse_sign_only_reply_string(&res);
         assert_eq!(sign_only.blockhash, blockhash);
-        assert_eq!(sign_only.message, Some(expected_msg));
+        assert_eq!(sign_only.message, Some(expected_msg.clone()));
         assert_eq!(sign_only.present_signers[0].0, present.pubkey());
         assert_eq!(sign_only.absent_signers[0], absent.pubkey());
         assert_eq!(sign_only.bad_signers[0], bad.pubkey());
+
+        let res_data = return_signers_data(&tx, &config);
+        assert_eq!(
+            res_data,
+            CliSignOnlyData {
+                blockhash: blockhash.to_string(),
+                message: Some(expected_msg),
+                signers: vec![format!(
+                    "{}={}",
+                    present.pubkey().to_string(),
+                    tx.signatures[1]
+                )],
+                absent: vec![absent.pubkey().to_string()],
+                bad_sig: vec![bad.pubkey().to_string()],
+            }
+        );
     }
 
     #[test]
