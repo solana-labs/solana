@@ -7,8 +7,9 @@ use solana_clap_utils::{
     keypair::{CliSigners, DefaultSigner},
     DisplayError
 };
-use solana_cli::cli::{
-    get_clap_app, parse_command, process_command, CliCommandInfo, CliConfig, SettingType
+use solana_cli::{
+    cli::{parse_command, process_command, CliCommandInfo, CliConfig, SettingType},
+    clap_app::get_clap_app
 };
 use solana_cli_config::{Config};
 use solana_cli_output::{display::println_name_value, OutputFormat};

@@ -36,3 +36,4 @@ pub mod stake;
 pub mod test_utils;
 pub mod validator_info;
 pub mod vote;
+pub mod clap_app;
