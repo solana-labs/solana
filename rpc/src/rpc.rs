@@ -1064,7 +1064,10 @@ impl JsonRpcRequestProcessor {
             .map_err(|_| Error::internal_error())?
             .filter(|&slot| slot <= end_slot && slot <= highest_confirmed_root)
             .collect();
-        let last_element = blocks.last().cloned().unwrap_or_default();
+        let last_element = blocks
+            .last()
+            .cloned()
+            .unwrap_or_else(|| start_slot.saturating_sub(1));
 
         // Maybe add confirmed blocks
         if commitment.is_confirmed() && last_element < end_slot {
