@@ -307,8 +307,6 @@ impl Validator {
             }
         }
 
-        report_target_features();
-
         for cluster_entrypoint in &cluster_entrypoints {
             info!("entrypoint: {:?}", cluster_entrypoint);
         }

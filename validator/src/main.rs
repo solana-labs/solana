@@ -2151,6 +2151,14 @@ pub fn main() {
     info!("{} {}", crate_name!(), solana_version::version!());
     info!("Starting validator with: {:#?}", std::env::args_os());
 
+    let cuda = matches.is_present("cuda");
+    if cuda {
+        solana_perf::perf_libs::init_cuda();
+        enable_recycler_warming();
+    }
+
+    solana_core::validator::report_target_features();
+
     let authorized_voter_keypairs = keypairs_of(&matches, "authorized_voter_keypairs")
         .map(|keypairs| keypairs.into_iter().map(Arc::new).collect())
         .unwrap_or_else(|| {
@@ -2278,7 +2286,7 @@ pub fn main() {
             .ok()
             .or_else(|| Some(ledger_path.clone())),
         dev_halt_at_slot: value_t!(matches, "dev_halt_at_slot", Slot).ok(),
-        cuda: matches.is_present("cuda"),
+        cuda,
         expected_genesis_hash: matches
             .value_of("expected_genesis_hash")
             .map(|s| Hash::from_str(s).unwrap()),
@@ -2658,10 +2666,6 @@ pub fn main() {
     solana_metrics::set_host_id(identity_keypair.pubkey().to_string());
     solana_metrics::set_panic_hook("validator");
 
-    if validator_config.cuda {
-        solana_perf::perf_libs::init_cuda();
-        enable_recycler_warming();
-    }
     solana_entry::entry::init_poh();
     solana_runtime::snapshot_utils::remove_tmp_snapshot_archives(&snapshot_output_dir);
 
