@@ -701,8 +701,8 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
             self.using_empty_get.fetch_add(1, Ordering::Relaxed);
             instance.data.ref_count = 0;
             assert!(instance.data.slot_list.is_empty());
+            instance.confirmed_not_on_disk = false; // we are inserted now if we were 'confirmed_not_on_disk' before. update_static below handles this fine
         }
-        instance.confirmed_not_on_disk = false; // we are inserted now if we were 'confirmed_not_on_disk' before. update_static below handles this fine
         self.updates_in_cache.fetch_add(1, Ordering::Relaxed);
 
         let mut current = &mut instance.data;
@@ -965,7 +965,8 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
             if verify_get_on_insert {
                 assert!(self.get(key).is_some());
             }
-            self.updates.fetch_add(1, Ordering::Relaxed);
+            // if we have a previous value, then that item is currently open and locked, so it could not have been changed. Thus, this is an in-cache update as long as we are caching gets.
+            self.updates_in_cache.fetch_add(1, Ordering::Relaxed);
             if update_caching {
                 self.upsert_in_cache(key, updatefn, current_value);
             } else {
