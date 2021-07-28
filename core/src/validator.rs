@@ -1457,7 +1457,7 @@ fn is_rosetta_emulated() -> bool {
     }
 }
 
-fn report_target_features() {
+pub fn report_target_features() {
     warn!(
         "CUDA is {}abled",
         if solana_perf::perf_libs::api().is_some() {
