@@ -55,6 +55,7 @@ gives a convenient interface for the RPC methods.
 - [getSlotLeader](jsonrpc-api.md#getslotleader)
 - [getSlotLeaders](jsonrpc-api.md#getslotleaders)
 - [getStakeActivation](jsonrpc-api.md#getstakeactivation)
+- [getSnapshotSlot](jsonrpc-api.md#getsnapshotslot)
 - [getSupply](jsonrpc-api.md#getsupply)
 - [getTokenAccountBalance](jsonrpc-api.md#gettokenaccountbalance)
 - [getTokenAccountsByDelegate](jsonrpc-api.md#gettokenaccountsbydelegate)
@@ -2533,6 +2534,8 @@ The result will be an RpcResponse JSON object with `value` equal to an array of 
    - `executable: <bool>`, boolean indicating if the account contains a program \(and is strictly read-only\)
    - `rentEpoch: <u64>`, the epoch at which this account will next owe rent, as u64
 
+When the data is requested with the `jsonParsed` encoding a format similar to that of the [Token Balances Structure](jsonrpc-api.md#token-balances-structure) can be expected inside the structure, both for the `tokenAmount` and the `delegatedAmount`, with the latter being an optional object.
+
 #### Example:
 
 ```bash
@@ -2567,7 +2570,6 @@ Result:
         "data": {
           "program": "spl-token",
           "parsed": {
-            "accountType": "account",
             "info": {
               "tokenAmount": {
                 "amount": "1",
@@ -2576,13 +2578,20 @@ Result:
                 "uiAmountString": "0.1",
               },
               "delegate": "4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T",
-              "delegatedAmount": 1,
-              "isInitialized": true,
+              "delegatedAmount": {
+                "amount": "1",
+                "decimals": 1,
+                "uiAmount": 0.1,
+                "uiAmountString": "0.1",
+              },
+              "state": "initialized",
               "isNative": false,
               "mint": "3wyAj7Rt1TWVPZVteFJPLa26JmLvdb1CAKEFZm3NY75E",
               "owner": "CnPoSPKXu7wJqxe59Fs72tkBeALovhsCxYeFwPCQH9TD"
-            }
-          }
+            },
+            "type": "account"
+          },
+          "space": 165
         },
         "executable": false,
         "lamports": 1726080,
@@ -2622,6 +2631,8 @@ The result will be an RpcResponse JSON object with `value` equal to an array of 
    - `data: <object>`, Token state data associated with the account, either as encoded binary data or in JSON format `{<program>: <state>}`
    - `executable: <bool>`, boolean indicating if the account contains a program \(and is strictly read-only\)
    - `rentEpoch: <u64>`, the epoch at which this account will next owe rent, as u64
+
+When the data is requested with the `jsonParsed` encoding a format similar to that of the [Token Balances Structure](jsonrpc-api.md#token-balances-structure) can be expected inside the structure, both for the `tokenAmount` and the `delegatedAmount`, with the latter being an optional object.
 
 #### Example:
 
@@ -2665,14 +2676,21 @@ Result:
                 "uiAmount": 0.1,
                 "uiAmountString": "0.1",
               },
-              "delegate": null,
-              "delegatedAmount": 1,
-              "isInitialized": true,
+              "delegate": "4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T",
+              "delegatedAmount": {
+                "amount": "1",
+                "decimals": 1,
+                "uiAmount": 0.1,
+                "uiAmountString": "0.1",
+              },
+              "state": "initialized",
               "isNative": false,
               "mint": "3wyAj7Rt1TWVPZVteFJPLa26JmLvdb1CAKEFZm3NY75E",
               "owner": "4Qkev8aNZcqFNSRhQzwyLMFSsi94jHqE8WNVTJzTP99F"
-            }
-          }
+            },
+            "type": "account"
+          },
+          "space": 165
         },
         "executable": false,
         "lamports": 1726080,
