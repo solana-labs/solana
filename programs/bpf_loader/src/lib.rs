@@ -864,16 +864,13 @@ mod tests {
         account_utils::StateMut,
         client::SyncClient,
         clock::Clock,
-        compute_budget::ComputeBudget,
         feature_set::FeatureSet,
         genesis_config::create_genesis_config,
         instruction::Instruction,
         instruction::{AccountMeta, InstructionError},
         keyed_account::KeyedAccount,
         message::Message,
-        process_instruction::{
-            InvokeContextStackFrame, MockComputeMeter, MockInvokeContext, MockLogger,
-        },
+        process_instruction::{MockComputeMeter, MockInvokeContext},
         pubkey::Pubkey,
         rent::Rent,
         signature::{Keypair, Signer},
@@ -1123,22 +1120,8 @@ mod tests {
         );
 
         // Case: limited budget
-        let keyed_accounts_range = 0..keyed_accounts.len();
-        let mut invoke_context = MockInvokeContext {
-            invoke_stack: vec![InvokeContextStackFrame {
-                key: Pubkey::default(),
-                keyed_accounts,
-                keyed_accounts_range,
-            }],
-            logger: MockLogger::default(),
-            compute_budget: ComputeBudget::default(),
-            bpf_compute_budget: ComputeBudget::default().into(),
-            compute_meter: MockComputeMeter::default(),
-            programs: vec![],
-            accounts: vec![],
-            sysvars: vec![],
-            disabled_features: vec![].into_iter().collect(),
-        };
+        let mut invoke_context = MockInvokeContext::new(keyed_accounts);
+        invoke_context.compute_meter = MockComputeMeter::default();
         assert_eq!(
             Err(InstructionError::ProgramFailedToComplete),
             process_instruction(&program_key, &[], &mut invoke_context)
