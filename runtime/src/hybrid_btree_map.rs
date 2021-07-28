@@ -331,6 +331,7 @@ pub struct WriteCacheEntry<V> {
     pub dirty: bool,
     pub insert: bool,
     pub must_do_lookup_from_disk: bool,
+    pub confirmed_not_on_disk: bool,
 }
 
 #[derive(Debug)]
@@ -690,6 +691,11 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
 
         instance.age = self.set_age_to_future();
         instance.dirty = true;
+        if instance.confirmed_not_on_disk {
+            instance.data.ref_count = 0;
+            assert!(instance.data.slot_list.is_empty());
+        }
+        instance.confirmed_not_on_disk = false; // we are inserted now if we were 'confirmed_not_on_disk' before. update_static below handles this fine
         self.updates_in_cache.fetch_add(1, Ordering::Relaxed);
 
         let mut current = &mut instance.data;
@@ -717,6 +723,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
         reclaims_must_be_empty: bool,
     ) {
         let mut must_do_lookup_from_disk = false;
+        let mut confirmed_not_on_disk = false;
         /*
         let k = Pubkey::from_str("5x3NHJ4VEu2abiZJ5EHEibTc2iqW22Lc245Z3fCwCxRS").unwrap();
         if key == k {
@@ -759,6 +766,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
                         true,
                         true,
                         must_do_lookup_from_disk,
+                        confirmed_not_on_disk,
                     ));
                     return; // we can be satisfied that this index will be looked up later
                 }
@@ -776,7 +784,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
                     if addref {
                         current.0 += 1;
                     }
-                    vacant.insert(self.allocate(&current.1, current.0, true, false, must_do_lookup_from_disk));
+                    vacant.insert(self.allocate(&current.1, current.0, true, false, must_do_lookup_from_disk, confirmed_not_on_disk,));
                     m1.stop();
                     self.update_cache_us
                         .fetch_add(m1.as_ns(), Ordering::Relaxed);
@@ -789,6 +797,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
                         true,
                         true,
                         must_do_lookup_from_disk,
+                        confirmed_not_on_disk,
                     ));
                 }
             }
@@ -809,6 +818,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
         F: Fn(Option<(&[SlotT<V>], u64)>) -> Option<(Vec<SlotT<V>>, u64)>,
     {
         let mut must_do_lookup_from_disk = false;
+        let mut confirmed_not_on_disk = false;
 
         //let k = Pubkey::from_str("D5vcuUjK4uPSg1Cy9hoTPWCodFcLv6MyfWFNmRtbEofL").unwrap();
         if current_value.is_none() && !force_not_insert {
@@ -839,7 +849,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
                     // stick this in the write cache and flush it later
                     let ix = self.bucket_ix(key);
                     let wc = &mut self.write_cache[ix].write().unwrap();
-                    wc.insert(key.clone(), self.allocate(&result.0, result.1, true, true, must_do_lookup_from_disk));
+                    wc.insert(key.clone(), self.allocate(&result.0, result.1, true, true, must_do_lookup_from_disk, confirmed_not_on_disk));
                 } else {
                     panic!("should have returned a value from updatefn");
                 }
@@ -873,6 +883,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
         dirty: bool,
         insert: bool,
         must_do_lookup_from_disk: bool,
+        confirmed_not_on_disk: bool,
     ) -> WriteCacheEntryArc<V> {
         assert!(!(insert && !dirty));
         let current_age = self.current_age.load(Ordering::Relaxed);
@@ -886,6 +897,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
                 age: self.set_age_to_future(),
                 insert,
                 must_do_lookup_from_disk,
+                confirmed_not_on_disk,
             }),
         }
     }
@@ -895,6 +907,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
         F: Fn(Option<(&[SlotT<V>], u64)>) -> Option<(Vec<SlotT<V>>, u64)>,
     {
         let must_do_lookup_from_disk = false;
+        let mut confirmed_not_on_disk = false;
         let current_value = current_value.map(|entry| (&entry.slot_list[..], entry.ref_count));
         // we are an update
         let result = updatefn(current_value);
@@ -906,10 +919,10 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
             match wc.entry(key.clone()) {
                 HashMapEntry::Occupied(mut occupied) => {
                     let mut gm = occupied.get_mut();
-                    *gm = self.allocate(&result.0, result.1, true, false, must_do_lookup_from_disk);
+                    *gm = self.allocate(&result.0, result.1, true, false, must_do_lookup_from_disk, confirmed_not_on_disk);
                 }
                 HashMapEntry::Vacant(vacant) => {
-                    vacant.insert(self.allocate(&result.0, result.1, true, true, must_do_lookup_from_disk));
+                    vacant.insert(self.allocate(&result.0, result.1, true, true, must_do_lookup_from_disk, confirmed_not_on_disk));
                     self.wait.notify_all(); // we have put something in the write cache that needs to be flushed sometime
                 }
             }
@@ -982,6 +995,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
         }
         */
         let must_do_lookup_from_disk = false;
+        let mut confirmed_not_on_disk = false;
         let ix = self.bucket_ix(key);
         {
             let mut m1 = Measure::start("");
@@ -993,10 +1007,11 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
                     let mut instance = res.instance.write().unwrap();
                     instance.age = self.set_age_to_future();
                     self.gets_from_cache.fetch_add(1, Ordering::Relaxed);
+                    if instance.confirmed_not_on_disk {
+                        return None; // does not really exist
+                    }
+
                     let r = Some((instance.data.ref_count, instance.data.slot_list.clone()));
-                    drop(res);
-                    drop(instance);
-                    drop(wc);
                     self.get_cache_us.fetch_add(m1.as_ns(), Ordering::Relaxed);
                     return r;
                 } else {
@@ -1018,6 +1033,9 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
                 HashMapEntry::Occupied(occupied) => {
                     let mut instance = occupied.get().instance.write().unwrap();
                     instance.age = self.set_age_to_future();
+                    if instance.confirmed_not_on_disk {
+                        return None; // does not really exist
+                    }
                     self.gets_from_cache.fetch_add(1, Ordering::Relaxed);
                     m1.stop();
                     self.update_cache_us
@@ -1026,9 +1044,14 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
                 }
                 HashMapEntry::Vacant(vacant) => {
                     let r = self.get_no_cache(key);
-                    r.as_ref().map(|loaded| {
-                        vacant.insert(self.allocate(&loaded.1, loaded.0, false, false, must_do_lookup_from_disk));
-                    });
+                    if let Some(loaded) = &r {
+                        vacant.insert(self.allocate(&loaded.1, loaded.0, false, false, must_do_lookup_from_disk, confirmed_not_on_disk));
+                    }
+                    else {
+                        // we looked this up. it does not exist. let's insert a marker in the cache saying it doesn't exist. otherwise, we have to look it up again on insert!
+                        confirmed_not_on_disk = true;
+                        vacant.insert(self.allocate(&SlotList::default(), RefCount::MAX, false, false, must_do_lookup_from_disk, confirmed_not_on_disk));
+                    }
                     m1.stop();
                     self.update_cache_us
                         .fetch_add(m1.as_ns(), Ordering::Relaxed);
@@ -1060,10 +1083,13 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
             HashMapEntry::Occupied(mut occupied) => {
                 self.gets_from_cache.fetch_add(1, Ordering::Relaxed);
                 let mut gm = occupied.get_mut();
-                if add {
-                    gm.instance.write().unwrap().data.ref_count += 1;
-                } else {
-                    gm.instance.write().unwrap().data.ref_count -= 1;
+                let mut instance = gm.instance.write().unwrap();
+                if !instance.confirmed_not_on_disk {
+                    if add {
+                        instance.data.ref_count += 1;
+                    } else {
+                        instance.data.ref_count -= 1;
+                    }
                 }
             }
             HashMapEntry::Vacant(vacant) => {
