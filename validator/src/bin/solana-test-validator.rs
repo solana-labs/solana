@@ -386,6 +386,8 @@ fn main() {
     };
     let _logger_thread = redirect_stderr_to_file(logfile);
 
+    solana_core::validator::report_target_features();
+
     // TODO: Ideally test-validator should *only* allow private addresses.
     let socket_addr_space = SocketAddrSpace::new(/*allow_private_addr=*/ true);
     let cli_config = if let Some(config_file) = matches.value_of("config_file") {
