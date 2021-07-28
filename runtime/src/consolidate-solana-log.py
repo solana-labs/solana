@@ -75,7 +75,7 @@ with open(input_file) as fh:
             print("{} {} ".format(count, last_time), end="")
             for (name, total) in stats.items():
                 if name != "fetch_entries_fail_time":
-                    print("{}: {:.1f} ".format(name, total), end="")
+                    print("{}: {:.1f} ".format(name, total))
             print("")
 
             if False:
@@ -100,7 +100,7 @@ with open(input_file) as fh:
         print("{} {} ".format(count, last_time), end="")
         for (name, total) in stats.items():
             if name != "fetch_entries_fail_time":
-                print("{}: {:.1f} ".format(name, total), end="")
+                print("{}: {:.1f} ".format(name, total))
         print("")
 
 if num_groups == 0:
