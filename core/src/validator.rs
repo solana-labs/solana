@@ -1469,6 +1469,7 @@ pub fn report_target_features() {
 
     if !is_rosetta_emulated() {
         unsafe { check_avx() };
+        unsafe { check_avx2() };
     }
 }
 
@@ -1482,7 +1483,7 @@ unsafe fn check_avx() {
         info!("AVX detected");
     } else {
         error!(
-            "Your machine does not have AVX support, please rebuild from source on your machine"
+            "Incompatible CPU detected: missing AVX support. Please build from source on the target"
         );
         abort();
     }
@@ -1490,6 +1491,22 @@ unsafe fn check_avx() {
 
 #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
 unsafe fn check_avx() {}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[target_feature(enable = "avx2")]
+unsafe fn check_avx2() {
+    if is_x86_feature_detected!("avx2") {
+        info!("AVX2 detected");
+    } else {
+        error!(
+            "Incompatible CPU detected: missing AVX2 support. Please build from source on the target"
+        );
+        abort();
+    }
+}
+
+#[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+unsafe fn check_avx2() {}
 
 // Get the activated stake percentage (based on the provided bank) that is visible in gossip
 fn get_stake_percent_in_gossip(bank: &Bank, cluster_info: &ClusterInfo, log: bool) -> u64 {
