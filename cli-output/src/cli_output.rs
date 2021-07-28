@@ -8,6 +8,7 @@ use {
         QuietDisplay, VerboseDisplay,
     },
     chrono::{Local, TimeZone},
+    clap::ArgMatches,
     console::{style, Emoji},
     inflector::cases::titlecase::to_title_case,
     serde::{Deserialize, Serialize},
@@ -47,7 +48,7 @@ use {
 
 static WARNING: Emoji = Emoji("⚠️", "!");
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub enum OutputFormat {
     Display,
     Json,
@@ -76,6 +77,21 @@ impl OutputFormat {
             OutputFormat::Json => serde_json::to_string_pretty(item).unwrap(),
             OutputFormat::JsonCompact => serde_json::to_value(item).unwrap().to_string(),
         }
+    }
+
+    pub fn from_matches(matches: &ArgMatches<'_>, output_name: &str, verbose: bool) -> Self {
+        matches
+            .value_of(output_name)
+            .map(|value| match value {
+                "json" => OutputFormat::Json,
+                "json-compact" => OutputFormat::JsonCompact,
+                _ => unreachable!(),
+            })
+            .unwrap_or(if verbose {
+                OutputFormat::DisplayVerbose
+            } else {
+                OutputFormat::Display
+            })
     }
 }
 
@@ -2438,6 +2454,7 @@ impl VerboseDisplay for CliGossipNodes {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use clap::{App, Arg};
     use solana_sdk::{
         message::Message,
         pubkey::Pubkey,
@@ -2561,6 +2578,52 @@ mod tests {
         assert_eq!(
             &OutputFormat::DisplayVerbose.formatted_string(&f),
             "verbose"
+        );
+    }
+
+    #[test]
+    fn test_output_format_from_matches() {
+        let app = App::new("test").arg(
+            Arg::with_name("output_format")
+                .long("output")
+                .value_name("FORMAT")
+                .global(true)
+                .takes_value(true)
+                .possible_values(&["json", "json-compact"])
+                .help("Return information in specified output format"),
+        );
+        let matches = app
+            .clone()
+            .get_matches_from(vec!["test", "--output", "json"]);
+        assert_eq!(
+            OutputFormat::from_matches(&matches, "output_format", false),
+            OutputFormat::Json
+        );
+        assert_eq!(
+            OutputFormat::from_matches(&matches, "output_format", true),
+            OutputFormat::Json
+        );
+
+        let matches = app
+            .clone()
+            .get_matches_from(vec!["test", "--output", "json-compact"]);
+        assert_eq!(
+            OutputFormat::from_matches(&matches, "output_format", false),
+            OutputFormat::JsonCompact
+        );
+        assert_eq!(
+            OutputFormat::from_matches(&matches, "output_format", true),
+            OutputFormat::JsonCompact
+        );
+
+        let matches = app.clone().get_matches_from(vec!["test"]);
+        assert_eq!(
+            OutputFormat::from_matches(&matches, "output_format", false),
+            OutputFormat::Display
+        );
+        assert_eq!(
+            OutputFormat::from_matches(&matches, "output_format", true),
+            OutputFormat::DisplayVerbose
         );
     }
 }

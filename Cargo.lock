@@ -4333,6 +4333,7 @@ dependencies = [
  "Inflector",
  "base64 0.13.0",
  "chrono",
+ "clap 2.33.3",
  "console",
  "humantime",
  "indicatif",
