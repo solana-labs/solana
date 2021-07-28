@@ -200,18 +200,7 @@ pub fn parse_args<'a>(
     }
 
     let verbose = matches.is_present("verbose");
-    let output_format = matches
-        .value_of("output_format")
-        .map(|value| match value {
-            "json" => OutputFormat::Json,
-            "json-compact" => OutputFormat::JsonCompact,
-            _ => unreachable!(),
-        })
-        .unwrap_or(if verbose {
-            OutputFormat::DisplayVerbose
-        } else {
-            OutputFormat::Display
-        });
+    let output_format = OutputFormat::from_matches(matches, "output_format", verbose);
 
     let (_, commitment) = CliConfig::compute_commitment_config(
         matches.value_of("commitment").unwrap_or(""),
