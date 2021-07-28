@@ -30,10 +30,6 @@ pub mod instructions_sysvar_enabled {
     solana_sdk::declare_id!("EnvhHCLvg55P7PDtbvR1NwuTuAeodqpusV3MR5QEK8gs");
 }
 
-pub mod consistent_recent_blockhashes_sysvar {
-    solana_sdk::declare_id!("3h1BQWPDS5veRsq6mDBWruEpgPxRJkfwGexg5iiQ9mYg");
-}
-
 pub mod deprecate_rewards_sysvar {
     solana_sdk::declare_id!("GaBtBJvmS4Arjj5W1NmFcyvPjsHN38UGYDq2MDwbs9Qu");
 }
@@ -203,7 +199,6 @@ lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
         (instructions_sysvar_enabled::id(), "instructions sysvar"),
-        (consistent_recent_blockhashes_sysvar::id(), "consistent recentblockhashes sysvar"),
         (deprecate_rewards_sysvar::id(), "deprecate unused rewards sysvar"),
         (pico_inflation::id(), "pico inflation"),
         (full_inflation::devnet_and_testnet::id(), "full inflation on devnet and testnet"),
