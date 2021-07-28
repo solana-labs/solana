@@ -282,6 +282,110 @@ fn main() {
         )
         .get_matches();
 
+    let ledger_path = value_t_or_exit!(matches, "ledger_path", PathBuf);
+    let reset_ledger = matches.is_present("reset");
+    let output = if matches.is_present("quiet") {
+        Output::None
+    } else if matches.is_present("log") {
+        Output::Log
+    } else {
+        Output::Dashboard
+    };
+    let mut ledger_fd_lock = FdLock::new(fs::File::open(&ledger_path).unwrap());
+    let _ledger_lock = ledger_fd_lock.try_lock().unwrap_or_else(|_| {
+        println!(
+            "Error: Unable to lock {} directory. Check if another validator is running",
+            ledger_path.display()
+        );
+        exit(1);
+    });
+
+    if reset_ledger {
+        remove_directory_contents(&ledger_path).unwrap_or_else(|err| {
+            println!("Error: Unable to remove {}: {}", ledger_path.display(), err);
+            exit(1);
+        })
+    }
+    solana_runtime::snapshot_utils::remove_tmp_snapshot_archives(&ledger_path);
+
+    let validator_log_symlink = ledger_path.join("validator.log");
+    let logfile = if output != Output::Log {
+        let validator_log_with_timestamp = format!(
+            "validator-{}.log",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_millis()
+        );
+
+        let _ = fs::remove_file(&validator_log_symlink);
+        symlink::symlink_file(&validator_log_with_timestamp, &validator_log_symlink).unwrap();
+
+        Some(
+            ledger_path
+                .join(validator_log_with_timestamp)
+                .into_os_string()
+                .into_string()
+                .unwrap(),
+        )
+    } else {
+        None
+    };
+    let _logger_thread = redirect_stderr_to_file(logfile);
+
+    if !ledger_path.exists() {
+        fs::create_dir(&ledger_path).unwrap_or_else(|err| {
+            println!(
+                "Error: Unable to create directory {}: {}",
+                ledger_path.display(),
+                err
+            );
+            exit(1);
+        });
+    }
+
+    let mut ledger_fd_lock = FdLock::new(fs::File::open(&ledger_path).unwrap());
+    let _ledger_lock = ledger_fd_lock.try_lock().unwrap_or_else(|_| {
+        println!(
+            "Error: Unable to lock {} directory. Check if another validator is running",
+            ledger_path.display()
+        );
+        exit(1);
+    });
+
+    if reset_ledger {
+        remove_directory_contents(&ledger_path).unwrap_or_else(|err| {
+            println!("Error: Unable to remove {}: {}", ledger_path.display(), err);
+            exit(1);
+        })
+    }
+    solana_runtime::snapshot_utils::remove_tmp_snapshot_archives(&ledger_path);
+
+    let validator_log_symlink = ledger_path.join("validator.log");
+    let logfile = if output != Output::Log {
+        let validator_log_with_timestamp = format!(
+            "validator-{}.log",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_millis()
+        );
+
+        let _ = fs::remove_file(&validator_log_symlink);
+        symlink::symlink_file(&validator_log_with_timestamp, &validator_log_symlink).unwrap();
+
+        Some(
+            ledger_path
+                .join(validator_log_with_timestamp)
+                .into_os_string()
+                .into_string()
+                .unwrap(),
+        )
+    } else {
+        None
+    };
+    let _logger_thread = redirect_stderr_to_file(logfile);
+
     // TODO: Ideally test-validator should *only* allow private addresses.
     let socket_addr_space = SocketAddrSpace::new(/*allow_private_addr=*/ true);
     let cli_config = if let Some(config_file) = matches.value_of("config_file") {
@@ -302,15 +406,6 @@ fn main() {
                 .unwrap_or_else(|_| (Keypair::new().pubkey(), true))
         });
 
-    let ledger_path = value_t_or_exit!(matches, "ledger_path", PathBuf);
-    let reset_ledger = matches.is_present("reset");
-    let output = if matches.is_present("quiet") {
-        Output::None
-    } else if matches.is_present("log") {
-        Output::Log
-    } else {
-        Output::Dashboard
-    };
     let rpc_port = value_t_or_exit!(matches, "rpc_port", u16);
     let faucet_port = value_t_or_exit!(matches, "faucet_port", u16);
     let slots_per_epoch = value_t!(matches, "slots_per_epoch", Slot).ok();
@@ -393,59 +488,6 @@ fn main() {
     } else {
         None
     };
-
-    if !ledger_path.exists() {
-        fs::create_dir(&ledger_path).unwrap_or_else(|err| {
-            println!(
-                "Error: Unable to create directory {}: {}",
-                ledger_path.display(),
-                err
-            );
-            exit(1);
-        });
-    }
-
-    let mut ledger_fd_lock = FdLock::new(fs::File::open(&ledger_path).unwrap());
-    let _ledger_lock = ledger_fd_lock.try_lock().unwrap_or_else(|_| {
-        println!(
-            "Error: Unable to lock {} directory. Check if another validator is running",
-            ledger_path.display()
-        );
-        exit(1);
-    });
-
-    if reset_ledger {
-        remove_directory_contents(&ledger_path).unwrap_or_else(|err| {
-            println!("Error: Unable to remove {}: {}", ledger_path.display(), err);
-            exit(1);
-        })
-    }
-    solana_runtime::snapshot_utils::remove_tmp_snapshot_archives(&ledger_path);
-
-    let validator_log_symlink = ledger_path.join("validator.log");
-    let logfile = if output != Output::Log {
-        let validator_log_with_timestamp = format!(
-            "validator-{}.log",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_millis()
-        );
-
-        let _ = fs::remove_file(&validator_log_symlink);
-        symlink::symlink_file(&validator_log_with_timestamp, &validator_log_symlink).unwrap();
-
-        Some(
-            ledger_path
-                .join(validator_log_with_timestamp)
-                .into_os_string()
-                .into_string()
-                .unwrap(),
-        )
-    } else {
-        None
-    };
-    let _logger_thread = redirect_stderr_to_file(logfile);
 
     let faucet_lamports = sol_to_lamports(value_of(&matches, "faucet_sol").unwrap());
     let faucet_keypair_file = ledger_path.join("faucet-keypair.json");
