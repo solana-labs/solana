@@ -515,7 +515,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
         for (k, mut v) in read_lock.iter() {
             let mut instance = v.instance.read().unwrap();
             let mut flush = instance.dirty;
-            let mut keep_this_in_cache = (Self::in_cache(&instance.data.slot_list) || instance.data.slot_list.len() > 1);
+            let mut keep_this_in_cache = Self::in_cache(&instance.data.slot_list); // || instance.data.slot_list.len() > 1);
             if bg && keep_this_in_cache {
                 // for all account indexes that are in the write cache instead of storage, don't write them to disk yet - they will be updated soon
                 flush = false;
