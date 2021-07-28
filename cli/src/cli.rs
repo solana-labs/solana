@@ -954,34 +954,18 @@ pub fn parse_command(
             })
         }
         ("completion", Some(matches)) => {
-            match matches.value_of("shell") {
-                Some("bash") =>
-                    get_clap_app(
-                        crate_name!(), crate_description!(),
-                        solana_version::version!()
-                    ).gen_completions_to("solana", Shell::Bash, &mut stdout()),
-                Some("fish") =>
-                    get_clap_app(
-                        crate_name!(), crate_description!(),
-                        solana_version::version!()
-                    ).gen_completions_to("solana", Shell::Fish, &mut stdout()),
-                Some("zsh") =>
-                    get_clap_app(
-                        crate_name!(), crate_description!(),
-                        solana_version::version!()
-                    ).gen_completions_to("solana", Shell::Zsh, &mut stdout()),
-                Some("powershell") =>
-                    get_clap_app(
-                        crate_name!(), crate_description!(),
-                        solana_version::version!()
-                    ).gen_completions_to("solana", Shell::PowerShell, &mut stdout()),
-                Some("elvish") =>
-                    get_clap_app(
-                        crate_name!(), crate_description!(),
-                        solana_version::version!()
-                    ).gen_completions_to("solana", Shell::Elvish, &mut stdout()),
+            let shell_choice = match matches.value_of("shell") {
+                Some("bash") => Shell::Bash,
+                Some("fish") => Shell::Fish,
+                Some("zsh") => Shell::Zsh,
+                Some("powershell") => Shell::PowerShell,
+                Some("elvish") => Shell::Elvish,
                 _ => unreachable!() // This is safe, since we assign default_value
-            }
+            };
+            get_clap_app(
+                crate_name!(), crate_description!(),
+                solana_version::version!()
+            ).gen_completions_to("solana", shell_choice, &mut stdout());
             std::process::exit(0);
         }
         //
@@ -2527,7 +2511,7 @@ fn base_clap_app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<
 
 pub fn get_clap_app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, 'v> {
     let app = base_clap_app(name, about, version);
-    return finalize_clap_app(app);
+    finalize_clap_app(app)
 }
 
 #[cfg(test)]
