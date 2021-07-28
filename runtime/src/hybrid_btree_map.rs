@@ -1161,7 +1161,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
             ("min", min, i64),
             ("max", max, i64),
             ("sum", sum, i64),
-            ("updates_not_in_cache", self.updates.swap(0, Ordering::Relaxed), i64),
+            //("updates_not_in_cache", self.updates.swap(0, Ordering::Relaxed), i64),
             ("updates_in_cache", self.updates_in_cache.swap(0, Ordering::Relaxed), i64),
             ("inserts", self.inserts.swap(0, Ordering::Relaxed), i64),
             ("inserts_without_checking_disk", self.inserts_without_checking_disk.swap(0, Ordering::Relaxed), i64),
