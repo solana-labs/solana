@@ -83,7 +83,7 @@ impl BuildHasher for myhash {
 }*/
 type MyBuildHasher = BuildHasherDefault<MyHasher>;
 
-pub const default_age: u8 = 25;
+pub const default_age: u8 = 100;
 pub const verify_get_on_insert: bool = false;
 pub const bucket_bins: usize = BINS;
 pub const use_trait: bool = false;
@@ -782,7 +782,9 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
                 }
                 let r = self.get_no_cache(&key); // maybe move this outside lock - but race conditions unclear
                 if let Some(mut current) = r {
-                    self.updates.fetch_add(1, Ordering::Relaxed);
+                    if 1000 <= self.updates.fetch_add(1, Ordering::Relaxed) {
+                        panic!("1000th update without loading");
+                    }
                     let (slot, new_entry) = new_value.slot_list.remove(0);
                     let addref = WriteAccountMapEntry::update_static(
                         &mut current.1,
