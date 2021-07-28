@@ -1,6 +1,8 @@
 //! @brief Example Rust-based BPF program that tests sysvar use
 
 extern crate solana_program;
+#[allow(deprecated)]
+use solana_program::sysvar::recent_blockhashes::RecentBlockhashes;
 use solana_program::{
     account_info::AccountInfo,
     entrypoint,
@@ -10,9 +12,8 @@ use solana_program::{
     program_error::ProgramError,
     pubkey::Pubkey,
     sysvar::{
-        self, clock::Clock, epoch_schedule::EpochSchedule, fees::Fees, instructions,
-        recent_blockhashes::RecentBlockhashes, rent::Rent, slot_hashes::SlotHashes,
-        slot_history::SlotHistory, stake_history::StakeHistory, Sysvar,
+        self, clock::Clock, epoch_schedule::EpochSchedule, fees::Fees, instructions, rent::Rent,
+        slot_hashes::SlotHashes, slot_history::SlotHistory, stake_history::StakeHistory, Sysvar,
     },
 };
 
@@ -61,6 +62,7 @@ pub fn process_instruction(
     assert_eq!(0, index);
 
     // Recent Blockhashes
+    #[allow(deprecated)]
     {
         msg!("RecentBlockhashes identifier:");
         sysvar::recent_blockhashes::id().log();
