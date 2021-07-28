@@ -3139,12 +3139,8 @@ dependencies = [
  "Inflector",
  "base64 0.13.0",
  "chrono",
-<<<<<<< HEAD
- "console 0.14.1",
-=======
  "clap",
- "console",
->>>>>>> 467c18e0d (Add cli-output helpers (#18933))
+ "console 0.14.1",
  "humantime",
  "indicatif",
  "serde",
