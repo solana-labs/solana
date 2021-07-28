@@ -156,7 +156,7 @@ pub struct Blockstore {
     slots_stats: Arc<Mutex<SlotsStats>>,
 }
 
-pub struct SlotsStats {
+struct SlotsStats {
     last_cleanup_ts: Instant,
     stats: BTreeMap<Slot, SlotStats>,
 }

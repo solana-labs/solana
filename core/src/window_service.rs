@@ -41,11 +41,11 @@ pub type DuplicateSlotSender = CrossbeamSender<Slot>;
 pub type DuplicateSlotReceiver = CrossbeamReceiver<Slot>;
 
 #[derive(Default)]
-pub struct WindowServiceMetrics {
-    pub run_insert_count: u64,
-    pub num_shreds_received: u64,
-    pub shred_receiver_elapsed_us: u64,
-    pub prune_shreds_elapsed_us: u64,
+struct WindowServiceMetrics {
+    run_insert_count: u64,
+    num_shreds_received: u64,
+    shred_receiver_elapsed_us: u64,
+    prune_shreds_elapsed_us: u64,
 }
 
 impl WindowServiceMetrics {

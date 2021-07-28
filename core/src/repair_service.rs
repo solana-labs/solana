@@ -269,25 +269,25 @@ impl RepairService {
             };
 
             let mut build_repairs_batch_elapsed = Measure::start("build_repairs_batch_elapsed");
-            let mut outstanding_requests = outstanding_requests.write().unwrap();
-            let batch: Vec<(Vec<u8>, SocketAddr)> = repairs
-                .iter()
-                .filter_map(|repair_request| {
-                    if let Ok((to, req)) = serve_repair.repair_request(
-                        &repair_info.cluster_slots,
-                        *repair_request,
-                        &mut peers_cache,
-                        &mut repair_stats,
-                        &repair_info.repair_validators,
-                        &mut outstanding_requests,
-                    ) {
+            let batch: Vec<(Vec<u8>, SocketAddr)> = {
+                let mut outstanding_requests = outstanding_requests.write().unwrap();
+                repairs
+                    .iter()
+                    .filter_map(|repair_request| {
+                        let (to, req) = serve_repair
+                            .repair_request(
+                                &repair_info.cluster_slots,
+                                *repair_request,
+                                &mut peers_cache,
+                                &mut repair_stats,
+                                &repair_info.repair_validators,
+                                &mut outstanding_requests,
+                            )
+                            .ok()?;
                         Some((req, to))
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-            drop(outstanding_requests);
+                    })
+                    .collect()
+            };
             let batch: Vec<(&[u8], &SocketAddr)> = batch.iter().map(|(v, s)| (&v[..], s)).collect();
             build_repairs_batch_elapsed.stop();
 
