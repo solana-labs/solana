@@ -762,8 +762,10 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
                 return;
             }
             HashMapEntry::Vacant(vacant) => {
-                if reclaims_must_be_empty {
-                    self.insert_without_lookup.fetch_add(1, Ordering::Relaxed);
+                if !reclaims_must_be_empty {
+                    if 1000 <= self.insert_without_lookup.fetch_add(1, Ordering::Relaxed) {
+                        panic!("upsert without reclaims");
+                    }
                 }
                 if reclaims_must_be_empty && false { // todo
                     // we don't have to go to disk to look this thing up yet
@@ -1167,7 +1169,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
             ("inserts_without_checking_disk", self.inserts_without_checking_disk.swap(0, Ordering::Relaxed), i64),
             ("deletes", self.deletes.swap(0, Ordering::Relaxed), i64),
             ("using_empty_get", self.using_empty_get.swap(0, Ordering::Relaxed), i64),
-            ("insert_without_lookup", self.insert_without_lookup.swap(0, Ordering::Relaxed), i64),
+            //("insert_without_lookup", self.insert_without_lookup.swap(0, Ordering::Relaxed), i64),
             (
                 "gets_from_disk_empty",
                 self.gets_from_disk_empty.swap(0, Ordering::Relaxed),
