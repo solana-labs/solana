@@ -153,13 +153,12 @@ pub struct Blockstore {
     pub completed_slots_senders: Vec<CompletedSlotsSender>,
     pub lowest_cleanup_slot: Arc<RwLock<Slot>>,
     no_compaction: bool,
-    pub slots_stats: Arc<Mutex<SlotsStats>>,
+    slots_stats: Arc<Mutex<SlotsStats>>,
 }
 
 pub struct SlotsStats {
     last_cleanup_ts: Instant,
     stats: BTreeMap<Slot, SlotStats>,
-    pub broadcast_only_slots: HashSet<Slot>,
 }
 
 impl Default for SlotsStats {
@@ -167,7 +166,6 @@ impl Default for SlotsStats {
         SlotsStats {
             last_cleanup_ts: Instant::now(),
             stats: BTreeMap::new(),
-            broadcast_only_slots: HashSet::new(),
         }
     }
 }
@@ -1557,9 +1555,6 @@ impl Blockstore {
             let (num_repaired, num_recovered) = {
                 let mut slots_stats = self.slots_stats.lock().unwrap();
                 if let Some(e) = slots_stats.stats.remove(&slot_meta.slot) {
-                    if e.num_repaired == 0 {
-                        slots_stats.broadcast_only_slots.insert(slot_meta.slot);
-                    }
                     if slots_stats.last_cleanup_ts.elapsed().as_secs() > 30 {
                         let root = self.last_root();
                         slots_stats.stats = slots_stats.stats.split_off(&root);
@@ -1567,7 +1562,6 @@ impl Blockstore {
                     }
                     (e.num_repaired, e.num_recovered)
                 } else {
-                    slots_stats.broadcast_only_slots.insert(slot_meta.slot);
                     (0, 0)
                 }
             };
