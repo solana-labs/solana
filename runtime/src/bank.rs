@@ -1297,10 +1297,6 @@ impl Bank {
         new.update_stake_history(Some(parent_epoch));
         new.update_clock(Some(parent_epoch));
         new.update_fees();
-        if !new.fix_recent_blockhashes_sysvar_delay() {
-            new.update_recent_blockhashes();
-        }
-
         new
     }
 
@@ -2662,9 +2658,7 @@ impl Bank {
         let mut w_blockhash_queue = self.blockhash_queue.write().unwrap();
         if self.is_block_boundary(self.tick_height.load(Relaxed) + 1) {
             w_blockhash_queue.register_hash(hash, &self.fee_calculator);
-            if self.fix_recent_blockhashes_sysvar_delay() {
-                self.update_recent_blockhashes_locked(&w_blockhash_queue);
-            }
+            self.update_recent_blockhashes_locked(&w_blockhash_queue);
         }
         // ReplayStage will start computing the accounts delta hash when it
         // detects the tick height has reached the boundary, so the system
@@ -3524,7 +3518,6 @@ impl Bank {
             loaded_txs,
             &self.rent_collector,
             &self.last_blockhash_with_fee_calculator(),
-            self.fix_recent_blockhashes_sysvar_delay(),
             self.rent_for_sysvars(),
         );
         let rent_debits = self.collect_rent(executed, loaded_txs);
@@ -5493,15 +5486,6 @@ impl Bank {
                     }
                 };
             }
-        }
-    }
-
-    fn fix_recent_blockhashes_sysvar_delay(&self) -> bool {
-        match self.cluster_type() {
-            ClusterType::Development | ClusterType::Devnet | ClusterType::Testnet => true,
-            ClusterType::MainnetBeta => self
-                .feature_set
-                .is_active(&feature_set::consistent_recent_blockhashes_sysvar::id()),
         }
     }
 
@@ -10885,25 +10869,25 @@ pub(crate) mod tests {
             if bank.slot == 0 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "BfvaoHkrQwrkQo7T1mW6jmJXveRy11rut8bva2H1Rt5H"
+                    "DqaWg7EVKzb5Fpe92zNBtXAWqLwcedgHDicYrCBnf3QK"
                 );
             }
             if bank.slot == 32 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "JBGPApnSMPKZaYiR16v46XSSGcKxy8kCbVtN1CG1XDxW"
+                    "AYdhzhKrM74r9XuZBDGcHeFzg2DEtp1boggnEnzDjZSq"
                 );
             }
             if bank.slot == 64 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "BDCt9cGPfxpgJXzp8Tq1nX1zSqpbs8xrkAFyRhmXKiuX"
+                    "EsbPVYzo1qz5reEUH5okKW4ExB6WbcidkVdW5mzpFn7C"
                 );
             }
             if bank.slot == 128 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "4zUpK4VUhKLaPUgeMMSeDR2w827goriRL5NndJxGDVmz"
+                    "H3DWrQ6FqbLkFNDxbWQ62UKRbw2dbuxf3oVF2VpBk6Ga"
                 );
                 break;
             }

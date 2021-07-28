@@ -576,7 +576,7 @@ pub fn process_withdraw_from_nonce_account(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cli::{app, parse_command};
+    use crate::{clap_app::get_clap_app, cli::parse_command};
     use solana_sdk::{
         account::Account,
         account_utils::StateMut,
@@ -596,7 +596,7 @@ mod tests {
 
     #[test]
     fn test_parse_command() {
-        let test_commands = app("test", "desc", "version");
+        let test_commands = get_clap_app("test", "desc", "version");
         let default_keypair = Keypair::new();
         let (default_keypair_file, mut tmp_file) = make_tmp_file();
         write_keypair(&default_keypair, tmp_file.as_file_mut()).unwrap();

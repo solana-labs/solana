@@ -880,7 +880,7 @@ pub fn process_withdraw_from_vote_account(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cli::{app, parse_command};
+    use crate::{clap_app::get_clap_app, cli::parse_command};
     use solana_sdk::signature::{read_keypair_file, write_keypair, Keypair, Signer};
     use tempfile::NamedTempFile;
 
@@ -891,7 +891,7 @@ mod tests {
 
     #[test]
     fn test_parse_command() {
-        let test_commands = app("test", "desc", "version");
+        let test_commands = get_clap_app("test", "desc", "version");
         let keypair = Keypair::new();
         let pubkey = keypair.pubkey();
         let pubkey_string = pubkey.to_string();
