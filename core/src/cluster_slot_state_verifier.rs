@@ -1,4 +1,8 @@
-use crate::{fork_choice::ForkChoice, heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice};
+use crate::{
+    ancestor_hashes_service::{AncestorHashesReplayUpdate, AncestorHashesReplayUpdateSender},
+    fork_choice::ForkChoice,
+    heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
+};
 use solana_ledger::blockstore::Blockstore;
 use solana_sdk::{clock::Slot, hash::Hash};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
@@ -220,6 +224,7 @@ pub enum ResultingStateChange {
     RepairDuplicateConfirmedVersion(Hash),
     // Hash of our current frozen version of the slot
     DuplicateConfirmedSlotMatchesCluster(Hash),
+    SendAncestorHashesReplayUpdate(AncestorHashesReplayUpdate),
 }
 
 impl SlotStateUpdate {
@@ -294,6 +299,9 @@ fn on_dead_slot(slot: Slot, dead_state: DeadState) -> Vec<ResultingStateChange> 
         // check if our version agrees with the cluster,
         let bank_hash = Hash::default();
         let is_dead = true;
+        state_changes.push(ResultingStateChange::SendAncestorHashesReplayUpdate(
+            AncestorHashesReplayUpdate::DeadDuplicateConfirmed(slot),
+        ));
         check_duplicate_confirmed_hash_against_frozen_hash(
             &mut state_changes,
             slot,
@@ -301,8 +309,13 @@ fn on_dead_slot(slot: Slot, dead_state: DeadState) -> Vec<ResultingStateChange> 
             bank_hash,
             is_dead,
         );
-    } else if is_slot_duplicate {
-        state_changes.push(ResultingStateChange::MarkSlotDuplicate(Hash::default()));
+    } else {
+        state_changes.push(ResultingStateChange::SendAncestorHashesReplayUpdate(
+            AncestorHashesReplayUpdate::Dead(slot),
+        ));
+        if is_slot_duplicate {
+            state_changes.push(ResultingStateChange::MarkSlotDuplicate(Hash::default()));
+        }
     }
 
     state_changes
@@ -351,9 +364,14 @@ fn on_duplicate_confirmed(
     }
 
     let bank_hash = bank_status.bank_hash().expect("bank hash must exist");
-    let is_dead = bank_status.is_dead();
 
     let mut state_changes = vec![];
+    let is_dead = bank_status.is_dead();
+    if is_dead {
+        state_changes.push(ResultingStateChange::SendAncestorHashesReplayUpdate(
+            AncestorHashesReplayUpdate::DeadDuplicateConfirmed(slot),
+        ));
+    }
     check_duplicate_confirmed_hash_against_frozen_hash(
         &mut state_changes,
         slot,
@@ -460,6 +478,7 @@ fn apply_state_changes(
     fork_choice: &mut HeaviestSubtreeForkChoice,
     duplicate_slots_to_repair: &mut DuplicateSlotsToRepair,
     blockstore: &Blockstore,
+    ancestor_hashes_replay_update_sender: &AncestorHashesReplayUpdateSender,
     state_changes: Vec<ResultingStateChange>,
 ) {
     // Handle cases where the bank is frozen, but not duplicate confirmed
@@ -494,6 +513,9 @@ fn apply_state_changes(
                     )
                     .unwrap();
             }
+            ResultingStateChange::SendAncestorHashesReplayUpdate(ancestor_hashes_replay_update) => {
+                let _ = ancestor_hashes_replay_update_sender.send(ancestor_hashes_replay_update);
+            }
         }
     }
 
@@ -510,6 +532,7 @@ pub(crate) fn check_slot_agrees_with_cluster(
     duplicate_slots_tracker: &mut DuplicateSlotsTracker,
     fork_choice: &mut HeaviestSubtreeForkChoice,
     duplicate_slots_to_repair: &mut HashSet<(Slot, Hash)>,
+    ancestor_hashes_replay_update_sender: &AncestorHashesReplayUpdateSender,
     slot_state_update: SlotStateUpdate,
 ) {
     info!(
@@ -533,12 +556,23 @@ pub(crate) fn check_slot_agrees_with_cluster(
         }
     }
 
+    // Avoid duplicate work from multiple of the same DuplicateConfirmed signal. This can
+    // happen if we get duplicate confirmed from gossip and from local replay.
+    if let SlotStateUpdate::DuplicateConfirmed(state) = &slot_state_update {
+        if let Some(bank_hash) = state.bank_status.bank_hash() {
+            if let Some(true) = fork_choice.is_duplicate_confirmed(&(slot, bank_hash)) {
+                return;
+            }
+        }
+    }
+
     let state_changes = slot_state_update.into_state_changes(slot);
     apply_state_changes(
         slot,
         fork_choice,
         duplicate_slots_to_repair,
         blockstore,
+        ancestor_hashes_replay_update_sender,
         state_changes,
     );
 }
@@ -547,6 +581,7 @@ pub(crate) fn check_slot_agrees_with_cluster(
 mod test {
     use super::*;
     use crate::{progress_map::ProgressMap, replay_stage::tests::setup_forks_from_tree};
+    use crossbeam_channel::unbounded;
     use solana_runtime::bank_forks::BankForks;
     use std::{
         collections::{HashMap, HashSet},
@@ -686,6 +721,7 @@ mod test {
             (
                 SlotStateUpdate::DuplicateConfirmed(duplicate_confirmed_state),
                 vec![
+                ResultingStateChange::SendAncestorHashesReplayUpdate(AncestorHashesReplayUpdate::DeadDuplicateConfirmed(10)),
                 ResultingStateChange::MarkSlotDuplicate(Hash::default()),
                 ResultingStateChange::RepairDuplicateConfirmedVersion(duplicate_confirmed_hash)],
             )
@@ -727,7 +763,9 @@ mod test {
             );
             (
                 SlotStateUpdate::Dead(dead_state),
-                Vec::<ResultingStateChange>::new()
+                vec![
+                    ResultingStateChange::SendAncestorHashesReplayUpdate(AncestorHashesReplayUpdate::Dead(10))
+                ],
             )
         },
         dead_state_update_1: {
@@ -739,7 +777,8 @@ mod test {
             );
             (
                 SlotStateUpdate::Dead(dead_state),
-                vec![ResultingStateChange::MarkSlotDuplicate(Hash::default())],
+                vec![
+                    ResultingStateChange::SendAncestorHashesReplayUpdate(AncestorHashesReplayUpdate::Dead(10)), ResultingStateChange::MarkSlotDuplicate(Hash::default())],
             )
         },
         dead_state_update_2: {
@@ -752,6 +791,7 @@ mod test {
             (
                 SlotStateUpdate::Dead(dead_state),
                 vec![
+                ResultingStateChange::SendAncestorHashesReplayUpdate(AncestorHashesReplayUpdate::DeadDuplicateConfirmed(10)),
                 ResultingStateChange::MarkSlotDuplicate(Hash::default()),
                 ResultingStateChange::RepairDuplicateConfirmedVersion(duplicate_confirmed_hash.unwrap())],
             )
@@ -766,6 +806,7 @@ mod test {
             (
                 SlotStateUpdate::Dead(dead_state),
                 vec![
+                    ResultingStateChange::SendAncestorHashesReplayUpdate(AncestorHashesReplayUpdate::DeadDuplicateConfirmed(10)),
                 ResultingStateChange::MarkSlotDuplicate(Hash::default()),
                 ResultingStateChange::RepairDuplicateConfirmedVersion(duplicate_confirmed_hash.unwrap())],
             )
@@ -888,11 +929,14 @@ mod test {
             .get(duplicate_slot)
             .unwrap()
             .hash();
+        let (ancestor_hashes_replay_update_sender, _ancestor_hashes_replay_update_receiver) =
+            unbounded();
         apply_state_changes(
             duplicate_slot,
             &mut heaviest_subtree_fork_choice,
             &mut duplicate_slots_to_repair,
             &blockstore,
+            &ancestor_hashes_replay_update_sender,
             vec![ResultingStateChange::MarkSlotDuplicate(duplicate_slot_hash)],
         );
         assert!(!heaviest_subtree_fork_choice
@@ -926,6 +970,7 @@ mod test {
             &mut heaviest_subtree_fork_choice,
             &mut duplicate_slots_to_repair,
             &blockstore,
+            &ancestor_hashes_replay_update_sender,
             vec![ResultingStateChange::RepairDuplicateConfirmedVersion(
                 correct_hash,
             )],
@@ -956,11 +1001,14 @@ mod test {
         // Simulate ReplayStage freezing a Bank with the given hash.
         // BankFrozen should mark it down in Blockstore.
         assert!(blockstore.get_bank_hash(duplicate_slot).is_none());
+        let (ancestor_hashes_replay_update_sender, _ancestor_hashes_replay_update_receiver) =
+            unbounded();
         apply_state_changes(
             duplicate_slot,
             &mut heaviest_subtree_fork_choice,
             &mut duplicate_slots_to_repair,
             &blockstore,
+            &ancestor_hashes_replay_update_sender,
             vec![ResultingStateChange::BankFrozen(duplicate_slot_hash)],
         );
         assert_eq!(
@@ -983,6 +1031,7 @@ mod test {
             &mut heaviest_subtree_fork_choice,
             &mut duplicate_slots_to_repair,
             &blockstore,
+            &ancestor_hashes_replay_update_sender,
             vec![ResultingStateChange::BankFrozen(new_bank_hash)],
         );
         assert_eq!(
@@ -1024,11 +1073,14 @@ mod test {
             our_duplicate_slot_hash,
         )];
         modify_state_changes(our_duplicate_slot_hash, &mut state_changes);
+        let (ancestor_hashes_replay_update_sender, _ancestor_hashes_replay_update_receiver) =
+            unbounded();
         apply_state_changes(
             duplicate_slot,
             &mut heaviest_subtree_fork_choice,
             &mut duplicate_slots_to_repair,
             &blockstore,
+            &ancestor_hashes_replay_update_sender,
             state_changes,
         );
         for child_slot in descendants
@@ -1096,6 +1148,8 @@ mod test {
             || progress.is_dead(duplicate_slot).unwrap_or(false),
             || initial_bank_hash,
         );
+        let (ancestor_hashes_replay_update_sender, _ancestor_hashes_replay_update_receiver) =
+            unbounded();
         check_slot_agrees_with_cluster(
             duplicate_slot,
             root,
@@ -1103,6 +1157,7 @@ mod test {
             &mut duplicate_slots_tracker,
             &mut heaviest_subtree_fork_choice,
             &mut duplicate_slots_to_repair,
+            &ancestor_hashes_replay_update_sender,
             SlotStateUpdate::Duplicate(duplicate_state),
         );
         assert!(duplicate_slots_tracker.contains(&duplicate_slot));
@@ -1135,6 +1190,7 @@ mod test {
             &mut duplicate_slots_tracker,
             &mut heaviest_subtree_fork_choice,
             &mut duplicate_slots_to_repair,
+            &ancestor_hashes_replay_update_sender,
             SlotStateUpdate::BankFrozen(bank_frozen_state),
         );
 
@@ -1194,6 +1250,8 @@ mod test {
             || progress.is_dead(2).unwrap_or(false),
             || Some(slot2_hash),
         );
+        let (ancestor_hashes_replay_update_sender, _ancestor_hashes_replay_update_receiver) =
+            unbounded();
         check_slot_agrees_with_cluster(
             2,
             root,
@@ -1201,6 +1259,7 @@ mod test {
             &mut duplicate_slots_tracker,
             &mut heaviest_subtree_fork_choice,
             &mut DuplicateSlotsToRepair::default(),
+            &ancestor_hashes_replay_update_sender,
             SlotStateUpdate::DuplicateConfirmed(duplicate_confirmed_state),
         );
         assert!(heaviest_subtree_fork_choice
@@ -1236,6 +1295,7 @@ mod test {
             &mut duplicate_slots_tracker,
             &mut heaviest_subtree_fork_choice,
             &mut DuplicateSlotsToRepair::default(),
+            &ancestor_hashes_replay_update_sender,
             SlotStateUpdate::Duplicate(duplicate_state),
         );
         assert!(duplicate_slots_tracker.contains(&3));
@@ -1295,6 +1355,8 @@ mod test {
             || progress.is_dead(2).unwrap_or(false),
             || Some(slot2_hash),
         );
+        let (ancestor_hashes_replay_update_sender, _ancestor_hashes_replay_update_receiver) =
+            unbounded();
         check_slot_agrees_with_cluster(
             2,
             root,
@@ -1302,6 +1364,7 @@ mod test {
             &mut duplicate_slots_tracker,
             &mut heaviest_subtree_fork_choice,
             &mut DuplicateSlotsToRepair::default(),
+            &ancestor_hashes_replay_update_sender,
             SlotStateUpdate::Duplicate(duplicate_state),
         );
         assert!(duplicate_slots_tracker.contains(&2));
@@ -1335,6 +1398,7 @@ mod test {
             &mut duplicate_slots_tracker,
             &mut heaviest_subtree_fork_choice,
             &mut DuplicateSlotsToRepair::default(),
+            &ancestor_hashes_replay_update_sender,
             SlotStateUpdate::DuplicateConfirmed(duplicate_confirmed_state),
         );
         for slot in 0..=3 {
@@ -1380,6 +1444,8 @@ mod test {
             || progress.is_dead(3).unwrap_or(false),
             || Some(slot3_hash),
         );
+        let (ancestor_hashes_replay_update_sender, _ancestor_hashes_replay_update_receiver) =
+            unbounded();
         check_slot_agrees_with_cluster(
             3,
             root,
@@ -1387,6 +1453,7 @@ mod test {
             &mut duplicate_slots_tracker,
             &mut heaviest_subtree_fork_choice,
             &mut duplicate_slots_to_repair,
+            &ancestor_hashes_replay_update_sender,
             SlotStateUpdate::DuplicateConfirmed(duplicate_confirmed_state),
         );
         let verify_all_slots_duplicate_confirmed =
@@ -1426,6 +1493,7 @@ mod test {
             &mut duplicate_slots_tracker,
             &mut heaviest_subtree_fork_choice,
             &mut duplicate_slots_to_repair,
+            &ancestor_hashes_replay_update_sender,
             SlotStateUpdate::Duplicate(duplicate_state),
         );
         assert!(duplicate_slots_tracker.contains(&1));

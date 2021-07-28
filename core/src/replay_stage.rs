@@ -1,6 +1,7 @@
 //! The `replay_stage` replays transactions broadcast by the leader.
 
 use crate::{
+    ancestor_hashes_service::AncestorHashesReplayUpdateSender,
     broadcast_stage::RetransmitSlotsSender,
     cache_block_meta_service::CacheBlockMetaSender,
     cluster_info_vote_listener::{
@@ -126,6 +127,7 @@ pub struct ReplayStageConfig {
     pub cache_block_meta_sender: Option<CacheBlockMetaSender>,
     pub bank_notification_sender: Option<BankNotificationSender>,
     pub wait_for_vote_to_start_leader: bool,
+    pub ancestor_hashes_replay_update_sender: AncestorHashesReplayUpdateSender,
 }
 
 #[derive(Default)]
@@ -333,6 +335,7 @@ impl ReplayStage {
             cache_block_meta_sender,
             bank_notification_sender,
             wait_for_vote_to_start_leader,
+            ancestor_hashes_replay_update_sender,
         } = config;
 
         trace!("replay stage");
@@ -417,7 +420,8 @@ impl ReplayStage {
                         &mut latest_validator_votes_for_frozen_banks,
                         &cluster_slots_update_sender,
                         &cost_update_sender,
-                        &mut duplicate_slots_to_repair
+                        &mut duplicate_slots_to_repair,
+                        &ancestor_hashes_replay_update_sender,
                     );
                     replay_active_banks_time.stop();
 
@@ -433,7 +437,8 @@ impl ReplayStage {
                         &bank_forks,
                         &mut progress,
                         &mut heaviest_subtree_fork_choice,
-                        &mut duplicate_slots_to_repair
+                        &mut duplicate_slots_to_repair,
+                        &ancestor_hashes_replay_update_sender,
                     );
                     process_gossip_duplicate_confirmed_slots_time.stop();
 
@@ -463,7 +468,8 @@ impl ReplayStage {
                             &bank_forks,
                             &mut progress,
                             &mut heaviest_subtree_fork_choice,
-                            &mut duplicate_slots_to_repair
+                            &mut duplicate_slots_to_repair,
+                            &ancestor_hashes_replay_update_sender,
                         );
                     }
                     process_duplicate_slots_time.stop();
@@ -505,7 +511,7 @@ impl ReplayStage {
                             &bank_forks,
                         );
 
-                        Self::mark_slots_confirmed(&confirmed_forks, &blockstore, &bank_forks, &mut progress, &mut duplicate_slots_tracker, &mut heaviest_subtree_fork_choice,  &mut duplicate_slots_to_repair);
+                        Self::mark_slots_confirmed(&confirmed_forks, &blockstore, &bank_forks, &mut progress, &mut duplicate_slots_tracker, &mut heaviest_subtree_fork_choice,  &mut duplicate_slots_to_repair, &ancestor_hashes_replay_update_sender);
                     }
                     compute_slot_stats_time.stop();
 
@@ -1085,6 +1091,7 @@ impl ReplayStage {
         progress: &mut ProgressMap,
         fork_choice: &mut HeaviestSubtreeForkChoice,
         duplicate_slots_to_repair: &mut DuplicateSlotsToRepair,
+        ancestor_hashes_replay_update_sender: &AncestorHashesReplayUpdateSender,
     ) {
         let root = bank_forks.read().unwrap().root();
         for new_confirmed_slots in gossip_duplicate_confirmed_slots_receiver.try_iter() {
@@ -1111,6 +1118,7 @@ impl ReplayStage {
                     duplicate_slots_tracker,
                     fork_choice,
                     duplicate_slots_to_repair,
+                    ancestor_hashes_replay_update_sender,
                     SlotStateUpdate::DuplicateConfirmed(duplicate_confirmed_state),
                 );
             }
@@ -1146,6 +1154,7 @@ impl ReplayStage {
         progress: &mut ProgressMap,
         fork_choice: &mut HeaviestSubtreeForkChoice,
         duplicate_slots_to_repair: &mut DuplicateSlotsToRepair,
+        ancestor_hashes_replay_update_sender: &AncestorHashesReplayUpdateSender,
     ) {
         let new_duplicate_slots: Vec<Slot> = duplicate_slots_receiver.try_iter().collect();
         let (root_slot, bank_hashes) = {
@@ -1175,6 +1184,7 @@ impl ReplayStage {
                 duplicate_slots_tracker,
                 fork_choice,
                 duplicate_slots_to_repair,
+                ancestor_hashes_replay_update_sender,
                 SlotStateUpdate::Duplicate(duplicate_state),
             );
         }
@@ -1423,6 +1433,7 @@ impl ReplayStage {
         progress: &mut ProgressMap,
         heaviest_subtree_fork_choice: &mut HeaviestSubtreeForkChoice,
         duplicate_slots_to_repair: &mut DuplicateSlotsToRepair,
+        ancestor_hashes_replay_update_sender: &AncestorHashesReplayUpdateSender,
     ) {
         // Do not remove from progress map when marking dead! Needed by
         // `process_gossip_duplicate_confirmed_slots()`
@@ -1470,6 +1481,7 @@ impl ReplayStage {
             duplicate_slots_tracker,
             heaviest_subtree_fork_choice,
             duplicate_slots_to_repair,
+            ancestor_hashes_replay_update_sender,
             SlotStateUpdate::Dead(dead_state),
         );
     }
@@ -1869,6 +1881,7 @@ impl ReplayStage {
         cluster_slots_update_sender: &ClusterSlotsUpdateSender,
         cost_update_sender: &Sender<ExecuteTimings>,
         duplicate_slots_to_repair: &mut DuplicateSlotsToRepair,
+        ancestor_hashes_replay_update_sender: &AncestorHashesReplayUpdateSender,
     ) -> bool {
         let mut did_complete_bank = false;
         let mut tx_count = 0;
@@ -1936,6 +1949,7 @@ impl ReplayStage {
                             progress,
                             heaviest_subtree_fork_choice,
                             duplicate_slots_to_repair,
+                            ancestor_hashes_replay_update_sender,
                         );
                         // If the bank was corrupted, don't try to run the below logic to check if the
                         // bank is completed
@@ -1984,6 +1998,7 @@ impl ReplayStage {
                     duplicate_slots_tracker,
                     heaviest_subtree_fork_choice,
                     duplicate_slots_to_repair,
+                    ancestor_hashes_replay_update_sender,
                     SlotStateUpdate::BankFrozen(bank_frozen_state),
                 );
                 if let Some(sender) = bank_notification_sender {
@@ -2500,6 +2515,7 @@ impl ReplayStage {
         duplicate_slots_tracker: &mut DuplicateSlotsTracker,
         fork_choice: &mut HeaviestSubtreeForkChoice,
         duplicate_slots_to_repair: &mut DuplicateSlotsToRepair,
+        ancestor_hashes_replay_update_sender: &AncestorHashesReplayUpdateSender,
     ) {
         let root_slot = bank_forks.read().unwrap().root();
         for (slot, frozen_hash) in confirmed_forks.iter() {
@@ -2525,6 +2541,7 @@ impl ReplayStage {
                     duplicate_slots_tracker,
                     fork_choice,
                     duplicate_slots_to_repair,
+                    ancestor_hashes_replay_update_sender,
                     SlotStateUpdate::DuplicateConfirmed(duplicate_confirmed_state),
                 );
             }
@@ -3403,6 +3420,8 @@ pub mod tests {
                 block_commitment_cache,
                 OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
             ));
+            let (ancestor_hashes_replay_update_sender, _ancestor_hashes_replay_update_receiver) =
+                unbounded();
             if let Err(err) = &res {
                 ReplayStage::mark_dead_slot(
                     &blockstore,
@@ -3415,6 +3434,7 @@ pub mod tests {
                     &mut progress,
                     &mut heaviest_subtree_fork_choice,
                     &mut DuplicateSlotsToRepair::default(),
+                    &ancestor_hashes_replay_update_sender,
                 );
             }
 
@@ -4852,6 +4872,8 @@ pub mod tests {
             || progress.is_dead(4).unwrap_or(false),
             || Some(bank4_hash),
         );
+        let (ancestor_hashes_replay_update_sender, _ancestor_hashes_replay_update_receiver) =
+            unbounded();
         check_slot_agrees_with_cluster(
             4,
             bank_forks.read().unwrap().root(),
@@ -4859,6 +4881,7 @@ pub mod tests {
             &mut duplicate_slots_tracker,
             &mut vote_simulator.heaviest_subtree_fork_choice,
             &mut DuplicateSlotsToRepair::default(),
+            &ancestor_hashes_replay_update_sender,
             SlotStateUpdate::Duplicate(duplicate_state),
         );
 
@@ -4890,6 +4913,7 @@ pub mod tests {
             &mut duplicate_slots_tracker,
             &mut vote_simulator.heaviest_subtree_fork_choice,
             &mut DuplicateSlotsToRepair::default(),
+            &ancestor_hashes_replay_update_sender,
             SlotStateUpdate::Duplicate(duplicate_state),
         );
 
@@ -4922,6 +4946,7 @@ pub mod tests {
             &mut duplicate_slots_tracker,
             &mut vote_simulator.heaviest_subtree_fork_choice,
             &mut duplicate_slots_to_repair,
+            &ancestor_hashes_replay_update_sender,
             SlotStateUpdate::DuplicateConfirmed(duplicate_confirmed_state),
         );
         // The confirmed hash is detected in `progress`, which means
@@ -5058,6 +5083,8 @@ pub mod tests {
             || progress.is_dead(2).unwrap_or(false),
             || Some(our_bank2_hash),
         );
+        let (ancestor_hashes_replay_update_sender, _ancestor_hashes_replay_update_receiver) =
+            unbounded();
         check_slot_agrees_with_cluster(
             2,
             bank_forks.read().unwrap().root(),
@@ -5065,6 +5092,7 @@ pub mod tests {
             &mut duplicate_slots_tracker,
             heaviest_subtree_fork_choice,
             &mut duplicate_slots_to_repair,
+            &ancestor_hashes_replay_update_sender,
             SlotStateUpdate::DuplicateConfirmed(duplicate_confirmed_state),
         );
         assert!(duplicate_slots_to_repair.contains(&(2, duplicate_confirmed_bank2_hash)));

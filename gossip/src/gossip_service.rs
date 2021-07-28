@@ -58,27 +58,27 @@ impl GossipService {
             1,
             false,
         );
-        let (response_sender, response_receiver) = channel();
         let (consume_sender, listen_receiver) = channel();
+        // https://github.com/rust-lang/rust/issues/39364#issuecomment-634545136
+        let _consume_sender = consume_sender.clone();
         let t_socket_consume = cluster_info.clone().start_socket_consume_thread(
             request_receiver,
             consume_sender,
             exit.clone(),
         );
-        let t_listen = ClusterInfo::listen(
-            cluster_info.clone(),
+        let (response_sender, response_receiver) = channel();
+        let t_listen = cluster_info.clone().listen(
             bank_forks.clone(),
             listen_receiver,
             response_sender.clone(),
             should_check_duplicate_instance,
-            exit,
+            exit.clone(),
         );
-        let t_gossip = ClusterInfo::gossip(
-            cluster_info.clone(),
+        let t_gossip = cluster_info.clone().gossip(
             bank_forks,
             response_sender,
             gossip_validators,
-            exit,
+            exit.clone(),
         );
         // To work around:
         // https://github.com/rust-lang/rust/issues/54267
