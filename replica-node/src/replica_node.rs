@@ -3,9 +3,7 @@ use {
     log::*,
     solana_download_utils::download_snapshot,
     solana_genesis_utils::download_then_check_genesis_hash,
-    solana_gossip::{
-        cluster_info::ClusterInfo, contact_info::ContactInfo, socketaddr, socketaddr_any,
-    },
+    solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
     solana_ledger::{
         blockstore::Blockstore, blockstore_db::AccessType, blockstore_processor,
         leader_schedule_cache::LeaderScheduleCache,
@@ -29,6 +27,7 @@ use {
         snapshot_utils::{self, ArchiveFormat},
     },
     solana_sdk::{clock::Slot, exit::Exit, genesis_config::GenesisConfig, hash::Hash},
+    solana_streamer::socket::SocketAddrSpace,
     std::{
         fs,
         net::SocketAddr,
@@ -56,28 +55,7 @@ pub struct ReplicaNodeConfig {
     pub account_indexes: AccountSecondaryIndexes,
     pub accounts_db_caching_enabled: bool,
     pub replica_exit: Arc<RwLock<Exit>>,
-}
-
-impl Default for ReplicaNodeConfig {
-    fn default() -> Self {
-        Self {
-            rpc_source_addr: socketaddr_any!(),
-            rpc_addr: socketaddr_any!(),
-            rpc_pubsub_addr: socketaddr_any!(),
-            ledger_path: PathBuf::default(),
-            snapshot_output_dir: PathBuf::default(),
-            snapshot_path: PathBuf::default(),
-            account_paths: vec![],
-            snapshot_info: (0, Hash::default()),
-            cluster_info: Arc::new(ClusterInfo::default()),
-            rpc_config: JsonRpcConfig::default(),
-            snapshot_config: None,
-            pubsub_config: PubSubConfig::default(),
-            account_indexes: AccountSecondaryIndexes::default(),
-            accounts_db_caching_enabled: false,
-            replica_exit: Arc::new(RwLock::new(Exit::default())),
-        }
-    }
+    pub socket_addr_space: SocketAddrSpace,
 }
 
 pub struct ReplicaNode {
@@ -177,6 +155,7 @@ fn start_client_rpc_services(
     genesis_config: &GenesisConfig,
     cluster_info: Arc<ClusterInfo>,
     bank_info: &ReplicaBankInfo,
+    socket_addr_space: &SocketAddrSpace,
 ) -> (
     Option<JsonRpcService>,
     Option<PubSubService>,
@@ -211,13 +190,15 @@ fn start_client_rpc_services(
     ));
 
     let rpc_override_health_check = Arc::new(AtomicBool::new(false));
-    if ContactInfo::is_valid_address(&replica_config.rpc_addr) {
+    if ContactInfo::is_valid_address(&replica_config.rpc_addr, socket_addr_space) {
         assert!(ContactInfo::is_valid_address(
-            &replica_config.rpc_pubsub_addr
+            &replica_config.rpc_pubsub_addr,
+            socket_addr_space
         ));
     } else {
         assert!(!ContactInfo::is_valid_address(
-            &replica_config.rpc_pubsub_addr
+            &replica_config.rpc_pubsub_addr,
+            socket_addr_space
         ));
     }
 
@@ -291,6 +272,7 @@ impl ReplicaNode {
                 &genesis_config,
                 replica_config.cluster_info.clone(),
                 &bank_info,
+                &replica_config.socket_addr_space,
             );
 
         ReplicaNode {

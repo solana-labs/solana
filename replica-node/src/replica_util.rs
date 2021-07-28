@@ -13,6 +13,7 @@ use {
         pubkey::Pubkey,
         signature::{Keypair, Signer},
     },
+    solana_streamer::socket::SocketAddrSpace,
     std::{
         collections::HashSet,
         net::{SocketAddr, UdpSocket},
@@ -198,13 +199,14 @@ fn start_gossip_node(
     expected_shred_version: Option<u16>,
     gossip_validators: Option<HashSet<Pubkey>>,
     should_check_duplicate_instance: bool,
+    socket_addr_space: SocketAddrSpace,
 ) -> (Arc<ClusterInfo>, Arc<AtomicBool>, GossipService) {
     let contact_info = ClusterInfo::gossip_contact_info(
         identity_keypair.pubkey(),
         *gossip_addr,
         expected_shred_version.unwrap_or(0),
     );
-    let mut cluster_info = ClusterInfo::new(contact_info, identity_keypair);
+    let mut cluster_info = ClusterInfo::new(contact_info, identity_keypair, socket_addr_space);
     cluster_info.set_entrypoints(cluster_entrypoints.to_vec());
     cluster_info.restore_contact_info(ledger_path, 0);
     let cluster_info = Arc::new(cluster_info);
@@ -237,6 +239,7 @@ pub fn get_rpc_peer_info(
     expected_shred_version: Option<u16>,
     peer_pubkey: &Pubkey,
     snapshot_output_dir: &Path,
+    socket_addr_space: SocketAddrSpace,
 ) -> (Arc<ClusterInfo>, ContactInfo, Option<(Slot, Hash)>) {
     let identity_keypair = Arc::new(identity_keypair);
 
@@ -249,6 +252,7 @@ pub fn get_rpc_peer_info(
         expected_shred_version,
         None,
         true,
+        socket_addr_space,
     );
 
     let rpc_node_details = get_rpc_peer_node(

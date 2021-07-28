@@ -1,40 +1,43 @@
 #![allow(clippy::integer_arithmetic)]
-use log::*;
-use serial_test::serial;
-
-use solana_core::validator::ValidatorConfig;
-
-use solana_gossip::{cluster_info::Node, contact_info::ContactInfo};
-
-use solana_local_cluster::{
-    cluster::Cluster,
-    local_cluster::{ClusterConfig, LocalCluster},
-    validator_configs::*,
+use {
+    log::*,
+    serial_test::serial,
+    solana_core::validator::ValidatorConfig,
+    solana_gossip::{cluster_info::Node, contact_info::ContactInfo},
+    solana_local_cluster::{
+        cluster::Cluster,
+        local_cluster::{ClusterConfig, LocalCluster},
+        validator_configs::*,
+    },
+    solana_replica_node::{
+        replica_node::{ReplicaNode, ReplicaNodeConfig},
+        replica_util,
+    },
+    solana_rpc::{rpc::JsonRpcConfig, rpc_pubsub_service::PubSubConfig},
+    solana_runtime::{
+        accounts_index::AccountSecondaryIndexes,
+        snapshot_config::SnapshotConfig,
+        snapshot_utils::{self, ArchiveFormat},
+    },
+    solana_sdk::{
+        client::SyncClient,
+        clock::Slot,
+        commitment_config::CommitmentConfig,
+        epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
+        exit::Exit,
+        hash::Hash,
+        signature::{Keypair, Signer},
+    },
+    solana_streamer::socket::SocketAddrSpace,
+    std::{
+        net::{IpAddr, Ipv4Addr, SocketAddr},
+        path::{Path, PathBuf},
+        sync::{Arc, RwLock},
+        thread::sleep,
+        time::Duration,
+    },
+    tempfile::TempDir,
 };
-use solana_replica_node::replica_util;
-
-use solana_runtime::{
-    snapshot_config::SnapshotConfig,
-    snapshot_utils::{self, ArchiveFormat},
-};
-use solana_sdk::{
-    client::SyncClient,
-    clock::Slot,
-    commitment_config::CommitmentConfig,
-    epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
-    hash::Hash,
-    signature::{Keypair, Signer},
-};
-
-use std::{
-    net::{IpAddr, Ipv4Addr, SocketAddr},
-    path::{Path, PathBuf},
-    thread::sleep,
-    time::Duration,
-};
-use tempfile::TempDir;
-
-use solana_replica_node::replica_node::{ReplicaNode, ReplicaNodeConfig};
 
 const RUST_LOG_FILTER: &str =
     "error,solana_core::replay_stage=warn,solana_local_cluster=info,local_cluster=info";
@@ -143,7 +146,7 @@ fn setup_snapshot_validator_config(
     }
 }
 
-fn test_local_cluster_start_and_exit_with_config() {
+fn test_local_cluster_start_and_exit_with_config(socket_addr_space: SocketAddrSpace) {
     solana_logger::setup();
     const NUM_NODES: usize = 1;
     let mut config = ClusterConfig {
@@ -155,14 +158,16 @@ fn test_local_cluster_start_and_exit_with_config() {
         stakers_slot_offset: MINIMUM_SLOTS_PER_EPOCH as u64,
         ..ClusterConfig::default()
     };
-    let cluster = LocalCluster::new(&mut config);
+    let cluster = LocalCluster::new(&mut config, socket_addr_space);
     assert_eq!(cluster.validators.len(), NUM_NODES);
 }
 
 #[test]
 #[serial]
 fn test_replica_bootstrap() {
-    test_local_cluster_start_and_exit_with_config();
+    let socket_addr_space = SocketAddrSpace::new(true);
+
+    test_local_cluster_start_and_exit_with_config(socket_addr_space);
 
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     // First set up the cluster with 1 node
@@ -188,7 +193,7 @@ fn test_replica_bootstrap() {
         ..ClusterConfig::default()
     };
 
-    let cluster = LocalCluster::new(&mut config);
+    let cluster = LocalCluster::new(&mut config, socket_addr_space);
 
     assert_eq!(cluster.validators.len(), 1);
     let contact_info = &cluster.entry_point_info;
@@ -246,6 +251,7 @@ fn test_replica_bootstrap() {
         None,
         &contact_info.id,
         snapshot_output_path,
+        socket_addr_space,
     );
 
     info!("The cluster info:\n{:?}", cluster_info.contact_info_trace());
@@ -260,7 +266,13 @@ fn test_replica_bootstrap() {
         account_paths,
         snapshot_info: archive_snapshot_hash,
         cluster_info,
-        ..ReplicaNodeConfig::default()
+        rpc_config: JsonRpcConfig::default(),
+        snapshot_config: None,
+        pubsub_config: PubSubConfig::default(),
+        socket_addr_space,
+        account_indexes: AccountSecondaryIndexes::default(),
+        accounts_db_caching_enabled: false,
+        replica_exit: Arc::new(RwLock::new(Exit::default())),
     };
     let _replica_node = ReplicaNode::new(config);
 }

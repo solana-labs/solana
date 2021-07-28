@@ -20,7 +20,10 @@ use {
         replica_node::{ReplicaNode, ReplicaNodeConfig},
         replica_util,
     },
-    solana_sdk::{pubkey::Pubkey, signature::Signer},
+    solana_rpc::{rpc::JsonRpcConfig, rpc_pubsub_service::PubSubConfig},
+    solana_runtime::accounts_index::AccountSecondaryIndexes,
+    solana_sdk::{exit::Exit, pubkey::Pubkey, signature::Signer},
+    solana_streamer::socket::SocketAddrSpace,
     solana_validator::port_range_validator,
     std::{
         collections::HashSet,
@@ -28,6 +31,7 @@ use {
         net::{IpAddr, SocketAddr},
         path::PathBuf,
         process::exit,
+        sync::{Arc, RwLock},
     },
 };
 
@@ -159,6 +163,13 @@ pub fn main() {
                        Sending the SIGUSR1 signal to the validator process will cause it \
                        to re-open the log file",
                 ),
+        )
+        .arg(
+            Arg::with_name("allow_private_addr")
+                .long("allow-private-addr")
+                .takes_value(false)
+                .help("Allow contacting private ip addresses")
+                .hidden(true),
         )
         .get_matches();
 
@@ -326,6 +337,7 @@ pub fn main() {
             Some(logfile)
         }
     };
+    let socket_addr_space = SocketAddrSpace::new(matches.is_present("allow_private_addr"));
 
     let _logger_thread = solana_validator::redirect_stderr_to_file(logfile);
 
@@ -337,6 +349,7 @@ pub fn main() {
         expected_shred_version,
         &peer_pubkey,
         &snapshot_output_dir,
+        socket_addr_space,
     );
 
     info!(
@@ -354,7 +367,13 @@ pub fn main() {
         account_paths,
         snapshot_info: snapshot_info.unwrap(),
         cluster_info,
-        ..ReplicaNodeConfig::default()
+        rpc_config: JsonRpcConfig::default(),
+        snapshot_config: None,
+        pubsub_config: PubSubConfig::default(),
+        socket_addr_space,
+        account_indexes: AccountSecondaryIndexes::default(),
+        accounts_db_caching_enabled: false,
+        replica_exit: Arc::new(RwLock::new(Exit::default())),
     };
 
     let validator = ReplicaNode::new(config);

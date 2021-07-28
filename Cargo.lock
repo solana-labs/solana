@@ -5441,6 +5441,7 @@ dependencies = [
  "solana-rpc",
  "solana-runtime",
  "solana-sdk",
+ "solana-streamer",
  "solana-validator",
  "solana-version",
  "solana-vote-program",
