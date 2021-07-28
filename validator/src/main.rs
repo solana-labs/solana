@@ -2076,6 +2076,25 @@ pub fn main() {
         .exit();
     }));
 
+    let logfile = {
+        let logfile = matches
+            .value_of("logfile")
+            .map(|s| s.into())
+            .unwrap_or_else(|| format!("solana-validator-{}.log", identity_keypair.pubkey()));
+
+        if logfile == "-" {
+            None
+        } else {
+            println!("log file: {}", logfile);
+            Some(logfile)
+        }
+    };
+    let use_progress_bar = logfile.is_none();
+    let _logger_thread = redirect_stderr_to_file(logfile);
+
+    info!("{} {}", crate_name!(), solana_version::version!());
+    info!("Starting validator with: {:#?}", std::env::args_os());
+
     let authorized_voter_keypairs = keypairs_of(&matches, "authorized_voter_keypairs")
         .map(|keypairs| keypairs.into_iter().map(Arc::new).collect())
         .unwrap_or_else(|| vec![identity_keypair.clone()]);
@@ -2470,25 +2489,6 @@ pub fn main() {
         );
         exit(1);
     });
-
-    let logfile = {
-        let logfile = matches
-            .value_of("logfile")
-            .map(|s| s.into())
-            .unwrap_or_else(|| format!("solana-validator-{}.log", identity_keypair.pubkey()));
-
-        if logfile == "-" {
-            None
-        } else {
-            println!("log file: {}", logfile);
-            Some(logfile)
-        }
-    };
-    let use_progress_bar = logfile.is_none();
-    let _logger_thread = redirect_stderr_to_file(logfile);
-
-    info!("{} {}", crate_name!(), solana_version::version!());
-    info!("Starting validator with: {:#?}", std::env::args_os());
 
     let start_progress = Arc::new(RwLock::new(ValidatorStartProgress::default()));
     admin_rpc_service::run(
