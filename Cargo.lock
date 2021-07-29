@@ -3561,9 +3561,9 @@ dependencies = [
 
 [[package]]
 name = "raptorq"
-version = "1.6.3"
+version = "1.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0713b99964ca1c1b7e79bf6f95fa95d2d5eb36cd3600cc85f36e9b78d9243df2"
+checksum = "cd204b7464360edee359a86d04f16c2c4219eb6459423b9e84b818cb4342e9c3"
 
 [[package]]
 name = "rayon"
