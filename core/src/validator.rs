@@ -123,7 +123,6 @@ pub struct ValidatorConfig {
     pub max_genesis_archive_unpacked_size: u64,
     pub wal_recovery_mode: Option<BlockstoreRecoveryMode>,
     pub poh_verify: bool, // Perform PoH verification during blockstore processing at boo
-    pub cuda: bool,
     pub require_tower: bool,
     pub tower_path: Option<PathBuf>,
     pub debug_keys: Option<Arc<HashSet<Pubkey>>>,
@@ -180,7 +179,6 @@ impl Default for ValidatorConfig {
             max_genesis_archive_unpacked_size: MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
             wal_recovery_mode: None,
             poh_verify: true,
-            cuda: false,
             require_tower: false,
             tower_path: None,
             debug_keys: None,

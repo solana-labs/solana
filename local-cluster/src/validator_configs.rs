@@ -36,7 +36,6 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         max_genesis_archive_unpacked_size: config.max_genesis_archive_unpacked_size,
         wal_recovery_mode: config.wal_recovery_mode.clone(),
         poh_verify: config.poh_verify,
-        cuda: config.cuda,
         require_tower: config.require_tower,
         tower_path: config.tower_path.clone(),
         debug_keys: config.debug_keys.clone(),
