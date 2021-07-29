@@ -12,19 +12,26 @@ use log::*;
 use solana_sdk::{pubkey::Pubkey, sanitized_transaction::SanitizedTransaction};
 use std::collections::HashMap;
 
-// Guestimated from mainnet-beta data, sigver averages 1us, average read 7us and average write 25us
+// 07-27-2021, compute_unit to microsecond conversion ratio collected from mainnet-beta
+// differs between instructions. Some bpf instruction has much higher CU/US ratio
+// (eg 7vxeyaXGLqcp66fFShqUdHxdacp4k4kwUpRSSeoZLCZ4 has average ratio 135), others
+// have lower ratio (eg 9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin has an average ratio 14).
+// With this, I am guestimating the flat_fee for sigver and account read/write
+// as following. This can be adjusted when needed.
 const SIGVER_COST: u64 = 1;
-const NON_SIGNED_READONLY_ACCOUNT_ACCESS_COST: u64 = 7;
-const NON_SIGNED_WRITABLE_ACCOUNT_ACCESS_COST: u64 = 25;
+const NON_SIGNED_READONLY_ACCOUNT_ACCESS_COST: u64 = 1;
+const NON_SIGNED_WRITABLE_ACCOUNT_ACCESS_COST: u64 = 2;
 const SIGNED_READONLY_ACCOUNT_ACCESS_COST: u64 =
     SIGVER_COST + NON_SIGNED_READONLY_ACCOUNT_ACCESS_COST;
 const SIGNED_WRITABLE_ACCOUNT_ACCESS_COST: u64 =
     SIGVER_COST + NON_SIGNED_WRITABLE_ACCOUNT_ACCESS_COST;
 
-// Sampled from mainnet-beta, the instruction execution timings stats are (in us):
-// min=194, max=62164, avg=8214.49, med=2243
-pub const ACCOUNT_MAX_COST: u64 = 100_000_000;
-pub const BLOCK_MAX_COST: u64 = 2_500_000_000;
+// 07-27-2021, cost model limit is set to "worst case scenario", which is the
+// max compute unit it can execute. From mainnet-beta, the max CU of instruction
+// is 3753, round up to 4_000. Say we allows max 50_000 instruction per writable i
+// account, and  1_000_000 instruction per block. It comes to following limits:
+pub const ACCOUNT_MAX_COST: u64 = 200_000_000;
+pub const BLOCK_MAX_COST: u64 = 4_000_000_000;
 
 const MAX_WRITABLE_ACCOUNTS: usize = 256;
 
