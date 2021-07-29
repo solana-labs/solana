@@ -21,9 +21,8 @@ use solana_sdk::{
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     epoch_schedule::EpochSchedule,
     feature_set::{
-        blake3_syscall_enabled, cpi_data_cost, enforce_aligned_host_addrs,
-        keccak256_syscall_enabled, libsecp256k1_0_5_upgrade_enabled, memory_ops_syscalls,
-        secp256k1_recover_syscall_enabled, sysvar_via_syscall, update_data_on_realloc,
+        blake3_syscall_enabled, enforce_aligned_host_addrs, libsecp256k1_0_5_upgrade_enabled,
+        memory_ops_syscalls, secp256k1_recover_syscall_enabled,
     },
     hash::{Hasher, HASH_BYTES},
     ic_msg,
@@ -134,10 +133,7 @@ pub fn register_syscalls(
     )?;
 
     syscall_registry.register_syscall_by_name(b"sol_sha256", SyscallSha256::call)?;
-
-    if invoke_context.is_feature_active(&keccak256_syscall_enabled::id()) {
-        syscall_registry.register_syscall_by_name(b"sol_keccak256", SyscallKeccak256::call)?;
-    }
+    syscall_registry.register_syscall_by_name(b"sol_keccak256", SyscallKeccak256::call)?;
 
     if invoke_context.is_feature_active(&secp256k1_recover_syscall_enabled::id()) {
         syscall_registry
@@ -148,18 +144,16 @@ pub fn register_syscalls(
         syscall_registry.register_syscall_by_name(b"sol_blake3", SyscallBlake3::call)?;
     }
 
-    if invoke_context.is_feature_active(&sysvar_via_syscall::id()) {
-        syscall_registry
-            .register_syscall_by_name(b"sol_get_clock_sysvar", SyscallGetClockSysvar::call)?;
-        syscall_registry.register_syscall_by_name(
-            b"sol_get_epoch_schedule_sysvar",
-            SyscallGetEpochScheduleSysvar::call,
-        )?;
-        syscall_registry
-            .register_syscall_by_name(b"sol_get_fees_sysvar", SyscallGetFeesSysvar::call)?;
-        syscall_registry
-            .register_syscall_by_name(b"sol_get_rent_sysvar", SyscallGetRentSysvar::call)?;
-    }
+    syscall_registry
+        .register_syscall_by_name(b"sol_get_clock_sysvar", SyscallGetClockSysvar::call)?;
+    syscall_registry.register_syscall_by_name(
+        b"sol_get_epoch_schedule_sysvar",
+        SyscallGetEpochScheduleSysvar::call,
+    )?;
+    syscall_registry
+        .register_syscall_by_name(b"sol_get_fees_sysvar", SyscallGetFeesSysvar::call)?;
+    syscall_registry
+        .register_syscall_by_name(b"sol_get_rent_sysvar", SyscallGetRentSysvar::call)?;
 
     if invoke_context.is_feature_active(&memory_ops_syscalls::id()) {
         syscall_registry.register_syscall_by_name(b"sol_memcpy_", SyscallMemcpy::call)?;
@@ -283,16 +277,15 @@ pub fn bind_syscall_context_objects<'a>(
         None,
     )?;
 
-    bind_feature_gated_syscall_context_object!(
-        vm,
-        invoke_context.is_feature_active(&keccak256_syscall_enabled::id()),
+    vm.bind_syscall_context_object(
         Box::new(SyscallKeccak256 {
             base_cost: compute_budget.sha256_base_cost,
             byte_cost: compute_budget.sha256_byte_cost,
             compute_meter: invoke_context.get_compute_meter(),
             loader_id,
         }),
-    );
+        None,
+    )?;
 
     bind_feature_gated_syscall_context_object!(
         vm,
@@ -353,42 +346,36 @@ pub fn bind_syscall_context_objects<'a>(
         }),
     );
 
-    let is_sysvar_via_syscall_active = invoke_context.is_feature_active(&sysvar_via_syscall::id());
-
     let invoke_context = Rc::new(RefCell::new(invoke_context));
 
-    bind_feature_gated_syscall_context_object!(
-        vm,
-        is_sysvar_via_syscall_active,
+    vm.bind_syscall_context_object(
         Box::new(SyscallGetClockSysvar {
             invoke_context: invoke_context.clone(),
             loader_id,
         }),
-    );
-    bind_feature_gated_syscall_context_object!(
-        vm,
-        is_sysvar_via_syscall_active,
+        None,
+    )?;
+    vm.bind_syscall_context_object(
         Box::new(SyscallGetEpochScheduleSysvar {
             invoke_context: invoke_context.clone(),
             loader_id,
         }),
-    );
-    bind_feature_gated_syscall_context_object!(
-        vm,
-        is_sysvar_via_syscall_active,
+        None,
+    )?;
+    vm.bind_syscall_context_object(
         Box::new(SyscallGetFeesSysvar {
             invoke_context: invoke_context.clone(),
             loader_id,
         }),
-    );
-    bind_feature_gated_syscall_context_object!(
-        vm,
-        is_sysvar_via_syscall_active,
+        None,
+    )?;
+    vm.bind_syscall_context_object(
         Box::new(SyscallGetRentSysvar {
             invoke_context: invoke_context.clone(),
             loader_id,
         }),
-    );
+        None,
+    )?;
 
     // Cross-program invocation syscalls
     vm.bind_syscall_context_object(
@@ -1690,11 +1677,9 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
                     enforce_aligned_host_addrs,
                 )?;
 
-                if invoke_context.is_feature_active(&cpi_data_cost::id()) {
-                    invoke_context.get_compute_meter().consume(
-                        data.len() as u64 / invoke_context.get_compute_budget().cpi_bytes_per_unit,
-                    )?;
-                }
+                invoke_context.get_compute_meter().consume(
+                    data.len() as u64 / invoke_context.get_compute_budget().cpi_bytes_per_unit,
+                )?;
 
                 let translated = translate(
                     memory_mapping,
@@ -2009,11 +1994,9 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
             )?;
             let vm_data_addr = account_info.data_addr;
 
-            if invoke_context.is_feature_active(&cpi_data_cost::id()) {
-                invoke_context.get_compute_meter().consume(
-                    account_info.data_len / invoke_context.get_compute_budget().cpi_bytes_per_unit,
-                )?;
-            }
+            invoke_context.get_compute_meter().consume(
+                account_info.data_len / invoke_context.get_compute_budget().cpi_bytes_per_unit,
+            )?;
 
             let data = translate_slice_mut::<u8>(
                 memory_mapping,
@@ -2440,22 +2423,13 @@ fn call<'a>(
                             )
                             .into());
                         }
-                        if invoke_context.is_feature_active(&update_data_on_realloc::id()) {
-                            account_ref.data = translate_slice_mut::<u8>(
-                                memory_mapping,
-                                account_ref.vm_data_addr,
-                                account.data().len() as u64,
-                                &bpf_loader_deprecated::id(), // Don't care since it is byte aligned
-                                true,
-                            )?;
-                        } else {
-                            let _ = translate(
-                                memory_mapping,
-                                AccessType::Store,
-                                account_ref.vm_data_addr,
-                                account.data().len() as u64,
-                            )?;
-                        }
+                        account_ref.data = translate_slice_mut::<u8>(
+                            memory_mapping,
+                            account_ref.vm_data_addr,
+                            account.data().len() as u64,
+                            &bpf_loader_deprecated::id(), // Don't care since it is byte aligned
+                            true,
+                        )?;
                         *account_ref.ref_to_len_in_vm = account.data().len() as u64;
                         *account_ref.serialized_len_ptr = account.data().len() as u64;
                     }
