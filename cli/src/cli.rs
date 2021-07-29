@@ -15,17 +15,7 @@ use solana_client::{
     client_error::{ClientError, Result as ClientResult},
     nonce_utils,
     rpc_client::RpcClient,
-<<<<<<< HEAD
-    rpc_config::{
-        RpcLargestAccountsFilter, RpcSendTransactionConfig, RpcTransactionConfig,
-        RpcTransactionLogsFilter,
-    },
-    rpc_response::RpcKeyedAccount,
-=======
     rpc_config::{RpcLargestAccountsFilter, RpcSendTransactionConfig, RpcTransactionLogsFilter},
-    rpc_request::{RpcError, RpcResponseErrorData},
-    rpc_response::RpcSimulateTransactionResult,
->>>>>>> 662ccfa55 (Cli: app and wallet command reorg (#18955))
 };
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
