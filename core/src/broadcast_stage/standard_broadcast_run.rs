@@ -5,7 +5,9 @@ use {
         broadcast_utils::{self, ReceiveResults},
         *,
     },
-    crate::{broadcast_stage::broadcast_utils::UnfinishedSlotInfo, cluster_nodes::ClusterNodes},
+    crate::{
+        broadcast_stage::broadcast_utils::UnfinishedSlotInfo, cluster_nodes::ClusterNodesCache,
+    },
     solana_entry::entry::Entry,
     solana_ledger::shred::{
         ProcessShredsStats, Shred, Shredder, MAX_DATA_SHREDS_PER_FEC_BLOCK,
@@ -47,12 +49,20 @@ pub struct StandardBroadcastRun {
     shred_version: u16,
     last_datapoint_submit: Arc<AtomicInterval>,
     num_batches: usize,
-    cluster_nodes: Arc<RwLock<ClusterNodes<BroadcastStage>>>,
+    cluster_nodes_cache: Arc<ClusterNodesCache<BroadcastStage>>,
     last_peer_update: Arc<AtomicInterval>,
 }
 
 impl StandardBroadcastRun {
+<<<<<<< HEAD
     pub(super) fn new(keypair: Arc<Keypair>, shred_version: u16) -> Self {
+=======
+    pub(super) fn new(shred_version: u16) -> Self {
+        let cluster_nodes_cache = Arc::new(ClusterNodesCache::<BroadcastStage>::new(
+            CLUSTER_NODES_CACHE_NUM_EPOCH_CAP,
+            CLUSTER_NODES_CACHE_TTL,
+        ));
+>>>>>>> aa32738dd (uses cluster-nodes cache in broadcast-stage)
         Self {
             process_shreds_stats: ProcessShredsStats::default(),
             transmit_shreds_stats: Arc::default(),
@@ -64,7 +74,7 @@ impl StandardBroadcastRun {
             shred_version,
             last_datapoint_submit: Arc::default(),
             num_batches: 0,
-            cluster_nodes: Arc::default(),
+            cluster_nodes_cache,
             last_peer_update: Arc::new(AtomicInterval::default()),
         }
     }
@@ -360,12 +370,8 @@ impl StandardBroadcastRun {
         // Get the list of peers to broadcast to
         let mut get_peers_time = Measure::start("broadcast::get_peers");
         let root_bank = bank_forks.read().unwrap().root_bank();
-        let epoch = root_bank.get_leader_schedule_epoch(slot);
-        let stakes = root_bank.epoch_staked_nodes(epoch);
-        *self.cluster_nodes.write().unwrap() =
-            ClusterNodes::<BroadcastStage>::new(cluster_info, &stakes.unwrap_or_default());
+        let cluster_nodes = self.cluster_nodes_cache.get(slot, &root_bank, cluster_info);
         get_peers_time.stop();
-        let cluster_nodes = self.cluster_nodes.read().unwrap();
 
         let mut transmit_stats = TransmitShredsStats::default();
         // Broadcast the shreds
@@ -381,7 +387,6 @@ impl StandardBroadcastRun {
             cluster_info.id(),
             bank_forks,
         )?;
-        drop(cluster_nodes);
         transmit_time.stop();
 
         transmit_stats.transmit_elapsed = transmit_time.as_us();

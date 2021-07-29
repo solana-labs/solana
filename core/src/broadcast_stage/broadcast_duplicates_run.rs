@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 use super::broadcast_utils::ReceiveResults;
 use super::*;
 use log::*;
@@ -11,6 +12,20 @@ use solana_sdk::signature::{Keypair, Signer};
 use solana_sdk::transaction::Transaction;
 use std::collections::VecDeque;
 use std::sync::Mutex;
+=======
+use {
+    super::*,
+    crate::cluster_nodes::ClusterNodesCache,
+    solana_entry::entry::Entry,
+    solana_ledger::shred::Shredder,
+    solana_runtime::blockhash_queue::BlockhashQueue,
+    solana_sdk::{
+        hash::Hash,
+        signature::{Keypair, Signer},
+        system_transaction,
+    },
+};
+>>>>>>> aa32738dd (uses cluster-nodes cache in broadcast-stage)
 
 // Queue which facilitates delivering shreds with a delay
 type DelayedQueue = VecDeque<(Option<Pubkey>, Option<Vec<Shred>>)>;
@@ -28,6 +43,7 @@ pub(super) struct BroadcastDuplicatesRun {
     last_broadcast_slot: Slot,
     next_shred_index: u32,
     shred_version: u16,
+<<<<<<< HEAD
     keypair: Arc<Keypair>,
 }
 
@@ -39,6 +55,20 @@ impl BroadcastDuplicatesRun {
     ) -> Self {
         let mut delayed_queue = DelayedQueue::new();
         delayed_queue.resize(config.duplicate_send_delay, (None, None));
+=======
+    recent_blockhash: Option<Hash>,
+    prev_entry_hash: Option<Hash>,
+    num_slots_broadcasted: usize,
+    cluster_nodes_cache: Arc<ClusterNodesCache<BroadcastStage>>,
+}
+
+impl BroadcastDuplicatesRun {
+    pub(super) fn new(shred_version: u16, config: BroadcastDuplicatesConfig) -> Self {
+        let cluster_nodes_cache = Arc::new(ClusterNodesCache::<BroadcastStage>::new(
+            CLUSTER_NODES_CACHE_NUM_EPOCH_CAP,
+            CLUSTER_NODES_CACHE_TTL,
+        ));
+>>>>>>> aa32738dd (uses cluster-nodes cache in broadcast-stage)
         Self {
             config,
             delayed_queue: Arc::new(Mutex::new(delayed_queue)),
@@ -48,6 +78,7 @@ impl BroadcastDuplicatesRun {
             last_broadcast_slot: 0,
             last_duplicate_entry_hash: Hash::default(),
             shred_version,
+<<<<<<< HEAD
             keypair,
         }
     }
@@ -126,6 +157,13 @@ impl BroadcastDuplicatesRun {
         // Save last duplicate entry hash to avoid invalid entry hash errors
         if let Some(last_duplicate_entry) = duplicate_entries.last() {
             self.last_duplicate_entry_hash = last_duplicate_entry.hash;
+=======
+            current_slot: 0,
+            recent_blockhash: None,
+            prev_entry_hash: None,
+            num_slots_broadcasted: 0,
+            cluster_nodes_cache,
+>>>>>>> aa32738dd (uses cluster-nodes cache in broadcast-stage)
         }
 
         (duplicate_entries, next_shred_index)
@@ -363,11 +401,8 @@ impl BroadcastRun for BroadcastDuplicatesRun {
 =======
         let ((slot, shreds), _) = receiver.lock().unwrap().recv()?;
         let root_bank = bank_forks.read().unwrap().root_bank();
-        let epoch = root_bank.get_leader_schedule_epoch(slot);
-        let stakes = root_bank.epoch_staked_nodes(epoch);
         // Broadcast data
-        let cluster_nodes =
-            ClusterNodes::<BroadcastStage>::new(cluster_info, &stakes.unwrap_or_default());
+        let cluster_nodes = self.cluster_nodes_cache.get(slot, &root_bank, cluster_info);
         broadcast_shreds(
             sock,
             &shreds,
