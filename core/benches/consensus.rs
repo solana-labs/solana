@@ -59,7 +59,7 @@ fn bench_generate_ancestors_descendants(bench: &mut Bencher) {
     let num_banks = 500;
     let forks = tr(0);
     let mut vote_simulator = VoteSimulator::new(2);
-    vote_simulator.fill_bank_forks(forks, &HashMap::new());
+    vote_simulator.fill_bank_forks(forks, &HashMap::new(), true);
     vote_simulator.create_and_vote_new_branch(
         0,
         num_banks,
