@@ -3,6 +3,7 @@
 extern crate solana_core;
 extern crate test;
 
+<<<<<<< HEAD
 use log::*;
 use solana_core::retransmit_stage::retransmitter;
 use solana_gossip::cluster_info::{ClusterInfo, Node};
@@ -31,6 +32,44 @@ use std::thread::sleep;
 use std::thread::Builder;
 use std::time::Duration;
 use test::Bencher;
+=======
+use {
+    log::*,
+    solana_core::retransmit_stage::retransmitter,
+    solana_entry::entry::Entry,
+    solana_gossip::{
+        cluster_info::{ClusterInfo, Node},
+        contact_info::ContactInfo,
+    },
+    solana_ledger::{
+        genesis_utils::{create_genesis_config, GenesisConfigInfo},
+        leader_schedule_cache::LeaderScheduleCache,
+        shred::Shredder,
+    },
+    solana_measure::measure::Measure,
+    solana_perf::packet::{Packet, Packets},
+    solana_runtime::{bank::Bank, bank_forks::BankForks},
+    solana_sdk::{
+        hash::Hash,
+        pubkey,
+        signature::{Keypair, Signer},
+        system_transaction,
+        timing::timestamp,
+    },
+    solana_streamer::socket::SocketAddrSpace,
+    std::{
+        net::UdpSocket,
+        sync::{
+            atomic::{AtomicUsize, Ordering},
+            mpsc::channel,
+            Arc, Mutex, RwLock,
+        },
+        thread::{sleep, Builder},
+        time::Duration,
+    },
+    test::Bencher,
+};
+>>>>>>> d06dc6c8a (shares cluster-nodes between retransmit threads (#18947))
 
 #[bench]
 #[allow(clippy::same_item_push)]
@@ -102,7 +141,7 @@ fn bench_retransmitter(bencher: &mut Bencher) {
         &leader_schedule_cache,
         cluster_info,
         packet_receiver,
-        &Arc::new(MaxSlots::default()),
+        Arc::default(), // solana_rpc::max_slots::MaxSlots
         None,
     );
 
