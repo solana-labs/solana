@@ -35,18 +35,20 @@ pub fn recv_mmsg(socket: &UdpSocket, packets: &mut [Packet]) -> io::Result<(usiz
 }
 
 #[cfg(target_os = "linux")]
+#[allow(clippy::uninit_assumed_init)]
 pub fn recv_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result<(usize, usize)> {
     use libc::{
-        c_void, iovec, mmsghdr, recvmmsg, sockaddr_in, sockaddr_storage, socklen_t, timespec,
-        AF_INET, AF_INET6, MSG_WAITFORONE,
+        c_void, iovec, mmsghdr, recvmmsg, sa_family_t, sockaddr_in, sockaddr_in6, sockaddr_storage,
+        socklen_t, timespec, AF_INET, AF_INET6, MSG_WAITFORONE,
     };
-    use nix::sys::socket::InetAddr;
+    use nix::sys::socket::{InetAddr, IpAddr};
     use std::mem;
     use std::os::unix::io::AsRawFd;
 
     let mut hdrs: [mmsghdr; NUM_RCVMMSGS] = unsafe { mem::zeroed() };
     let mut iovs: [iovec; NUM_RCVMMSGS] = unsafe { mem::zeroed() };
-    let mut addr: [sockaddr_storage; NUM_RCVMMSGS] = unsafe { mem::zeroed() };
+    let mut addr: [sockaddr_storage; NUM_RCVMMSGS] =
+        unsafe { mem::MaybeUninit::uninit().assume_init() };
     let addrlen = mem::size_of_val(&addr) as socklen_t;
 
     let sock_fd = sock.as_raw_fd();
@@ -74,13 +76,15 @@ pub fn recv_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result<(usize,
             n => {
                 for i in 0..n as usize {
                     let inet_addr = if addr[i].ss_family == AF_INET as sa_family_t {
-                        InetAddr::V4(addr[i]);
+                        let p: *const sockaddr_in = &addr[i] as *const _ as *const _;
+                        unsafe { InetAddr::V4(*p) }
                     } else if addr[i].ss_family == AF_INET6 as sa_family_t {
-                        InetAddr::V6(addr[i]);
+                        let p: *const sockaddr_in6 = &addr[i] as *const _ as *const _;
+                        unsafe { InetAddr::V6(*p) }
                     } else {
                         warn!("recvmmsg unexpected address family {}", addr[i].ss_family);
                         hdrs[i].msg_len = 0;
-                        InetAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0)
+                        InetAddr::new(IpAddr::new_v4(0, 0, 0, 0), 0)
                     };
                     let mut p = &mut packets[i];
                     p.meta.size = hdrs[i].msg_len as usize;
