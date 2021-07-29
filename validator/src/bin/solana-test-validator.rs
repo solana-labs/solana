@@ -279,13 +279,6 @@ fn main() {
                      If the ledger already exists then this parameter is silently ignored",
                 ),
         )
-        .arg(
-            Arg::with_name("allow_private_addr")
-                .long("allow-private-addr")
-                .takes_value(false)
-                .help("Allow contacting private ip addresses")
-                .hidden(true),
-        )
         .get_matches();
 
     let output = if matches.is_present("quiet") {
@@ -355,7 +348,8 @@ fn main() {
 
     solana_core::validator::report_target_features();
 
-    let socket_addr_space = SocketAddrSpace::new(matches.is_present("allow_private_addr"));
+    // TODO: Ideally test-validator should *only* allow private addresses.
+    let socket_addr_space = SocketAddrSpace::new(/*allow_private_addr=*/ true);
     let cli_config = if let Some(config_file) = matches.value_of("config_file") {
         solana_cli_config::Config::load(config_file).unwrap_or_default()
     } else {
