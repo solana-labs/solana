@@ -100,10 +100,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
         let data_shreds = Arc::new(data_shreds);
         blockstore_sender.send((data_shreds.clone(), None))?;
         // 4) Start broadcast step
-        let bank_epoch = bank.get_leader_schedule_epoch(bank.slot());
-        let stakes = bank.epoch_staked_nodes(bank_epoch);
-        let stakes = stakes.map(Arc::new);
-        socket_sender.send(((stakes.clone(), data_shreds), None))?;
+        socket_sender.send(((bank.slot(), data_shreds), None))?;
         if let Some((good_last_data_shred, bad_last_data_shred)) = last_shreds {
             // Stash away the good shred so we can rewrite them later
             self.good_shreds.extend(good_last_data_shred.clone());
@@ -122,7 +119,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
             // Store the bad shred so we serve bad repairs to validators catching up
             blockstore_sender.send((bad_last_data_shred.clone(), None))?;
             // Send bad shreds to rest of network
-            socket_sender.send(((stakes, bad_last_data_shred), None))?;
+            socket_sender.send(((bank.slot(), bad_last_data_shred), None))?;
         }
         Ok(())
     }
@@ -133,12 +130,13 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
         sock: &UdpSocket,
         bank_forks: &Arc<RwLock<BankForks>>,
     ) -> Result<()> {
-        let ((stakes, shreds), _) = receiver.lock().unwrap().recv()?;
+        let ((slot, shreds), _) = receiver.lock().unwrap().recv()?;
+        let root_bank = bank_forks.read().unwrap().root_bank();
+        let epoch = root_bank.get_leader_schedule_epoch(slot);
+        let stakes = root_bank.epoch_staked_nodes(epoch);
         // Broadcast data
-        let cluster_nodes = ClusterNodes::<BroadcastStage>::new(
-            cluster_info,
-            stakes.as_deref().unwrap_or(&HashMap::default()),
-        );
+        let cluster_nodes =
+            ClusterNodes::<BroadcastStage>::new(cluster_info, &stakes.unwrap_or_default());
         broadcast_shreds(
             sock,
             &shreds,

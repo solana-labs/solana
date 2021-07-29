@@ -84,19 +84,20 @@ impl BroadcastRun for BroadcastFakeShredsRun {
         let data_shreds = Arc::new(data_shreds);
         blockstore_sender.send((data_shreds.clone(), None))?;
 
+        let slot = bank.slot();
+        let batch_info = BroadcastShredBatchInfo {
+            slot,
+            num_expected_batches: None,
+            slot_start_ts: Instant::now(),
+        };
         // 3) Start broadcast step
         //some indicates fake shreds
-        socket_sender.send((
-            (Some(Arc::new(HashMap::new())), Arc::new(fake_data_shreds)),
-            None,
-        ))?;
-        socket_sender.send((
-            (Some(Arc::new(HashMap::new())), Arc::new(fake_coding_shreds)),
-            None,
-        ))?;
+        let batch_info = Some(batch_info);
+        socket_sender.send(((slot, Arc::new(fake_data_shreds)), batch_info.clone()))?;
+        socket_sender.send(((slot, Arc::new(fake_coding_shreds)), batch_info))?;
         //none indicates real shreds
-        socket_sender.send(((None, data_shreds), None))?;
-        socket_sender.send(((None, Arc::new(coding_shreds)), None))?;
+        socket_sender.send(((slot, data_shreds), None))?;
+        socket_sender.send(((slot, Arc::new(coding_shreds)), None))?;
 
         Ok(())
     }
@@ -107,15 +108,12 @@ impl BroadcastRun for BroadcastFakeShredsRun {
         sock: &UdpSocket,
         _bank_forks: &Arc<RwLock<BankForks>>,
     ) -> Result<()> {
-        for ((stakes, data_shreds), _) in receiver.lock().unwrap().iter() {
+        for ((_slot, data_shreds), batch_info) in receiver.lock().unwrap().iter() {
+            let fake = batch_info.is_some();
             let peers = cluster_info.tvu_peers();
             peers.iter().enumerate().for_each(|(i, peer)| {
-                if i <= self.partition && stakes.is_some() {
+                if fake == (i <= self.partition) {
                     // Send fake shreds to the first N peers
-                    data_shreds.iter().for_each(|b| {
-                        sock.send_to(&b.payload, &peer.tvu_forwards).unwrap();
-                    });
-                } else if i > self.partition && stakes.is_none() {
                     data_shreds.iter().for_each(|b| {
                         sock.send_to(&b.payload, &peer.tvu_forwards).unwrap();
                     });
