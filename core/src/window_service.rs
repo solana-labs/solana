@@ -20,6 +20,7 @@ use solana_ledger::{
     leader_schedule_cache::LeaderScheduleCache,
     shred::{Nonce, Shred},
 };
+use solana_measure::measure::Measure;
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_error};
 use solana_perf::packet::{Packet, Packets};
 use solana_rayon_threadlimit::get_thread_count;
@@ -38,6 +39,34 @@ use std::{
 
 pub type DuplicateSlotSender = CrossbeamSender<Slot>;
 pub type DuplicateSlotReceiver = CrossbeamReceiver<Slot>;
+
+#[derive(Default)]
+struct WindowServiceMetrics {
+    run_insert_count: u64,
+    num_shreds_received: u64,
+    shred_receiver_elapsed_us: u64,
+    prune_shreds_elapsed_us: u64,
+}
+
+impl WindowServiceMetrics {
+    pub fn report_metrics(&self, metric_name: &'static str) {
+        datapoint_info!(
+            metric_name,
+            ("run_insert_count", self.run_insert_count as i64, i64),
+            ("num_shreds_received", self.num_shreds_received as i64, i64),
+            (
+                "shred_receiver_elapsed_us",
+                self.shred_receiver_elapsed_us as i64,
+                i64
+            ),
+            (
+                "prune_shreds_elapsed_us",
+                self.prune_shreds_elapsed_us as i64,
+                i64
+            ),
+        );
+    }
+}
 
 fn verify_shred_slot(shred: &Shred, root: u64) -> bool {
     if shred.is_data() {
@@ -176,24 +205,30 @@ fn run_insert<F>(
     leader_schedule_cache: &Arc<LeaderScheduleCache>,
     handle_duplicate: F,
     metrics: &mut BlockstoreInsertionMetrics,
+    ws_metrics: &mut WindowServiceMetrics,
     completed_data_sets_sender: &CompletedDataSetsSender,
     outstanding_requests: &Arc<RwLock<OutstandingShredRepairs>>,
 ) -> Result<()>
 where
     F: Fn(Shred),
 {
+    let mut shred_receiver_elapsed = Measure::start("shred_receiver_elapsed");
     let timer = Duration::from_millis(200);
     let (mut shreds, mut repair_infos) = shred_receiver.recv_timeout(timer)?;
     while let Ok((more_shreds, more_repair_infos)) = shred_receiver.try_recv() {
         shreds.extend(more_shreds);
         repair_infos.extend(more_repair_infos);
     }
+    shred_receiver_elapsed.stop();
+    ws_metrics.num_shreds_received += shreds.len() as u64;
 
+    let mut prune_shreds_elapsed = Measure::start("prune_shreds_elapsed");
     prune_shreds_invalid_repair(&mut shreds, &mut repair_infos, outstanding_requests);
     let repairs: Vec<_> = repair_infos
         .iter()
         .map(|repair_info| repair_info.is_some())
         .collect();
+    prune_shreds_elapsed.stop();
 
     let (completed_data_sets, inserted_indices) = blockstore.insert_shreds_handle_duplicate(
         shreds,
@@ -210,6 +245,11 @@ where
     }
 
     completed_data_sets_sender.try_send(completed_data_sets)?;
+
+    ws_metrics.run_insert_count += 1;
+    ws_metrics.shred_receiver_elapsed_us += shred_receiver_elapsed.as_us();
+    ws_metrics.prune_shreds_elapsed_us += prune_shreds_elapsed.as_us();
+
     Ok(())
 }
 
@@ -464,6 +504,7 @@ impl WindowService {
                     let _ = check_duplicate_sender.send(shred);
                 };
                 let mut metrics = BlockstoreInsertionMetrics::default();
+                let mut ws_metrics = WindowServiceMetrics::default();
                 let mut last_print = Instant::now();
                 loop {
                     if exit.load(Ordering::Relaxed) {
@@ -476,6 +517,7 @@ impl WindowService {
                         &leader_schedule_cache,
                         &handle_duplicate,
                         &mut metrics,
+                        &mut ws_metrics,
                         &completed_data_sets_sender,
                         &outstanding_requests,
                     ) {
@@ -487,6 +529,8 @@ impl WindowService {
                     if last_print.elapsed().as_secs() > 2 {
                         metrics.report_metrics("recv-window-insert-shreds");
                         metrics = BlockstoreInsertionMetrics::default();
+                        ws_metrics.report_metrics("recv-window-insert-shreds");
+                        ws_metrics = WindowServiceMetrics::default();
                         last_print = Instant::now();
                     }
                 }

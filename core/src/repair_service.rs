@@ -22,6 +22,7 @@ use solana_runtime::{bank_forks::BankForks, contains::Contains};
 use solana_sdk::{
     clock::Slot, epoch_schedule::EpochSchedule, hash::Hash, pubkey::Pubkey, timing::timestamp,
 };
+use solana_streamer::sendmmsg::{batch_send, SendPktsError};
 use std::{
     collections::{HashMap, HashSet},
     iter::Iterator,
@@ -95,6 +96,8 @@ pub struct RepairTiming {
     pub get_best_orphans_elapsed: u64,
     pub get_best_shreds_elapsed: u64,
     pub send_repairs_elapsed: u64,
+    pub build_repairs_batch_elapsed: u64,
+    pub batch_send_repairs_elapsed: u64,
 }
 
 impl RepairTiming {
@@ -103,12 +106,15 @@ impl RepairTiming {
         set_root_elapsed: u64,
         get_votes_elapsed: u64,
         add_votes_elapsed: u64,
-        send_repairs_elapsed: u64,
+        build_repairs_batch_elapsed: u64,
+        batch_send_repairs_elapsed: u64,
     ) {
         self.set_root_elapsed += set_root_elapsed;
         self.get_votes_elapsed += get_votes_elapsed;
         self.add_votes_elapsed += add_votes_elapsed;
-        self.send_repairs_elapsed += send_repairs_elapsed;
+        self.build_repairs_batch_elapsed += build_repairs_batch_elapsed;
+        self.batch_send_repairs_elapsed += batch_send_repairs_elapsed;
+        self.send_repairs_elapsed += build_repairs_batch_elapsed + batch_send_repairs_elapsed;
     }
 }
 
@@ -262,29 +268,51 @@ impl RepairService {
                 )
             };
 
-            let mut send_repairs_elapsed = Measure::start("send_repairs_elapsed");
-            let mut outstanding_requests = outstanding_requests.write().unwrap();
-            repairs.into_iter().for_each(|repair_request| {
-                if let Ok((to, req)) = serve_repair.repair_request(
-                    &repair_info.cluster_slots,
-                    repair_request,
-                    &mut peers_cache,
-                    &mut repair_stats,
-                    &repair_info.repair_validators,
-                    &mut outstanding_requests,
-                ) {
-                    repair_socket.send_to(&req, to).unwrap_or_else(|e| {
-                        info!("{} repair req send_to({}) error {:?}", id, to, e);
-                        0
-                    });
+            let mut build_repairs_batch_elapsed = Measure::start("build_repairs_batch_elapsed");
+            let batch: Vec<(Vec<u8>, SocketAddr)> = {
+                let mut outstanding_requests = outstanding_requests.write().unwrap();
+                repairs
+                    .iter()
+                    .filter_map(|repair_request| {
+                        let (to, req) = serve_repair
+                            .repair_request(
+                                &repair_info.cluster_slots,
+                                *repair_request,
+                                &mut peers_cache,
+                                &mut repair_stats,
+                                &repair_info.repair_validators,
+                                &mut outstanding_requests,
+                            )
+                            .ok()?;
+                        Some((req, to))
+                    })
+                    .collect()
+            };
+            let batch: Vec<(&[u8], &SocketAddr)> = batch.iter().map(|(v, s)| (&v[..], s)).collect();
+            build_repairs_batch_elapsed.stop();
+
+            let mut batch_send_repairs_elapsed = Measure::start("batch_send_repairs_elapsed");
+            if !batch.is_empty() {
+                if let Err(SendPktsError::IoError(err, num_failed)) =
+                    batch_send(repair_socket, &batch)
+                {
+                    error!(
+                        "{} batch_send failed to send {}/{} packets first error {:?}",
+                        id,
+                        num_failed,
+                        batch.len(),
+                        err
+                    );
                 }
-            });
-            send_repairs_elapsed.stop();
+            }
+            batch_send_repairs_elapsed.stop();
+
             repair_timing.update(
                 set_root_elapsed.as_us(),
                 get_votes_elapsed.as_us(),
                 add_votes_elapsed.as_us(),
-                send_repairs_elapsed.as_us(),
+                build_repairs_batch_elapsed.as_us(),
+                batch_send_repairs_elapsed.as_us(),
             );
 
             if last_stats.elapsed().as_secs() > 2 {
@@ -338,6 +366,16 @@ impl RepairService {
                     (
                         "send-repairs-elapsed",
                         repair_timing.send_repairs_elapsed,
+                        i64
+                    ),
+                    (
+                        "build-repairs-batch-elapsed",
+                        repair_timing.build_repairs_batch_elapsed,
+                        i64
+                    ),
+                    (
+                        "batch-send-repairs-elapsed",
+                        repair_timing.batch_send_repairs_elapsed,
                         i64
                     ),
                 );
