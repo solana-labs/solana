@@ -79,8 +79,13 @@ while [[ -n $1 ]]; do
     elif [[ $1 == --accounts-db-skip-shrink ]]; then
       args+=("$1")
       shift
+<<<<<<< HEAD
     elif [[ $1 == --skip-require-tower ]]; then
       maybeRequireTower=false
+=======
+    elif [[ $1 == --allow-private-addr ]]; then
+      args+=("$1")
+>>>>>>> 81026f9ea (passes through --allow-private-addr to validators in system perf tests (#18876))
       shift
     else
       echo "Unknown argument: $1"

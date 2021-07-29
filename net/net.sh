@@ -309,7 +309,11 @@ startBootstrapLeader() {
          ${#clientIpList[@]} \"$benchTpsExtraArgs\" \
          ${#clientIpList[@]} \"$benchExchangeExtraArgs\" \
          \"$genesisOptions\" \
+<<<<<<< HEAD
          \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize $maybeWaitForSupermajority $maybeAccountsDbSkipShrink $maybeSkipRequireTower\" \
+=======
+         \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize $maybeWaitForSupermajority $maybeAllowPrivateAddr\" \
+>>>>>>> 81026f9ea (passes through --allow-private-addr to validators in system perf tests (#18876))
          \"$gpuMode\" \
          \"$maybeWarpSlot\" \
          \"$waitForNodeInit\" \
@@ -381,7 +385,11 @@ startNode() {
          ${#clientIpList[@]} \"$benchTpsExtraArgs\" \
          ${#clientIpList[@]} \"$benchExchangeExtraArgs\" \
          \"$genesisOptions\" \
+<<<<<<< HEAD
          \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize $maybeWaitForSupermajority $maybeAccountsDbSkipShrink $maybeSkipRequireTower\" \
+=======
+         \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize $maybeWaitForSupermajority $maybeAllowPrivateAddr\" \
+>>>>>>> 81026f9ea (passes through --allow-private-addr to validators in system perf tests (#18876))
          \"$gpuMode\" \
          \"$maybeWarpSlot\" \
          \"$waitForNodeInit\" \
@@ -782,8 +790,12 @@ maybeLimitLedgerSize=""
 maybeSkipLedgerVerify=""
 maybeDisableAirdrops=""
 maybeWaitForSupermajority=""
+<<<<<<< HEAD
 maybeAccountsDbSkipShrink=""
 maybeSkipRequireTower=""
+=======
+maybeAllowPrivateAddr=""
+>>>>>>> 81026f9ea (passes through --allow-private-addr to validators in system perf tests (#18876))
 debugBuild=false
 doBuild=true
 gpuMode=auto
@@ -908,11 +920,16 @@ while [[ -n $1 ]]; do
     elif [[ $1 == --extra-primordial-stakes ]]; then
       extraPrimordialStakes=$2
       shift 2
+<<<<<<< HEAD
     elif [[ $1 = --accounts-db-skip-shrink ]]; then
       maybeAccountsDbSkipShrink="$1"
       shift 1
     elif [[ $1 = --skip-require-tower ]]; then
       maybeSkipRequireTower="$1"
+=======
+    elif [[ $1 = --allow-private-addr ]]; then
+      maybeAllowPrivateAddr="$1"
+>>>>>>> 81026f9ea (passes through --allow-private-addr to validators in system perf tests (#18876))
       shift 1
     else
       usage "Unknown long option: $1"
