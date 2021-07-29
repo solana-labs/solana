@@ -731,30 +731,23 @@ mod tests {
     ) -> snapshot_utils::Result<()> {
         let slot = bank.slot();
         info!("Making full snapshot archive from bank at slot: {}", slot);
-        let bank_snapshots = snapshot_utils::get_bank_snapshots(&snapshot_config.snapshot_path)
+        let bank_snapshot_info = snapshot_utils::get_bank_snapshots(&snapshot_config.snapshot_path)
             .into_iter()
             .find(|elem| elem.slot == slot)
             .ok_or_else(|| Error::new(ErrorKind::Other, "did not find snapshot with this path"))?;
-        let snapshot_package = snapshot_utils::package_full_snapshot(
+        snapshot_utils::package_process_and_archive_full_snapshot(
             bank,
-            &bank_snapshots,
+            &bank_snapshot_info,
             &snapshot_config.snapshot_path,
-            bank.src.slot_deltas(&bank.src.roots()),
             &snapshot_config.snapshot_package_output_path,
             bank.get_snapshot_storages(),
             snapshot_config.archive_format,
             snapshot_config.snapshot_version,
             None,
-        )?;
-        let snapshot_package = snapshot_utils::process_accounts_package_pre(
-            snapshot_package,
-            Some(bank.get_thread_pool()),
-            None,
-        );
-        snapshot_utils::archive_snapshot_package(
-            &snapshot_package,
             snapshot_config.maximum_snapshots_to_retain,
-        )
+        )?;
+
+        Ok(())
     }
 
     fn make_incremental_snapshot_archive(
@@ -767,31 +760,24 @@ mod tests {
             "Making incremental snapshot archive from bank at slot: {}, and base slot: {}",
             slot, incremental_snapshot_base_slot,
         );
-        let bank_snapshots = snapshot_utils::get_bank_snapshots(&snapshot_config.snapshot_path)
+        let bank_snapshot_info = snapshot_utils::get_bank_snapshots(&snapshot_config.snapshot_path)
             .into_iter()
             .find(|elem| elem.slot == slot)
             .ok_or_else(|| Error::new(ErrorKind::Other, "did not find snapshot with this path"))?;
-        let incremental_snapshot_package = snapshot_utils::package_incremental_snapshot(
+        snapshot_utils::package_process_and_archive_incremental_snapshot(
             bank,
             incremental_snapshot_base_slot,
-            &bank_snapshots,
+            &bank_snapshot_info,
             &snapshot_config.snapshot_path,
-            bank.src.slot_deltas(&bank.src.roots()),
             &snapshot_config.snapshot_package_output_path,
             bank.get_incremental_snapshot_storages(incremental_snapshot_base_slot),
             snapshot_config.archive_format,
             snapshot_config.snapshot_version,
             None,
-        )?;
-        let incremental_snapshot_package = snapshot_utils::process_accounts_package_pre(
-            incremental_snapshot_package,
-            Some(bank.get_thread_pool()),
-            Some(incremental_snapshot_base_slot),
-        );
-        snapshot_utils::archive_snapshot_package(
-            &incremental_snapshot_package,
             snapshot_config.maximum_snapshots_to_retain,
-        )
+        )?;
+
+        Ok(())
     }
 
     fn restore_from_incremental_snapshot_and_check_banks_are_equal(
