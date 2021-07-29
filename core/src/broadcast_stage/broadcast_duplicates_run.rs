@@ -51,6 +51,7 @@ impl BroadcastDuplicatesRun {
             keypair,
         }
     }
+<<<<<<< HEAD
 
     fn queue_or_create_duplicate_entries(
         &mut self,
@@ -129,6 +130,8 @@ impl BroadcastDuplicatesRun {
 
         (duplicate_entries, next_shred_index)
     }
+=======
+>>>>>>> 44b11154c (sends slots (instead of stakes) through broadcast flow)
 }
 
 /// Duplicate slots should only be sent once all validators have started.
@@ -264,6 +267,7 @@ impl BroadcastRun for BroadcastDuplicatesRun {
         blockstore_sender.send((data_shreds.clone(), None))?;
 
         // 3) Start broadcast step
+<<<<<<< HEAD
         socket_sender.send((
             (
                 Some(duplicate_recipients.clone()),
@@ -281,6 +285,37 @@ impl BroadcastRun for BroadcastDuplicatesRun {
         socket_sender.send(((Some(real_recipients.clone()), data_shreds), None))?;
         socket_sender.send(((Some(real_recipients), Arc::new(coding_shreds)), None))?;
 
+=======
+        let transmit_shreds = (bank.slot(), data_shreds.clone());
+        info!(
+            "{} Sending good shreds for slot {} to network",
+            keypair.pubkey(),
+            data_shreds.first().unwrap().slot()
+        );
+        socket_sender.send((transmit_shreds, None))?;
+
+        // Special handling of last shred to cause partition
+        if let Some((original_last_data_shred, partition_last_data_shred)) = last_shreds {
+            let original_last_data_shred = Arc::new(original_last_data_shred);
+            let partition_last_data_shred = Arc::new(partition_last_data_shred);
+
+            // Store the original shreds that this node replayed
+            blockstore_sender.send((original_last_data_shred.clone(), None))?;
+
+            // TODO: Previously, on the last shred, the code here was using
+            // stakes to partition the network with duplicate and real shreds
+            // at self.config.stake_partition of cumulative stake. This is no
+            // longer possible here as stakes are computed elsewhere further
+            // down the stream. Figure out how to replicate old behaviour to
+            // preserve test coverage.
+            // https://github.com/solana-labs/solana/blob/cde146155/core/src/broadcast_stage/broadcast_duplicates_run.rs#L65-L116
+            let original_transmit_shreds = (bank.slot(), original_last_data_shred);
+            let partition_transmit_shreds = (bank.slot(), partition_last_data_shred);
+
+            socket_sender.send((original_transmit_shreds, None))?;
+            socket_sender.send((partition_transmit_shreds, None))?;
+        }
+>>>>>>> 44b11154c (sends slots (instead of stakes) through broadcast flow)
         Ok(())
     }
     fn transmit(
@@ -290,6 +325,7 @@ impl BroadcastRun for BroadcastDuplicatesRun {
         sock: &UdpSocket,
         _bank_forks: &Arc<RwLock<BankForks>>,
     ) -> Result<()> {
+<<<<<<< HEAD
         // Check the delay queue for shreds that are ready to be sent
         let (delayed_recipient, delayed_shreds) = {
             let mut delayed_deque = self.delayed_queue.lock().unwrap();
@@ -324,6 +360,25 @@ impl BroadcastRun for BroadcastDuplicatesRun {
                 }
             }
         }
+=======
+        let ((slot, shreds), _) = receiver.lock().unwrap().recv()?;
+        let root_bank = bank_forks.read().unwrap().root_bank();
+        let epoch = root_bank.get_leader_schedule_epoch(slot);
+        let stakes = root_bank.epoch_staked_nodes(epoch);
+        // Broadcast data
+        let cluster_nodes =
+            ClusterNodes::<BroadcastStage>::new(cluster_info, &stakes.unwrap_or_default());
+        broadcast_shreds(
+            sock,
+            &shreds,
+            &cluster_nodes,
+            &Arc::new(AtomicInterval::default()),
+            &mut TransmitShredsStats::default(),
+            cluster_info.id(),
+            bank_forks,
+            cluster_info.socket_addr_space(),
+        )?;
+>>>>>>> 44b11154c (sends slots (instead of stakes) through broadcast flow)
 
         Ok(())
     }
