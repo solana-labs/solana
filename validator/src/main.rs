@@ -2286,7 +2286,6 @@ pub fn main() {
             .ok()
             .or_else(|| Some(ledger_path.clone())),
         dev_halt_at_slot: value_t!(matches, "dev_halt_at_slot", Slot).ok(),
-        cuda,
         expected_genesis_hash: matches
             .value_of("expected_genesis_hash")
             .map(|s| Hash::from_str(s).unwrap()),
