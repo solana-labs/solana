@@ -44,6 +44,9 @@ pub(crate) mod broadcast_utils;
 mod fail_entry_verification_broadcast_run;
 mod standard_broadcast_run;
 
+const CLUSTER_NODES_CACHE_NUM_EPOCH_CAP: usize = 8;
+const CLUSTER_NODES_CACHE_TTL: Duration = Duration::from_secs(5);
+
 pub(crate) const NUM_INSERT_THREADS: usize = 2;
 pub(crate) type RetransmitSlotsSender = CrossbeamSender<HashMap<Slot, Arc<Bank>>>;
 pub(crate) type RetransmitSlotsReceiver = CrossbeamReceiver<HashMap<Slot, Arc<Bank>>>;
