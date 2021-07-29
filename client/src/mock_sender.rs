@@ -5,7 +5,8 @@ use {
         client_error::Result,
         rpc_request::RpcRequest,
         rpc_response::{
-            Response, RpcResponseContext, RpcSimulateTransactionResult, RpcVersionInfo,
+            Response, RpcBlockProduction, RpcBlockProductionRange, RpcResponseContext,
+            RpcSimulateTransactionResult, RpcVersionInfo,
         },
         rpc_sender::RpcSender,
     },
@@ -184,6 +185,19 @@ impl RpcSender for MockSender {
                 json!(RpcVersionInfo {
                     solana_core: version.to_string(),
                     feature_set: Some(version.feature_set),
+                })
+            }
+            "getBlockProduction" => {
+                let map = vec![(PUBKEY.to_string(), (1, 1))].into_iter().collect();
+                json!(Response {
+                    context: RpcResponseContext { slot: 1 },
+                    value: RpcBlockProduction {
+                        by_identity: map,
+                        range: RpcBlockProductionRange {
+                            first_slot: 0,
+                            last_slot: 0,
+                        },
+                    },
                 })
             }
             _ => Value::Null,
