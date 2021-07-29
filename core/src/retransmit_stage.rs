@@ -356,7 +356,7 @@ fn retransmit(
         &working_bank,
     );
     let cluster_nodes = cluster_nodes.read().unwrap();
-    let mut peers_len = 0;
+    let peers_len = cluster_nodes.num_peers();
     epoch_cache_update.stop();
 
     let my_id = cluster_info.id();
@@ -409,7 +409,6 @@ fn retransmit(
             // TODO: Consider forwarding the packet to the root node here.
             retransmit_tree_mismatch += 1;
         }
-        peers_len = peers_len.max(cluster_nodes.num_peers());
         compute_turbine_peers.stop();
         compute_turbine_peers_total += compute_turbine_peers.as_us();
 
