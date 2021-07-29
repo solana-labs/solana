@@ -47,7 +47,7 @@ pub struct ClusterNodes<T> {
     _phantom: PhantomData<T>,
 }
 
-pub struct ClusterNodesCache<T> {
+pub(crate) struct ClusterNodesCache<T> {
     #[allow(clippy::type_complexity)]
     cache: Mutex<LruCache<Epoch, (Instant, Arc<ClusterNodes<T>>)>>,
     ttl: Duration, // Time to live.
@@ -72,12 +72,12 @@ impl Node {
 }
 
 impl<T> ClusterNodes<T> {
-    pub fn num_peers(&self) -> usize {
+    pub(crate) fn num_peers(&self) -> usize {
         self.index.len()
     }
 
     // A peer is considered live if they generated their contact info recently.
-    pub fn num_peers_live(&self, now: u64) -> usize {
+    pub(crate) fn num_peers_live(&self, now: u64) -> usize {
         self.index
             .iter()
             .filter_map(|(_, index)| self.nodes[*index].contact_info())
@@ -100,7 +100,7 @@ impl ClusterNodes<BroadcastStage> {
 
     /// Returns the root of turbine broadcast tree, which the leader sends the
     /// shred to.
-    pub fn get_broadcast_peer(&self, shred_seed: [u8; 32]) -> Option<&ContactInfo> {
+    pub(crate) fn get_broadcast_peer(&self, shred_seed: [u8; 32]) -> Option<&ContactInfo> {
         if self.index.is_empty() {
             None
         } else {
@@ -114,11 +114,7 @@ impl ClusterNodes<BroadcastStage> {
 }
 
 impl ClusterNodes<RetransmitStage> {
-    pub fn new(cluster_info: &ClusterInfo, stakes: &HashMap<Pubkey, u64>) -> Self {
-        new_cluster_nodes(cluster_info, stakes)
-    }
-
-    pub fn get_retransmit_peers(
+    pub(crate) fn get_retransmit_peers(
         &self,
         shred_seed: [u8; 32],
         fanout: usize,
@@ -230,7 +226,7 @@ fn get_nodes(cluster_info: &ClusterInfo, stakes: &HashMap<Pubkey, u64>) -> Vec<N
 }
 
 impl<T> ClusterNodesCache<T> {
-    pub fn new(
+    pub(crate) fn new(
         // Capacity of underlying LRU-cache in terms of number of epochs.
         cap: usize,
         // A time-to-live eviction policy is enforced to refresh entries in
@@ -244,41 +240,13 @@ impl<T> ClusterNodesCache<T> {
     }
 }
 
-impl ClusterNodesCache<RetransmitStage> {
-    pub fn get(
-        &self,
-        cluster_info: &ClusterInfo,
-        working_bank: &Bank,
-    ) -> Arc<ClusterNodes<RetransmitStage>> {
-        let slot = working_bank.slot();
-        let epoch = working_bank.get_leader_schedule_epoch(slot);
-        {
-            let mut cache = self.cache.lock().unwrap();
-            if let Some((asof, nodes)) = cache.get(&epoch) {
-                if asof.elapsed() < self.ttl {
-                    return Arc::clone(nodes);
-                }
-                cache.pop(&epoch);
-            }
-        }
-        let epoch_staked_nodes = working_bank.epoch_staked_nodes(epoch).unwrap_or_default();
-        let nodes = ClusterNodes::<RetransmitStage>::new(cluster_info, &epoch_staked_nodes);
-        let nodes = Arc::new(nodes);
-        {
-            let mut cache = self.cache.lock().unwrap();
-            cache.put(epoch, (Instant::now(), Arc::clone(&nodes)));
-        }
-        nodes
-    }
-}
-
-impl ClusterNodesCache<BroadcastStage> {
-    pub fn get(
+impl<T: 'static> ClusterNodesCache<T> {
+    pub(crate) fn get(
         &self,
         shred_slot: Slot,
         root_bank: &Bank,
         cluster_info: &ClusterInfo,
-    ) -> Arc<ClusterNodes<BroadcastStage>> {
+    ) -> Arc<ClusterNodes<T>> {
         let epoch = root_bank.get_leader_schedule_epoch(shred_slot);
         {
             let mut cache = self.cache.lock().unwrap();
@@ -290,7 +258,7 @@ impl ClusterNodesCache<BroadcastStage> {
             }
         }
         let epoch_staked_nodes = root_bank.epoch_staked_nodes(epoch).unwrap_or_default();
-        let nodes = ClusterNodes::<BroadcastStage>::new(cluster_info, &epoch_staked_nodes);
+        let nodes = new_cluster_nodes::<T>(cluster_info, &epoch_staked_nodes);
         let nodes = Arc::new(nodes);
         {
             let mut cache = self.cache.lock().unwrap();
@@ -408,7 +376,7 @@ mod tests {
         let this_node = cluster_info.my_contact_info();
         // ClusterInfo::tvu_peers excludes the node itself.
         assert_eq!(cluster_info.tvu_peers().len(), nodes.len() - 1);
-        let cluster_nodes = ClusterNodes::<RetransmitStage>::new(&cluster_info, &stakes);
+        let cluster_nodes = new_cluster_nodes::<RetransmitStage>(&cluster_info, &stakes);
         // All nodes with contact-info should be in the index.
         assert_eq!(cluster_nodes.index.len(), nodes.len());
         // Staked nodes with no contact-info should be included.
