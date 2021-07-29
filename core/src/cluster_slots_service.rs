@@ -179,14 +179,9 @@ impl ClusterSlotsService {
 mod test {
     use {
         super::*,
-<<<<<<< HEAD
         solana_gossip::{cluster_info::Node, crds_value::CrdsValueLabel},
-        solana_sdk::pubkey::Pubkey,
-=======
-        solana_gossip::{cluster_info::Node, crds_value::LowestSlot},
         solana_sdk::{pubkey::Pubkey, signature::Keypair},
         solana_streamer::socket::SocketAddrSpace,
->>>>>>> d2d5f36a3 (adds validator flag to allow private ip addresses (#18850))
     };
 
     #[test]

@@ -63,13 +63,8 @@ use {
     },
     solana_streamer::{
         packet,
-<<<<<<< HEAD
         sendmmsg::multicast,
-        socket::is_global,
-=======
-        sendmmsg::{multi_target_send, SendPktsError},
         socket::SocketAddrSpace,
->>>>>>> d2d5f36a3 (adds validator flag to allow private ip addresses (#18850))
         streamer::{PacketReceiver, PacketSender},
     },
     solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY,
@@ -483,19 +478,12 @@ impl ClusterInfo {
             shred_version,
             ..
         } = *self.my_contact_info.read().unwrap();
-<<<<<<< HEAD
         self.gossip.write().unwrap().refresh_push_active_set(
-=======
-        self.gossip.refresh_push_active_set(
->>>>>>> d2d5f36a3 (adds validator flag to allow private ip addresses (#18850))
             &self_pubkey,
             shred_version,
             stakes,
             gossip_validators,
-<<<<<<< HEAD
-=======
             &self.socket_addr_space,
->>>>>>> d2d5f36a3 (adds validator flag to allow private ip addresses (#18850))
         );
     }
 
@@ -1151,19 +1139,16 @@ impl ClusterInfo {
 
     /// all validators that have a valid rpc port regardless of `shred_version`.
     pub fn all_rpc_peers(&self) -> Vec<ContactInfo> {
+        let self_pubkey = self.id();
         self.gossip
             .read()
             .unwrap()
             .crds
             .get_nodes_contact_info()
-<<<<<<< HEAD
-            .filter(|x| x.id != self.id() && ContactInfo::is_valid_address(&x.rpc))
-=======
             .filter(|x| {
                 x.id != self_pubkey
                     && ContactInfo::is_valid_address(&x.rpc, &self.socket_addr_space)
             })
->>>>>>> d2d5f36a3 (adds validator flag to allow private ip addresses (#18850))
             .cloned()
             .collect()
     }
@@ -1196,17 +1181,14 @@ impl ClusterInfo {
 
     /// all validators that have a valid tvu port regardless of `shred_version`.
     pub fn all_tvu_peers(&self) -> Vec<ContactInfo> {
+        let self_pubkey = self.id();
         self.time_gossip_read_lock("all_tvu_peers", &self.stats.all_tvu_peers)
             .crds
             .get_nodes_contact_info()
-<<<<<<< HEAD
-            .filter(|x| ContactInfo::is_valid_address(&x.tvu) && x.id != self.id())
-=======
             .filter(|x| {
                 ContactInfo::is_valid_address(&x.tvu, &self.socket_addr_space)
                     && x.id != self_pubkey
             })
->>>>>>> d2d5f36a3 (adds validator flag to allow private ip addresses (#18850))
             .cloned()
             .collect()
     }
@@ -1229,7 +1211,6 @@ impl ClusterInfo {
 
     /// all tvu peers with valid gossip addrs that likely have the slot being requested
     pub fn repair_peers(&self, slot: Slot) -> Vec<ContactInfo> {
-<<<<<<< HEAD
         let mut time = Measure::start("repair_peers");
         // self.tvu_peers() already filters on:
         //   node.id != self.id() &&
@@ -1240,7 +1221,7 @@ impl ClusterInfo {
             nodes
                 .into_iter()
                 .filter(|node| {
-                    ContactInfo::is_valid_address(&node.serve_repair)
+                    ContactInfo::is_valid_address(&node.serve_repair, &self.socket_addr_space)
                         && match gossip.crds.get_lowest_slot(node.id) {
                             None => true, // fallback to legacy behavior
                             Some(lowest_slot) => lowest_slot.lowest <= slot,
@@ -1250,26 +1231,6 @@ impl ClusterInfo {
         };
         self.stats.repair_peers.add_measure(&mut time);
         nodes
-=======
-        let _st = ScopedTimer::from(&self.stats.repair_peers);
-        let self_pubkey = self.id();
-        let self_shred_version = self.my_shred_version();
-        let gossip_crds = self.gossip.crds.read().unwrap();
-        gossip_crds
-            .get_nodes_contact_info()
-            .filter(|node| {
-                node.id != self_pubkey
-                    && node.shred_version == self_shred_version
-                    && ContactInfo::is_valid_tvu_address(&node.tvu)
-                    && ContactInfo::is_valid_address(&node.serve_repair, &self.socket_addr_space)
-                    && match gossip_crds.get::<&LowestSlot>(node.id) {
-                        None => true, // fallback to legacy behavior
-                        Some(lowest_slot) => lowest_slot.lowest <= slot,
-                    }
-            })
-            .cloned()
-            .collect()
->>>>>>> d2d5f36a3 (adds validator flag to allow private ip addresses (#18850))
     }
 
     fn is_spy_node(contact_info: &ContactInfo, socket_addr_space: &SocketAddrSpace) -> bool {
@@ -1280,19 +1241,16 @@ impl ClusterInfo {
 
     /// compute broadcast table
     pub fn tpu_peers(&self) -> Vec<ContactInfo> {
+        let self_pubkey = self.id();
         self.gossip
             .read()
             .unwrap()
             .crds
             .get_nodes_contact_info()
-<<<<<<< HEAD
-            .filter(|x| x.id != self.id() && ContactInfo::is_valid_address(&x.tpu))
-=======
             .filter(|x| {
                 x.id != self_pubkey
                     && ContactInfo::is_valid_address(&x.tpu, &self.socket_addr_space)
             })
->>>>>>> d2d5f36a3 (adds validator flag to allow private ip addresses (#18850))
             .cloned()
             .collect()
     }
@@ -3059,16 +3017,11 @@ mod tests {
     #[test]
     fn test_gossip_node() {
         //check that a gossip nodes always show up as spies
-<<<<<<< HEAD
         let (node, _, _) = ClusterInfo::spy_node(&solana_sdk::pubkey::new_rand(), 0);
-        assert!(ClusterInfo::is_spy_node(&node));
-=======
-        let (node, _, _) = ClusterInfo::spy_node(solana_sdk::pubkey::new_rand(), 0);
         assert!(ClusterInfo::is_spy_node(
             &node,
             &SocketAddrSpace::Unspecified
         ));
->>>>>>> d2d5f36a3 (adds validator flag to allow private ip addresses (#18850))
         let (node, _, _) = ClusterInfo::gossip_node(
             &solana_sdk::pubkey::new_rand(),
             &"1.1.1.1:1111".parse().unwrap(),
@@ -3360,9 +3313,12 @@ mod tests {
         let thread_pool = ThreadPoolBuilder::new().build().unwrap();
         //check that gossip doesn't try to push to invalid addresses
         let node = Node::new_localhost();
-<<<<<<< HEAD
         let (spy, _, _) = ClusterInfo::spy_node(&solana_sdk::pubkey::new_rand(), 0);
-        let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(node.info));
+        let cluster_info = Arc::new(ClusterInfo::new(
+            node.info,
+            Arc::new(Keypair::new()),
+            SocketAddrSpace::Unspecified,
+        ));
         cluster_info.insert_info(spy);
         {
             let mut gossip = cluster_info.gossip.write().unwrap();
@@ -3371,24 +3327,9 @@ mod tests {
                 cluster_info.my_shred_version(),
                 &HashMap::new(), // stakes
                 None,            // gossip validators
+                &SocketAddrSpace::Unspecified,
             );
         }
-=======
-        let (spy, _, _) = ClusterInfo::spy_node(solana_sdk::pubkey::new_rand(), 0);
-        let cluster_info = Arc::new(ClusterInfo::new(
-            node.info,
-            Arc::new(Keypair::new()),
-            SocketAddrSpace::Unspecified,
-        ));
-        cluster_info.insert_info(spy);
-        cluster_info.gossip.refresh_push_active_set(
-            &cluster_info.id(),
-            cluster_info.my_shred_version(),
-            &HashMap::new(), // stakes
-            None,            // gossip validators
-            &SocketAddrSpace::Unspecified,
-        );
->>>>>>> d2d5f36a3 (adds validator flag to allow private ip addresses (#18850))
         let reqs = cluster_info.generate_new_gossip_requests(
             &thread_pool,
             None,            // gossip_validators
@@ -3509,7 +3450,6 @@ mod tests {
             .unwrap()
             .mock_pong(peer.id, peer.gossip, Instant::now());
         cluster_info.insert_info(peer);
-<<<<<<< HEAD
         {
             let mut gossip = cluster_info.gossip.write().unwrap();
             gossip.refresh_push_active_set(
@@ -3517,17 +3457,9 @@ mod tests {
                 cluster_info.my_shred_version(),
                 &HashMap::new(), // stakes
                 None,            // gossip validators
+                &SocketAddrSpace::Unspecified,
             );
         }
-=======
-        cluster_info.gossip.refresh_push_active_set(
-            &cluster_info.id(),
-            cluster_info.my_shred_version(),
-            &HashMap::new(), // stakes
-            None,            // gossip validators
-            &SocketAddrSpace::Unspecified,
-        );
->>>>>>> d2d5f36a3 (adds validator flag to allow private ip addresses (#18850))
         //check that all types of gossip messages are signed correctly
         let push_messages = cluster_info
             .gossip

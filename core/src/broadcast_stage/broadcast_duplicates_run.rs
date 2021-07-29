@@ -300,13 +300,15 @@ impl BroadcastRun for BroadcastDuplicatesRun {
         };
 
         let ((stakes, shreds), _) = receiver.lock().unwrap().recv()?;
-<<<<<<< HEAD
         let stakes = stakes.unwrap();
+        let socket_addr_space = cluster_info.socket_addr_space();
         for peer in cluster_info.tvu_peers() {
             // Forward shreds to circumvent gossip
             if stakes.get(&peer.id).is_some() {
                 shreds.iter().for_each(|shred| {
-                    sock.send_to(&shred.payload, &peer.tvu_forwards).unwrap();
+                    if socket_addr_space.check(&peer.tvu_forwards) {
+                        sock.send_to(&shred.payload, &peer.tvu_forwards).unwrap();
+                    }
                 });
             }
 
@@ -314,28 +316,13 @@ impl BroadcastRun for BroadcastDuplicatesRun {
             if let Some(shreds) = delayed_shreds.as_ref() {
                 if Some(peer.id) == delayed_recipient {
                     shreds.iter().for_each(|shred| {
-                        sock.send_to(&shred.payload, &peer.tvu).unwrap();
+                        if socket_addr_space.check(&peer.tvu) {
+                            sock.send_to(&shred.payload, &peer.tvu).unwrap();
+                        }
                     });
                 }
             }
         }
-=======
-        // Broadcast data
-        let cluster_nodes = ClusterNodes::<BroadcastStage>::new(
-            cluster_info,
-            stakes.as_deref().unwrap_or(&HashMap::default()),
-        );
-        broadcast_shreds(
-            sock,
-            &shreds,
-            &cluster_nodes,
-            &Arc::new(AtomicU64::new(0)),
-            &mut TransmitShredsStats::default(),
-            cluster_info.id(),
-            bank_forks,
-            cluster_info.socket_addr_space(),
-        )?;
->>>>>>> d2d5f36a3 (adds validator flag to allow private ip addresses (#18850))
 
         Ok(())
     }

@@ -21,16 +21,8 @@ use solana_metrics::{inc_new_counter_error, inc_new_counter_info};
 use solana_poh::poh_recorder::WorkingBankEntry;
 use solana_runtime::bank::Bank;
 use solana_sdk::timing::timestamp;
-<<<<<<< HEAD
 use solana_sdk::{clock::Slot, pubkey::Pubkey};
-use solana_streamer::{sendmmsg::send_mmsg, socket::is_global};
-=======
-use solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Keypair};
-use solana_streamer::{
-    sendmmsg::{batch_send, SendPktsError},
-    socket::SocketAddrSpace,
-};
->>>>>>> d2d5f36a3 (adds validator flag to allow private ip addresses (#18850))
+use solana_streamer::{sendmmsg::send_mmsg, socket::SocketAddrSpace};
 use std::sync::atomic::AtomicU64;
 use std::{
     collections::HashMap,
@@ -394,12 +386,7 @@ pub fn broadcast_shreds(
     cluster_nodes: &ClusterNodes<BroadcastStage>,
     last_datapoint_submit: &Arc<AtomicU64>,
     transmit_stats: &mut TransmitShredsStats,
-<<<<<<< HEAD
-=======
-    self_pubkey: Pubkey,
-    bank_forks: &Arc<RwLock<BankForks>>,
     socket_addr_space: &SocketAddrSpace,
->>>>>>> d2d5f36a3 (adds validator flag to allow private ip addresses (#18850))
 ) -> Result<()> {
     let broadcast_len = cluster_nodes.num_peers();
     if broadcast_len == 0 {
@@ -410,16 +397,9 @@ pub fn broadcast_shreds(
     let packets: Vec<_> = shreds
         .iter()
         .filter_map(|shred| {
-<<<<<<< HEAD
             let node = cluster_nodes.get_broadcast_peer(shred.seed())?;
-            if is_global(&node.tvu) {
-                Some((&shred.payload, &node.tvu))
-=======
-            let seed = shred.seed(Some(self_pubkey), &root_bank);
-            let node = cluster_nodes.get_broadcast_peer(seed)?;
             if socket_addr_space.check(&node.tvu) {
-                Some((&shred.payload[..], &node.tvu))
->>>>>>> d2d5f36a3 (adds validator flag to allow private ip addresses (#18850))
+                Some((&shred.payload, &node.tvu))
             } else {
                 None
             }

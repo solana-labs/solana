@@ -15,6 +15,7 @@ use solana_sdk::{
     genesis_config::create_genesis_config,
     signature::{Keypair, Signer},
 };
+use solana_streamer::socket::SocketAddrSpace;
 use std::{process::exit, sync::mpsc::channel, time::Duration};
 
 #[test]
@@ -43,13 +44,19 @@ fn test_exchange_local_cluster() {
     } = config;
     let accounts_in_groups = batch_size * account_groups;
 
-    let cluster = LocalCluster::new(&mut ClusterConfig {
-        node_stakes: vec![100_000; NUM_NODES],
-        cluster_lamports: 100_000_000_000_000,
-        validator_configs: make_identical_validator_configs(&ValidatorConfig::default(), NUM_NODES),
-        native_instruction_processors: [solana_exchange_program!()].to_vec(),
-        ..ClusterConfig::default()
-    });
+    let cluster = LocalCluster::new(
+        &mut ClusterConfig {
+            node_stakes: vec![100_000; NUM_NODES],
+            cluster_lamports: 100_000_000_000_000,
+            validator_configs: make_identical_validator_configs(
+                &ValidatorConfig::default(),
+                NUM_NODES,
+            ),
+            native_instruction_processors: [solana_exchange_program!()].to_vec(),
+            ..ClusterConfig::default()
+        },
+        SocketAddrSpace::Unspecified,
+    );
 
     let faucet_keypair = Keypair::new();
     cluster.transfer(
@@ -66,13 +73,17 @@ fn test_exchange_local_cluster() {
         .expect("faucet_addr");
 
     info!("Connecting to the cluster");
-    let nodes =
-        discover_cluster(&cluster.entry_point_info.gossip, NUM_NODES).unwrap_or_else(|err| {
-            error!("Failed to discover {} nodes: {:?}", NUM_NODES, err);
-            exit(1);
-        });
+    let nodes = discover_cluster(
+        &cluster.entry_point_info.gossip,
+        NUM_NODES,
+        SocketAddrSpace::Unspecified,
+    )
+    .unwrap_or_else(|err| {
+        error!("Failed to discover {} nodes: {:?}", NUM_NODES, err);
+        exit(1);
+    });
 
-    let (client, num_clients) = get_multi_client(&nodes);
+    let (client, num_clients) = get_multi_client(&nodes, &SocketAddrSpace::Unspecified);
 
     info!("clients: {}", num_clients);
     assert!(num_clients >= NUM_NODES);

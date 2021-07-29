@@ -1388,12 +1388,7 @@ mod tests {
     use super::*;
     use crossbeam_channel::unbounded;
     use itertools::Itertools;
-<<<<<<< HEAD
-    use solana_gossip::cluster_info::Node;
-=======
-    use solana_entry::entry::{next_entry, Entry, EntrySlice};
     use solana_gossip::{cluster_info::Node, contact_info::ContactInfo};
->>>>>>> d2d5f36a3 (adds validator flag to allow private ip addresses (#18850))
     use solana_ledger::{
         blockstore::{entries_to_test_shreds, Blockstore},
         entry::{next_entry, Entry, EntrySlice},

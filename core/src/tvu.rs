@@ -362,11 +362,8 @@ pub mod tests {
     use solana_poh::poh_recorder::create_test_recorder;
     use solana_rpc::optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank;
     use solana_runtime::bank::Bank;
-<<<<<<< HEAD
-=======
     use solana_sdk::signature::{Keypair, Signer};
     use solana_streamer::socket::SocketAddrSpace;
->>>>>>> d2d5f36a3 (adds validator flag to allow private ip addresses (#18850))
     use std::sync::atomic::Ordering;
 
     #[ignore]

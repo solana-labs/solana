@@ -28,11 +28,7 @@ use solana_sdk::{
     timing::duration_as_ms,
     transport::TransportError,
 };
-<<<<<<< HEAD
-=======
 use solana_streamer::socket::SocketAddrSpace;
-use solana_vote_program::vote_transaction;
->>>>>>> d2d5f36a3 (adds validator flag to allow private ip addresses (#18850))
 use std::{
     collections::{HashMap, HashSet},
     path::Path,
@@ -415,39 +411,3 @@ fn verify_slot_ticks(
     }
     entries.last().unwrap().hash
 }
-<<<<<<< HEAD
-=======
-
-pub fn submit_vote_to_cluster_gossip(
-    node_keypair: &Keypair,
-    vote_keypair: &Keypair,
-    vote_slot: Slot,
-    vote_hash: Hash,
-    blockhash: Hash,
-    gossip_addr: SocketAddr,
-    socket_addr_space: &SocketAddrSpace,
-) -> Result<(), GossipError> {
-    let vote_tx = vote_transaction::new_vote_transaction(
-        vec![vote_slot],
-        vote_hash,
-        blockhash,
-        node_keypair,
-        vote_keypair,
-        vote_keypair,
-        None,
-    );
-
-    cluster_info::push_messages_to_peer(
-        vec![CrdsValue::new_signed(
-            CrdsData::Vote(
-                0,
-                crds_value::Vote::new(node_keypair.pubkey(), vote_tx, timestamp()),
-            ),
-            node_keypair,
-        )],
-        node_keypair.pubkey(),
-        gossip_addr,
-        socket_addr_space,
-    )
-}
->>>>>>> d2d5f36a3 (adds validator flag to allow private ip addresses (#18850))

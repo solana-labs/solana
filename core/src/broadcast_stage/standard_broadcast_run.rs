@@ -365,12 +365,7 @@ impl StandardBroadcastRun {
             &cluster_nodes,
             &self.last_datapoint_submit,
             &mut transmit_stats,
-<<<<<<< HEAD
-=======
-            cluster_info.id(),
-            bank_forks,
             cluster_info.socket_addr_space(),
->>>>>>> d2d5f36a3 (adds validator flag to allow private ip addresses (#18850))
         )?;
         drop(cluster_nodes);
         transmit_time.stop();
@@ -504,11 +499,7 @@ mod test {
         genesis_config::GenesisConfig,
         signature::{Keypair, Signer},
     };
-<<<<<<< HEAD
-=======
     use solana_streamer::socket::SocketAddrSpace;
-    use std::ops::Deref;
->>>>>>> d2d5f36a3 (adds validator flag to allow private ip addresses (#18850))
     use std::sync::Arc;
     use std::time::Duration;
 

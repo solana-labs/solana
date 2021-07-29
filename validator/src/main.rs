@@ -367,11 +367,8 @@ fn start_gossip_node(
             expected_shred_version.unwrap_or(0),
         ),
         identity_keypair.clone(),
+        socket_addr_space,
     );
-<<<<<<< HEAD
-=======
-    let mut cluster_info = ClusterInfo::new(contact_info, identity_keypair, socket_addr_space);
->>>>>>> d2d5f36a3 (adds validator flag to allow private ip addresses (#18850))
     cluster_info.set_entrypoints(cluster_entrypoints.to_vec());
     cluster_info.restore_contact_info(ledger_path, 0);
     let cluster_info = Arc::new(cluster_info);

@@ -276,16 +276,8 @@ impl CrdsGossipPull {
         now: u64,
         gossip_validators: Option<&HashSet<Pubkey>>,
         stakes: &HashMap<Pubkey, u64>,
-<<<<<<< HEAD
-    ) -> Vec<(u64, &'a ContactInfo)> {
-=======
         socket_addr_space: &SocketAddrSpace,
-    ) -> Vec<(
-        u64,        // weight
-        Pubkey,     // node
-        SocketAddr, // gossip address
-    )> {
->>>>>>> d2d5f36a3 (adds validator flag to allow private ip addresses (#18850))
+    ) -> Vec<(u64, &'a ContactInfo)> {
         let mut rng = rand::thread_rng();
         let active_cutoff = now.saturating_sub(PULL_ACTIVE_TIMEOUT_MS);
         crds.get_nodes()
@@ -710,10 +702,6 @@ pub(crate) mod tests {
             stakes.insert(id, i * 100);
         }
         let now = 1024;
-<<<<<<< HEAD
-        let mut options = node.pull_options(&crds, &me.label().pubkey(), 0, now, None, &stakes);
-=======
-        let crds = RwLock::new(crds);
         let mut options = node.pull_options(
             &crds,
             &me.label().pubkey(),
@@ -723,7 +711,6 @@ pub(crate) mod tests {
             &stakes,
             &SocketAddrSpace::Unspecified,
         );
->>>>>>> d2d5f36a3 (adds validator flag to allow private ip addresses (#18850))
         assert!(!options.is_empty());
         options.sort_by(|(weight_l, _), (weight_r, _)| weight_r.partial_cmp(weight_l).unwrap());
         // check that the highest stake holder is also the heaviest weighted.

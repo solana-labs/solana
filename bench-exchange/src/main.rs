@@ -7,6 +7,7 @@ use crate::bench::{airdrop_lamports, create_client_accounts_file, do_bench_excha
 use log::*;
 use solana_gossip::gossip_service::{discover_cluster, get_multi_client};
 use solana_sdk::signature::Signer;
+use solana_streamer::socket::SocketAddrSpace;
 
 fn main() {
     solana_logger::setup();
@@ -55,11 +56,12 @@ fn main() {
         );
     } else {
         info!("Connecting to the cluster");
-        let nodes = discover_cluster(&entrypoint_addr, num_nodes).unwrap_or_else(|_| {
-            panic!("Failed to discover nodes");
-        });
+        let nodes = discover_cluster(&entrypoint_addr, num_nodes, SocketAddrSpace::Unspecified)
+            .unwrap_or_else(|_| {
+                panic!("Failed to discover nodes");
+            });
 
-        let (client, num_clients) = get_multi_client(&nodes);
+        let (client, num_clients) = get_multi_client(&nodes, &SocketAddrSpace::Unspecified);
 
         info!("{} nodes found", num_clients);
         if num_clients < num_nodes {

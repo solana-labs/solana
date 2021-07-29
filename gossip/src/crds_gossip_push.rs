@@ -275,14 +275,8 @@ impl CrdsGossipPush {
         let mut rng = rand::thread_rng();
         let need = Self::compute_need(self.num_active, self.active_set.len(), ratio);
         let mut new_items = HashMap::new();
-<<<<<<< HEAD
         let (weights, peers): (Vec<_>, Vec<_>) = self
-            .push_options(crds, self_id, self_shred_version, stakes, gossip_validators)
-            .into_iter()
-            .unzip();
-=======
-        let (weights, peers): (Vec<_>, Vec<_>) = {
-            self.push_options(
+            .push_options(
                 crds,
                 self_id,
                 self_shred_version,
@@ -291,9 +285,7 @@ impl CrdsGossipPush {
                 socket_addr_space,
             )
             .into_iter()
-            .unzip()
-        };
->>>>>>> d2d5f36a3 (adds validator flag to allow private ip addresses (#18850))
+            .unzip();
         if peers.is_empty() {
             return;
         }
@@ -332,12 +324,8 @@ impl CrdsGossipPush {
         self_shred_version: u16,
         stakes: &HashMap<Pubkey, u64>,
         gossip_validators: Option<&HashSet<Pubkey>>,
-<<<<<<< HEAD
-    ) -> Vec<(u64, &'a ContactInfo)> {
-=======
         socket_addr_space: &SocketAddrSpace,
-    ) -> Vec<(/*weight:*/ u64, /*node:*/ Pubkey)> {
->>>>>>> d2d5f36a3 (adds validator flag to allow private ip addresses (#18850))
+    ) -> Vec<(u64, &'a ContactInfo)> {
         let now = timestamp();
         let mut rng = rand::thread_rng();
         let max_weight = u16::MAX as f32 - 1.0;
@@ -569,10 +557,6 @@ mod test {
         )));
 
         assert_eq!(crds.insert(value1.clone(), now), Ok(()));
-<<<<<<< HEAD
-        push.refresh_push_active_set(&crds, &HashMap::new(), None, &Pubkey::default(), 0, 1, 1);
-=======
-        let crds = RwLock::new(crds);
         push.refresh_push_active_set(
             &crds,
             &HashMap::new(),
@@ -583,7 +567,6 @@ mod test {
             1,
             &SocketAddrSpace::Unspecified,
         );
->>>>>>> d2d5f36a3 (adds validator flag to allow private ip addresses (#18850))
 
         assert!(push.active_set.get(&value1.label().pubkey()).is_some());
         let value2 = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
@@ -593,10 +576,6 @@ mod test {
         assert!(push.active_set.get(&value2.label().pubkey()).is_none());
         assert_eq!(crds.insert(value2.clone(), now), Ok(()));
         for _ in 0..30 {
-<<<<<<< HEAD
-            push.refresh_push_active_set(&crds, &HashMap::new(), None, &Pubkey::default(), 0, 1, 1);
-            if push.active_set.get(&value2.label().pubkey()).is_some() {
-=======
             push.refresh_push_active_set(
                 &crds,
                 &HashMap::new(),
@@ -607,9 +586,7 @@ mod test {
                 1,
                 &SocketAddrSpace::Unspecified,
             );
-            let active_set = push.active_set.read().unwrap();
-            if active_set.get(&value2.label().pubkey()).is_some() {
->>>>>>> d2d5f36a3 (adds validator flag to allow private ip addresses (#18850))
+            if push.active_set.get(&value2.label().pubkey()).is_some() {
                 break;
             }
         }
@@ -621,10 +598,6 @@ mod test {
             ));
             assert_eq!(crds.insert(value2.clone(), now), Ok(()));
         }
-<<<<<<< HEAD
-        push.refresh_push_active_set(&crds, &HashMap::new(), None, &Pubkey::default(), 0, 1, 1);
-        assert_eq!(push.active_set.len(), push.num_active);
-=======
         push.refresh_push_active_set(
             &crds,
             &HashMap::new(),
@@ -635,8 +608,7 @@ mod test {
             1,
             &SocketAddrSpace::Unspecified,
         );
-        assert_eq!(push.active_set.read().unwrap().len(), push.num_active);
->>>>>>> d2d5f36a3 (adds validator flag to allow private ip addresses (#18850))
+        assert_eq!(push.active_set.len(), push.num_active);
     }
     #[test]
     fn test_active_set_refresh_with_bank() {
@@ -655,10 +627,6 @@ mod test {
             stakes.insert(id, i * 100);
             push.last_pushed_to.put(id, time);
         }
-<<<<<<< HEAD
-        let mut options = push.push_options(&crds, &Pubkey::default(), 0, &stakes, None);
-=======
-        let crds = RwLock::new(crds);
         let mut options = push.push_options(
             &crds,
             &Pubkey::default(),
@@ -667,7 +635,6 @@ mod test {
             None,
             &SocketAddrSpace::Unspecified,
         );
->>>>>>> d2d5f36a3 (adds validator flag to allow private ip addresses (#18850))
         assert!(!options.is_empty());
         options.sort_by(|(weight_l, _), (weight_r, _)| weight_r.partial_cmp(weight_l).unwrap());
         // check that the highest stake holder is also the heaviest weighted.
@@ -734,22 +701,18 @@ mod test {
         assert!(options.contains(&node_123.pubkey()));
 
         // spy nodes should not push to people on different shred versions
-<<<<<<< HEAD
         let options = node
-            .push_options(&crds, &spy.label().pubkey(), 0, &stakes, None)
+            .push_options(
+                &crds,
+                &spy.label().pubkey(),
+                0,
+                &stakes,
+                None,
+                &SocketAddrSpace::Unspecified,
+            )
             .iter()
             .map(|(_, c)| c.id)
             .collect::<Vec<_>>();
-=======
-        let options = node.push_options(
-            &crds,
-            &spy.label().pubkey(),
-            0,
-            &stakes,
-            None,
-            &SocketAddrSpace::Unspecified,
-        );
->>>>>>> d2d5f36a3 (adds validator flag to allow private ip addresses (#18850))
         assert!(options.is_empty());
     }
 
@@ -825,10 +788,6 @@ mod test {
             0,
         )));
         assert_eq!(crds.insert(peer.clone(), now), Ok(()));
-<<<<<<< HEAD
-        push.refresh_push_active_set(&crds, &HashMap::new(), None, &Pubkey::default(), 0, 1, 1);
-=======
-        let crds = RwLock::new(crds);
         push.refresh_push_active_set(
             &crds,
             &HashMap::new(),
@@ -839,7 +798,6 @@ mod test {
             1,
             &SocketAddrSpace::Unspecified,
         );
->>>>>>> d2d5f36a3 (adds validator flag to allow private ip addresses (#18850))
 
         let new_msg = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
             &solana_sdk::pubkey::new_rand(),
@@ -905,10 +863,6 @@ mod test {
             0,
         )));
         assert_eq!(crds.insert(peer.clone(), 0), Ok(()));
-<<<<<<< HEAD
-        push.refresh_push_active_set(&crds, &HashMap::new(), None, &Pubkey::default(), 0, 1, 1);
-=======
-        let crds = RwLock::new(crds);
         push.refresh_push_active_set(
             &crds,
             &HashMap::new(),
@@ -919,7 +873,6 @@ mod test {
             1,
             &SocketAddrSpace::Unspecified,
         );
->>>>>>> d2d5f36a3 (adds validator flag to allow private ip addresses (#18850))
 
         let new_msg = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
             &solana_sdk::pubkey::new_rand(),
@@ -946,10 +899,6 @@ mod test {
             0,
         )));
         assert_eq!(crds.insert(peer, 0), Ok(()));
-<<<<<<< HEAD
-        push.refresh_push_active_set(&crds, &HashMap::new(), None, &Pubkey::default(), 0, 1, 1);
-=======
-        let crds = RwLock::new(crds);
         push.refresh_push_active_set(
             &crds,
             &HashMap::new(),
@@ -960,7 +909,6 @@ mod test {
             1,
             &SocketAddrSpace::Unspecified,
         );
->>>>>>> d2d5f36a3 (adds validator flag to allow private ip addresses (#18850))
 
         let mut ci = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), 0);
         ci.wallclock = 1;

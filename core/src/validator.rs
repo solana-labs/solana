@@ -436,12 +436,11 @@ impl Validator {
             }
         }
 
-<<<<<<< HEAD
-        let mut cluster_info = ClusterInfo::new(node.info.clone(), identity_keypair.clone());
-=======
-        let mut cluster_info =
-            ClusterInfo::new(node.info.clone(), identity_keypair, socket_addr_space);
->>>>>>> d2d5f36a3 (adds validator flag to allow private ip addresses (#18850))
+        let mut cluster_info = ClusterInfo::new(
+            node.info.clone(),
+            identity_keypair.clone(),
+            socket_addr_space,
+        );
         cluster_info.set_contact_debug_interval(config.contact_debug_interval);
         cluster_info.set_entrypoints(cluster_entrypoints);
         cluster_info.restore_contact_info(ledger_path, config.contact_save_interval);

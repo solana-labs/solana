@@ -4187,6 +4187,7 @@ dependencies = [
  "solana-net-utils",
  "solana-runtime",
  "solana-sdk",
+ "solana-streamer",
  "solana-version",
 ]
 

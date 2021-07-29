@@ -145,12 +145,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
             &cluster_nodes,
             &Arc::new(AtomicU64::new(0)),
             &mut TransmitShredsStats::default(),
-<<<<<<< HEAD
-=======
-            cluster_info.id(),
-            bank_forks,
             cluster_info.socket_addr_space(),
->>>>>>> d2d5f36a3 (adds validator flag to allow private ip addresses (#18850))
         )?;
 
         Ok(())

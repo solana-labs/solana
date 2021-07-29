@@ -4111,18 +4111,11 @@ pub mod tests {
         let tx = system_transaction::transfer(&alice, pubkey, std::u64::MAX, blockhash);
         let _ = bank.process_transaction(&tx);
 
-<<<<<<< HEAD
-        let cluster_info = Arc::new(ClusterInfo::default());
-=======
         let cluster_info = Arc::new(ClusterInfo::new(
-            ContactInfo {
-                id: alice.pubkey(),
-                ..ContactInfo::default()
-            },
+            ContactInfo::default(),
             Arc::new(Keypair::new()),
             SocketAddrSpace::Unspecified,
         ));
->>>>>>> d2d5f36a3 (adds validator flag to allow private ip addresses (#18850))
         let tpu_address = cluster_info.my_contact_info().tpu;
 
         cluster_info.insert_info(ContactInfo::new_with_pubkey_socketaddr(

@@ -322,11 +322,7 @@ fn make_gossip_node(
     } else {
         ClusterInfo::spy_node(&keypair.pubkey(), shred_version)
     };
-<<<<<<< HEAD
-    let cluster_info = ClusterInfo::new(node, keypair);
-=======
-    let cluster_info = ClusterInfo::new(node, Arc::new(keypair), socket_addr_space);
->>>>>>> d2d5f36a3 (adds validator flag to allow private ip addresses (#18850))
+    let cluster_info = ClusterInfo::new(node, keypair, socket_addr_space);
     if let Some(entrypoint) = entrypoint {
         cluster_info.set_entrypoint(ContactInfo::new_gossip_entry_point(entrypoint));
     }
