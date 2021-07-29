@@ -41,26 +41,26 @@ test-stable-bpf)
 
   # solana-keygen required when building C programs
   _ "$cargo" build --manifest-path=keygen/Cargo.toml
+
   export PATH="$PWD/target/debug":$PATH
   cargo_build_bpf="$(realpath ./cargo-build-bpf)"
+  cargo_test_bpf="$(realpath ./cargo-test-bpf)"
 
   # BPF solana-sdk legacy compile test
   "$cargo_build_bpf" --manifest-path sdk/Cargo.toml
 
-  # BPF Program unit tests
-  "$cargo" test --manifest-path programs/bpf/Cargo.toml
-  "$cargo_build_bpf" --manifest-path programs/bpf/Cargo.toml --bpf-sdk sdk/bpf
-
-  # BPF program system tests
+  # BPF C program system tests
   _ make -C programs/bpf/c tests
   _ "$cargo" stable test \
     --manifest-path programs/bpf/Cargo.toml \
     --no-default-features --features=bpf_c,bpf_rust -- --nocapture
 
-  # Dump BPF program assembly listings
+  # BPF Rust program unit tests
   for bpf_test in programs/bpf/rust/*; do
     if pushd "$bpf_test"; then
-      "$cargo_build_bpf" --dump
+      "$cargo" test
+      "$cargo_build_bpf" --bpf-sdk ../../../../sdk/bpf --dump
+      "$cargo_test_bpf" --bpf-sdk ../../../../sdk/bpf
       popd
     fi
   done
