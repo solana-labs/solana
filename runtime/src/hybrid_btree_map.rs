@@ -765,7 +765,12 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
             HashMapEntry::Vacant(vacant) => {
                 if !reclaims_must_be_empty {
                     if 1000 <= self.insert_without_lookup.fetch_add(1, Ordering::Relaxed) {
-                        panic!("upsert without reclaims");
+                        //panic!("upsert without reclaims");
+                        /*
+   2: solana_runtime::accounts_index::AccountsIndex<T>::upsert
+   3: solana_runtime::accounts_db::AccountsDb::store_accounts_frozen
+   4: solana_runtime::accounts_db::AccountsDb::shrink_candidate_slots                        
+                        */
                     }
                 }
                 if reclaims_must_be_empty && false { // todo
