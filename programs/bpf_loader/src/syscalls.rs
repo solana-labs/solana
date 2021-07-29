@@ -9,6 +9,8 @@ use solana_rbpf::{
     vm::{EbpfVm, SyscallObject, SyscallRegistry},
 };
 use solana_runtime::message_processor::MessageProcessor;
+#[allow(deprecated)]
+use solana_sdk::sysvar::fees::Fees;
 use solana_sdk::{
     account::{Account, AccountSharedData, ReadableAccount},
     account_info::AccountInfo,
@@ -35,7 +37,7 @@ use solana_sdk::{
     secp256k1_recover::{
         Secp256k1RecoverError, SECP256K1_PUBLIC_KEY_LENGTH, SECP256K1_SIGNATURE_LENGTH,
     },
-    sysvar::{self, fees::Fees, Sysvar, SysvarId},
+    sysvar::{self, Sysvar, SysvarId},
 };
 use std::{
     alloc::Layout,
@@ -1114,6 +1116,7 @@ struct SyscallGetFeesSysvar<'a> {
     invoke_context: Rc<RefCell<&'a mut dyn InvokeContext>>,
     loader_id: &'a Pubkey,
 }
+#[allow(deprecated)]
 impl<'a> SyscallObject<BpfError> for SyscallGetFeesSysvar<'a> {
     fn call(
         &mut self,
@@ -3365,6 +3368,7 @@ mod tests {
         }
 
         // Test fees sysvar
+        #[allow(deprecated)]
         {
             let got_fees = Fees::default();
             let got_fees_va = 2048;

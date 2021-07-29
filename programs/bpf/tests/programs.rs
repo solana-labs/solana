@@ -42,7 +42,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{keypair_from_seed, Keypair, Signer},
     system_instruction,
-    sysvar::{clock, fees, rent},
+    sysvar::{clock, rent},
     transaction::{Transaction, TransactionError},
 };
 use solana_transaction_status::{
@@ -1258,11 +1258,8 @@ fn test_program_bpf_call_depth() {
     let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
     assert!(result.is_ok());
 
-    let instruction = Instruction::new_with_bincode(
-        program_id,
-        &ComputeBudget::default().max_call_depth,
-        vec![],
-    );
+    let instruction =
+        Instruction::new_with_bincode(program_id, &ComputeBudget::default().max_call_depth, vec![]);
     let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
     assert!(result.is_err());
 }
@@ -1701,7 +1698,6 @@ fn test_program_bpf_upgrade() {
         vec![
             AccountMeta::new(program_id.clone(), false),
             AccountMeta::new(clock::id(), false),
-            AccountMeta::new(fees::id(), false),
         ],
     );
 
@@ -1797,7 +1793,6 @@ fn test_program_bpf_upgrade_and_invoke_in_same_tx() {
         vec![
             AccountMeta::new(program_id.clone(), false),
             AccountMeta::new(clock::id(), false),
-            AccountMeta::new(fees::id(), false),
         ],
     );
 
@@ -1886,7 +1881,6 @@ fn test_program_bpf_invoke_upgradeable_via_cpi() {
             AccountMeta::new(program_id, false),
             AccountMeta::new(program_id, false),
             AccountMeta::new(clock::id(), false),
-            AccountMeta::new(fees::id(), false),
         ],
     );
 
@@ -2077,7 +2071,6 @@ fn test_program_bpf_upgrade_via_cpi() {
             AccountMeta::new(program_id, false),
             AccountMeta::new(program_id, false),
             AccountMeta::new(clock::id(), false),
-            AccountMeta::new(fees::id(), false),
         ],
     );
 
@@ -2182,7 +2175,6 @@ fn test_program_bpf_upgrade_self_via_cpi() {
             AccountMeta::new(noop_program_id, false),
             AccountMeta::new(noop_program_id, false),
             AccountMeta::new(clock::id(), false),
-            AccountMeta::new(fees::id(), false),
         ],
     );
 

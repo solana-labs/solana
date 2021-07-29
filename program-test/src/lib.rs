@@ -1,6 +1,8 @@
 //! The solana-program-test provides a BanksClient-based test framework BPF programs
 #![allow(clippy::integer_arithmetic)]
 
+#[allow(deprecated)]
+use solana_sdk::sysvar::fees::Fees;
 use {
     async_trait::async_trait,
     chrono_humanize::{Accuracy, HumanTime, Tense},
@@ -34,7 +36,7 @@ use {
         signature::{Keypair, Signer},
         sysvar::{
             clock, epoch_schedule,
-            fees::{self, Fees},
+            fees::{self},
             rent, Sysvar,
         },
     },
@@ -377,6 +379,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
         get_sysvar::<EpochSchedule>(&epoch_schedule::id(), var_addr)
     }
 
+    #[allow(deprecated)]
     fn sol_get_fees_sysvar(&self, var_addr: *mut u8) -> u64 {
         get_sysvar::<Fees>(&fees::id(), var_addr)
     }
