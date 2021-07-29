@@ -14,6 +14,8 @@ use solana_sdk::{
         instructions_sysvar_enabled, neon_evm_compute_budget, tx_wide_compute_cap,
         updated_verify_policy, FeatureSet,
     },
+    fee_calculator::FeeCalculator,
+    hash::Hash,
     ic_logger_msg, ic_msg,
     instruction::{CompiledInstruction, Instruction, InstructionError},
     keyed_account::{create_keyed_accounts_unified, keyed_account_at_index, KeyedAccount},
@@ -303,6 +305,8 @@ pub struct ThisInvokeContext<'a> {
     ancestors: &'a Ancestors,
     #[allow(clippy::type_complexity)]
     sysvars: RefCell<Vec<(Pubkey, Option<Rc<Vec<u8>>>)>>,
+    blockhash: &'a Hash,
+    fee_calculator: &'a FeeCalculator,
 }
 impl<'a> ThisInvokeContext<'a> {
     #[allow(clippy::too_many_arguments)]
@@ -322,6 +326,8 @@ impl<'a> ThisInvokeContext<'a> {
         feature_set: Arc<FeatureSet>,
         account_db: Arc<Accounts>,
         ancestors: &'a Ancestors,
+        blockhash: &'a Hash,
+        fee_calculator: &'a FeeCalculator,
     ) -> Self {
         let pre_accounts = MessageProcessor::create_pre_accounts(message, instruction, accounts);
         let keyed_accounts = MessageProcessor::create_keyed_accounts(
@@ -354,6 +360,8 @@ impl<'a> ThisInvokeContext<'a> {
             account_db,
             ancestors,
             sysvars: RefCell::new(vec![]),
+            blockhash,
+            fee_calculator,
         };
         invoke_context
             .invoke_stack
@@ -538,6 +546,12 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
     }
     fn get_compute_budget(&self) -> &ComputeBudget {
         &self.compute_budget
+    }
+    fn get_blockhash(&self) -> &Hash {
+        self.blockhash
+    }
+    fn get_fee_calculator(&self) -> &FeeCalculator {
+        self.fee_calculator
     }
 }
 pub struct ThisLogger {
@@ -1168,6 +1182,8 @@ impl MessageProcessor {
         timings: &mut ExecuteDetailsTimings,
         account_db: Arc<Accounts>,
         ancestors: &Ancestors,
+        blockhash: &Hash,
+        fee_calculator: &FeeCalculator,
     ) -> Result<(), InstructionError> {
         // Fixup the special instructions key if present
         // before the account pre-values are taken care of
@@ -1211,6 +1227,8 @@ impl MessageProcessor {
             feature_set,
             account_db,
             ancestors,
+            blockhash,
+            fee_calculator,
         );
         self.process_instruction(program_id, &instruction.data, &mut invoke_context)?;
         Self::verify(
@@ -1250,6 +1268,8 @@ impl MessageProcessor {
         timings: &mut ExecuteDetailsTimings,
         account_db: Arc<Accounts>,
         ancestors: &Ancestors,
+        blockhash: Hash,
+        fee_calculator: FeeCalculator,
     ) -> Result<(), TransactionError> {
         for (instruction_index, instruction) in message.instructions.iter().enumerate() {
             let mut time = Measure::start("execute_instruction");
@@ -1274,6 +1294,8 @@ impl MessageProcessor {
                     timings,
                     account_db.clone(),
                     ancestors,
+                    &blockhash,
+                    &fee_calculator,
                 )
                 .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err));
             time.stop();
@@ -1337,6 +1359,8 @@ mod tests {
             None,
         );
         let ancestors = Ancestors::default();
+        let blockhash = Hash::default();
+        let fee_calculator = FeeCalculator::default();
         let mut invoke_context = ThisInvokeContext::new(
             &invoke_stack[0],
             Rent::default(),
@@ -1353,6 +1377,8 @@ mod tests {
             Arc::new(FeatureSet::all_enabled()),
             Arc::new(Accounts::default()),
             &ancestors,
+            &blockhash,
+            &fee_calculator,
         );
 
         // Check call depth increases and has a limit
@@ -1965,6 +1991,8 @@ mod tests {
             &mut ExecuteDetailsTimings::default(),
             Arc::new(Accounts::default()),
             &ancestors,
+            Hash::default(),
+            FeeCalculator::default(),
         );
         assert_eq!(result, Ok(()));
         assert_eq!(accounts[0].1.borrow().lamports(), 100);
@@ -1993,6 +2021,8 @@ mod tests {
             &mut ExecuteDetailsTimings::default(),
             Arc::new(Accounts::default()),
             &ancestors,
+            Hash::default(),
+            FeeCalculator::default(),
         );
         assert_eq!(
             result,
@@ -2025,6 +2055,8 @@ mod tests {
             &mut ExecuteDetailsTimings::default(),
             Arc::new(Accounts::default()),
             &ancestors,
+            Hash::default(),
+            FeeCalculator::default(),
         );
         assert_eq!(
             result,
@@ -2149,6 +2181,8 @@ mod tests {
             &mut ExecuteDetailsTimings::default(),
             Arc::new(Accounts::default()),
             &ancestors,
+            Hash::default(),
+            FeeCalculator::default(),
         );
         assert_eq!(
             result,
@@ -2181,6 +2215,8 @@ mod tests {
             &mut ExecuteDetailsTimings::default(),
             Arc::new(Accounts::default()),
             &ancestors,
+            Hash::default(),
+            FeeCalculator::default(),
         );
         assert_eq!(result, Ok(()));
 
@@ -2211,6 +2247,8 @@ mod tests {
             &mut ExecuteDetailsTimings::default(),
             Arc::new(Accounts::default()),
             &ancestors,
+            Hash::default(),
+            FeeCalculator::default(),
         );
         assert_eq!(result, Ok(()));
         assert_eq!(accounts[0].1.borrow().lamports(), 80);
@@ -2299,6 +2337,8 @@ mod tests {
         let message = Message::new(&[instruction], None);
 
         let ancestors = Ancestors::default();
+        let blockhash = Hash::default();
+        let fee_calculator = FeeCalculator::default();
         let mut invoke_context = ThisInvokeContext::new(
             &caller_program_id,
             Rent::default(),
@@ -2315,6 +2355,8 @@ mod tests {
             Arc::new(FeatureSet::all_enabled()),
             Arc::new(Accounts::default()),
             &ancestors,
+            &blockhash,
+            &fee_calculator,
         );
 
         // not owned account modified by the caller (before the invoke)
@@ -2356,6 +2398,8 @@ mod tests {
             let message = Message::new(&[instruction], None);
 
             let ancestors = Ancestors::default();
+            let blockhash = Hash::default();
+            let fee_calculator = FeeCalculator::default();
             let mut invoke_context = ThisInvokeContext::new(
                 &caller_program_id,
                 Rent::default(),
@@ -2372,6 +2416,8 @@ mod tests {
                 Arc::new(FeatureSet::all_enabled()),
                 Arc::new(Accounts::default()),
                 &ancestors,
+                &blockhash,
+                &fee_calculator,
             );
 
             let caller_write_privileges = message

@@ -3262,6 +3262,18 @@ impl Bank {
                             compute_budget.max_units,
                         )));
 
+                        let (blockhash, fee_calculator) = {
+                            let blockhash_queue = self.blockhash_queue.read().unwrap();
+                            let blockhash = blockhash_queue.last_hash();
+                            (
+                                blockhash,
+                                blockhash_queue
+                                    .get_fee_calculator(&blockhash)
+                                    .cloned()
+                                    .unwrap_or_else(|| self.fee_calculator.clone()),
+                            )
+                        };
+
                         process_result = self.message_processor.process_message(
                             tx.message(),
                             &loader_refcells,
@@ -3276,6 +3288,8 @@ impl Bank {
                             &mut timings.details,
                             self.rc.accounts.clone(),
                             &self.ancestors,
+                            blockhash,
+                            fee_calculator,
                         );
 
                         transaction_log_messages.push(Self::collect_log_messages(log_collector));
