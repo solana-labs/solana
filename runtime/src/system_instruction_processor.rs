@@ -1907,4 +1907,75 @@ mod tests {
         .unwrap();
         assert_eq!(get_system_account_kind(&nonce_account), None);
     }
+
+    #[test]
+    fn test_nonce_initialize_with_empty_recent_blockhashes_fail() {
+        let nonce_acc = nonce_account::create_account(1_000_000);
+        let new_recent_blockhashes_account = RefCell::new(
+            #[allow(deprecated)]
+            solana_sdk::recent_blockhashes_account::create_account_with_data_for_test(
+                vec![].into_iter(),
+            ),
+        );
+        assert_eq!(
+            process_instruction(
+                &Pubkey::default(),
+                vec![
+                    KeyedAccount::new(&Pubkey::default(), true, &nonce_acc),
+                    KeyedAccount::new(
+                        #[allow(deprecated)]
+                        &sysvar::recent_blockhashes::id(),
+                        false,
+                        &new_recent_blockhashes_account,
+                    ),
+                    KeyedAccount::new(&sysvar::rent::id(), false, &create_default_rent_account()),
+                ],
+                &serialize(&SystemInstruction::InitializeNonceAccount(Pubkey::default())).unwrap(),
+            ),
+            Err(NonceError::NoRecentBlockhashes.into())
+        );
+    }
+
+    #[test]
+    fn test_nonce_advance_with_empty_recent_blockhashes_fail() {
+        let nonce_acc = nonce_account::create_account(1_000_000);
+        process_instruction(
+            &Pubkey::default(),
+            vec![
+                KeyedAccount::new(&Pubkey::default(), true, &nonce_acc),
+                KeyedAccount::new(
+                    #[allow(deprecated)]
+                    &sysvar::recent_blockhashes::id(),
+                    false,
+                    &create_default_recent_blockhashes_account(),
+                ),
+                KeyedAccount::new(&sysvar::rent::id(), false, &create_default_rent_account()),
+            ],
+            &serialize(&SystemInstruction::InitializeNonceAccount(Pubkey::default())).unwrap(),
+        )
+        .unwrap();
+        let blockhash = &hash(&serialize(&0).unwrap());
+        let new_recent_blockhashes_account = RefCell::new(
+            #[allow(deprecated)]
+            solana_sdk::recent_blockhashes_account::create_account_with_data_for_test(
+                vec![].into_iter(),
+            ),
+        );
+        let owner = Pubkey::default();
+        #[allow(deprecated)]
+        let blockhash_id = sysvar::recent_blockhashes::id();
+        let mut invoke_context = &mut MockInvokeContext::new(vec![
+            KeyedAccount::new(&owner, true, &nonce_acc),
+            KeyedAccount::new(&blockhash_id, false, &new_recent_blockhashes_account),
+        ]);
+        invoke_context.blockhash = *blockhash;
+        assert_eq!(
+            super::process_instruction(
+                &Pubkey::default(),
+                &serialize(&SystemInstruction::AdvanceNonceAccount).unwrap(),
+                invoke_context,
+            ),
+            Err(NonceError::NoRecentBlockhashes.into()),
+        );
+    }
 }
