@@ -257,9 +257,18 @@ impl<T: 'static> ClusterNodesCache<T> {
                 cache.pop(&epoch);
             }
         }
-        let epoch_staked_nodes = root_bank.epoch_staked_nodes(epoch).unwrap_or_default();
-        let nodes = new_cluster_nodes::<T>(cluster_info, &epoch_staked_nodes);
-        let nodes = Arc::new(nodes);
+        let epoch_staked_nodes = root_bank.epoch_staked_nodes(epoch);
+        if epoch_staked_nodes.is_none() {
+            inc_new_counter_info!("cluster_nodes-unknown_epoch_staked_nodes", 1);
+            if epoch != root_bank.get_leader_schedule_epoch(root_bank.slot()) {
+                return self.get(root_bank.slot(), root_bank, cluster_info);
+            }
+            inc_new_counter_info!("cluster_nodes-unknown_epoch_staked_nodes_root", 1);
+        }
+        let nodes = Arc::new(new_cluster_nodes::<T>(
+            cluster_info,
+            &epoch_staked_nodes.unwrap_or_default(),
+        ));
         {
             let mut cache = self.cache.lock().unwrap();
             cache.put(epoch, (Instant::now(), Arc::clone(&nodes)));
