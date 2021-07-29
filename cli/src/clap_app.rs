@@ -1,12 +1,9 @@
 use crate::{
     cli::*, cluster_query::*, feature::*, inflation::*, nonce::*, program::*, stake::*,
-    validator_info::*, vote::*,
+    validator_info::*, vote::*, wallet::*,
 };
 use clap::{App, AppSettings, Arg, ArgGroup, SubCommand};
-use solana_clap_utils::{
-    self, fee_payer::fee_payer_arg, input_validators::*, keypair::*, memo::memo_arg, nonce::*,
-    offline::*,
-};
+use solana_clap_utils::{self, input_validators::*, keypair::*};
 use solana_cli_config::CONFIG_FILE;
 
 pub fn get_clap_app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, 'v> {
@@ -14,267 +11,6 @@ pub fn get_clap_app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> A
         .about(about)
         .version(version)
         .setting(AppSettings::SubcommandRequiredElseHelp)
-        .subcommand(
-            SubCommand::with_name("address")
-                .about("Get your public key")
-                .arg(
-                    Arg::with_name("confirm_key")
-                        .long("confirm-key")
-                        .takes_value(false)
-                        .help("Confirm key on device; only relevant if using remote wallet"),
-                ),
-        )
-        .cluster_query_subcommands()
-        .feature_subcommands()
-        .inflation_subcommands()
-        .nonce_subcommands()
-        .program_subcommands()
-        .stake_subcommands()
-        .subcommand(
-            SubCommand::with_name("airdrop")
-                .about("Request SOL from a faucet")
-                .arg(
-                    Arg::with_name("amount")
-                        .index(1)
-                        .value_name("AMOUNT")
-                        .takes_value(true)
-                        .validator(is_amount)
-                        .required(true)
-                        .help("The airdrop amount to request, in SOL"),
-                )
-                .arg(
-                    pubkey!(Arg::with_name("to")
-                        .index(2)
-                        .value_name("RECIPIENT_ADDRESS"),
-                        "The account address of airdrop recipient. "),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("balance")
-                .about("Get your balance")
-                .arg(
-                    pubkey!(Arg::with_name("pubkey")
-                        .index(1)
-                        .value_name("ACCOUNT_ADDRESS"),
-                        "The account address of the balance to check. ")
-                )
-                .arg(
-                    Arg::with_name("lamports")
-                        .long("lamports")
-                        .takes_value(false)
-                        .help("Display balance in lamports instead of SOL"),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("confirm")
-                .about("Confirm transaction by signature")
-                .arg(
-                    Arg::with_name("signature")
-                        .index(1)
-                        .value_name("TRANSACTION_SIGNATURE")
-                        .takes_value(true)
-                        .required(true)
-                        .help("The transaction signature to confirm"),
-                )
-                .after_help(// Formatted specifically for the manually-indented heredoc string
-                   "Note: This will show more detailed information for finalized transactions with verbose mode (-v/--verbose).\
-                  \n\
-                  \nAccount modes:\
-                  \n  |srwx|\
-                  \n    s: signed\
-                  \n    r: readable (always true)\
-                  \n    w: writable\
-                  \n    x: program account (inner instructions excluded)\
-                   "
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("decode-transaction")
-                .about("Decode a serialized transaction")
-                .arg(
-                    Arg::with_name("transaction")
-                        .index(1)
-                        .value_name("TRANSACTION")
-                        .takes_value(true)
-                        .required(true)
-                        .help("transaction to decode"),
-                )
-                .arg(
-                    Arg::with_name("encoding")
-                        .index(2)
-                        .value_name("ENCODING")
-                        .possible_values(&["base58", "base64"]) // Subset of `UiTransactionEncoding` enum
-                        .default_value("base58")
-                        .takes_value(true)
-                        .required(true)
-                        .help("transaction encoding"),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("create-address-with-seed")
-                .about("Generate a derived account address with a seed")
-                .arg(
-                    Arg::with_name("seed")
-                        .index(1)
-                        .value_name("SEED_STRING")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_derived_address_seed)
-                        .help("The seed.  Must not take more than 32 bytes to encode as utf-8"),
-                )
-                .arg(
-                    Arg::with_name("program_id")
-                        .index(2)
-                        .value_name("PROGRAM_ID")
-                        .takes_value(true)
-                        .required(true)
-                        .help(
-                            "The program_id that the address will ultimately be used for, \n\
-                             or one of NONCE, STAKE, and VOTE keywords",
-                        ),
-                )
-                .arg(
-                    pubkey!(Arg::with_name("from")
-                        .long("from")
-                        .value_name("FROM_PUBKEY")
-                        .required(false),
-                        "From (base) key, [default: cli config keypair]. "),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("deploy")
-                .about("Deploy a program")
-                .arg(
-                    Arg::with_name("program_location")
-                        .index(1)
-                        .value_name("PROGRAM_FILEPATH")
-                        .takes_value(true)
-                        .required(true)
-                        .help("/path/to/program.o"),
-                )
-                .arg(
-                    Arg::with_name("address_signer")
-                        .index(2)
-                        .value_name("PROGRAM_ADDRESS_SIGNER")
-                        .takes_value(true)
-                        .validator(is_valid_signer)
-                        .help("The signer for the desired address of the program [default: new random address]")
-                )
-                .arg(
-                    Arg::with_name("use_deprecated_loader")
-                        .long("use-deprecated-loader")
-                        .takes_value(false)
-                        .hidden(true) // Don't document this argument to discourage its use
-                        .help("Use the deprecated BPF loader")
-                )
-                .arg(
-                    Arg::with_name("allow_excessive_balance")
-                        .long("allow-excessive-deploy-account-balance")
-                        .takes_value(false)
-                        .help("Use the designated program id, even if the account already holds a large balance of SOL")
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("resolve-signer")
-                .about("Checks that a signer is valid, and returns its specific path; useful for signers that may be specified generally, eg. usb://ledger")
-                .arg(
-                    Arg::with_name("signer")
-                        .index(1)
-                        .value_name("SIGNER_KEYPAIR")
-                        .takes_value(true)
-                        .required(true)
-                        .validator(is_valid_signer)
-                        .help("The signer path to resolve")
-                )
-        )
-        .subcommand(
-            SubCommand::with_name("transfer")
-                .about("Transfer funds between system accounts")
-                .alias("pay")
-                .arg(
-                    pubkey!(Arg::with_name("to")
-                        .index(1)
-                        .value_name("RECIPIENT_ADDRESS")
-                        .required(true),
-                        "The account address of recipient. "),
-                )
-                .arg(
-                    Arg::with_name("amount")
-                        .index(2)
-                        .value_name("AMOUNT")
-                        .takes_value(true)
-                        .validator(is_amount_or_all)
-                        .required(true)
-                        .help("The amount to send, in SOL; accepts keyword ALL"),
-                )
-                .arg(
-                    pubkey!(Arg::with_name("from")
-                        .long("from")
-                        .value_name("FROM_ADDRESS"),
-                        "Source account of funds (if different from client local account). "),
-                )
-                .arg(
-                    Arg::with_name("no_wait")
-                        .long("no-wait")
-                        .takes_value(false)
-                        .help("Return signature immediately after submitting the transaction, instead of waiting for confirmations"),
-                )
-                .arg(
-                    Arg::with_name("derived_address_seed")
-                        .long("derived-address-seed")
-                        .takes_value(true)
-                        .value_name("SEED_STRING")
-                        .requires("derived_address_program_id")
-                        .validator(is_derived_address_seed)
-                        .hidden(true)
-                )
-                .arg(
-                    Arg::with_name("derived_address_program_id")
-                        .long("derived-address-program-id")
-                        .takes_value(true)
-                        .value_name("PROGRAM_ID")
-                        .requires("derived_address_seed")
-                        .hidden(true)
-                )
-                .arg(
-                    Arg::with_name("allow_unfunded_recipient")
-                        .long("allow-unfunded-recipient")
-                        .takes_value(false)
-                        .help("Complete the transfer even if the recipient address is not funded")
-                )
-                .offline_args()
-                .nonce_args(false)
-                .arg(memo_arg())
-                .arg(fee_payer_arg()),
-        )
-        .subcommand(
-            SubCommand::with_name("account")
-                .about("Show the contents of an account")
-                .alias("account")
-                .arg(
-                    pubkey!(Arg::with_name("account_pubkey")
-                        .index(1)
-                        .value_name("ACCOUNT_ADDRESS")
-                        .required(true),
-                        "Account key URI. ")
-                )
-                .arg(
-                    Arg::with_name("output_file")
-                        .long("output-file")
-                        .short("o")
-                        .value_name("FILEPATH")
-                        .takes_value(true)
-                        .help("Write the account data to this file"),
-                )
-                .arg(
-                    Arg::with_name("lamports")
-                        .long("lamports")
-                        .takes_value(false)
-                        .help("Display balance in lamports instead of SOL"),
-                ),
-        )
-        .validator_info_subcommands()
-        .vote_subcommands()
         .arg({
             let arg = Arg::with_name("config_file")
                 .short("C")
@@ -387,6 +123,15 @@ pub fn get_clap_app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> A
                 .hidden(true)
                 .help("Timeout value for initial transaction status"),
         )
+        .cluster_query_subcommands()
+        .feature_subcommands()
+        .inflation_subcommands()
+        .nonce_subcommands()
+        .program_subcommands()
+        .stake_subcommands()
+        .validator_info_subcommands()
+        .vote_subcommands()
+        .wallet_subcommands()
         .subcommand(
             SubCommand::with_name("config")
                 .about("Solana command-line tool configuration settings")
