@@ -334,7 +334,7 @@ impl ProgramSubCommands for App<'_, '_> {
                 )
                 .subcommand(
                     SubCommand::with_name("close")
-                        .about("Close an acount and withdraw all lamports")
+                        .about("Close an account and withdraw all lamports")
                         .arg(
                             Arg::with_name("account")
                                 .index(1)
