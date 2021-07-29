@@ -160,7 +160,7 @@ impl RepairWeight {
         );
         get_best_orphans_elapsed.stop();
 
-        let mut get_best_shreds_elapsed = Measure::start("get_best_orphans");
+        let mut get_best_shreds_elapsed = Measure::start("get_best_shreds");
         // Find the best incomplete slots in rooted subtree
         self.get_best_shreds(blockstore, &mut repairs, max_new_shreds, ignore_slots);
         get_best_shreds_elapsed.stop();
