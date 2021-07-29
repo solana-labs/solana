@@ -1,9 +1,10 @@
-use super::*;
-use crate::cluster_nodes::ClusterNodes;
-use solana_ledger::shred::Shredder;
-use solana_sdk::hash::Hash;
-use solana_sdk::signature::Keypair;
-use std::{thread::sleep, time::Duration};
+use {
+    super::*,
+    crate::cluster_nodes::ClusterNodesCache,
+    solana_ledger::shred::Shredder,
+    solana_sdk::{hash::Hash, signature::Keypair},
+    std::{thread::sleep, time::Duration},
+};
 
 pub const NUM_BAD_SLOTS: u64 = 10;
 pub const SLOT_TO_RESOLVE: u64 = 32;
@@ -14,15 +15,21 @@ pub(super) struct FailEntryVerificationBroadcastRun {
     good_shreds: Vec<Shred>,
     current_slot: Slot,
     next_shred_index: u32,
+    cluster_nodes_cache: Arc<ClusterNodesCache<BroadcastStage>>,
 }
 
 impl FailEntryVerificationBroadcastRun {
     pub(super) fn new(shred_version: u16) -> Self {
+        let cluster_nodes_cache = Arc::new(ClusterNodesCache::<BroadcastStage>::new(
+            CLUSTER_NODES_CACHE_NUM_EPOCH_CAP,
+            CLUSTER_NODES_CACHE_TTL,
+        ));
         Self {
             shred_version,
             good_shreds: vec![],
             current_slot: 0,
             next_shred_index: 0,
+            cluster_nodes_cache,
         }
     }
 }
@@ -132,11 +139,8 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
     ) -> Result<()> {
         let ((slot, shreds), _) = receiver.lock().unwrap().recv()?;
         let root_bank = bank_forks.read().unwrap().root_bank();
-        let epoch = root_bank.get_leader_schedule_epoch(slot);
-        let stakes = root_bank.epoch_staked_nodes(epoch);
         // Broadcast data
-        let cluster_nodes =
-            ClusterNodes::<BroadcastStage>::new(cluster_info, &stakes.unwrap_or_default());
+        let cluster_nodes = self.cluster_nodes_cache.get(slot, &root_bank, cluster_info);
         broadcast_shreds(
             sock,
             &shreds,

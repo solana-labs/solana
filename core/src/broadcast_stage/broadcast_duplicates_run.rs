@@ -1,11 +1,14 @@
-use super::*;
-use solana_entry::entry::Entry;
-use solana_ledger::shred::Shredder;
-use solana_runtime::blockhash_queue::BlockhashQueue;
-use solana_sdk::{
-    hash::Hash,
-    signature::{Keypair, Signer},
-    system_transaction,
+use {
+    super::*,
+    crate::cluster_nodes::ClusterNodesCache,
+    solana_entry::entry::Entry,
+    solana_ledger::shred::Shredder,
+    solana_runtime::blockhash_queue::BlockhashQueue,
+    solana_sdk::{
+        hash::Hash,
+        signature::{Keypair, Signer},
+        system_transaction,
+    },
 };
 
 pub const MINIMUM_DUPLICATE_SLOT: Slot = 20;
@@ -32,10 +35,15 @@ pub(super) struct BroadcastDuplicatesRun {
     recent_blockhash: Option<Hash>,
     prev_entry_hash: Option<Hash>,
     num_slots_broadcasted: usize,
+    cluster_nodes_cache: Arc<ClusterNodesCache<BroadcastStage>>,
 }
 
 impl BroadcastDuplicatesRun {
     pub(super) fn new(shred_version: u16, config: BroadcastDuplicatesConfig) -> Self {
+        let cluster_nodes_cache = Arc::new(ClusterNodesCache::<BroadcastStage>::new(
+            CLUSTER_NODES_CACHE_NUM_EPOCH_CAP,
+            CLUSTER_NODES_CACHE_TTL,
+        ));
         Self {
             config,
             duplicate_queue: BlockhashQueue::default(),
@@ -47,6 +55,7 @@ impl BroadcastDuplicatesRun {
             recent_blockhash: None,
             prev_entry_hash: None,
             num_slots_broadcasted: 0,
+            cluster_nodes_cache,
         }
     }
 }
@@ -220,11 +229,8 @@ impl BroadcastRun for BroadcastDuplicatesRun {
     ) -> Result<()> {
         let ((slot, shreds), _) = receiver.lock().unwrap().recv()?;
         let root_bank = bank_forks.read().unwrap().root_bank();
-        let epoch = root_bank.get_leader_schedule_epoch(slot);
-        let stakes = root_bank.epoch_staked_nodes(epoch);
         // Broadcast data
-        let cluster_nodes =
-            ClusterNodes::<BroadcastStage>::new(cluster_info, &stakes.unwrap_or_default());
+        let cluster_nodes = self.cluster_nodes_cache.get(slot, &root_bank, cluster_info);
         broadcast_shreds(
             sock,
             &shreds,
