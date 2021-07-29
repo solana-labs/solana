@@ -351,7 +351,7 @@ impl StandardBroadcastRun {
         if now - last > BROADCAST_PEER_UPDATE_INTERVAL_MS
             && self
                 .last_peer_update
-                .compare_and_swap(now, last, Ordering::Relaxed)
+                .compare_and_swap(last, now, Ordering::Relaxed)
                 == last
         {
             let mut w_broadcast_peer_cache = self.broadcast_peer_cache.write().unwrap();
