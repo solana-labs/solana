@@ -36,7 +36,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     short_vec::decode_shortu16_len,
     signature::Signature,
-    timing::{duration_as_ms, timestamp},
+    timing::{duration_as_ms, timestamp, AtomicInterval},
     transaction::{self, Transaction, TransactionError},
 };
 use solana_transaction_status::token_balances::{
@@ -78,7 +78,7 @@ const DEFAULT_LRU_SIZE: usize = 200_000;
 
 #[derive(Debug, Default)]
 pub struct BankingStageStats {
-    last_report: AtomicU64,
+    last_report: AtomicInterval,
     id: u32,
     process_packets_count: AtomicUsize,
     new_tx_count: AtomicUsize,
@@ -107,19 +107,7 @@ impl BankingStageStats {
     }
 
     fn report(&self, report_interval_ms: u64) {
-        let should_report = {
-            let last = self.last_report.load(Ordering::Relaxed);
-            let now = solana_sdk::timing::timestamp();
-            now.saturating_sub(last) > report_interval_ms
-                && self.last_report.compare_exchange(
-                    last,
-                    now,
-                    Ordering::Relaxed,
-                    Ordering::Relaxed,
-                ) == Ok(last)
-        };
-
-        if should_report {
+        if self.last_report.should_update(report_interval_ms) {
             datapoint_info!(
                 "banking_stage-loop-stats",
                 ("id", self.id as i64, i64),

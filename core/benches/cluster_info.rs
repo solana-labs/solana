@@ -12,13 +12,13 @@ use solana_gossip::{
     contact_info::ContactInfo,
 };
 use solana_ledger::shred::Shred;
-use solana_sdk::{pubkey, signature::Keypair, timing::timestamp};
-use solana_streamer::socket::SocketAddrSpace;
-use std::{
-    collections::HashMap,
-    net::UdpSocket,
-    sync::{atomic::AtomicU64, Arc},
+use solana_sdk::{
+    pubkey,
+    signature::Keypair,
+    timing::{timestamp, AtomicInterval},
 };
+use solana_streamer::socket::SocketAddrSpace;
+use std::{collections::HashMap, net::UdpSocket, sync::Arc};
 use test::Bencher;
 
 #[bench]
@@ -46,7 +46,7 @@ fn broadcast_shreds_bench(bencher: &mut Bencher) {
     let cluster_info = Arc::new(cluster_info);
     let cluster_nodes = ClusterNodes::<BroadcastStage>::new(&cluster_info, &stakes);
     let shreds = Arc::new(shreds);
-    let last_datapoint = Arc::new(AtomicU64::new(0));
+    let last_datapoint = Arc::new(AtomicInterval::default());
     bencher.iter(move || {
         let shreds = shreds.clone();
         broadcast_shreds(
