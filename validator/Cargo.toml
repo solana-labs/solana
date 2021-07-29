@@ -45,6 +45,7 @@ solana-poh = { path = "../poh", version = "=1.7.9" }
 solana-rpc = { path = "../rpc", version = "=1.7.9" }
 solana-runtime = { path = "../runtime", version = "=1.7.9" }
 solana-sdk = { path = "../sdk", version = "=1.7.9" }
+solana-streamer = { path = "../streamer", version = "=1.7.9" }
 solana-version = { path = "../version", version = "=1.7.9" }
 solana-vote-program = { path = "../programs/vote", version = "=1.7.9" }
 symlink = "0.1.0"

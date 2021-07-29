@@ -28,6 +28,7 @@ use solana_sdk::{
     timing::duration_as_ms,
     transport::TransportError,
 };
+use solana_streamer::socket::SocketAddrSpace;
 use std::{
     collections::{HashMap, HashSet},
     path::Path,
@@ -42,8 +43,10 @@ pub fn spend_and_verify_all_nodes<S: ::std::hash::BuildHasher + Sync + Send>(
     funding_keypair: &Keypair,
     nodes: usize,
     ignore_nodes: HashSet<Pubkey, S>,
+    socket_addr_space: SocketAddrSpace,
 ) {
-    let cluster_nodes = discover_cluster(&entry_point_info.gossip, nodes).unwrap();
+    let cluster_nodes =
+        discover_cluster(&entry_point_info.gossip, nodes, socket_addr_space).unwrap();
     assert!(cluster_nodes.len() >= nodes);
     let ignore_nodes = Arc::new(ignore_nodes);
     cluster_nodes.par_iter().for_each(|ingress_node| {
@@ -182,9 +185,11 @@ pub fn kill_entry_and_spend_and_verify_rest(
     funding_keypair: &Keypair,
     nodes: usize,
     slot_millis: u64,
+    socket_addr_space: SocketAddrSpace,
 ) {
     info!("kill_entry_and_spend_and_verify_rest...");
-    let cluster_nodes = discover_cluster(&entry_point_info.gossip, nodes).unwrap();
+    let cluster_nodes =
+        discover_cluster(&entry_point_info.gossip, nodes, socket_addr_space).unwrap();
     assert!(cluster_nodes.len() >= nodes);
     let client = create_client(entry_point_info.client_facing_addr(), VALIDATOR_PORT_RANGE);
     // sleep long enough to make sure we are in epoch 3

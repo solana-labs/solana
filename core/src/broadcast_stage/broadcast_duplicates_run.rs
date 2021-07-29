@@ -301,11 +301,14 @@ impl BroadcastRun for BroadcastDuplicatesRun {
 
         let ((stakes, shreds), _) = receiver.lock().unwrap().recv()?;
         let stakes = stakes.unwrap();
+        let socket_addr_space = cluster_info.socket_addr_space();
         for peer in cluster_info.tvu_peers() {
             // Forward shreds to circumvent gossip
             if stakes.get(&peer.id).is_some() {
                 shreds.iter().for_each(|shred| {
-                    sock.send_to(&shred.payload, &peer.tvu_forwards).unwrap();
+                    if socket_addr_space.check(&peer.tvu_forwards) {
+                        sock.send_to(&shred.payload, &peer.tvu_forwards).unwrap();
+                    }
                 });
             }
 
@@ -313,7 +316,9 @@ impl BroadcastRun for BroadcastDuplicatesRun {
             if let Some(shreds) = delayed_shreds.as_ref() {
                 if Some(peer.id) == delayed_recipient {
                     shreds.iter().for_each(|shred| {
-                        sock.send_to(&shred.payload, &peer.tvu).unwrap();
+                        if socket_addr_space.check(&peer.tvu) {
+                            sock.send_to(&shred.payload, &peer.tvu).unwrap();
+                        }
                     });
                 }
             }

@@ -626,6 +626,7 @@ mod test {
         signature::{Keypair, Signer},
         timing::timestamp,
     };
+    use solana_streamer::socket::SocketAddrSpace;
     use std::sync::Arc;
 
     fn local_entries_to_shred(
@@ -776,7 +777,11 @@ mod test {
         assert!(!blockstore.has_duplicate_shreds_in_slot(duplicate_shred_slot));
         let keypair = Keypair::new();
         let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), timestamp());
-        let cluster_info = ClusterInfo::new(contact_info, Arc::new(keypair));
+        let cluster_info = ClusterInfo::new(
+            contact_info,
+            Arc::new(keypair),
+            SocketAddrSpace::Unspecified,
+        );
         run_check_duplicate(
             &cluster_info,
             &blockstore,

@@ -12,8 +12,8 @@ use solana_gossip::{
     contact_info::ContactInfo,
 };
 use solana_ledger::shred::Shred;
-use solana_sdk::pubkey;
-use solana_sdk::timing::timestamp;
+use solana_sdk::{pubkey, signature::Keypair, timing::timestamp};
+use solana_streamer::socket::SocketAddrSpace;
 use std::{
     collections::HashMap,
     net::UdpSocket,
@@ -26,7 +26,11 @@ fn broadcast_shreds_bench(bencher: &mut Bencher) {
     solana_logger::setup();
     let leader_pubkey = pubkey::new_rand();
     let leader_info = Node::new_localhost_with_pubkey(&leader_pubkey);
-    let cluster_info = ClusterInfo::new_with_invalid_keypair(leader_info.info);
+    let cluster_info = ClusterInfo::new(
+        leader_info.info,
+        Arc::new(Keypair::new()),
+        SocketAddrSpace::Unspecified,
+    );
     let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
 
     const NUM_SHREDS: usize = 32;
@@ -51,6 +55,7 @@ fn broadcast_shreds_bench(bencher: &mut Bencher) {
             &cluster_nodes,
             &last_datapoint,
             &mut TransmitShredsStats::default(),
+            &SocketAddrSpace::Unspecified,
         )
         .unwrap();
     });

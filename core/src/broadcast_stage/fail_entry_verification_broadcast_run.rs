@@ -145,6 +145,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
             &cluster_nodes,
             &Arc::new(AtomicU64::new(0)),
             &mut TransmitShredsStats::default(),
+            cluster_info.socket_addr_space(),
         )?;
 
         Ok(())
