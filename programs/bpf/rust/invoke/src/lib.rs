@@ -662,7 +662,7 @@ mod test {
     fn create_program_address_is_defined() {
         assert_eq!(
             Pubkey::create_program_address(&[b"You pass butter"], &Pubkey::default()).unwrap_err(),
-            PubkeyError::InvalidSeeds
+            PubkeyError::IllegalOwner
         );
     }
 }
