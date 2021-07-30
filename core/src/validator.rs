@@ -120,7 +120,6 @@ pub struct ValidatorConfig {
     pub max_genesis_archive_unpacked_size: u64,
     pub wal_recovery_mode: Option<BlockstoreRecoveryMode>,
     pub poh_verify: bool, // Perform PoH verification during blockstore processing at boo
-    pub cuda: bool,
     pub require_tower: bool,
     pub tower_path: Option<PathBuf>,
     pub debug_keys: Option<Arc<HashSet<Pubkey>>>,
@@ -177,7 +176,6 @@ impl Default for ValidatorConfig {
             max_genesis_archive_unpacked_size: MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
             wal_recovery_mode: None,
             poh_verify: true,
-            cuda: false,
             require_tower: false,
             tower_path: None,
             debug_keys: None,
@@ -301,8 +299,6 @@ impl Validator {
                 warn!("authorized voter: {}", authorized_voter_keypair.pubkey());
             }
         }
-
-        report_target_features();
 
         for cluster_entrypoint in &cluster_entrypoints {
             info!("entrypoint: {:?}", cluster_entrypoint);
@@ -1419,7 +1415,26 @@ fn wait_for_supermajority(
     Ok(true)
 }
 
-fn report_target_features() {
+fn is_rosetta_emulated() -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        use std::str::FromStr;
+        std::process::Command::new("sysctl")
+            .args(&["-in", "sysctl.proc_translated"])
+            .output()
+            .map_err(|_| ())
+            .and_then(|output| String::from_utf8(output.stdout).map_err(|_| ()))
+            .and_then(|stdout| u8::from_str(stdout.trim()).map_err(|_| ()))
+            .map(|enabled| enabled == 1)
+            .unwrap_or(false)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        false
+    }
+}
+
+pub fn report_target_features() {
     warn!(
         "CUDA is {}abled",
         if solana_perf::perf_libs::api().is_some() {
@@ -1429,39 +1444,46 @@ fn report_target_features() {
         }
     );
 
-    // We exclude Mac OS here to be compatible with computers that have Mac M1 chips.
-    // For these computers, one must install rust/cargo/brew etc. using Rosetta 2,
-    // which allows them to run software targeted for x86_64 on an aarch64.
-    // Hence the code below will run on these machines (target_arch="x86_64")
-    // if we don't exclude with target_os="macos".
-    //
-    // It's going to require more more work to get Solana building
-    // on Mac M1's without Rosetta,
-    // and when that happens we should remove this
-    // (the feature flag for code targeting that is target_arch="aarch64")
-    #[cfg(all(
-        any(target_arch = "x86", target_arch = "x86_64"),
-        not(target_os = "macos")
-    ))]
-    {
+    if !is_rosetta_emulated() {
         unsafe { check_avx() };
+        unsafe { check_avx2() };
     }
 }
 
 // Validator binaries built on a machine with AVX support will generate invalid opcodes
 // when run on machines without AVX causing a non-obvious process abort.  Instead detect
 // the mismatch and error cleanly.
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[target_feature(enable = "avx")]
 unsafe fn check_avx() {
     if is_x86_feature_detected!("avx") {
         info!("AVX detected");
     } else {
         error!(
-            "Your machine does not have AVX support, please rebuild from source on your machine"
+            "Incompatible CPU detected: missing AVX support. Please build from source on the target"
         );
         abort();
     }
 }
+
+#[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+unsafe fn check_avx() {}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[target_feature(enable = "avx2")]
+unsafe fn check_avx2() {
+    if is_x86_feature_detected!("avx2") {
+        info!("AVX2 detected");
+    } else {
+        error!(
+            "Incompatible CPU detected: missing AVX2 support. Please build from source on the target"
+        );
+        abort();
+    }
+}
+
+#[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+unsafe fn check_avx2() {}
 
 // Get the activated stake percentage (based on the provided bank) that is visible in gossip
 fn get_stake_percent_in_gossip(bank: &Bank, cluster_info: &ClusterInfo, log: bool) -> u64 {
