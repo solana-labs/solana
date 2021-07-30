@@ -1250,13 +1250,13 @@ impl ClusterInfo {
         let dests: Vec<_> = if forwarded {
             peers
                 .iter()
-                .map(|peer| &peer.tvu_forwards)
+                .map(|peer| peer.tvu_forwards)
                 .filter(|addr| ContactInfo::is_valid_address(addr, socket_addr_space))
                 .collect()
         } else {
             peers
                 .iter()
-                .map(|peer| &peer.tvu)
+                .map(|peer| peer.tvu)
                 .filter(|addr| socket_addr_space.check(addr))
                 .collect()
         };

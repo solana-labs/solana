@@ -288,7 +288,6 @@ impl RepairService {
                     })
                     .collect()
             };
-            let batch: Vec<(&[u8], &SocketAddr)> = batch.iter().map(|(v, s)| (&v[..], s)).collect();
             build_repairs_batch_elapsed.stop();
 
             let mut batch_send_repairs_elapsed = Measure::start("batch_send_repairs_elapsed");
