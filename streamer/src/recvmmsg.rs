@@ -46,10 +46,8 @@ pub fn recv_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result<(usize,
     use std::os::unix::io::AsRawFd;
 
     let mut hdrs: [mmsghdr; NUM_RCVMMSGS] = unsafe { mem::zeroed() };
-    let mut iovs: [iovec; NUM_RCVMMSGS] = unsafe { mem::zeroed() };
-    //let mut addr: [sockaddr_storage; NUM_RCVMMSGS] = unsafe { mem::zeroed() };
-    let mut addr: [sockaddr_storage; NUM_RCVMMSGS] =
-        unsafe { mem::MaybeUninit::uninit().assume_init() };
+    let mut iovs: [iovec; NUM_RCVMMSGS] = unsafe { mem::MaybeUninit::uninit().assume_init() };
+    let mut addr: [sockaddr_storage; NUM_RCVMMSGS] = unsafe { mem::zeroed() };
     let addrlen = mem::size_of_val(&addr) as socklen_t;
 
     let sock_fd = sock.as_raw_fd();
@@ -76,10 +74,14 @@ pub fn recv_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result<(usize,
             -1 => return Err(io::Error::last_os_error()),
             n => {
                 for i in 0..n as usize {
-                    let inet_addr = if addr[i].ss_family == AF_INET as sa_family_t {
+                    let inet_addr = if addr[i].ss_family == AF_INET as sa_family_t
+                        && hdrs[i].msg_hdr.msg_namelen == mem::size_of::<sockaddr_in>()
+                    {
                         let p: *const sockaddr_in = &addr[i] as *const _ as *const _;
                         unsafe { InetAddr::V4(*p) }
-                    } else if addr[i].ss_family == AF_INET6 as sa_family_t {
+                    } else if addr[i].ss_family == AF_INET6 as sa_family_t
+                        && hdrs[i].msg_hdr.msg_namelen == mem::size_of::<sockaddr_in6>()
+                    {
                         let p: *const sockaddr_in6 = &addr[i] as *const _ as *const _;
                         unsafe { InetAddr::V6(*p) }
                     } else {
