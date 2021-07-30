@@ -35,7 +35,7 @@ pub fn recv_mmsg(socket: &UdpSocket, packets: &mut [Packet]) -> io::Result<(usiz
 }
 
 #[cfg(target_os = "linux")]
-//#[allow(clippy::uninit_assumed_init)]
+#[allow(clippy::uninit_assumed_init)]
 pub fn recv_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result<(usize, usize)> {
     use libc::{
         c_void, iovec, mmsghdr, recvmmsg, sa_family_t, sockaddr_in, sockaddr_in6, sockaddr_storage,
@@ -47,8 +47,9 @@ pub fn recv_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result<(usize,
 
     let mut hdrs: [mmsghdr; NUM_RCVMMSGS] = unsafe { mem::zeroed() };
     let mut iovs: [iovec; NUM_RCVMMSGS] = unsafe { mem::zeroed() };
-    let mut addr: [sockaddr_storage; NUM_RCVMMSGS] = unsafe { mem::zeroed() };
-    //unsafe { mem::MaybeUninit::uninit().assume_init() };
+    //let mut addr: [sockaddr_storage; NUM_RCVMMSGS] = unsafe { mem::zeroed() };
+    let mut addr: [sockaddr_storage; NUM_RCVMMSGS] =
+        unsafe { mem::MaybeUninit::uninit().assume_init() };
     let addrlen = mem::size_of_val(&addr) as socklen_t;
 
     let sock_fd = sock.as_raw_fd();
