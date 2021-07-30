@@ -69,34 +69,35 @@ pub fn recv_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result<(usize,
     };
 
     let mut total_size = 0;
-    let npkts =
-        match unsafe { recvmmsg(sock_fd, &mut hdrs[0], count as u32, MSG_WAITFORONE, &mut ts) } {
-            -1 => return Err(io::Error::last_os_error()),
-            n => {
-                for i in 0..n as usize {
-                    let inet_addr = if addr[i].ss_family == AF_INET as sa_family_t
-                        && hdrs[i].msg_hdr.msg_namelen == mem::size_of::<sockaddr_in>()
-                    {
-                        let p: *const sockaddr_in = &addr[i] as *const _ as *const _;
-                        unsafe { InetAddr::V4(*p) }
-                    } else if addr[i].ss_family == AF_INET6 as sa_family_t
-                        && hdrs[i].msg_hdr.msg_namelen == mem::size_of::<sockaddr_in6>()
-                    {
-                        let p: *const sockaddr_in6 = &addr[i] as *const _ as *const _;
-                        unsafe { InetAddr::V6(*p) }
-                    } else {
-                        error!("recvmmsg unexpected address family {}", addr[i].ss_family);
-                        hdrs[i].msg_len = 0;
-                        InetAddr::new(IpAddr::new_v4(0, 0, 0, 0), 0)
-                    };
-                    let mut p = &mut packets[i];
-                    p.meta.size = hdrs[i].msg_len as usize;
-                    total_size += p.meta.size;
-                    p.meta.set_addr(&inet_addr.to_std());
-                }
-                n as usize
+    let npkts = match unsafe {
+        recvmmsg(sock_fd, &mut hdrs[0], count as u32, MSG_WAITFORONE, &mut ts)
+    } {
+        -1 => return Err(io::Error::last_os_error()),
+        n => {
+            for i in 0..n as usize {
+                let inet_addr = if addr[i].ss_family == AF_INET as sa_family_t
+                    && hdrs[i].msg_hdr.msg_namelen == mem::size_of::<sockaddr_in>() as socklen_t
+                {
+                    let p: *const sockaddr_in = &addr[i] as *const _ as *const _;
+                    unsafe { InetAddr::V4(*p) }
+                } else if addr[i].ss_family == AF_INET6 as sa_family_t
+                    && hdrs[i].msg_hdr.msg_namelen == mem::size_of::<sockaddr_in6>() as socklen_t
+                {
+                    let p: *const sockaddr_in6 = &addr[i] as *const _ as *const _;
+                    unsafe { InetAddr::V6(*p) }
+                } else {
+                    error!("recvmmsg unexpected address family {}", addr[i].ss_family);
+                    hdrs[i].msg_len = 0;
+                    InetAddr::new(IpAddr::new_v4(0, 0, 0, 0), 0)
+                };
+                let mut p = &mut packets[i];
+                p.meta.size = hdrs[i].msg_len as usize;
+                total_size += p.meta.size;
+                p.meta.set_addr(&inet_addr.to_std());
             }
-        };
+            n as usize
+        }
+    };
 
     Ok((total_size, npkts))
 }
