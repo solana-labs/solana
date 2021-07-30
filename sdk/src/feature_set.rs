@@ -231,6 +231,10 @@ pub mod tx_wide_compute_cap {
     solana_sdk::declare_id!("5ekBxc8itEnPv4NzGJtr8BVVQLNMQuLMNQQj7pHoLNZ9");
 }
 
+pub mod gate_large_block {
+    solana_sdk::declare_id!("2ry7ygxiYURULZCrypHhveanvP5tzZ4toRwVp89oCNSj");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -289,6 +293,7 @@ lazy_static! {
         (optimize_epoch_boundary_updates::id(), "Optimize epoch boundary updates"),
         (cost_model::id(), "cost model feature that regulates block cost limits"),
         (tx_wide_compute_cap::id(), "Transaction wide compute cap"),
+        (gate_large_block::id(), "validator checks block cost against max limit in realtime, reject if exceeds."),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
