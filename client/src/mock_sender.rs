@@ -2,14 +2,10 @@ use {
     crate::{
         client_error::Result,
         rpc_request::RpcRequest,
-<<<<<<< HEAD
-        rpc_response::{Response, RpcResponseContext, RpcVersionInfo},
-=======
         rpc_response::{
             Response, RpcBlockProduction, RpcBlockProductionRange, RpcResponseContext,
-            RpcSimulateTransactionResult, RpcVersionInfo,
+            RpcVersionInfo,
         },
->>>>>>> 58f395257 (Fix serialization of parameters in RpcClient::get_block_production_with_config (#18998))
         rpc_sender::RpcSender,
     },
     serde_json::{json, Number, Value},
