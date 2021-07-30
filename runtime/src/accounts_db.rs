@@ -5968,6 +5968,7 @@ impl AccountsDb {
 
     #[allow(clippy::needless_collect)]
     pub fn generate_index(&self, limit_load_slot_count_from_snapshot: Option<usize>, verify: bool) {
+        self.accounts_index.account_maps.first().unwrap().read().unwrap().set_startup(true);
         let mut slots = self.storage.all_slots();
         #[allow(clippy::stable_sort_primitive)]
         slots.sort();
@@ -6115,6 +6116,7 @@ impl AccountsDb {
         });
 
         self.add_test_accounts();
+        self.accounts_index.account_maps.first().unwrap().read().unwrap().set_startup(false);
     }
 
     fn add_test_accounts(&self) {

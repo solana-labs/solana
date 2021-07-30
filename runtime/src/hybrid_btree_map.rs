@@ -350,6 +350,7 @@ pub struct BucketMapWriteHolder<V> {
     pub update_cache_us: AtomicU64,
     pub write_cache_flushes: AtomicU64,
     pub bucket_flush_calls: AtomicU64,
+    pub startup: AtomicBool,
     pub get_purges: AtomicU64,
     pub gets_from_disk: AtomicU64,
     pub gets_from_disk_empty: AtomicU64,
@@ -440,6 +441,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
         let write_cache_flushes = AtomicU64::new(0);
         let bucket_flush_calls = AtomicU64::new(0);
         let get_purges = AtomicU64::new(0);
+        let startup = AtomicBool::new(false);
         let gets_from_disk = AtomicU64::new(0);
         let gets_from_disk_empty = AtomicU64::new(0);
         let using_empty_get = AtomicU64::new(0);
@@ -483,6 +485,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
             unified_backing,
             get_purges,
             bucket_flush_calls,
+            startup,
             get_disk_us,
             update_dist_us,
             get_cache_us,
@@ -493,6 +496,9 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
             keys,
         }
     }
+    pub fn set_startup(&self, startup: bool) {
+        self.startup.store(startup, Ordering::Relaxed);
+    }
     pub fn flush(&self, ix: usize, bg: bool, age: Option<u8>) -> bool {
         //error!("start flusha: {}", ix);
         let read_lock = self.write_cache[ix].read().unwrap();
@@ -501,6 +507,7 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
         if read_lock.is_empty() {
             return false;
         }
+        let startup = self.startup.load(Ordering::Relaxed);
 
         //error!("start flush: {}", ix);
         let (age_comp, do_age, next_age) = age
@@ -524,8 +531,8 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
                 flush_keys.push(*k);
                 had_dirty = true;
             }
-            if do_age {
-                if instance.age == age_comp && !keep_this_in_cache {
+            if do_age || startup {
+                if startup || (instance.age == age_comp && !keep_this_in_cache) {
                     // clear the cache of things that have aged out
                     delete_keys.push(*k);
                     get_purges += 1;
@@ -1678,5 +1685,9 @@ impl<V: 'static + Clone + Debug + IsCached + Guts> HybridBTreeMap<V> {
     }
     pub fn remove(&mut self, key: &K) {
         self.disk.delete_key(key); //.map(|x| x.entry)
+    }
+
+    pub fn set_startup(&self, startup: bool) {
+        self.disk.set_startup(startup);
     }
 }
