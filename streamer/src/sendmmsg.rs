@@ -1,8 +1,14 @@
 //! The `sendmmsg` module provides sendmmsg() API implementation
 
-use std::io;
-use std::net::{SocketAddr, UdpSocket};
-use thiserror::Error;
+use {
+    std::{
+        borrow::Borrow,
+        io,
+        iter::repeat,
+        net::{SocketAddr, UdpSocket},
+    },
+    thiserror::Error,
+};
 
 #[derive(Debug, Error)]
 pub enum SendPktsError {
@@ -12,11 +18,15 @@ pub enum SendPktsError {
 }
 
 #[cfg(not(target_os = "linux"))]
-pub fn batch_send(sock: &UdpSocket, packets: &[(&[u8], &SocketAddr)]) -> Result<(), SendPktsError> {
+pub fn batch_send<S, T>(sock: &UdpSocket, packets: &[(T, S)]) -> Result<(), SendPktsError>
+where
+    S: Borrow<SocketAddr>,
+    T: AsRef<[u8]>,
+{
     let mut num_failed = 0;
     let mut erropt = None;
     for (p, a) in packets {
-        if let Err(e) = sock.send_to(p, *a) {
+        if let Err(e) = sock.send_to(p.as_ref(), a.borrow()) {
             num_failed += 1;
             if erropt.is_none() {
                 erropt = Some(e);
@@ -128,7 +138,11 @@ fn sendmmsg_retry(sock: &UdpSocket, hdrs: &mut Vec<mmsghdr>) -> Result<(), SendP
 }
 
 #[cfg(target_os = "linux")]
-pub fn batch_send(sock: &UdpSocket, packets: &[(&[u8], &SocketAddr)]) -> Result<(), SendPktsError> {
+pub fn batch_send<S, T>(sock: &UdpSocket, packets: &[(T, S)]) -> Result<(), SendPktsError>
+where
+    S: Borrow<SocketAddr>,
+    T: AsRef<[u8]>,
+{
     // The vectors are allocated with capacity, as later code inserts elements
     // at specific indices, and uses the address of the vector index in hdrs
     let mut iovs: Vec<iovec> = Vec::with_capacity(packets.len());
@@ -136,19 +150,30 @@ pub fn batch_send(sock: &UdpSocket, packets: &[(&[u8], &SocketAddr)]) -> Result<
     let mut hdrs: Vec<mmsghdr> = Vec::with_capacity(packets.len());
 
     for (pkt, dest) in packets.iter() {
-        mmsghdr_for_packet(pkt, dest, &mut iovs, &mut addrs, &mut hdrs);
+        mmsghdr_for_packet(
+            pkt.as_ref(),
+            dest.borrow(),
+            &mut iovs,
+            &mut addrs,
+            &mut hdrs,
+        );
     }
 
     sendmmsg_retry(sock, &mut hdrs)
 }
 
-pub fn multi_target_send(
+pub fn multi_target_send<S, T>(
     sock: &UdpSocket,
-    packet: &[u8],
-    dests: &[&SocketAddr],
-) -> Result<(), SendPktsError> {
-    let pkts: Vec<_> = dests.iter().map(|addr| (packet, *addr)).collect();
-    batch_send(sock, &pkts[..])
+    packet: T,
+    dests: &[S],
+) -> Result<(), SendPktsError>
+where
+    S: Borrow<SocketAddr>,
+    T: AsRef<[u8]>,
+{
+    let dests = dests.iter().map(Borrow::borrow);
+    let pkts: Vec<_> = repeat(&packet).zip(dests).collect();
+    batch_send(sock, &pkts)
 }
 
 #[cfg(test)]

@@ -411,7 +411,7 @@ pub fn broadcast_shreds(
             let seed = shred.seed(Some(self_pubkey), &root_bank);
             let node = cluster_nodes.get_broadcast_peer(seed)?;
             if socket_addr_space.check(&node.tvu) {
-                Some((&shred.payload[..], &node.tvu))
+                Some((&shred.payload, node.tvu))
             } else {
                 None
             }
