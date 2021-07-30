@@ -41,17 +41,19 @@ pub fn recv_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result<(usize,
         c_void, iovec, mmsghdr, recvmmsg, sa_family_t, sockaddr_in, sockaddr_in6, sockaddr_storage,
         socklen_t, timespec, AF_INET, AF_INET6, MSG_WAITFORONE,
     };
-    use nix::sys::socket::{InetAddr, IpAddr};
+    use nix::sys::socket::InetAddr;
     use std::mem;
     use std::os::unix::io::AsRawFd;
+
+    const SOCKADDR_STORAGE_SIZE: socklen_t = mem::size_of::<sockaddr_storage>() as socklen_t;
+    const SOCKADDR_IN_SIZE: socklen_t = mem::size_of::<sockaddr_in>() as socklen_t;
+    const SOCKADDR_IN6_SIZE: socklen_t = mem::size_of::<sockaddr_in6>() as socklen_t;
 
     let mut hdrs: [mmsghdr; NUM_RCVMMSGS] = unsafe { mem::zeroed() };
     let mut iovs: [iovec; NUM_RCVMMSGS] = unsafe { mem::MaybeUninit::uninit().assume_init() };
     let mut addr: [sockaddr_storage; NUM_RCVMMSGS] = unsafe { mem::zeroed() };
-    let addrlen = mem::size_of_val(&addr) as socklen_t;
 
     let sock_fd = sock.as_raw_fd();
-
     let count = cmp::min(iovs.len(), packets.len());
 
     for i in 0..count {
@@ -59,7 +61,7 @@ pub fn recv_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result<(usize,
         iovs[i].iov_len = packets[i].data.len();
 
         hdrs[i].msg_hdr.msg_name = &mut addr[i] as *mut _ as *mut _;
-        hdrs[i].msg_hdr.msg_namelen = addrlen;
+        hdrs[i].msg_hdr.msg_namelen = SOCKADDR_STORAGE_SIZE;
         hdrs[i].msg_hdr.msg_iov = &mut iovs[i];
         hdrs[i].msg_hdr.msg_iovlen = 1;
     }
@@ -69,35 +71,35 @@ pub fn recv_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result<(usize,
     };
 
     let mut total_size = 0;
-    let npkts = match unsafe {
-        recvmmsg(sock_fd, &mut hdrs[0], count as u32, MSG_WAITFORONE, &mut ts)
-    } {
-        -1 => return Err(io::Error::last_os_error()),
-        n => {
-            for i in 0..n as usize {
-                let inet_addr = if addr[i].ss_family == AF_INET as sa_family_t
-                    && hdrs[i].msg_hdr.msg_namelen == mem::size_of::<sockaddr_in>() as socklen_t
-                {
-                    let p: *const sockaddr_in = &addr[i] as *const _ as *const _;
-                    unsafe { InetAddr::V4(*p) }
-                } else if addr[i].ss_family == AF_INET6 as sa_family_t
-                    && hdrs[i].msg_hdr.msg_namelen == mem::size_of::<sockaddr_in6>() as socklen_t
-                {
-                    let p: *const sockaddr_in6 = &addr[i] as *const _ as *const _;
-                    unsafe { InetAddr::V6(*p) }
-                } else {
-                    error!("recvmmsg unexpected address family {}", addr[i].ss_family);
-                    hdrs[i].msg_len = 0;
-                    InetAddr::new(IpAddr::new_v4(0, 0, 0, 0), 0)
-                };
-                let mut p = &mut packets[i];
-                p.meta.size = hdrs[i].msg_len as usize;
-                total_size += p.meta.size;
-                p.meta.set_addr(&inet_addr.to_std());
+    let npkts =
+        match unsafe { recvmmsg(sock_fd, &mut hdrs[0], count as u32, MSG_WAITFORONE, &mut ts) } {
+            -1 => return Err(io::Error::last_os_error()),
+            n => {
+                let mut pkt_idx: usize = 0;
+                for i in 0..n as usize {
+                    let inet_addr = if addr[i].ss_family == AF_INET as sa_family_t
+                        && hdrs[i].msg_hdr.msg_namelen == SOCKADDR_IN_SIZE
+                    {
+                        let a: *const sockaddr_in = &addr[i] as *const _ as *const _;
+                        unsafe { InetAddr::V4(*a) }
+                    } else if addr[i].ss_family == AF_INET6 as sa_family_t
+                        && hdrs[i].msg_hdr.msg_namelen == SOCKADDR_IN6_SIZE
+                    {
+                        let a: *const sockaddr_in6 = &addr[i] as *const _ as *const _;
+                        unsafe { InetAddr::V6(*a) }
+                    } else {
+                        error!("recvmmsg unexpected address family {}", addr[i].ss_family);
+                        continue;
+                    };
+                    let mut p = &mut packets[pkt_idx];
+                    p.meta.size = hdrs[i].msg_len as usize;
+                    total_size += p.meta.size;
+                    p.meta.set_addr(&inet_addr.to_std());
+                    pkt_idx += 1;
+                }
+                pkt_idx
             }
-            n as usize
-        }
-    };
+        };
 
     Ok((total_size, npkts))
 }
