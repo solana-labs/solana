@@ -88,7 +88,10 @@ pub fn recv_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result<(usize,
                         let a: *const sockaddr_in6 = &addr[i] as *const _ as *const _;
                         unsafe { InetAddr::V6(*a) }
                     } else {
-                        error!("recvmmsg unexpected address family {}", addr[i].ss_family);
+                        error!(
+                            "recvmmsg unexpected ss_family:{} msg_namelen:{}",
+                            addr[i].ss_family, hdrs[i].msg_hdr.msg_namelen
+                        );
                         continue;
                     };
                     let mut p = &mut packets[pkt_idx];
