@@ -939,7 +939,7 @@ impl Blockstore {
         self.shred_wal
             .lock()
             .unwrap()
-            .write(&just_inserted_data_shreds)
+            .log_shred_write(just_inserted_data_shreds)
             .expect("Couldn't write shreds to WAL");
 
         let mut start = Measure::start("Shred recovery");

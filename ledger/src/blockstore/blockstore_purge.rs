@@ -14,6 +14,7 @@ impl Blockstore {
     /// Modifies multiple column families simultaneously
     pub fn purge_slots(&self, from_slot: Slot, to_slot: Slot, purge_type: PurgeType) {
         let mut purge_stats = PurgeStats::default();
+        error!("Purge from slot {} to slot {}", from_slot, to_slot);
         let purge_result =
             self.run_purge_with_stats(from_slot, to_slot, purge_type, &mut purge_stats);
 
@@ -130,6 +131,14 @@ impl Blockstore {
         // delete range cf is not inclusive
         let to_slot = to_slot.saturating_add(1);
 
+        // Write the log first; if the purge fails midway through, it is better to have
+        // the purge recorded in log and have some extraneous data than to be "missing"
+        // data and not have the purge recorded
+        self.shred_wal
+            .lock()
+            .unwrap()
+            .log_shred_purge(from_slot..to_slot)?;
+
         let mut delete_range_timer = Measure::start("delete_range");
         let mut columns_purged = self
             .db
@@ -221,7 +230,6 @@ impl Blockstore {
         for slot in from_slot..to_slot {
             self.purge_data_shreds(slot);
         }
-        self.shred_wal.lock().unwrap().purge(to_slot);
 
         // only drop w_active_transaction_status_index after we do db.write(write_batch);
         // otherwise, readers might be confused with inconsistent state between

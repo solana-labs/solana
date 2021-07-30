@@ -4,23 +4,22 @@ use super::*;
 use crate::shred::SHRED_PAYLOAD_SIZE;
 use std::collections::BTreeMap;
 use std::time::{SystemTime, UNIX_EPOCH};
-use std::{cmp, fs, io::Read, io::Seek, io::SeekFrom, io::Write};
+use std::{cmp, fs, io::Read, io::Seek, io::SeekFrom, io::Write, ops::Range};
 
 pub const SHRED_DIRECTORY: &str = "shreds";
 pub const SHRED_WAL_DIRECTORY: &str = "log";
 pub const DATA_SHRED_DIRECTORY: &str = "data";
 
-// TODO: revisit this value / correlate it to the cache size and/or flush interval
-// Shreds are 1228 bytes, so WAL filesize will be at most 1024 * 512 * 1228 = 614 MB
-pub const DEFAULT_MAX_WAL_SHREDS: usize = 1024 * 512;
-
-// A WAL (Write Ahead Log) provides persistent backing for data that is written into
-// cache. The WAL is used to recover data held in memory in (that hasn't been pushed)
-// to disk in the event of process termination.
+// For general information on a WAL (Write Ahead Log), see
+// https://en.wikipedia.org/wiki/Write-ahead_logging
 //
-// The WAL will only be used to recover state at startup, or to record shred insertion
-// in Blockstore::insert_shreds(). The former is a single threaded scenario; the
-// latter is protected by write-lock, so we don't need to worry about any sync in here
+// This WAL will record shred operations, namely, insertions and deletions. In the event of a
+// system crash / reboot, the WAL will be played back to establish the state that was lost in
+// memory. As shreds are more permanently persisted to non-volatile storage in the database,
+// parts of the WAL may become unnecessary and can then be cleaned up.
+//
+// With the existence of delete operations, order matters and the WAL must replayed in the same
+// order that it was written.
 pub struct ShredWAL {
     // Directory where WAL file(s) will be stored
     wal_path: PathBuf,
@@ -33,6 +32,22 @@ pub struct ShredWAL {
     // Map of WAL ID to max slot contained in WAL
     max_slots: BTreeMap<u128, u64>,
 }
+
+// TODO: revisit this value / correlate it to the cache size and/or flush interval
+// Shreds are 1228 bytes, so WAL filesize will be at most 1228 * 1024 * 128 = 153.5 MB
+pub const DEFAULT_MAX_WAL_SHREDS: usize = 1024 * 128;
+
+// WAL entries consist of a SHRED_PAYLOAD_SIZE data section and 4 byte identifier footer
+// Types of WAL entries:
+// - Insertion: | Payload | Type |
+// - Deletion:  | Purge From Slot | Purge To Slot | Zero Padding | Type |
+//   - Purge To Slot is exclusive, so this number should have a +1 increment baked in
+const WAL_ENTRY_SIZE: usize = SHRED_PAYLOAD_SIZE + 4;
+// Constants used to identify WAL entries
+const WAL_ENTRY_INSERTION: u32 = 0xFFFF0000;
+const WAL_ENTRY_DELETION: u32 = 0x0000FFFF;
+
+type RecoveredShreds = HashMap<Slot, Vec<Shred>>;
 
 impl ShredWAL {
     pub fn new(shred_db_path: &Path, max_shreds: usize) -> Result<ShredWAL> {
@@ -49,77 +64,89 @@ impl ShredWAL {
     }
 
     // Recover shreds from log files at specified path
-    pub fn recover(&mut self) -> Result<Vec<Shred>> {
+    pub fn recover(&mut self) -> Result<RecoveredShreds> {
         assert!(&self.wal_path.is_dir());
-        let mut buffers = vec![];
+        let mut buffer_map = HashMap::new();
+        // Log filenames are the timestamp at which they're created; we want to proceed
+        // through log files in the same order that they were created (ascending)
+        // fs::read_dir() doesn't guaranteed results to be sorted, so we explicitly sort
         let dir = fs::read_dir(&self.wal_path)?;
-        for log in dir {
-            // Log filenames are the timestamp at which they're created
-            let log = log?;
+        let mut logs: Vec<_> = dir.filter_map(|log| log.ok()).collect();
+        logs.sort_by_key(|log| log.path());
+        for log in logs {
             // TODO: better error handling below line? We can probably fail
             // if there is some unknown file in this directory
-            let id: u128 = log.file_name().to_str().unwrap().parse().unwrap();
-            let mut max_slot = 0;
+            let log_id: u128 = log.file_name().to_str().unwrap().parse().unwrap();
+            let mut log_max_slot = 0;
 
-            let path = self.wal_path.join(id.to_string());
+            let path = self.wal_path.join(log_id.to_string());
             let mut file = fs::File::open(path)?;
             // In the event of a quick restart, make sure WAL has been completely flushed
             // from OS buffer to disk before attempting to read from it.
             file.sync_all()?;
             loop {
-                let mut buffer = vec![0; SHRED_PAYLOAD_SIZE];
+                let mut buffer = vec![0; WAL_ENTRY_SIZE];
                 match file.read_exact(&mut buffer).ok() {
                     Some(_) => {
-                        max_slot = cmp::max(max_slot, Shred::get_slot_from_data(&buffer).unwrap());
-                        buffers.push(buffer);
+                        let entry_type = u32::from_le_bytes(
+                            buffer[SHRED_PAYLOAD_SIZE..WAL_ENTRY_SIZE]
+                                .try_into()
+                                .unwrap(),
+                        );
+                        match entry_type {
+                            WAL_ENTRY_INSERTION => {
+                                let slot = Shred::get_slot_from_data(&buffer).unwrap();
+                                let buffers = buffer_map.entry(slot).or_insert_with(Vec::new);
+                                buffers.push(buffer);
+                                log_max_slot = cmp::max(log_max_slot, slot);
+                            }
+                            WAL_ENTRY_DELETION => {
+                                for slot in Self::decode_deletion_entry(&buffer) {
+                                    buffer_map.remove(&slot);
+                                }
+                            }
+                            _ => {
+                                warn!("Invalid WAL entry found of type ID: {:#X}", entry_type);
+                                // TODO: panic here ?
+                            }
+                        }
                     }
                     None => break,
                 };
             }
-            self.max_slots.insert(id, max_slot);
+            self.max_slots.insert(log_id, log_max_slot);
         }
 
-        let shreds: ShredResult<Vec<_>> = buffers
-            .into_iter()
-            .map(Shred::new_from_serialized_shred)
-            .collect();
-        let shreds = shreds.map_err(|err| {
-            BlockstoreError::InvalidShredData(Box::new(bincode::ErrorKind::Custom(format!(
-                "Could not reconstruct shred from shred payload: {:?}",
-                err
-            ))))
-        })?;
-        Ok(shreds)
+        // Shred::new_from_serialized_shred() will strip off the type identifier from buffers
+        let mut shred_map: RecoveredShreds = HashMap::new();
+        for (slot, buffers) in buffer_map.into_iter() {
+            let shreds: ShredResult<Vec<_>> = buffers
+                .into_iter()
+                .map(Shred::new_from_serialized_shred)
+                .collect();
+            let shreds = shreds.map_err(|err| {
+                BlockstoreError::InvalidShredData(Box::new(bincode::ErrorKind::Custom(format!(
+                    "Could not reconstruct shred from shred payload: {:?}",
+                    err
+                ))))
+            })?;
+            shred_map.insert(slot, shreds);
+        }
+        Ok(shred_map)
     }
 
     // Write the supplied shred payloads into the log
-    pub fn write(&mut self, shreds: &HashMap<(u64, u64), Shred>) -> Result<()> {
-        // Check if write would push WAL size over limit
-        let mut file = if self.cur_id.is_none() || self.cur_shreds + shreds.len() > self.max_shreds
-        {
-            // .as_millis() provides enough granularity to avoid filename collision;
-            // observed collisions (same value) with .as_secs() with quick validator restart
-            self.cur_id = Some(
-                SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap()
-                    .as_millis(),
-            );
-            self.cur_shreds = 0;
-            self.max_slots.insert(self.cur_id.unwrap(), 0);
-            fs::File::create(self.id_path(self.cur_id.unwrap()))
-        } else {
-            fs::OpenOptions::new()
-                .append(true)
-                .open(self.id_path(self.cur_id.unwrap()))
-        }?;
-
+    // This function modifies the shreds in-place, so this function consumes the shred HashMap
+    // instead of borrowing to avoid corrupted shreds being used later
+    pub fn log_shred_write(&mut self, mut shreds: HashMap<(u64, u64), Shred>) -> Result<()> {
+        let mut log = self.open_or_create_log(shreds.len())?;
         let mut insert_max_slot = 0;
         let result: Result<Vec<_>> = shreds
-            .iter()
+            .iter_mut()
             .map(|((slot, index), shred)| {
                 insert_max_slot = cmp::max(insert_max_slot, *slot);
-                file.write_all(&shred.payload).map_err(|err| {
+                shred.payload.extend(WAL_ENTRY_INSERTION.to_le_bytes());
+                log.write_all(&shred.payload).map_err(|err| {
                     // TODO: slot / index possibly not relevant, also should we panic?
                     BlockstoreError::Io(IoError::new(
                         ErrorKind::Other,
@@ -142,14 +169,74 @@ impl ShredWAL {
         Ok(())
     }
 
-    // Path to WAL file with id
+    // Mark the specified range of slots as purged in the log
+    pub fn log_shred_purge(&mut self, range: Range<Slot>) -> Result<()> {
+        let entry = Self::encode_deletion_entry(&range);
+        // A purge entry occupies the space of one shred
+        let mut log = self.open_or_create_log(1)?;
+        log.write_all(&entry).map_err(|err| {
+            BlockstoreError::Io(IoError::new(
+                ErrorKind::Other,
+                format!(
+                    "Unable to log purge from slot {} to slot {} in wal: {}",
+                    range.start, range.end, err
+                ),
+            ))
+        })?;
+        Ok(())
+    }
+
+    // Path to WAL file with specified id
     fn id_path(&self, id: u128) -> PathBuf {
         self.wal_path.join(id.to_string())
     }
 
+    // Opens a file handle to current log; creates a new file if one doesn't exist
+    // or if the new write would push the existing log over size capacity
+    fn open_or_create_log(&mut self, write_size: usize) -> std::io::Result<fs::File> {
+        // Check if write would push WAL size over limit
+        if self.cur_id.is_none() || self.cur_shreds + write_size > self.max_shreds {
+            // .as_millis() provides enough granularity to avoid filename collision;
+            // observed collisions with .as_secs() with quick validator restart
+            self.cur_id = Some(
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_millis(),
+            );
+            self.cur_shreds = 0;
+            self.max_slots.insert(self.cur_id.unwrap(), 0);
+            fs::File::create(self.id_path(self.cur_id.unwrap()))
+        } else {
+            fs::OpenOptions::new()
+                .append(true)
+                .open(self.id_path(self.cur_id.unwrap()))
+        }
+    }
+
+    // Extract the range deletion information from an entry
+    // The range should be treated as [start, end)
+    fn decode_deletion_entry(buffer: &[u8]) -> Range<Slot> {
+        let start = u64::from_le_bytes(buffer[0..8].try_into().unwrap());
+        let end = u64::from_le_bytes(buffer[8..16].try_into().unwrap());
+        Range::<Slot> { start, end }
+    }
+
+    //
+    fn encode_deletion_entry(range: &Range<Slot>) -> Vec<u8> {
+        let mut entry = vec![0; WAL_ENTRY_SIZE];
+        entry[0..8].copy_from_slice(&range.start.to_le_bytes());
+        entry[8..16].copy_from_slice(&range.end.to_le_bytes());
+        entry[SHRED_PAYLOAD_SIZE..WAL_ENTRY_SIZE]
+            .copy_from_slice(&WAL_ENTRY_DELETION.to_le_bytes());
+        entry
+    }
+
     // Purge log files where the newest shreds in the log are
     // older than the max_purge_slot
-    pub fn purge(&mut self, max_purge_slot: Slot) {
+    /*
+    // TODO: plug this back in shortly
+    pub fn purge_logs(&mut self, max_purge_slot: Slot) {
         let mut ids_to_purge = vec![];
         for (id, _) in self
             .max_slots
@@ -171,6 +258,7 @@ impl ShredWAL {
             self.max_slots.remove(id);
         }
     }
+    */
 }
 
 impl Blockstore {
@@ -298,10 +386,10 @@ impl Blockstore {
         let _ = fs::remove_file(self.slot_data_shreds_path(slot));
     }
 
-    /// Recover shreds from WAL(s) and re-establish consistent state in the blockstore
+    /// Recover shreds from WAL and re-establish consistent state in the blockstore
     pub(crate) fn recover(&self) -> Result<()> {
         let mut shred_wal = self.shred_wal.lock().unwrap();
-        let mut rec_shreds = shred_wal.recover()?;
+        let recovered_shreds = shred_wal.recover()?;
         let mut full_insert_shreds = vec![];
         // There several possible scenarios for what we need to do with the shred
         // 1) If the shred is in index ...
@@ -310,26 +398,37 @@ impl Blockstore {
         //      So, re-insert it into the cache directly (to avoid having it in WAL twice)
         // 2) If the shred is not in the index, perform a regular insert so the
         //    the metadata is updated. Collect all of these until the end for perf.
-        while !rec_shreds.is_empty() {
-            let shred = rec_shreds.pop().unwrap();
-            let slot = shred.slot();
-            let index = shred.index() as u64;
-
-            // TODO: Would be better if we had something like BTreeMap<Slot, Vec<Shred>> so
-            // to reduce the number of calls to self.index_cf.get(slot)
+        for (slot, mut shreds) in recovered_shreds.into_iter() {
             let shred_index_opt = self.index_cf.get(slot)?;
             match shred_index_opt {
                 Some(shred_index) => {
-                    // TODO: Maybe a helper that checks metadata but doesn't pull shred out
-                    let shred_on_disk = self.get_data_shred_from_fs(slot, index)?.is_some();
-                    if shred_index.data().is_present(index) && !shred_on_disk {
-                        self.insert_data_shred_into_cache(slot, index, &shred)
+                    while !shreds.is_empty() {
+                        let shred = shreds.pop().unwrap();
+                        let index = shred.index() as u64;
+
+                        // TODO: Maybe a helper that checks metadata but doesn't pull shred out
+                        // TODO: Handle case where this shred not in index, full insert
+                        let shred_on_disk = self.get_data_shred_from_fs(slot, index)?.is_some();
+                        if shred_index.data().is_present(index) && !shred_on_disk {
+                            self.insert_data_shred_into_cache(slot, index, &shred)
+                        }
                     }
                 }
-                None => full_insert_shreds.push(shred),
+                None => full_insert_shreds.extend(shreds),
             }
         }
-        // TODO: is leader_schedule as None here ok ?
+        // For now, drop shreds found in WAL but not in metadata; state will be consistent
+        // like this, but we probably do want to do a full insert with these later
+        if !full_insert_shreds.is_empty() {
+            warn!(
+                "{} shreds found in WAL but not in Rocks",
+                full_insert_shreds.len()
+            );
+        }
+        // TODO: is leader_schedule as None here ok ? Not sure what else could be gathered ?
+        // TODO: insert_shreds() will deadlock as blockstore::recover() holds the WAL lock; need a
+        // flag to avoid writing WAL in this special case, we want that anyways as any insertions
+        // generated below are already in the WAL so we don't want them duplicated
         // self.insert_shreds(full_insert_shreds, None, false);
         Ok(())
     }
