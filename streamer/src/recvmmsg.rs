@@ -106,56 +106,69 @@ pub fn recv_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result<(usize,
 mod tests {
     use crate::packet::PACKET_DATA_SIZE;
     use crate::recvmmsg::*;
+    use std::net::{SocketAddr, UdpSocket};
     use std::time::{Duration, Instant};
+
+    type TestConfig = (UdpSocket, SocketAddr, UdpSocket, SocketAddr);
+
+    fn test_setup_reader_sender(ip_str: &str) -> TestConfig {
+        let reader = UdpSocket::bind(ip_str).expect("bind");
+        let addr = reader.local_addr().unwrap();
+        let sender = UdpSocket::bind(ip_str).expect("bind");
+        let saddr = sender.local_addr().unwrap();
+        (reader, addr, sender, saddr)
+    }
 
     const TEST_NUM_MSGS: usize = 32;
     #[test]
     pub fn test_recv_mmsg_one_iter() {
-        let reader = UdpSocket::bind("127.0.0.1:0").expect("bind");
-        let addr = reader.local_addr().unwrap();
-        let sender = UdpSocket::bind("127.0.0.1:0").expect("bind");
-        let saddr = sender.local_addr().unwrap();
-        let sent = TEST_NUM_MSGS - 1;
-        for _ in 0..sent {
-            let data = [0; PACKET_DATA_SIZE];
-            sender.send_to(&data[..], &addr).unwrap();
-        }
+        let test_one_iter = |(reader, addr, sender, saddr): TestConfig| {
+            let sent = TEST_NUM_MSGS - 1;
+            for _ in 0..sent {
+                let data = [0; PACKET_DATA_SIZE];
+                sender.send_to(&data[..], &addr).unwrap();
+            }
 
-        let mut packets = vec![Packet::default(); TEST_NUM_MSGS];
-        let recv = recv_mmsg(&reader, &mut packets[..]).unwrap().1;
-        assert_eq!(sent, recv);
-        for packet in packets.iter().take(recv) {
-            assert_eq!(packet.meta.size, PACKET_DATA_SIZE);
-            assert_eq!(packet.meta.addr(), saddr);
-        }
+            let mut packets = vec![Packet::default(); TEST_NUM_MSGS];
+            let recv = recv_mmsg(&reader, &mut packets[..]).unwrap().1;
+            assert_eq!(sent, recv);
+            for packet in packets.iter().take(recv) {
+                assert_eq!(packet.meta.size, PACKET_DATA_SIZE);
+                assert_eq!(packet.meta.addr(), saddr);
+            }
+        };
+
+        test_one_iter(test_setup_reader_sender("127.0.0.1:0"));
+        test_one_iter(test_setup_reader_sender("::1:0"));
     }
 
     #[test]
     pub fn test_recv_mmsg_multi_iter() {
-        let reader = UdpSocket::bind("127.0.0.1:0").expect("bind");
-        let addr = reader.local_addr().unwrap();
-        let sender = UdpSocket::bind("127.0.0.1:0").expect("bind");
-        let saddr = sender.local_addr().unwrap();
-        let sent = TEST_NUM_MSGS + 10;
-        for _ in 0..sent {
-            let data = [0; PACKET_DATA_SIZE];
-            sender.send_to(&data[..], &addr).unwrap();
-        }
+        let test_send_recv = |(reader, addr, sender, saddr): TestConfig| {
+            let sent = TEST_NUM_MSGS + 10;
+            for _ in 0..sent {
+                let data = [0; PACKET_DATA_SIZE];
+                sender.send_to(&data[..], &addr).unwrap();
+            }
 
-        let mut packets = vec![Packet::default(); TEST_NUM_MSGS];
-        let recv = recv_mmsg(&reader, &mut packets[..]).unwrap().1;
-        assert_eq!(TEST_NUM_MSGS, recv);
-        for packet in packets.iter().take(recv) {
-            assert_eq!(packet.meta.size, PACKET_DATA_SIZE);
-            assert_eq!(packet.meta.addr(), saddr);
-        }
+            let mut packets = vec![Packet::default(); TEST_NUM_MSGS];
+            let recv = recv_mmsg(&reader, &mut packets[..]).unwrap().1;
+            assert_eq!(TEST_NUM_MSGS, recv);
+            for packet in packets.iter().take(recv) {
+                assert_eq!(packet.meta.size, PACKET_DATA_SIZE);
+                assert_eq!(packet.meta.addr(), saddr);
+            }
 
-        let recv = recv_mmsg(&reader, &mut packets[..]).unwrap().1;
-        assert_eq!(sent - TEST_NUM_MSGS, recv);
-        for packet in packets.iter().take(recv) {
-            assert_eq!(packet.meta.size, PACKET_DATA_SIZE);
-            assert_eq!(packet.meta.addr(), saddr);
-        }
+            let recv = recv_mmsg(&reader, &mut packets[..]).unwrap().1;
+            assert_eq!(sent - TEST_NUM_MSGS, recv);
+            for packet in packets.iter().take(recv) {
+                assert_eq!(packet.meta.size, PACKET_DATA_SIZE);
+                assert_eq!(packet.meta.addr(), saddr);
+            }
+        };
+
+        test_send_recv(test_setup_reader_sender("127.0.0.1:0"));
+        test_send_recv(test_setup_reader_sender("::1:0"));
     }
 
     #[test]
