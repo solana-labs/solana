@@ -6125,7 +6125,14 @@ impl AccountsDb {
         info!("adding test accounts");
         (0..threads).into_par_iter().for_each(|_| {
             let mut reclaims = vec![];
+            let mut count = 0;
             (0..count).into_iter().for_each(|_| {
+                count += 1;
+                if count >= 100000 {
+                    self.accounts_index.account_maps.par_iter().for_each(|i| {
+                        i.write().unwrap().flush();});
+                    count = 0;
+                }
                 let key = Pubkey::new_rand();
                 let info = AccountInfo::default();
                 self.accounts_index.upsert(
