@@ -111,12 +111,12 @@ mod tests {
 
     type TestConfig = (UdpSocket, SocketAddr, UdpSocket, SocketAddr);
 
-    fn test_setup_reader_sender(ip_str: &str) -> TestConfig {
-        let reader = UdpSocket::bind(ip_str).expect("bind");
-        let addr = reader.local_addr().unwrap();
-        let sender = UdpSocket::bind(ip_str).expect("bind");
-        let saddr = sender.local_addr().unwrap();
-        (reader, addr, sender, saddr)
+    fn test_setup_reader_sender(ip_str: &str) -> io::Result<TestConfig> {
+        let reader = UdpSocket::bind(ip_str)?;
+        let addr = reader.local_addr()?;
+        let sender = UdpSocket::bind(ip_str)?;
+        let saddr = sender.local_addr()?;
+        Ok((reader, addr, sender, saddr))
     }
 
     const TEST_NUM_MSGS: usize = 32;
@@ -138,13 +138,17 @@ mod tests {
             }
         };
 
-        test_one_iter(test_setup_reader_sender("127.0.0.1:0"));
-        test_one_iter(test_setup_reader_sender("::1:0"));
+        test_one_iter(test_setup_reader_sender("127.0.0.1:0").unwrap());
+
+        match test_setup_reader_sender("::1:0") {
+            Ok(config) => test_one_iter(config),
+            Err(e) => warn!("Failed to configure IPv6: {:?}", e),
+        }
     }
 
     #[test]
     pub fn test_recv_mmsg_multi_iter() {
-        let test_send_recv = |(reader, addr, sender, saddr): TestConfig| {
+        let test_multi_iter = |(reader, addr, sender, saddr): TestConfig| {
             let sent = TEST_NUM_MSGS + 10;
             for _ in 0..sent {
                 let data = [0; PACKET_DATA_SIZE];
@@ -167,8 +171,12 @@ mod tests {
             }
         };
 
-        test_send_recv(test_setup_reader_sender("127.0.0.1:0"));
-        test_send_recv(test_setup_reader_sender("::1:0"));
+        test_multi_iter(test_setup_reader_sender("127.0.0.1:0").unwrap());
+
+        match test_setup_reader_sender("::1:0") {
+            Ok(config) => test_multi_iter(config),
+            Err(e) => warn!("Failed to configure IPv6: {:?}", e),
+        }
     }
 
     #[test]
