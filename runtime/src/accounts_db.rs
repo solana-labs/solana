@@ -6121,7 +6121,7 @@ impl AccountsDb {
 
     fn add_test_accounts(&self) {
         let threads = 30;
-        let count = 1_000_000;
+        let count = 15_000_000;
         info!("adding test accounts");
         (0..threads).into_par_iter().for_each(|_| {
             let mut reclaims = vec![];
