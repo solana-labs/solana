@@ -25,6 +25,7 @@ solana-config-program = { path = "../config", version = "=1.8.0" }
 thiserror = "1.0"
 
 [dev-dependencies]
+proptest = "1.0"
 solana-logger = { path = "../../logger", version = "=1.8.0" }
 
 [build-dependencies]
