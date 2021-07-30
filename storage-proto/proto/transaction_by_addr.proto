@@ -41,6 +41,7 @@ enum TransactionErrorType {
     SANITIZE_FAILURE = 14;
     CLUSTER_MAINTENANCE = 15;
     ACCOUNT_BORROW_OUTSTANDING_TX = 16;
+    WOULD_EXCEED_MAX_BLOCK_COST_LIMIT = 17;
 }
 
 message InstructionError {

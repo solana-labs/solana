@@ -1,6 +1,7 @@
 use crate::{
-    block_error::BlockError, blockstore::Blockstore, blockstore_db::BlockstoreError,
-    blockstore_meta::SlotMeta, leader_schedule_cache::LeaderScheduleCache,
+    block_cost_limits::*, block_error::BlockError, blockstore::Blockstore,
+    blockstore_db::BlockstoreError, blockstore_meta::SlotMeta,
+    leader_schedule_cache::LeaderScheduleCache,
 };
 use chrono_humanize::{Accuracy, HumanTime, Tense};
 use crossbeam_channel::Sender;
@@ -48,10 +49,39 @@ use std::{
     convert::TryFrom,
     path::PathBuf,
     result,
-    sync::Arc,
+    sync::{Arc, RwLock},
     time::{Duration, Instant},
 };
 use thiserror::Error;
+
+// it tracks the block cost available capacity - number of compute-units allowed
+// by max blockl cost limit
+#[derive(Debug)]
+pub struct BlockCostCapacityMeter {
+    pub capacity: u64,
+    pub accumulated_cost: u64,
+}
+
+impl Default for BlockCostCapacityMeter {
+    fn default() -> Self {
+        BlockCostCapacityMeter::new(block_cost_max())
+    }
+}
+
+impl BlockCostCapacityMeter {
+    pub fn new(capacity_limit: u64) -> Self {
+        Self {
+            capacity: capacity_limit,
+            accumulated_cost: 0_u64,
+        }
+    }
+
+    // return the remaining capacity
+    pub fn accumulate(&mut self, cost: u64) -> u64 {
+        self.accumulated_cost += cost;
+        self.capacity.saturating_sub(self.accumulated_cost)
+    }
+}
 
 pub type BlockstoreProcessorResult =
     result::Result<(BankForks, LeaderScheduleCache), BlockstoreProcessorError>;
@@ -100,12 +130,25 @@ fn get_first_error(
     first_err
 }
 
+fn aggregate_total_execution_units(execute_timings: &ExecuteTimings) -> u64 {
+    let mut execute_cost_units: u64 = 0;
+    for (program_id, timing) in &execute_timings.details.per_program_timings {
+        if timing.count < 1 {
+            continue;
+        }
+        execute_cost_units += timing.accumulated_units / timing.count as u64;
+        trace!("aggregated execution cost of {:?} {:?}", program_id, timing);
+    }
+    execute_cost_units
+}
+
 fn execute_batch(
     batch: &TransactionBatch,
     bank: &Arc<Bank>,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     timings: &mut ExecuteTimings,
+    cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
 ) -> Result<()> {
     let record_token_balances = transaction_status_sender.is_some();
 
@@ -117,6 +160,8 @@ fn execute_batch(
         vec![]
     };
 
+    let pre_process_units: u64 = aggregate_total_execution_units(timings);
+
     let (tx_results, balances, inner_instructions, transaction_logs) =
         batch.bank().load_execute_and_commit_transactions(
             batch,
@@ -126,6 +171,22 @@ fn execute_batch(
             transaction_status_sender.is_some(),
             timings,
         );
+
+    let post_process_units: u64 = aggregate_total_execution_units(timings);
+    let execution_cost_units: u64 = post_process_units - pre_process_units;
+    let remaining_block_cost_cap = cost_capacity_meter
+        .write()
+        .unwrap()
+        .accumulate(execution_cost_units);
+    debug!(
+        "batch of {} transactions, total execute cu {}, remaining block cost cap {}",
+        batch.sanitized_transactions().len(),
+        execution_cost_units,
+        remaining_block_cost_cap
+    );
+    if remaining_block_cost_cap == 0_u64 {
+        return Err(TransactionError::WouldExceedMaxBlockCostLimit);
+    }
 
     bank_utils::find_and_send_votes(
         batch.sanitized_transactions(),
@@ -174,6 +235,7 @@ fn execute_batches(
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     timings: &mut ExecuteTimings,
+    cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
 ) -> Result<()> {
     inc_new_counter_debug!("bank-par_execute_entries-count", batches.len());
     let (results, new_timings): (Vec<Result<()>>, Vec<ExecuteTimings>) =
@@ -189,6 +251,7 @@ fn execute_batches(
                             transaction_status_sender,
                             replay_vote_sender,
                             &mut timings,
+                            cost_capacity_meter.clone(),
                         );
                         if let Some(entry_callback) = entry_callback {
                             entry_callback(bank);
@@ -233,6 +296,7 @@ pub fn process_entries(
         transaction_status_sender,
         replay_vote_sender,
         &mut timings,
+        Arc::new(RwLock::new(BlockCostCapacityMeter::default())),
     );
 
     debug!("process_entries: {:?}", timings);
@@ -248,6 +312,7 @@ fn process_entries_with_callback(
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     timings: &mut ExecuteTimings,
+    cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
 ) -> Result<()> {
     // accumulator for entries that can be processed in parallel
     let mut batches = vec![];
@@ -269,6 +334,7 @@ fn process_entries_with_callback(
                         transaction_status_sender,
                         replay_vote_sender,
                         timings,
+                        cost_capacity_meter.clone(),
                     )?;
                     batches.clear();
                     for hash in &tick_hashes {
@@ -320,6 +386,7 @@ fn process_entries_with_callback(
                             transaction_status_sender,
                             replay_vote_sender,
                             timings,
+                            cost_capacity_meter.clone(),
                         )?;
                         batches.clear();
                     }
@@ -334,6 +401,7 @@ fn process_entries_with_callback(
         transaction_status_sender,
         replay_vote_sender,
         timings,
+        cost_capacity_meter,
     )?;
     for hash in tick_hashes {
         bank.register_tick(hash);
@@ -819,6 +887,7 @@ pub fn confirm_slot(
 
     let mut replay_elapsed = Measure::start("replay_elapsed");
     let mut execute_timings = ExecuteTimings::default();
+    let cost_capacity_meter = Arc::new(RwLock::new(BlockCostCapacityMeter::default()));
     // Note: This will shuffle entries' transactions in-place.
     let process_result = process_entries_with_callback(
         bank,
@@ -828,6 +897,7 @@ pub fn confirm_slot(
         transaction_status_sender,
         replay_vote_sender,
         &mut execute_timings,
+        cost_capacity_meter,
     )
     .map_err(BlockstoreProcessorError::from);
     replay_elapsed.stop();
