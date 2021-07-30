@@ -6092,7 +6092,6 @@ impl AccountsDb {
 
                     timings.report();
                 }
-                stop.store(true, Ordering::Relaxed);
             }
             else {
                 let count = 2;
@@ -6116,15 +6115,16 @@ impl AccountsDb {
         });
 
         self.add_test_accounts();
+        stop.store(true, Ordering::Relaxed);
         self.accounts_index.account_maps.first().unwrap().read().unwrap().set_startup(false);
     }
 
     fn add_test_accounts(&self) {
-        let iterations = 100;
+        let iterations = 20;
         let threads = 32;
         let count = 15_000_000 / iterations;
         (0..iterations).into_iter().for_each(|i| {
-            info!("adding test accounts: {}", i);
+            info!("adding test accounts: {}, {}", i, iterations * threads);
             (0..threads).into_par_iter().for_each(|_| {
                 let mut reclaims = vec![];
                 (0..count).into_iter().for_each(|_| {
@@ -6142,6 +6142,7 @@ impl AccountsDb {
                     );
                 });
             });
+            info!("flushing");
             self.accounts_index.account_maps.par_iter().for_each(|i| {
                 i.write().unwrap().flush();});
         });
