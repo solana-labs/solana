@@ -6120,11 +6120,12 @@ impl AccountsDb {
     }
 
     fn add_test_accounts(&self) {
-        let iterations = 20;
+        let iterations = 50;
         let threads = 32;
         let count = 15_000_000 / iterations;
+        let BINS = self.accounts_index.account_maps.len();
         (0..iterations).into_iter().for_each(|i| {
-            info!("adding test accounts: {}, {}", i, iterations * threads);
+            info!("adding test accounts: {}, {}", i, count * threads);
             (0..threads).into_par_iter().for_each(|_| {
                 let mut reclaims = vec![];
                 (0..count).into_iter().for_each(|_| {
@@ -6143,8 +6144,13 @@ impl AccountsDb {
                 });
             });
             info!("flushing");
-            self.accounts_index.account_maps.par_iter().for_each(|i| {
-                i.write().unwrap().flush();});
+            (0..threads).into_par_iter().for_each(|i| {
+                let skip = i * BINS / threads;
+                let end = (i + 1) * BINS / threads;
+                let take = end - skip;
+                self.accounts_index.account_maps.iter().skip(skip).take(take).for_each(|i| {
+                    i.read().unwrap().flush();});
+            });
         });
         info!("done adding test accounts");
     }
