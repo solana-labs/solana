@@ -10,7 +10,7 @@ documentation = "https://docs.rs/solana-bpf-rust-sha"
 edition = "2018"
 
 [dependencies]
-blake3 = "0.3.7"
+blake3 = "1.0.0"
 solana-program = { path = "../../../../sdk/program", version = "=1.8.0" }
 
 [lib]

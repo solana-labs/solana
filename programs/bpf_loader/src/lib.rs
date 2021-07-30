@@ -30,10 +30,7 @@ use solana_sdk::{
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     clock::Clock,
     entrypoint::{HEAP_LENGTH, SUCCESS},
-    feature_set::{
-        add_missing_program_error_mappings, stop_verify_mul64_imm_nonzero,
-        upgradeable_close_instruction,
-    },
+    feature_set::{add_missing_program_error_mappings, stop_verify_mul64_imm_nonzero},
     ic_logger_msg, ic_msg,
     instruction::InstructionError,
     keyed_account::{from_keyed_account, keyed_account_at_index},
@@ -621,9 +618,6 @@ fn process_loader_upgradeable_instruction(
             ic_logger_msg!(logger, "New authority {:?}", new_authority);
         }
         UpgradeableLoaderInstruction::Close => {
-            if !invoke_context.is_feature_active(&upgradeable_close_instruction::id()) {
-                return Err(InstructionError::InvalidInstructionData);
-            }
             let close_account = keyed_account_at_index(keyed_accounts, 0)?;
             let recipient_account = keyed_account_at_index(keyed_accounts, 1)?;
             let authority = keyed_account_at_index(keyed_accounts, 2)?;
@@ -865,16 +859,13 @@ mod tests {
         account_utils::StateMut,
         client::SyncClient,
         clock::Clock,
-        compute_budget::ComputeBudget,
         feature_set::FeatureSet,
         genesis_config::create_genesis_config,
         instruction::Instruction,
         instruction::{AccountMeta, InstructionError},
         keyed_account::KeyedAccount,
         message::Message,
-        process_instruction::{
-            InvokeContextStackFrame, MockComputeMeter, MockInvokeContext, MockLogger,
-        },
+        process_instruction::{MockComputeMeter, MockInvokeContext},
         pubkey::Pubkey,
         rent::Rent,
         signature::{Keypair, Signer},
@@ -1125,22 +1116,8 @@ mod tests {
         );
 
         // Case: limited budget
-        let keyed_accounts_range = 0..keyed_accounts.len();
-        let mut invoke_context = MockInvokeContext {
-            invoke_stack: vec![InvokeContextStackFrame {
-                key: Pubkey::default(),
-                keyed_accounts,
-                keyed_accounts_range,
-            }],
-            logger: MockLogger::default(),
-            compute_budget: ComputeBudget::default(),
-            bpf_compute_budget: ComputeBudget::default().into(),
-            compute_meter: MockComputeMeter::default(),
-            programs: vec![],
-            accounts: vec![],
-            sysvars: vec![],
-            disabled_features: vec![].into_iter().collect(),
-        };
+        let mut invoke_context = MockInvokeContext::new(keyed_accounts);
+        invoke_context.compute_meter = MockComputeMeter::default();
         assert_eq!(
             Err(InstructionError::ProgramFailedToComplete),
             process_instruction(&program_key, &[], &mut invoke_context)

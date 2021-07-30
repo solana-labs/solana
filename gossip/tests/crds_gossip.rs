@@ -21,6 +21,7 @@ use {
         signature::{Keypair, Signer},
         timing::timestamp,
     },
+    solana_streamer::socket::SocketAddrSpace,
     std::{
         collections::{HashMap, HashSet},
         ops::Deref,
@@ -262,6 +263,7 @@ fn network_simulator(thread_pool: &ThreadPool, network: &mut Network, max_conver
             0,               // shred version
             &HashMap::new(), // stakes
             None,            // gossip validators
+            &SocketAddrSpace::Unspecified,
         );
     });
     let mut total_bytes = bytes_tx;
@@ -420,6 +422,7 @@ fn network_run_push(
                     0,               // shred version
                     &HashMap::new(), // stakes
                     None,            // gossip validators
+                    &SocketAddrSpace::Unspecified,
                 );
             });
         }
@@ -490,6 +493,7 @@ fn network_run_pull(
                             cluster_info::MAX_BLOOM_SIZE,
                             from.ping_cache.deref(),
                             &mut pings,
+                            &SocketAddrSpace::Unspecified,
                         )
                         .ok()?;
                     let from_pubkey = from.keypair.pubkey();
@@ -501,7 +505,7 @@ fn network_run_pull(
                 .collect()
         };
         let transfered: Vec<_> = requests
-            .into_par_iter()
+            .into_iter()
             .map(|(to, filters, caller_info)| {
                 let mut bytes: usize = 0;
                 let mut msgs: usize = 0;
@@ -523,8 +527,9 @@ fn network_run_pull(
                         let rsp = node
                             .gossip
                             .generate_pull_responses(
+                                thread_pool,
                                 &filters,
-                                /*output_size_limit=*/ usize::MAX,
+                                usize::MAX, // output_size_limit
                                 now,
                             )
                             .into_iter()
@@ -710,6 +715,7 @@ fn test_prune_errors() {
         0,               // shred version
         &HashMap::new(), // stakes
         None,            // gossip validators
+        &SocketAddrSpace::Unspecified,
     );
     let now = timestamp();
     //incorrect dest

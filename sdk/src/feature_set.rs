@@ -5,7 +5,7 @@
 //! - For features that are unambiguously good (ie bug fixes), these steps are sufficient.
 //! - For features that should go up for community vote (ie fee structure changes), more
 //!   information on the additional steps to follow can be found at:
-//!   https://spl.solana.com/feature-proposal#feature-proposal-life-cycle
+//!   <https://spl.solana.com/feature-proposal#feature-proposal-life-cycle>
 //!
 //! 1. Generate a new keypair with `solana-keygen new --outfile feature.json --no-passphrase`
 //!    - Keypairs should be held by core contributors only. If you're a non-core contirbutor going
@@ -28,10 +28,6 @@ use std::collections::{HashMap, HashSet};
 
 pub mod instructions_sysvar_enabled {
     solana_sdk::declare_id!("EnvhHCLvg55P7PDtbvR1NwuTuAeodqpusV3MR5QEK8gs");
-}
-
-pub mod consistent_recent_blockhashes_sysvar {
-    solana_sdk::declare_id!("3h1BQWPDS5veRsq6mDBWruEpgPxRJkfwGexg5iiQ9mYg");
 }
 
 pub mod deprecate_rewards_sysvar {
@@ -111,28 +107,8 @@ pub mod require_stake_for_gossip {
     solana_sdk::declare_id!("6oNzd5Z3M2L1xo4Q5hoox7CR2DuW7m1ETLWH5jHJthwa");
 }
 
-pub mod cpi_data_cost {
-    solana_sdk::declare_id!("Hrg5bXePPGiAVWZfDHbvjqytSeyBDPAGAQ7v6N5i4gCX");
-}
-
-pub mod upgradeable_close_instruction {
-    solana_sdk::declare_id!("FsPaByos3gA9bUEhp3EimQpQPCoSvCEigHod496NmABQ");
-}
-
-pub mod sysvar_via_syscall {
-    solana_sdk::declare_id!("7411E6gFQLDhQkdRjmpXwM1hzHMMoYQUjHicmvGPC1Nf");
-}
-
 pub mod enforce_aligned_host_addrs {
     solana_sdk::declare_id!("6Qob9Z4RwGdf599FDVCqsjuKjR8ZFR3oVs2ByRLWBsua");
-}
-
-pub mod update_data_on_realloc {
-    solana_sdk::declare_id!("BkPcYCrwHXBoTsv9vMhiRF9gteZmDj3Uwisz9CDjoMKp");
-}
-
-pub mod keccak256_syscall_enabled {
-    solana_sdk::declare_id!("7Ua8mFtahVfA3WCY9LoXDAJJdvJRJHckvSSr1dD8FTWc");
 }
 
 pub mod stake_program_v4 {
@@ -207,7 +183,6 @@ lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
         (instructions_sysvar_enabled::id(), "instructions sysvar"),
-        (consistent_recent_blockhashes_sysvar::id(), "consistent recentblockhashes sysvar"),
         (deprecate_rewards_sysvar::id(), "deprecate unused rewards sysvar"),
         (pico_inflation::id(), "pico inflation"),
         (full_inflation::devnet_and_testnet::id(), "full inflation on devnet and testnet"),
@@ -226,12 +201,7 @@ lazy_static! {
         (check_init_vote_data::id(), "check initialized Vote data"),
         (check_program_owner::id(), "limit programs to operating on accounts owned by itself"),
         (require_stake_for_gossip::id(), "require stakes for propagating crds values through gossip #15561"),
-        (cpi_data_cost::id(), "charge the compute budget for data passed via CPI"),
-        (upgradeable_close_instruction::id(), "close upgradeable buffer accounts"),
-        (sysvar_via_syscall::id(), "provide sysvars via syscalls"),
         (enforce_aligned_host_addrs::id(), "enforce aligned host addresses"),
-        (update_data_on_realloc::id(), "Retain updated data values modified after realloc via CPI"),
-        (keccak256_syscall_enabled::id(), "keccak256 syscall"),
         (stake_program_v4::id(), "solana_stake_program v4"),
         (memory_ops_syscalls::id(), "add syscalls for memory operations"),
         (secp256k1_recover_syscall_enabled::id(), "secp256k1_recover syscall"),

@@ -37,7 +37,7 @@ use solana_sdk::{
     sanitized_transaction::SanitizedTransaction,
     short_vec::decode_shortu16_len,
     signature::Signature,
-    timing::{duration_as_ms, timestamp},
+    timing::{duration_as_ms, timestamp, AtomicInterval},
     transaction::{self, Transaction, TransactionError},
 };
 use solana_transaction_status::token_balances::{
@@ -79,7 +79,7 @@ const DEFAULT_LRU_SIZE: usize = 200_000;
 
 #[derive(Debug, Default)]
 pub struct BankingStageStats {
-    last_report: AtomicU64,
+    last_report: AtomicInterval,
     id: u32,
     process_packets_count: AtomicUsize,
     new_tx_count: AtomicUsize,
@@ -115,19 +115,7 @@ impl BankingStageStats {
     }
 
     fn report(&self, report_interval_ms: u64) {
-        let should_report = {
-            let last = self.last_report.load(Ordering::Relaxed);
-            let now = solana_sdk::timing::timestamp();
-            now.saturating_sub(last) > report_interval_ms
-                && self.last_report.compare_exchange(
-                    last,
-                    now,
-                    Ordering::Relaxed,
-                    Ordering::Relaxed,
-                ) == Ok(last)
-        };
-
-        if should_report {
+        if self.last_report.should_update(report_interval_ms) {
             datapoint_info!(
                 "banking_stage-loop-stats",
                 ("id", self.id as i64, i64),
@@ -1557,7 +1545,7 @@ mod tests {
     use crossbeam_channel::unbounded;
     use itertools::Itertools;
     use solana_entry::entry::{next_entry, Entry, EntrySlice};
-    use solana_gossip::cluster_info::Node;
+    use solana_gossip::{cluster_info::Node, contact_info::ContactInfo};
     use solana_ledger::{
         blockstore::{entries_to_test_shreds, Blockstore},
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
@@ -1579,6 +1567,7 @@ mod tests {
         system_transaction,
         transaction::TransactionError,
     };
+    use solana_streamer::socket::SocketAddrSpace;
     use solana_transaction_status::TransactionWithStatusMeta;
     use std::{
         convert::TryInto,
@@ -1590,6 +1579,14 @@ mod tests {
         },
         thread::sleep,
     };
+
+    fn new_test_cluster_info(contact_info: ContactInfo) -> ClusterInfo {
+        ClusterInfo::new(
+            contact_info,
+            Arc::new(Keypair::new()),
+            SocketAddrSpace::Unspecified,
+        )
+    }
 
     #[test]
     fn test_banking_stage_shutdown1() {
@@ -1606,7 +1603,7 @@ mod tests {
             );
             let (exit, poh_recorder, poh_service, _entry_receiever) =
                 create_test_recorder(&bank, &blockstore, None);
-            let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
+            let cluster_info = new_test_cluster_info(Node::new_localhost().info);
             let cluster_info = Arc::new(cluster_info);
             let banking_stage = BankingStage::new(
                 &cluster_info,
@@ -1652,7 +1649,7 @@ mod tests {
             };
             let (exit, poh_recorder, poh_service, entry_receiver) =
                 create_test_recorder(&bank, &blockstore, Some(poh_config));
-            let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
+            let cluster_info = new_test_cluster_info(Node::new_localhost().info);
             let cluster_info = Arc::new(cluster_info);
             let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
 
@@ -1724,7 +1721,7 @@ mod tests {
             };
             let (exit, poh_recorder, poh_service, entry_receiver) =
                 create_test_recorder(&bank, &blockstore, Some(poh_config));
-            let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
+            let cluster_info = new_test_cluster_info(Node::new_localhost().info);
             let cluster_info = Arc::new(cluster_info);
             let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
 
@@ -1875,8 +1872,7 @@ mod tests {
                 };
                 let (exit, poh_recorder, poh_service, entry_receiver) =
                     create_test_recorder(&bank, &blockstore, Some(poh_config));
-                let cluster_info =
-                    ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
+                let cluster_info = new_test_cluster_info(Node::new_localhost().info);
                 let cluster_info = Arc::new(cluster_info);
                 let _banking_stage = BankingStage::new_num_threads(
                     &cluster_info,

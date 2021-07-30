@@ -78,23 +78,26 @@ impl RpcSender for MockSender {
         if self.url == "fails" {
             return Ok(Value::Null);
         }
-        let val = match request {
-            RpcRequest::GetAccountInfo => serde_json::to_value(Response {
+
+        let method = &request.build_request_json(42, params.clone())["method"];
+
+        let val = match method.as_str().unwrap() {
+            "getAccountInfo" => serde_json::to_value(Response {
                 context: RpcResponseContext { slot: 1 },
                 value: Value::Null,
             })?,
-            RpcRequest::GetBalance => serde_json::to_value(Response {
+            "getBalance" => serde_json::to_value(Response {
                 context: RpcResponseContext { slot: 1 },
                 value: Value::Number(Number::from(50)),
             })?,
-            RpcRequest::GetRecentBlockhash => serde_json::to_value(Response {
+            "getRecentBlockhash" => serde_json::to_value(Response {
                 context: RpcResponseContext { slot: 1 },
                 value: (
                     Value::String(PUBKEY.to_string()),
                     serde_json::to_value(FeeCalculator::default()).unwrap(),
                 ),
             })?,
-            RpcRequest::GetEpochInfo => serde_json::to_value(EpochInfo {
+            "getEpochInfo" => serde_json::to_value(EpochInfo {
                 epoch: 1,
                 slot_index: 2,
                 slots_in_epoch: 32,
@@ -102,7 +105,7 @@ impl RpcSender for MockSender {
                 block_height: 34,
                 transaction_count: Some(123),
             })?,
-            RpcRequest::GetFeeCalculatorForBlockhash => {
+            "getFeeCalculatorForBlockhash" => {
                 let value = if self.url == "blockhash_expired" {
                     Value::Null
                 } else {
@@ -113,11 +116,11 @@ impl RpcSender for MockSender {
                     value,
                 })?
             }
-            RpcRequest::GetFeeRateGovernor => serde_json::to_value(Response {
+            "getFeeRateGovernor" => serde_json::to_value(Response {
                 context: RpcResponseContext { slot: 1 },
                 value: serde_json::to_value(FeeRateGovernor::default()).unwrap(),
             })?,
-            RpcRequest::GetSignatureStatuses => {
+            "getSignatureStatuses" => {
                 let status: transaction::Result<()> = if self.url == "account_in_use" {
                     Err(TransactionError::AccountInUse)
                 } else if self.url == "instruction_error" {
@@ -151,11 +154,11 @@ impl RpcSender for MockSender {
                     value: statuses,
                 })?
             }
-            RpcRequest::GetTransactionCount => Value::Number(Number::from(1234)),
-            RpcRequest::GetSlot => Value::Number(Number::from(0)),
-            RpcRequest::GetMaxShredInsertSlot => Value::Number(Number::from(0)),
-            RpcRequest::RequestAirdrop => Value::String(Signature::new(&[8; 64]).to_string()),
-            RpcRequest::SendTransaction => {
+            "getTransactionCount" => json![1234],
+            "getSlot" => json![0],
+            "getMaxShredInsertSlot" => json![0],
+            "requestAirdrop" => Value::String(Signature::new(&[8; 64]).to_string()),
+            "sendTransaction" => {
                 let signature = if self.url == "malicious" {
                     Signature::new(&[8; 64]).to_string()
                 } else {
@@ -166,7 +169,7 @@ impl RpcSender for MockSender {
                 };
                 Value::String(signature)
             }
-            RpcRequest::SimulateTransaction => serde_json::to_value(Response {
+            "simulateTransaction" => serde_json::to_value(Response {
                 context: RpcResponseContext { slot: 1 },
                 value: RpcSimulateTransactionResult {
                     err: None,
@@ -175,8 +178,8 @@ impl RpcSender for MockSender {
                     units_consumed: None,
                 },
             })?,
-            RpcRequest::GetMinimumBalanceForRentExemption => Value::Number(Number::from(20)),
-            RpcRequest::GetVersion => {
+            "getMinimumBalanceForRentExemption" => json![20],
+            "getVersion" => {
                 let version = Version::default();
                 json!(RpcVersionInfo {
                     solana_core: version.to_string(),

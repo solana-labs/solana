@@ -9,7 +9,11 @@ use solana_entry::entry::Entry;
 use solana_ledger::shred::{
     ProcessShredsStats, Shred, Shredder, MAX_DATA_SHREDS_PER_FEC_BLOCK, SHRED_TICK_REFERENCE_MASK,
 };
-use solana_sdk::{pubkey::Pubkey, signature::Keypair, timing::duration_as_us};
+use solana_sdk::{
+    pubkey::Pubkey,
+    signature::Keypair,
+    timing::{duration_as_us, AtomicInterval},
+};
 use std::{collections::HashMap, sync::RwLock, time::Duration};
 
 #[derive(Clone)]
@@ -21,10 +25,10 @@ pub struct StandardBroadcastRun {
     current_slot_and_parent: Option<(u64, u64)>,
     slot_broadcast_start: Option<Instant>,
     shred_version: u16,
-    last_datapoint_submit: Arc<AtomicU64>,
+    last_datapoint_submit: Arc<AtomicInterval>,
     num_batches: usize,
     cluster_nodes: Arc<RwLock<ClusterNodes<BroadcastStage>>>,
-    last_peer_update: Arc<AtomicU64>,
+    last_peer_update: Arc<AtomicInterval>,
 }
 
 impl StandardBroadcastRun {
@@ -40,7 +44,7 @@ impl StandardBroadcastRun {
             last_datapoint_submit: Arc::default(),
             num_batches: 0,
             cluster_nodes: Arc::default(),
-            last_peer_update: Arc::default(),
+            last_peer_update: Arc::new(AtomicInterval::default()),
         }
     }
 
@@ -338,14 +342,9 @@ impl StandardBroadcastRun {
         trace!("Broadcasting {:?} shreds", shreds.len());
         // Get the list of peers to broadcast to
         let mut get_peers_time = Measure::start("broadcast::get_peers");
-        let now = timestamp();
-        let last = self.last_peer_update.load(Ordering::Relaxed);
-        #[allow(deprecated)]
-        if now - last > BROADCAST_PEER_UPDATE_INTERVAL_MS
-            && self
-                .last_peer_update
-                .compare_and_swap(last, now, Ordering::Relaxed)
-                == last
+        if self
+            .last_peer_update
+            .should_update_ext(BROADCAST_PEER_UPDATE_INTERVAL_MS, false)
         {
             *self.cluster_nodes.write().unwrap() = ClusterNodes::<BroadcastStage>::new(
                 cluster_info,
@@ -367,6 +366,7 @@ impl StandardBroadcastRun {
             &mut transmit_stats,
             cluster_info.id(),
             bank_forks,
+            cluster_info.socket_addr_space(),
         )?;
         drop(cluster_nodes);
         transmit_time.stop();
@@ -510,6 +510,7 @@ mod test {
         genesis_config::GenesisConfig,
         signature::{Keypair, Signer},
     };
+    use solana_streamer::socket::SocketAddrSpace;
     use std::ops::Deref;
     use std::sync::Arc;
     use std::time::Duration;
@@ -534,7 +535,11 @@ mod test {
         let leader_keypair = Arc::new(Keypair::new());
         let leader_pubkey = leader_keypair.pubkey();
         let leader_info = Node::new_localhost_with_pubkey(&leader_pubkey);
-        let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(leader_info.info));
+        let cluster_info = Arc::new(ClusterInfo::new(
+            leader_info.info,
+            Arc::new(Keypair::new()),
+            SocketAddrSpace::Unspecified,
+        ));
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let mut genesis_config = create_genesis_config(10_000).genesis_config;
         genesis_config.ticks_per_slot = max_ticks_per_n_shreds(num_shreds_per_slot, None) + 1;

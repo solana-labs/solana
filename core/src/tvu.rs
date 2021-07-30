@@ -169,6 +169,8 @@ impl Tvu {
         let max_compaction_jitter = tvu_config.rocksdb_max_compaction_jitter;
         let (duplicate_slots_sender, duplicate_slots_receiver) = unbounded();
         let (cluster_slots_update_sender, cluster_slots_update_receiver) = unbounded();
+        let (ancestor_hashes_replay_update_sender, ancestor_hashes_replay_update_receiver) =
+            unbounded();
         let retransmit_stage = RetransmitStage::new(
             bank_forks.clone(),
             leader_schedule_cache,
@@ -190,6 +192,7 @@ impl Tvu {
             max_slots,
             Some(rpc_subscriptions.clone()),
             duplicate_slots_sender,
+            ancestor_hashes_replay_update_receiver,
         );
 
         let (ledger_cleanup_slot_sender, ledger_cleanup_slot_receiver) = channel();
@@ -273,6 +276,7 @@ impl Tvu {
             cache_block_meta_sender,
             bank_notification_sender,
             wait_for_vote_to_start_leader: tvu_config.wait_for_vote_to_start_leader,
+            ancestor_hashes_replay_update_sender,
         };
 
         let (voting_sender, voting_receiver) = channel();
@@ -373,7 +377,8 @@ pub mod tests {
     use solana_poh::poh_recorder::create_test_recorder;
     use solana_rpc::optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank;
     use solana_runtime::bank::Bank;
-    use solana_sdk::signature::Signer;
+    use solana_sdk::signature::{Keypair, Signer};
+    use solana_streamer::socket::SocketAddrSpace;
     use std::sync::atomic::Ordering;
 
     #[ignore]
@@ -391,7 +396,11 @@ pub mod tests {
         let bank_forks = BankForks::new(Bank::new(&genesis_config));
 
         //start cluster_info1
-        let cluster_info1 = ClusterInfo::new_with_invalid_keypair(target1.info.clone());
+        let cluster_info1 = ClusterInfo::new(
+            target1.info.clone(),
+            Arc::new(Keypair::new()),
+            SocketAddrSpace::Unspecified,
+        );
         cluster_info1.insert_info(leader.info);
         let cref1 = Arc::new(cluster_info1);
 

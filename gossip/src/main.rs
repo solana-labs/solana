@@ -11,6 +11,7 @@ use {
     },
     solana_gossip::{contact_info::ContactInfo, gossip_service::discover},
     solana_sdk::pubkey::Pubkey,
+    solana_streamer::socket::SocketAddrSpace,
     std::{
         error,
         net::{IpAddr, Ipv4Addr, SocketAddr},
@@ -31,6 +32,13 @@ fn parse_matches() -> ArgMatches<'static> {
         .about(crate_description!())
         .version(solana_version::version!())
         .setting(AppSettings::SubcommandRequiredElseHelp)
+        .arg(
+            Arg::with_name("allow_private_addr")
+                .long("allow-private-addr")
+                .takes_value(false)
+                .help("Allow contacting private ip addresses")
+                .hidden(true),
+        )
         .subcommand(
             SubCommand::with_name("rpc-url")
                 .about("Get an RPC URL for the cluster")
@@ -209,7 +217,7 @@ fn process_spy_results(
     }
 }
 
-fn process_spy(matches: &ArgMatches) -> std::io::Result<()> {
+fn process_spy(matches: &ArgMatches, socket_addr_space: SocketAddrSpace) -> std::io::Result<()> {
     let num_nodes_exactly = matches
         .value_of("num_nodes_exactly")
         .map(|num| num.to_string().parse().unwrap());
@@ -250,6 +258,7 @@ fn process_spy(matches: &ArgMatches) -> std::io::Result<()> {
         None,               // find_node_by_gossip_addr
         Some(&gossip_addr), // my_gossip_addr
         shred_version,
+        socket_addr_space,
     )?;
 
     process_spy_results(timeout, validators, num_nodes, num_nodes_exactly, pubkey);
@@ -266,7 +275,10 @@ fn parse_entrypoint(matches: &ArgMatches) -> Option<SocketAddr> {
     })
 }
 
-fn process_rpc_url(matches: &ArgMatches) -> std::io::Result<()> {
+fn process_rpc_url(
+    matches: &ArgMatches,
+    socket_addr_space: SocketAddrSpace,
+) -> std::io::Result<()> {
     let any = matches.is_present("any");
     let all = matches.is_present("all");
     let entrypoint_addr = parse_entrypoint(matches);
@@ -281,13 +293,14 @@ fn process_rpc_url(matches: &ArgMatches) -> std::io::Result<()> {
         entrypoint_addr.as_ref(), // find_node_by_gossip_addr
         None,                     // my_gossip_addr
         shred_version,
+        socket_addr_space,
     )?;
 
     let rpc_addrs: Vec<_> = validators
         .iter()
         .filter_map(|contact_info| {
             if (any || all || Some(contact_info.gossip) == entrypoint_addr)
-                && ContactInfo::is_valid_address(&contact_info.rpc)
+                && ContactInfo::is_valid_address(&contact_info.rpc, &socket_addr_space)
             {
                 return Some(contact_info.rpc);
             }
@@ -314,13 +327,13 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     solana_logger::setup_with_default("solana=info");
 
     let matches = parse_matches();
-
+    let socket_addr_space = SocketAddrSpace::new(matches.is_present("allow_private_addr"));
     match matches.subcommand() {
         ("spy", Some(matches)) => {
-            process_spy(matches)?;
+            process_spy(matches, socket_addr_space)?;
         }
         ("rpc-url", Some(matches)) => {
-            process_rpc_url(matches)?;
+            process_rpc_url(matches, socket_addr_space)?;
         }
         _ => unreachable!(),
     }

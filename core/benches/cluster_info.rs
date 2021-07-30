@@ -16,12 +16,16 @@ use solana_ledger::{
     shred::Shred,
 };
 use solana_runtime::{bank::Bank, bank_forks::BankForks};
-use solana_sdk::pubkey;
-use solana_sdk::timing::timestamp;
+use solana_sdk::{
+    pubkey,
+    signature::Keypair,
+    timing::{timestamp, AtomicInterval},
+};
+use solana_streamer::socket::SocketAddrSpace;
 use std::{
     collections::HashMap,
     net::UdpSocket,
-    sync::{atomic::AtomicU64, Arc, RwLock},
+    sync::{Arc, RwLock},
 };
 use test::Bencher;
 
@@ -30,7 +34,11 @@ fn broadcast_shreds_bench(bencher: &mut Bencher) {
     solana_logger::setup();
     let leader_pubkey = pubkey::new_rand();
     let leader_info = Node::new_localhost_with_pubkey(&leader_pubkey);
-    let cluster_info = ClusterInfo::new_with_invalid_keypair(leader_info.info);
+    let cluster_info = ClusterInfo::new(
+        leader_info.info,
+        Arc::new(Keypair::new()),
+        SocketAddrSpace::Unspecified,
+    );
     let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
 
     let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
@@ -50,7 +58,7 @@ fn broadcast_shreds_bench(bencher: &mut Bencher) {
     let cluster_info = Arc::new(cluster_info);
     let cluster_nodes = ClusterNodes::<BroadcastStage>::new(&cluster_info, &stakes);
     let shreds = Arc::new(shreds);
-    let last_datapoint = Arc::new(AtomicU64::new(0));
+    let last_datapoint = Arc::new(AtomicInterval::default());
     bencher.iter(move || {
         let shreds = shreds.clone();
         broadcast_shreds(
@@ -61,6 +69,7 @@ fn broadcast_shreds_bench(bencher: &mut Bencher) {
             &mut TransmitShredsStats::default(),
             cluster_info.id(),
             &bank_forks,
+            &SocketAddrSpace::Unspecified,
         )
         .unwrap();
     });

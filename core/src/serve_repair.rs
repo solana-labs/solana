@@ -95,20 +95,25 @@ impl RequestResponse for ShredRepairType {
     }
 }
 
-pub struct AncestorHashesRepair(Slot);
+pub struct AncestorHashesRepairType(pub Slot);
+impl AncestorHashesRepairType {
+    pub fn slot(&self) -> Slot {
+        self.0
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 pub enum AncestorHashesResponseVersion {
     Current(Vec<SlotHash>),
 }
 impl AncestorHashesResponseVersion {
-    #[cfg(test)]
-    fn into_slot_hashes(self) -> Vec<SlotHash> {
+    pub fn into_slot_hashes(self) -> Vec<SlotHash> {
         match self {
             AncestorHashesResponseVersion::Current(slot_hashes) => slot_hashes,
         }
     }
 
-    fn slot_hashes(&self) -> &[SlotHash] {
+    pub fn slot_hashes(&self) -> &[SlotHash] {
         match self {
             AncestorHashesResponseVersion::Current(slot_hashes) => slot_hashes,
         }
@@ -121,7 +126,7 @@ impl AncestorHashesResponseVersion {
     }
 }
 
-impl RequestResponse for AncestorHashesRepair {
+impl RequestResponse for AncestorHashesRepairType {
     type Response = AncestorHashesResponseVersion;
     fn num_expected_responses(&self) -> u32 {
         1
@@ -194,13 +199,6 @@ impl RepairPeers {
 }
 
 impl ServeRepair {
-    /// Without a valid keypair gossip will not function. Only useful for tests.
-    pub fn new_with_invalid_keypair(contact_info: ContactInfo) -> Self {
-        Self::new(Arc::new(ClusterInfo::new_with_invalid_keypair(
-            contact_info,
-        )))
-    }
-
     pub fn new(cluster_info: Arc<ClusterInfo>) -> Self {
         Self { cluster_info }
     }
@@ -481,6 +479,16 @@ impl ServeRepair {
         Ok(out)
     }
 
+    pub fn ancestor_repair_request_bytes(
+        &self,
+        request_slot: Slot,
+        nonce: Nonce,
+    ) -> Result<Vec<u8>> {
+        let repair_request = RepairProtocol::AncestorHashes(self.my_info(), request_slot, nonce);
+        let out = serialize(&repair_request)?;
+        Ok(out)
+    }
+
     pub(crate) fn repair_request(
         &self,
         cluster_slots: &ClusterSlots,
@@ -754,7 +762,8 @@ mod tests {
         shred::{max_ticks_per_n_shreds, Shred},
     };
     use solana_perf::packet::Packet;
-    use solana_sdk::{hash::Hash, pubkey::Pubkey, timing::timestamp};
+    use solana_sdk::{hash::Hash, pubkey::Pubkey, signature::Keypair, timing::timestamp};
+    use solana_streamer::socket::SocketAddrSpace;
 
     #[test]
     fn test_run_highest_window_request() {
@@ -899,11 +908,19 @@ mod tests {
         Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
     }
 
+    fn new_test_cluster_info(contact_info: ContactInfo) -> ClusterInfo {
+        ClusterInfo::new(
+            contact_info,
+            Arc::new(Keypair::new()),
+            SocketAddrSpace::Unspecified,
+        )
+    }
+
     #[test]
     fn window_index_request() {
         let cluster_slots = ClusterSlots::default();
         let me = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
-        let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(me));
+        let cluster_info = Arc::new(new_test_cluster_info(me));
         let serve_repair = ServeRepair::new(cluster_info.clone());
         let mut outstanding_requests = OutstandingShredRepairs::default();
         let rv = serve_repair.repair_request(
@@ -1213,7 +1230,7 @@ mod tests {
     fn test_repair_with_repair_validators() {
         let cluster_slots = ClusterSlots::default();
         let me = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
-        let cluster_info = Arc::new(ClusterInfo::new_with_invalid_keypair(me.clone()));
+        let cluster_info = Arc::new(new_test_cluster_info(me.clone()));
 
         // Insert two peers on the network
         let contact_info2 =
@@ -1344,7 +1361,7 @@ mod tests {
     #[test]
     fn test_verify_ancestor_response() {
         let request_slot = MAX_ANCESTOR_RESPONSES as Slot;
-        let repair = AncestorHashesRepair(request_slot);
+        let repair = AncestorHashesRepairType(request_slot);
         let mut response: Vec<SlotHash> = (0..request_slot)
             .into_iter()
             .map(|slot| (slot, Hash::new_unique()))

@@ -890,7 +890,6 @@ impl Accounts {
         loaded: &'a mut [TransactionLoadResult],
         rent_collector: &RentCollector,
         last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
-        fix_recent_blockhashes_sysvar_delay: bool,
         rent_for_sysvars: bool,
     ) {
         let accounts_to_store = self.collect_accounts_to_store(
@@ -899,7 +898,6 @@ impl Accounts {
             loaded,
             rent_collector,
             last_blockhash_with_fee_calculator,
-            fix_recent_blockhashes_sysvar_delay,
             rent_for_sysvars,
         );
         self.accounts_db.store_cached(slot, &accounts_to_store);
@@ -924,7 +922,6 @@ impl Accounts {
         loaded: &'a mut [TransactionLoadResult],
         rent_collector: &RentCollector,
         last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
-        fix_recent_blockhashes_sysvar_delay: bool,
         rent_for_sysvars: bool,
     ) -> Vec<(&'a Pubkey, &'a AccountSharedData)> {
         let mut accounts = Vec::with_capacity(loaded.len());
@@ -963,7 +960,6 @@ impl Accounts {
                     res,
                     maybe_nonce_rollback,
                     last_blockhash_with_fee_calculator,
-                    fix_recent_blockhashes_sysvar_delay,
                 );
                 if fee_payer_index.is_none() {
                     fee_payer_index = Some(i);
@@ -1011,21 +1007,13 @@ pub fn prepare_if_nonce_account(
     tx_result: &Result<()>,
     maybe_nonce_rollback: Option<(&Pubkey, &AccountSharedData, Option<&AccountSharedData>)>,
     last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
-    fix_recent_blockhashes_sysvar_delay: bool,
 ) -> bool {
     if let Some((nonce_key, nonce_acc, _maybe_fee_account)) = maybe_nonce_rollback {
         if account_pubkey == nonce_key {
-            let overwrite = if tx_result.is_err() {
+            if tx_result.is_err() {
                 // Nonce TX failed with an InstructionError. Roll back
                 // its account state
                 *account = nonce_acc.clone();
-                true
-            } else {
-                // Retain overwrite on successful transactions until
-                // recent_blockhashes_sysvar_delay fix is activated
-                !fix_recent_blockhashes_sysvar_delay
-            };
-            if overwrite {
                 // Since hash_age_kind is DurableNonce, unwrap is safe here
                 let state = StateMut::<nonce::state::Versions>::state(nonce_acc)
                     .unwrap()
@@ -1987,7 +1975,6 @@ mod tests {
             &rent_collector,
             &(Hash::default(), FeeCalculator::default()),
             true,
-            true,
         );
         assert_eq!(collected_accounts.len(), 2);
         assert!(collected_accounts
@@ -2140,7 +2127,6 @@ mod tests {
             tx_result,
             maybe_nonce_rollback,
             last_blockhash_with_fee_calculator,
-            true,
         );
         expect_account == account
     }
@@ -2358,7 +2344,6 @@ mod tests {
             &rent_collector,
             &(next_blockhash, FeeCalculator::default()),
             true,
-            true,
         );
         assert_eq!(collected_accounts.len(), 2);
         assert_eq!(
@@ -2474,7 +2459,6 @@ mod tests {
             loaded.as_mut_slice(),
             &rent_collector,
             &(next_blockhash, FeeCalculator::default()),
-            true,
             true,
         );
         assert_eq!(collected_accounts.len(), 1);

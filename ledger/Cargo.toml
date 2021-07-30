@@ -17,8 +17,8 @@ chrono-humanize = "0.2.1"
 crossbeam-channel = "0.5"
 ed25519-dalek = "1.0.1"
 fs_extra = "1.2.0"
-futures = "0.3.15"
-futures-util = "0.3.5"
+futures = "0.3.16"
+futures-util = "0.3.16"
 itertools = "0.10.1"
 lazy_static = "1.4.0"
 libc = "0.2.98"
@@ -64,7 +64,7 @@ reed-solomon-erasure = { version = "4.0.2", features = ["simd-accel"] }
 [dependencies.rocksdb]
 # Avoid the vendored bzip2 within rocksdb-sys that can cause linker conflicts
 # when also using the bzip2 crate
-version = "0.16.0"
+version = "0.17.0"
 default-features = false
 features = ["lz4"]
 

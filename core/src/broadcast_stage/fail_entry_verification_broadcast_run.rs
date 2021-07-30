@@ -143,10 +143,11 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
             sock,
             &shreds,
             &cluster_nodes,
-            &Arc::new(AtomicU64::new(0)),
+            &Arc::new(AtomicInterval::default()),
             &mut TransmitShredsStats::default(),
             cluster_info.id(),
             bank_forks,
+            cluster_info.socket_addr_space(),
         )?;
 
         Ok(())

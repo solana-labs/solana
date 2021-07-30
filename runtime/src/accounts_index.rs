@@ -541,14 +541,37 @@ impl<'a, T> AccountsIndexIterator<'a, T> {
         }
     }
 
+    fn bin_from_bound(bound: &Bound<Pubkey>, unbounded_bin: usize) -> usize {
+        match bound {
+            Bound::Included(bound) | Bound::Excluded(bound) => get_bin_pubkey(bound),
+            Bound::Unbounded => unbounded_bin,
+        }
+    }
+
     fn start_bin(&self) -> usize {
         // start in bin where 'start_bound' would exist
-        match &self.start_bound {
-            Bound::Included(start_bound) | Bound::Excluded(start_bound) => {
-                get_bin_pubkey(start_bound)
-            }
-            Bound::Unbounded => 0,
-        }
+        Self::bin_from_bound(&self.start_bound, 0)
+    }
+
+    fn end_bin_inclusive(&self) -> usize {
+        // end in bin where 'end_bound' would exist
+        Self::bin_from_bound(&self.end_bound, usize::MAX)
+    }
+
+    fn bin_start_and_range(&self) -> (usize, usize) {
+        let start_bin = self.start_bin();
+        // calculate the max range of bins to look in
+        let end_bin_inclusive = self.end_bin_inclusive();
+        let bin_range = if start_bin > end_bin_inclusive {
+            0 // empty range
+        } else if end_bin_inclusive == usize::MAX {
+            usize::MAX
+        } else {
+            // the range is end_inclusive + 1 - start
+            // end_inclusive could be usize::MAX already if no bound was specified
+            end_bin_inclusive.saturating_add(1) - start_bin
+        };
+        (start_bin, bin_range)
     }
 
     pub fn new<R>(account_maps: &'a LockMapTypeSlice<T>, range: Option<R>) -> Self
@@ -576,10 +599,9 @@ impl<'a, T: 'static + Clone> Iterator for AccountsIndexIterator<'a, T> {
         if self.is_finished {
             return None;
         }
-
-        let start_bin = self.start_bin();
+        let (start_bin, bin_range) = self.bin_start_and_range();
         let mut chunk: Vec<(Pubkey, AccountMapEntry<T>)> = Vec::with_capacity(ITER_BATCH_SIZE);
-        'outer: for i in self.account_maps.iter().skip(start_bin) {
+        'outer: for i in self.account_maps.iter().skip(start_bin).take(bin_range) {
             for (pubkey, account_map_entry) in
                 i.read().unwrap().range((self.start_bound, self.end_bound))
             {
@@ -1453,30 +1475,24 @@ impl<
         account_indexes: &AccountSecondaryIndexes,
         account_info: T,
         reclaims: &mut SlotList<T>,
-    ) -> bool {
-        let is_newly_inserted = {
-            // We don't atomically update both primary index and secondary index together.
-            // This certainly creates small time window with inconsistent state across the two indexes.
-            // However, this is acceptable because:
-            //
-            //  - A strict consistent view at any given moment of time is not necessary, because the only
-            //  use case for the secondary index is `scan`, and `scans` are only supported/require consistency
-            //  on frozen banks, and this inconsistency is only possible on working banks.
-            //
-            //  - The secondary index is never consulted as primary source of truth for gets/stores.
-            //  So, what the accounts_index sees alone is sufficient as a source of truth for other non-scan
-            //  account operations.
-            if let Some((mut w_account_entry, account_info)) =
-                self.get_account_write_entry_else_create(pubkey, slot, account_info)
-            {
-                w_account_entry.update(slot, account_info, reclaims);
-                false
-            } else {
-                true
-            }
-        };
+    ) {
+        // We don't atomically update both primary index and secondary index together.
+        // This certainly creates a small time window with inconsistent state across the two indexes.
+        // However, this is acceptable because:
+        //
+        //  - A strict consistent view at any given moment of time is not necessary, because the only
+        //  use case for the secondary index is `scan`, and `scans` are only supported/require consistency
+        //  on frozen banks, and this inconsistency is only possible on working banks.
+        //
+        //  - The secondary index is never consulted as primary source of truth for gets/stores.
+        //  So, what the accounts_index sees alone is sufficient as a source of truth for other non-scan
+        //  account operations.
+        if let Some((mut w_account_entry, account_info)) =
+            self.get_account_write_entry_else_create(pubkey, slot, account_info)
+        {
+            w_account_entry.update(slot, account_info, reclaims);
+        }
         self.update_secondary_indexes(pubkey, account_owner, account_data, account_indexes);
-        is_newly_inserted
     }
 
     pub fn unref_from_storage(&self, pubkey: &Pubkey) {
@@ -3279,30 +3295,52 @@ pub mod tests {
         assert!(found_key);
     }
 
+    fn account_maps_len_expensive<
+        T: 'static
+            + Sync
+            + Send
+            + Clone
+            + IsCached
+            + ZeroLamport
+            + std::cmp::PartialEq
+            + std::fmt::Debug,
+    >(
+        index: &AccountsIndex<T>,
+    ) -> usize {
+        index
+            .account_maps
+            .iter()
+            .map(|bin_map| bin_map.read().unwrap().len())
+            .sum()
+    }
+
     #[test]
     fn test_purge() {
         let key = Keypair::new();
         let index = AccountsIndex::<u64>::default();
         let mut gc = Vec::new();
-        assert!(index.upsert(
+        assert_eq!(0, account_maps_len_expensive(&index));
+        index.upsert(
             1,
             &key.pubkey(),
             &Pubkey::default(),
             &[],
             &AccountSecondaryIndexes::default(),
             12,
-            &mut gc
-        ));
+            &mut gc,
+        );
+        assert_eq!(1, account_maps_len_expensive(&index));
 
-        assert!(!index.upsert(
+        index.upsert(
             1,
             &key.pubkey(),
             &Pubkey::default(),
             &[],
             &AccountSecondaryIndexes::default(),
             10,
-            &mut gc
-        ));
+            &mut gc,
+        );
+        assert_eq!(1, account_maps_len_expensive(&index));
 
         let purges = index.purge_roots(&key.pubkey());
         assert_eq!(purges, (vec![], false));
@@ -3311,15 +3349,17 @@ pub mod tests {
         let purges = index.purge_roots(&key.pubkey());
         assert_eq!(purges, (vec![(1, 10)], true));
 
-        assert!(!index.upsert(
+        assert_eq!(1, account_maps_len_expensive(&index));
+        index.upsert(
             1,
             &key.pubkey(),
             &Pubkey::default(),
             &[],
             &AccountSecondaryIndexes::default(),
             9,
-            &mut gc
-        ));
+            &mut gc,
+        );
+        assert_eq!(1, account_maps_len_expensive(&index));
     }
 
     #[test]
@@ -3798,31 +3838,74 @@ pub mod tests {
     }
 
     #[test]
-    fn test_start_bin() {
+    fn test_bin_start_and_range() {
+        let index = AccountsIndex::<bool>::default();
+        let iter = AccountsIndexIterator::new(&index.account_maps, None::<RangeInclusive<Pubkey>>);
+        assert_eq!((0, usize::MAX), iter.bin_start_and_range());
+
+        let key_0 = Pubkey::new(&[0; 32]);
+        let key_ff = Pubkey::new(&[0xff; 32]);
+
+        let iter = AccountsIndexIterator::new(
+            &index.account_maps,
+            Some(RangeInclusive::new(key_0, key_ff)),
+        );
+        assert_eq!((0, BINS), iter.bin_start_and_range());
+        let iter = AccountsIndexIterator::new(
+            &index.account_maps,
+            Some(RangeInclusive::new(key_ff, key_0)),
+        );
+        assert_eq!((BINS - 1, 0), iter.bin_start_and_range());
+        let iter =
+            AccountsIndexIterator::new(&index.account_maps, Some((Included(key_0), Unbounded)));
+        assert_eq!((0, usize::MAX), iter.bin_start_and_range());
+        let iter =
+            AccountsIndexIterator::new(&index.account_maps, Some((Included(key_ff), Unbounded)));
+        assert_eq!((BINS - 1, usize::MAX), iter.bin_start_and_range());
+
+        assert_eq!(
+            (0..2)
+                .into_iter()
+                .skip(1)
+                .take(usize::MAX)
+                .collect::<Vec<_>>(),
+            vec![1]
+        );
+    }
+
+    #[test]
+    fn test_start_end_bin() {
         let index = AccountsIndex::<bool>::default();
         let iter = AccountsIndexIterator::new(&index.account_maps, None::<RangeInclusive<Pubkey>>);
         assert_eq!(iter.start_bin(), 0); // no range, so 0
+        assert_eq!(iter.end_bin_inclusive(), usize::MAX); // no range, so max
 
         let key = Pubkey::new(&[0; 32]);
         let iter =
             AccountsIndexIterator::new(&index.account_maps, Some(RangeInclusive::new(key, key)));
         assert_eq!(iter.start_bin(), 0); // start at pubkey 0, so 0
+        assert_eq!(iter.end_bin_inclusive(), 0); // end at pubkey 0, so 0
         let iter =
             AccountsIndexIterator::new(&index.account_maps, Some((Included(key), Excluded(key))));
         assert_eq!(iter.start_bin(), 0); // start at pubkey 0, so 0
+        assert_eq!(iter.end_bin_inclusive(), 0); // end at pubkey 0, so 0
         let iter =
             AccountsIndexIterator::new(&index.account_maps, Some((Excluded(key), Excluded(key))));
         assert_eq!(iter.start_bin(), 0); // start at pubkey 0, so 0
+        assert_eq!(iter.end_bin_inclusive(), 0); // end at pubkey 0, so 0
 
         let key = Pubkey::new(&[0xff; 32]);
         let iter =
             AccountsIndexIterator::new(&index.account_maps, Some(RangeInclusive::new(key, key)));
         assert_eq!(iter.start_bin(), BINS - 1); // start at highest possible pubkey, so BINS - 1
+        assert_eq!(iter.end_bin_inclusive(), BINS - 1);
         let iter =
             AccountsIndexIterator::new(&index.account_maps, Some((Included(key), Excluded(key))));
         assert_eq!(iter.start_bin(), BINS - 1); // start at highest possible pubkey, so BINS - 1
+        assert_eq!(iter.end_bin_inclusive(), BINS - 1);
         let iter =
             AccountsIndexIterator::new(&index.account_maps, Some((Excluded(key), Excluded(key))));
         assert_eq!(iter.start_bin(), BINS - 1); // start at highest possible pubkey, so BINS - 1
+        assert_eq!(iter.end_bin_inclusive(), BINS - 1);
     }
 }

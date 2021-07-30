@@ -1,41 +1,54 @@
 //! The `retransmit_stage` retransmits shreds between validators
 #![allow(clippy::rc_buffer)]
 
-use crate::{
-    cluster_info_vote_listener::VerifiedVoteReceiver,
-    cluster_nodes::ClusterNodes,
-    cluster_slots::ClusterSlots,
-    cluster_slots_service::{ClusterSlotsService, ClusterSlotsUpdateReceiver},
-    completed_data_sets_service::CompletedDataSetsSender,
-    repair_service::{DuplicateSlotsResetSender, RepairInfo},
-    result::{Error, Result},
-    window_service::{should_retransmit_and_persist, WindowService},
-};
-use crossbeam_channel::{Receiver, Sender};
-use lru::LruCache;
-use solana_client::rpc_response::SlotUpdate;
-use solana_gossip::cluster_info::{ClusterInfo, DATA_PLANE_FANOUT};
-use solana_ledger::shred::{get_shred_slot_index_type, ShredFetchStats};
-use solana_ledger::{blockstore::Blockstore, leader_schedule_cache::LeaderScheduleCache};
-use solana_measure::measure::Measure;
-use solana_metrics::inc_new_counter_error;
-use solana_perf::packet::{Packet, Packets};
-use solana_rpc::{max_slots::MaxSlots, rpc_subscriptions::RpcSubscriptions};
-use solana_runtime::{bank::Bank, bank_forks::BankForks};
-use solana_sdk::{clock::Slot, epoch_schedule::EpochSchedule, pubkey::Pubkey, timing::timestamp};
-use solana_streamer::streamer::PacketReceiver;
-use std::{
-    collections::hash_set::HashSet,
-    collections::{BTreeMap, BTreeSet, HashMap},
-    net::UdpSocket,
-    ops::{Deref, DerefMut},
-    sync::atomic::{AtomicBool, AtomicU64, Ordering},
-    sync::mpsc::channel,
-    sync::mpsc::RecvTimeoutError,
-    sync::Mutex,
-    sync::{Arc, RwLock},
-    thread::{self, Builder, JoinHandle},
-    time::Duration,
+use {
+    crate::{
+        ancestor_hashes_service::AncestorHashesReplayUpdateReceiver,
+        cluster_info_vote_listener::VerifiedVoteReceiver,
+        cluster_nodes::ClusterNodes,
+        cluster_slots::ClusterSlots,
+        cluster_slots_service::{ClusterSlotsService, ClusterSlotsUpdateReceiver},
+        completed_data_sets_service::CompletedDataSetsSender,
+        packet_hasher::PacketHasher,
+        repair_service::{DuplicateSlotsResetSender, RepairInfo},
+        result::{Error, Result},
+        window_service::{should_retransmit_and_persist, WindowService},
+    },
+    crossbeam_channel::{Receiver, Sender},
+    lru::LruCache,
+    solana_client::rpc_response::SlotUpdate,
+    solana_gossip::cluster_info::{ClusterInfo, DATA_PLANE_FANOUT},
+    solana_ledger::{
+        shred::{get_shred_slot_index_type, ShredFetchStats},
+        {blockstore::Blockstore, leader_schedule_cache::LeaderScheduleCache},
+    },
+    solana_measure::measure::Measure,
+    solana_metrics::inc_new_counter_error,
+    solana_perf::packet::{Packet, Packets},
+    solana_rpc::{max_slots::MaxSlots, rpc_subscriptions::RpcSubscriptions},
+    solana_runtime::{bank::Bank, bank_forks::BankForks},
+    solana_sdk::{
+        clock::{Epoch, Slot},
+        epoch_schedule::EpochSchedule,
+        pubkey::Pubkey,
+        timing::{timestamp, AtomicInterval},
+    },
+    solana_streamer::streamer::PacketReceiver,
+    std::{
+        collections::{
+            hash_set::HashSet,
+            {BTreeMap, BTreeSet, HashMap},
+        },
+        net::UdpSocket,
+        ops::DerefMut,
+        sync::{
+            atomic::{AtomicBool, AtomicU64, Ordering},
+            mpsc::{channel, RecvTimeoutError},
+            Arc, Mutex, RwLock,
+        },
+        thread::{self, Builder, JoinHandle},
+        time::Duration,
+    },
 };
 
 const MAX_DUPLICATE_COUNT: usize = 2;
@@ -55,7 +68,7 @@ struct RetransmitStats {
     repair_total: AtomicU64,
     discard_total: AtomicU64,
     retransmit_total: AtomicU64,
-    last_ts: AtomicU64,
+    last_ts: AtomicInterval,
     compute_turbine_peers_total: AtomicU64,
     retransmit_tree_mismatch: AtomicU64,
     packets_by_slot: Mutex<BTreeMap<Slot, usize>>,
@@ -115,12 +128,7 @@ fn update_retransmit_stats(
         }
     }
 
-    let now = timestamp();
-    let last = stats.last_ts.load(Ordering::Relaxed);
-    #[allow(deprecated)]
-    if now.saturating_sub(last) > 2000
-        && stats.last_ts.compare_and_swap(last, now, Ordering::Relaxed) == last
-    {
+    if stats.last_ts.should_update(2000) {
         datapoint_info!("retransmit-num_nodes", ("count", peers_len, i64));
         datapoint_info!(
             "retransmit-stage",
@@ -208,7 +216,6 @@ fn update_retransmit_stats(
     }
 }
 
-use crate::packet_hasher::PacketHasher;
 // Map of shred (slot, index, is_data) => list of hash values seen for that key.
 pub type ShredFilter = LruCache<(Slot, u32, bool), Vec<u64>>;
 
@@ -268,6 +275,38 @@ fn check_if_first_shred_received(
     }
 }
 
+fn maybe_update_peers_cache(
+    cluster_nodes: &RwLock<ClusterNodes<RetransmitStage>>,
+    shreds_received: &Mutex<ShredFilterAndHasher>,
+    last_peer_update: &AtomicU64,
+    cluster_info: &ClusterInfo,
+    bank_epoch: Epoch,
+    working_bank: &Bank,
+) {
+    const UPDATE_INTERVAL_MS: u64 = 1000;
+    if timestamp().saturating_sub(last_peer_update.load(Ordering::Acquire)) < UPDATE_INTERVAL_MS {
+        return;
+    }
+    {
+        // Write-lock cluster-nodes here so that only one thread does the
+        // computations to update peers.
+        let mut cluster_nodes = cluster_nodes.write().unwrap();
+        let now = timestamp();
+        if now.saturating_sub(last_peer_update.load(Ordering::Acquire)) < UPDATE_INTERVAL_MS {
+            return; // Some other thread has already done the update.
+        }
+        let epoch_staked_nodes = working_bank
+            .epoch_staked_nodes(bank_epoch)
+            .unwrap_or_default();
+        *cluster_nodes = ClusterNodes::<RetransmitStage>::new(cluster_info, &epoch_staked_nodes);
+        last_peer_update.store(now, Ordering::Release);
+    }
+    let mut shreds_received = shreds_received.lock().unwrap();
+    let (cache, hasher) = shreds_received.deref_mut();
+    cache.clear();
+    hasher.reset();
+}
+
 #[allow(clippy::too_many_arguments)]
 fn retransmit(
     bank_forks: &RwLock<BankForks>,
@@ -300,36 +339,28 @@ fn retransmit(
     drop(r_lock);
 
     let mut epoch_fetch = Measure::start("retransmit_epoch_fetch");
-    let (r_bank, root_bank) = {
+    let (working_bank, root_bank) = {
         let bank_forks = bank_forks.read().unwrap();
         (bank_forks.working_bank(), bank_forks.root_bank())
     };
-    let bank_epoch = r_bank.get_leader_schedule_epoch(r_bank.slot());
+    let bank_epoch = working_bank.get_leader_schedule_epoch(working_bank.slot());
     epoch_fetch.stop();
 
     let mut epoch_cache_update = Measure::start("retransmit_epoch_cach_update");
-    let now = timestamp();
-    let last = last_peer_update.load(Ordering::Relaxed);
-    #[allow(deprecated)]
-    if now.saturating_sub(last) > 1000
-        && last_peer_update.compare_and_swap(last, now, Ordering::Relaxed) == last
-    {
-        let epoch_staked_nodes = r_bank.epoch_staked_nodes(bank_epoch);
-        *cluster_nodes.write().unwrap() = ClusterNodes::<RetransmitStage>::new(
-            cluster_info,
-            &epoch_staked_nodes.unwrap_or_default(),
-        );
-        {
-            let mut sr = shreds_received.lock().unwrap();
-            sr.0.clear();
-            sr.1.reset();
-        }
-    }
+    maybe_update_peers_cache(
+        cluster_nodes,
+        shreds_received,
+        last_peer_update,
+        cluster_info,
+        bank_epoch,
+        &working_bank,
+    );
     let cluster_nodes = cluster_nodes.read().unwrap();
-    let mut peers_len = 0;
+    let peers_len = cluster_nodes.num_peers();
     epoch_cache_update.stop();
 
     let my_id = cluster_info.id();
+    let socket_addr_space = cluster_info.socket_addr_space();
     let mut discard_total = 0;
     let mut repair_total = 0;
     let mut retransmit_total = 0;
@@ -366,7 +397,7 @@ fn retransmit(
         }
 
         let mut compute_turbine_peers = Measure::start("turbine_start");
-        let slot_leader = leader_schedule_cache.slot_leader_at(shred_slot, Some(r_bank.deref()));
+        let slot_leader = leader_schedule_cache.slot_leader_at(shred_slot, Some(&working_bank));
         let (neighbors, children) =
             cluster_nodes.get_retransmit_peers(packet.meta.seed, DATA_PLANE_FANOUT, slot_leader);
         // If the node is on the critical path (i.e. the first node in each
@@ -378,7 +409,6 @@ fn retransmit(
             // TODO: Consider forwarding the packet to the root node here.
             retransmit_tree_mismatch += 1;
         }
-        peers_len = peers_len.max(cluster_nodes.num_peers());
         compute_turbine_peers.stop();
         compute_turbine_peers_total += compute_turbine_peers.as_us();
 
@@ -399,6 +429,7 @@ fn retransmit(
                 packet,
                 sock,
                 /*forward socket=*/ true,
+                socket_addr_space,
             );
         }
         ClusterInfo::retransmit_to(
@@ -406,6 +437,7 @@ fn retransmit(
             packet,
             sock,
             !anchor_node, // send to forward socket!
+            socket_addr_space,
         );
         retransmit_time.stop();
         retransmit_total += retransmit_time.as_us();
@@ -452,9 +484,11 @@ pub fn retransmitter(
     leader_schedule_cache: &Arc<LeaderScheduleCache>,
     cluster_info: Arc<ClusterInfo>,
     r: Arc<Mutex<PacketReceiver>>,
-    max_slots: &Arc<MaxSlots>,
+    max_slots: Arc<MaxSlots>,
     rpc_subscriptions: Option<Arc<RpcSubscriptions>>,
 ) -> Vec<JoinHandle<()>> {
+    let cluster_nodes = Arc::default();
+    let last_peer_update = Arc::default();
     let stats = Arc::new(RetransmitStats::default());
     let shreds_received = Arc::new(Mutex::new((
         LruCache::new(DEFAULT_LRU_SIZE),
@@ -469,8 +503,8 @@ pub fn retransmitter(
             let r = r.clone();
             let cluster_info = cluster_info.clone();
             let stats = stats.clone();
-            let cluster_nodes = Arc::default();
-            let last_peer_update = Arc::new(AtomicU64::new(0));
+            let cluster_nodes = Arc::clone(&cluster_nodes);
+            let last_peer_update = Arc::clone(&last_peer_update);
             let shreds_received = shreds_received.clone();
             let max_slots = max_slots.clone();
             let first_shreds_received = first_shreds_received.clone();
@@ -542,6 +576,7 @@ impl RetransmitStage {
         max_slots: &Arc<MaxSlots>,
         rpc_subscriptions: Option<Arc<RpcSubscriptions>>,
         duplicate_slots_sender: Sender<Slot>,
+        ancestor_hashes_replay_update_receiver: AncestorHashesReplayUpdateReceiver,
     ) -> Self {
         let (retransmit_sender, retransmit_receiver) = channel();
 
@@ -552,7 +587,7 @@ impl RetransmitStage {
             leader_schedule_cache,
             cluster_info.clone(),
             retransmit_receiver,
-            max_slots,
+            Arc::clone(max_slots),
             rpc_subscriptions,
         );
 
@@ -571,10 +606,11 @@ impl RetransmitStage {
             epoch_schedule,
             duplicate_slots_reset_sender,
             repair_validators,
+            cluster_info: cluster_info.clone(),
+            cluster_slots,
         };
         let window_service = WindowService::new(
             blockstore,
-            cluster_info.clone(),
             verified_receiver,
             retransmit_sender,
             repair_socket,
@@ -596,10 +632,10 @@ impl RetransmitStage {
                 );
                 rv && is_connected
             },
-            cluster_slots,
             verified_vote_receiver,
             completed_data_sets_sender,
             duplicate_slots_sender,
+            ancestor_hashes_replay_update_receiver,
         );
 
         Self {
@@ -629,6 +665,8 @@ mod tests {
     use solana_ledger::shred::Shred;
     use solana_net_utils::find_available_port_in_range;
     use solana_perf::packet::{Packet, Packets};
+    use solana_sdk::signature::Keypair;
+    use solana_streamer::socket::SocketAddrSpace;
     use std::net::{IpAddr, Ipv4Addr};
 
     #[test]
@@ -653,6 +691,7 @@ mod tests {
         let me_retransmit = UdpSocket::bind(format!("127.0.0.1:{}", port)).unwrap();
         // need to make sure tvu and tpu are valid addresses
         me.tvu_forwards = me_retransmit.local_addr().unwrap();
+
         let port = find_available_port_in_range(ip_addr, (8000, 10000)).unwrap();
         me.tvu = UdpSocket::bind(format!("127.0.0.1:{}", port))
             .unwrap()
@@ -665,7 +704,11 @@ mod tests {
             .find(|pk| me.id < *pk)
             .unwrap();
         let other = ContactInfo::new_localhost(&other, 0);
-        let cluster_info = ClusterInfo::new_with_invalid_keypair(other);
+        let cluster_info = ClusterInfo::new(
+            other,
+            Arc::new(Keypair::new()),
+            SocketAddrSpace::Unspecified,
+        );
         cluster_info.insert_info(me);
 
         let retransmit_socket = Arc::new(vec![UdpSocket::bind("0.0.0.0:0").unwrap()]);
@@ -678,7 +721,7 @@ mod tests {
             &leader_schedule_cache,
             cluster_info,
             Arc::new(Mutex::new(retransmit_receiver)),
-            &Arc::new(MaxSlots::default()),
+            Arc::default(), // MaxSlots
             None,
         );
 
