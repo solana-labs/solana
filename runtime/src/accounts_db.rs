@@ -6120,32 +6120,30 @@ impl AccountsDb {
     }
 
     fn add_test_accounts(&self) {
-        let threads = 30;
-        let count = 15_000_000;
-        info!("adding test accounts");
-        (0..threads).into_par_iter().for_each(|_| {
-            let mut reclaims = vec![];
-            let mut count2 = 0;
-            (0..count).into_iter().for_each(|_| {
-                count2 += 1;
-                if count2 >= 100000 {
-                    self.accounts_index.account_maps.par_iter().for_each(|i| {
-                        i.write().unwrap().flush();});
-                    count2 = 0;
-                }
-                let key = Pubkey::new_rand();
-                let info = AccountInfo::default();
-                self.accounts_index.upsert(
-                    0,
-                    &key,
-                    &key,
-                    &vec![][..],
-                    &self.account_indexes,
-                    info,
-                    &mut reclaims,
-                    false,
-                );
+        let iterations = 100;
+        let threads = 32;
+        let count = 15_000_000 / iterations;
+        (0..iterations).into_iter().for_each(|i| {
+            info!("adding test accounts: {}", i);
+            (0..threads).into_par_iter().for_each(|_| {
+                let mut reclaims = vec![];
+                (0..count).into_iter().for_each(|_| {
+                    let key = Pubkey::new_rand();
+                    let info = AccountInfo::default();
+                    self.accounts_index.upsert(
+                        0,
+                        &key,
+                        &key,
+                        &vec![][..],
+                        &self.account_indexes,
+                        info,
+                        &mut reclaims,
+                        false,
+                    );
+                });
             });
+            self.accounts_index.account_maps.par_iter().for_each(|i| {
+                i.write().unwrap().flush();});
         });
         info!("done adding test accounts");
     }
