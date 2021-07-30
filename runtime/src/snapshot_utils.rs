@@ -133,15 +133,15 @@ impl IncrementalSnapshotArchiveInfo {
         })
     }
 
-    fn path(&self) -> &PathBuf {
+    pub fn path(&self) -> &PathBuf {
         &self.inner.path
     }
 
-    fn base_slot(&self) -> &Slot {
+    pub fn base_slot(&self) -> &Slot {
         &self.base_slot
     }
 
-    fn slot(&self) -> &Slot {
+    pub fn slot(&self) -> &Slot {
         &self.inner.slot
     }
 
@@ -368,7 +368,7 @@ where
 
 /// Package up bank snapshot files, snapshot storages, and slot deltas for an incremental snapshot.
 #[allow(clippy::too_many_arguments)]
-fn package_incremental_snapshot<P, Q>(
+pub fn package_incremental_snapshot<P, Q>(
     bank: &Bank,
     incremental_snapshot_base_slot: Slot,
     bank_snapshot_info: &BankSnapshotInfo,
@@ -420,6 +420,7 @@ where
     )
 }
 
+/// Create a snapshot package
 fn do_package_snapshot<P>(
     bank: &Bank,
     bank_snapshot_info: &BankSnapshotInfo,
@@ -434,8 +435,6 @@ fn do_package_snapshot<P>(
 where
     P: AsRef<Path>,
 {
-    // Create a snapshot package
-
     // Hard link the snapshot into a tmpdir, to ensure its not removed prior to packaging.
     {
         let snapshot_hardlink_dir = snapshot_tmpdir
@@ -1777,25 +1776,20 @@ pub fn bank_to_full_snapshot_archive<P: AsRef<Path>, Q: AsRef<Path>>(
     bank.rehash(); // Bank accounts may have been manually modified by the caller
 
     let temp_dir = tempfile::tempdir_in(snapshots_dir)?;
-
     let storages = bank.get_snapshot_storages();
     let bank_snapshot_info = add_bank_snapshot(&temp_dir, bank, &storages, snapshot_version)?;
-    let package = package_full_snapshot(
+
+    package_process_and_archive_full_snapshot(
         bank,
         &bank_snapshot_info,
         &temp_dir,
-        bank.src.slot_deltas(&bank.src.roots()),
         snapshot_package_output_path,
         storages,
         archive_format,
         snapshot_version,
-        None,
-    )?;
-
-    let package = process_accounts_package_pre(package, thread_pool, None);
-
-    archive_snapshot_package(&package, maximum_snapshots_to_retain)?;
-    Ok(package.tar_output_file)
+        thread_pool,
+        maximum_snapshots_to_retain,
+    )
 }
 
 /// Convenience function to create an incremental snapshot archive out of any Bank, regardless of
@@ -1825,25 +1819,102 @@ pub fn bank_to_incremental_snapshot_archive<P: AsRef<Path>, Q: AsRef<Path>>(
     bank.rehash(); // Bank accounts may have been manually modified by the caller
 
     let temp_dir = tempfile::tempdir_in(snapshots_dir)?;
-
     let storages = bank.get_incremental_snapshot_storages(full_snapshot_slot);
     let bank_snapshot_info = add_bank_snapshot(&temp_dir, bank, &storages, snapshot_version)?;
-    let package = package_incremental_snapshot(
+
+    package_process_and_archive_incremental_snapshot(
         bank,
         full_snapshot_slot,
         &bank_snapshot_info,
         &temp_dir,
-        bank.src.slot_deltas(&bank.src.roots()),
         snapshot_package_output_path,
         storages,
+        archive_format,
+        snapshot_version,
+        thread_pool,
+        maximum_snapshots_to_retain,
+    )
+}
+
+/// Helper function to hold shared code to package, process, and archive full snapshots
+pub fn package_process_and_archive_full_snapshot(
+    bank: &Bank,
+    bank_snapshot_info: &BankSnapshotInfo,
+    snapshots_dir: impl AsRef<Path>,
+    snapshot_package_output_path: impl AsRef<Path>,
+    snapshot_storages: SnapshotStorages,
+    archive_format: ArchiveFormat,
+    snapshot_version: SnapshotVersion,
+    thread_pool: Option<&ThreadPool>,
+    maximum_snapshots_to_retain: usize,
+) -> Result<PathBuf> {
+    let package = package_full_snapshot(
+        bank,
+        bank_snapshot_info,
+        snapshots_dir,
+        bank.src.slot_deltas(&bank.src.roots()),
+        snapshot_package_output_path,
+        snapshot_storages,
         archive_format,
         snapshot_version,
         None,
     )?;
 
-    let package = process_accounts_package_pre(package, thread_pool, Some(full_snapshot_slot));
+    process_and_archive_snapshot_package_pre(
+        package,
+        thread_pool,
+        None,
+        maximum_snapshots_to_retain,
+    )
+}
+
+/// Helper function to hold shared code to package, process, and archive incremental snapshots
+#[allow(clippy::too_many_arguments)]
+pub fn package_process_and_archive_incremental_snapshot(
+    bank: &Bank,
+    incremental_snapshot_base_slot: Slot,
+    bank_snapshot_info: &BankSnapshotInfo,
+    snapshots_dir: impl AsRef<Path>,
+    snapshot_package_output_path: impl AsRef<Path>,
+    snapshot_storages: SnapshotStorages,
+    archive_format: ArchiveFormat,
+    snapshot_version: SnapshotVersion,
+    thread_pool: Option<&ThreadPool>,
+    maximum_snapshots_to_retain: usize,
+) -> Result<PathBuf> {
+    let package = package_incremental_snapshot(
+        bank,
+        incremental_snapshot_base_slot,
+        bank_snapshot_info,
+        snapshots_dir,
+        bank.src.slot_deltas(&bank.src.roots()),
+        snapshot_package_output_path,
+        snapshot_storages,
+        archive_format,
+        snapshot_version,
+        None,
+    )?;
+
+    process_and_archive_snapshot_package_pre(
+        package,
+        thread_pool,
+        Some(incremental_snapshot_base_slot),
+        maximum_snapshots_to_retain,
+    )
+}
+
+/// Helper function to hold shared code to process and archive snapshot packages
+fn process_and_archive_snapshot_package_pre(
+    package_pre: AccountsPackagePre,
+    thread_pool: Option<&ThreadPool>,
+    incremental_snapshot_base_slot: Option<Slot>,
+    maximum_snapshots_to_retain: usize,
+) -> Result<PathBuf> {
+    let package =
+        process_accounts_package_pre(package_pre, thread_pool, incremental_snapshot_base_slot);
 
     archive_snapshot_package(&package, maximum_snapshots_to_retain)?;
+
     Ok(package.tar_output_file)
 }
 

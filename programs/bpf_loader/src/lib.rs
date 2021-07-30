@@ -31,7 +31,7 @@ use solana_sdk::{
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     clock::Clock,
     entrypoint::{HEAP_LENGTH, SUCCESS},
-    feature_set::{add_missing_program_error_mappings, upgradeable_close_instruction},
+    feature_set::add_missing_program_error_mappings,
     ic_logger_msg, ic_msg,
     instruction::InstructionError,
     keyed_account::{from_keyed_account, keyed_account_at_index},
@@ -620,9 +620,6 @@ fn process_loader_upgradeable_instruction(
             ic_logger_msg!(logger, "New authority {:?}", new_authority);
         }
         UpgradeableLoaderInstruction::Close => {
-            if !invoke_context.is_feature_active(&upgradeable_close_instruction::id()) {
-                return Err(InstructionError::InvalidInstructionData);
-            }
             let close_account = keyed_account_at_index(keyed_accounts, 0)?;
             let recipient_account = keyed_account_at_index(keyed_accounts, 1)?;
             let authority = keyed_account_at_index(keyed_accounts, 2)?;

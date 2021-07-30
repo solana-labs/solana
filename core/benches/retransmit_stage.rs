@@ -3,34 +3,42 @@
 extern crate solana_core;
 extern crate test;
 
-use log::*;
-use solana_core::retransmit_stage::retransmitter;
-use solana_entry::entry::Entry;
-use solana_gossip::cluster_info::{ClusterInfo, Node};
-use solana_gossip::contact_info::ContactInfo;
-use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
-use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
-use solana_ledger::shred::Shredder;
-use solana_measure::measure::Measure;
-use solana_perf::packet::{Packet, Packets};
-use solana_rpc::max_slots::MaxSlots;
-use solana_runtime::bank::Bank;
-use solana_runtime::bank_forks::BankForks;
-use solana_sdk::hash::Hash;
-use solana_sdk::pubkey;
-use solana_sdk::signature::{Keypair, Signer};
-use solana_sdk::system_transaction;
-use solana_sdk::timing::timestamp;
-use solana_streamer::socket::SocketAddrSpace;
-use std::net::UdpSocket;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::mpsc::channel;
-use std::sync::Mutex;
-use std::sync::{Arc, RwLock};
-use std::thread::sleep;
-use std::thread::Builder;
-use std::time::Duration;
-use test::Bencher;
+use {
+    log::*,
+    solana_core::retransmit_stage::retransmitter,
+    solana_entry::entry::Entry,
+    solana_gossip::{
+        cluster_info::{ClusterInfo, Node},
+        contact_info::ContactInfo,
+    },
+    solana_ledger::{
+        genesis_utils::{create_genesis_config, GenesisConfigInfo},
+        leader_schedule_cache::LeaderScheduleCache,
+        shred::Shredder,
+    },
+    solana_measure::measure::Measure,
+    solana_perf::packet::{Packet, Packets},
+    solana_runtime::{bank::Bank, bank_forks::BankForks},
+    solana_sdk::{
+        hash::Hash,
+        pubkey,
+        signature::{Keypair, Signer},
+        system_transaction,
+        timing::timestamp,
+    },
+    solana_streamer::socket::SocketAddrSpace,
+    std::{
+        net::UdpSocket,
+        sync::{
+            atomic::{AtomicUsize, Ordering},
+            mpsc::channel,
+            Arc, Mutex, RwLock,
+        },
+        thread::{sleep, Builder},
+        time::Duration,
+    },
+    test::Bencher,
+};
 
 #[bench]
 #[allow(clippy::same_item_push)]
@@ -102,7 +110,7 @@ fn bench_retransmitter(bencher: &mut Bencher) {
         &leader_schedule_cache,
         cluster_info,
         packet_receiver,
-        &Arc::new(MaxSlots::default()),
+        Arc::default(), // solana_rpc::max_slots::MaxSlots
         None,
     );
 

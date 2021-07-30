@@ -3,6 +3,8 @@
 use solana_sdk::{
     account::AccountSharedData,
     compute_budget::ComputeBudget,
+    fee_calculator::FeeCalculator,
+    hash::Hash,
     instruction::{CompiledInstruction, Instruction, InstructionError},
     keyed_account::{create_keyed_accounts_unified, KeyedAccount},
     pubkey::Pubkey,
@@ -107,6 +109,10 @@ pub trait InvokeContext {
     fn get_sysvar_data(&self, id: &Pubkey) -> Option<Rc<Vec<u8>>>;
     /// Get this invocation's compute budget
     fn get_compute_budget(&self) -> &ComputeBudget;
+    /// Get this invocation's blockhash
+    fn get_blockhash(&self) -> &Hash;
+    /// Get this invocation's `FeeCalculator`
+    fn get_fee_calculator(&self) -> &FeeCalculator;
 }
 
 /// Convenience macro to log a message with an `Rc<RefCell<dyn Logger>>`
@@ -379,13 +385,14 @@ pub struct MockInvokeContext<'a> {
     pub invoke_stack: Vec<InvokeContextStackFrame<'a>>,
     pub logger: MockLogger,
     pub compute_budget: ComputeBudget,
-    #[allow(deprecated)]
     pub bpf_compute_budget: BpfComputeBudget,
     pub compute_meter: MockComputeMeter,
     pub programs: Vec<(Pubkey, ProcessInstructionWithContext)>,
     pub accounts: Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>,
     pub sysvars: Vec<(Pubkey, Option<Rc<Vec<u8>>>)>,
     pub disabled_features: HashSet<Pubkey>,
+    pub blockhash: Hash,
+    pub fee_calculator: FeeCalculator,
 }
 impl<'a> MockInvokeContext<'a> {
     pub fn new(keyed_accounts: Vec<KeyedAccount<'a>>) -> Self {
@@ -394,7 +401,6 @@ impl<'a> MockInvokeContext<'a> {
             invoke_stack: Vec::with_capacity(compute_budget.max_invoke_depth),
             logger: MockLogger::default(),
             compute_budget,
-            #[allow(deprecated)]
             bpf_compute_budget: compute_budget.into(),
             compute_meter: MockComputeMeter {
                 remaining: std::i64::MAX as u64,
@@ -403,6 +409,8 @@ impl<'a> MockInvokeContext<'a> {
             accounts: vec![],
             sysvars: vec![],
             disabled_features: HashSet::default(),
+            blockhash: Hash::default(),
+            fee_calculator: FeeCalculator::default(),
         };
         invoke_context
             .invoke_stack
@@ -524,5 +532,11 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
     }
     fn get_compute_budget(&self) -> &ComputeBudget {
         &self.compute_budget
+    }
+    fn get_blockhash(&self) -> &Hash {
+        &self.blockhash
+    }
+    fn get_fee_calculator(&self) -> &FeeCalculator {
+        &self.fee_calculator
     }
 }

@@ -1752,6 +1752,7 @@ impl Bank {
         }
     }
 
+    #[allow(deprecated)]
     fn update_fees(&self) {
         self.update_sysvar_account(&sysvar::fees::id(), |account| {
             create_account(
@@ -3262,6 +3263,18 @@ impl Bank {
                             compute_budget.max_units,
                         )));
 
+                        let (blockhash, fee_calculator) = {
+                            let blockhash_queue = self.blockhash_queue.read().unwrap();
+                            let blockhash = blockhash_queue.last_hash();
+                            (
+                                blockhash,
+                                blockhash_queue
+                                    .get_fee_calculator(&blockhash)
+                                    .cloned()
+                                    .unwrap_or_else(|| self.fee_calculator.clone()),
+                            )
+                        };
+
                         process_result = self.message_processor.process_message(
                             tx.message(),
                             &loader_refcells,
@@ -3276,6 +3289,8 @@ impl Bank {
                             &mut timings.details,
                             self.rc.accounts.clone(),
                             &self.ancestors,
+                            blockhash,
+                            fee_calculator,
                         );
 
                         transaction_log_messages.push(Self::collect_log_messages(log_collector));
@@ -5286,6 +5301,7 @@ impl Bank {
         for sysvar_id in &[
             sysvar::clock::id(),
             sysvar::epoch_schedule::id(),
+            #[allow(deprecated)]
             sysvar::fees::id(),
             #[allow(deprecated)]
             sysvar::recent_blockhashes::id(),
@@ -5560,6 +5576,8 @@ pub(crate) mod tests {
         status_cache::MAX_CACHE_ENTRIES,
     };
     use crossbeam_channel::{bounded, unbounded};
+    #[allow(deprecated)]
+    use solana_sdk::sysvar::fees::Fees;
     use solana_sdk::{
         account::Account,
         clock::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT},
@@ -5580,7 +5598,7 @@ pub(crate) mod tests {
         },
         system_instruction::{self, SystemError},
         system_program,
-        sysvar::{fees::Fees, rewards::Rewards},
+        sysvar::rewards::Rewards,
         timing::duration_as_s,
     };
     use solana_vote_program::{
@@ -9364,6 +9382,7 @@ pub(crate) mod tests {
         assert!(stake_delegations.get(&stake_keypair.pubkey()).is_some());
     }
 
+    #[allow(deprecated)]
     #[test]
     fn test_bank_fees_account() {
         let (mut genesis_config, _) = create_genesis_config(500);
@@ -11978,6 +11997,7 @@ pub(crate) mod tests {
                         &[
                             sysvar::clock::id(),
                             sysvar::epoch_schedule::id(),
+                            #[allow(deprecated)]
                             sysvar::fees::id(),
                             #[allow(deprecated)]
                             sysvar::recent_blockhashes::id(),
@@ -12089,6 +12109,7 @@ pub(crate) mod tests {
                         &[
                             sysvar::clock::id(),
                             sysvar::epoch_schedule::id(),
+                            #[allow(deprecated)]
                             sysvar::fees::id(),
                             #[allow(deprecated)]
                             sysvar::recent_blockhashes::id(),
@@ -13605,9 +13626,11 @@ pub(crate) mod tests {
         bank.add_builtin("mock_program1", program_id, mock_ix_processor);
 
         let blockhash = bank.last_blockhash();
-        let blockhash_sysvar = sysvar::fees::id();
-        let orig_lamports = bank.get_account(&sysvar::fees::id()).unwrap().lamports();
-        info!("{:?}", bank.get_account(&sysvar::fees::id()));
+        #[allow(deprecated)]
+        let blockhash_sysvar = sysvar::clock::id();
+        #[allow(deprecated)]
+        let orig_lamports = bank.get_account(&sysvar::clock::id()).unwrap().lamports();
+        info!("{:?}", bank.get_account(&sysvar::clock::id()));
         let tx = system_transaction::transfer(&mint_keypair, &blockhash_sysvar, 10, blockhash);
         assert_eq!(
             bank.process_transaction(&tx),
@@ -13616,11 +13639,13 @@ pub(crate) mod tests {
                 InstructionError::ReadonlyLamportChange
             ))
         );
+        #[allow(deprecated)]
         assert_eq!(
-            bank.get_account(&sysvar::fees::id()).unwrap().lamports(),
+            bank.get_account(&sysvar::clock::id()).unwrap().lamports(),
             orig_lamports
         );
-        info!("{:?}", bank.get_account(&sysvar::fees::id()));
+        #[allow(deprecated)]
+        info!("{:?}", bank.get_account(&sysvar::clock::id()));
 
         let accounts = vec![
             AccountMeta::new(mint_keypair.pubkey(), true),

@@ -217,7 +217,7 @@ fn process_spy_results(
     }
 }
 
-fn process_spy(matches: &ArgMatches) -> std::io::Result<()> {
+fn process_spy(matches: &ArgMatches, socket_addr_space: SocketAddrSpace) -> std::io::Result<()> {
     let num_nodes_exactly = matches
         .value_of("num_nodes_exactly")
         .map(|num| num.to_string().parse().unwrap());
@@ -231,7 +231,6 @@ fn process_spy(matches: &ArgMatches) -> std::io::Result<()> {
     let pubkey = matches
         .value_of("node_pubkey")
         .map(|pubkey_str| pubkey_str.parse::<Pubkey>().unwrap());
-    let socket_addr_space = SocketAddrSpace::new(matches.is_present("allow_private_addr"));
     let shred_version = value_t_or_exit!(matches, "shred_version", u16);
     let identity_keypair = keypair_of(matches, "identity");
 
@@ -276,13 +275,15 @@ fn parse_entrypoint(matches: &ArgMatches) -> Option<SocketAddr> {
     })
 }
 
-fn process_rpc_url(matches: &ArgMatches) -> std::io::Result<()> {
+fn process_rpc_url(
+    matches: &ArgMatches,
+    socket_addr_space: SocketAddrSpace,
+) -> std::io::Result<()> {
     let any = matches.is_present("any");
     let all = matches.is_present("all");
     let entrypoint_addr = parse_entrypoint(matches);
     let timeout = value_t_or_exit!(matches, "timeout", u64);
     let shred_version = value_t_or_exit!(matches, "shred_version", u16);
-    let socket_addr_space = SocketAddrSpace::new(matches.is_present("allow_private_addr"));
     let (_all_peers, validators) = discover(
         None, // keypair
         entrypoint_addr.as_ref(),
@@ -326,13 +327,13 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     solana_logger::setup_with_default("solana=info");
 
     let matches = parse_matches();
-
+    let socket_addr_space = SocketAddrSpace::new(matches.is_present("allow_private_addr"));
     match matches.subcommand() {
         ("spy", Some(matches)) => {
-            process_spy(matches)?;
+            process_spy(matches, socket_addr_space)?;
         }
         ("rpc-url", Some(matches)) => {
-            process_rpc_url(matches)?;
+            process_rpc_url(matches, socket_addr_space)?;
         }
         _ => unreachable!(),
     }
