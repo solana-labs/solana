@@ -8,9 +8,8 @@ title: Web Wallets
 extension, Solana wallet that makes it safe & easy for you to store, send,
 receive, collect, and swap tokens.
 
-- Connect to dapps
-- NFT support
-- Swap tokens
+- Use Solana dapps
+- Beautiful NFT support
 - Ledger hardware wallet support
 
 Available for Chrome, Brave, Firefox, and Edge
