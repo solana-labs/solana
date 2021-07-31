@@ -4,7 +4,7 @@ title: Web Wallets
 
 ## Phantom
 
-[Phantom](https://phantom.app/download) is a friendly non-custodial, browser
+[Phantom](https://phantom.app/) is a friendly non-custodial, browser
 extension, Solana wallet that makes it safe & easy for you to store, send,
 receive, collect, and swap tokens.
 
