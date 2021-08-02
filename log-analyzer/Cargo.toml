@@ -12,7 +12,7 @@ publish = false
 [dependencies]
 byte-unit = "4.0.12"
 clap = "2.33.1"
-serde = "1.0.126"
+serde = "1.0.127"
 serde_json = "1.0.66"
 solana-clap-utils = { path = "../clap-utils", version = "=1.8.0" }
 solana-logger = { path = "../logger", version = "=1.8.0" }
