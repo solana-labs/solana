@@ -179,7 +179,8 @@ fn execute_batch(
         .unwrap()
         .accumulate(execution_cost_units);
     debug!(
-        "batch of {} transactions, total execute cu {}, remaining block cost cap {}",
+        "bank {:?} batch of {} transactions, total execute cu {}, remaining block cost cap {}",
+        bank.slot(),
         batch.sanitized_transactions().len(),
         execution_cost_units,
         remaining_block_cost_cap
