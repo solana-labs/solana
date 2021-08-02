@@ -4840,6 +4840,8 @@ impl Bank {
         verify = verify && self.verify_hash();
         verify2_time.stop();
 
+        crate::accounts_db::AccountsDb::add_test_accounts(self.rc.accounts.clone());
+
         datapoint_info!(
             "verify_snapshot_bank",
             ("clean_us", clean_time.as_us(), i64),

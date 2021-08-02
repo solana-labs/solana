@@ -6114,37 +6114,48 @@ impl AccountsDb {
             }
         });
 
-        self.add_test_accounts();
+        //self.add_test_accounts();
         stop.store(true, Ordering::Relaxed);
         self.accounts_index.account_maps.first().unwrap().read().unwrap().set_startup(false);
     }
 
-    fn add_test_accounts(&self) {
+    pub fn add_test_accounts(accounts: Arc<crate::accounts::Accounts>) {
         let iterations = 50;
-        let threads = 32;
+        let threads = 2;
         let count = 15_000_000 / iterations;
-        let BINS = self.accounts_index.account_maps.len();
+        let BINS = accounts.accounts_db.accounts_index.account_maps.len();
 
-        (0..iterations).into_iter().for_each(|i| {
-            info!("adding test accounts: {}, {}", i, count * threads);
-            (0..threads).into_par_iter().for_each(|_| {
-                let data = (0..count).into_iter().map(|_| {
-                    let key = Pubkey::new_rand();
-                    let info = AccountInfo::default();
-                    (key, info)
-                }).collect::<Vec<_>>();
-                self.accounts_index.insert_new_if_missing_into_primary_index(0, data.len(), data.into_iter());
-            });
-            info!("flushing");
-            (0..threads).into_par_iter().for_each(|i| {
-                let skip = i * BINS / threads;
-                let end = (i + 1) * BINS / threads;
-                let take = end - skip;
-                self.accounts_index.account_maps.iter().skip(skip).take(take).for_each(|i| {
-                    i.read().unwrap().flush();});
-            });
+        std::thread::Builder::new()
+        .name("account-writers".to_string())
+        .spawn(move || {
+            let mut i = 0;
+            let accounts = 
+            &accounts
+            .accounts_db;
+            loop {
+                info!("adding test accounts: {}, {}", i, count * threads);
+    
+                (0..threads).into_par_iter().for_each(|_| {
+                    let data = (0..count).into_iter().map(|_| {
+                        let key = Pubkey::new_rand();
+                        let info = AccountInfo::default();
+                        (key, info)
+                    }).collect::<Vec<_>>();
+                    accounts.accounts_index.insert_new_if_missing_into_primary_index(0, data.len(), data.into_iter());
+                });
+                
+                info!("flushing");
+                (0..threads).into_par_iter().for_each(|i| {
+                    let skip = i * BINS / threads;
+                    let end = (i + 1) * BINS / threads;
+                    let take = end - skip;
+                    accounts.accounts_index.account_maps.iter().skip(skip).take(take).for_each(|i| {
+                        i.read().unwrap().flush();});
+                });
+                
+                i += 1;
+            }
         });
-        info!("done adding test accounts");
     }
 
     fn calculate_storage_count_and_alive_bytes(
