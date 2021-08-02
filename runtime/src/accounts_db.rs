@@ -6122,7 +6122,7 @@ impl AccountsDb {
     fn add_test_accounts(&self) {
         let iterations = 50;
         let threads = 32;
-        let count = 30_000_000 / iterations;
+        let count = 15_000_000 / iterations;
         let BINS = self.accounts_index.account_maps.len();
 
         (0..iterations).into_iter().for_each(|i| {
