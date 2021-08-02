@@ -75,6 +75,7 @@ test-stable-bpf)
   bpf_dump_archive="bpf-dumps.tar.bz2"
   rm -f "$bpf_dump_archive"
   tar cjvf "$bpf_dump_archive" "${bpf_target_path}"/{deploy/*.txt,bpfel-unknown-unknown/release/*.so}
+  exit 0
   ;;
 test-stable-perf)
   if [[ $(uname) = Linux ]]; then
