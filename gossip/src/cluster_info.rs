@@ -1690,7 +1690,7 @@ impl ClusterInfo {
                                 Some(root_bank.feature_set.clone()),
                             )
                         }
-                        None => (HashMap::new(), None),
+                        None => (Arc::default(), None),
                     };
                     let require_stake_for_gossip =
                         self.require_stake_for_gossip(feature_set.as_deref(), &stakes);
@@ -2485,7 +2485,7 @@ impl ClusterInfo {
         // feature does not roll back (if the feature happens to get enabled in
         // a minority fork).
         let (feature_set, stakes) = match bank_forks {
-            None => (None, HashMap::default()),
+            None => (None, Arc::default()),
             Some(bank_forks) => {
                 let bank = bank_forks.read().unwrap().root_bank();
                 let feature_set = bank.feature_set.clone();
