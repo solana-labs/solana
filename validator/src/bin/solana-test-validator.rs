@@ -282,8 +282,6 @@ fn main() {
         )
         .get_matches();
 
-    let ledger_path = value_t_or_exit!(matches, "ledger_path", PathBuf);
-    let reset_ledger = matches.is_present("reset");
     let output = if matches.is_present("quiet") {
         Output::None
     } else if matches.is_present("log") {
@@ -291,47 +289,9 @@ fn main() {
     } else {
         Output::Dashboard
     };
-    let mut ledger_fd_lock = FdLock::new(fs::File::open(&ledger_path).unwrap());
-    let _ledger_lock = ledger_fd_lock.try_lock().unwrap_or_else(|_| {
-        println!(
-            "Error: Unable to lock {} directory. Check if another validator is running",
-            ledger_path.display()
-        );
-        exit(1);
-    });
 
-    if reset_ledger {
-        remove_directory_contents(&ledger_path).unwrap_or_else(|err| {
-            println!("Error: Unable to remove {}: {}", ledger_path.display(), err);
-            exit(1);
-        })
-    }
-    solana_runtime::snapshot_utils::remove_tmp_snapshot_archives(&ledger_path);
-
-    let validator_log_symlink = ledger_path.join("validator.log");
-    let logfile = if output != Output::Log {
-        let validator_log_with_timestamp = format!(
-            "validator-{}.log",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_millis()
-        );
-
-        let _ = fs::remove_file(&validator_log_symlink);
-        symlink::symlink_file(&validator_log_with_timestamp, &validator_log_symlink).unwrap();
-
-        Some(
-            ledger_path
-                .join(validator_log_with_timestamp)
-                .into_os_string()
-                .into_string()
-                .unwrap(),
-        )
-    } else {
-        None
-    };
-    let _logger_thread = redirect_stderr_to_file(logfile);
+    let ledger_path = value_t_or_exit!(matches, "ledger_path", PathBuf);
+    let reset_ledger = matches.is_present("reset");
 
     if !ledger_path.exists() {
         fs::create_dir(&ledger_path).unwrap_or_else(|err| {
