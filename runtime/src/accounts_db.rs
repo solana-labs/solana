@@ -6122,26 +6122,18 @@ impl AccountsDb {
     fn add_test_accounts(&self) {
         let iterations = 50;
         let threads = 32;
-        let count = 15_000_000 / iterations;
+        let count = 30_000_000 / iterations;
         let BINS = self.accounts_index.account_maps.len();
+
         (0..iterations).into_iter().for_each(|i| {
             info!("adding test accounts: {}, {}", i, count * threads);
             (0..threads).into_par_iter().for_each(|_| {
-                let mut reclaims = vec![];
-                (0..count).into_iter().for_each(|_| {
+                let data = (0..count).into_iter().map(|_| {
                     let key = Pubkey::new_rand();
                     let info = AccountInfo::default();
-                    self.accounts_index.upsert(
-                        0,
-                        &key,
-                        &key,
-                        &vec![][..],
-                        &self.account_indexes,
-                        info,
-                        &mut reclaims,
-                        false,
-                    );
-                });
+                    (key, info)
+                }).collect::<Vec<_>>();
+                self.accounts_index.insert_new_if_missing_into_primary_index(0, data.len(), data.into_iter());
             });
             info!("flushing");
             (0..threads).into_par_iter().for_each(|i| {

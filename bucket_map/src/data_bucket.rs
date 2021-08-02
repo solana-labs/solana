@@ -23,7 +23,9 @@ pub struct BucketMapStats {
     pub data: Arc<BucketStats>,
 }
 
-const DEFAULT_CAPACITY: u8 = 4;
+// 23: 8,388,608
+// 24; // 16,777,216
+const DEFAULT_CAPACITY: u8 = 23;
 
 #[repr(C)]
 struct Header {
