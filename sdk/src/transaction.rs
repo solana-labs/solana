@@ -8,6 +8,7 @@ use crate::{
     hash::Hash,
     instruction::{CompiledInstruction, Instruction, InstructionError},
     message::Message,
+    nonce::NONCED_TX_MARKER_IX_INDEX,
     program_utils::limited_deserialize,
     pubkey::Pubkey,
     short_vec,
@@ -464,7 +465,7 @@ pub fn uses_durable_nonce(tx: &Transaction) -> Option<&CompiledInstruction> {
     let message = tx.message();
     message
         .instructions
-        .get(0)
+        .get(NONCED_TX_MARKER_IX_INDEX as usize)
         .filter(|maybe_ix| {
             let prog_id_idx = maybe_ix.program_id_index as usize;
             match message.account_keys.get(prog_id_idx) {

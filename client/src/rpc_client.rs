@@ -895,7 +895,7 @@ impl RpcClient {
         &self,
         config: RpcBlockProductionConfig,
     ) -> RpcResult<RpcBlockProduction> {
-        self.send(RpcRequest::GetBlockProduction, json!(config))
+        self.send(RpcRequest::GetBlockProduction, json!([config]))
     }
 
     pub fn get_stake_activation(
@@ -2657,5 +2657,24 @@ mod tests {
     fn test_rpc_client_thread() {
         let rpc_client = RpcClient::new_mock("succeeds".to_string());
         thread::spawn(move || rpc_client);
+    }
+
+    // Regression test that the get_block_production_with_config
+    // method internally creates the json params array correctly.
+    #[test]
+    fn get_block_production_with_config_no_error() -> ClientResult<()> {
+        let rpc_client = RpcClient::new_mock("succeeds".to_string());
+
+        let config = RpcBlockProductionConfig {
+            identity: None,
+            range: None,
+            commitment: None,
+        };
+
+        let prod = rpc_client.get_block_production_with_config(config)?.value;
+
+        assert!(!prod.by_identity.is_empty());
+
+        Ok(())
     }
 }

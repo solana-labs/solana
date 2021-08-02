@@ -284,7 +284,7 @@ impl Blockstore {
         self.db
     }
 
-    pub fn ledger_path(&self) -> &Path {
+    pub fn ledger_path(&self) -> &PathBuf {
         &self.ledger_path
     }
 

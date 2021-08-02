@@ -4,9 +4,15 @@ title: Web Wallets
 
 ## Phantom
 
-[Phantom](https://phantom.app/download) is a non-custodial, chrome extension,
-Solana crypto wallet reimagined for DeFi & NFTs with a simple, clean and
-beautiful UX. Use invite code DEVDOCS to get access.
+[Phantom](https://phantom.app/) is a friendly non-custodial, browser
+extension, Solana wallet that makes it safe & easy for you to store, send,
+receive, collect, and swap tokens.
+
+- Use Solana dapps
+- Beautiful NFT support
+- Ledger hardware wallet support
+
+Available for Chrome, Brave, Firefox, and Edge
 
 ## SolFlare
 

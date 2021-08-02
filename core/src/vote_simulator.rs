@@ -56,7 +56,12 @@ impl VoteSimulator {
             latest_validator_votes_for_frozen_banks: LatestValidatorVotesForFrozenBanks::default(),
         }
     }
-    pub fn fill_bank_forks(&mut self, forks: Tree<u64>, cluster_votes: &HashMap<Pubkey, Vec<u64>>) {
+    pub fn fill_bank_forks(
+        &mut self,
+        forks: Tree<u64>,
+        cluster_votes: &HashMap<Pubkey, Vec<u64>>,
+        is_frozen: bool,
+    ) {
         let root = *forks.root().data();
         assert!(self.bank_forks.read().unwrap().get(root).is_some());
 
@@ -107,15 +112,17 @@ impl VoteSimulator {
             while new_bank.tick_height() < new_bank.max_tick_height() {
                 new_bank.register_tick(&Hash::new_unique());
             }
-            new_bank.freeze();
-            self.progress
-                .get_fork_stats_mut(new_bank.slot())
-                .expect("All frozen banks must exist in the Progress map")
-                .bank_hash = Some(new_bank.hash());
-            self.heaviest_subtree_fork_choice.add_new_leaf_slot(
-                (new_bank.slot(), new_bank.hash()),
-                Some((new_bank.parent_slot(), new_bank.parent_hash())),
-            );
+            if !visit.node().has_no_child() || is_frozen {
+                new_bank.freeze();
+                self.progress
+                    .get_fork_stats_mut(new_bank.slot())
+                    .expect("All frozen banks must exist in the Progress map")
+                    .bank_hash = Some(new_bank.hash());
+                self.heaviest_subtree_fork_choice.add_new_leaf_slot(
+                    (new_bank.slot(), new_bank.hash()),
+                    Some((new_bank.parent_slot(), new_bank.parent_hash())),
+                );
+            }
             self.bank_forks.write().unwrap().insert(new_bank);
 
             walk.forward();
@@ -221,7 +228,7 @@ impl VoteSimulator {
             .filter_map(|slot| {
                 let mut fork_tip_parent = tr(slot - 1);
                 fork_tip_parent.push_front(tr(slot));
-                self.fill_bank_forks(fork_tip_parent, cluster_votes);
+                self.fill_bank_forks(fork_tip_parent, cluster_votes, true);
                 if votes_to_simulate.contains(&slot) {
                     Some((slot, self.simulate_vote(slot, my_pubkey, tower)))
                 } else {
@@ -264,7 +271,7 @@ impl VoteSimulator {
             let mut fork_tip_parent = tr(start_slot + i - 1);
             // The tip of the fork
             fork_tip_parent.push_front(tr(start_slot + i));
-            self.fill_bank_forks(fork_tip_parent, cluster_votes);
+            self.fill_bank_forks(fork_tip_parent, cluster_votes, true);
             if self
                 .simulate_vote(i + start_slot, my_pubkey, tower)
                 .is_empty()
