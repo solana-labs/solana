@@ -1,6 +1,6 @@
 use solana_bpf_rust_sysvar::process_instruction;
 use solana_program_test::*;
-use solana_sdk::sysvar::{fees, recent_blockhashes};
+use solana_sdk::sysvar::recent_blockhashes;
 use solana_sdk::{
     instruction::{AccountMeta, Instruction},
     pubkey::Pubkey,
