@@ -1754,12 +1754,17 @@ impl Bank {
 
     #[allow(deprecated)]
     fn update_fees(&self) {
-        self.update_sysvar_account(&sysvar::fees::id(), |account| {
-            create_account(
-                &sysvar::fees::Fees::new(&self.fee_calculator),
-                self.inherit_specially_retained_account_fields(account),
-            )
-        });
+        if !self
+            .feature_set
+            .is_active(&feature_set::disable_fees_sysvar::id())
+        {
+            self.update_sysvar_account(&sysvar::fees::id(), |account| {
+                create_account(
+                    &sysvar::fees::Fees::new(&self.fee_calculator),
+                    self.inherit_specially_retained_account_fields(account),
+                )
+            });
+        }
     }
 
     fn update_rent(&self) {
@@ -7410,8 +7415,8 @@ pub(crate) mod tests {
 
         bank.collect_rent_in_partition((0, 0, 1)); // all range
 
-        // unrelated 1-lamport account exists
-        assert_eq!(bank.collected_rent.load(Relaxed), rent_collected + 1);
+        // unrelated 1-lamport accounts exists
+        assert_eq!(bank.collected_rent.load(Relaxed), rent_collected + 2);
         assert_eq!(
             bank.get_account(&rent_due_pubkey).unwrap().lamports(),
             little_lamports - rent_collected
