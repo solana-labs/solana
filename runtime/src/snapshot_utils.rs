@@ -1597,7 +1597,7 @@ pub fn snapshot_bank(
     let highest_bank_snapshot_info = get_highest_bank_snapshot_info(snapshots_dir)
         .expect("no snapshots found in config snapshots_dir");
 
-    let package = AccountsPackagePre::new_full_snapshot(
+    let package = AccountsPackagePre::new_full_snapshot_package(
         root_bank,
         &highest_bank_snapshot_info,
         snapshots_dir,
@@ -1710,7 +1710,7 @@ pub fn package_process_and_archive_full_snapshot(
     thread_pool: Option<&ThreadPool>,
     maximum_snapshots_to_retain: usize,
 ) -> Result<PathBuf> {
-    let package = AccountsPackagePre::new_full_snapshot(
+    let package = AccountsPackagePre::new_full_snapshot_package(
         bank,
         bank_snapshot_info,
         snapshots_dir,
@@ -1744,7 +1744,7 @@ pub fn package_process_and_archive_incremental_snapshot(
     thread_pool: Option<&ThreadPool>,
     maximum_snapshots_to_retain: usize,
 ) -> Result<PathBuf> {
-    let package = AccountsPackagePre::new_incremental_snapshot(
+    let package = AccountsPackagePre::new_incremental_snapshot_package(
         bank,
         incremental_snapshot_base_slot,
         bank_snapshot_info,

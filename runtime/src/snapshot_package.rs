@@ -71,7 +71,7 @@ impl AccountsPackagePre {
 
     /// Create a snapshot package
     #[allow(clippy::too_many_arguments)]
-    pub fn new_snapshot<P>(
+    fn new_snapshot<P>(
         bank: &Bank,
         bank_snapshot_info: &BankSnapshotInfo,
         status_cache_slot_deltas: Vec<BankSlotDelta>,
@@ -115,7 +115,7 @@ impl AccountsPackagePre {
 
     /// Package up bank snapshot files, snapshot storages, and slot deltas for a full snapshot.
     #[allow(clippy::too_many_arguments)]
-    pub fn new_full_snapshot<P, Q>(
+    pub fn new_full_snapshot_package<P, Q>(
         bank: &Bank,
         bank_snapshot_info: &BankSnapshotInfo,
         snapshots_dir: P,
@@ -153,9 +153,9 @@ impl AccountsPackagePre {
         )
     }
 
-    /// Package up bank snapshot files, snapshot storages, and slot deltas for a full snapshot.
+    /// Package up bank snapshot files, snapshot storages, and slot deltas for an incremental snapshot.
     #[allow(clippy::too_many_arguments)]
-    pub fn new_incremental_snapshot<P, Q>(
+    pub fn new_incremental_snapshot_package<P, Q>(
         bank: &Bank,
         incremental_snapshot_base_slot: Slot,
         bank_snapshot_info: &BankSnapshotInfo,
