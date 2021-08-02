@@ -853,7 +853,7 @@ impl ReplayStage {
         (progress, heaviest_subtree_fork_choice)
     }
 
-    fn dump_then_repair_correct_slots(
+    pub fn dump_then_repair_correct_slots(
         duplicate_slots_to_repair: &mut DuplicateSlotsToRepair,
         ancestors: &mut HashMap<Slot, HashSet<Slot>>,
         descendants: &mut HashMap<Slot, HashSet<Slot>>,
@@ -2800,8 +2800,8 @@ pub mod tests {
         assert!(ReplayStage::is_partition_detected(&ancestors, 4, 3));
     }
 
-    struct ReplayBlockstoreComponents {
-        blockstore: Arc<Blockstore>,
+    pub struct ReplayBlockstoreComponents {
+        pub blockstore: Arc<Blockstore>,
         validator_node_to_vote_keys: HashMap<Pubkey, Pubkey>,
         my_pubkey: Pubkey,
         cluster_info: ClusterInfo,
@@ -2809,10 +2809,10 @@ pub mod tests {
         poh_recorder: Mutex<PohRecorder>,
         tower: Tower,
         rpc_subscriptions: Arc<RpcSubscriptions>,
-        vote_simulator: VoteSimulator,
+        pub vote_simulator: VoteSimulator,
     }
 
-    fn replay_blockstore_components(
+    pub fn replay_blockstore_components(
         forks: Option<Tree<Slot>>,
         num_validators: usize,
         generate_votes: Option<GenerateVotes>,
@@ -3764,7 +3764,7 @@ pub mod tests {
 
         // Create the tree of banks in a BankForks object
         let forks = tr(0) / (tr(1)) / (tr(2));
-        vote_simulator.fill_bank_forks(forks, &HashMap::new());
+        vote_simulator.fill_bank_forks(forks, &HashMap::new(), true);
         let mut frozen_banks: Vec<_> = vote_simulator
             .bank_forks
             .read()
@@ -3841,7 +3841,7 @@ pub mod tests {
         let mut cluster_votes = HashMap::new();
         let votes = vec![0, 2];
         cluster_votes.insert(my_node_pubkey, votes.clone());
-        vote_simulator.fill_bank_forks(forks, &cluster_votes);
+        vote_simulator.fill_bank_forks(forks, &cluster_votes, true);
 
         // Fill banks with votes
         for vote in votes {
@@ -4821,7 +4821,7 @@ pub mod tests {
         ]
         .into_iter()
         .collect();
-        vote_simulator.fill_bank_forks(forks, &validator_votes);
+        vote_simulator.fill_bank_forks(forks, &validator_votes, true);
 
         let (bank_forks, mut progress) = (vote_simulator.bank_forks, vote_simulator.progress);
         let ledger_path = get_tmp_ledger_path!();
@@ -5721,7 +5721,7 @@ pub mod tests {
         let cluster_votes = generate_votes
             .map(|generate_votes| generate_votes(pubkeys))
             .unwrap_or_default();
-        vote_simulator.fill_bank_forks(tree.clone(), &cluster_votes);
+        vote_simulator.fill_bank_forks(tree.clone(), &cluster_votes, true);
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Blockstore::open(&ledger_path).unwrap();
         blockstore.add_tree(tree, false, true, 2, Hash::default());
