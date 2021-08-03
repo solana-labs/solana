@@ -676,15 +676,15 @@ pub struct AccountsIndex<T> {
     pub removed_bank_ids: Mutex<HashSet<BankId>>,
 }
 
-impl<T> Default for AccountsIndex<T> {
+impl<
+        T: 'static + Clone + IsCached + ZeroLamport + std::marker::Sync + std::marker::Send + Debug,
+    > Default for AccountsIndex<T>
+{
     fn default() -> Self {
-        let bins = BINS_DEFAULT;
+        let (account_maps, bin_calculator) = Self::allocate_accounts_index(BINS_DEFAULT);
         Self {
-            account_maps: (0..bins)
-                .into_iter()
-                .map(|_| RwLock::new(AccountMap::default()))
-                .collect::<Vec<_>>(),
-            bin_calculator: PubkeyBinCalculator16::new(bins),
+            account_maps,
+            bin_calculator,
             program_id_index: SecondaryIndex::<DashMapSecondaryIndexEntry>::new(
                 "program_id_index_stats",
             ),
@@ -705,6 +705,14 @@ impl<
         T: 'static + Clone + IsCached + ZeroLamport + std::marker::Sync + std::marker::Send + Debug,
     > AccountsIndex<T>
 {
+    fn allocate_accounts_index(bins: usize) -> (LockMapType<T>, PubkeyBinCalculator16) {
+        let account_maps = (0..bins)
+            .into_iter()
+            .map(|_| RwLock::new(AccountMap::default()))
+            .collect::<Vec<_>>();
+        let bin_calculator = PubkeyBinCalculator16::new(bins);
+        (account_maps, bin_calculator)
+    }
     fn iter<R>(&self, range: Option<R>) -> AccountsIndexIterator<T>
     where
         R: RangeBounds<Pubkey>,
