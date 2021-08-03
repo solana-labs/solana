@@ -13704,12 +13704,10 @@ pub(crate) mod tests {
                 InstructionError::ReadonlyLamportChange
             ))
         );
-        #[allow(deprecated)]
         assert_eq!(
             bank.get_account(&sysvar::clock::id()).unwrap().lamports(),
             orig_lamports
         );
-        #[allow(deprecated)]
         info!("{:?}", bank.get_account(&sysvar::clock::id()));
 
         let accounts = vec![
