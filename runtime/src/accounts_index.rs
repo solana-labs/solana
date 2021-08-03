@@ -1425,8 +1425,9 @@ impl<
         items.for_each(|(pubkey, account_info)| {
             let bin = get_bin_pubkey(&pubkey);
             // this value is equivalent to what update() below would have created if we inserted a new item
+            let is_zero_lamport = account_info.is_zero_lamport();
             let info = WriteAccountMapEntry::new_entry_after_update(slot, account_info);
-            binned[bin].1.push((pubkey, info));
+            binned[bin].1.push((pubkey, info, is_zero_lamport));
         });
         binned.retain(|x| !x.1.is_empty());
 
@@ -1442,17 +1443,21 @@ impl<
                 let mut duplicate_keys = Vec::with_capacity(items.len() / 10);
                 let mut w_account_maps = self.account_maps[pubkey_bin].write().unwrap();
                 let mut insert_time = Measure::start("insert_into_primary_index");
-                items.into_iter().for_each(|(pubkey, new_item)| {
-                    let already_exists = self.insert_new_entry_if_missing_with_lock(
-                        pubkey,
-                        &mut w_account_maps,
-                        new_item,
-                    );
-                    if let Some((mut w_account_entry, account_info, pubkey)) = already_exists {
-                        w_account_entry.update(slot, account_info, &mut _reclaims);
-                        duplicate_keys.push(pubkey);
-                    }
-                });
+                items
+                    .into_iter()
+                    .for_each(|(pubkey, new_item, is_zero_lamport)| {
+                        let already_exists = self.insert_new_entry_if_missing_with_lock(
+                            pubkey,
+                            &mut w_account_maps,
+                            new_item,
+                        );
+                        if let Some((mut w_account_entry, account_info, pubkey)) = already_exists {
+                            w_account_entry.update(slot, account_info, &mut _reclaims);
+                            duplicate_keys.push(pubkey);
+                        } else if is_zero_lamport {
+                            duplicate_keys.push(pubkey);
+                        }
+                    });
                 insert_time.stop();
                 insertion_time.fetch_add(insert_time.as_us(), Ordering::Relaxed);
                 duplicate_keys
