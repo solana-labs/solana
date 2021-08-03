@@ -1314,7 +1314,7 @@ fn assert_instruction_count() {
             ("relative_call", 10),
             ("sanity", 169),
             ("sanity++", 168),
-            ("secp256k1_recover", 357),
+            ("secp256k1_recover", 359),
             ("sha", 1040),
             ("struct_pass", 8),
             ("struct_ret", 22),
@@ -1342,7 +1342,7 @@ fn assert_instruction_count() {
     }
 
     let mut passed = true;
-    println!("\n  {:30} expected actual  diff", "BPF program");
+    println!("\n  {:36} expected actual  diff", "BPF program");
     for program in programs.iter() {
         let program_id = solana_sdk::pubkey::new_rand();
         let key = solana_sdk::pubkey::new_rand();
@@ -1351,7 +1351,7 @@ fn assert_instruction_count() {
         let count = run_program(program.0, &program_id, parameter_accounts, &[]).unwrap();
         let diff: i64 = count as i64 - program.1 as i64;
         println!(
-            "  {:30} {:8} {:6} {:+5} ({:+3.0}%)",
+            "  {:36} {:8} {:6} {:+5} ({:+3.0}%)",
             program.0,
             program.1,
             count,
