@@ -1204,10 +1204,10 @@ mod test {
                 .map(|s| (s, Hash::default()))
                 .collect::<Vec<_>>()
         );
-        let parents: Vec<_> = heaviest_subtree_fork_choice
+        assert!(heaviest_subtree_fork_choice
             .ancestor_iterator((0, Hash::default()))
-            .collect();
-        assert!(parents.is_empty());
+            .next()
+            .is_none());
 
         // Set a root, everything but slots 2, 4 should be removed
         heaviest_subtree_fork_choice.set_root((2, Hash::default()));
@@ -1555,11 +1555,8 @@ mod test {
             .add_new_leaf_slot((10, Hash::default()), Some((4, Hash::default())));
         let ancestors = heaviest_subtree_fork_choice
             .ancestor_iterator((10, Hash::default()))
-            .collect::<Vec<_>>();
-        for a in ancestors
-            .into_iter()
-            .chain(std::iter::once((10, Hash::default())))
-        {
+            .chain(std::iter::once((10, Hash::default())));
+        for a in ancestors {
             assert_eq!(heaviest_subtree_fork_choice.best_slot(&a).unwrap().0, 10);
         }
 
@@ -1568,11 +1565,8 @@ mod test {
             .add_new_leaf_slot((9, Hash::default()), Some((4, Hash::default())));
         let ancestors = heaviest_subtree_fork_choice
             .ancestor_iterator((9, Hash::default()))
-            .collect::<Vec<_>>();
-        for a in ancestors
-            .into_iter()
-            .chain(std::iter::once((9, Hash::default())))
-        {
+            .chain(std::iter::once((9, Hash::default())));
+        for a in ancestors {
             assert_eq!(heaviest_subtree_fork_choice.best_slot(&a).unwrap().0, 9);
         }
 
@@ -1581,11 +1575,8 @@ mod test {
             .add_new_leaf_slot((11, Hash::default()), Some((4, Hash::default())));
         let ancestors = heaviest_subtree_fork_choice
             .ancestor_iterator((11, Hash::default()))
-            .collect::<Vec<_>>();
-        for a in ancestors
-            .into_iter()
-            .chain(std::iter::once((9, Hash::default())))
-        {
+            .chain(std::iter::once((9, Hash::default())));
+        for a in ancestors {
             assert_eq!(heaviest_subtree_fork_choice.best_slot(&a).unwrap().0, 9);
         }
 
@@ -1608,11 +1599,8 @@ mod test {
             .add_new_leaf_slot((8, Hash::default()), Some((4, Hash::default())));
         let ancestors = heaviest_subtree_fork_choice
             .ancestor_iterator((8, Hash::default()))
-            .collect::<Vec<_>>();
-        for a in ancestors
-            .into_iter()
-            .chain(std::iter::once((8, Hash::default())))
-        {
+            .chain(std::iter::once((8, Hash::default())));
+        for a in ancestors {
             let best_slot = if a.0 > 1 { 8 } else { leaf6 };
             assert_eq!(
                 heaviest_subtree_fork_choice.best_slot(&a).unwrap().0,
@@ -1635,11 +1623,8 @@ mod test {
             .add_new_leaf_slot((7, Hash::default()), Some((4, Hash::default())));
         let ancestors = heaviest_subtree_fork_choice
             .ancestor_iterator((7, Hash::default()))
-            .collect::<Vec<_>>();
-        for a in ancestors
-            .into_iter()
-            .chain(std::iter::once((8, Hash::default())))
-        {
+            .chain(std::iter::once((8, Hash::default())));
+        for a in ancestors {
             assert_eq!(heaviest_subtree_fork_choice.best_slot(&a).unwrap().0, 8);
         }
 

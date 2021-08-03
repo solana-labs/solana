@@ -1490,8 +1490,7 @@ pub mod tests {
         let input: Vec<Vec<u32>> = vec![vec![]];
         let cumulative = CumulativeOffsets::from_raw(&input);
 
-        let src: Vec<_> = input.into_iter().flatten().collect();
-        let len = src.len();
+        let len = input.into_iter().flatten().count();
         assert_eq!(cumulative.total_count, len);
         assert_eq!(cumulative.cumulative_offsets.len(), 0); // 2 non-empty vectors
     }
@@ -1601,8 +1600,7 @@ pub mod tests {
         let input: Vec<Vec<Vec<u32>>> = vec![vec![]];
         let cumulative = CumulativeOffsets::from_raw_2d(&input);
 
-        let src: Vec<_> = input.into_iter().flatten().collect();
-        let len = src.len();
+        let len = input.into_iter().flatten().count();
         assert_eq!(cumulative.total_count, len);
         assert_eq!(cumulative.cumulative_offsets.len(), 0); // 2 non-empty vectors
 
