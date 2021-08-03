@@ -5743,7 +5743,7 @@ impl AccountsDb {
         }
     }
 
-    pub fn add_root_to_squash_bank(&self, slot: Slot) {
+    pub fn add_root(&self, slot: Slot) {
         self.add_root_to_update_index(slot, self.caching_enabled);
         if self.caching_enabled {
             self.accounts_cache.add_root(slot);
