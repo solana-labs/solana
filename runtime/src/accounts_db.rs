@@ -2097,7 +2097,7 @@ impl AccountsDb {
         );
     }
 
-    fn do_shrink_slot_stores<'a, I>(&'a self, slot: Slot, stores: I, _is_startup: bool) -> usize
+    fn do_shrink_slot_stores<'a, I>(&'a self, slot: Slot, stores: I, is_startup: bool) -> usize
     where
         I: Iterator<Item = &'a Arc<AccountStorageEntry>>,
     {
@@ -2254,8 +2254,10 @@ impl AccountsDb {
             if let Some(slot_stores) = self.storage.get_slot_stores(slot) {
                 slot_stores.write().unwrap().retain(|_key, store| {
                     if store.count() == 0 {
-                        self.dirty_stores
-                            .insert((slot, store.append_vec_id()), store.clone());
+                        if !is_startup {
+                            self.dirty_stores
+                                .insert((slot, store.append_vec_id()), store.clone());
+                        }
                         dead_storages.push(store.clone());
                         false
                     } else {
@@ -5233,8 +5235,11 @@ impl AccountsDb {
                 );
                 let count = store.remove_account(account_info.stored_size, reset_accounts);
                 if count == 0 {
-                    self.dirty_stores
-                        .insert((*slot, store.append_vec_id()), store.clone());
+                    // expected_slot is none should exclude write path from flush/shrink/bank drop
+                    if expected_slot.is_none() {
+                        self.dirty_stores
+                            .insert((*slot, store.append_vec_id()), store.clone());
+                    }
                     dead_slots.insert(*slot);
                 } else if self.caching_enabled
                     && Self::is_shrinking_productive(*slot, &[store.clone()])
@@ -5738,11 +5743,16 @@ impl AccountsDb {
         }
     }
 
-    pub fn add_root(&self, slot: Slot) {
-        self.accounts_index.add_root(slot, self.caching_enabled);
+    pub fn add_root_to_squash_bank(&self, slot: Slot) {
+        self.add_root_to_update_index(slot, self.caching_enabled);
         if self.caching_enabled {
             self.accounts_cache.add_root(slot);
         }
+    }
+
+    pub fn add_root_to_update_index(&self, slot: Slot, caching_enabled: bool) {
+        self.accounts_index.add_root(slot, caching_enabled);
+
         if let Some(slot_stores) = self.storage.get_slot_stores(slot) {
             for (store_id, store) in slot_stores.read().unwrap().iter() {
                 self.dirty_stores.insert((slot, *store_id), store.clone());
@@ -6009,7 +6019,7 @@ impl AccountsDb {
             if pass == 0 {
                 // Need to add these last, otherwise older updates will be cleaned
                 for slot in &slots {
-                    self.accounts_index.add_root(*slot, false);
+                    self.add_root_to_update_index(*slot, false);
                 }
 
                 self.initialize_storage_count_and_alive_bytes(&mut timings);
