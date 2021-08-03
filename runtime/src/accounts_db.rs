@@ -2472,12 +2472,19 @@ impl AccountsDb {
     }
 
     pub fn shrink_all_slots(&self, is_startup: bool) {
+        const MAX_DIRTY_STORES: usize = 10_000;
         if is_startup && self.caching_enabled {
             let slots = self.all_slots_in_storage();
-            let chunk_size = std::cmp::max(slots.len() / 8, 1); // approximately 400k slots in a snapshot
-            slots.par_chunks(chunk_size).for_each(|slots| {
-                for slot in slots {
-                    self.shrink_slot_forced(*slot, is_startup);
+            let outer_chunk_size = 2000;
+            let chunk_size = std::cmp::max(outer_chunk_size / 8, 1);
+            slots.chunks(outer_chunk_size).for_each(|chunk| {
+                chunk.par_chunks(chunk_size).for_each(|slots| {
+                    for slot in slots {
+                        self.shrink_slot_forced(*slot, is_startup);
+                    }
+                });
+                if self.dirty_stores.len() > MAX_DIRTY_STORES {
+                    self.clean_accounts(None, is_startup);
                 }
             });
         } else {
@@ -2486,6 +2493,9 @@ impl AccountsDb {
                     self.shrink_slot_forced(slot, false);
                 } else {
                     self.do_shrink_slot_forced_v1(slot);
+                }
+                if self.dirty_stores.len() > MAX_DIRTY_STORES {
+                    self.clean_accounts(None, is_startup);
                 }
             }
         }
