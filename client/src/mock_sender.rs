@@ -5,12 +5,8 @@ use {
         client_error::Result,
         rpc_request::RpcRequest,
         rpc_response::{
-<<<<<<< HEAD
             Response, RpcBlockProduction, RpcBlockProductionRange, RpcResponseContext,
-            RpcVersionInfo,
-=======
-            Response, RpcResponseContext, RpcSimulateTransactionResult, RpcVersionInfo,
->>>>>>> 5dcfd7ce7 (Add some docs for RpcClient and friends (#18748))
+            RpcSimulateTransactionResult, RpcVersionInfo,
         },
         rpc_sender::RpcSender,
     },
@@ -174,11 +170,7 @@ impl RpcSender for MockSender {
                 };
                 Value::String(signature)
             }
-<<<<<<< HEAD
-            "getMinimumBalanceForRentExemption" => json![20],
-            "getVersion" => {
-=======
-            RpcRequest::SimulateTransaction => serde_json::to_value(Response {
+            "simulateTransaction" => serde_json::to_value(Response {
                 context: RpcResponseContext { slot: 1 },
                 value: RpcSimulateTransactionResult {
                     err: None,
@@ -186,9 +178,8 @@ impl RpcSender for MockSender {
                     accounts: None,
                 },
             })?,
-            RpcRequest::GetMinimumBalanceForRentExemption => Value::Number(Number::from(20)),
-            RpcRequest::GetVersion => {
->>>>>>> 5dcfd7ce7 (Add some docs for RpcClient and friends (#18748))
+            "getMinimumBalanceForRentExemption" => json![20],
+            "getVersion" => {
                 let version = Version::default();
                 json!(RpcVersionInfo {
                     solana_core: version.to_string(),
