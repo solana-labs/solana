@@ -186,6 +186,32 @@ impl ShredWAL {
         Ok(())
     }
 
+    // Purge log files that contain shreds in slots < purge_to_slot
+    /*
+    pub fn purge_logs(&mut self, purge_to_slot: Slot) {
+        let mut ids_to_purge = vec![];
+        for (id, _) in self
+            .max_slots
+            .iter()
+            .filter(|(_, max_slot)| **max_slot < purge_to_slot)
+        {
+            match self.cur_id {
+                // Do not delete the current log file
+                Some(cur_id) if *id != cur_id => {
+                    // Collect which files are getting purged
+                    ids_to_purge.push(cur_id);
+                    let _ = fs::remove_file(self.id_path(*id));
+                }
+                _ => {}
+            }
+        }
+
+        for id in ids_to_purge.iter() {
+            self.max_slots.remove(id);
+        }
+    }
+    */
+
     // Path to WAL file with specified id
     fn id_path(&self, id: u128) -> PathBuf {
         self.wal_path.join(id.to_string())
@@ -231,34 +257,6 @@ impl ShredWAL {
             .copy_from_slice(&WAL_ENTRY_DELETION.to_le_bytes());
         entry
     }
-
-    // Purge log files where the newest shreds in the log are
-    // older than the max_purge_slot
-    /*
-    // TODO: plug this back in shortly
-    pub fn purge_logs(&mut self, max_purge_slot: Slot) {
-        let mut ids_to_purge = vec![];
-        for (id, _) in self
-            .max_slots
-            .iter()
-            .filter(|(_, max_slot)| **max_slot < max_purge_slot)
-        {
-            match self.cur_id {
-                // Do not delete the current log file
-                Some(cur_id) if *id != cur_id => {
-                    // Collect which files are getting purged
-                    ids_to_purge.push(cur_id);
-                    let _ = fs::remove_file(self.id_path(*id));
-                }
-                _ => {}
-            }
-        }
-
-        for id in ids_to_purge.iter() {
-            self.max_slots.remove(id);
-        }
-    }
-    */
 }
 
 impl Blockstore {
@@ -378,12 +376,20 @@ impl Blockstore {
         Ok(())
     }
 
-    /// Purge an entire slot of data shreds
-    pub(crate) fn purge_data_shreds(&self, slot: Slot) {
+    /// Purge the data shreds within [from_slot, to_slot) slots
+    pub(crate) fn purge_data_shreds(&self, from_slot: Slot, to_slot: Slot) {
         // Remove from the cache; no issues if the slot had previously been flushed
-        self.data_shred_cache.remove(&slot);
-        // Could get errors such as file doesn't exist; we don't care so just eat the error
-        let _ = fs::remove_file(self.slot_data_shreds_path(slot));
+        let mut data_shred_cache_slots = self.data_shred_cache_slots.lock().unwrap();
+        for slot in from_slot..to_slot {
+            data_shred_cache_slots.remove(&slot);
+            self.data_shred_cache.remove(&slot);
+        }
+        drop(data_shred_cache_slots);
+        // TODO: Do this in parallel across several threads ?
+        for slot in from_slot..to_slot {
+            // Could get errors such as file doesn't exist; we don't care so just eat the error
+            let _ = fs::remove_file(self.slot_data_shreds_path(slot));
+        }
     }
 
     /// Recover shreds from WAL and re-establish consistent state in the blockstore

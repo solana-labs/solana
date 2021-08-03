@@ -156,6 +156,7 @@ impl LedgerCleanupService {
         );
 
         let mut flush_time = Measure::start("flush_time");
+        // TODO: Do this in parallel across several threads ?
         for slot in slots_to_flush.iter() {
             blockstore.flush_data_shreds_for_slot_to_fs(*slot)?;
         }

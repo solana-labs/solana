@@ -227,9 +227,7 @@ impl Blockstore {
         purge_stats.delete_range += delete_range_timer.as_us();
         purge_stats.write_batch += write_timer.as_us();
 
-        for slot in from_slot..to_slot {
-            self.purge_data_shreds(slot);
-        }
+        self.purge_data_shreds(from_slot, to_slot);
 
         // only drop w_active_transaction_status_index after we do db.write(write_batch);
         // otherwise, readers might be confused with inconsistent state between
