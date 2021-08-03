@@ -548,32 +548,25 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
         drop(read_lock);
 
         {
-            let mut wc = &mut self.write_cache[ix].write().unwrap(); // maybe get lock for each item?
             for k in flush_keys.into_iter() {
-                match wc.entry(k) {
-                    HashMapEntry::Occupied(occupied) => {
-                        //error!("mid flush: {}, {}", ix, line!());
-                        let mut instance = occupied.get().instance.write().unwrap();
-                        if instance.dirty {
-                            //error!("mid flush: {}, {}", ix, line!());
-                            self.update_no_cache(
-                                occupied.key(),
-                                |_current| {
-                                    Some((
-                                        instance.data.slot_list.clone(),
-                                        instance.data.ref_count,
-                                    ))
-                                },
-                                None,
-                                true,
-                            );
-                            //error!("mid flush: {}, {}", ix, line!());
-                            instance.age = next_age; // keep newly updated stuff around
-                            instance.dirty = false;
-                            flushed += 1;
-                        }
-                    }
-                    HashMapEntry::Vacant(vacant) => { // do nothing, item is no longer in cache somehow, so obviously not dirty
+                let mut wc = &mut self.write_cache[ix].read().unwrap(); // maybe get lock for each item?
+                if let Some(occupied) = wc.get(&k) {
+                    let mut instance = occupied.get().instance.write().unwrap();
+                    if instance.dirty {
+                        self.update_no_cache(
+                            occupied.key(),
+                            |_current| {
+                                Some((
+                                    instance.data.slot_list.clone(),
+                                    instance.data.ref_count,
+                                ))
+                            },
+                            None,
+                            true,
+                        );
+                        instance.age = next_age; // keep newly updated stuff around
+                        instance.dirty = false;
+                        flushed += 1;
                     }
                 }
             }
