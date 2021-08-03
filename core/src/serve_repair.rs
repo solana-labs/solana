@@ -102,7 +102,7 @@ impl AncestorHashesRepairType {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum AncestorHashesResponseVersion {
     Current(Vec<SlotHash>),
 }

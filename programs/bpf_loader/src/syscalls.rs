@@ -21,8 +21,8 @@ use solana_sdk::{
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     epoch_schedule::EpochSchedule,
     feature_set::{
-        blake3_syscall_enabled, enforce_aligned_host_addrs, libsecp256k1_0_5_upgrade_enabled,
-        memory_ops_syscalls, secp256k1_recover_syscall_enabled,
+        blake3_syscall_enabled, disable_fees_sysvar, enforce_aligned_host_addrs,
+        libsecp256k1_0_5_upgrade_enabled, memory_ops_syscalls, secp256k1_recover_syscall_enabled,
     },
     hash::{Hasher, HASH_BYTES},
     ic_msg,
@@ -150,8 +150,10 @@ pub fn register_syscalls(
         b"sol_get_epoch_schedule_sysvar",
         SyscallGetEpochScheduleSysvar::call,
     )?;
-    syscall_registry
-        .register_syscall_by_name(b"sol_get_fees_sysvar", SyscallGetFeesSysvar::call)?;
+    if invoke_context.is_feature_active(&disable_fees_sysvar::id()) {
+        syscall_registry
+            .register_syscall_by_name(b"sol_get_fees_sysvar", SyscallGetFeesSysvar::call)?;
+    }
     syscall_registry
         .register_syscall_by_name(b"sol_get_rent_sysvar", SyscallGetRentSysvar::call)?;
 
@@ -346,6 +348,9 @@ pub fn bind_syscall_context_objects<'a>(
         }),
     );
 
+    let is_fee_sysvar_via_syscall_active =
+        !invoke_context.is_feature_active(&disable_fees_sysvar::id());
+
     let invoke_context = Rc::new(RefCell::new(invoke_context));
 
     vm.bind_syscall_context_object(
@@ -362,13 +367,14 @@ pub fn bind_syscall_context_objects<'a>(
         }),
         None,
     )?;
-    vm.bind_syscall_context_object(
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        is_fee_sysvar_via_syscall_active,
         Box::new(SyscallGetFeesSysvar {
             invoke_context: invoke_context.clone(),
             loader_id,
         }),
-        None,
-    )?;
+    );
     vm.bind_syscall_context_object(
         Box::new(SyscallGetRentSysvar {
             invoke_context: invoke_context.clone(),

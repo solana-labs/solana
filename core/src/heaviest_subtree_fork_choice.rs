@@ -1237,7 +1237,7 @@ mod test {
         */
         let forks = tr(0) / (tr(1) / (tr(2) / (tr(4))) / (tr(3)));
         let mut vote_simulator = VoteSimulator::new(1);
-        vote_simulator.fill_bank_forks(forks, &HashMap::new());
+        vote_simulator.fill_bank_forks(forks, &HashMap::new(), true);
         let bank_forks = vote_simulator.bank_forks;
         let mut frozen_banks: Vec<_> = bank_forks
             .read()

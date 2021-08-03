@@ -12,12 +12,10 @@ use solana_cli_output::{
 };
 use solana_client::{
     blockhash_query::BlockhashQuery,
-    client_error::{ClientError, ClientErrorKind, Result as ClientResult},
+    client_error::{ClientError, Result as ClientResult},
     nonce_utils,
     rpc_client::RpcClient,
     rpc_config::{RpcLargestAccountsFilter, RpcSendTransactionConfig, RpcTransactionLogsFilter},
-    rpc_request::{RpcError, RpcResponseErrorData},
-    rpc_response::RpcSimulateTransactionResult,
 };
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
@@ -1536,6 +1534,17 @@ pub fn request_and_confirm_airdrop(
     Ok(signature)
 }
 
+fn common_error_adapter<E>(ix_error: &InstructionError) -> Option<E>
+where
+    E: 'static + std::error::Error + DecodeError<E> + FromPrimitive,
+{
+    if let InstructionError::Custom(code) = ix_error {
+        E::decode_custom_error_to_enum(*code)
+    } else {
+        None
+    }
+}
+
 pub fn log_instruction_custom_error<E>(
     result: ClientResult<Signature>,
     config: &CliConfig,
@@ -1543,36 +1552,23 @@ pub fn log_instruction_custom_error<E>(
 where
     E: 'static + std::error::Error + DecodeError<E> + FromPrimitive,
 {
+    log_instruction_custom_error_ex::<E, _>(result, config, common_error_adapter)
+}
+
+pub fn log_instruction_custom_error_ex<E, F>(
+    result: ClientResult<Signature>,
+    config: &CliConfig,
+    error_adapter: F,
+) -> ProcessResult
+where
+    E: 'static + std::error::Error + DecodeError<E> + FromPrimitive,
+    F: Fn(&InstructionError) -> Option<E>,
+{
     match result {
         Err(err) => {
-            // If transaction simulation returns a known Custom InstructionError, decode it
-            if let ClientErrorKind::RpcError(RpcError::RpcResponseError {
-                data:
-                    RpcResponseErrorData::SendTransactionPreflightFailure(
-                        RpcSimulateTransactionResult {
-                            err:
-                                Some(TransactionError::InstructionError(
-                                    _,
-                                    InstructionError::Custom(code),
-                                )),
-                            ..
-                        },
-                    ),
-                ..
-            }) = err.kind()
-            {
-                if let Some(specific_error) = E::decode_custom_error_to_enum(*code) {
-                    return Err(specific_error.into());
-                }
-            }
-            // If the transaction was instead submitted and returned a known Custom
-            // InstructionError, decode it
-            if let ClientErrorKind::TransactionError(TransactionError::InstructionError(
-                _,
-                InstructionError::Custom(code),
-            )) = err.kind()
-            {
-                if let Some(specific_error) = E::decode_custom_error_to_enum(*code) {
+            let maybe_tx_err = err.get_transaction_error();
+            if let Some(TransactionError::InstructionError(_, ix_error)) = maybe_tx_err {
+                if let Some(specific_error) = error_adapter(&ix_error) {
                     return Err(specific_error.into());
                 }
             }
