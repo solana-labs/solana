@@ -551,10 +551,10 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
             for k in flush_keys.into_iter() {
                 let mut wc = &mut self.write_cache[ix].read().unwrap(); // maybe get lock for each item?
                 if let Some(occupied) = wc.get(&k) {
-                    let mut instance = occupied.get().instance.write().unwrap();
+                    let mut instance = occupied.instance.write().unwrap();
                     if instance.dirty {
                         self.update_no_cache(
-                            occupied.key(),
+                            &k,
                             |_current| {
                                 Some((
                                     instance.data.slot_list.clone(),
