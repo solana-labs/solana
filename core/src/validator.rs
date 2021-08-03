@@ -608,7 +608,7 @@ impl Validator {
         let (snapshot_packager_service, snapshot_config_and_pending_package) =
             if let Some(snapshot_config) = config.snapshot_config.clone() {
                 if is_snapshot_config_invalid(
-                    snapshot_config.snapshot_interval_slots,
+                    snapshot_config.full_snapshot_archive_interval_slots,
                     config.accounts_hash_interval_slots,
                 ) {
                     error!("Snapshot config is invalid");

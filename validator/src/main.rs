@@ -2494,11 +2494,12 @@ pub fn main() {
                 })
             });
     validator_config.snapshot_config = Some(SnapshotConfig {
-        snapshot_interval_slots: if snapshot_interval_slots > 0 {
+        full_snapshot_archive_interval_slots: if snapshot_interval_slots > 0 {
             snapshot_interval_slots
         } else {
             std::u64::MAX
         },
+        incremental_snapshot_archive_interval_slots: Slot::MAX,
         snapshot_path,
         snapshot_package_output_path: snapshot_output_dir.clone(),
         archive_format,

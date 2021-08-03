@@ -694,7 +694,8 @@ fn load_bank_forks(
         let snapshot_package_output_path =
             snapshot_archive_path.unwrap_or_else(|| blockstore.ledger_path().to_path_buf());
         Some(SnapshotConfig {
-            snapshot_interval_slots: 0, // Value doesn't matter
+            full_snapshot_archive_interval_slots: 0, // Value doesn't matter
+            incremental_snapshot_archive_interval_slots: Slot::MAX,
             snapshot_package_output_path,
             snapshot_path,
             archive_format: ArchiveFormat::TarBzip2,
