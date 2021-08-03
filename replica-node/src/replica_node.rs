@@ -248,7 +248,7 @@ fn start_client_rpc_services(
             &exit,
             bank_forks.clone(),
             optimistically_confirmed_bank.clone(),
-            subscriptions.clone(),
+            subscriptions,
             None,
         )),
     )

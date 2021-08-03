@@ -1060,12 +1060,6 @@ pub fn main() {
     let default_genesis_archive_unpacked_size = &MAX_GENESIS_ARCHIVE_UNPACKED_SIZE.to_string();
     let default_rpc_max_multiple_accounts = &MAX_MULTIPLE_ACCOUNTS.to_string();
 
-    // There params are no longer in use.
-    let default_rpc_pubsub_max_connections = 1000.to_string();
-    let default_rpc_pubsub_max_fragment_size = (50 * 1024).to_string();
-    let default_rpc_pubsub_max_in_buffer_capacity = (50 * 1024).to_string();
-    let default_rpc_pubsub_max_out_buffer_capacity = (15 * 1024 * 1024).to_string();
-
     let default_rpc_pubsub_max_active_subscriptions =
         PubSubConfig::default().max_active_subscriptions.to_string();
     let default_rpc_pubsub_queue_capacity = PubSubConfig::default().queue_capacity.to_string();
@@ -1738,7 +1732,7 @@ pub fn main() {
                 .value_name("NUMBER")
                 .takes_value(true)
                 .validator(is_parsable::<usize>)
-                .default_value(&default_rpc_pubsub_max_connections)
+                .hidden(true)
                 .help("The maximum number of connections that RPC PubSub will support. \
                        This is a hard limit and no new connections beyond this limit can \
                        be made until an old connection is dropped. (Obsolete)"),
@@ -1749,7 +1743,7 @@ pub fn main() {
                 .value_name("BYTES")
                 .takes_value(true)
                 .validator(is_parsable::<usize>)
-                .default_value(&default_rpc_pubsub_max_fragment_size)
+                .hidden(true)
                 .help("The maximum length in bytes of acceptable incoming frames. Messages longer \
                        than this will be rejected. (Obsolete)"),
         )
@@ -1759,7 +1753,7 @@ pub fn main() {
                 .value_name("BYTES")
                 .takes_value(true)
                 .validator(is_parsable::<usize>)
-                .default_value(&default_rpc_pubsub_max_in_buffer_capacity)
+                .hidden(true)
                 .help("The maximum size in bytes to which the incoming websocket buffer can grow. \
                       (Obsolete)"),
         )
@@ -1769,7 +1763,7 @@ pub fn main() {
                 .value_name("BYTES")
                 .takes_value(true)
                 .validator(is_parsable::<usize>)
-                .default_value(&default_rpc_pubsub_max_out_buffer_capacity)
+                .hidden(true)
                 .help("The maximum size in bytes to which the outgoing websocket buffer can grow. \
                        (Obsolete)"),
         )

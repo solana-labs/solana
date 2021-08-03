@@ -2,7 +2,7 @@
 
 use {
     crate::{
-        rpc_pubsub::{RpcSolPubSub, RpcSolPubSubImpl},
+        rpc_pubsub::{RpcSolPubSubImpl, RpcSolPubSubInternal},
         rpc_subscription_tracker::{SubscriptionId, SubscriptionToken},
         rpc_subscriptions::{RpcNotification, RpcSubscriptions},
     },
@@ -79,8 +79,6 @@ impl PubSubService {
         self.thread_hdl.join()
     }
 }
-
-type StdResult<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 struct BroadcastHandler {
     current_subscriptions: Arc<DashMap<SubscriptionId, SubscriptionToken>>,
@@ -167,7 +165,7 @@ async fn handle_connection(
     subscriptions: Arc<RpcSubscriptions>,
     config: PubSubConfig,
     mut tripwire: Tripwire,
-) -> StdResult<()> {
+) -> Result<(), Box<dyn std::error::Error>> {
     let mut server = Server::new(socket.compat());
     let request = server.receive_request().await?;
     let accept = server::Response::Accept {
@@ -238,7 +236,7 @@ async fn listen(
     config: PubSubConfig,
     subscriptions: Arc<RpcSubscriptions>,
     mut tripwire: Tripwire,
-) -> StdResult<()> {
+) -> Result<(), Box<dyn std::error::Error>> {
     let listener = tokio::net::TcpListener::bind(&listen_address).await?;
     loop {
         select! {

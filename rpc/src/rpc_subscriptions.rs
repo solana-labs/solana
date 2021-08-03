@@ -131,8 +131,8 @@ where
     F: Fn(X, &P, Slot, Arc<Bank>) -> (Box<dyn Iterator<Item = S>>, Slot),
     X: Clone + Default,
 {
-    let commitment = if let Some(c) = subscription.commitment() {
-        c
+    let commitment = if let Some(commitment) = subscription.commitment() {
+        commitment
     } else {
         error!("missing commitment in check_commitment_and_notify");
         return false;
@@ -803,7 +803,7 @@ pub(crate) mod tests {
             optimistically_confirmed_bank_tracker::{
                 BankNotification, OptimisticallyConfirmedBank, OptimisticallyConfirmedBankTracker,
             },
-            rpc_pubsub::RpcSolPubSub,
+            rpc_pubsub::RpcSolPubSubInternal,
             rpc_pubsub_service,
         },
         serial_test::serial,

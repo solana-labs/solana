@@ -9,104 +9,309 @@ use {
             ProgramSubscriptionParams, SignatureSubscriptionParams, SubscriptionId,
             SubscriptionParams, SubscriptionToken,
         },
-        rpc_subscriptions::RpcSubscriptions,
+        rpc_subscriptions::{RpcSubscriptions, RpcVote},
     },
     dashmap::DashMap,
     jsonrpc_core::{Error, ErrorCode, Result},
     jsonrpc_derive::rpc,
-    solana_account_decoder::UiAccountEncoding,
-    solana_client::rpc_config::{
-        RpcAccountInfoConfig, RpcProgramAccountsConfig, RpcSignatureSubscribeConfig,
-        RpcTransactionLogsConfig, RpcTransactionLogsFilter,
+    jsonrpc_pubsub::{typed::Subscriber, SubscriptionId as PubSubSubscriptionId},
+    solana_account_decoder::{UiAccount, UiAccountEncoding},
+    solana_client::{
+        rpc_config::{
+            RpcAccountInfoConfig, RpcProgramAccountsConfig, RpcSignatureSubscribeConfig,
+            RpcTransactionLogsConfig, RpcTransactionLogsFilter,
+        },
+        rpc_response::{
+            Response as RpcResponse, RpcKeyedAccount, RpcLogsResponse, RpcSignatureResult,
+            SlotInfo, SlotUpdate,
+        },
     },
-    solana_sdk::{pubkey::Pubkey, signature::Signature},
+    solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature},
     std::{str::FromStr, sync::Arc},
 };
 
+// We have to keep both of the following traits to not break backwards compatibility.
+// `RpcSolPubSubInternal` is actually used by the current PubSub API implementation.
+// `RpcSolPubSub` and the corresponding `gen_client` module are preserved
+// so the clients reliant on `gen_client::Client` do not break after this implementation is released.
+//
+// There are no compile-time checks that ensures the coherence between traits
+// so extra attention is required when adding a new method to the API.
+
+// Suppress needless_return due to
+//   https://github.com/paritytech/jsonrpc/blob/2d38e6424d8461cdf72e78425ce67d51af9c6586/derive/src/lib.rs#L204
+// Once https://github.com/paritytech/jsonrpc/issues/418 is resolved, try to remove this clippy allow
+#[allow(clippy::needless_return)]
 #[rpc]
 pub trait RpcSolPubSub {
+    type Metadata;
+
     // Get notification every time account data is changed
     // Accepts pubkey parameter as base-58 encoded string
-    #[rpc(name = "accountSubscribe")]
+    #[pubsub(
+        subscription = "accountNotification",
+        subscribe,
+        name = "accountSubscribe"
+    )]
     fn account_subscribe(
         &self,
+        meta: Self::Metadata,
+        subscriber: Subscriber<RpcResponse<UiAccount>>,
         pubkey_str: String,
         config: Option<RpcAccountInfoConfig>,
-    ) -> Result<SubscriptionId>;
+    );
 
     // Unsubscribe from account notification subscription.
-    #[rpc(name = "accountUnsubscribe")]
-    fn account_unsubscribe(&self, id: SubscriptionId) -> Result<bool>;
+    #[pubsub(
+        subscription = "accountNotification",
+        unsubscribe,
+        name = "accountUnsubscribe"
+    )]
+    fn account_unsubscribe(
+        &self,
+        meta: Option<Self::Metadata>,
+        id: PubSubSubscriptionId,
+    ) -> Result<bool>;
 
     // Get notification every time account data owned by a particular program is changed
     // Accepts pubkey parameter as base-58 encoded string
-    #[rpc(name = "programSubscribe")]
+    #[pubsub(
+        subscription = "programNotification",
+        subscribe,
+        name = "programSubscribe"
+    )]
     fn program_subscribe(
         &self,
+        meta: Self::Metadata,
+        subscriber: Subscriber<RpcResponse<RpcKeyedAccount>>,
         pubkey_str: String,
         config: Option<RpcProgramAccountsConfig>,
-    ) -> Result<SubscriptionId>;
+    );
 
     // Unsubscribe from account notification subscription.
-    #[rpc(name = "programUnsubscribe")]
-    fn program_unsubscribe(&self, id: SubscriptionId) -> Result<bool>;
+    #[pubsub(
+        subscription = "programNotification",
+        unsubscribe,
+        name = "programUnsubscribe"
+    )]
+    fn program_unsubscribe(
+        &self,
+        meta: Option<Self::Metadata>,
+        id: PubSubSubscriptionId,
+    ) -> Result<bool>;
 
     // Get logs for all transactions that reference the specified address
-    #[rpc(name = "logsSubscribe")]
+    #[pubsub(subscription = "logsNotification", subscribe, name = "logsSubscribe")]
     fn logs_subscribe(
         &self,
+        meta: Self::Metadata,
+        subscriber: Subscriber<RpcResponse<RpcLogsResponse>>,
         filter: RpcTransactionLogsFilter,
         config: Option<RpcTransactionLogsConfig>,
-    ) -> Result<SubscriptionId>;
+    );
 
     // Unsubscribe from logs notification subscription.
-    #[rpc(name = "logsUnsubscribe")]
-    fn logs_unsubscribe(&self, id: SubscriptionId) -> Result<bool>;
+    #[pubsub(
+        subscription = "logsNotification",
+        unsubscribe,
+        name = "logsUnsubscribe"
+    )]
+    fn logs_unsubscribe(
+        &self,
+        meta: Option<Self::Metadata>,
+        id: PubSubSubscriptionId,
+    ) -> Result<bool>;
 
     // Get notification when signature is verified
     // Accepts signature parameter as base-58 encoded string
-    #[rpc(name = "signatureSubscribe")]
+    #[pubsub(
+        subscription = "signatureNotification",
+        subscribe,
+        name = "signatureSubscribe"
+    )]
     fn signature_subscribe(
         &self,
+        meta: Self::Metadata,
+        subscriber: Subscriber<RpcResponse<RpcSignatureResult>>,
         signature_str: String,
         config: Option<RpcSignatureSubscribeConfig>,
-    ) -> Result<SubscriptionId>;
+    );
 
     // Unsubscribe from signature notification subscription.
-    #[rpc(name = "signatureUnsubscribe")]
-    fn signature_unsubscribe(&self, id: SubscriptionId) -> Result<bool>;
+    #[pubsub(
+        subscription = "signatureNotification",
+        unsubscribe,
+        name = "signatureUnsubscribe"
+    )]
+    fn signature_unsubscribe(
+        &self,
+        meta: Option<Self::Metadata>,
+        id: PubSubSubscriptionId,
+    ) -> Result<bool>;
 
     // Get notification when slot is encountered
-    #[rpc(name = "slotSubscribe")]
-    fn slot_subscribe(&self) -> Result<SubscriptionId>;
+    #[pubsub(subscription = "slotNotification", subscribe, name = "slotSubscribe")]
+    fn slot_subscribe(&self, meta: Self::Metadata, subscriber: Subscriber<SlotInfo>);
 
     // Unsubscribe from slot notification subscription.
-    #[rpc(name = "slotUnsubscribe")]
-    fn slot_unsubscribe(&self, id: SubscriptionId) -> Result<bool>;
+    #[pubsub(
+        subscription = "slotNotification",
+        unsubscribe,
+        name = "slotUnsubscribe"
+    )]
+    fn slot_unsubscribe(
+        &self,
+        meta: Option<Self::Metadata>,
+        id: PubSubSubscriptionId,
+    ) -> Result<bool>;
 
     // Get series of updates for all slots
-    #[rpc(name = "slotsUpdatesSubscribe")]
-    fn slots_updates_subscribe(&self) -> Result<SubscriptionId>;
+    #[pubsub(
+        subscription = "slotsUpdatesNotification",
+        subscribe,
+        name = "slotsUpdatesSubscribe"
+    )]
+    fn slots_updates_subscribe(
+        &self,
+        meta: Self::Metadata,
+        subscriber: Subscriber<Arc<SlotUpdate>>,
+    );
 
     // Unsubscribe from slots updates notification subscription.
-    #[rpc(name = "slotsUpdatesUnsubscribe")]
-    fn slots_updates_unsubscribe(&self, id: SubscriptionId) -> Result<bool>;
+    #[pubsub(
+        subscription = "slotsUpdatesNotification",
+        unsubscribe,
+        name = "slotsUpdatesUnsubscribe"
+    )]
+    fn slots_updates_unsubscribe(
+        &self,
+        meta: Option<Self::Metadata>,
+        id: PubSubSubscriptionId,
+    ) -> Result<bool>;
 
     // Get notification when vote is encountered
-    #[rpc(name = "voteSubscribe")]
-    fn vote_subscribe(&self) -> Result<SubscriptionId>;
+    #[pubsub(subscription = "voteNotification", subscribe, name = "voteSubscribe")]
+    fn vote_subscribe(&self, meta: Self::Metadata, subscriber: Subscriber<RpcVote>);
 
     // Unsubscribe from vote notification subscription.
-    #[rpc(name = "voteUnsubscribe")]
-    fn vote_unsubscribe(&self, id: SubscriptionId) -> Result<bool>;
+    #[pubsub(
+        subscription = "voteNotification",
+        unsubscribe,
+        name = "voteUnsubscribe"
+    )]
+    fn vote_unsubscribe(
+        &self,
+        meta: Option<Self::Metadata>,
+        id: PubSubSubscriptionId,
+    ) -> Result<bool>;
 
     // Get notification when a new root is set
-    #[rpc(name = "rootSubscribe")]
-    fn root_subscribe(&self) -> Result<SubscriptionId>;
+    #[pubsub(subscription = "rootNotification", subscribe, name = "rootSubscribe")]
+    fn root_subscribe(&self, meta: Self::Metadata, subscriber: Subscriber<Slot>);
 
     // Unsubscribe from slot notification subscription.
-    #[rpc(name = "rootUnsubscribe")]
-    fn root_unsubscribe(&self, id: SubscriptionId) -> Result<bool>;
+    #[pubsub(
+        subscription = "rootNotification",
+        unsubscribe,
+        name = "rootUnsubscribe"
+    )]
+    fn root_unsubscribe(
+        &self,
+        meta: Option<Self::Metadata>,
+        id: PubSubSubscriptionId,
+    ) -> Result<bool>;
+}
+
+pub use internal::RpcSolPubSubInternal;
+// We have to use a separate module so the code generated by different `rpc` macro invocations do not interfere with each other.
+mod internal {
+    use super::*;
+
+    #[rpc]
+    pub trait RpcSolPubSubInternal {
+        // Get notification every time account data is changed
+        // Accepts pubkey parameter as base-58 encoded string
+        #[rpc(name = "accountSubscribe")]
+        fn account_subscribe(
+            &self,
+            pubkey_str: String,
+            config: Option<RpcAccountInfoConfig>,
+        ) -> Result<SubscriptionId>;
+
+        // Unsubscribe from account notification subscription.
+        #[rpc(name = "accountUnsubscribe")]
+        fn account_unsubscribe(&self, id: SubscriptionId) -> Result<bool>;
+
+        // Get notification every time account data owned by a particular program is changed
+        // Accepts pubkey parameter as base-58 encoded string
+        #[rpc(name = "programSubscribe")]
+        fn program_subscribe(
+            &self,
+            pubkey_str: String,
+            config: Option<RpcProgramAccountsConfig>,
+        ) -> Result<SubscriptionId>;
+
+        // Unsubscribe from account notification subscription.
+        #[rpc(name = "programUnsubscribe")]
+        fn program_unsubscribe(&self, id: SubscriptionId) -> Result<bool>;
+
+        // Get logs for all transactions that reference the specified address
+        #[rpc(name = "logsSubscribe")]
+        fn logs_subscribe(
+            &self,
+            filter: RpcTransactionLogsFilter,
+            config: Option<RpcTransactionLogsConfig>,
+        ) -> Result<SubscriptionId>;
+
+        // Unsubscribe from logs notification subscription.
+        #[rpc(name = "logsUnsubscribe")]
+        fn logs_unsubscribe(&self, id: SubscriptionId) -> Result<bool>;
+
+        // Get notification when signature is verified
+        // Accepts signature parameter as base-58 encoded string
+        #[rpc(name = "signatureSubscribe")]
+        fn signature_subscribe(
+            &self,
+            signature_str: String,
+            config: Option<RpcSignatureSubscribeConfig>,
+        ) -> Result<SubscriptionId>;
+
+        // Unsubscribe from signature notification subscription.
+        #[rpc(name = "signatureUnsubscribe")]
+        fn signature_unsubscribe(&self, id: SubscriptionId) -> Result<bool>;
+
+        // Get notification when slot is encountered
+        #[rpc(name = "slotSubscribe")]
+        fn slot_subscribe(&self) -> Result<SubscriptionId>;
+
+        // Unsubscribe from slot notification subscription.
+        #[rpc(name = "slotUnsubscribe")]
+        fn slot_unsubscribe(&self, id: SubscriptionId) -> Result<bool>;
+
+        // Get series of updates for all slots
+        #[rpc(name = "slotsUpdatesSubscribe")]
+        fn slots_updates_subscribe(&self) -> Result<SubscriptionId>;
+
+        // Unsubscribe from slots updates notification subscription.
+        #[rpc(name = "slotsUpdatesUnsubscribe")]
+        fn slots_updates_unsubscribe(&self, id: SubscriptionId) -> Result<bool>;
+
+        // Get notification when vote is encountered
+        #[rpc(name = "voteSubscribe")]
+        fn vote_subscribe(&self) -> Result<SubscriptionId>;
+
+        // Unsubscribe from vote notification subscription.
+        #[rpc(name = "voteUnsubscribe")]
+        fn vote_unsubscribe(&self, id: SubscriptionId) -> Result<bool>;
+
+        // Get notification when a new root is set
+        #[rpc(name = "rootSubscribe")]
+        fn root_subscribe(&self) -> Result<SubscriptionId>;
+
+        // Unsubscribe from slot notification subscription.
+        #[rpc(name = "rootUnsubscribe")]
+        fn root_unsubscribe(&self, id: SubscriptionId) -> Result<bool>;
+    }
 }
 
 pub struct RpcSolPubSubImpl {
@@ -175,7 +380,7 @@ fn param<T: FromStr>(param_str: &str, thing: &str) -> Result<T> {
     })
 }
 
-impl RpcSolPubSub for RpcSolPubSubImpl {
+impl RpcSolPubSubInternal for RpcSolPubSubImpl {
     fn account_subscribe(
         &self,
         pubkey_str: String,
@@ -316,7 +521,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
 #[cfg(test)]
 mod tests {
     use {
-        super::*,
+        super::{RpcSolPubSubInternal, *},
         crate::{
             optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank, rpc_pubsub_service,
 
