@@ -6120,6 +6120,7 @@ impl AccountsDb {
     }
 
     pub fn add_test_accounts(accounts: Arc<crate::accounts::Accounts>) {
+        return;
         let iterations = 50;
         let threads = 2;
         let count = 15_000_000 / iterations;
