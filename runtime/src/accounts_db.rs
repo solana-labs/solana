@@ -972,6 +972,8 @@ pub struct AccountsDb {
     dirty_stores: DashMap<(Slot, AppendVecId), Arc<AccountStorageEntry>>,
 }
 
+const MAX_DIRTY_STORES_LEN: usize = 10_000;
+
 #[derive(Debug, Default)]
 struct AccountsStats {
     delta_hash_scan_time_total_us: AtomicU64,
@@ -2097,7 +2099,7 @@ impl AccountsDb {
         );
     }
 
-    fn do_shrink_slot_stores<'a, I>(&'a self, slot: Slot, stores: I, is_startup: bool) -> usize
+    fn do_shrink_slot_stores<'a, I>(&'a self, slot: Slot, stores: I, _is_startup: bool) -> usize
     where
         I: Iterator<Item = &'a Arc<AccountStorageEntry>>,
     {
@@ -2254,7 +2256,7 @@ impl AccountsDb {
             if let Some(slot_stores) = self.storage.get_slot_stores(slot) {
                 slot_stores.write().unwrap().retain(|_key, store| {
                     if store.count() == 0 {
-                        if !is_startup {
+                        if self.dirty_stores.len() < MAX_DIRTY_STORES_LEN {
                             self.dirty_stores
                                 .insert((slot, store.append_vec_id()), store.clone());
                         }
@@ -5235,8 +5237,7 @@ impl AccountsDb {
                 );
                 let count = store.remove_account(account_info.stored_size, reset_accounts);
                 if count == 0 {
-                    // expected_slot is none should exclude write path from flush/shrink/bank drop
-                    if expected_slot.is_none() {
+                    if self.dirty_stores.len() < MAX_DIRTY_STORES_LEN {
                         self.dirty_stores
                             .insert((*slot, store.append_vec_id()), store.clone());
                     }
