@@ -1099,15 +1099,13 @@ fn stake_weighted_credits_observed(
             u128::from(stake.credits_observed).checked_mul(u128::from(stake.delegation.stake))?;
         let absorbed_weighted_credits =
             u128::from(absorbed_credits_observed).checked_mul(u128::from(absorbed_lamports))?;
-        let total_weighted_credits =
-            stake_weighted_credits.checked_add(absorbed_weighted_credits)?;
-        let effective_credits_observed = total_weighted_credits.checked_div(total_stake)?;
-        if total_weighted_credits.checked_rem(total_stake)? > 0 {
-            // discard fractional credits as a merge side-effect friction by ceiling
-            u64::try_from(effective_credits_observed.checked_add(1)?).ok()
-        } else {
-            u64::try_from(effective_credits_observed).ok()
-        }
+        // Discard fractional credits as a merge side-effect friction by taking
+        // the ceiling, done by adding `denominator - 1` to the numerator.
+        let total_weighted_credits = stake_weighted_credits
+            .checked_add(absorbed_weighted_credits)?
+            .checked_add(total_stake)?
+            .checked_sub(1)?;
+        u64::try_from(total_weighted_credits.checked_div(total_stake)?).ok()
     }
 }
 
