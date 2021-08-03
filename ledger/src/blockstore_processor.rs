@@ -32,6 +32,7 @@ use solana_runtime::{
 };
 use solana_sdk::{
     clock::{Slot, MAX_PROCESSING_AGE},
+    feature_set,
     genesis_config::GenesisConfig,
     hash::Hash,
     pubkey::Pubkey,
@@ -172,21 +173,27 @@ fn execute_batch(
             timings,
         );
 
-    let post_process_units: u64 = aggregate_total_execution_units(timings);
-    let execution_cost_units: u64 = post_process_units - pre_process_units;
-    let remaining_block_cost_cap = cost_capacity_meter
-        .write()
-        .unwrap()
-        .accumulate(execution_cost_units);
-    debug!(
-        "bank {:?} batch of {} transactions, total execute cu {}, remaining block cost cap {}",
-        bank.slot(),
-        batch.sanitized_transactions().len(),
-        execution_cost_units,
-        remaining_block_cost_cap
-    );
-    if remaining_block_cost_cap == 0_u64 {
-        return Err(TransactionError::WouldExceedMaxBlockCostLimit);
+    if bank
+        .feature_set
+        .is_active(&feature_set::gate_large_block::id())
+    {
+        let execution_cost_units = aggregate_total_execution_units(timings) - pre_process_units;
+        let remaining_block_cost_cap = cost_capacity_meter
+            .write()
+            .unwrap()
+            .accumulate(execution_cost_units);
+
+        debug!(
+            "bank {} executed a batch, number of transactions {}, total execute cu {}, remaining block cost cap {}",
+            bank.slot(),
+            batch.sanitized_transactions().len(),
+            execution_cost_units,
+            remaining_block_cost_cap,
+        );
+
+        if remaining_block_cost_cap == 0_u64 {
+            return Err(TransactionError::WouldExceedMaxBlockCostLimit);
+        }
     }
 
     bank_utils::find_and_send_votes(
