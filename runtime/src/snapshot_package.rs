@@ -71,7 +71,7 @@ impl AccountsPackagePre {
 
     /// Create a snapshot package
     #[allow(clippy::too_many_arguments)]
-    fn new_snapshot<P>(
+    fn new_snapshot_package<P>(
         bank: &Bank,
         bank_snapshot_info: &BankSnapshotInfo,
         status_cache_slot_deltas: Vec<BankSlotDelta>,
@@ -140,7 +140,7 @@ impl AccountsPackagePre {
             .prefix(&format!("{}{}-", TMP_FULL_SNAPSHOT_PREFIX, bank.slot()))
             .tempdir_in(snapshots_dir)?;
 
-        Self::new_snapshot(
+        Self::new_snapshot_package(
             bank,
             bank_snapshot_info,
             status_cache_slot_deltas,
@@ -194,7 +194,7 @@ impl AccountsPackagePre {
             ))
             .tempdir_in(snapshots_dir)?;
 
-        Self::new_snapshot(
+        Self::new_snapshot_package(
             bank,
             bank_snapshot_info,
             status_cache_slot_deltas,
