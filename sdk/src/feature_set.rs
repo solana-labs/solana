@@ -227,7 +227,7 @@ lazy_static! {
         (spl_token_v2_set_authority_fix::id(), "spl-token set_authority fix"),
         (merge_nonce_error_into_system_error::id(), "merge NonceError into SystemError"),
         (disable_fees_sysvar::id(), "disable fees sysvar"),
-        (stake_merge_with_unmatched_credits_observed::id(), "allow merging active stakes with unmatched credits_observed"),
+        (stake_merge_with_unmatched_credits_observed::id(), "allow merging active stakes with unmatched credits_observed #18985"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
