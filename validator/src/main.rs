@@ -21,10 +21,12 @@ use {
     },
     solana_core::{
         ledger_cleanup_service::{DEFAULT_MAX_LEDGER_SHREDS, DEFAULT_MIN_MAX_LEDGER_SHREDS},
+        retransmit_stage::RetransmitStageParams,
         tpu::DEFAULT_TPU_COALESCE_MS,
         validator::{
             is_snapshot_config_invalid, Validator, ValidatorConfig, ValidatorStartProgress,
         },
+        window_service::WindowServiceParams,
     },
     solana_download_utils::{download_snapshot, DownloadProgressRecord},
     solana_genesis_utils::download_then_check_genesis_hash,
@@ -1060,6 +1062,18 @@ pub fn main() {
     let default_accounts_shrink_optimize_total_space =
         &DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE.to_string();
     let default_accounts_shrink_ratio = &DEFAULT_ACCOUNTS_SHRINK_RATIO.to_string();
+    let default_retransmit_sent_max_duplicate_count = RetransmitStageParams::default()
+        .sent_max_duplicate_count
+        .to_string();
+    let default_retransmit_shreds_received_lru_cache_size = RetransmitStageParams::default()
+        .shreds_received_lru_cache_size
+        .to_string();
+    let default_retransmit_packet_batch_threshold = RetransmitStageParams::default()
+        .retransmit_packet_batch_threshold
+        .to_string();
+    let default_window_service_shred_batch_threshold = WindowServiceParams::default()
+        .shred_batch_threshold
+        .to_string();
 
     let matches = App::new(crate_name!()).about(crate_description!())
         .version(solana_version::version!())
@@ -1875,6 +1889,34 @@ pub fn main() {
                 .help("Allow contacting private ip addresses")
                 .hidden(true),
         )
+        .arg(
+            Arg::with_name("retransmit_sent_max_duplicate_count")
+                .long("retransmit-sent-max-duplicate-count")
+                .takes_value(true)
+                .default_value(&default_retransmit_sent_max_duplicate_count)
+                .hidden(true),
+        )
+        .arg(
+            Arg::with_name("retransmit_shreds_received_lru_cache_size")
+                .long("retransmit-shreds-received-lru-cache-size")
+                .takes_value(true)
+                .default_value(&default_retransmit_shreds_received_lru_cache_size)
+                .hidden(true),
+        )
+        .arg(
+            Arg::with_name("retransmit_packet_batch_threshold")
+                .long("retransmit-packet-batch-threshold")
+                .takes_value(true)
+                .default_value(&default_retransmit_packet_batch_threshold)
+                .hidden(true),
+        )
+        .arg(
+            Arg::with_name("window_service_shred_batch_threshold")
+                .long("window-service-shred-batch-threshold")
+                .takes_value(true)
+                .default_value(&default_window_service_shred_batch_threshold)
+                .hidden(true),
+        )
         .after_help("The default subcommand is run")
         .subcommand(
             SubCommand::with_name("exit")
@@ -2385,6 +2427,21 @@ pub fn main() {
         accounts_shrink_ratio,
         ..ValidatorConfig::default()
     };
+
+    validator_config
+        .retransmit_stage_params
+        .sent_max_duplicate_count =
+        value_t_or_exit!(matches, "retransmit_sent_max_duplicate_count", usize);
+    validator_config
+        .retransmit_stage_params
+        .shreds_received_lru_cache_size =
+        value_t_or_exit!(matches, "retransmit_shreds_received_lru_cache_size", usize);
+    validator_config
+        .retransmit_stage_params
+        .retransmit_packet_batch_threshold =
+        value_t_or_exit!(matches, "retransmit_packet_batch_threshold", usize);
+    validator_config.window_service_params.shred_batch_threshold =
+        value_t_or_exit!(matches, "window_service_shred_batch_threshold", usize);
 
     let vote_account = pubkey_of(&matches, "vote_account").unwrap_or_else(|| {
         if !validator_config.voting_disabled {

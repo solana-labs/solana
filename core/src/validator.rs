@@ -7,6 +7,7 @@ use crate::{
     completed_data_sets_service::CompletedDataSetsService,
     consensus::{reconcile_blockstore_roots_with_tower, Tower},
     cost_model::CostModel,
+    retransmit_stage::RetransmitStageParams,
     rewards_recorder_service::{RewardsRecorderSender, RewardsRecorderService},
     sample_performance_service::SamplePerformanceService,
     serve_repair::ServeRepair,
@@ -15,6 +16,7 @@ use crate::{
     snapshot_packager_service::{PendingSnapshotPackage, SnapshotPackagerService},
     tpu::{Tpu, DEFAULT_TPU_COALESCE_MS},
     tvu::{Sockets, Tvu, TvuConfig},
+    window_service::WindowServiceParams,
 };
 use crossbeam_channel::{bounded, unbounded};
 use rand::{thread_rng, Rng};
@@ -143,6 +145,8 @@ pub struct ValidatorConfig {
     pub validator_exit: Arc<RwLock<Exit>>,
     pub no_wait_for_vote_to_start_leader: bool,
     pub accounts_shrink_ratio: AccountShrinkThreshold,
+    pub retransmit_stage_params: RetransmitStageParams,
+    pub window_service_params: WindowServiceParams,
 }
 
 impl Default for ValidatorConfig {
@@ -199,6 +203,8 @@ impl Default for ValidatorConfig {
             validator_exit: Arc::new(RwLock::new(Exit::default())),
             no_wait_for_vote_to_start_leader: true,
             accounts_shrink_ratio: AccountShrinkThreshold::default(),
+            retransmit_stage_params: RetransmitStageParams::default(),
+            window_service_params: WindowServiceParams::default(),
         }
     }
 }
@@ -747,6 +753,8 @@ impl Validator {
             },
             &max_slots,
             &cost_model,
+            &config.retransmit_stage_params,
+            &config.window_service_params,
         );
 
         let tpu = Tpu::new(

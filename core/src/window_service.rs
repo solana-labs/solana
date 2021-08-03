@@ -37,6 +37,30 @@ use std::{
     time::{Duration, Instant},
 };
 
+const WINDOW_SERVICE_CHECK_DUPLICATE_RECV_TIMOUT_MS: u64 = 200;
+const WINDOW_SERVICE_SHRED_RECEIVER_RECV_TIMEOUT_MS: u64 = 200;
+const WINDOW_SERVICE_SHRED_BATCH_THRESHOLD: usize = 100;
+const WINDOW_SERVICE_VERIFIED_RECEIVER_RECV_TIMEOUT_MS: u64 = 200;
+
+#[derive(Clone, Debug)]
+pub struct WindowServiceParams {
+    pub check_duplicate_recv_timeout_ms: u64,
+    pub shred_receiver_recv_timeout_ms: u64,
+    pub shred_batch_threshold: usize,
+    pub verified_receiver_recv_timeout_ms: u64,
+}
+
+impl Default for WindowServiceParams {
+    fn default() -> Self {
+        Self {
+            check_duplicate_recv_timeout_ms: WINDOW_SERVICE_CHECK_DUPLICATE_RECV_TIMOUT_MS,
+            shred_receiver_recv_timeout_ms: WINDOW_SERVICE_SHRED_RECEIVER_RECV_TIMEOUT_MS,
+            shred_batch_threshold: WINDOW_SERVICE_SHRED_BATCH_THRESHOLD,
+            verified_receiver_recv_timeout_ms: WINDOW_SERVICE_VERIFIED_RECEIVER_RECV_TIMEOUT_MS,
+        }
+    }
+}
+
 pub type DuplicateSlotSender = CrossbeamSender<Slot>;
 pub type DuplicateSlotReceiver = CrossbeamReceiver<Slot>;
 
@@ -62,6 +86,44 @@ impl WindowServiceMetrics {
             (
                 "prune_shreds_elapsed_us",
                 self.prune_shreds_elapsed_us as i64,
+                i64
+            ),
+        );
+    }
+}
+
+#[derive(Default)]
+struct RecvWindowMetrics {
+    recv_window_count: u64,
+    num_packets_received: usize,
+    verified_receiver_recv_elapsed_us: u64,
+    handle_packets_elapsed_us: u64,
+    recv_window_elapsed_us: u64,
+}
+
+impl RecvWindowMetrics {
+    pub fn report_metrics(&self, metric_name: &'static str) {
+        datapoint_info!(
+            metric_name,
+            ("recv_window_count", self.recv_window_count as i64, i64),
+            (
+                "num_packets_received",
+                self.num_packets_received as i64,
+                i64
+            ),
+            (
+                "verified_receiver_recv_elapsed_us",
+                self.verified_receiver_recv_elapsed_us as i64,
+                i64
+            ),
+            (
+                "handle_packets_elapsed_us",
+                self.handle_packets_elapsed_us as i64,
+                i64
+            ),
+            (
+                "recv_window_elapsed_us",
+                self.recv_window_elapsed_us as i64,
                 i64
             ),
         );
@@ -115,6 +177,7 @@ pub fn should_retransmit_and_persist(
 }
 
 fn run_check_duplicate(
+    params: &WindowServiceParams,
     cluster_info: &ClusterInfo,
     blockstore: &Blockstore,
     shred_receiver: &CrossbeamReceiver<Shred>,
@@ -142,7 +205,7 @@ fn run_check_duplicate(
 
         Ok(())
     };
-    let timer = Duration::from_millis(200);
+    let timer = Duration::from_millis(params.check_duplicate_recv_timeout_ms);
     let shred = shred_receiver.recv_timeout(timer)?;
     check_duplicate(shred)?;
     while let Ok(shred) = shred_receiver.try_recv() {
@@ -200,6 +263,7 @@ fn prune_shreds_invalid_repair(
 }
 
 fn run_insert<F>(
+    ws_params: &WindowServiceParams,
     shred_receiver: &CrossbeamReceiver<(Vec<Shred>, Vec<Option<RepairMeta>>)>,
     blockstore: &Arc<Blockstore>,
     leader_schedule_cache: &Arc<LeaderScheduleCache>,
@@ -213,11 +277,16 @@ where
     F: Fn(Shred),
 {
     let mut shred_receiver_elapsed = Measure::start("shred_receiver_elapsed");
-    let timer = Duration::from_millis(200);
+    let timer = Duration::from_millis(ws_params.shred_receiver_recv_timeout_ms);
     let (mut shreds, mut repair_infos) = shred_receiver.recv_timeout(timer)?;
+    let mut total_shreds = shreds.len();
     while let Ok((more_shreds, more_repair_infos)) = shred_receiver.try_recv() {
+        total_shreds += more_shreds.len();
         shreds.extend(more_shreds);
         repair_infos.extend(more_repair_infos);
+        if total_shreds >= ws_params.shred_batch_threshold {
+            break;
+        }
     }
     shred_receiver_elapsed.stop();
     ws_metrics.num_shreds_received += shreds.len() as u64;
@@ -253,7 +322,9 @@ where
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn recv_window<F>(
+    ws_params: &WindowServiceParams,
     blockstore: &Arc<Blockstore>,
     leader_schedule_cache: &Arc<LeaderScheduleCache>,
     bank_forks: &Arc<RwLock<BankForks>>,
@@ -263,13 +334,17 @@ fn recv_window<F>(
     retransmit: &PacketSender,
     shred_filter: F,
     thread_pool: &ThreadPool,
+    metrics: &mut RecvWindowMetrics,
 ) -> Result<()>
 where
     F: Fn(&Shred, u64) -> bool + Sync,
 {
-    let timer = Duration::from_millis(200);
+    let mut verified_receiver_recv_elapsed = Measure::start("recv_window_receiver_elapsed");
+    let timer = Duration::from_millis(ws_params.verified_receiver_recv_timeout_ms);
     let mut packets = verified_receiver.recv_timeout(timer)?;
     packets.extend(verified_receiver.try_iter().flatten());
+    verified_receiver_recv_elapsed.stop();
+
     let total_packets: usize = packets.iter().map(|p| p.packets.len()).sum();
     let now = Instant::now();
     inc_new_counter_debug!("streamer-recv_window-recv", total_packets);
@@ -310,12 +385,15 @@ where
             Some((shred, None))
         }
     };
+
+    let mut handle_packets_elapsed = Measure::start("recv_window_handle_packets_elapsed");
     let (shreds, repair_infos): (Vec<_>, Vec<_>) = thread_pool.install(|| {
         packets
             .par_iter_mut()
             .flat_map_iter(|packet| packet.packets.iter_mut().filter_map(handle_packet))
             .unzip()
     });
+    handle_packets_elapsed.stop();
 
     trace!("{:?} shreds from packets", shreds.len());
 
@@ -330,10 +408,16 @@ where
 
     insert_shred_sender.send((shreds, repair_infos))?;
 
+    let call_duration = now.elapsed();
     trace!(
         "Elapsed processing time in recv_window(): {}",
-        duration_as_ms(&now.elapsed())
+        duration_as_ms(&call_duration)
     );
+    metrics.recv_window_count += 1;
+    metrics.num_packets_received += total_packets;
+    metrics.verified_receiver_recv_elapsed_us += verified_receiver_recv_elapsed.as_us();
+    metrics.handle_packets_elapsed_us += handle_packets_elapsed.as_us();
+    metrics.recv_window_elapsed_us += call_duration.as_micros() as u64;
 
     Ok(())
 }
@@ -371,6 +455,7 @@ pub struct WindowService {
 impl WindowService {
     #[allow(clippy::too_many_arguments)]
     pub fn new<F>(
+        ws_params: &WindowServiceParams,
         blockstore: Arc<Blockstore>,
         verified_receiver: CrossbeamReceiver<Vec<Packets>>,
         retransmit: PacketSender,
@@ -390,6 +475,8 @@ impl WindowService {
             + std::marker::Send
             + std::marker::Sync,
     {
+        info!("WindowService::new() params: {:?}", ws_params);
+
         let outstanding_requests: Arc<RwLock<OutstandingShredRepairs>> =
             Arc::new(RwLock::new(OutstandingRequests::default()));
 
@@ -411,6 +498,7 @@ impl WindowService {
         let (duplicate_sender, duplicate_receiver) = unbounded();
 
         let t_check_duplicate = Self::start_check_duplicate_thread(
+            ws_params,
             cluster_info,
             exit.clone(),
             blockstore.clone(),
@@ -419,6 +507,7 @@ impl WindowService {
         );
 
         let t_insert = Self::start_window_insert_thread(
+            ws_params,
             exit,
             &blockstore,
             leader_schedule_cache,
@@ -429,6 +518,7 @@ impl WindowService {
         );
 
         let t_window = Self::start_recv_window_thread(
+            ws_params,
             id,
             exit,
             &blockstore,
@@ -449,12 +539,14 @@ impl WindowService {
     }
 
     fn start_check_duplicate_thread(
+        ws_params: &WindowServiceParams,
         cluster_info: Arc<ClusterInfo>,
         exit: Arc<AtomicBool>,
         blockstore: Arc<Blockstore>,
         duplicate_receiver: CrossbeamReceiver<Shred>,
         duplicate_slot_sender: DuplicateSlotSender,
     ) -> JoinHandle<()> {
+        let ws_params = ws_params.clone();
         let handle_error = || {
             inc_new_counter_error!("solana-check-duplicate-error", 1, 1);
         };
@@ -464,9 +556,9 @@ impl WindowService {
                 if exit.load(Ordering::Relaxed) {
                     break;
                 }
-
                 let mut noop = || {};
                 if let Err(e) = run_check_duplicate(
+                    &ws_params,
                     &cluster_info,
                     &blockstore,
                     &duplicate_receiver,
@@ -481,6 +573,7 @@ impl WindowService {
     }
 
     fn start_window_insert_thread(
+        ws_params: &WindowServiceParams,
         exit: &Arc<AtomicBool>,
         blockstore: &Arc<Blockstore>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
@@ -492,6 +585,7 @@ impl WindowService {
         let exit = exit.clone();
         let blockstore = blockstore.clone();
         let leader_schedule_cache = leader_schedule_cache.clone();
+        let ws_params = ws_params.clone();
         let mut handle_timeout = || {};
         let handle_error = || {
             inc_new_counter_error!("solana-window-insert-error", 1, 1);
@@ -512,6 +606,7 @@ impl WindowService {
                     }
 
                     if let Err(e) = run_insert(
+                        &ws_params,
                         &insert_receiver,
                         &blockstore,
                         &leader_schedule_cache,
@@ -540,6 +635,7 @@ impl WindowService {
 
     #[allow(clippy::too_many_arguments)]
     fn start_recv_window_thread<F>(
+        ws_params: &WindowServiceParams,
         id: Pubkey,
         exit: &Arc<AtomicBool>,
         blockstore: &Arc<Blockstore>,
@@ -561,6 +657,7 @@ impl WindowService {
         let bank_forks = bank_forks.clone();
         let bank_forks_opt = Some(bank_forks.clone());
         let leader_schedule_cache = leader_schedule_cache.clone();
+        let ws_params = ws_params.clone();
         Builder::new()
             .name("solana-window".to_string())
             .spawn(move || {
@@ -574,6 +671,8 @@ impl WindowService {
                 let handle_error = || {
                     inc_new_counter_error!("solana-window-error", 1, 1);
                 };
+                let mut metrics = RecvWindowMetrics::default();
+                let mut last_print = Instant::now();
 
                 loop {
                     if exit.load(Ordering::Relaxed) {
@@ -587,6 +686,7 @@ impl WindowService {
                         }
                     };
                     if let Err(e) = recv_window(
+                        &ws_params,
                         &blockstore,
                         &leader_schedule_cache,
                         &bank_forks,
@@ -605,13 +705,20 @@ impl WindowService {
                             )
                         },
                         &thread_pool,
+                        &mut metrics,
                     ) {
                         if Self::should_exit_on_error(e, &mut handle_timeout, &handle_error) {
                             break;
                         }
-                    } else {
-                        now = Instant::now();
                     }
+
+                    if last_print.elapsed().as_secs() > 2 {
+                        metrics.report_metrics("recv-window-recv-window");
+                        metrics = RecvWindowMetrics::default();
+                        last_print = Instant::now();
+                    }
+
+                    now = Instant::now();
                 }
             })
             .unwrap()
@@ -818,7 +925,9 @@ mod test {
             Arc::new(keypair),
             SocketAddrSpace::Unspecified,
         );
+        let ws_params = WindowServiceParams::default();
         run_check_duplicate(
+            &ws_params,
             &cluster_info,
             &blockstore,
             &receiver,

@@ -12,7 +12,7 @@ use {
         packet_hasher::PacketHasher,
         repair_service::{DuplicateSlotsResetSender, RepairInfo},
         result::{Error, Result},
-        window_service::{should_retransmit_and_persist, WindowService},
+        window_service::{should_retransmit_and_persist, WindowService, WindowServiceParams},
     },
     crossbeam_channel::{Receiver, Sender},
     lru::LruCache,
@@ -51,12 +51,34 @@ use {
     },
 };
 
-const MAX_DUPLICATE_COUNT: usize = 2;
-const DEFAULT_LRU_SIZE: usize = 10_000;
-
+const SENT_MAX_DUPLICATE_COUNT: usize = 2;
+const DEFAULT_SHREDS_RECEIVED_LRU_CACHE_SIZE: usize = 10_000;
+const UPDATE_PEER_CACHE_INTERVAL_MS: u64 = 1_000;
 // Limit a given thread to consume about this many packets so that
 // it doesn't pull up too much work.
-const MAX_PACKET_BATCH_SIZE: usize = 100;
+const RETRANSMIT_PACKET_BATCH_THRESHOLD: usize = 100;
+const RETRANSMIT_PACKET_RECV_TIMEOUT_MS: u64 = 1_000;
+
+#[derive(Clone, Debug)]
+pub struct RetransmitStageParams {
+    pub sent_max_duplicate_count: usize,
+    pub shreds_received_lru_cache_size: usize,
+    pub update_peer_cache_interval_ms: u64,
+    pub retransmit_packet_batch_threshold: usize,
+    pub retransmit_packet_recv_timeout_ms: u64,
+}
+
+impl Default for RetransmitStageParams {
+    fn default() -> Self {
+        Self {
+            sent_max_duplicate_count: SENT_MAX_DUPLICATE_COUNT,
+            shreds_received_lru_cache_size: DEFAULT_SHREDS_RECEIVED_LRU_CACHE_SIZE,
+            update_peer_cache_interval_ms: UPDATE_PEER_CACHE_INTERVAL_MS,
+            retransmit_packet_batch_threshold: RETRANSMIT_PACKET_BATCH_THRESHOLD,
+            retransmit_packet_recv_timeout_ms: RETRANSMIT_PACKET_RECV_TIMEOUT_MS,
+        }
+    }
+}
 
 #[derive(Default)]
 struct RetransmitStats {
@@ -224,6 +246,7 @@ pub type ShredFilterAndHasher = (ShredFilter, PacketHasher);
 // Returns None if shred is already received and should skip retransmit.
 // Otherwise returns shred's slot and whether the shred is a data shred.
 fn check_if_already_received(
+    params: &RetransmitStageParams,
     packet: &Packet,
     shreds_received: &Mutex<ShredFilterAndHasher>,
 ) -> Option<Slot> {
@@ -231,7 +254,7 @@ fn check_if_already_received(
     let mut shreds_received = shreds_received.lock().unwrap();
     let (cache, hasher) = shreds_received.deref_mut();
     match cache.get_mut(&shred) {
-        Some(sent) if sent.len() >= MAX_DUPLICATE_COUNT => None,
+        Some(sent) if sent.len() >= params.sent_max_duplicate_count => None,
         Some(sent) => {
             let hash = hasher.hash_packet(packet);
             if sent.contains(&hash) {
@@ -276,6 +299,7 @@ fn check_if_first_shred_received(
 }
 
 fn maybe_update_peers_cache(
+    params: &RetransmitStageParams,
     cluster_nodes: &RwLock<ClusterNodes<RetransmitStage>>,
     shreds_received: &Mutex<ShredFilterAndHasher>,
     last_peer_update: &AtomicU64,
@@ -283,8 +307,9 @@ fn maybe_update_peers_cache(
     bank_epoch: Epoch,
     working_bank: &Bank,
 ) {
-    const UPDATE_INTERVAL_MS: u64 = 1000;
-    if timestamp().saturating_sub(last_peer_update.load(Ordering::Acquire)) < UPDATE_INTERVAL_MS {
+    if timestamp().saturating_sub(last_peer_update.load(Ordering::Acquire))
+        < params.update_peer_cache_interval_ms
+    {
         return;
     }
     {
@@ -292,7 +317,9 @@ fn maybe_update_peers_cache(
         // computations to update peers.
         let mut cluster_nodes = cluster_nodes.write().unwrap();
         let now = timestamp();
-        if now.saturating_sub(last_peer_update.load(Ordering::Acquire)) < UPDATE_INTERVAL_MS {
+        if now.saturating_sub(last_peer_update.load(Ordering::Acquire))
+            < params.update_peer_cache_interval_ms
+        {
             return; // Some other thread has already done the update.
         }
         let epoch_staked_nodes = working_bank
@@ -309,6 +336,7 @@ fn maybe_update_peers_cache(
 
 #[allow(clippy::too_many_arguments)]
 fn retransmit(
+    params: &RetransmitStageParams,
     bank_forks: &RwLock<BankForks>,
     leader_schedule_cache: &LeaderScheduleCache,
     cluster_info: &ClusterInfo,
@@ -323,16 +351,16 @@ fn retransmit(
     first_shreds_received: &Mutex<BTreeSet<Slot>>,
     rpc_subscriptions: &Option<Arc<RpcSubscriptions>>,
 ) -> Result<()> {
-    const RECV_TIMEOUT: Duration = Duration::from_secs(1);
+    let recv_timeout = Duration::from_millis(params.retransmit_packet_recv_timeout_ms);
     let r_lock = r.lock().unwrap();
-    let packets = r_lock.recv_timeout(RECV_TIMEOUT)?;
+    let packets = r_lock.recv_timeout(recv_timeout)?;
     let mut timer_start = Measure::start("retransmit");
     let mut total_packets = packets.packets.len();
     let mut packets = vec![packets];
     while let Ok(nq) = r_lock.try_recv() {
         total_packets += nq.packets.len();
         packets.push(nq);
-        if total_packets >= MAX_PACKET_BATCH_SIZE {
+        if total_packets >= params.retransmit_packet_batch_threshold {
             break;
         }
     }
@@ -348,6 +376,7 @@ fn retransmit(
 
     let mut epoch_cache_update = Measure::start("retransmit_epoch_cach_update");
     maybe_update_peers_cache(
+        params,
         cluster_nodes,
         shreds_received,
         last_peer_update,
@@ -381,7 +410,7 @@ fn retransmit(
             repair_total += 1;
             continue;
         }
-        let shred_slot = match check_if_already_received(packet, shreds_received) {
+        let shred_slot = match check_if_already_received(params, packet, shreds_received) {
             Some(slot) => slot,
             None => continue,
         };
@@ -479,6 +508,7 @@ fn retransmit(
 /// * `cluster_info` - This structure needs to be updated and populated by the bank and via gossip.
 /// * `r` - Receive channel for shreds to be retransmitted to all the layer 1 nodes.
 pub fn retransmitter(
+    params: &RetransmitStageParams,
     sockets: Arc<Vec<UdpSocket>>,
     bank_forks: Arc<RwLock<BankForks>>,
     leader_schedule_cache: &Arc<LeaderScheduleCache>,
@@ -491,12 +521,13 @@ pub fn retransmitter(
     let last_peer_update = Arc::default();
     let stats = Arc::new(RetransmitStats::default());
     let shreds_received = Arc::new(Mutex::new((
-        LruCache::new(DEFAULT_LRU_SIZE),
+        LruCache::new(params.shreds_received_lru_cache_size),
         PacketHasher::default(),
     )));
     let first_shreds_received = Arc::new(Mutex::new(BTreeSet::new()));
     (0..sockets.len())
         .map(|s| {
+            let params = params.clone();
             let sockets = sockets.clone();
             let bank_forks = bank_forks.clone();
             let leader_schedule_cache = leader_schedule_cache.clone();
@@ -516,6 +547,7 @@ pub fn retransmitter(
                     trace!("retransmitter started");
                     loop {
                         if let Err(e) = retransmit(
+                            &params,
                             &bank_forks,
                             &leader_schedule_cache,
                             &cluster_info,
@@ -556,6 +588,8 @@ impl RetransmitStage {
     #[allow(clippy::new_ret_no_self)]
     #[allow(clippy::too_many_arguments)]
     pub fn new(
+        retransmit_stage_params: &RetransmitStageParams,
+        window_service_params: &WindowServiceParams,
         bank_forks: Arc<RwLock<BankForks>>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         blockstore: Arc<Blockstore>,
@@ -578,10 +612,16 @@ impl RetransmitStage {
         duplicate_slots_sender: Sender<Slot>,
         ancestor_hashes_replay_update_receiver: AncestorHashesReplayUpdateReceiver,
     ) -> Self {
+        info!(
+            "RetransmitStage::new() params: {:?}",
+            retransmit_stage_params
+        );
+
         let (retransmit_sender, retransmit_receiver) = channel();
 
         let retransmit_receiver = Arc::new(Mutex::new(retransmit_receiver));
         let thread_hdls = retransmitter(
+            retransmit_stage_params,
             retransmit_sockets,
             bank_forks.clone(),
             leader_schedule_cache,
@@ -610,6 +650,7 @@ impl RetransmitStage {
             cluster_slots,
         };
         let window_service = WindowService::new(
+            window_service_params,
             blockstore,
             verified_receiver,
             retransmit_sender,
@@ -667,7 +708,7 @@ mod tests {
     use solana_perf::packet::{Packet, Packets};
     use solana_sdk::signature::Keypair;
     use solana_streamer::socket::SocketAddrSpace;
-    use std::net::{IpAddr, Ipv4Addr};
+    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
     #[test]
     fn test_skip_repair() {
@@ -686,14 +727,14 @@ mod tests {
         let bank_forks = Arc::new(RwLock::new(bank_forks));
 
         let mut me = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), 0);
-        let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        let ip_addr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
         let port = find_available_port_in_range(ip_addr, (8000, 10000)).unwrap();
-        let me_retransmit = UdpSocket::bind(format!("127.0.0.1:{}", port)).unwrap();
+        let me_retransmit = UdpSocket::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, port))).unwrap();
         // need to make sure tvu and tpu are valid addresses
         me.tvu_forwards = me_retransmit.local_addr().unwrap();
 
         let port = find_available_port_in_range(ip_addr, (8000, 10000)).unwrap();
-        me.tvu = UdpSocket::bind(format!("127.0.0.1:{}", port))
+        me.tvu = UdpSocket::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, port)))
             .unwrap()
             .local_addr()
             .unwrap();
@@ -711,11 +752,17 @@ mod tests {
         );
         cluster_info.insert_info(me);
 
-        let retransmit_socket = Arc::new(vec![UdpSocket::bind("0.0.0.0:0").unwrap()]);
+        let retransmit_socket = Arc::new(vec![UdpSocket::bind(SocketAddr::from((
+            Ipv4Addr::UNSPECIFIED,
+            0,
+        )))
+        .unwrap()]);
         let cluster_info = Arc::new(cluster_info);
+        let retransmit_stage_params = RetransmitStageParams::default();
 
         let (retransmit_sender, retransmit_receiver) = channel();
         let _t_retransmit = retransmitter(
+            &retransmit_stage_params,
             retransmit_socket,
             bank_forks,
             &leader_schedule_cache,
@@ -753,6 +800,7 @@ mod tests {
 
     #[test]
     fn test_already_received() {
+        let rs_params = RetransmitStageParams::default();
         let mut packet = Packet::default();
         let slot = 1;
         let index = 5;
@@ -762,52 +810,76 @@ mod tests {
         let shreds_received = Arc::new(Mutex::new((LruCache::new(100), PacketHasher::default())));
         // unique shred for (1, 5) should pass
         assert_eq!(
-            check_if_already_received(&packet, &shreds_received),
+            check_if_already_received(&rs_params, &packet, &shreds_received),
             Some(slot)
         );
         // duplicate shred for (1, 5) blocked
-        assert_eq!(check_if_already_received(&packet, &shreds_received), None);
+        assert_eq!(
+            check_if_already_received(&rs_params, &packet, &shreds_received),
+            None
+        );
 
         let shred = Shred::new_from_data(slot, index, 2, None, true, true, 0, version, 0);
         shred.copy_to_packet(&mut packet);
         // first duplicate shred for (1, 5) passed
         assert_eq!(
-            check_if_already_received(&packet, &shreds_received),
+            check_if_already_received(&rs_params, &packet, &shreds_received),
             Some(slot)
         );
         // then blocked
-        assert_eq!(check_if_already_received(&packet, &shreds_received), None);
+        assert_eq!(
+            check_if_already_received(&rs_params, &packet, &shreds_received),
+            None
+        );
 
         let shred = Shred::new_from_data(slot, index, 8, None, true, true, 0, version, 0);
         shred.copy_to_packet(&mut packet);
         // 2nd duplicate shred for (1, 5) blocked
-        assert_eq!(check_if_already_received(&packet, &shreds_received), None);
-        assert_eq!(check_if_already_received(&packet, &shreds_received), None);
+        assert_eq!(
+            check_if_already_received(&rs_params, &packet, &shreds_received),
+            None
+        );
+        assert_eq!(
+            check_if_already_received(&rs_params, &packet, &shreds_received),
+            None
+        );
 
         let shred = Shred::new_empty_coding(slot, index, 0, 1, 1, version);
         shred.copy_to_packet(&mut packet);
         // Coding at (1, 5) passes
         assert_eq!(
-            check_if_already_received(&packet, &shreds_received),
+            check_if_already_received(&rs_params, &packet, &shreds_received),
             Some(slot)
         );
         // then blocked
-        assert_eq!(check_if_already_received(&packet, &shreds_received), None);
+        assert_eq!(
+            check_if_already_received(&rs_params, &packet, &shreds_received),
+            None
+        );
 
         let shred = Shred::new_empty_coding(slot, index, 2, 1, 1, version);
         shred.copy_to_packet(&mut packet);
         // 2nd unique coding at (1, 5) passes
         assert_eq!(
-            check_if_already_received(&packet, &shreds_received),
+            check_if_already_received(&rs_params, &packet, &shreds_received),
             Some(slot)
         );
         // same again is blocked
-        assert_eq!(check_if_already_received(&packet, &shreds_received), None);
+        assert_eq!(
+            check_if_already_received(&rs_params, &packet, &shreds_received),
+            None
+        );
 
         let shred = Shred::new_empty_coding(slot, index, 3, 1, 1, version);
         shred.copy_to_packet(&mut packet);
         // Another unique coding at (1, 5) always blocked
-        assert_eq!(check_if_already_received(&packet, &shreds_received), None);
-        assert_eq!(check_if_already_received(&packet, &shreds_received), None);
+        assert_eq!(
+            check_if_already_received(&rs_params, &packet, &shreds_received),
+            None
+        );
+        assert_eq!(
+            check_if_already_received(&rs_params, &packet, &shreds_received),
+            None
+        );
     }
 }

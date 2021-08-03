@@ -16,13 +16,14 @@ use crate::{
     cost_update_service::CostUpdateService,
     ledger_cleanup_service::LedgerCleanupService,
     replay_stage::{ReplayStage, ReplayStageConfig},
-    retransmit_stage::RetransmitStage,
+    retransmit_stage::{RetransmitStage, RetransmitStageParams},
     rewards_recorder_service::RewardsRecorderSender,
     shred_fetch_stage::ShredFetchStage,
     sigverify_shreds::ShredSigVerifier,
     sigverify_stage::SigVerifyStage,
     snapshot_packager_service::PendingSnapshotPackage,
     voting_service::VotingService,
+    window_service::WindowServiceParams,
 };
 use crossbeam_channel::unbounded;
 use solana_gossip::cluster_info::ClusterInfo;
@@ -133,6 +134,8 @@ impl Tvu {
         tvu_config: TvuConfig,
         max_slots: &Arc<MaxSlots>,
         cost_model: &Arc<RwLock<CostModel>>,
+        retransmit_stage_params: &RetransmitStageParams,
+        window_service_params: &WindowServiceParams,
     ) -> Self {
         let Sockets {
             repair: repair_socket,
@@ -171,7 +174,10 @@ impl Tvu {
         let (cluster_slots_update_sender, cluster_slots_update_receiver) = unbounded();
         let (ancestor_hashes_replay_update_sender, ancestor_hashes_replay_update_receiver) =
             unbounded();
+
         let retransmit_stage = RetransmitStage::new(
+            retransmit_stage_params,
+            window_service_params,
             bank_forks.clone(),
             leader_schedule_cache,
             blockstore.clone(),
@@ -426,6 +432,8 @@ pub mod tests {
         let (_, gossip_confirmed_slots_receiver) = unbounded();
         let bank_forks = Arc::new(RwLock::new(bank_forks));
         let tower = Tower::default();
+        let rts_params = RetransmitStageParams::default();
+        let ws_params = WindowServiceParams::default();
         let tvu = Tvu::new(
             &vote_keypair.pubkey(),
             Arc::new(RwLock::new(vec![Arc::new(vote_keypair)])),
@@ -468,6 +476,8 @@ pub mod tests {
             TvuConfig::default(),
             &Arc::new(MaxSlots::default()),
             &Arc::new(RwLock::new(CostModel::default())),
+            &rts_params,
+            &ws_params,
         );
         exit.store(true, Ordering::Relaxed);
         tvu.join().unwrap();
