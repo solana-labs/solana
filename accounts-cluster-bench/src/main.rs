@@ -304,8 +304,8 @@ fn make_create_message(
 
             instructions
         })
+        .flatten()
         .collect();
-    let instructions: Vec<_> = instructions.into_iter().flatten().collect();
 
     Message::new(&instructions, Some(&keypair.pubkey()))
 }
