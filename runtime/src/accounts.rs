@@ -914,8 +914,8 @@ impl Accounts {
     }
 
     /// Add a slot to root.  Root slots cannot be purged
-    pub fn add_root_to_squash_bank(&self, slot: Slot) {
-        self.accounts_db.add_root_to_squash_bank(slot)
+    pub fn add_root(&self, slot: Slot) {
+        self.accounts_db.add_root(slot)
     }
 
     fn collect_accounts_to_store<'a>(
