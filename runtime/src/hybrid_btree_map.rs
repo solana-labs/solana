@@ -521,7 +521,8 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
         let mut get_purges = 0;
         for (k, mut v) in read_lock.iter() {
             let mut instance = v.instance.read().unwrap();
-            let mut flush = instance.dirty;
+            let dirty = instance.dirty;
+            let mut flush = dirty;
             let mut keep_this_in_cache = Self::in_cache(&instance.data.slot_list); // || instance.data.slot_list.len() > 1);
             if bg && keep_this_in_cache {
                 // for all account indexes that are in the write cache instead of storage, don't write them to disk yet - they will be updated soon
@@ -531,14 +532,14 @@ impl<V: 'static + Clone + IsCached + Debug + Guts> BucketMapWriteHolder<V> {
                 flush_keys.push(*k);
                 had_dirty = true;
             }
-            if do_age || startup {
+            if (do_age && !dirty) || startup {
                 if startup || (instance.age == age_comp && !keep_this_in_cache) {
                     // clear the cache of things that have aged out
                     delete_keys.push(*k);
                     get_purges += 1;
 
                     // if we should age this key out, then go ahead and flush it
-                    if !flush && instance.dirty {
+                    if !flush && dirty {
                         flush_keys.push(*k);
                     }
                 }
