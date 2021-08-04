@@ -264,7 +264,9 @@ pub struct Vote {
     transaction: Transaction,
     pub(crate) wallclock: u64,
     #[serde(skip_serializing)]
-    slot: Option<Slot>,
+    vote_account: Option<Pubkey>,
+    #[serde(skip_serializing)]
+    slots: Vec<Slot>,
 }
 
 impl Sanitize for Vote {
@@ -277,13 +279,18 @@ impl Sanitize for Vote {
 
 impl Vote {
     pub fn new(from: Pubkey, transaction: Transaction, wallclock: u64) -> Self {
-        let slot = parse_vote_transaction(&transaction)
-            .and_then(|(_, vote, _)| vote.slots.last().copied());
+        // TODO: Consider dropping the vote if tx does not parse or if slots is
+        // empty.
+        let (vote_account, slots) = match parse_vote_transaction(&transaction) {
+            Some((pubkey, vote, _)) => (Some(pubkey), vote.slots),
+            None => (None, Vec::default()),
+        };
         Self {
             from,
             transaction,
             wallclock,
-            slot,
+            vote_account,
+            slots,
         }
     }
 
@@ -293,7 +300,8 @@ impl Vote {
             from: pubkey.unwrap_or_else(pubkey::new_rand),
             transaction: Transaction::default(),
             wallclock: new_rand_timestamp(rng),
-            slot: None,
+            vote_account: None,
+            slots: Vec::default(),
         }
     }
 
@@ -301,8 +309,8 @@ impl Vote {
         &self.transaction
     }
 
-    pub(crate) fn slot(&self) -> Option<Slot> {
-        self.slot
+    pub(crate) fn slots(&self) -> &[Slot] {
+        &self.slots
     }
 }
 
@@ -317,14 +325,20 @@ impl<'de> Deserialize<'de> for Vote {
             transaction: Transaction,
             wallclock: u64,
         }
-        let vote = Vote::deserialize(deserializer)?;
-        let vote = match vote.transaction.sanitize() {
-            Ok(_) => Self::new(vote.from, vote.transaction, vote.wallclock),
+        let Vote {
+            from,
+            transaction,
+            wallclock,
+        } = Vote::deserialize(deserializer)?;
+        // TODO: Consider erroring out if tx sanitize fails.
+        let vote = match transaction.sanitize() {
+            Ok(_) => Self::new(from, transaction, wallclock),
             Err(_) => Self {
-                from: vote.from,
-                transaction: vote.transaction,
-                wallclock: vote.wallclock,
-                slot: None,
+                from,
+                transaction,
+                wallclock,
+                vote_account: None,
+                slots: Vec::default(),
             },
         };
         Ok(vote)
@@ -773,15 +787,15 @@ mod test {
             tx,
             rng.gen(), // wallclock
         );
-        assert_eq!(vote.slot, Some(7));
+        assert_eq!(vote.slots(), &[1, 3, 7]);
         let bytes = bincode::serialize(&vote).unwrap();
         let other = bincode::deserialize(&bytes[..]).unwrap();
         assert_eq!(vote, other);
-        assert_eq!(other.slot, Some(7));
+        assert_eq!(other.slots(), &[1, 3, 7]);
         let bytes = bincode::options().serialize(&vote).unwrap();
         let other = bincode::options().deserialize(&bytes[..]).unwrap();
         assert_eq!(vote, other);
-        assert_eq!(other.slot, Some(7));
+        assert_eq!(other.slots(), &[1, 3, 7]);
     }
 
     #[test]

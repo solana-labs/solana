@@ -14,38 +14,19 @@ use crate::{
 
 pub fn parse_vote_transaction(tx: &Transaction) -> Option<(Pubkey, Vote, Option<Hash>)> {
     // Check first instruction for a vote
-    let message = tx.message();
-    message.instructions.get(0).and_then(|first_instruction| {
-        let prog_id_idx = first_instruction.program_id_index as usize;
-        match message.account_keys.get(prog_id_idx) {
-            Some(program_id) => {
-                if !crate::check_id(program_id) {
-                    return None;
-                }
-            }
-            _ => {
-                return None;
-            }
-        };
-        first_instruction
-            .accounts
-            .first()
-            .and_then(|first_account| {
-                tx.message
-                    .account_keys
-                    .get(*first_account as usize)
-                    .and_then(|key| {
-                        let vote_instruction = limited_deserialize(&first_instruction.data).ok();
-                        vote_instruction.and_then(|vote_instruction| match vote_instruction {
-                            VoteInstruction::Vote(vote) => Some((*key, vote, None)),
-                            VoteInstruction::VoteSwitch(vote, hash) => {
-                                Some((*key, vote, Some(hash)))
-                            }
-                            _ => None,
-                        })
-                    })
-            })
-    })
+    let account_keys = &tx.message.account_keys;
+    let instruction = tx.message.instructions.first()?;
+    let id = account_keys.get(instruction.program_id_index as usize)?;
+    if !crate::check_id(id) {
+        return None;
+    }
+    let account = *instruction.accounts.first()?;
+    let key = *account_keys.get(account as usize)?;
+    match limited_deserialize(&instruction.data).ok()? {
+        VoteInstruction::Vote(vote) => Some((key, vote, None)),
+        VoteInstruction::VoteSwitch(vote, hash) => Some((key, vote, Some(hash))),
+        _ => None,
+    }
 }
 
 pub fn new_vote_transaction(

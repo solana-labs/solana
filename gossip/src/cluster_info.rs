@@ -976,7 +976,7 @@ impl ClusterInfo {
         let self_pubkey = self.id();
         // Returns true if the tower does not contain the vote.slot.
         let should_evict_vote = |vote: &Vote| -> bool {
-            match vote.slot() {
+            match vote.slots().last().copied() {
                 Some(slot) => !tower.contains(&slot),
                 None => {
                     error!("crds vote with no slots!");
@@ -1012,22 +1012,14 @@ impl ClusterInfo {
             let self_pubkey = self.id();
             let gossip_crds =
                 self.time_gossip_read_lock("gossip_read_push_vote", &self.stats.push_vote_read);
-            (0..MAX_LOCKOUT_HISTORY as u8).find(|ix| {
-                let vote = CrdsValueLabel::Vote(*ix, self_pubkey);
-                if let Some(vote) = gossip_crds.get::<&CrdsData>(&vote) {
-                    match &vote {
-                        CrdsData::Vote(_, prev_vote) => match prev_vote.slot() {
-                            Some(prev_vote_slot) => prev_vote_slot == vote_slot,
-                            None => {
-                                error!("crds vote with no slots!");
-                                false
-                            }
-                        },
-                        _ => panic!("this should not happen!"),
-                    }
-                } else {
-                    false
-                }
+            (0..MAX_LOCKOUT_HISTORY as u8).find_map(|ix| {
+                let vote = CrdsValueLabel::Vote(ix, self_pubkey);
+                let vote = match gossip_crds.get::<&CrdsData>(&vote)? {
+                    CrdsData::Vote(_, vote) => vote,
+                    _ => panic!("this should not happen!"),
+                };
+                let slot = vote.slots().last().copied()?;
+                (slot == vote_slot).then(|| ix)
             })
         };
 
@@ -3627,7 +3619,8 @@ mod tests {
             for label in labels {
                 match &gossip_crds.get::<&CrdsData>(&label).unwrap() {
                     CrdsData::Vote(_, vote) => {
-                        assert!(vote_slots.insert(vote.slot().unwrap()));
+                        let slot = vote.slots().last().copied().unwrap();
+                        assert!(vote_slots.insert(slot));
                     }
                     _ => panic!("this should not happen!"),
                 }
