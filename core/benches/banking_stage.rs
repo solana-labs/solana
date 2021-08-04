@@ -59,7 +59,7 @@ fn check_txs(receiver: &Arc<Receiver<WorkingBankEntry>>, ref_tx_count: usize) {
 #[bench]
 fn bench_consume_buffered(bencher: &mut Bencher) {
     let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(100_000);
-    let bank = Arc::new(Bank::new(&genesis_config));
+    let bank = Arc::new(Bank::new_for_benches(&genesis_config));
     let ledger_path = get_tmp_ledger_path!();
     let my_pubkey = pubkey::new_rand();
     {
@@ -164,10 +164,10 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
 
     let (verified_sender, verified_receiver) = unbounded();
     let (vote_sender, vote_receiver) = unbounded();
-    let mut bank = Bank::new(&genesis_config);
+    let mut bank = Bank::new_for_benches(&genesis_config);
     // Allow arbitrary transaction processing time for the purposes of this bench
     bank.ns_per_slot = std::u128::MAX;
-    let bank = Arc::new(Bank::new(&genesis_config));
+    let bank = Arc::new(Bank::new_for_benches(&genesis_config));
 
     debug!("threads: {} txs: {}", num_threads, txes);
 
@@ -293,7 +293,7 @@ fn simulate_process_entries(
     initial_lamports: u64,
     num_accounts: usize,
 ) {
-    let bank = Arc::new(Bank::new(genesis_config));
+    let bank = Arc::new(Bank::new_for_benches(genesis_config));
 
     for i in 0..(num_accounts / 2) {
         bank.transfer(initial_lamports, mint_keypair, &keypairs[i * 2].pubkey())

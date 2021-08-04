@@ -1052,6 +1052,11 @@ impl Bank {
         Self::new_for_tests(genesis_config)
     }
 
+    pub fn new_for_benches(genesis_config: &GenesisConfig) -> Self {
+        // this will diverge
+        Self::new_for_tests(genesis_config)
+    }
+
     pub fn new_for_tests(genesis_config: &GenesisConfig) -> Self {
         // this will diverge
         Self::new_with_paths(

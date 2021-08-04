@@ -167,7 +167,7 @@ fn main() {
     let (verified_sender, verified_receiver) = unbounded();
     let (vote_sender, vote_receiver) = unbounded();
     let (replay_vote_sender, _replay_vote_receiver) = unbounded();
-    let bank0 = Bank::new(&genesis_config);
+    let bank0 = Bank::new_for_benches(&genesis_config);
     let mut bank_forks = BankForks::new(bank0);
     let mut bank = bank_forks.working_bank();
 

@@ -72,7 +72,7 @@ fn bench_retransmitter(bencher: &mut Bencher) {
     let cluster_info = Arc::new(cluster_info);
 
     let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(100_000);
-    let bank0 = Bank::new(&genesis_config);
+    let bank0 = Bank::new_for_benches(&genesis_config);
     let bank_forks = BankForks::new(bank0);
     let bank = bank_forks.working_bank();
     let bank_forks = Arc::new(RwLock::new(bank_forks));
