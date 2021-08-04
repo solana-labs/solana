@@ -91,7 +91,6 @@ impl ClusterSlotsService {
                     break;
                 }
             };
-            let new_root = bank_forks.read().unwrap().root();
             let mut lowest_slot_elapsed = Measure::start("lowest_slot_elapsed");
             let lowest_slot = blockstore.lowest_slot();
             Self::update_lowest_slot(lowest_slot, &cluster_info);
@@ -105,7 +104,8 @@ impl ClusterSlotsService {
                     &cluster_info,
                 );
             }
-            cluster_slots.update(new_root, &cluster_info, &bank_forks);
+            let root_bank = bank_forks.read().unwrap().root_bank();
+            cluster_slots.update(&root_bank, &cluster_info);
             process_cluster_slots_updates_elapsed.stop();
 
             cluster_slots_service_timing.update(
