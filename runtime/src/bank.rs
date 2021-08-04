@@ -4876,7 +4876,11 @@ impl Bank {
 
     /// A snapshot bank should be purged of 0 lamport accounts which are not part of the hash
     /// calculation and could shield other real accounts.
-    pub fn verify_snapshot_bank(&self, test_hash_calculation: bool) -> bool {
+    pub fn verify_snapshot_bank(
+        &self,
+        test_hash_calculation: bool,
+        accounts_db_skip_shrink: bool,
+    ) -> bool {
         info!("cleaning..");
         let mut clean_time = Measure::start("clean");
         if self.slot() > 0 {
@@ -4884,9 +4888,9 @@ impl Bank {
         }
         clean_time.stop();
 
-        info!("shrinking..");
         let mut shrink_all_slots_time = Measure::start("shrink_all_slots");
-        if self.slot() > 0 {
+        if !accounts_db_skip_shrink && self.slot() > 0 {
+            info!("shrinking..");
             self.shrink_all_slots(true);
         }
         shrink_all_slots_time.stop();
@@ -8674,11 +8678,11 @@ pub(crate) mod tests {
         bank.transfer(1_000, &mint_keypair, &pubkey).unwrap();
         bank.freeze();
         bank.update_accounts_hash();
-        assert!(bank.verify_snapshot_bank(true));
+        assert!(bank.verify_snapshot_bank(true, false));
 
         // tamper the bank after freeze!
         bank.increment_signature_count(1);
-        assert!(!bank.verify_snapshot_bank(true));
+        assert!(!bank.verify_snapshot_bank(true, false));
     }
 
     // Test that two bank forks with the same accounts should not hash to the same value.

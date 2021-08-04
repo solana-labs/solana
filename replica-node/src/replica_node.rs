@@ -126,6 +126,7 @@ fn initialize_from_snapshot(
         process_options.limit_load_slot_count_from_snapshot,
         process_options.shrink_ratio,
         process_options.accounts_db_test_hash_calculation,
+        false,
         process_options.verify_index,
     )
     .unwrap();

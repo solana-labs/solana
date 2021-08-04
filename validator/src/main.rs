@@ -1813,6 +1813,12 @@ pub fn main() {
                 .help("Disables accounts caching"),
         )
         .arg(
+            Arg::with_name("accounts_db_skip_shrink")
+                .long("accounts-db-skip-shrink")
+                .help("Enables faster starting of validators by skipping shrink. \
+                      This option is for use during testing."),
+        )
+        .arg(
             Arg::with_name("accounts_db_test_hash_calculation")
                 .long("accounts-db-test-hash-calculation")
                 .help("Enables testing of hash calculation using stores in \
@@ -2379,6 +2385,7 @@ pub fn main() {
         account_indexes,
         accounts_db_caching_enabled: !matches.is_present("no_accounts_db_caching"),
         accounts_db_test_hash_calculation: matches.is_present("accounts_db_test_hash_calculation"),
+        accounts_db_skip_shrink: matches.is_present("accounts_db_skip_shrink"),
         accounts_db_use_index_hash_calculation: matches.is_present("accounts_db_index_hashing"),
         tpu_coalesce_ms,
         no_wait_for_vote_to_start_leader: matches.is_present("no_wait_for_vote_to_start_leader"),

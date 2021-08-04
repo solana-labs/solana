@@ -844,6 +844,7 @@ pub fn bank_from_snapshot_archives<P>(
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
     test_hash_calculation: bool,
+    accounts_db_skip_shrink: bool,
     verify_index: bool,
 ) -> Result<(Bank, BankFromArchiveTimings)>
 where
@@ -916,7 +917,7 @@ where
     info!("{}", measure_rebuild);
 
     let mut measure_verify = Measure::start("verify");
-    if !bank.verify_snapshot_bank(test_hash_calculation)
+    if !bank.verify_snapshot_bank(test_hash_calculation, accounts_db_skip_shrink)
         && limit_load_slot_count_from_snapshot.is_none()
     {
         panic!("Snapshot bank for slot {} failed to verify", bank.slot());
@@ -2497,6 +2498,7 @@ mod tests {
             AccountShrinkThreshold::default(),
             false,
             false,
+            false,
         )
         .unwrap();
 
@@ -2585,6 +2587,7 @@ mod tests {
             false,
             None,
             AccountShrinkThreshold::default(),
+            false,
             false,
             false,
         )
@@ -2694,6 +2697,7 @@ mod tests {
             false,
             None,
             AccountShrinkThreshold::default(),
+            false,
             false,
             false,
         )
