@@ -28,13 +28,13 @@ use {
         collections::HashSet,
         fmt,
         fs::{self, File},
-        io::{self, BufReader, BufWriter, Error as IoError, ErrorKind, Read, Seek, Write},
+        io::{BufReader, BufWriter, Error as IoError, ErrorKind, Read, Seek, Write},
         path::{Path, PathBuf},
-        process::{self, ExitStatus},
+        process::ExitStatus,
         str::FromStr,
         sync::Arc,
     },
-    tar::Archive,
+    tar::{self, Archive},
     tempfile::TempDir,
     thiserror::Error,
 };
@@ -442,69 +442,46 @@ pub fn archive_snapshot_package(
     let file_ext = get_archive_ext(snapshot_package.archive_format);
 
     // Tar the staging directory into the archive at `archive_path`
-    //
-    // system `tar` program is used for -S (sparse file support)
     let archive_path = tar_dir.join(format!(
         "{}{}.{}",
         TMP_FULL_SNAPSHOT_PREFIX, snapshot_package.slot, file_ext
     ));
 
-    let mut tar = process::Command::new("tar")
-        .args(&[
-            "chS",
-            "-C",
-            staging_dir.path().to_str().unwrap(),
-            "accounts",
-            "snapshots",
-            "version",
-        ])
-        .stdin(process::Stdio::null())
-        .stdout(process::Stdio::piped())
-        .stderr(process::Stdio::inherit())
-        .spawn()
-        .map_err(|e| SnapshotError::IoWithSource(e, "tar process spawn"))?;
+    {
+        let mut archive_file = fs::File::create(&archive_path)?;
 
-    match &mut tar.stdout {
-        None => {
-            return Err(SnapshotError::Io(IoError::new(
-                ErrorKind::Other,
-                "tar stdout unavailable".to_string(),
-            )));
-        }
-        Some(tar_output) => {
-            let mut archive_file = fs::File::create(&archive_path)?;
+        let do_archive_files = |encoder: &mut dyn Write| -> Result<()> {
+            let mut archive = tar::Builder::new(encoder);
+            for dir in ["accounts", "snapshots"] {
+                archive.append_dir_all(dir, staging_dir.as_ref().join(dir))?;
+            }
+            archive.append_path_with_name(staging_dir.as_ref().join("version"), "version")?;
+            archive.into_inner()?;
+            Ok(())
+        };
 
-            match snapshot_package.archive_format {
-                ArchiveFormat::TarBzip2 => {
-                    let mut encoder =
-                        bzip2::write::BzEncoder::new(archive_file, bzip2::Compression::best());
-                    io::copy(tar_output, &mut encoder)?;
-                    let _ = encoder.finish()?;
-                }
-                ArchiveFormat::TarGzip => {
-                    let mut encoder =
-                        flate2::write::GzEncoder::new(archive_file, flate2::Compression::default());
-                    io::copy(tar_output, &mut encoder)?;
-                    let _ = encoder.finish()?;
-                }
-                ArchiveFormat::Tar => {
-                    io::copy(tar_output, &mut archive_file)?;
-                }
-                ArchiveFormat::TarZstd => {
-                    let mut encoder = zstd::stream::Encoder::new(archive_file, 0)?;
-                    io::copy(tar_output, &mut encoder)?;
-                    let _ = encoder.finish()?;
-                }
-            };
-        }
-    }
-
-    let tar_exit_status = tar
-        .wait()
-        .map_err(|e| SnapshotError::IoWithSource(e, "tar process wait"))?;
-    if !tar_exit_status.success() {
-        warn!("tar command failed with exit code: {}", tar_exit_status);
-        return Err(SnapshotError::ArchiveGenerationFailure(tar_exit_status));
+        match snapshot_package.archive_format {
+            ArchiveFormat::TarBzip2 => {
+                let mut encoder =
+                    bzip2::write::BzEncoder::new(archive_file, bzip2::Compression::best());
+                do_archive_files(&mut encoder)?;
+                encoder.finish()?;
+            }
+            ArchiveFormat::TarGzip => {
+                let mut encoder =
+                    flate2::write::GzEncoder::new(archive_file, flate2::Compression::default());
+                do_archive_files(&mut encoder)?;
+                encoder.finish()?;
+            }
+            ArchiveFormat::TarZstd => {
+                let mut encoder = zstd::stream::Encoder::new(archive_file, 0)?;
+                do_archive_files(&mut encoder)?;
+                encoder.finish()?;
+            }
+            ArchiveFormat::Tar => {
+                do_archive_files(&mut archive_file)?;
+            }
+        };
     }
 
     // Atomically move the archive into position for other validators to find
@@ -2581,7 +2558,7 @@ mod tests {
         let accounts_dir = tempfile::TempDir::new().unwrap();
         let snapshots_dir = tempfile::TempDir::new().unwrap();
         let snapshot_archives_dir = tempfile::TempDir::new().unwrap();
-        let snapshot_archive_format = ArchiveFormat::Tar;
+        let snapshot_archive_format = ArchiveFormat::TarGzip;
 
         let full_snapshot_archive_path = bank_to_full_snapshot_archive(
             snapshots_dir.path(),
@@ -2656,7 +2633,7 @@ mod tests {
         let accounts_dir = tempfile::TempDir::new().unwrap();
         let snapshots_dir = tempfile::TempDir::new().unwrap();
         let snapshot_archives_dir = tempfile::TempDir::new().unwrap();
-        let snapshot_archive_format = ArchiveFormat::Tar;
+        let snapshot_archive_format = ArchiveFormat::TarZstd;
 
         let full_snapshot_slot = slot;
         let full_snapshot_archive_path = bank_to_full_snapshot_archive(
