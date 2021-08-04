@@ -1352,7 +1352,7 @@ impl Default for AccountsDb {
         let mut bank_hashes = HashMap::new();
         bank_hashes.insert(0, BankHashInfo::default());
         AccountsDb {
-            accounts_index: AccountsIndex::default(),
+            accounts_index: AccountsIndex::new(crate::accounts_index::BINS_DEFAULT),
             storage: AccountStorage::default(),
             accounts_cache: AccountsCache::default(),
             sender_bg_hasher: None,
