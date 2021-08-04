@@ -6848,7 +6848,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             new_stake.credits_observed,
-            (credits_a * delegation + credits_b * delegation) / (delegation + delegation)
+            (credits_a * delegation + credits_b * delegation) / (delegation * 2)
         );
         assert_eq!(new_stake.delegation.stake, delegation * 2);
     }
