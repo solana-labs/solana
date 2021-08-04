@@ -210,7 +210,7 @@ impl<T: 'static + Clone + IsCached> WriteAccountMapEntry<T> {
         item.fetch_add(1, Ordering::Relaxed);
     }
 
-    pub fn upsert_new_key<'a>(
+    pub fn upsert<'a>(
         mut w_account_maps: AccountMapsWriteLock<'a, T>,
         pubkey: &Pubkey,
         new_value: AccountMapEntry<T>,
@@ -1564,7 +1564,7 @@ impl<
         if !WriteAccountMapEntry::update_key_if_exists(r_account_maps, pubkey, &new_item, reclaims)
         {
             let w_account_maps = map.write().unwrap();
-            WriteAccountMapEntry::upsert_new_key(w_account_maps, pubkey, new_item, reclaims);
+            WriteAccountMapEntry::upsert(w_account_maps, pubkey, new_item, reclaims);
         }
         self.update_secondary_indexes(pubkey, account_owner, account_data, account_indexes);
     }
@@ -2879,7 +2879,7 @@ pub mod tests {
 
         assert_eq!(0, account_maps_len_expensive(&index));
         let w_account_maps = index.get_account_maps_write_lock(&key.pubkey());
-        WriteAccountMapEntry::upsert_new_key(
+        WriteAccountMapEntry::upsert(
             w_account_maps,
             &key.pubkey(),
             new_entry,
