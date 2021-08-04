@@ -55,6 +55,7 @@ mod tests {
         bank_forks::BankForks,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         snapshot_config::SnapshotConfig,
+        snapshot_package::AccountsPackagePre,
         snapshot_utils::{
             self, ArchiveFormat, SnapshotVersion, DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
         },
@@ -254,7 +255,7 @@ mod tests {
         let snapshot_path = &snapshot_config.snapshot_path;
         let last_bank_snapshot_info = snapshot_utils::get_highest_bank_snapshot_info(snapshot_path)
             .expect("no snapshots found in path");
-        let snapshot_package = snapshot_utils::package_full_snapshot(
+        let snapshot_package = AccountsPackagePre::new_full_snapshot_package(
             last_bank,
             &last_bank_snapshot_info,
             snapshot_path,
