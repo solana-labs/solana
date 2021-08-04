@@ -219,7 +219,7 @@ impl<T: 'static + Clone + IsCached> WriteAccountMapEntry<T> {
         match w_account_maps.entry(*pubkey) {
             Entry::Occupied(mut occupied) => {
                 let current = occupied.get_mut();
-                Self::upsert_item(current, new_value, reclaims);
+                Self::upsert_item(current, &new_value, reclaims);
             }
             Entry::Vacant(vacant) => {
                 vacant.insert(new_value);
@@ -227,25 +227,25 @@ impl<T: 'static + Clone + IsCached> WriteAccountMapEntry<T> {
         }
     }
 
-    // returns None if upsert was successful
-    // otherwise, the pubkey has to be added to the maps with a write lock. call upsert_new
+    // returns true if upsert was successful. new_value is modified in this case. new_value contains a RwLock
+    // otherwise, new_value has not been modified and the pubkey has to be added to the maps with a write lock. call upsert_new
     pub fn upsert_existing_key<'a>(
         r_account_maps: AccountMapsReadLock<'a, T>,
         pubkey: &Pubkey,
-        new_value: AccountMapEntry<T>,
+        new_value: &AccountMapEntry<T>,
         reclaims: &mut SlotList<T>,
-    ) -> Option<AccountMapEntry<T>> {
+    ) -> bool {
         if let Some(current) = r_account_maps.get(pubkey) {
             Self::upsert_item(current, new_value, reclaims);
-            None
+            true
         } else {
-            Some(new_value)
+            false
         }
     }
 
     fn upsert_item(
         current: &Arc<AccountMapEntryInner<T>>,
-        new_value: AccountMapEntry<T>,
+        new_value: &AccountMapEntry<T>,
         reclaims: &mut SlotList<T>,
     ) {
         let mut slot_list = current.slot_list.write().unwrap();
@@ -1561,9 +1561,7 @@ impl<
         let map = &self.account_maps[get_bin_pubkey(pubkey)];
 
         let r_account_maps = map.read().unwrap();
-        if let Some(new_item) =
-            WriteAccountMapEntry::upsert_existing_key(r_account_maps, pubkey, new_item, reclaims)
-        {
+        if !WriteAccountMapEntry::upsert_existing_key(r_account_maps, pubkey, &new_item, reclaims) {
             let w_account_maps = map.write().unwrap();
             WriteAccountMapEntry::upsert_new_key(w_account_maps, pubkey, new_item, reclaims);
         }
@@ -2867,19 +2865,15 @@ pub mod tests {
 
         // will fail because key doesn't exist
         let r_account_maps = index.get_account_maps_read_lock(&key.pubkey());
+        assert!(!WriteAccountMapEntry::upsert_existing_key(
+            r_account_maps,
+            &key.pubkey(),
+            &new_entry,
+            &mut SlotList::default(),
+        ));
         assert_eq!(
             (slot, account_info),
-            WriteAccountMapEntry::upsert_existing_key(
-                r_account_maps,
-                &key.pubkey(),
-                new_entry.clone(),
-                &mut SlotList::default(),
-            )
-            .unwrap()
-            .slot_list
-            .read()
-            .as_ref()
-            .unwrap()[0]
+            new_entry.slot_list.read().as_ref().unwrap()[0]
         );
 
         assert_eq!(0, account_maps_len_expensive(&index));
