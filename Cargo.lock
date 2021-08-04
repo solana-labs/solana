@@ -6192,9 +6192,9 @@ dependencies = [
 
 [[package]]
 name = "sysctl"
-version = "0.4.1"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "571282e1349eaf61f946466da731050daf3a9dcf74e33c7a0da065a665cabee7"
+checksum = "963488c73b34185a9028742c2be0219ed1d8558e59f85c3b466a4f54affba936"
 dependencies = [
  "bitflags",
  "byteorder",
