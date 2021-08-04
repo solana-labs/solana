@@ -515,7 +515,7 @@ mod tests {
         } = create_genesis_config(10_000);
         let exit = Arc::new(AtomicBool::new(false));
         let validator_exit = create_validator_exit(&exit);
-        let bank = Bank::new(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
         let cluster_info = Arc::new(ClusterInfo::new(
             ContactInfo::default(),
             Arc::new(Keypair::new()),
@@ -572,7 +572,7 @@ mod tests {
             mut genesis_config, ..
         } = create_genesis_config(10_000);
         genesis_config.cluster_type = ClusterType::MainnetBeta;
-        let bank = Bank::new(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
         Arc::new(RwLock::new(BankForks::new(bank)))
     }
 

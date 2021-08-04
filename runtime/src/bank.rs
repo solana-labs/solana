@@ -438,7 +438,7 @@ impl ComputeMeter for TransactionComputeMeter {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug)]
 pub struct BankRc {
     /// where all the Accounts are stored
     pub accounts: Arc<Accounts>,
@@ -884,7 +884,7 @@ impl AbiExample for OptionalDropCallback {
 /// Manager for the state of all accounts and programs after processing its entries.
 /// AbiExample is needed even without Serialize/Deserialize; actual (de-)serialization
 /// are implemented elsewhere for versioning
-#[derive(AbiExample, Debug, Default)]
+#[derive(AbiExample, Debug)]
 pub struct Bank {
     /// References to accounts, parent and signature status
     pub rc: BankRc,
@@ -1047,6 +1047,25 @@ impl Default for BlockhashQueue {
 }
 
 impl Bank {
+    pub fn default_for_tests() -> Self {
+        Self::default_with_accounts(Accounts::default_for_tests())
+    }
+
+    pub fn new_for_tests(genesis_config: &GenesisConfig) -> Self {
+        Self::new_with_paths(
+            genesis_config,
+            Vec::new(),
+            &[],
+            None,
+            None,
+            AccountSecondaryIndexes::default(),
+            false,
+            AccountShrinkThreshold::default(),
+            false,
+        )
+    }
+
+    #[cfg(test)]
     pub fn new(genesis_config: &GenesisConfig) -> Self {
         Self::new_with_paths(
             genesis_config,
@@ -1061,7 +1080,7 @@ impl Bank {
         )
     }
 
-    pub fn new_no_wallclock_throttle(genesis_config: &GenesisConfig) -> Self {
+    pub fn new_no_wallclock_throttle_for_tests(genesis_config: &GenesisConfig) -> Self {
         let mut bank = Self::new_with_paths(
             genesis_config,
             Vec::new(),
@@ -1098,7 +1117,66 @@ impl Bank {
         )
     }
 
-    pub fn new_with_paths(
+    fn default_with_accounts(accounts: Accounts) -> Self {
+        Self {
+            rc: BankRc::new(accounts, Slot::default()),
+            src: StatusCacheRc::default(),
+            blockhash_queue: RwLock::<BlockhashQueue>::default(),
+            ancestors: Ancestors::default(),
+            hash: RwLock::<Hash>::default(),
+            parent_hash: Hash::default(),
+            parent_slot: Slot::default(),
+            hard_forks: Arc::<RwLock<HardForks>>::default(),
+            transaction_count: AtomicU64::default(),
+            transaction_error_count: AtomicU64::default(),
+            transaction_entries_count: AtomicU64::default(),
+            transactions_per_entry_max: AtomicU64::default(),
+            tick_height: AtomicU64::default(),
+            signature_count: AtomicU64::default(),
+            capitalization: AtomicU64::default(),
+            max_tick_height: u64::default(),
+            hashes_per_tick: Option::<u64>::default(),
+            ticks_per_slot: u64::default(),
+            ns_per_slot: u128::default(),
+            genesis_creation_time: UnixTimestamp::default(),
+            slots_per_year: f64::default(),
+            unused: u64::default(),
+            slot: Slot::default(),
+            bank_id: BankId::default(),
+            epoch: Epoch::default(),
+            block_height: u64::default(),
+            collector_id: Pubkey::default(),
+            collector_fees: AtomicU64::default(),
+            fee_calculator: FeeCalculator::default(),
+            fee_rate_governor: FeeRateGovernor::default(),
+            collected_rent: AtomicU64::default(),
+            rent_collector: RentCollector::default(),
+            epoch_schedule: EpochSchedule::default(),
+            inflation: Arc::<RwLock<Inflation>>::default(),
+            stakes: RwLock::<Stakes>::default(),
+            epoch_stakes: HashMap::<Epoch, EpochStakes>::default(),
+            is_delta: AtomicBool::default(),
+            message_processor: MessageProcessor::default(),
+            compute_budget: Option::<ComputeBudget>::default(),
+            feature_builtins: Arc::<Vec<(Builtin, Pubkey, ActivationType)>>::default(),
+            last_vote_sync: AtomicU64::default(),
+            rewards: RwLock::<Vec<(Pubkey, RewardInfo)>>::default(),
+            cluster_type: Option::<ClusterType>::default(),
+            lazy_rent_collection: AtomicBool::default(),
+            no_stake_rewrite: AtomicBool::default(),
+            rewards_pool_pubkeys: Arc::<HashSet<Pubkey>>::default(),
+            cached_executors: RwLock::<CowCachedExecutors>::default(),
+            transaction_debug_keys: Option::<Arc<HashSet<Pubkey>>>::default(),
+            transaction_log_collector_config: Arc::<RwLock<TransactionLogCollectorConfig>>::default(
+            ),
+            transaction_log_collector: Arc::<RwLock<TransactionLogCollector>>::default(),
+            feature_set: Arc::<FeatureSet>::default(),
+            drop_callback: RwLock::<OptionalDropCallback>::default(),
+            freeze_started: AtomicBool::default(),
+        }
+    }
+
+    pub fn new_with_paths2(
         genesis_config: &GenesisConfig,
         paths: Vec<PathBuf>,
         frozen_account_pubkeys: &[Pubkey],
@@ -1108,19 +1186,22 @@ impl Bank {
         accounts_db_caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
         debug_do_not_add_builtins: bool,
+        accounts_index_bins: usize,
     ) -> Self {
-        let mut bank = Self::default();
-        bank.ancestors = Ancestors::from(vec![bank.slot()]);
-        bank.transaction_debug_keys = debug_keys;
-        bank.cluster_type = Some(genesis_config.cluster_type);
-
-        bank.rc.accounts = Arc::new(Accounts::new_with_config(
+        let accounts = Accounts::new_with_config2(
             paths,
             &genesis_config.cluster_type,
             account_indexes,
             accounts_db_caching_enabled,
             shrink_ratio,
-        ));
+            accounts_index_bins,
+        );
+
+        let mut bank = Self::default_with_accounts(accounts);
+        bank.ancestors = Ancestors::from(vec![bank.slot()]);
+        bank.transaction_debug_keys = debug_keys;
+        bank.cluster_type = Some(genesis_config.cluster_type);
+
         bank.process_genesis_config(genesis_config);
         bank.finish_init(
             genesis_config,
@@ -1148,6 +1229,31 @@ impl Bank {
         bank.update_epoch_schedule();
         bank.update_recent_blockhashes();
         bank
+    }
+
+    pub fn new_with_paths(
+        genesis_config: &GenesisConfig,
+        paths: Vec<PathBuf>,
+        frozen_account_pubkeys: &[Pubkey],
+        debug_keys: Option<Arc<HashSet<Pubkey>>>,
+        additional_builtins: Option<&Builtins>,
+        account_indexes: AccountSecondaryIndexes,
+        accounts_db_caching_enabled: bool,
+        shrink_ratio: AccountShrinkThreshold,
+        debug_do_not_add_builtins: bool,
+    ) -> Self {
+        Self::new_with_paths2(
+            genesis_config,
+            paths,
+            frozen_account_pubkeys,
+            debug_keys,
+            additional_builtins,
+            account_indexes,
+            accounts_db_caching_enabled,
+            shrink_ratio,
+            debug_do_not_add_builtins,
+            crate::accounts_index::BINS_FOR_TESTING,
+        )
     }
 
     /// Create a new bank that points to an immutable checkpoint of another bank.
@@ -5619,6 +5725,12 @@ pub(crate) mod tests {
         },
     };
     use std::{result, thread::Builder, time::Duration};
+
+    impl Default for Bank {
+        fn default() -> Self {
+            Self::default_with_accounts(Accounts::default())
+        }
+    }
 
     #[test]
     fn test_nonce_rollback_info() {

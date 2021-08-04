@@ -144,6 +144,7 @@ fn load_from_snapshot(
         process_options.shrink_ratio,
         process_options.accounts_db_test_hash_calculation,
         process_options.verify_index,
+        process_options.accounts_index_bins,
     )
     .expect("Load from snapshot failed");
     if let Some(shrink_paths) = shrink_paths {

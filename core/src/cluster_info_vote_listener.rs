@@ -1037,7 +1037,7 @@ mod tests {
                 vec![stake_per_validator; validator_voting_keypairs.len()],
             );
 
-        let bank0 = Bank::new(&genesis_config);
+        let bank0 = Bank::new_for_tests(&genesis_config);
         // Votes for slots less than the provided root bank's slot should not be processed
         let bank3 = Arc::new(Bank::new_from_parent(
             &Arc::new(bank0),
@@ -1151,7 +1151,7 @@ mod tests {
                 &validator_voting_keypairs,
                 vec![stake_per_validator; validator_voting_keypairs.len()],
             );
-        let bank0 = Bank::new(&genesis_config);
+        let bank0 = Bank::new_for_tests(&genesis_config);
 
         let gossip_vote_slots = vec![1, 2];
         let replay_vote_slots = vec![3, 4];
@@ -1286,7 +1286,7 @@ mod tests {
                 &validator_voting_keypairs,
                 vec![stake_per_validator; validator_voting_keypairs.len()],
             );
-        let bank0 = Bank::new(&genesis_config);
+        let bank0 = Bank::new_for_tests(&genesis_config);
 
         // Send some votes to process
         let (votes_txs_sender, votes_txs_receiver) = unbounded();
@@ -1524,7 +1524,7 @@ mod tests {
                 &validator_keypairs,
                 vec![100; validator_keypairs.len()],
             );
-        let bank = Bank::new(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
         let exit = Arc::new(AtomicBool::new(false));
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let bank = bank_forks.read().unwrap().get(0).unwrap().clone();
@@ -1643,7 +1643,7 @@ mod tests {
                 &validator_voting_keypairs,
                 vec![100; validator_voting_keypairs.len()],
             );
-        let bank = Bank::new(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
         let vote_tracker = VoteTracker::new(&bank);
         let exit = Arc::new(AtomicBool::new(false));
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));

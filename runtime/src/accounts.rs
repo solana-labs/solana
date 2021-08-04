@@ -87,7 +87,7 @@ impl AccountLocks {
 }
 
 /// This structure handles synchronization for db
-#[derive(Default, Debug, AbiExample)]
+#[derive(Debug, AbiExample)]
 pub struct Accounts {
     /// Single global AccountsDb
     pub accounts_db: Arc<AccountsDb>,
@@ -117,6 +117,14 @@ pub enum AccountAddressFilter {
 }
 
 impl Accounts {
+    pub fn default_for_tests() -> Self {
+        Self {
+            accounts_db: Arc::new(AccountsDb::default_for_tests()),
+            account_locks: Mutex::default(),
+        }
+    }
+
+    #[cfg(test)]
     pub fn new(
         paths: Vec<PathBuf>,
         cluster_type: &ClusterType,
@@ -131,6 +139,24 @@ impl Accounts {
         )
     }
 
+    pub fn new_with_config_for_tests(
+        paths: Vec<PathBuf>,
+        cluster_type: &ClusterType,
+        account_indexes: AccountSecondaryIndexes,
+        caching_enabled: bool,
+        shrink_ratio: AccountShrinkThreshold,
+    ) -> Self {
+        Self::new_with_config2(
+            paths,
+            cluster_type,
+            account_indexes,
+            caching_enabled,
+            shrink_ratio,
+            crate::accounts_index::BINS_FOR_TESTING,
+        )
+    }
+
+    #[cfg(test)]
     pub fn new_with_config(
         paths: Vec<PathBuf>,
         cluster_type: &ClusterType,
@@ -138,13 +164,32 @@ impl Accounts {
         caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
     ) -> Self {
+        Self::new_with_config2(
+            paths,
+            cluster_type,
+            account_indexes,
+            caching_enabled,
+            shrink_ratio,
+            crate::accounts_index::BINS_FOR_TESTING,
+        )
+    }
+
+    pub fn new_with_config2(
+        paths: Vec<PathBuf>,
+        cluster_type: &ClusterType,
+        account_indexes: AccountSecondaryIndexes,
+        caching_enabled: bool,
+        shrink_ratio: AccountShrinkThreshold,
+        accounts_index_bins: usize,
+    ) -> Self {
         Self {
-            accounts_db: Arc::new(AccountsDb::new_with_config(
+            accounts_db: Arc::new(AccountsDb::new_with_config2(
                 paths,
                 cluster_type,
                 account_indexes,
                 caching_enabled,
                 shrink_ratio,
+                accounts_index_bins,
             )),
             account_locks: Mutex::new(AccountLocks::default()),
         }
@@ -1154,6 +1199,12 @@ mod tests {
     ) -> Vec<TransactionLoadResult> {
         let fee_calculator = FeeCalculator::default();
         load_accounts_with_fee(tx, ka, &fee_calculator, error_counters)
+    }
+
+    impl Default for Accounts {
+        fn default() -> Self {
+            Self::default_for_tests()
+        }
     }
 
     #[test]

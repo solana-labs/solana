@@ -1344,15 +1344,22 @@ impl<'a> ReadableAccount for StoredAccountMeta<'a> {
     }
 }
 
-impl Default for AccountsDb {
-    fn default() -> Self {
+type GenerateIndexAccountsMap<'a> =
+    HashMap<Pubkey, (StoredMetaWriteVersion, AppendVecId, StoredAccountMeta<'a>)>;
+
+impl AccountsDb {
+    pub fn default_for_tests() -> Self {
+        Self::default_with_accounts_index(AccountInfoAccountsIndex::default_for_tests())
+    }
+
+    fn default_with_accounts_index(accounts_index: AccountInfoAccountsIndex) -> Self {
         let num_threads = get_thread_count();
         const MAX_READ_ONLY_CACHE_DATA_SIZE: usize = 200_000_000;
 
         let mut bank_hashes = HashMap::new();
         bank_hashes.insert(0, BankHashInfo::default());
         AccountsDb {
-            accounts_index: AccountsIndex::default(),
+            accounts_index,
             storage: AccountStorage::default(),
             accounts_cache: AccountsCache::default(),
             sender_bg_hasher: None,
@@ -1393,29 +1400,32 @@ impl Default for AccountsDb {
             dirty_stores: DashMap::default(),
         }
     }
-}
 
-type GenerateIndexAccountsMap<'a> =
-    HashMap<Pubkey, (StoredMetaWriteVersion, AppendVecId, StoredAccountMeta<'a>)>;
-
-impl AccountsDb {
+    #[cfg(test)]
     pub fn new(paths: Vec<PathBuf>, cluster_type: &ClusterType) -> Self {
-        AccountsDb::new_with_config(
+        Self::new_for_tests(paths, cluster_type)
+    }
+
+    pub fn new_for_tests(paths: Vec<PathBuf>, cluster_type: &ClusterType) -> Self {
+        AccountsDb::new_with_config2(
             paths,
             cluster_type,
             AccountSecondaryIndexes::default(),
             false,
             AccountShrinkThreshold::default(),
+            crate::accounts_index::BINS_FOR_TESTING,
         )
     }
 
-    pub fn new_with_config(
+    pub fn new_with_config2(
         paths: Vec<PathBuf>,
         cluster_type: &ClusterType,
         account_indexes: AccountSecondaryIndexes,
         caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
+        accounts_index_bins: usize,
     ) -> Self {
+        let accounts_index = AccountsIndex::new(accounts_index_bins);
         let mut new = if !paths.is_empty() {
             Self {
                 paths,
@@ -1424,7 +1434,7 @@ impl AccountsDb {
                 account_indexes,
                 caching_enabled,
                 shrink_ratio,
-                ..Self::default()
+                ..Self::default_with_accounts_index(accounts_index)
             }
         } else {
             // Create a temporary set of accounts directories, used primarily
@@ -1437,7 +1447,7 @@ impl AccountsDb {
                 account_indexes,
                 caching_enabled,
                 shrink_ratio,
-                ..Self::default()
+                ..Self::default_with_accounts_index(accounts_index)
             }
         };
 
@@ -1448,6 +1458,24 @@ impl AccountsDb {
             }
         }
         new
+    }
+
+    #[cfg(test)]
+    pub fn new_with_config(
+        paths: Vec<PathBuf>,
+        cluster_type: &ClusterType,
+        account_indexes: AccountSecondaryIndexes,
+        caching_enabled: bool,
+        shrink_ratio: AccountShrinkThreshold,
+    ) -> Self {
+        Self::new_with_config2(
+            paths,
+            cluster_type,
+            account_indexes,
+            caching_enabled,
+            shrink_ratio,
+            crate::accounts_index::BINS_FOR_TESTING,
+        )
     }
 
     pub fn set_shrink_paths(&self, paths: Vec<PathBuf>) {
@@ -1466,7 +1494,7 @@ impl AccountsDb {
     pub fn new_single_for_tests() -> Self {
         AccountsDb {
             min_num_stores: 0,
-            ..AccountsDb::new(Vec::new(), &ClusterType::Development)
+            ..AccountsDb::new_for_tests(Vec::new(), &ClusterType::Development)
         }
     }
 
@@ -6386,6 +6414,12 @@ pub mod tests {
             check_hash: bool,
         ) -> Result<Vec<Vec<Vec<CalculateHashIntermediate>>>, BankHashVerificationError> {
             Self::scan_snapshot_stores_with_cache(storage, stats, bins, bin_range, check_hash, None)
+        }
+    }
+
+    impl Default for AccountsDb {
+        fn default() -> Self {
+            Self::default_for_tests()
         }
     }
 

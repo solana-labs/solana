@@ -15,7 +15,6 @@ impl PubkeyBinCalculator16 {
         assert!(x > 0);
         Self::num_bits::<u32>() as u32 - x.leading_zeros() - 1
     }
-
     pub fn new(bins: usize) -> Self {
         const MAX_BITS: u32 = 16;
         assert!(bins > 0);

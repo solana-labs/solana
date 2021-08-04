@@ -1389,7 +1389,7 @@ pub(crate) mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(100);
-        let bank = Bank::new(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let bank0 = bank_forks.read().unwrap().get(0).unwrap().clone();
@@ -1534,7 +1534,7 @@ pub(crate) mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(100);
-        let bank = Bank::new(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let alice = Keypair::new();
@@ -1627,7 +1627,7 @@ pub(crate) mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(100);
-        let bank = Bank::new(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
         let blockhash = bank.last_blockhash();
         let mut bank_forks = BankForks::new(bank);
         let alice = Keypair::new();
@@ -1835,7 +1835,7 @@ pub(crate) mod tests {
         let sub_id = SubscriptionId::Number(0);
         let exit = Arc::new(AtomicBool::new(false));
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
-        let bank = Bank::new(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
@@ -1886,7 +1886,7 @@ pub(crate) mod tests {
         let sub_id = SubscriptionId::Number(0);
         let exit = Arc::new(AtomicBool::new(false));
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
-        let bank = Bank::new(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
@@ -1992,7 +1992,7 @@ pub(crate) mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(100);
-        let bank = Bank::new(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let bank0 = bank_forks.read().unwrap().get(0).unwrap().clone();
@@ -2197,7 +2197,7 @@ pub(crate) mod tests {
     #[test]
     fn test_total_subscriptions() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(100);
-        let bank = Bank::new(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let subscriptions = RpcSubscriptions::default_with_bank_forks(bank_forks);
 

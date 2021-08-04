@@ -136,6 +136,7 @@ pub struct ValidatorConfig {
     pub poh_hashes_per_batch: u64,
     pub account_indexes: AccountSecondaryIndexes,
     pub accounts_db_caching_enabled: bool,
+    pub accounts_index_bins: usize,
     pub warp_slot: Option<Slot>,
     pub accounts_db_test_hash_calculation: bool,
     pub accounts_db_use_index_hash_calculation: bool,
@@ -199,6 +200,7 @@ impl Default for ValidatorConfig {
             validator_exit: Arc::new(RwLock::new(Exit::default())),
             no_wait_for_vote_to_start_leader: true,
             accounts_shrink_ratio: AccountShrinkThreshold::default(),
+            accounts_index_bins: 0,
         }
     }
 }
@@ -1130,6 +1132,7 @@ fn new_banks_from_ledger(
         debug_keys: config.debug_keys.clone(),
         account_indexes: config.account_indexes.clone(),
         accounts_db_caching_enabled: config.accounts_db_caching_enabled,
+        accounts_index_bins: config.accounts_index_bins,
         shrink_ratio: config.accounts_shrink_ratio,
         ..blockstore_processor::ProcessOptions::default()
     };
@@ -1755,7 +1758,7 @@ mod tests {
         );
 
         let (genesis_config, _mint_keypair) = create_genesis_config(1);
-        let bank = Arc::new(Bank::new(&genesis_config));
+        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
         let mut config = ValidatorConfig::default();
         let rpc_override_health_check = Arc::new(AtomicBool::new(false));
         let start_progress = Arc::new(RwLock::new(ValidatorStartProgress::default()));

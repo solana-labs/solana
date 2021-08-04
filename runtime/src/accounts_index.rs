@@ -32,7 +32,8 @@ use std::{
 use thiserror::Error;
 
 pub const ITER_BATCH_SIZE: usize = 1000;
-const BINS_DEFAULT: usize = 16;
+pub const BINS_DEFAULT: usize = 16;
+pub const BINS_FOR_TESTING: usize = 16;
 pub type ScanResult<T> = Result<T, ScanError>;
 pub type SlotList<T> = Vec<(Slot, T)>;
 pub type SlotSlice<'s, T> = &'s [(Slot, T)];
@@ -676,15 +677,19 @@ pub struct AccountsIndex<T> {
     pub removed_bank_ids: Mutex<HashSet<BankId>>,
 }
 
-impl<T> Default for AccountsIndex<T> {
-    fn default() -> Self {
-        let bins = BINS_DEFAULT;
+impl<
+        T: 'static + Clone + IsCached + ZeroLamport + std::marker::Sync + std::marker::Send + Debug,
+    > AccountsIndex<T>
+{
+    pub fn default_for_tests() -> Self {
+        Self::new(BINS_FOR_TESTING)
+    }
+
+    pub fn new(bins: usize) -> Self {
+        let (account_maps, bin_calculator) = Self::allocate_accounts_index(bins);
         Self {
-            account_maps: (0..bins)
-                .into_iter()
-                .map(|_| RwLock::new(AccountMap::default()))
-                .collect::<Vec<_>>(),
-            bin_calculator: PubkeyBinCalculator16::new(bins),
+            account_maps,
+            bin_calculator,
             program_id_index: SecondaryIndex::<DashMapSecondaryIndexEntry>::new(
                 "program_id_index_stats",
             ),
@@ -699,12 +704,14 @@ impl<T> Default for AccountsIndex<T> {
             removed_bank_ids: Mutex::<HashSet<BankId>>::default(),
         }
     }
-}
-
-impl<
-        T: 'static + Clone + IsCached + ZeroLamport + std::marker::Sync + std::marker::Send + Debug,
-    > AccountsIndex<T>
-{
+    fn allocate_accounts_index(bins: usize) -> (LockMapType<T>, PubkeyBinCalculator16) {
+        let account_maps = (0..bins)
+            .into_iter()
+            .map(|_| RwLock::new(AccountMap::default()))
+            .collect::<Vec<_>>();
+        let bin_calculator = PubkeyBinCalculator16::new(bins);
+        (account_maps, bin_calculator)
+    }
     fn iter<R>(&self, range: Option<R>) -> AccountsIndexIterator<T>
     where
         R: RangeBounds<Pubkey>,
@@ -1851,6 +1858,21 @@ pub mod tests {
             SPL_TOKEN_ACCOUNT_OWNER_OFFSET + PUBKEY_BYTES,
             spl_token_owner_index_enabled(),
         )
+    }
+
+    impl<
+            T: 'static
+                + Clone
+                + IsCached
+                + ZeroLamport
+                + std::marker::Sync
+                + std::marker::Send
+                + Debug,
+        > Default for AccountsIndex<T>
+    {
+        fn default() -> Self {
+            Self::default_for_tests()
+        }
     }
 
     #[test]

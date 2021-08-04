@@ -3018,7 +3018,7 @@ pub mod tests {
     #[test]
     fn test_handle_new_root() {
         let genesis_config = create_genesis_config(10_000).genesis_config;
-        let bank0 = Bank::new(&genesis_config);
+        let bank0 = Bank::new_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank0)));
 
         let root = 3;
@@ -3093,7 +3093,7 @@ pub mod tests {
     #[test]
     fn test_handle_new_root_ahead_of_highest_confirmed_root() {
         let genesis_config = create_genesis_config(10_000).genesis_config;
-        let bank0 = Bank::new(&genesis_config);
+        let bank0 = Bank::new_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank0)));
         let confirmed_root = 1;
         let fork = 2;
@@ -3461,7 +3461,7 @@ pub mod tests {
         let leader_voting_pubkey = genesis_config_info.voting_keypair.pubkey();
         genesis_config.epoch_schedule.warmup = false;
         genesis_config.ticks_per_slot = 4;
-        let bank0 = Bank::new(&genesis_config);
+        let bank0 = Bank::new_for_tests(&genesis_config);
         for _ in 0..genesis_config.ticks_per_slot {
             bank0.register_tick(&Hash::default());
         }
@@ -3580,7 +3580,7 @@ pub mod tests {
             let keypair2 = Keypair::new();
             let keypair3 = Keypair::new();
 
-            let bank0 = Arc::new(Bank::new(&genesis_config));
+            let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
             bank0
                 .transfer(4, &mint_keypair, &keypair2.pubkey())
                 .unwrap();
@@ -4049,7 +4049,7 @@ pub mod tests {
     fn test_update_slot_propagated_threshold_from_votes2() {
         let mut empty: Vec<Pubkey> = vec![];
         let genesis_config = create_genesis_config(100_000_000).genesis_config;
-        let root_bank = Bank::new(&genesis_config);
+        let root_bank = Bank::new_for_tests(&genesis_config);
         let stake = 10_000;
         // Simulate a child slot seeing threshold (`child_reached_threshold` = true),
         // then the parent should also be marked as having reached threshold,
@@ -4431,7 +4431,7 @@ pub mod tests {
 
         // If the root is now set to `parent_slot`, this filters out `previous_leader_slot` from the progress map,
         // which implies confirmation
-        let bank0 = Bank::new(&genesis_config::create_genesis_config(10000).0);
+        let bank0 = Bank::new_for_tests(&genesis_config::create_genesis_config(10000).0);
         let parent_slot_bank =
             Bank::new_from_parent(&Arc::new(bank0), &Pubkey::default(), parent_slot);
         let mut bank_forks = BankForks::new(parent_slot_bank);

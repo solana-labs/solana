@@ -12,7 +12,7 @@ fn test_race_register_tick_freeze() {
     let hash = hash(p.as_ref());
 
     for _ in 0..1000 {
-        let bank0 = Arc::new(Bank::new(&genesis_config));
+        let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
         let bank0_ = bank0.clone();
         let freeze_thread = Builder::new()
             .name("freeze".to_string())

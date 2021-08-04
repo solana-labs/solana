@@ -6,6 +6,7 @@ use crate::{
 use solana_sdk::{pubkey::Pubkey, sanitized_transaction::SanitizedTransaction, signature::Signer};
 use solana_vote_program::vote_transaction;
 
+// for tests only
 pub fn setup_bank_and_vote_pubkeys(num_vote_accounts: usize, stake: u64) -> (Bank, Vec<Pubkey>) {
     // Create some voters at genesis
     let validator_voting_keypairs: Vec<_> = (0..num_vote_accounts)
@@ -22,7 +23,7 @@ pub fn setup_bank_and_vote_pubkeys(num_vote_accounts: usize, stake: u64) -> (Ban
             &validator_voting_keypairs,
             vec![stake; validator_voting_keypairs.len()],
         );
-    let bank = Bank::new(&genesis_config);
+    let bank = Bank::new_for_tests(&genesis_config);
     (bank, vote_pubkeys)
 }
 

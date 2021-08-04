@@ -86,7 +86,7 @@ mod tests {
         let genesis_config =
             create_genesis_config_with_leader(0, &pubkey, bootstrap_validator_stake_lamports())
                 .genesis_config;
-        let bank = Bank::new(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
 
         let pubkeys_and_stakes: Vec<_> = bank.staked_nodes().into_iter().collect();
         let seed = [0u8; 32];
@@ -108,7 +108,7 @@ mod tests {
         let genesis_config =
             create_genesis_config_with_leader(42, &pubkey, bootstrap_validator_stake_lamports())
                 .genesis_config;
-        let bank = Bank::new(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
         assert_eq!(slot_leader_at(bank.slot(), &bank).unwrap(), pubkey);
     }
 

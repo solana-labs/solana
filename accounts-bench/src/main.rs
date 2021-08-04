@@ -60,12 +60,13 @@ fn main() {
     if fs::remove_dir_all(path.clone()).is_err() {
         println!("Warning: Couldn't remove {:?}", path);
     }
-    let accounts = Accounts::new_with_config(
+    let accounts = Accounts::new_with_config2(
         vec![path],
         &ClusterType::Testnet,
         AccountSecondaryIndexes::default(),
         false,
         AccountShrinkThreshold::default(),
+        0,
     );
     println!("Creating {} accounts", num_accounts);
     let mut create_time = Measure::start("create accounts");

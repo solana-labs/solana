@@ -185,6 +185,7 @@ mod tests {
             accounts_db::AccountShrinkThreshold::default(),
             check_hash_calculation,
             false,
+            solana_runtime::accounts_index::BINS_FOR_TESTING,
         )
         .unwrap();
 
@@ -841,6 +842,7 @@ mod tests {
             accounts_db::AccountShrinkThreshold::default(),
             false,
             false,
+            solana_runtime::accounts_index::BINS_FOR_TESTING,
         )?;
 
         Ok((
