@@ -25,7 +25,12 @@ solana-config-program = { path = "../config", version = "=1.7.10" }
 thiserror = "1.0"
 
 [dev-dependencies]
+<<<<<<< HEAD
 solana-logger = { path = "../../logger", version = "=1.7.10" }
+=======
+proptest = "1.0"
+solana-logger = { path = "../../logger", version = "=1.8.0" }
+>>>>>>> 2b33c0c16 (stake: Allow stakes with unmatched credits observed to merge (#18985))
 
 [build-dependencies]
 rustc_version = "0.2"

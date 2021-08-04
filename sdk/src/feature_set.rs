@@ -175,6 +175,10 @@ pub mod spl_token_v2_set_authority_fix {
     solana_sdk::declare_id!("FToKNBYyiF4ky9s8WsmLBXHCht17Ek7RXaLZGHzzQhJ1");
 }
 
+pub mod stake_merge_with_unmatched_credits_observed {
+    solana_sdk::declare_id!("meRgp4ArRPhD3KtCY9c5yAf2med7mBLsjKTPeVUHqBL");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -217,7 +221,12 @@ lazy_static! {
         (rent_for_sysvars::id(), "collect rent from accounts owned by sysvars"),
         (libsecp256k1_0_5_upgrade_enabled::id(), "upgrade libsecp256k1 to v0.5.0"),
         (merge_nonce_error_into_system_error::id(), "merge NonceError into SystemError"),
+<<<<<<< HEAD
         (spl_token_v2_set_authority_fix::id(), "spl-token set_authority fix"),
+=======
+        (disable_fees_sysvar::id(), "disable fees sysvar"),
+        (stake_merge_with_unmatched_credits_observed::id(), "allow merging active stakes with unmatched credits_observed #18985"),
+>>>>>>> 2b33c0c16 (stake: Allow stakes with unmatched credits observed to merge (#18985))
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
