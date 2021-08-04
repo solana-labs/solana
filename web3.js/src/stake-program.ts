@@ -167,6 +167,14 @@ export type DeactivateStakeParams = {
 };
 
 /**
+ * Deactivate stake instruction params
+ */
+export type MergeStakeParams = {
+  stakePubkey: PublicKey;
+  sourceStakePubKey: PublicKey;
+  authorizedPubkey: PublicKey;
+};
+/**
  * Stake Instruction class
  */
 export class StakeInstruction {
@@ -399,7 +407,8 @@ export type StakeInstructionType =
   | 'Delegate'
   | 'Initialize'
   | 'Split'
-  | 'Withdraw';
+  | 'Withdraw'
+  | 'Merge';
 
 /**
  * An enumeration of valid stake InstructionType's
@@ -445,6 +454,15 @@ export const STAKE_INSTRUCTION_LAYOUTS: {
   Deactivate: {
     index: 5,
     layout: BufferLayout.struct([BufferLayout.u32('instruction')]),
+  },
+  Merge: {
+    index: 7,
+    layout: BufferLayout.struct([
+      BufferLayout.u32('instruction'),
+      Layout.publicKey('stakePubKey'),
+      Layout.publicKey('sourceStakePubKey'),
+      Layout.publicKey('authorityOwner'),
+    ]),
   },
   AuthorizeWithSeed: {
     index: 8,
@@ -699,6 +717,31 @@ export class StakeProgram {
       keys: [
         {pubkey: stakePubkey, isSigner: false, isWritable: true},
         {pubkey: splitStakePubkey, isSigner: false, isWritable: true},
+        {pubkey: authorizedPubkey, isSigner: true, isWritable: false},
+      ],
+      programId: this.programId,
+      data,
+    });
+  }
+
+  /**
+   * Generate a Transaction that merges Stake accounts.
+   */
+  static merge(params: MergeStakeParams): Transaction {
+    const {stakePubkey, authorizedPubkey, sourceStakePubKey} = params;
+    const type = STAKE_INSTRUCTION_LAYOUTS.Merge;
+    const data = encodeData(type);
+
+    return new Transaction().add({
+      keys: [
+        {pubkey: stakePubkey, isSigner: false, isWritable: true},
+        {pubkey: sourceStakePubKey, isSigner: false, isWritable: true},
+        {pubkey: SYSVAR_CLOCK_PUBKEY, isSigner: false, isWritable: false},
+        {
+          pubkey: SYSVAR_STAKE_HISTORY_PUBKEY,
+          isSigner: false,
+          isWritable: false,
+        },
         {pubkey: authorizedPubkey, isSigner: true, isWritable: false},
       ],
       programId: this.programId,
