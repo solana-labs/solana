@@ -1,11 +1,14 @@
 use {
     crossbeam_channel::{Receiver, RecvTimeoutError},
+    csv::{ReaderBuilder, Trim},
     solana_measure::measure::Measure,
     solana_metrics::datapoint_info,
     solana_runtime::bank::Bank,
     solana_sdk::{account::Account, clock::Slot, pubkey::Pubkey},
     std::{
         collections::{BTreeMap, HashMap, HashSet},
+        path::Path,
+        str::FromStr,
         sync::{
             atomic::{AtomicBool, Ordering},
             Arc, RwLock, RwLockWriteGuard,
@@ -15,10 +18,11 @@ use {
     },
 };
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct AccountHistoryConfig {
     pub num_slots: usize,
     pub updates_only: bool,
+    pub account_keys: AccountKeys,
 }
 
 pub type AccountHistory = BTreeMap<Slot, HashMap<Pubkey, Account>>;
@@ -30,13 +34,14 @@ pub struct RpcAccountHistoryService {
 
 impl RpcAccountHistoryService {
     pub fn new(
-        config: AccountHistoryConfig,
+        config: &AccountHistoryConfig,
         account_keys: Arc<RwLock<AccountKeys>>,
         account_history: Arc<RwLock<AccountHistory>>,
         account_history_receiver: Receiver<Arc<Bank>>,
         exit: &Arc<AtomicBool>,
     ) -> Self {
         let exit = exit.clone();
+        let config = config.clone();
         let thread_hdl = Builder::new()
             .name("solana-account-history".to_string())
             .spawn(move || loop {
@@ -129,6 +134,21 @@ impl RpcAccountHistoryService {
     pub fn join(self) -> thread::Result<()> {
         self.thread_hdl.join()
     }
+}
+
+pub fn read_account_keys_file<F: AsRef<Path>>(
+    path: F,
+) -> Result<AccountKeys, Box<dyn std::error::Error>> {
+    let mut reader = ReaderBuilder::new()
+        .has_headers(false)
+        .trim(Trim::All)
+        .from_path(path)?;
+    let iterator = reader.deserialize::<String>();
+    let mut account_keys = HashSet::new();
+    for pubkey_str in iterator {
+        account_keys.insert(Pubkey::from_str(&pubkey_str?)?);
+    }
+    Ok(account_keys)
 }
 
 #[cfg(test)]

@@ -5528,6 +5528,7 @@ dependencies = [
  "bincode",
  "bs58 0.4.0",
  "crossbeam-channel",
+ "csv",
  "itertools 0.10.1",
  "jsonrpc-core 18.0.0",
  "jsonrpc-core-client 18.0.0",

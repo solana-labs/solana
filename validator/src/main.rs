@@ -37,7 +37,9 @@ use {
     solana_perf::recycler::enable_recycler_warming,
     solana_poh::poh_service,
     solana_rpc::{
-        account_history::AccountHistoryConfig, rpc::JsonRpcConfig, rpc_pubsub_service::PubSubConfig,
+        account_history::{read_account_keys_file, AccountHistoryConfig},
+        rpc::JsonRpcConfig,
+        rpc_pubsub_service::PubSubConfig,
     },
     solana_runtime::{
         accounts_db::{
@@ -1254,7 +1256,16 @@ pub fn main() {
             Arg::with_name("rpc_account_history_updates_only")
                 .long("rpc-account-history-updates-only")
                 .takes_value(false)
+                .requires("enable_rpc_account_history")
                 .help("Only store account history for slots with updates")
+        )
+        .arg(
+            Arg::with_name("rpc_account_history_addresses")
+                .long("rpc-account-history-addresses")
+                .value_name("PATH")
+                .takes_value(true)
+                .requires("enable_rpc_account_history")
+                .help("File of line-separated addresses to preload into rpc-account-history tracking")
         )
         .arg(
             Arg::with_name("rpc_max_multiple_accounts")
@@ -2296,6 +2307,32 @@ pub fn main() {
         .ok()
         .or_else(|| get_cluster_shred_version(&entrypoint_addrs));
 
+    let rpc_account_history_config = if let Some(num_slots) =
+        value_of(&matches, "enable_rpc_account_history")
+    {
+        let account_keys = if let Some(path) = matches.value_of("rpc_account_history_addresses") {
+            read_account_keys_file(path).unwrap_or_else(|err| {
+                clap::Error::with_description(
+                    &format!(
+                        "The --rpc-account-history-addresses <PATH> file cannot be parsed: {:?}",
+                        err
+                    ),
+                    clap::ErrorKind::ValueValidation,
+                )
+                .exit();
+            })
+        } else {
+            HashSet::new()
+        };
+        Some(AccountHistoryConfig {
+            num_slots,
+            updates_only: matches.is_present("rpc_account_history_updates_only"),
+            account_keys,
+        })
+    } else {
+        None
+    };
+
     let mut validator_config = ValidatorConfig {
         require_tower: matches.is_present("require_tower"),
         tower_path: value_t!(matches, "tower", PathBuf)
@@ -2337,12 +2374,7 @@ pub fn main() {
                 .map(Duration::from_secs),
             account_indexes: account_indexes.clone(),
             rpc_scan_and_fix_roots: matches.is_present("rpc_scan_and_fix_roots"),
-            enable_rpc_account_history: value_of(&matches, "enable_rpc_account_history").map(
-                |num_slots| AccountHistoryConfig {
-                    num_slots,
-                    updates_only: matches.is_present("rpc_account_history_updates_only"),
-                },
-            ),
+            enable_rpc_account_history: rpc_account_history_config,
         },
         rpc_addrs: value_t!(matches, "rpc_port", u16).ok().map(|rpc_port| {
             (

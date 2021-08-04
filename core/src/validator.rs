@@ -1176,7 +1176,7 @@ fn new_banks_from_ledger(
 
     let rpc_account_history_services = match (
         config.rpc_addrs,
-        config.rpc_config.enable_rpc_account_history,
+        config.rpc_config.enable_rpc_account_history.as_ref(),
     ) {
         (Some(_), Some(account_history_config)) => {
             initialize_rpc_account_history_services(account_history_config, exit)
@@ -1405,11 +1405,11 @@ fn initialize_rpc_transaction_history_services(
 }
 
 fn initialize_rpc_account_history_services(
-    config: AccountHistoryConfig,
+    config: &AccountHistoryConfig,
     exit: &Arc<AtomicBool>,
 ) -> RpcAccountHistoryServices {
     let rpc_account_history = Arc::new(RwLock::new(AccountHistory::new()));
-    let rpc_account_keys = Arc::new(RwLock::new(AccountKeys::new()));
+    let rpc_account_keys = Arc::new(RwLock::new(config.account_keys.clone()));
     let (rpc_account_history_sender, rpc_account_history_receiver) = unbounded();
     let rpc_account_history_sender = Some(rpc_account_history_sender);
     let rpc_account_history_service = Some(RpcAccountHistoryService::new(
