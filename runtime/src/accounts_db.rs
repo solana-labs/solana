@@ -1314,7 +1314,7 @@ pub fn make_min_priority_thread_pool() -> ThreadPool {
 #[cfg(all(test, RUSTC_WITH_SPECIALIZATION))]
 impl solana_frozen_abi::abi_example::AbiExample for AccountsDb {
     fn example() -> Self {
-        let accounts_db = AccountsDb::new_single();
+        let accounts_db = AccountsDb::new_single_for_tests();
         let key = Pubkey::default();
         let some_data_len = 5;
         let some_slot: Slot = 0;
@@ -1463,7 +1463,7 @@ impl AccountsDb {
         self.file_size
     }
 
-    pub fn new_single() -> Self {
+    pub fn new_single_for_tests() -> Self {
         AccountsDb {
             min_num_stores: 0,
             ..AccountsDb::new(Vec::new(), &ClusterType::Development)
@@ -7108,7 +7108,7 @@ pub mod tests {
     #[test]
     fn test_accountsdb_count_stores() {
         solana_logger::setup();
-        let db = AccountsDb::new_single();
+        let db = AccountsDb::new_single_for_tests();
 
         let mut pubkeys: Vec<Pubkey> = vec![];
         create_account(&db, &mut pubkeys, 0, 2, DEFAULT_FILE_SIZE as usize / 3, 0);
@@ -7432,7 +7432,7 @@ pub mod tests {
 
     #[test]
     fn test_account_update() {
-        let accounts = AccountsDb::new_single();
+        let accounts = AccountsDb::new_single_for_tests();
         let mut pubkeys: Vec<Pubkey> = vec![];
         create_account(&accounts, &mut pubkeys, 0, 100, 0, 0);
         update_accounts(&accounts, &pubkeys, 0, 99);
@@ -7478,7 +7478,7 @@ pub mod tests {
 
     #[test]
     fn test_account_grow() {
-        let accounts = AccountsDb::new_single();
+        let accounts = AccountsDb::new_single_for_tests();
 
         let status = [AccountStorageStatus::Available, AccountStorageStatus::Full];
         let pubkey1 = solana_sdk::pubkey::new_rand();
@@ -8037,7 +8037,7 @@ pub mod tests {
     #[test]
     fn test_accounts_db_serialize1() {
         solana_logger::setup();
-        let accounts = AccountsDb::new_single();
+        let accounts = AccountsDb::new_single_for_tests();
         let mut pubkeys: Vec<Pubkey> = vec![];
 
         // Create 100 accounts in slot 0
@@ -8191,7 +8191,7 @@ pub mod tests {
 
         let zero_lamport_account = AccountSharedData::new(zero_lamport, no_data, &owner);
 
-        let accounts = AccountsDb::new_single();
+        let accounts = AccountsDb::new_single_for_tests();
         accounts.add_root(0);
 
         // Step A
@@ -8267,7 +8267,7 @@ pub mod tests {
 
         let zero_lamport_account = AccountSharedData::new(zero_lamport, no_data, &owner);
 
-        let accounts = AccountsDb::new_single();
+        let accounts = AccountsDb::new_single_for_tests();
         accounts.add_root(0);
 
         let mut current_slot = 1;
@@ -8332,7 +8332,7 @@ pub mod tests {
         let filler_account = AccountSharedData::new(some_lamport, no_data, &owner);
         let filler_account_pubkey = solana_sdk::pubkey::new_rand();
 
-        let accounts = AccountsDb::new_single();
+        let accounts = AccountsDb::new_single_for_tests();
 
         let mut current_slot = 1;
         accounts.store_uncached(current_slot, &[(&pubkey, &account)]);
@@ -8392,7 +8392,7 @@ pub mod tests {
         let dummy_account = AccountSharedData::new(dummy_lamport, no_data, &owner);
         let dummy_pubkey = Pubkey::default();
 
-        let accounts = AccountsDb::new_single();
+        let accounts = AccountsDb::new_single_for_tests();
 
         let mut current_slot = 1;
         accounts.store_uncached(current_slot, &[(&pubkey, &account)]);
@@ -8532,7 +8532,7 @@ pub mod tests {
     #[test]
     fn test_cleanup_key_not_removed() {
         solana_logger::setup();
-        let db = AccountsDb::new_single();
+        let db = AccountsDb::new_single_for_tests();
 
         let key = Pubkey::default();
         let key0 = solana_sdk::pubkey::new_rand();
@@ -9162,7 +9162,7 @@ pub mod tests {
         let purged_pubkey2 = solana_sdk::pubkey::new_rand();
 
         let mut current_slot = 0;
-        let accounts = AccountsDb::new_single();
+        let accounts = AccountsDb::new_single_for_tests();
 
         // create intermediate updates to purged_pubkey1 so that
         // generate_index must add slots as root last at once
@@ -9352,7 +9352,7 @@ pub mod tests {
         let dummy_pubkey = solana_sdk::pubkey::new_rand();
 
         let mut current_slot = 0;
-        let accounts = AccountsDb::new_single();
+        let accounts = AccountsDb::new_single_for_tests();
 
         // A: Initialize AccountsDb with pubkey1 and pubkey2
         current_slot += 1;
@@ -9441,7 +9441,7 @@ pub mod tests {
 
     #[test]
     fn test_clean_stored_dead_slots_empty() {
-        let accounts = AccountsDb::new_single();
+        let accounts = AccountsDb::new_single_for_tests();
         let mut dead_slots = HashSet::new();
         dead_slots.insert(10);
         accounts.clean_stored_dead_slots(&dead_slots, None);
@@ -9450,7 +9450,7 @@ pub mod tests {
     #[test]
     fn test_shrink_all_slots_none() {
         for startup in &[false, true] {
-            let accounts = AccountsDb::new_single();
+            let accounts = AccountsDb::new_single_for_tests();
 
             for _ in 0..10 {
                 accounts.shrink_candidate_slots();
@@ -9462,7 +9462,7 @@ pub mod tests {
 
     #[test]
     fn test_shrink_next_slots() {
-        let mut accounts = AccountsDb::new_single();
+        let mut accounts = AccountsDb::new_single_for_tests();
         accounts.caching_enabled = false;
 
         let mut current_slot = 7;
@@ -9501,7 +9501,7 @@ pub mod tests {
 
     #[test]
     fn test_shrink_reset_uncleaned_roots() {
-        let mut accounts = AccountsDb::new_single();
+        let mut accounts = AccountsDb::new_single_for_tests();
         accounts.caching_enabled = false;
 
         accounts.reset_uncleaned_roots_v1();
@@ -9539,7 +9539,7 @@ pub mod tests {
         solana_logger::setup();
 
         for startup in &[false, true] {
-            let accounts = AccountsDb::new_single();
+            let accounts = AccountsDb::new_single_for_tests();
 
             let pubkey_count = 100;
             let pubkeys: Vec<_> = (0..pubkey_count)
@@ -9608,7 +9608,7 @@ pub mod tests {
     fn test_shrink_candidate_slots() {
         solana_logger::setup();
 
-        let accounts = AccountsDb::new_single();
+        let accounts = AccountsDb::new_single_for_tests();
 
         let pubkey_count = 30000;
         let pubkeys: Vec<_> = (0..pubkey_count)
@@ -9668,7 +9668,7 @@ pub mod tests {
         solana_logger::setup();
 
         // case 1: no candidates
-        let accounts = AccountsDb::new_single();
+        let accounts = AccountsDb::new_single_for_tests();
 
         let mut candidates: ShrinkCandidates = HashMap::new();
         let output_candidates =
@@ -9751,7 +9751,7 @@ pub mod tests {
     fn test_shrink_stale_slots_skipped() {
         solana_logger::setup();
 
-        let mut accounts = AccountsDb::new_single();
+        let mut accounts = AccountsDb::new_single_for_tests();
         accounts.caching_enabled = false;
 
         let pubkey_count = 30000;
@@ -9966,7 +9966,7 @@ pub mod tests {
     #[test]
     fn test_store_overhead() {
         solana_logger::setup();
-        let accounts = AccountsDb::new_single();
+        let accounts = AccountsDb::new_single_for_tests();
         let account = AccountSharedData::default();
         let pubkey = solana_sdk::pubkey::new_rand();
         accounts.store_uncached(0, &[(&pubkey, &account)]);
@@ -11861,7 +11861,7 @@ pub mod tests {
     fn test_is_candidate_for_shrink() {
         solana_logger::setup();
 
-        let mut accounts = AccountsDb::new_single();
+        let mut accounts = AccountsDb::new_single_for_tests();
         let dummy_path = Path::new("");
         let dummy_size = 2 * PAGE_SIZE;
         let entry = Arc::new(AccountStorageEntry::new(dummy_path, 0, 1, dummy_size));
@@ -11889,7 +11889,7 @@ pub mod tests {
 
     #[test]
     fn test_calculate_storage_count_and_alive_bytes() {
-        let accounts = AccountsDb::new_single();
+        let accounts = AccountsDb::new_single_for_tests();
         let shared_key = solana_sdk::pubkey::new_rand();
         let account = AccountSharedData::new(1, 1, AccountSharedData::default().owner());
         let slot0 = 0;
@@ -11905,7 +11905,7 @@ pub mod tests {
 
     #[test]
     fn test_calculate_storage_count_and_alive_bytes_0_accounts() {
-        let accounts = AccountsDb::new_single();
+        let accounts = AccountsDb::new_single_for_tests();
         let result =
             accounts.calculate_storage_count_and_alive_bytes(&mut GenerateIndexTimings::default());
         assert!(result.is_empty());
@@ -11913,7 +11913,7 @@ pub mod tests {
 
     #[test]
     fn test_calculate_storage_count_and_alive_bytes_2_accounts() {
-        let accounts = AccountsDb::new_single();
+        let accounts = AccountsDb::new_single_for_tests();
         let keys = [
             solana_sdk::pubkey::Pubkey::new(&[0; 32]),
             solana_sdk::pubkey::Pubkey::new(&[255; 32]),
@@ -11945,7 +11945,7 @@ pub mod tests {
 
     #[test]
     fn test_set_storage_count_and_alive_bytes() {
-        let accounts = AccountsDb::new_single();
+        let accounts = AccountsDb::new_single_for_tests();
 
         // make sure we have storage 0
         let shared_key = solana_sdk::pubkey::new_rand();
@@ -11976,7 +11976,7 @@ pub mod tests {
 
     #[test]
     fn test_purge_alive_unrooted_slots_after_clean() {
-        let accounts = AccountsDb::new_single();
+        let accounts = AccountsDb::new_single_for_tests();
 
         // Key shared between rooted and nonrooted slot
         let shared_key = solana_sdk::pubkey::new_rand();
