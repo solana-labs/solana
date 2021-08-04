@@ -3480,7 +3480,7 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d25bf25ec5ae4a3f1b92f929810509a2f53d7dca2f50b794ff57e3face536c8f"
 dependencies = [
- "rand_core 0.6.3",
+ "rand_core 0.6.2",
 ]
 
 [[package]]
@@ -5509,12 +5509,8 @@ dependencies = [
  "log 0.4.11",
  "num-derive",
  "num-traits",
-<<<<<<< HEAD
- "rustc_version",
-=======
  "proptest",
- "rustc_version 0.4.0",
->>>>>>> 2b33c0c16 (stake: Allow stakes with unmatched credits observed to merge (#18985))
+ "rustc_version",
  "serde",
  "serde_derive",
  "solana-config-program",
