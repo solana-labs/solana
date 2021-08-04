@@ -500,9 +500,8 @@ impl RpcClient {
     /// Check the confirmation status of a transaction.
     ///
     /// Returns `true` if the given transaction succeeded and has been committed
-    /// with the configured commitment level. Unless `RpcClient` is constructed
-    /// with a specific commitment level, the transaction is confirmed with
-    /// [`CommitmentLevel::Finalized`].
+    /// with the configured commitment level, which can be retrieved with
+    /// the [`commitment`](RpcClient::commitment) method.
     ///
     /// Note that this method does not wait for a transaction to be confirmed
     /// &mdash; it only checks whether a transaction has been confirmed. To
@@ -1015,7 +1014,7 @@ impl RpcClient {
     ///
     /// # Errors
     ///
-    /// For any individual `TransactionStatus`, that transaction may have
+    /// Any individual `TransactionStatus` may have
     /// triggered an error during processing, in which case its
     /// [`err`][`TransactionStatus::err`] field will be `Some`.
     ///

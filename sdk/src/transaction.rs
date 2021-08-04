@@ -114,7 +114,7 @@ impl From<SanitizeError> for TransactionError {
 #[derive(Debug, PartialEq, Default, Eq, Clone, Serialize, Deserialize, AbiExample)]
 pub struct Transaction {
     /// A set of digital signatures of a serialized [`Message`],
-    /// signed by the first `signatures.len()` keys of `account_keys`.
+    /// signed by the first `signatures.len()` keys of [`account_keys`].
     ///
     /// [`account_keys`]: Message::account_keys
     ///
