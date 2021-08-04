@@ -1270,6 +1270,7 @@ where
     );
     let mut snapshot_archives = get_full_snapshot_archives(&snapshot_archives_dir);
     snapshot_archives.sort_unstable();
+    snapshot_archives.reverse();
     // Keep the oldest snapshot so we can always play the ledger from it.
     snapshot_archives.pop();
     let max_snaps = max(1, maximum_snapshots_to_retain);
@@ -2371,6 +2372,53 @@ mod tests {
         // retaining 2, all three should be retained
         let expected_snapshots = vec![&snap1_name, &snap2_name, &snap3_name];
         common_test_purge_old_snapshot_archives(&snapshot_names, 2, &expected_snapshots);
+    }
+
+    /// Mimic a running node's behavior w.r.t. purging old snapshot archives.  Take snapshots in a
+    /// loop, and periodically purge old snapshot archives.  After purging, check to make sure the
+    /// snapshot archives on disk are correct.
+    #[test]
+    fn test_purge_old_full_snapshot_archives_in_the_loop() {
+        let snapshot_archives_dir = tempfile::TempDir::new().unwrap();
+        let maximum_snapshots_to_retain = 5;
+        let starting_slot: Slot = 42;
+
+        for slot in (starting_slot..).take(100) {
+            let full_snapshot_archive_file_name =
+                format!("snapshot-{}-{}.tar", slot, Hash::default());
+            let full_snapshot_archive_path = snapshot_archives_dir
+                .as_ref()
+                .join(full_snapshot_archive_file_name);
+            File::create(full_snapshot_archive_path).unwrap();
+
+            // don't purge-and-check until enough snapshot archives have been created
+            if slot < starting_slot + maximum_snapshots_to_retain as Slot {
+                continue;
+            }
+
+            // purge infrequently, so there will always be snapshot archives to purge
+            if slot % (maximum_snapshots_to_retain as Slot * 2) != 0 {
+                continue;
+            }
+
+            purge_old_snapshot_archives(&snapshot_archives_dir, maximum_snapshots_to_retain);
+            let mut full_snapshot_archives = get_full_snapshot_archives(&snapshot_archives_dir);
+            full_snapshot_archives.sort_unstable();
+            assert_eq!(
+                full_snapshot_archives.len(),
+                maximum_snapshots_to_retain + 1
+            );
+            assert_eq!(
+                *full_snapshot_archives.first().unwrap().slot(),
+                starting_slot
+            );
+            assert_eq!(*full_snapshot_archives.last().unwrap().slot(), slot);
+            for (i, full_snapshot_archive) in
+                full_snapshot_archives.iter().skip(1).rev().enumerate()
+            {
+                assert_eq!(*full_snapshot_archive.slot(), slot - i as Slot);
+            }
+        }
     }
 
     #[test]
