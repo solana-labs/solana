@@ -250,7 +250,7 @@ impl<T: 'static + Clone + IsCached> WriteAccountMapEntry<T> {
     ) {
         let mut slot_list = current.slot_list.write().unwrap();
         let (slot, new_entry) = new_value.slot_list.write().unwrap().remove(0);
-        let addref = Self::update_static(&mut slot_list, slot, new_entry, reclaims);
+        let addref = Self::update_slot_list(&mut slot_list, slot, new_entry, reclaims);
         if addref {
             Self::addref(&current.ref_count);
         }
@@ -258,7 +258,7 @@ impl<T: 'static + Clone + IsCached> WriteAccountMapEntry<T> {
 
     // modifies slot_list
     // returns true if caller should addref
-    pub fn update_static(
+    pub fn update_slot_list(
         list: &mut SlotList<T>,
         slot: Slot,
         account_info: T,
@@ -293,7 +293,7 @@ impl<T: 'static + Clone + IsCached> WriteAccountMapEntry<T> {
     pub fn update(&mut self, slot: Slot, account_info: T, reclaims: &mut SlotList<T>) {
         let mut addref = !account_info.is_cached();
         self.slot_list_mut(|list| {
-            addref = Self::update_static(list, slot, account_info, reclaims);
+            addref = Self::update_slot_list(list, slot, account_info, reclaims);
         });
         if addref {
             // If it's the first non-cache insert, also bump the stored ref count
@@ -1558,7 +1558,7 @@ impl<
         //  So, what the accounts_index sees alone is sufficient as a source of truth for other non-scan
         //  account operations.
         let new_item = WriteAccountMapEntry::new_entry_after_update(slot, account_info);
-        let map = &self.account_maps[get_bin_pubkey(pubkey)];
+        let map = &self.account_maps[self.bin_calculator.bin_from_pubkey(pubkey)];
 
         let r_account_maps = map.read().unwrap();
         if !WriteAccountMapEntry::update_key_if_exists(r_account_maps, pubkey, &new_item, reclaims)
