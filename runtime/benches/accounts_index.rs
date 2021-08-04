@@ -29,6 +29,7 @@ fn bench_accounts_index(bencher: &mut Bencher) {
                 &AccountSecondaryIndexes::default(),
                 AccountInfo::default(),
                 &mut reclaims,
+                false,
             );
         }
     }
@@ -46,6 +47,7 @@ fn bench_accounts_index(bencher: &mut Bencher) {
                 &AccountSecondaryIndexes::default(),
                 AccountInfo::default(),
                 &mut reclaims,
+                false,
             );
             reclaims.clear();
         }
