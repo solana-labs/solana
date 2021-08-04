@@ -8,11 +8,7 @@ use crate::{
 };
 use log::*;
 use solana_entry::entry::VerifyRecyclers;
-use solana_runtime::{
-    bank_forks::BankForks,
-    snapshot_config::SnapshotConfig,
-    snapshot_utils::{self, FullSnapshotArchiveInfo},
-};
+use solana_runtime::{bank_forks::BankForks, snapshot_config::SnapshotConfig, snapshot_utils};
 use solana_sdk::{clock::Slot, genesis_config::GenesisConfig, hash::Hash};
 use std::{fs, path::PathBuf, process, result};
 
@@ -44,19 +40,19 @@ pub fn load(
     transaction_status_sender: Option<&TransactionStatusSender>,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
 ) -> LoadResult {
-    if let Some(snapshot_config) = snapshot_config.as_ref() {
+    if let Some(snapshot_config) = snapshot_config {
         info!(
-            "Initializing snapshot path: {:?}",
-            snapshot_config.snapshot_path
+            "Initializing snapshot path: {}",
+            snapshot_config.snapshot_path.display()
         );
         let _ = fs::remove_dir_all(&snapshot_config.snapshot_path);
         fs::create_dir_all(&snapshot_config.snapshot_path)
             .expect("Couldn't create snapshot directory");
 
-        if let Some(full_snapshot_archive_info) =
-            snapshot_utils::get_highest_full_snapshot_archive_info(
-                &snapshot_config.snapshot_package_output_path,
-            )
+        if snapshot_utils::get_highest_full_snapshot_archive_info(
+            &snapshot_config.snapshot_package_output_path,
+        )
+        .is_some()
         {
             return load_from_snapshot(
                 genesis_config,
@@ -67,7 +63,6 @@ pub fn load(
                 process_options,
                 transaction_status_sender,
                 cache_block_meta_sender,
-                &full_snapshot_archive_info,
             );
         } else {
             info!("No snapshot package available; will load from genesis");
@@ -115,26 +110,18 @@ fn load_from_snapshot(
     process_options: ProcessOptions,
     transaction_status_sender: Option<&TransactionStatusSender>,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
-    full_snapshot_archive_info: &FullSnapshotArchiveInfo,
 ) -> LoadResult {
-    info!(
-        "Loading snapshot package: {:?}",
-        full_snapshot_archive_info.path()
-    );
-
     // Fail hard here if snapshot fails to load, don't silently continue
     if account_paths.is_empty() {
         error!("Account paths not present when booting from snapshot");
         process::exit(1);
     }
 
-    let (deserialized_bank, timings) = snapshot_utils::bank_from_snapshot_archives(
+    let (deserialized_bank, timings) = snapshot_utils::bank_from_latest_snapshot_archives(
+        &snapshot_config.snapshot_path,
+        &snapshot_config.snapshot_package_output_path,
         &account_paths,
         &process_options.frozen_accounts,
-        &snapshot_config.snapshot_path,
-        full_snapshot_archive_info.path(),
-        None,
-        *full_snapshot_archive_info.archive_format(),
         genesis_config,
         process_options.debug_keys.clone(),
         Some(&crate::builtins::get(process_options.bpf_jit)),
@@ -147,30 +134,14 @@ fn load_from_snapshot(
         process_options.verify_index,
     )
     .expect("Load from snapshot failed");
-    if let Some(shrink_paths) = shrink_paths {
-        deserialized_bank.set_shrink_paths(shrink_paths);
-    }
 
     let deserialized_bank_slot_and_hash = (
         deserialized_bank.slot(),
         deserialized_bank.get_accounts_hash(),
     );
 
-    if deserialized_bank_slot_and_hash
-        != (
-            *full_snapshot_archive_info.slot(),
-            *full_snapshot_archive_info.hash(),
-        )
-    {
-        error!(
-            "Snapshot has mismatch:\narchive: {:?}\ndeserialized: {:?}",
-            (
-                full_snapshot_archive_info.slot(),
-                full_snapshot_archive_info.hash()
-            ),
-            deserialized_bank_slot_and_hash
-        );
-        process::exit(1);
+    if let Some(shrink_paths) = shrink_paths {
+        deserialized_bank.set_shrink_paths(shrink_paths);
     }
 
     to_loadresult(

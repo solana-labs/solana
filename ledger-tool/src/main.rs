@@ -2199,7 +2199,7 @@ fn main() {
                         bank.slot(),
                     );
 
-                    let archive_file = snapshot_utils::bank_to_full_snapshot_archive(
+                    let full_snapshot_archive_info = snapshot_utils::bank_to_full_snapshot_archive(
                         ledger_path,
                         &bank,
                         Some(snapshot_version),
@@ -2217,7 +2217,7 @@ fn main() {
                         "Successfully created snapshot for slot {}, hash {}: {}",
                         bank.slot(),
                         bank.hash(),
-                        archive_file.display(),
+                        full_snapshot_archive_info.path().display(),
                     );
                     println!(
                         "Shred version: {}",

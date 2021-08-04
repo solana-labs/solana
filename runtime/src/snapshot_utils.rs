@@ -40,7 +40,7 @@ use {
 };
 
 /// Common information about a snapshot archive
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 struct SnapshotArchiveInfo {
     /// Path to the snapshot archive file
     path: PathBuf,
@@ -56,21 +56,25 @@ struct SnapshotArchiveInfo {
 }
 
 /// Information about a full snapshot archive: its path, slot, hash, and archive format
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct FullSnapshotArchiveInfo(SnapshotArchiveInfo);
 
 impl FullSnapshotArchiveInfo {
     /// Parse the path to a full snapshot archive and return a new `FullSnapshotArchiveInfo`
-    fn new_from_path(path: PathBuf) -> Result<Self> {
+    pub fn new_from_path(path: PathBuf) -> Result<Self> {
         let filename = path_to_file_name_str(path.as_path())?;
         let (slot, hash, archive_format) = parse_full_snapshot_archive_filename(filename)?;
 
-        Ok(Self(SnapshotArchiveInfo {
+        Ok(Self::new(path, slot, hash, archive_format))
+    }
+
+    fn new(path: PathBuf, slot: Slot, hash: Hash, archive_format: ArchiveFormat) -> Self {
+        Self(SnapshotArchiveInfo {
             path,
             slot,
             hash,
             archive_format,
-        }))
+        })
     }
 
     pub fn path(&self) -> &PathBuf {
@@ -104,7 +108,7 @@ impl Ord for FullSnapshotArchiveInfo {
 }
 
 /// Information about an incremental snapshot archive: its path, slot, base slot, hash, and archive format
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct IncrementalSnapshotArchiveInfo {
     /// The slot that the incremental snapshot was based from.  This is the same as the full
     /// snapshot slot used when making the incremental snapshot.
@@ -117,12 +121,22 @@ pub struct IncrementalSnapshotArchiveInfo {
 
 impl IncrementalSnapshotArchiveInfo {
     /// Parse the path to an incremental snapshot archive and return a new `IncrementalSnapshotArchiveInfo`
-    fn new_from_path(path: PathBuf) -> Result<Self> {
+    pub fn new_from_path(path: PathBuf) -> Result<Self> {
         let filename = path_to_file_name_str(path.as_path())?;
         let (base_slot, slot, hash, archive_format) =
             parse_incremental_snapshot_archive_filename(filename)?;
 
-        Ok(Self {
+        Ok(Self::new(path, base_slot, slot, hash, archive_format))
+    }
+
+    fn new(
+        path: PathBuf,
+        base_slot: Slot,
+        slot: Slot,
+        hash: Hash,
+        archive_format: ArchiveFormat,
+    ) -> Self {
+        Self {
             base_slot,
             inner: SnapshotArchiveInfo {
                 path,
@@ -130,7 +144,7 @@ impl IncrementalSnapshotArchiveInfo {
                 hash,
                 archive_format,
             },
-        })
+        }
     }
 
     pub fn path(&self) -> &PathBuf {
@@ -145,11 +159,11 @@ impl IncrementalSnapshotArchiveInfo {
         &self.inner.slot
     }
 
-    fn _hash(&self) -> &Hash {
+    fn hash(&self) -> &Hash {
         &self.inner.hash
     }
 
-    fn _archive_format(&self) -> &ArchiveFormat {
+    fn archive_format(&self) -> &ArchiveFormat {
         &self.inner.archive_format
     }
 }
@@ -324,6 +338,12 @@ pub enum SnapshotError {
 
     #[error("snapshots are incompatible: full snapshot slot ({0}) and incremental snapshot base slot ({1}) do not match")]
     MismatchedBaseSlot(Slot, Slot),
+
+    #[error("no snapshot archives to load from")]
+    NoSnapshotArchives,
+
+    #[error("snapshot has mismatch: deserialized bank: {:?}, snapshot archive info: {:?}", .0, .1)]
+    MismatchedSlotHash((Slot, Hash), (Slot, Hash)),
 }
 pub type Result<T> = std::result::Result<T, SnapshotError>;
 
@@ -829,13 +849,12 @@ const PARALLEL_UNTAR_READERS_DEFAULT: usize = 4;
 /// Rebuild bank from snapshot archives.  Handles either just a full snapshot, or both a full
 /// snapshot and an incremental snapshot.
 #[allow(clippy::too_many_arguments)]
-pub fn bank_from_snapshot_archives<P>(
+pub fn bank_from_snapshot_archives(
     account_paths: &[PathBuf],
     frozen_account_pubkeys: &[Pubkey],
-    snapshots_dir: &Path,
-    full_snapshot_archive_path: P,
-    incremental_snapshot_archive_path: Option<P>,
-    archive_format: ArchiveFormat,
+    snapshots_dir: impl AsRef<Path>,
+    full_snapshot_archive_info: &FullSnapshotArchiveInfo,
+    incremental_snapshot_archive_info: Option<&IncrementalSnapshotArchiveInfo>,
     genesis_config: &GenesisConfig,
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
     additional_builtins: Option<&Builtins>,
@@ -846,39 +865,36 @@ pub fn bank_from_snapshot_archives<P>(
     test_hash_calculation: bool,
     accounts_db_skip_shrink: bool,
     verify_index: bool,
-) -> Result<(Bank, BankFromArchiveTimings)>
-where
-    P: AsRef<Path> + std::marker::Sync,
-{
+) -> Result<(Bank, BankFromArchiveTimings)> {
+    check_are_snapshots_compatible(
+        full_snapshot_archive_info,
+        incremental_snapshot_archive_info,
+    )?;
+
     let parallel_divisions = std::cmp::min(
         PARALLEL_UNTAR_READERS_DEFAULT,
         std::cmp::max(1, num_cpus::get() / 4),
     );
 
     let unarchived_full_snapshot = unarchive_snapshot(
-        snapshots_dir,
+        &snapshots_dir,
         TMP_FULL_SNAPSHOT_PREFIX,
-        &full_snapshot_archive_path,
+        full_snapshot_archive_info.path(),
         "snapshot untar",
         account_paths,
-        archive_format,
+        *full_snapshot_archive_info.archive_format(),
         parallel_divisions,
     )?;
 
     let mut unarchived_incremental_snapshot =
-        if let Some(incremental_snapshot_archive_path) = incremental_snapshot_archive_path {
-            check_are_snapshots_compatible(
-                &full_snapshot_archive_path,
-                &incremental_snapshot_archive_path,
-            )?;
-
+        if let Some(incremental_snapshot_archive_info) = incremental_snapshot_archive_info {
             let unarchived_incremental_snapshot = unarchive_snapshot(
-                snapshots_dir,
+                &snapshots_dir,
                 TMP_INCREMENTAL_SNAPSHOT_PREFIX,
-                &incremental_snapshot_archive_path,
+                incremental_snapshot_archive_info.path(),
                 "incremental snapshot untar",
                 account_paths,
-                archive_format,
+                *incremental_snapshot_archive_info.archive_format(),
                 parallel_divisions,
             )?;
             Some(unarchived_incremental_snapshot)
@@ -936,6 +952,87 @@ where
     Ok((bank, timings))
 }
 
+/// Rebuild bank from snapshot archives.  This function searches `snapshot_archives_dir` for the
+/// highest full snapshot and highest corresponding incremental snapshot, then rebuilds the bank.
+#[allow(clippy::too_many_arguments)]
+pub fn bank_from_latest_snapshot_archives(
+    snapshots_dir: impl AsRef<Path>,
+    snapshot_archives_dir: impl AsRef<Path>,
+    account_paths: &[PathBuf],
+    frozen_account_pubkeys: &[Pubkey],
+    genesis_config: &GenesisConfig,
+    debug_keys: Option<Arc<HashSet<Pubkey>>>,
+    additional_builtins: Option<&Builtins>,
+    account_secondary_indexes: AccountSecondaryIndexes,
+    accounts_db_caching_enabled: bool,
+    limit_load_slot_count_from_snapshot: Option<usize>,
+    shrink_ratio: AccountShrinkThreshold,
+    test_hash_calculation: bool,
+    verify_index: bool,
+) -> Result<(Bank, BankFromArchiveTimings)> {
+    let full_snapshot_archive_info = get_highest_full_snapshot_archive_info(&snapshot_archives_dir)
+        .ok_or(SnapshotError::NoSnapshotArchives)?;
+
+    let incremental_snapshot_archive_info = get_highest_incremental_snapshot_archive_info(
+        &snapshot_archives_dir,
+        *full_snapshot_archive_info.slot(),
+    );
+
+    info!(
+        "Loading bank from full snapshot: {}, and incremental snapshot: {:?}",
+        full_snapshot_archive_info.path().display(),
+        incremental_snapshot_archive_info
+            .as_ref()
+            .map(|isai| isai.path().display())
+    );
+
+    let (bank, timings) = bank_from_snapshot_archives(
+        account_paths,
+        frozen_account_pubkeys,
+        snapshots_dir.as_ref(),
+        &full_snapshot_archive_info,
+        incremental_snapshot_archive_info.as_ref(),
+        genesis_config,
+        debug_keys,
+        additional_builtins,
+        account_secondary_indexes,
+        accounts_db_caching_enabled,
+        limit_load_slot_count_from_snapshot,
+        shrink_ratio,
+        test_hash_calculation,
+        verify_index,
+    )?;
+
+    check_bank_with_snapshot_archive_info(
+        &bank,
+        *incremental_snapshot_archive_info
+            .as_ref()
+            .map_or(full_snapshot_archive_info.slot(), |isai| isai.slot()),
+        *incremental_snapshot_archive_info
+            .as_ref()
+            .map_or(full_snapshot_archive_info.hash(), |isai| isai.hash()),
+    )?;
+
+    Ok((bank, timings))
+}
+
+/// Check to make sure the deserialized bank's slot and hash matches the snapshot archive's slot
+/// and hash
+fn check_bank_with_snapshot_archive_info(
+    bank: &Bank,
+    snapshot_archive_info_slot: Slot,
+    snapshot_archive_info_hash: Hash,
+) -> Result<()> {
+    let bank_slot = bank.slot();
+    let bank_hash = bank.get_accounts_hash();
+    (bank_slot == snapshot_archive_info_slot && bank_hash == snapshot_archive_info_hash)
+        .then(|| ())
+        .ok_or(SnapshotError::MismatchedSlotHash(
+            (bank_slot, bank_hash),
+            (snapshot_archive_info_slot, snapshot_archive_info_hash),
+        ))
+}
+
 /// Perform the common tasks when unarchiving a snapshot.  Handles creating the temporary
 /// directories, untaring, reading the version file, and then returning those fields plus the
 /// unpacked append vec map.
@@ -987,31 +1084,26 @@ where
     })
 }
 
-/// Check if an incremental snapshot is compatible with a full snapshot.  This function parses the
-/// paths to see if the incremental snapshot's base slot is the same as the full snapshot's slot.
-/// Return an error if they are incompatible (or if the paths cannot be parsed), otherwise return a
-/// tuple of the full snapshot slot and the incremental snapshot slot.
-fn check_are_snapshots_compatible<P>(
-    full_snapshot_archive_path: P,
-    incremental_snapshot_archive_path: P,
-) -> Result<()>
-where
-    P: AsRef<Path>,
-{
-    let full_snapshot_filename = path_to_file_name_str(full_snapshot_archive_path.as_ref())?;
-    let (full_snapshot_slot, _, _) = parse_full_snapshot_archive_filename(full_snapshot_filename)?;
+/// Check if an incremental snapshot is compatible with a full snapshot.  This is done by checking
+/// if the incremental snapshot's base slot is the same as the full snapshot's slot.
+fn check_are_snapshots_compatible(
+    full_snapshot_archive_info: &FullSnapshotArchiveInfo,
+    incremental_snapshot_archive_info: Option<&IncrementalSnapshotArchiveInfo>,
+) -> Result<()> {
+    if incremental_snapshot_archive_info.is_none() {
+        return Ok(());
+    }
 
-    let incremental_snapshot_filename =
-        path_to_file_name_str(incremental_snapshot_archive_path.as_ref())?;
-    let (incremental_snapshot_base_slot, _, _, _) =
-        parse_incremental_snapshot_archive_filename(incremental_snapshot_filename)?;
+    let incremental_snapshot_archive_info = incremental_snapshot_archive_info.unwrap();
 
-    (full_snapshot_slot == incremental_snapshot_base_slot)
+    (full_snapshot_archive_info.slot() == incremental_snapshot_archive_info.base_slot())
         .then(|| ())
-        .ok_or(SnapshotError::MismatchedBaseSlot(
-            full_snapshot_slot,
-            incremental_snapshot_base_slot,
-        ))
+        .ok_or_else(|| {
+            SnapshotError::MismatchedBaseSlot(
+                *full_snapshot_archive_info.slot(),
+                *incremental_snapshot_archive_info.base_slot(),
+            )
+        })
 }
 
 /// Get the `&str` from a `&Path`
@@ -1598,15 +1690,15 @@ pub fn snapshot_bank(
 ///
 /// Requires:
 ///     - `bank` is complete
-pub fn bank_to_full_snapshot_archive<P: AsRef<Path>, Q: AsRef<Path>>(
-    snapshots_dir: P,
+pub fn bank_to_full_snapshot_archive(
+    snapshots_dir: impl AsRef<Path>,
     bank: &Bank,
     snapshot_version: Option<SnapshotVersion>,
-    snapshot_package_output_path: Q,
+    snapshot_package_output_path: impl AsRef<Path>,
     archive_format: ArchiveFormat,
     thread_pool: Option<&ThreadPool>,
     maximum_snapshots_to_retain: usize,
-) -> Result<PathBuf> {
+) -> Result<FullSnapshotArchiveInfo> {
     let snapshot_version = snapshot_version.unwrap_or_default();
 
     assert!(bank.is_complete());
@@ -1639,16 +1731,16 @@ pub fn bank_to_full_snapshot_archive<P: AsRef<Path>, Q: AsRef<Path>>(
 /// Requires:
 ///     - `bank` is complete
 ///     - `bank`'s slot is greater than `full_snapshot_slot`
-pub fn bank_to_incremental_snapshot_archive<P: AsRef<Path>, Q: AsRef<Path>>(
-    snapshots_dir: P,
+pub fn bank_to_incremental_snapshot_archive(
+    snapshots_dir: impl AsRef<Path>,
     bank: &Bank,
     full_snapshot_slot: Slot,
     snapshot_version: Option<SnapshotVersion>,
-    snapshot_package_output_path: Q,
+    snapshot_package_output_path: impl AsRef<Path>,
     archive_format: ArchiveFormat,
     thread_pool: Option<&ThreadPool>,
     maximum_snapshots_to_retain: usize,
-) -> Result<PathBuf> {
+) -> Result<IncrementalSnapshotArchiveInfo> {
     let snapshot_version = snapshot_version.unwrap_or_default();
 
     assert!(bank.is_complete());
@@ -1688,7 +1780,7 @@ pub fn package_process_and_archive_full_snapshot(
     snapshot_version: SnapshotVersion,
     thread_pool: Option<&ThreadPool>,
     maximum_snapshots_to_retain: usize,
-) -> Result<PathBuf> {
+) -> Result<FullSnapshotArchiveInfo> {
     let package = AccountsPackagePre::new_full_snapshot_package(
         bank,
         bank_snapshot_info,
@@ -1701,12 +1793,19 @@ pub fn package_process_and_archive_full_snapshot(
         None,
     )?;
 
-    process_and_archive_snapshot_package_pre(
+    let package = process_and_archive_snapshot_package_pre(
         package,
         thread_pool,
         None,
         maximum_snapshots_to_retain,
-    )
+    )?;
+
+    Ok(FullSnapshotArchiveInfo::new(
+        package.tar_output_file,
+        package.slot,
+        package.hash,
+        package.archive_format,
+    ))
 }
 
 /// Helper function to hold shared code to package, process, and archive incremental snapshots
@@ -1722,7 +1821,7 @@ pub fn package_process_and_archive_incremental_snapshot(
     snapshot_version: SnapshotVersion,
     thread_pool: Option<&ThreadPool>,
     maximum_snapshots_to_retain: usize,
-) -> Result<PathBuf> {
+) -> Result<IncrementalSnapshotArchiveInfo> {
     let package = AccountsPackagePre::new_incremental_snapshot_package(
         bank,
         incremental_snapshot_base_slot,
@@ -1736,12 +1835,20 @@ pub fn package_process_and_archive_incremental_snapshot(
         None,
     )?;
 
-    process_and_archive_snapshot_package_pre(
+    let package = process_and_archive_snapshot_package_pre(
         package,
         thread_pool,
         Some(incremental_snapshot_base_slot),
         maximum_snapshots_to_retain,
-    )
+    )?;
+
+    Ok(IncrementalSnapshotArchiveInfo::new(
+        package.tar_output_file,
+        incremental_snapshot_base_slot,
+        package.slot,
+        package.hash,
+        package.archive_format,
+    ))
 }
 
 /// Helper function to hold shared code to process and archive snapshot packages
@@ -1750,13 +1857,13 @@ fn process_and_archive_snapshot_package_pre(
     thread_pool: Option<&ThreadPool>,
     incremental_snapshot_base_slot: Option<Slot>,
     maximum_snapshots_to_retain: usize,
-) -> Result<PathBuf> {
+) -> Result<AccountsPackage> {
     let package =
         process_accounts_package_pre(package_pre, thread_pool, incremental_snapshot_base_slot);
 
     archive_snapshot_package(&package, maximum_snapshots_to_retain)?;
 
-    Ok(package.tar_output_file)
+    Ok(package)
 }
 
 pub fn process_accounts_package_pre(
@@ -2095,25 +2202,40 @@ mod tests {
         let slot2: Slot = 5678;
         let slot3: Slot = 999_999;
 
-        assert!(check_are_snapshots_compatible(
-            &format!("/dir/snapshot-{}-{}.tar", slot1, Hash::new_unique()),
-            &format!(
+        let full_snapshot_archive_info = FullSnapshotArchiveInfo::new_from_path(PathBuf::from(
+            format!("/dir/snapshot-{}-{}.tar", slot1, Hash::new_unique()),
+        ))
+        .unwrap();
+
+        assert!(check_are_snapshots_compatible(&full_snapshot_archive_info, None,).is_ok());
+
+        let incremental_snapshot_archive_info =
+            IncrementalSnapshotArchiveInfo::new_from_path(PathBuf::from(format!(
                 "/dir/incremental-snapshot-{}-{}-{}.tar",
                 slot1,
                 slot2,
                 Hash::new_unique()
-            ),
+            )))
+            .unwrap();
+
+        assert!(check_are_snapshots_compatible(
+            &full_snapshot_archive_info,
+            Some(&incremental_snapshot_archive_info)
         )
         .is_ok());
 
-        assert!(check_are_snapshots_compatible(
-            &format!("/dir/snapshot-{}-{}.tar", slot1, Hash::new_unique()),
-            &format!(
+        let incremental_snapshot_archive_info =
+            IncrementalSnapshotArchiveInfo::new_from_path(PathBuf::from(format!(
                 "/dir/incremental-snapshot-{}-{}-{}.tar",
                 slot2,
                 slot3,
                 Hash::new_unique()
-            ),
+            )))
+            .unwrap();
+
+        assert!(check_are_snapshots_compatible(
+            &full_snapshot_archive_info,
+            Some(&incremental_snapshot_archive_info)
         )
         .is_err());
     }
@@ -2471,8 +2593,8 @@ mod tests {
         let snapshot_archives_dir = tempfile::TempDir::new().unwrap();
         let snapshot_archive_format = ArchiveFormat::Tar;
 
-        let snapshot_archive_path = bank_to_full_snapshot_archive(
-            snapshots_dir.path(),
+        let snapshot_archive_info = bank_to_full_snapshot_archive(
+            &snapshots_dir,
             &original_bank,
             None,
             snapshot_archives_dir.path(),
@@ -2486,9 +2608,8 @@ mod tests {
             &[PathBuf::from(accounts_dir.path())],
             &[],
             snapshots_dir.path(),
-            &snapshot_archive_path,
+            &snapshot_archive_info,
             None,
-            snapshot_archive_format,
             &genesis_config,
             None,
             None,
@@ -2562,7 +2683,7 @@ mod tests {
         let snapshot_archives_dir = tempfile::TempDir::new().unwrap();
         let snapshot_archive_format = ArchiveFormat::TarGzip;
 
-        let full_snapshot_archive_path = bank_to_full_snapshot_archive(
+        let full_snapshot_archive_info = bank_to_full_snapshot_archive(
             snapshots_dir.path(),
             &bank4,
             None,
@@ -2577,9 +2698,8 @@ mod tests {
             &[PathBuf::from(accounts_dir.path())],
             &[],
             snapshots_dir.path(),
-            &full_snapshot_archive_path,
+            &full_snapshot_archive_info,
             None,
-            snapshot_archive_format,
             &genesis_config,
             None,
             None,
@@ -2639,7 +2759,7 @@ mod tests {
         let snapshot_archive_format = ArchiveFormat::TarZstd;
 
         let full_snapshot_slot = slot;
-        let full_snapshot_archive_path = bank_to_full_snapshot_archive(
+        let full_snapshot_archive_info = bank_to_full_snapshot_archive(
             snapshots_dir.path(),
             &bank1,
             None,
@@ -2671,7 +2791,7 @@ mod tests {
             bank4.register_tick(&Hash::new_unique());
         }
 
-        let incremental_snapshot_archive_path = bank_to_incremental_snapshot_archive(
+        let incremental_snapshot_archive_info = bank_to_incremental_snapshot_archive(
             snapshots_dir.path(),
             &bank4,
             full_snapshot_slot,
@@ -2687,9 +2807,8 @@ mod tests {
             &[PathBuf::from(accounts_dir.path())],
             &[],
             snapshots_dir.path(),
-            &full_snapshot_archive_path,
-            Some(&incremental_snapshot_archive_path),
-            snapshot_archive_format,
+            &full_snapshot_archive_info,
+            Some(&incremental_snapshot_archive_info),
             &genesis_config,
             None,
             None,
@@ -2704,5 +2823,102 @@ mod tests {
         .unwrap();
 
         assert_eq!(*bank4, roundtrip_bank);
+    }
+
+    /// Test rebuilding bank from the latest snapshot archives
+    #[test]
+    fn test_bank_from_latest_snapshot_archives() {
+        solana_logger::setup();
+        let collector = Pubkey::new_unique();
+        let key1 = Keypair::new();
+        let key2 = Keypair::new();
+        let key3 = Keypair::new();
+
+        let (genesis_config, mint_keypair) = create_genesis_config(1_000_000);
+        let bank0 = Arc::new(Bank::new(&genesis_config));
+        bank0.transfer(1, &mint_keypair, &key1.pubkey()).unwrap();
+        bank0.transfer(2, &mint_keypair, &key2.pubkey()).unwrap();
+        bank0.transfer(3, &mint_keypair, &key3.pubkey()).unwrap();
+        while !bank0.is_complete() {
+            bank0.register_tick(&Hash::new_unique());
+        }
+
+        let slot = 1;
+        let bank1 = Arc::new(Bank::new_from_parent(&bank0, &collector, slot));
+        bank1.transfer(1, &mint_keypair, &key1.pubkey()).unwrap();
+        bank1.transfer(2, &mint_keypair, &key2.pubkey()).unwrap();
+        bank1.transfer(3, &mint_keypair, &key3.pubkey()).unwrap();
+        while !bank1.is_complete() {
+            bank1.register_tick(&Hash::new_unique());
+        }
+
+        let accounts_dir = tempfile::TempDir::new().unwrap();
+        let snapshots_dir = tempfile::TempDir::new().unwrap();
+        let snapshot_archives_dir = tempfile::TempDir::new().unwrap();
+        let snapshot_archive_format = ArchiveFormat::Tar;
+
+        let full_snapshot_slot = slot;
+        bank_to_full_snapshot_archive(
+            &snapshots_dir,
+            &bank1,
+            None,
+            &snapshot_archives_dir,
+            snapshot_archive_format,
+            None,
+            std::usize::MAX,
+        )
+        .unwrap();
+
+        let slot = slot + 1;
+        let bank2 = Arc::new(Bank::new_from_parent(&bank1, &collector, slot));
+        bank2.transfer(1, &mint_keypair, &key1.pubkey()).unwrap();
+        while !bank2.is_complete() {
+            bank2.register_tick(&Hash::new_unique());
+        }
+
+        let slot = slot + 1;
+        let bank3 = Arc::new(Bank::new_from_parent(&bank2, &collector, slot));
+        bank3.transfer(2, &mint_keypair, &key2.pubkey()).unwrap();
+        while !bank3.is_complete() {
+            bank3.register_tick(&Hash::new_unique());
+        }
+
+        let slot = slot + 1;
+        let bank4 = Arc::new(Bank::new_from_parent(&bank3, &collector, slot));
+        bank4.transfer(3, &mint_keypair, &key3.pubkey()).unwrap();
+        while !bank4.is_complete() {
+            bank4.register_tick(&Hash::new_unique());
+        }
+
+        bank_to_incremental_snapshot_archive(
+            &snapshots_dir,
+            &bank4,
+            full_snapshot_slot,
+            None,
+            &snapshot_archives_dir,
+            snapshot_archive_format,
+            None,
+            std::usize::MAX,
+        )
+        .unwrap();
+
+        let (deserialized_bank, _) = bank_from_latest_snapshot_archives(
+            &snapshots_dir,
+            &snapshot_archives_dir,
+            &[accounts_dir.as_ref().to_path_buf()],
+            &[],
+            &genesis_config,
+            None,
+            None,
+            AccountSecondaryIndexes::default(),
+            false,
+            None,
+            AccountShrinkThreshold::default(),
+            false,
+            false,
+        )
+        .unwrap();
+
+        assert_eq!(deserialized_bank, *bank4);
     }
 }

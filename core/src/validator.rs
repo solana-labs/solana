@@ -1194,20 +1194,24 @@ fn new_banks_from_ledger(
         );
         leader_schedule_cache.set_root(&bank_forks.root_bank());
 
-        let archive_file = solana_runtime::snapshot_utils::bank_to_full_snapshot_archive(
-            ledger_path,
-            &bank_forks.root_bank(),
-            None,
-            &snapshot_config.snapshot_package_output_path,
-            snapshot_config.archive_format,
-            Some(bank_forks.root_bank().get_thread_pool()),
-            snapshot_config.maximum_snapshots_to_retain,
-        )
-        .unwrap_or_else(|err| {
-            error!("Unable to create snapshot: {}", err);
-            abort();
-        });
-        info!("created snapshot: {}", archive_file.display());
+        let full_snapshot_archive_info =
+            solana_runtime::snapshot_utils::bank_to_full_snapshot_archive(
+                ledger_path,
+                &bank_forks.root_bank(),
+                None,
+                &snapshot_config.snapshot_package_output_path,
+                snapshot_config.archive_format,
+                Some(bank_forks.root_bank().get_thread_pool()),
+                snapshot_config.maximum_snapshots_to_retain,
+            )
+            .unwrap_or_else(|err| {
+                error!("Unable to create snapshot: {}", err);
+                abort();
+            });
+        info!(
+            "created snapshot: {}",
+            full_snapshot_archive_info.path().display()
+        );
     }
 
     let tower = post_process_restored_tower(
