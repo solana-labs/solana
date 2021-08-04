@@ -2380,8 +2380,8 @@ mod tests {
     #[test]
     fn test_purge_old_full_snapshot_archives_in_the_loop() {
         let snapshot_archives_dir = tempfile::TempDir::new().unwrap();
-        let maximum_snapshots_to_retain = 5 as usize;
-        let starting_slot = 42 as Slot;
+        let maximum_snapshots_to_retain = 5;
+        let starting_slot: Slot = 42;
 
         for slot in (starting_slot..).take(100) {
             let full_snapshot_archive_file_name =
