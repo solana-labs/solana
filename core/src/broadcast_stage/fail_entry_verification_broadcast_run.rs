@@ -138,9 +138,14 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
         bank_forks: &Arc<RwLock<BankForks>>,
     ) -> Result<()> {
         let ((slot, shreds), _) = receiver.lock().unwrap().recv()?;
-        let root_bank = bank_forks.read().unwrap().root_bank();
+        let (root_bank, working_bank) = {
+            let bank_forks = bank_forks.read().unwrap();
+            (bank_forks.root_bank(), bank_forks.working_bank())
+        };
         // Broadcast data
-        let cluster_nodes = self.cluster_nodes_cache.get(slot, &root_bank, cluster_info);
+        let cluster_nodes =
+            self.cluster_nodes_cache
+                .get(slot, &root_bank, &working_bank, cluster_info);
         broadcast_shreds(
             sock,
             &shreds,

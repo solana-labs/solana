@@ -347,8 +347,13 @@ impl StandardBroadcastRun {
         trace!("Broadcasting {:?} shreds", shreds.len());
         // Get the list of peers to broadcast to
         let mut get_peers_time = Measure::start("broadcast::get_peers");
-        let root_bank = bank_forks.read().unwrap().root_bank();
-        let cluster_nodes = self.cluster_nodes_cache.get(slot, &root_bank, cluster_info);
+        let (root_bank, working_bank) = {
+            let bank_forks = bank_forks.read().unwrap();
+            (bank_forks.root_bank(), bank_forks.working_bank())
+        };
+        let cluster_nodes =
+            self.cluster_nodes_cache
+                .get(slot, &root_bank, &working_bank, cluster_info);
         get_peers_time.stop();
 
         let mut transmit_stats = TransmitShredsStats::default();
