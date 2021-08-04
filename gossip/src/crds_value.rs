@@ -312,6 +312,10 @@ impl Vote {
     pub(crate) fn slots(&self) -> &[Slot] {
         &self.slots
     }
+
+    pub(crate) fn vote_account(&self) -> Option<Pubkey> {
+        self.vote_account
+    }
 }
 
 impl<'de> Deserialize<'de> for Vote {

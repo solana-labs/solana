@@ -1436,13 +1436,14 @@ impl ClusterInfo {
     fn new_push_requests(
         &self,
         stakes: &HashMap<Pubkey, u64>,
+        bank_forks: Option<&RwLock<BankForks>>,
         require_stake_for_gossip: bool,
     ) -> Vec<(SocketAddr, Protocol)> {
         let self_id = self.id();
         let mut push_messages = {
             let _st = ScopedTimer::from(&self.stats.new_push_requests);
             self.gossip
-                .new_push_messages(self.drain_push_queue(), timestamp())
+                .new_push_messages(self.drain_push_queue(), bank_forks, timestamp())
         };
         if require_stake_for_gossip {
             push_messages.retain(|_, data| {
@@ -1480,6 +1481,7 @@ impl ClusterInfo {
         thread_pool: &ThreadPool,
         gossip_validators: Option<&HashSet<Pubkey>>,
         stakes: &HashMap<Pubkey, u64>,
+        bank_forks: Option<&RwLock<BankForks>>,
         generate_pull_requests: bool,
         require_stake_for_gossip: bool,
     ) -> Vec<(SocketAddr, Protocol)> {
@@ -1488,7 +1490,7 @@ impl ClusterInfo {
         // pull-request bloom filters, preventing pull responses to return the
         // same values back to the node itself. Note that packets will arrive
         // and are processed out of order.
-        let mut out: Vec<_> = self.new_push_requests(stakes, require_stake_for_gossip);
+        let mut out: Vec<_> = self.new_push_requests(stakes, bank_forks, require_stake_for_gossip);
         self.stats
             .packets_sent_push_messages_count
             .add_relaxed(out.len() as u64);
@@ -1514,6 +1516,7 @@ impl ClusterInfo {
         gossip_validators: Option<&HashSet<Pubkey>>,
         recycler: &PacketsRecycler,
         stakes: &HashMap<Pubkey, u64>,
+        bank_forks: Option<&RwLock<BankForks>>,
         sender: &PacketSender,
         generate_pull_requests: bool,
         require_stake_for_gossip: bool,
@@ -1522,6 +1525,7 @@ impl ClusterInfo {
             thread_pool,
             gossip_validators,
             stakes,
+            bank_forks,
             generate_pull_requests,
             require_stake_for_gossip,
         );
@@ -1691,6 +1695,7 @@ impl ClusterInfo {
                         gossip_validators.as_ref(),
                         &recycler,
                         &stakes,
+                        bank_forks.as_deref(),
                         &sender,
                         generate_pull_requests,
                         require_stake_for_gossip,
@@ -1771,6 +1776,7 @@ impl ClusterInfo {
         thread_pool: &ThreadPool,
         recycler: &PacketsRecycler,
         stakes: &HashMap<Pubkey, u64>,
+        bank_forks: Option<&RwLock<BankForks>>,
         response_sender: &PacketSender,
         require_stake_for_gossip: bool,
     ) {
@@ -1808,6 +1814,7 @@ impl ClusterInfo {
                 recycler,
                 requests,
                 stakes,
+                bank_forks,
                 require_stake_for_gossip,
             );
             if !response.is_empty() {
@@ -1883,6 +1890,7 @@ impl ClusterInfo {
         recycler: &PacketsRecycler,
         requests: Vec<PullData>,
         stakes: &HashMap<Pubkey, u64>,
+        bank_forks: Option<&RwLock<BankForks>>,
         require_stake_for_gossip: bool,
     ) -> Packets {
         const DEFAULT_EPOCH_DURATION_MS: u64 = DEFAULT_SLOTS_PER_EPOCH * DEFAULT_MS_PER_SLOT;
@@ -1914,6 +1922,7 @@ impl ClusterInfo {
             self.gossip.generate_pull_responses(
                 thread_pool,
                 &caller_and_filters,
+                bank_forks,
                 output_size_limit,
                 now,
             )
@@ -2161,6 +2170,7 @@ impl ClusterInfo {
         thread_pool: &ThreadPool,
         recycler: &PacketsRecycler,
         stakes: &HashMap<Pubkey, u64>,
+        bank_forks: Option<&RwLock<BankForks>>,
         response_sender: &PacketSender,
         require_stake_for_gossip: bool,
     ) {
@@ -2239,7 +2249,8 @@ impl ClusterInfo {
         self.stats
             .push_response_count
             .add_relaxed(packets.packets.len() as u64);
-        let new_push_requests = self.new_push_requests(stakes, require_stake_for_gossip);
+        let new_push_requests =
+            self.new_push_requests(stakes, bank_forks, require_stake_for_gossip);
         inc_new_counter_debug!("cluster_info-push_message-pushes", new_push_requests.len());
         for (address, request) in new_push_requests {
             if ContactInfo::is_valid_address(&address, &self.socket_addr_space) {
@@ -2287,6 +2298,7 @@ impl ClusterInfo {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn process_packets(
         &self,
         packets: VecDeque<(/*from:*/ SocketAddr, Protocol)>,
@@ -2294,6 +2306,7 @@ impl ClusterInfo {
         recycler: &PacketsRecycler,
         response_sender: &PacketSender,
         stakes: &HashMap<Pubkey, u64>,
+        bank_forks: Option<&RwLock<BankForks>>,
         feature_set: Option<&FeatureSet>,
         epoch_duration: Duration,
         should_check_duplicate_instance: bool,
@@ -2390,6 +2403,7 @@ impl ClusterInfo {
             thread_pool,
             recycler,
             stakes,
+            bank_forks,
             response_sender,
             require_stake_for_gossip,
         );
@@ -2401,6 +2415,7 @@ impl ClusterInfo {
             thread_pool,
             recycler,
             stakes,
+            bank_forks,
             response_sender,
             require_stake_for_gossip,
         );
@@ -2490,6 +2505,7 @@ impl ClusterInfo {
             recycler,
             response_sender,
             &stakes,
+            bank_forks,
             feature_set.as_deref(),
             get_epoch_duration(bank_forks),
             should_check_duplicate_instance,
@@ -3307,6 +3323,7 @@ mod tests {
             &thread_pool,
             None,            // gossip_validators
             &HashMap::new(), // stakes
+            None,            // bank_forks
             true,            // generate_pull_requests
             false,           // require_stake_for_gossip
         );
@@ -3431,9 +3448,11 @@ mod tests {
             &SocketAddrSpace::Unspecified,
         );
         //check that all types of gossip messages are signed correctly
-        let push_messages = cluster_info
-            .gossip
-            .new_push_messages(cluster_info.drain_push_queue(), timestamp());
+        let push_messages = cluster_info.gossip.new_push_messages(
+            cluster_info.drain_push_queue(),
+            None, // bank_forks
+            timestamp(),
+        );
         // there should be some pushes ready
         assert!(!push_messages.is_empty());
         push_messages

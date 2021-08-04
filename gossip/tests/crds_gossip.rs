@@ -339,7 +339,11 @@ fn network_run_push(
                     Duration::from_millis(node.gossip.pull.crds_timeout),
                 );
                 node.gossip.purge(&node_pubkey, thread_pool, now, &timeouts);
-                (node_pubkey, node.gossip.new_push_messages(vec![], now))
+                (
+                    node_pubkey,
+                    node.gossip
+                        .new_push_messages(vec![], /*bank_forks=*/ None, now),
+                )
             })
             .collect();
         let transfered: Vec<_> = requests
@@ -529,6 +533,7 @@ fn network_run_pull(
                             .generate_pull_responses(
                                 thread_pool,
                                 &filters,
+                                None,       // bank_forks
                                 usize::MAX, // output_size_limit
                                 now,
                             )

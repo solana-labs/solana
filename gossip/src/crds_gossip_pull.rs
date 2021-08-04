@@ -16,7 +16,7 @@ use {
         cluster_info::{Ping, CRDS_UNIQUE_PUBKEY_CAPACITY},
         contact_info::ContactInfo,
         crds::{Crds, VersionedCrdsValue},
-        crds_gossip::{get_stake, get_weight},
+        crds_gossip::{get_stake, get_weight, should_gossip},
         crds_gossip_error::CrdsGossipError,
         crds_value::CrdsValue,
         ping_pong::PingCache,
@@ -25,7 +25,10 @@ use {
     lru::LruCache,
     rand::Rng,
     rayon::{prelude::*, ThreadPool},
-    solana_runtime::bloom::{AtomicBloom, Bloom},
+    solana_runtime::{
+        bank_forks::BankForks,
+        bloom::{AtomicBloom, Bloom},
+    },
     solana_sdk::{
         hash::{hash, Hash},
         pubkey::Pubkey,
@@ -358,10 +361,18 @@ impl CrdsGossipPull {
         thread_pool: &ThreadPool,
         crds: &RwLock<Crds>,
         requests: &[(CrdsValue, CrdsFilter)],
+        bank_forks: Option<&RwLock<BankForks>>,
         output_size_limit: usize, // Limit number of crds values returned.
         now: u64,
     ) -> Vec<Vec<CrdsValue>> {
-        Self::filter_crds_values(thread_pool, crds, requests, output_size_limit, now)
+        Self::filter_crds_values(
+            thread_pool,
+            crds,
+            requests,
+            bank_forks,
+            output_size_limit,
+            now,
+        )
     }
 
     // Checks if responses should be inserted and
@@ -511,6 +522,7 @@ impl CrdsGossipPull {
         thread_pool: &ThreadPool,
         crds: &RwLock<Crds>,
         filters: &[(CrdsValue, CrdsFilter)],
+        bank_forks: Option<&RwLock<BankForks>>,
         output_size_limit: usize, // Limit number of crds values returned.
         now: u64,
     ) -> Vec<Vec<CrdsValue>> {
@@ -523,6 +535,7 @@ impl CrdsGossipPull {
         let total_skipped = AtomicUsize::default();
         let output_size_limit = output_size_limit.try_into().unwrap_or(i64::MAX);
         let output_size_limit = AtomicI64::new(output_size_limit);
+        let root_bank = bank_forks.map(|bank_forks| bank_forks.read().unwrap().root_bank());
         let crds = crds.read().unwrap();
         let apply_filter = |caller: &CrdsValue, filter: &CrdsFilter| {
             if output_size_limit.load(Ordering::Relaxed) <= 0 {
@@ -545,6 +558,7 @@ impl CrdsGossipPull {
                     !filter.filter_contains(&entry.value_hash)
                         && (entry.value.pubkey() != caller_pubkey
                             || entry.value.should_force_push(&caller_pubkey))
+                        && should_gossip(entry, root_bank.as_deref())
                 }
             };
             let out: Vec<_> = crds
@@ -1224,6 +1238,7 @@ pub(crate) mod tests {
             &thread_pool,
             &dest_crds,
             &filters,
+            None,       // bank_forks
             usize::MAX, // output_size_limit
             0,          // now
         );
@@ -1245,6 +1260,7 @@ pub(crate) mod tests {
             &thread_pool,
             &dest_crds,
             &filters,
+            None,                            // bank_forks
             usize::MAX,                      // output_size_limit
             CRDS_GOSSIP_PULL_MSG_TIMEOUT_MS, // now
         );
@@ -1264,6 +1280,7 @@ pub(crate) mod tests {
             &thread_pool,
             &dest_crds,
             &filters,
+            None,       // bank_forks
             usize::MAX, // output_size_limit
             CRDS_GOSSIP_PULL_MSG_TIMEOUT_MS,
         );
@@ -1318,6 +1335,7 @@ pub(crate) mod tests {
             &thread_pool,
             &dest_crds,
             &filters,
+            None,       // bank_forks
             usize::MAX, // output_size_limit
             0,          // now
         );
@@ -1397,6 +1415,7 @@ pub(crate) mod tests {
                 &thread_pool,
                 &dest_crds,
                 &filters,
+                None,       // bank_forks
                 usize::MAX, // output_size_limit
                 0,          // now
             );

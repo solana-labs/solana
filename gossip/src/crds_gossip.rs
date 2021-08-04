@@ -8,7 +8,7 @@ use {
     crate::{
         cluster_info::Ping,
         contact_info::ContactInfo,
-        crds::Crds,
+        crds::{Crds, VersionedCrdsValue},
         crds_gossip_error::CrdsGossipError,
         crds_gossip_pull::{CrdsFilter, CrdsGossipPull, ProcessPullStats},
         crds_gossip_push::{CrdsGossipPush, CRDS_GOSSIP_NUM_ACTIVE},
@@ -18,6 +18,7 @@ use {
     },
     rayon::ThreadPool,
     solana_ledger::shred::Shred,
+    solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{
         hash::Hash,
         pubkey::Pubkey,
@@ -74,6 +75,7 @@ impl CrdsGossip {
     pub fn new_push_messages(
         &self,
         pending_push_messages: Vec<CrdsValue>,
+        bank_forks: Option<&RwLock<BankForks>>,
         now: u64,
     ) -> HashMap<Pubkey, Vec<CrdsValue>> {
         {
@@ -82,7 +84,7 @@ impl CrdsGossip {
                 let _ = crds.insert(entry, now);
             }
         }
-        self.push.new_push_messages(&self.crds, now)
+        self.push.new_push_messages(&self.crds, bank_forks, now)
     }
 
     pub(crate) fn push_duplicate_shred(
@@ -242,6 +244,7 @@ impl CrdsGossip {
         &self,
         thread_pool: &ThreadPool,
         filters: &[(CrdsValue, CrdsFilter)],
+        bank_forks: Option<&RwLock<BankForks>>,
         output_size_limit: usize, // Limit number of crds values returned.
         now: u64,
     ) -> Vec<Vec<CrdsValue>> {
@@ -249,6 +252,7 @@ impl CrdsGossip {
             thread_pool,
             &self.crds,
             filters,
+            bank_forks,
             output_size_limit,
             now,
         )
@@ -352,6 +356,50 @@ pub fn get_weight(max_weight: f32, time_since_last_selected: u32, stake: f32) ->
         weight = max_weight;
     }
     1.0_f32.max(weight.min(max_weight))
+}
+
+/// Returns true if the crds-value should be broadcasted through gossip.
+pub(crate) fn should_gossip(entry: &VersionedCrdsValue, root_bank: Option<&Bank>) -> bool {
+    // TODO: consolidate other predicates here!
+    !should_exclude_from_gossip(entry, root_bank)
+}
+
+fn should_exclude_from_gossip(entry: &VersionedCrdsValue, root_bank: Option<&Bank>) -> bool {
+    // Exclude votes from gossip if they are already landing in TPU.
+    let vote = match &entry.value.data {
+        CrdsData::Vote(_, vote) => vote,
+        _ => return false,
+    };
+    let vote_account = match vote.vote_account() {
+        Some(vote_account) => vote_account,
+        None => return true, // Invalid vote.
+    };
+    // Gossip votes with 5+ slots, as apparently leader's TPU is dropping them.
+    match vote.slots().len() {
+        0 => return true, // Invalid vote.
+        1..=4 => (),
+        _ => return false,
+    };
+    // TODO: consider using working-bank instead and/or check if blocks are
+    // optimistically executed/confirmed.
+    let vote_account = match root_bank {
+        Some(bank) => match bank.get_vote_account(&vote_account) {
+            Some((_, vote_account)) => vote_account,
+            None => return false,
+        },
+        None => return false,
+    };
+    // TODO: Consider adding a number of slots as buffer.
+    vote.slots().last().copied().unwrap_or_default() <= {
+        let vote_state = vote_account.vote_state();
+        match vote_state.as_ref() {
+            Ok(vote_state) => match vote_state.last_voted_slot() {
+                None => return false,
+                Some(slot) => slot,
+            },
+            Err(_) => return false,
+        }
+    }
 }
 
 #[cfg(test)]

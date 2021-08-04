@@ -16,7 +16,7 @@ use {
         cluster_info::CRDS_UNIQUE_PUBKEY_CAPACITY,
         contact_info::ContactInfo,
         crds::{Crds, Cursor},
-        crds_gossip::{get_stake, get_weight},
+        crds_gossip::{get_stake, get_weight, should_gossip},
         crds_gossip_error::CrdsGossipError,
         crds_value::CrdsValue,
         weighted_shuffle::WeightedShuffle,
@@ -26,7 +26,10 @@ use {
     itertools::Itertools,
     lru::LruCache,
     rand::{seq::SliceRandom, Rng},
-    solana_runtime::bloom::{AtomicBloom, Bloom},
+    solana_runtime::{
+        bank_forks::BankForks,
+        bloom::{AtomicBloom, Bloom},
+    },
     solana_sdk::{packet::PACKET_DATA_SIZE, pubkey::Pubkey, timing::timestamp},
     solana_streamer::socket::SocketAddrSpace,
     std::{
@@ -260,8 +263,10 @@ impl CrdsGossipPush {
     pub(crate) fn new_push_messages(
         &self,
         crds: &RwLock<Crds>,
+        bank_forks: Option<&RwLock<BankForks>>,
         now: u64,
     ) -> HashMap<Pubkey, Vec<CrdsValue>> {
+        let root_bank = bank_forks.map(|bank_forks| bank_forks.read().unwrap().root_bank());
         let active_set = self.active_set.read().unwrap();
         let active_set_len = active_set.len();
         let push_fanout = self.push_fanout.min(active_set_len);
@@ -278,6 +283,7 @@ impl CrdsGossipPush {
         let crds = crds.read().unwrap();
         let entries = crds
             .get_entries(crds_cursor.deref_mut())
+            .filter(|entry| should_gossip(entry, root_bank.as_deref()))
             .map(|entry| &entry.value)
             .filter(|value| wallclock_window.contains(&value.wallclock()));
         for value in entries {
@@ -923,7 +929,10 @@ mod test {
             [Ok(origin)]
         );
         assert_eq!(push.active_set.read().unwrap().len(), 1);
-        assert_eq!(push.new_push_messages(&crds, 0), expected);
+        assert_eq!(
+            push.new_push_messages(&crds, /*bank_forks=*/ None, /*now=*/ 0),
+            expected
+        );
     }
     #[test]
     fn test_personalized_push_messages() {
@@ -966,7 +975,10 @@ mod test {
         .into_iter()
         .collect();
         assert_eq!(push.active_set.read().unwrap().len(), 3);
-        assert_eq!(push.new_push_messages(&crds, now), expected);
+        assert_eq!(
+            push.new_push_messages(&crds, /*bank_forks=*/ None, now),
+            expected
+        );
     }
     #[test]
     fn test_process_prune() {
@@ -1005,7 +1017,10 @@ mod test {
             &peer.label().pubkey(),
             &[new_msg.label().pubkey()],
         );
-        assert_eq!(push.new_push_messages(&crds, 0), expected);
+        assert_eq!(
+            push.new_push_messages(&crds, /*bank_forks=*/ None, /*now=*/ 0),
+            expected
+        );
     }
     #[test]
     fn test_purge_old_pending_push_messages() {
@@ -1037,7 +1052,10 @@ mod test {
             push.process_push_message(&crds, &Pubkey::default(), vec![new_msg], 1),
             [Ok(origin)],
         );
-        assert_eq!(push.new_push_messages(&crds, 0), expected);
+        assert_eq!(
+            push.new_push_messages(&crds, /*bank_forks=*/ None, /*now=*/ 0),
+            expected
+        );
     }
 
     #[test]
