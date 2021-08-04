@@ -124,7 +124,7 @@ fn do_bench_transactions(
     let ns_per_s = 1_000_000_000;
     let (mut genesis_config, mint_keypair) = create_genesis_config(100_000_000);
     genesis_config.ticks_per_slot = 100;
-    let mut bank = Bank::new(&genesis_config);
+    let mut bank = Bank::new_for_benches(&genesis_config);
     bank.add_builtin(
         "builtin_program",
         Pubkey::new(&BUILTIN_PROGRAM_ID),
@@ -181,7 +181,7 @@ fn bench_bank_async_process_native_loader_transactions(bencher: &mut Bencher) {
 #[ignore]
 fn bench_bank_update_recent_blockhashes(bencher: &mut Bencher) {
     let (genesis_config, _mint_keypair) = create_genesis_config(100);
-    let mut bank = Arc::new(Bank::new(&genesis_config));
+    let mut bank = Arc::new(Bank::new_for_benches(&genesis_config));
     goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
     let genesis_hash = bank.last_blockhash();
     // Prime blockhash_queue
