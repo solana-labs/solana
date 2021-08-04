@@ -33,6 +33,7 @@ use thiserror::Error;
 
 pub const ITER_BATCH_SIZE: usize = 1000;
 const BINS_DEFAULT: usize = 16;
+const BINS_FOR_TESTING: usize = BINS_DEFAULT;
 pub type ScanResult<T> = Result<T, ScanError>;
 pub type SlotList<T> = Vec<(Slot, T)>;
 pub type SlotSlice<'s, T> = &'s [(Slot, T)];
@@ -681,7 +682,21 @@ impl<
     > Default for AccountsIndex<T>
 {
     fn default() -> Self {
-        let (account_maps, bin_calculator) = Self::allocate_accounts_index(BINS_DEFAULT);
+        // all test callers will move to default_for_tests
+        Self::new(BINS_DEFAULT)
+    }
+}
+
+impl<
+        T: 'static + Clone + IsCached + ZeroLamport + std::marker::Sync + std::marker::Send + Debug,
+    > AccountsIndex<T>
+{
+    pub fn default_for_tests() -> Self {
+        Self::new(BINS_FOR_TESTING)
+    }
+
+    fn new(bins: usize) -> Self {
+        let (account_maps, bin_calculator) = Self::allocate_accounts_index(bins);
         Self {
             account_maps,
             bin_calculator,
@@ -699,12 +714,7 @@ impl<
             removed_bank_ids: Mutex::<HashSet<BankId>>::default(),
         }
     }
-}
 
-impl<
-        T: 'static + Clone + IsCached + ZeroLamport + std::marker::Sync + std::marker::Send + Debug,
-    > AccountsIndex<T>
-{
     fn allocate_accounts_index(bins: usize) -> (LockMapType<T>, PubkeyBinCalculator16) {
         let account_maps = (0..bins)
             .into_iter()
@@ -713,6 +723,7 @@ impl<
         let bin_calculator = PubkeyBinCalculator16::new(bins);
         (account_maps, bin_calculator)
     }
+
     fn iter<R>(&self, range: Option<R>) -> AccountsIndexIterator<T>
     where
         R: RangeBounds<Pubkey>,
