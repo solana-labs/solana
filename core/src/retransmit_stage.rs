@@ -378,7 +378,8 @@ fn retransmit(
 
         let mut compute_turbine_peers = Measure::start("turbine_start");
         let slot_leader = leader_schedule_cache.slot_leader_at(shred_slot, Some(&working_bank));
-        let cluster_nodes = cluster_nodes_cache.get(shred_slot, &root_bank, cluster_info);
+        let cluster_nodes =
+            cluster_nodes_cache.get(shred_slot, &root_bank, &working_bank, cluster_info);
         let (neighbors, children) =
             cluster_nodes.get_retransmit_peers(packet.meta.seed, DATA_PLANE_FANOUT, slot_leader);
         // If the node is on the critical path (i.e. the first node in each
@@ -432,7 +433,8 @@ fn retransmit(
         retransmit_total,
         id,
     );
-    let cluster_nodes = cluster_nodes_cache.get(root_bank.slot(), &root_bank, cluster_info);
+    let cluster_nodes =
+        cluster_nodes_cache.get(root_bank.slot(), &root_bank, &working_bank, cluster_info);
     update_retransmit_stats(
         stats,
         timer_start.as_us(),
