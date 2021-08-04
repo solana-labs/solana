@@ -1017,9 +1017,9 @@ dependencies = [
 
 [[package]]
 name = "curve25519-dalek"
-version = "3.1.0"
+version = "3.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "639891fde0dbea823fc3d798a0fdf9d2f9440a42d64a78ab3488b0ca025117b3"
+checksum = "0b9fdf9972b2bd6af2d913799d9ebc165ea4d2e65878e329d9c6b372c4491b61"
 dependencies = [
  "byteorder",
  "digest 0.9.0",
@@ -1193,7 +1193,7 @@ version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c762bae6dcaf24c4c84667b8579785430908723d5c889f469d76a41d59cc7a9d"
 dependencies = [
- "curve25519-dalek 3.1.0",
+ "curve25519-dalek 3.2.0",
  "ed25519",
  "rand 0.7.3",
  "serde",
@@ -4748,7 +4748,7 @@ dependencies = [
  "backtrace",
  "bytes 0.4.12",
  "cc",
- "curve25519-dalek 3.1.0",
+ "curve25519-dalek 3.2.0",
  "ed25519-dalek",
  "either",
  "lazy_static",
@@ -5301,7 +5301,7 @@ name = "solana-perf"
 version = "1.8.0"
 dependencies = [
  "bincode",
- "curve25519-dalek 3.1.0",
+ "curve25519-dalek 3.2.0",
  "dlopen",
  "dlopen_derive",
  "lazy_static",
@@ -5401,7 +5401,7 @@ dependencies = [
  "borsh-derive",
  "bs58 0.4.0",
  "bv",
- "curve25519-dalek 3.1.0",
+ "curve25519-dalek 3.2.0",
  "hex",
  "itertools 0.10.1",
  "lazy_static",
@@ -5640,7 +5640,7 @@ dependencies = [
  "bv",
  "byteorder",
  "chrono",
- "curve25519-dalek 3.1.0",
+ "curve25519-dalek 3.2.0",
  "derivation-path",
  "digest 0.9.0",
  "ed25519-dalek",
