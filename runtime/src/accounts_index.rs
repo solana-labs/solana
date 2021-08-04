@@ -229,7 +229,7 @@ impl<T: 'static + Clone + IsCached> WriteAccountMapEntry<T> {
 
     // returns true if upsert was successful. new_value is modified in this case. new_value contains a RwLock
     // otherwise, new_value has not been modified and the pubkey has to be added to the maps with a write lock. call upsert_new
-    pub fn upsert_existing_key<'a>(
+    pub fn update_key_if_exists<'a>(
         r_account_maps: AccountMapsReadLock<'a, T>,
         pubkey: &Pubkey,
         new_value: &AccountMapEntry<T>,
@@ -1561,7 +1561,8 @@ impl<
         let map = &self.account_maps[get_bin_pubkey(pubkey)];
 
         let r_account_maps = map.read().unwrap();
-        if !WriteAccountMapEntry::upsert_existing_key(r_account_maps, pubkey, &new_item, reclaims) {
+        if !WriteAccountMapEntry::update_key_if_exists(r_account_maps, pubkey, &new_item, reclaims)
+        {
             let w_account_maps = map.write().unwrap();
             WriteAccountMapEntry::upsert_new_key(w_account_maps, pubkey, new_item, reclaims);
         }
@@ -2865,7 +2866,7 @@ pub mod tests {
 
         // will fail because key doesn't exist
         let r_account_maps = index.get_account_maps_read_lock(&key.pubkey());
-        assert!(!WriteAccountMapEntry::upsert_existing_key(
+        assert!(!WriteAccountMapEntry::update_key_if_exists(
             r_account_maps,
             &key.pubkey(),
             &new_entry,
