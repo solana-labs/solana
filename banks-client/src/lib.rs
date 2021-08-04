@@ -340,7 +340,7 @@ mod tests {
         // `runtime.block_on()` just once, to run all the async code.
 
         let genesis = create_genesis_config(10);
-        let bank = Bank::new(&genesis.genesis_config);
+        let bank = Bank::new_for_tests(&genesis.genesis_config);
         let slot = bank.slot();
         let block_commitment_cache = Arc::new(RwLock::new(
             BlockCommitmentCache::new_for_tests_with_slots(slot, slot),
@@ -371,7 +371,7 @@ mod tests {
         // server-side functionality is available to the client.
 
         let genesis = create_genesis_config(10);
-        let bank = Bank::new(&genesis.genesis_config);
+        let bank = Bank::new_for_tests(&genesis.genesis_config);
         let slot = bank.slot();
         let block_commitment_cache = Arc::new(RwLock::new(
             BlockCommitmentCache::new_for_tests_with_slots(slot, slot),

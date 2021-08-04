@@ -544,7 +544,7 @@ mod test {
         let mut genesis_config = create_genesis_config(10_000).genesis_config;
         genesis_config.ticks_per_slot = max_ticks_per_n_shreds(num_shreds_per_slot, None) + 1;
 
-        let bank = Bank::new(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let bank0 = bank_forks.read().unwrap().root_bank();
         (

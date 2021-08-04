@@ -1512,7 +1512,7 @@ mod tests {
     #[test]
     fn test_bpf_loader_upgradeable_deploy_with_max_len() {
         let (genesis_config, mint_keypair) = create_genesis_config(1_000_000_000);
-        let mut bank = Bank::new(&genesis_config);
+        let mut bank = Bank::new_for_tests(&genesis_config);
         bank.feature_set = Arc::new(FeatureSet::all_enabled());
         bank.add_builtin(
             "solana_bpf_loader_upgradeable_program",

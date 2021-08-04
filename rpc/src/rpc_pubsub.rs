@@ -632,7 +632,7 @@ mod tests {
         } = create_genesis_config(10_000);
         let bob = Keypair::new();
         let bob_pubkey = bob.pubkey();
-        let bank = Bank::new(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let rpc = RpcSolPubSubImpl {
@@ -757,7 +757,7 @@ mod tests {
             ..
         } = create_genesis_config(10_000);
         let bob_pubkey = solana_sdk::pubkey::new_rand();
-        let bank = Bank::new(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
 
@@ -807,7 +807,7 @@ mod tests {
         let from = Keypair::new();
         let stake_account = Keypair::new();
         let stake_program_id = stake::program::id();
-        let bank = Bank::new(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let bank0 = bank_forks.read().unwrap().get(0).unwrap().clone();
@@ -918,7 +918,7 @@ mod tests {
         } = create_genesis_config(10_000);
 
         let nonce_account = Keypair::new();
-        let bank = Bank::new(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let bank0 = bank_forks.read().unwrap().get(0).unwrap().clone();
@@ -1005,7 +1005,9 @@ mod tests {
         let bob_pubkey = solana_sdk::pubkey::new_rand();
         let session = create_session();
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(Bank::new(&genesis_config))));
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(Bank::new_for_tests(
+            &genesis_config,
+        ))));
 
         let mut io = PubSubHandler::default();
         let rpc = RpcSolPubSubImpl::default_with_bank_forks(bank_forks);
@@ -1045,7 +1047,7 @@ mod tests {
             mint_keypair: alice,
             ..
         } = create_genesis_config(10_000);
-        let bank = Bank::new(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let bob = Keypair::new();
@@ -1094,7 +1096,7 @@ mod tests {
             mint_keypair: alice,
             ..
         } = create_genesis_config(10_000);
-        let bank = Bank::new(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let bank0 = bank_forks.read().unwrap().get(0).unwrap().clone();
@@ -1172,7 +1174,7 @@ mod tests {
     #[serial]
     fn test_slot_subscribe() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
-        let bank = Bank::new(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let rpc = RpcSolPubSubImpl::default_with_bank_forks(bank_forks);
         let session = create_session();
@@ -1200,7 +1202,7 @@ mod tests {
     #[serial]
     fn test_slot_unsubscribe() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
-        let bank = Bank::new(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let rpc = RpcSolPubSubImpl::default_with_bank_forks(bank_forks);
         let session = create_session();
@@ -1245,7 +1247,7 @@ mod tests {
             vec![100; validator_voting_keypairs.len()],
         );
         let exit = Arc::new(AtomicBool::new(false));
-        let bank = Bank::new(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
 
         // Setup RPC
@@ -1284,7 +1286,7 @@ mod tests {
     #[serial]
     fn test_vote_unsubscribe() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
-        let bank = Bank::new(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let rpc = RpcSolPubSubImpl::default_with_bank_forks(bank_forks);
         let session = create_session();

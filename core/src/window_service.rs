@@ -698,7 +698,7 @@ mod test {
         let me_id = solana_sdk::pubkey::new_rand();
         let leader_keypair = Arc::new(Keypair::new());
         let leader_pubkey = leader_keypair.pubkey();
-        let bank = Arc::new(Bank::new(
+        let bank = Arc::new(Bank::new_for_tests(
             &create_genesis_config_with_leader(100, &leader_pubkey, 10).genesis_config,
         ));
         let cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));

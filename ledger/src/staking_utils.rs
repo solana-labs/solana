@@ -163,7 +163,7 @@ pub(crate) mod tests {
             ..
         } = create_genesis_config(10_000 * bootstrap_validator_stake_lamports());
 
-        let bank = Bank::new(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
         let vote_account = Keypair::new();
 
         // Give the validator some stake but don't setup a staking account

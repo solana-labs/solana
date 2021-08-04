@@ -1759,7 +1759,7 @@ mod tests {
         );
 
         let (genesis_config, _mint_keypair) = create_genesis_config(1);
-        let bank = Arc::new(Bank::new(&genesis_config));
+        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
         let mut config = ValidatorConfig::default();
         let rpc_override_health_check = Arc::new(AtomicBool::new(false));
         let start_progress = Arc::new(RwLock::new(ValidatorStartProgress::default()));
