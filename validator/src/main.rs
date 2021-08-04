@@ -1816,7 +1816,7 @@ pub fn main() {
             Arg::with_name("accounts_db_skip_shrink")
                 .long("accounts-db-skip-shrink")
                 .help("Enables faster starting of validators by skipping shrink. \
-                      This option if for use during testing."),
+                      This option is for use during testing."),
         )
         .arg(
             Arg::with_name("accounts_db_test_hash_calculation")
