@@ -1433,14 +1433,14 @@ impl<
 
         let insertion_time = AtomicU64::new(0);
 
-        let duplicate_keys = binned
+        let dirty_pubkeys = binned
             .into_iter()
             .map(|(pubkey_bin, items)| {
                 let mut _reclaims = SlotList::new();
 
                 // big enough so not likely to re-allocate, small enough to not over-allocate by too much
                 // this assumes 10% of keys are duplicates. This vector will be flattened below.
-                let mut duplicate_keys = Vec::with_capacity(items.len() / 10);
+                let mut dirty_pubkeys = Vec::with_capacity(items.len() / 10);
                 let mut w_account_maps = self.account_maps[pubkey_bin].write().unwrap();
                 let mut insert_time = Measure::start("insert_into_primary_index");
                 items
@@ -1453,19 +1453,19 @@ impl<
                         );
                         if let Some((mut w_account_entry, account_info, pubkey)) = already_exists {
                             w_account_entry.update(slot, account_info, &mut _reclaims);
-                            duplicate_keys.push(pubkey);
+                            dirty_pubkeys.push(pubkey);
                         } else if is_zero_lamport {
-                            duplicate_keys.push(pubkey);
+                            dirty_pubkeys.push(pubkey);
                         }
                     });
                 insert_time.stop();
                 insertion_time.fetch_add(insert_time.as_us(), Ordering::Relaxed);
-                duplicate_keys
+                dirty_pubkeys
             })
             .flatten()
             .collect::<Vec<_>>();
 
-        (duplicate_keys, insertion_time.load(Ordering::Relaxed))
+        (dirty_pubkeys, insertion_time.load(Ordering::Relaxed))
     }
 
     // Updates the given pubkey at the given slot with the new account information.
