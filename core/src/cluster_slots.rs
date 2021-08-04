@@ -3,7 +3,7 @@ use {
     solana_gossip::{
         cluster_info::ClusterInfo, contact_info::ContactInfo, crds::Cursor, epoch_slots::EpochSlots,
     },
-    solana_runtime::{bank_forks::BankForks, epoch_stakes::NodeIdToVoteAccounts},
+    solana_runtime::{bank::Bank, epoch_stakes::NodeIdToVoteAccounts},
     solana_sdk::{clock::Slot, pubkey::Pubkey},
     std::{
         collections::{BTreeMap, HashMap},
@@ -30,18 +30,13 @@ impl ClusterSlots {
         self.cluster_slots.read().unwrap().get(&slot).cloned()
     }
 
-    pub(crate) fn update(
-        &self,
-        root: Slot,
-        cluster_info: &ClusterInfo,
-        bank_forks: &RwLock<BankForks>,
-    ) {
-        self.update_peers(bank_forks);
+    pub(crate) fn update(&self, root_bank: &Bank, cluster_info: &ClusterInfo) {
+        self.update_peers(root_bank);
         let epoch_slots = {
             let mut cursor = self.cursor.lock().unwrap();
             cluster_info.get_epoch_slots(&mut cursor)
         };
-        self.update_internal(root, epoch_slots);
+        self.update_internal(root_bank.slot(), epoch_slots);
     }
 
     fn update_internal(&self, root: Slot, epoch_slots_list: Vec<EpochSlots>) {
@@ -114,8 +109,7 @@ impl ClusterSlots {
         slot_pubkeys.write().unwrap().insert(node_id, balance);
     }
 
-    fn update_peers(&self, bank_forks: &RwLock<BankForks>) {
-        let root_bank = bank_forks.read().unwrap().root_bank();
+    fn update_peers(&self, root_bank: &Bank) {
         let root_epoch = root_bank.epoch();
         let my_epoch = *self.epoch.read().unwrap();
 
