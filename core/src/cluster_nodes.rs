@@ -261,6 +261,7 @@ impl<T: 'static> ClusterNodesCache<T> {
         &self,
         shred_slot: Slot,
         root_bank: &Bank,
+        working_bank: &Bank,
         cluster_info: &ClusterInfo,
     ) -> Arc<ClusterNodes<T>> {
         let epoch = root_bank.get_leader_schedule_epoch(shred_slot);
@@ -273,11 +274,13 @@ impl<T: 'static> ClusterNodesCache<T> {
                 return Arc::clone(nodes);
             }
         }
-        let epoch_staked_nodes = root_bank.epoch_staked_nodes(epoch);
+        let epoch_staked_nodes = [root_bank, working_bank]
+            .iter()
+            .find_map(|bank| bank.epoch_staked_nodes(epoch));
         if epoch_staked_nodes.is_none() {
             inc_new_counter_info!("cluster_nodes-unknown_epoch_staked_nodes", 1);
             if epoch != root_bank.get_leader_schedule_epoch(root_bank.slot()) {
-                return self.get(root_bank.slot(), root_bank, cluster_info);
+                return self.get(root_bank.slot(), root_bank, working_bank, cluster_info);
             }
             inc_new_counter_info!("cluster_nodes-unknown_epoch_staked_nodes_root", 1);
         }
