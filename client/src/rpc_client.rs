@@ -929,8 +929,8 @@ impl RpcClient {
     /// transaction status whatever it is. It does not wait for transactions to
     /// be processed.
     ///
-    /// This function only searches a node's recent history, including all recent slots,
-    /// plus up to
+    /// This function only searches a node's recent history, including all
+    /// recent slots, plus up to
     /// [`MAX_RECENT_BLOCKHASHES`][solana_sdk::clock::MAX_RECENT_BLOCKHASHES]
     /// rooted slots. To search the full transaction history use the
     /// [`get_signature_statuses_with_history`][RpcClient::get_signature_statuses_with_history]
@@ -938,9 +938,9 @@ impl RpcClient {
     ///
     /// # Errors
     ///
-    /// Any individual `TransactionStatus` may have
-    /// triggered an error during processing, in which case its
-    /// [`err`][`TransactionStatus::err`] field will be `Some`.
+    /// Any individual `TransactionStatus` may have triggered an error during
+    /// processing, in which case its [`err`][`TransactionStatus::err`] field
+    /// will be `Some`.
     ///
     /// # RPC Reference
     ///
@@ -1014,9 +1014,9 @@ impl RpcClient {
     ///
     /// # Errors
     ///
-    /// Any individual `TransactionStatus` may have
-    /// triggered an error during processing, in which case its
-    /// [`err`][`TransactionStatus::err`] field will be `Some`.
+    /// Any individual `TransactionStatus` may have triggered an error during
+    /// processing, in which case its [`err`][`TransactionStatus::err`] field
+    /// will be `Some`.
     ///
     /// # RPC Reference
     ///
