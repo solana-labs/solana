@@ -2466,18 +2466,19 @@ impl AccountsDb {
     }
 
     pub fn shrink_all_slots(&self, is_startup: bool) {
-        const MAX_DIRTY_STORES: usize = 10_000;
+        const DIRTY_STORES_CLEANING_THRESHOLD: usize = 10_000;
+        const OUTER_CHUNK_SIZE: usize = 2000;
+        const INNER_CHUNK_SIZE: usize = OUTER_CHUNK_SIZE / 8;
         if is_startup && self.caching_enabled {
             let slots = self.all_slots_in_storage();
-            let outer_chunk_size = 2000;
-            let chunk_size = std::cmp::max(outer_chunk_size / 8, 1);
-            slots.chunks(outer_chunk_size).for_each(|chunk| {
-                chunk.par_chunks(chunk_size).for_each(|slots| {
+            let inner_chunk_size = std::cmp::max(INNER_CHUNK_SIZE, 1);
+            slots.chunks(OUTER_CHUNK_SIZE).for_each(|chunk| {
+                chunk.par_chunks(inner_chunk_size).for_each(|slots| {
                     for slot in slots {
                         self.shrink_slot_forced(*slot, is_startup);
                     }
                 });
-                if self.dirty_stores.len() > MAX_DIRTY_STORES {
+                if self.dirty_stores.len() > DIRTY_STORES_CLEANING_THRESHOLD {
                     self.clean_accounts(None, is_startup);
                 }
             });
@@ -2488,7 +2489,7 @@ impl AccountsDb {
                 } else {
                     self.do_shrink_slot_forced_v1(slot);
                 }
-                if self.dirty_stores.len() > MAX_DIRTY_STORES {
+                if self.dirty_stores.len() > DIRTY_STORES_CLEANING_THRESHOLD {
                     self.clean_accounts(None, is_startup);
                 }
             }
