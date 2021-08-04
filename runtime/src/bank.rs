@@ -1048,6 +1048,12 @@ impl Default for BlockhashQueue {
 
 impl Bank {
     pub fn new(genesis_config: &GenesisConfig) -> Self {
+        // this will go away in a coming pr where many replacements in test code will get made
+        Self::new_for_tests(genesis_config)
+    }
+
+    pub fn new_for_tests(genesis_config: &GenesisConfig) -> Self {
+        // this will diverge
         Self::new_with_paths(
             genesis_config,
             Vec::new(),
