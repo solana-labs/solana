@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 use crate::serve_repair::RepairType;
 use itertools::Itertools;
 use solana_gossip::{
@@ -8,13 +9,26 @@ use solana_sdk::{clock::Slot, pubkey::Pubkey};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     sync::{Arc, Mutex, RwLock},
+=======
+use {
+    itertools::Itertools,
+    solana_gossip::{
+        cluster_info::ClusterInfo, contact_info::ContactInfo, crds::Cursor, epoch_slots::EpochSlots,
+    },
+    solana_runtime::{bank_forks::BankForks, epoch_stakes::NodeIdToVoteAccounts},
+    solana_sdk::{clock::Slot, pubkey::Pubkey},
+    std::{
+        collections::{BTreeMap, HashMap},
+        sync::{Arc, Mutex, RwLock},
+    },
+>>>>>>> 2fc112edc (removes unused code from cluster-slots)
 };
 
 // Limit the size of cluster-slots map in case
 // of receiving bogus epoch slots values.
 const CLUSTER_SLOTS_TRIM_SIZE: usize = 524_288; // 512K
 
-pub type SlotPubkeys = HashMap<Pubkey, u64>;
+pub(crate) type SlotPubkeys = HashMap</*node:*/ Pubkey, /*stake:*/ u64>;
 
 #[derive(Default)]
 pub struct ClusterSlots {
@@ -25,11 +39,16 @@ pub struct ClusterSlots {
 }
 
 impl ClusterSlots {
-    pub fn lookup(&self, slot: Slot) -> Option<Arc<RwLock<SlotPubkeys>>> {
+    pub(crate) fn lookup(&self, slot: Slot) -> Option<Arc<RwLock<SlotPubkeys>>> {
         self.cluster_slots.read().unwrap().get(&slot).cloned()
     }
 
-    pub fn update(&self, root: Slot, cluster_info: &ClusterInfo, bank_forks: &RwLock<BankForks>) {
+    pub(crate) fn update(
+        &self,
+        root: Slot,
+        cluster_info: &ClusterInfo,
+        bank_forks: &RwLock<BankForks>,
+    ) {
         self.update_peers(bank_forks);
         let epoch_slots = {
             let mut cursor = self.cursor.lock().unwrap();
@@ -89,16 +108,6 @@ impl ClusterSlots {
         }
     }
 
-    pub fn collect(&self, id: &Pubkey) -> HashSet<Slot> {
-        self.cluster_slots
-            .read()
-            .unwrap()
-            .iter()
-            .filter(|(_, keys)| keys.read().unwrap().contains_key(id))
-            .map(|(slot, _)| *slot)
-            .collect()
-    }
-
     #[cfg(test)]
     pub(crate) fn insert_node_id(&self, slot: Slot, node_id: Pubkey) {
         let balance = self
@@ -135,7 +144,7 @@ impl ClusterSlots {
         }
     }
 
-    pub fn compute_weights(&self, slot: Slot, repair_peers: &[ContactInfo]) -> Vec<u64> {
+    pub(crate) fn compute_weights(&self, slot: Slot, repair_peers: &[ContactInfo]) -> Vec<u64> {
         if repair_peers.is_empty() {
             return Vec::default();
         }
@@ -165,7 +174,11 @@ impl ClusterSlots {
             .collect()
     }
 
+<<<<<<< HEAD
     pub fn compute_weights_exclude_noncomplete(
+=======
+    pub(crate) fn compute_weights_exclude_nonfrozen(
+>>>>>>> 2fc112edc (removes unused code from cluster-slots)
         &self,
         slot: Slot,
         repair_peers: &[ContactInfo],
@@ -181,6 +194,7 @@ impl ClusterSlots {
             })
             .collect()
     }
+<<<<<<< HEAD
 
     pub fn generate_repairs_for_missing_slots(
         &self,
@@ -196,6 +210,8 @@ impl ClusterSlots {
             .map(|x| RepairType::HighestShred(*x, 0))
             .collect()
     }
+=======
+>>>>>>> 2fc112edc (removes unused code from cluster-slots)
 }
 
 #[cfg(test)]
@@ -380,6 +396,7 @@ mod tests {
             Some(&1)
         );
     }
+<<<<<<< HEAD
 
     #[test]
     fn test_generate_repairs() {
@@ -416,4 +433,6 @@ mod tests {
             .generate_repairs_for_missing_slots(&self_id, 0)
             .is_empty());
     }
+=======
+>>>>>>> 2fc112edc (removes unused code from cluster-slots)
 }
