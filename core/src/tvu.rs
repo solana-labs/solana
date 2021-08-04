@@ -199,7 +199,7 @@ impl Tvu {
 
         let snapshot_interval_slots = {
             if let Some(config) = bank_forks.read().unwrap().snapshot_config() {
-                config.snapshot_interval_slots
+                config.full_snapshot_archive_interval_slots
             } else {
                 std::u64::MAX
             }

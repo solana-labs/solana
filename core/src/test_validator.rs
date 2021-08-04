@@ -497,7 +497,8 @@ impl TestValidator {
             account_paths: vec![ledger_path.join("accounts")],
             poh_verify: false, // Skip PoH verification of ledger on startup for speed
             snapshot_config: Some(SnapshotConfig {
-                snapshot_interval_slots: 100,
+                full_snapshot_archive_interval_slots: 100,
+                incremental_snapshot_archive_interval_slots: Slot::MAX,
                 snapshot_path: ledger_path.join("snapshot"),
                 snapshot_package_output_path: ledger_path.to_path_buf(),
                 archive_format: ArchiveFormat::Tar,

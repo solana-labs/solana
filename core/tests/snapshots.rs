@@ -126,7 +126,8 @@ mod tests {
             bank_forks.accounts_hash_interval_slots = accounts_hash_interval_slots;
 
             let snapshot_config = SnapshotConfig {
-                snapshot_interval_slots,
+                full_snapshot_archive_interval_slots: snapshot_interval_slots,
+                incremental_snapshot_archive_interval_slots: Slot::MAX,
                 snapshot_package_output_path: snapshot_archives_dir.path().to_path_buf(),
                 snapshot_path: bank_snapshots_dir.path().to_path_buf(),
                 archive_format: ArchiveFormat::TarBzip2,
