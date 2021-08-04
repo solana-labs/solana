@@ -219,7 +219,7 @@ impl<T: 'static + Clone + IsCached> WriteAccountMapEntry<T> {
         match w_account_maps.entry(*pubkey) {
             Entry::Occupied(mut occupied) => {
                 let current = occupied.get_mut();
-                Self::upsert_item(current, &new_value, reclaims);
+                Self::lock_and_update_slot_list(current, &new_value, reclaims);
             }
             Entry::Vacant(vacant) => {
                 vacant.insert(new_value);
@@ -236,14 +236,14 @@ impl<T: 'static + Clone + IsCached> WriteAccountMapEntry<T> {
         reclaims: &mut SlotList<T>,
     ) -> bool {
         if let Some(current) = r_account_maps.get(pubkey) {
-            Self::upsert_item(current, new_value, reclaims);
+            Self::lock_and_update_slot_list(current, new_value, reclaims);
             true
         } else {
             false
         }
     }
 
-    fn upsert_item(
+    fn lock_and_update_slot_list(
         current: &Arc<AccountMapEntryInner<T>>,
         new_value: &AccountMapEntry<T>,
         reclaims: &mut SlotList<T>,
