@@ -144,6 +144,11 @@ fn load_from_snapshot(
         process_options.limit_load_slot_count_from_snapshot,
         process_options.shrink_ratio,
         process_options.accounts_db_test_hash_calculation,
+<<<<<<< HEAD
+=======
+        process_options.accounts_db_skip_shrink,
+        process_options.verify_index,
+>>>>>>> 3280ae3e9 (add validator option --accounts-db-skip-shrink (#19028))
     )
     .expect("Load from snapshot failed");
     if let Some(shrink_paths) = shrink_paths {
