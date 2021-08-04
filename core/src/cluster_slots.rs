@@ -1,20 +1,21 @@
-use crate::serve_repair::ShredRepairType;
-use itertools::Itertools;
-use solana_gossip::{
-    cluster_info::ClusterInfo, contact_info::ContactInfo, crds::Cursor, epoch_slots::EpochSlots,
-};
-use solana_runtime::{bank_forks::BankForks, epoch_stakes::NodeIdToVoteAccounts};
-use solana_sdk::{clock::Slot, pubkey::Pubkey};
-use std::{
-    collections::{BTreeMap, HashMap, HashSet},
-    sync::{Arc, Mutex, RwLock},
+use {
+    itertools::Itertools,
+    solana_gossip::{
+        cluster_info::ClusterInfo, contact_info::ContactInfo, crds::Cursor, epoch_slots::EpochSlots,
+    },
+    solana_runtime::{bank_forks::BankForks, epoch_stakes::NodeIdToVoteAccounts},
+    solana_sdk::{clock::Slot, pubkey::Pubkey},
+    std::{
+        collections::{BTreeMap, HashMap},
+        sync::{Arc, Mutex, RwLock},
+    },
 };
 
 // Limit the size of cluster-slots map in case
 // of receiving bogus epoch slots values.
 const CLUSTER_SLOTS_TRIM_SIZE: usize = 524_288; // 512K
 
-pub type SlotPubkeys = HashMap<Pubkey, u64>;
+pub(crate) type SlotPubkeys = HashMap</*node:*/ Pubkey, /*stake:*/ u64>;
 
 #[derive(Default)]
 pub struct ClusterSlots {
@@ -25,11 +26,16 @@ pub struct ClusterSlots {
 }
 
 impl ClusterSlots {
-    pub fn lookup(&self, slot: Slot) -> Option<Arc<RwLock<SlotPubkeys>>> {
+    pub(crate) fn lookup(&self, slot: Slot) -> Option<Arc<RwLock<SlotPubkeys>>> {
         self.cluster_slots.read().unwrap().get(&slot).cloned()
     }
 
-    pub fn update(&self, root: Slot, cluster_info: &ClusterInfo, bank_forks: &RwLock<BankForks>) {
+    pub(crate) fn update(
+        &self,
+        root: Slot,
+        cluster_info: &ClusterInfo,
+        bank_forks: &RwLock<BankForks>,
+    ) {
         self.update_peers(bank_forks);
         let epoch_slots = {
             let mut cursor = self.cursor.lock().unwrap();
@@ -89,16 +95,6 @@ impl ClusterSlots {
         }
     }
 
-    pub fn collect(&self, id: &Pubkey) -> HashSet<Slot> {
-        self.cluster_slots
-            .read()
-            .unwrap()
-            .iter()
-            .filter(|(_, keys)| keys.read().unwrap().contains_key(id))
-            .map(|(slot, _)| *slot)
-            .collect()
-    }
-
     #[cfg(test)]
     pub(crate) fn insert_node_id(&self, slot: Slot, node_id: Pubkey) {
         let balance = self
@@ -135,7 +131,7 @@ impl ClusterSlots {
         }
     }
 
-    pub fn compute_weights(&self, slot: Slot, repair_peers: &[ContactInfo]) -> Vec<u64> {
+    pub(crate) fn compute_weights(&self, slot: Slot, repair_peers: &[ContactInfo]) -> Vec<u64> {
         if repair_peers.is_empty() {
             return Vec::default();
         }
@@ -165,7 +161,7 @@ impl ClusterSlots {
             .collect()
     }
 
-    pub fn compute_weights_exclude_nonfrozen(
+    pub(crate) fn compute_weights_exclude_nonfrozen(
         &self,
         slot: Slot,
         repair_peers: &[ContactInfo],
@@ -179,21 +175,6 @@ impl ClusterSlots {
                     .as_ref()
                     .and_then(|v| v.read().unwrap().get(&x.id).map(|stake| (*stake + 1, i)))
             })
-            .collect()
-    }
-
-    pub fn generate_repairs_for_missing_slots(
-        &self,
-        self_id: &Pubkey,
-        root: Slot,
-    ) -> Vec<ShredRepairType> {
-        let my_slots = self.collect(self_id);
-        self.cluster_slots
-            .read()
-            .unwrap()
-            .keys()
-            .filter(|x| **x > root && !my_slots.contains(*x))
-            .map(|x| ShredRepairType::HighestShred(*x, 0))
             .collect()
     }
 }
@@ -379,41 +360,5 @@ mod tests {
                 .get(&Pubkey::default()),
             Some(&1)
         );
-    }
-
-    #[test]
-    fn test_generate_repairs() {
-        let cs = ClusterSlots::default();
-        let mut epoch_slot = EpochSlots::default();
-        epoch_slot.fill(&[1], 0);
-        cs.update_internal(0, vec![epoch_slot]);
-        let self_id = solana_sdk::pubkey::new_rand();
-        assert_eq!(
-            cs.generate_repairs_for_missing_slots(&self_id, 0),
-            vec![ShredRepairType::HighestShred(1, 0)]
-        )
-    }
-
-    #[test]
-    fn test_collect_my_slots() {
-        let cs = ClusterSlots::default();
-        let mut epoch_slot = EpochSlots::default();
-        epoch_slot.fill(&[1], 0);
-        let self_id = epoch_slot.from;
-        cs.update_internal(0, vec![epoch_slot]);
-        let slots: Vec<Slot> = cs.collect(&self_id).into_iter().collect();
-        assert_eq!(slots, vec![1]);
-    }
-
-    #[test]
-    fn test_generate_repairs_existing() {
-        let cs = ClusterSlots::default();
-        let mut epoch_slot = EpochSlots::default();
-        epoch_slot.fill(&[1], 0);
-        let self_id = epoch_slot.from;
-        cs.update_internal(0, vec![epoch_slot]);
-        assert!(cs
-            .generate_repairs_for_missing_slots(&self_id, 0)
-            .is_empty());
     }
 }
