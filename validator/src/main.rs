@@ -2307,7 +2307,7 @@ pub fn main() {
         .ok()
         .or_else(|| get_cluster_shred_version(&entrypoint_addrs));
 
-    let rpc_account_history_config = if let Some(num_slots) =
+    let rpc_account_history_config = if let Some(max_slot_history) =
         value_of(&matches, "enable_rpc_account_history")
     {
         let account_keys = if let Some(path) = matches.value_of("rpc_account_history_addresses") {
@@ -2325,7 +2325,7 @@ pub fn main() {
             HashSet::new()
         };
         Some(AccountHistoryConfig {
-            num_slots,
+            max_slot_history,
             updates_only: matches.is_present("rpc_account_history_updates_only"),
             account_keys,
         })

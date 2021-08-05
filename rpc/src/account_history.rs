@@ -20,7 +20,7 @@ use {
 
 #[derive(Debug, Clone)]
 pub struct AccountHistoryConfig {
-    pub num_slots: usize,
+    pub max_slot_history: usize,
     pub updates_only: bool,
     pub account_keys: AccountKeys,
 }
@@ -86,7 +86,7 @@ impl RpcAccountHistoryService {
         measure_write.stop();
 
         let mut measure_prune = Measure::start("prune-account-history");
-        Self::remove_old_slots(w_account_history, &config.num_slots);
+        Self::remove_old_slots(w_account_history, &config.max_slot_history);
         measure_prune.stop();
 
         datapoint_info!(
@@ -101,11 +101,11 @@ impl RpcAccountHistoryService {
 
     fn collect_accounts(
         frozen_bank: &Bank,
-        accounts: &HashSet<Pubkey>,
+        account_keys: &HashSet<Pubkey>,
         updates_only: bool,
     ) -> HashMap<Pubkey, Account> {
         let mut slot_accounts = HashMap::new();
-        for address in accounts.iter() {
+        for address in account_keys.iter() {
             let shared_account = if updates_only {
                 frozen_bank
                     .get_account_modified_slot(address)
@@ -123,9 +123,9 @@ impl RpcAccountHistoryService {
 
     fn remove_old_slots(
         mut w_account_history: RwLockWriteGuard<AccountHistory>,
-        num_slots: &usize,
+        max_slot_history: &usize,
     ) {
-        while w_account_history.len() > *num_slots {
+        while w_account_history.len() > *max_slot_history {
             let oldest_slot = w_account_history.keys().cloned().next().unwrap_or_default();
             w_account_history.remove(&oldest_slot);
         }
@@ -185,10 +185,13 @@ mod tests {
 
     #[test]
     fn test_remove_old_slots() {
-        let num_slots = 3;
+        let max_slot_history = 3;
         let account_history = RwLock::new(BTreeMap::new());
         assert_eq!(account_history.read().unwrap().len(), 0);
-        RpcAccountHistoryService::remove_old_slots(account_history.write().unwrap(), &num_slots);
+        RpcAccountHistoryService::remove_old_slots(
+            account_history.write().unwrap(),
+            &max_slot_history,
+        );
         assert_eq!(account_history.read().unwrap().len(), 0);
 
         let accounts: HashMap<Pubkey, Account> = vec![
@@ -199,28 +202,37 @@ mod tests {
         .collect();
         account_history.write().unwrap().insert(0, accounts.clone());
         assert_eq!(account_history.read().unwrap().len(), 1);
-        RpcAccountHistoryService::remove_old_slots(account_history.write().unwrap(), &num_slots);
+        RpcAccountHistoryService::remove_old_slots(
+            account_history.write().unwrap(),
+            &max_slot_history,
+        );
         assert_eq!(account_history.read().unwrap().len(), 1);
 
-        for slot in 1..num_slots {
+        for slot in 1..max_slot_history {
             account_history
                 .write()
                 .unwrap()
                 .insert(slot as Slot, accounts.clone());
         }
-        assert_eq!(account_history.read().unwrap().len(), num_slots);
-        RpcAccountHistoryService::remove_old_slots(account_history.write().unwrap(), &num_slots);
-        assert_eq!(account_history.read().unwrap().len(), num_slots);
+        assert_eq!(account_history.read().unwrap().len(), max_slot_history);
+        RpcAccountHistoryService::remove_old_slots(
+            account_history.write().unwrap(),
+            &max_slot_history,
+        );
+        assert_eq!(account_history.read().unwrap().len(), max_slot_history);
 
-        for slot in num_slots..num_slots + 2 {
+        for slot in max_slot_history..max_slot_history + 2 {
             account_history
                 .write()
                 .unwrap()
                 .insert(slot as Slot, accounts.clone());
         }
-        assert_eq!(account_history.read().unwrap().len(), num_slots + 2);
-        RpcAccountHistoryService::remove_old_slots(account_history.write().unwrap(), &num_slots);
-        assert_eq!(account_history.read().unwrap().len(), num_slots);
+        assert_eq!(account_history.read().unwrap().len(), max_slot_history + 2);
+        RpcAccountHistoryService::remove_old_slots(
+            account_history.write().unwrap(),
+            &max_slot_history,
+        );
+        assert_eq!(account_history.read().unwrap().len(), max_slot_history);
         assert_eq!(*account_history.read().unwrap().iter().next().unwrap().0, 2);
     }
 }
