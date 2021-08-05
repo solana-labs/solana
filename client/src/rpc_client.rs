@@ -939,7 +939,7 @@ impl RpcClient {
     ///
     /// # Errors
     ///
-    /// For any individual `TransactionStatus`, that transaction may have
+    /// Any individual `TransactionStatus` may have
     /// triggered an error during processing, in which case its
     /// [`err`][`TransactionStatus::err`] field will be `Some`.
     ///
