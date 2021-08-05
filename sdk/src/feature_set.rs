@@ -175,12 +175,20 @@ pub mod spl_token_v2_set_authority_fix {
     solana_sdk::declare_id!("FToKNBYyiF4ky9s8WsmLBXHCht17Ek7RXaLZGHzzQhJ1");
 }
 
+pub mod stop_verify_mul64_imm_nonzero {
+    solana_sdk::declare_id!("EHFwHg2vhwUb7ifm7BuY9RMbsyt1rS1rUii7yeDJtGnN");
+}
+
 pub mod merge_nonce_error_into_system_error {
     solana_sdk::declare_id!("21AWDosvp3pBamFW91KB35pNoaoZVTM7ess8nr2nt53B");
 }
 
 pub mod disable_fees_sysvar {
     solana_sdk::declare_id!("JAN1trEUEtZjgXYzNBYHU9DYd7GnThhXfFP7SzPXkPsG");
+}
+
+pub mod stake_merge_with_unmatched_credits_observed {
+    solana_sdk::declare_id!("meRgp4ArRPhD3KtCY9c5yAf2med7mBLsjKTPeVUHqBL");
 }
 
 lazy_static! {
@@ -221,8 +229,10 @@ lazy_static! {
         (libsecp256k1_0_5_upgrade_enabled::id(), "upgrade libsecp256k1 to v0.5.0"),
         (tx_wide_compute_cap::id(), "Transaction wide compute cap"),
         (spl_token_v2_set_authority_fix::id(), "spl-token set_authority fix"),
+        (stop_verify_mul64_imm_nonzero::id(), "Sets rbpf vm config verify_mul64_imm_nonzero to false"),
         (merge_nonce_error_into_system_error::id(), "merge NonceError into SystemError"),
         (disable_fees_sysvar::id(), "disable fees sysvar"),
+        (stake_merge_with_unmatched_credits_observed::id(), "allow merging active stakes with unmatched credits_observed #18985"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

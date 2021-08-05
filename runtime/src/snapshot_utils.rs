@@ -28,13 +28,13 @@ use {
         collections::HashSet,
         fmt,
         fs::{self, File},
-        io::{self, BufReader, BufWriter, Error as IoError, ErrorKind, Read, Seek, Write},
+        io::{BufReader, BufWriter, Error as IoError, ErrorKind, Read, Seek, Write},
         path::{Path, PathBuf},
-        process::{self, ExitStatus},
+        process::ExitStatus,
         str::FromStr,
         sync::Arc,
     },
-    tar::Archive,
+    tar::{self, Archive},
     tempfile::TempDir,
     thiserror::Error,
 };
@@ -176,8 +176,8 @@ pub const MAX_BANK_SNAPSHOTS: usize = 8; // Save some snapshots but not too many
 const MAX_SNAPSHOT_DATA_FILE_SIZE: u64 = 32 * 1024 * 1024 * 1024; // 32 GiB
 const VERSION_STRING_V1_2_0: &str = "1.2.0";
 const DEFAULT_SNAPSHOT_VERSION: SnapshotVersion = SnapshotVersion::V1_2_0;
-const TMP_FULL_SNAPSHOT_PREFIX: &str = "tmp-snapshot-";
-const TMP_INCREMENTAL_SNAPSHOT_PREFIX: &str = "tmp-incremental-snapshot-";
+pub(crate) const TMP_FULL_SNAPSHOT_PREFIX: &str = "tmp-snapshot-";
+pub(crate) const TMP_INCREMENTAL_SNAPSHOT_PREFIX: &str = "tmp-incremental-snapshot-";
 pub const DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN: usize = 2;
 pub const FULL_SNAPSHOT_ARCHIVE_FILENAME_REGEX: &str = r"^snapshot-(?P<slot>[[:digit:]]+)-(?P<hash>[[:alnum:]]+)\.(?P<ext>tar|tar\.bz2|tar\.zst|tar\.gz)$";
 pub const INCREMENTAL_SNAPSHOT_ARCHIVE_FILENAME_REGEX: &str = r"^incremental-snapshot-(?P<base>[[:digit:]]+)-(?P<slot>[[:digit:]]+)-(?P<hash>[[:alnum:]]+)\.(?P<ext>tar|tar\.bz2|tar\.zst|tar\.gz)$";
@@ -327,144 +327,6 @@ pub enum SnapshotError {
 }
 pub type Result<T> = std::result::Result<T, SnapshotError>;
 
-/// Package up bank snapshot files, snapshot storages, and slot deltas for a full snapshot.
-pub fn package_full_snapshot<P, Q>(
-    bank: &Bank,
-    bank_snapshot_info: &BankSnapshotInfo,
-    snapshots_dir: P,
-    status_cache_slot_deltas: Vec<BankSlotDelta>,
-    snapshot_package_output_path: Q,
-    snapshot_storages: SnapshotStorages,
-    archive_format: ArchiveFormat,
-    snapshot_version: SnapshotVersion,
-    hash_for_testing: Option<Hash>,
-) -> Result<AccountsPackagePre>
-where
-    P: AsRef<Path>,
-    Q: AsRef<Path>,
-{
-    info!(
-        "Package full snapshot for bank: {} has {} account storage entries",
-        bank.slot(),
-        snapshot_storages.len()
-    );
-
-    let snapshot_tmpdir = tempfile::Builder::new()
-        .prefix(&format!("{}{}-", TMP_FULL_SNAPSHOT_PREFIX, bank.slot()))
-        .tempdir_in(snapshots_dir)?;
-
-    do_package_snapshot(
-        bank,
-        bank_snapshot_info,
-        status_cache_slot_deltas,
-        snapshot_package_output_path,
-        snapshot_storages,
-        archive_format,
-        snapshot_version,
-        hash_for_testing,
-        snapshot_tmpdir,
-    )
-}
-
-/// Package up bank snapshot files, snapshot storages, and slot deltas for an incremental snapshot.
-#[allow(clippy::too_many_arguments)]
-pub fn package_incremental_snapshot<P, Q>(
-    bank: &Bank,
-    incremental_snapshot_base_slot: Slot,
-    bank_snapshot_info: &BankSnapshotInfo,
-    snapshots_dir: P,
-    status_cache_slot_deltas: Vec<BankSlotDelta>,
-    snapshot_package_output_path: Q,
-    snapshot_storages: SnapshotStorages,
-    archive_format: ArchiveFormat,
-    snapshot_version: SnapshotVersion,
-    hash_for_testing: Option<Hash>,
-) -> Result<AccountsPackagePre>
-where
-    P: AsRef<Path>,
-    Q: AsRef<Path>,
-{
-    info!(
-        "Package incremental snapshot for bank {} (from base slot {}) has {} account storage entries",
-        bank.slot(),
-        incremental_snapshot_base_slot,
-        snapshot_storages.len()
-    );
-
-    assert!(
-        snapshot_storages.iter().all(|storage| storage
-            .iter()
-            .all(|entry| entry.slot() > incremental_snapshot_base_slot)),
-        "Incremental snapshot package must only contain storage entries where slot > incremental snapshot base slot (i.e. full snapshot slot)!"
-    );
-
-    let snapshot_tmpdir = tempfile::Builder::new()
-        .prefix(&format!(
-            "{}{}-{}-",
-            TMP_INCREMENTAL_SNAPSHOT_PREFIX,
-            incremental_snapshot_base_slot,
-            bank.slot()
-        ))
-        .tempdir_in(snapshots_dir)?;
-
-    do_package_snapshot(
-        bank,
-        bank_snapshot_info,
-        status_cache_slot_deltas,
-        snapshot_package_output_path,
-        snapshot_storages,
-        archive_format,
-        snapshot_version,
-        hash_for_testing,
-        snapshot_tmpdir,
-    )
-}
-
-/// Create a snapshot package
-fn do_package_snapshot<P>(
-    bank: &Bank,
-    bank_snapshot_info: &BankSnapshotInfo,
-    status_cache_slot_deltas: Vec<BankSlotDelta>,
-    snapshot_package_output_path: P,
-    snapshot_storages: SnapshotStorages,
-    archive_format: ArchiveFormat,
-    snapshot_version: SnapshotVersion,
-    hash_for_testing: Option<Hash>,
-    snapshot_tmpdir: TempDir,
-) -> Result<AccountsPackagePre>
-where
-    P: AsRef<Path>,
-{
-    // Hard link the snapshot into a tmpdir, to ensure its not removed prior to packaging.
-    {
-        let snapshot_hardlink_dir = snapshot_tmpdir
-            .as_ref()
-            .join(bank_snapshot_info.slot.to_string());
-        fs::create_dir_all(&snapshot_hardlink_dir)?;
-        fs::hard_link(
-            &bank_snapshot_info.snapshot_path,
-            &snapshot_hardlink_dir.join(bank_snapshot_info.slot.to_string()),
-        )?;
-    }
-
-    let package = AccountsPackagePre::new(
-        bank.slot(),
-        bank.block_height(),
-        status_cache_slot_deltas,
-        snapshot_tmpdir,
-        snapshot_storages,
-        bank.get_accounts_hash(),
-        archive_format,
-        snapshot_version,
-        snapshot_package_output_path.as_ref().to_path_buf(),
-        bank.capitalization(),
-        hash_for_testing,
-        bank.cluster_type(),
-    );
-
-    Ok(package)
-}
-
 fn get_archive_ext(archive_format: ArchiveFormat) -> &'static str {
     match archive_format {
         ArchiveFormat::TarBzip2 => "tar.bz2",
@@ -580,69 +442,46 @@ pub fn archive_snapshot_package(
     let file_ext = get_archive_ext(snapshot_package.archive_format);
 
     // Tar the staging directory into the archive at `archive_path`
-    //
-    // system `tar` program is used for -S (sparse file support)
     let archive_path = tar_dir.join(format!(
         "{}{}.{}",
         TMP_FULL_SNAPSHOT_PREFIX, snapshot_package.slot, file_ext
     ));
 
-    let mut tar = process::Command::new("tar")
-        .args(&[
-            "chS",
-            "-C",
-            staging_dir.path().to_str().unwrap(),
-            "accounts",
-            "snapshots",
-            "version",
-        ])
-        .stdin(process::Stdio::null())
-        .stdout(process::Stdio::piped())
-        .stderr(process::Stdio::inherit())
-        .spawn()
-        .map_err(|e| SnapshotError::IoWithSource(e, "tar process spawn"))?;
+    {
+        let mut archive_file = fs::File::create(&archive_path)?;
 
-    match &mut tar.stdout {
-        None => {
-            return Err(SnapshotError::Io(IoError::new(
-                ErrorKind::Other,
-                "tar stdout unavailable".to_string(),
-            )));
-        }
-        Some(tar_output) => {
-            let mut archive_file = fs::File::create(&archive_path)?;
+        let do_archive_files = |encoder: &mut dyn Write| -> Result<()> {
+            let mut archive = tar::Builder::new(encoder);
+            for dir in ["accounts", "snapshots"] {
+                archive.append_dir_all(dir, staging_dir.as_ref().join(dir))?;
+            }
+            archive.append_path_with_name(staging_dir.as_ref().join("version"), "version")?;
+            archive.into_inner()?;
+            Ok(())
+        };
 
-            match snapshot_package.archive_format {
-                ArchiveFormat::TarBzip2 => {
-                    let mut encoder =
-                        bzip2::write::BzEncoder::new(archive_file, bzip2::Compression::best());
-                    io::copy(tar_output, &mut encoder)?;
-                    let _ = encoder.finish()?;
-                }
-                ArchiveFormat::TarGzip => {
-                    let mut encoder =
-                        flate2::write::GzEncoder::new(archive_file, flate2::Compression::default());
-                    io::copy(tar_output, &mut encoder)?;
-                    let _ = encoder.finish()?;
-                }
-                ArchiveFormat::Tar => {
-                    io::copy(tar_output, &mut archive_file)?;
-                }
-                ArchiveFormat::TarZstd => {
-                    let mut encoder = zstd::stream::Encoder::new(archive_file, 0)?;
-                    io::copy(tar_output, &mut encoder)?;
-                    let _ = encoder.finish()?;
-                }
-            };
-        }
-    }
-
-    let tar_exit_status = tar
-        .wait()
-        .map_err(|e| SnapshotError::IoWithSource(e, "tar process wait"))?;
-    if !tar_exit_status.success() {
-        warn!("tar command failed with exit code: {}", tar_exit_status);
-        return Err(SnapshotError::ArchiveGenerationFailure(tar_exit_status));
+        match snapshot_package.archive_format {
+            ArchiveFormat::TarBzip2 => {
+                let mut encoder =
+                    bzip2::write::BzEncoder::new(archive_file, bzip2::Compression::best());
+                do_archive_files(&mut encoder)?;
+                encoder.finish()?;
+            }
+            ArchiveFormat::TarGzip => {
+                let mut encoder =
+                    flate2::write::GzEncoder::new(archive_file, flate2::Compression::default());
+                do_archive_files(&mut encoder)?;
+                encoder.finish()?;
+            }
+            ArchiveFormat::TarZstd => {
+                let mut encoder = zstd::stream::Encoder::new(archive_file, 0)?;
+                do_archive_files(&mut encoder)?;
+                encoder.finish()?;
+            }
+            ArchiveFormat::Tar => {
+                do_archive_files(&mut archive_file)?;
+            }
+        };
     }
 
     // Atomically move the archive into position for other validators to find
@@ -1005,6 +844,7 @@ pub fn bank_from_snapshot_archives<P>(
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
     test_hash_calculation: bool,
+    accounts_db_skip_shrink: bool,
     verify_index: bool,
 ) -> Result<(Bank, BankFromArchiveTimings)>
 where
@@ -1077,7 +917,7 @@ where
     info!("{}", measure_rebuild);
 
     let mut measure_verify = Measure::start("verify");
-    if !bank.verify_snapshot_bank(test_hash_calculation)
+    if !bank.verify_snapshot_bank(test_hash_calculation, accounts_db_skip_shrink)
         && limit_load_slot_count_from_snapshot.is_none()
     {
         panic!("Snapshot bank for slot {} failed to verify", bank.slot());
@@ -1408,6 +1248,7 @@ where
     );
     let mut snapshot_archives = get_full_snapshot_archives(&snapshot_archives_dir);
     snapshot_archives.sort_unstable();
+    snapshot_archives.reverse();
     // Keep the oldest snapshot so we can always play the ledger from it.
     snapshot_archives.pop();
     let max_snaps = max(1, maximum_snapshots_to_retain);
@@ -1735,7 +1576,7 @@ pub fn snapshot_bank(
     let highest_bank_snapshot_info = get_highest_bank_snapshot_info(snapshots_dir)
         .expect("no snapshots found in config snapshots_dir");
 
-    let package = package_full_snapshot(
+    let package = AccountsPackagePre::new_full_snapshot_package(
         root_bank,
         &highest_bank_snapshot_info,
         snapshots_dir,
@@ -1848,7 +1689,7 @@ pub fn package_process_and_archive_full_snapshot(
     thread_pool: Option<&ThreadPool>,
     maximum_snapshots_to_retain: usize,
 ) -> Result<PathBuf> {
-    let package = package_full_snapshot(
+    let package = AccountsPackagePre::new_full_snapshot_package(
         bank,
         bank_snapshot_info,
         snapshots_dir,
@@ -1882,7 +1723,7 @@ pub fn package_process_and_archive_incremental_snapshot(
     thread_pool: Option<&ThreadPool>,
     maximum_snapshots_to_retain: usize,
 ) -> Result<PathBuf> {
-    let package = package_incremental_snapshot(
+    let package = AccountsPackagePre::new_incremental_snapshot_package(
         bank,
         incremental_snapshot_base_slot,
         bank_snapshot_info,
@@ -2511,6 +2352,53 @@ mod tests {
         common_test_purge_old_snapshot_archives(&snapshot_names, 2, &expected_snapshots);
     }
 
+    /// Mimic a running node's behavior w.r.t. purging old snapshot archives.  Take snapshots in a
+    /// loop, and periodically purge old snapshot archives.  After purging, check to make sure the
+    /// snapshot archives on disk are correct.
+    #[test]
+    fn test_purge_old_full_snapshot_archives_in_the_loop() {
+        let snapshot_archives_dir = tempfile::TempDir::new().unwrap();
+        let maximum_snapshots_to_retain = 5;
+        let starting_slot: Slot = 42;
+
+        for slot in (starting_slot..).take(100) {
+            let full_snapshot_archive_file_name =
+                format!("snapshot-{}-{}.tar", slot, Hash::default());
+            let full_snapshot_archive_path = snapshot_archives_dir
+                .as_ref()
+                .join(full_snapshot_archive_file_name);
+            File::create(full_snapshot_archive_path).unwrap();
+
+            // don't purge-and-check until enough snapshot archives have been created
+            if slot < starting_slot + maximum_snapshots_to_retain as Slot {
+                continue;
+            }
+
+            // purge infrequently, so there will always be snapshot archives to purge
+            if slot % (maximum_snapshots_to_retain as Slot * 2) != 0 {
+                continue;
+            }
+
+            purge_old_snapshot_archives(&snapshot_archives_dir, maximum_snapshots_to_retain);
+            let mut full_snapshot_archives = get_full_snapshot_archives(&snapshot_archives_dir);
+            full_snapshot_archives.sort_unstable();
+            assert_eq!(
+                full_snapshot_archives.len(),
+                maximum_snapshots_to_retain + 1
+            );
+            assert_eq!(
+                *full_snapshot_archives.first().unwrap().slot(),
+                starting_slot
+            );
+            assert_eq!(*full_snapshot_archives.last().unwrap().slot(), slot);
+            for (i, full_snapshot_archive) in
+                full_snapshot_archives.iter().skip(1).rev().enumerate()
+            {
+                assert_eq!(*full_snapshot_archive.slot(), slot - i as Slot);
+            }
+        }
+    }
+
     #[test]
     fn test_purge_old_incremental_snapshot_archives() {
         let snapshot_archives_dir = tempfile::TempDir::new().unwrap();
@@ -2610,6 +2498,7 @@ mod tests {
             AccountShrinkThreshold::default(),
             false,
             false,
+            false,
         )
         .unwrap();
 
@@ -2671,7 +2560,7 @@ mod tests {
         let accounts_dir = tempfile::TempDir::new().unwrap();
         let snapshots_dir = tempfile::TempDir::new().unwrap();
         let snapshot_archives_dir = tempfile::TempDir::new().unwrap();
-        let snapshot_archive_format = ArchiveFormat::Tar;
+        let snapshot_archive_format = ArchiveFormat::TarGzip;
 
         let full_snapshot_archive_path = bank_to_full_snapshot_archive(
             snapshots_dir.path(),
@@ -2698,6 +2587,7 @@ mod tests {
             false,
             None,
             AccountShrinkThreshold::default(),
+            false,
             false,
             false,
         )
@@ -2746,7 +2636,7 @@ mod tests {
         let accounts_dir = tempfile::TempDir::new().unwrap();
         let snapshots_dir = tempfile::TempDir::new().unwrap();
         let snapshot_archives_dir = tempfile::TempDir::new().unwrap();
-        let snapshot_archive_format = ArchiveFormat::Tar;
+        let snapshot_archive_format = ArchiveFormat::TarZstd;
 
         let full_snapshot_slot = slot;
         let full_snapshot_archive_path = bank_to_full_snapshot_archive(
@@ -2807,6 +2697,7 @@ mod tests {
             false,
             None,
             AccountShrinkThreshold::default(),
+            false,
             false,
             false,
         )

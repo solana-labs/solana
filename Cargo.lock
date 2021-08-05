@@ -290,6 +290,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "bit-set"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6e11e16035ea35e4e5997b393eacbf6f63983188f7a2ad25bfb13465f5ad59de"
+dependencies = [
+ "bit-vec",
+]
+
+[[package]]
+name = "bit-vec"
+version = "0.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "349f9b6a179ed607305526ca489b34ad0a41aed5f7980fa90eb03160b69598fb"
+
+[[package]]
 name = "bitflags"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -769,9 +784,9 @@ checksum = "28b9d6de7f49e22cf97ad17fc4036ece69300032f45f78f30b4a4482cdc3f4a6"
 
 [[package]]
 name = "const_format"
-version = "0.2.15"
+version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "74cd0be51cd9ea39adba1f11b1a82d0fb41674c800540e2817d510da21bf9508"
+checksum = "41f4087b5a1164f92255f8b301c88fc8627e5abf5e25b5476f84b02e4b47795d"
 dependencies = [
  "const_format_proc_macros",
 ]
@@ -1002,9 +1017,9 @@ dependencies = [
 
 [[package]]
 name = "curve25519-dalek"
-version = "3.1.0"
+version = "3.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "639891fde0dbea823fc3d798a0fdf9d2f9440a42d64a78ab3488b0ca025117b3"
+checksum = "0b9fdf9972b2bd6af2d913799d9ebc165ea4d2e65878e329d9c6b372c4491b61"
 dependencies = [
  "byteorder",
  "digest 0.9.0",
@@ -1178,7 +1193,7 @@ version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c762bae6dcaf24c4c84667b8579785430908723d5c889f469d76a41d59cc7a9d"
 dependencies = [
- "curve25519-dalek 3.1.0",
+ "curve25519-dalek 3.2.0",
  "ed25519",
  "rand 0.7.3",
  "serde",
@@ -3266,6 +3281,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "proptest"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e0d9cc07f18492d879586c92b485def06bc850da3118075cd45d50e9c95b0e5"
+dependencies = [
+ "bit-set",
+ "bitflags",
+ "byteorder",
+ "lazy_static",
+ "num-traits",
+ "quick-error 2.0.1",
+ "rand 0.8.3",
+ "rand_chacha 0.3.0",
+ "rand_xorshift 0.3.0",
+ "regex-syntax",
+ "rusty-fork",
+ "tempfile",
+]
+
+[[package]]
 name = "prost"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3326,6 +3361,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "quick-error"
+version = "1.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a1d01941d82fa2ab50be1e79e6714289dd7cde78eba4c074bc5a4374f650dfe0"
+
+[[package]]
+name = "quick-error"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a993555f31e5a609f617c12db6250dedcac1b0a85076912c436e6fc9b2c8e6a3"
+
+[[package]]
 name = "quote"
 version = "0.6.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3377,7 +3424,7 @@ dependencies = [
  "rand_jitter",
  "rand_os",
  "rand_pcg 0.1.2",
- "rand_xorshift",
+ "rand_xorshift 0.1.1",
  "winapi 0.3.8",
 ]
 
@@ -3557,6 +3604,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cbf7e9e623549b0e21f6e97cf8ecf247c1a8fd2e8a992ae265314300b2455d5c"
 dependencies = [
  "rand_core 0.3.1",
+]
+
+[[package]]
+name = "rand_xorshift"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d25bf25ec5ae4a3f1b92f929810509a2f53d7dca2f50b794ff57e3face536c8f"
+dependencies = [
+ "rand_core 0.6.3",
 ]
 
 [[package]]
@@ -3825,6 +3881,18 @@ name = "rustversion"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "61b3909d758bb75c79f23d4736fac9433868679d3ad2ea7a61e3c25cfda9a088"
+
+[[package]]
+name = "rusty-fork"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cb3dcc6e454c328bb824492db107ab7c0ae8fcffe4ad210136ef014458c1bc4f"
+dependencies = [
+ "fnv",
+ "quick-error 1.2.3",
+ "tempfile",
+ "wait-timeout",
+]
 
 [[package]]
 name = "ryu"
@@ -4680,7 +4748,7 @@ dependencies = [
  "backtrace",
  "bytes 0.4.12",
  "cc",
- "curve25519-dalek 3.1.0",
+ "curve25519-dalek 3.2.0",
  "ed25519-dalek",
  "either",
  "lazy_static",
@@ -5233,7 +5301,7 @@ name = "solana-perf"
 version = "1.8.0"
 dependencies = [
  "bincode",
- "curve25519-dalek 3.1.0",
+ "curve25519-dalek 3.2.0",
  "dlopen",
  "dlopen_derive",
  "lazy_static",
@@ -5333,7 +5401,7 @@ dependencies = [
  "borsh-derive",
  "bs58 0.4.0",
  "bv",
- "curve25519-dalek 3.1.0",
+ "curve25519-dalek 3.2.0",
  "hex",
  "itertools 0.10.1",
  "lazy_static",
@@ -5572,7 +5640,7 @@ dependencies = [
  "bv",
  "byteorder",
  "chrono",
- "curve25519-dalek 3.1.0",
+ "curve25519-dalek 3.2.0",
  "derivation-path",
  "digest 0.9.0",
  "ed25519-dalek",
@@ -5668,6 +5736,7 @@ dependencies = [
  "log 0.4.14",
  "num-derive",
  "num-traits",
+ "proptest",
  "rustc_version 0.4.0",
  "serde",
  "serde_derive",
@@ -5931,9 +6000,9 @@ dependencies = [
 
 [[package]]
 name = "solana_rbpf"
-version = "0.2.13"
+version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fc1dced9892c2b0273318ef4d8486112ea7c7a7b8eb563a20e7858ad921b4719"
+checksum = "e27486ed1c74044866b529076b6aa9ca6fab9ec494d1835439ec84efc5575953"
 dependencies = [
  "byteorder",
  "combine",
@@ -6123,9 +6192,9 @@ dependencies = [
 
 [[package]]
 name = "sysctl"
-version = "0.4.1"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "571282e1349eaf61f946466da731050daf3a9dcf74e33c7a0da065a665cabee7"
+checksum = "963488c73b34185a9028742c2be0219ed1d8558e59f85c3b466a4f54affba936"
 dependencies = [
  "bitflags",
  "byteorder",

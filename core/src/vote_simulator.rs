@@ -344,7 +344,7 @@ pub fn initialize_state(
     );
 
     genesis_config.poh_config.hashes_per_tick = Some(2);
-    let bank0 = Bank::new(&genesis_config);
+    let bank0 = Bank::new_for_tests(&genesis_config);
 
     for pubkey in validator_keypairs_map.keys() {
         bank0.transfer(10_000, &mint_keypair, pubkey).unwrap();

@@ -55,6 +55,7 @@ mod tests {
         bank_forks::BankForks,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         snapshot_config::SnapshotConfig,
+        snapshot_package::AccountsPackagePre,
         snapshot_utils::{
             self, ArchiveFormat, SnapshotVersion, DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
         },
@@ -125,7 +126,8 @@ mod tests {
             bank_forks.accounts_hash_interval_slots = accounts_hash_interval_slots;
 
             let snapshot_config = SnapshotConfig {
-                snapshot_interval_slots,
+                full_snapshot_archive_interval_slots: snapshot_interval_slots,
+                incremental_snapshot_archive_interval_slots: Slot::MAX,
                 snapshot_package_output_path: snapshot_archives_dir.path().to_path_buf(),
                 snapshot_path: bank_snapshots_dir.path().to_path_buf(),
                 archive_format: ArchiveFormat::TarBzip2,
@@ -183,6 +185,7 @@ mod tests {
             None,
             accounts_db::AccountShrinkThreshold::default(),
             check_hash_calculation,
+            false,
             false,
         )
         .unwrap();
@@ -254,7 +257,7 @@ mod tests {
         let snapshot_path = &snapshot_config.snapshot_path;
         let last_bank_snapshot_info = snapshot_utils::get_highest_bank_snapshot_info(snapshot_path)
             .expect("no snapshots found in path");
-        let snapshot_package = snapshot_utils::package_full_snapshot(
+        let snapshot_package = AccountsPackagePre::new_full_snapshot_package(
             last_bank,
             &last_bank_snapshot_info,
             snapshot_path,
@@ -838,6 +841,7 @@ mod tests {
             false,
             None,
             accounts_db::AccountShrinkThreshold::default(),
+            false,
             false,
             false,
         )?;

@@ -126,6 +126,7 @@ fn initialize_from_snapshot(
         process_options.limit_load_slot_count_from_snapshot,
         process_options.shrink_ratio,
         process_options.accounts_db_test_hash_calculation,
+        false,
         process_options.verify_index,
     )
     .unwrap();
@@ -254,7 +255,8 @@ impl ReplicaNode {
         .unwrap();
 
         let snapshot_config = SnapshotConfig {
-            snapshot_interval_slots: std::u64::MAX,
+            full_snapshot_archive_interval_slots: std::u64::MAX,
+            incremental_snapshot_archive_interval_slots: std::u64::MAX,
             snapshot_package_output_path: replica_config.snapshot_output_dir.clone(),
             snapshot_path: replica_config.snapshot_path.clone(),
             archive_format: ArchiveFormat::TarBzip2,

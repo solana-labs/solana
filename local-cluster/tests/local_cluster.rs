@@ -3451,7 +3451,8 @@ fn setup_snapshot_validator_config(
     let snapshot_dir = tempfile::tempdir_in(farf_dir()).unwrap();
     let snapshot_archives_dir = tempfile::tempdir_in(farf_dir()).unwrap();
     let snapshot_config = SnapshotConfig {
-        snapshot_interval_slots,
+        full_snapshot_archive_interval_slots: snapshot_interval_slots,
+        incremental_snapshot_archive_interval_slots: Slot::MAX,
         snapshot_package_output_path: snapshot_archives_dir.path().to_path_buf(),
         snapshot_path: snapshot_dir.path().to_path_buf(),
         archive_format: ArchiveFormat::TarBzip2,

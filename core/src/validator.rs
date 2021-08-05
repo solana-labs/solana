@@ -140,6 +140,7 @@ pub struct ValidatorConfig {
     pub accounts_db_caching_enabled: bool,
     pub warp_slot: Option<Slot>,
     pub accounts_db_test_hash_calculation: bool,
+    pub accounts_db_skip_shrink: bool,
     pub accounts_db_use_index_hash_calculation: bool,
     pub tpu_coalesce_ms: u64,
     pub validator_exit: Arc<RwLock<Exit>>,
@@ -198,6 +199,7 @@ impl Default for ValidatorConfig {
             accounts_db_caching_enabled: false,
             warp_slot: None,
             accounts_db_test_hash_calculation: false,
+            accounts_db_skip_shrink: false,
             accounts_db_use_index_hash_calculation: true,
             tpu_coalesce_ms: DEFAULT_TPU_COALESCE_MS,
             validator_exit: Arc::new(RwLock::new(Exit::default())),
@@ -614,7 +616,7 @@ impl Validator {
         let (snapshot_packager_service, snapshot_config_and_pending_package) =
             if let Some(snapshot_config) = config.snapshot_config.clone() {
                 if is_snapshot_config_invalid(
-                    snapshot_config.snapshot_interval_slots,
+                    snapshot_config.full_snapshot_archive_interval_slots,
                     config.accounts_hash_interval_slots,
                 ) {
                     error!("Snapshot config is invalid");
@@ -1139,6 +1141,8 @@ fn new_banks_from_ledger(
         account_indexes: config.account_indexes.clone(),
         accounts_db_caching_enabled: config.accounts_db_caching_enabled,
         shrink_ratio: config.accounts_shrink_ratio,
+        accounts_db_test_hash_calculation: config.accounts_db_test_hash_calculation,
+        accounts_db_skip_shrink: config.accounts_db_skip_shrink,
         ..blockstore_processor::ProcessOptions::default()
     };
 

@@ -8,6 +8,7 @@ use {
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::{State, StateMut},
         clock::{Clock, Epoch},
+        feature_set::stake_merge_with_unmatched_credits_observed,
         ic_msg,
         instruction::{checked_add, InstructionError},
         keyed_account::KeyedAccount,
@@ -957,6 +958,7 @@ impl MergeKind {
         }
     }
 
+    // Remove this when the `stake_merge_with_unmatched_credits_observed` feature is removed
     fn active_stakes_can_merge(
         invoke_context: &dyn InvokeContext,
         stake: &Stake,
@@ -988,7 +990,19 @@ impl MergeKind {
         Self::metas_can_merge(invoke_context, self.meta(), source.meta(), clock)?;
         self.active_stake()
             .zip(source.active_stake())
-            .map(|(stake, source)| Self::active_stakes_can_merge(invoke_context, stake, source))
+            .map(|(stake, source)| {
+                if invoke_context
+                    .is_feature_active(&stake_merge_with_unmatched_credits_observed::id())
+                {
+                    Self::active_delegations_can_merge(
+                        invoke_context,
+                        &stake.delegation,
+                        &source.delegation,
+                    )
+                } else {
+                    Self::active_stakes_can_merge(invoke_context, stake, source)
+                }
+            })
             .unwrap_or(Ok(()))?;
         let merged_state = match (self, source) {
             (Self::Inactive(_, _), Self::Inactive(_, _)) => None,
@@ -1005,7 +1019,12 @@ impl MergeKind {
                     source_meta.rent_exempt_reserve,
                     source_stake.delegation.stake,
                 )?;
-                stake.delegation.stake = checked_add(stake.delegation.stake, source_lamports)?;
+                merge_delegation_stake_and_credits_observed(
+                    invoke_context,
+                    &mut stake,
+                    source_lamports,
+                    source_stake.credits_observed,
+                )?;
                 Some(StakeState::Stake(meta, stake))
             }
             (Self::FullyActive(meta, mut stake), Self::FullyActive(_, source_stake)) => {
@@ -1013,13 +1032,80 @@ impl MergeKind {
                 // protect against the magic activation loophole. It will
                 // instead be moved into the destination account as extra,
                 // withdrawable `lamports`
-                stake.delegation.stake =
-                    checked_add(stake.delegation.stake, source_stake.delegation.stake)?;
+                merge_delegation_stake_and_credits_observed(
+                    invoke_context,
+                    &mut stake,
+                    source_stake.delegation.stake,
+                    source_stake.credits_observed,
+                )?;
                 Some(StakeState::Stake(meta, stake))
             }
             _ => return Err(StakeError::MergeMismatch.into()),
         };
         Ok(merged_state)
+    }
+}
+
+fn merge_delegation_stake_and_credits_observed(
+    invoke_context: &dyn InvokeContext,
+    stake: &mut Stake,
+    absorbed_lamports: u64,
+    absorbed_credits_observed: u64,
+) -> Result<(), InstructionError> {
+    if invoke_context.is_feature_active(&stake_merge_with_unmatched_credits_observed::id()) {
+        stake.credits_observed =
+            stake_weighted_credits_observed(stake, absorbed_lamports, absorbed_credits_observed)
+                .ok_or(InstructionError::ArithmeticOverflow)?;
+    }
+    stake.delegation.stake = checked_add(stake.delegation.stake, absorbed_lamports)?;
+    Ok(())
+}
+
+/// Calculate the effective credits observed for two stakes when merging
+///
+/// When merging two `ActivationEpoch` or `FullyActive` stakes, the credits
+/// observed of the merged stake is the weighted average of the two stakes'
+/// credits observed.
+///
+/// This is because we can derive the effective credits_observed by reversing the staking
+/// rewards equation, _while keeping the rewards unchanged after merge (i.e. strong
+/// requirement)_, like below:
+///
+/// a(N) => account, r => rewards, s => stake, c => credits:
+/// assume:
+///   a3 = merge(a1, a2)
+/// then:
+///   a3.s = a1.s + a2.s
+///
+/// Next, given:
+///   aN.r = aN.c * aN.s (for every N)
+/// finally:
+///        a3.r = a1.r + a2.r
+/// a3.c * a3.s = a1.c * a1.s + a2.c * a2.s
+///        a3.c = (a1.c * a1.s + a2.c * a2.s) / (a1.s + a2.s)     // QED
+///
+/// (For this discussion, we omitted irrelevant variables, including distance
+///  calculation against vote_account and point indirection.)
+fn stake_weighted_credits_observed(
+    stake: &Stake,
+    absorbed_lamports: u64,
+    absorbed_credits_observed: u64,
+) -> Option<u64> {
+    if stake.credits_observed == absorbed_credits_observed {
+        Some(stake.credits_observed)
+    } else {
+        let total_stake = u128::from(stake.delegation.stake.checked_add(absorbed_lamports)?);
+        let stake_weighted_credits =
+            u128::from(stake.credits_observed).checked_mul(u128::from(stake.delegation.stake))?;
+        let absorbed_weighted_credits =
+            u128::from(absorbed_credits_observed).checked_mul(u128::from(absorbed_lamports))?;
+        // Discard fractional credits as a merge side-effect friction by taking
+        // the ceiling, done by adding `denominator - 1` to the numerator.
+        let total_weighted_credits = stake_weighted_credits
+            .checked_add(absorbed_weighted_credits)?
+            .checked_add(total_stake)?
+            .checked_sub(1)?;
+        u64::try_from(total_weighted_credits.checked_div(total_stake)?).ok()
     }
 }
 
@@ -1281,6 +1367,7 @@ fn do_create_account(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
     use solana_sdk::{
         account::{AccountSharedData, WritableAccount},
         clock::UnixTimestamp,
@@ -6648,5 +6735,188 @@ mod tests {
             .unwrap();
         let delegation = new_state.delegation().unwrap();
         assert_eq!(delegation.stake, 2 * stake.delegation.stake);
+    }
+
+    #[test]
+    fn test_active_stake_merge() {
+        let delegation_a = 4_242_424_242u64;
+        let delegation_b = 6_200_000_000u64;
+        let credits_a = 124_521_000u64;
+        let rent_exempt_reserve = 227_000_000u64;
+        let meta = Meta {
+            rent_exempt_reserve,
+            ..Meta::default()
+        };
+        let stake_a = Stake {
+            delegation: Delegation {
+                stake: delegation_a,
+                ..Delegation::default()
+            },
+            credits_observed: credits_a,
+        };
+        let stake_b = Stake {
+            delegation: Delegation {
+                stake: delegation_b,
+                ..Delegation::default()
+            },
+            credits_observed: credits_a,
+        };
+
+        let invoke_context = MockInvokeContext::new(vec![]);
+
+        // activating stake merge, match credits observed
+        let activation_epoch_a = MergeKind::ActivationEpoch(meta, stake_a);
+        let activation_epoch_b = MergeKind::ActivationEpoch(meta, stake_b);
+        let new_stake = activation_epoch_a
+            .merge(&invoke_context, activation_epoch_b, None)
+            .unwrap()
+            .unwrap()
+            .stake()
+            .unwrap();
+        assert_eq!(new_stake.credits_observed, credits_a);
+        assert_eq!(
+            new_stake.delegation.stake,
+            delegation_a + delegation_b + rent_exempt_reserve
+        );
+
+        // active stake merge, match credits observed
+        let fully_active_a = MergeKind::FullyActive(meta, stake_a);
+        let fully_active_b = MergeKind::FullyActive(meta, stake_b);
+        let new_stake = fully_active_a
+            .merge(&invoke_context, fully_active_b, None)
+            .unwrap()
+            .unwrap()
+            .stake()
+            .unwrap();
+        assert_eq!(new_stake.credits_observed, credits_a);
+        assert_eq!(new_stake.delegation.stake, delegation_a + delegation_b);
+
+        // activating stake merge, unmatched credits observed
+        let credits_b = 125_124_521u64;
+        let stake_b = Stake {
+            delegation: Delegation {
+                stake: delegation_b,
+                ..Delegation::default()
+            },
+            credits_observed: credits_b,
+        };
+        let activation_epoch_a = MergeKind::ActivationEpoch(meta, stake_a);
+        let activation_epoch_b = MergeKind::ActivationEpoch(meta, stake_b);
+        let new_stake = activation_epoch_a
+            .merge(&invoke_context, activation_epoch_b, None)
+            .unwrap()
+            .unwrap()
+            .stake()
+            .unwrap();
+        assert_eq!(
+            new_stake.credits_observed,
+            (credits_a * delegation_a + credits_b * (delegation_b + rent_exempt_reserve))
+                / (delegation_a + delegation_b + rent_exempt_reserve)
+                + 1
+        );
+        assert_eq!(
+            new_stake.delegation.stake,
+            delegation_a + delegation_b + rent_exempt_reserve
+        );
+
+        // active stake merge, unmatched credits observed
+        let fully_active_a = MergeKind::FullyActive(meta, stake_a);
+        let fully_active_b = MergeKind::FullyActive(meta, stake_b);
+        let new_stake = fully_active_a
+            .merge(&invoke_context, fully_active_b, None)
+            .unwrap()
+            .unwrap()
+            .stake()
+            .unwrap();
+        assert_eq!(
+            new_stake.credits_observed,
+            (credits_a * delegation_a + credits_b * delegation_b) / (delegation_a + delegation_b)
+                + 1
+        );
+        assert_eq!(new_stake.delegation.stake, delegation_a + delegation_b);
+
+        // active stake merge, unmatched credits observed, no need to ceiling the calculation
+        let delegation = 1_000_000u64;
+        let credits_a = 200_000_000u64;
+        let credits_b = 100_000_000u64;
+        let rent_exempt_reserve = 227_000_000u64;
+        let meta = Meta {
+            rent_exempt_reserve,
+            ..Meta::default()
+        };
+        let stake_a = Stake {
+            delegation: Delegation {
+                stake: delegation,
+                ..Delegation::default()
+            },
+            credits_observed: credits_a,
+        };
+        let stake_b = Stake {
+            delegation: Delegation {
+                stake: delegation,
+                ..Delegation::default()
+            },
+            credits_observed: credits_b,
+        };
+        let fully_active_a = MergeKind::FullyActive(meta, stake_a);
+        let fully_active_b = MergeKind::FullyActive(meta, stake_b);
+        let new_stake = fully_active_a
+            .merge(&invoke_context, fully_active_b, None)
+            .unwrap()
+            .unwrap()
+            .stake()
+            .unwrap();
+        assert_eq!(
+            new_stake.credits_observed,
+            (credits_a * delegation + credits_b * delegation) / (delegation + delegation)
+        );
+        assert_eq!(new_stake.delegation.stake, delegation * 2);
+    }
+
+    prop_compose! {
+        pub fn sum_within(max: u64)(total in 1..max)
+            (intermediate in 1..total, total in Just(total))
+            -> (u64, u64) {
+                (intermediate, total - intermediate)
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn test_stake_weighted_credits_observed(
+            (credits_a, credits_b) in sum_within(u64::MAX),
+            (delegation_a, delegation_b) in sum_within(u64::MAX),
+        ) {
+            let stake = Stake {
+                delegation: Delegation {
+                    stake: delegation_a,
+                    ..Delegation::default()
+                },
+                credits_observed: credits_a
+            };
+            let credits_observed = stake_weighted_credits_observed(
+                &stake,
+                delegation_b,
+                credits_b,
+            ).unwrap();
+
+            // calculated credits observed should always be between the credits of a and b
+            if credits_a < credits_b {
+                assert!(credits_a < credits_observed);
+                assert!(credits_observed <= credits_b);
+            } else {
+                assert!(credits_b <= credits_observed);
+                assert!(credits_observed <= credits_a);
+            }
+
+            // the difference of the combined weighted credits and the separate weighted credits
+            // should be 1 or 0
+            let weighted_credits_total = credits_observed as u128 * (delegation_a + delegation_b) as u128;
+            let weighted_credits_a = credits_a as u128 * delegation_a as u128;
+            let weighted_credits_b = credits_b as u128 * delegation_b as u128;
+            let raw_diff = weighted_credits_total - (weighted_credits_a + weighted_credits_b);
+            let credits_observed_diff = raw_diff / (delegation_a + delegation_b) as u128;
+            assert!(credits_observed_diff <= 1);
+        }
     }
 }

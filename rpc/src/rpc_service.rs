@@ -599,7 +599,8 @@ mod tests {
         let rrm_with_snapshot_config = RpcRequestMiddleware::new(
             PathBuf::from("/"),
             Some(SnapshotConfig {
-                snapshot_interval_slots: 0,
+                full_snapshot_archive_interval_slots: 0,
+                incremental_snapshot_archive_interval_slots: u64::MAX,
                 snapshot_package_output_path: PathBuf::from("/"),
                 snapshot_path: PathBuf::from("/"),
                 archive_format: ArchiveFormat::TarBzip2,

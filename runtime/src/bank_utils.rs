@@ -22,7 +22,7 @@ pub fn setup_bank_and_vote_pubkeys(num_vote_accounts: usize, stake: u64) -> (Ban
             &validator_voting_keypairs,
             vec![stake; validator_voting_keypairs.len()],
         );
-    let bank = Bank::new(&genesis_config);
+    let bank = Bank::new_for_tests(&genesis_config);
     (bank, vote_pubkeys)
 }
 

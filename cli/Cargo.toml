@@ -17,7 +17,7 @@ clap = "2.33.1"
 criterion-stats = "0.3.0"
 ctrlc = { version = "3.1.9", features = ["termination"] }
 console = "0.14.1"
-const_format = "0.2.15"
+const_format = "0.2.17"
 dirs-next = "2.0.0"
 log = "0.4.14"
 Inflector = "0.11.4"
@@ -39,7 +39,7 @@ solana-config-program = { path = "../programs/config", version = "=1.8.0" }
 solana-faucet = { path = "../faucet", version = "=1.8.0" }
 solana-logger = { path = "../logger", version = "=1.8.0" }
 solana-net-utils = { path = "../net-utils", version = "=1.8.0" }
-solana_rbpf = "=0.2.13"
+solana_rbpf = "=0.2.14"
 solana-remote-wallet = { path = "../remote-wallet", version = "=1.8.0" }
 solana-sdk = { path = "../sdk", version = "=1.8.0" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.8.0" }
