@@ -9838,7 +9838,7 @@ pub mod tests {
         );
     }
 
-    const UPSERT_RECLAIMS_MUST_BE_EMPTY_FALSE: bool = false;
+    const UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE: bool = false;
 
     #[test]
     fn test_delete_dependencies() {
@@ -9880,7 +9880,7 @@ pub mod tests {
             &AccountSecondaryIndexes::default(),
             info0,
             &mut reclaims,
-            UPSERT_RECLAIMS_MUST_BE_EMPTY_FALSE,
+            UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
         accounts_index.upsert(
             1,
@@ -9890,7 +9890,7 @@ pub mod tests {
             &AccountSecondaryIndexes::default(),
             info1.clone(),
             &mut reclaims,
-            UPSERT_RECLAIMS_MUST_BE_EMPTY_FALSE,
+            UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
         accounts_index.upsert(
             1,
@@ -9900,7 +9900,7 @@ pub mod tests {
             &AccountSecondaryIndexes::default(),
             info1,
             &mut reclaims,
-            UPSERT_RECLAIMS_MUST_BE_EMPTY_FALSE,
+            UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
         accounts_index.upsert(
             2,
@@ -9910,7 +9910,7 @@ pub mod tests {
             &AccountSecondaryIndexes::default(),
             info2.clone(),
             &mut reclaims,
-            UPSERT_RECLAIMS_MUST_BE_EMPTY_FALSE,
+            UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
         accounts_index.upsert(
             2,
@@ -9920,7 +9920,7 @@ pub mod tests {
             &AccountSecondaryIndexes::default(),
             info2,
             &mut reclaims,
-            UPSERT_RECLAIMS_MUST_BE_EMPTY_FALSE,
+            UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
         accounts_index.upsert(
             3,
@@ -9930,7 +9930,7 @@ pub mod tests {
             &AccountSecondaryIndexes::default(),
             info3,
             &mut reclaims,
-            UPSERT_RECLAIMS_MUST_BE_EMPTY_FALSE,
+            UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
         accounts_index.add_root(0, false);
         accounts_index.add_root(1, false);
