@@ -1261,8 +1261,12 @@ impl<T: 'static + Clone + IsCached + ZeroLamport + std::marker::Sync + std::mark
         pubkey: Pubkey,
         w_account_maps: AccountMapsWriteLock<'a, T>,
         mut new_entry: AccountMapEntry<T>,
-        reclaims: &mut SlotList<T>,
     ) -> (Option<Pubkey>, AccountMapsWriteLock<'a, T>) {
+        // caller does not need to know whether the item existed already or not
+        w_account_maps.update_or_insert_async(pubkey, new_entry);
+        (None, w_account_maps)
+        /*
+        
         let allow_vacant = true;
         let mut result =
             WriteAccountMapEntry::new_with_lock(&pubkey, w_account_maps, allow_vacant).unwrap();
@@ -1277,6 +1281,7 @@ impl<T: 'static + Clone + IsCached + ZeroLamport + std::marker::Sync + std::mark
             let r = result.insert(new_entry);
             (None, r)
         }
+        */
     }
 
     pub fn handle_dead_keys(
@@ -1614,8 +1619,6 @@ impl<T: 'static + Clone + IsCached + ZeroLamport + std::marker::Sync + std::mark
         let duplicate_keys = binned
             .into_iter()
             .map(|(pubkey_bin, items)| {
-                let mut _reclaims = SlotList::new();
-
                 // big enough so not likely to re-allocate, small enough to not over-allocate by too much
                 // this assumes 10% of keys are duplicates. This vector will be flattened below.
                 let mut duplicate_keys = Vec::with_capacity(items.len() / 10);
@@ -1627,7 +1630,6 @@ impl<T: 'static + Clone + IsCached + ZeroLamport + std::marker::Sync + std::mark
                         pubkey,
                         w_account_maps,
                         new_item,
-                        &mut _reclaims,
                     );
                     w_account_maps = returned_lock; // re-use the lock
                     if let Some(pubkey) = already_exists {
