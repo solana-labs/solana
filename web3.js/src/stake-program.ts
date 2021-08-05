@@ -167,13 +167,14 @@ export type DeactivateStakeParams = {
 };
 
 /**
- * Deactivate stake instruction params
+ * Merge stake instruction params
  */
 export type MergeStakeParams = {
   stakePubkey: PublicKey;
   sourceStakePubKey: PublicKey;
   authorizedPubkey: PublicKey;
 };
+
 /**
  * Stake Instruction class
  */
@@ -332,6 +333,21 @@ export class StakeInstruction {
       splitStakePubkey: instruction.keys[1].pubkey,
       authorizedPubkey: instruction.keys[2].pubkey,
       lamports,
+    };
+  }
+
+  /**
+   * Decode a merge stake instruction and retrieve the instruction params.
+   */
+  static decodeMerge(instruction: TransactionInstruction): MergeStakeParams {
+    this.checkProgramId(instruction.programId);
+    this.checkKeyLength(instruction.keys, 3);
+    decodeData(STAKE_INSTRUCTION_LAYOUTS.Merge, instruction.data);
+
+    return {
+      stakePubkey: instruction.keys[0].pubkey,
+      sourceStakePubKey: instruction.keys[1].pubkey,
+      authorizedPubkey: instruction.keys[4].pubkey,
     };
   }
 
@@ -723,7 +739,7 @@ export class StakeProgram {
    * Generate a Transaction that merges Stake accounts.
    */
   static merge(params: MergeStakeParams): Transaction {
-    const {stakePubkey, authorizedPubkey, sourceStakePubKey} = params;
+    const {stakePubkey, sourceStakePubKey, authorizedPubkey} = params;
     const type = STAKE_INSTRUCTION_LAYOUTS.Merge;
     const data = encodeData(type);
 

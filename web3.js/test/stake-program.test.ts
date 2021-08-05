@@ -220,6 +220,21 @@ describe('StakeProgram', () => {
     expect(params).to.eql(StakeInstruction.decodeSplit(stakeInstruction));
   });
 
+  it('merge', () => {
+    const stakePubkey = Keypair.generate().publicKey;
+    const sourceStakePubKey = Keypair.generate().publicKey;
+    const authorizedPubkey = Keypair.generate().publicKey;
+    const params = {
+      stakePubkey,
+      sourceStakePubKey,
+      authorizedPubkey,
+    };
+    const transaction = StakeProgram.merge(params);
+    expect(transaction.instructions).to.have.length(1);
+    const [stakeInstruction] = transaction.instructions;
+    expect(params).to.eql(StakeInstruction.decodeMerge(stakeInstruction));
+  });
+
   it('withdraw', () => {
     const stakePubkey = Keypair.generate().publicKey;
     const authorizedPubkey = Keypair.generate().publicKey;
