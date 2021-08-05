@@ -457,12 +457,7 @@ export const STAKE_INSTRUCTION_LAYOUTS: {
   },
   Merge: {
     index: 7,
-    layout: BufferLayout.struct([
-      BufferLayout.u32('instruction'),
-      Layout.publicKey('stakePubKey'),
-      Layout.publicKey('sourceStakePubKey'),
-      Layout.publicKey('authorityOwner'),
-    ]),
+    layout: BufferLayout.struct([BufferLayout.u32('instruction')]),
   },
   AuthorizeWithSeed: {
     index: 8,
