@@ -142,9 +142,10 @@ impl ClusterQuerySubCommands for App<'_, '_> {
             SubCommand::with_name("cluster-version")
                 .about("Get the version of the cluster entrypoint"),
         )
+        // Deprecated in v1.8.0
         .subcommand(
             SubCommand::with_name("fees")
-            .about("Display current cluster fees")
+            .about("Display current cluster fees (Deprecated in v1.8.0)")
             .arg(
                 Arg::with_name("blockhash")
                     .long("blockhash")
@@ -950,6 +951,7 @@ pub fn process_fees(
     blockhash: Option<&Hash>,
 ) -> ProcessResult {
     let fees = if let Some(recent_blockhash) = blockhash {
+        #[allow(deprecated)]
         let result = rpc_client.get_fee_calculator_for_blockhash_with_commitment(
             recent_blockhash,
             config.commitment,
@@ -966,6 +968,7 @@ pub fn process_fees(
             CliFees::none()
         }
     } else {
+        #[allow(deprecated)]
         let result = rpc_client.get_fees_with_commitment(config.commitment)?;
         CliFees::some(
             result.context.slot,
@@ -1374,7 +1377,7 @@ pub fn process_ping(
     let mut confirmed_count = 0;
     let mut confirmation_time: VecDeque<u64> = VecDeque::with_capacity(1024);
 
-    let (mut blockhash, mut fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let mut blockhash = rpc_client.get_latest_blockhash()?;
     let mut blockhash_transaction_count = 0;
     let mut blockhash_acquired = Instant::now();
     if let Some(fixed_blockhash) = fixed_blockhash {
@@ -1393,9 +1396,8 @@ pub fn process_ping(
         let now = Instant::now();
         if fixed_blockhash.is_none() && now.duration_since(blockhash_acquired).as_secs() > 60 {
             // Fetch a new blockhash every minute
-            let (new_blockhash, new_fee_calculator) = rpc_client.get_new_blockhash(&blockhash)?;
+            let new_blockhash = rpc_client.get_new_latest_blockhash(&blockhash)?;
             blockhash = new_blockhash;
-            fee_calculator = new_fee_calculator;
             blockhash_transaction_count = 0;
             blockhash_acquired = Instant::now();
         }
@@ -1414,7 +1416,7 @@ pub fn process_ping(
             rpc_client,
             false,
             SpendAmount::Some(lamports),
-            &fee_calculator,
+            &blockhash,
             &config.signers[0].pubkey(),
             build_message,
             config.commitment,

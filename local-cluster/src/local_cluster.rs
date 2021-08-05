@@ -481,8 +481,8 @@ impl LocalCluster {
         lamports: u64,
     ) -> u64 {
         trace!("getting leader blockhash");
-        let (blockhash, _fee_calculator, _last_valid_slot) = client
-            .get_recent_blockhash_with_commitment(CommitmentConfig::processed())
+        let (blockhash, _) = client
+            .get_latest_blockhash_with_commitment(CommitmentConfig::processed())
             .unwrap();
         let mut tx = system_transaction::transfer(source_keypair, dest_pubkey, lamports, blockhash);
         info!(
@@ -542,7 +542,7 @@ impl LocalCluster {
                 &[from_account.as_ref(), vote_account],
                 message,
                 client
-                    .get_recent_blockhash_with_commitment(CommitmentConfig::processed())
+                    .get_latest_blockhash_with_commitment(CommitmentConfig::processed())
                     .unwrap()
                     .0,
             );
@@ -570,7 +570,7 @@ impl LocalCluster {
                 &[from_account.as_ref(), &stake_account_keypair],
                 message,
                 client
-                    .get_recent_blockhash_with_commitment(CommitmentConfig::processed())
+                    .get_latest_blockhash_with_commitment(CommitmentConfig::processed())
                     .unwrap()
                     .0,
             );

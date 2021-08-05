@@ -46,6 +46,10 @@ impl BlockhashQueue {
         self.last_hash.expect("no hash has been set")
     }
 
+    #[deprecated(
+        since = "1.8.0",
+        note = "Please do not use, will no longer be available in the future"
+    )]
     pub fn get_fee_calculator(&self, hash: &Hash) -> Option<&FeeCalculator> {
         self.ages.get(hash).map(|hash_age| &hash_age.fee_calculator)
     }
@@ -66,9 +70,8 @@ impl BlockhashQueue {
     }
 
     /// check if hash is valid
-    #[cfg(test)]
-    pub fn check_hash(&self, hash: Hash) -> bool {
-        self.ages.get(&hash).is_some()
+    pub fn check_hash(&self, hash: &Hash) -> bool {
+        self.ages.get(hash).is_some()
     }
 
     pub fn genesis_hash(&mut self, hash: &Hash, fee_calculator: &FeeCalculator) {
@@ -148,9 +151,9 @@ mod tests {
     fn test_register_hash() {
         let last_hash = Hash::default();
         let mut hash_queue = BlockhashQueue::new(100);
-        assert!(!hash_queue.check_hash(last_hash));
+        assert!(!hash_queue.check_hash(&last_hash));
         hash_queue.register_hash(&last_hash, &FeeCalculator::default());
-        assert!(hash_queue.check_hash(last_hash));
+        assert!(hash_queue.check_hash(&last_hash));
         assert_eq!(hash_queue.hash_height(), 1);
     }
 
@@ -163,12 +166,12 @@ mod tests {
             hash_queue.register_hash(&last_hash, &FeeCalculator::default());
         }
         // Assert we're no longer able to use the oldest hash.
-        assert!(!hash_queue.check_hash(last_hash));
+        assert!(!hash_queue.check_hash(&last_hash));
         assert_eq!(None, hash_queue.check_hash_age(&last_hash, 0));
 
         // Assert we are not able to use the oldest remaining hash.
         let last_valid_hash = hash(&serialize(&1).unwrap());
-        assert!(hash_queue.check_hash(last_valid_hash));
+        assert!(hash_queue.check_hash(&last_valid_hash));
         assert_eq!(Some(false), hash_queue.check_hash_age(&last_valid_hash, 0));
     }
 

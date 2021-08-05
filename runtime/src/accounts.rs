@@ -450,11 +450,13 @@ impl Accounts {
                         .as_ref()
                         .map(|nonce_rollback| nonce_rollback.fee_calculator())
                         .unwrap_or_else(|| {
+                            #[allow(deprecated)]
                             hash_queue
                                 .get_fee_calculator(&tx.message().recent_blockhash)
                                 .cloned()
                         });
                     let fee = if let Some(fee_calculator) = fee_calculator {
+                        #[allow(deprecated)]
                         fee_calculator.calculate_fee(tx.message())
                     } else {
                         return (Err(TransactionError::BlockhashNotFound), None);
@@ -1292,7 +1294,9 @@ mod tests {
         );
 
         let fee_calculator = FeeCalculator::new(10);
-        assert_eq!(fee_calculator.calculate_fee(tx.message()), 10);
+        #[allow(deprecated)]
+        let fee = fee_calculator.calculate_fee(tx.message());
+        assert_eq!(fee, 10);
 
         let loaded_accounts =
             load_accounts_with_fee(tx, &accounts, &fee_calculator, &mut error_counters);

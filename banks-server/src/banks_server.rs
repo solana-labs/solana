@@ -167,6 +167,7 @@ impl Banks for BanksServer {
         commitment: CommitmentLevel,
     ) -> (FeeCalculator, Hash, u64) {
         let bank = self.bank(commitment);
+        #[allow(deprecated)]
         let (blockhash, fee_calculator) = bank.last_blockhash_with_fee_calculator();
         let last_valid_block_height = bank
             .get_blockhash_last_valid_block_height(&blockhash)

@@ -183,7 +183,7 @@ fn get_cluster_info(
     rpc_client: &RpcClient,
 ) -> client_error::Result<(u64, Hash, RpcVoteAccountStatus, HashMap<Pubkey, u64>)> {
     let transaction_count = rpc_client.get_transaction_count()?;
-    let recent_blockhash = rpc_client.get_recent_blockhash()?.0;
+    let recent_blockhash = rpc_client.get_latest_blockhash()?;
     let vote_accounts = rpc_client.get_vote_accounts()?;
 
     let mut validator_balances = HashMap::new();

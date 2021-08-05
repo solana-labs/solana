@@ -106,9 +106,11 @@ impl TransactionStatusService {
                         let fee_calculator = nonce_rollback
                             .map(|nonce_rollback| nonce_rollback.fee_calculator())
                             .unwrap_or_else(|| {
+                                #[allow(deprecated)]
                                 bank.get_fee_calculator(&transaction.message().recent_blockhash)
                             })
                             .expect("FeeCalculator must exist");
+                        #[allow(deprecated)]
                         let fee = fee_calculator.calculate_fee(transaction.message());
                         let (writable_keys, readonly_keys) =
                             transaction.message.get_account_keys_by_lock_type();

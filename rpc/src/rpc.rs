@@ -531,7 +531,8 @@ impl JsonRpcRequestProcessor {
         commitment: Option<CommitmentConfig>,
     ) -> RpcResponse<RpcBlockhashFeeCalculator> {
         let bank = self.bank(commitment);
-        let (blockhash, fee_calculator) = bank.confirmed_last_blockhash();
+        #[allow(deprecated)]
+        let (blockhash, fee_calculator) = bank.confirmed_last_blockhash_with_fee_calculator();
         new_response(
             &bank,
             RpcBlockhashFeeCalculator {
@@ -543,7 +544,8 @@ impl JsonRpcRequestProcessor {
 
     fn get_fees(&self, commitment: Option<CommitmentConfig>) -> RpcResponse<RpcFees> {
         let bank = self.bank(commitment);
-        let (blockhash, fee_calculator) = bank.confirmed_last_blockhash();
+        #[allow(deprecated)]
+        let (blockhash, fee_calculator) = bank.confirmed_last_blockhash_with_fee_calculator();
         #[allow(deprecated)]
         let last_valid_slot = bank
             .get_blockhash_last_valid_slot(&blockhash)
@@ -568,6 +570,7 @@ impl JsonRpcRequestProcessor {
         commitment: Option<CommitmentConfig>,
     ) -> RpcResponse<Option<RpcFeeCalculator>> {
         let bank = self.bank(commitment);
+        #[allow(deprecated)]
         let fee_calculator = bank.get_fee_calculator(blockhash);
         new_response(
             &bank,
@@ -577,6 +580,7 @@ impl JsonRpcRequestProcessor {
 
     fn get_fee_rate_governor(&self) -> RpcResponse<RpcFeeRateGovernor> {
         let bank = self.bank(None);
+        #[allow(deprecated)]
         let fee_rate_governor = bank.get_fee_rate_governor();
         new_response(
             &bank,
@@ -1896,6 +1900,45 @@ impl JsonRpcRequestProcessor {
             self.get_filtered_program_accounts(bank, &spl_token_id_v2_0(), filters)
         }
     }
+
+    fn get_latest_blockhash(
+        &self,
+        commitment: Option<CommitmentConfig>,
+    ) -> RpcResponse<RpcBlockhash> {
+        let bank = self.bank(commitment);
+        let blockhash = bank.last_blockhash();
+        let last_valid_block_height = bank
+            .get_blockhash_last_valid_block_height(&blockhash)
+            .expect("bank blockhash queue should contain blockhash");
+        new_response(
+            &bank,
+            RpcBlockhash {
+                blockhash: blockhash.to_string(),
+                last_valid_block_height,
+            },
+        )
+    }
+
+    fn is_blockhash_valid(
+        &self,
+        blockhash: &Hash,
+        commitment: Option<CommitmentConfig>,
+    ) -> RpcResponse<bool> {
+        let bank = self.bank(commitment);
+        let is_valid = bank.is_blockhash_valid(blockhash);
+        new_response(&bank, is_valid)
+    }
+
+    fn get_fee_for_transaction(
+        &self,
+        blockhash: &Hash,
+        transaction: &Transaction,
+        commitment: Option<CommitmentConfig>,
+    ) -> Result<RpcResponse<Option<u64>>> {
+        let bank = self.bank(commitment);
+        let fee = bank.get_fee_for_transaction(blockhash, &transaction.message);
+        Ok(new_response(&bank, fee))
+    }
 }
 
 fn verify_transaction(
@@ -2410,34 +2453,6 @@ pub mod rpc_bank {
         #[rpc(meta, name = "getEpochSchedule")]
         fn get_epoch_schedule(&self, meta: Self::Metadata) -> Result<EpochSchedule>;
 
-        #[rpc(meta, name = "getRecentBlockhash")]
-        fn get_recent_blockhash(
-            &self,
-            meta: Self::Metadata,
-            commitment: Option<CommitmentConfig>,
-        ) -> Result<RpcResponse<RpcBlockhashFeeCalculator>>;
-
-        #[rpc(meta, name = "getFees")]
-        fn get_fees(
-            &self,
-            meta: Self::Metadata,
-            commitment: Option<CommitmentConfig>,
-        ) -> Result<RpcResponse<RpcFees>>;
-
-        #[rpc(meta, name = "getFeeCalculatorForBlockhash")]
-        fn get_fee_calculator_for_blockhash(
-            &self,
-            meta: Self::Metadata,
-            blockhash: String,
-            commitment: Option<CommitmentConfig>,
-        ) -> Result<RpcResponse<Option<RpcFeeCalculator>>>;
-
-        #[rpc(meta, name = "getFeeRateGovernor")]
-        fn get_fee_rate_governor(
-            &self,
-            meta: Self::Metadata,
-        ) -> Result<RpcResponse<RpcFeeRateGovernor>>;
-
         #[rpc(meta, name = "getSlotLeader")]
         fn get_slot_leader(
             &self,
@@ -2498,44 +2513,6 @@ pub mod rpc_bank {
         fn get_epoch_schedule(&self, meta: Self::Metadata) -> Result<EpochSchedule> {
             debug!("get_epoch_schedule rpc request received");
             Ok(meta.get_epoch_schedule())
-        }
-
-        fn get_recent_blockhash(
-            &self,
-            meta: Self::Metadata,
-            commitment: Option<CommitmentConfig>,
-        ) -> Result<RpcResponse<RpcBlockhashFeeCalculator>> {
-            debug!("get_recent_blockhash rpc request received");
-            Ok(meta.get_recent_blockhash(commitment))
-        }
-
-        fn get_fees(
-            &self,
-            meta: Self::Metadata,
-            commitment: Option<CommitmentConfig>,
-        ) -> Result<RpcResponse<RpcFees>> {
-            debug!("get_fees rpc request received");
-            Ok(meta.get_fees(commitment))
-        }
-
-        fn get_fee_calculator_for_blockhash(
-            &self,
-            meta: Self::Metadata,
-            blockhash: String,
-            commitment: Option<CommitmentConfig>,
-        ) -> Result<RpcResponse<Option<RpcFeeCalculator>>> {
-            debug!("get_fee_calculator_for_blockhash rpc request received");
-            let blockhash = Hash::from_str(&blockhash)
-                .map_err(|e| Error::invalid_params(format!("{:?}", e)))?;
-            Ok(meta.get_fee_calculator_for_blockhash(&blockhash, commitment))
-        }
-
-        fn get_fee_rate_governor(
-            &self,
-            meta: Self::Metadata,
-        ) -> Result<RpcResponse<RpcFeeRateGovernor>> {
-            debug!("get_fee_rate_governor rpc request received");
-            Ok(meta.get_fee_rate_governor())
         }
 
         fn get_slot_leader(
@@ -3084,6 +3061,31 @@ pub mod rpc_full {
 
         #[rpc(meta, name = "getFirstAvailableBlock")]
         fn get_first_available_block(&self, meta: Self::Metadata) -> BoxFuture<Result<Slot>>;
+
+        #[rpc(meta, name = "getLatestBlockhash")]
+        fn get_latest_blockhash(
+            &self,
+            meta: Self::Metadata,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<RpcResponse<RpcBlockhash>>;
+
+        #[rpc(meta, name = "isBlockhashValid")]
+        fn is_blockhash_valid(
+            &self,
+            meta: Self::Metadata,
+            blockhash: String,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<RpcResponse<bool>>;
+
+        #[rpc(meta, name = "getFeeForTransaction")]
+        fn get_fee_for_transaction(
+            &self,
+            meta: Self::Metadata,
+            blockhash: String,
+            data: String,
+            encoding: UiTransactionEncoding,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<RpcResponse<Option<u64>>>;
     }
 
     pub struct FullImpl;
@@ -3232,7 +3234,7 @@ pub mod rpc_full {
             let blockhash = if let Some(blockhash) = config.recent_blockhash {
                 verify_hash(&blockhash)?
             } else {
-                bank.confirmed_last_blockhash().0
+                bank.confirmed_last_blockhash()
             };
             let last_valid_block_height = bank
                 .get_blockhash_last_valid_block_height(&blockhash)
@@ -3578,10 +3580,126 @@ pub mod rpc_full {
 
             Box::pin(async move { meta.get_inflation_reward(addresses, config).await })
         }
+
+        fn get_latest_blockhash(
+            &self,
+            meta: Self::Metadata,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<RpcResponse<RpcBlockhash>> {
+            debug!("get_latest_blockhash rpc request received");
+            Ok(meta.get_latest_blockhash(commitment))
+        }
+
+        fn is_blockhash_valid(
+            &self,
+            meta: Self::Metadata,
+            blockhash: String,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<RpcResponse<bool>> {
+            let blockhash = Hash::from_str(&blockhash)
+                .map_err(|e| Error::invalid_params(format!("{:?}", e)))?;
+            Ok(meta.is_blockhash_valid(&blockhash, commitment))
+        }
+
+        fn get_fee_for_transaction(
+            &self,
+            meta: Self::Metadata,
+            blockhash: String,
+            data: String,
+            encoding: UiTransactionEncoding,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<RpcResponse<Option<u64>>> {
+            debug!("get_fee_for_transaction rpc request received");
+            let blockhash = Hash::from_str(&blockhash)
+                .map_err(|e| Error::invalid_params(format!("{:?}", e)))?;
+            let (_, transaction) = deserialize_transaction(data, encoding)?;
+            meta.get_fee_for_transaction(&blockhash, &transaction, commitment)
+        }
     }
 }
 
-// Deprecated RPC methods, collected for easy deactivation and removal in v1.8
+// RPC methods deprecated in v1.8
+pub mod rpc_deprecated_v1_8 {
+    #![allow(deprecated)]
+    use super::*;
+    #[rpc]
+    pub trait DeprecatedV1_8 {
+        type Metadata;
+
+        #[rpc(meta, name = "getRecentBlockhash")]
+        fn get_recent_blockhash(
+            &self,
+            meta: Self::Metadata,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<RpcResponse<RpcBlockhashFeeCalculator>>;
+
+        #[rpc(meta, name = "getFees")]
+        fn get_fees(
+            &self,
+            meta: Self::Metadata,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<RpcResponse<RpcFees>>;
+
+        #[rpc(meta, name = "getFeeCalculatorForBlockhash")]
+        fn get_fee_calculator_for_blockhash(
+            &self,
+            meta: Self::Metadata,
+            blockhash: String,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<RpcResponse<Option<RpcFeeCalculator>>>;
+
+        #[rpc(meta, name = "getFeeRateGovernor")]
+        fn get_fee_rate_governor(
+            &self,
+            meta: Self::Metadata,
+        ) -> Result<RpcResponse<RpcFeeRateGovernor>>;
+    }
+
+    pub struct DeprecatedV1_8Impl;
+    impl DeprecatedV1_8 for DeprecatedV1_8Impl {
+        type Metadata = JsonRpcRequestProcessor;
+
+        fn get_recent_blockhash(
+            &self,
+            meta: Self::Metadata,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<RpcResponse<RpcBlockhashFeeCalculator>> {
+            debug!("get_recent_blockhash rpc request received");
+            Ok(meta.get_recent_blockhash(commitment))
+        }
+
+        fn get_fees(
+            &self,
+            meta: Self::Metadata,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<RpcResponse<RpcFees>> {
+            debug!("get_fees rpc request received");
+            Ok(meta.get_fees(commitment))
+        }
+
+        fn get_fee_calculator_for_blockhash(
+            &self,
+            meta: Self::Metadata,
+            blockhash: String,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<RpcResponse<Option<RpcFeeCalculator>>> {
+            debug!("get_fee_calculator_for_blockhash rpc request received");
+            let blockhash = Hash::from_str(&blockhash)
+                .map_err(|e| Error::invalid_params(format!("{:?}", e)))?;
+            Ok(meta.get_fee_calculator_for_blockhash(&blockhash, commitment))
+        }
+
+        fn get_fee_rate_governor(
+            &self,
+            meta: Self::Metadata,
+        ) -> Result<RpcResponse<RpcFeeRateGovernor>> {
+            debug!("get_fee_rate_governor rpc request received");
+            Ok(meta.get_fee_rate_governor())
+        }
+    }
+}
+
+// RPC methods deprecated in v1.7
 pub mod rpc_deprecated_v1_7 {
     #![allow(deprecated)]
     use super::*;
@@ -3966,7 +4084,7 @@ pub fn create_test_transactions_and_populate_blockstore(
     let keypair2 = keypairs[2];
     let keypair3 = keypairs[3];
     let slot = bank.slot();
-    let blockhash = bank.confirmed_last_blockhash().0;
+    let blockhash = bank.confirmed_last_blockhash();
 
     // Generate transactions for processing
     // Successful transaction
@@ -4032,7 +4150,9 @@ pub fn create_test_transactions_and_populate_blockstore(
 #[cfg(test)]
 pub mod tests {
     use {
-        super::{rpc_accounts::*, rpc_bank::*, rpc_full::*, rpc_minimal::*, *},
+        super::{
+            rpc_accounts::*, rpc_bank::*, rpc_deprecated_v1_8::*, rpc_full::*, rpc_minimal::*, *,
+        },
         crate::{
             optimistically_confirmed_bank_tracker::{
                 BankNotification, OptimisticallyConfirmedBankTracker,
@@ -4196,7 +4316,7 @@ pub mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let validator_exit = create_validator_exit(&exit);
 
-        let blockhash = bank.confirmed_last_blockhash().0;
+        let blockhash = bank.confirmed_last_blockhash();
         let tx = system_transaction::transfer(&alice, pubkey, 20, blockhash);
         bank.process_transaction(&tx).expect("process transaction");
         let tx =
@@ -4267,6 +4387,7 @@ pub mod tests {
         io.extend_with(rpc_bank::BankDataImpl.to_delegate());
         io.extend_with(rpc_accounts::AccountsDataImpl.to_delegate());
         io.extend_with(rpc_full::FullImpl.to_delegate());
+        io.extend_with(rpc_deprecated_v1_8::DeprecatedV1_8Impl.to_delegate());
         RpcHandler {
             io,
             meta,
@@ -5675,6 +5796,7 @@ pub mod tests {
         let bob_pubkey = solana_sdk::pubkey::new_rand();
         let RpcHandler { io, meta, bank, .. } = start_rpc_handler_with_tx(&bob_pubkey);
 
+        #[allow(deprecated)]
         let (blockhash, fee_calculator) = bank.last_blockhash_with_fee_calculator();
         let fee_calculator = RpcFeeCalculator { fee_calculator };
 
