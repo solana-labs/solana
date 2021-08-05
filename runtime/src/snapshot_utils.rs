@@ -983,7 +983,11 @@ pub fn bank_from_latest_snapshot_archives(
         full_snapshot_archive_info.path().display(),
         incremental_snapshot_archive_info
             .as_ref()
-            .map(|isai| isai.path().display())
+            .map(
+                |incremental_snapshot_archive_info| incremental_snapshot_archive_info
+                    .path()
+                    .display()
+            )
     );
 
     let (bank, timings) = bank_from_snapshot_archives(
@@ -1005,12 +1009,14 @@ pub fn bank_from_latest_snapshot_archives(
 
     check_bank_with_snapshot_archive_info(
         &bank,
-        *incremental_snapshot_archive_info
-            .as_ref()
-            .map_or(full_snapshot_archive_info.slot(), |isai| isai.slot()),
-        *incremental_snapshot_archive_info
-            .as_ref()
-            .map_or(full_snapshot_archive_info.hash(), |isai| isai.hash()),
+        *incremental_snapshot_archive_info.as_ref().map_or(
+            full_snapshot_archive_info.slot(),
+            |incremental_snapshot_archive_info| incremental_snapshot_archive_info.slot(),
+        ),
+        *incremental_snapshot_archive_info.as_ref().map_or(
+            full_snapshot_archive_info.hash(),
+            |incremental_snapshot_archive_info| incremental_snapshot_archive_info.hash(),
+        ),
     )?;
 
     Ok((bank, timings))
@@ -1025,12 +1031,15 @@ fn check_bank_with_snapshot_archive_info(
 ) -> Result<()> {
     let bank_slot = bank.slot();
     let bank_hash = bank.get_accounts_hash();
-    (bank_slot == snapshot_archive_info_slot && bank_hash == snapshot_archive_info_hash)
-        .then(|| ())
-        .ok_or(SnapshotError::MismatchedSlotHash(
+
+    if bank_slot != snapshot_archive_info_slot || bank_hash != snapshot_archive_info_hash {
+        return Err(SnapshotError::MismatchedSlotHash(
             (bank_slot, bank_hash),
             (snapshot_archive_info_slot, snapshot_archive_info_hash),
-        ))
+        ));
+    }
+
+    Ok(())
 }
 
 /// Perform the common tasks when unarchiving a snapshot.  Handles creating the temporary
