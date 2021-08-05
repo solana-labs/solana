@@ -203,7 +203,7 @@ impl<T: IsCached> WriteAccountMapEntry<T> {
         pubkey: &Pubkey,
         new_value: AccountMapEntry<T>,
         reclaims: &mut SlotList<T>,
-        reclaims_must_be_empty: bool,
+        previous_slot_entry_was_cached: bool,
     ) {
         match w_account_maps.entry(*pubkey) {
             Entry::Occupied(mut occupied) => {
@@ -212,7 +212,7 @@ impl<T: IsCached> WriteAccountMapEntry<T> {
                     current,
                     &new_value,
                     reclaims,
-                    reclaims_must_be_empty,
+                    previous_slot_entry_was_cached,
                 );
             }
             Entry::Vacant(vacant) => {
@@ -228,10 +228,10 @@ impl<T: IsCached> WriteAccountMapEntry<T> {
         pubkey: &Pubkey,
         new_value: &AccountMapEntry<T>,
         reclaims: &mut SlotList<T>,
-        reclaims_must_be_empty: bool,
+        previous_slot_entry_was_cached: bool,
     ) -> bool {
         if let Some(current) = r_account_maps.get(pubkey) {
-            Self::lock_and_update_slot_list(current, new_value, reclaims, reclaims_must_be_empty);
+            Self::lock_and_update_slot_list(current, new_value, reclaims, previous_slot_entry_was_cached);
             true
         } else {
             false
@@ -242,7 +242,7 @@ impl<T: IsCached> WriteAccountMapEntry<T> {
         current: &Arc<AccountMapEntryInner<T>>,
         new_value: &AccountMapEntry<T>,
         reclaims: &mut SlotList<T>,
-        reclaims_must_be_empty: bool,
+        previous_slot_entry_was_cached: bool,
     ) {
         let mut slot_list = current.slot_list.write().unwrap();
         let (slot, new_entry) = new_value.slot_list.write().unwrap().remove(0);
@@ -251,7 +251,7 @@ impl<T: IsCached> WriteAccountMapEntry<T> {
             slot,
             new_entry,
             reclaims,
-            reclaims_must_be_empty,
+            previous_slot_entry_was_cached,
         );
         if addref {
             Self::addref(&current.ref_count);
@@ -265,7 +265,7 @@ impl<T: IsCached> WriteAccountMapEntry<T> {
         slot: Slot,
         account_info: T,
         reclaims: &mut SlotList<T>,
-        reclaims_must_be_empty: bool,
+        previous_slot_entry_was_cached: bool,
     ) -> bool {
         let mut addref = !account_info.is_cached();
 
@@ -278,7 +278,7 @@ impl<T: IsCached> WriteAccountMapEntry<T> {
 
                 let mut new_item = (slot, account_info);
                 std::mem::swap(&mut new_item, &mut list[list_index]);
-                if reclaims_must_be_empty {
+                if previous_slot_entry_was_cached {
                     assert!(previous_was_cached);
                 } else {
                     reclaims.push(new_item);
@@ -1540,7 +1540,7 @@ impl<T: IsCached> AccountsIndex<T> {
         account_indexes: &AccountSecondaryIndexes,
         account_info: T,
         reclaims: &mut SlotList<T>,
-        reclaims_must_be_empty: bool,
+        previous_slot_entry_was_cached: bool,
     ) {
         // We don't atomically update both primary index and secondary index together.
         // This certainly creates a small time window with inconsistent state across the two indexes.
@@ -1562,7 +1562,7 @@ impl<T: IsCached> AccountsIndex<T> {
             pubkey,
             &new_item,
             reclaims,
-            reclaims_must_be_empty,
+            previous_slot_entry_was_cached,
         ) {
             let w_account_maps = map.write().unwrap();
             WriteAccountMapEntry::upsert(
@@ -1570,7 +1570,7 @@ impl<T: IsCached> AccountsIndex<T> {
                 pubkey,
                 new_item,
                 reclaims,
-                reclaims_must_be_empty,
+                previous_slot_entry_was_cached,
             );
         }
         self.update_secondary_indexes(pubkey, account_owner, account_data, account_indexes);

@@ -5157,14 +5157,14 @@ impl AccountsDb {
         ret
     }
 
-    // reclaims_must_be_empty = true means we just need to assert that after this update is complete
+    // previous_slot_entry_was_cached = true means we just need to assert that after this update is complete
     //  that there are no items we would have put in reclaims that are not cached
     fn update_index(
         &self,
         slot: Slot,
         infos: Vec<AccountInfo>,
         accounts: &[(&Pubkey, &impl ReadableAccount)],
-        reclaims_must_be_empty: bool,
+        previous_slot_entry_was_cached: bool,
     ) -> SlotList<AccountInfo> {
         let mut reclaims = SlotList::<AccountInfo>::with_capacity(infos.len() * 2);
         for (info, pubkey_account) in infos.into_iter().zip(accounts.iter()) {
@@ -5177,7 +5177,7 @@ impl AccountsDb {
                 &self.account_indexes,
                 info,
                 &mut reclaims,
-                reclaims_must_be_empty,
+                previous_slot_entry_was_cached,
             );
         }
         reclaims
@@ -5719,13 +5719,13 @@ impl AccountsDb {
             .fetch_add(store_accounts_time.as_us(), Ordering::Relaxed);
         let mut update_index_time = Measure::start("update_index");
 
-        let reclaims_must_be_empty = self.caching_enabled && is_cached_store;
+        let previous_slot_entry_was_cached = self.caching_enabled && is_cached_store;
 
         // If the cache was flushed, then because `update_index` occurs
         // after the account are stored by the above `store_accounts_to`
         // call and all the accounts are stored, all reads after this point
         // will know to not check the cache anymore
-        let mut reclaims = self.update_index(slot, infos, accounts, reclaims_must_be_empty);
+        let mut reclaims = self.update_index(slot, infos, accounts, previous_slot_entry_was_cached);
 
         // For each updated account, `reclaims` should only have at most one
         // item (if the account was previously updated in this slot).
