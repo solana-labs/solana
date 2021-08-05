@@ -206,30 +206,94 @@ impl<T: 'static + Clone + IsCached> WriteAccountMapEntry<T> {
         })
     }
 
+    fn addref(item: &AtomicU64) {
+        item.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn upsert<'a>(
+        mut w_account_maps: AccountMapsWriteLock<'a, T>,
+        pubkey: &Pubkey,
+        new_value: AccountMapEntry<T>,
+        reclaims: &mut SlotList<T>,
+    ) {
+        match w_account_maps.entry(*pubkey) {
+            Entry::Occupied(mut occupied) => {
+                let current = occupied.get_mut();
+                Self::lock_and_update_slot_list(current, &new_value, reclaims);
+            }
+            Entry::Vacant(vacant) => {
+                vacant.insert(new_value);
+            }
+        }
+    }
+
+    // returns true if upsert was successful. new_value is modified in this case. new_value contains a RwLock
+    // otherwise, new_value has not been modified and the pubkey has to be added to the maps with a write lock. call upsert_new
+    pub fn update_key_if_exists<'a>(
+        r_account_maps: AccountMapsReadLock<'a, T>,
+        pubkey: &Pubkey,
+        new_value: &AccountMapEntry<T>,
+        reclaims: &mut SlotList<T>,
+    ) -> bool {
+        if let Some(current) = r_account_maps.get(pubkey) {
+            Self::lock_and_update_slot_list(current, new_value, reclaims);
+            true
+        } else {
+            false
+        }
+    }
+
+    fn lock_and_update_slot_list(
+        current: &Arc<AccountMapEntryInner<T>>,
+        new_value: &AccountMapEntry<T>,
+        reclaims: &mut SlotList<T>,
+    ) {
+        let mut slot_list = current.slot_list.write().unwrap();
+        let (slot, new_entry) = new_value.slot_list.write().unwrap().remove(0);
+        let addref = Self::update_slot_list(&mut slot_list, slot, new_entry, reclaims);
+        if addref {
+            Self::addref(&current.ref_count);
+        }
+    }
+
+    // modifies slot_list
+    // returns true if caller should addref
+    pub fn update_slot_list(
+        list: &mut SlotList<T>,
+        slot: Slot,
+        account_info: T,
+        reclaims: &mut SlotList<T>,
+    ) -> bool {
+        let mut addref = !account_info.is_cached();
+
+        // find other dirty entries from the same slot
+        for list_index in 0..list.len() {
+            let (s, previous_update_value) = &list[list_index];
+            if *s == slot {
+                addref = addref && previous_update_value.is_cached();
+
+                let mut new_item = (slot, account_info);
+                std::mem::swap(&mut new_item, &mut list[list_index]);
+                reclaims.push(new_item);
+                list[(list_index + 1)..]
+                    .iter()
+                    .for_each(|item| assert!(item.0 != slot));
+                return addref;
+            }
+        }
+
+        // if we make it here, we did not find the slot in the list
+        list.push((slot, account_info));
+        addref
+    }
+
     // Try to update an item in the slot list the given `slot` If an item for the slot
     // already exists in the list, remove the older item, add it to `reclaims`, and insert
     // the new item.
     pub fn update(&mut self, slot: Slot, account_info: T, reclaims: &mut SlotList<T>) {
         let mut addref = !account_info.is_cached();
         self.slot_list_mut(|list| {
-            // find other dirty entries from the same slot
-            for list_index in 0..list.len() {
-                let (s, previous_update_value) = &list[list_index];
-                if *s == slot {
-                    addref = addref && previous_update_value.is_cached();
-
-                    let mut new_item = (slot, account_info);
-                    std::mem::swap(&mut new_item, &mut list[list_index]);
-                    reclaims.push(new_item);
-                    list[(list_index + 1)..]
-                        .iter()
-                        .for_each(|item| assert!(item.0 != slot));
-                    return; // this returns from self.slot_list_mut above
-                }
-            }
-
-            // if we make it here, we did not find the slot in the list
-            list.push((slot, account_info));
+            addref = Self::update_slot_list(list, slot, account_info, reclaims);
         });
         if addref {
             // If it's the first non-cache insert, also bump the stored ref count
@@ -1071,26 +1135,6 @@ impl<
             .map(WriteAccountMapEntry::from_account_map_entry)
     }
 
-    fn insert_new_entry_if_missing(
-        &self,
-        pubkey: &Pubkey,
-        slot: Slot,
-        info: T,
-        w_account_maps: Option<&mut AccountMapsWriteLock<T>>,
-    ) -> Option<(WriteAccountMapEntry<T>, T)> {
-        let new_entry = WriteAccountMapEntry::new_entry_after_update(slot, info);
-        match w_account_maps {
-            Some(w_account_maps) => {
-                self.insert_new_entry_if_missing_with_lock(*pubkey, w_account_maps, new_entry)
-            }
-            None => {
-                let mut w_account_maps = self.get_account_maps_write_lock(pubkey);
-                self.insert_new_entry_if_missing_with_lock(*pubkey, &mut w_account_maps, new_entry)
-            }
-        }
-        .map(|x| (x.0, x.1))
-    }
-
     // return None if item was created new
     // if entry for pubkey already existed, return Some(entry). Caller needs to call entry.update.
     fn insert_new_entry_if_missing_with_lock(
@@ -1111,18 +1155,6 @@ impl<
                 account_entry.insert(new_entry);
                 None
             }
-        }
-    }
-
-    fn get_account_write_entry_else_create(
-        &self,
-        pubkey: &Pubkey,
-        slot: Slot,
-        info: T,
-    ) -> Option<(WriteAccountMapEntry<T>, T)> {
-        match self.get_account_write_entry(pubkey) {
-            Some(w_account_entry) => Some((w_account_entry, info)),
-            None => self.insert_new_entry_if_missing(pubkey, slot, info, None),
         }
     }
 
@@ -1525,10 +1557,14 @@ impl<
         //  - The secondary index is never consulted as primary source of truth for gets/stores.
         //  So, what the accounts_index sees alone is sufficient as a source of truth for other non-scan
         //  account operations.
-        if let Some((mut w_account_entry, account_info)) =
-            self.get_account_write_entry_else_create(pubkey, slot, account_info)
+        let new_item = WriteAccountMapEntry::new_entry_after_update(slot, account_info);
+        let map = &self.account_maps[self.bin_calculator.bin_from_pubkey(pubkey)];
+
+        let r_account_maps = map.read().unwrap();
+        if !WriteAccountMapEntry::update_key_if_exists(r_account_maps, pubkey, &new_item, reclaims)
         {
-            w_account_entry.update(slot, account_info, reclaims);
+            let w_account_maps = map.write().unwrap();
+            WriteAccountMapEntry::upsert(w_account_maps, pubkey, new_item, reclaims);
         }
         self.update_secondary_indexes(pubkey, account_owner, account_data, account_indexes);
     }
@@ -2826,14 +2862,30 @@ pub mod tests {
         let account_info = true;
 
         let new_entry = WriteAccountMapEntry::new_entry_after_update(slot, account_info);
-        let mut w_account_maps = index.get_account_maps_write_lock(&key.pubkey());
-        let write = index.insert_new_entry_if_missing_with_lock(
-            key.pubkey(),
-            &mut w_account_maps,
-            new_entry,
+        assert_eq!(0, account_maps_len_expensive(&index));
+
+        // will fail because key doesn't exist
+        let r_account_maps = index.get_account_maps_read_lock(&key.pubkey());
+        assert!(!WriteAccountMapEntry::update_key_if_exists(
+            r_account_maps,
+            &key.pubkey(),
+            &new_entry,
+            &mut SlotList::default(),
+        ));
+        assert_eq!(
+            (slot, account_info),
+            new_entry.slot_list.read().as_ref().unwrap()[0]
         );
-        assert!(write.is_none());
-        drop(w_account_maps);
+
+        assert_eq!(0, account_maps_len_expensive(&index));
+        let w_account_maps = index.get_account_maps_write_lock(&key.pubkey());
+        WriteAccountMapEntry::upsert(
+            w_account_maps,
+            &key.pubkey(),
+            new_entry,
+            &mut SlotList::default(),
+        );
+        assert_eq!(1, account_maps_len_expensive(&index));
 
         let mut ancestors = Ancestors::default();
         assert!(index.get(&key.pubkey(), Some(&ancestors), None).is_none());
