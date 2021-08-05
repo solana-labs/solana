@@ -860,7 +860,7 @@ fn check_for_newer_github_release(
     prerelease_allowed: bool,
 ) -> reqwest::Result<Option<String>> {
     let url =
-        reqwest::Url::parse("https://api.github.com/repos/solana-labs/solana/releases").unwrap();
+        reqwest::Url::parse("https://api.github.com/repos/solana-labs/solana/releases?per_page=100").unwrap();
     let client = reqwest::blocking::Client::builder()
         .user_agent("solana-install")
         .build()?;
