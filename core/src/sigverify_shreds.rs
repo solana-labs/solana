@@ -112,8 +112,9 @@ pub mod tests {
     fn test_sigverify_shreds_verify_batch() {
         let leader_keypair = Arc::new(Keypair::new());
         let leader_pubkey = leader_keypair.pubkey();
-        let bank =
-            Bank::new(&create_genesis_config_with_leader(100, &leader_pubkey, 10).genesis_config);
+        let bank = Bank::new_for_tests(
+            &create_genesis_config_with_leader(100, &leader_pubkey, 10).genesis_config,
+        );
         let cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         let bf = Arc::new(RwLock::new(BankForks::new(bank)));
         let verifier = ShredSigVerifier::new(bf, cache);

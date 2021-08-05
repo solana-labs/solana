@@ -111,7 +111,7 @@ mod tests {
             mint_keypair,
             ..
         } = create_genesis_config_with_leader(500, &dummy_leader_pubkey, 100);
-        let bank = Bank::new(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
 
         let pubkey = solana_sdk::pubkey::new_rand();
         let keypair2 = Keypair::new();

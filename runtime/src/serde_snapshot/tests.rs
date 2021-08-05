@@ -180,7 +180,7 @@ fn test_accounts_serialize_style(serde_style: SerdeStyle) {
 fn test_bank_serialize_style(serde_style: SerdeStyle) {
     solana_logger::setup();
     let (genesis_config, _) = create_genesis_config(500);
-    let bank0 = Arc::new(Bank::new(&genesis_config));
+    let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
     let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
     bank0.squash();
 

@@ -247,7 +247,7 @@ mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(10);
-        let bank = Arc::new(Bank::new_no_wallclock_throttle(&genesis_config));
+        let bank = Arc::new(Bank::new_no_wallclock_throttle_for_tests(&genesis_config));
         let start_hash = bank.last_blockhash();
         (mint_keypair, start_hash)
     }

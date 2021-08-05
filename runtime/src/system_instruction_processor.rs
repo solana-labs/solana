@@ -1290,7 +1290,7 @@ mod tests {
     #[test]
     fn test_allocate() {
         let (genesis_config, mint_keypair) = create_genesis_config(100);
-        let bank = Bank::new(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
         let bank_client = BankClient::new(bank);
 
         let alice_keypair = Keypair::new();
@@ -1346,7 +1346,7 @@ mod tests {
 
         // create initial bank and fund the alice account
         let (genesis_config, mint_keypair) = create_genesis_config(mint_lamports);
-        let bank = Arc::new(Bank::new(&genesis_config));
+        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
         let bank_client = BankClient::new_shared(&bank);
         bank_client
             .transfer_and_confirm(mint_lamports, &mint_keypair, &alice_pubkey)
@@ -1402,7 +1402,7 @@ mod tests {
     #[test]
     fn test_assign_with_seed() {
         let (genesis_config, mint_keypair) = create_genesis_config(100);
-        let bank = Bank::new(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
         let bank_client = BankClient::new(bank);
 
         let alice_keypair = Keypair::new();
@@ -1438,7 +1438,7 @@ mod tests {
         let mallory_pubkey = mallory_keypair.pubkey();
 
         // Fund to account to bypass AccountNotFound error
-        let bank = Bank::new(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
         let bank_client = BankClient::new(bank);
         bank_client
             .transfer_and_confirm(50, &alice_keypair, &mallory_pubkey)

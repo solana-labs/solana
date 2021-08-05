@@ -94,7 +94,7 @@ mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(2);
-        let bank0 = Arc::new(Bank::new(&genesis_config));
+        let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
         let tx = system_transaction::transfer(
             &mint_keypair,
             &solana_sdk::pubkey::new_rand(),

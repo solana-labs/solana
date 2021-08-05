@@ -372,7 +372,7 @@ mod tests {
     #[test]
     fn test_bank_forks_new() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
-        let bank = Bank::new(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
         let mut bank_forks = BankForks::new(bank);
         let child_bank = Bank::new_from_parent(&bank_forks[0u64], &Pubkey::default(), 1);
         child_bank.register_tick(&Hash::default());
@@ -384,7 +384,7 @@ mod tests {
     #[test]
     fn test_bank_forks_new_from_banks() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
-        let bank = Arc::new(Bank::new(&genesis_config));
+        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
         let child_bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), 1));
 
         let bank_forks = BankForks::new_from_banks(&[bank.clone(), child_bank.clone()], 0);
@@ -399,7 +399,7 @@ mod tests {
     #[test]
     fn test_bank_forks_descendants() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
-        let bank = Bank::new(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
         let mut bank_forks = BankForks::new(bank);
         let bank0 = bank_forks[0].clone();
         let bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
@@ -416,7 +416,7 @@ mod tests {
     #[test]
     fn test_bank_forks_ancestors() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
-        let bank = Bank::new(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
         let mut bank_forks = BankForks::new(bank);
         let bank0 = bank_forks[0].clone();
         let bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
@@ -434,7 +434,7 @@ mod tests {
     #[test]
     fn test_bank_forks_frozen_banks() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
-        let bank = Bank::new(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
         let mut bank_forks = BankForks::new(bank);
         let child_bank = Bank::new_from_parent(&bank_forks[0u64], &Pubkey::default(), 1);
         bank_forks.insert(child_bank);
@@ -445,7 +445,7 @@ mod tests {
     #[test]
     fn test_bank_forks_active_banks() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
-        let bank = Bank::new(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
         let mut bank_forks = BankForks::new(bank);
         let child_bank = Bank::new_from_parent(&bank_forks[0u64], &Pubkey::default(), 1);
         bank_forks.insert(child_bank);
@@ -464,11 +464,11 @@ mod tests {
         let slots_in_epoch = 32;
         genesis_config.epoch_schedule = EpochSchedule::new(slots_in_epoch);
 
-        let bank0 = Bank::new(&genesis_config);
+        let bank0 = Bank::new_for_tests(&genesis_config);
         let mut bank_forks0 = BankForks::new(bank0);
         bank_forks0.set_root(0, &AbsRequestSender::default(), None);
 
-        let bank1 = Bank::new(&genesis_config);
+        let bank1 = Bank::new_for_tests(&genesis_config);
         let mut bank_forks1 = BankForks::new(bank1);
 
         let additional_timestamp_secs = 2;
@@ -523,7 +523,7 @@ mod tests {
     #[test]
     fn test_bank_forks_with_set_root() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
-        let mut banks = vec![Arc::new(Bank::new(&genesis_config))];
+        let mut banks = vec![Arc::new(Bank::new_for_tests(&genesis_config))];
         assert_eq!(banks[0].slot(), 0);
         let mut bank_forks = BankForks::new_from_banks(&banks, 0);
         banks.push(bank_forks.insert(Bank::new_from_parent(&banks[0], &Pubkey::default(), 1)));
@@ -582,7 +582,7 @@ mod tests {
     #[test]
     fn test_bank_forks_with_highest_confirmed_root() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
-        let mut banks = vec![Arc::new(Bank::new(&genesis_config))];
+        let mut banks = vec![Arc::new(Bank::new_for_tests(&genesis_config))];
         assert_eq!(banks[0].slot(), 0);
         let mut bank_forks = BankForks::new_from_banks(&banks, 0);
         banks.push(bank_forks.insert(Bank::new_from_parent(&banks[0], &Pubkey::default(), 1)));

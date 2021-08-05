@@ -457,7 +457,7 @@ mod test {
     #[test]
     fn test_accounts_background_service_remove_dead_slots() {
         let genesis = create_genesis_config(10);
-        let bank0 = Arc::new(Bank::new(&genesis.genesis_config));
+        let bank0 = Arc::new(Bank::new_for_tests(&genesis.genesis_config));
         let (pruned_banks_sender, pruned_banks_receiver) = unbounded();
         let request_handler = AbsRequestHandler {
             snapshot_request_handler: None,

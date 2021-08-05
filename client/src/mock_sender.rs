@@ -3,10 +3,12 @@
 use {
     crate::{
         client_error::Result,
+        rpc_config::RpcBlockProductionConfig,
         rpc_request::RpcRequest,
         rpc_response::{
-            Response, RpcBlockProduction, RpcBlockProductionRange, RpcResponseContext,
-            RpcSimulateTransactionResult, RpcVersionInfo,
+            Response, RpcAccountBalance, RpcBlockProduction, RpcBlockProductionRange,
+            RpcResponseContext, RpcSimulateTransactionResult, RpcStakeActivation, RpcSupply,
+            RpcVersionInfo, RpcVoteAccountStatus, StakeActivationState,
         },
         rpc_sender::RpcSender,
     },
@@ -159,6 +161,78 @@ impl RpcSender for MockSender {
             "getSlot" => json![0],
             "getMaxShredInsertSlot" => json![0],
             "requestAirdrop" => Value::String(Signature::new(&[8; 64]).to_string()),
+            "getSnapshotSlot" => Value::Number(Number::from(0)),
+            "getBlockHeight" => Value::Number(Number::from(1234)),
+            "getSlotLeaders" => json!([PUBKEY]),
+            "getBlockProduction" => {
+                if params.is_null() {
+                    json!(Response {
+                        context: RpcResponseContext { slot: 1 },
+                        value: RpcBlockProduction {
+                            by_identity: HashMap::new(),
+                            range: RpcBlockProductionRange {
+                                first_slot: 1,
+                                last_slot: 2,
+                            },
+                        },
+                    })
+                } else {
+                    let config: Vec<RpcBlockProductionConfig> =
+                        serde_json::from_value(params).unwrap();
+                    let config = config[0].clone();
+                    let mut by_identity = HashMap::new();
+                    by_identity.insert(config.identity.unwrap(), (1, 123));
+                    let config_range = config.range.unwrap_or_default();
+
+                    json!(Response {
+                        context: RpcResponseContext { slot: 1 },
+                        value: RpcBlockProduction {
+                            by_identity,
+                            range: RpcBlockProductionRange {
+                                first_slot: config_range.first_slot,
+                                last_slot: {
+                                    if let Some(last_slot) = config_range.last_slot {
+                                        last_slot
+                                    } else {
+                                        2
+                                    }
+                                },
+                            },
+                        },
+                    })
+                }
+            }
+            "getStakeActivation" => json!(RpcStakeActivation {
+                state: StakeActivationState::Active,
+                active: 123,
+                inactive: 12,
+            }),
+            "getSupply" => json!(Response {
+                context: RpcResponseContext { slot: 1 },
+                value: RpcSupply {
+                    total: 100000000,
+                    circulating: 50000,
+                    non_circulating: 20000,
+                    non_circulating_accounts: vec![PUBKEY.to_string()],
+                },
+            }),
+            "getLargestAccounts" => {
+                let rpc_account_balance = RpcAccountBalance {
+                    address: PUBKEY.to_string(),
+                    lamports: 10000,
+                };
+
+                json!(Response {
+                    context: RpcResponseContext { slot: 1 },
+                    value: vec![rpc_account_balance],
+                })
+            }
+            "getVoteAccounts" => {
+                json!(RpcVoteAccountStatus {
+                    current: vec![],
+                    delinquent: vec![],
+                })
+            }
             "sendTransaction" => {
                 let signature = if self.url == "malicious" {
                     Signature::new(&[8; 64]).to_string()
@@ -185,19 +259,6 @@ impl RpcSender for MockSender {
                 json!(RpcVersionInfo {
                     solana_core: version.to_string(),
                     feature_set: Some(version.feature_set),
-                })
-            }
-            "getBlockProduction" => {
-                let map = vec![(PUBKEY.to_string(), (1, 1))].into_iter().collect();
-                json!(Response {
-                    context: RpcResponseContext { slot: 1 },
-                    value: RpcBlockProduction {
-                        by_identity: map,
-                        range: RpcBlockProductionRange {
-                            first_slot: 0,
-                            last_slot: 0,
-                        },
-                    },
                 })
             }
             _ => Value::Null,

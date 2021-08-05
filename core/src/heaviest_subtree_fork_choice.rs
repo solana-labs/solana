@@ -1097,7 +1097,7 @@ mod test {
         let mut heaviest_subtree_fork_choice = HeaviestSubtreeForkChoice::new_from_tree(forks);
 
         let stake = 100;
-        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys(1, stake);
+        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys_for_tests(1, stake);
         heaviest_subtree_fork_choice.add_votes(
             [(vote_pubkeys[0], (4, Hash::default()))].iter(),
             bank.epoch_stakes_map(),
@@ -1126,7 +1126,7 @@ mod test {
         */
         let forks = tr(3) / (tr(4) / (tr(5)));
         let stake = 100;
-        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys(1, stake);
+        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys_for_tests(1, stake);
         let mut heaviest_subtree_fork_choice = HeaviestSubtreeForkChoice::new_from_tree(forks);
         heaviest_subtree_fork_choice.add_votes(
             [(vote_pubkeys[0], (5, Hash::default()))].iter(),
@@ -1350,7 +1350,7 @@ mod test {
     fn test_set_root_and_add_votes() {
         let mut heaviest_subtree_fork_choice = setup_forks();
         let stake = 100;
-        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys(1, stake);
+        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys_for_tests(1, stake);
 
         // Vote for slot 2
         heaviest_subtree_fork_choice.add_votes(
@@ -1405,7 +1405,7 @@ mod test {
     fn test_set_root_and_add_outdated_votes() {
         let mut heaviest_subtree_fork_choice = setup_forks();
         let stake = 100;
-        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys(1, stake);
+        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys_for_tests(1, stake);
 
         // Vote for slot 0
         heaviest_subtree_fork_choice.add_votes(
@@ -1582,7 +1582,7 @@ mod test {
 
         // Add a vote for the other branch at slot 3.
         let stake = 100;
-        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys(2, stake);
+        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys_for_tests(2, stake);
         let leaf6 = 6;
         // Leaf slot 9 stops being the `best_slot` at slot 1 because there
         // are now votes for the branch at slot 3
@@ -1653,7 +1653,7 @@ mod test {
         let forks = tr(0) / (tr(4) / (tr(6)));
         let mut heaviest_subtree_fork_choice = HeaviestSubtreeForkChoice::new_from_tree(forks);
         let stake = 100;
-        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys(1, stake);
+        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys_for_tests(1, stake);
 
         // slot 6 should be the best because it's the only leaf
         assert_eq!(heaviest_subtree_fork_choice.best_overall_slot().0, 6);
@@ -1813,7 +1813,7 @@ mod test {
     fn test_process_update_operations() {
         let mut heaviest_subtree_fork_choice = setup_forks();
         let stake = 100;
-        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys(3, stake);
+        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys_for_tests(3, stake);
 
         let pubkey_votes: Vec<(Pubkey, SlotHashKey)> = vec![
             (vote_pubkeys[0], (3, Hash::default())),
@@ -1886,7 +1886,7 @@ mod test {
     fn test_generate_update_operations() {
         let mut heaviest_subtree_fork_choice = setup_forks();
         let stake = 100;
-        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys(3, stake);
+        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys_for_tests(3, stake);
         let pubkey_votes: Vec<(Pubkey, SlotHashKey)> = vec![
             (vote_pubkeys[0], (3, Hash::default())),
             (vote_pubkeys[1], (4, Hash::default())),
@@ -2067,7 +2067,7 @@ mod test {
     fn test_add_votes() {
         let mut heaviest_subtree_fork_choice = setup_forks();
         let stake = 100;
-        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys(3, stake);
+        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys_for_tests(3, stake);
 
         let pubkey_votes: Vec<(Pubkey, SlotHashKey)> = vec![
             (vote_pubkeys[0], (3, Hash::default())),
@@ -2094,7 +2094,8 @@ mod test {
             setup_duplicate_forks();
         let stake = 10;
         let num_validators = 2;
-        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys(num_validators, stake);
+        let (bank, vote_pubkeys) =
+            bank_utils::setup_bank_and_vote_pubkeys_for_tests(num_validators, stake);
 
         let pubkey_votes: Vec<(Pubkey, SlotHashKey)> = vec![
             (vote_pubkeys[0], duplicate_leaves_descended_from_4[0]),
@@ -2176,7 +2177,8 @@ mod test {
             setup_duplicate_forks();
         let stake = 10;
         let num_validators = 2;
-        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys(num_validators, stake);
+        let (bank, vote_pubkeys) =
+            bank_utils::setup_bank_and_vote_pubkeys_for_tests(num_validators, stake);
 
         let pubkey_votes: Vec<(Pubkey, SlotHashKey)> = vec![
             (vote_pubkeys[0], duplicate_leaves_descended_from_4[0]),
@@ -2248,7 +2250,8 @@ mod test {
             setup_duplicate_forks();
         let stake = 10;
         let num_validators = 2;
-        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys(num_validators, stake);
+        let (bank, vote_pubkeys) =
+            bank_utils::setup_bank_and_vote_pubkeys_for_tests(num_validators, stake);
 
         // Both voters voted on duplicate_leaves_descended_from_4[1], so thats the heaviest
         // branch
@@ -2351,7 +2354,8 @@ mod test {
             setup_duplicate_forks();
         let stake = 10;
         let num_validators = 3;
-        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys(num_validators, stake);
+        let (bank, vote_pubkeys) =
+            bank_utils::setup_bank_and_vote_pubkeys_for_tests(num_validators, stake);
 
         let pubkey_votes: Vec<(Pubkey, SlotHashKey)> = vec![
             (vote_pubkeys[0], duplicate_leaves_descended_from_4[0]),
@@ -2480,7 +2484,8 @@ mod test {
 
         let stake = 0;
         let num_validators = 2;
-        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys(num_validators, stake);
+        let (bank, vote_pubkeys) =
+            bank_utils::setup_bank_and_vote_pubkeys_for_tests(num_validators, stake);
 
         // Make new vote with vote_pubkeys[0] for a higher slot
         // Create new child with heaviest duplicate parent
@@ -2563,7 +2568,7 @@ mod test {
         assert!(!heaviest_subtree_fork_choice.is_best_child(&(10, Hash::default())));
 
         // Add vote for 9, it's the best again
-        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys(3, 100);
+        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys_for_tests(3, 100);
         heaviest_subtree_fork_choice.add_votes(
             [(vote_pubkeys[0], (9, Hash::default()))].iter(),
             bank.epoch_stakes_map(),
@@ -2577,7 +2582,7 @@ mod test {
     #[test]
     fn test_merge() {
         let stake = 100;
-        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys(4, stake);
+        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys_for_tests(4, stake);
         /*
             Build fork structure:
                  slot 0
@@ -2721,7 +2726,7 @@ mod test {
     #[test]
     fn test_merge_duplicate() {
         let stake = 100;
-        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys(2, stake);
+        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys_for_tests(2, stake);
         let mut slot_5_duplicate_hashes = std::iter::repeat_with(|| (5, Hash::new_unique()))
             .take(2)
             .collect::<Vec<_>>();
@@ -2904,7 +2909,7 @@ mod test {
     fn test_mark_valid_invalid_forks() {
         let mut heaviest_subtree_fork_choice = setup_forks();
         let stake = 100;
-        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys(3, stake);
+        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys_for_tests(3, stake);
 
         let pubkey_votes: Vec<(Pubkey, SlotHashKey)> = vec![
             (vote_pubkeys[0], (6, Hash::default())),
@@ -3025,7 +3030,7 @@ mod test {
             duplicate_leaves_descended_from_5,
         ) = setup_duplicate_forks();
         let stake = 100;
-        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys(3, stake);
+        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys_for_tests(3, stake);
 
         let pubkey_votes: Vec<(Pubkey, SlotHashKey)> = vec![
             (vote_pubkeys[0], duplicate_leaves_descended_from_4[0]),

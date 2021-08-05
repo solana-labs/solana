@@ -32,7 +32,8 @@ use std::{
 use thiserror::Error;
 
 pub const ITER_BATCH_SIZE: usize = 1000;
-const BINS_DEFAULT: usize = 16;
+pub const BINS_DEFAULT: usize = 16;
+const BINS_FOR_TESTING: usize = BINS_DEFAULT;
 pub type ScanResult<T> = Result<T, ScanError>;
 pub type SlotList<T> = Vec<(Slot, T)>;
 pub type SlotSlice<'s, T> = &'s [(Slot, T)];
@@ -41,7 +42,7 @@ pub type AccountMap<K, V> = BTreeMap<K, V>;
 
 type AccountMapEntry<T> = Arc<AccountMapEntryInner<T>>;
 
-pub trait IsCached {
+pub trait IsCached: 'static + Clone + Debug {
     fn is_cached(&self) -> bool;
 }
 
@@ -205,30 +206,94 @@ impl<T: 'static + Clone + IsCached> WriteAccountMapEntry<T> {
         })
     }
 
+    fn addref(item: &AtomicU64) {
+        item.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn upsert<'a>(
+        mut w_account_maps: AccountMapsWriteLock<'a, T>,
+        pubkey: &Pubkey,
+        new_value: AccountMapEntry<T>,
+        reclaims: &mut SlotList<T>,
+    ) {
+        match w_account_maps.entry(*pubkey) {
+            Entry::Occupied(mut occupied) => {
+                let current = occupied.get_mut();
+                Self::lock_and_update_slot_list(current, &new_value, reclaims);
+            }
+            Entry::Vacant(vacant) => {
+                vacant.insert(new_value);
+            }
+        }
+    }
+
+    // returns true if upsert was successful. new_value is modified in this case. new_value contains a RwLock
+    // otherwise, new_value has not been modified and the pubkey has to be added to the maps with a write lock. call upsert_new
+    pub fn update_key_if_exists<'a>(
+        r_account_maps: AccountMapsReadLock<'a, T>,
+        pubkey: &Pubkey,
+        new_value: &AccountMapEntry<T>,
+        reclaims: &mut SlotList<T>,
+    ) -> bool {
+        if let Some(current) = r_account_maps.get(pubkey) {
+            Self::lock_and_update_slot_list(current, new_value, reclaims);
+            true
+        } else {
+            false
+        }
+    }
+
+    fn lock_and_update_slot_list(
+        current: &Arc<AccountMapEntryInner<T>>,
+        new_value: &AccountMapEntry<T>,
+        reclaims: &mut SlotList<T>,
+    ) {
+        let mut slot_list = current.slot_list.write().unwrap();
+        let (slot, new_entry) = new_value.slot_list.write().unwrap().remove(0);
+        let addref = Self::update_slot_list(&mut slot_list, slot, new_entry, reclaims);
+        if addref {
+            Self::addref(&current.ref_count);
+        }
+    }
+
+    // modifies slot_list
+    // returns true if caller should addref
+    pub fn update_slot_list(
+        list: &mut SlotList<T>,
+        slot: Slot,
+        account_info: T,
+        reclaims: &mut SlotList<T>,
+    ) -> bool {
+        let mut addref = !account_info.is_cached();
+
+        // find other dirty entries from the same slot
+        for list_index in 0..list.len() {
+            let (s, previous_update_value) = &list[list_index];
+            if *s == slot {
+                addref = addref && previous_update_value.is_cached();
+
+                let mut new_item = (slot, account_info);
+                std::mem::swap(&mut new_item, &mut list[list_index]);
+                reclaims.push(new_item);
+                list[(list_index + 1)..]
+                    .iter()
+                    .for_each(|item| assert!(item.0 != slot));
+                return addref;
+            }
+        }
+
+        // if we make it here, we did not find the slot in the list
+        list.push((slot, account_info));
+        addref
+    }
+
     // Try to update an item in the slot list the given `slot` If an item for the slot
     // already exists in the list, remove the older item, add it to `reclaims`, and insert
     // the new item.
     pub fn update(&mut self, slot: Slot, account_info: T, reclaims: &mut SlotList<T>) {
         let mut addref = !account_info.is_cached();
         self.slot_list_mut(|list| {
-            // find other dirty entries from the same slot
-            for list_index in 0..list.len() {
-                let (s, previous_update_value) = &list[list_index];
-                if *s == slot {
-                    addref = addref && previous_update_value.is_cached();
-
-                    let mut new_item = (slot, account_info);
-                    std::mem::swap(&mut new_item, &mut list[list_index]);
-                    reclaims.push(new_item);
-                    list[(list_index + 1)..]
-                        .iter()
-                        .for_each(|item| assert!(item.0 != slot));
-                    return; // this returns from self.slot_list_mut above
-                }
-            }
-
-            // if we make it here, we did not find the slot in the list
-            list.push((slot, account_info));
+            addref = Self::update_slot_list(list, slot, account_info, reclaims);
         });
         if addref {
             // If it's the first non-cache insert, also bump the stored ref count
@@ -678,10 +743,14 @@ pub struct AccountsIndex<T> {
 
 impl<
         T: 'static + Clone + IsCached + ZeroLamport + std::marker::Sync + std::marker::Send + Debug,
-    > Default for AccountsIndex<T>
+    > AccountsIndex<T>
 {
-    fn default() -> Self {
-        let (account_maps, bin_calculator) = Self::allocate_accounts_index(BINS_DEFAULT);
+    pub fn default_for_tests() -> Self {
+        Self::new(BINS_FOR_TESTING)
+    }
+
+    pub fn new(bins: usize) -> Self {
+        let (account_maps, bin_calculator) = Self::allocate_accounts_index(bins);
         Self {
             account_maps,
             bin_calculator,
@@ -699,12 +768,7 @@ impl<
             removed_bank_ids: Mutex::<HashSet<BankId>>::default(),
         }
     }
-}
 
-impl<
-        T: 'static + Clone + IsCached + ZeroLamport + std::marker::Sync + std::marker::Send + Debug,
-    > AccountsIndex<T>
-{
     fn allocate_accounts_index(bins: usize) -> (LockMapType<T>, PubkeyBinCalculator16) {
         let account_maps = (0..bins)
             .into_iter()
@@ -713,6 +777,7 @@ impl<
         let bin_calculator = PubkeyBinCalculator16::new(bins);
         (account_maps, bin_calculator)
     }
+
     fn iter<R>(&self, range: Option<R>) -> AccountsIndexIterator<T>
     where
         R: RangeBounds<Pubkey>,
@@ -1060,26 +1125,6 @@ impl<
             .map(WriteAccountMapEntry::from_account_map_entry)
     }
 
-    fn insert_new_entry_if_missing(
-        &self,
-        pubkey: &Pubkey,
-        slot: Slot,
-        info: T,
-        w_account_maps: Option<&mut AccountMapsWriteLock<T>>,
-    ) -> Option<(WriteAccountMapEntry<T>, T)> {
-        let new_entry = WriteAccountMapEntry::new_entry_after_update(slot, info);
-        match w_account_maps {
-            Some(w_account_maps) => {
-                self.insert_new_entry_if_missing_with_lock(*pubkey, w_account_maps, new_entry)
-            }
-            None => {
-                let mut w_account_maps = self.get_account_maps_write_lock(pubkey);
-                self.insert_new_entry_if_missing_with_lock(*pubkey, &mut w_account_maps, new_entry)
-            }
-        }
-        .map(|x| (x.0, x.1))
-    }
-
     // return None if item was created new
     // if entry for pubkey already existed, return Some(entry). Caller needs to call entry.update.
     fn insert_new_entry_if_missing_with_lock(
@@ -1100,18 +1145,6 @@ impl<
                 account_entry.insert(new_entry);
                 None
             }
-        }
-    }
-
-    fn get_account_write_entry_else_create(
-        &self,
-        pubkey: &Pubkey,
-        slot: Slot,
-        info: T,
-    ) -> Option<(WriteAccountMapEntry<T>, T)> {
-        match self.get_account_write_entry(pubkey) {
-            Some(w_account_entry) => Some((w_account_entry, info)),
-            None => self.insert_new_entry_if_missing(pubkey, slot, info, None),
         }
     }
 
@@ -1514,10 +1547,14 @@ impl<
         //  - The secondary index is never consulted as primary source of truth for gets/stores.
         //  So, what the accounts_index sees alone is sufficient as a source of truth for other non-scan
         //  account operations.
-        if let Some((mut w_account_entry, account_info)) =
-            self.get_account_write_entry_else_create(pubkey, slot, account_info)
+        let new_item = WriteAccountMapEntry::new_entry_after_update(slot, account_info);
+        let map = &self.account_maps[self.bin_calculator.bin_from_pubkey(pubkey)];
+
+        let r_account_maps = map.read().unwrap();
+        if !WriteAccountMapEntry::update_key_if_exists(r_account_maps, pubkey, &new_item, reclaims)
         {
-            w_account_entry.update(slot, account_info, reclaims);
+            let w_account_maps = map.write().unwrap();
+            WriteAccountMapEntry::upsert(w_account_maps, pubkey, new_item, reclaims);
         }
         self.update_secondary_indexes(pubkey, account_owner, account_data, account_indexes);
     }
@@ -1845,7 +1882,7 @@ pub mod tests {
     fn create_dashmap_secondary_index_state() -> (usize, usize, AccountSecondaryIndexes) {
         {
             // Check that we're actually testing the correct variant
-            let index = AccountsIndex::<bool>::default();
+            let index = AccountsIndex::<bool>::default_for_tests();
             let _type_check = SecondaryIndexTypes::DashMap(&index.spl_token_mint_index);
         }
 
@@ -1855,7 +1892,7 @@ pub mod tests {
     fn create_rwlock_secondary_index_state() -> (usize, usize, AccountSecondaryIndexes) {
         {
             // Check that we're actually testing the correct variant
-            let index = AccountsIndex::<bool>::default();
+            let index = AccountsIndex::<bool>::default_for_tests();
             let _type_check = SecondaryIndexTypes::RwLock(&index.spl_token_owner_index);
         }
 
@@ -2509,7 +2546,7 @@ pub mod tests {
     #[test]
     fn test_get_empty() {
         let key = Keypair::new();
-        let index = AccountsIndex::<bool>::default();
+        let index = AccountsIndex::<bool>::default_for_tests();
         let ancestors = Ancestors::default();
         assert!(index.get(&key.pubkey(), Some(&ancestors), None).is_none());
         assert!(index.get(&key.pubkey(), None, None).is_none());
@@ -2567,7 +2604,7 @@ pub mod tests {
     #[test]
     fn test_insert_no_ancestors() {
         let key = Keypair::new();
-        let index = AccountsIndex::<bool>::default();
+        let index = AccountsIndex::<bool>::default_for_tests();
         let mut gc = Vec::new();
         index.upsert(
             0,
@@ -2608,7 +2645,7 @@ pub mod tests {
         let pubkey = &key.pubkey();
         let slot = 0;
 
-        let index = AccountsIndex::<bool>::default();
+        let index = AccountsIndex::<bool>::default_for_tests();
         let account_info = true;
         let items = vec![(*pubkey, account_info)];
         index.insert_new_if_missing_into_primary_index(slot, items.len(), items.into_iter());
@@ -2627,7 +2664,7 @@ pub mod tests {
         assert_eq!(num, 1);
 
         // not zero lamports
-        let index = AccountsIndex::<AccountInfoTest>::default();
+        let index = AccountsIndex::<AccountInfoTest>::default_for_tests();
         let account_info: AccountInfoTest = 0 as AccountInfoTest;
         let items = vec![(*pubkey, account_info)];
         index.insert_new_if_missing_into_primary_index(slot, items.len(), items.into_iter());
@@ -2678,7 +2715,7 @@ pub mod tests {
         let key0 = Keypair::new().pubkey();
         let key1 = Keypair::new().pubkey();
 
-        let index = AccountsIndex::<bool>::default();
+        let index = AccountsIndex::<bool>::default_for_tests();
         let account_infos = [true, false];
 
         let items = vec![(key0, account_infos[0]), (key1, account_infos[1])];
@@ -2709,7 +2746,7 @@ pub mod tests {
         let slot1 = 1;
         let key = Keypair::new().pubkey();
 
-        let index = AccountsIndex::<T>::default();
+        let index = AccountsIndex::<T>::default_for_tests();
         let mut gc = Vec::new();
 
         if upsert {
@@ -2810,19 +2847,35 @@ pub mod tests {
     #[test]
     fn test_insert_with_lock_no_ancestors() {
         let key = Keypair::new();
-        let index = AccountsIndex::<bool>::default();
+        let index = AccountsIndex::<bool>::default_for_tests();
         let slot = 0;
         let account_info = true;
 
         let new_entry = WriteAccountMapEntry::new_entry_after_update(slot, account_info);
-        let mut w_account_maps = index.get_account_maps_write_lock(&key.pubkey());
-        let write = index.insert_new_entry_if_missing_with_lock(
-            key.pubkey(),
-            &mut w_account_maps,
-            new_entry,
+        assert_eq!(0, account_maps_len_expensive(&index));
+
+        // will fail because key doesn't exist
+        let r_account_maps = index.get_account_maps_read_lock(&key.pubkey());
+        assert!(!WriteAccountMapEntry::update_key_if_exists(
+            r_account_maps,
+            &key.pubkey(),
+            &new_entry,
+            &mut SlotList::default(),
+        ));
+        assert_eq!(
+            (slot, account_info),
+            new_entry.slot_list.read().as_ref().unwrap()[0]
         );
-        assert!(write.is_none());
-        drop(w_account_maps);
+
+        assert_eq!(0, account_maps_len_expensive(&index));
+        let w_account_maps = index.get_account_maps_write_lock(&key.pubkey());
+        WriteAccountMapEntry::upsert(
+            w_account_maps,
+            &key.pubkey(),
+            new_entry,
+            &mut SlotList::default(),
+        );
+        assert_eq!(1, account_maps_len_expensive(&index));
 
         let mut ancestors = Ancestors::default();
         assert!(index.get(&key.pubkey(), Some(&ancestors), None).is_none());
@@ -2840,7 +2893,7 @@ pub mod tests {
     #[test]
     fn test_insert_wrong_ancestors() {
         let key = Keypair::new();
-        let index = AccountsIndex::<bool>::default();
+        let index = AccountsIndex::<bool>::default_for_tests();
         let mut gc = Vec::new();
         index.upsert(
             0,
@@ -2864,7 +2917,7 @@ pub mod tests {
     #[test]
     fn test_insert_with_ancestors() {
         let key = Keypair::new();
-        let index = AccountsIndex::<bool>::default();
+        let index = AccountsIndex::<bool>::default_for_tests();
         let mut gc = Vec::new();
         index.upsert(
             0,
@@ -2894,7 +2947,7 @@ pub mod tests {
     }
 
     fn setup_accounts_index_keys(num_pubkeys: usize) -> (AccountsIndex<bool>, Vec<Pubkey>) {
-        let index = AccountsIndex::<bool>::default();
+        let index = AccountsIndex::<bool>::default_for_tests();
         let root_slot = 0;
 
         let mut pubkeys: Vec<Pubkey> = std::iter::repeat_with(|| {
@@ -3060,7 +3113,7 @@ pub mod tests {
 
     #[test]
     fn test_is_root() {
-        let index = AccountsIndex::<bool>::default();
+        let index = AccountsIndex::<bool>::default_for_tests();
         assert!(!index.is_root(0));
         index.add_root(0, false);
         assert!(index.is_root(0));
@@ -3069,7 +3122,7 @@ pub mod tests {
     #[test]
     fn test_insert_with_root() {
         let key = Keypair::new();
-        let index = AccountsIndex::<bool>::default();
+        let index = AccountsIndex::<bool>::default_for_tests();
         let mut gc = Vec::new();
         index.upsert(
             0,
@@ -3089,7 +3142,7 @@ pub mod tests {
 
     #[test]
     fn test_clean_first() {
-        let index = AccountsIndex::<bool>::default();
+        let index = AccountsIndex::<bool>::default_for_tests();
         index.add_root(0, false);
         index.add_root(1, false);
         index.clean_dead_slot(0);
@@ -3100,7 +3153,7 @@ pub mod tests {
     #[test]
     fn test_clean_last() {
         //this behavior might be undefined, clean up should only occur on older slots
-        let index = AccountsIndex::<bool>::default();
+        let index = AccountsIndex::<bool>::default_for_tests();
         index.add_root(0, false);
         index.add_root(1, false);
         index.clean_dead_slot(1);
@@ -3110,7 +3163,7 @@ pub mod tests {
 
     #[test]
     fn test_clean_and_unclean_slot() {
-        let index = AccountsIndex::<bool>::default();
+        let index = AccountsIndex::<bool>::default_for_tests();
         assert_eq!(0, index.roots_tracker.read().unwrap().uncleaned_roots.len());
         index.add_root(0, false);
         index.add_root(1, false);
@@ -3182,7 +3235,7 @@ pub mod tests {
     #[test]
     fn test_update_last_wins() {
         let key = Keypair::new();
-        let index = AccountsIndex::<bool>::default();
+        let index = AccountsIndex::<bool>::default_for_tests();
         let ancestors = vec![(0, 0)].into_iter().collect();
         let mut gc = Vec::new();
         index.upsert(
@@ -3218,7 +3271,7 @@ pub mod tests {
     fn test_update_new_slot() {
         solana_logger::setup();
         let key = Keypair::new();
-        let index = AccountsIndex::<bool>::default();
+        let index = AccountsIndex::<bool>::default_for_tests();
         let ancestors = vec![(0, 0)].into_iter().collect();
         let mut gc = Vec::new();
         index.upsert(
@@ -3251,7 +3304,7 @@ pub mod tests {
     #[test]
     fn test_update_gc_purged_slot() {
         let key = Keypair::new();
-        let index = AccountsIndex::<bool>::default();
+        let index = AccountsIndex::<bool>::default_for_tests();
         let mut gc = Vec::new();
         index.upsert(
             0,
@@ -3344,7 +3397,7 @@ pub mod tests {
     #[test]
     fn test_purge() {
         let key = Keypair::new();
-        let index = AccountsIndex::<u64>::default();
+        let index = AccountsIndex::<u64>::default_for_tests();
         let mut gc = Vec::new();
         assert_eq!(0, account_maps_len_expensive(&index));
         index.upsert(
@@ -3392,7 +3445,7 @@ pub mod tests {
     #[test]
     fn test_latest_slot() {
         let slot_slice = vec![(0, true), (5, true), (3, true), (7, true)];
-        let index = AccountsIndex::<bool>::default();
+        let index = AccountsIndex::<bool>::default_for_tests();
 
         // No ancestors, no root, should return None
         assert!(index.latest_slot(None, &slot_slice, None).is_none());
@@ -3494,7 +3547,7 @@ pub mod tests {
     #[test]
     fn test_purge_exact_dashmap_secondary_index() {
         let (key_start, key_end, secondary_indexes) = create_dashmap_secondary_index_state();
-        let index = AccountsIndex::<bool>::default();
+        let index = AccountsIndex::<bool>::default_for_tests();
         run_test_purge_exact_secondary_index(
             &index,
             &index.spl_token_mint_index,
@@ -3507,7 +3560,7 @@ pub mod tests {
     #[test]
     fn test_purge_exact_rwlock_secondary_index() {
         let (key_start, key_end, secondary_indexes) = create_rwlock_secondary_index_state();
-        let index = AccountsIndex::<bool>::default();
+        let index = AccountsIndex::<bool>::default_for_tests();
         run_test_purge_exact_secondary_index(
             &index,
             &index.spl_token_owner_index,
@@ -3520,7 +3573,7 @@ pub mod tests {
     #[test]
     fn test_purge_older_root_entries() {
         // No roots, should be no reclaims
-        let index = AccountsIndex::<bool>::default();
+        let index = AccountsIndex::<bool>::default_for_tests();
         let mut slot_list = vec![(1, true), (2, true), (5, true), (9, true)];
         let mut reclaims = vec![];
         index.purge_older_root_entries(&mut slot_list, &mut reclaims, None);
@@ -3715,7 +3768,7 @@ pub mod tests {
     #[test]
     fn test_dashmap_secondary_index() {
         let (key_start, key_end, secondary_indexes) = create_dashmap_secondary_index_state();
-        let index = AccountsIndex::<bool>::default();
+        let index = AccountsIndex::<bool>::default_for_tests();
         run_test_secondary_indexes(
             &index,
             &index.spl_token_mint_index,
@@ -3728,7 +3781,7 @@ pub mod tests {
     #[test]
     fn test_rwlock_secondary_index() {
         let (key_start, key_end, secondary_indexes) = create_rwlock_secondary_index_state();
-        let index = AccountsIndex::<bool>::default();
+        let index = AccountsIndex::<bool>::default_for_tests();
         run_test_secondary_indexes(
             &index,
             &index.spl_token_owner_index,
@@ -3829,7 +3882,7 @@ pub mod tests {
     #[test]
     fn test_dashmap_secondary_index_same_slot_and_forks() {
         let (key_start, key_end, account_index) = create_dashmap_secondary_index_state();
-        let index = AccountsIndex::<bool>::default();
+        let index = AccountsIndex::<bool>::default_for_tests();
         run_test_secondary_indexes_same_slot_and_forks(
             &index,
             &index.spl_token_mint_index,
@@ -3842,7 +3895,7 @@ pub mod tests {
     #[test]
     fn test_rwlock_secondary_index_same_slot_and_forks() {
         let (key_start, key_end, account_index) = create_rwlock_secondary_index_state();
-        let index = AccountsIndex::<bool>::default();
+        let index = AccountsIndex::<bool>::default_for_tests();
         run_test_secondary_indexes_same_slot_and_forks(
             &index,
             &index.spl_token_owner_index,
@@ -3866,7 +3919,7 @@ pub mod tests {
 
     #[test]
     fn test_bin_start_and_range() {
-        let index = AccountsIndex::<bool>::default();
+        let index = AccountsIndex::<bool>::default_for_tests();
         let iter = AccountsIndexIterator::new(&index, None::<RangeInclusive<Pubkey>>);
         assert_eq!((0, usize::MAX), iter.bin_start_and_range());
 
@@ -3895,7 +3948,7 @@ pub mod tests {
 
     #[test]
     fn test_start_end_bin() {
-        let index = AccountsIndex::<bool>::default();
+        let index = AccountsIndex::<bool>::default_for_tests();
         assert_eq!(index.bins(), BINS_DEFAULT);
         let iter = AccountsIndexIterator::new(&index, None::<RangeInclusive<Pubkey>>);
         assert_eq!(iter.start_bin(), 0); // no range, so 0
@@ -3923,5 +3976,11 @@ pub mod tests {
         let iter = AccountsIndexIterator::new(&index, Some((Excluded(key), Excluded(key))));
         assert_eq!(iter.start_bin(), bins - 1); // start at highest possible pubkey, so bins - 1
         assert_eq!(iter.end_bin_inclusive(), bins - 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "bins.is_power_of_two()")]
+    fn test_illegal_bins() {
+        AccountsIndex::<bool>::new(3);
     }
 }

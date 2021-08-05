@@ -8191,7 +8191,7 @@ pub mod tests {
             shredder.entries_to_shreds(&leader_keypair, &entries, true, 0);
 
         let genesis_config = create_genesis_config(2).genesis_config;
-        let bank = Arc::new(Bank::new(&genesis_config));
+        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
         let mut leader_schedule_cache = LeaderScheduleCache::new_from_bank(&bank);
         let fixed_schedule = FixedSchedule {
             leader_schedule: Arc::new(LeaderSchedule::new_from_schedule(vec![

@@ -1,14 +1,27 @@
 use {
     crate::{broadcast_stage::BroadcastStage, retransmit_stage::RetransmitStage},
     itertools::Itertools,
+    lru::LruCache,
     solana_gossip::{
         cluster_info::{compute_retransmit_peers, ClusterInfo},
         contact_info::ContactInfo,
         crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS,
         weighted_shuffle::{weighted_best, weighted_shuffle},
     },
-    solana_sdk::pubkey::Pubkey,
-    std::{any::TypeId, cmp::Reverse, collections::HashMap, marker::PhantomData},
+    solana_runtime::bank::Bank,
+    solana_sdk::{
+        clock::{Epoch, Slot},
+        pubkey::Pubkey,
+    },
+    std::{
+        any::TypeId,
+        cmp::Reverse,
+        collections::HashMap,
+        marker::PhantomData,
+        ops::Deref,
+        sync::{Arc, Mutex},
+        time::{Duration, Instant},
+    },
 };
 
 enum NodeId {
@@ -35,6 +48,15 @@ pub struct ClusterNodes<T> {
     _phantom: PhantomData<T>,
 }
 
+type CacheEntry<T> = Option<(/*as of:*/ Instant, Arc<ClusterNodes<T>>)>;
+
+pub(crate) struct ClusterNodesCache<T> {
+    // Cache entries are wrapped in Arc<Mutex<...>>, so that, when needed, only
+    // one thread does the computations to update the entry for the epoch.
+    cache: Mutex<LruCache<Epoch, Arc<Mutex<CacheEntry<T>>>>>,
+    ttl: Duration, // Time to live.
+}
+
 impl Node {
     #[inline]
     fn pubkey(&self) -> Pubkey {
@@ -54,12 +76,12 @@ impl Node {
 }
 
 impl<T> ClusterNodes<T> {
-    pub fn num_peers(&self) -> usize {
+    pub(crate) fn num_peers(&self) -> usize {
         self.index.len()
     }
 
     // A peer is considered live if they generated their contact info recently.
-    pub fn num_peers_live(&self, now: u64) -> usize {
+    pub(crate) fn num_peers_live(&self, now: u64) -> usize {
         self.index
             .iter()
             .filter_map(|(_, index)| self.nodes[*index].contact_info())
@@ -82,7 +104,7 @@ impl ClusterNodes<BroadcastStage> {
 
     /// Returns the root of turbine broadcast tree, which the leader sends the
     /// shred to.
-    pub fn get_broadcast_peer(&self, shred_seed: [u8; 32]) -> Option<&ContactInfo> {
+    pub(crate) fn get_broadcast_peer(&self, shred_seed: [u8; 32]) -> Option<&ContactInfo> {
         if self.index.is_empty() {
             None
         } else {
@@ -96,11 +118,7 @@ impl ClusterNodes<BroadcastStage> {
 }
 
 impl ClusterNodes<RetransmitStage> {
-    pub fn new(cluster_info: &ClusterInfo, stakes: &HashMap<Pubkey, u64>) -> Self {
-        new_cluster_nodes(cluster_info, stakes)
-    }
-
-    pub fn get_retransmit_peers(
+    pub(crate) fn get_retransmit_peers(
         &self,
         shred_seed: [u8; 32],
         fanout: usize,
@@ -211,6 +229,70 @@ fn get_nodes(cluster_info: &ClusterInfo, stakes: &HashMap<Pubkey, u64>) -> Vec<N
     .collect()
 }
 
+impl<T> ClusterNodesCache<T> {
+    pub(crate) fn new(
+        // Capacity of underlying LRU-cache in terms of number of epochs.
+        cap: usize,
+        // A time-to-live eviction policy is enforced to refresh entries in
+        // case gossip contact-infos are updated.
+        ttl: Duration,
+    ) -> Self {
+        Self {
+            cache: Mutex::new(LruCache::new(cap)),
+            ttl,
+        }
+    }
+}
+
+impl<T: 'static> ClusterNodesCache<T> {
+    fn get_cache_entry(&self, epoch: Epoch) -> Arc<Mutex<CacheEntry<T>>> {
+        let mut cache = self.cache.lock().unwrap();
+        match cache.get(&epoch) {
+            Some(entry) => Arc::clone(entry),
+            None => {
+                let entry = Arc::default();
+                cache.put(epoch, Arc::clone(&entry));
+                entry
+            }
+        }
+    }
+
+    pub(crate) fn get(
+        &self,
+        shred_slot: Slot,
+        root_bank: &Bank,
+        working_bank: &Bank,
+        cluster_info: &ClusterInfo,
+    ) -> Arc<ClusterNodes<T>> {
+        let epoch = root_bank.get_leader_schedule_epoch(shred_slot);
+        let entry = self.get_cache_entry(epoch);
+        // Hold the lock on the entry here so that, if needed, only
+        // one thread recomputes cluster-nodes for this epoch.
+        let mut entry = entry.lock().unwrap();
+        if let Some((asof, nodes)) = entry.deref() {
+            if asof.elapsed() < self.ttl {
+                return Arc::clone(nodes);
+            }
+        }
+        let epoch_staked_nodes = [root_bank, working_bank]
+            .iter()
+            .find_map(|bank| bank.epoch_staked_nodes(epoch));
+        if epoch_staked_nodes.is_none() {
+            inc_new_counter_info!("cluster_nodes-unknown_epoch_staked_nodes", 1);
+            if epoch != root_bank.get_leader_schedule_epoch(root_bank.slot()) {
+                return self.get(root_bank.slot(), root_bank, working_bank, cluster_info);
+            }
+            inc_new_counter_info!("cluster_nodes-unknown_epoch_staked_nodes_root", 1);
+        }
+        let nodes = Arc::new(new_cluster_nodes::<T>(
+            cluster_info,
+            &epoch_staked_nodes.unwrap_or_default(),
+        ));
+        *entry = Some((Instant::now(), Arc::clone(&nodes)));
+        nodes
+    }
+}
+
 impl From<ContactInfo> for NodeId {
     fn from(node: ContactInfo) -> Self {
         NodeId::ContactInfo(node)
@@ -319,7 +401,7 @@ mod tests {
         let this_node = cluster_info.my_contact_info();
         // ClusterInfo::tvu_peers excludes the node itself.
         assert_eq!(cluster_info.tvu_peers().len(), nodes.len() - 1);
-        let cluster_nodes = ClusterNodes::<RetransmitStage>::new(&cluster_info, &stakes);
+        let cluster_nodes = new_cluster_nodes::<RetransmitStage>(&cluster_info, &stakes);
         // All nodes with contact-info should be in the index.
         assert_eq!(cluster_nodes.index.len(), nodes.len());
         // Staked nodes with no contact-info should be included.

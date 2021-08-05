@@ -153,7 +153,7 @@ pub mod test {
     #[test]
     fn test_weighted_repair_traversal() {
         let stake = 100;
-        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys(1, stake);
+        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys_for_tests(1, stake);
         let (_, mut heaviest_subtree_fork_choice) = setup_forks();
         let weighted_traversal = RepairWeightTraversal::new(&heaviest_subtree_fork_choice);
         let steps: Vec<_> = weighted_traversal.collect();

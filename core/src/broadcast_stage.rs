@@ -44,6 +44,9 @@ pub(crate) mod broadcast_utils;
 mod fail_entry_verification_broadcast_run;
 mod standard_broadcast_run;
 
+const CLUSTER_NODES_CACHE_NUM_EPOCH_CAP: usize = 8;
+const CLUSTER_NODES_CACHE_TTL: Duration = Duration::from_secs(5);
+
 pub(crate) const NUM_INSERT_THREADS: usize = 2;
 pub(crate) type RetransmitSlotsSender = CrossbeamSender<HashMap<Slot, Arc<Bank>>>;
 pub(crate) type RetransmitSlotsReceiver = CrossbeamReceiver<HashMap<Slot, Arc<Bank>>>;
@@ -124,7 +127,7 @@ impl BroadcastStageType {
     }
 }
 
-pub type TransmitShreds = (Option<Arc<HashMap<Pubkey, u64>>>, Arc<Vec<Shred>>);
+type TransmitShreds = (Slot, Arc<Vec<Shred>>);
 trait BroadcastRun {
     fn run(
         &mut self,
@@ -339,27 +342,25 @@ impl BroadcastStage {
         }
 
         for (_, bank) in retransmit_slots.iter() {
-            let bank_epoch = bank.get_leader_schedule_epoch(bank.slot());
-            let stakes = bank.epoch_staked_nodes(bank_epoch);
-            let stakes = stakes.map(Arc::new);
+            let slot = bank.slot();
             let data_shreds = Arc::new(
                 blockstore
-                    .get_data_shreds_for_slot(bank.slot(), 0)
+                    .get_data_shreds_for_slot(slot, 0)
                     .expect("My own shreds must be reconstructable"),
             );
 
             if !data_shreds.is_empty() {
-                socket_sender.send(((stakes.clone(), data_shreds), None))?;
+                socket_sender.send(((slot, data_shreds), None))?;
             }
 
             let coding_shreds = Arc::new(
                 blockstore
-                    .get_coding_shreds_for_slot(bank.slot(), 0)
+                    .get_coding_shreds_for_slot(slot, 0)
                     .expect("My own shreds must be reconstructable"),
             );
 
             if !coding_shreds.is_empty() {
-                socket_sender.send(((stakes.clone(), coding_shreds), None))?;
+                socket_sender.send(((slot, coding_shreds), None))?;
             }
         }
 
@@ -464,10 +465,9 @@ pub mod test {
     };
 
     #[allow(clippy::implicit_hasher)]
-    pub fn make_transmit_shreds(
+    fn make_transmit_shreds(
         slot: Slot,
         num: u64,
-        stakes: Option<Arc<HashMap<Pubkey, u64>>>,
     ) -> (
         Vec<Shred>,
         Vec<Shred>,
@@ -489,11 +489,11 @@ pub mod test {
             coding_shreds.clone(),
             data_shreds
                 .into_iter()
-                .map(|s| (stakes.clone(), Arc::new(vec![s])))
+                .map(|s| (slot, Arc::new(vec![s])))
                 .collect(),
             coding_shreds
                 .into_iter()
-                .map(|s| (stakes.clone(), Arc::new(vec![s])))
+                .map(|s| (slot, Arc::new(vec![s])))
                 .collect(),
         )
     }
@@ -532,12 +532,12 @@ pub mod test {
         let (transmit_sender, transmit_receiver) = channel();
         let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(100_000);
-        let bank0 = Arc::new(Bank::new(&genesis_config));
+        let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
 
         // Make some shreds
         let updated_slot = 0;
         let (all_data_shreds, all_coding_shreds, _, _all_coding_transmit_shreds) =
-            make_transmit_shreds(updated_slot, 10, None);
+            make_transmit_shreds(updated_slot, 10);
         let num_data_shreds = all_data_shreds.len();
         let num_coding_shreds = all_coding_shreds.len();
         assert!(num_data_shreds >= 10);
@@ -608,7 +608,7 @@ pub mod test {
         let exit_sender = Arc::new(AtomicBool::new(false));
 
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
-        let bank = Bank::new(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let bank = bank_forks.read().unwrap().root_bank();
 
