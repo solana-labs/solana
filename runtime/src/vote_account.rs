@@ -27,7 +27,11 @@ const INVALID_VOTE_STATE: Result<VoteState, InstructionError> =
 pub struct VoteAccount(Arc<VoteAccountInner>);
 
 #[derive(Debug, AbiExample)]
+<<<<<<< HEAD
 struct VoteAccountInner {
+=======
+struct VoteAccount {
+>>>>>>> 1403eaeef (makes solana_runtime::vote_account::VoteAccount private)
     account: Account,
     vote_state: RwLock<Result<VoteState, InstructionError>>,
     vote_state_once: Once,
@@ -51,6 +55,7 @@ pub struct VoteAccounts {
     staked_nodes_once: Once,
 }
 
+<<<<<<< HEAD
 impl VoteAccount {
     pub fn account(&self) -> &Account {
         &self.0.account
@@ -58,6 +63,11 @@ impl VoteAccount {
 
     pub(crate) fn lamports(&self) -> u64 {
         self.account().lamports
+=======
+impl ArcVoteAccount {
+    pub fn lamports(&self) -> u64 {
+        self.0.account.lamports
+>>>>>>> 1403eaeef (makes solana_runtime::vote_account::VoteAccount private)
     }
 
     pub fn vote_state(&self) -> RwLockReadGuard<Result<VoteState, InstructionError>> {
@@ -67,10 +77,13 @@ impl VoteAccount {
             *inner.vote_state.write().unwrap() = vote_state;
         });
         inner.vote_state.read().unwrap()
+<<<<<<< HEAD
     }
 
     pub fn is_deserialized(&self) -> bool {
         self.0.vote_state_once.is_completed()
+=======
+>>>>>>> 1403eaeef (makes solana_runtime::vote_account::VoteAccount private)
     }
 
     /// VoteState.node_pubkey of this vote-account.
@@ -175,7 +188,11 @@ impl VoteAccounts {
     }
 }
 
+<<<<<<< HEAD
 impl Serialize for VoteAccount {
+=======
+impl Serialize for ArcVoteAccount {
+>>>>>>> 1403eaeef (makes solana_runtime::vote_account::VoteAccount private)
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -194,9 +211,27 @@ impl<'de> Deserialize<'de> for VoteAccount {
     }
 }
 
+<<<<<<< HEAD
 impl From<AccountSharedData> for VoteAccount {
     fn from(account: AccountSharedData) -> Self {
         Self(Arc::new(VoteAccountInner::from(account)))
+=======
+impl From<AccountSharedData> for ArcVoteAccount {
+    fn from(account: AccountSharedData) -> Self {
+        Self(Arc::new(VoteAccount::from(account)))
+    }
+}
+
+impl From<Account> for ArcVoteAccount {
+    fn from(account: Account) -> Self {
+        Self(Arc::new(VoteAccount::from(account)))
+    }
+}
+
+impl From<AccountSharedData> for VoteAccount {
+    fn from(account: AccountSharedData) -> Self {
+        Self::from(Account::from(account))
+>>>>>>> 1403eaeef (makes solana_runtime::vote_account::VoteAccount private)
     }
 }
 
