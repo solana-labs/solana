@@ -1072,7 +1072,7 @@ impl Bank {
         )
     }
 
-    pub fn new_no_wallclock_throttle(genesis_config: &GenesisConfig) -> Self {
+    pub fn new_no_wallclock_throttle_for_tests(genesis_config: &GenesisConfig) -> Self {
         let mut bank = Self::new_with_paths(
             genesis_config,
             Vec::new(),
