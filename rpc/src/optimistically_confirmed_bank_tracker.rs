@@ -118,11 +118,14 @@ impl OptimisticallyConfirmedBankTracker {
     ) {
         if bank.slot() > last_notified_slot {
             if bank.is_frozen() {
-                info!("notify_or_defer notifying {:?}", bank.slot());
+                debug!(
+                    "notify_or_defer notifying via notify_gossip_subscribers for slot {:?}",
+                    bank.slot()
+                );
                 subscriptions.notify_gossip_subscribers(bank.slot());
             } else if bank.slot() > bank_forks.read().unwrap().root_bank().slot() {
                 pending_optimistically_confirmed_banks.insert(bank.slot());
-                info!("notify_or_defer defer notifying {:?}", bank.slot());
+                debug!("notify_or_defer defer notifying for slot {:?}", bank.slot());
             }
         }
     }
@@ -135,7 +138,7 @@ impl OptimisticallyConfirmedBankTracker {
         mut pending_optimistically_confirmed_banks: &mut HashSet<Slot>,
         last_notified_slot: &mut Slot,
     ) {
-        info!("received bank notification: {:?}", notification);
+        debug!("received bank notification: {:?}", notification);
         match notification {
             BankNotification::OptimisticallyConfirmed(slot) => {
                 if let Some(bank) = bank_forks.read().unwrap().get(slot) {
@@ -158,7 +161,7 @@ impl OptimisticallyConfirmedBankTracker {
 
                         for parent in bank.parents().iter() {
                             if parent.slot() > *last_notified_slot {
-                                info!("notify_or_defer for parent {:?}", parent.slot());
+                                debug!("Calling notify_or_defer for parent {:?}", parent.slot());
                                 Self::notify_or_defer(
                                     subscriptions,
                                     bank_forks,
@@ -209,8 +212,8 @@ impl OptimisticallyConfirmedBankTracker {
                     if frozen_slot > w_optimistically_confirmed_bank.bank.slot() {
                         w_optimistically_confirmed_bank.bank = bank;
                     }
-                    info!(
-                        "notify_or_defer sending deferred notification {:?}",
+                    debug!(
+                        "Calling notify_gossip_subscribers to send deferred notification {:?}",
                         frozen_slot
                     );
                     subscriptions.notify_gossip_subscribers(frozen_slot);
