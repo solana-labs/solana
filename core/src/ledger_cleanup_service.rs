@@ -241,6 +241,8 @@ impl LedgerCleanupService {
         // Flush interval is shorter than purge interval, so check this one first
         if root - *last_flush_slot > flush_interval {
             let _ = Self::flush_slots(&blockstore.clone(), root, last_flush_slot, flush_interval);
+            // Some slots have been persisted, see if any WAL's can now be cleaned out
+            blockstore.purge_shred_logs(*last_flush_slot);
         }
 
         if root - *last_purge_slot <= purge_interval {
@@ -400,7 +402,7 @@ mod tests {
             &blockstore,
             5,
             &mut last_flush_slot,
-            20, // Flush interval > purge interval so we don't flush
+            20, // Flush interval > purge interval so we don't flush in this test
             &mut last_purge_slot,
             10,
             &highest_compaction_slot,
@@ -473,7 +475,7 @@ mod tests {
                 &blockstore,
                 initial_slots,
                 &mut last_flush_slot,
-                20, // Flush interval > purge interval so we don't flush
+                20, // Flush interval > purge interval so we don't flush in this test
                 &mut last_purge_slot,
                 10,
                 &last_compaction_slot,

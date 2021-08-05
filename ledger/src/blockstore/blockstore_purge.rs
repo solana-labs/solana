@@ -33,6 +33,13 @@ impl Blockstore {
         }
     }
 
+    /// Deletes any shred log files that contain shreds from slot(s) <= last_flush_slot
+    /// The caller of this function must konw what slots have ben flushed, so the only
+    /// current legal user of this function is LedgerCleanupService.
+    pub fn purge_shred_logs(&self, last_flush_slot: Slot) {
+        self.shred_wal.lock().unwrap().purge_logs(last_flush_slot);
+    }
+
     /// Usually this is paired with .purge_slots() but we can't internally call this in
     /// that function unconditionally. That's because set_max_expired_slot()
     /// expects to purge older slots by the successive chronological order, while .purge_slots()
@@ -214,6 +221,8 @@ impl Blockstore {
                 // in no spiky periodic huge delete_range for them.
             }
         }
+        self.purge_data_shreds(from_slot, to_slot);
+
         delete_range_timer.stop();
         let mut write_timer = Measure::start("write_batch");
         if let Err(e) = self.db.write(write_batch) {
@@ -226,8 +235,6 @@ impl Blockstore {
         write_timer.stop();
         purge_stats.delete_range += delete_range_timer.as_us();
         purge_stats.write_batch += write_timer.as_us();
-
-        self.purge_data_shreds(from_slot, to_slot);
 
         // only drop w_active_transaction_status_index after we do db.write(write_batch);
         // otherwise, readers might be confused with inconsistent state between

@@ -186,52 +186,52 @@ impl ShredWAL {
         Ok(())
     }
 
-    // Purge log files that contain shreds in slots < purge_to_slot
-    /*
-    pub fn purge_logs(&mut self, purge_to_slot: Slot) {
-        let mut ids_to_purge = vec![];
+    // Purge log files that contain shreds in slot(s) <= last_flush_slot
+    // The strategy here is to clear log files based on chronological order; however,
+    // purges may not necessarily clear the oldest chronological data. As such, this
+    // method should be used by caller that knows when last_flush_slot has advanced
+    pub fn purge_logs(&mut self, last_flush_slot: Slot) {
+        // Can't modify max_slots while iterating so update a duplicate structure
+        // as we iterate and then replace at the end
+        let mut updated_max_slots = self.max_slots.clone();
         for (id, _) in self
             .max_slots
             .iter()
-            .filter(|(_, max_slot)| **max_slot < purge_to_slot)
+            .filter(|(_, max_slot)| **max_slot <= last_flush_slot)
         {
-            match self.cur_id {
-                // Do not delete the current log file
-                Some(cur_id) if *id != cur_id => {
-                    // Collect which files are getting purged
-                    ids_to_purge.push(cur_id);
-                    let _ = fs::remove_file(self.id_path(*id));
-                }
-                _ => {}
+            if self.cur_id.is_some() && *id != self.cur_id.unwrap() {
+                updated_max_slots.remove(id);
+                let _ = fs::remove_file(self.id_path(*id));
             }
         }
-
-        for id in ids_to_purge.iter() {
-            self.max_slots.remove(id);
-        }
+        self.max_slots = updated_max_slots;
     }
-    */
 
     // Path to WAL file with specified id
     fn id_path(&self, id: u128) -> PathBuf {
         self.wal_path.join(id.to_string())
     }
 
-    // Opens a file handle to current log; creates a new file if one doesn't exist
-    // or if the new write would push the existing log over size capacity
+    // Generate a new log ID and update metadata accordingly
+    fn update_log_id(&mut self) {
+        // .as_millis() provides enough granularity to avoid filename collision;
+        // observed collisions with .as_secs() with quick validator restart
+        self.cur_id = Some(
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_millis(),
+        );
+        self.cur_shreds = 0;
+        self.max_slots.insert(self.cur_id.unwrap(), 0);
+    }
+
+    // Returns file handle to current log; creates a new log if
+    // a) one does not yet exist
+    // b) the write would push current log over max capacity
     fn open_or_create_log(&mut self, write_size: usize) -> std::io::Result<fs::File> {
-        // Check if write would push WAL size over limit
         if self.cur_id.is_none() || self.cur_shreds + write_size > self.max_shreds {
-            // .as_millis() provides enough granularity to avoid filename collision;
-            // observed collisions with .as_secs() with quick validator restart
-            self.cur_id = Some(
-                SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap()
-                    .as_millis(),
-            );
-            self.cur_shreds = 0;
-            self.max_slots.insert(self.cur_id.unwrap(), 0);
+            self.update_log_id();
             fs::File::create(self.id_path(self.cur_id.unwrap()))
         } else {
             fs::OpenOptions::new()
@@ -248,7 +248,7 @@ impl ShredWAL {
         Range::<Slot> { start, end }
     }
 
-    //
+    // Encode a deletion range into an entry
     fn encode_deletion_entry(range: &Range<Slot>) -> Vec<u8> {
         let mut entry = vec![0; WAL_ENTRY_SIZE];
         entry[0..8].copy_from_slice(&range.start.to_le_bytes());
