@@ -24,7 +24,7 @@ use crate::{
     accounts_hash::{AccountsHash, CalculateHashIntermediate, HashStats, PreviousPass},
     accounts_index::{
         AccountIndexGetResult, AccountSecondaryIndexes, AccountsIndex, AccountsIndexRootsStats,
-        IndexKey, IsCached, ScanResult, SlotList, SlotSlice, ZeroLamport,
+        IndexKey, IsCached, ScanResult, SlotList, SlotSlice, ZeroLamport, BINS_DEFAULT,
     },
     ancestors::Ancestors,
     append_vec::{AppendVec, StoredAccountMeta, StoredMeta, StoredMetaWriteVersion},
@@ -1346,7 +1346,7 @@ impl<'a> ReadableAccount for StoredAccountMeta<'a> {
 
 impl Default for AccountsDb {
     fn default() -> Self {
-        Self::default_with_accounts_index(AccountInfoAccountsIndex::default())
+        Self::default_with_accounts_index(AccountInfoAccountsIndex::new(BINS_DEFAULT))
     }
 }
 
@@ -1429,7 +1429,7 @@ impl AccountsDb {
         caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
     ) -> Self {
-        let accounts_index = AccountsIndex::default();
+        let accounts_index = AccountsIndex::new(BINS_DEFAULT);
         let mut new = if !paths.is_empty() {
             Self {
                 paths,
