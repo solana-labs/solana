@@ -9810,7 +9810,7 @@ pub mod tests {
     #[test]
     fn test_delete_dependencies() {
         solana_logger::setup();
-        let accounts_index = AccountsIndex::default();
+        let accounts_index = AccountsIndex::default_for_tests();
         let key0 = Pubkey::new_from_array([0u8; 32]);
         let key1 = Pubkey::new_from_array([1u8; 32]);
         let key2 = Pubkey::new_from_array([2u8; 32]);
