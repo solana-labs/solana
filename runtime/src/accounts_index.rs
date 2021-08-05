@@ -42,20 +42,8 @@ pub type AccountMap<K, V> = BTreeMap<K, V>;
 
 type AccountMapEntry<T> = Arc<AccountMapEntryInner<T>>;
 
-pub trait IsCached: 'static + Clone + Debug {
+pub trait IsCached: 'static + Clone + Debug + PartialEq + ZeroLamport {
     fn is_cached(&self) -> bool;
-}
-
-impl IsCached for bool {
-    fn is_cached(&self) -> bool {
-        false
-    }
-}
-
-impl IsCached for u64 {
-    fn is_cached(&self) -> bool {
-        false
-    }
 }
 
 #[derive(Error, Debug, PartialEq)]
@@ -170,7 +158,7 @@ pub struct WriteAccountMapEntry<T: 'static> {
     slot_list_guard: RwLockWriteGuard<'this, SlotList<T>>,
 }
 
-impl<T: 'static + Clone + IsCached> WriteAccountMapEntry<T> {
+impl<T: IsCached> WriteAccountMapEntry<T> {
     pub fn from_account_map_entry(account_map_entry: AccountMapEntry<T>) -> Self {
         WriteAccountMapEntryBuilder {
             owned_entry: account_map_entry,
@@ -741,10 +729,7 @@ pub struct AccountsIndex<T> {
     pub removed_bank_ids: Mutex<HashSet<BankId>>,
 }
 
-impl<
-        T: 'static + Clone + IsCached + ZeroLamport + std::marker::Sync + std::marker::Send + Debug,
-    > AccountsIndex<T>
-{
+impl<T: IsCached> AccountsIndex<T> {
     pub fn default_for_tests() -> Self {
         Self::new(BINS_FOR_TESTING)
     }
@@ -2728,16 +2713,7 @@ pub mod tests {
         }
     }
 
-    fn test_new_entry_code_paths_helper<
-        T: 'static
-            + Sync
-            + Send
-            + Clone
-            + IsCached
-            + ZeroLamport
-            + std::cmp::PartialEq
-            + std::fmt::Debug,
-    >(
+    fn test_new_entry_code_paths_helper<T: IsCached>(
         account_infos: [T; 2],
         is_cached: bool,
         upsert: bool,
@@ -3375,18 +3351,7 @@ pub mod tests {
         assert!(found_key);
     }
 
-    fn account_maps_len_expensive<
-        T: 'static
-            + Sync
-            + Send
-            + Clone
-            + IsCached
-            + ZeroLamport
-            + std::cmp::PartialEq
-            + std::fmt::Debug,
-    >(
-        index: &AccountsIndex<T>,
-    ) -> usize {
+    fn account_maps_len_expensive<T: IsCached>(index: &AccountsIndex<T>) -> usize {
         index
             .account_maps
             .iter()
@@ -3905,6 +3870,16 @@ pub mod tests {
         );
     }
 
+    impl IsCached for bool {
+        fn is_cached(&self) -> bool {
+            false
+        }
+    }
+    impl IsCached for u64 {
+        fn is_cached(&self) -> bool {
+            false
+        }
+    }
     impl ZeroLamport for bool {
         fn is_zero_lamport(&self) -> bool {
             false
