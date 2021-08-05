@@ -24,7 +24,7 @@ use crate::{
     accounts_hash::{AccountsHash, CalculateHashIntermediate, HashStats, PreviousPass},
     accounts_index::{
         AccountIndexGetResult, AccountSecondaryIndexes, AccountsIndex, AccountsIndexRootsStats,
-        IndexKey, IsCached, ScanResult, SlotList, SlotSlice, ZeroLamport,
+        IndexKey, IsCached, ScanResult, SlotList, SlotSlice, ZeroLamport, BINS_DEFAULT,
     },
     ancestors::Ancestors,
     append_vec::{AppendVec, StoredAccountMeta, StoredMeta, StoredMetaWriteVersion},
@@ -1346,13 +1346,26 @@ impl<'a> ReadableAccount for StoredAccountMeta<'a> {
 
 impl Default for AccountsDb {
     fn default() -> Self {
+        Self::default_with_accounts_index(AccountInfoAccountsIndex::new(BINS_DEFAULT))
+    }
+}
+
+type GenerateIndexAccountsMap<'a> =
+    HashMap<Pubkey, (StoredMetaWriteVersion, AppendVecId, StoredAccountMeta<'a>)>;
+
+impl AccountsDb {
+    pub fn default_for_tests() -> Self {
+        Self::default_with_accounts_index(AccountInfoAccountsIndex::default_for_tests())
+    }
+
+    fn default_with_accounts_index(accounts_index: AccountInfoAccountsIndex) -> Self {
         let num_threads = get_thread_count();
         const MAX_READ_ONLY_CACHE_DATA_SIZE: usize = 200_000_000;
 
         let mut bank_hashes = HashMap::new();
         bank_hashes.insert(0, BankHashInfo::default());
         AccountsDb {
-            accounts_index: AccountsIndex::new(crate::accounts_index::BINS_DEFAULT),
+            accounts_index,
             storage: AccountStorage::default(),
             accounts_cache: AccountsCache::default(),
             sender_bg_hasher: None,
@@ -1393,12 +1406,7 @@ impl Default for AccountsDb {
             dirty_stores: DashMap::default(),
         }
     }
-}
 
-type GenerateIndexAccountsMap<'a> =
-    HashMap<Pubkey, (StoredMetaWriteVersion, AppendVecId, StoredAccountMeta<'a>)>;
-
-impl AccountsDb {
     pub fn new(paths: Vec<PathBuf>, cluster_type: &ClusterType) -> Self {
         AccountsDb::new_with_config(
             paths,
@@ -1409,6 +1417,11 @@ impl AccountsDb {
         )
     }
 
+    pub fn new_for_tests(paths: Vec<PathBuf>, cluster_type: &ClusterType) -> Self {
+        // will diverge
+        Self::new(paths, cluster_type)
+    }
+
     pub fn new_with_config(
         paths: Vec<PathBuf>,
         cluster_type: &ClusterType,
@@ -1416,6 +1429,7 @@ impl AccountsDb {
         caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
     ) -> Self {
+        let accounts_index = AccountsIndex::new(BINS_DEFAULT);
         let mut new = if !paths.is_empty() {
             Self {
                 paths,
@@ -1424,7 +1438,7 @@ impl AccountsDb {
                 account_indexes,
                 caching_enabled,
                 shrink_ratio,
-                ..Self::default()
+                ..Self::default_with_accounts_index(accounts_index)
             }
         } else {
             // Create a temporary set of accounts directories, used primarily
@@ -1437,7 +1451,7 @@ impl AccountsDb {
                 account_indexes,
                 caching_enabled,
                 shrink_ratio,
-                ..Self::default()
+                ..Self::default_with_accounts_index(accounts_index)
             }
         };
 
@@ -1466,7 +1480,7 @@ impl AccountsDb {
     pub fn new_single_for_tests() -> Self {
         AccountsDb {
             min_num_stores: 0,
-            ..AccountsDb::new(Vec::new(), &ClusterType::Development)
+            ..AccountsDb::new_for_tests(Vec::new(), &ClusterType::Development)
         }
     }
 

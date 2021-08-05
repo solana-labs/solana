@@ -87,7 +87,7 @@ impl AccountLocks {
 }
 
 /// This structure handles synchronization for db
-#[derive(Default, Debug, AbiExample)]
+#[derive(Debug, AbiExample)]
 pub struct Accounts {
     /// Single global AccountsDb
     pub accounts_db: Arc<AccountsDb>,
@@ -95,6 +95,15 @@ pub struct Accounts {
     /// set of read-only and writable accounts which are currently
     /// being processed by banking/replay threads
     pub(crate) account_locks: Mutex<AccountLocks>,
+}
+
+impl Default for Accounts {
+    fn default() -> Self {
+        Self {
+            accounts_db: Arc::new(AccountsDb::default()),
+            account_locks: Mutex::default(),
+        }
+    }
 }
 
 // for the load instructions
@@ -117,6 +126,13 @@ pub enum AccountAddressFilter {
 }
 
 impl Accounts {
+    pub fn default_for_tests() -> Self {
+        Self {
+            accounts_db: Arc::new(AccountsDb::default_for_tests()),
+            account_locks: Mutex::default(),
+        }
+    }
+
     pub fn new(
         paths: Vec<PathBuf>,
         cluster_type: &ClusterType,
