@@ -930,7 +930,7 @@ impl RpcClient {
     /// transaction status whatever it is. It does not wait for transactions to
     /// be processed.
     ///
-    /// This function only searches recent history, including all recent slots,
+    /// This function only searches a node's recent history, including all recent slots,
     /// plus up to
     /// [`MAX_RECENT_BLOCKHASHES`][solana_sdk::clock::MAX_RECENT_BLOCKHASHES]
     /// rooted slots. To search the full transaction history use the
