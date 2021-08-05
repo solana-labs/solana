@@ -2460,7 +2460,7 @@ mod tests {
     fn test_roundtrip_bank_to_and_from_full_snapshot_simple() {
         solana_logger::setup();
         let genesis_config = GenesisConfig::default();
-        let original_bank = Bank::new(&genesis_config);
+        let original_bank = Bank::new_for_tests(&genesis_config);
 
         while !original_bank.is_complete() {
             original_bank.register_tick(&Hash::new_unique());
@@ -2519,7 +2519,7 @@ mod tests {
         let key5 = Keypair::new();
 
         let (genesis_config, mint_keypair) = create_genesis_config(1_000_000);
-        let bank0 = Arc::new(Bank::new(&genesis_config));
+        let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
         bank0.transfer(1, &mint_keypair, &key1.pubkey()).unwrap();
         bank0.transfer(2, &mint_keypair, &key2.pubkey()).unwrap();
         bank0.transfer(3, &mint_keypair, &key3.pubkey()).unwrap();
@@ -2616,7 +2616,7 @@ mod tests {
         let key5 = Keypair::new();
 
         let (genesis_config, mint_keypair) = create_genesis_config(1_000_000);
-        let bank0 = Arc::new(Bank::new(&genesis_config));
+        let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
         bank0.transfer(1, &mint_keypair, &key1.pubkey()).unwrap();
         bank0.transfer(2, &mint_keypair, &key2.pubkey()).unwrap();
         bank0.transfer(3, &mint_keypair, &key3.pubkey()).unwrap();

@@ -532,7 +532,7 @@ pub mod test {
         let (transmit_sender, transmit_receiver) = channel();
         let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(100_000);
-        let bank0 = Arc::new(Bank::new(&genesis_config));
+        let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
 
         // Make some shreds
         let updated_slot = 0;
@@ -608,7 +608,7 @@ pub mod test {
         let exit_sender = Arc::new(AtomicBool::new(false));
 
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
-        let bank = Bank::new(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let bank = bank_forks.read().unwrap().root_bank();
 

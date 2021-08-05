@@ -4275,7 +4275,7 @@ pub mod tests {
     fn test_rpc_request_processor_new() {
         let bob_pubkey = solana_sdk::pubkey::new_rand();
         let genesis = create_genesis_config(100);
-        let bank = Arc::new(Bank::new(&genesis.genesis_config));
+        let bank = Arc::new(Bank::new_for_tests(&genesis.genesis_config));
         bank.transfer(20, &genesis.mint_keypair, &bob_pubkey)
             .unwrap();
         let request_processor =
@@ -4287,7 +4287,7 @@ pub mod tests {
     fn test_rpc_get_balance() {
         let genesis = create_genesis_config(20);
         let mint_pubkey = genesis.mint_keypair.pubkey();
-        let bank = Arc::new(Bank::new(&genesis.genesis_config));
+        let bank = Arc::new(Bank::new_for_tests(&genesis.genesis_config));
         let meta = JsonRpcRequestProcessor::new_from_bank(&bank, SocketAddrSpace::Unspecified);
 
         let mut io = MetaIoHandler::default();
@@ -4315,7 +4315,7 @@ pub mod tests {
     fn test_rpc_get_balance_via_client() {
         let genesis = create_genesis_config(20);
         let mint_pubkey = genesis.mint_keypair.pubkey();
-        let bank = Arc::new(Bank::new(&genesis.genesis_config));
+        let bank = Arc::new(Bank::new_for_tests(&genesis.genesis_config));
         let meta = JsonRpcRequestProcessor::new_from_bank(&bank, SocketAddrSpace::Unspecified);
 
         let mut io = MetaIoHandler::default();
@@ -4446,7 +4446,7 @@ pub mod tests {
     fn test_rpc_get_tx_count() {
         let bob_pubkey = solana_sdk::pubkey::new_rand();
         let genesis = create_genesis_config(10);
-        let bank = Arc::new(Bank::new(&genesis.genesis_config));
+        let bank = Arc::new(Bank::new_for_tests(&genesis.genesis_config));
         // Add 4 transactions
         bank.transfer(1, &genesis.mint_keypair, &bob_pubkey)
             .unwrap();
@@ -5760,7 +5760,7 @@ pub mod tests {
     #[test]
     fn test_rpc_send_bad_tx() {
         let genesis = create_genesis_config(100);
-        let bank = Arc::new(Bank::new(&genesis.genesis_config));
+        let bank = Arc::new(Bank::new_for_tests(&genesis.genesis_config));
         let meta = JsonRpcRequestProcessor::new_from_bank(&bank, SocketAddrSpace::Unspecified);
 
         let mut io = MetaIoHandler::default();
@@ -5975,7 +5975,7 @@ pub mod tests {
         genesis_config.epoch_schedule =
             EpochSchedule::custom(TEST_SLOTS_PER_EPOCH, TEST_SLOTS_PER_EPOCH, false);
 
-        let bank = Bank::new(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
         (
             Arc::new(RwLock::new(BankForks::new(bank))),
             mint_keypair,
@@ -7477,7 +7477,7 @@ pub mod tests {
             SocketAddrSpace::Unspecified,
         ));
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(100);
-        let bank = Bank::new(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
 
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let bank0 = bank_forks.read().unwrap().get(0).unwrap().clone();

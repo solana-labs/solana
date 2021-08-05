@@ -356,7 +356,7 @@ mod test {
         solana_logger::setup();
 
         let (genesis_config, mint_keypair) = create_genesis_config(4);
-        let bank = Bank::new(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let send_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let tpu_address = "127.0.0.1:0".parse().unwrap();
@@ -510,7 +510,7 @@ mod test {
         solana_logger::setup();
 
         let (genesis_config, mint_keypair) = create_genesis_config(4);
-        let bank = Bank::new(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let send_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let tpu_address = "127.0.0.1:0".parse().unwrap();
@@ -803,7 +803,7 @@ mod test {
                 &validator_keypairs,
                 vec![10_000; 3],
             );
-            let bank = Arc::new(Bank::new(&genesis_config));
+            let bank = Arc::new(Bank::new_for_tests(&genesis_config));
 
             let (poh_recorder, _entry_receiver, _record_receiver) = PohRecorder::new(
                 0,
