@@ -1047,6 +1047,11 @@ impl Default for BlockhashQueue {
 }
 
 impl Bank {
+    pub fn default_for_tests() -> Self {
+        // will diverge
+        Self::default()
+    }
+
     pub fn new_for_benches(genesis_config: &GenesisConfig) -> Self {
         // this will diverge
         Self::new_for_tests(genesis_config)

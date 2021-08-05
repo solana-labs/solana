@@ -2101,7 +2101,7 @@ mod tests {
     fn test_should_process_or_forward_packets() {
         let my_pubkey = solana_sdk::pubkey::new_rand();
         let my_pubkey1 = solana_sdk::pubkey::new_rand();
-        let bank = Arc::new(Bank::default());
+        let bank = Arc::new(Bank::default_for_tests());
         assert_matches!(
             BankingStage::consume_or_forward_packets(&my_pubkey, None, Some(&bank), false, false),
             BufferedPacketsDecision::Hold
