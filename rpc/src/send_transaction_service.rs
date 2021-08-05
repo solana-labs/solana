@@ -340,7 +340,7 @@ mod test {
     #[test]
     fn service_exit() {
         let tpu_address = "127.0.0.1:0".parse().unwrap();
-        let bank = Bank::default();
+        let bank = Bank::default_for_tests();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let (sender, receiver) = channel();
 

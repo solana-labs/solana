@@ -6854,7 +6854,7 @@ pub mod tests {
 
     #[test]
     fn test_is_finalized() {
-        let bank = Arc::new(Bank::default());
+        let bank = Arc::new(Bank::default_for_tests());
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
         blockstore.set_roots(vec![0, 1].iter()).unwrap();
