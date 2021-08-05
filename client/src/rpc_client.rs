@@ -1009,7 +1009,7 @@ impl RpcClient {
     /// transaction status whatever it is. It does not wait for transactions to
     /// be processed.
     ///
-    /// This function searches the full blockchain history. To search for
+    /// This function searches a node's full ledger history and (if implemented) long-term storage. To search for
     /// transactions in recent slots only use the
     /// [`get_signature_statuses`][RpcClient::get_signature_statuses] method.
     ///
