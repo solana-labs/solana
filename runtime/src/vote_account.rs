@@ -11,7 +11,6 @@ use {
         cmp::Ordering,
         collections::{hash_map::Entry, HashMap},
         iter::FromIterator,
-        ops::Deref,
         sync::{Arc, Once, RwLock, RwLockReadGuard},
     },
 };
@@ -25,7 +24,7 @@ const INVALID_VOTE_STATE: Result<VoteState, InstructionError> =
 pub struct ArcVoteAccount(Arc<VoteAccount>);
 
 #[derive(Debug, AbiExample)]
-pub struct VoteAccount {
+struct VoteAccount {
     account: Account,
     vote_state: RwLock<Result<VoteState, InstructionError>>,
     vote_state_once: Once,
@@ -47,16 +46,18 @@ pub struct VoteAccounts {
     staked_nodes_once: Once,
 }
 
-impl VoteAccount {
+impl ArcVoteAccount {
     pub fn lamports(&self) -> u64 {
-        self.account.lamports
+        self.0.account.lamports
     }
 
     pub fn vote_state(&self) -> RwLockReadGuard<Result<VoteState, InstructionError>> {
-        self.vote_state_once.call_once(|| {
-            *self.vote_state.write().unwrap() = VoteState::deserialize(&self.account.data);
+        let inner = &self.0;
+        inner.vote_state_once.call_once(|| {
+            let vote_state = VoteState::deserialize(&inner.account.data);
+            *inner.vote_state.write().unwrap() = vote_state;
         });
-        self.vote_state.read().unwrap()
+        inner.vote_state.read().unwrap()
     }
 
     /// VoteState.node_pubkey of this vote-account.
@@ -155,20 +156,12 @@ impl VoteAccounts {
     }
 }
 
-impl Deref for ArcVoteAccount {
-    type Target = VoteAccount;
-
-    fn deref(&self) -> &Self::Target {
-        self.0.deref()
-    }
-}
-
 impl Serialize for ArcVoteAccount {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        self.account.serialize(serializer)
+        self.0.account.serialize(serializer)
     }
 }
 
@@ -187,6 +180,7 @@ impl From<AccountSharedData> for ArcVoteAccount {
         Self(Arc::new(VoteAccount::from(account)))
     }
 }
+
 impl From<Account> for ArcVoteAccount {
     fn from(account: Account) -> Self {
         Self(Arc::new(VoteAccount::from(account)))
@@ -195,11 +189,7 @@ impl From<Account> for ArcVoteAccount {
 
 impl From<AccountSharedData> for VoteAccount {
     fn from(account: AccountSharedData) -> Self {
-        Self {
-            account: Account::from(account),
-            vote_state: RwLock::new(INVALID_VOTE_STATE),
-            vote_state_once: Once::new(),
-        }
+        Self::from(Account::from(account))
     }
 }
 
