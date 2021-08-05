@@ -573,7 +573,7 @@ mod test {
     fn test_add_votes() {
         let blockstore = setup_forks();
         let stake = 100;
-        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys(3, stake);
+        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys_for_tests(3, stake);
         let votes = vec![(1, vote_pubkeys.clone())];
 
         let mut repair_weight = RepairWeight::new(0);
@@ -670,7 +670,7 @@ mod test {
     fn test_add_votes_orphans() {
         let blockstore = setup_orphans();
         let stake = 100;
-        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys(3, stake);
+        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys_for_tests(3, stake);
         let votes = vec![(1, vote_pubkeys.clone()), (8, vote_pubkeys.clone())];
 
         let mut repair_weight = RepairWeight::new(0);
@@ -782,7 +782,7 @@ mod test {
     fn test_update_orphan_ancestors() {
         let blockstore = setup_orphans();
         let stake = 100;
-        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys(3, stake);
+        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys_for_tests(3, stake);
         // Create votes for both orphan branches
         let votes = vec![
             (10, vote_pubkeys[0..1].to_vec()),
@@ -839,7 +839,7 @@ mod test {
     fn test_get_best_orphans() {
         let blockstore = setup_orphans();
         let stake = 100;
-        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys(2, stake);
+        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys_for_tests(2, stake);
         let votes = vec![(8, vec![vote_pubkeys[0]]), (20, vec![vote_pubkeys[1]])];
         let mut repair_weight = RepairWeight::new(0);
         repair_weight.add_votes(
@@ -947,7 +947,7 @@ mod test {
     fn test_get_extra_orphans() {
         let blockstore = setup_orphans();
         let stake = 100;
-        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys(2, stake);
+        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys_for_tests(2, stake);
         let votes = vec![(8, vec![vote_pubkeys[0]])];
         let mut repair_weight = RepairWeight::new(0);
         repair_weight.add_votes(
@@ -1249,7 +1249,7 @@ mod test {
     fn setup_orphan_repair_weight() -> (Blockstore, Bank, RepairWeight) {
         let blockstore = setup_orphans();
         let stake = 100;
-        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys(2, stake);
+        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys_for_tests(2, stake);
 
         // Add votes for the main fork and orphan forks
         let votes = vec![
