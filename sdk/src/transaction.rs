@@ -113,13 +113,10 @@ impl From<SanitizeError> for TransactionError {
 #[frozen_abi(digest = "AAeVxvWiiotwxDLxKLxsfgkA6ndW74nVbaAEb6cwJYqR")]
 #[derive(Debug, PartialEq, Default, Eq, Clone, Serialize, Deserialize, AbiExample)]
 pub struct Transaction {
-    /// A set of digital signatures of the [`account_keys`], [`recent_blockhash`], and [`instructions`] fields
-    /// of [`message`], signed by the first `signatures.len()` keys of `account_keys`.
+    /// A set of digital signatures of a serialized [`Message`],
+    /// signed by the first `signatures.len()` keys of `account_keys`.
     ///
     /// [`account_keys`]: Message::account_keys
-    /// [`recent_blockhash`]: Message::recent_blockhash
-    /// [`instructions`]: Message::instructions
-    /// [`message`]: Transaction::message
     ///
     // NOTE: Serialization-related changes must be paired with the direct read at sigverify.
     #[serde(with = "short_vec")]
