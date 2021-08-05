@@ -135,7 +135,7 @@ impl OptimisticallyConfirmedBankTracker {
         mut pending_optimistically_confirmed_banks: &mut HashSet<Slot>,
         last_notified_slot: &mut Slot,
     ) {
-        debug!("received bank notification: {:?}", notification);
+        info!("received bank notification: {:?}", notification);
         match notification {
             BankNotification::OptimisticallyConfirmed(slot) => {
                 if let Some(bank) = bank_forks.read().unwrap().get(slot) {
@@ -157,7 +157,7 @@ impl OptimisticallyConfirmedBankTracker {
                         );
 
                         for parent in bank.parents().iter() {
-                            info!("notify_gossip_subscribers notify the parent not notifed before: {:?}", parent.slot());
+                            info!("notify_or_defer for parent {:?}", parent.slot());
                             Self::notify_or_defer(
                                 subscriptions,
                                 bank_forks,
@@ -168,7 +168,6 @@ impl OptimisticallyConfirmedBankTracker {
                         }
                         *last_notified_slot = slot;
                     }
-
                     drop(w_optimistically_confirmed_bank);
                 } else if slot > bank_forks.read().unwrap().root_bank().slot() {
                     pending_optimistically_confirmed_banks.insert(slot);
@@ -302,7 +301,6 @@ mod tests {
         assert_eq!(last_notified_slot, 2);
 
         // Test bank will only be cached when frozen
-        last_notified_slot = 0;
         OptimisticallyConfirmedBankTracker::process_notification(
             BankNotification::OptimisticallyConfirmed(3),
             &bank_forks,
@@ -314,10 +312,11 @@ mod tests {
         assert_eq!(optimistically_confirmed_bank.read().unwrap().bank.slot(), 2);
         assert_eq!(pending_optimistically_confirmed_banks.len(), 1);
         assert!(pending_optimistically_confirmed_banks.contains(&3));
+        assert_eq!(last_notified_slot, 3);
 
         // Test bank will only be cached when frozen
         let bank3 = bank_forks.read().unwrap().get(3).unwrap().clone();
-        last_notified_slot = 0;
+
         OptimisticallyConfirmedBankTracker::process_notification(
             BankNotification::Frozen(bank3),
             &bank_forks,
@@ -327,12 +326,12 @@ mod tests {
             &mut last_notified_slot,
         );
         assert_eq!(optimistically_confirmed_bank.read().unwrap().bank.slot(), 3);
+        assert_eq!(last_notified_slot, 3);
 
         // Test higher root will be cached and clear pending_optimistically_confirmed_banks
         let bank3 = bank_forks.read().unwrap().get(3).unwrap().clone();
         let bank4 = Bank::new_from_parent(&bank3, &Pubkey::default(), 4);
         bank_forks.write().unwrap().insert(bank4);
-        last_notified_slot = 0;
         OptimisticallyConfirmedBankTracker::process_notification(
             BankNotification::OptimisticallyConfirmed(4),
             &bank_forks,
@@ -344,12 +343,12 @@ mod tests {
         assert_eq!(optimistically_confirmed_bank.read().unwrap().bank.slot(), 3);
         assert_eq!(pending_optimistically_confirmed_banks.len(), 1);
         assert!(pending_optimistically_confirmed_banks.contains(&4));
+        assert_eq!(last_notified_slot, 4);
 
         let bank4 = bank_forks.read().unwrap().get(4).unwrap().clone();
         let bank5 = Bank::new_from_parent(&bank4, &Pubkey::default(), 5);
         bank_forks.write().unwrap().insert(bank5);
         let bank5 = bank_forks.read().unwrap().get(5).unwrap().clone();
-        last_notified_slot = 0;
         OptimisticallyConfirmedBankTracker::process_notification(
             BankNotification::Root(bank5),
             &bank_forks,
@@ -361,6 +360,7 @@ mod tests {
         assert_eq!(optimistically_confirmed_bank.read().unwrap().bank.slot(), 5);
         assert_eq!(pending_optimistically_confirmed_banks.len(), 0);
         assert!(!pending_optimistically_confirmed_banks.contains(&4));
+        assert_eq!(last_notified_slot, 4);
 
         // Banks <= root do not get added to pending list, even if not frozen
         let bank5 = bank_forks.read().unwrap().get(5).unwrap().clone();
@@ -373,7 +373,6 @@ mod tests {
             .write()
             .unwrap()
             .set_root(7, &AbsRequestSender::default(), None);
-        last_notified_slot = 0;
         OptimisticallyConfirmedBankTracker::process_notification(
             BankNotification::OptimisticallyConfirmed(6),
             &bank_forks,
@@ -385,5 +384,6 @@ mod tests {
         assert_eq!(optimistically_confirmed_bank.read().unwrap().bank.slot(), 5);
         assert_eq!(pending_optimistically_confirmed_banks.len(), 0);
         assert!(!pending_optimistically_confirmed_banks.contains(&6));
+        assert_eq!(last_notified_slot, 4);
     }
 }
