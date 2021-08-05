@@ -42,7 +42,7 @@ pub type AccountMap<K, V> = BTreeMap<K, V>;
 
 type AccountMapEntry<T> = Arc<AccountMapEntryInner<T>>;
 
-pub trait IsCached {
+pub trait IsCached: 'static + Clone + Debug {
     fn is_cached(&self) -> bool;
 }
 
