@@ -32,7 +32,7 @@ use std::{
 use thiserror::Error;
 
 pub const ITER_BATCH_SIZE: usize = 1000;
-const BINS_DEFAULT: usize = 16;
+pub const BINS_DEFAULT: usize = 16;
 const BINS_FOR_TESTING: usize = BINS_DEFAULT;
 pub type ScanResult<T> = Result<T, ScanError>;
 pub type SlotList<T> = Vec<(Slot, T)>;
@@ -759,7 +759,7 @@ impl<
         Self::new(BINS_FOR_TESTING)
     }
 
-    fn new(bins: usize) -> Self {
+    pub fn new(bins: usize) -> Self {
         let (account_maps, bin_calculator) = Self::allocate_accounts_index(bins);
         Self {
             account_maps,
@@ -3986,5 +3986,11 @@ pub mod tests {
         let iter = AccountsIndexIterator::new(&index, Some((Excluded(key), Excluded(key))));
         assert_eq!(iter.start_bin(), bins - 1); // start at highest possible pubkey, so bins - 1
         assert_eq!(iter.end_bin_inclusive(), bins - 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "bins.is_power_of_two()")]
+    fn test_illegal_bins() {
+        AccountsIndex::<bool>::new(3);
     }
 }
