@@ -157,14 +157,18 @@ impl OptimisticallyConfirmedBankTracker {
                         );
 
                         for parent in bank.parents().iter() {
-                            info!("notify_or_defer for parent {:?}", parent.slot());
-                            Self::notify_or_defer(
-                                subscriptions,
-                                bank_forks,
-                                parent,
-                                *last_notified_slot,
-                                &mut pending_optimistically_confirmed_banks,
-                            );
+                            if parent.slot() > *last_notified_slot {
+                                info!("notify_or_defer for parent {:?}", parent.slot());
+                                Self::notify_or_defer(
+                                    subscriptions,
+                                    bank_forks,
+                                    parent,
+                                    *last_notified_slot,
+                                    &mut pending_optimistically_confirmed_banks,
+                                );
+                            } else {
+                                break;
+                            }
                         }
                         *last_notified_slot = slot;
                     }
