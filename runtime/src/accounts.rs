@@ -97,15 +97,6 @@ pub struct Accounts {
     pub(crate) account_locks: Mutex<AccountLocks>,
 }
 
-impl Default for Accounts {
-    fn default() -> Self {
-        Self {
-            accounts_db: Arc::new(AccountsDb::default()),
-            account_locks: Mutex::default(),
-        }
-    }
-}
-
 // for the load instructions
 pub type TransactionAccounts = Vec<(Pubkey, AccountSharedData)>;
 pub type TransactionRent = u64;
@@ -131,20 +122,6 @@ impl Accounts {
             accounts_db: Arc::new(AccountsDb::default_for_tests()),
             account_locks: Mutex::default(),
         }
-    }
-
-    pub fn new(
-        paths: Vec<PathBuf>,
-        cluster_type: &ClusterType,
-        shrink_ratio: AccountShrinkThreshold,
-    ) -> Self {
-        Self::new_with_config(
-            paths,
-            cluster_type,
-            AccountSecondaryIndexes::default(),
-            false,
-            shrink_ratio,
-        )
     }
 
     pub fn new_with_config_for_benches(
