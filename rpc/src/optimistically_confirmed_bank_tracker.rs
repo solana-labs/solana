@@ -150,16 +150,9 @@ impl OptimisticallyConfirmedBankTracker {
                         w_optimistically_confirmed_bank.bank = bank.clone();
                     }
 
-                    if slot > *last_notified_slot {
-                        Self::notify_or_defer(
-                            subscriptions,
-                            bank_forks,
-                            bank,
-                            *last_notified_slot,
-                            &mut pending_optimistically_confirmed_banks,
-                        );
 
-                        for parent in bank.parents().iter() {
+                    if slot > *last_notified_slot {
+                        for parent in bank.parents().iter().rev() {
                             if parent.slot() > *last_notified_slot {
                                 debug!("Calling notify_or_defer for parent {:?}", parent.slot());
                                 Self::notify_or_defer(
@@ -169,10 +162,16 @@ impl OptimisticallyConfirmedBankTracker {
                                     *last_notified_slot,
                                     &mut pending_optimistically_confirmed_banks,
                                 );
-                            } else {
-                                break;
                             }
                         }
+                        Self::notify_or_defer(
+                            subscriptions,
+                            bank_forks,
+                            bank,
+                            *last_notified_slot,
+                            &mut pending_optimistically_confirmed_banks,
+                        );
+
                         *last_notified_slot = slot;
                     }
                     drop(w_optimistically_confirmed_bank);
