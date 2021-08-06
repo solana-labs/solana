@@ -1040,12 +1040,6 @@ pub struct Bank {
     pub freeze_started: AtomicBool,
 }
 
-impl Default for Bank {
-    fn default() -> Self {
-        Self::default_with_accounts(Accounts::default())
-    }
-}
-
 impl Default for BlockhashQueue {
     fn default() -> Self {
         Self::new(MAX_RECENT_BLOCKHASHES)
@@ -1054,8 +1048,7 @@ impl Default for BlockhashQueue {
 
 impl Bank {
     pub fn default_for_tests() -> Self {
-        // will diverge
-        Self::default()
+        Self::default_with_accounts(Accounts::default_for_tests())
     }
 
     pub fn new_for_benches(genesis_config: &GenesisConfig) -> Self {
