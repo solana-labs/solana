@@ -1344,12 +1344,6 @@ impl<'a> ReadableAccount for StoredAccountMeta<'a> {
     }
 }
 
-impl Default for AccountsDb {
-    fn default() -> Self {
-        Self::default_with_accounts_index(AccountInfoAccountsIndex::new(BINS_DEFAULT))
-    }
-}
-
 type GenerateIndexAccountsMap<'a> =
     HashMap<Pubkey, (StoredMetaWriteVersion, AppendVecId, StoredAccountMeta<'a>)>;
 
