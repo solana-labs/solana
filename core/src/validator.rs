@@ -61,6 +61,7 @@ use solana_runtime::{
     commitment::BlockCommitmentCache,
     hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
     snapshot_config::SnapshotConfig,
+    snapshot_utils::{self, SnapshotArchiveInfo},
 };
 use solana_sdk::{
     clock::Slot,
@@ -1194,20 +1195,19 @@ fn new_banks_from_ledger(
         );
         leader_schedule_cache.set_root(&bank_forks.root_bank());
 
-        let full_snapshot_archive_info =
-            solana_runtime::snapshot_utils::bank_to_full_snapshot_archive(
-                ledger_path,
-                &bank_forks.root_bank(),
-                None,
-                &snapshot_config.snapshot_package_output_path,
-                snapshot_config.archive_format,
-                Some(bank_forks.root_bank().get_thread_pool()),
-                snapshot_config.maximum_snapshots_to_retain,
-            )
-            .unwrap_or_else(|err| {
-                error!("Unable to create snapshot: {}", err);
-                abort();
-            });
+        let full_snapshot_archive_info = snapshot_utils::bank_to_full_snapshot_archive(
+            ledger_path,
+            &bank_forks.root_bank(),
+            None,
+            &snapshot_config.snapshot_package_output_path,
+            snapshot_config.archive_format,
+            Some(bank_forks.root_bank().get_thread_pool()),
+            snapshot_config.maximum_snapshots_to_retain,
+        )
+        .unwrap_or_else(|err| {
+            error!("Unable to create snapshot: {}", err);
+            abort();
+        });
         info!(
             "created snapshot: {}",
             full_snapshot_archive_info.path().display()

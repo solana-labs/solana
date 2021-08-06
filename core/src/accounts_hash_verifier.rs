@@ -10,6 +10,7 @@ use solana_gossip::cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES};
 use solana_runtime::{
     accounts_db,
     snapshot_package::{AccountsPackage, AccountsPackagePre, AccountsPackageReceiver},
+    snapshot_utils::SnapshotArchiveInfo,
 };
 use solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey};
 use std::collections::{HashMap, HashSet};
@@ -125,22 +126,19 @@ impl AccountsHashVerifier {
         fault_injection_rate_slots: u64,
         snapshot_interval_slots: u64,
     ) {
-        let hash = accounts_package.snapshot_archive_info.hash;
+        let hash = *accounts_package.hash();
         if fault_injection_rate_slots != 0
-            && accounts_package.snapshot_archive_info.slot % fault_injection_rate_slots == 0
+            && accounts_package.slot() % fault_injection_rate_slots == 0
         {
             // For testing, publish an invalid hash to gossip.
             use rand::{thread_rng, Rng};
             use solana_sdk::hash::extend_and_hash;
-            warn!(
-                "inserting fault at slot: {}",
-                accounts_package.snapshot_archive_info.slot
-            );
+            warn!("inserting fault at slot: {}", accounts_package.slot());
             let rand = thread_rng().gen_range(0, 10);
             let hash = extend_and_hash(&hash, &[rand]);
-            hashes.push((accounts_package.snapshot_archive_info.slot, hash));
+            hashes.push((accounts_package.slot(), hash));
         } else {
-            hashes.push((accounts_package.snapshot_archive_info.slot, hash));
+            hashes.push((accounts_package.slot(), hash));
         }
 
         while hashes.len() > MAX_SNAPSHOT_HASHES {

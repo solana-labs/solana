@@ -39,9 +39,30 @@ use {
     thiserror::Error,
 };
 
+/// Trait to query the snapshot archive information
+pub trait SnapshotArchiveInfo {
+    fn snapshot_archive_info_inner(&self) -> &SnapshotArchiveInfoInner;
+
+    fn path(&self) -> &PathBuf {
+        &self.snapshot_archive_info_inner().path
+    }
+
+    fn slot(&self) -> Slot {
+        self.snapshot_archive_info_inner().slot
+    }
+
+    fn hash(&self) -> &Hash {
+        &self.snapshot_archive_info_inner().hash
+    }
+
+    fn archive_format(&self) -> ArchiveFormat {
+        self.snapshot_archive_info_inner().archive_format
+    }
+}
+
 /// Common information about a snapshot archive
 #[derive(PartialEq, Eq, Debug, Clone)]
-pub struct SnapshotArchiveInfo {
+pub struct SnapshotArchiveInfoInner {
     /// Path to the snapshot archive file
     pub path: PathBuf,
 
@@ -57,7 +78,7 @@ pub struct SnapshotArchiveInfo {
 
 /// Information about a full snapshot archive: its path, slot, hash, and archive format
 #[derive(PartialEq, Eq, Debug, Clone)]
-pub struct FullSnapshotArchiveInfo(SnapshotArchiveInfo);
+pub struct FullSnapshotArchiveInfo(SnapshotArchiveInfoInner);
 
 impl FullSnapshotArchiveInfo {
     /// Parse the path to a full snapshot archive and return a new `FullSnapshotArchiveInfo`
@@ -65,7 +86,7 @@ impl FullSnapshotArchiveInfo {
         let filename = path_to_file_name_str(path.as_path())?;
         let (slot, hash, archive_format) = parse_full_snapshot_archive_filename(filename)?;
 
-        Ok(Self::new(SnapshotArchiveInfo {
+        Ok(Self::new(SnapshotArchiveInfoInner {
             path,
             slot,
             hash,
@@ -73,24 +94,14 @@ impl FullSnapshotArchiveInfo {
         }))
     }
 
-    fn new(snapshot_archive_info: SnapshotArchiveInfo) -> Self {
+    fn new(snapshot_archive_info: SnapshotArchiveInfoInner) -> Self {
         Self(snapshot_archive_info)
     }
+}
 
-    pub fn path(&self) -> &PathBuf {
-        &self.0.path
-    }
-
-    pub fn slot(&self) -> &Slot {
-        &self.0.slot
-    }
-
-    pub fn hash(&self) -> &Hash {
-        &self.0.hash
-    }
-
-    pub fn archive_format(&self) -> &ArchiveFormat {
-        &self.0.archive_format
+impl SnapshotArchiveInfo for FullSnapshotArchiveInfo {
+    fn snapshot_archive_info_inner(&self) -> &SnapshotArchiveInfoInner {
+        &self.0
     }
 }
 
@@ -103,7 +114,7 @@ impl PartialOrd for FullSnapshotArchiveInfo {
 // Order `FullSnapshotArchiveInfo` by slot (ascending), which practially is sorting chronologically
 impl Ord for FullSnapshotArchiveInfo {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.slot().cmp(other.slot())
+        self.slot().cmp(&other.slot())
     }
 }
 
@@ -116,7 +127,7 @@ pub struct IncrementalSnapshotArchiveInfo {
 
     /// Use the `SnapshotArchiveInfo` struct for the common fields: path, slot, hash, and
     /// archive_format, but as they pertain to the incremental snapshot.
-    inner: SnapshotArchiveInfo,
+    inner: SnapshotArchiveInfoInner,
 }
 
 impl IncrementalSnapshotArchiveInfo {
@@ -128,7 +139,7 @@ impl IncrementalSnapshotArchiveInfo {
 
         Ok(Self::new(
             base_slot,
-            SnapshotArchiveInfo {
+            SnapshotArchiveInfoInner {
                 path,
                 slot,
                 hash,
@@ -137,31 +148,21 @@ impl IncrementalSnapshotArchiveInfo {
         ))
     }
 
-    fn new(base_slot: Slot, snapshot_archive_info: SnapshotArchiveInfo) -> Self {
+    fn new(base_slot: Slot, snapshot_archive_info: SnapshotArchiveInfoInner) -> Self {
         Self {
             base_slot,
             inner: snapshot_archive_info,
         }
     }
 
-    pub fn path(&self) -> &PathBuf {
-        &self.inner.path
+    pub fn base_slot(&self) -> Slot {
+        self.base_slot
     }
+}
 
-    pub fn base_slot(&self) -> &Slot {
-        &self.base_slot
-    }
-
-    pub fn slot(&self) -> &Slot {
-        &self.inner.slot
-    }
-
-    fn hash(&self) -> &Hash {
-        &self.inner.hash
-    }
-
-    fn archive_format(&self) -> &ArchiveFormat {
-        &self.inner.archive_format
+impl SnapshotArchiveInfo for IncrementalSnapshotArchiveInfo {
+    fn snapshot_archive_info_inner(&self) -> &SnapshotArchiveInfoInner {
+        &self.inner
     }
 }
 
@@ -176,8 +177,8 @@ impl PartialOrd for IncrementalSnapshotArchiveInfo {
 impl Ord for IncrementalSnapshotArchiveInfo {
     fn cmp(&self, other: &Self) -> Ordering {
         self.base_slot()
-            .cmp(other.base_slot())
-            .then(self.slot().cmp(other.slot()))
+            .cmp(&other.base_slot())
+            .then(self.slot().cmp(&other.slot()))
     }
 }
 
@@ -478,7 +479,7 @@ pub fn archive_snapshot_package(
             Ok(())
         };
 
-        match snapshot_package.snapshot_archive_info.archive_format {
+        match snapshot_package.archive_format() {
             ArchiveFormat::TarBzip2 => {
                 let mut encoder =
                     bzip2::write::BzEncoder::new(archive_file, bzip2::Compression::best());
@@ -880,7 +881,7 @@ pub fn bank_from_snapshot_archives(
         full_snapshot_archive_info.path(),
         "snapshot untar",
         account_paths,
-        *full_snapshot_archive_info.archive_format(),
+        full_snapshot_archive_info.archive_format(),
         parallel_divisions,
     )?;
 
@@ -892,7 +893,7 @@ pub fn bank_from_snapshot_archives(
                 incremental_snapshot_archive_info.path(),
                 "incremental snapshot untar",
                 account_paths,
-                *incremental_snapshot_archive_info.archive_format(),
+                incremental_snapshot_archive_info.archive_format(),
                 parallel_divisions,
             )?;
             Some(unarchived_incremental_snapshot)
@@ -974,7 +975,7 @@ pub fn bank_from_latest_snapshot_archives(
 
     let incremental_snapshot_archive_info = get_highest_incremental_snapshot_archive_info(
         &snapshot_archives_dir,
-        *full_snapshot_archive_info.slot(),
+        full_snapshot_archive_info.slot(),
     );
 
     info!(
@@ -1009,13 +1010,13 @@ pub fn bank_from_latest_snapshot_archives(
 
     verify_bank_against_expected_slot_hash(
         &bank,
-        *incremental_snapshot_archive_info.as_ref().map_or(
+        incremental_snapshot_archive_info.as_ref().map_or(
             full_snapshot_archive_info.slot(),
             |incremental_snapshot_archive_info| incremental_snapshot_archive_info.slot(),
         ),
-        *incremental_snapshot_archive_info.as_ref().map_or(
-            full_snapshot_archive_info.hash(),
-            |incremental_snapshot_archive_info| incremental_snapshot_archive_info.hash(),
+        incremental_snapshot_archive_info.as_ref().map_or(
+            *full_snapshot_archive_info.hash(),
+            |incremental_snapshot_archive_info| *incremental_snapshot_archive_info.hash(),
         ),
     )?;
 
@@ -1109,8 +1110,8 @@ fn check_are_snapshots_compatible(
         .then(|| ())
         .ok_or_else(|| {
             SnapshotError::MismatchedBaseSlot(
-                *full_snapshot_archive_info.slot(),
-                *incremental_snapshot_archive_info.base_slot(),
+                full_snapshot_archive_info.slot(),
+                incremental_snapshot_archive_info.base_slot(),
             )
         })
 }
@@ -1290,7 +1291,7 @@ where
     P: AsRef<Path>,
 {
     get_highest_full_snapshot_archive_info(snapshot_archives_dir)
-        .map(|full_snapshot_archive_info| *full_snapshot_archive_info.slot())
+        .map(|full_snapshot_archive_info| full_snapshot_archive_info.slot())
 }
 
 /// Get the highest slot of the incremental snapshot archives in a directory, for a given full
@@ -1300,7 +1301,7 @@ pub fn get_highest_incremental_snapshot_archive_slot<P: AsRef<Path>>(
     full_snapshot_slot: Slot,
 ) -> Option<Slot> {
     get_highest_incremental_snapshot_archive_info(snapshot_archives_dir, full_snapshot_slot)
-        .map(|incremental_snapshot_archive_info| *incremental_snapshot_archive_info.slot())
+        .map(|incremental_snapshot_archive_info| incremental_snapshot_archive_info.slot())
 }
 
 /// Get the path (and metadata) for the full snapshot archive with the highest slot in a directory
@@ -1331,7 +1332,7 @@ where
         get_incremental_snapshot_archives(snapshot_archives_dir)
             .into_iter()
             .filter(|incremental_snapshot_archive_info| {
-                *incremental_snapshot_archive_info.base_slot() == full_snapshot_slot
+                incremental_snapshot_archive_info.base_slot() == full_snapshot_slot
             })
             .collect::<Vec<_>>();
     incremental_snapshot_archives.sort_unstable();
@@ -1373,7 +1374,7 @@ where
         get_highest_full_snapshot_archive_slot(&snapshot_archives_dir).unwrap_or(Slot::MAX);
     get_incremental_snapshot_archives(&snapshot_archives_dir)
         .iter()
-        .filter(|archive_info| *archive_info.base_slot() < last_full_snapshot_slot)
+        .filter(|archive_info| archive_info.base_slot() < last_full_snapshot_slot)
         .for_each(|old_archive| {
             trace!(
                 "Purging old incremental snapshot archive: {}",
@@ -2510,14 +2511,14 @@ mod tests {
                 maximum_snapshots_to_retain + 1
             );
             assert_eq!(
-                *full_snapshot_archives.first().unwrap().slot(),
+                full_snapshot_archives.first().unwrap().slot(),
                 starting_slot
             );
-            assert_eq!(*full_snapshot_archives.last().unwrap().slot(), slot);
+            assert_eq!(full_snapshot_archives.last().unwrap().slot(), slot);
             for (i, full_snapshot_archive) in
                 full_snapshot_archives.iter().skip(1).rev().enumerate()
             {
-                assert_eq!(*full_snapshot_archive.slot(), slot - i as Slot);
+                assert_eq!(full_snapshot_archive.slot(), slot - i as Slot);
             }
         }
     }
@@ -2548,7 +2549,7 @@ mod tests {
             get_incremental_snapshot_archives(snapshot_archives_dir.path());
         assert_eq!(remaining_incremental_snapshot_archives.len(), 4);
         for archive in &remaining_incremental_snapshot_archives {
-            assert_eq!(*archive.base_slot(), 200);
+            assert_eq!(archive.base_slot(), 200);
         }
     }
 
