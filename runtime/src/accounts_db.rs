@@ -2480,12 +2480,20 @@ impl AccountsDb {
     }
 
     pub fn shrink_all_slots(&self, is_startup: bool) {
+        const DIRTY_STORES_CLEANING_THRESHOLD: usize = 10_000;
+        const OUTER_CHUNK_SIZE: usize = 2000;
+        const INNER_CHUNK_SIZE: usize = OUTER_CHUNK_SIZE / 8;
         if is_startup && self.caching_enabled {
             let slots = self.all_slots_in_storage();
-            let chunk_size = std::cmp::max(slots.len() / 8, 1); // approximately 400k slots in a snapshot
-            slots.par_chunks(chunk_size).for_each(|slots| {
-                for slot in slots {
-                    self.shrink_slot_forced(*slot, is_startup);
+            let inner_chunk_size = std::cmp::max(INNER_CHUNK_SIZE, 1);
+            slots.chunks(OUTER_CHUNK_SIZE).for_each(|chunk| {
+                chunk.par_chunks(inner_chunk_size).for_each(|slots| {
+                    for slot in slots {
+                        self.shrink_slot_forced(*slot, is_startup);
+                    }
+                });
+                if self.dirty_stores.len() > DIRTY_STORES_CLEANING_THRESHOLD {
+                    self.clean_accounts(None, is_startup);
                 }
             });
         } else {
@@ -2494,6 +2502,9 @@ impl AccountsDb {
                     self.shrink_slot_forced(slot, false);
                 } else {
                     self.do_shrink_slot_forced_v1(slot);
+                }
+                if self.dirty_stores.len() > DIRTY_STORES_CLEANING_THRESHOLD {
+                    self.clean_accounts(None, is_startup);
                 }
             }
         }
