@@ -5,7 +5,7 @@ extern crate test;
 
 use {
     log::*,
-    solana_core::retransmit_stage::retransmitter,
+    solana_core::retransmit_stage::{retransmitter, RetransmitStageParams},
     solana_entry::entry::Entry,
     solana_gossip::{
         cluster_info::{ClusterInfo, Node},
@@ -82,6 +82,7 @@ fn bench_retransmitter(bencher: &mut Bencher) {
     let sockets = (0..NUM_THREADS)
         .map(|_| UdpSocket::bind("0.0.0.0:0").unwrap())
         .collect();
+    let params = RetransmitStageParams::default();
 
     let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
 
@@ -105,6 +106,7 @@ fn bench_retransmitter(bencher: &mut Bencher) {
     let num_packets = data_shreds.len();
 
     let retransmitter_handles = retransmitter(
+        params: &RetransmitStageParams,
         Arc::new(sockets),
         bank_forks,
         &leader_schedule_cache,

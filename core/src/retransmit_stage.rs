@@ -53,7 +53,6 @@ use {
 
 const SENT_MAX_DUPLICATE_COUNT: usize = 2;
 const DEFAULT_SHREDS_RECEIVED_LRU_CACHE_SIZE: usize = 10_000;
-const UPDATE_PEER_CACHE_INTERVAL_MS: u64 = 1_000;
 // Limit a given thread to consume about this many packets so that
 // it doesn't pull up too much work.
 const RETRANSMIT_PACKET_BATCH_THRESHOLD: usize = 100;
@@ -63,7 +62,6 @@ const RETRANSMIT_PACKET_RECV_TIMEOUT_MS: u64 = 1_000;
 pub struct RetransmitStageParams {
     pub sent_max_duplicate_count: usize,
     pub shreds_received_lru_cache_size: usize,
-    pub update_peer_cache_interval_ms: u64,
     pub retransmit_packet_batch_threshold: usize,
     pub retransmit_packet_recv_timeout_ms: u64,
 }
@@ -73,7 +71,6 @@ impl Default for RetransmitStageParams {
         Self {
             sent_max_duplicate_count: SENT_MAX_DUPLICATE_COUNT,
             shreds_received_lru_cache_size: DEFAULT_SHREDS_RECEIVED_LRU_CACHE_SIZE,
-            update_peer_cache_interval_ms: UPDATE_PEER_CACHE_INTERVAL_MS,
             retransmit_packet_batch_threshold: RETRANSMIT_PACKET_BATCH_THRESHOLD,
             retransmit_packet_recv_timeout_ms: RETRANSMIT_PACKET_RECV_TIMEOUT_MS,
         }
