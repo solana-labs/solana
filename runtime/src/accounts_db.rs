@@ -180,6 +180,7 @@ struct StorageSizeAndCount {
     pub stored_size: usize,
     pub count: usize,
 }
+type StorageSizeAndCountMap = DashMap<AppendVecId, StorageSizeAndCount>;
 
 impl GenerateIndexTimings {
     pub fn report(&self) {
@@ -5967,6 +5968,7 @@ impl AccountsDb {
         // verify checks that all the expected items are in the accounts index and measures how long it takes to look them all up
         let passes = if verify { 2 } else { 1 };
         for pass in 0..passes {
+            let storage_info = StorageSizeAndCountMap::default();
             let total_processed_slots_across_all_threads = AtomicU64::new(0);
             let outer_slots_len = slots.len();
             let chunk_size = (outer_slots_len / 7) + 1; // approximately 400k slots in a snapshot
@@ -5989,6 +5991,22 @@ impl AccountsDb {
                             .get_slot_storage_entries(*slot)
                             .unwrap_or_default();
                         let accounts_map = Self::process_storage_slot(&storage_maps);
+                        let mut storage_info_local =
+                            HashMap::<AppendVecId, StorageSizeAndCount>::default();
+                        for (_, v) in accounts_map.iter() {
+                            let mut info = storage_info_local
+                                .entry(v.store_id)
+                                .or_insert_with(StorageSizeAndCount::default);
+                            info.stored_size += v.stored_account.stored_size;
+                            info.count += 1;
+                        }
+                        for (store_id, v) in storage_info_local.into_iter() {
+                            let mut info = storage_info
+                                .entry(store_id)
+                                .or_insert_with(StorageSizeAndCount::default);
+                            info.stored_size += v.stored_size;
+                            info.count += v.count;
+                        }
                         scan_time.stop();
                         scan_time_sum += scan_time.as_us();
 
@@ -6062,7 +6080,7 @@ impl AccountsDb {
                     self.accounts_index.add_root(*slot, false);
                 }
 
-                self.initialize_storage_count_and_alive_bytes(&mut timings);
+                self.initialize_storage_count_and_alive_bytes(&mut timings, storage_info);
             }
             timings.report();
         }
@@ -6146,8 +6164,20 @@ impl AccountsDb {
         timings.storage_size_storages_us = storage_size_storages_time.as_us();
     }
 
-    fn initialize_storage_count_and_alive_bytes(&self, timings: &mut GenerateIndexTimings) {
+    fn initialize_storage_count_and_alive_bytes(
+        &self,
+        timings: &mut GenerateIndexTimings,
+        storage_info: StorageSizeAndCountMap,
+    ) {
         let stored_sizes_and_counts = self.calculate_storage_count_and_alive_bytes(timings);
+        for (k, v) in stored_sizes_and_counts.iter() {
+            let item = storage_info.remove(k);
+            assert!(item.is_some());
+            let item = item.unwrap().1;
+            assert_eq!(item.count, v.count);
+            assert_eq!(item.stored_size, v.stored_size);
+        }
+        assert!(storage_info.is_empty());
         self.set_storage_count_and_alive_bytes(stored_sizes_and_counts, timings);
     }
 
