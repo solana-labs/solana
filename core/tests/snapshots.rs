@@ -160,6 +160,7 @@ mod tests {
 
         let old_last_bank = old_bank_forks.get(old_last_slot).unwrap();
 
+        let check_hash_calculation = false;
         let full_snapshot_archive_path = snapshot_utils::build_full_snapshot_archive_path(
             snapshot_package_output_path.to_path_buf(),
             old_last_bank.slot(),
@@ -187,7 +188,7 @@ mod tests {
             false,
             None,
             accounts_db::AccountShrinkThreshold::default(),
-            false,
+            check_hash_calculation,
             false,
             false,
         )
