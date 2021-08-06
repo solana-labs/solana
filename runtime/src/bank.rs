@@ -1065,7 +1065,7 @@ impl Bank {
 
     pub fn new_for_tests(genesis_config: &GenesisConfig) -> Self {
         // this will diverge
-        Self::new_with_paths(
+        Self::new_with_paths_for_tests(
             genesis_config,
             Vec::new(),
             &[],
@@ -1079,7 +1079,7 @@ impl Bank {
     }
 
     pub fn new_no_wallclock_throttle_for_tests(genesis_config: &GenesisConfig) -> Self {
-        let mut bank = Self::new_with_paths(
+        let mut bank = Self::new_with_paths_for_tests(
             genesis_config,
             Vec::new(),
             &[],
@@ -1102,7 +1102,7 @@ impl Bank {
         accounts_db_caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
     ) -> Self {
-        Self::new_with_paths(
+        Self::new_with_paths_for_tests(
             genesis_config,
             Vec::new(),
             &[],
@@ -1174,7 +1174,55 @@ impl Bank {
         }
     }
 
-    pub fn new_with_paths(
+    pub fn new_with_paths_for_tests(
+        genesis_config: &GenesisConfig,
+        paths: Vec<PathBuf>,
+        frozen_account_pubkeys: &[Pubkey],
+        debug_keys: Option<Arc<HashSet<Pubkey>>>,
+        additional_builtins: Option<&Builtins>,
+        account_indexes: AccountSecondaryIndexes,
+        accounts_db_caching_enabled: bool,
+        shrink_ratio: AccountShrinkThreshold,
+        debug_do_not_add_builtins: bool,
+    ) -> Self {
+        Self::new_with_paths_production(
+            genesis_config,
+            paths,
+            frozen_account_pubkeys,
+            debug_keys,
+            additional_builtins,
+            account_indexes,
+            accounts_db_caching_enabled,
+            shrink_ratio,
+            debug_do_not_add_builtins,
+        )
+    }
+
+    pub fn new_with_paths_for_benches(
+        genesis_config: &GenesisConfig,
+        paths: Vec<PathBuf>,
+        frozen_account_pubkeys: &[Pubkey],
+        debug_keys: Option<Arc<HashSet<Pubkey>>>,
+        additional_builtins: Option<&Builtins>,
+        account_indexes: AccountSecondaryIndexes,
+        accounts_db_caching_enabled: bool,
+        shrink_ratio: AccountShrinkThreshold,
+        debug_do_not_add_builtins: bool,
+    ) -> Self {
+        Self::new_with_paths_production(
+            genesis_config,
+            paths,
+            frozen_account_pubkeys,
+            debug_keys,
+            additional_builtins,
+            account_indexes,
+            accounts_db_caching_enabled,
+            shrink_ratio,
+            debug_do_not_add_builtins,
+        )
+    }
+
+    pub fn new_with_paths_production(
         genesis_config: &GenesisConfig,
         paths: Vec<PathBuf>,
         frozen_account_pubkeys: &[Pubkey],
@@ -12211,7 +12259,7 @@ pub(crate) mod tests {
             feature_builtins: (vec![]),
         };
 
-        let bank0 = Arc::new(Bank::new_with_paths(
+        let bank0 = Arc::new(Bank::new_with_paths_for_tests(
             &genesis_config,
             Vec::new(),
             &[],

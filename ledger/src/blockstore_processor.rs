@@ -406,7 +406,7 @@ pub fn process_blockstore(
     }
 
     // Setup bank for slot 0
-    let bank0 = Bank::new_with_paths(
+    let bank0 = Bank::new_with_paths_production(
         genesis_config,
         account_paths,
         &opts.frozen_accounts,
@@ -3126,7 +3126,7 @@ pub mod tests {
         genesis_config: &GenesisConfig,
         account_paths: Vec<PathBuf>,
     ) -> EpochSchedule {
-        let bank = Bank::new_with_paths(
+        let bank = Bank::new_with_paths_for_tests(
             genesis_config,
             account_paths,
             &[],
