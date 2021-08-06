@@ -42,7 +42,7 @@ use {
     },
     solana_runtime::{
         snapshot_config::SnapshotConfig,
-        snapshot_utils::{self, ArchiveFormat, SnapshotArchiveInfo},
+        snapshot_utils::{self, ArchiveFormat, SnapshotArchiveInfoGetter},
     },
     solana_sdk::{
         account::AccountSharedData,

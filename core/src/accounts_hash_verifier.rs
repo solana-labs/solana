@@ -10,7 +10,7 @@ use solana_gossip::cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES};
 use solana_runtime::{
     accounts_db,
     snapshot_package::{AccountsPackage, AccountsPackagePre, AccountsPackageReceiver},
-    snapshot_utils::SnapshotArchiveInfo,
+    snapshot_utils::SnapshotArchiveInfoGetter,
 };
 use solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey};
 use std::collections::{HashMap, HashSet};

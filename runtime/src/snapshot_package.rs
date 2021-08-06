@@ -1,5 +1,5 @@
 use crate::snapshot_utils::{
-    ArchiveFormat, BankSnapshotInfo, Result, SnapshotArchiveInfo, SnapshotArchiveInfoInner,
+    ArchiveFormat, BankSnapshotInfo, Result, SnapshotArchiveInfo, SnapshotArchiveInfoGetter,
     SnapshotVersion, TMP_FULL_SNAPSHOT_PREFIX, TMP_INCREMENTAL_SNAPSHOT_PREFIX,
 };
 use crate::{
@@ -209,7 +209,7 @@ impl AccountsPackagePre {
 }
 
 pub struct AccountsPackage {
-    pub snapshot_archive_info: SnapshotArchiveInfoInner,
+    pub snapshot_archive_info: SnapshotArchiveInfo,
     pub block_height: Slot,
     pub slot_deltas: Vec<BankSlotDelta>,
     pub snapshot_links: TempDir,
@@ -230,7 +230,7 @@ impl AccountsPackage {
         snapshot_version: SnapshotVersion,
     ) -> Self {
         Self {
-            snapshot_archive_info: SnapshotArchiveInfoInner {
+            snapshot_archive_info: SnapshotArchiveInfo {
                 path: snapshot_archive_path,
                 slot,
                 hash,
@@ -245,8 +245,8 @@ impl AccountsPackage {
     }
 }
 
-impl SnapshotArchiveInfo for AccountsPackage {
-    fn snapshot_archive_info_inner(&self) -> &SnapshotArchiveInfoInner {
+impl SnapshotArchiveInfoGetter for AccountsPackage {
+    fn snapshot_archive_info(&self) -> &SnapshotArchiveInfo {
         &self.snapshot_archive_info
     }
 }

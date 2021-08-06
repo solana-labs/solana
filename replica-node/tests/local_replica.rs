@@ -17,7 +17,7 @@ use {
     solana_runtime::{
         accounts_index::AccountSecondaryIndexes,
         snapshot_config::SnapshotConfig,
-        snapshot_utils::{self, ArchiveFormat, SnapshotArchiveInfo},
+        snapshot_utils::{self, ArchiveFormat, SnapshotArchiveInfoGetter},
     },
     solana_sdk::{
         client::SyncClient,

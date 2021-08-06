@@ -29,7 +29,7 @@ use {
         bank_forks::BankForks,
         commitment::BlockCommitmentCache,
         snapshot_config::SnapshotConfig,
-        snapshot_utils::{self, SnapshotArchiveInfo},
+        snapshot_utils::{self, SnapshotArchiveInfoGetter},
     },
     solana_sdk::{
         exit::Exit, genesis_config::DEFAULT_GENESIS_DOWNLOAD_PATH, hash::Hash,

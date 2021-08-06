@@ -40,29 +40,29 @@ use {
 };
 
 /// Trait to query the snapshot archive information
-pub trait SnapshotArchiveInfo {
-    fn snapshot_archive_info_inner(&self) -> &SnapshotArchiveInfoInner;
+pub trait SnapshotArchiveInfoGetter {
+    fn snapshot_archive_info(&self) -> &SnapshotArchiveInfo;
 
     fn path(&self) -> &PathBuf {
-        &self.snapshot_archive_info_inner().path
+        &self.snapshot_archive_info().path
     }
 
     fn slot(&self) -> Slot {
-        self.snapshot_archive_info_inner().slot
+        self.snapshot_archive_info().slot
     }
 
     fn hash(&self) -> &Hash {
-        &self.snapshot_archive_info_inner().hash
+        &self.snapshot_archive_info().hash
     }
 
     fn archive_format(&self) -> ArchiveFormat {
-        self.snapshot_archive_info_inner().archive_format
+        self.snapshot_archive_info().archive_format
     }
 }
 
 /// Common information about a snapshot archive
 #[derive(PartialEq, Eq, Debug, Clone)]
-pub struct SnapshotArchiveInfoInner {
+pub struct SnapshotArchiveInfo {
     /// Path to the snapshot archive file
     pub path: PathBuf,
 
@@ -78,7 +78,7 @@ pub struct SnapshotArchiveInfoInner {
 
 /// Information about a full snapshot archive: its path, slot, hash, and archive format
 #[derive(PartialEq, Eq, Debug, Clone)]
-pub struct FullSnapshotArchiveInfo(SnapshotArchiveInfoInner);
+pub struct FullSnapshotArchiveInfo(SnapshotArchiveInfo);
 
 impl FullSnapshotArchiveInfo {
     /// Parse the path to a full snapshot archive and return a new `FullSnapshotArchiveInfo`
@@ -86,7 +86,7 @@ impl FullSnapshotArchiveInfo {
         let filename = path_to_file_name_str(path.as_path())?;
         let (slot, hash, archive_format) = parse_full_snapshot_archive_filename(filename)?;
 
-        Ok(Self::new(SnapshotArchiveInfoInner {
+        Ok(Self::new(SnapshotArchiveInfo {
             path,
             slot,
             hash,
@@ -94,13 +94,13 @@ impl FullSnapshotArchiveInfo {
         }))
     }
 
-    fn new(snapshot_archive_info: SnapshotArchiveInfoInner) -> Self {
+    fn new(snapshot_archive_info: SnapshotArchiveInfo) -> Self {
         Self(snapshot_archive_info)
     }
 }
 
-impl SnapshotArchiveInfo for FullSnapshotArchiveInfo {
-    fn snapshot_archive_info_inner(&self) -> &SnapshotArchiveInfoInner {
+impl SnapshotArchiveInfoGetter for FullSnapshotArchiveInfo {
+    fn snapshot_archive_info(&self) -> &SnapshotArchiveInfo {
         &self.0
     }
 }
@@ -127,7 +127,7 @@ pub struct IncrementalSnapshotArchiveInfo {
 
     /// Use the `SnapshotArchiveInfo` struct for the common fields: path, slot, hash, and
     /// archive_format, but as they pertain to the incremental snapshot.
-    inner: SnapshotArchiveInfoInner,
+    inner: SnapshotArchiveInfo,
 }
 
 impl IncrementalSnapshotArchiveInfo {
@@ -139,7 +139,7 @@ impl IncrementalSnapshotArchiveInfo {
 
         Ok(Self::new(
             base_slot,
-            SnapshotArchiveInfoInner {
+            SnapshotArchiveInfo {
                 path,
                 slot,
                 hash,
@@ -148,7 +148,7 @@ impl IncrementalSnapshotArchiveInfo {
         ))
     }
 
-    fn new(base_slot: Slot, snapshot_archive_info: SnapshotArchiveInfoInner) -> Self {
+    fn new(base_slot: Slot, snapshot_archive_info: SnapshotArchiveInfo) -> Self {
         Self {
             base_slot,
             inner: snapshot_archive_info,
@@ -160,8 +160,8 @@ impl IncrementalSnapshotArchiveInfo {
     }
 }
 
-impl SnapshotArchiveInfo for IncrementalSnapshotArchiveInfo {
-    fn snapshot_archive_info_inner(&self) -> &SnapshotArchiveInfoInner {
+impl SnapshotArchiveInfoGetter for IncrementalSnapshotArchiveInfo {
+    fn snapshot_archive_info(&self) -> &SnapshotArchiveInfo {
         &self.inner
     }
 }

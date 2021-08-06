@@ -61,7 +61,7 @@ use solana_runtime::{
     commitment::BlockCommitmentCache,
     hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
     snapshot_config::SnapshotConfig,
-    snapshot_utils::{self, SnapshotArchiveInfo},
+    snapshot_utils::{self, SnapshotArchiveInfoGetter},
 };
 use solana_sdk::{
     clock::Slot,

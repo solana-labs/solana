@@ -49,7 +49,7 @@ use {
         hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
         snapshot_config::SnapshotConfig,
         snapshot_utils::{
-            self, ArchiveFormat, SnapshotArchiveInfo, SnapshotVersion,
+            self, ArchiveFormat, SnapshotArchiveInfoGetter, SnapshotVersion,
             DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
         },
     },
