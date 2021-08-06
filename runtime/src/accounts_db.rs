@@ -1407,7 +1407,8 @@ impl AccountsDb {
         }
     }
 
-    pub fn new(paths: Vec<PathBuf>, cluster_type: &ClusterType) -> Self {
+    pub fn new_for_tests(paths: Vec<PathBuf>, cluster_type: &ClusterType) -> Self {
+        // will diverge
         AccountsDb::new_with_config(
             paths,
             cluster_type,
@@ -1415,11 +1416,6 @@ impl AccountsDb {
             false,
             AccountShrinkThreshold::default(),
         )
-    }
-
-    pub fn new_for_tests(paths: Vec<PathBuf>, cluster_type: &ClusterType) -> Self {
-        // will diverge
-        Self::new(paths, cluster_type)
     }
 
     pub fn new_with_config(
@@ -6186,6 +6182,10 @@ impl AccountsDb {
 
 #[cfg(test)]
 impl AccountsDb {
+    pub fn new(paths: Vec<PathBuf>, cluster_type: &ClusterType) -> Self {
+        Self::new_for_tests(paths, cluster_type)
+    }
+
     pub fn new_sized(paths: Vec<PathBuf>, file_size: u64) -> Self {
         AccountsDb {
             file_size,
