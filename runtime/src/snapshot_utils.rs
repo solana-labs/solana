@@ -1026,16 +1026,16 @@ pub fn bank_from_latest_snapshot_archives(
 /// and hash
 fn check_bank_with_snapshot_archive_info(
     bank: &Bank,
-    snapshot_archive_info_slot: Slot,
-    snapshot_archive_info_hash: Hash,
+    expected_slot: Slot,
+    expected_hash: Hash,
 ) -> Result<()> {
     let bank_slot = bank.slot();
     let bank_hash = bank.get_accounts_hash();
 
-    if bank_slot != snapshot_archive_info_slot || bank_hash != snapshot_archive_info_hash {
+    if bank_slot != expected_slot || bank_hash != expected_hash {
         return Err(SnapshotError::MismatchedSlotHash(
             (bank_slot, bank_hash),
-            (snapshot_archive_info_slot, snapshot_archive_info_hash),
+            (expected_slot, expected_hash),
         ));
     }
 
