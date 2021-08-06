@@ -131,7 +131,7 @@ where
 fn test_accounts_serialize_style(serde_style: SerdeStyle) {
     solana_logger::setup();
     let (_accounts_dir, paths) = get_temp_accounts_paths(4).unwrap();
-    let accounts = Accounts::new_with_config(
+    let accounts = Accounts::new_with_config_for_tests(
         paths,
         &ClusterType::Development,
         AccountSecondaryIndexes::default(),

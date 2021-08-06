@@ -60,7 +60,7 @@ fn main() {
     if fs::remove_dir_all(path.clone()).is_err() {
         println!("Warning: Couldn't remove {:?}", path);
     }
-    let accounts = Accounts::new_with_config(
+    let accounts = Accounts::new_with_config_for_benches(
         vec![path],
         &ClusterType::Testnet,
         AccountSecondaryIndexes::default(),
