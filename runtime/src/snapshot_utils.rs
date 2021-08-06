@@ -1007,7 +1007,7 @@ pub fn bank_from_latest_snapshot_archives(
         verify_index,
     )?;
 
-    check_bank_with_snapshot_archive_info(
+    verify_bank_against_expected_slot_hash(
         &bank,
         *incremental_snapshot_archive_info.as_ref().map_or(
             full_snapshot_archive_info.slot(),
@@ -1024,7 +1024,7 @@ pub fn bank_from_latest_snapshot_archives(
 
 /// Check to make sure the deserialized bank's slot and hash matches the snapshot archive's slot
 /// and hash
-fn check_bank_with_snapshot_archive_info(
+fn verify_bank_against_expected_slot_hash(
     bank: &Bank,
     expected_slot: Slot,
     expected_hash: Hash,
