@@ -147,7 +147,7 @@ mod tests {
 
         match test_setup_reader_sender("::1:0") {
             Ok(config) => test_one_iter(config),
-            Err(e) => warn!("Failed to configure IPv6: {:?}", e),
+            Err(e) => panic!("Failed to configure IPv6: {:?}", e),
         }
     }
 
@@ -180,7 +180,7 @@ mod tests {
 
         match test_setup_reader_sender("::1:0") {
             Ok(config) => test_multi_iter(config),
-            Err(e) => warn!("Failed to configure IPv6: {:?}", e),
+            Err(e) => panic!("Failed to configure IPv6: {:?}", e),
         }
     }
 
