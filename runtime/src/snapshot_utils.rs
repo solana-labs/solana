@@ -386,11 +386,11 @@ pub fn archive_snapshot_package(
 ) -> Result<()> {
     info!(
         "Generating snapshot archive for slot {}",
-        snapshot_package.snapshot_archive_info.slot
+        snapshot_package.slot()
     );
 
     serialize_status_cache(
-        snapshot_package.snapshot_archive_info.slot,
+        snapshot_package.slot(),
         &snapshot_package.slot_deltas,
         &snapshot_package
             .snapshot_links
@@ -400,8 +400,7 @@ pub fn archive_snapshot_package(
 
     let mut timer = Measure::start("snapshot_package-package_snapshots");
     let tar_dir = snapshot_package
-        .snapshot_archive_info
-        .path
+        .path()
         .parent()
         .expect("Tar output path is invalid");
 
@@ -412,7 +411,8 @@ pub fn archive_snapshot_package(
     let staging_dir = tempfile::Builder::new()
         .prefix(&format!(
             "{}{}-",
-            TMP_FULL_SNAPSHOT_PREFIX, snapshot_package.snapshot_archive_info.slot
+            TMP_FULL_SNAPSHOT_PREFIX,
+            snapshot_package.slot()
         ))
         .tempdir_in(tar_dir)
         .map_err(|e| SnapshotError::IoWithSource(e, "create archive tempdir"))?;
@@ -458,12 +458,14 @@ pub fn archive_snapshot_package(
             .map_err(|e| SnapshotError::IoWithSource(e, "write version file"))?;
     }
 
-    let file_ext = get_archive_ext(snapshot_package.snapshot_archive_info.archive_format);
+    let file_ext = get_archive_ext(snapshot_package.archive_format());
 
     // Tar the staging directory into the archive at `archive_path`
     let archive_path = tar_dir.join(format!(
         "{}{}.{}",
-        TMP_FULL_SNAPSHOT_PREFIX, snapshot_package.snapshot_archive_info.slot, file_ext
+        TMP_FULL_SNAPSHOT_PREFIX,
+        snapshot_package.slot(),
+        file_ext
     ));
 
     {
@@ -506,7 +508,7 @@ pub fn archive_snapshot_package(
     // Atomically move the archive into position for other validators to find
     let metadata = fs::metadata(&archive_path)
         .map_err(|e| SnapshotError::IoWithSource(e, "archive path stat"))?;
-    fs::rename(&archive_path, &snapshot_package.snapshot_archive_info.path)
+    fs::rename(&archive_path, &snapshot_package.path())
         .map_err(|e| SnapshotError::IoWithSource(e, "archive path rename"))?;
 
     purge_old_snapshot_archives(tar_dir, maximum_snapshots_to_retain);
@@ -514,14 +516,14 @@ pub fn archive_snapshot_package(
     timer.stop();
     info!(
         "Successfully created {:?}. slot: {}, elapsed ms: {}, size={}",
-        snapshot_package.snapshot_archive_info.path,
-        snapshot_package.snapshot_archive_info.slot,
+        snapshot_package.path(),
+        snapshot_package.slot(),
         timer.as_ms(),
         metadata.len()
     );
     datapoint_info!(
         "snapshot-package",
-        ("slot", snapshot_package.snapshot_archive_info.slot, i64),
+        ("slot", snapshot_package.slot(), i64),
         ("duration_ms", timer.as_ms(), i64),
         ("size", metadata.len(), i64)
     );
