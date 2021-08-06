@@ -106,7 +106,7 @@ fn bench_retransmitter(bencher: &mut Bencher) {
     let num_packets = data_shreds.len();
 
     let retransmitter_handles = retransmitter(
-        params: &RetransmitStageParams,
+        &params,
         Arc::new(sockets),
         bank_forks,
         &leader_schedule_cache,
