@@ -147,6 +147,23 @@ impl Accounts {
         )
     }
 
+    pub fn new_with_config_for_benches(
+        paths: Vec<PathBuf>,
+        cluster_type: &ClusterType,
+        account_indexes: AccountSecondaryIndexes,
+        caching_enabled: bool,
+        shrink_ratio: AccountShrinkThreshold,
+    ) -> Self {
+        // will diverge
+        Self::new_with_config(
+            paths,
+            cluster_type,
+            account_indexes,
+            caching_enabled,
+            shrink_ratio,
+        )
+    }
+
     pub fn new_with_config(
         paths: Vec<PathBuf>,
         cluster_type: &ClusterType,

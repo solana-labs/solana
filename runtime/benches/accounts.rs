@@ -95,7 +95,7 @@ fn test_accounts_squash(bencher: &mut Bencher) {
 
 #[bench]
 fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
-    let accounts = Accounts::new_with_config(
+    let accounts = Accounts::new_with_config_for_benches(
         vec![PathBuf::from("bench_accounts_hash_internal")],
         &ClusterType::Development,
         AccountSecondaryIndexes::default(),
@@ -122,7 +122,7 @@ fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
 #[bench]
 fn test_update_accounts_hash(bencher: &mut Bencher) {
     solana_logger::setup();
-    let accounts = Accounts::new_with_config(
+    let accounts = Accounts::new_with_config_for_benches(
         vec![PathBuf::from("update_accounts_hash")],
         &ClusterType::Development,
         AccountSecondaryIndexes::default(),
@@ -140,7 +140,7 @@ fn test_update_accounts_hash(bencher: &mut Bencher) {
 #[bench]
 fn test_accounts_delta_hash(bencher: &mut Bencher) {
     solana_logger::setup();
-    let accounts = Accounts::new_with_config(
+    let accounts = Accounts::new_with_config_for_benches(
         vec![PathBuf::from("accounts_delta_hash")],
         &ClusterType::Development,
         AccountSecondaryIndexes::default(),
@@ -157,7 +157,7 @@ fn test_accounts_delta_hash(bencher: &mut Bencher) {
 #[bench]
 fn bench_delete_dependencies(bencher: &mut Bencher) {
     solana_logger::setup();
-    let accounts = Accounts::new_with_config(
+    let accounts = Accounts::new_with_config_for_benches(
         vec![PathBuf::from("accounts_delete_deps")],
         &ClusterType::Development,
         AccountSecondaryIndexes::default(),
@@ -188,7 +188,7 @@ fn store_accounts_with_possible_contention<F: 'static>(
     F: Fn(&Accounts, &[Pubkey]) + Send + Copy,
 {
     let num_readers = 5;
-    let accounts = Arc::new(Accounts::new_with_config(
+    let accounts = Arc::new(Accounts::new_with_config_for_benches(
         vec![
             PathBuf::from(std::env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string()))
                 .join(bench_name),
@@ -324,7 +324,7 @@ fn bench_rwlock_hashmap_single_reader_with_n_writers(bencher: &mut Bencher) {
 }
 
 fn setup_bench_dashmap_iter() -> (Arc<Accounts>, DashMap<Pubkey, (AccountSharedData, Hash)>) {
-    let accounts = Arc::new(Accounts::new_with_config(
+    let accounts = Arc::new(Accounts::new_with_config_for_benches(
         vec![
             PathBuf::from(std::env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string()))
                 .join("bench_dashmap_par_iter"),
@@ -382,7 +382,7 @@ fn bench_dashmap_iter(bencher: &mut Bencher) {
 
 #[bench]
 fn bench_load_largest_accounts(b: &mut Bencher) {
-    let accounts = Accounts::new_with_config(
+    let accounts = Accounts::new_with_config_for_benches(
         Vec::new(),
         &ClusterType::Development,
         AccountSecondaryIndexes::default(),
