@@ -41,18 +41,18 @@ use {
 
 /// Common information about a snapshot archive
 #[derive(PartialEq, Eq, Debug, Clone)]
-struct SnapshotArchiveInfo {
+pub struct SnapshotArchiveInfo {
     /// Path to the snapshot archive file
-    path: PathBuf,
+    pub path: PathBuf,
 
     /// Slot that the snapshot was made
-    slot: Slot,
+    pub slot: Slot,
 
     /// Hash of the accounts at this slot
-    hash: Hash,
+    pub hash: Hash,
 
     /// Archive format for the snapshot file
-    archive_format: ArchiveFormat,
+    pub archive_format: ArchiveFormat,
 }
 
 /// Information about a full snapshot archive: its path, slot, hash, and archive format
@@ -65,16 +65,16 @@ impl FullSnapshotArchiveInfo {
         let filename = path_to_file_name_str(path.as_path())?;
         let (slot, hash, archive_format) = parse_full_snapshot_archive_filename(filename)?;
 
-        Ok(Self::new(path, slot, hash, archive_format))
-    }
-
-    fn new(path: PathBuf, slot: Slot, hash: Hash, archive_format: ArchiveFormat) -> Self {
-        Self(SnapshotArchiveInfo {
+        Ok(Self::new(SnapshotArchiveInfo {
             path,
             slot,
             hash,
             archive_format,
-        })
+        }))
+    }
+
+    fn new(snapshot_archive_info: SnapshotArchiveInfo) -> Self {
+        Self(snapshot_archive_info)
     }
 
     pub fn path(&self) -> &PathBuf {
@@ -126,24 +126,21 @@ impl IncrementalSnapshotArchiveInfo {
         let (base_slot, slot, hash, archive_format) =
             parse_incremental_snapshot_archive_filename(filename)?;
 
-        Ok(Self::new(path, base_slot, slot, hash, archive_format))
-    }
-
-    fn new(
-        path: PathBuf,
-        base_slot: Slot,
-        slot: Slot,
-        hash: Hash,
-        archive_format: ArchiveFormat,
-    ) -> Self {
-        Self {
+        Ok(Self::new(
             base_slot,
-            inner: SnapshotArchiveInfo {
+            SnapshotArchiveInfo {
                 path,
                 slot,
                 hash,
                 archive_format,
             },
+        ))
+    }
+
+    fn new(base_slot: Slot, snapshot_archive_info: SnapshotArchiveInfo) -> Self {
+        Self {
+            base_slot,
+            inner: snapshot_archive_info,
         }
     }
 
@@ -388,11 +385,11 @@ pub fn archive_snapshot_package(
 ) -> Result<()> {
     info!(
         "Generating snapshot archive for slot {}",
-        snapshot_package.slot
+        snapshot_package.snapshot_archive_info.slot
     );
 
     serialize_status_cache(
-        snapshot_package.slot,
+        snapshot_package.snapshot_archive_info.slot,
         &snapshot_package.slot_deltas,
         &snapshot_package
             .snapshot_links
@@ -402,7 +399,8 @@ pub fn archive_snapshot_package(
 
     let mut timer = Measure::start("snapshot_package-package_snapshots");
     let tar_dir = snapshot_package
-        .tar_output_file
+        .snapshot_archive_info
+        .path
         .parent()
         .expect("Tar output path is invalid");
 
@@ -413,7 +411,7 @@ pub fn archive_snapshot_package(
     let staging_dir = tempfile::Builder::new()
         .prefix(&format!(
             "{}{}-",
-            TMP_FULL_SNAPSHOT_PREFIX, snapshot_package.slot
+            TMP_FULL_SNAPSHOT_PREFIX, snapshot_package.snapshot_archive_info.slot
         ))
         .tempdir_in(tar_dir)
         .map_err(|e| SnapshotError::IoWithSource(e, "create archive tempdir"))?;
@@ -459,12 +457,12 @@ pub fn archive_snapshot_package(
             .map_err(|e| SnapshotError::IoWithSource(e, "write version file"))?;
     }
 
-    let file_ext = get_archive_ext(snapshot_package.archive_format);
+    let file_ext = get_archive_ext(snapshot_package.snapshot_archive_info.archive_format);
 
     // Tar the staging directory into the archive at `archive_path`
     let archive_path = tar_dir.join(format!(
         "{}{}.{}",
-        TMP_FULL_SNAPSHOT_PREFIX, snapshot_package.slot, file_ext
+        TMP_FULL_SNAPSHOT_PREFIX, snapshot_package.snapshot_archive_info.slot, file_ext
     ));
 
     {
@@ -480,7 +478,7 @@ pub fn archive_snapshot_package(
             Ok(())
         };
 
-        match snapshot_package.archive_format {
+        match snapshot_package.snapshot_archive_info.archive_format {
             ArchiveFormat::TarBzip2 => {
                 let mut encoder =
                     bzip2::write::BzEncoder::new(archive_file, bzip2::Compression::best());
@@ -507,7 +505,7 @@ pub fn archive_snapshot_package(
     // Atomically move the archive into position for other validators to find
     let metadata = fs::metadata(&archive_path)
         .map_err(|e| SnapshotError::IoWithSource(e, "archive path stat"))?;
-    fs::rename(&archive_path, &snapshot_package.tar_output_file)
+    fs::rename(&archive_path, &snapshot_package.snapshot_archive_info.path)
         .map_err(|e| SnapshotError::IoWithSource(e, "archive path rename"))?;
 
     purge_old_snapshot_archives(tar_dir, maximum_snapshots_to_retain);
@@ -515,14 +513,14 @@ pub fn archive_snapshot_package(
     timer.stop();
     info!(
         "Successfully created {:?}. slot: {}, elapsed ms: {}, size={}",
-        snapshot_package.tar_output_file,
-        snapshot_package.slot,
+        snapshot_package.snapshot_archive_info.path,
+        snapshot_package.snapshot_archive_info.slot,
         timer.as_ms(),
         metadata.len()
     );
     datapoint_info!(
         "snapshot-package",
-        ("slot", snapshot_package.slot, i64),
+        ("slot", snapshot_package.snapshot_archive_info.slot, i64),
         ("duration_ms", timer.as_ms(), i64),
         ("size", metadata.len(), i64)
     );
@@ -968,6 +966,7 @@ pub fn bank_from_latest_snapshot_archives(
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
     test_hash_calculation: bool,
+    accounts_db_skip_shrink: bool,
     verify_index: bool,
 ) -> Result<(Bank, BankFromArchiveTimings)> {
     let full_snapshot_archive_info = get_highest_full_snapshot_archive_info(&snapshot_archives_dir)
@@ -1004,6 +1003,7 @@ pub fn bank_from_latest_snapshot_archives(
         limit_load_slot_count_from_snapshot,
         shrink_ratio,
         test_hash_calculation,
+        accounts_db_skip_shrink,
         verify_index,
     )?;
 
@@ -1809,12 +1809,7 @@ pub fn package_process_and_archive_full_snapshot(
         maximum_snapshots_to_retain,
     )?;
 
-    Ok(FullSnapshotArchiveInfo::new(
-        package.tar_output_file,
-        package.slot,
-        package.hash,
-        package.archive_format,
-    ))
+    Ok(FullSnapshotArchiveInfo::new(package.snapshot_archive_info))
 }
 
 /// Helper function to hold shared code to package, process, and archive incremental snapshots
@@ -1852,11 +1847,8 @@ pub fn package_process_and_archive_incremental_snapshot(
     )?;
 
     Ok(IncrementalSnapshotArchiveInfo::new(
-        package.tar_output_file,
         incremental_snapshot_base_slot,
-        package.slot,
-        package.hash,
-        package.archive_format,
+        package.snapshot_archive_info,
     ))
 }
 
@@ -1905,7 +1897,7 @@ pub fn process_accounts_package_pre(
         ("calculate_hash", time.as_us(), i64),
     );
 
-    let tar_output_file = match incremental_snapshot_base_slot {
+    let snapshot_archive_path = match incremental_snapshot_base_slot {
         None => build_full_snapshot_archive_path(
             accounts_package.snapshot_output_dir,
             accounts_package.slot,
@@ -1927,7 +1919,7 @@ pub fn process_accounts_package_pre(
         accounts_package.slot_deltas,
         accounts_package.snapshot_links,
         accounts_package.storages,
-        tar_output_file,
+        snapshot_archive_path,
         hash,
         accounts_package.archive_format,
         accounts_package.snapshot_version,
@@ -2844,7 +2836,7 @@ mod tests {
         let key3 = Keypair::new();
 
         let (genesis_config, mint_keypair) = create_genesis_config(1_000_000);
-        let bank0 = Arc::new(Bank::new(&genesis_config));
+        let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
         bank0.transfer(1, &mint_keypair, &key1.pubkey()).unwrap();
         bank0.transfer(2, &mint_keypair, &key2.pubkey()).unwrap();
         bank0.transfer(3, &mint_keypair, &key3.pubkey()).unwrap();
@@ -2923,6 +2915,7 @@ mod tests {
             false,
             None,
             AccountShrinkThreshold::default(),
+            false,
             false,
             false,
         )
