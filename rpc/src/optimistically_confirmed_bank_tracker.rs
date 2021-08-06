@@ -150,7 +150,6 @@ impl OptimisticallyConfirmedBankTracker {
                         w_optimistically_confirmed_bank.bank = bank.clone();
                     }
 
-
                     if slot > *last_notified_slot {
                         for parent in bank.parents().iter().rev() {
                             if parent.slot() > *last_notified_slot {
