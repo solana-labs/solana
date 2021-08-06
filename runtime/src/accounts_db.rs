@@ -6186,6 +6186,22 @@ impl AccountsDb {
         Self::new_for_tests(paths, cluster_type)
     }
 
+    pub fn new_with_config_for_tests(
+        paths: Vec<PathBuf>,
+        cluster_type: &ClusterType,
+        account_indexes: AccountSecondaryIndexes,
+        caching_enabled: bool,
+        shrink_ratio: AccountShrinkThreshold,
+    ) -> Self {
+        Self::new_with_config(
+            paths,
+            cluster_type,
+            account_indexes,
+            caching_enabled,
+            shrink_ratio,
+        )
+    }
+
     pub fn new_sized(paths: Vec<PathBuf>, file_size: u64) -> Self {
         AccountsDb {
             file_size,
@@ -7858,7 +7874,7 @@ pub mod tests {
     fn test_clean_old_with_both_normal_and_zero_lamport_accounts() {
         solana_logger::setup();
 
-        let mut accounts = AccountsDb::new_with_config(
+        let mut accounts = AccountsDb::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             spl_token_mint_index_enabled(),
@@ -10007,7 +10023,7 @@ pub mod tests {
     #[test]
     fn test_store_clean_after_shrink() {
         solana_logger::setup();
-        let accounts = AccountsDb::new_with_config(
+        let accounts = AccountsDb::new_with_config_for_tests(
             vec![],
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
@@ -10318,7 +10334,7 @@ pub mod tests {
     #[test]
     fn test_read_only_accounts_cache() {
         let caching_enabled = true;
-        let db = Arc::new(AccountsDb::new_with_config(
+        let db = Arc::new(AccountsDb::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
@@ -10366,7 +10382,7 @@ pub mod tests {
     #[test]
     fn test_flush_cache_clean() {
         let caching_enabled = true;
-        let db = Arc::new(AccountsDb::new_with_config(
+        let db = Arc::new(AccountsDb::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
@@ -10415,7 +10431,7 @@ pub mod tests {
     #[test]
     fn test_flush_cache_dont_clean_zero_lamport_account() {
         let caching_enabled = true;
-        let db = Arc::new(AccountsDb::new_with_config(
+        let db = Arc::new(AccountsDb::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
@@ -10550,7 +10566,7 @@ pub mod tests {
     #[test]
     fn test_scan_flush_accounts_cache_then_clean_drop() {
         let caching_enabled = true;
-        let db = Arc::new(AccountsDb::new_with_config(
+        let db = Arc::new(AccountsDb::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
@@ -10657,7 +10673,7 @@ pub mod tests {
     #[test]
     fn test_alive_bytes() {
         let caching_enabled = true;
-        let accounts_db = AccountsDb::new_with_config(
+        let accounts_db = AccountsDb::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
@@ -10712,7 +10728,7 @@ pub mod tests {
         scan_slot: Option<Slot>,
     ) -> (Arc<AccountsDb>, Vec<Pubkey>, Vec<Slot>, Option<ScanTracker>) {
         let caching_enabled = true;
-        let accounts_db = Arc::new(AccountsDb::new_with_config(
+        let accounts_db = Arc::new(AccountsDb::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
@@ -11117,7 +11133,7 @@ pub mod tests {
         // Enable caching so that we use the straightforward implementation
         // of shrink that will shrink all candidate slots
         let caching_enabled = true;
-        let db = AccountsDb::new_with_config(
+        let db = AccountsDb::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
@@ -11374,7 +11390,7 @@ pub mod tests {
         solana_logger::setup();
 
         let caching_enabled = true;
-        let mut db = AccountsDb::new_with_config(
+        let mut db = AccountsDb::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
@@ -11446,7 +11462,7 @@ pub mod tests {
 
     fn do_test_load_account_and_shrink_race(with_retry: bool) {
         let caching_enabled = true;
-        let mut db = AccountsDb::new_with_config(
+        let mut db = AccountsDb::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
@@ -11522,7 +11538,7 @@ pub mod tests {
     #[test]
     fn test_cache_flush_delayed_remove_unrooted_race() {
         let caching_enabled = true;
-        let mut db = AccountsDb::new_with_config(
+        let mut db = AccountsDb::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
@@ -11594,7 +11610,7 @@ pub mod tests {
     #[test]
     fn test_cache_flush_remove_unrooted_race_multiple_slots() {
         let caching_enabled = true;
-        let db = AccountsDb::new_with_config(
+        let db = AccountsDb::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
