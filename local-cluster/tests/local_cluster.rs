@@ -42,7 +42,7 @@ use {
     },
     solana_runtime::{
         snapshot_config::SnapshotConfig,
-        snapshot_utils::{self, ArchiveFormat},
+        snapshot_utils::{self, ArchiveFormat, SnapshotArchiveInfoGetter},
     },
     solana_sdk::{
         account::AccountSharedData,
@@ -1855,12 +1855,12 @@ fn test_snapshots_blockstore_floor() {
             .snapshot_archives_dir
             .path()
             .to_path_buf(),
-        *archive_info.slot(),
+        archive_info.slot(),
         archive_info.hash(),
         ArchiveFormat::TarBzip2,
     );
     fs::hard_link(archive_info.path(), &validator_archive_path).unwrap();
-    let slot_floor = *archive_info.slot();
+    let slot_floor = archive_info.slot();
 
     // Start up a new node from a snapshot
     let validator_stake = 5;
@@ -3411,11 +3411,11 @@ fn wait_for_next_snapshot(
                 "full snapshot for slot {} exists",
                 full_snapshot_archive_info.slot()
             );
-            if *full_snapshot_archive_info.slot() >= last_slot {
+            if full_snapshot_archive_info.slot() >= last_slot {
                 return (
                     full_snapshot_archive_info.path().clone(),
                     (
-                        *full_snapshot_archive_info.slot(),
+                        full_snapshot_archive_info.slot(),
                         *full_snapshot_archive_info.hash(),
                     ),
                 );

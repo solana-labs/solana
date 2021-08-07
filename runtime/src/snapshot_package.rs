@@ -1,6 +1,6 @@
 use crate::snapshot_utils::{
-    ArchiveFormat, BankSnapshotInfo, Result, SnapshotVersion, TMP_FULL_SNAPSHOT_PREFIX,
-    TMP_INCREMENTAL_SNAPSHOT_PREFIX,
+    ArchiveFormat, BankSnapshotInfo, Result, SnapshotArchiveInfo, SnapshotArchiveInfoGetter,
+    SnapshotVersion, TMP_FULL_SNAPSHOT_PREFIX, TMP_INCREMENTAL_SNAPSHOT_PREFIX,
 };
 use crate::{
     accounts_db::SnapshotStorages,
@@ -209,14 +209,11 @@ impl AccountsPackagePre {
 }
 
 pub struct AccountsPackage {
-    pub slot: Slot,
+    pub snapshot_archive_info: SnapshotArchiveInfo,
     pub block_height: Slot,
     pub slot_deltas: Vec<BankSlotDelta>,
     pub snapshot_links: TempDir,
     pub storages: SnapshotStorages,
-    pub tar_output_file: PathBuf,
-    pub hash: Hash,
-    pub archive_format: ArchiveFormat,
     pub snapshot_version: SnapshotVersion,
 }
 
@@ -227,21 +224,29 @@ impl AccountsPackage {
         slot_deltas: Vec<BankSlotDelta>,
         snapshot_links: TempDir,
         storages: SnapshotStorages,
-        tar_output_file: PathBuf,
+        snapshot_archive_path: PathBuf,
         hash: Hash,
         archive_format: ArchiveFormat,
         snapshot_version: SnapshotVersion,
     ) -> Self {
         Self {
-            slot,
+            snapshot_archive_info: SnapshotArchiveInfo {
+                path: snapshot_archive_path,
+                slot,
+                hash,
+                archive_format,
+            },
             block_height,
             slot_deltas,
             snapshot_links,
             storages,
-            tar_output_file,
-            hash,
-            archive_format,
             snapshot_version,
         }
+    }
+}
+
+impl SnapshotArchiveInfoGetter for AccountsPackage {
+    fn snapshot_archive_info(&self) -> &SnapshotArchiveInfo {
+        &self.snapshot_archive_info
     }
 }

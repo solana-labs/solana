@@ -31,7 +31,8 @@ use solana_runtime::{
     hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
     snapshot_config::SnapshotConfig,
     snapshot_utils::{
-        self, ArchiveFormat, SnapshotVersion, DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+        self, ArchiveFormat, SnapshotArchiveInfoGetter, SnapshotVersion,
+        DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
     },
 };
 use solana_sdk::{
@@ -2199,7 +2200,7 @@ fn main() {
                         bank.slot(),
                     );
 
-                    let archive_file = snapshot_utils::bank_to_full_snapshot_archive(
+                    let full_snapshot_archive_info = snapshot_utils::bank_to_full_snapshot_archive(
                         ledger_path,
                         &bank,
                         Some(snapshot_version),
@@ -2217,7 +2218,7 @@ fn main() {
                         "Successfully created snapshot for slot {}, hash {}: {}",
                         bank.slot(),
                         bank.hash(),
-                        archive_file.display(),
+                        full_snapshot_archive_info.path().display(),
                     );
                     println!(
                         "Shred version: {}",

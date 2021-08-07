@@ -10,6 +10,7 @@ use solana_gossip::cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES};
 use solana_runtime::{
     accounts_db,
     snapshot_package::{AccountsPackage, AccountsPackagePre, AccountsPackageReceiver},
+    snapshot_utils::SnapshotArchiveInfoGetter,
 };
 use solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey};
 use std::collections::{HashMap, HashSet};
@@ -125,19 +126,19 @@ impl AccountsHashVerifier {
         fault_injection_rate_slots: u64,
         snapshot_interval_slots: u64,
     ) {
-        let hash = accounts_package.hash;
+        let hash = *accounts_package.hash();
         if fault_injection_rate_slots != 0
-            && accounts_package.slot % fault_injection_rate_slots == 0
+            && accounts_package.slot() % fault_injection_rate_slots == 0
         {
             // For testing, publish an invalid hash to gossip.
             use rand::{thread_rng, Rng};
             use solana_sdk::hash::extend_and_hash;
-            warn!("inserting fault at slot: {}", accounts_package.slot);
+            warn!("inserting fault at slot: {}", accounts_package.slot());
             let rand = thread_rng().gen_range(0, 10);
             let hash = extend_and_hash(&hash, &[rand]);
-            hashes.push((accounts_package.slot, hash));
+            hashes.push((accounts_package.slot(), hash));
         } else {
-            hashes.push((accounts_package.slot, hash));
+            hashes.push((accounts_package.slot(), hash));
         }
 
         while hashes.len() > MAX_SNAPSHOT_HASHES {
@@ -281,18 +282,26 @@ mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let mut hashes = vec![];
         for i in 0..MAX_SNAPSHOT_HASHES + 1 {
+            let slot = 100 + i as u64;
+            let block_height = 100 + i as u64;
+            let slot_deltas = vec![];
             let snapshot_links = TempDir::new().unwrap();
-            let accounts_package = AccountsPackage {
-                hash: hash(&[i as u8]),
-                block_height: 100 + i as u64,
-                slot: 100 + i as u64,
-                slot_deltas: vec![],
+            let storages = vec![];
+            let snapshot_archive_path = PathBuf::from(".");
+            let hash = hash(&[i as u8]);
+            let archive_format = ArchiveFormat::TarBzip2;
+            let snapshot_version = SnapshotVersion::default();
+            let accounts_package = AccountsPackage::new(
+                slot,
+                block_height,
+                slot_deltas,
                 snapshot_links,
-                tar_output_file: PathBuf::from("."),
-                storages: vec![],
-                archive_format: ArchiveFormat::TarBzip2,
-                snapshot_version: SnapshotVersion::default(),
-            };
+                storages,
+                snapshot_archive_path,
+                hash,
+                archive_format,
+                snapshot_version,
+            );
 
             AccountsHashVerifier::process_accounts_package(
                 accounts_package,
