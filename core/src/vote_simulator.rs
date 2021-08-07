@@ -1,6 +1,8 @@
 use crate::{
     cluster_info_vote_listener::VoteTracker,
-    cluster_slot_state_verifier::{DuplicateSlotsTracker, GossipDuplicateConfirmedSlots},
+    cluster_slot_state_verifier::{
+        DuplicateSlotsTracker, EpochSlotsFrozenSlots, GossipDuplicateConfirmedSlots,
+    },
     cluster_slots::ClusterSlots,
     consensus::Tower,
     fork_choice::SelectVoteAndResetForkResult,
@@ -212,6 +214,7 @@ impl VoteSimulator {
             &mut UnfrozenGossipVerifiedVoteHashes::default(),
             &mut true,
             &mut Vec::new(),
+            &mut EpochSlotsFrozenSlots::default(),
         )
     }
 
