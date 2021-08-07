@@ -1236,32 +1236,30 @@ impl ClusterInfo {
             .collect()
     }
 
-    /// retransmit messages to a list of nodes
-    /// # Remarks
-    /// We need to avoid having obj locked while doing a io, such as the `send_to`
-    pub fn retransmit_to(
-        peers: &[&ContactInfo],
-        packet: &Packet,
-        s: &UdpSocket,
-        forwarded: bool,
+    pub fn get_retransmit_to_dests<'a>(
+        peers: &[&'a ContactInfo],
         socket_addr_space: &SocketAddrSpace,
-    ) {
-        trace!("retransmit orders {}", peers.len());
-        let dests: Vec<_> = if forwarded {
+        forwarded: bool,
+    ) -> Vec<&'a SocketAddr> {
+        let dests: Vec<&SocketAddr> = if forwarded {
             peers
                 .iter()
-                .map(|peer| peer.tvu_forwards)
+                .map(|peer| &peer.tvu_forwards)
                 .filter(|addr| ContactInfo::is_valid_address(addr, socket_addr_space))
                 .collect()
         } else {
             peers
                 .iter()
-                .map(|peer| peer.tvu)
+                .map(|peer| &peer.tvu)
                 .filter(|addr| socket_addr_space.check(addr))
                 .collect()
         };
-        let data = &packet.data[..packet.meta.size];
+        dests
+    }
 
+    pub fn retransmit_to(s: &UdpSocket, dests: &[&SocketAddr], packet: &Packet) {
+        trace!("retransmit orders {}", dests.len());
+        let data = &packet.data[..packet.meta.size];
         if let Err(SendPktsError::IoError(ioerr, num_failed)) = multi_target_send(s, data, &dests) {
             inc_new_counter_info!("cluster_info-retransmit-packets", dests.len(), 1);
             inc_new_counter_error!("cluster_info-retransmit-error", num_failed, 1);
