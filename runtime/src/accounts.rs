@@ -87,7 +87,7 @@ impl AccountLocks {
 }
 
 /// This structure handles synchronization for db
-#[derive(Default, Debug, AbiExample)]
+#[derive(Debug, AbiExample)]
 pub struct Accounts {
     /// Single global AccountsDb
     pub accounts_db: Arc<AccountsDb>,
@@ -117,16 +117,26 @@ pub enum AccountAddressFilter {
 }
 
 impl Accounts {
-    pub fn new(
+    pub fn default_for_tests() -> Self {
+        Self {
+            accounts_db: Arc::new(AccountsDb::default_for_tests()),
+            account_locks: Mutex::default(),
+        }
+    }
+
+    pub fn new_with_config_for_benches(
         paths: Vec<PathBuf>,
         cluster_type: &ClusterType,
+        account_indexes: AccountSecondaryIndexes,
+        caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
     ) -> Self {
+        // will diverge
         Self::new_with_config(
             paths,
             cluster_type,
-            AccountSecondaryIndexes::default(),
-            false,
+            account_indexes,
+            caching_enabled,
             shrink_ratio,
         )
     }

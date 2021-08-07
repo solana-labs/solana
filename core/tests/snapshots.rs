@@ -110,7 +110,7 @@ mod tests {
             let snapshot_archives_dir = TempDir::new().unwrap();
             let mut genesis_config_info = create_genesis_config(10_000);
             genesis_config_info.genesis_config.cluster_type = cluster_type;
-            let bank0 = Bank::new_with_paths(
+            let bank0 = Bank::new_with_paths_for_tests(
                 &genesis_config_info.genesis_config,
                 vec![accounts_dir.path().to_path_buf()],
                 &[],

@@ -37,7 +37,7 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         wal_recovery_mode: config.wal_recovery_mode.clone(),
         poh_verify: config.poh_verify,
         require_tower: config.require_tower,
-        tower_path: config.tower_path.clone(),
+        tower_storage: config.tower_storage.clone(),
         debug_keys: config.debug_keys.clone(),
         contact_debug_interval: config.contact_debug_interval,
         contact_save_interval: config.contact_save_interval,

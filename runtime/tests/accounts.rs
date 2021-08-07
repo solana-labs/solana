@@ -73,7 +73,7 @@ fn test_shrink_and_clean() {
 fn test_bad_bank_hash() {
     solana_logger::setup();
     use solana_sdk::signature::{Keypair, Signer};
-    let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+    let db = AccountsDb::new_for_tests(Vec::new(), &ClusterType::Development);
 
     let some_slot: Slot = 0;
     let ancestors = Ancestors::from(vec![some_slot]);
