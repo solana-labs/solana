@@ -1,16 +1,27 @@
 #![allow(clippy::integer_arithmetic)]
 
-use super::MessageHeader;
 use crate::{
     hash::Hash,
     instruction::CompiledInstruction,
+    message::MessageHeader,
     pubkey::Pubkey,
     sanitize::{Sanitize, SanitizeError},
     short_vec,
 };
 
-/// Alternative version of `Message` that supports succinct account loading
-/// through an on-chain address map.
+/// Indexes that are mapped to addresses using an on-chain address map for
+/// succinctly loading readonly and writable accounts.
+#[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone, AbiExample)]
+#[serde(rename_all = "camelCase")]
+pub struct AddressMapIndexes {
+    #[serde(with = "short_vec")]
+    pub writable: Vec<u8>,
+    #[serde(with = "short_vec")]
+    pub readonly: Vec<u8>,
+}
+
+/// Transaction message format which supports succinct account loading with
+/// indexes for on-chain address maps.
 #[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone, AbiExample)]
 #[serde(rename_all = "camelCase")]
 pub struct Message {
@@ -21,15 +32,15 @@ pub struct Message {
     #[serde(with = "short_vec")]
     pub account_keys: Vec<Pubkey>,
 
-    /// List of address maps used to succinctly load additional accounts for
-    /// this transaction.
+    /// List of address map indexes used to succinctly load additional accounts
+    /// for this transaction.
     ///
     /// # Notes
     ///
-    /// The last `address_maps.len()` accounts of the read-only unsigned
+    /// The last `address_map_indexes.len()` accounts of the read-only unsigned
     /// accounts are loaded as address maps.
     #[serde(with = "short_vec")]
-    pub address_maps: Vec<AddressMap>,
+    pub address_map_indexes: Vec<AddressMapIndexes>,
 
     /// The blockhash of a recent block.
     pub recent_blockhash: Hash,
@@ -39,9 +50,10 @@ pub struct Message {
     ///
     /// # Notes
     ///
-    /// Account indices will index into the list of addresses constructed from
-    /// the concatenation of `account_keys` and the `entries` of each address
-    /// map in sequential order.
+    /// Account and program indexes will index into the list of addresses
+    /// constructed from the concatenation of `account_keys`, flattened list of
+    /// `writable` address map indexes, and the flattened `readonly` address
+    /// map indexes.
     #[serde(with = "short_vec")]
     pub instructions: Vec<CompiledInstruction>,
 }
@@ -63,17 +75,18 @@ impl Sanitize for Message {
         }
 
         // there cannot be more address maps than read-only unsigned accounts.
-        if self.address_maps.len() > self.header.num_readonly_unsigned_accounts as usize {
+        let num_address_map_indexes = self.address_map_indexes.len();
+        if num_address_map_indexes > self.header.num_readonly_unsigned_accounts as usize {
             return Err(SanitizeError::IndexOutOfBounds);
         }
 
         // each map must load at least one entry
         let mut num_loaded_accounts = self.account_keys.len();
-        for map in &self.address_maps {
-            let num_loaded_map_entries = map
-                .read_only_entries
+        for indexes in &self.address_map_indexes {
+            let num_loaded_map_entries = indexes
+                .writable
                 .len()
-                .saturating_add(map.writable_entries.len());
+                .saturating_add(indexes.readonly.len());
 
             if num_loaded_map_entries == 0 {
                 return Err(SanitizeError::InvalidValue);
@@ -107,19 +120,6 @@ impl Sanitize for Message {
     }
 }
 
-/// Address map specifies read-only and writable entries
-/// to load for the transaction.
-#[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone, AbiExample)]
-#[serde(rename_all = "camelCase")]
-pub struct AddressMap {
-    /// List of map entries to load as read-only.
-    #[serde(with = "short_vec")]
-    pub read_only_entries: Vec<u8>,
-    /// List of map entries to load as read-write.
-    #[serde(with = "short_vec")]
-    pub writable_entries: Vec<u8>,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -132,9 +132,9 @@ mod tests {
                 num_readonly_unsigned_accounts: 1,
             },
             account_keys: vec![Pubkey::new_unique(), Pubkey::new_unique()],
-            address_maps: vec![AddressMap {
-                read_only_entries: vec![0],
-                writable_entries: vec![],
+            address_map_indexes: vec![AddressMapIndexes {
+                writable: vec![],
+                readonly: vec![0],
             }],
             ..Message::default()
         }
@@ -152,14 +152,14 @@ mod tests {
                 Pubkey::new_unique(),
                 Pubkey::new_unique(),
             ],
-            address_maps: vec![
-                AddressMap {
-                    read_only_entries: vec![0],
-                    writable_entries: vec![1],
+            address_map_indexes: vec![
+                AddressMapIndexes {
+                    writable: vec![1],
+                    readonly: vec![0],
                 },
-                AddressMap {
-                    read_only_entries: vec![1],
-                    writable_entries: vec![0],
+                AddressMapIndexes {
+                    writable: vec![0],
+                    readonly: vec![1],
                 },
             ],
             ..Message::default()
@@ -170,7 +170,7 @@ mod tests {
     fn test_sanitize_account_indices() {
         assert!(Message {
             account_keys: (0..=u8::MAX).map(|_| Pubkey::new_unique()).collect(),
-            address_maps: vec![],
+            address_map_indexes: vec![],
             instructions: vec![CompiledInstruction {
                 program_id_index: 1,
                 accounts: vec![u8::MAX],
@@ -183,7 +183,7 @@ mod tests {
 
         assert!(Message {
             account_keys: (0..u8::MAX).map(|_| Pubkey::new_unique()).collect(),
-            address_maps: vec![],
+            address_map_indexes: vec![],
             instructions: vec![CompiledInstruction {
                 program_id_index: 1,
                 accounts: vec![u8::MAX],
@@ -219,14 +219,14 @@ mod tests {
         .is_err());
 
         assert!(Message {
-            address_maps: vec![
-                AddressMap {
-                    read_only_entries: (0..200).step_by(2).collect(),
-                    writable_entries: (1..200).step_by(2).collect(),
+            address_map_indexes: vec![
+                AddressMapIndexes {
+                    writable: (0..200).step_by(2).collect(),
+                    readonly: (1..200).step_by(2).collect(),
                 },
-                AddressMap {
-                    read_only_entries: (0..53).step_by(2).collect(),
-                    writable_entries: (1..53).step_by(2).collect(),
+                AddressMapIndexes {
+                    writable: (0..53).step_by(2).collect(),
+                    readonly: (1..53).step_by(2).collect(),
                 },
             ],
             instructions: vec![CompiledInstruction {
@@ -240,14 +240,14 @@ mod tests {
         .is_ok());
 
         assert!(Message {
-            address_maps: vec![
-                AddressMap {
-                    read_only_entries: (0..200).step_by(2).collect(),
-                    writable_entries: (1..200).step_by(2).collect(),
+            address_map_indexes: vec![
+                AddressMapIndexes {
+                    writable: (0..200).step_by(2).collect(),
+                    readonly: (1..200).step_by(2).collect(),
                 },
-                AddressMap {
-                    read_only_entries: (0..52).step_by(2).collect(),
-                    writable_entries: (1..52).step_by(2).collect(),
+                AddressMapIndexes {
+                    writable: (0..52).step_by(2).collect(),
+                    readonly: (1..52).step_by(2).collect(),
                 },
             ],
             instructions: vec![CompiledInstruction {
@@ -265,7 +265,7 @@ mod tests {
     fn test_sanitize_excessive_loaded_accounts() {
         assert!(Message {
             account_keys: (0..=u8::MAX).map(|_| Pubkey::new_unique()).collect(),
-            address_maps: vec![],
+            address_map_indexes: vec![],
             ..simple_message()
         }
         .sanitize()
@@ -273,7 +273,7 @@ mod tests {
 
         assert!(Message {
             account_keys: (0..257).map(|_| Pubkey::new_unique()).collect(),
-            address_maps: vec![],
+            address_map_indexes: vec![],
             ..simple_message()
         }
         .sanitize()
@@ -294,14 +294,14 @@ mod tests {
         .is_err());
 
         assert!(Message {
-            address_maps: vec![
-                AddressMap {
-                    read_only_entries: (0..200).step_by(2).collect(),
-                    writable_entries: (1..200).step_by(2).collect(),
+            address_map_indexes: vec![
+                AddressMapIndexes {
+                    writable: (0..200).step_by(2).collect(),
+                    readonly: (1..200).step_by(2).collect(),
                 },
-                AddressMap {
-                    read_only_entries: (0..53).step_by(2).collect(),
-                    writable_entries: (1..53).step_by(2).collect(),
+                AddressMapIndexes {
+                    writable: (0..53).step_by(2).collect(),
+                    readonly: (1..53).step_by(2).collect(),
                 }
             ],
             ..two_map_message()
@@ -310,14 +310,14 @@ mod tests {
         .is_ok());
 
         assert!(Message {
-            address_maps: vec![
-                AddressMap {
-                    read_only_entries: (0..200).step_by(2).collect(),
-                    writable_entries: (1..200).step_by(2).collect(),
+            address_map_indexes: vec![
+                AddressMapIndexes {
+                    writable: (0..200).step_by(2).collect(),
+                    readonly: (1..200).step_by(2).collect(),
                 },
-                AddressMap {
-                    read_only_entries: (0..200).step_by(2).collect(),
-                    writable_entries: (1..200).step_by(2).collect(),
+                AddressMapIndexes {
+                    writable: (0..200).step_by(2).collect(),
+                    readonly: (1..200).step_by(2).collect(),
                 }
             ],
             ..two_map_message()
@@ -352,9 +352,9 @@ mod tests {
     #[test]
     fn test_sanitize_address_map() {
         assert!(Message {
-            address_maps: vec![AddressMap {
-                read_only_entries: vec![],
-                writable_entries: vec![0],
+            address_map_indexes: vec![AddressMapIndexes {
+                writable: vec![0],
+                readonly: vec![],
             }],
             ..simple_message()
         }
@@ -362,9 +362,9 @@ mod tests {
         .is_ok());
 
         assert!(Message {
-            address_maps: vec![AddressMap {
-                read_only_entries: vec![0],
-                writable_entries: vec![],
+            address_map_indexes: vec![AddressMapIndexes {
+                writable: vec![],
+                readonly: vec![0],
             }],
             ..simple_message()
         }
@@ -372,9 +372,9 @@ mod tests {
         .is_ok());
 
         assert!(Message {
-            address_maps: vec![AddressMap {
-                read_only_entries: vec![],
-                writable_entries: vec![],
+            address_map_indexes: vec![AddressMapIndexes {
+                writable: vec![],
+                readonly: vec![],
             }],
             ..simple_message()
         }

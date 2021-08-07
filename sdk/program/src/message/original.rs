@@ -19,7 +19,7 @@ use std::{convert::TryFrom, str::FromStr};
 
 lazy_static! {
     // Copied keys over since direct references create cyclical dependency.
-    static ref BUILTIN_PROGRAMS_KEYS: [Pubkey; 10] = {
+    pub static ref BUILTIN_PROGRAMS_KEYS: [Pubkey; 10] = {
         let parse = |s| Pubkey::from_str(s).unwrap();
         [
             parse("Config1111111111111111111111111111111111111"),

@@ -16,7 +16,7 @@ use {
 };
 
 /// Bit mask that indicates whether a serialized message is versioned.
-const VERSION_PREFIX: u8 = 0x80;
+pub const MESSAGE_VERSION_PREFIX: u8 = 0x80;
 
 /// Message versions supported by the Solana runtime.
 ///
@@ -26,14 +26,20 @@ const VERSION_PREFIX: u8 = 0x80;
 /// which message version is serialized starting from version `0`. If the first
 /// is bit is not set, all bytes are used to encode the original `Message`
 /// format.
-#[frozen_abi(digest = "DeuuRstA25YgNwvzBmuBjK3jZobPA7Fz83DxnNi6cBX1")]
+#[frozen_abi(digest = "5hAeXsHoMFfGREfh8RqJYmAjRcs88sT1YxrpJJq3Ne1f")]
 #[derive(Debug, PartialEq, Eq, Clone, AbiEnumVisitor, AbiExample)]
-pub enum MessageVersions {
+pub enum VersionedMessage {
     Original(Message),
     V0(v0::Message),
 }
 
-impl Sanitize for MessageVersions {
+impl Default for VersionedMessage {
+    fn default() -> Self {
+        Self::Original(Message::default())
+    }
+}
+
+impl Sanitize for VersionedMessage {
     fn sanitize(&self) -> Result<(), SanitizeError> {
         match self {
             Self::Original(message) => message.sanitize(),
@@ -42,7 +48,7 @@ impl Sanitize for MessageVersions {
     }
 }
 
-impl Serialize for MessageVersions {
+impl Serialize for VersionedMessage {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -55,7 +61,7 @@ impl Serialize for MessageVersions {
             }
             Self::V0(message) => {
                 let mut seq = serializer.serialize_tuple(2)?;
-                seq.serialize_element(&VERSION_PREFIX)?;
+                seq.serialize_element(&MESSAGE_VERSION_PREFIX)?;
                 seq.serialize_element(message)?;
                 seq.end()
             }
@@ -83,8 +89,8 @@ impl<'de> Deserialize<'de> for MessagePrefix {
             }
 
             fn visit_u8<E>(self, byte: u8) -> Result<MessagePrefix, E> {
-                if byte & VERSION_PREFIX != 0 {
-                    Ok(MessagePrefix::Versioned(byte ^ VERSION_PREFIX))
+                if byte & MESSAGE_VERSION_PREFIX != 0 {
+                    Ok(MessagePrefix::Versioned(byte & !MESSAGE_VERSION_PREFIX))
                 } else {
                     Ok(MessagePrefix::Original(byte))
                 }
@@ -95,21 +101,21 @@ impl<'de> Deserialize<'de> for MessagePrefix {
     }
 }
 
-impl<'de> Deserialize<'de> for MessageVersions {
-    fn deserialize<D>(deserializer: D) -> Result<MessageVersions, D::Error>
+impl<'de> Deserialize<'de> for VersionedMessage {
+    fn deserialize<D>(deserializer: D) -> Result<VersionedMessage, D::Error>
     where
         D: Deserializer<'de>,
     {
         struct MessageVisitor;
 
         impl<'de> Visitor<'de> for MessageVisitor {
-            type Value = MessageVersions;
+            type Value = VersionedMessage;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                 formatter.write_str("message bytes")
             }
 
-            fn visit_seq<A>(self, mut seq: A) -> Result<MessageVersions, A::Error>
+            fn visit_seq<A>(self, mut seq: A) -> Result<VersionedMessage, A::Error>
             where
                 A: SeqAccess<'de>,
             {
@@ -136,7 +142,7 @@ impl<'de> Deserialize<'de> for MessageVersions {
                             de::Error::invalid_length(1, &self)
                         })?;
 
-                        Ok(MessageVersions::Original(Message {
+                        Ok(VersionedMessage::Original(Message {
                             header: MessageHeader {
                                 num_required_signatures,
                                 num_readonly_signed_accounts: rm.num_readonly_signed_accounts,
@@ -149,7 +155,7 @@ impl<'de> Deserialize<'de> for MessageVersions {
                     }
                     MessagePrefix::Versioned(version) => {
                         if version == 0 {
-                            Ok(MessageVersions::V0(seq.next_element()?.ok_or_else(
+                            Ok(VersionedMessage::V0(seq.next_element()?.ok_or_else(
                                 || {
                                     // will never happen since tuple length is always 2
                                     de::Error::invalid_length(1, &self)
@@ -175,7 +181,7 @@ mod tests {
     use super::*;
     use crate::{
         instruction::{AccountMeta, Instruction},
-        message::v0::AddressMap,
+        message::v0::AddressMapIndexes,
     };
 
     #[test]
@@ -205,14 +211,14 @@ mod tests {
         message.recent_blockhash = Hash::new_unique();
 
         let bytes1 = bincode::serialize(&message).unwrap();
-        let bytes2 = bincode::serialize(&MessageVersions::Original(message.clone())).unwrap();
+        let bytes2 = bincode::serialize(&VersionedMessage::Original(message.clone())).unwrap();
 
         assert_eq!(bytes1, bytes2);
 
         let message1: Message = bincode::deserialize(&bytes1).unwrap();
-        let message2: MessageVersions = bincode::deserialize(&bytes2).unwrap();
+        let message2: VersionedMessage = bincode::deserialize(&bytes2).unwrap();
 
-        if let MessageVersions::Original(message2) = message2 {
+        if let VersionedMessage::Original(message2) = message2 {
             assert_eq!(message, message1);
             assert_eq!(message1, message2);
         } else {
@@ -234,14 +240,14 @@ mod tests {
                 Pubkey::new_unique(),
                 Pubkey::new_unique(),
             ],
-            address_maps: vec![
-                AddressMap {
-                    read_only_entries: vec![0],
-                    writable_entries: vec![1],
+            address_map_indexes: vec![
+                AddressMapIndexes {
+                    writable: vec![1],
+                    readonly: vec![0],
                 },
-                AddressMap {
-                    read_only_entries: vec![1],
-                    writable_entries: vec![0],
+                AddressMapIndexes {
+                    writable: vec![0],
+                    readonly: vec![1],
                 },
             ],
             instructions: vec![CompiledInstruction {
@@ -251,10 +257,10 @@ mod tests {
             }],
         };
 
-        let bytes = bincode::serialize(&MessageVersions::V0(message.clone())).unwrap();
-        let message_from_bytes: MessageVersions = bincode::deserialize(&bytes).unwrap();
+        let bytes = bincode::serialize(&VersionedMessage::V0(message.clone())).unwrap();
+        let message_from_bytes: VersionedMessage = bincode::deserialize(&bytes).unwrap();
 
-        if let MessageVersions::V0(message_from_bytes) = message_from_bytes {
+        if let VersionedMessage::V0(message_from_bytes) = message_from_bytes {
             assert_eq!(message, message_from_bytes);
         } else {
             panic!("should deserialize to versioned message");
