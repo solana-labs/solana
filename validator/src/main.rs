@@ -49,7 +49,8 @@ use {
         hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
         snapshot_config::SnapshotConfig,
         snapshot_utils::{
-            self, ArchiveFormat, SnapshotVersion, DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+            self, ArchiveFormat, SnapshotArchiveInfoGetter, SnapshotVersion,
+            DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
         },
     },
     solana_sdk::{
@@ -482,7 +483,7 @@ fn get_rpc_node(
         let mut highest_snapshot_hash: Option<(Slot, Hash)> =
             snapshot_utils::get_highest_full_snapshot_archive_info(snapshot_output_dir).map(
                 |snapshot_archive_info| {
-                    (*snapshot_archive_info.slot(), *snapshot_archive_info.hash())
+                    (snapshot_archive_info.slot(), *snapshot_archive_info.hash())
                 },
             );
         let eligible_rpc_peers = if snapshot_not_required {

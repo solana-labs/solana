@@ -17,7 +17,7 @@ use {
     solana_runtime::{
         accounts_index::AccountSecondaryIndexes,
         snapshot_config::SnapshotConfig,
-        snapshot_utils::{self, ArchiveFormat},
+        snapshot_utils::{self, ArchiveFormat, SnapshotArchiveInfoGetter},
     },
     solana_sdk::{
         client::SyncClient,
@@ -68,11 +68,11 @@ fn wait_for_next_snapshot(
                 "full snapshot for slot {} exists",
                 full_snapshot_archive_info.slot()
             );
-            if *full_snapshot_archive_info.slot() >= last_slot {
+            if full_snapshot_archive_info.slot() >= last_slot {
                 return (
                     full_snapshot_archive_info.path().clone(),
                     (
-                        *full_snapshot_archive_info.slot(),
+                        full_snapshot_archive_info.slot(),
                         *full_snapshot_archive_info.hash(),
                     ),
                 );

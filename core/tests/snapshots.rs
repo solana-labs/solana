@@ -161,6 +161,16 @@ mod tests {
         let old_last_bank = old_bank_forks.get(old_last_slot).unwrap();
 
         let check_hash_calculation = false;
+        let full_snapshot_archive_path = snapshot_utils::build_full_snapshot_archive_path(
+            snapshot_package_output_path.to_path_buf(),
+            old_last_bank.slot(),
+            &old_last_bank.get_accounts_hash(),
+            ArchiveFormat::TarBzip2,
+        );
+        let full_snapshot_archive_info =
+            snapshot_utils::FullSnapshotArchiveInfo::new_from_path(full_snapshot_archive_path)
+                .unwrap();
+
         let (deserialized_bank, _timing) = snapshot_utils::bank_from_snapshot_archives(
             account_paths,
             &[],
@@ -169,14 +179,8 @@ mod tests {
                 .as_ref()
                 .unwrap()
                 .snapshot_path,
-            snapshot_utils::build_full_snapshot_archive_path(
-                snapshot_package_output_path.to_path_buf(),
-                old_last_bank.slot(),
-                &old_last_bank.get_accounts_hash(),
-                ArchiveFormat::TarBzip2,
-            ),
+            &full_snapshot_archive_info,
             None,
-            ArchiveFormat::TarBzip2,
             old_genesis_config,
             None,
             None,
@@ -716,9 +720,8 @@ mod tests {
                 )
                 .unwrap();
 
-                restore_from_incremental_snapshot_and_check_banks_are_equal(
+                restore_from_snapshots_and_check_banks_are_equal(
                     &bank,
-                    last_full_snapshot_slot.unwrap(),
                     &snapshot_test_config.snapshot_config,
                     snapshot_test_config.accounts_dir.path().to_path_buf(),
                     &snapshot_test_config.genesis_config_info.genesis_config,
@@ -783,57 +786,17 @@ mod tests {
         Ok(())
     }
 
-    fn restore_from_incremental_snapshot_and_check_banks_are_equal(
+    fn restore_from_snapshots_and_check_banks_are_equal(
         bank: &Bank,
-        last_full_snapshot_slot: Slot,
         snapshot_config: &SnapshotConfig,
         accounts_dir: PathBuf,
         genesis_config: &GenesisConfig,
     ) -> snapshot_utils::Result<()> {
-        let (
-            full_snapshot_archive_slot,
-            (incremental_snapshot_archive_base_slot, incremental_snapshot_archive_slot),
-            deserialized_bank,
-        ) = restore_from_incremental_snapshot(snapshot_config, accounts_dir, genesis_config)?;
-
-        assert_eq!(
-            full_snapshot_archive_slot,
-            incremental_snapshot_archive_base_slot
-        );
-        assert_eq!(full_snapshot_archive_slot, last_full_snapshot_slot);
-        assert_eq!(incremental_snapshot_archive_slot, bank.slot(),);
-        assert_eq!(*bank, deserialized_bank);
-
-        Ok(())
-    }
-
-    fn restore_from_incremental_snapshot(
-        snapshot_config: &SnapshotConfig,
-        accounts_dir: PathBuf,
-        genesis_config: &GenesisConfig,
-    ) -> snapshot_utils::Result<(Slot, (Slot, Slot), Bank)> {
-        let full_snapshot_archive_info = snapshot_utils::get_highest_full_snapshot_archive_info(
+        let (deserialized_bank, _) = snapshot_utils::bank_from_latest_snapshot_archives(
+            &snapshot_config.snapshot_path,
             &snapshot_config.snapshot_package_output_path,
-        )
-        .ok_or_else(|| Error::new(ErrorKind::Other, "no full snapshot"))?;
-
-        let incremental_snapshot_archive_info =
-            snapshot_utils::get_highest_incremental_snapshot_archive_info(
-                &snapshot_config.snapshot_package_output_path,
-                *full_snapshot_archive_info.slot(),
-            )
-            .ok_or_else(|| Error::new(ErrorKind::Other, "no incremental snapshot"))?;
-
-        info!("Restoring bank from full snapshot slot: {}, and incremental snapshot slot: {} (with base slot: {})",
-        full_snapshot_archive_info.slot(), incremental_snapshot_archive_info.slot(), incremental_snapshot_archive_info.base_slot());
-
-        let (deserialized_bank, _) = snapshot_utils::bank_from_snapshot_archives(
             &[accounts_dir],
             &[],
-            &snapshot_config.snapshot_path,
-            full_snapshot_archive_info.path(),
-            Some(incremental_snapshot_archive_info.path()),
-            snapshot_config.archive_format,
             genesis_config,
             None,
             None,
@@ -846,13 +809,8 @@ mod tests {
             false,
         )?;
 
-        Ok((
-            *full_snapshot_archive_info.slot(),
-            (
-                *incremental_snapshot_archive_info.base_slot(),
-                *incremental_snapshot_archive_info.slot(),
-            ),
-            deserialized_bank,
-        ))
+        assert_eq!(bank, &deserialized_bank);
+
+        Ok(())
     }
 }

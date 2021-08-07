@@ -6,7 +6,7 @@ use {
         contact_info::ContactInfo,
         gossip_service::GossipService,
     },
-    solana_runtime::snapshot_utils,
+    solana_runtime::snapshot_utils::{self, SnapshotArchiveInfoGetter},
     solana_sdk::{
         clock::Slot,
         hash::Hash,
@@ -112,7 +112,7 @@ fn get_rpc_peer_node(
         let mut highest_snapshot_info: Option<(Slot, Hash)> =
             snapshot_utils::get_highest_full_snapshot_archive_info(snapshot_output_dir).map(
                 |snapshot_archive_info| {
-                    (*snapshot_archive_info.slot(), *snapshot_archive_info.hash())
+                    (snapshot_archive_info.slot(), *snapshot_archive_info.hash())
                 },
             );
         let eligible_rpc_peers = {

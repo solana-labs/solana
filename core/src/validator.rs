@@ -61,6 +61,7 @@ use solana_runtime::{
     commitment::BlockCommitmentCache,
     hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
     snapshot_config::SnapshotConfig,
+    snapshot_utils::{self, SnapshotArchiveInfoGetter},
 };
 use solana_sdk::{
     clock::Slot,
@@ -1194,7 +1195,7 @@ fn new_banks_from_ledger(
         );
         leader_schedule_cache.set_root(&bank_forks.root_bank());
 
-        let archive_file = solana_runtime::snapshot_utils::bank_to_full_snapshot_archive(
+        let full_snapshot_archive_info = snapshot_utils::bank_to_full_snapshot_archive(
             ledger_path,
             &bank_forks.root_bank(),
             None,
@@ -1207,7 +1208,10 @@ fn new_banks_from_ledger(
             error!("Unable to create snapshot: {}", err);
             abort();
         });
-        info!("created snapshot: {}", archive_file.display());
+        info!(
+            "created snapshot: {}",
+            full_snapshot_archive_info.path().display()
+        );
     }
 
     let tower = post_process_restored_tower(
