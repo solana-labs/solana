@@ -9,9 +9,12 @@ use solana_cli_output::{
     OutputFormat,
 };
 use solana_ledger::{blockstore::Blockstore, blockstore_db::AccessType};
-use solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature};
+use solana_sdk::{
+    clock::Slot, pubkey::Pubkey, signature::Signature, transaction::SanitizedTransaction,
+};
 use solana_transaction_status::{ConfirmedBlock, EncodedTransaction, UiTransactionEncoding};
 use std::{
+    convert::TryFrom,
     path::Path,
     process::exit,
     result::Result,
@@ -183,13 +186,19 @@ pub async fn transaction_history(
                                     );
                                 }
                                 Some(transaction_with_meta) => {
-                                    println_transaction(
-                                        &transaction_with_meta.transaction,
-                                        &transaction_with_meta.meta.clone().map(|m| m.into()),
-                                        "  ",
-                                        None,
-                                        None,
-                                    );
+                                    let transaction = transaction_with_meta.transaction.clone();
+                                    match SanitizedTransaction::try_from(transaction) {
+                                        Ok(transaction) => println_transaction(
+                                            &transaction,
+                                            &transaction_with_meta.meta.clone().map(|m| m.into()),
+                                            "  ",
+                                            None,
+                                            None,
+                                        ),
+                                        Err(err) => {
+                                            println!("  Unable to construct sanitized transaction for {}: {}", result.signature, err)
+                                        }
+                                    }
                                 }
                             }
                             break;

@@ -3276,7 +3276,7 @@ pub mod rpc_full {
                 .preflight_commitment
                 .map(|commitment| CommitmentConfig { commitment });
             let preflight_bank = &*meta.bank(preflight_commitment);
-            let transaction = sanitize_transaction(unsanitized_tx)?;
+            let transaction = sanitize_transaction(preflight_bank, unsanitized_tx)?;
             let signature = *transaction.signature();
 
             let mut last_valid_block_height = preflight_bank
@@ -3381,7 +3381,7 @@ pub mod rpc_full {
                     .set_recent_blockhash(bank.last_blockhash());
             }
 
-            let transaction = sanitize_transaction(unsanitized_tx)?;
+            let transaction = sanitize_transaction(bank, unsanitized_tx)?;
             if config.sig_verify {
                 verify_transaction(&transaction, bank.libsecp256k1_0_5_upgrade_enabled())?;
             }
@@ -3924,10 +3924,15 @@ fn deserialize_transaction(
         .map(|transaction| (wire_transaction, transaction))
 }
 
-fn sanitize_transaction(transaction: VersionedTransaction) -> Result<SanitizedTransaction> {
+fn sanitize_transaction(
+    bank: &Bank,
+    transaction: VersionedTransaction,
+) -> Result<SanitizedTransaction> {
     let message_hash = transaction.message.hash();
-    SanitizedTransaction::try_create(transaction, message_hash, |_| {
-        Err(TransactionError::UnsupportedVersion)
+    SanitizedTransaction::try_create(transaction, message_hash, |message| {
+        bank.address_map_cache()
+            .map_message_addresses(message)
+            .ok_or(TransactionError::AccountNotFound)
     })
     .map_err(|err| Error::invalid_params(format!("invalid transaction: {}", err)))
 }

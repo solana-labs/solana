@@ -334,13 +334,26 @@ impl Blockstore {
                 .flat_map(|entry| entry.transactions)
             {
                 if let Some(&signature) = transaction.signatures.get(0) {
+                    let mut delete_addresses = |pubkeys: Vec<Pubkey>| -> Result<()> {
+                        for pubkey in pubkeys {
+                            batch.delete::<cf::AddressSignatures>((0, pubkey, slot, signature))?;
+                            batch.delete::<cf::AddressSignatures>((1, pubkey, slot, signature))?;
+                        }
+                        Ok(())
+                    };
+
+                    delete_addresses(transaction.message.unmapped_keys())?;
+                    // Mapped keys are recorded in transaction status meta and
+                    // are necessary for cleaning up the remaining address rows
+                    if let Some(status) = self.read_transaction_status((signature, slot))? {
+                        if let Some(mapped_addresses) = status.mapped_addresses {
+                            delete_addresses(mapped_addresses.writable)?;
+                            delete_addresses(mapped_addresses.readonly)?;
+                        }
+                    }
+
                     batch.delete::<cf::TransactionStatus>((0, signature, slot))?;
                     batch.delete::<cf::TransactionStatus>((1, signature, slot))?;
-                    // TODO: support purging mapped addresses from versioned transactions
-                    for pubkey in transaction.message.unmapped_keys() {
-                        batch.delete::<cf::AddressSignatures>((0, pubkey, slot, signature))?;
-                        batch.delete::<cf::AddressSignatures>((1, pubkey, slot, signature))?;
-                    }
                 }
             }
         }

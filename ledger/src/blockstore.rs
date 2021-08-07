@@ -4021,6 +4021,7 @@ pub mod tests {
     use solana_sdk::{
         hash::{self, hash, Hash},
         instruction::CompiledInstruction,
+        message::MappedAddresses,
         packet::PACKET_DATA_SIZE,
         pubkey::Pubkey,
         signature::Signature,
@@ -6225,6 +6226,7 @@ pub mod tests {
                     pre_token_balances: Some(vec![]),
                     post_token_balances: Some(vec![]),
                     rewards: Some(vec![]),
+                    mapped_addresses: None,
                 }
                 .into();
                 ledger
@@ -6241,6 +6243,7 @@ pub mod tests {
                     pre_token_balances: Some(vec![]),
                     post_token_balances: Some(vec![]),
                     rewards: Some(vec![]),
+                    mapped_addresses: None,
                 }
                 .into();
                 ledger
@@ -6257,6 +6260,7 @@ pub mod tests {
                     pre_token_balances: Some(vec![]),
                     post_token_balances: Some(vec![]),
                     rewards: Some(vec![]),
+                    mapped_addresses: None,
                 }
                 .into();
                 ledger
@@ -6275,6 +6279,7 @@ pub mod tests {
                         pre_token_balances: Some(vec![]),
                         post_token_balances: Some(vec![]),
                         rewards: Some(vec![]),
+                        mapped_addresses: None,
                     }),
                 }
             })
@@ -6379,6 +6384,10 @@ pub mod tests {
             let pre_token_balances_vec = vec![];
             let post_token_balances_vec = vec![];
             let rewards_vec = vec![];
+            let expected_mapped_addresses = MappedAddresses {
+                writable: vec![Pubkey::new_unique()],
+                readonly: vec![Pubkey::new_unique()],
+            };
 
             // result not found
             assert!(transaction_status_cf
@@ -6403,6 +6412,7 @@ pub mod tests {
                 pre_token_balances: Some(pre_token_balances_vec.clone()),
                 post_token_balances: Some(post_token_balances_vec.clone()),
                 rewards: Some(rewards_vec.clone()),
+                mapped_addresses: Some(expected_mapped_addresses.clone()),
             }
             .into();
             assert!(transaction_status_cf
@@ -6420,6 +6430,7 @@ pub mod tests {
                 pre_token_balances,
                 post_token_balances,
                 rewards,
+                mapped_addresses,
             } = transaction_status_cf
                 .get_protobuf_or_bincode::<StoredTransactionStatusMeta>((
                     0,
@@ -6439,6 +6450,7 @@ pub mod tests {
             assert_eq!(pre_token_balances.unwrap(), pre_token_balances_vec);
             assert_eq!(post_token_balances.unwrap(), post_token_balances_vec);
             assert_eq!(rewards.unwrap(), rewards_vec);
+            assert_eq!(mapped_addresses.unwrap(), expected_mapped_addresses);
 
             // insert value
             let status = TransactionStatusMeta {
@@ -6451,6 +6463,7 @@ pub mod tests {
                 pre_token_balances: Some(pre_token_balances_vec.clone()),
                 post_token_balances: Some(post_token_balances_vec.clone()),
                 rewards: Some(rewards_vec.clone()),
+                mapped_addresses: Some(expected_mapped_addresses.clone()),
             }
             .into();
             assert!(transaction_status_cf
@@ -6468,6 +6481,7 @@ pub mod tests {
                 pre_token_balances,
                 post_token_balances,
                 rewards,
+                mapped_addresses,
             } = transaction_status_cf
                 .get_protobuf_or_bincode::<StoredTransactionStatusMeta>((
                     0,
@@ -6489,6 +6503,7 @@ pub mod tests {
             assert_eq!(pre_token_balances.unwrap(), pre_token_balances_vec);
             assert_eq!(post_token_balances.unwrap(), post_token_balances_vec);
             assert_eq!(rewards.unwrap(), rewards_vec);
+            assert_eq!(mapped_addresses.unwrap(), expected_mapped_addresses);
         }
         Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
@@ -6720,6 +6735,7 @@ pub mod tests {
                 pre_token_balances: Some(vec![]),
                 post_token_balances: Some(vec![]),
                 rewards: Some(vec![]),
+                mapped_addresses: Some(MappedAddresses::default()),
             }
             .into();
 
@@ -6916,6 +6932,7 @@ pub mod tests {
                 pre_token_balances: Some(vec![]),
                 post_token_balances: Some(vec![]),
                 rewards: Some(vec![]),
+                mapped_addresses: Some(MappedAddresses::default()),
             }
             .into();
 
@@ -7097,6 +7114,7 @@ pub mod tests {
                 let post_token_balances = Some(vec![]);
                 let rewards = Some(vec![]);
                 let signature = transaction.signatures[0];
+                let mapped_addresses = Some(MappedAddresses::default());
                 let status = TransactionStatusMeta {
                     status: Ok(()),
                     fee: 42,
@@ -7107,6 +7125,7 @@ pub mod tests {
                     pre_token_balances: pre_token_balances.clone(),
                     post_token_balances: post_token_balances.clone(),
                     rewards: rewards.clone(),
+                    mapped_addresses: mapped_addresses.clone(),
                 }
                 .into();
                 blockstore
@@ -7125,6 +7144,7 @@ pub mod tests {
                         pre_token_balances,
                         post_token_balances,
                         rewards,
+                        mapped_addresses,
                     }),
                 }
             })
@@ -7199,6 +7219,7 @@ pub mod tests {
                 let pre_token_balances = Some(vec![]);
                 let post_token_balances = Some(vec![]);
                 let rewards = Some(vec![]);
+                let mapped_addresses = Some(MappedAddresses::default());
                 let signature = transaction.signatures[0];
                 let status = TransactionStatusMeta {
                     status: Ok(()),
@@ -7210,6 +7231,7 @@ pub mod tests {
                     pre_token_balances: pre_token_balances.clone(),
                     post_token_balances: post_token_balances.clone(),
                     rewards: rewards.clone(),
+                    mapped_addresses: mapped_addresses.clone(),
                 }
                 .into();
                 blockstore
@@ -7228,6 +7250,7 @@ pub mod tests {
                         pre_token_balances,
                         post_token_balances,
                         rewards,
+                        mapped_addresses,
                     }),
                 }
             })
@@ -7964,6 +7987,7 @@ pub mod tests {
                     pre_token_balances: Some(vec![]),
                     post_token_balances: Some(vec![]),
                     rewards: Some(vec![]),
+                    mapped_addresses: Some(MappedAddresses::default()),
                 }
                 .into();
                 transaction_status_cf
@@ -8517,6 +8541,10 @@ pub mod tests {
                     reward_type: Some(RewardType::Rent),
                     commission: None,
                 }]),
+                mapped_addresses: Some(MappedAddresses {
+                    writable: vec![Pubkey::new_unique()],
+                    readonly: vec![Pubkey::new_unique()],
+                }),
             };
             let deprecated_status: StoredTransactionStatusMeta = status.clone().into();
             let protobuf_status: generated::TransactionStatusMeta = status.into();

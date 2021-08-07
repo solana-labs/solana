@@ -42,6 +42,7 @@ use crate::{
     accounts_index::{
         AccountSecondaryIndexes, IndexKey, ScanResult, BINS_FOR_BENCHMARKS, BINS_FOR_TESTING,
     },
+    address_map_cache::{AddressMapCache, AddressMapChange},
     ancestors::{Ancestors, AncestorsForSerialization},
     blockhash_queue::BlockhashQueue,
     builtins::{self, ActivationType},
@@ -1042,6 +1043,9 @@ pub struct Bank {
     pub drop_callback: RwLock<OptionalDropCallback>,
 
     pub freeze_started: AtomicBool,
+
+    /// Pending address map changes queued by this bank
+    pub pending_address_map_changes: RwLock<Vec<AddressMapChange>>,
 }
 
 impl Default for BlockhashQueue {
@@ -1168,6 +1172,7 @@ impl Bank {
             feature_set: Arc::<FeatureSet>::default(),
             drop_callback: RwLock::<OptionalDropCallback>::default(),
             freeze_started: AtomicBool::default(),
+            pending_address_map_changes: RwLock::<Vec<AddressMapChange>>::default(),
         }
     }
 
@@ -1387,6 +1392,7 @@ impl Bank {
                     .map(|drop_callback| drop_callback.clone_box()),
             )),
             freeze_started: AtomicBool::new(false),
+            pending_address_map_changes: RwLock::new(vec![]),
         };
 
         datapoint_info!(
@@ -1534,6 +1540,7 @@ impl Bank {
             feature_set: new(),
             drop_callback: RwLock::new(OptionalDropCallback(None)),
             freeze_started: AtomicBool::new(fields.hash != Hash::default()),
+            pending_address_map_changes: new(),
         };
         bank.finish_init(
             genesis_config,
@@ -2811,6 +2818,10 @@ impl Bank {
         tick_height % self.ticks_per_slot == 0
     }
 
+    pub fn address_map_cache(&self) -> &AddressMapCache {
+        &self.rc.accounts.accounts_db.address_map_cache
+    }
+
     /// Prepare a transaction batch from a list of legacy transactionsy. Used for tests only.
     pub fn prepare_batch(&self, txs: Vec<Transaction>) -> Result<TransactionBatch> {
         let sanitized_txs = txs
@@ -2832,8 +2843,10 @@ impl Bank {
             .into_iter()
             .map(|tx| {
                 let message_hash = tx.message.hash();
-                SanitizedTransaction::try_create(tx, message_hash, |_| {
-                    Err(TransactionError::UnsupportedVersion)
+                SanitizedTransaction::try_create(tx, message_hash, |message| {
+                    self.address_map_cache()
+                        .map_message_addresses(message)
+                        .ok_or(TransactionError::AccountNotFound)
                 })
             })
             .collect::<Result<Vec<_>>>()?;
@@ -3418,28 +3431,23 @@ impl Bank {
                             )
                         };
 
-                        if let Some(legacy_message) = tx.message().legacy_message() {
-                            process_result = self.message_processor.process_message(
-                                legacy_message,
-                                &loader_refcells,
-                                &account_refcells,
-                                &self.rent_collector,
-                                log_collector.clone(),
-                                executors.clone(),
-                                instruction_recorders.as_deref(),
-                                feature_set,
-                                compute_budget,
-                                compute_meter,
-                                &mut timings.details,
-                                self.rc.accounts.clone(),
-                                &self.ancestors,
-                                blockhash,
-                                fee_calculator,
-                            );
-                        } else {
-                            // TODO: support versioned messages
-                            process_result = Err(TransactionError::UnsupportedVersion);
-                        }
+                        process_result = self.message_processor.process_message(
+                            tx.message(),
+                            &loader_refcells,
+                            &account_refcells,
+                            &self.rent_collector,
+                            log_collector.clone(),
+                            executors.clone(),
+                            instruction_recorders.as_deref(),
+                            feature_set,
+                            compute_budget,
+                            compute_meter,
+                            &mut timings.details,
+                            self.rc.accounts.clone(),
+                            &self.ancestors,
+                            blockhash,
+                            fee_calculator,
+                        );
 
                         transaction_log_messages.push(Self::collect_log_messages(log_collector));
                         inner_instructions.push(Self::compile_recorded_instructions(
@@ -4954,8 +4962,10 @@ impl Bank {
                 tx.message.hash()
             };
 
-            SanitizedTransaction::try_create(tx, message_hash, |_| {
-                Err(TransactionError::UnsupportedVersion)
+            SanitizedTransaction::try_create(tx, message_hash, |message| {
+                self.address_map_cache()
+                    .map_message_addresses(message)
+                    .ok_or(TransactionError::AccountNotFound)
             })
         }?;
 

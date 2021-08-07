@@ -27,7 +27,7 @@ use {
         hash::Hash,
         instruction::Instruction,
         instruction::InstructionError,
-        message::Message,
+        message::{Message, SanitizedMessage},
         native_token::sol_to_lamports,
         process_instruction::{stable_log, InvokeContext, ProcessInstructionWithContext},
         program_error::{ProgramError, ACCOUNT_BORROW_FAILED, UNSUPPORTED_SYSVAR},
@@ -324,6 +324,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
 
         invoke_context.record_instruction(instruction);
 
+        let message = SanitizedMessage::Legacy(message);
         solana_runtime::message_processor::MessageProcessor::process_cross_program_instruction(
             &message,
             &executables,
@@ -334,7 +335,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
         .map_err(|err| ProgramError::try_from(err).unwrap_or_else(|err| panic!("{}", err)))?;
 
         // Copy writeable account modifications back into the caller's AccountInfos
-        for (i, (pubkey, account)) in accounts.iter().enumerate().take(message.account_keys.len()) {
+        for (i, (pubkey, account)) in accounts.iter().enumerate().take(message.account_keys_len()) {
             if !message.is_writable(i) {
                 continue;
             }

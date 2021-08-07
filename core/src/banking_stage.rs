@@ -1043,14 +1043,15 @@ impl BankingStage {
     // Also returned is packet indexes for transaction should be retried due to cost limits.
     #[allow(clippy::needless_collect)]
     fn transactions_from_packets(
+        bank: &Arc<Bank>,
         msgs: &Packets,
         transaction_indexes: &[usize],
-        libsecp256k1_0_5_upgrade_enabled: bool,
         cost_tracker: &Arc<RwLock<CostTracker>>,
         banking_stage_stats: &BankingStageStats,
     ) -> (Vec<SanitizedTransaction>, Vec<usize>, Vec<usize>) {
         let mut retryable_transaction_packet_indexes: Vec<usize> = vec![];
 
+        let libsecp256k1_0_5_upgrade_enabled = bank.libsecp256k1_0_5_upgrade_enabled();
         let verified_transactions_with_packet_indexes: Vec<_> = transaction_indexes
             .iter()
             .filter_map(|tx_index| {
@@ -1058,8 +1059,10 @@ impl BankingStage {
                 let tx: VersionedTransaction = limited_deserialize(&p.data[0..p.meta.size]).ok()?;
                 let message_bytes = Self::packet_message(p)?;
                 let message_hash = Message::hash_raw_message(message_bytes);
-                let tx = SanitizedTransaction::try_create(tx, message_hash, |_| {
-                    Err(TransactionError::UnsupportedVersion)
+                let tx = SanitizedTransaction::try_create(tx, message_hash, |message| {
+                    bank.address_map_cache()
+                        .map_message_addresses(message)
+                        .ok_or(TransactionError::AccountNotFound)
                 })
                 .ok()?;
                 tx.verify_precompiles(libsecp256k1_0_5_upgrade_enabled)
@@ -1155,9 +1158,9 @@ impl BankingStage {
         let mut packet_conversion_time = Measure::start("packet_conversion");
         let (transactions, transaction_to_packet_indexes, retryable_packet_indexes) =
             Self::transactions_from_packets(
+                bank,
                 msgs,
                 &packet_indexes,
-                bank.libsecp256k1_0_5_upgrade_enabled(),
                 cost_tracker,
                 banking_stage_stats,
             );
@@ -1257,9 +1260,9 @@ impl BankingStage {
             Measure::start("unprocessed_packet_conversion");
         let (transactions, transaction_to_packet_indexes, retry_packet_indexes) =
             Self::transactions_from_packets(
+                bank,
                 msgs,
                 transaction_indexes,
-                bank.libsecp256k1_0_5_upgrade_enabled(),
                 cost_tracker,
                 banking_stage_stats,
             );

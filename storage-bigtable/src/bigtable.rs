@@ -665,7 +665,9 @@ mod tests {
     use super::*;
     use crate::StoredConfirmedBlock;
     use prost::Message;
-    use solana_sdk::{hash::Hash, signature::Keypair, system_transaction};
+    use solana_sdk::{
+        hash::Hash, message::MappedAddresses, signature::Keypair, system_transaction,
+    };
     use solana_storage_proto::convert::generated;
     use solana_transaction_status::{
         ConfirmedBlock, TransactionStatusMeta, TransactionWithStatusMeta,
@@ -689,6 +691,7 @@ mod tests {
                 pre_token_balances: Some(vec![]),
                 post_token_balances: Some(vec![]),
                 rewards: Some(vec![]),
+                mapped_addresses: Some(MappedAddresses::default()),
             }),
         };
         let block = ConfirmedBlock {

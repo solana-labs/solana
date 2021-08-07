@@ -318,6 +318,7 @@ impl Message {
             .collect()
     }
 
+    #[deprecated]
     pub fn is_key_passed_to_program(&self, key_index: usize) -> bool {
         if let Ok(key_index) = u8::try_from(key_index) {
             self.instructions
@@ -328,6 +329,7 @@ impl Message {
         }
     }
 
+    #[deprecated]
     pub fn is_key_called_as_program(&self, key_index: usize) -> bool {
         if let Ok(key_index) = u8::try_from(key_index) {
             self.instructions
@@ -338,10 +340,13 @@ impl Message {
         }
     }
 
+    #[deprecated]
+    #[allow(deprecated)]
     pub fn is_non_loader_key(&self, key_index: usize) -> bool {
         !self.is_key_called_as_program(key_index) || self.is_key_passed_to_program(key_index)
     }
 
+    #[deprecated]
     pub fn program_position(&self, index: usize) -> Option<usize> {
         let program_ids = self.program_ids();
         program_ids
@@ -349,6 +354,8 @@ impl Message {
             .position(|&&pubkey| pubkey == self.account_keys[index])
     }
 
+    #[deprecated]
+    #[allow(deprecated)]
     pub fn maybe_executable(&self, i: usize) -> bool {
         self.program_position(i).is_some()
     }

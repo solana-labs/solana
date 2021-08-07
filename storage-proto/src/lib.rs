@@ -4,7 +4,9 @@ use {
         parse_token::{real_number_string_trimmed, UiTokenAmount},
         StringAmount,
     },
-    solana_sdk::{deserialize_utils::default_on_eof, transaction::Result},
+    solana_sdk::{
+        deserialize_utils::default_on_eof, message::MappedAddresses, transaction::Result,
+    },
     solana_transaction_status::{
         InnerInstructions, Reward, RewardType, TransactionStatusMeta, TransactionTokenBalance,
     },
@@ -159,6 +161,8 @@ pub struct StoredTransactionStatusMeta {
     pub post_token_balances: Option<Vec<StoredTransactionTokenBalance>>,
     #[serde(deserialize_with = "default_on_eof")]
     pub rewards: Option<Vec<StoredExtendedReward>>,
+    #[serde(deserialize_with = "default_on_eof")]
+    pub mapped_addresses: Option<MappedAddresses>,
 }
 
 impl From<StoredTransactionStatusMeta> for TransactionStatusMeta {
@@ -173,6 +177,7 @@ impl From<StoredTransactionStatusMeta> for TransactionStatusMeta {
             pre_token_balances,
             post_token_balances,
             rewards,
+            mapped_addresses,
         } = value;
         Self {
             status,
@@ -187,6 +192,7 @@ impl From<StoredTransactionStatusMeta> for TransactionStatusMeta {
                 .map(|balances| balances.into_iter().map(|balance| balance.into()).collect()),
             rewards: rewards
                 .map(|rewards| rewards.into_iter().map(|reward| reward.into()).collect()),
+            mapped_addresses,
         }
     }
 }
@@ -203,6 +209,7 @@ impl From<TransactionStatusMeta> for StoredTransactionStatusMeta {
             pre_token_balances,
             post_token_balances,
             rewards,
+            mapped_addresses,
         } = value;
         Self {
             status,
@@ -217,6 +224,7 @@ impl From<TransactionStatusMeta> for StoredTransactionStatusMeta {
                 .map(|balances| balances.into_iter().map(|balance| balance.into()).collect()),
             rewards: rewards
                 .map(|rewards| rewards.into_iter().map(|reward| reward.into()).collect()),
+            mapped_addresses,
         }
     }
 }

@@ -56,12 +56,13 @@ use solana_sdk::{
         stake_history::{self},
     },
     timing,
-    transaction::Transaction,
+    transaction::{SanitizedTransaction, Transaction},
 };
 use solana_transaction_status::UiTransactionEncoding;
 use solana_vote_program::vote_state::VoteState;
 use std::{
     collections::{BTreeMap, HashMap, VecDeque},
+    convert::TryFrom,
     fmt,
     str::FromStr,
     sync::{
@@ -2022,17 +2023,26 @@ pub fn process_transaction_history(
                     },
                 ) {
                     Ok(confirmed_transaction) => {
-                        println_transaction(
-                            &confirmed_transaction
-                                .transaction
-                                .transaction
-                                .decode()
-                                .expect("Successful decode"),
-                            &confirmed_transaction.transaction.meta,
-                            "  ",
-                            None,
-                            None,
-                        );
+                        let transaction = confirmed_transaction
+                            .transaction
+                            .transaction
+                            .decode()
+                            .expect("Successful decode");
+
+                        match SanitizedTransaction::try_from(transaction) {
+                            Ok(transaction) => {
+                                println_transaction(
+                                    &transaction,
+                                    &confirmed_transaction.transaction.meta,
+                                    "  ",
+                                    None,
+                                    None,
+                                );
+                            }
+                            Err(err) => {
+                                println!("  Unable to construct sanitized transaction: {}", err)
+                            }
+                        }
                     }
                     Err(err) => println!("  Unable to get confirmed transaction details: {}", err),
                 }

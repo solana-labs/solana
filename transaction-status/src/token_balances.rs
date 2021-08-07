@@ -67,7 +67,6 @@ pub fn collect_token_balances(
                 if transaction.message().is_invoked(index) || is_token_program(account_id) {
                     continue;
                 }
-
                 if let Some((mint, ui_token_amount)) =
                     collect_token_balance_from_account(bank, account_id, &mut mint_decimals)
                 {

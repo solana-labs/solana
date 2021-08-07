@@ -42,6 +42,7 @@ members = [
     "poh",
     "poh-bench",
     "program-test",
+    "programs/address_map",
     "programs/bpf_loader",
     "programs/compute-budget",
     "programs/config",

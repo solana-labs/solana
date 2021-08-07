@@ -19,7 +19,7 @@ use solana_sdk::{
     ic_logger_msg, ic_msg,
     instruction::{CompiledInstruction, Instruction, InstructionError},
     keyed_account::{create_keyed_accounts_unified, keyed_account_at_index, KeyedAccount},
-    message::Message,
+    message::{Message, SanitizedMessage},
     native_loader,
     process_instruction::{
         ComputeMeter, Executor, InvokeContext, InvokeContextStackFrame, Logger,
@@ -313,7 +313,7 @@ impl<'a> ThisInvokeContext<'a> {
     pub fn new(
         program_id: &Pubkey,
         rent: Rent,
-        message: &'a Message,
+        message: &'a SanitizedMessage,
         instruction: &'a CompiledInstruction,
         executable_accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
         accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
@@ -660,7 +660,7 @@ impl MessageProcessor {
 
     /// Create the KeyedAccounts that will be passed to the program
     fn create_keyed_accounts<'a>(
-        message: &'a Message,
+        message: &'a SanitizedMessage,
         instruction: &'a CompiledInstruction,
         executable_accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
         accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
@@ -896,7 +896,7 @@ impl MessageProcessor {
                 executable_accounts.push(programdata);
             }
             (
-                message,
+                SanitizedMessage::Legacy(message),
                 executable_accounts,
                 accounts,
                 keyed_account_indices_reordered,
@@ -956,15 +956,13 @@ impl MessageProcessor {
     /// Process a cross-program instruction
     /// This method calls the instruction's program entrypoint function
     pub fn process_cross_program_instruction(
-        message: &Message,
+        message: &SanitizedMessage,
         executable_accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
         accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
         caller_write_privileges: &[bool],
         invoke_context: &mut dyn InvokeContext,
     ) -> Result<(), InstructionError> {
-        if let Some(instruction) = message.instructions.get(0) {
-            let program_id = instruction.program_id(&message.account_keys);
-
+        if let Some((program_id, instruction)) = message.program_instructions_iter().next() {
             // Verify the calling program hasn't misbehaved
             invoke_context.verify_and_update(instruction, accounts, caller_write_privileges)?;
 
@@ -987,7 +985,7 @@ impl MessageProcessor {
             );
             if result.is_ok() {
                 // Verify the called program has not misbehaved
-                let write_privileges: Vec<bool> = (0..message.account_keys.len())
+                let write_privileges: Vec<bool> = (0..message.account_keys_len())
                     .map(|i| message.is_writable(i))
                     .collect();
                 result = invoke_context.verify_and_update(instruction, accounts, &write_privileges);
@@ -1005,14 +1003,14 @@ impl MessageProcessor {
     /// Record the initial state of the accounts so that they can be compared
     /// after the instruction is processed
     pub fn create_pre_accounts(
-        message: &Message,
+        message: &SanitizedMessage,
         instruction: &CompiledInstruction,
         accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
     ) -> Vec<PreAccount> {
         let mut pre_accounts = Vec::with_capacity(instruction.accounts.len());
         {
             let mut work = |_unique_index: usize, account_index: usize| {
-                if account_index < message.account_keys.len() && account_index < accounts.len() {
+                if account_index < message.account_keys_len() && account_index < accounts.len() {
                     let account = accounts[account_index].1.borrow();
                     pre_accounts.push(PreAccount::new(&accounts[account_index].0, &account));
                     return Ok(());
@@ -1038,7 +1036,7 @@ impl MessageProcessor {
 
     /// Verify the results of an instruction
     pub fn verify(
-        message: &Message,
+        message: &SanitizedMessage,
         instruction: &CompiledInstruction,
         pre_accounts: &[PreAccount],
         executable_accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
@@ -1054,7 +1052,9 @@ impl MessageProcessor {
         // Verify the per-account instruction results
         let (mut pre_sum, mut post_sum) = (0_u128, 0_u128);
         {
-            let program_id = instruction.program_id(&message.account_keys);
+            let program_id = message
+                .get_account_key(instruction.program_id_index as usize)
+                .expect("message to be sanitized");
             let mut work = |unique_index: usize, account_index: usize| {
                 {
                     // Verify account has no outstanding references
@@ -1167,7 +1167,7 @@ impl MessageProcessor {
     #[allow(clippy::too_many_arguments)]
     fn execute_instruction(
         &self,
-        message: &Message,
+        message: &SanitizedMessage,
         instruction: &CompiledInstruction,
         executable_accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
         accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
@@ -1188,7 +1188,7 @@ impl MessageProcessor {
         // Fixup the special instructions key if present
         // before the account pre-values are taken care of
         if feature_set.is_active(&instructions_sysvar_enabled::id()) {
-            for (pubkey, accont) in accounts.iter().take(message.account_keys.len()) {
+            for (pubkey, accont) in accounts.iter().take(message.account_keys_len()) {
                 if instructions::check_id(pubkey) {
                     let mut mut_account_ref = accont.borrow_mut();
                     instructions::store_current_index(
@@ -1200,7 +1200,9 @@ impl MessageProcessor {
             }
         }
 
-        let program_id = instruction.program_id(&message.account_keys);
+        let program_id = message
+            .get_account_key(instruction.program_id_index as usize)
+            .expect("message to be sanitized");
 
         let mut compute_budget = compute_budget;
         if feature_set.is_active(&neon_evm_compute_budget::id())
@@ -1255,7 +1257,7 @@ impl MessageProcessor {
     #[allow(clippy::type_complexity)]
     pub fn process_message(
         &self,
-        message: &Message,
+        message: &SanitizedMessage,
         loaders: &[Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>],
         accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
         rent_collector: &RentCollector,
@@ -1271,7 +1273,9 @@ impl MessageProcessor {
         blockhash: Hash,
         fee_calculator: FeeCalculator,
     ) -> Result<(), TransactionError> {
-        for (instruction_index, instruction) in message.instructions.iter().enumerate() {
+        for (instruction_index, (program_id, instruction)) in
+            message.program_instructions_iter().enumerate()
+        {
             let mut time = Measure::start("execute_instruction");
             let pre_remaining_units = compute_meter.borrow().get_remaining();
             let instruction_recorder = instruction_recorders
@@ -1302,7 +1306,7 @@ impl MessageProcessor {
             let post_remaining_units = compute_meter.borrow().get_remaining();
 
             timings.accumulate_program(
-                instruction.program_id(&message.account_keys),
+                program_id,
                 time.as_us(),
                 pre_remaining_units - post_remaining_units,
             );
@@ -1323,6 +1327,11 @@ mod tests {
         native_loader::create_loadable_account_for_test,
         process_instruction::MockComputeMeter,
     };
+    use std::convert::TryInto;
+
+    fn new_sanitized_message(instructions: &[Instruction], payer: &Pubkey) -> SanitizedMessage {
+        Message::new(instructions, Some(payer)).try_into().unwrap()
+    }
 
     #[test]
     fn test_invoke_context() {
@@ -1354,9 +1363,9 @@ mod tests {
             metas.push(AccountMeta::new(*program_id, false));
         }
 
-        let message = Message::new(
+        let message = new_sanitized_message(
             &[Instruction::new_with_bytes(invoke_stack[0], &[0], metas)],
-            None,
+            &Pubkey::new_unique(),
         );
         let ancestors = Ancestors::default();
         let blockhash = Hash::default();
@@ -1365,7 +1374,7 @@ mod tests {
             &invoke_stack[0],
             Rent::default(),
             &message,
-            &message.instructions[0],
+            message.instructions().get(0).unwrap(),
             &[],
             &accounts,
             &[],
@@ -1399,13 +1408,13 @@ mod tests {
                 AccountMeta::new(accounts[not_owned_index].0, false),
                 AccountMeta::new(accounts[owned_index].0, false),
             ];
-            let message = Message::new(
+            let message = new_sanitized_message(
                 &[Instruction::new_with_bytes(
                     invoke_stack[owned_index],
                     &[0],
                     metas,
                 )],
-                None,
+                &Pubkey::new_unique(),
             );
 
             // modify account owned by the program
@@ -1413,18 +1422,22 @@ mod tests {
                 (MAX_DEPTH + owned_index) as u8;
             let mut these_accounts = accounts[not_owned_index..owned_index + 1].to_vec();
             these_accounts.push((
-                message.account_keys[2],
+                *message.get_account_key(2).unwrap(),
                 Rc::new(RefCell::new(AccountSharedData::new(
                     1,
                     1,
                     &solana_sdk::pubkey::Pubkey::default(),
                 ))),
             ));
-            let write_privileges: Vec<bool> = (0..message.account_keys.len())
+            let write_privileges: Vec<bool> = (0..message.account_keys_len())
                 .map(|i| message.is_writable(i))
                 .collect();
             invoke_context
-                .verify_and_update(&message.instructions[0], &these_accounts, &write_privileges)
+                .verify_and_update(
+                    message.instructions().get(0).unwrap(),
+                    &these_accounts,
+                    &write_privileges,
+                )
                 .unwrap();
             assert_eq!(
                 invoke_context.pre_accounts[owned_index]
@@ -1440,7 +1453,7 @@ mod tests {
                 (MAX_DEPTH + not_owned_index) as u8;
             assert_eq!(
                 invoke_context.verify_and_update(
-                    &message.instructions[0],
+                    message.instructions().get(0).unwrap(),
                     &accounts[not_owned_index..owned_index + 1],
                     &write_privileges,
                 ),
@@ -1968,13 +1981,13 @@ mod tests {
             AccountMeta::new(accounts[0].0, true),
             AccountMeta::new_readonly(accounts[1].0, false),
         ];
-        let message = Message::new(
+        let message = new_sanitized_message(
             &[Instruction::new_with_bincode(
                 mock_system_program_id,
                 &MockSystemInstruction::Correct,
                 account_metas.clone(),
             )],
-            Some(&accounts[0].0),
+            &accounts[0].0,
         );
 
         let result = message_processor.process_message(
@@ -1998,13 +2011,13 @@ mod tests {
         assert_eq!(accounts[0].1.borrow().lamports(), 100);
         assert_eq!(accounts[1].1.borrow().lamports(), 0);
 
-        let message = Message::new(
+        let message = new_sanitized_message(
             &[Instruction::new_with_bincode(
                 mock_system_program_id,
                 &MockSystemInstruction::AttemptCredit { lamports: 50 },
                 account_metas.clone(),
             )],
-            Some(&accounts[0].0),
+            &accounts[0].0,
         );
 
         let result = message_processor.process_message(
@@ -2032,13 +2045,13 @@ mod tests {
             ))
         );
 
-        let message = Message::new(
+        let message = new_sanitized_message(
             &[Instruction::new_with_bincode(
                 mock_system_program_id,
                 &MockSystemInstruction::AttemptDataChange { data: 50 },
                 account_metas,
             )],
-            Some(&accounts[0].0),
+            &accounts[0].0,
         );
 
         let result = message_processor.process_message(
@@ -2159,13 +2172,13 @@ mod tests {
         ];
 
         // Try to borrow mut the same account
-        let message = Message::new(
+        let message = new_sanitized_message(
             &[Instruction::new_with_bincode(
                 mock_program_id,
                 &MockSystemInstruction::BorrowFail,
                 account_metas.clone(),
             )],
-            Some(&accounts[0].0),
+            &accounts[0].0,
         );
         let result = message_processor.process_message(
             &message,
@@ -2193,13 +2206,13 @@ mod tests {
         );
 
         // Try to borrow mut the same account in a safe way
-        let message = Message::new(
+        let message = new_sanitized_message(
             &[Instruction::new_with_bincode(
                 mock_program_id,
                 &MockSystemInstruction::MultiBorrowMut,
                 account_metas.clone(),
             )],
-            Some(&accounts[0].0),
+            &accounts[0].0,
         );
         let result = message_processor.process_message(
             &message,
@@ -2221,7 +2234,7 @@ mod tests {
         assert_eq!(result, Ok(()));
 
         // Do work on the same account but at different location in keyed_accounts[]
-        let message = Message::new(
+        let message = new_sanitized_message(
             &[Instruction::new_with_bincode(
                 mock_program_id,
                 &MockSystemInstruction::DoWork {
@@ -2230,7 +2243,7 @@ mod tests {
                 },
                 account_metas,
             )],
-            Some(&accounts[0].0),
+            &accounts[0].0,
         );
         let ancestors = Ancestors::default();
         let result = message_processor.process_message(
@@ -2334,7 +2347,7 @@ mod tests {
             &MockInstruction::NoopSuccess,
             metas.clone(),
         );
-        let message = Message::new(&[instruction], None);
+        let message = new_sanitized_message(&[instruction], &accounts[0].0);
 
         let ancestors = Ancestors::default();
         let blockhash = Hash::default();
@@ -2361,8 +2374,7 @@ mod tests {
 
         // not owned account modified by the caller (before the invoke)
         let caller_write_privileges = message
-            .account_keys
-            .iter()
+            .account_keys_iter()
             .enumerate()
             .map(|(i, _)| message.is_writable(i))
             .collect::<Vec<bool>>();
@@ -2395,7 +2407,7 @@ mod tests {
         for case in cases {
             let instruction =
                 Instruction::new_with_bincode(callee_program_id, &case.0, metas.clone());
-            let message = Message::new(&[instruction], None);
+            let message = new_sanitized_message(&[instruction], &accounts[0].0);
 
             let ancestors = Ancestors::default();
             let blockhash = Hash::default();
@@ -2421,8 +2433,7 @@ mod tests {
             );
 
             let caller_write_privileges = message
-                .account_keys
-                .iter()
+                .account_keys_iter()
                 .enumerate()
                 .map(|(i, _)| message.is_writable(i))
                 .collect::<Vec<bool>>();

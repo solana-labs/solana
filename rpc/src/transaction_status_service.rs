@@ -140,6 +140,7 @@ impl TransactionStatusService {
                                 .collect(),
                         );
 
+                        let mapped_addresses = transaction.message().mapped_addresses().cloned();
                         blockstore
                             .write_transaction_status(
                                 slot,
@@ -156,6 +157,7 @@ impl TransactionStatusService {
                                     pre_token_balances,
                                     post_token_balances,
                                     rewards,
+                                    mapped_addresses,
                                 },
                             )
                             .expect("Expect database write to succeed");

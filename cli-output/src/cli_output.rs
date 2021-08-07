@@ -2262,7 +2262,7 @@ impl fmt::Display for CliBlock {
             writeln!(f, "Transaction {}:", index)?;
             writeln_transaction(
                 f,
-                &transaction_with_meta.transaction.decode().unwrap(),
+                transaction_with_meta.transaction.decode().unwrap(),
                 &transaction_with_meta.meta,
                 "  ",
                 None,
@@ -2296,7 +2296,7 @@ impl fmt::Display for CliTransaction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln_transaction(
             f,
-            &self.decoded_transaction,
+            self.decoded_transaction.clone(),
             &self.meta,
             &self.prefix,
             if !self.sigverify_status.is_empty() {

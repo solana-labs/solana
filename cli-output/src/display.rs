@@ -4,13 +4,19 @@ use {
     console::style,
     indicatif::{ProgressBar, ProgressStyle},
     solana_sdk::{
-        clock::UnixTimestamp, hash::Hash, message::Message, native_token::lamports_to_sol,
-        program_utils::limited_deserialize, pubkey::Pubkey, stake, transaction::Transaction,
+        clock::UnixTimestamp,
+        hash::Hash,
+        message::SanitizedMessage,
+        native_token::lamports_to_sol,
+        program_utils::limited_deserialize,
+        pubkey::Pubkey,
+        stake,
+        transaction::{SanitizedTransaction, Transaction},
     },
     solana_transaction_status::UiTransactionStatusMeta,
     spl_memo::id as spl_memo_id,
     spl_memo::v1::id as spl_memo_v1_id,
-    std::{collections::HashMap, fmt, io},
+    std::{collections::HashMap, convert::TryFrom, fmt, io},
 };
 
 #[derive(Clone, Debug)]
@@ -132,7 +138,7 @@ pub fn println_signers(
     println!();
 }
 
-fn format_account_mode(message: &Message, index: usize) -> String {
+fn format_account_mode(message: &SanitizedMessage, index: usize) -> String {
     format!(
         "{}r{}{}", // accounts are always readable...
         if message.is_signer(index) {
@@ -147,7 +153,7 @@ fn format_account_mode(message: &Message, index: usize) -> String {
         },
         // account may be executable on-chain while not being
         // designated as a program-id in the message
-        if message.maybe_executable(index) {
+        if message.is_invoked(index) {
             "x"
         } else {
             // programs to be executed via CPI cannot be identified as
@@ -159,13 +165,13 @@ fn format_account_mode(message: &Message, index: usize) -> String {
 
 pub fn write_transaction<W: io::Write>(
     w: &mut W,
-    transaction: &Transaction,
+    transaction: &SanitizedTransaction,
     transaction_status: &Option<UiTransactionStatusMeta>,
     prefix: &str,
     sigverify_status: Option<&[CliSignatureVerificationStatus]>,
     block_time: Option<UnixTimestamp>,
 ) -> io::Result<()> {
-    let message = &transaction.message;
+    let message = transaction.message();
     if let Some(block_time) = block_time {
         writeln!(
             w,
@@ -177,7 +183,8 @@ pub fn write_transaction<W: io::Write>(
     writeln!(
         w,
         "{}Recent Blockhash: {:?}",
-        prefix, message.recent_blockhash
+        prefix,
+        message.recent_blockhash()
     )?;
     let sigverify_statuses = if let Some(sigverify_status) = sigverify_status {
         sigverify_status
@@ -185,10 +192,10 @@ pub fn write_transaction<W: io::Write>(
             .map(|s| format!(" ({})", s))
             .collect()
     } else {
-        vec!["".to_string(); transaction.signatures.len()]
+        vec!["".to_string(); transaction.signatures().len()]
     };
     for (signature_index, (signature, sigverify_status)) in transaction
-        .signatures
+        .signatures()
         .iter()
         .zip(&sigverify_statuses)
         .enumerate()
@@ -200,7 +207,7 @@ pub fn write_transaction<W: io::Write>(
         )?;
     }
     let mut fee_payer_index = None;
-    for (account_index, account) in message.account_keys.iter().enumerate() {
+    for (account_index, account) in message.account_keys_iter().enumerate() {
         if fee_payer_index.is_none() && message.is_non_loader_key(account_index) {
             fee_payer_index = Some(account_index)
         }
@@ -218,8 +225,9 @@ pub fn write_transaction<W: io::Write>(
             },
         )?;
     }
-    for (instruction_index, instruction) in message.instructions.iter().enumerate() {
-        let program_pubkey = message.account_keys[instruction.program_id_index as usize];
+    for (instruction_index, (program_pubkey, instruction)) in
+        message.program_instructions_iter().enumerate()
+    {
         writeln!(w, "{}Instruction {}", prefix, instruction_index)?;
         writeln!(
             w,
@@ -227,7 +235,9 @@ pub fn write_transaction<W: io::Write>(
             prefix, program_pubkey, instruction.program_id_index
         )?;
         for (account_index, account) in instruction.accounts.iter().enumerate() {
-            let account_pubkey = message.account_keys[*account as usize];
+            let account_pubkey = message
+                .get_account_key(*account as usize)
+                .expect("account index is sanitized");
             writeln!(
                 w,
                 "{}  Account {}: {} ({})",
@@ -236,7 +246,7 @@ pub fn write_transaction<W: io::Write>(
         }
 
         let mut raw = true;
-        if program_pubkey == solana_vote_program::id() {
+        if program_pubkey == &solana_vote_program::id() {
             if let Ok(vote_instruction) = limited_deserialize::<
                 solana_vote_program::vote_instruction::VoteInstruction,
             >(&instruction.data)
@@ -244,14 +254,14 @@ pub fn write_transaction<W: io::Write>(
                 writeln!(w, "{}  {:?}", prefix, vote_instruction)?;
                 raw = false;
             }
-        } else if program_pubkey == stake::program::id() {
+        } else if program_pubkey == &stake::program::id() {
             if let Ok(stake_instruction) =
                 limited_deserialize::<stake::instruction::StakeInstruction>(&instruction.data)
             {
                 writeln!(w, "{}  {:?}", prefix, stake_instruction)?;
                 raw = false;
             }
-        } else if program_pubkey == solana_sdk::system_program::id() {
+        } else if program_pubkey == &solana_sdk::system_program::id() {
             if let Ok(system_instruction) = limited_deserialize::<
                 solana_sdk::system_instruction::SystemInstruction,
             >(&instruction.data)
@@ -259,7 +269,7 @@ pub fn write_transaction<W: io::Write>(
                 writeln!(w, "{}  {:?}", prefix, system_instruction)?;
                 raw = false;
             }
-        } else if is_memo_program(&program_pubkey) {
+        } else if is_memo_program(program_pubkey) {
             if let Ok(s) = std::str::from_utf8(&instruction.data) {
                 writeln!(w, "{}  Data: \"{}\"", prefix, s)?;
                 raw = false;
@@ -364,7 +374,7 @@ pub fn write_transaction<W: io::Write>(
 }
 
 pub fn println_transaction(
-    transaction: &Transaction,
+    transaction: &SanitizedTransaction,
     transaction_status: &Option<UiTransactionStatusMeta>,
     prefix: &str,
     sigverify_status: Option<&[CliSignatureVerificationStatus]>,
@@ -389,25 +399,27 @@ pub fn println_transaction(
 
 pub fn writeln_transaction(
     f: &mut dyn fmt::Write,
-    transaction: &Transaction,
+    transaction: Transaction,
     transaction_status: &Option<UiTransactionStatusMeta>,
     prefix: &str,
     sigverify_status: Option<&[CliSignatureVerificationStatus]>,
     block_time: Option<UnixTimestamp>,
 ) -> fmt::Result {
     let mut w = Vec::new();
-    if write_transaction(
-        &mut w,
-        transaction,
-        transaction_status,
-        prefix,
-        sigverify_status,
-        block_time,
-    )
-    .is_ok()
-    {
-        if let Ok(s) = String::from_utf8(w) {
-            write!(f, "{}", s)?;
+    if let Ok(transaction) = SanitizedTransaction::try_from(transaction) {
+        if write_transaction(
+            &mut w,
+            &transaction,
+            transaction_status,
+            prefix,
+            sigverify_status,
+            block_time,
+        )
+        .is_ok()
+        {
+            if let Ok(s) = String::from_utf8(w) {
+                write!(f, "{}", s)?;
+            }
         }
     }
     Ok(())

@@ -220,7 +220,7 @@ impl SanitizedMessage {
     }
 
     /// Return the mapped addresses for this message if it has any.
-    fn mapped_addresses(&self) -> Option<&MappedAddresses> {
+    pub fn mapped_addresses(&self) -> Option<&MappedAddresses> {
         match &self {
             SanitizedMessage::V0(message) => Some(&message.mapped_addresses),
             _ => None,

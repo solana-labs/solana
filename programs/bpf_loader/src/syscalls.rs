@@ -29,6 +29,7 @@ use solana_sdk::{
     instruction::{AccountMeta, Instruction, InstructionError},
     keccak,
     keyed_account::KeyedAccount,
+    message::SanitizedMessage,
     native_loader,
     process_instruction::{self, stable_log, ComputeMeter, InvokeContext, Logger},
     pubkey::{Pubkey, PubkeyError, MAX_SEEDS},
@@ -2370,7 +2371,7 @@ fn call<'a>(
         invoke_context.record_instruction(&instruction);
 
         (
-            message,
+            SanitizedMessage::Legacy(message),
             executables,
             accounts,
             account_refs,

@@ -25,7 +25,7 @@ use solana_sdk::{
     commitment_config::CommitmentConfig,
     deserialize_utils::default_on_eof,
     instruction::CompiledInstruction,
-    message::{Message, MessageHeader},
+    message::{MappedAddresses, Message, MessageHeader},
     pubkey::Pubkey,
     sanitize::Sanitize,
     signature::Signature,
@@ -187,6 +187,8 @@ pub struct TransactionStatusMeta {
     pub post_token_balances: Option<Vec<TransactionTokenBalance>>,
     #[serde(deserialize_with = "default_on_eof")]
     pub rewards: Option<Rewards>,
+    #[serde(deserialize_with = "default_on_eof")]
+    pub mapped_addresses: Option<MappedAddresses>,
 }
 
 impl Default for TransactionStatusMeta {
@@ -201,6 +203,7 @@ impl Default for TransactionStatusMeta {
             pre_token_balances: None,
             post_token_balances: None,
             rewards: None,
+            mapped_addresses: None,
         }
     }
 }
@@ -219,6 +222,7 @@ pub struct UiTransactionStatusMeta {
     pub pre_token_balances: Option<Vec<UiTransactionTokenBalance>>,
     pub post_token_balances: Option<Vec<UiTransactionTokenBalance>>,
     pub rewards: Option<Rewards>,
+    pub mapped_addresses: Option<MappedAddresses>,
 }
 
 impl UiTransactionStatusMeta {
@@ -242,6 +246,7 @@ impl UiTransactionStatusMeta {
                 .post_token_balances
                 .map(|balance| balance.into_iter().map(|balance| balance.into()).collect()),
             rewards: meta.rewards,
+            mapped_addresses: meta.mapped_addresses,
         }
     }
 }
@@ -265,6 +270,7 @@ impl From<TransactionStatusMeta> for UiTransactionStatusMeta {
                 .post_token_balances
                 .map(|balance| balance.into_iter().map(|balance| balance.into()).collect()),
             rewards: meta.rewards,
+            mapped_addresses: meta.mapped_addresses,
         }
     }
 }

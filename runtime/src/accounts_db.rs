@@ -26,6 +26,7 @@ use crate::{
         AccountIndexGetResult, AccountSecondaryIndexes, AccountsIndex, AccountsIndexRootsStats,
         IndexKey, IsCached, ScanResult, SlotList, SlotSlice, ZeroLamport, BINS_FOR_TESTING,
     },
+    address_map_cache::AddressMapCache,
     ancestors::Ancestors,
     append_vec::{AppendVec, StoredAccountMeta, StoredMeta, StoredMetaWriteVersion},
     contains::Contains,
@@ -897,6 +898,9 @@ pub struct AccountsDb {
 
     pub accounts_cache: AccountsCache,
 
+    /// Cache for fast address lookups required by mapped transactions
+    pub address_map_cache: AddressMapCache,
+
     sender_bg_hasher: Option<Sender<CachedAccount>>,
     pub read_only_accounts_cache: ReadOnlyAccountsCache,
 
@@ -1410,6 +1414,7 @@ impl AccountsDb {
             remove_unrooted_slots_synchronization: RemoveUnrootedSlotsSynchronization::default(),
             shrink_ratio: AccountShrinkThreshold::default(),
             dirty_stores: DashMap::default(),
+            address_map_cache: AddressMapCache::default(),
         }
     }
 
@@ -5922,6 +5927,11 @@ impl AccountsDb {
                     stored_account,
                 },
             )| {
+                if stored_account.account_meta.owner == solana_address_map_program::id() {
+                    self.address_map_cache
+                        .update_cache(&pubkey, stored_account.data);
+                }
+
                 if secondary {
                     self.accounts_index.update_secondary_indexes(
                         &pubkey,

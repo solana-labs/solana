@@ -52,6 +52,7 @@ use solana_sdk::{
     transaction::{SanitizedTransaction, TransactionError},
 };
 use solana_stake_program::stake_state::{self, PointValue};
+use solana_transaction_status::UiTransactionStatusMeta;
 use solana_vote_program::{
     self,
     vote_state::{self, VoteState},
@@ -144,15 +145,33 @@ fn output_entry(
                     })
                     .map(|transaction_status| transaction_status.into());
 
-                if let Some(legacy_tx) = transaction.legacy_transaction() {
-                    solana_cli_output::display::println_transaction(
-                        &legacy_tx, &tx_status, "      ", None, None,
-                    );
-                } else {
-                    eprintln!(
-                        "Failed to print unsupported transaction for {} at slot {}",
-                        tx_signature, slot
-                    );
+                let message_hash = transaction.message.hash();
+                let sanitize_result =
+                    SanitizedTransaction::try_create(transaction, message_hash, |_| {
+                        tx_status
+                            .as_ref()
+                            .and_then(|meta: &UiTransactionStatusMeta| {
+                                meta.mapped_addresses.clone()
+                            })
+                            .ok_or(TransactionError::AccountNotFound)
+                    });
+
+                match sanitize_result {
+                    Ok(transaction) => {
+                        solana_cli_output::display::println_transaction(
+                            &transaction,
+                            &tx_status,
+                            "      ",
+                            None,
+                            None,
+                        );
+                    }
+                    Err(err) => {
+                        eprintln!(
+                            "Failed to construct sanitized transaction for {} at slot {}: {}",
+                            tx_signature, slot, err
+                        );
+                    }
                 }
             }
         }
@@ -223,20 +242,17 @@ fn output_slot(
                 let tx_signature = transaction.signatures[0];
                 let sanitize_result =
                     SanitizedTransaction::try_create(transaction, Hash::default(), |_| {
-                        Err(TransactionError::UnsupportedVersion)
+                        blockstore
+                            .read_transaction_status((tx_signature, slot))
+                            .ok()
+                            .flatten()
+                            .and_then(|meta| meta.mapped_addresses)
+                            .ok_or(TransactionError::AccountNotFound)
                     });
 
-                match sanitize_result {
-                    Ok(transaction) => {
-                        for (program_id, _) in transaction.message().program_instructions_iter() {
-                            *program_ids.entry(*program_id).or_insert(0) += 1;
-                        }
-                    }
-                    Err(err) => {
-                        warn!(
-                            "Failed to analyze unsupported transaction {}: {:?}",
-                            tx_signature, err
-                        );
+                if let Ok(transaction) = sanitize_result {
+                    for (program_id, _) in transaction.message().program_instructions_iter() {
+                        *program_ids.entry(*program_id).or_insert(0) += 1;
                     }
                 }
             }
@@ -779,8 +795,14 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
             .transactions
             .into_iter()
             .filter_map(|transaction| {
+                let tx_signature = transaction.signatures[0];
                 SanitizedTransaction::try_create(transaction, Hash::default(), |_| {
-                    Err(TransactionError::UnsupportedVersion)
+                    blockstore
+                        .read_transaction_status((tx_signature, slot))
+                        .ok()
+                        .flatten()
+                        .and_then(|meta| meta.mapped_addresses)
+                        .ok_or(TransactionError::AccountNotFound)
                 })
                 .map_err(|err| {
                     warn!("Failed to compute cost of transaction: {:?}", err);

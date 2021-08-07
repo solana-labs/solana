@@ -5,7 +5,7 @@ use {
         hash::Hash,
         instruction::CompiledInstruction,
         instruction::InstructionError,
-        message::{Message, MessageHeader},
+        message::{MappedAddresses, Message, MessageHeader},
         pubkey::Pubkey,
         signature::Signature,
         transaction::Transaction,
@@ -109,6 +109,40 @@ impl From<generated::Reward> for Reward {
                 _ => None,
             },
             commission: reward.commission.parse::<u8>().ok(),
+        }
+    }
+}
+
+impl From<MappedAddresses> for generated::MappedAddresses {
+    fn from(mapped_addresses: MappedAddresses) -> Self {
+        Self {
+            writable: mapped_addresses
+                .writable
+                .into_iter()
+                .map(|key| <Pubkey as AsRef<[u8]>>::as_ref(&key).into())
+                .collect(),
+            readonly: mapped_addresses
+                .readonly
+                .into_iter()
+                .map(|key| <Pubkey as AsRef<[u8]>>::as_ref(&key).into())
+                .collect(),
+        }
+    }
+}
+
+impl From<generated::MappedAddresses> for MappedAddresses {
+    fn from(value: generated::MappedAddresses) -> Self {
+        Self {
+            writable: value
+                .writable
+                .into_iter()
+                .map(|key| Pubkey::new(&key))
+                .collect(),
+            readonly: value
+                .readonly
+                .into_iter()
+                .map(|key| Pubkey::new(&key))
+                .collect(),
         }
     }
 }
@@ -276,6 +310,7 @@ impl From<TransactionStatusMeta> for generated::TransactionStatusMeta {
             pre_token_balances,
             post_token_balances,
             rewards,
+            mapped_addresses,
         } = value;
         let err = match status {
             Ok(()) => None,
@@ -304,6 +339,7 @@ impl From<TransactionStatusMeta> for generated::TransactionStatusMeta {
             .into_iter()
             .map(|reward| reward.into())
             .collect();
+        let mapped_addresses = mapped_addresses.map(|mapped_addresses| mapped_addresses.into());
 
         Self {
             err,
@@ -315,6 +351,7 @@ impl From<TransactionStatusMeta> for generated::TransactionStatusMeta {
             pre_token_balances,
             post_token_balances,
             rewards,
+            mapped_addresses,
         }
     }
 }
@@ -340,6 +377,7 @@ impl TryFrom<generated::TransactionStatusMeta> for TransactionStatusMeta {
             pre_token_balances,
             post_token_balances,
             rewards,
+            mapped_addresses,
         } = value;
         let status = match &err {
             None => Ok(()),
@@ -365,6 +403,7 @@ impl TryFrom<generated::TransactionStatusMeta> for TransactionStatusMeta {
                 .collect(),
         );
         let rewards = Some(rewards.into_iter().map(|reward| reward.into()).collect());
+        let mapped_addresses = mapped_addresses.map(|mapped_addresses| mapped_addresses.into());
         Ok(Self {
             status,
             fee,
@@ -375,6 +414,7 @@ impl TryFrom<generated::TransactionStatusMeta> for TransactionStatusMeta {
             pre_token_balances,
             post_token_balances,
             rewards,
+            mapped_addresses,
         })
     }
 }
