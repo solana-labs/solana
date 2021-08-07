@@ -29,10 +29,10 @@ use solana_runtime::{
     bank::{Bank, RewardCalculationEvent},
     bank_forks::BankForks,
     hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
+    snapshot_archive_info::SnapshotArchiveInfoGetter,
     snapshot_config::SnapshotConfig,
     snapshot_utils::{
-        self, ArchiveFormat, SnapshotArchiveInfoGetter, SnapshotVersion,
-        DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+        self, ArchiveFormat, SnapshotVersion, DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
     },
 };
 use solana_sdk::{

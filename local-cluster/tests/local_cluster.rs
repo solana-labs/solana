@@ -41,8 +41,9 @@ use {
         validator_configs::*,
     },
     solana_runtime::{
+        snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_config::SnapshotConfig,
-        snapshot_utils::{self, ArchiveFormat, SnapshotArchiveInfoGetter},
+        snapshot_utils::{self, ArchiveFormat},
     },
     solana_sdk::{
         account::AccountSharedData,

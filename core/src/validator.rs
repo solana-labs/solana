@@ -60,8 +60,9 @@ use solana_runtime::{
     bank_forks::BankForks,
     commitment::BlockCommitmentCache,
     hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
+    snapshot_archive_info::SnapshotArchiveInfoGetter,
     snapshot_config::SnapshotConfig,
-    snapshot_utils::{self, SnapshotArchiveInfoGetter},
+    snapshot_utils,
 };
 use solana_sdk::{
     clock::Slot,
