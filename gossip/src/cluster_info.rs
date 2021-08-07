@@ -1260,7 +1260,7 @@ impl ClusterInfo {
     pub fn retransmit_to(s: &UdpSocket, dests: &[&SocketAddr], packet: &Packet) {
         trace!("retransmit orders {}", dests.len());
         let data = &packet.data[..packet.meta.size];
-        if let Err(SendPktsError::IoError(ioerr, num_failed)) = multi_target_send(s, data, &dests) {
+        if let Err(SendPktsError::IoError(ioerr, num_failed)) = multi_target_send(s, data, dests) {
             inc_new_counter_info!("cluster_info-retransmit-packets", dests.len(), 1);
             inc_new_counter_error!("cluster_info-retransmit-error", num_failed, 1);
             error!(
