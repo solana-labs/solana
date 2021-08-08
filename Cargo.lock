@@ -5807,6 +5807,7 @@ dependencies = [
 name = "solana-streamer"
 version = "1.8.0"
 dependencies = [
+ "itertools 0.10.1",
  "libc",
  "log 0.4.14",
  "nix",
