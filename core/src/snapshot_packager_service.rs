@@ -1,7 +1,7 @@
 use solana_gossip::cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES};
 use solana_runtime::{
-    snapshot_package::AccountsPackage,
-    snapshot_utils::{self, SnapshotArchiveInfoGetter},
+    snapshot_archive_info::SnapshotArchiveInfoGetter, snapshot_package::AccountsPackage,
+    snapshot_utils,
 };
 use solana_sdk::{clock::Slot, hash::Hash};
 use std::{

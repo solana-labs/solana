@@ -16,8 +16,9 @@ use {
     solana_rpc::{rpc::JsonRpcConfig, rpc_pubsub_service::PubSubConfig},
     solana_runtime::{
         accounts_index::AccountSecondaryIndexes,
+        snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_config::SnapshotConfig,
-        snapshot_utils::{self, ArchiveFormat, SnapshotArchiveInfoGetter},
+        snapshot_utils::{self, ArchiveFormat},
     },
     solana_sdk::{
         client::SyncClient,

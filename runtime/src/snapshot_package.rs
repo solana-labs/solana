@@ -1,10 +1,13 @@
-use crate::snapshot_utils::{
-    ArchiveFormat, BankSnapshotInfo, Result, SnapshotArchiveInfo, SnapshotArchiveInfoGetter,
-    SnapshotVersion, TMP_FULL_SNAPSHOT_PREFIX, TMP_INCREMENTAL_SNAPSHOT_PREFIX,
-};
 use crate::{
     accounts_db::SnapshotStorages,
     bank::{Bank, BankSlotDelta},
+};
+use crate::{
+    snapshot_archive_info::{SnapshotArchiveInfo, SnapshotArchiveInfoGetter},
+    snapshot_utils::{
+        ArchiveFormat, BankSnapshotInfo, Result, SnapshotVersion, TMP_FULL_SNAPSHOT_PREFIX,
+        TMP_INCREMENTAL_SNAPSHOT_PREFIX,
+    },
 };
 use log::*;
 use solana_sdk::clock::Slot;

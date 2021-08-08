@@ -54,6 +54,7 @@ mod tests {
         bank::{Bank, BankSlotDelta},
         bank_forks::BankForks,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
+        snapshot_archive_info::FullSnapshotArchiveInfo,
         snapshot_config::SnapshotConfig,
         snapshot_package::AccountsPackagePre,
         snapshot_utils::{
@@ -168,8 +169,7 @@ mod tests {
             ArchiveFormat::TarBzip2,
         );
         let full_snapshot_archive_info =
-            snapshot_utils::FullSnapshotArchiveInfo::new_from_path(full_snapshot_archive_path)
-                .unwrap();
+            FullSnapshotArchiveInfo::new_from_path(full_snapshot_archive_path).unwrap();
 
         let (deserialized_bank, _timing) = snapshot_utils::bank_from_snapshot_archives(
             account_paths,
