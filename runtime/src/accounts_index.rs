@@ -33,7 +33,8 @@ use thiserror::Error;
 
 pub const ITER_BATCH_SIZE: usize = 1000;
 pub const BINS_DEFAULT: usize = 16;
-const BINS_FOR_TESTING: usize = BINS_DEFAULT;
+pub const BINS_FOR_TESTING: usize = BINS_DEFAULT;
+pub const BINS_FOR_BENCHMARKS: usize = BINS_DEFAULT;
 pub type ScanResult<T> = Result<T, ScanError>;
 pub type SlotList<T> = Vec<(Slot, T)>;
 pub type SlotSlice<'s, T> = &'s [(Slot, T)];

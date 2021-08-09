@@ -197,6 +197,7 @@ pub(crate) fn bank_from_streams<R>(
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
     verify_index: bool,
+    accounts_index_bins: usize,
 ) -> std::result::Result<Bank, Error>
 where
     R: Read,
@@ -234,6 +235,7 @@ where
                 limit_load_slot_count_from_snapshot,
                 shrink_ratio,
                 verify_index,
+                accounts_index_bins,
             )?;
             Ok(bank)
         }};
@@ -326,6 +328,7 @@ fn reconstruct_bank_from_fields<E>(
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
     verify_index: bool,
+    accounts_index_bins: usize,
 ) -> Result<Bank, Error>
 where
     E: SerializableStorage + std::marker::Sync,
@@ -340,6 +343,7 @@ where
         limit_load_slot_count_from_snapshot,
         shrink_ratio,
         verify_index,
+        accounts_index_bins,
     )?;
     accounts_db.freeze_accounts(
         &Ancestors::from(&bank_fields.ancestors),
@@ -380,6 +384,7 @@ where
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn reconstruct_accountsdb_from_fields<E>(
     snapshot_accounts_db_fields: SnapshotAccountsDbFields<E>,
     account_paths: &[PathBuf],
@@ -390,6 +395,7 @@ fn reconstruct_accountsdb_from_fields<E>(
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
     verify_index: bool,
+    accounts_index_bins: usize,
 ) -> Result<AccountsDb, Error>
 where
     E: SerializableStorage + std::marker::Sync,
@@ -400,6 +406,7 @@ where
         account_secondary_indexes,
         caching_enabled,
         shrink_ratio,
+        accounts_index_bins,
     );
 
     let AccountsDbFields(

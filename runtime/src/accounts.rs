@@ -3,7 +3,9 @@ use crate::{
         AccountShrinkThreshold, AccountsDb, BankHashInfo, ErrorCounters, LoadHint, LoadedAccount,
         ScanStorageResult,
     },
-    accounts_index::{AccountSecondaryIndexes, IndexKey, ScanResult},
+    accounts_index::{
+        AccountSecondaryIndexes, IndexKey, ScanResult, BINS_FOR_BENCHMARKS, BINS_FOR_TESTING,
+    },
     ancestors::Ancestors,
     bank::{
         NonceRollbackFull, NonceRollbackInfo, RentDebits, TransactionCheckResult,
@@ -131,13 +133,13 @@ impl Accounts {
         caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
     ) -> Self {
-        // will diverge
         Self::new_with_config(
             paths,
             cluster_type,
             account_indexes,
             caching_enabled,
             shrink_ratio,
+            BINS_FOR_TESTING,
         )
     }
 
@@ -148,13 +150,13 @@ impl Accounts {
         caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
     ) -> Self {
-        // will diverge
         Self::new_with_config(
             paths,
             cluster_type,
             account_indexes,
             caching_enabled,
             shrink_ratio,
+            BINS_FOR_BENCHMARKS,
         )
     }
 
@@ -164,6 +166,7 @@ impl Accounts {
         account_indexes: AccountSecondaryIndexes,
         caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
+        accounts_index_bins: usize,
     ) -> Self {
         Self {
             accounts_db: Arc::new(AccountsDb::new_with_config(
@@ -172,6 +175,7 @@ impl Accounts {
                 account_indexes,
                 caching_enabled,
                 shrink_ratio,
+                accounts_index_bins,
             )),
             account_locks: Mutex::new(AccountLocks::default()),
         }

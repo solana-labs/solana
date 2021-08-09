@@ -726,6 +726,7 @@ pub fn bank_from_snapshot_archives(
     test_hash_calculation: bool,
     accounts_db_skip_shrink: bool,
     verify_index: bool,
+    accounts_index_bins: usize,
 ) -> Result<(Bank, BankFromArchiveTimings)> {
     check_are_snapshots_compatible(
         full_snapshot_archive_info,
@@ -789,6 +790,7 @@ pub fn bank_from_snapshot_archives(
         limit_load_slot_count_from_snapshot,
         shrink_ratio,
         verify_index,
+        accounts_index_bins,
     )?;
     measure_rebuild.stop();
     info!("{}", measure_rebuild);
@@ -831,6 +833,7 @@ pub fn bank_from_latest_snapshot_archives(
     test_hash_calculation: bool,
     accounts_db_skip_shrink: bool,
     verify_index: bool,
+    accounts_index_bins: usize,
 ) -> Result<(Bank, BankFromArchiveTimings)> {
     let full_snapshot_archive_info = get_highest_full_snapshot_archive_info(&snapshot_archives_dir)
         .ok_or(SnapshotError::NoSnapshotArchives)?;
@@ -868,6 +871,7 @@ pub fn bank_from_latest_snapshot_archives(
         test_hash_calculation,
         accounts_db_skip_shrink,
         verify_index,
+        accounts_index_bins,
     )?;
 
     verify_bank_against_expected_slot_hash(
@@ -1367,6 +1371,7 @@ fn rebuild_bank_from_snapshots(
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
     verify_index: bool,
+    accounts_index_bins: usize,
 ) -> Result<Bank> {
     let (full_snapshot_version, full_snapshot_root_paths) =
         verify_unpacked_snapshots_dir_and_version(
@@ -1414,6 +1419,7 @@ fn rebuild_bank_from_snapshots(
                     limit_load_slot_count_from_snapshot,
                     shrink_ratio,
                     verify_index,
+                    accounts_index_bins,
                 ),
             }?,
         )
@@ -2484,6 +2490,7 @@ mod tests {
             false,
             false,
             false,
+            crate::accounts_index::BINS_FOR_TESTING,
         )
         .unwrap();
 
@@ -2574,6 +2581,7 @@ mod tests {
             false,
             false,
             false,
+            crate::accounts_index::BINS_FOR_TESTING,
         )
         .unwrap();
 
@@ -2683,6 +2691,7 @@ mod tests {
             false,
             false,
             false,
+            crate::accounts_index::BINS_FOR_TESTING,
         )
         .unwrap();
 
@@ -2781,6 +2790,7 @@ mod tests {
             false,
             false,
             false,
+            crate::accounts_index::BINS_FOR_TESTING,
         )
         .unwrap();
 
