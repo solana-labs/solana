@@ -1,10 +1,10 @@
 //! A library for generating a message from a sequence of instructions
 
-mod original;
+mod legacy;
 mod v0;
 mod versions;
 
-pub use original::Message;
+pub use legacy::Message;
 
 pub const MESSAGE_HEADER_LENGTH: usize = 3;
 

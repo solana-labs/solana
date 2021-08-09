@@ -24,25 +24,25 @@ pub const MESSAGE_VERSION_PREFIX: u8 = 0x80;
 ///
 /// If the first bit is set, the remaining 7 bits will be used to determine
 /// which message version is serialized starting from version `0`. If the first
-/// is bit is not set, all bytes are used to encode the original `Message`
+/// is bit is not set, all bytes are used to encode the legacy `Message`
 /// format.
 #[frozen_abi(digest = "5hAeXsHoMFfGREfh8RqJYmAjRcs88sT1YxrpJJq3Ne1f")]
 #[derive(Debug, PartialEq, Eq, Clone, AbiEnumVisitor, AbiExample)]
 pub enum VersionedMessage {
-    Original(Message),
+    Legacy(Message),
     V0(v0::Message),
 }
 
 impl Default for VersionedMessage {
     fn default() -> Self {
-        Self::Original(Message::default())
+        Self::Legacy(Message::default())
     }
 }
 
 impl Sanitize for VersionedMessage {
     fn sanitize(&self) -> Result<(), SanitizeError> {
         match self {
-            Self::Original(message) => message.sanitize(),
+            Self::Legacy(message) => message.sanitize(),
             Self::V0(message) => message.sanitize(),
         }
     }
@@ -54,7 +54,7 @@ impl Serialize for VersionedMessage {
         S: Serializer,
     {
         match self {
-            Self::Original(message) => {
+            Self::Legacy(message) => {
                 let mut seq = serializer.serialize_tuple(1)?;
                 seq.serialize_element(message)?;
                 seq.end()
@@ -70,7 +70,7 @@ impl Serialize for VersionedMessage {
 }
 
 enum MessagePrefix {
-    Original(u8),
+    Legacy(u8),
     Versioned(u8),
 }
 
@@ -92,7 +92,7 @@ impl<'de> Deserialize<'de> for MessagePrefix {
                 if byte & MESSAGE_VERSION_PREFIX != 0 {
                     Ok(MessagePrefix::Versioned(byte & !MESSAGE_VERSION_PREFIX))
                 } else {
-                    Ok(MessagePrefix::Original(byte))
+                    Ok(MessagePrefix::Legacy(byte))
                 }
             }
         }
@@ -124,10 +124,10 @@ impl<'de> Deserialize<'de> for VersionedMessage {
                     .ok_or_else(|| de::Error::invalid_length(0, &self))?;
 
                 match prefix {
-                    MessagePrefix::Original(num_required_signatures) => {
-                        // The remaining fields of the original Message struct after the first byte.
+                    MessagePrefix::Legacy(num_required_signatures) => {
+                        // The remaining fields of the legacy Message struct after the first byte.
                         #[derive(Serialize, Deserialize)]
-                        struct RemainingMessage {
+                        struct RemainingLegacyMessage {
                             pub num_readonly_signed_accounts: u8,
                             pub num_readonly_unsigned_accounts: u8,
                             #[serde(with = "short_vec")]
@@ -137,20 +137,20 @@ impl<'de> Deserialize<'de> for VersionedMessage {
                             pub instructions: Vec<CompiledInstruction>,
                         }
 
-                        let rm: RemainingMessage = seq.next_element()?.ok_or_else(|| {
+                        let message: RemainingLegacyMessage = seq.next_element()?.ok_or_else(|| {
                             // will never happen since tuple length is always 2
                             de::Error::invalid_length(1, &self)
                         })?;
 
-                        Ok(VersionedMessage::Original(Message {
+                        Ok(VersionedMessage::Legacy(Message {
                             header: MessageHeader {
                                 num_required_signatures,
-                                num_readonly_signed_accounts: rm.num_readonly_signed_accounts,
-                                num_readonly_unsigned_accounts: rm.num_readonly_unsigned_accounts,
+                                num_readonly_signed_accounts: message.num_readonly_signed_accounts,
+                                num_readonly_unsigned_accounts: message.num_readonly_unsigned_accounts,
                             },
-                            account_keys: rm.account_keys,
-                            recent_blockhash: rm.recent_blockhash,
-                            instructions: rm.instructions,
+                            account_keys: message.account_keys,
+                            recent_blockhash: message.recent_blockhash,
+                            instructions: message.instructions,
                         }))
                     }
                     MessagePrefix::Versioned(version) => {
@@ -185,7 +185,7 @@ mod tests {
     };
 
     #[test]
-    fn test_original_message_serialization() {
+    fn test_legacy_message_serialization() {
         let program_id0 = Pubkey::new_unique();
         let program_id1 = Pubkey::new_unique();
         let id0 = Pubkey::new_unique();
@@ -211,18 +211,18 @@ mod tests {
         message.recent_blockhash = Hash::new_unique();
 
         let bytes1 = bincode::serialize(&message).unwrap();
-        let bytes2 = bincode::serialize(&VersionedMessage::Original(message.clone())).unwrap();
+        let bytes2 = bincode::serialize(&VersionedMessage::Legacy(message.clone())).unwrap();
 
         assert_eq!(bytes1, bytes2);
 
         let message1: Message = bincode::deserialize(&bytes1).unwrap();
         let message2: VersionedMessage = bincode::deserialize(&bytes2).unwrap();
 
-        if let VersionedMessage::Original(message2) = message2 {
+        if let VersionedMessage::Legacy(message2) = message2 {
             assert_eq!(message, message1);
             assert_eq!(message1, message2);
         } else {
-            panic!("should deserialize to original message");
+            panic!("should deserialize to legacy message");
         }
     }
 
