@@ -69,6 +69,7 @@ loadConfigFile() {
     entrypointIp=${validatorIpList[0]}
   else
     entrypointIp=${validatorIpListPrivate[0]}
+    maybeAllowPrivateAddr='--allow-private-addr'
   fi
 
   buildSshOptions
