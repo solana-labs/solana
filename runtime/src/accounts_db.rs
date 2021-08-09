@@ -1344,8 +1344,13 @@ impl<'a> ReadableAccount for StoredAccountMeta<'a> {
     }
 }
 
-type GenerateIndexAccountsMap<'a> =
-    HashMap<Pubkey, (StoredMetaWriteVersion, AppendVecId, StoredAccountMeta<'a>)>;
+struct IndexAccountMapEntry<'a> {
+    pub write_version: StoredMetaWriteVersion,
+    pub store_id: AppendVecId,
+    pub stored_account: StoredAccountMeta<'a>,
+}
+
+type GenerateIndexAccountsMap<'a> = HashMap<Pubkey, IndexAccountMapEntry<'a>>;
 
 impl AccountsDb {
     pub fn default_for_tests() -> Self {
@@ -5864,12 +5869,20 @@ impl AccountsDb {
                 let this_version = stored_account.meta.write_version;
                 match accounts_map.entry(stored_account.meta.pubkey) {
                     std::collections::hash_map::Entry::Vacant(entry) => {
-                        entry.insert((this_version, storage.append_vec_id(), stored_account));
+                        entry.insert(IndexAccountMapEntry {
+                            write_version: this_version,
+                            store_id: storage.append_vec_id(),
+                            stored_account,
+                        });
                     }
                     std::collections::hash_map::Entry::Occupied(mut entry) => {
-                        let occupied_version = entry.get().0;
+                        let occupied_version = entry.get().write_version;
                         if occupied_version < this_version {
-                            entry.insert((this_version, storage.append_vec_id(), stored_account));
+                            entry.insert(IndexAccountMapEntry {
+                                write_version: this_version,
+                                store_id: storage.append_vec_id(),
+                                stored_account,
+                            });
                         } else {
                             assert!(occupied_version != this_version);
                         }
@@ -5892,9 +5905,15 @@ impl AccountsDb {
         let secondary = !self.account_indexes.is_empty();
 
         let len = accounts_map.len();
-        let items = accounts_map
-            .into_iter()
-            .map(|(pubkey, (_, store_id, stored_account))| {
+        let items = accounts_map.into_iter().map(
+            |(
+                pubkey,
+                IndexAccountMapEntry {
+                    write_version: _write_version,
+                    store_id,
+                    stored_account,
+                },
+            )| {
                 if secondary {
                     self.accounts_index.update_secondary_indexes(
                         &pubkey,
@@ -5913,7 +5932,8 @@ impl AccountsDb {
                         lamports: stored_account.account_meta.lamports,
                     },
                 )
-            });
+            },
+        );
 
         let (dirty_pubkeys, insert_us) = self
             .accounts_index
@@ -5983,10 +6003,13 @@ impl AccountsDb {
                                     if slot2 == slot {
                                         count += 1;
                                         let ai = AccountInfo {
-                                            store_id: account_info.1,
-                                            offset: account_info.2.offset,
-                                            stored_size: account_info.2.stored_size,
-                                            lamports: account_info.2.account_meta.lamports,
+                                            store_id: account_info.store_id,
+                                            offset: account_info.stored_account.offset,
+                                            stored_size: account_info.stored_account.stored_size,
+                                            lamports: account_info
+                                                .stored_account
+                                                .account_meta
+                                                .lamports,
                                         };
                                         assert_eq!(&ai, account_info2);
                                     }
