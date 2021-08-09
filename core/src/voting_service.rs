@@ -1,4 +1,4 @@
-use crate::consensus::{SavedTower, TowerStorage};
+use crate::tower_storage::{SavedTower, TowerStorage};
 use solana_gossip::cluster_info::ClusterInfo;
 use solana_measure::measure::Measure;
 use solana_poh::poh_recorder::PohRecorder;

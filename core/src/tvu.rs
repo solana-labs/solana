@@ -11,7 +11,7 @@ use crate::{
     },
     cluster_slots::ClusterSlots,
     completed_data_sets_service::CompletedDataSetsSender,
-    consensus::{Tower, TowerStorage},
+    consensus::Tower,
     cost_model::CostModel,
     cost_update_service::CostUpdateService,
     ledger_cleanup_service::LedgerCleanupService,
@@ -22,6 +22,7 @@ use crate::{
     sigverify_shreds::ShredSigVerifier,
     sigverify_stage::SigVerifyStage,
     snapshot_packager_service::PendingSnapshotPackage,
+    tower_storage::TowerStorage,
     voting_service::VotingService,
 };
 use crossbeam_channel::unbounded;
@@ -455,7 +456,7 @@ pub mod tests {
             )),
             &poh_recorder,
             tower,
-            Arc::new(crate::consensus::FileTowerStorage::default()),
+            Arc::new(crate::tower_storage::FileTowerStorage::default()),
             &leader_schedule_cache,
             &exit,
             block_commitment_cache,

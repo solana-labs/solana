@@ -5,7 +5,7 @@ use crate::{
     cache_block_meta_service::{CacheBlockMetaSender, CacheBlockMetaService},
     cluster_info_vote_listener::VoteTracker,
     completed_data_sets_service::CompletedDataSetsService,
-    consensus::{reconcile_blockstore_roots_with_tower, FileTowerStorage, Tower, TowerStorage},
+    consensus::{reconcile_blockstore_roots_with_tower, Tower},
     cost_model::CostModel,
     rewards_recorder_service::{RewardsRecorderSender, RewardsRecorderService},
     sample_performance_service::SamplePerformanceService,
@@ -13,6 +13,7 @@ use crate::{
     serve_repair_service::ServeRepairService,
     sigverify,
     snapshot_packager_service::{PendingSnapshotPackage, SnapshotPackagerService},
+    tower_storage::{FileTowerStorage, TowerStorage},
     tpu::{Tpu, DEFAULT_TPU_COALESCE_MS},
     tvu::{Sockets, Tvu, TvuConfig},
 };
