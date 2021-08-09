@@ -2,7 +2,12 @@
  * @brief Example C-based BPF program that tests cross-program invocations
  */
 #include "../invoked/instruction.h"
-#include <solana_sdk.h>
+#include <sol_entrypoint.h>
+#include <sol_cpi.h>
+#include <sol_pubkey.h>
+#include <sol_log.h>
+#include <sol_assert.h>
+#include <sol_deserialize.h>
 
 static const uint8_t TEST_SUCCESS = 1;
 static const uint8_t TEST_PRIVILEGE_ESCALATION_SIGNER = 2;
