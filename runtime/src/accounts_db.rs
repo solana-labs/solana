@@ -175,6 +175,12 @@ struct GenerateIndexTimings {
     pub storage_size_accounts_map_flatten_us: u64,
 }
 
+#[derive(Default, Debug, PartialEq)]
+struct StorageSizeAndCount {
+    pub stored_size: usize,
+    pub count: usize,
+}
+
 impl GenerateIndexTimings {
     pub fn report(&self) {
         datapoint_info!(
@@ -6065,7 +6071,7 @@ impl AccountsDb {
     fn calculate_storage_count_and_alive_bytes(
         &self,
         timings: &mut GenerateIndexTimings,
-    ) -> HashMap<usize, (usize, usize)> {
+    ) -> HashMap<AppendVecId, StorageSizeAndCount> {
         // look at every account in the account index and calculate for each storage: stored_size and count
         let mut storage_size_accounts_map_time = Measure::start("storage_size_accounts_map");
         let mut maps = self
@@ -6083,9 +6089,9 @@ impl AccountsDb {
                         .for_each(|(_slot, account_entry)| {
                             let storage_entry_meta = stored_sizes_and_counts
                                 .entry(account_entry.store_id)
-                                .or_insert((0, 0));
-                            storage_entry_meta.0 += account_entry.stored_size;
-                            storage_entry_meta.1 += 1;
+                                .or_insert_with(StorageSizeAndCount::default);
+                            storage_entry_meta.stored_size += account_entry.stored_size;
+                            storage_entry_meta.count += 1;
                         })
                 });
                 stored_sizes_and_counts
@@ -6100,9 +6106,11 @@ impl AccountsDb {
         let mut stored_sizes_and_counts = maps.pop().unwrap_or_default();
         for map in maps {
             for (store_id, meta) in map.into_iter() {
-                let storage_entry_meta = stored_sizes_and_counts.entry(store_id).or_insert((0, 0));
-                storage_entry_meta.0 += meta.0;
-                storage_entry_meta.1 += meta.1;
+                let storage_entry_meta = stored_sizes_and_counts
+                    .entry(store_id)
+                    .or_insert_with(StorageSizeAndCount::default);
+                storage_entry_meta.stored_size += meta.stored_size;
+                storage_entry_meta.count += meta.count;
             }
         }
         storage_size_accounts_map_flatten_time.stop();
@@ -6113,7 +6121,7 @@ impl AccountsDb {
 
     fn set_storage_count_and_alive_bytes(
         &self,
-        stored_sizes_and_counts: HashMap<usize, (usize, usize)>,
+        stored_sizes_and_counts: HashMap<usize, StorageSizeAndCount>,
         timings: &mut GenerateIndexTimings,
     ) {
         // store count and size for each storage
@@ -6122,7 +6130,9 @@ impl AccountsDb {
             for (id, store) in slot_stores.value().read().unwrap().iter() {
                 // Should be default at this point
                 assert_eq!(store.alive_bytes(), 0);
-                if let Some((stored_size, count)) = stored_sizes_and_counts.get(id) {
+                if let Some(StorageSizeAndCount { stored_size, count }) =
+                    stored_sizes_and_counts.get(id)
+                {
                     trace!("id: {} setting count: {} cur: {}", id, count, store.count(),);
                     store.count_and_status.write().unwrap().0 = *count;
                     store.alive_bytes.store(*stored_size, Ordering::SeqCst);
@@ -11971,7 +11981,16 @@ pub mod tests {
             accounts.calculate_storage_count_and_alive_bytes(&mut GenerateIndexTimings::default());
         assert_eq!(result.len(), 1);
         for (k, v) in result.iter() {
-            assert_eq!((k, v), (&0, &(144, 1)));
+            assert_eq!(
+                (k, v),
+                (
+                    &0,
+                    &StorageSizeAndCount {
+                        stored_size: 144,
+                        count: 1
+                    }
+                )
+            );
         }
     }
 
@@ -12011,7 +12030,16 @@ pub mod tests {
             accounts.calculate_storage_count_and_alive_bytes(&mut GenerateIndexTimings::default());
         assert_eq!(result.len(), 1);
         for (k, v) in result.iter() {
-            assert_eq!((k, v), (&0, &(1280, 2)));
+            assert_eq!(
+                (k, v),
+                (
+                    &0,
+                    &StorageSizeAndCount {
+                        stored_size: 1280,
+                        count: 2
+                    }
+                )
+            );
         }
     }
 
@@ -12034,7 +12062,13 @@ pub mod tests {
 
         // populate based on made up hash data
         let mut hashmap = HashMap::default();
-        hashmap.insert(0, (2, 3));
+        hashmap.insert(
+            0,
+            StorageSizeAndCount {
+                stored_size: 2,
+                count: 3,
+            },
+        );
         accounts.set_storage_count_and_alive_bytes(hashmap, &mut GenerateIndexTimings::default());
         assert_eq!(accounts.storage.0.len(), 1);
         for slot_stores in accounts.storage.0.iter() {
