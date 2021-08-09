@@ -1728,7 +1728,7 @@ pub(crate) mod tests {
             .unwrap()
             .contains_key(&stake::program::id()));
 
-        let mut last_notified_slot: Slot = 0;
+        let mut highest_confirmed_slot: Slot = 0;
         // Optimistically notifying slot 3 without notifying slot 1 and 2, bank3 is unfrozen, we expect
         // to see transaction for alice and bob to be notified in order.
         OptimisticallyConfirmedBankTracker::process_notification(
@@ -1737,7 +1737,7 @@ pub(crate) mod tests {
             &optimistically_confirmed_bank,
             &subscriptions,
             &mut pending_optimistically_confirmed_banks,
-            &mut last_notified_slot,
+            &mut highest_confirmed_slot,
         );
 
         // a closure to reduce code duplications in building expected responses:
@@ -1779,7 +1779,7 @@ pub(crate) mod tests {
             &optimistically_confirmed_bank,
             &subscriptions,
             &mut pending_optimistically_confirmed_banks,
-            &mut last_notified_slot,
+            &mut highest_confirmed_slot,
         );
 
         let (response, _) = robust_poll_or_panic(transport_receiver);
@@ -2231,25 +2231,25 @@ pub(crate) mod tests {
             .unwrap();
 
         // First, notify the unfrozen bank first to queue pending notification
-        let mut last_notified_slot: Slot = 0;
+        let mut highest_confirmed_slot: Slot = 0;
         OptimisticallyConfirmedBankTracker::process_notification(
             BankNotification::OptimisticallyConfirmed(2),
             &bank_forks,
             &optimistically_confirmed_bank,
             &subscriptions,
             &mut pending_optimistically_confirmed_banks,
-            &mut last_notified_slot,
+            &mut highest_confirmed_slot,
         );
 
         // Now, notify the frozen bank and ensure its notifications are processed
-        last_notified_slot = 0;
+        highest_confirmed_slot = 0;
         OptimisticallyConfirmedBankTracker::process_notification(
             BankNotification::OptimisticallyConfirmed(1),
             &bank_forks,
             &optimistically_confirmed_bank,
             &subscriptions,
             &mut pending_optimistically_confirmed_banks,
-            &mut last_notified_slot,
+            &mut highest_confirmed_slot,
         );
 
         let (response, _) = robust_poll_or_panic(transport_receiver0);
@@ -2286,14 +2286,14 @@ pub(crate) mod tests {
         );
 
         let bank2 = bank_forks.read().unwrap().get(2).unwrap().clone();
-        last_notified_slot = 0;
+        highest_confirmed_slot = 0;
         OptimisticallyConfirmedBankTracker::process_notification(
             BankNotification::Frozen(bank2),
             &bank_forks,
             &optimistically_confirmed_bank,
             &subscriptions,
             &mut pending_optimistically_confirmed_banks,
-            &mut last_notified_slot,
+            &mut highest_confirmed_slot,
         );
         let (response, _) = robust_poll_or_panic(transport_receiver1);
         let expected = json!({
