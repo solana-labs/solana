@@ -292,9 +292,6 @@ pub enum ResultingStateChange {
     // Hash of our current frozen version of the slot
     DuplicateConfirmedSlotMatchesCluster(Hash),
     SendAncestorHashesReplayUpdate(AncestorHashesReplayUpdate),
-    // Hash returned from EpochSlots does not match the duplicate
-    // confirmed hash detected from replay or gossip.
-    EpochSlotsMismatchedHash,
 }
 
 impl SlotStateUpdate {
@@ -695,7 +692,6 @@ fn apply_state_changes(
     duplicate_slots_to_repair: &mut DuplicateSlotsToRepair,
     blockstore: &Blockstore,
     ancestor_hashes_replay_update_sender: &AncestorHashesReplayUpdateSender,
-    epoch_slots_frozen_slots: &mut EpochSlotsFrozenSlots,
     state_changes: Vec<ResultingStateChange>,
 ) {
     // Handle cases where the bank is frozen, but not duplicate confirmed
@@ -730,22 +726,6 @@ fn apply_state_changes(
                     )
                     .unwrap();
                 duplicate_slots_to_repair.remove(&slot);
-            }
-            ResultingStateChange::EpochSlotsMismatchedHash => {
-                // Even if the order of events is:
-                // 1) DuplicateConfirmed(hash1), mismatched detected, add hash1 to
-                //    `duplicate_slots_to_repair`
-                // 2) Dump + Repair in Replay based on `duplicate_slots_to_repair`
-                // 3) EpochSlotsFrozen(hash2) before replay of new version of the
-                //    slot finishes replaying
-                // 4) Ran the `state_handler`.
-                // We won't re-add `hash1` to `duplicate_slots_to_repair` and
-                // trigger another dump + repair because the unfrozen bank hash is still
-                // default, and all the state handlers take no action when the bank
-                // hash is still default.
-                epoch_slots_frozen_slots
-                    .remove(&slot)
-                    .expect("epoch_slots_frozen_slots must be some at this point");
             }
             ResultingStateChange::SendAncestorHashesReplayUpdate(ancestor_hashes_replay_update) => {
                 let _ = ancestor_hashes_replay_update_sender.send(ancestor_hashes_replay_update);
@@ -819,7 +799,6 @@ pub(crate) fn check_slot_agrees_with_cluster(
         duplicate_slots_to_repair,
         blockstore,
         ancestor_hashes_replay_update_sender,
-        epoch_slots_frozen_slots,
         state_changes,
     );
 }
@@ -1382,7 +1361,6 @@ mod test {
         } = setup();
 
         let mut duplicate_slots_to_repair = DuplicateSlotsToRepair::default();
-        let mut epoch_slots_frozen_slots = EpochSlotsFrozenSlots::default();
 
         // MarkSlotDuplicate should mark progress map and remove
         // the slot from fork choice
@@ -1401,7 +1379,6 @@ mod test {
             &mut duplicate_slots_to_repair,
             &blockstore,
             &ancestor_hashes_replay_update_sender,
-            &mut epoch_slots_frozen_slots,
             vec![ResultingStateChange::MarkSlotDuplicate(duplicate_slot_hash)],
         );
         assert!(!heaviest_subtree_fork_choice
@@ -1436,7 +1413,6 @@ mod test {
             &mut duplicate_slots_to_repair,
             &blockstore,
             &ancestor_hashes_replay_update_sender,
-            &mut epoch_slots_frozen_slots,
             vec![ResultingStateChange::RepairDuplicateConfirmedVersion(
                 correct_hash,
             )],
@@ -1446,26 +1422,6 @@ mod test {
             *duplicate_slots_to_repair.get(&duplicate_slot).unwrap(),
             correct_hash
         );
-
-        // Simulate EpochSlots giving us a frozen hash that doesn't match
-        // the cluster duplicate confirmed hash.
-        //
-        // EpochSlotsMismatchedHash should remove the mismatched
-        // hash from `epoch_slots_frozen_slots`
-        let mismatched_hash = Hash::new_unique();
-        epoch_slots_frozen_slots.insert(duplicate_slot, mismatched_hash);
-        let (ancestor_hashes_replay_update_sender, _ancestor_hashes_replay_update_receiver) =
-            unbounded();
-        apply_state_changes(
-            duplicate_slot,
-            &mut heaviest_subtree_fork_choice,
-            &mut duplicate_slots_to_repair,
-            &blockstore,
-            &ancestor_hashes_replay_update_sender,
-            &mut epoch_slots_frozen_slots,
-            vec![ResultingStateChange::EpochSlotsMismatchedHash],
-        );
-        assert!(epoch_slots_frozen_slots.is_empty());
     }
 
     #[test]
@@ -1479,7 +1435,6 @@ mod test {
         } = setup();
 
         let mut duplicate_slots_to_repair = DuplicateSlotsToRepair::default();
-        let mut epoch_slots_frozen_slots = EpochSlotsFrozenSlots::default();
 
         let duplicate_slot = bank_forks.read().unwrap().root() + 1;
         let duplicate_slot_hash = bank_forks
@@ -1500,7 +1455,6 @@ mod test {
             &mut duplicate_slots_to_repair,
             &blockstore,
             &ancestor_hashes_replay_update_sender,
-            &mut epoch_slots_frozen_slots,
             vec![ResultingStateChange::BankFrozen(duplicate_slot_hash)],
         );
         assert_eq!(
@@ -1524,7 +1478,6 @@ mod test {
             &mut duplicate_slots_to_repair,
             &blockstore,
             &ancestor_hashes_replay_update_sender,
-            &mut epoch_slots_frozen_slots,
             vec![ResultingStateChange::BankFrozen(new_bank_hash)],
         );
         assert_eq!(
@@ -1547,7 +1500,6 @@ mod test {
         } = setup();
 
         let mut duplicate_slots_to_repair = DuplicateSlotsToRepair::default();
-        let mut epoch_slots_frozen_slots = EpochSlotsFrozenSlots::default();
 
         let duplicate_slot = bank_forks.read().unwrap().root() + 1;
         let our_duplicate_slot_hash = bank_forks
@@ -1579,7 +1531,6 @@ mod test {
             &mut duplicate_slots_to_repair,
             &blockstore,
             &ancestor_hashes_replay_update_sender,
-            &mut epoch_slots_frozen_slots,
             state_changes,
         );
         for child_slot in descendants
@@ -2192,7 +2143,7 @@ mod test {
             SlotStateUpdate::DuplicateConfirmed(duplicate_confirmed_state),
         );
         assert!(duplicate_slots_to_repair.is_empty());
-        assert!(epoch_slots_frozen_slots.is_empty());
+        assert_eq!(*epoch_slots_frozen_slots.get(&3).unwrap(), mismatched_hash);
         verify_all_slots_duplicate_confirmed(
             &bank_forks,
             &heaviest_subtree_fork_choice,
