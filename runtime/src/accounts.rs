@@ -2078,7 +2078,7 @@ mod tests {
             }
         }
         info!("done..cleaning..");
-        accounts.accounts_db.clean_accounts(None, false);
+        accounts.accounts_db.clean_accounts(None, false, None);
     }
 
     fn load_accounts_no_store(accounts: &Accounts, tx: Transaction) -> Vec<TransactionLoadResult> {
