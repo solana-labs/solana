@@ -5,6 +5,7 @@ mod v0;
 mod versions;
 
 pub use legacy::Message;
+pub use versions::MESSAGE_VERSION_PREFIX;
 
 pub const MESSAGE_HEADER_LENGTH: usize = 3;
 
