@@ -8,7 +8,7 @@ use {
         },
     },
     solana_client::rpc_client::RpcClient,
-    solana_core::consensus::FileTowerStorage,
+    solana_core::tower_storage::FileTowerStorage,
     solana_faucet::faucet::{run_local_faucet_with_port, FAUCET_PORT},
     solana_rpc::rpc::JsonRpcConfig,
     solana_sdk::{

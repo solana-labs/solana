@@ -12,8 +12,7 @@ use {
         cluster_slots_service::ClusterSlotsUpdateSender,
         commitment_service::{AggregateCommitmentService, CommitmentAggregationData},
         consensus::{
-            ComputedBankState, SavedTower, Stake, SwitchForkDecision, Tower, TowerStorage,
-            VotedStakes, SWITCH_FORK_THRESHOLD,
+            ComputedBankState, Stake, SwitchForkDecision, Tower, VotedStakes, SWITCH_FORK_THRESHOLD,
         },
         fork_choice::{ForkChoice, SelectVoteAndResetForkResult},
         heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
@@ -21,6 +20,7 @@ use {
         progress_map::{ForkProgress, ProgressMap, PropagatedStats},
         repair_service::DuplicateSlotsResetReceiver,
         rewards_recorder_service::RewardsRecorderSender,
+        tower_storage::{SavedTower, TowerStorage},
         unfrozen_gossip_verified_vote_hashes::UnfrozenGossipVerifiedVoteHashes,
         voting_service::VoteOp,
         window_service::DuplicateSlotReceiver,
@@ -2738,7 +2738,7 @@ impl ReplayStage {
 pub mod tests {
     use super::*;
     use crate::{
-        consensus::{NullTowerStorage, Tower},
+        consensus::Tower,
         progress_map::ValidatorStakeInfo,
         replay_stage::ReplayStage,
         tree_diff::TreeDiff,
@@ -5419,7 +5419,7 @@ pub mod tests {
             vote_simulator,
             ..
         } = replay_blockstore_components(None, 10, None::<GenerateVotes>);
-        let tower_storage = NullTowerStorage::default();
+        let tower_storage = crate::tower_storage::NullTowerStorage::default();
 
         let VoteSimulator {
             mut validator_keypairs,

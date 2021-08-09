@@ -20,8 +20,8 @@ use {
         rpc_request::MAX_MULTIPLE_ACCOUNTS,
     },
     solana_core::{
-        consensus::FileTowerStorage,
         ledger_cleanup_service::{DEFAULT_MAX_LEDGER_SHREDS, DEFAULT_MIN_MAX_LEDGER_SHREDS},
+        tower_storage::FileTowerStorage,
         tpu::DEFAULT_TPU_COALESCE_MS,
         validator::{
             is_snapshot_config_invalid, Validator, ValidatorConfig, ValidatorStartProgress,

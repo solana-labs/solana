@@ -5,8 +5,7 @@ extern crate test;
 
 use {
     solana_core::{
-        consensus::{FileTowerStorage, Tower},
-        vote_simulator::VoteSimulator,
+        consensus::Tower, tower_storage::FileTowerStorage, vote_simulator::VoteSimulator,
     },
     solana_runtime::bank::Bank,
     solana_runtime::bank_forks::BankForks,
