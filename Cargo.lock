@@ -65,7 +65,7 @@ version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ee49baf6cb617b853aa8d93bf420db2383fab46d314482ca2803b40d5fde979b"
 dependencies = [
- "winapi 0.3.8",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -106,10 +106,11 @@ checksum = "eab1c04a571841102f5345a8fc0f6bb3d31c315dec879b5c6e42e40ce7ffa34e"
 
 [[package]]
 name = "assert_cmd"
-version = "1.0.2"
+version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3dc1679af9a1ab4bea16f228b05d18f8363f8327b1fa8db00d2760cfafc6b61e"
+checksum = "54f002ce7d0c5e809ebb02be78fd503aeed4a511fd0fcaff6e6914cbdabbfa33"
 dependencies = [
+ "bstr",
  "doc-comment",
  "predicates",
  "predicates-core",
@@ -163,7 +164,7 @@ checksum = "d9b39be18770d11421cdb1b9947a45dd3f37e93092cbf377614828a319d5fee8"
 dependencies = [
  "hermit-abi",
  "libc",
- "winapi 0.3.8",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -420,9 +421,9 @@ checksum = "476e9cd489f9e121e02ffa6014a8ef220ecb15c05ed23fc34cca13925dc283fb"
 
 [[package]]
 name = "bstr"
-version = "0.2.13"
+version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "31accafdb70df7871592c058eca3985b71104e15ac32f64706022c58867da931"
+checksum = "90682c8d613ad3373e66de8c6411e0ae2ab2571e879d2efbf73558cc66f21279"
 dependencies = [
  "lazy_static",
  "memchr 2.3.3",
@@ -584,7 +585,7 @@ dependencies = [
  "num-traits",
  "serde",
  "time 0.1.43",
- "winapi 0.3.8",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -666,7 +667,7 @@ dependencies = [
  "terminal_size",
  "termios",
  "unicode-width",
- "winapi 0.3.8",
+ "winapi 0.3.9",
  "winapi-util",
 ]
 
@@ -682,7 +683,7 @@ dependencies = [
  "regex",
  "terminal_size",
  "unicode-width",
- "winapi 0.3.8",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -951,8 +952,13 @@ version = "3.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "54dedab740bc412d514cfbc4a1d9d5d16fed02c4b14a7be129003c07fdc33b9b"
 dependencies = [
+<<<<<<< HEAD
  "nix 0.17.0",
  "winapi 0.3.8",
+=======
+ "nix",
+ "winapi 0.3.9",
+>>>>>>> db40cb41b (Handle new security advisories (#19126))
 ]
 
 [[package]]
@@ -1035,10 +1041,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "difference"
-version = "2.0.0"
+name = "difflib"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "524cbf6897b527295dff137cec09ecf3a05f4fddffd7dfcd1585403449e74198"
+checksum = "6184e33543162437515c2e2b48714794e37845ec9851711914eec9d308f6ebe8"
 
 [[package]]
 name = "digest"
@@ -1085,7 +1091,7 @@ checksum = "99de365f605554ae33f115102a02057d4fc18b01f3284d6870be0938743cfe7d"
 dependencies = [
  "libc",
  "redox_users",
- "winapi 0.3.8",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -1103,7 +1109,7 @@ dependencies = [
  "dlopen_derive",
  "lazy_static",
  "libc",
- "winapi 0.3.8",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -1290,7 +1296,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0010f02effd88c702318c5dde0463206be67495d0b4d906ba7c0a8f166cc7f06"
 dependencies = [
  "libc",
- "winapi 0.3.8",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -1307,7 +1313,7 @@ checksum = "a71e83755e51aa52b9034f1986173783789e8e7d79c3c774adbbb63fb554f2cb"
 dependencies = [
  "libc",
  "thiserror",
- "winapi 0.3.8",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -1318,8 +1324,13 @@ checksum = "affc17579b132fc2461adf7c575cc6e8b134ebca52c51f5411388965227dc695"
 dependencies = [
  "cfg-if 0.1.10",
  "libc",
+<<<<<<< HEAD
  "redox_syscall",
  "winapi 0.3.8",
+=======
+ "redox_syscall 0.1.56",
+ "winapi 0.3.9",
+>>>>>>> db40cb41b (Handle new security advisories (#19126))
 ]
 
 [[package]]
@@ -1494,8 +1505,13 @@ dependencies = [
  "futures-macro",
  "futures-sink",
  "futures-task",
+<<<<<<< HEAD
  "memchr 2.3.3",
  "pin-project 1.0.1",
+=======
+ "memchr",
+ "pin-project-lite 0.2.7",
+>>>>>>> db40cb41b (Handle new security advisories (#19126))
  "pin-utils",
  "proc-macro-hack",
  "proc-macro-nested",
@@ -1539,7 +1555,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e692e296bfac1d2533ef168d0b60ff5897b8b70a4009276834014dd8924cc028"
 dependencies = [
  "libc",
- "winapi 0.3.8",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -1621,6 +1637,7 @@ dependencies = [
 
 [[package]]
 name = "h2"
+<<<<<<< HEAD
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "79b7246d7e4b979c03fa093da39cfb3617a96bbeee6310af63991668d7e843ff"
@@ -1641,8 +1658,11 @@ dependencies = [
 [[package]]
 name = "h2"
 version = "0.3.0"
+=======
+version = "0.3.3"
+>>>>>>> db40cb41b (Handle new security advisories (#19126))
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6b67e66362108efccd8ac053abafc8b7a8d86a37e6e48fc4f6f7485eb5e9e6a5"
+checksum = "825343c4eef0b63f541f8903f395dc5beb362a979b5799a84062527ef1e37726"
 dependencies = [
  "bytes 1.0.1",
  "fnv",
@@ -1655,7 +1675,6 @@ dependencies = [
  "tokio 1.8.1",
  "tokio-util 0.6.3",
  "tracing",
- "tracing-futures",
 ]
 
 [[package]]
@@ -1812,20 +1831,20 @@ checksum = "60daa14be0e0786db0f03a9e57cb404c9d756eed2b6c62b9ea98ec5743ec75a9"
 dependencies = [
  "bytes 1.0.1",
  "http",
- "pin-project-lite 0.2.4",
+ "pin-project-lite 0.2.7",
 ]
 
 [[package]]
 name = "httparse"
-version = "1.3.4"
+version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd179ae861f0c2e53da70d892f5f3029f9594be0c41dc5269cd371691b1dc2f9"
+checksum = "f3a87b616e37e93c22fb19bcd386f02f3af5ea98a25670ad0fce773de23c5e68"
 
 [[package]]
 name = "httpdate"
-version = "0.3.2"
+version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "494b4d60369511e7dea41cf646832512a94e542f68bb9c49e54518e0f468eb47"
+checksum = "6456b8a6c8f33fee7d958fcd1b60d55b11940a79e63ae87013e6d22e26034440"
 
 [[package]]
 name = "humantime"
@@ -1854,9 +1873,15 @@ dependencies = [
 
 [[package]]
 name = "hyper"
+<<<<<<< HEAD
 version = "0.13.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a6f157065790a3ed2f88679250419b5cdd96e714a0d65f7797fd337186e96bb"
+=======
+version = "0.14.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b61cf2d1aebcf6e6352c97b81dc2244ca29194be1b276f5d8ad5c6330fffb11"
+>>>>>>> db40cb41b (Handle new security advisories (#19126))
 dependencies = [
  "bytes 0.5.4",
  "futures-channel",
@@ -1868,9 +1893,15 @@ dependencies = [
  "httparse",
  "httpdate",
  "itoa",
+<<<<<<< HEAD
  "pin-project 1.0.1",
  "socket2",
  "tokio 0.2.22",
+=======
+ "pin-project-lite 0.2.7",
+ "socket2 0.4.1",
+ "tokio 1.9.0",
+>>>>>>> db40cb41b (Handle new security advisories (#19126))
  "tower-service",
  "tracing",
  "want",
@@ -1886,6 +1917,7 @@ dependencies = [
  "futures-channel",
  "futures-core",
  "futures-util",
+<<<<<<< HEAD
  "h2 0.3.0",
  "http",
  "http-body 0.4.2",
@@ -1911,6 +1943,12 @@ dependencies = [
  "log 0.4.11",
  "rustls",
  "tokio 1.8.1",
+=======
+ "hyper 0.14.11",
+ "log 0.4.14",
+ "rustls",
+ "tokio 1.9.0",
+>>>>>>> db40cb41b (Handle new security advisories (#19126))
  "tokio-rustls",
  "webpki",
 ]
@@ -1921,9 +1959,15 @@ version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbb958482e8c7be4bc3cf272a766a2b0bf1a6755e7a6ae777f017a31d11b13b1"
 dependencies = [
+<<<<<<< HEAD
  "hyper 0.14.3",
  "pin-project-lite 0.2.4",
  "tokio 1.8.1",
+=======
+ "hyper 0.14.11",
+ "pin-project-lite 0.2.7",
+ "tokio 1.9.0",
+>>>>>>> db40cb41b (Handle new security advisories (#19126))
  "tokio-io-timeout",
 ]
 
@@ -1934,7 +1978,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6183ddfa99b85da61a140bea0efc93fdf56ceaa041b37d553518030827f9905"
 dependencies = [
  "bytes 1.0.1",
- "hyper 0.14.3",
+ "hyper 0.14.11",
  "native-tls",
  "tokio 1.8.1",
  "tokio-native-tls",
@@ -2132,11 +2176,19 @@ version = "17.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "522a047cac0958097ee71d047dd71cb84979fd2fa21c7a68fbe12736bef870a2"
 dependencies = [
+<<<<<<< HEAD
  "futures 0.3.8",
  "hyper 0.13.10",
  "jsonrpc-core",
  "jsonrpc-server-utils",
  "log 0.4.11",
+=======
+ "futures 0.3.16",
+ "hyper 0.14.11",
+ "jsonrpc-core 18.0.0",
+ "jsonrpc-server-utils 18.0.0",
+ "log 0.4.14",
+>>>>>>> db40cb41b (Handle new security advisories (#19126))
  "net2",
  "parking_lot 0.11.0",
  "unicase 2.6.0",
@@ -2263,7 +2315,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6f84d96438c15fcd6c3f244c8fce01d1e2b9c6b5623e9c711dc9286d8fc92d6a"
 dependencies = [
  "cfg-if 1.0.0",
- "winapi 0.3.8",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -2484,7 +2536,7 @@ dependencies = [
  "log 0.4.11",
  "miow 0.3.6",
  "ntapi",
- "winapi 0.3.8",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -2507,8 +2559,13 @@ checksum = "0840c1c50fd55e521b247f949c241c9997709f23bd7f023b9762cd561e935656"
 dependencies = [
  "log 0.4.11",
  "mio 0.6.22",
+<<<<<<< HEAD
  "miow 0.3.6",
  "winapi 0.3.8",
+=======
+ "miow 0.3.7",
+ "winapi 0.3.9",
+>>>>>>> db40cb41b (Handle new security advisories (#19126))
 ]
 
 [[package]]
@@ -2540,8 +2597,12 @@ version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5a33c1b55807fbed163481b5ba66db4b2fa6cde694a5027be10fb724206c5897"
 dependencies = [
+<<<<<<< HEAD
  "socket2",
  "winapi 0.3.8",
+=======
+ "winapi 0.3.9",
+>>>>>>> db40cb41b (Handle new security advisories (#19126))
 ]
 
 [[package]]
@@ -2576,7 +2637,7 @@ checksum = "391630d12b68002ae1e25e8f974306474966550ad82dac6886fb8910c19568ae"
 dependencies = [
  "cfg-if 0.1.10",
  "libc",
- "winapi 0.3.8",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -2629,7 +2690,7 @@ version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a31937dea023539c72ddae0e3571deadc1414b300483fa7aaec176168cfa9d2"
 dependencies = [
- "winapi 0.3.8",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -2805,10 +2866,31 @@ dependencies = [
  "libc",
  "log 0.4.11",
  "mio-named-pipes",
+<<<<<<< HEAD
  "miow 0.3.6",
  "rand 0.7.3",
  "tokio 0.2.22",
  "winapi 0.3.8",
+=======
+ "miow 0.3.7",
+ "rand 0.7.3",
+ "tokio 0.2.24",
+ "winapi 0.3.9",
+]
+
+[[package]]
+name = "parity-tokio-ipc"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9981e32fb75e004cc148f5fb70342f393830e0a4aa62e3cc93b50976218d42b6"
+dependencies = [
+ "futures 0.3.16",
+ "libc",
+ "log 0.4.14",
+ "rand 0.7.3",
+ "tokio 1.9.0",
+ "winapi 0.3.9",
+>>>>>>> db40cb41b (Handle new security advisories (#19126))
 ]
 
 [[package]]
@@ -2873,7 +2955,7 @@ dependencies = [
  "redox_syscall",
  "rustc_version",
  "smallvec 0.6.14",
- "winapi 0.3.8",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -2887,7 +2969,7 @@ dependencies = [
  "libc",
  "redox_syscall",
  "smallvec 1.6.1",
- "winapi 0.3.8",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -2902,7 +2984,7 @@ dependencies = [
  "libc",
  "redox_syscall",
  "smallvec 1.6.1",
- "winapi 0.3.8",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -3031,9 +3113,9 @@ checksum = "f7505eeebd78492e0f6108f7171c4948dbb120ee8119d9d77d0afa5469bef67f"
 
 [[package]]
 name = "pin-project-lite"
-version = "0.2.4"
+version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "439697af366c49a6d0a010c56a0d97685bc140ce0d377b13a2ea2aa42d64a827"
+checksum = "8d31d11c69a6b52a174b42bdc0c30e5e11670f90788b2c471c31c1d17d449443"
 
 [[package]]
 name = "pin-utils"
@@ -3061,11 +3143,12 @@ checksum = "237a5ed80e274dbc66f86bd59c1e25edc039660be53194b5fe0a482e0f2612ea"
 
 [[package]]
 name = "predicates"
-version = "1.0.4"
+version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "347a1b6f0b21e636bc9872fb60b83b8e185f6f5516298b8238699f7f9a531030"
+checksum = "bc3d91237f5de3bcd9d927e24d03b495adb6135097b001cea7403e2d573d00a9"
 dependencies = [
- "difference",
+ "difflib",
+ "itertools 0.10.1",
  "predicates-core",
 ]
 
@@ -3274,7 +3357,7 @@ dependencies = [
  "libc",
  "rand_core 0.3.1",
  "rdrand",
- "winapi 0.3.8",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -3293,7 +3376,7 @@ dependencies = [
  "rand_os",
  "rand_pcg 0.1.2",
  "rand_xorshift 0.1.1",
- "winapi 0.3.8",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -3429,7 +3512,7 @@ checksum = "1166d5c91dc97b88d1decc3285bb0a99ed84b05cfd0bc2341bdf2d43fc41e39b"
 dependencies = [
  "libc",
  "rand_core 0.4.2",
- "winapi 0.3.8",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -3443,7 +3526,7 @@ dependencies = [
  "libc",
  "rand_core 0.4.2",
  "rdrand",
- "winapi 0.3.8",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -3586,7 +3669,7 @@ version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dfc5b3ce5d5ea144bb04ebd093a9e14e9765bcfec866aecda9b6dec43b3d1e24"
 dependencies = [
- "winapi 0.3.8",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -3601,8 +3684,13 @@ dependencies = [
  "futures-core",
  "futures-util",
  "http",
+<<<<<<< HEAD
  "http-body 0.4.2",
  "hyper 0.14.3",
+=======
+ "http-body",
+ "hyper 0.14.11",
+>>>>>>> db40cb41b (Handle new security advisories (#19126))
  "hyper-rustls",
  "hyper-tls",
  "ipnet",
@@ -3612,7 +3700,7 @@ dependencies = [
  "mime 0.3.16",
  "native-tls",
  "percent-encoding 2.1.0",
- "pin-project-lite 0.2.4",
+ "pin-project-lite 0.2.7",
  "rustls",
  "serde",
  "serde_json",
@@ -3646,7 +3734,7 @@ dependencies = [
  "spin",
  "untrusted",
  "web-sys",
- "winapi 0.3.8",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -3666,7 +3754,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "99371657d3c8e4d816fb6221db98fa408242b0b53bac08f8676a41f8554fe99f"
 dependencies = [
  "libc",
- "winapi 0.3.8",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -3761,7 +3849,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f05ba609c234e60bee0d547fe94a4c7e9da733d1c962cf6e59efa4cd9c8bc75"
 dependencies = [
  "lazy_static",
- "winapi 0.3.8",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -4091,8 +4179,23 @@ checksum = "2c29947abdee2a218277abeca306f25789c938e500ea5a9d4b12a5a504466902"
 dependencies = [
  "cfg-if 1.0.0",
  "libc",
+<<<<<<< HEAD
  "redox_syscall",
  "winapi 0.3.8",
+=======
+ "redox_syscall 0.1.56",
+ "winapi 0.3.9",
+]
+
+[[package]]
+name = "socket2"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "765f090f0e423d2b55843402a07915add955e7d60657db13707a159727326cad"
+dependencies = [
+ "libc",
+ "winapi 0.3.9",
+>>>>>>> db40cb41b (Handle new security advisories (#19126))
 ]
 
 [[package]]
@@ -4582,9 +4685,14 @@ dependencies = [
  "ring",
  "serde",
  "syn 0.15.44",
+<<<<<<< HEAD
  "syn 1.0.60",
  "tokio 0.1.22",
  "winapi 0.3.8",
+=======
+ "syn 1.0.67",
+ "winapi 0.3.9",
+>>>>>>> db40cb41b (Handle new security advisories (#19126))
 ]
 
 [[package]]
@@ -4831,9 +4939,15 @@ dependencies = [
  "solana-version",
  "tar",
  "tempfile",
+<<<<<<< HEAD
  "url 2.2.0",
  "winapi 0.3.8",
  "winreg",
+=======
+ "url 2.2.2",
+ "winapi 0.3.9",
+ "winreg 0.9.0",
+>>>>>>> db40cb41b (Handle new security advisories (#19126))
 ]
 
 [[package]]
@@ -5076,7 +5190,7 @@ dependencies = [
  "rand 0.7.3",
  "serde",
  "serde_derive",
- "socket2",
+ "socket2 0.3.17",
  "solana-clap-utils",
  "solana-logger 1.7.10",
  "solana-sdk",
@@ -5292,8 +5406,16 @@ dependencies = [
  "qstring",
  "semver 0.9.0",
  "solana-sdk",
+<<<<<<< HEAD
  "thiserror",
  "uriparse",
+=======
+ "solana-streamer",
+ "solana-validator",
+ "solana-version",
+ "solana-vote-program",
+ "tempfile",
+>>>>>>> db40cb41b (Handle new security advisories (#19126))
 ]
 
 [[package]]
@@ -5981,7 +6103,7 @@ dependencies = [
  "libc",
  "nom 3.2.1",
  "time 0.1.43",
- "winapi 0.3.8",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -6025,7 +6147,11 @@ checksum = "f3240378a22b1195734e085ba71d1d4188d50f034aea82635acc430b7005afb5"
 dependencies = [
  "proc-macro2 1.0.24",
  "quote 1.0.9",
+<<<<<<< HEAD
  "syn 1.0.60",
+=======
+ "syn 1.0.67",
+>>>>>>> db40cb41b (Handle new security advisories (#19126))
 ]
 
 [[package]]
@@ -6039,7 +6165,7 @@ dependencies = [
  "rand 0.7.3",
  "redox_syscall",
  "remove_dir_all",
- "winapi 0.3.8",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -6058,7 +6184,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "86ca8ced750734db02076f44132d802af0b33b09942331f4459dde8636fd2406"
 dependencies = [
  "libc",
- "winapi 0.3.8",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -6112,7 +6238,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ca8a50ef2360fbd1eeb0ecd46795a87a19024eb4b53c5dc916ca1fd95fe62438"
 dependencies = [
  "libc",
- "winapi 0.3.8",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -6127,7 +6253,7 @@ dependencies = [
  "stdweb",
  "time-macros",
  "version_check 0.9.2",
- "winapi 0.3.8",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -6263,11 +6389,19 @@ dependencies = [
  "mio 0.7.6",
  "num_cpus",
  "once_cell",
+<<<<<<< HEAD
  "parking_lot 0.11.0",
  "pin-project-lite 0.2.4",
  "signal-hook-registry",
  "tokio-macros 1.3.0",
  "winapi 0.3.8",
+=======
+ "parking_lot 0.11.1",
+ "pin-project-lite 0.2.7",
+ "signal-hook-registry",
+ "tokio-macros 1.2.0",
+ "winapi 0.3.9",
+>>>>>>> db40cb41b (Handle new security advisories (#19126))
 ]
 
 [[package]]
@@ -6329,8 +6463,13 @@ version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "90c49f106be240de154571dd31fbe48acb10ba6c6dd6f6517ad603abffa42de9"
 dependencies = [
+<<<<<<< HEAD
  "pin-project-lite 0.2.4",
  "tokio 1.8.1",
+=======
+ "pin-project-lite 0.2.7",
+ "tokio 1.9.0",
+>>>>>>> db40cb41b (Handle new security advisories (#19126))
 ]
 
 [[package]]
@@ -6418,8 +6557,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "76066865172052eb8796c686f0b441a93df8b08d40a950b062ffb9a426f00edd"
 dependencies = [
  "futures-core",
+<<<<<<< HEAD
  "pin-project-lite 0.2.4",
  "tokio 1.8.1",
+=======
+ "pin-project-lite 0.2.7",
+ "tokio 1.9.0",
+>>>>>>> db40cb41b (Handle new security advisories (#19126))
 ]
 
 [[package]]
@@ -6542,9 +6686,16 @@ dependencies = [
  "bytes 1.0.1",
  "futures-core",
  "futures-sink",
+<<<<<<< HEAD
  "log 0.4.11",
  "pin-project-lite 0.2.4",
  "tokio 1.8.1",
+=======
+ "log 0.4.14",
+ "pin-project-lite 0.2.7",
+ "slab",
+ "tokio 1.9.0",
+>>>>>>> db40cb41b (Handle new security advisories (#19126))
 ]
 
 [[package]]
@@ -6570,8 +6721,13 @@ dependencies = [
  "futures-util",
  "h2 0.3.0",
  "http",
+<<<<<<< HEAD
  "http-body 0.4.2",
  "hyper 0.14.3",
+=======
+ "http-body",
+ "hyper 0.14.11",
+>>>>>>> db40cb41b (Handle new security advisories (#19126))
  "hyper-timeout",
  "percent-encoding 2.1.0",
  "pin-project 1.0.1",
@@ -6638,8 +6794,14 @@ version = "0.1.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f0aae59226cf195d8e74d4b34beae1859257efb4e5fed3f147d2dc2c7d372178"
 dependencies = [
+<<<<<<< HEAD
  "cfg-if 0.1.10",
  "log 0.4.11",
+=======
+ "cfg-if 1.0.0",
+ "log 0.4.14",
+ "pin-project-lite 0.2.7",
+>>>>>>> db40cb41b (Handle new security advisories (#19126))
  "tracing-attributes",
  "tracing-core",
 ]
@@ -6924,7 +7086,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "777182bc735b6424e1a57516d35ed72cb8019d85c8c9bf536dccb3445c1a2f7d"
 dependencies = [
  "same-file",
- "winapi 0.3.8",
+ "winapi 0.3.9",
  "winapi-util",
 ]
 
@@ -7100,9 +7262,9 @@ checksum = "167dc9d6949a9b857f3451275e911c3f44255842c1f7a76f33c55103a909087a"
 
 [[package]]
 name = "winapi"
-version = "0.3.8"
+version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8093091eeb260906a183e6ae1abdba2ef5ef2257a21801128899c3fc699229c6"
+checksum = "5c839a674fcd7a98952e593242ea400abe93992746761e38641405d28b00f419"
 dependencies = [
  "winapi-i686-pc-windows-gnu",
  "winapi-x86_64-pc-windows-gnu",
@@ -7126,7 +7288,7 @@ version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "70ec6ce85bb158151cae5e5c87f95a8e97d2c0c4b001223f33a334e3ce5de178"
 dependencies = [
- "winapi 0.3.8",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -7141,10 +7303,22 @@ version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0120db82e8a1e0b9fb3345a539c478767c0048d842860994d96113d5b667bd69"
 dependencies = [
- "winapi 0.3.8",
+ "winapi 0.3.9",
 ]
 
 [[package]]
+<<<<<<< HEAD
+=======
+name = "winreg"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "16cdb3898397cf7f624c294948669beafaeebc5577d5ec53d0afb76633593597"
+dependencies = [
+ "winapi 0.3.9",
+]
+
+[[package]]
+>>>>>>> db40cb41b (Handle new security advisories (#19126))
 name = "ws2_32-sys"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
