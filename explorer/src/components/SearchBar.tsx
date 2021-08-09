@@ -6,6 +6,7 @@ import StateManager from "react-select";
 import {
   LOADER_IDS,
   PROGRAM_NAME_BY_ID,
+  SPECIAL_IDS,
   SYSVAR_IDS,
   LoaderName,
   programLabel,
@@ -141,6 +142,28 @@ function buildSysvarOptions(search: string) {
   }
 }
 
+function buildSpecialOptions(search: string) {
+  const matchedSpecialIds = Object.entries(SPECIAL_IDS).filter(
+    ([address, name]) => {
+      return (
+        name.toLowerCase().includes(search.toLowerCase()) ||
+        address.includes(search)
+      );
+    }
+  );
+
+  if (matchedSpecialIds.length > 0) {
+    return {
+      label: "Accounts",
+      options: matchedSpecialIds.map(([id, name]) => ({
+        label: name,
+        value: [name, id],
+        pathname: "/address/" + id,
+      })),
+    };
+  }
+}
+
 function buildTokenOptions(
   search: string,
   cluster: Cluster,
@@ -192,6 +215,11 @@ function buildOptions(
   const sysvarOptions = buildSysvarOptions(search);
   if (sysvarOptions) {
     options.push(sysvarOptions);
+  }
+
+  const specialOptions = buildSpecialOptions(search);
+  if (specialOptions) {
+    options.push(specialOptions);
   }
 
   const tokenOptions = buildTokenOptions(search, cluster, tokenRegistry);

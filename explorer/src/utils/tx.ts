@@ -132,7 +132,8 @@ export const LOADER_IDS = {
   BPFLoaderUpgradeab1e11111111111111111111111: "BPF Upgradeable Loader",
 } as const;
 
-const SYSVAR_ID: { [key: string]: string } = {
+export const SPECIAL_IDS: { [key: string]: string } = {
+  "1nc1nerator11111111111111111111111111111111": "Incinerator",
   Sysvar1111111111111111111111111111111111111: "SYSVAR",
 };
 
@@ -182,7 +183,7 @@ export function addressLabel(
   return (
     programLabel(address, cluster) ||
     SYSVAR_IDS[address] ||
-    SYSVAR_ID[address] ||
+    SPECIAL_IDS[address] ||
     tokenLabel(address, tokenRegistry) ||
     SerumMarketRegistry.get(address, cluster)
   );
