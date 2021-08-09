@@ -1,10 +1,12 @@
 #![cfg(feature = "full")]
 
-use crate::transaction::{Transaction, TransactionError};
-use borsh::{BorshDeserialize, BorshSchema, BorshSerialize};
-use solana_sdk::{
-    borsh::try_from_slice_unchecked,
-    instruction::{Instruction, InstructionError},
+use {
+    crate::{
+        borsh::try_from_slice_unchecked,
+        instruction::{Instruction, InstructionError},
+        transaction::{SanitizedTransaction, TransactionError},
+    },
+    borsh::{BorshDeserialize, BorshSchema, BorshSerialize},
 };
 
 crate::declare_id!("ComputeBudget111111111111111111111111111111");
@@ -96,11 +98,14 @@ impl ComputeBudget {
             heap_size: None,
         }
     }
-    pub fn process_transaction(&mut self, tx: &Transaction) -> Result<(), TransactionError> {
+    pub fn process_transaction(
+        &mut self,
+        tx: &SanitizedTransaction,
+    ) -> Result<(), TransactionError> {
         let error = TransactionError::InstructionError(0, InstructionError::InvalidInstructionData);
         // Compute budget instruction must be in 1st or 2nd instruction (avoid nonce marker)
-        for instruction in tx.message().instructions.iter().take(2) {
-            if check_id(instruction.program_id(&tx.message().account_keys)) {
+        for (program_id, instruction) in tx.message().program_instructions_iter().take(2) {
+            if check_id(program_id) {
                 let ComputeBudgetInstruction::RequestUnits(units) =
                     try_from_slice_unchecked::<ComputeBudgetInstruction>(&instruction.data)
                         .map_err(|_| error.clone())?;
@@ -117,22 +122,30 @@ impl ComputeBudget {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{hash::Hash, message::Message, pubkey::Pubkey, signature::Keypair, signer::Signer};
+    use crate::{
+        hash::Hash, message::Message, pubkey::Pubkey, signature::Keypair, signer::Signer,
+        transaction::Transaction,
+    };
+    use std::convert::TryInto;
+
+    fn sanitize_tx(tx: Transaction) -> SanitizedTransaction {
+        tx.try_into().unwrap()
+    }
 
     #[test]
     fn test_process_transaction() {
         let payer_keypair = Keypair::new();
         let mut compute_budget = ComputeBudget::default();
 
-        let tx = Transaction::new(
+        let tx = sanitize_tx(Transaction::new(
             &[&payer_keypair],
             Message::new(&[], Some(&payer_keypair.pubkey())),
             Hash::default(),
-        );
+        ));
         compute_budget.process_transaction(&tx).unwrap();
         assert_eq!(compute_budget, ComputeBudget::default());
 
-        let tx = Transaction::new(
+        let tx = sanitize_tx(Transaction::new(
             &[&payer_keypair],
             Message::new(
                 &[
@@ -142,7 +155,7 @@ mod tests {
                 Some(&payer_keypair.pubkey()),
             ),
             Hash::default(),
-        );
+        ));
         compute_budget.process_transaction(&tx).unwrap();
         assert_eq!(
             compute_budget,
@@ -152,7 +165,7 @@ mod tests {
             }
         );
 
-        let tx = Transaction::new(
+        let tx = sanitize_tx(Transaction::new(
             &[&payer_keypair],
             Message::new(
                 &[
@@ -162,7 +175,7 @@ mod tests {
                 Some(&payer_keypair.pubkey()),
             ),
             Hash::default(),
-        );
+        ));
         let result = compute_budget.process_transaction(&tx);
         assert_eq!(
             result,
@@ -172,7 +185,7 @@ mod tests {
             ))
         );
 
-        let tx = Transaction::new(
+        let tx = sanitize_tx(Transaction::new(
             &[&payer_keypair],
             Message::new(
                 &[
@@ -182,7 +195,7 @@ mod tests {
                 Some(&payer_keypair.pubkey()),
             ),
             Hash::default(),
-        );
+        ));
         compute_budget.process_transaction(&tx).unwrap();
         assert_eq!(
             compute_budget,

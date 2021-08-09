@@ -368,7 +368,9 @@ mod tests {
         solana_measure::measure::Measure,
         solana_perf::test_tx::test_tx,
         solana_runtime::bank::Bank,
-        solana_sdk::{clock, hash::hash, pubkey::Pubkey, timing},
+        solana_sdk::{
+            clock, hash::hash, pubkey::Pubkey, timing, transaction::VersionedTransaction,
+        },
         std::time::Duration,
     };
 
@@ -434,7 +436,7 @@ mod tests {
                         let mut total_us = 0;
                         let mut total_times = 0;
                         let h1 = hash(b"hello world!");
-                        let tx = test_tx();
+                        let tx = VersionedTransaction::from(test_tx());
                         loop {
                             // send some data
                             let mut time = Measure::start("record");

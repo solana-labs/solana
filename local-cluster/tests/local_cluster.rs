@@ -678,6 +678,7 @@ fn find_latest_replayed_slot_from_ledger(
                             latest_slot,
                             non_tick_entry.transactions.clone().into_iter(),
                         )
+                        .unwrap()
                         .is_empty()
                     {
                         return (

@@ -2,23 +2,31 @@
 
 #![cfg(feature = "full")]
 
-use crate::sanitize::{Sanitize, SanitizeError};
-use crate::secp256k1_instruction::verify_eth_addresses;
-use crate::{
-    hash::Hash,
-    instruction::{CompiledInstruction, Instruction, InstructionError},
-    message::Message,
-    nonce::NONCED_TX_MARKER_IX_INDEX,
-    program_utils::limited_deserialize,
-    pubkey::Pubkey,
-    short_vec,
-    signature::{Signature, SignerError},
-    signers::Signers,
-    system_instruction::SystemInstruction,
-    system_program,
+use {
+    crate::{
+        hash::Hash,
+        instruction::{CompiledInstruction, Instruction, InstructionError},
+        message::Message,
+        nonce::NONCED_TX_MARKER_IX_INDEX,
+        program_utils::limited_deserialize,
+        pubkey::Pubkey,
+        sanitize::{Sanitize, SanitizeError},
+        secp256k1_instruction::verify_eth_addresses,
+        short_vec,
+        signature::{Signature, SignerError},
+        signers::Signers,
+    },
+    serde::Serialize,
+    solana_program::{system_instruction::SystemInstruction, system_program},
+    std::result,
+    thiserror::Error,
 };
-use std::result;
-use thiserror::Error;
+
+mod sanitized;
+mod versioned;
+
+pub use sanitized::*;
+pub use versioned::*;
 
 /// Reasons a transaction might be rejected.
 #[derive(
@@ -99,6 +107,10 @@ pub enum TransactionError {
     /// Transaction processing left an account with an outstanding borrowed reference
     #[error("Transaction processing left an account with an outstanding borrowed reference")]
     AccountBorrowOutstanding,
+
+    /// Transaction version is unsupported
+    #[error("Transaction version is unsupported")]
+    UnsupportedVersion,
 }
 
 pub type Result<T> = result::Result<T, TransactionError>;
@@ -225,10 +237,12 @@ impl Transaction {
             .and_then(|instruction| instruction.accounts.get(accounts_index))
             .map(|&account_keys_index| account_keys_index as usize)
     }
+
     pub fn key(&self, instruction_index: usize, accounts_index: usize) -> Option<&Pubkey> {
         self.key_index(instruction_index, accounts_index)
             .and_then(|account_keys_index| self.message.account_keys.get(account_keys_index))
     }
+
     pub fn signer_key(&self, instruction_index: usize, accounts_index: usize) -> Option<&Pubkey> {
         match self.key_index(instruction_index, accounts_index) {
             None => None,
@@ -479,6 +493,7 @@ pub fn uses_durable_nonce(tx: &Transaction) -> Option<&CompiledInstruction> {
         )
 }
 
+#[deprecated]
 pub fn get_nonce_pubkey_from_instruction<'a>(
     ix: &CompiledInstruction,
     tx: &'a Transaction,
@@ -491,6 +506,8 @@ pub fn get_nonce_pubkey_from_instruction<'a>(
 
 #[cfg(test)]
 mod tests {
+    #![allow(deprecated)]
+
     use super::*;
     use crate::{
         hash::hash,
@@ -548,6 +565,7 @@ mod tests {
         assert_eq!(*get_program_id(&tx, 0), prog1);
         assert_eq!(*get_program_id(&tx, 1), prog2);
     }
+
     #[test]
     fn test_refs_invalid_program_id() {
         let key = Keypair::new();

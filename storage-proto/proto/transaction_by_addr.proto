@@ -41,6 +41,7 @@ enum TransactionErrorType {
     SANITIZE_FAILURE = 14;
     CLUSTER_MAINTENANCE = 15;
     ACCOUNT_BORROW_OUTSTANDING_TX = 16;
+    UNSUPPORTED_VERSION = 17;
 }
 
 message InstructionError {
