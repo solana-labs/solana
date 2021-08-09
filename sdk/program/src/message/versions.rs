@@ -137,16 +137,18 @@ impl<'de> Deserialize<'de> for VersionedMessage {
                             pub instructions: Vec<CompiledInstruction>,
                         }
 
-                        let message: RemainingLegacyMessage = seq.next_element()?.ok_or_else(|| {
-                            // will never happen since tuple length is always 2
-                            de::Error::invalid_length(1, &self)
-                        })?;
+                        let message: RemainingLegacyMessage =
+                            seq.next_element()?.ok_or_else(|| {
+                                // will never happen since tuple length is always 2
+                                de::Error::invalid_length(1, &self)
+                            })?;
 
                         Ok(VersionedMessage::Legacy(Message {
                             header: MessageHeader {
                                 num_required_signatures,
                                 num_readonly_signed_accounts: message.num_readonly_signed_accounts,
-                                num_readonly_unsigned_accounts: message.num_readonly_unsigned_accounts,
+                                num_readonly_unsigned_accounts: message
+                                    .num_readonly_unsigned_accounts,
                             },
                             account_keys: message.account_keys,
                             recent_blockhash: message.recent_blockhash,
