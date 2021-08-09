@@ -465,10 +465,13 @@ impl ClusterInfo {
         .into_iter()
         .map(|v| CrdsValue::new_signed(v, &self.keypair()))
         .collect();
-        self.local_message_pending_push_queue
-            .lock()
-            .unwrap()
-            .extend(entries);
+        {
+            let mut l = self.local_message_pending_push_queue
+                .lock()
+                .unwrap();
+            l.extend(entries);
+            info!("push_self: local_queue: {}", l.len());
+        }
         let ContactInfo {
             id: self_pubkey,
             shred_version,
@@ -1534,11 +1537,14 @@ impl ClusterInfo {
             require_stake_for_gossip,
         );
         if !reqs.is_empty() {
+            info!("run_gossip: sending {} reqs", reqs.len());
             let packets = to_packets_with_destination(recycler.clone(), &reqs);
             self.stats
                 .packets_sent_gossip_requests_count
                 .add_relaxed(packets.packets.len() as u64);
             sender.send(packets)?;
+        } else {
+            info!("run_gossip: 0 reqs");
         }
         Ok(())
     }
@@ -2470,17 +2476,7 @@ impl ClusterInfo {
     ) -> Result<(), GossipError> {
         const RECV_TIMEOUT: Duration = Duration::from_secs(1);
         const SUBMIT_GOSSIP_STATS_INTERVAL: Duration = Duration::from_secs(2);
-        let mut packets = VecDeque::from(receiver.recv_timeout(RECV_TIMEOUT)?);
-        for payload in receiver.try_iter() {
-            packets.extend(payload);
-            let excess_count = packets.len().saturating_sub(MAX_GOSSIP_TRAFFIC);
-            if excess_count > 0 {
-                packets.drain(0..excess_count);
-                self.stats
-                    .gossip_packets_dropped_count
-                    .add_relaxed(excess_count as u64);
-            }
-        }
+
         // Using root_bank instead of working_bank here so that an enbaled
         // feature does not roll back (if the feature happens to get enabled in
         // a minority fork).
@@ -2492,6 +2488,26 @@ impl ClusterInfo {
                 (Some(feature_set), bank.staked_nodes())
             }
         };
+
+        if last_print.elapsed() > SUBMIT_GOSSIP_STATS_INTERVAL {
+            submit_gossip_stats(&self.stats, &self.gossip, &stakes);
+            *last_print = Instant::now();
+        }
+
+        let r = receiver.recv_timeout(RECV_TIMEOUT);
+        info!("recv: {:?}", r);
+        let mut packets = VecDeque::from(r?);
+
+        for payload in receiver.try_iter() {
+            packets.extend(payload);
+            let excess_count = packets.len().saturating_sub(MAX_GOSSIP_TRAFFIC);
+            if excess_count > 0 {
+                packets.drain(0..excess_count);
+                self.stats
+                    .gossip_packets_dropped_count
+                    .add_relaxed(excess_count as u64);
+            }
+        }
         self.process_packets(
             packets,
             thread_pool,
@@ -2502,10 +2518,6 @@ impl ClusterInfo {
             get_epoch_duration(bank_forks),
             should_check_duplicate_instance,
         )?;
-        if last_print.elapsed() > SUBMIT_GOSSIP_STATS_INTERVAL {
-            submit_gossip_stats(&self.stats, &self.gossip, &stakes);
-            *last_print = Instant::now();
-        }
         Ok(())
     }
 
