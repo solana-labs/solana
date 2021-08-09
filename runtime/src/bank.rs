@@ -1178,7 +1178,7 @@ impl Bank {
         shrink_ratio: AccountShrinkThreshold,
         debug_do_not_add_builtins: bool,
     ) -> Self {
-        Self::new_with_paths_production(
+        Self::new_with_paths(
             genesis_config,
             paths,
             frozen_account_pubkeys,
@@ -1202,7 +1202,7 @@ impl Bank {
         shrink_ratio: AccountShrinkThreshold,
         debug_do_not_add_builtins: bool,
     ) -> Self {
-        Self::new_with_paths_production(
+        Self::new_with_paths(
             genesis_config,
             paths,
             frozen_account_pubkeys,
@@ -1215,7 +1215,7 @@ impl Bank {
         )
     }
 
-    pub fn new_with_paths_production(
+    pub fn new_with_paths(
         genesis_config: &GenesisConfig,
         paths: Vec<PathBuf>,
         frozen_account_pubkeys: &[Pubkey],
