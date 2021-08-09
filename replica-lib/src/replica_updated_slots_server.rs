@@ -1,18 +1,20 @@
 use tonic;
-tonic::include_proto!("accountsdb_repl");
+// tonic::include_proto!("accountsdb_repl");
+use crate::accountsdb_repl_server::{self, ReplicaUpdatedSlotsServer};
 
-trait ReplicaUpdatedSlotsServer {
-    fn get_updated_slots(request: &ReplicaUpdatedSlotsRequest) -> Result<ReplicaUpdatedSlotsResponse, tonic::Status>;
-}
-
-struct ReplicaUpdatedSlotsServerImpl {
-
-}
-
+pub(crate) struct ReplicaUpdatedSlotsServerImpl {}
 
 impl ReplicaUpdatedSlotsServer for ReplicaUpdatedSlotsServerImpl {
-    fn get_updated_slots(_request: &ReplicaUpdatedSlotsRequest) -> Result<ReplicaUpdatedSlotsResponse, tonic::Status>  {
+    fn get_updated_slots(
+        &self,
+        _request: &accountsdb_repl_server::ReplicaUpdatedSlotsRequest,
+    ) -> Result<accountsdb_repl_server::ReplicaUpdatedSlotsResponse, tonic::Status> {
         Err(tonic::Status::unimplemented("Not implemented yet"))
     }
-   
+}
+
+impl ReplicaUpdatedSlotsServerImpl {
+    pub fn new() -> Self {
+        Self {}
+    }
 }
