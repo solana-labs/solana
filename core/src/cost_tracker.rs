@@ -5,7 +5,7 @@
 //! - add_transaction_cost(&tx), mutable function to accumulate `tx` cost to tracker.
 //!
 use crate::cost_model::{CostModel, CostModelError, TransactionCost};
-use solana_sdk::{clock::Slot, pubkey::Pubkey, sanitized_transaction::SanitizedTransaction};
+use solana_sdk::{clock::Slot, pubkey::Pubkey, transaction::SanitizedTransaction};
 use std::{
     collections::HashMap,
     sync::{Arc, RwLock},

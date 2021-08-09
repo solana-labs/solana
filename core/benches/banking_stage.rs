@@ -30,7 +30,7 @@ use solana_sdk::signature::Signer;
 use solana_sdk::system_instruction;
 use solana_sdk::system_transaction;
 use solana_sdk::timing::{duration_as_us, timestamp};
-use solana_sdk::transaction::Transaction;
+use solana_sdk::transaction::{Transaction, VersionedTransaction};
 use solana_streamer::socket::SocketAddrSpace;
 use std::collections::VecDeque;
 use std::sync::atomic::Ordering;
@@ -287,7 +287,7 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
 fn simulate_process_entries(
     randomize_txs: bool,
     mint_keypair: &Keypair,
-    mut tx_vector: Vec<Transaction>,
+    mut tx_vector: Vec<VersionedTransaction>,
     genesis_config: &GenesisConfig,
     keypairs: &[Keypair],
     initial_lamports: u64,
@@ -301,12 +301,15 @@ fn simulate_process_entries(
     }
 
     for i in (0..num_accounts).step_by(2) {
-        tx_vector.push(system_transaction::transfer(
-            &keypairs[i],
-            &keypairs[i + 1].pubkey(),
-            initial_lamports,
-            bank.last_blockhash(),
-        ));
+        tx_vector.push(
+            system_transaction::transfer(
+                &keypairs[i],
+                &keypairs[i + 1].pubkey(),
+                initial_lamports,
+                bank.last_blockhash(),
+            )
+            .into(),
+        );
     }
 
     // Transfer lamports to each other
@@ -315,7 +318,7 @@ fn simulate_process_entries(
         hash: next_hash(&bank.last_blockhash(), 1, &tx_vector),
         transactions: tx_vector,
     };
-    process_entries(&bank, &mut [entry], randomize_txs, None, None).unwrap();
+    process_entries(&bank, vec![entry], randomize_txs, None, None).unwrap();
 }
 
 #[allow(clippy::same_item_push)]
@@ -335,7 +338,7 @@ fn bench_process_entries(randomize_txs: bool, bencher: &mut Bencher) {
     } = create_genesis_config((num_accounts + 1) as u64 * initial_lamports);
 
     let mut keypairs: Vec<Keypair> = vec![];
-    let tx_vector: Vec<Transaction> = Vec::with_capacity(num_accounts / 2);
+    let tx_vector: Vec<VersionedTransaction> = Vec::with_capacity(num_accounts / 2);
 
     for _ in 0..num_accounts {
         let keypair = Keypair::new();

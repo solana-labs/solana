@@ -3,7 +3,7 @@
 use crate::{
     hash::Hash,
     instruction::CompiledInstruction,
-    message::MessageHeader,
+    message::{MessageHeader, MESSAGE_VERSION_PREFIX},
     pubkey::Pubkey,
     sanitize::{Sanitize, SanitizeError},
     short_vec,
@@ -117,6 +117,36 @@ impl Sanitize for Message {
         }
 
         Ok(())
+    }
+}
+
+impl Message {
+    pub fn num_writable_map_indexes(&self) -> usize {
+        self.address_map_indexes
+            .iter()
+            .map(|indexes| indexes.writable.len())
+            .sum()
+    }
+
+    pub fn num_readonly_map_indexes(&self) -> usize {
+        self.address_map_indexes
+            .iter()
+            .map(|indexes| indexes.readonly.len())
+            .sum()
+    }
+
+    pub fn address_map_indexes_iter(&self) -> impl Iterator<Item = (&Pubkey, &AddressMapIndexes)> {
+        let address_map_keys_start = self
+            .account_keys
+            .len()
+            .saturating_sub(self.address_map_indexes.len());
+        self.account_keys[address_map_keys_start..]
+            .iter()
+            .zip(self.address_map_indexes.iter())
+    }
+
+    pub fn serialize(&self) -> Vec<u8> {
+        bincode::serialize(&(MESSAGE_VERSION_PREFIX, self)).unwrap()
     }
 }
 

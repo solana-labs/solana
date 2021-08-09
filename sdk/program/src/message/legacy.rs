@@ -369,6 +369,7 @@ impl Message {
         i < self.header.num_required_signatures as usize
     }
 
+    #[deprecated]
     pub fn get_account_keys_by_lock_type(&self) -> (Vec<&Pubkey>, Vec<&Pubkey>) {
         let mut writable_keys = vec![];
         let mut readonly_keys = vec![];
@@ -395,6 +396,7 @@ impl Message {
     //   35..67 - program_id
     //   67..69 - data len - u16
     //   69..data_len - data
+    #[deprecated]
     pub fn serialize_instructions(&self) -> Vec<u8> {
         // 64 bytes is a reasonable guess, calculating exactly is slower in benchmarks
         let mut data = Vec::with_capacity(self.instructions.len() * (32 * 2));
@@ -485,10 +487,25 @@ impl Message {
             .min(self.header.num_required_signatures as usize);
         self.account_keys[..last_key].iter().collect()
     }
+
+    /// Return true if account_keys has any duplicate keys
+    pub fn has_duplicates(&self) -> bool {
+        // Note: This is an O(n^2) algorithm, but requires no heap allocations. The benchmark
+        // `bench_has_duplicates` in benches/message_processor.rs shows that this implementation is
+        // ~50 times faster than using HashSet for very short slices.
+        for i in 1..self.account_keys.len() {
+            #[allow(clippy::integer_arithmetic)]
+            if self.account_keys[i..].contains(&self.account_keys[i - 1]) {
+                return true;
+            }
+        }
+        false
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    #![allow(deprecated)]
     use super::*;
     use crate::{hash, instruction::AccountMeta, message::MESSAGE_HEADER_LENGTH};
     use std::collections::HashSet;

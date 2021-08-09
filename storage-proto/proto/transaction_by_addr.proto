@@ -42,6 +42,7 @@ enum TransactionErrorType {
     CLUSTER_MAINTENANCE = 15;
     ACCOUNT_BORROW_OUTSTANDING_TX = 16;
     WOULD_EXCEED_MAX_BLOCK_COST_LIMIT = 17;
+    UNSUPPORTED_VERSION = 18;
 }
 
 message InstructionError {

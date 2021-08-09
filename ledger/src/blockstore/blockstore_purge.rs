@@ -336,7 +336,8 @@ impl Blockstore {
                 if let Some(&signature) = transaction.signatures.get(0) {
                     batch.delete::<cf::TransactionStatus>((0, signature, slot))?;
                     batch.delete::<cf::TransactionStatus>((1, signature, slot))?;
-                    for pubkey in transaction.message.account_keys {
+                    // TODO: support purging mapped addresses from versioned transactions
+                    for pubkey in transaction.message.unmapped_keys() {
                         batch.delete::<cf::AddressSignatures>((0, pubkey, slot, signature))?;
                         batch.delete::<cf::AddressSignatures>((1, pubkey, slot, signature))?;
                     }
@@ -398,6 +399,7 @@ pub mod tests {
     use solana_sdk::{
         hash::{hash, Hash},
         message::Message,
+        transaction::Transaction,
     };
 
     // check that all columns are either empty or start at `min_slot`

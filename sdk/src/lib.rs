@@ -40,7 +40,6 @@ pub mod program_utils;
 pub mod pubkey;
 pub mod recent_blockhashes_account;
 pub mod rpc_port;
-pub mod sanitized_transaction;
 pub mod secp256k1_instruction;
 pub mod shred_version;
 pub mod signature;

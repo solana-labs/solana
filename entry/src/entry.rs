@@ -18,13 +18,9 @@ use solana_perf::perf_libs;
 use solana_perf::recycler::Recycler;
 use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::hash::Hash;
-use solana_sdk::packet::PACKET_DATA_SIZE;
-use solana_sdk::sanitized_transaction::SanitizedTransaction;
 use solana_sdk::timing;
-use solana_sdk::transaction::{Result, Transaction, TransactionError};
-use std::borrow::Cow;
+use solana_sdk::transaction::{Result, SanitizedTransaction, Transaction, VersionedTransaction};
 use std::cell::RefCell;
-use std::convert::TryFrom;
 use std::ffi::OsStr;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Once;
@@ -118,30 +114,13 @@ pub struct Entry {
     /// An unordered list of transactions that were observed before the Entry ID was
     /// generated. They may have been observed before a previous Entry ID but were
     /// pushed back into this list to ensure deterministic interpretation of the ledger.
-    pub transactions: Vec<Transaction>,
+    pub transactions: Vec<VersionedTransaction>,
 }
 
 /// Typed entry to distinguish between transaction and tick entries
-pub enum EntryType<'a> {
-    Transactions(Vec<SanitizedTransaction<'a>>),
+pub enum EntryType {
+    Transactions(Vec<SanitizedTransaction>),
     Tick(Hash),
-}
-
-impl<'a> TryFrom<&'a Entry> for EntryType<'a> {
-    type Error = TransactionError;
-    fn try_from(entry: &'a Entry) -> Result<Self> {
-        if entry.transactions.is_empty() {
-            Ok(EntryType::Tick(entry.hash))
-        } else {
-            Ok(EntryType::Transactions(
-                entry
-                    .transactions
-                    .iter()
-                    .map(SanitizedTransaction::try_from)
-                    .collect::<Result<_>>()?,
-            ))
-        }
-    }
 }
 
 impl Entry {
@@ -153,6 +132,7 @@ impl Entry {
             num_hashes = 1;
         }
 
+        let transactions = transactions.into_iter().map(Into::into).collect::<Vec<_>>();
         let hash = next_hash(prev_hash, num_hashes, &transactions);
         Entry {
             num_hashes,
@@ -201,7 +181,7 @@ impl Entry {
     }
 }
 
-pub fn hash_transactions(transactions: &[Transaction]) -> Hash {
+pub fn hash_transactions(transactions: &[VersionedTransaction]) -> Hash {
     // a hash of a slice of transactions only needs to hash the signatures
     let signatures: Vec<_> = transactions
         .iter()
@@ -219,7 +199,11 @@ pub fn hash_transactions(transactions: &[Transaction]) -> Hash {
 /// a signature, the final hash will be a hash of both the previous ID and
 /// the signature.  If num_hashes is zero and there's no transaction data,
 ///  start_hash is returned.
-pub fn next_hash(start_hash: &Hash, num_hashes: u64, transactions: &[Transaction]) -> Hash {
+pub fn next_hash(
+    start_hash: &Hash,
+    num_hashes: u64,
+    transactions: &[VersionedTransaction],
+) -> Hash {
     if num_hashes == 0 && transactions.is_empty() {
         return *start_hash;
     }
@@ -329,6 +313,32 @@ impl EntryVerificationState {
     }
 }
 
+pub fn verify_transactions(
+    entries: Vec<Entry>,
+    verify: Arc<dyn Fn(VersionedTransaction) -> Result<SanitizedTransaction> + Send + Sync>,
+) -> Result<Vec<EntryType>> {
+    PAR_THREAD_POOL.with(|thread_pool| {
+        thread_pool.borrow().install(|| {
+            entries
+                .into_par_iter()
+                .map(|entry| {
+                    if entry.transactions.is_empty() {
+                        Ok(EntryType::Tick(entry.hash))
+                    } else {
+                        Ok(EntryType::Transactions(
+                            entry
+                                .transactions
+                                .into_par_iter()
+                                .map(verify.as_ref())
+                                .collect::<Result<Vec<_>>>()?,
+                        ))
+                    }
+                })
+                .collect()
+        })
+    })
+}
+
 fn compare_hashes(computed_hash: Hash, ref_entry: &Entry) -> bool {
     let actual = if !ref_entry.transactions.is_empty() {
         let tx_hash = hash_transactions(&ref_entry.transactions);
@@ -358,12 +368,6 @@ pub trait EntrySlice {
     fn verify_tick_hash_count(&self, tick_hash_count: &mut u64, hashes_per_tick: u64) -> bool;
     /// Counts tick entries
     fn tick_count(&self) -> u64;
-    fn verify_and_hash_transactions(
-        &self,
-        skip_verification: bool,
-        libsecp256k1_0_5_upgrade_enabled: bool,
-        verify_tx_signatures_len: bool,
-    ) -> Result<Vec<EntryType<'_>>>;
 }
 
 impl EntrySlice for [Entry] {
@@ -512,52 +516,6 @@ impl EntrySlice for [Entry] {
         } else {
             self.verify_cpu_generic(start_hash)
         }
-    }
-
-    fn verify_and_hash_transactions<'a>(
-        &'a self,
-        skip_verification: bool,
-        libsecp256k1_0_5_upgrade_enabled: bool,
-        verify_tx_signatures_len: bool,
-    ) -> Result<Vec<EntryType<'a>>> {
-        let verify_and_hash = |tx: &'a Transaction| -> Result<SanitizedTransaction<'a>> {
-            let message_hash = if !skip_verification {
-                let size =
-                    bincode::serialized_size(tx).map_err(|_| TransactionError::SanitizeFailure)?;
-                if size > PACKET_DATA_SIZE as u64 {
-                    return Err(TransactionError::SanitizeFailure);
-                }
-                tx.verify_precompiles(libsecp256k1_0_5_upgrade_enabled)?;
-                if verify_tx_signatures_len && !tx.verify_signatures_len() {
-                    return Err(TransactionError::SanitizeFailure);
-                }
-                tx.verify_and_hash_message()?
-            } else {
-                tx.message().hash()
-            };
-
-            SanitizedTransaction::try_create(Cow::Borrowed(tx), message_hash)
-        };
-
-        PAR_THREAD_POOL.with(|thread_pool| {
-            thread_pool.borrow().install(|| {
-                self.par_iter()
-                    .map(|entry| {
-                        if entry.transactions.is_empty() {
-                            Ok(EntryType::Tick(entry.hash))
-                        } else {
-                            Ok(EntryType::Transactions(
-                                entry
-                                    .transactions
-                                    .par_iter()
-                                    .map(verify_and_hash)
-                                    .collect::<Result<Vec<_>>>()?,
-                            ))
-                        }
-                    })
-                    .collect()
-            })
-        })
     }
 
     fn start_verify(
@@ -718,6 +676,7 @@ pub fn create_random_ticks(num_ticks: u64, max_hashes_per_tick: u64, mut hash: H
 /// Creates the next Tick or Transaction Entry `num_hashes` after `start_hash`.
 pub fn next_entry(prev_hash: &Hash, num_hashes: u64, transactions: Vec<Transaction>) -> Entry {
     assert!(num_hashes > 0 || transactions.is_empty());
+    let transactions = transactions.into_iter().map(Into::into).collect::<Vec<_>>();
     Entry {
         num_hashes,
         hash: next_hash(prev_hash, num_hashes, &transactions),
@@ -728,15 +687,11 @@ pub fn next_entry(prev_hash: &Hash, num_hashes: u64, transactions: Vec<Transacti
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::entry::Entry;
     use solana_sdk::{
-        hash::{hash, new_rand as hash_new_rand, Hash},
-        message::Message,
-        packet::PACKET_DATA_SIZE,
+        hash::{hash, Hash},
         pubkey::Pubkey,
         signature::{Keypair, Signer},
-        system_instruction, system_transaction,
-        transaction::Transaction,
+        system_transaction,
     };
 
     #[test]
@@ -761,8 +716,8 @@ mod tests {
         assert!(e0.verify(&zero));
 
         // Next, swap two transactions and ensure verification fails.
-        e0.transactions[0] = tx1; // <-- attack
-        e0.transactions[1] = tx0;
+        e0.transactions[0] = tx1.into(); // <-- attack
+        e0.transactions[1] = tx0.into();
         assert!(!e0.verify(&zero));
     }
 
@@ -815,7 +770,7 @@ mod tests {
         let tx0 = system_transaction::transfer(&keypair, &Pubkey::new_unique(), 42, zero);
         let entry0 = next_entry(&zero, 1, vec![tx0.clone()]);
         assert_eq!(entry0.num_hashes, 1);
-        assert_eq!(entry0.hash, next_hash(&zero, 1, &[tx0]));
+        assert_eq!(entry0.hash, next_hash(&zero, 1, &[tx0.into()]));
     }
 
     #[test]
@@ -891,154 +846,9 @@ mod tests {
     }
 
     #[test]
-    fn test_verify_and_hash_transactions_sig_len() {
-        let mut rng = rand::thread_rng();
-        let recent_blockhash = hash_new_rand(&mut rng);
-        let from_keypair = Keypair::new();
-        let to_keypair = Keypair::new();
-        let from_pubkey = from_keypair.pubkey();
-        let to_pubkey = to_keypair.pubkey();
-
-        enum TestCase {
-            AddSignature,
-            RemoveSignature,
-        }
-
-        let make_transaction = |case: TestCase| {
-            let message = Message::new(
-                &[system_instruction::transfer(&from_pubkey, &to_pubkey, 1)],
-                Some(&from_pubkey),
-            );
-            let mut tx = Transaction::new(&[&from_keypair], message, recent_blockhash);
-            assert_eq!(tx.message.header.num_required_signatures, 1);
-            match case {
-                TestCase::AddSignature => {
-                    let signature = to_keypair.sign_message(&tx.message.serialize());
-                    tx.signatures.push(signature);
-                }
-                TestCase::RemoveSignature => {
-                    tx.signatures.remove(0);
-                }
-            }
-            tx
-        };
-        // Too few signatures: Sanitization failure
-        {
-            let tx = make_transaction(TestCase::RemoveSignature);
-            let entries = vec![next_entry(&recent_blockhash, 1, vec![tx])];
-            assert_eq!(
-                entries[..]
-                    .verify_and_hash_transactions(false, false, false)
-                    .err(),
-                Some(TransactionError::SanitizeFailure),
-            );
-        }
-        // Too many signatures: Sanitize failure only with feature switch
-        {
-            let tx = make_transaction(TestCase::AddSignature);
-            let entries = vec![next_entry(&recent_blockhash, 1, vec![tx])];
-            assert!(entries[..]
-                .verify_and_hash_transactions(false, false, false)
-                .is_ok());
-            assert_eq!(
-                entries[..]
-                    .verify_and_hash_transactions(false, false, true)
-                    .err(),
-                Some(TransactionError::SanitizeFailure)
-            );
-        }
-    }
-
-    #[test]
-    fn test_verify_and_hash_transactions_load_duplicate_account() {
-        let mut rng = rand::thread_rng();
-        let recent_blockhash = hash_new_rand(&mut rng);
-        let from_keypair = Keypair::new();
-        let to_keypair = Keypair::new();
-        let from_pubkey = from_keypair.pubkey();
-        let to_pubkey = to_keypair.pubkey();
-
-        let make_transaction = || {
-            let mut message = Message::new(
-                &[system_instruction::transfer(&from_pubkey, &to_pubkey, 1)],
-                Some(&from_pubkey),
-            );
-            let to_index = message
-                .account_keys
-                .iter()
-                .position(|k| k == &to_pubkey)
-                .unwrap();
-            message.account_keys[to_index] = from_pubkey;
-            Transaction::new(&[&from_keypair], message, recent_blockhash)
-        };
-
-        // Duplicate account
-        {
-            let tx = make_transaction();
-            let entries = vec![next_entry(&recent_blockhash, 1, vec![tx])];
-            assert_eq!(
-                entries[..]
-                    .verify_and_hash_transactions(false, false, false)
-                    .err(),
-                Some(TransactionError::AccountLoadedTwice)
-            );
-        }
-    }
-
-    #[test]
-    fn test_verify_and_hash_transactions_packet_data_size() {
-        let mut rng = rand::thread_rng();
-        let recent_blockhash = hash_new_rand(&mut rng);
-        let keypair = Keypair::new();
-        let pubkey = keypair.pubkey();
-        let make_transaction = |size| {
-            let ixs: Vec<_> = std::iter::repeat_with(|| {
-                system_instruction::transfer(&pubkey, &Pubkey::new_unique(), 1)
-            })
-            .take(size)
-            .collect();
-            let message = Message::new(&ixs[..], Some(&pubkey));
-            Transaction::new(&[&keypair], message, recent_blockhash)
-        };
-        // Small transaction.
-        {
-            let tx = make_transaction(5);
-            let entries = vec![next_entry(&recent_blockhash, 1, vec![tx.clone()])];
-            assert!(bincode::serialized_size(&tx).unwrap() <= PACKET_DATA_SIZE as u64);
-            assert!(entries[..]
-                .verify_and_hash_transactions(false, false, false)
-                .is_ok());
-        }
-        // Big transaction.
-        {
-            let tx = make_transaction(25);
-            let entries = vec![next_entry(&recent_blockhash, 1, vec![tx.clone()])];
-            assert!(bincode::serialized_size(&tx).unwrap() > PACKET_DATA_SIZE as u64);
-            assert_eq!(
-                entries[..]
-                    .verify_and_hash_transactions(false, false, false)
-                    .err(),
-                Some(TransactionError::SanitizeFailure)
-            );
-        }
-        // Assert that verify fails as soon as serialized
-        // size exceeds packet data size.
-        for size in 1..30 {
-            let tx = make_transaction(size);
-            let entries = vec![next_entry(&recent_blockhash, 1, vec![tx.clone()])];
-            assert_eq!(
-                bincode::serialized_size(&tx).unwrap() <= PACKET_DATA_SIZE as u64,
-                entries[..]
-                    .verify_and_hash_transactions(false, false, false)
-                    .is_ok(),
-            );
-        }
-    }
-
-    #[test]
     fn test_verify_tick_hash_count() {
         let hashes_per_tick = 10;
-        let tx = Transaction::default();
+        let tx = VersionedTransaction::default();
 
         let no_hash_tx_entry = Entry {
             transactions: vec![tx.clone()],
