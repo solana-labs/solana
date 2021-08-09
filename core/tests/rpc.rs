@@ -423,7 +423,6 @@ fn test_tpu_send_transaction() {
     }
 }
 
-// #15576 - correctly deserialize RPC errors
 #[test]
 fn deserialize_rpc_error() -> ClientResult<()> {
     solana_logger::setup();
