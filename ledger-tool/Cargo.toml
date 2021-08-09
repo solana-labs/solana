@@ -41,7 +41,7 @@ tempfile = "3.2.0"
 tokio = { version = "1", features = ["full"] }
 
 [dev-dependencies]
-assert_cmd = "1.0"
+assert_cmd = "2.0"
 
 [target."cfg(unix)".dependencies]
 signal-hook = "0.2.3"
