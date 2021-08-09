@@ -137,16 +137,20 @@ impl<T: Clone> ReadAccountMapEntry<T> {
         &*self.borrow_slot_list_guard()
     }
 
-    pub fn ref_count(&self) -> &AtomicU64 {
-        &self.borrow_owned_entry().ref_count
+    pub fn ref_count(&self) -> RefCount {
+        self.borrow_owned_entry().ref_count.load(Ordering::Relaxed)
     }
 
     pub fn unref(&self) {
-        self.ref_count().fetch_sub(1, Ordering::Relaxed);
+        self.borrow_owned_entry()
+            .ref_count
+            .fetch_sub(1, Ordering::Relaxed);
     }
 
     pub fn addref(&self) {
-        self.ref_count().fetch_add(1, Ordering::Relaxed);
+        self.borrow_owned_entry()
+            .ref_count
+            .fetch_add(1, Ordering::Relaxed);
     }
 }
 
@@ -1265,7 +1269,7 @@ impl<T: IsCached> AccountsIndex<T> {
     ) -> (SlotList<T>, RefCount) {
         (
             self.get_rooted_entries(locked_account_entry.slot_list(), max),
-            locked_account_entry.ref_count().load(Ordering::Relaxed),
+            locked_account_entry.ref_count(),
         )
     }
 
@@ -1589,7 +1593,7 @@ impl<T: IsCached> AccountsIndex<T> {
 
     pub fn ref_count_from_storage(&self, pubkey: &Pubkey) -> RefCount {
         if let Some(locked_entry) = self.get_account_read_entry(pubkey) {
-            locked_entry.ref_count().load(Ordering::Relaxed)
+            locked_entry.ref_count()
         } else {
             0
         }
@@ -2748,7 +2752,7 @@ pub mod tests {
 
         for (i, key) in [key0, key1].iter().enumerate() {
             let entry = index.get_account_read_entry(key).unwrap();
-            assert_eq!(entry.ref_count().load(Ordering::Relaxed), 1);
+            assert_eq!(entry.ref_count(), 1);
             assert_eq!(entry.slot_list().to_vec(), vec![(slot0, account_infos[i]),]);
         }
     }
@@ -2786,10 +2790,7 @@ pub mod tests {
         // verify the added entry matches expected
         {
             let entry = index.get_account_read_entry(&key).unwrap();
-            assert_eq!(
-                entry.ref_count().load(Ordering::Relaxed),
-                if is_cached { 0 } else { 1 }
-            );
+            assert_eq!(entry.ref_count(), if is_cached { 0 } else { 1 });
             let expected = vec![(slot0, account_infos[0].clone())];
             assert_eq!(entry.slot_list().to_vec(), expected);
             let new_entry =
@@ -2833,10 +2834,7 @@ pub mod tests {
                 index.get_account_read_entry(&key).unwrap()
             };
 
-            assert_eq!(
-                entry.ref_count().load(Ordering::Relaxed),
-                if is_cached { 0 } else { 2 }
-            );
+            assert_eq!(entry.ref_count(), if is_cached { 0 } else { 2 });
             assert_eq!(
                 entry.slot_list().to_vec(),
                 vec![
