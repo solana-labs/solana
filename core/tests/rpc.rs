@@ -6,8 +6,10 @@ use reqwest::{self, header::CONTENT_TYPE};
 use serde_json::{json, Value};
 use solana_account_decoder::UiAccount;
 use solana_client::{
+    client_error::{ClientErrorKind, Result as ClientResult},
     rpc_client::RpcClient,
     rpc_config::{RpcAccountInfoConfig, RpcSignatureSubscribeConfig},
+    rpc_request::RpcError,
     rpc_response::{Response, RpcSignatureResult, SlotUpdate},
     tpu_client::{TpuClient, TpuClientConfig},
 };
@@ -417,6 +419,37 @@ fn test_tpu_send_transaction() {
         let statuses = rpc_client.get_signature_statuses(&signatures).unwrap();
         if statuses.value.get(0).is_some() {
             return;
+        }
+    }
+}
+
+#[test]
+fn deserialize_rpc_error() -> ClientResult<()> {
+    solana_logger::setup();
+
+    let alice = Keypair::new();
+    let validator = TestValidator::with_no_fees(alice.pubkey(), None, SocketAddrSpace::Unspecified);
+    let rpc_client = RpcClient::new(validator.rpc_url());
+
+    let bob = Keypair::new();
+    let lamports = 50;
+    let (recent_blockhash, _) = rpc_client.get_recent_blockhash()?;
+    let mut tx = system_transaction::transfer(&alice, &bob.pubkey(), lamports, recent_blockhash);
+
+    // This will cause an error
+    tx.signatures.clear();
+
+    let err = rpc_client.send_transaction(&tx);
+    let err = err.unwrap_err();
+
+    match err.kind {
+        ClientErrorKind::RpcError(RpcError::RpcRequestError { .. }) => {
+            // This is what used to happen
+            panic!()
+        }
+        ClientErrorKind::RpcError(RpcError::RpcResponseError { .. }) => Ok(()),
+        _ => {
+            panic!()
         }
     }
 }

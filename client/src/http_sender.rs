@@ -67,7 +67,6 @@ impl HttpSender {
 struct RpcErrorObject {
     code: i64,
     message: String,
-    data: serde_json::Value,
 }
 
 impl RpcSender for HttpSender {
