@@ -5153,11 +5153,14 @@ impl AccountsDb {
         ret
     }
 
+    // previous_slot_entry_was_cached = true means we just need to assert that after this update is complete
+    //  that there are no items we would have put in reclaims that are not cached
     fn update_index(
         &self,
         slot: Slot,
         infos: Vec<AccountInfo>,
         accounts: &[(&Pubkey, &impl ReadableAccount)],
+        previous_slot_entry_was_cached: bool,
     ) -> SlotList<AccountInfo> {
         let mut reclaims = SlotList::<AccountInfo>::with_capacity(infos.len() * 2);
         for (info, pubkey_account) in infos.into_iter().zip(accounts.iter()) {
@@ -5170,6 +5173,7 @@ impl AccountsDb {
                 &self.account_indexes,
                 info,
                 &mut reclaims,
+                previous_slot_entry_was_cached,
             );
         }
         reclaims
@@ -5711,11 +5715,13 @@ impl AccountsDb {
             .fetch_add(store_accounts_time.as_us(), Ordering::Relaxed);
         let mut update_index_time = Measure::start("update_index");
 
+        let previous_slot_entry_was_cached = self.caching_enabled && is_cached_store;
+
         // If the cache was flushed, then because `update_index` occurs
         // after the account are stored by the above `store_accounts_to`
         // call and all the accounts are stored, all reads after this point
         // will know to not check the cache anymore
-        let mut reclaims = self.update_index(slot, infos, accounts);
+        let mut reclaims = self.update_index(slot, infos, accounts, previous_slot_entry_was_cached);
 
         // For each updated account, `reclaims` should only have at most one
         // item (if the account was previously updated in this slot).
@@ -5723,7 +5729,7 @@ impl AccountsDb {
         // to anything that needs to be cleaned in the backing storage
         // entries
         if self.caching_enabled {
-            reclaims.retain(|(_, r)| r.store_id != CACHE_VIRTUAL_STORAGE_ID);
+            reclaims.retain(|(_, r)| !r.is_cached());
 
             if is_cached_store {
                 assert!(reclaims.is_empty());
@@ -9848,6 +9854,8 @@ pub mod tests {
         );
     }
 
+    const UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE: bool = false;
+
     #[test]
     fn test_delete_dependencies() {
         solana_logger::setup();
@@ -9888,6 +9896,7 @@ pub mod tests {
             &AccountSecondaryIndexes::default(),
             info0,
             &mut reclaims,
+            UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
         accounts_index.upsert(
             1,
@@ -9897,6 +9906,7 @@ pub mod tests {
             &AccountSecondaryIndexes::default(),
             info1.clone(),
             &mut reclaims,
+            UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
         accounts_index.upsert(
             1,
@@ -9906,6 +9916,7 @@ pub mod tests {
             &AccountSecondaryIndexes::default(),
             info1,
             &mut reclaims,
+            UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
         accounts_index.upsert(
             2,
@@ -9915,6 +9926,7 @@ pub mod tests {
             &AccountSecondaryIndexes::default(),
             info2.clone(),
             &mut reclaims,
+            UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
         accounts_index.upsert(
             2,
@@ -9924,6 +9936,7 @@ pub mod tests {
             &AccountSecondaryIndexes::default(),
             info2,
             &mut reclaims,
+            UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
         accounts_index.upsert(
             3,
@@ -9933,6 +9946,7 @@ pub mod tests {
             &AccountSecondaryIndexes::default(),
             info3,
             &mut reclaims,
+            UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
         accounts_index.add_root(0, false);
         accounts_index.add_root(1, false);
