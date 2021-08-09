@@ -456,7 +456,7 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
     install_if_missing(
         config,
         "bpf-tools",
-        "v1.14",
+        "v1.15",
         "https://github.com/solana-labs/bpf-tools/releases/download",
         &PathBuf::from(bpf_tools_filename),
     )
