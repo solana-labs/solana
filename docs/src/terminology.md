@@ -8,11 +8,16 @@ The following terms are used throughout the documentation.
 
 A record in the Solana ledger that either holds data or is an executable program.
 
-Like an account at a traditional bank, a Solana account may hold funds called [lamports](terminology.md#lamport). Like a file in Linux, it is addressable by a [key](terminology.md#public-key) (public key or pubkey).
+Like an account at a traditional bank, a Solana account may hold funds called [lamports](terminology.md#lamport). Like a file in Linux, it is addressable by a [key], often referred to as a (terminology.md#public-key) public key or pubkey.
+
+The key may be one of:
+an ed25519 public key
+a program-derived account address (32byte value forced off the ed25519 curve)
+a hash of an ed25519 public key with a 32 character string
 
 ## account owner
 
-The public key of the program that owns the account. Only the owning program is capable of modifying the account.
+The address of the program that owns the account. Only the owning program is capable of modifying the account.
 
 ## app
 
@@ -36,7 +41,7 @@ The number of [blocks](terminology.md#block) beneath the current block. The firs
 
 ## bootstrap validator
 
-The server node ([validator](terminology.md#validator)) that produces the genesis (first) [block](terminology.md#block) of a block chain.
+The [validator](terminology.md#validator) that produces the genesis (first) [block](terminology.md#block) of a block chain.
 
 ## BPF loader
 
@@ -207,7 +212,7 @@ The code that interprets [instructions](terminology.md#instruction).
 
 ## program derived account (PDA)
 
-An account whose owner is a program and thus is not controlled by a private key like other accounts.   For example, associated token accounts are have a separate owner field which is the token program that controls debits to the account.
+An account whose owner is a program and thus is not controlled by a private key like other accounts.
 
 ## program id
 
@@ -265,7 +270,7 @@ The [native token](terminology.md#native-token) of a Solana [cluster](terminolog
 
 ## Solana Program Library (SPL)
 
-A library of smart contracts on Solana such as spl-token that facilitates tasks such as creating and using tokens
+A library of programs on Solana such as spl-token that facilitates tasks such as creating and using tokens
 
 ## stake
 
@@ -325,7 +330,7 @@ See [verifiable delay function](terminology.md#verifiable-delay-function).
 
 ## verifiable delay function (VDF)
 
-A function that Solana uses to encode the passage of time.   The Solana VDF takes a fixed amount of time to execute and produces a proof that it ran, which can then be verified in less time than it took to produce.
+A function that takes a fixed amount of time to execute that produces a proof that it ran, which can then be verified in less time than it took to produce.
 
 ## vote
 
