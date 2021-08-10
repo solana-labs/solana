@@ -69,7 +69,11 @@ pub(crate) mod tests {
             bootstrap_validator_stake_lamports, create_genesis_config, GenesisConfigInfo,
         },
         rand::Rng,
+<<<<<<< HEAD
         solana_runtime::vote_account::{ArcVoteAccount, VoteAccounts},
+=======
+        solana_runtime::vote_account::{VoteAccount, VoteAccounts},
+>>>>>>> 00e5e1290 (renames solana_runtime::vote_account::VoteAccount)
         solana_sdk::{
             account::{from_account, AccountSharedData},
             clock::Clock,
@@ -312,7 +316,7 @@ pub(crate) mod tests {
             )
             .unwrap();
             let vote_pubkey = Pubkey::new_unique();
-            (vote_pubkey, (stake, ArcVoteAccount::from(account)))
+            (vote_pubkey, (stake, VoteAccount::from(account)))
         });
         let result = vote_accounts.collect::<VoteAccounts>().staked_nodes();
         assert_eq!(result.len(), 2);

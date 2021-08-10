@@ -116,8 +116,29 @@ use {
         timing::years_as_slots,
         transaction::{self, Result, Transaction, TransactionError},
     },
+<<<<<<< HEAD
     solana_stake_program::stake_state::{
         self, Delegation, InflationPointCalculationEvent, PointValue, StakeState,
+=======
+    stakes::Stakes,
+    status_cache::{SlotDelta, StatusCache},
+    system_instruction_processor::{get_system_account_kind, SystemAccountKind},
+    transaction_batch::TransactionBatch,
+    vote_account::VoteAccount,
+};
+use byteorder::{ByteOrder, LittleEndian};
+use itertools::Itertools;
+use log::*;
+use rayon::ThreadPool;
+use solana_measure::measure::Measure;
+use solana_metrics::{datapoint_debug, inc_new_counter_debug, inc_new_counter_info};
+#[allow(deprecated)]
+use solana_sdk::recent_blockhashes_account;
+use solana_sdk::{
+    account::{
+        create_account_shared_data_with_fields as create_account, from_account, Account,
+        AccountSharedData, InheritableAccountFields, ReadableAccount, WritableAccount,
+>>>>>>> 00e5e1290 (renames solana_runtime::vote_account::VoteAccount)
     },
     solana_vote_program::{
         vote_instruction::VoteInstruction,
@@ -575,6 +596,14 @@ pub struct TransactionBalancesSet {
     pub pre_balances: TransactionBalances,
     pub post_balances: TransactionBalances,
 }
+<<<<<<< HEAD
+=======
+pub struct OverwrittenVoteAccount {
+    pub account: VoteAccount,
+    pub transaction_index: usize,
+    pub transaction_result_index: usize,
+}
+>>>>>>> 00e5e1290 (renames solana_runtime::vote_account::VoteAccount)
 
 impl TransactionBalancesSet {
     pub fn new(pre_balances: TransactionBalances, post_balances: TransactionBalances) -> Self {
@@ -3809,7 +3838,7 @@ impl Bank {
     #[allow(clippy::needless_collect)]
     fn distribute_rent_to_validators<I>(&self, vote_accounts: I, rent_to_be_distributed: u64)
     where
-        I: IntoIterator<Item = (Pubkey, (u64, ArcVoteAccount))>,
+        I: IntoIterator<Item = (Pubkey, (u64, VoteAccount))>,
     {
         let mut total_staked = 0;
 
@@ -5196,9 +5225,16 @@ impl Bank {
     ///   attributed to each account
     /// Note: This clones the entire vote-accounts hashmap. For a single
     /// account lookup use get_vote_account instead.
+<<<<<<< HEAD
     pub fn vote_accounts(&self) -> Vec<(Pubkey, (u64 /*stake*/, ArcVoteAccount))> {
         self.stakes_cache
             .stakes()
+=======
+    pub fn vote_accounts(&self) -> Vec<(Pubkey, (/*stake:*/ u64, VoteAccount))> {
+        self.stakes
+            .read()
+            .unwrap()
+>>>>>>> 00e5e1290 (renames solana_runtime::vote_account::VoteAccount)
             .vote_accounts()
             .iter()
             .map(|(k, v)| (*k, v.clone()))
@@ -5206,12 +5242,19 @@ impl Bank {
     }
 
     /// Vote account for the given vote account pubkey along with the stake.
+<<<<<<< HEAD
     pub fn get_vote_account(
         &self,
         vote_account: &Pubkey,
     ) -> Option<(u64 /*stake*/, ArcVoteAccount)> {
         self.stakes_cache
             .stakes()
+=======
+    pub fn get_vote_account(&self, vote_account: &Pubkey) -> Option<(/*stake:*/ u64, VoteAccount)> {
+        self.stakes
+            .read()
+            .unwrap()
+>>>>>>> 00e5e1290 (renames solana_runtime::vote_account::VoteAccount)
             .vote_accounts()
             .get(vote_account)
             .cloned()
@@ -5235,7 +5278,7 @@ impl Bank {
     pub fn epoch_vote_accounts(
         &self,
         epoch: Epoch,
-    ) -> Option<&HashMap<Pubkey, (u64, ArcVoteAccount)>> {
+    ) -> Option<&HashMap<Pubkey, (u64, VoteAccount)>> {
         self.epoch_stakes
             .get(&epoch)
             .map(|epoch_stakes| Stakes::vote_accounts(epoch_stakes.stakes()))
