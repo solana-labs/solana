@@ -1,7 +1,7 @@
 //! Stakes serve as a cache of stake and vote accounts to derive
 //! node stakes
 use {
-    crate::vote_account::{ArcVoteAccount, VoteAccounts},
+    crate::vote_account::{VoteAccount, VoteAccounts},
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         clock::Epoch,
@@ -127,7 +127,7 @@ impl Stakes {
         account: &AccountSharedData,
         fix_stake_deactivate: bool,
         check_vote_init: bool,
-    ) -> Option<ArcVoteAccount> {
+    ) -> Option<VoteAccount> {
         if solana_vote_program::check_id(account.owner()) {
             // unconditionally remove existing at first; there is no dependent calculated state for
             // votes, not like stakes (stake codepath maintains calculated stake value grouped by
@@ -151,7 +151,7 @@ impl Stakes {
                 );
 
                 self.vote_accounts
-                    .insert(*pubkey, (stake, ArcVoteAccount::from(account.clone())));
+                    .insert(*pubkey, (stake, VoteAccount::from(account.clone())));
             }
             old.map(|(_, account)| account)
         } else if stake::program::check_id(account.owner()) {
@@ -211,7 +211,7 @@ impl Stakes {
         }
     }
 
-    pub fn vote_accounts(&self) -> &HashMap<Pubkey, (u64, ArcVoteAccount)> {
+    pub fn vote_accounts(&self) -> &HashMap<Pubkey, (u64, VoteAccount)> {
         self.vote_accounts.borrow()
     }
 
