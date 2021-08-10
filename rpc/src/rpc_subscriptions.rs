@@ -1871,7 +1871,7 @@ pub(crate) mod tests {
                 },
                 ..RpcProgramAccountsConfig::default()
             }),
-            sub_id.clone(),
+            sub_id,
             subscriber,
         );
 
