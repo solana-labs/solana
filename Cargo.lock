@@ -6726,9 +6726,9 @@ dependencies = [
 
 [[package]]
 name = "tonic"
-version = "0.5.0"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b584f064fdfc50017ec39162d5aebce49912f1eb16fd128e04b7f4ce4907c7e5"
+checksum = "732f88450af985c51fed3243a313ccdd2b5a03bee78ec0b94d66509304777e5c"
 dependencies = [
  "async-stream",
  "async-trait",
