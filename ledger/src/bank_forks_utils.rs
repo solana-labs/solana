@@ -132,7 +132,7 @@ fn load_from_snapshot(
         process_options.accounts_db_test_hash_calculation,
         process_options.accounts_db_skip_shrink,
         process_options.verify_index,
-        None,
+        process_options.accounts_index_bins,
     )
     .expect("Load from snapshot failed");
 

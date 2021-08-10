@@ -127,7 +127,7 @@ fn initialize_from_snapshot(
         process_options.accounts_db_test_hash_calculation,
         false,
         process_options.verify_index,
-        None,
+        process_options.accounts_index_bins,
     )
     .unwrap();
 

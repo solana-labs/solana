@@ -385,6 +385,7 @@ pub struct ProcessOptions {
     pub allow_dead_slots: bool,
     pub accounts_db_test_hash_calculation: bool,
     pub accounts_db_skip_shrink: bool,
+    pub accounts_index_bins: Option<usize>,
     pub verify_index: bool,
     pub shrink_ratio: AccountShrinkThreshold,
 }
@@ -416,7 +417,7 @@ pub fn process_blockstore(
         opts.accounts_db_caching_enabled,
         opts.shrink_ratio,
         false,
-        None, // later, this will be passed from ProcessOptions
+        opts.accounts_index_bins,
     );
     let bank0 = Arc::new(bank0);
     info!("processing ledger for slot 0...");
