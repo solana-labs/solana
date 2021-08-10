@@ -122,7 +122,7 @@ impl OptimisticallyConfirmedBankTracker {
     ) {
         if bank.is_frozen() {
             if bank.slot() > *last_notified_confirmed_slot {
-                println!(
+                debug!(
                     "notify_or_defer notifying via notify_gossip_subscribers for slot {:?}",
                     bank.slot()
                 );
@@ -131,7 +131,7 @@ impl OptimisticallyConfirmedBankTracker {
             }
         } else if bank.slot() > bank_forks.read().unwrap().root_bank().slot() {
             pending_optimistically_confirmed_banks.insert(bank.slot());
-            println!("notify_or_defer defer notifying for slot {:?}", bank.slot());
+            debug!("notify_or_defer defer notifying for slot {:?}", bank.slot());
         }
     }
 
@@ -229,9 +229,9 @@ impl OptimisticallyConfirmedBankTracker {
                 }
 
                 if pending_optimistically_confirmed_banks.remove(&bank.slot()) {
-                    println!(
-                        "Calling notify_gossip_subscribers to send deferred notification {:?} {:?}",
-                        frozen_slot, pending_optimistically_confirmed_banks
+                    debug!(
+                        "Calling notify_gossip_subscribers to send deferred notification {:?}",
+                        frozen_slot
                     );
 
                     Self::notify_or_defer_confirmed_banks(
@@ -371,7 +371,6 @@ mod tests {
         );
         assert_eq!(optimistically_confirmed_bank.read().unwrap().bank.slot(), 3);
         assert_eq!(highest_confirmed_slot, 3);
-        println!("zzzzzzz {:?}", pending_optimistically_confirmed_banks);
         assert_eq!(pending_optimistically_confirmed_banks.len(), 0);
 
         // Test higher root will be cached and clear pending_optimistically_confirmed_banks
