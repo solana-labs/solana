@@ -28,16 +28,29 @@ cargo_audit_ignores=(
   # Blocked on multiple crates updating `time` to >= 0.2.23
   --ignore RUSTSEC-2020-0071
 
-  # difference is unmaintained
-  #
-  # Blocked on predicates v1.0.6 removing its dependency on `difference`
-  --ignore RUSTSEC-2020-0095
-
   # generic-array: arr! macro erases lifetimes
   #
   # Blocked on libsecp256k1 releasing with upgraded dependencies
   # https://github.com/paritytech/libsecp256k1/issues/66
   --ignore RUSTSEC-2020-0146
+
+  # hyper: Lenient `hyper` header parsing of `Content-Length` could allow request smuggling
+  #
+  # Blocked on jsonrpc removing dependency on unmaintained `websocket`
+  # https://github.com/paritytech/jsonrpc/issues/605
+  --ignore RUSTSEC-2021-0078
+
+  # hyper: Integer overflow in `hyper`'s parsing of the `Transfer-Encoding` header leads to data loss
+  #
+  # Blocked on jsonrpc removing dependency on unmaintained `websocket`
+  # https://github.com/paritytech/jsonrpc/issues/605
+  --ignore RUSTSEC-2021-0079
+
+  # tar: Links in archive can create arbitrary directories
+  #
+  # Blocked on `tar` releasing safe upgrade
+  # https://github.com/alexcrichton/tar-rs/issues/238
+  --ignore RUSTSEC-2021-0080
 
 )
 scripts/cargo-for-all-lock-files.sh stable audit "${cargo_audit_ignores[@]}"
