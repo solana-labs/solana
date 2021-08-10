@@ -12,6 +12,7 @@ steps:
       CLIENT_OPTIONS: "bench-tps=1=--tx_count 5000 --thread-batch-sleep-ms 250"
       TESTNET_ZONES: "us-west1-a"
       USE_PUBLIC_IP_ADDRESSES: "false"
+      ALLOW_PRIVATE_ADDR: "true"
       ADDITIONAL_FLAGS: "--dedicated"
       APPLY_PARTITIONS: "true"
       NETEM_CONFIG_FILE: "system-test/netem-configs/complete-loss-two-partitions"
