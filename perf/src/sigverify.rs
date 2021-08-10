@@ -597,22 +597,6 @@ mod tests {
     }
 
     #[test]
-    fn test_large_sigs() {
-        // use any large number to be misinterpreted as 2 bytes when decoded as short_vec
-        let required_num_sigs = 214;
-        let actual_num_sigs = 5;
-
-        let packet = packet_from_num_sigs(required_num_sigs, actual_num_sigs);
-
-        let unsanitized_packet_offsets = sigverify::do_get_packet_offsets(&packet, 0);
-
-        assert_eq!(
-            unsanitized_packet_offsets,
-            Err(PacketError::MismatchSignatureLen)
-        );
-    }
-
-    #[test]
     fn test_small_packet() {
         let tx = test_tx();
         let mut packet = sigverify::make_packet_from_transaction(tx);
