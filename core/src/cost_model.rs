@@ -122,22 +122,14 @@ impl CostModel {
         // calculate account access cost
         let message = transaction.message();
         message.account_keys.iter().enumerate().for_each(|(i, k)| {
-            let is_signer = message.is_signer(i);
             let is_writable = message.is_writable(i);
 
-            if is_signer && is_writable {
+            if is_writable {
                 self.transaction_cost.writable_accounts.push(*k);
-                self.transaction_cost.account_access_cost += SIGNED_WRITABLE_ACCOUNT_ACCESS_COST;
-            } else if is_signer && !is_writable {
-                self.transaction_cost.account_access_cost += SIGNED_READONLY_ACCOUNT_ACCESS_COST;
-            } else if !is_signer && is_writable {
-                self.transaction_cost.writable_accounts.push(*k);
-                self.transaction_cost.account_access_cost +=
-                    NON_SIGNED_WRITABLE_ACCOUNT_ACCESS_COST;
+                self.transaction_cost.account_access_cost += account_write_cost();
             } else {
-                self.transaction_cost.account_access_cost +=
-                    NON_SIGNED_READONLY_ACCOUNT_ACCESS_COST;
-            }
+                self.transaction_cost.account_access_cost += account_read_cost();
+            } 
         });
         debug!(
             "transaction {:?} has cost {:?}",
@@ -398,9 +390,9 @@ mod tests {
                 .try_into()
                 .unwrap();
 
-        let expected_account_cost = SIGNED_WRITABLE_ACCOUNT_ACCESS_COST
-            + NON_SIGNED_WRITABLE_ACCOUNT_ACCESS_COST
-            + NON_SIGNED_READONLY_ACCOUNT_ACCESS_COST;
+        let expected_account_cost = account_write_cost()
+            + account_write_cost()
+            + account_read_cost();
         let expected_execution_cost = 8;
 
         let mut cost_model = CostModel::default();
@@ -455,9 +447,9 @@ mod tests {
         );
 
         let number_threads = 10;
-        let expected_account_cost = SIGNED_WRITABLE_ACCOUNT_ACCESS_COST
-            + NON_SIGNED_WRITABLE_ACCOUNT_ACCESS_COST * 2
-            + NON_SIGNED_READONLY_ACCOUNT_ACCESS_COST * 2;
+        let expected_account_cost = account_write_cost()
+            + account_write_cost() * 2
+            + account_read_cost() * 2;
         let cost1 = 100;
         let cost2 = 200;
         // execution cost can be either 2 * Default (before write) or cost1+cost2 (after write)
