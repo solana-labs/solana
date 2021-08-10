@@ -12,7 +12,10 @@ pub fn leader_schedule(epoch: Epoch, bank: &Bank) -> Option<LeaderSchedule> {
     bank.epoch_staked_nodes(epoch).map(|stakes| {
         let mut seed = [0u8; 32];
         seed[0..8].copy_from_slice(&epoch.to_le_bytes());
-        let mut stakes: Vec<_> = stakes.into_iter().collect();
+        let mut stakes: Vec<_> = stakes
+            .iter()
+            .map(|(pubkey, stake)| (*pubkey, *stake))
+            .collect();
         sort_stakes(&mut stakes);
         LeaderSchedule::new(
             &stakes,
@@ -88,7 +91,11 @@ mod tests {
                 .genesis_config;
         let bank = Bank::new_for_tests(&genesis_config);
 
-        let pubkeys_and_stakes: Vec<_> = bank.staked_nodes().into_iter().collect();
+        let pubkeys_and_stakes: Vec<_> = bank
+            .staked_nodes()
+            .iter()
+            .map(|(pubkey, stake)| (*pubkey, *stake))
+            .collect();
         let seed = [0u8; 32];
         let leader_schedule = LeaderSchedule::new(
             &pubkeys_and_stakes,
