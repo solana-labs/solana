@@ -41,53 +41,19 @@ pub struct AccountsPackagePre {
 }
 
 impl AccountsPackagePre {
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        slot: Slot,
-        block_height: u64,
-        slot_deltas: Vec<BankSlotDelta>,
-        snapshot_links: TempDir,
-        storages: SnapshotStorages,
-        hash: Hash,
-        archive_format: ArchiveFormat,
-        snapshot_version: SnapshotVersion,
-        snapshot_output_dir: PathBuf,
-        expected_capitalization: u64,
-        hash_for_testing: Option<Hash>,
-        cluster_type: ClusterType,
-    ) -> Self {
-        Self {
-            slot,
-            block_height,
-            slot_deltas,
-            snapshot_links,
-            storages,
-            hash,
-            archive_format,
-            snapshot_version,
-            snapshot_output_dir,
-            expected_capitalization,
-            hash_for_testing,
-            cluster_type,
-        }
-    }
-
     /// Create a snapshot package
     #[allow(clippy::too_many_arguments)]
-    fn new_snapshot_package<P>(
+    fn new(
         bank: &Bank,
         bank_snapshot_info: &BankSnapshotInfo,
         status_cache_slot_deltas: Vec<BankSlotDelta>,
-        snapshot_package_output_path: P,
+        snapshot_package_output_path: impl AsRef<Path>,
         snapshot_storages: SnapshotStorages,
         archive_format: ArchiveFormat,
         snapshot_version: SnapshotVersion,
         hash_for_testing: Option<Hash>,
         snapshot_tmpdir: TempDir,
-    ) -> Result<Self>
-    where
-        P: AsRef<Path>,
-    {
+    ) -> Result<Self> {
         // Hard link the snapshot into a tmpdir, to ensure its not removed prior to packaging.
         {
             let snapshot_hardlink_dir = snapshot_tmpdir
@@ -100,39 +66,35 @@ impl AccountsPackagePre {
             )?;
         }
 
-        Ok(Self::new(
-            bank.slot(),
-            bank.block_height(),
-            status_cache_slot_deltas,
-            snapshot_tmpdir,
-            snapshot_storages,
-            bank.get_accounts_hash(),
+        Ok(Self {
+            slot: bank.slot(),
+            block_height: bank.block_height(),
+            slot_deltas: status_cache_slot_deltas,
+            snapshot_links: snapshot_tmpdir,
+            storages: snapshot_storages,
+            hash: bank.get_accounts_hash(),
             archive_format,
             snapshot_version,
-            snapshot_package_output_path.as_ref().to_path_buf(),
-            bank.capitalization(),
+            snapshot_output_dir: snapshot_package_output_path.as_ref().to_path_buf(),
+            expected_capitalization: bank.capitalization(),
             hash_for_testing,
-            bank.cluster_type(),
-        ))
+            cluster_type: bank.cluster_type(),
+        })
     }
 
     /// Package up bank snapshot files, snapshot storages, and slot deltas for a full snapshot.
     #[allow(clippy::too_many_arguments)]
-    pub fn new_full_snapshot_package<P, Q>(
+    pub fn new_full_snapshot_package(
         bank: &Bank,
         bank_snapshot_info: &BankSnapshotInfo,
-        snapshots_dir: P,
+        snapshots_dir: impl AsRef<Path>,
         status_cache_slot_deltas: Vec<BankSlotDelta>,
-        snapshot_package_output_path: Q,
+        snapshot_package_output_path: impl AsRef<Path>,
         snapshot_storages: SnapshotStorages,
         archive_format: ArchiveFormat,
         snapshot_version: SnapshotVersion,
         hash_for_testing: Option<Hash>,
-    ) -> Result<Self>
-    where
-        P: AsRef<Path>,
-        Q: AsRef<Path>,
-    {
+    ) -> Result<Self> {
         info!(
             "Package full snapshot for bank: {} has {} account storage entries",
             bank.slot(),
@@ -143,7 +105,7 @@ impl AccountsPackagePre {
             .prefix(&format!("{}{}-", TMP_FULL_SNAPSHOT_PREFIX, bank.slot()))
             .tempdir_in(snapshots_dir)?;
 
-        Self::new_snapshot_package(
+        Self::new(
             bank,
             bank_snapshot_info,
             status_cache_slot_deltas,
@@ -158,22 +120,18 @@ impl AccountsPackagePre {
 
     /// Package up bank snapshot files, snapshot storages, and slot deltas for an incremental snapshot.
     #[allow(clippy::too_many_arguments)]
-    pub fn new_incremental_snapshot_package<P, Q>(
+    pub fn new_incremental_snapshot_package(
         bank: &Bank,
         incremental_snapshot_base_slot: Slot,
         bank_snapshot_info: &BankSnapshotInfo,
-        snapshots_dir: P,
+        snapshots_dir: impl AsRef<Path>,
         status_cache_slot_deltas: Vec<BankSlotDelta>,
-        snapshot_package_output_path: Q,
+        snapshot_package_output_path: impl AsRef<Path>,
         snapshot_storages: SnapshotStorages,
         archive_format: ArchiveFormat,
         snapshot_version: SnapshotVersion,
         hash_for_testing: Option<Hash>,
-    ) -> Result<Self>
-    where
-        P: AsRef<Path>,
-        Q: AsRef<Path>,
-    {
+    ) -> Result<Self> {
         info!(
             "Package incremental snapshot for bank {} (from base slot {}) has {} account storage entries",
             bank.slot(),
@@ -197,7 +155,7 @@ impl AccountsPackagePre {
             ))
             .tempdir_in(snapshots_dir)?;
 
-        Self::new_snapshot_package(
+        Self::new(
             bank,
             bank_snapshot_info,
             status_cache_slot_deltas,
