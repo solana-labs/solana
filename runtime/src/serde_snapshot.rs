@@ -197,7 +197,7 @@ pub(crate) fn bank_from_streams<R>(
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
     verify_index: bool,
-    accounts_index_bins: usize,
+    accounts_index_bins: Option<usize>,
 ) -> std::result::Result<Bank, Error>
 where
     R: Read,
@@ -328,7 +328,7 @@ fn reconstruct_bank_from_fields<E>(
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
     verify_index: bool,
-    accounts_index_bins: usize,
+    accounts_index_bins: Option<usize>,
 ) -> Result<Bank, Error>
 where
     E: SerializableStorage + std::marker::Sync,
@@ -395,7 +395,7 @@ fn reconstruct_accountsdb_from_fields<E>(
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
     verify_index: bool,
-    accounts_index_bins: usize,
+    accounts_index_bins: Option<usize>,
 ) -> Result<AccountsDb, Error>
 where
     E: SerializableStorage + std::marker::Sync,

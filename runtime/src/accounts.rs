@@ -139,7 +139,7 @@ impl Accounts {
             account_indexes,
             caching_enabled,
             shrink_ratio,
-            BINS_FOR_TESTING,
+            Some(BINS_FOR_TESTING),
         )
     }
 
@@ -156,7 +156,7 @@ impl Accounts {
             account_indexes,
             caching_enabled,
             shrink_ratio,
-            BINS_FOR_BENCHMARKS,
+            Some(BINS_FOR_BENCHMARKS),
         )
     }
 
@@ -166,7 +166,7 @@ impl Accounts {
         account_indexes: AccountSecondaryIndexes,
         caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
-        accounts_index_bins: usize,
+        accounts_index_bins: Option<usize>,
     ) -> Self {
         Self {
             accounts_db: Arc::new(AccountsDb::new_with_config(

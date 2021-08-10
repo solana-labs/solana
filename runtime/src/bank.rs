@@ -1190,7 +1190,7 @@ impl Bank {
             accounts_db_caching_enabled,
             shrink_ratio,
             debug_do_not_add_builtins,
-            BINS_FOR_TESTING,
+            Some(BINS_FOR_TESTING),
         )
     }
 
@@ -1215,7 +1215,7 @@ impl Bank {
             accounts_db_caching_enabled,
             shrink_ratio,
             debug_do_not_add_builtins,
-            BINS_FOR_BENCHMARKS,
+            Some(BINS_FOR_BENCHMARKS),
         )
     }
 
@@ -1230,7 +1230,7 @@ impl Bank {
         accounts_db_caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
         debug_do_not_add_builtins: bool,
-        accounts_index_bins: usize,
+        accounts_index_bins: Option<usize>,
     ) -> Self {
         let accounts = Accounts::new_with_config(
             paths,

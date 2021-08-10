@@ -416,7 +416,7 @@ pub fn process_blockstore(
         opts.accounts_db_caching_enabled,
         opts.shrink_ratio,
         false,
-        solana_runtime::accounts_index::BINS_DEFAULT,
+        None, // later, this will be passed from ProcessOptions
     );
     let bank0 = Arc::new(bank0);
     info!("processing ledger for slot 0...");

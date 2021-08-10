@@ -132,7 +132,7 @@ fn load_from_snapshot(
         process_options.accounts_db_test_hash_calculation,
         process_options.accounts_db_skip_shrink,
         process_options.verify_index,
-        solana_runtime::accounts_index::BINS_DEFAULT,
+        None,
     )
     .expect("Load from snapshot failed");
 
