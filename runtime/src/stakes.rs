@@ -1,6 +1,7 @@
 //! Stakes serve as a cache of stake and vote accounts to derive
 //! node stakes
 use {
+<<<<<<< HEAD
     crate::{
         stake_delegations::StakeDelegations,
         stake_history::StakeHistory,
@@ -13,6 +14,9 @@ use {
         iter::{IntoParallelRefIterator, ParallelIterator},
         ThreadPool,
     },
+=======
+    crate::vote_account::{VoteAccount, VoteAccounts},
+>>>>>>> 00e5e1290 (renames solana_runtime::vote_account::VoteAccount)
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         clock::{Epoch, Slot},
@@ -281,6 +285,7 @@ impl Stakes {
         self.vote_accounts.remove(vote_pubkey);
     }
 
+<<<<<<< HEAD
     pub fn remove_stake_delegation(&mut self, stake_pubkey: &Pubkey) {
         if let Some(removed_delegation) = self.stake_delegations.remove(stake_pubkey) {
             let removed_stake = removed_delegation.stake(self.epoch, Some(&self.stake_history));
@@ -308,6 +313,100 @@ impl Stakes {
             self.vote_accounts
                 .insert(*vote_pubkey, (new_stake, new_vote_account));
         }
+=======
+    pub fn store(
+        &mut self,
+        pubkey: &Pubkey,
+        account: &AccountSharedData,
+        fix_stake_deactivate: bool,
+        check_vote_init: bool,
+    ) -> Option<VoteAccount> {
+        if solana_vote_program::check_id(account.owner()) {
+            // unconditionally remove existing at first; there is no dependent calculated state for
+            // votes, not like stakes (stake codepath maintains calculated stake value grouped by
+            // delegated vote pubkey)
+            let old = self.vote_accounts.remove(pubkey);
+            // when account is removed (lamports == 0 or data uninitialized), don't read so that
+            // given `pubkey` can be used for any owner in the future, while not affecting Stakes.
+            if account.lamports() != 0
+                && !(check_vote_init && VoteState::is_uninitialized_no_deser(account.data()))
+            {
+                let stake = old.as_ref().map_or_else(
+                    || {
+                        self.calculate_stake(
+                            pubkey,
+                            self.epoch,
+                            Some(&self.stake_history),
+                            fix_stake_deactivate,
+                        )
+                    },
+                    |v| v.0,
+                );
+
+                self.vote_accounts
+                    .insert(*pubkey, (stake, VoteAccount::from(account.clone())));
+            }
+            old.map(|(_, account)| account)
+        } else if stake::program::check_id(account.owner()) {
+            //  old_stake is stake lamports and voter_pubkey from the pre-store() version
+            let old_stake = self.stake_delegations.get(pubkey).map(|delegation| {
+                (
+                    delegation.voter_pubkey,
+                    delegation.stake(self.epoch, Some(&self.stake_history), fix_stake_deactivate),
+                )
+            });
+
+            let delegation = stake_state::delegation_from(account);
+
+            let stake = delegation.map(|delegation| {
+                (
+                    delegation.voter_pubkey,
+                    if account.lamports() != 0 {
+                        delegation.stake(
+                            self.epoch,
+                            Some(&self.stake_history),
+                            fix_stake_deactivate,
+                        )
+                    } else {
+                        // when account is removed (lamports == 0), this special `else` clause ensures
+                        // resetting cached stake value below, even if the account happens to be
+                        // still staked for some (odd) reason
+                        0
+                    },
+                )
+            });
+
+            // if adjustments need to be made...
+            if stake != old_stake {
+                if let Some((voter_pubkey, stake)) = old_stake {
+                    self.vote_accounts.sub_stake(&voter_pubkey, stake);
+                }
+                if let Some((voter_pubkey, stake)) = stake {
+                    self.vote_accounts.add_stake(&voter_pubkey, stake);
+                }
+            }
+
+            if account.lamports() == 0 {
+                // when account is removed (lamports == 0), remove it from Stakes as well
+                // so that given `pubkey` can be used for any owner in the future, while not
+                // affecting Stakes.
+                self.stake_delegations.remove(pubkey);
+            } else if let Some(delegation) = delegation {
+                self.stake_delegations.insert(*pubkey, delegation);
+            }
+            None
+        } else {
+            // there is no need to remove possibly existing Stakes cache entries with given
+            // `pubkey` because this isn't possible, first of all.
+            // Runtime always enforces an intermediary write of account.lamports == 0,
+            // when not-System111-owned account.owner is swapped.
+            None
+        }
+    }
+
+    pub fn vote_accounts(&self) -> &HashMap<Pubkey, (u64, VoteAccount)> {
+        self.vote_accounts.borrow()
+>>>>>>> 00e5e1290 (renames solana_runtime::vote_account::VoteAccount)
     }
 
     pub fn update_stake_delegation(

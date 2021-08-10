@@ -28,10 +28,14 @@ pub struct VoteAccount(Arc<VoteAccountInner>);
 
 #[derive(Debug, AbiExample)]
 <<<<<<< HEAD
+<<<<<<< HEAD
 struct VoteAccountInner {
 =======
 struct VoteAccount {
 >>>>>>> 1403eaeef (makes solana_runtime::vote_account::VoteAccount private)
+=======
+struct VoteAccountInner {
+>>>>>>> 00e5e1290 (renames solana_runtime::vote_account::VoteAccount)
     account: Account,
     vote_state: RwLock<Result<VoteState, InstructionError>>,
     vote_state_once: Once,
@@ -41,7 +45,11 @@ pub type VoteAccountsHashMap = HashMap<Pubkey, (/*stake:*/ u64, VoteAccount)>;
 
 #[derive(Debug, AbiExample)]
 pub struct VoteAccounts {
+<<<<<<< HEAD
     vote_accounts: Arc<VoteAccountsHashMap>,
+=======
+    vote_accounts: HashMap<Pubkey, (/*stake:*/ u64, VoteAccount)>,
+>>>>>>> 00e5e1290 (renames solana_runtime::vote_account::VoteAccount)
     // Inner Arc is meant to implement copy-on-write semantics as opposed to
     // sharing mutations (hence RwLock<Arc<...>> instead of Arc<RwLock<...>>).
     staked_nodes: RwLock<
@@ -56,6 +64,7 @@ pub struct VoteAccounts {
 }
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 impl VoteAccount {
     pub fn account(&self) -> &Account {
         &self.0.account
@@ -65,6 +74,9 @@ impl VoteAccount {
         self.account().lamports
 =======
 impl ArcVoteAccount {
+=======
+impl VoteAccount {
+>>>>>>> 00e5e1290 (renames solana_runtime::vote_account::VoteAccount)
     pub fn lamports(&self) -> u64 {
         self.0.account.lamports
 >>>>>>> 1403eaeef (makes solana_runtime::vote_account::VoteAccount private)
@@ -110,6 +122,7 @@ impl VoteAccounts {
         self.staked_nodes.read().unwrap().clone()
     }
 
+<<<<<<< HEAD
     pub fn get(&self, pubkey: &Pubkey) -> Option<&(/*stake:*/ u64, VoteAccount)> {
         self.vote_accounts.get(pubkey)
     }
@@ -119,6 +132,13 @@ impl VoteAccounts {
     }
 
     pub(crate) fn insert(&mut self, pubkey: Pubkey, (stake, vote_account): (u64, VoteAccount)) {
+=======
+    pub fn iter(&self) -> impl Iterator<Item = (&Pubkey, &(u64, VoteAccount))> {
+        self.vote_accounts.iter()
+    }
+
+    pub fn insert(&mut self, pubkey: Pubkey, (stake, vote_account): (u64, VoteAccount)) {
+>>>>>>> 00e5e1290 (renames solana_runtime::vote_account::VoteAccount)
         self.add_node_stake(stake, &vote_account);
         let vote_accounts = Arc::make_mut(&mut self.vote_accounts);
         if let Some((stake, vote_account)) = vote_accounts.insert(pubkey, (stake, vote_account)) {
@@ -126,10 +146,16 @@ impl VoteAccounts {
         }
     }
 
+<<<<<<< HEAD
     pub(crate) fn remove(&mut self, pubkey: &Pubkey) -> Option<(u64, VoteAccount)> {
         let vote_accounts = Arc::make_mut(&mut self.vote_accounts);
         let entry = vote_accounts.remove(pubkey);
         if let Some((stake, ref vote_account)) = entry {
+=======
+    pub fn remove(&mut self, pubkey: &Pubkey) -> Option<(u64, VoteAccount)> {
+        let value = self.vote_accounts.remove(pubkey);
+        if let Some((stake, ref vote_account)) = value {
+>>>>>>> 00e5e1290 (renames solana_runtime::vote_account::VoteAccount)
             self.sub_node_stake(stake, vote_account);
         }
         entry
@@ -189,10 +215,14 @@ impl VoteAccounts {
 }
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 impl Serialize for VoteAccount {
 =======
 impl Serialize for ArcVoteAccount {
 >>>>>>> 1403eaeef (makes solana_runtime::vote_account::VoteAccount private)
+=======
+impl Serialize for VoteAccount {
+>>>>>>> 00e5e1290 (renames solana_runtime::vote_account::VoteAccount)
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -212,6 +242,7 @@ impl<'de> Deserialize<'de> for VoteAccount {
 }
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 impl From<AccountSharedData> for VoteAccount {
     fn from(account: AccountSharedData) -> Self {
         Self(Arc::new(VoteAccountInner::from(account)))
@@ -228,14 +259,28 @@ impl From<Account> for ArcVoteAccount {
     }
 }
 
+=======
+>>>>>>> 00e5e1290 (renames solana_runtime::vote_account::VoteAccount)
 impl From<AccountSharedData> for VoteAccount {
+    fn from(account: AccountSharedData) -> Self {
+        Self(Arc::new(VoteAccountInner::from(account)))
+    }
+}
+
+impl From<Account> for VoteAccount {
+    fn from(account: Account) -> Self {
+        Self(Arc::new(VoteAccountInner::from(account)))
+    }
+}
+
+impl From<AccountSharedData> for VoteAccountInner {
     fn from(account: AccountSharedData) -> Self {
         Self::from(Account::from(account))
 >>>>>>> 1403eaeef (makes solana_runtime::vote_account::VoteAccount private)
     }
 }
 
-impl From<Account> for VoteAccount {
+impl From<Account> for VoteAccountInner {
     fn from(account: Account) -> Self {
         Self(Arc::new(VoteAccountInner::from(account)))
     }
@@ -316,8 +361,15 @@ impl PartialEq<VoteAccounts> for VoteAccounts {
     }
 }
 
+<<<<<<< HEAD
 impl From<Arc<VoteAccountsHashMap>> for VoteAccounts {
     fn from(vote_accounts: Arc<VoteAccountsHashMap>) -> Self {
+=======
+type VoteAccountsHashMap = HashMap<Pubkey, (/*stake:*/ u64, VoteAccount)>;
+
+impl From<VoteAccountsHashMap> for VoteAccounts {
+    fn from(vote_accounts: VoteAccountsHashMap) -> Self {
+>>>>>>> 00e5e1290 (renames solana_runtime::vote_account::VoteAccount)
         Self {
             vote_accounts,
             staked_nodes: RwLock::default(),
@@ -332,12 +384,15 @@ impl AsRef<VoteAccountsHashMap> for VoteAccounts {
     }
 }
 
+<<<<<<< HEAD
 impl From<&VoteAccounts> for Arc<VoteAccountsHashMap> {
     fn from(vote_accounts: &VoteAccounts) -> Self {
         Arc::clone(&vote_accounts.vote_accounts)
     }
 }
 
+=======
+>>>>>>> 00e5e1290 (renames solana_runtime::vote_account::VoteAccount)
 impl FromIterator<(Pubkey, (/*stake:*/ u64, VoteAccount))> for VoteAccounts {
     fn from_iter<I>(iter: I) -> Self
     where

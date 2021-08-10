@@ -205,7 +205,14 @@ impl Tower {
         ancestors: &HashMap<Slot, HashSet<Slot>>,
         get_frozen_hash: impl Fn(Slot) -> Option<Hash>,
         latest_validator_votes_for_frozen_banks: &mut LatestValidatorVotesForFrozenBanks,
+<<<<<<< HEAD
     ) -> ComputedBankState {
+=======
+    ) -> ComputedBankState
+    where
+        F: IntoIterator<Item = (Pubkey, (u64, VoteAccount))>,
+    {
+>>>>>>> 00e5e1290 (renames solana_runtime::vote_account::VoteAccount)
         let mut vote_slots = HashSet::new();
         let mut voted_stakes = HashMap::new();
         let mut total_stake = 0;
@@ -1298,6 +1305,7 @@ pub mod test {
         trees::tr,
     };
 
+<<<<<<< HEAD
     fn gen_stakes(stake_votes: &[(u64, &[u64])]) -> HashMap<Pubkey, (u64, VoteAccount)> {
         stake_votes
             .iter()
@@ -1322,6 +1330,31 @@ pub mod test {
                 )
             })
             .collect()
+=======
+    fn gen_stakes(stake_votes: &[(u64, &[u64])]) -> Vec<(Pubkey, (u64, VoteAccount))> {
+        let mut stakes = vec![];
+        for (lamports, votes) in stake_votes {
+            let mut account = AccountSharedData::from(Account {
+                data: vec![0; VoteState::size_of()],
+                lamports: *lamports,
+                ..Account::default()
+            });
+            let mut vote_state = VoteState::default();
+            for slot in *votes {
+                vote_state.process_slot_vote_unchecked(*slot);
+            }
+            VoteState::serialize(
+                &VoteStateVersions::new_current(vote_state),
+                &mut account.data_as_mut_slice(),
+            )
+            .expect("serialize state");
+            stakes.push((
+                solana_sdk::pubkey::new_rand(),
+                (*lamports, VoteAccount::from(account)),
+            ));
+        }
+        stakes
+>>>>>>> 00e5e1290 (renames solana_runtime::vote_account::VoteAccount)
     }
 
     #[test]

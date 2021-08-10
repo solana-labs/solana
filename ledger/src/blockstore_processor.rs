@@ -3,6 +3,7 @@ use {
         block_error::BlockError, blockstore::Blockstore, blockstore_db::BlockstoreError,
         blockstore_meta::SlotMeta, leader_schedule_cache::LeaderScheduleCache,
     },
+<<<<<<< HEAD
     chrono_humanize::{Accuracy, HumanTime, Tense},
     crossbeam_channel::Sender,
     itertools::Itertools,
@@ -59,6 +60,27 @@ use {
         time::{Duration, Instant},
     },
     thiserror::Error,
+=======
+    bank_forks::BankForks,
+    bank_utils,
+    commitment::VOTE_THRESHOLD_SIZE,
+    snapshot_utils::BankFromArchiveTimings,
+    transaction_batch::TransactionBatch,
+    vote_account::VoteAccount,
+    vote_sender_types::ReplayVoteSender,
+};
+use solana_sdk::{
+    clock::{Slot, MAX_PROCESSING_AGE},
+    genesis_config::GenesisConfig,
+    hash::Hash,
+    pubkey::Pubkey,
+    signature::{Keypair, Signature},
+    timing,
+    transaction::{Result, Transaction, TransactionError},
+};
+use solana_transaction_status::token_balances::{
+    collect_token_balances, TransactionTokenBalancesSet,
+>>>>>>> 00e5e1290 (renames solana_runtime::vote_account::VoteAccount)
 };
 
 // it tracks the block cost available capacity - number of compute-units allowed
@@ -1326,8 +1348,16 @@ fn supermajority_root(roots: &[(Slot, u64)], total_epoch_stake: u64) -> Option<S
 fn supermajority_root_from_vote_accounts(
     bank_slot: Slot,
     total_epoch_stake: u64,
+<<<<<<< HEAD
     vote_accounts: &HashMap<Pubkey, (/*stake:*/ u64, VoteAccount)>,
 ) -> Option<Slot> {
+=======
+    vote_accounts: I,
+) -> Option<Slot>
+where
+    I: IntoIterator<Item = (Pubkey, (u64, VoteAccount))>,
+{
+>>>>>>> 00e5e1290 (renames solana_runtime::vote_account::VoteAccount)
     let mut roots_stakes: Vec<(Slot, u64)> = vote_accounts
         .iter()
         .filter_map(|(key, (stake, account))| {
@@ -3779,7 +3809,11 @@ pub mod tests {
     #[allow(clippy::field_reassign_with_default)]
     fn test_supermajority_root_from_vote_accounts() {
         let convert_to_vote_accounts =
+<<<<<<< HEAD
             |roots_stakes: Vec<(Slot, u64)>| -> HashMap<Pubkey, (u64, VoteAccount)> {
+=======
+            |roots_stakes: Vec<(Slot, u64)>| -> Vec<(Pubkey, (u64, VoteAccount))> {
+>>>>>>> 00e5e1290 (renames solana_runtime::vote_account::VoteAccount)
                 roots_stakes
                     .into_iter()
                     .map(|(root, stake)| {

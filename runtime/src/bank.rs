@@ -33,6 +33,43 @@
 //! It offers a high-level API that signs transactions
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
+<<<<<<< HEAD
+=======
+use crate::{
+    accounts::{
+        AccountAddressFilter, Accounts, TransactionAccounts, TransactionLoadResult,
+        TransactionLoaders,
+    },
+    accounts_db::{AccountShrinkThreshold, ErrorCounters, SnapshotStorages},
+    accounts_index::{
+        AccountSecondaryIndexes, IndexKey, ScanResult, BINS_FOR_BENCHMARKS, BINS_FOR_TESTING,
+    },
+    ancestors::{Ancestors, AncestorsForSerialization},
+    blockhash_queue::BlockhashQueue,
+    builtins::{self, ActivationType},
+    epoch_stakes::{EpochStakes, NodeVoteAccounts},
+    inline_spl_token_v2_0,
+    instruction_recorder::InstructionRecorder,
+    log_collector::LogCollector,
+    message_processor::{ExecuteDetailsTimings, Executors, MessageProcessor},
+    rent_collector::RentCollector,
+    stake_weighted_timestamp::{
+        calculate_stake_weighted_timestamp, MaxAllowableDrift, MAX_ALLOWABLE_DRIFT_PERCENTAGE,
+        MAX_ALLOWABLE_DRIFT_PERCENTAGE_FAST, MAX_ALLOWABLE_DRIFT_PERCENTAGE_SLOW,
+    },
+    stakes::Stakes,
+    status_cache::{SlotDelta, StatusCache},
+    system_instruction_processor::{get_system_account_kind, SystemAccountKind},
+    transaction_batch::TransactionBatch,
+    vote_account::VoteAccount,
+};
+use byteorder::{ByteOrder, LittleEndian};
+use itertools::Itertools;
+use log::*;
+use rayon::ThreadPool;
+use solana_measure::measure::Measure;
+use solana_metrics::{datapoint_debug, inc_new_counter_debug, inc_new_counter_info};
+>>>>>>> 00e5e1290 (renames solana_runtime::vote_account::VoteAccount)
 #[allow(deprecated)]
 use solana_sdk::recent_blockhashes_account;
 use {
@@ -519,6 +556,14 @@ pub struct TransactionBalancesSet {
     pub pre_balances: TransactionBalances,
     pub post_balances: TransactionBalances,
 }
+<<<<<<< HEAD
+=======
+pub struct OverwrittenVoteAccount {
+    pub account: VoteAccount,
+    pub transaction_index: usize,
+    pub transaction_result_index: usize,
+}
+>>>>>>> 00e5e1290 (renames solana_runtime::vote_account::VoteAccount)
 
 impl TransactionBalancesSet {
     pub fn new(pre_balances: TransactionBalances, post_balances: TransactionBalances) -> Self {
@@ -3928,11 +3973,18 @@ impl Bank {
     //
     // Ref: collect_fees
     #[allow(clippy::needless_collect)]
+<<<<<<< HEAD
     fn distribute_rent_to_validators(
         &self,
         vote_accounts: &HashMap<Pubkey, (/*stake:*/ u64, VoteAccount)>,
         rent_to_be_distributed: u64,
     ) {
+=======
+    fn distribute_rent_to_validators<I>(&self, vote_accounts: I, rent_to_be_distributed: u64)
+    where
+        I: IntoIterator<Item = (Pubkey, (u64, VoteAccount))>,
+    {
+>>>>>>> 00e5e1290 (renames solana_runtime::vote_account::VoteAccount)
         let mut total_staked = 0;
 
         // Collect the stake associated with each validator.
@@ -5497,15 +5549,37 @@ impl Bank {
 
     /// current vote accounts for this bank along with the stake
     ///   attributed to each account
+<<<<<<< HEAD
     pub fn vote_accounts(&self) -> Arc<HashMap<Pubkey, (/*stake:*/ u64, VoteAccount)>> {
         let stakes = self.stakes_cache.stakes();
         Arc::from(stakes.vote_accounts())
+=======
+    /// Note: This clones the entire vote-accounts hashmap. For a single
+    /// account lookup use get_vote_account instead.
+    pub fn vote_accounts(&self) -> Vec<(Pubkey, (/*stake:*/ u64, VoteAccount))> {
+        self.stakes
+            .read()
+            .unwrap()
+            .vote_accounts()
+            .iter()
+            .map(|(k, v)| (*k, v.clone()))
+            .collect()
+>>>>>>> 00e5e1290 (renames solana_runtime::vote_account::VoteAccount)
     }
 
     /// Vote account for the given vote account pubkey along with the stake.
     pub fn get_vote_account(&self, vote_account: &Pubkey) -> Option<(/*stake:*/ u64, VoteAccount)> {
+<<<<<<< HEAD
         let stakes = self.stakes_cache.stakes();
         stakes.vote_accounts().get(vote_account).cloned()
+=======
+        self.stakes
+            .read()
+            .unwrap()
+            .vote_accounts()
+            .get(vote_account)
+            .cloned()
+>>>>>>> 00e5e1290 (renames solana_runtime::vote_account::VoteAccount)
     }
 
     /// Get the EpochStakes for a given epoch
@@ -5527,8 +5601,14 @@ impl Bank {
         &self,
         epoch: Epoch,
     ) -> Option<&HashMap<Pubkey, (u64, VoteAccount)>> {
+<<<<<<< HEAD
         let epoch_stakes = self.epoch_stakes.get(&epoch)?.stakes();
         Some(epoch_stakes.vote_accounts().as_ref())
+=======
+        self.epoch_stakes
+            .get(&epoch)
+            .map(|epoch_stakes| Stakes::vote_accounts(epoch_stakes.stakes()))
+>>>>>>> 00e5e1290 (renames solana_runtime::vote_account::VoteAccount)
     }
 
     /// Get the fixed authorized voter for the given vote account for the
