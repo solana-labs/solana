@@ -143,7 +143,7 @@ impl OptimisticallyConfirmedBankTracker {
         mut last_notified_confirmed_slot: &mut Slot,
         mut pending_optimistically_confirmed_banks: &mut HashSet<Slot>,
     ) {
-        for parent in bank.parents().iter().rev() {
+        for parent in bank.clone().parents_inclusive().iter().rev() {
             if parent.slot() > slot_threshold {
                 debug!("Calling notify_or_defer for parent {:?}", parent.slot());
                 Self::notify_or_defer(
@@ -155,13 +155,6 @@ impl OptimisticallyConfirmedBankTracker {
                 );
             }
         }
-        Self::notify_or_defer(
-            subscriptions,
-            bank_forks,
-            bank,
-            &mut last_notified_confirmed_slot,
-            &mut pending_optimistically_confirmed_banks,
-        );
     }
 
     pub fn process_notification(
