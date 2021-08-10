@@ -48,8 +48,8 @@ pub const MAX_BANK_SNAPSHOTS: usize = 8; // Save some snapshots but not too many
 const MAX_SNAPSHOT_DATA_FILE_SIZE: u64 = 32 * 1024 * 1024 * 1024; // 32 GiB
 const VERSION_STRING_V1_2_0: &str = "1.2.0";
 const DEFAULT_SNAPSHOT_VERSION: SnapshotVersion = SnapshotVersion::V1_2_0;
-pub(crate) const TMP_FULL_SNAPSHOT_PREFIX: &str = "tmp-snapshot-";
-pub(crate) const TMP_INCREMENTAL_SNAPSHOT_PREFIX: &str = "tmp-incremental-snapshot-";
+pub const TMP_FULL_SNAPSHOT_PREFIX: &str = "tmp-snapshot-";
+pub const TMP_INCREMENTAL_SNAPSHOT_PREFIX: &str = "tmp-incremental-snapshot-";
 pub const DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN: usize = 2;
 pub const FULL_SNAPSHOT_ARCHIVE_FILENAME_REGEX: &str = r"^snapshot-(?P<slot>[[:digit:]]+)-(?P<hash>[[:alnum:]]+)\.(?P<ext>tar|tar\.bz2|tar\.zst|tar\.gz)$";
 pub const INCREMENTAL_SNAPSHOT_ARCHIVE_FILENAME_REGEX: &str = r"^incremental-snapshot-(?P<base>[[:digit:]]+)-(?P<slot>[[:digit:]]+)-(?P<hash>[[:alnum:]]+)\.(?P<ext>tar|tar\.bz2|tar\.zst|tar\.gz)$";
@@ -239,10 +239,11 @@ pub fn remove_tmp_snapshot_archives(snapshot_archives_dir: &Path) {
     }
 }
 
-/// Make a full snapshot archive out of the AccountsPackage
-pub fn archive_snapshot_package(
+/// Make a snapshot archive out of the AccountsPackage
+pub(crate) fn archive_snapshot_package(
     snapshot_package: &AccountsPackage,
     maximum_snapshots_to_retain: usize,
+    staging_dir_prefix: impl AsRef<str>,
 ) -> Result<()> {
     info!(
         "Generating snapshot archive for slot {}",
@@ -271,7 +272,7 @@ pub fn archive_snapshot_package(
     let staging_dir = tempfile::Builder::new()
         .prefix(&format!(
             "{}{}-",
-            TMP_FULL_SNAPSHOT_PREFIX,
+            staging_dir_prefix.as_ref(),
             snapshot_package.slot()
         ))
         .tempdir_in(tar_dir)
@@ -323,7 +324,7 @@ pub fn archive_snapshot_package(
     // Tar the staging directory into the archive at `archive_path`
     let archive_path = tar_dir.join(format!(
         "{}{}.{}",
-        TMP_FULL_SNAPSHOT_PREFIX,
+        staging_dir_prefix.as_ref(),
         snapshot_package.slot(),
         file_ext
     ));
@@ -1680,6 +1681,7 @@ pub fn package_process_and_archive_full_snapshot(
         thread_pool,
         None,
         maximum_snapshots_to_retain,
+        TMP_FULL_SNAPSHOT_PREFIX,
     )?;
 
     Ok(FullSnapshotArchiveInfo::new(package.snapshot_archive_info))
@@ -1717,6 +1719,7 @@ pub fn package_process_and_archive_incremental_snapshot(
         thread_pool,
         Some(incremental_snapshot_base_slot),
         maximum_snapshots_to_retain,
+        TMP_INCREMENTAL_SNAPSHOT_PREFIX,
     )?;
 
     Ok(IncrementalSnapshotArchiveInfo::new(
@@ -1731,11 +1734,12 @@ fn process_and_archive_snapshot_package_pre(
     thread_pool: Option<&ThreadPool>,
     incremental_snapshot_base_slot: Option<Slot>,
     maximum_snapshots_to_retain: usize,
+    staging_dir_prefix: impl AsRef<str>,
 ) -> Result<AccountsPackage> {
     let package =
         process_accounts_package_pre(package_pre, thread_pool, incremental_snapshot_base_slot);
 
-    archive_snapshot_package(&package, maximum_snapshots_to_retain)?;
+    archive_snapshot_package(&package, maximum_snapshots_to_retain, staging_dir_prefix)?;
 
     Ok(package)
 }

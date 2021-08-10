@@ -4,14 +4,16 @@
 // hash on gossip. Monitor gossip for messages from validators in the --trusted-validators
 // set and halt the node if a mismatch is detected.
 
-use crate::snapshot_packager_service::PendingSnapshotPackage;
 use rayon::ThreadPool;
 use solana_gossip::cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES};
 use solana_runtime::{
     accounts_db,
     snapshot_archive_info::SnapshotArchiveInfoGetter,
     snapshot_config::SnapshotConfig,
-    snapshot_package::{AccountsPackage, AccountsPackagePre, AccountsPackageReceiver},
+    snapshot_package::{
+        AccountsPackage, AccountsPackagePre, AccountsPackageReceiver, PendingSnapshotPackage,
+        SnapshotPackage,
+    },
 };
 use solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey};
 use std::collections::{HashMap, HashSet};
@@ -161,7 +163,8 @@ impl AccountsHashVerifier {
                 == 0
             {
                 if let Some(pending_snapshot_package) = pending_snapshot_package {
-                    *pending_snapshot_package.lock().unwrap() = Some(accounts_package);
+                    *pending_snapshot_package.lock().unwrap() =
+                        Some(SnapshotPackage::FullSnapshotPackage(accounts_package));
                 }
             }
         }

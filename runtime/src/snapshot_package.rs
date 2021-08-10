@@ -4,10 +4,7 @@ use crate::{
 };
 use crate::{
     snapshot_archive_info::{SnapshotArchiveInfo, SnapshotArchiveInfoGetter},
-    snapshot_utils::{
-        ArchiveFormat, BankSnapshotInfo, Result, SnapshotVersion, TMP_FULL_SNAPSHOT_PREFIX,
-        TMP_INCREMENTAL_SNAPSHOT_PREFIX,
-    },
+    snapshot_utils::{self, ArchiveFormat, BankSnapshotInfo, Result, SnapshotVersion},
 };
 use log::*;
 use solana_sdk::clock::Slot;
@@ -16,13 +13,69 @@ use solana_sdk::hash::Hash;
 use std::{
     fs,
     path::{Path, PathBuf},
-    sync::mpsc::{Receiver, SendError, Sender},
+    sync::{
+        mpsc::{Receiver, SendError, Sender},
+        Arc, Mutex,
+    },
 };
 use tempfile::TempDir;
 
+/// The sender side of the AccountsPackage channel, used by AccountsBackgroundService
 pub type AccountsPackageSender = Sender<AccountsPackagePre>;
+
+/// The receiver side of the AccountsPackage channel, used by AccountsHashVerifier
 pub type AccountsPackageReceiver = Receiver<AccountsPackagePre>;
+
+/// The error type when sending an AccountsPackage over the channel fails
 pub type AccountsPackageSendError = SendError<AccountsPackagePre>;
+
+/// The PendingSnapshotPackage passes a SnapshotPackage from AccountsHashVerifier to SnapshotPackagerService for archiving
+pub type PendingSnapshotPackage = Arc<Mutex<Option<SnapshotPackage>>>;
+
+/// This enum wraps an AccountsPackage to differentiate between a full snapshot package and an
+/// incremental snapshot package
+pub enum SnapshotPackage {
+    FullSnapshotPackage(AccountsPackage),
+    IncrementalSnapshotPackage(AccountsPackage),
+}
+
+impl SnapshotPackage {
+    /// Archive a SnapshotPackage
+    pub fn archive_snapshot_package(
+        &self,
+        maximum_snapshot_archives_to_retain: usize,
+    ) -> Result<()> {
+        match self {
+            SnapshotPackage::FullSnapshotPackage(accounts_package) => {
+                snapshot_utils::archive_snapshot_package(
+                    accounts_package,
+                    maximum_snapshot_archives_to_retain,
+                    snapshot_utils::TMP_FULL_SNAPSHOT_PREFIX,
+                )
+            }
+            SnapshotPackage::IncrementalSnapshotPackage(accounts_package) => {
+                snapshot_utils::archive_snapshot_package(
+                    accounts_package,
+                    maximum_snapshot_archives_to_retain,
+                    snapshot_utils::TMP_INCREMENTAL_SNAPSHOT_PREFIX,
+                )
+            }
+        }
+    }
+}
+
+impl SnapshotArchiveInfoGetter for SnapshotPackage {
+    fn snapshot_archive_info(&self) -> &SnapshotArchiveInfo {
+        match self {
+            SnapshotPackage::FullSnapshotPackage(accounts_package) => {
+                accounts_package.snapshot_archive_info()
+            }
+            SnapshotPackage::IncrementalSnapshotPackage(accounts_package) => {
+                accounts_package.snapshot_archive_info()
+            }
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct AccountsPackagePre {
@@ -102,7 +155,11 @@ impl AccountsPackagePre {
         );
 
         let snapshot_tmpdir = tempfile::Builder::new()
-            .prefix(&format!("{}{}-", TMP_FULL_SNAPSHOT_PREFIX, bank.slot()))
+            .prefix(&format!(
+                "{}{}-",
+                snapshot_utils::TMP_FULL_SNAPSHOT_PREFIX,
+                bank.slot()
+            ))
             .tempdir_in(snapshots_dir)?;
 
         Self::new(
@@ -149,7 +206,7 @@ impl AccountsPackagePre {
         let snapshot_tmpdir = tempfile::Builder::new()
             .prefix(&format!(
                 "{}{}-{}-",
-                TMP_INCREMENTAL_SNAPSHOT_PREFIX,
+                snapshot_utils::TMP_INCREMENTAL_SNAPSHOT_PREFIX,
                 incremental_snapshot_base_slot,
                 bank.slot()
             ))

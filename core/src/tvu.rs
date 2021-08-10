@@ -21,7 +21,6 @@ use crate::{
     shred_fetch_stage::ShredFetchStage,
     sigverify_shreds::ShredSigVerifier,
     sigverify_stage::SigVerifyStage,
-    snapshot_packager_service::PendingSnapshotPackage,
     tower_storage::TowerStorage,
     voting_service::VotingService,
 };
@@ -45,6 +44,7 @@ use solana_runtime::{
     bank_forks::BankForks,
     commitment::BlockCommitmentCache,
     snapshot_config::SnapshotConfig,
+    snapshot_package::PendingSnapshotPackage,
     vote_sender_types::ReplayVoteSender,
 };
 use solana_sdk::{pubkey::Pubkey, signature::Keypair};

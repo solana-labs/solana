@@ -52,7 +52,7 @@ mod tests {
     use log::{info, trace};
     use solana_core::{
         accounts_hash_verifier::AccountsHashVerifier,
-        snapshot_packager_service::{PendingSnapshotPackage, SnapshotPackagerService},
+        snapshot_packager_service::SnapshotPackagerService,
     };
     use solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo};
     use solana_runtime::{
@@ -66,7 +66,7 @@ mod tests {
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         snapshot_archive_info::FullSnapshotArchiveInfo,
         snapshot_config::SnapshotConfig,
-        snapshot_package::AccountsPackagePre,
+        snapshot_package::{AccountsPackagePre, PendingSnapshotPackage, SnapshotPackage},
         snapshot_utils::{
             self, ArchiveFormat, SnapshotVersion, DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
         },
@@ -292,11 +292,10 @@ mod tests {
             Some(last_bank.get_thread_pool()),
             None,
         );
-        snapshot_utils::archive_snapshot_package(
-            &snapshot_package,
-            DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
-        )
-        .unwrap();
+        let snapshot_package = SnapshotPackage::FullSnapshotPackage(snapshot_package);
+        snapshot_package
+            .archive_snapshot_package(DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN)
+            .unwrap();
 
         // Restore bank from snapshot
         let account_paths = &[snapshot_test_config.accounts_dir.path().to_path_buf()];
@@ -520,7 +519,8 @@ mod tests {
                             Some(&thread_pool),
                             None,
                         );
-                    *pending_snapshot_package.lock().unwrap() = Some(snapshot_package);
+                    *pending_snapshot_package.lock().unwrap() =
+                        Some(SnapshotPackage::FullSnapshotPackage(snapshot_package));
                 }
 
                 // Wait until the package is consumed by SnapshotPackagerService
