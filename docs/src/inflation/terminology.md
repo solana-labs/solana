@@ -24,7 +24,7 @@ A deterministic description of token issuance over time. The Solana Foundation i
 
 The inflation rate actually observed on the Solana network after accounting for other factors that might decrease the _Total Current Supply_. Note that it is not possible for tokens to be created outside of what is described by the _Inflation Schedule_.
 
-- While the _Inflation Schedule_ determines how the protocol issues SOL, this neglects the concurrent elimination of tokens in the ecosystem due to various factors. The primary token burning mechanism is the burning of a portion of each transaction fee. While $100\%$ of each transaction fee is currently being destroyed, it is planned on reducing this burn rate to $50\%$ of each transaction fee, with the remaining fee to be retained by the validator that processes the transaction.
+- While the _Inflation Schedule_ determines how the protocol issues SOL, this neglects the concurrent elimination of tokens in the ecosystem due to various factors. The primary token burning mechanism is the burning of a portion of each transaction fee. $50\%$ of each transaction fee is burned, with the remaining fee retained by the validator that processes the transaction.
 - Additional factors such as loss of private keys and slashing events should also be considered in a holistic analysis of the _Effective Inflation Rate_. For example, it’s estimated that $10-20\%$ of all BTC have been lost and are unrecoverable and that networks may experience similar yearly losses at the rate of $1-2\%$.
 
 ### Staking Yield [%]
