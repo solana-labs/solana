@@ -377,11 +377,7 @@ pub struct ProcessOptions {
     pub limit_load_slot_count_from_snapshot: Option<usize>,
     pub allow_dead_slots: bool,
     pub accounts_db_test_hash_calculation: bool,
-<<<<<<< HEAD
-=======
     pub accounts_db_skip_shrink: bool,
-    pub verify_index: bool,
->>>>>>> 3280ae3e9 (add validator option --accounts-db-skip-shrink (#19028))
     pub shrink_ratio: AccountShrinkThreshold,
 }
 
