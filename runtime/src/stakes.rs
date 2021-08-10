@@ -1,6 +1,7 @@
 //! Stakes serve as a cache of stake and vote accounts to derive
 //! node stakes
 use {
+<<<<<<< HEAD
     crate::vote_account::{VoteAccount, VoteAccounts, VoteAccountsHashMap},
     dashmap::DashMap,
     num_derive::ToPrimitive,
@@ -113,6 +114,23 @@ impl StakesCache {
         }
     }
 }
+=======
+    crate::vote_account::{ArcVoteAccount, VoteAccounts},
+    solana_sdk::{
+        account::{AccountSharedData, ReadableAccount},
+        clock::Epoch,
+        pubkey::Pubkey,
+        stake::{
+            self,
+            state::{Delegation, StakeState},
+        },
+        sysvar::stake_history::StakeHistory,
+    },
+    solana_stake_program::stake_state,
+    solana_vote_program::vote_state::VoteState,
+    std::{borrow::Borrow, collections::HashMap, sync::Arc},
+};
+>>>>>>> f302774cf (implements copy-on-write for staked-nodes (#19090))
 
 #[derive(Default, Clone, PartialEq, Debug, Deserialize, Serialize, AbiExample)]
 pub struct Stakes {
@@ -335,7 +353,7 @@ impl Stakes {
         &self.stake_delegations
     }
 
-    pub fn staked_nodes(&self) -> HashMap<Pubkey, u64> {
+    pub fn staked_nodes(&self) -> Arc<HashMap<Pubkey, u64>> {
         self.vote_accounts.staked_nodes()
     }
 

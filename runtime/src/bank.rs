@@ -5282,8 +5282,13 @@ impl Bank {
         self.stakes_cache.stakes().stake_delegations().clone()
     }
 
+<<<<<<< HEAD
     pub fn staked_nodes(&self) -> HashMap<Pubkey, u64> {
         self.stakes_cache.stakes().staked_nodes()
+=======
+    pub fn staked_nodes(&self) -> Arc<HashMap<Pubkey, u64>> {
+        self.stakes.read().unwrap().staked_nodes()
+>>>>>>> f302774cf (implements copy-on-write for staked-nodes (#19090))
     }
 
     /// current vote accounts for this bank along with the stake
@@ -5312,7 +5317,7 @@ impl Bank {
         &self.epoch_stakes
     }
 
-    pub fn epoch_staked_nodes(&self, epoch: Epoch) -> Option<HashMap<Pubkey, u64>> {
+    pub fn epoch_staked_nodes(&self, epoch: Epoch) -> Option<Arc<HashMap<Pubkey, u64>>> {
         Some(self.epoch_stakes.get(&epoch)?.stakes().staked_nodes())
     }
 
