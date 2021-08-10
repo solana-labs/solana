@@ -340,6 +340,7 @@ impl<V: IsCached> HybridBTreeMap<V> {
         keys.sort_unstable();
         Keys { keys, index: 0 }
     }
+    /*
     pub fn values(&self) -> Values<V> {
         let num_buckets = self.disk.num_buckets();
         if self.bin_index != 0 && self.disk.unified_backing {
@@ -371,6 +372,7 @@ impl<V: IsCached> HybridBTreeMap<V> {
         }
         Values { values, index: 0 }
     }
+    */
 
     pub fn upsert(
         &self,
