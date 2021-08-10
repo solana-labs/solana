@@ -1536,7 +1536,7 @@ pub fn snapshot_bank(
     archive_format: &ArchiveFormat,
     hash_for_testing: Option<Hash>,
 ) -> Result<()> {
-    let storages: Vec<_> = root_bank.get_snapshot_storages();
+    let storages = root_bank.get_snapshot_storages();
     let mut add_snapshot_time = Measure::start("add-snapshot-ms");
     add_bank_snapshot(snapshots_dir, root_bank, &storages, snapshot_version)?;
     add_snapshot_time.stop();
@@ -1630,7 +1630,11 @@ pub fn bank_to_incremental_snapshot_archive(
     bank.rehash(); // Bank accounts may have been manually modified by the caller
 
     let temp_dir = tempfile::tempdir_in(snapshots_dir)?;
-    let storages = bank.get_incremental_snapshot_storages(full_snapshot_slot);
+    let storages = {
+        let mut storages = bank.get_snapshot_storages();
+        filter_snapshot_storages_for_incremental_snapshot(&mut storages, full_snapshot_slot);
+        storages
+    };
     let bank_snapshot_info = add_bank_snapshot(&temp_dir, bank, &storages, snapshot_version)?;
 
     package_process_and_archive_incremental_snapshot(
@@ -1793,6 +1797,19 @@ pub fn process_accounts_package_pre(
         accounts_package.archive_format,
         accounts_package.snapshot_version,
     )
+}
+
+/// Filter snapshot storages and retain only the ones with slots _higher than_
+/// `incremental_snapshot_base_slot`.
+pub fn filter_snapshot_storages_for_incremental_snapshot(
+    snapshot_storages: &mut SnapshotStorages,
+    incremental_snapshot_base_slot: Slot,
+) {
+    snapshot_storages.retain(|storage| {
+        storage
+            .first()
+            .map_or(false, |entry| entry.slot() > incremental_snapshot_base_slot)
+    });
 }
 
 #[cfg(test)]
