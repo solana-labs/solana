@@ -129,7 +129,7 @@ impl CostModel {
                 self.transaction_cost.account_access_cost += account_write_cost();
             } else {
                 self.transaction_cost.account_access_cost += account_read_cost();
-            } 
+            }
         });
         debug!(
             "transaction {:?} has cost {:?}",
@@ -390,9 +390,8 @@ mod tests {
                 .try_into()
                 .unwrap();
 
-        let expected_account_cost = account_write_cost()
-            + account_write_cost()
-            + account_read_cost();
+        let expected_account_cost =
+            account_write_cost() + account_write_cost() + account_read_cost();
         let expected_execution_cost = 8;
 
         let mut cost_model = CostModel::default();
@@ -447,9 +446,8 @@ mod tests {
         );
 
         let number_threads = 10;
-        let expected_account_cost = account_write_cost()
-            + account_write_cost() * 2
-            + account_read_cost() * 2;
+        let expected_account_cost =
+            account_write_cost() + account_write_cost() * 2 + account_read_cost() * 2;
         let cost1 = 100;
         let cost2 = 200;
         // execution cost can be either 2 * Default (before write) or cost1+cost2 (after write)
