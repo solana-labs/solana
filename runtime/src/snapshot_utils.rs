@@ -632,6 +632,7 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
     test_hash_calculation: bool,
+    accounts_db_skip_shrink: bool,
 ) -> Result<(Bank, BankFromArchiveTimings)> {
     let unpack_dir = tempfile::Builder::new()
         .prefix(TMP_SNAPSHOT_PREFIX)
@@ -676,7 +677,7 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
     measure.stop();
 
     let mut verify = Measure::start("verify");
-    if !bank.verify_snapshot_bank(test_hash_calculation)
+    if !bank.verify_snapshot_bank(test_hash_calculation, accounts_db_skip_shrink)
         && limit_load_slot_count_from_snapshot.is_none()
     {
         panic!("Snapshot bank for slot {} failed to verify", bank.slot());
