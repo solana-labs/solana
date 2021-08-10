@@ -296,7 +296,7 @@ impl VoteState {
         }
     }
 
-    fn check_slots_are_valid(
+    pub fn check_slots_are_valid(
         &self,
         vote: &Vote,
         slot_hashes: &[(Slot, Hash)],
