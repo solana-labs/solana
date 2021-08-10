@@ -143,9 +143,9 @@ impl OptimisticallyConfirmedBankTracker {
         mut last_notified_confirmed_slot: &mut Slot,
         mut pending_optimistically_confirmed_banks: &mut HashSet<Slot>,
     ) {
-        for parent in bank.clone().parents_inclusive().iter().rev() {
-            if parent.slot() > slot_threshold {
-                debug!("Calling notify_or_defer for parent {:?}", parent.slot());
+        for confirmed_bank in bank.clone().parents_inclusive().iter().rev() {
+            if confirmed_bank.slot() > slot_threshold {
+                debug!("Calling notify_or_defer for confirmed_bank {:?}", confirmed_bank.slot());
                 Self::notify_or_defer(
                     subscriptions,
                     bank_forks,
