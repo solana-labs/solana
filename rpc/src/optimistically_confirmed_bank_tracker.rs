@@ -149,7 +149,7 @@ impl OptimisticallyConfirmedBankTracker {
                 Self::notify_or_defer(
                     subscriptions,
                     bank_forks,
-                    parent,
+                    confirmed_bank,
                     &mut last_notified_confirmed_slot,
                     &mut pending_optimistically_confirmed_banks,
                 );
