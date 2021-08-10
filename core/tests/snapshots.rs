@@ -771,13 +771,21 @@ mod tests {
             .into_iter()
             .find(|elem| elem.slot == slot)
             .ok_or_else(|| Error::new(ErrorKind::Other, "did not find snapshot with this path"))?;
+        let storages = {
+            let mut storages = bank.get_snapshot_storages();
+            snapshot_utils::filter_snapshot_storages_for_incremental_snapshot(
+                &mut storages,
+                incremental_snapshot_base_slot,
+            );
+            storages
+        };
         snapshot_utils::package_process_and_archive_incremental_snapshot(
             bank,
             incremental_snapshot_base_slot,
             &bank_snapshot_info,
             &snapshot_config.snapshot_path,
             &snapshot_config.snapshot_package_output_path,
-            bank.get_incremental_snapshot_storages(incremental_snapshot_base_slot),
+            storages,
             snapshot_config.archive_format,
             snapshot_config.snapshot_version,
             None,
