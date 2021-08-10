@@ -25,6 +25,7 @@ chrono = { version = "0.4.11", features = ["serde"] }
 crossbeam-channel = "0.5"
 dashmap = { version = "4.0.2", features = ["rayon", "raw-api"] }
 ed25519-dalek = "=1.0.1"
+etcd-client = { version = "0.7.1", features = ["tls"]}
 fs_extra = "1.2.0"
 flate2 = "1.0"
 indexmap = { version = "1.7", features = ["rayon"] }
@@ -71,6 +72,7 @@ solana-vote-program = { path = "../programs/vote", version = "=1.8.0" }
 tempfile = "3.2.0"
 thiserror = "1.0"
 solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.8.0" }
+tokio = { version = "1", features = ["full"] }
 trees = "0.4.2"
 
 [dev-dependencies]
@@ -86,7 +88,6 @@ solana-version = { path = "../version", version = "=1.8.0" }
 static_assertions = "1.1.0"
 symlink = "0.1.0"
 systemstat = "0.1.8"
-tokio = { version = "1", features = ["full"] }
 
 [build-dependencies]
 rustc_version = "0.4"
