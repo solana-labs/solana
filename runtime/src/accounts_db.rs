@@ -2113,16 +2113,18 @@ impl AccountsDb {
     /// When using incremental snapshots, do not purge zero-lamport accounts if the slot is higher
     /// than the last full snapshot slot.  This is to protect against the following scenario:
     ///
-    ///      A full snapshot is taken, and it contains an account with a non-zero balance.  Later,
-    ///      that account's  goes to zero.  Evntually cleaning runs, and before, this account would
-    ///      be cleaned up.  Finally, an incremental snapshot is taken.
+    ///   ```text
+    ///   A full snapshot is taken, and it contains an account with a non-zero balance.  Later,
+    ///   that account's  goes to zero.  Evntually cleaning runs, and before, this account would be
+    ///   cleaned up.  Finally, an incremental snapshot is taken.
     ///
-    ///      Later, the incremental (and full) snapshot is used to rebuild the bank and accounts
-    ///      database (e.x. if the node restarts).  The full snapshot _does_ contain the account
-    ///      (from above) and its balance is non-zero, however, since the account was cleaned up in
-    ///      a later slot, the incremental snapshot does not contain any info about this account,
-    ///      thus, the accounts database will contain the old info from this account, which has its
-    ///      old non-zero balance.  Very bad!
+    ///   Later, the incremental (and full) snapshot is used to rebuild the bank and accounts
+    ///   database (e.x. if the node restarts).  The full snapshot _does_ contain the account (from
+    ///   above) and its balance is non-zero, however, since the account was cleaned up in a later
+    ///   slot, the incremental snapshot does not contain any info about this account, thus, the
+    ///   accounts database will contain the old info from this account, which has its old non-zero
+    ///   balance.  Very bad!
+    ///   ```
     ///
     /// This filtering step can be skipped if there is no `last_full_snapshot_slot`, or if the
     /// `max_clean_root` is less-than-or-equal-to the `last_full_snapshot_slot`.
