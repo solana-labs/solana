@@ -145,7 +145,10 @@ impl OptimisticallyConfirmedBankTracker {
     ) {
         for confirmed_bank in bank.clone().parents_inclusive().iter().rev() {
             if confirmed_bank.slot() > slot_threshold {
-                debug!("Calling notify_or_defer for confirmed_bank {:?}", confirmed_bank.slot());
+                debug!(
+                    "Calling notify_or_defer for confirmed_bank {:?}",
+                    confirmed_bank.slot()
+                );
                 Self::notify_or_defer(
                     subscriptions,
                     bank_forks,
