@@ -24,7 +24,7 @@ use crate::{
     accounts_hash::{AccountsHash, CalculateHashIntermediate, HashStats, PreviousPass},
     accounts_index::{
         AccountIndexGetResult, AccountSecondaryIndexes, AccountsIndex, AccountsIndexRootsStats,
-        IndexKey, IsCached, ScanResult, SlotList, SlotSlice, ZeroLamport, BINS_DEFAULT,
+        IndexKey, IsCached, ScanResult, SlotList, SlotSlice, ZeroLamport, BINS_FOR_TESTING,
     },
     ancestors::Ancestors,
     append_vec::{AppendVec, StoredAccountMeta, StoredMeta, StoredMetaWriteVersion},
@@ -1413,13 +1413,13 @@ impl AccountsDb {
     }
 
     pub fn new_for_tests(paths: Vec<PathBuf>, cluster_type: &ClusterType) -> Self {
-        // will diverge
         AccountsDb::new_with_config(
             paths,
             cluster_type,
             AccountSecondaryIndexes::default(),
             false,
             AccountShrinkThreshold::default(),
+            BINS_FOR_TESTING,
         )
     }
 
@@ -1429,8 +1429,9 @@ impl AccountsDb {
         account_indexes: AccountSecondaryIndexes,
         caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
+        accounts_index_bins: usize,
     ) -> Self {
-        let accounts_index = AccountsIndex::new(BINS_DEFAULT);
+        let accounts_index = AccountsIndex::new(accounts_index_bins);
         let mut new = if !paths.is_empty() {
             Self {
                 paths,
@@ -6232,6 +6233,7 @@ impl AccountsDb {
             account_indexes,
             caching_enabled,
             shrink_ratio,
+            BINS_FOR_TESTING,
         )
     }
 
