@@ -26,7 +26,7 @@ use solana_runtime::{
     commitment::VOTE_THRESHOLD_SIZE,
     snapshot_utils::BankFromArchiveTimings,
     transaction_batch::TransactionBatch,
-    vote_account::ArcVoteAccount,
+    vote_account::VoteAccount,
     vote_sender_types::ReplayVoteSender,
 };
 use solana_sdk::{
@@ -1140,7 +1140,7 @@ fn supermajority_root_from_vote_accounts<I>(
     vote_accounts: I,
 ) -> Option<Slot>
 where
-    I: IntoIterator<Item = (Pubkey, (u64, ArcVoteAccount))>,
+    I: IntoIterator<Item = (Pubkey, (u64, VoteAccount))>,
 {
     let mut roots_stakes: Vec<(Slot, u64)> = vote_accounts
         .into_iter()
@@ -3501,7 +3501,7 @@ pub mod tests {
     #[allow(clippy::field_reassign_with_default)]
     fn test_supermajority_root_from_vote_accounts() {
         let convert_to_vote_accounts =
-            |roots_stakes: Vec<(Slot, u64)>| -> Vec<(Pubkey, (u64, ArcVoteAccount))> {
+            |roots_stakes: Vec<(Slot, u64)>| -> Vec<(Pubkey, (u64, VoteAccount))> {
                 roots_stakes
                     .into_iter()
                     .map(|(root, stake)| {
@@ -3516,7 +3516,7 @@ pub mod tests {
                         VoteState::serialize(&versioned, vote_account.data_as_mut_slice()).unwrap();
                         (
                             solana_sdk::pubkey::new_rand(),
-                            (stake, ArcVoteAccount::from(vote_account)),
+                            (stake, VoteAccount::from(vote_account)),
                         )
                     })
                     .collect_vec()

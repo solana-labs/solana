@@ -21,10 +21,10 @@ const INVALID_VOTE_STATE: Result<VoteState, InstructionError> =
     Err(InstructionError::InvalidAccountData);
 
 #[derive(Clone, Debug, Default, PartialEq, AbiExample)]
-pub struct ArcVoteAccount(Arc<VoteAccount>);
+pub struct VoteAccount(Arc<VoteAccountInner>);
 
 #[derive(Debug, AbiExample)]
-struct VoteAccount {
+struct VoteAccountInner {
     account: Account,
     vote_state: RwLock<Result<VoteState, InstructionError>>,
     vote_state_once: Once,
@@ -32,7 +32,7 @@ struct VoteAccount {
 
 #[derive(Debug, AbiExample)]
 pub struct VoteAccounts {
-    vote_accounts: HashMap<Pubkey, (u64 /*stake*/, ArcVoteAccount)>,
+    vote_accounts: HashMap<Pubkey, (/*stake:*/ u64, VoteAccount)>,
     // Inner Arc is meant to implement copy-on-write semantics as opposed to
     // sharing mutations (hence RwLock<Arc<...>> instead of Arc<RwLock<...>>).
     staked_nodes: RwLock<
@@ -46,7 +46,7 @@ pub struct VoteAccounts {
     staked_nodes_once: Once,
 }
 
-impl ArcVoteAccount {
+impl VoteAccount {
     pub fn lamports(&self) -> u64 {
         self.0.account.lamports
     }
@@ -84,11 +84,11 @@ impl VoteAccounts {
         self.staked_nodes.read().unwrap().clone()
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (&Pubkey, &(u64, ArcVoteAccount))> {
+    pub fn iter(&self) -> impl Iterator<Item = (&Pubkey, &(u64, VoteAccount))> {
         self.vote_accounts.iter()
     }
 
-    pub fn insert(&mut self, pubkey: Pubkey, (stake, vote_account): (u64, ArcVoteAccount)) {
+    pub fn insert(&mut self, pubkey: Pubkey, (stake, vote_account): (u64, VoteAccount)) {
         self.add_node_stake(stake, &vote_account);
         if let Some((stake, vote_account)) =
             self.vote_accounts.insert(pubkey, (stake, vote_account))
@@ -97,7 +97,7 @@ impl VoteAccounts {
         }
     }
 
-    pub fn remove(&mut self, pubkey: &Pubkey) -> Option<(u64, ArcVoteAccount)> {
+    pub fn remove(&mut self, pubkey: &Pubkey) -> Option<(u64, VoteAccount)> {
         let value = self.vote_accounts.remove(pubkey);
         if let Some((stake, ref vote_account)) = value {
             self.sub_node_stake(stake, vote_account);
@@ -123,7 +123,7 @@ impl VoteAccounts {
         }
     }
 
-    fn add_node_stake(&mut self, stake: u64, vote_account: &ArcVoteAccount) {
+    fn add_node_stake(&mut self, stake: u64, vote_account: &VoteAccount) {
         if stake != 0 && self.staked_nodes_once.is_completed() {
             if let Some(node_pubkey) = vote_account.node_pubkey() {
                 let mut staked_nodes = self.staked_nodes.write().unwrap();
@@ -136,7 +136,7 @@ impl VoteAccounts {
         }
     }
 
-    fn sub_node_stake(&mut self, stake: u64, vote_account: &ArcVoteAccount) {
+    fn sub_node_stake(&mut self, stake: u64, vote_account: &VoteAccount) {
         if stake != 0 && self.staked_nodes_once.is_completed() {
             if let Some(node_pubkey) = vote_account.node_pubkey() {
                 let mut staked_nodes = self.staked_nodes.write().unwrap();
@@ -156,7 +156,7 @@ impl VoteAccounts {
     }
 }
 
-impl Serialize for ArcVoteAccount {
+impl Serialize for VoteAccount {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -165,7 +165,7 @@ impl Serialize for ArcVoteAccount {
     }
 }
 
-impl<'de> Deserialize<'de> for ArcVoteAccount {
+impl<'de> Deserialize<'de> for VoteAccount {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -175,25 +175,25 @@ impl<'de> Deserialize<'de> for ArcVoteAccount {
     }
 }
 
-impl From<AccountSharedData> for ArcVoteAccount {
-    fn from(account: AccountSharedData) -> Self {
-        Self(Arc::new(VoteAccount::from(account)))
-    }
-}
-
-impl From<Account> for ArcVoteAccount {
-    fn from(account: Account) -> Self {
-        Self(Arc::new(VoteAccount::from(account)))
-    }
-}
-
 impl From<AccountSharedData> for VoteAccount {
+    fn from(account: AccountSharedData) -> Self {
+        Self(Arc::new(VoteAccountInner::from(account)))
+    }
+}
+
+impl From<Account> for VoteAccount {
+    fn from(account: Account) -> Self {
+        Self(Arc::new(VoteAccountInner::from(account)))
+    }
+}
+
+impl From<AccountSharedData> for VoteAccountInner {
     fn from(account: AccountSharedData) -> Self {
         Self::from(Account::from(account))
     }
 }
 
-impl From<Account> for VoteAccount {
+impl From<Account> for VoteAccountInner {
     fn from(account: Account) -> Self {
         Self {
             account,
@@ -203,7 +203,7 @@ impl From<Account> for VoteAccount {
     }
 }
 
-impl Default for VoteAccount {
+impl Default for VoteAccountInner {
     fn default() -> Self {
         Self {
             account: Account::default(),
@@ -213,7 +213,7 @@ impl Default for VoteAccount {
     }
 }
 
-impl PartialEq<VoteAccount> for VoteAccount {
+impl PartialEq<VoteAccountInner> for VoteAccountInner {
     fn eq(&self, other: &Self) -> bool {
         self.account == other.account
     }
@@ -256,7 +256,7 @@ impl PartialEq<VoteAccounts> for VoteAccounts {
     }
 }
 
-type VoteAccountsHashMap = HashMap<Pubkey, (u64 /*stake*/, ArcVoteAccount)>;
+type VoteAccountsHashMap = HashMap<Pubkey, (/*stake:*/ u64, VoteAccount)>;
 
 impl From<VoteAccountsHashMap> for VoteAccounts {
     fn from(vote_accounts: VoteAccountsHashMap) -> Self {
@@ -274,10 +274,10 @@ impl Borrow<VoteAccountsHashMap> for VoteAccounts {
     }
 }
 
-impl FromIterator<(Pubkey, (u64 /*stake*/, ArcVoteAccount))> for VoteAccounts {
+impl FromIterator<(Pubkey, (/*stake:*/ u64, VoteAccount))> for VoteAccounts {
     fn from_iter<I>(iter: I) -> Self
     where
-        I: IntoIterator<Item = (Pubkey, (u64, ArcVoteAccount))>,
+        I: IntoIterator<Item = (Pubkey, (u64, VoteAccount))>,
     {
         Self::from(HashMap::from_iter(iter))
     }
@@ -341,19 +341,19 @@ mod tests {
     fn new_rand_vote_accounts<R: Rng>(
         rng: &mut R,
         num_nodes: usize,
-    ) -> impl Iterator<Item = (Pubkey, (u64 /*stake*/, ArcVoteAccount))> + '_ {
+    ) -> impl Iterator<Item = (Pubkey, (/*stake:*/ u64, VoteAccount))> + '_ {
         let nodes: Vec<_> = repeat_with(Pubkey::new_unique).take(num_nodes).collect();
         repeat_with(move || {
             let node = nodes[rng.gen_range(0, nodes.len())];
             let (account, _) = new_rand_vote_account(rng, Some(node));
             let stake = rng.gen_range(0, 997);
-            (Pubkey::new_unique(), (stake, ArcVoteAccount::from(account)))
+            (Pubkey::new_unique(), (stake, VoteAccount::from(account)))
         })
     }
 
     fn staked_nodes<'a, I>(vote_accounts: I) -> HashMap<Pubkey, u64>
     where
-        I: IntoIterator<Item = &'a (Pubkey, (u64, ArcVoteAccount))>,
+        I: IntoIterator<Item = &'a (Pubkey, (u64, VoteAccount))>,
     {
         let mut staked_nodes = HashMap::new();
         for (_, (stake, vote_account)) in vote_accounts
@@ -375,7 +375,7 @@ mod tests {
         let mut rng = rand::thread_rng();
         let (account, vote_state) = new_rand_vote_account(&mut rng, None);
         let lamports = account.lamports;
-        let vote_account = ArcVoteAccount::from(account);
+        let vote_account = VoteAccount::from(account);
         assert_eq!(lamports, vote_account.lamports());
         assert_eq!(vote_state, *vote_account.vote_state().as_ref().unwrap());
         // 2nd call to .vote_state() should return the cached value.
@@ -386,9 +386,9 @@ mod tests {
     fn test_vote_account_serialize() {
         let mut rng = rand::thread_rng();
         let (account, vote_state) = new_rand_vote_account(&mut rng, None);
-        let vote_account = ArcVoteAccount::from(account.clone());
+        let vote_account = VoteAccount::from(account.clone());
         assert_eq!(vote_state, *vote_account.vote_state().as_ref().unwrap());
-        // Assert than ArcVoteAccount has the same wire format as Account.
+        // Assert than VoteAccount has the same wire format as Account.
         assert_eq!(
             bincode::serialize(&account).unwrap(),
             bincode::serialize(&vote_account).unwrap()
@@ -400,9 +400,9 @@ mod tests {
         let mut rng = rand::thread_rng();
         let (account, vote_state) = new_rand_vote_account(&mut rng, None);
         let data = bincode::serialize(&account).unwrap();
-        let vote_account = ArcVoteAccount::from(account);
+        let vote_account = VoteAccount::from(account);
         assert_eq!(vote_state, *vote_account.vote_state().as_ref().unwrap());
-        let other_vote_account: ArcVoteAccount = bincode::deserialize(&data).unwrap();
+        let other_vote_account: VoteAccount = bincode::deserialize(&data).unwrap();
         assert_eq!(vote_account, other_vote_account);
         assert_eq!(
             vote_state,
@@ -414,11 +414,11 @@ mod tests {
     fn test_vote_account_round_trip() {
         let mut rng = rand::thread_rng();
         let (account, vote_state) = new_rand_vote_account(&mut rng, None);
-        let vote_account = ArcVoteAccount::from(account);
+        let vote_account = VoteAccount::from(account);
         assert_eq!(vote_state, *vote_account.vote_state().as_ref().unwrap());
         let data = bincode::serialize(&vote_account).unwrap();
-        let other_vote_account: ArcVoteAccount = bincode::deserialize(&data).unwrap();
-        // Assert that serialize->deserialized returns the same ArcVoteAccount.
+        let other_vote_account: VoteAccount = bincode::deserialize(&data).unwrap();
+        // Assert that serialize->deserialized returns the same VoteAccount.
         assert_eq!(vote_account, other_vote_account);
         assert_eq!(
             vote_state,
@@ -429,7 +429,7 @@ mod tests {
     #[test]
     fn test_vote_accounts_serialize() {
         let mut rng = rand::thread_rng();
-        let vote_accounts_hash_map: HashMap<Pubkey, (u64, ArcVoteAccount)> =
+        let vote_accounts_hash_map: HashMap<Pubkey, (u64, VoteAccount)> =
             new_rand_vote_accounts(&mut rng, 64).take(1024).collect();
         let vote_accounts = VoteAccounts::from(vote_accounts_hash_map.clone());
         assert!(vote_accounts.staked_nodes().len() > 32);
@@ -448,7 +448,7 @@ mod tests {
     #[test]
     fn test_vote_accounts_deserialize() {
         let mut rng = rand::thread_rng();
-        let vote_accounts_hash_map: HashMap<Pubkey, (u64, ArcVoteAccount)> =
+        let vote_accounts_hash_map: HashMap<Pubkey, (u64, VoteAccount)> =
             new_rand_vote_accounts(&mut rng, 64).take(1024).collect();
         let data = bincode::serialize(&vote_accounts_hash_map).unwrap();
         let vote_accounts: VoteAccounts = bincode::deserialize(&data).unwrap();

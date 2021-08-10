@@ -1,15 +1,17 @@
-use crate::{
-    cluster_info_vote_listener::SlotVoteTracker,
-    cluster_slots::SlotPubkeys,
-    replay_stage::SUPERMINORITY_THRESHOLD,
-    {consensus::Stake, consensus::VotedStakes},
-};
-use solana_ledger::blockstore_processor::{ConfirmationProgress, ConfirmationTiming};
-use solana_runtime::{bank::Bank, bank_forks::BankForks, vote_account::ArcVoteAccount};
-use solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey};
-use std::{
-    collections::{BTreeMap, HashMap, HashSet},
-    sync::{Arc, RwLock},
+use {
+    crate::{
+        cluster_info_vote_listener::SlotVoteTracker,
+        cluster_slots::SlotPubkeys,
+        replay_stage::SUPERMINORITY_THRESHOLD,
+        {consensus::Stake, consensus::VotedStakes},
+    },
+    solana_ledger::blockstore_processor::{ConfirmationProgress, ConfirmationTiming},
+    solana_runtime::{bank::Bank, bank_forks::BankForks, vote_account::VoteAccount},
+    solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey},
+    std::{
+        collections::{BTreeMap, HashMap, HashSet},
+        sync::{Arc, RwLock},
+    },
 };
 
 type VotedSlot = Slot;
@@ -326,7 +328,7 @@ impl PropagatedStats {
         &mut self,
         node_pubkey: &Pubkey,
         vote_account_pubkeys: &[Pubkey],
-        epoch_vote_accounts: &HashMap<Pubkey, (u64, ArcVoteAccount)>,
+        epoch_vote_accounts: &HashMap<Pubkey, (u64, VoteAccount)>,
     ) {
         self.propagated_node_ids.insert(*node_pubkey);
         for vote_account_pubkey in vote_account_pubkeys.iter() {
@@ -522,7 +524,7 @@ mod test {
         let epoch_vote_accounts: HashMap<_, _> = vote_account_pubkeys
             .iter()
             .skip(num_vote_accounts - staked_vote_accounts)
-            .map(|pubkey| (*pubkey, (1, ArcVoteAccount::default())))
+            .map(|pubkey| (*pubkey, (1, VoteAccount::default())))
             .collect();
 
         let mut stats = PropagatedStats::default();
@@ -564,7 +566,7 @@ mod test {
         let epoch_vote_accounts: HashMap<_, _> = vote_account_pubkeys
             .iter()
             .skip(num_vote_accounts - staked_vote_accounts)
-            .map(|pubkey| (*pubkey, (1, ArcVoteAccount::default())))
+            .map(|pubkey| (*pubkey, (1, VoteAccount::default())))
             .collect();
         stats.add_node_pubkey_internal(&node_pubkey, &vote_account_pubkeys, &epoch_vote_accounts);
         assert!(stats.propagated_node_ids.contains(&node_pubkey));

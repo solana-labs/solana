@@ -8,7 +8,7 @@ use {
     solana_ledger::{ancestor_iterator::AncestorIterator, blockstore::Blockstore, blockstore_db},
     solana_runtime::{
         bank::Bank, bank_forks::BankForks, commitment::VOTE_THRESHOLD_SIZE,
-        vote_account::ArcVoteAccount,
+        vote_account::VoteAccount,
     },
     solana_sdk::{
         clock::{Slot, UnixTimestamp},
@@ -209,7 +209,7 @@ impl Tower {
         latest_validator_votes_for_frozen_banks: &mut LatestValidatorVotesForFrozenBanks,
     ) -> ComputedBankState
     where
-        F: IntoIterator<Item = (Pubkey, (u64, ArcVoteAccount))>,
+        F: IntoIterator<Item = (Pubkey, (u64, VoteAccount))>,
     {
         let mut vote_slots = HashSet::new();
         let mut voted_stakes = HashMap::new();
@@ -555,7 +555,7 @@ impl Tower {
         descendants: &HashMap<Slot, HashSet<u64>>,
         progress: &ProgressMap,
         total_stake: u64,
-        epoch_vote_accounts: &HashMap<Pubkey, (u64, ArcVoteAccount)>,
+        epoch_vote_accounts: &HashMap<Pubkey, (u64, VoteAccount)>,
         latest_validator_votes_for_frozen_banks: &LatestValidatorVotesForFrozenBanks,
         heaviest_subtree_fork_choice: &HeaviestSubtreeForkChoice,
     ) -> SwitchForkDecision {
@@ -825,7 +825,7 @@ impl Tower {
         descendants: &HashMap<Slot, HashSet<u64>>,
         progress: &ProgressMap,
         total_stake: u64,
-        epoch_vote_accounts: &HashMap<Pubkey, (u64, ArcVoteAccount)>,
+        epoch_vote_accounts: &HashMap<Pubkey, (u64, VoteAccount)>,
         latest_validator_votes_for_frozen_banks: &LatestValidatorVotesForFrozenBanks,
         heaviest_subtree_fork_choice: &HeaviestSubtreeForkChoice,
     ) -> SwitchForkDecision {
@@ -1398,7 +1398,7 @@ pub mod test {
     use tempfile::TempDir;
     use trees::tr;
 
-    fn gen_stakes(stake_votes: &[(u64, &[u64])]) -> Vec<(Pubkey, (u64, ArcVoteAccount))> {
+    fn gen_stakes(stake_votes: &[(u64, &[u64])]) -> Vec<(Pubkey, (u64, VoteAccount))> {
         let mut stakes = vec![];
         for (lamports, votes) in stake_votes {
             let mut account = AccountSharedData::from(Account {
@@ -1417,7 +1417,7 @@ pub mod test {
             .expect("serialize state");
             stakes.push((
                 solana_sdk::pubkey::new_rand(),
-                (*lamports, ArcVoteAccount::from(account)),
+                (*lamports, VoteAccount::from(account)),
             ));
         }
         stakes

@@ -22,7 +22,7 @@ pub(crate) struct MaxAllowableDrift {
 
 pub(crate) fn calculate_stake_weighted_timestamp<I, K, V, T>(
     unique_timestamps: I,
-    stakes: &HashMap<Pubkey, (u64, T /*Account|ArcVoteAccount*/)>,
+    stakes: &HashMap<Pubkey, (u64, T /*Account|VoteAccount*/)>,
     slot: Slot,
     slot_duration: Duration,
     epoch_start_timestamp: Option<(Slot, UnixTimestamp)>,
