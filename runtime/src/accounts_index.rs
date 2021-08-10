@@ -761,10 +761,10 @@ pub struct AccountsIndex<T> {
 
 impl<T: IsCached> AccountsIndex<T> {
     pub fn default_for_tests() -> Self {
-        Self::new(BINS_FOR_TESTING)
+        Self::new(Some(BINS_FOR_TESTING))
     }
 
-    pub fn new(bins: usize) -> Self {
+    pub fn new(bins: Option<usize>) -> Self {
         let (account_maps, bin_calculator) = Self::allocate_accounts_index(bins);
         Self {
             account_maps,
@@ -784,7 +784,8 @@ impl<T: IsCached> AccountsIndex<T> {
         }
     }
 
-    fn allocate_accounts_index(bins: usize) -> (LockMapType<T>, PubkeyBinCalculator16) {
+    fn allocate_accounts_index(bins: Option<usize>) -> (LockMapType<T>, PubkeyBinCalculator16) {
+        let bins = bins.unwrap_or(BINS_DEFAULT);
         let account_maps = (0..bins)
             .into_iter()
             .map(|_| RwLock::new(AccountMap::default()))
@@ -4023,6 +4024,6 @@ pub mod tests {
     #[test]
     #[should_panic(expected = "bins.is_power_of_two()")]
     fn test_illegal_bins() {
-        AccountsIndex::<bool>::new(3);
+        AccountsIndex::<bool>::new(Some(3));
     }
 }

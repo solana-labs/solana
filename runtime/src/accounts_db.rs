@@ -1420,7 +1420,7 @@ impl AccountsDb {
             AccountSecondaryIndexes::default(),
             false,
             AccountShrinkThreshold::default(),
-            BINS_FOR_TESTING,
+            Some(BINS_FOR_TESTING),
         )
     }
 
@@ -1430,7 +1430,7 @@ impl AccountsDb {
         account_indexes: AccountSecondaryIndexes,
         caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
-        accounts_index_bins: usize,
+        accounts_index_bins: Option<usize>,
     ) -> Self {
         let accounts_index = AccountsIndex::new(accounts_index_bins);
         let mut new = if !paths.is_empty() {
@@ -6227,7 +6227,7 @@ impl AccountsDb {
             account_indexes,
             caching_enabled,
             shrink_ratio,
-            BINS_FOR_TESTING,
+            Some(BINS_FOR_TESTING),
         )
     }
 
