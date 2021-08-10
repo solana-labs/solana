@@ -7530,6 +7530,7 @@ pub mod tests {
         let slot: Slot = serde_json::from_value(json["result"].clone()).unwrap();
         assert_eq!(slot, 0);
         let mut highest_confirmed_slot: Slot = 0;
+        let mut last_notified_confirmed_slot: Slot = 0;
 
         OptimisticallyConfirmedBankTracker::process_notification(
             BankNotification::OptimisticallyConfirmed(2),
@@ -7537,6 +7538,7 @@ pub mod tests {
             &optimistically_confirmed_bank,
             &subscriptions,
             &mut pending_optimistically_confirmed_banks,
+            &mut last_notified_confirmed_slot,
             &mut highest_confirmed_slot,
         );
         let req =
@@ -7553,6 +7555,7 @@ pub mod tests {
             &optimistically_confirmed_bank,
             &subscriptions,
             &mut pending_optimistically_confirmed_banks,
+            &mut last_notified_confirmed_slot,
             &mut highest_confirmed_slot,
         );
         let req =
@@ -7569,6 +7572,7 @@ pub mod tests {
             &optimistically_confirmed_bank,
             &subscriptions,
             &mut pending_optimistically_confirmed_banks,
+            &mut last_notified_confirmed_slot,
             &mut highest_confirmed_slot,
         );
         let req =
@@ -7586,6 +7590,7 @@ pub mod tests {
             &optimistically_confirmed_bank,
             &subscriptions,
             &mut pending_optimistically_confirmed_banks,
+            &mut last_notified_confirmed_slot,
             &mut highest_confirmed_slot,
         );
         let req =
