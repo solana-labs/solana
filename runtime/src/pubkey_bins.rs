@@ -11,7 +11,7 @@ impl PubkeyBinCalculator16 {
         std::mem::size_of::<T>() * 8
     }
 
-    fn log_2(x: u32) -> u32 {
+    pub fn log_2(x: u32) -> u32 {
         assert!(x > 0);
         Self::num_bits::<u32>() as u32 - x.leading_zeros() - 1
     }
@@ -26,6 +26,11 @@ impl PubkeyBinCalculator16 {
         Self {
             shift_bits: MAX_BITS - bits,
         }
+    }
+
+    pub fn bin_from_pubkey_static(bins: usize, pubkey: &Pubkey) -> usize {
+        let as_ref = pubkey.as_ref();
+        ((as_ref[0] as usize * 256 + as_ref[1] as usize) as usize) * bins / 65536
     }
 
     pub fn bin_from_pubkey(&self, pubkey: &Pubkey) -> usize {

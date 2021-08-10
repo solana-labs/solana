@@ -496,7 +496,10 @@ fn do_process_blockstore_from_root(
     assert!(bank.parent().is_none());
     let start_slot = bank.slot();
     let now = Instant::now();
+    let now2 = Instant::now();
+
     let mut root = start_slot;
+    let mut timing = ExecuteTimings::default();
 
     if let Some(ref new_hard_forks) = opts.new_hard_forks {
         let hard_forks = bank.hard_forks();
@@ -512,6 +515,8 @@ fn do_process_blockstore_from_root(
             }
         }
     }
+    timing.p1 += now2.elapsed().as_micros();
+    let now2 = Instant::now();
 
     // ensure start_slot is rooted for correct replay
     if blockstore.is_primary_access() {
@@ -522,13 +527,16 @@ fn do_process_blockstore_from_root(
         panic!("starting slot isn't root and can't update due to being secondary blockstore access: {}", start_slot);
     }
 
+    timing.p2 += now2.elapsed().as_micros();
+    let now2 = Instant::now();
     if let Ok(metas) = blockstore.slot_meta_iterator(start_slot) {
         if let Some((slot, _meta)) = metas.last() {
             info!("ledger holds data through slot {}", slot);
         }
     }
 
-    let mut timing = ExecuteTimings::default();
+    timing.p3 += now2.elapsed().as_micros();
+    let mut now2 = Instant::now();
     // Iterate and replay slots from blockstore starting from `start_slot`
     let (initial_forks, leader_schedule_cache) = {
         if let Some(meta) = blockstore
@@ -540,6 +548,9 @@ fn do_process_blockstore_from_root(
             if opts.full_leader_cache {
                 leader_schedule_cache.set_max_schedules(std::usize::MAX);
             }
+            timing.p5 += now2.elapsed().as_micros();
+            now2 = Instant::now();
+
             let mut initial_forks = load_frozen_forks(
                 &bank,
                 &meta,
@@ -552,7 +563,11 @@ fn do_process_blockstore_from_root(
                 cache_block_meta_sender,
                 &mut timing,
             )?;
+            timing.p6 += now2.elapsed().as_micros();
+            now2 = Instant::now();
             initial_forks.sort_by_key(|bank| bank.slot());
+            timing.p7 += now2.elapsed().as_micros();
+            now2 = Instant::now();
 
             (initial_forks, leader_schedule_cache)
         } else {
@@ -563,10 +578,13 @@ fn do_process_blockstore_from_root(
             (vec![bank], leader_schedule_cache)
         }
     };
+    timing.p4 += now2.elapsed().as_micros();
+    let now2 = Instant::now();
     if initial_forks.is_empty() {
         return Err(BlockstoreProcessorError::NoValidForksFound);
     }
     let bank_forks = BankForks::new_from_banks(&initial_forks, root);
+    timing.p5 += now2.elapsed().as_micros();
 
     let processing_time = now.elapsed();
 
@@ -585,6 +603,15 @@ fn do_process_blockstore_from_root(
 
     datapoint_info!(
         "process_blockstore_from_root",
+        ("p1", timing.p1, i64),
+        ("p2", timing.p2, i64),
+        ("p3", timing.p3, i64),
+        ("p4", timing.p4, i64),
+        ("p5", timing.p5, i64),
+        ("p6", timing.p6, i64),
+        ("p7", timing.p7, i64),
+        ("p8", timing.p8, i64),
+        ("p9", timing.p9, i64),
         ("total_time_us", processing_time.as_micros(), i64),
         ("frozen_banks", bank_forks.frozen_banks().len(), i64),
         ("slot", bank_forks.root(), i64),
@@ -972,6 +999,7 @@ fn load_frozen_forks(
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
     timing: &mut ExecuteTimings,
 ) -> result::Result<Vec<Arc<Bank>>, BlockstoreProcessorError> {
+    let mut now2 = Instant::now();
     let mut initial_forks = HashMap::new();
     let mut all_banks = HashMap::new();
     let mut last_status_report = Instant::now();
@@ -994,6 +1022,8 @@ fn load_frozen_forks(
         &mut pending_slots,
         &mut initial_forks,
     )?;
+    timing.p7 += now2.elapsed().as_micros();
+    now2 = Instant::now();
 
     let dev_halt_at_slot = opts.dev_halt_at_slot.unwrap_or(std::u64::MAX);
     if root_bank.slot() != dev_halt_at_slot {
@@ -1016,6 +1046,8 @@ fn load_frozen_forks(
             }
 
             let mut progress = ConfirmationProgress::new(last_entry_hash);
+            timing.p8 += now2.elapsed().as_micros();
+            now2 = Instant::now();
 
             if process_single_slot(
                 blockstore,
@@ -1032,6 +1064,8 @@ fn load_frozen_forks(
             {
                 continue;
             }
+            timing.p1 += now2.elapsed().as_micros();
+            now2 = Instant::now();
             txs += progress.num_txs;
 
             // Block must be frozen by this point, otherwise `process_single_slot` would
@@ -1085,6 +1119,8 @@ fn load_frozen_forks(
                     None
                 }
             };
+            timing.p9 += now2.elapsed().as_micros();
+            now2 = Instant::now();
 
             if let Some(new_root_bank) = new_root_bank {
                 *root = new_root_bank.slot();
@@ -1125,6 +1161,8 @@ fn load_frozen_forks(
                 &mut initial_forks,
             )?;
 
+            timing.p4 += now2.elapsed().as_micros();
+            now2 = Instant::now();
             if slot >= dev_halt_at_slot {
                 break;
             }

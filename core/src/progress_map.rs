@@ -94,6 +94,11 @@ impl ReplaySlotStats {
                 i64
             ),
             (
+                "collect_rent_us",
+                self.execute_timings.details.collect_rent_us,
+                i64
+            ),
+            (
                 "changed_account_count",
                 self.execute_timings.details.changed_account_count,
                 i64
