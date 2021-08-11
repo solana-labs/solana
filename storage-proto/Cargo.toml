@@ -27,4 +27,4 @@ name = "solana_storage_proto"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [build-dependencies]
-tonic-build = "0.5.1"
+tonic-build = "0.5.2"
