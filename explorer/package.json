@@ -18,7 +18,7 @@
     "@types/chai": "^4.2.21",
     "@types/chart.js": "^2.9.34",
     "@types/classnames": "^2.3.1",
-    "@types/jest": "^26.0.24",
+    "@types/jest": "^27.0.0",
     "@types/node": "^16.4.13",
     "@types/react": "^17.0.16",
     "@types/react-dom": "^17.0.9",
