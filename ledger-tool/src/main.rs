@@ -11,7 +11,7 @@ use serde_json::json;
 use solana_clap_utils::{
     input_parsers::{cluster_type_of, pubkey_of, pubkeys_of},
     input_validators::{
-        is_parsable, is_pubkey, is_pubkey_or_keypair, is_slot, is_valid_percentage,
+        is_bin, is_parsable, is_pubkey, is_pubkey_or_keypair, is_slot, is_valid_percentage,
     },
 };
 use solana_core::cost_model::CostModel;
@@ -849,6 +849,12 @@ fn main() {
         .long("no-accounts-db-caching")
         .takes_value(false)
         .help("Disables accounts-db caching");
+    let accounts_index_bins = Arg::with_name("accounts_index_bins")
+        .long("accounts-index-bins")
+        .value_name("BINS")
+        .validator(is_bin)
+        .takes_value(true)
+        .help("Number of bins to divide the accounts index into");
     let account_paths_arg = Arg::with_name("account_paths")
         .long("accounts")
         .value_name("PATHS")
@@ -1143,6 +1149,7 @@ fn main() {
             .arg(&account_paths_arg)
             .arg(&halt_at_slot_arg)
             .arg(&limit_load_slot_count_from_snapshot_arg)
+            .arg(&accounts_index_bins)
             .arg(&verify_index_arg)
             .arg(&hard_forks_arg)
             .arg(&no_accounts_db_caching_arg)
@@ -1868,6 +1875,7 @@ fn main() {
                     usize
                 )
                 .ok(),
+                accounts_index_bins: value_t!(arg_matches, "accounts_index_bins", usize).ok(),
                 verify_index: arg_matches.is_present("verify_accounts_index"),
                 allow_dead_slots: arg_matches.is_present("allow_dead_slots"),
                 accounts_db_test_hash_calculation: arg_matches
