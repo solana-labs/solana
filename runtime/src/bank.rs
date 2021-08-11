@@ -2692,7 +2692,10 @@ impl Bank {
         &self.fee_rate_governor
     }
 
-    // DEPRECATED
+    #[deprecated(
+        since = "1.6.11",
+        note = "Please use `get_blockhash_last_valid_block_height`"
+    )]
     pub fn get_blockhash_last_valid_slot(&self, blockhash: &Hash) -> Option<Slot> {
         let blockhash_queue = self.blockhash_queue.read().unwrap();
         // This calculation will need to be updated to consider epoch boundaries if BlockhashQueue

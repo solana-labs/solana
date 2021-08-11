@@ -6,10 +6,7 @@ use {
     solana_poh::poh_recorder::PohRecorder,
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{
-        clock::{Slot, NUM_CONSECUTIVE_LEADER_SLOTS},
-        hash::Hash,
-        nonce_account,
-        pubkey::Pubkey,
+        clock::NUM_CONSECUTIVE_LEADER_SLOTS, hash::Hash, nonce_account, pubkey::Pubkey,
         signature::Signature,
     },
     std::{
@@ -34,7 +31,7 @@ pub struct SendTransactionService {
 pub struct TransactionInfo {
     pub signature: Signature,
     pub wire_transaction: Vec<u8>,
-    pub last_valid_slot: Slot,
+    pub last_valid_block_height: u64,
     pub durable_nonce_info: Option<(Pubkey, Hash)>,
 }
 
@@ -42,13 +39,13 @@ impl TransactionInfo {
     pub fn new(
         signature: Signature,
         wire_transaction: Vec<u8>,
-        last_valid_slot: Slot,
+        last_valid_block_height: u64,
         durable_nonce_info: Option<(Pubkey, Hash)>,
     ) -> Self {
         Self {
             signature,
             wire_transaction,
-            last_valid_slot,
+            last_valid_block_height,
             durable_nonce_info,
         }
     }
@@ -244,7 +241,7 @@ impl SendTransactionService {
                     return false;
                 }
             }
-            if transaction_info.last_valid_slot < root_bank.slot() {
+            if transaction_info.last_valid_block_height < root_bank.block_height() {
                 info!("Dropping expired transaction: {}", signature);
                 result.expired += 1;
                 inc_new_counter_info!("send_transaction_service-expired", 1);
@@ -391,7 +388,12 @@ mod test {
         info!("Expired transactions are dropped...");
         transactions.insert(
             Signature::default(),
-            TransactionInfo::new(Signature::default(), vec![], root_bank.slot() - 1, None),
+            TransactionInfo::new(
+                Signature::default(),
+                vec![],
+                root_bank.block_height() - 1,
+                None,
+            ),
         );
         let result = SendTransactionService::process_transactions(
             &working_bank,
@@ -414,7 +416,7 @@ mod test {
         info!("Rooted transactions are dropped...");
         transactions.insert(
             rooted_signature,
-            TransactionInfo::new(rooted_signature, vec![], working_bank.slot(), None),
+            TransactionInfo::new(rooted_signature, vec![], working_bank.block_height(), None),
         );
         let result = SendTransactionService::process_transactions(
             &working_bank,
@@ -437,7 +439,7 @@ mod test {
         info!("Failed transactions are dropped...");
         transactions.insert(
             failed_signature,
-            TransactionInfo::new(failed_signature, vec![], working_bank.slot(), None),
+            TransactionInfo::new(failed_signature, vec![], working_bank.block_height(), None),
         );
         let result = SendTransactionService::process_transactions(
             &working_bank,
@@ -460,7 +462,12 @@ mod test {
         info!("Non-rooted transactions are kept...");
         transactions.insert(
             non_rooted_signature,
-            TransactionInfo::new(non_rooted_signature, vec![], working_bank.slot(), None),
+            TransactionInfo::new(
+                non_rooted_signature,
+                vec![],
+                working_bank.block_height(),
+                None,
+            ),
         );
         let result = SendTransactionService::process_transactions(
             &working_bank,
@@ -484,7 +491,12 @@ mod test {
         info!("Unknown transactions are retried...");
         transactions.insert(
             Signature::default(),
-            TransactionInfo::new(Signature::default(), vec![], working_bank.slot(), None),
+            TransactionInfo::new(
+                Signature::default(),
+                vec![],
+                working_bank.block_height(),
+                None,
+            ),
         );
         let result = SendTransactionService::process_transactions(
             &working_bank,
@@ -542,7 +554,7 @@ mod test {
             .transfer(2, &mint_keypair, &mint_keypair.pubkey())
             .unwrap();
 
-        let last_valid_slot = working_bank.slot() + 300;
+        let last_valid_block_height = working_bank.block_height() + 300;
 
         let failed_signature = {
             let blockhash = working_bank.last_blockhash();
@@ -561,7 +573,7 @@ mod test {
             TransactionInfo::new(
                 rooted_signature,
                 vec![],
-                last_valid_slot,
+                last_valid_block_height,
                 Some((nonce_address, durable_nonce)),
             ),
         );
@@ -588,7 +600,7 @@ mod test {
             TransactionInfo::new(
                 rooted_signature,
                 vec![],
-                last_valid_slot,
+                last_valid_block_height,
                 Some((nonce_address, Hash::new_unique())),
             ),
         );
@@ -617,7 +629,7 @@ mod test {
             TransactionInfo::new(
                 Signature::default(),
                 vec![],
-                last_valid_slot,
+                last_valid_block_height,
                 Some((nonce_address, Hash::new_unique())),
             ),
         );
@@ -638,13 +650,13 @@ mod test {
                 ..ProcessTransactionsResult::default()
             }
         );
-        // ... or last_valid_slot timeout has passed
+        // ... or last_valid_block_height timeout has passed
         transactions.insert(
             Signature::default(),
             TransactionInfo::new(
                 Signature::default(),
                 vec![],
-                root_bank.slot() - 1,
+                root_bank.block_height() - 1,
                 Some((nonce_address, durable_nonce)),
             ),
         );
@@ -672,7 +684,7 @@ mod test {
             TransactionInfo::new(
                 failed_signature,
                 vec![],
-                last_valid_slot,
+                last_valid_block_height,
                 Some((nonce_address, Hash::new_unique())), // runtime should advance nonce on failed transactions
             ),
         );
@@ -700,7 +712,7 @@ mod test {
             TransactionInfo::new(
                 non_rooted_signature,
                 vec![],
-                last_valid_slot,
+                last_valid_block_height,
                 Some((nonce_address, Hash::new_unique())), // runtime advances nonce when transaction lands
             ),
         );
@@ -729,7 +741,7 @@ mod test {
             TransactionInfo::new(
                 Signature::default(),
                 vec![],
-                last_valid_slot,
+                last_valid_block_height,
                 Some((nonce_address, durable_nonce)),
             ),
         );

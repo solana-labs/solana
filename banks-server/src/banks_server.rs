@@ -110,7 +110,7 @@ impl BanksServer {
         self,
         signature: &Signature,
         blockhash: &Hash,
-        last_valid_slot: Slot,
+        last_valid_block_height: u64,
         commitment: CommitmentLevel,
     ) -> Option<transaction::Result<()>> {
         let mut status = self
@@ -119,7 +119,7 @@ impl BanksServer {
         while status.is_none() {
             sleep(Duration::from_millis(200)).await;
             let bank = self.bank(commitment);
-            if bank.slot() > last_valid_slot {
+            if bank.block_height() > last_valid_block_height {
                 break;
             }
             status = bank.get_signature_status_with_blockhash(signature, blockhash);
@@ -145,16 +145,19 @@ fn verify_transaction(
 impl Banks for BanksServer {
     async fn send_transaction_with_context(self, _: Context, transaction: Transaction) {
         let blockhash = &transaction.message.recent_blockhash;
-        let last_valid_slot = self
+        let last_valid_block_height = self
             .bank_forks
             .read()
             .unwrap()
             .root_bank()
-            .get_blockhash_last_valid_slot(blockhash)
+            .get_blockhash_last_valid_block_height(blockhash)
             .unwrap();
         let signature = transaction.signatures.get(0).cloned().unwrap_or_default();
-        let info =
-            TransactionInfo::new(signature, serialize(&transaction).unwrap(), last_valid_slot);
+        let info = TransactionInfo::new(
+            signature,
+            serialize(&transaction).unwrap(),
+            last_valid_block_height,
+        );
         self.transaction_sender.send(info).unwrap();
     }
 
@@ -162,11 +165,13 @@ impl Banks for BanksServer {
         self,
         _: Context,
         commitment: CommitmentLevel,
-    ) -> (FeeCalculator, Hash, Slot) {
+    ) -> (FeeCalculator, Hash, u64) {
         let bank = self.bank(commitment);
         let (blockhash, fee_calculator) = bank.last_blockhash_with_fee_calculator();
-        let last_valid_slot = bank.get_blockhash_last_valid_slot(&blockhash).unwrap();
-        (fee_calculator, blockhash, last_valid_slot)
+        let last_valid_block_height = bank
+            .get_blockhash_last_valid_block_height(&blockhash)
+            .unwrap();
+        (fee_calculator, blockhash, last_valid_block_height)
     }
 
     async fn get_transaction_status_with_context(
@@ -209,6 +214,10 @@ impl Banks for BanksServer {
         self.slot(commitment)
     }
 
+    async fn get_block_height_with_context(self, _: Context, commitment: CommitmentLevel) -> u64 {
+        self.bank(commitment).block_height()
+    }
+
     async fn process_transaction_with_commitment_and_context(
         self,
         _: Context,
@@ -223,18 +232,21 @@ impl Banks for BanksServer {
         }
 
         let blockhash = &transaction.message.recent_blockhash;
-        let last_valid_slot = self
+        let last_valid_block_height = self
             .bank_forks
             .read()
             .unwrap()
             .root_bank()
-            .get_blockhash_last_valid_slot(blockhash)
+            .get_blockhash_last_valid_block_height(blockhash)
             .unwrap();
         let signature = transaction.signatures.get(0).cloned().unwrap_or_default();
-        let info =
-            TransactionInfo::new(signature, serialize(&transaction).unwrap(), last_valid_slot);
+        let info = TransactionInfo::new(
+            signature,
+            serialize(&transaction).unwrap(),
+            last_valid_block_height,
+        );
         self.transaction_sender.send(info).unwrap();
-        self.poll_signature_status(&signature, blockhash, last_valid_slot, commitment)
+        self.poll_signature_status(&signature, blockhash, last_valid_block_height, commitment)
             .await
     }
 

@@ -23,6 +23,7 @@ use solana_client::{
     rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig},
     rpc_filter::{Memcmp, MemcmpEncodedBytes, RpcFilterType},
     rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
+    rpc_response::Fees,
     tpu_client::{TpuClient, TpuClientConfig},
 };
 use solana_rbpf::{
@@ -35,7 +36,6 @@ use solana_sdk::{
     account_utils::StateMut,
     bpf_loader, bpf_loader_deprecated,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-    clock::Slot,
     commitment_config::CommitmentConfig,
     instruction::Instruction,
     instruction::InstructionError,
@@ -1943,8 +1943,12 @@ fn send_deploy_messages(
     if let Some(write_messages) = write_messages {
         if let Some(write_signer) = write_signer {
             trace!("Writing program data");
-            let (blockhash, _, last_valid_slot) = rpc_client
-                .get_recent_blockhash_with_commitment(config.commitment)?
+            let Fees {
+                blockhash,
+                last_valid_block_height,
+                ..
+            } = rpc_client
+                .get_fees_with_commitment(config.commitment)?
                 .value;
             let mut write_transactions = vec![];
             for message in write_messages.iter() {
@@ -1959,7 +1963,7 @@ fn send_deploy_messages(
                 write_transactions,
                 &[payer_signer, write_signer],
                 config.commitment,
-                last_valid_slot,
+                last_valid_block_height,
             )
             .map_err(|err| format!("Data writes to account failed: {}", err))?;
         }
@@ -2029,7 +2033,7 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
     mut transactions: Vec<Transaction>,
     signer_keys: &T,
     commitment: CommitmentConfig,
-    mut last_valid_slot: Slot,
+    mut last_valid_block_height: u64,
 ) -> Result<(), Box<dyn error::Error>> {
     let progress_bar = new_spinner_progress_bar();
     let mut send_retries = 5;
@@ -2069,7 +2073,7 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
 
         // Collect statuses for all the transactions, drop those that are confirmed
         loop {
-            let mut slot = 0;
+            let mut block_height = 0;
             let pending_signatures = pending_transactions.keys().cloned().collect::<Vec<_>>();
             for pending_signatures_chunk in
                 pending_signatures.chunks(MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS)
@@ -2094,12 +2098,12 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
                     }
                 }
 
-                slot = rpc_client.get_slot()?;
+                block_height = rpc_client.get_block_height()?;
                 progress_bar.set_message(format!(
-                    "[{}/{}] Transactions confirmed. Retrying in {} slots",
+                    "[{}/{}] Transactions confirmed. Retrying in {} blocks",
                     num_transactions - pending_transactions.len(),
                     num_transactions,
-                    last_valid_slot.saturating_sub(slot)
+                    last_valid_block_height.saturating_sub(block_height)
                 ));
             }
 
@@ -2107,7 +2111,7 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
                 return Ok(());
             }
 
-            if slot > last_valid_slot {
+            if block_height > last_valid_block_height {
                 break;
             }
 
@@ -2137,10 +2141,12 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
         send_retries -= 1;
 
         // Re-sign any failed transactions with a new blockhash and retry
-        let (blockhash, _fee_calculator, new_last_valid_slot) = rpc_client
-            .get_recent_blockhash_with_commitment(commitment)?
-            .value;
-        last_valid_slot = new_last_valid_slot;
+        let Fees {
+            blockhash,
+            last_valid_block_height: new_last_valid_block_height,
+            ..
+        } = rpc_client.get_fees_with_commitment(commitment)?.value;
+        last_valid_block_height = new_last_valid_block_height;
         transactions = vec![];
         for (_, mut transaction) in pending_transactions.into_iter() {
             transaction.try_sign(signer_keys, blockhash)?;

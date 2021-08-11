@@ -544,6 +544,7 @@ impl JsonRpcRequestProcessor {
     fn get_fees(&self, commitment: Option<CommitmentConfig>) -> RpcResponse<RpcFees> {
         let bank = self.bank(commitment);
         let (blockhash, fee_calculator) = bank.confirmed_last_blockhash();
+        #[allow(deprecated)]
         let last_valid_slot = bank
             .get_blockhash_last_valid_slot(&blockhash)
             .expect("bank blockhash queue should contain blockhash");
@@ -2140,7 +2141,7 @@ fn _send_transaction(
     meta: JsonRpcRequestProcessor,
     transaction: Transaction,
     wire_transaction: Vec<u8>,
-    last_valid_slot: Slot,
+    last_valid_block_height: u64,
     durable_nonce_info: Option<(Pubkey, Hash)>,
 ) -> Result<String> {
     if transaction.signatures.is_empty() {
@@ -2150,7 +2151,7 @@ fn _send_transaction(
     let transaction_info = TransactionInfo::new(
         signature,
         wire_transaction,
-        last_valid_slot,
+        last_valid_block_height,
         durable_nonce_info,
     );
     meta.transaction_sender
@@ -3233,7 +3234,9 @@ pub mod rpc_full {
             } else {
                 bank.confirmed_last_blockhash().0
             };
-            let last_valid_slot = bank.get_blockhash_last_valid_slot(&blockhash).unwrap_or(0);
+            let last_valid_block_height = bank
+                .get_blockhash_last_valid_block_height(&blockhash)
+                .unwrap_or(0);
 
             let transaction =
                 request_airdrop_transaction(&faucet_addr, &pubkey, lamports, blockhash).map_err(
@@ -3248,7 +3251,13 @@ pub mod rpc_full {
                 Error::internal_error()
             })?;
 
-            _send_transaction(meta, transaction, wire_transaction, last_valid_slot, None)
+            _send_transaction(
+                meta,
+                transaction,
+                wire_transaction,
+                last_valid_block_height,
+                None,
+            )
         }
 
         fn send_transaction(
@@ -3267,8 +3276,8 @@ pub mod rpc_full {
                 .map(|commitment| CommitmentConfig { commitment });
             let preflight_bank = &*meta.bank(preflight_commitment);
 
-            let mut last_valid_slot = preflight_bank
-                .get_blockhash_last_valid_slot(&transaction.message.recent_blockhash)
+            let mut last_valid_block_height = preflight_bank
+                .get_blockhash_last_valid_block_height(&transaction.message.recent_blockhash)
                 .unwrap_or(0);
 
             let durable_nonce_info = solana_sdk::transaction::uses_durable_nonce(&transaction)
@@ -3280,11 +3289,12 @@ pub mod rpc_full {
                 })
                 .map(|&pubkey| (pubkey, transaction.message.recent_blockhash));
             if durable_nonce_info.is_some() {
-                // While it uses a defined constant, this last_valid_slot value is chosen arbitrarily.
+                // While it uses a defined constant, this last_valid_block_height value is chosen arbitrarily.
                 // It provides a fallback timeout for durable-nonce transaction retries in case of
                 // malicious packing of the retry queue. Durable-nonce transactions are otherwise
                 // retried until the nonce is advanced.
-                last_valid_slot = preflight_bank.slot() + MAX_RECENT_BLOCKHASHES as u64;
+                last_valid_block_height =
+                    preflight_bank.block_height() + MAX_RECENT_BLOCKHASHES as u64;
             }
 
             if !config.skip_preflight {
@@ -3345,7 +3355,7 @@ pub mod rpc_full {
                 meta,
                 transaction,
                 wire_transaction,
-                last_valid_slot,
+                last_valid_block_height,
                 durable_nonce_info,
             )
         }
