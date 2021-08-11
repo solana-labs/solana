@@ -38,8 +38,10 @@ use crate::{
         AccountAddressFilter, Accounts, TransactionAccounts, TransactionLoadResult,
         TransactionLoaders,
     },
-    accounts_db::{AccountShrinkThreshold, ErrorCounters, SnapshotStorage, SnapshotStorages},
-    accounts_index::{AccountSecondaryIndexes, IndexKey, ScanResult},
+    accounts_db::{AccountShrinkThreshold, ErrorCounters, SnapshotStorages},
+    accounts_index::{
+        AccountSecondaryIndexes, IndexKey, ScanResult, BINS_FOR_BENCHMARKS, BINS_FOR_TESTING,
+    },
     ancestors::{Ancestors, AncestorsForSerialization},
     blockhash_queue::BlockhashQueue,
     builtins::{self, ActivationType},
@@ -57,7 +59,7 @@ use crate::{
     status_cache::{SlotDelta, StatusCache},
     system_instruction_processor::{get_system_account_kind, SystemAccountKind},
     transaction_batch::TransactionBatch,
-    vote_account::ArcVoteAccount,
+    vote_account::VoteAccount,
 };
 use byteorder::{ByteOrder, LittleEndian};
 use itertools::Itertools;
@@ -536,7 +538,7 @@ pub struct TransactionBalancesSet {
     pub post_balances: TransactionBalances,
 }
 pub struct OverwrittenVoteAccount {
-    pub account: ArcVoteAccount,
+    pub account: VoteAccount,
     pub transaction_index: usize,
     pub transaction_result_index: usize,
 }
@@ -1178,7 +1180,7 @@ impl Bank {
         shrink_ratio: AccountShrinkThreshold,
         debug_do_not_add_builtins: bool,
     ) -> Self {
-        Self::new_with_paths_production(
+        Self::new_with_paths(
             genesis_config,
             paths,
             frozen_account_pubkeys,
@@ -1188,6 +1190,7 @@ impl Bank {
             accounts_db_caching_enabled,
             shrink_ratio,
             debug_do_not_add_builtins,
+            Some(BINS_FOR_TESTING),
         )
     }
 
@@ -1202,7 +1205,7 @@ impl Bank {
         shrink_ratio: AccountShrinkThreshold,
         debug_do_not_add_builtins: bool,
     ) -> Self {
-        Self::new_with_paths_production(
+        Self::new_with_paths(
             genesis_config,
             paths,
             frozen_account_pubkeys,
@@ -1212,10 +1215,12 @@ impl Bank {
             accounts_db_caching_enabled,
             shrink_ratio,
             debug_do_not_add_builtins,
+            Some(BINS_FOR_BENCHMARKS),
         )
     }
 
-    pub fn new_with_paths_production(
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_with_paths(
         genesis_config: &GenesisConfig,
         paths: Vec<PathBuf>,
         frozen_account_pubkeys: &[Pubkey],
@@ -1225,6 +1230,7 @@ impl Bank {
         accounts_db_caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
         debug_do_not_add_builtins: bool,
+        accounts_index_bins: Option<usize>,
     ) -> Self {
         let accounts = Accounts::new_with_config(
             paths,
@@ -1232,6 +1238,7 @@ impl Bank {
             account_indexes,
             accounts_db_caching_enabled,
             shrink_ratio,
+            accounts_index_bins,
         );
         let mut bank = Self::default_with_accounts(accounts);
         bank.ancestors = Ancestors::from(vec![bank.slot()]);
@@ -3706,7 +3713,7 @@ impl Bank {
     #[allow(clippy::needless_collect)]
     fn distribute_rent_to_validators<I>(&self, vote_accounts: I, rent_to_be_distributed: u64)
     where
-        I: IntoIterator<Item = (Pubkey, (u64, ArcVoteAccount))>,
+        I: IntoIterator<Item = (Pubkey, (u64, VoteAccount))>,
     {
         let mut total_staked = 0;
 
@@ -4870,21 +4877,6 @@ impl Bank {
         self.rc.get_snapshot_storages(self.slot())
     }
 
-    /// Get the snapshot storages _higher than_ the `full_snapshot_slot`.  This is used when making an
-    /// incremental snapshot.
-    pub fn get_incremental_snapshot_storages(&self, full_snapshot_slot: Slot) -> SnapshotStorages {
-        self.get_snapshot_storages()
-            .into_iter()
-            .map(|storage| {
-                storage
-                    .into_iter()
-                    .filter(|entry| entry.slot() > full_snapshot_slot)
-                    .collect::<SnapshotStorage>()
-            })
-            .filter(|storage| !storage.is_empty())
-            .collect()
-    }
-
     #[must_use]
     fn verify_hash(&self) -> bool {
         assert!(self.is_frozen());
@@ -5130,7 +5122,7 @@ impl Bank {
         self.stakes.read().unwrap().stake_delegations().clone()
     }
 
-    pub fn staked_nodes(&self) -> HashMap<Pubkey, u64> {
+    pub fn staked_nodes(&self) -> Arc<HashMap<Pubkey, u64>> {
         self.stakes.read().unwrap().staked_nodes()
     }
 
@@ -5138,7 +5130,7 @@ impl Bank {
     ///   attributed to each account
     /// Note: This clones the entire vote-accounts hashmap. For a single
     /// account lookup use get_vote_account instead.
-    pub fn vote_accounts(&self) -> Vec<(Pubkey, (u64 /*stake*/, ArcVoteAccount))> {
+    pub fn vote_accounts(&self) -> Vec<(Pubkey, (/*stake:*/ u64, VoteAccount))> {
         self.stakes
             .read()
             .unwrap()
@@ -5149,10 +5141,7 @@ impl Bank {
     }
 
     /// Vote account for the given vote account pubkey along with the stake.
-    pub fn get_vote_account(
-        &self,
-        vote_account: &Pubkey,
-    ) -> Option<(u64 /*stake*/, ArcVoteAccount)> {
+    pub fn get_vote_account(&self, vote_account: &Pubkey) -> Option<(/*stake:*/ u64, VoteAccount)> {
         self.stakes
             .read()
             .unwrap()
@@ -5170,7 +5159,7 @@ impl Bank {
         &self.epoch_stakes
     }
 
-    pub fn epoch_staked_nodes(&self, epoch: Epoch) -> Option<HashMap<Pubkey, u64>> {
+    pub fn epoch_staked_nodes(&self, epoch: Epoch) -> Option<Arc<HashMap<Pubkey, u64>>> {
         Some(self.epoch_stakes.get(&epoch)?.stakes().staked_nodes())
     }
 
@@ -5179,7 +5168,7 @@ impl Bank {
     pub fn epoch_vote_accounts(
         &self,
         epoch: Epoch,
-    ) -> Option<&HashMap<Pubkey, (u64, ArcVoteAccount)>> {
+    ) -> Option<&HashMap<Pubkey, (u64, VoteAccount)>> {
         self.epoch_stakes
             .get(&epoch)
             .map(|epoch_stakes| Stakes::vote_accounts(epoch_stakes.stakes()))

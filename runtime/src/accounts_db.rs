@@ -24,7 +24,7 @@ use crate::{
     accounts_hash::{AccountsHash, CalculateHashIntermediate, HashStats, PreviousPass},
     accounts_index::{
         AccountIndexGetResult, AccountSecondaryIndexes, AccountsIndex, AccountsIndexRootsStats,
-        IndexKey, IsCached, ScanResult, SlotList, SlotSlice, ZeroLamport, BINS_DEFAULT,
+        IndexKey, IsCached, ScanResult, SlotList, SlotSlice, ZeroLamport, BINS_FOR_TESTING,
     },
     ancestors::Ancestors,
     append_vec::{AppendVec, StoredAccountMeta, StoredMeta, StoredMetaWriteVersion},
@@ -174,6 +174,13 @@ struct GenerateIndexTimings {
     pub storage_size_storages_us: u64,
     pub storage_size_accounts_map_flatten_us: u64,
 }
+
+#[derive(Default, Debug, PartialEq)]
+struct StorageSizeAndCount {
+    pub stored_size: usize,
+    pub count: usize,
+}
+type StorageSizeAndCountMap = DashMap<AppendVecId, StorageSizeAndCount>;
 
 impl GenerateIndexTimings {
     pub fn report(&self) {
@@ -1344,14 +1351,13 @@ impl<'a> ReadableAccount for StoredAccountMeta<'a> {
     }
 }
 
-impl Default for AccountsDb {
-    fn default() -> Self {
-        Self::default_with_accounts_index(AccountInfoAccountsIndex::new(BINS_DEFAULT))
-    }
+struct IndexAccountMapEntry<'a> {
+    pub write_version: StoredMetaWriteVersion,
+    pub store_id: AppendVecId,
+    pub stored_account: StoredAccountMeta<'a>,
 }
 
-type GenerateIndexAccountsMap<'a> =
-    HashMap<Pubkey, (StoredMetaWriteVersion, AppendVecId, StoredAccountMeta<'a>)>;
+type GenerateIndexAccountsMap<'a> = HashMap<Pubkey, IndexAccountMapEntry<'a>>;
 
 impl AccountsDb {
     pub fn default_for_tests() -> Self {
@@ -1408,13 +1414,13 @@ impl AccountsDb {
     }
 
     pub fn new_for_tests(paths: Vec<PathBuf>, cluster_type: &ClusterType) -> Self {
-        // will diverge
         AccountsDb::new_with_config(
             paths,
             cluster_type,
             AccountSecondaryIndexes::default(),
             false,
             AccountShrinkThreshold::default(),
+            Some(BINS_FOR_TESTING),
         )
     }
 
@@ -1424,8 +1430,9 @@ impl AccountsDb {
         account_indexes: AccountSecondaryIndexes,
         caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
+        accounts_index_bins: Option<usize>,
     ) -> Self {
-        let accounts_index = AccountsIndex::new(BINS_DEFAULT);
+        let accounts_index = AccountsIndex::new(accounts_index_bins);
         let mut new = if !paths.is_empty() {
             Self {
                 paths,
@@ -5153,11 +5160,14 @@ impl AccountsDb {
         ret
     }
 
+    // previous_slot_entry_was_cached = true means we just need to assert that after this update is complete
+    //  that there are no items we would have put in reclaims that are not cached
     fn update_index(
         &self,
         slot: Slot,
         infos: Vec<AccountInfo>,
         accounts: &[(&Pubkey, &impl ReadableAccount)],
+        previous_slot_entry_was_cached: bool,
     ) -> SlotList<AccountInfo> {
         let mut reclaims = SlotList::<AccountInfo>::with_capacity(infos.len() * 2);
         for (info, pubkey_account) in infos.into_iter().zip(accounts.iter()) {
@@ -5170,6 +5180,7 @@ impl AccountsDb {
                 &self.account_indexes,
                 info,
                 &mut reclaims,
+                previous_slot_entry_was_cached,
             );
         }
         reclaims
@@ -5711,11 +5722,13 @@ impl AccountsDb {
             .fetch_add(store_accounts_time.as_us(), Ordering::Relaxed);
         let mut update_index_time = Measure::start("update_index");
 
+        let previous_slot_entry_was_cached = self.caching_enabled && is_cached_store;
+
         // If the cache was flushed, then because `update_index` occurs
         // after the account are stored by the above `store_accounts_to`
         // call and all the accounts are stored, all reads after this point
         // will know to not check the cache anymore
-        let mut reclaims = self.update_index(slot, infos, accounts);
+        let mut reclaims = self.update_index(slot, infos, accounts, previous_slot_entry_was_cached);
 
         // For each updated account, `reclaims` should only have at most one
         // item (if the account was previously updated in this slot).
@@ -5723,7 +5736,7 @@ impl AccountsDb {
         // to anything that needs to be cleaned in the backing storage
         // entries
         if self.caching_enabled {
-            reclaims.retain(|(_, r)| r.store_id != CACHE_VIRTUAL_STORAGE_ID);
+            reclaims.retain(|(_, r)| !r.is_cached());
 
             if is_cached_store {
                 assert!(reclaims.is_empty());
@@ -5864,12 +5877,20 @@ impl AccountsDb {
                 let this_version = stored_account.meta.write_version;
                 match accounts_map.entry(stored_account.meta.pubkey) {
                     std::collections::hash_map::Entry::Vacant(entry) => {
-                        entry.insert((this_version, storage.append_vec_id(), stored_account));
+                        entry.insert(IndexAccountMapEntry {
+                            write_version: this_version,
+                            store_id: storage.append_vec_id(),
+                            stored_account,
+                        });
                     }
                     std::collections::hash_map::Entry::Occupied(mut entry) => {
-                        let occupied_version = entry.get().0;
+                        let occupied_version = entry.get().write_version;
                         if occupied_version < this_version {
-                            entry.insert((this_version, storage.append_vec_id(), stored_account));
+                            entry.insert(IndexAccountMapEntry {
+                                write_version: this_version,
+                                store_id: storage.append_vec_id(),
+                                stored_account,
+                            });
                         } else {
                             assert!(occupied_version != this_version);
                         }
@@ -5892,9 +5913,15 @@ impl AccountsDb {
         let secondary = !self.account_indexes.is_empty();
 
         let len = accounts_map.len();
-        let items = accounts_map
-            .into_iter()
-            .map(|(pubkey, (_, store_id, stored_account))| {
+        let items = accounts_map.into_iter().map(
+            |(
+                pubkey,
+                IndexAccountMapEntry {
+                    write_version: _write_version,
+                    store_id,
+                    stored_account,
+                },
+            )| {
                 if secondary {
                     self.accounts_index.update_secondary_indexes(
                         &pubkey,
@@ -5913,7 +5940,8 @@ impl AccountsDb {
                         lamports: stored_account.account_meta.lamports,
                     },
                 )
-            });
+            },
+        );
 
         let (dirty_pubkeys, insert_us) = self
             .accounts_index
@@ -5941,11 +5969,13 @@ impl AccountsDb {
         // verify checks that all the expected items are in the accounts index and measures how long it takes to look them all up
         let passes = if verify { 2 } else { 1 };
         for pass in 0..passes {
+            let storage_info = StorageSizeAndCountMap::default();
             let total_processed_slots_across_all_threads = AtomicU64::new(0);
             let outer_slots_len = slots.len();
             let chunk_size = (outer_slots_len / 7) + 1; // approximately 400k slots in a snapshot
             let mut index_time = Measure::start("index");
             let insertion_time_us = AtomicU64::new(0);
+            let storage_info_timings = Mutex::new(GenerateIndexTimings::default());
             let scan_time: u64 = slots
                 .par_chunks(chunk_size)
                 .map(|slots| {
@@ -5965,6 +5995,11 @@ impl AccountsDb {
                         let accounts_map = Self::process_storage_slot(&storage_maps);
                         scan_time.stop();
                         scan_time_sum += scan_time.as_us();
+                        Self::update_storage_info(
+                            &storage_info,
+                            &accounts_map,
+                            &storage_info_timings,
+                        );
 
                         let insert_us = if pass == 0 {
                             // generate index
@@ -5983,10 +6018,13 @@ impl AccountsDb {
                                     if slot2 == slot {
                                         count += 1;
                                         let ai = AccountInfo {
-                                            store_id: account_info.1,
-                                            offset: account_info.2.offset,
-                                            stored_size: account_info.2.stored_size,
-                                            lamports: account_info.2.account_meta.lamports,
+                                            store_id: account_info.store_id,
+                                            offset: account_info.stored_account.offset,
+                                            stored_size: account_info.stored_account.stored_size,
+                                            lamports: account_info
+                                                .stored_account
+                                                .account_meta
+                                                .lamports,
                                         };
                                         assert_eq!(&ai, account_info2);
                                     }
@@ -6017,6 +6055,8 @@ impl AccountsDb {
                 })
                 .sum();
 
+            let storage_info_timings = storage_info_timings.into_inner().unwrap();
+
             let mut timings = GenerateIndexTimings {
                 scan_time,
                 index_time: index_time.as_us(),
@@ -6024,6 +6064,9 @@ impl AccountsDb {
                 min_bin_size,
                 max_bin_size,
                 total_items,
+                storage_size_accounts_map_us: storage_info_timings.storage_size_accounts_map_us,
+                storage_size_accounts_map_flatten_us: storage_info_timings
+                    .storage_size_accounts_map_flatten_us,
                 ..GenerateIndexTimings::default()
             };
 
@@ -6033,64 +6076,49 @@ impl AccountsDb {
                     self.accounts_index.add_root(*slot, false);
                 }
 
-                self.initialize_storage_count_and_alive_bytes(&mut timings);
+                self.set_storage_count_and_alive_bytes(storage_info, &mut timings);
             }
             timings.report();
         }
     }
 
-    fn calculate_storage_count_and_alive_bytes(
-        &self,
-        timings: &mut GenerateIndexTimings,
-    ) -> HashMap<usize, (usize, usize)> {
-        // look at every account in the account index and calculate for each storage: stored_size and count
+    fn update_storage_info(
+        storage_info: &StorageSizeAndCountMap,
+        accounts_map: &GenerateIndexAccountsMap<'_>,
+        timings: &Mutex<GenerateIndexTimings>,
+    ) {
         let mut storage_size_accounts_map_time = Measure::start("storage_size_accounts_map");
-        let mut maps = self
-            .accounts_index
-            .account_maps
-            .par_iter()
-            .map(|bin_map| {
-                let mut stored_sizes_and_counts = HashMap::new();
-                bin_map.read().unwrap().values().for_each(|entry| {
-                    entry
-                        .slot_list
-                        .read()
-                        .unwrap()
-                        .iter()
-                        .for_each(|(_slot, account_entry)| {
-                            let storage_entry_meta = stored_sizes_and_counts
-                                .entry(account_entry.store_id)
-                                .or_insert((0, 0));
-                            storage_entry_meta.0 += account_entry.stored_size;
-                            storage_entry_meta.1 += 1;
-                        })
-                });
-                stored_sizes_and_counts
-            })
-            .collect::<Vec<_>>();
-        storage_size_accounts_map_time.stop();
-        timings.storage_size_accounts_map_us = storage_size_accounts_map_time.as_us();
 
-        // flatten/merge the HashMaps from the parallel iteration above
+        let mut storage_info_local = HashMap::<AppendVecId, StorageSizeAndCount>::default();
+        // first collect into a local HashMap with no lock contention
+        for (_, v) in accounts_map.iter() {
+            let mut info = storage_info_local
+                .entry(v.store_id)
+                .or_insert_with(StorageSizeAndCount::default);
+            info.stored_size += v.stored_account.stored_size;
+            info.count += 1;
+        }
+        storage_size_accounts_map_time.stop();
+        // second, collect into the shared DashMap once we've figured out all the info per store_id
         let mut storage_size_accounts_map_flatten_time =
             Measure::start("storage_size_accounts_map_flatten_time");
-        let mut stored_sizes_and_counts = maps.pop().unwrap_or_default();
-        for map in maps {
-            for (store_id, meta) in map.into_iter() {
-                let storage_entry_meta = stored_sizes_and_counts.entry(store_id).or_insert((0, 0));
-                storage_entry_meta.0 += meta.0;
-                storage_entry_meta.1 += meta.1;
-            }
+        for (store_id, v) in storage_info_local.into_iter() {
+            let mut info = storage_info
+                .entry(store_id)
+                .or_insert_with(StorageSizeAndCount::default);
+            info.stored_size += v.stored_size;
+            info.count += v.count;
         }
         storage_size_accounts_map_flatten_time.stop();
-        timings.storage_size_accounts_map_flatten_us =
-            storage_size_accounts_map_flatten_time.as_us();
-        stored_sizes_and_counts
-    }
 
+        let mut timings = timings.lock().unwrap();
+        timings.storage_size_accounts_map_us += storage_size_accounts_map_time.as_us();
+        timings.storage_size_accounts_map_flatten_us +=
+            storage_size_accounts_map_flatten_time.as_us();
+    }
     fn set_storage_count_and_alive_bytes(
         &self,
-        stored_sizes_and_counts: HashMap<usize, (usize, usize)>,
+        stored_sizes_and_counts: StorageSizeAndCountMap,
         timings: &mut GenerateIndexTimings,
     ) {
         // store count and size for each storage
@@ -6099,10 +6127,15 @@ impl AccountsDb {
             for (id, store) in slot_stores.value().read().unwrap().iter() {
                 // Should be default at this point
                 assert_eq!(store.alive_bytes(), 0);
-                if let Some((stored_size, count)) = stored_sizes_and_counts.get(id) {
-                    trace!("id: {} setting count: {} cur: {}", id, count, store.count(),);
-                    store.count_and_status.write().unwrap().0 = *count;
-                    store.alive_bytes.store(*stored_size, Ordering::SeqCst);
+                if let Some(entry) = stored_sizes_and_counts.get(id) {
+                    trace!(
+                        "id: {} setting count: {} cur: {}",
+                        id,
+                        entry.count,
+                        store.count(),
+                    );
+                    store.count_and_status.write().unwrap().0 = entry.count;
+                    store.alive_bytes.store(entry.stored_size, Ordering::SeqCst);
                 } else {
                     trace!("id: {} clearing count", id);
                     store.count_and_status.write().unwrap().0 = 0;
@@ -6111,11 +6144,6 @@ impl AccountsDb {
         }
         storage_size_storages_time.stop();
         timings.storage_size_storages_us = storage_size_storages_time.as_us();
-    }
-
-    fn initialize_storage_count_and_alive_bytes(&self, timings: &mut GenerateIndexTimings) {
-        let stored_sizes_and_counts = self.calculate_storage_count_and_alive_bytes(timings);
-        self.set_storage_count_and_alive_bytes(stored_sizes_and_counts, timings);
     }
 
     pub(crate) fn print_accounts_stats(&self, label: &str) {
@@ -6199,6 +6227,7 @@ impl AccountsDb {
             account_indexes,
             caching_enabled,
             shrink_ratio,
+            Some(BINS_FOR_TESTING),
         )
     }
 
@@ -9848,6 +9877,8 @@ pub mod tests {
         );
     }
 
+    const UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE: bool = false;
+
     #[test]
     fn test_delete_dependencies() {
         solana_logger::setup();
@@ -9888,6 +9919,7 @@ pub mod tests {
             &AccountSecondaryIndexes::default(),
             info0,
             &mut reclaims,
+            UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
         accounts_index.upsert(
             1,
@@ -9897,6 +9929,7 @@ pub mod tests {
             &AccountSecondaryIndexes::default(),
             info1.clone(),
             &mut reclaims,
+            UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
         accounts_index.upsert(
             1,
@@ -9906,6 +9939,7 @@ pub mod tests {
             &AccountSecondaryIndexes::default(),
             info1,
             &mut reclaims,
+            UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
         accounts_index.upsert(
             2,
@@ -9915,6 +9949,7 @@ pub mod tests {
             &AccountSecondaryIndexes::default(),
             info2.clone(),
             &mut reclaims,
+            UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
         accounts_index.upsert(
             2,
@@ -9924,6 +9959,7 @@ pub mod tests {
             &AccountSecondaryIndexes::default(),
             info2,
             &mut reclaims,
+            UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
         accounts_index.upsert(
             3,
@@ -9933,6 +9969,7 @@ pub mod tests {
             &AccountSecondaryIndexes::default(),
             info3,
             &mut reclaims,
+            UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
         accounts_index.add_root(0, false);
         accounts_index.add_root(1, false);
@@ -11936,20 +11973,29 @@ pub mod tests {
         let slot0 = 0;
         accounts.store_uncached(slot0, &[(&shared_key, &account)]);
 
-        let result =
-            accounts.calculate_storage_count_and_alive_bytes(&mut GenerateIndexTimings::default());
-        assert_eq!(result.len(), 1);
-        for (k, v) in result.iter() {
-            assert_eq!((k, v), (&0, &(144, 1)));
+        let storage_maps = accounts
+            .storage
+            .get_slot_storage_entries(slot0)
+            .unwrap_or_default();
+        let storage_info = StorageSizeAndCountMap::default();
+        let accounts_map = AccountsDb::process_storage_slot(&storage_maps[..]);
+        AccountsDb::update_storage_info(&storage_info, &accounts_map, &Mutex::default());
+        assert_eq!(storage_info.len(), 1);
+        for entry in storage_info.iter() {
+            assert_eq!(
+                (entry.key(), entry.value().count, entry.value().stored_size),
+                (&0, 1, 144)
+            );
         }
     }
 
     #[test]
     fn test_calculate_storage_count_and_alive_bytes_0_accounts() {
-        let accounts = AccountsDb::new_single_for_tests();
-        let result =
-            accounts.calculate_storage_count_and_alive_bytes(&mut GenerateIndexTimings::default());
-        assert!(result.is_empty());
+        let storage_maps = vec![];
+        let storage_info = StorageSizeAndCountMap::default();
+        let accounts_map = AccountsDb::process_storage_slot(&storage_maps[..]);
+        AccountsDb::update_storage_info(&storage_info, &accounts_map, &Mutex::default());
+        assert!(storage_info.is_empty());
     }
 
     #[test]
@@ -11976,11 +12022,19 @@ pub mod tests {
         accounts.store_uncached(slot0, &[(&keys[0], &account)]);
         accounts.store_uncached(slot0, &[(&keys[1], &account_big)]);
 
-        let result =
-            accounts.calculate_storage_count_and_alive_bytes(&mut GenerateIndexTimings::default());
-        assert_eq!(result.len(), 1);
-        for (k, v) in result.iter() {
-            assert_eq!((k, v), (&0, &(1280, 2)));
+        let storage_maps = accounts
+            .storage
+            .get_slot_storage_entries(slot0)
+            .unwrap_or_default();
+        let storage_info = StorageSizeAndCountMap::default();
+        let accounts_map = AccountsDb::process_storage_slot(&storage_maps[..]);
+        AccountsDb::update_storage_info(&storage_info, &accounts_map, &Mutex::default());
+        assert_eq!(storage_info.len(), 1);
+        for entry in storage_info.iter() {
+            assert_eq!(
+                (entry.key(), entry.value().count, entry.value().stored_size),
+                (&0, 2, 1280)
+            );
         }
     }
 
@@ -12002,9 +12056,15 @@ pub mod tests {
         }
 
         // populate based on made up hash data
-        let mut hashmap = HashMap::default();
-        hashmap.insert(0, (2, 3));
-        accounts.set_storage_count_and_alive_bytes(hashmap, &mut GenerateIndexTimings::default());
+        let dashmap = DashMap::default();
+        dashmap.insert(
+            0,
+            StorageSizeAndCount {
+                stored_size: 2,
+                count: 3,
+            },
+        );
+        accounts.set_storage_count_and_alive_bytes(dashmap, &mut GenerateIndexTimings::default());
         assert_eq!(accounts.storage.0.len(), 1);
         for slot_stores in accounts.storage.0.iter() {
             for (id, store) in slot_stores.value().read().unwrap().iter() {

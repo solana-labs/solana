@@ -220,7 +220,7 @@ impl Tvu {
             tvu_config.trusted_validators.clone(),
             tvu_config.halt_on_trusted_validators_accounts_hash_mismatch,
             tvu_config.accounts_hash_fault_injection_slots,
-            snapshot_interval_slots,
+            snapshot_config.clone(),
         );
 
         let (snapshot_request_sender, snapshot_request_handler) = {

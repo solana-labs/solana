@@ -110,7 +110,7 @@ impl From<SanitizeError> for TransactionError {
 }
 
 /// An atomic transaction
-#[frozen_abi(digest = "AAeVxvWiiotwxDLxKLxsfgkA6ndW74nVbaAEb6cwJYqR")]
+#[frozen_abi(digest = "FZtncnS1Xk8ghHfKiXE5oGiUbw2wJhmfXQuNgQR3K6Mc")]
 #[derive(Debug, PartialEq, Default, Eq, Clone, Serialize, Deserialize, AbiExample)]
 pub struct Transaction {
     /// A set of digital signatures of a serialized [`Message`], signed by the

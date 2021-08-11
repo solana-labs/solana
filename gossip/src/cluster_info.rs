@@ -252,7 +252,7 @@ pub fn make_accounts_hashes_message(
 pub(crate) type Ping = ping_pong::Ping<[u8; GOSSIP_PING_TOKEN_SIZE]>;
 
 // TODO These messages should go through the gpu pipeline for spam filtering
-#[frozen_abi(digest = "4khbdefBamDC8XpdahkW4bzkGX6N5c8PcHp3kBXJGg46")]
+#[frozen_abi(digest = "AqKhoLDkFr85WPiZnXG4bcRwHU4qSSyDZ3MQZLk3cnJf")]
 #[derive(Serialize, Deserialize, Debug, AbiEnumVisitor, AbiExample)]
 #[allow(clippy::large_enum_variant)]
 pub(crate) enum Protocol {
@@ -1688,7 +1688,7 @@ impl ClusterInfo {
                                 Some(root_bank.feature_set.clone()),
                             )
                         }
-                        None => (HashMap::new(), None),
+                        None => (Arc::default(), None),
                     };
                     let require_stake_for_gossip =
                         self.require_stake_for_gossip(feature_set.as_deref(), &stakes);
@@ -2483,7 +2483,7 @@ impl ClusterInfo {
         // feature does not roll back (if the feature happens to get enabled in
         // a minority fork).
         let (feature_set, stakes) = match bank_forks {
-            None => (None, HashMap::default()),
+            None => (None, Arc::default()),
             Some(bank_forks) => {
                 let bank = bank_forks.read().unwrap().root_bank();
                 let feature_set = bank.feature_set.clone();

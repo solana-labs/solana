@@ -6,7 +6,7 @@ use {
         contact_info::ContactInfo,
         gossip_service::GossipService,
     },
-    solana_runtime::snapshot_utils::{self, SnapshotArchiveInfoGetter},
+    solana_runtime::{snapshot_archive_info::SnapshotArchiveInfoGetter, snapshot_utils},
     solana_sdk::{
         clock::Slot,
         hash::Hash,

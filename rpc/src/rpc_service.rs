@@ -26,10 +26,9 @@ use {
     solana_metrics::inc_new_counter_info,
     solana_poh::poh_recorder::PohRecorder,
     solana_runtime::{
-        bank_forks::BankForks,
-        commitment::BlockCommitmentCache,
-        snapshot_config::SnapshotConfig,
-        snapshot_utils::{self, SnapshotArchiveInfoGetter},
+        bank_forks::BankForks, commitment::BlockCommitmentCache,
+        snapshot_archive_info::SnapshotArchiveInfoGetter, snapshot_config::SnapshotConfig,
+        snapshot_utils,
     },
     solana_sdk::{
         exit::Exit, genesis_config::DEFAULT_GENESIS_DOWNLOAD_PATH, hash::Hash,

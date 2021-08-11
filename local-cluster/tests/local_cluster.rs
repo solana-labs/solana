@@ -41,8 +41,9 @@ use {
         validator_configs::*,
     },
     solana_runtime::{
+        snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_config::SnapshotConfig,
-        snapshot_utils::{self, ArchiveFormat, SnapshotArchiveInfoGetter},
+        snapshot_utils::{self, ArchiveFormat},
     },
     solana_sdk::{
         account::AccountSharedData,
@@ -1424,6 +1425,7 @@ fn test_mainnet_beta_cluster_type() {
         &solana_vote_program::id(),
         &solana_sdk::bpf_loader_deprecated::id(),
         &solana_sdk::bpf_loader::id(),
+        &solana_sdk::bpf_loader_upgradeable::id(),
     ]
     .iter()
     {
@@ -1439,7 +1441,7 @@ fn test_mainnet_beta_cluster_type() {
     }
 
     // Programs that are not available at epoch 0
-    for program_id in [&solana_sdk::bpf_loader_upgradeable::id()].iter() {
+    for program_id in [].iter() {
         assert_eq!(
             (
                 program_id,

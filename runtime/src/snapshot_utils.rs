@@ -9,6 +9,9 @@ use {
             SnapshotStreams,
         },
         shared_buffer_reader::{SharedBuffer, SharedBufferReader},
+        snapshot_archive_info::{
+            FullSnapshotArchiveInfo, IncrementalSnapshotArchiveInfo, SnapshotArchiveInfoGetter,
+        },
         snapshot_package::{
             AccountsPackage, AccountsPackagePre, AccountsPackageSendError, AccountsPackageSender,
         },
@@ -38,149 +41,6 @@ use {
     tempfile::TempDir,
     thiserror::Error,
 };
-
-/// Trait to query the snapshot archive information
-pub trait SnapshotArchiveInfoGetter {
-    fn snapshot_archive_info(&self) -> &SnapshotArchiveInfo;
-
-    fn path(&self) -> &PathBuf {
-        &self.snapshot_archive_info().path
-    }
-
-    fn slot(&self) -> Slot {
-        self.snapshot_archive_info().slot
-    }
-
-    fn hash(&self) -> &Hash {
-        &self.snapshot_archive_info().hash
-    }
-
-    fn archive_format(&self) -> ArchiveFormat {
-        self.snapshot_archive_info().archive_format
-    }
-}
-
-/// Common information about a snapshot archive
-#[derive(PartialEq, Eq, Debug, Clone)]
-pub struct SnapshotArchiveInfo {
-    /// Path to the snapshot archive file
-    pub path: PathBuf,
-
-    /// Slot that the snapshot was made
-    pub slot: Slot,
-
-    /// Hash of the accounts at this slot
-    pub hash: Hash,
-
-    /// Archive format for the snapshot file
-    pub archive_format: ArchiveFormat,
-}
-
-/// Information about a full snapshot archive: its path, slot, hash, and archive format
-#[derive(PartialEq, Eq, Debug, Clone)]
-pub struct FullSnapshotArchiveInfo(SnapshotArchiveInfo);
-
-impl FullSnapshotArchiveInfo {
-    /// Parse the path to a full snapshot archive and return a new `FullSnapshotArchiveInfo`
-    pub fn new_from_path(path: PathBuf) -> Result<Self> {
-        let filename = path_to_file_name_str(path.as_path())?;
-        let (slot, hash, archive_format) = parse_full_snapshot_archive_filename(filename)?;
-
-        Ok(Self::new(SnapshotArchiveInfo {
-            path,
-            slot,
-            hash,
-            archive_format,
-        }))
-    }
-
-    fn new(snapshot_archive_info: SnapshotArchiveInfo) -> Self {
-        Self(snapshot_archive_info)
-    }
-}
-
-impl SnapshotArchiveInfoGetter for FullSnapshotArchiveInfo {
-    fn snapshot_archive_info(&self) -> &SnapshotArchiveInfo {
-        &self.0
-    }
-}
-
-impl PartialOrd for FullSnapshotArchiveInfo {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-// Order `FullSnapshotArchiveInfo` by slot (ascending), which practially is sorting chronologically
-impl Ord for FullSnapshotArchiveInfo {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.slot().cmp(&other.slot())
-    }
-}
-
-/// Information about an incremental snapshot archive: its path, slot, base slot, hash, and archive format
-#[derive(PartialEq, Eq, Debug, Clone)]
-pub struct IncrementalSnapshotArchiveInfo {
-    /// The slot that the incremental snapshot was based from.  This is the same as the full
-    /// snapshot slot used when making the incremental snapshot.
-    base_slot: Slot,
-
-    /// Use the `SnapshotArchiveInfo` struct for the common fields: path, slot, hash, and
-    /// archive_format, but as they pertain to the incremental snapshot.
-    inner: SnapshotArchiveInfo,
-}
-
-impl IncrementalSnapshotArchiveInfo {
-    /// Parse the path to an incremental snapshot archive and return a new `IncrementalSnapshotArchiveInfo`
-    pub fn new_from_path(path: PathBuf) -> Result<Self> {
-        let filename = path_to_file_name_str(path.as_path())?;
-        let (base_slot, slot, hash, archive_format) =
-            parse_incremental_snapshot_archive_filename(filename)?;
-
-        Ok(Self::new(
-            base_slot,
-            SnapshotArchiveInfo {
-                path,
-                slot,
-                hash,
-                archive_format,
-            },
-        ))
-    }
-
-    fn new(base_slot: Slot, snapshot_archive_info: SnapshotArchiveInfo) -> Self {
-        Self {
-            base_slot,
-            inner: snapshot_archive_info,
-        }
-    }
-
-    pub fn base_slot(&self) -> Slot {
-        self.base_slot
-    }
-}
-
-impl SnapshotArchiveInfoGetter for IncrementalSnapshotArchiveInfo {
-    fn snapshot_archive_info(&self) -> &SnapshotArchiveInfo {
-        &self.inner
-    }
-}
-
-impl PartialOrd for IncrementalSnapshotArchiveInfo {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-// Order `IncrementalSnapshotArchiveInfo` by base slot (ascending), then slot (ascending), which
-// practially is sorting chronologically
-impl Ord for IncrementalSnapshotArchiveInfo {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.base_slot()
-            .cmp(&other.base_slot())
-            .then(self.slot().cmp(&other.slot()))
-    }
-}
 
 pub const SNAPSHOT_STATUS_CACHE_FILE_NAME: &str = "status_cache";
 
@@ -866,6 +726,7 @@ pub fn bank_from_snapshot_archives(
     test_hash_calculation: bool,
     accounts_db_skip_shrink: bool,
     verify_index: bool,
+    accounts_index_bins: Option<usize>,
 ) -> Result<(Bank, BankFromArchiveTimings)> {
     check_are_snapshots_compatible(
         full_snapshot_archive_info,
@@ -929,6 +790,7 @@ pub fn bank_from_snapshot_archives(
         limit_load_slot_count_from_snapshot,
         shrink_ratio,
         verify_index,
+        accounts_index_bins,
     )?;
     measure_rebuild.stop();
     info!("{}", measure_rebuild);
@@ -971,6 +833,7 @@ pub fn bank_from_latest_snapshot_archives(
     test_hash_calculation: bool,
     accounts_db_skip_shrink: bool,
     verify_index: bool,
+    accounts_index_bins: Option<usize>,
 ) -> Result<(Bank, BankFromArchiveTimings)> {
     let full_snapshot_archive_info = get_highest_full_snapshot_archive_info(&snapshot_archives_dir)
         .ok_or(SnapshotError::NoSnapshotArchives)?;
@@ -1008,6 +871,7 @@ pub fn bank_from_latest_snapshot_archives(
         test_hash_calculation,
         accounts_db_skip_shrink,
         verify_index,
+        accounts_index_bins,
     )?;
 
     verify_bank_against_expected_slot_hash(
@@ -1119,7 +983,7 @@ fn check_are_snapshots_compatible(
 }
 
 /// Get the `&str` from a `&Path`
-fn path_to_file_name_str(path: &Path) -> Result<&str> {
+pub fn path_to_file_name_str(path: &Path) -> Result<&str> {
     path.file_name()
         .ok_or_else(|| SnapshotError::PathToFileNameError(path.to_path_buf()))?
         .to_str()
@@ -1172,7 +1036,7 @@ fn archive_format_from_str(archive_format: &str) -> Option<ArchiveFormat> {
 }
 
 /// Parse a full snapshot archive filename into its Slot, Hash, and Archive Format
-fn parse_full_snapshot_archive_filename(
+pub fn parse_full_snapshot_archive_filename(
     archive_filename: &str,
 ) -> Result<(Slot, Hash, ArchiveFormat)> {
     lazy_static! {
@@ -1203,7 +1067,7 @@ fn parse_full_snapshot_archive_filename(
 }
 
 /// Parse an incremental snapshot archive filename into its base Slot, actual Slot, Hash, and Archive Format
-fn parse_incremental_snapshot_archive_filename(
+pub fn parse_incremental_snapshot_archive_filename(
     archive_filename: &str,
 ) -> Result<(Slot, Slot, Hash, ArchiveFormat)> {
     lazy_static! {
@@ -1507,6 +1371,7 @@ fn rebuild_bank_from_snapshots(
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
     verify_index: bool,
+    accounts_index_bins: Option<usize>,
 ) -> Result<Bank> {
     let (full_snapshot_version, full_snapshot_root_paths) =
         verify_unpacked_snapshots_dir_and_version(
@@ -1554,6 +1419,7 @@ fn rebuild_bank_from_snapshots(
                     limit_load_slot_count_from_snapshot,
                     shrink_ratio,
                     verify_index,
+                    accounts_index_bins,
                 ),
             }?,
         )
@@ -1670,7 +1536,7 @@ pub fn snapshot_bank(
     archive_format: &ArchiveFormat,
     hash_for_testing: Option<Hash>,
 ) -> Result<()> {
-    let storages: Vec<_> = root_bank.get_snapshot_storages();
+    let storages = root_bank.get_snapshot_storages();
     let mut add_snapshot_time = Measure::start("add-snapshot-ms");
     add_bank_snapshot(snapshots_dir, root_bank, &storages, snapshot_version)?;
     add_snapshot_time.stop();
@@ -1764,7 +1630,11 @@ pub fn bank_to_incremental_snapshot_archive(
     bank.rehash(); // Bank accounts may have been manually modified by the caller
 
     let temp_dir = tempfile::tempdir_in(snapshots_dir)?;
-    let storages = bank.get_incremental_snapshot_storages(full_snapshot_slot);
+    let storages = {
+        let mut storages = bank.get_snapshot_storages();
+        filter_snapshot_storages_for_incremental_snapshot(&mut storages, full_snapshot_slot);
+        storages
+    };
     let bank_snapshot_info = add_bank_snapshot(&temp_dir, bank, &storages, snapshot_version)?;
 
     package_process_and_archive_incremental_snapshot(
@@ -1927,6 +1797,19 @@ pub fn process_accounts_package_pre(
         accounts_package.archive_format,
         accounts_package.snapshot_version,
     )
+}
+
+/// Filter snapshot storages and retain only the ones with slots _higher than_
+/// `incremental_snapshot_base_slot`.
+pub fn filter_snapshot_storages_for_incremental_snapshot(
+    snapshot_storages: &mut SnapshotStorages,
+    incremental_snapshot_base_slot: Slot,
+) {
+    snapshot_storages.retain(|storage| {
+        storage
+            .first()
+            .map_or(false, |entry| entry.slot() > incremental_snapshot_base_slot)
+    });
 }
 
 #[cfg(test)]
@@ -2624,6 +2507,7 @@ mod tests {
             false,
             false,
             false,
+            Some(crate::accounts_index::BINS_FOR_TESTING),
         )
         .unwrap();
 
@@ -2714,6 +2598,7 @@ mod tests {
             false,
             false,
             false,
+            Some(crate::accounts_index::BINS_FOR_TESTING),
         )
         .unwrap();
 
@@ -2823,6 +2708,7 @@ mod tests {
             false,
             false,
             false,
+            Some(crate::accounts_index::BINS_FOR_TESTING),
         )
         .unwrap();
 
@@ -2921,6 +2807,7 @@ mod tests {
             false,
             false,
             false,
+            Some(crate::accounts_index::BINS_FOR_TESTING),
         )
         .unwrap();
 

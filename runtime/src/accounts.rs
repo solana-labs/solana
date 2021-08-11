@@ -3,7 +3,9 @@ use crate::{
         AccountShrinkThreshold, AccountsDb, BankHashInfo, ErrorCounters, LoadHint, LoadedAccount,
         ScanStorageResult,
     },
-    accounts_index::{AccountSecondaryIndexes, IndexKey, ScanResult},
+    accounts_index::{
+        AccountSecondaryIndexes, IndexKey, ScanResult, BINS_FOR_BENCHMARKS, BINS_FOR_TESTING,
+    },
     ancestors::Ancestors,
     bank::{
         NonceRollbackFull, NonceRollbackInfo, RentDebits, TransactionCheckResult,
@@ -124,6 +126,23 @@ impl Accounts {
         }
     }
 
+    pub fn new_with_config_for_tests(
+        paths: Vec<PathBuf>,
+        cluster_type: &ClusterType,
+        account_indexes: AccountSecondaryIndexes,
+        caching_enabled: bool,
+        shrink_ratio: AccountShrinkThreshold,
+    ) -> Self {
+        Self::new_with_config(
+            paths,
+            cluster_type,
+            account_indexes,
+            caching_enabled,
+            shrink_ratio,
+            Some(BINS_FOR_TESTING),
+        )
+    }
+
     pub fn new_with_config_for_benches(
         paths: Vec<PathBuf>,
         cluster_type: &ClusterType,
@@ -131,13 +150,13 @@ impl Accounts {
         caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
     ) -> Self {
-        // will diverge
         Self::new_with_config(
             paths,
             cluster_type,
             account_indexes,
             caching_enabled,
             shrink_ratio,
+            Some(BINS_FOR_BENCHMARKS),
         )
     }
 
@@ -147,6 +166,7 @@ impl Accounts {
         account_indexes: AccountSecondaryIndexes,
         caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
+        accounts_index_bins: Option<usize>,
     ) -> Self {
         Self {
             accounts_db: Arc::new(AccountsDb::new_with_config(
@@ -155,6 +175,7 @@ impl Accounts {
                 account_indexes,
                 caching_enabled,
                 shrink_ratio,
+                accounts_index_bins,
             )),
             account_locks: Mutex::new(AccountLocks::default()),
         }
@@ -1124,7 +1145,7 @@ mod tests {
     ) -> Vec<TransactionLoadResult> {
         let mut hash_queue = BlockhashQueue::new(100);
         hash_queue.register_hash(&tx.message().recent_blockhash, fee_calculator);
-        let accounts = Accounts::new_with_config(
+        let accounts = Accounts::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
@@ -1662,7 +1683,7 @@ mod tests {
 
     #[test]
     fn test_load_by_program_slot() {
-        let accounts = Accounts::new_with_config(
+        let accounts = Accounts::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
@@ -1691,7 +1712,7 @@ mod tests {
 
     #[test]
     fn test_accounts_account_not_found() {
-        let accounts = Accounts::new_with_config(
+        let accounts = Accounts::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
@@ -1715,7 +1736,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_accounts_empty_bank_hash() {
-        let accounts = Accounts::new_with_config(
+        let accounts = Accounts::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
@@ -1737,7 +1758,7 @@ mod tests {
         let account2 = AccountSharedData::new(3, 0, &Pubkey::default());
         let account3 = AccountSharedData::new(4, 0, &Pubkey::default());
 
-        let accounts = Accounts::new_with_config(
+        let accounts = Accounts::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
@@ -1847,7 +1868,7 @@ mod tests {
         let account1 = AccountSharedData::new(2, 0, &Pubkey::default());
         let account2 = AccountSharedData::new(3, 0, &Pubkey::default());
 
-        let accounts = Accounts::new_with_config(
+        let accounts = Accounts::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
@@ -1986,7 +2007,7 @@ mod tests {
 
         let mut loaded = vec![loaded0, loaded1];
 
-        let accounts = Accounts::new_with_config(
+        let accounts = Accounts::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
@@ -2034,7 +2055,7 @@ mod tests {
     #[test]
     fn huge_clean() {
         solana_logger::setup();
-        let accounts = Accounts::new_with_config(
+        let accounts = Accounts::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
@@ -2082,7 +2103,7 @@ mod tests {
     #[test]
     fn test_instructions() {
         solana_logger::setup();
-        let accounts = Accounts::new_with_config(
+        let accounts = Accounts::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
@@ -2371,7 +2392,7 @@ mod tests {
         let mut loaded = vec![loaded];
 
         let next_blockhash = Hash::new_unique();
-        let accounts = Accounts::new_with_config(
+        let accounts = Accounts::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
@@ -2488,7 +2509,7 @@ mod tests {
         let mut loaded = vec![loaded];
 
         let next_blockhash = Hash::new_unique();
-        let accounts = Accounts::new_with_config(
+        let accounts = Accounts::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
@@ -2524,7 +2545,7 @@ mod tests {
 
     #[test]
     fn test_load_largest_accounts() {
-        let accounts = Accounts::new_with_config(
+        let accounts = Accounts::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),

@@ -54,6 +54,7 @@ mod tests {
         bank::{Bank, BankSlotDelta},
         bank_forks::BankForks,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
+        snapshot_archive_info::FullSnapshotArchiveInfo,
         snapshot_config::SnapshotConfig,
         snapshot_package::AccountsPackagePre,
         snapshot_utils::{
@@ -168,8 +169,7 @@ mod tests {
             ArchiveFormat::TarBzip2,
         );
         let full_snapshot_archive_info =
-            snapshot_utils::FullSnapshotArchiveInfo::new_from_path(full_snapshot_archive_path)
-                .unwrap();
+            FullSnapshotArchiveInfo::new_from_path(full_snapshot_archive_path).unwrap();
 
         let (deserialized_bank, _timing) = snapshot_utils::bank_from_snapshot_archives(
             account_paths,
@@ -191,6 +191,7 @@ mod tests {
             check_hash_calculation,
             false,
             false,
+            Some(solana_runtime::accounts_index::BINS_FOR_TESTING),
         )
         .unwrap();
 
@@ -770,13 +771,21 @@ mod tests {
             .into_iter()
             .find(|elem| elem.slot == slot)
             .ok_or_else(|| Error::new(ErrorKind::Other, "did not find snapshot with this path"))?;
+        let storages = {
+            let mut storages = bank.get_snapshot_storages();
+            snapshot_utils::filter_snapshot_storages_for_incremental_snapshot(
+                &mut storages,
+                incremental_snapshot_base_slot,
+            );
+            storages
+        };
         snapshot_utils::package_process_and_archive_incremental_snapshot(
             bank,
             incremental_snapshot_base_slot,
             &bank_snapshot_info,
             &snapshot_config.snapshot_path,
             &snapshot_config.snapshot_package_output_path,
-            bank.get_incremental_snapshot_storages(incremental_snapshot_base_slot),
+            storages,
             snapshot_config.archive_format,
             snapshot_config.snapshot_version,
             None,
@@ -807,6 +816,7 @@ mod tests {
             false,
             false,
             false,
+            Some(solana_runtime::accounts_index::BINS_FOR_TESTING),
         )?;
 
         assert_eq!(bank, &deserialized_bank);

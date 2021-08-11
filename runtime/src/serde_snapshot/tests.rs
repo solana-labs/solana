@@ -81,6 +81,7 @@ where
         None,
         AccountShrinkThreshold::default(),
         false,
+        Some(crate::accounts_index::BINS_FOR_TESTING),
     )
 }
 
@@ -131,7 +132,7 @@ where
 fn test_accounts_serialize_style(serde_style: SerdeStyle) {
     solana_logger::setup();
     let (_accounts_dir, paths) = get_temp_accounts_paths(4).unwrap();
-    let accounts = Accounts::new_with_config(
+    let accounts = Accounts::new_with_config_for_tests(
         paths,
         &ClusterType::Development,
         AccountSecondaryIndexes::default(),
@@ -242,6 +243,7 @@ fn test_bank_serialize_style(serde_style: SerdeStyle) {
         None,
         AccountShrinkThreshold::default(),
         false,
+        Some(crate::accounts_index::BINS_FOR_TESTING),
     )
     .unwrap();
     dbank.src = ref_sc;
@@ -304,7 +306,7 @@ mod test_bank_serialize {
 
     // This some what long test harness is required to freeze the ABI of
     // Bank's serialization due to versioned nature
-    #[frozen_abi(digest = "9i743Qsin8qndpSGqXM3ATkX6fL8dDKtqUwJ8DPjuRam")]
+    #[frozen_abi(digest = "7XCv7DU27QC6iNJ1WYkXY3X4bKu8j6CxAn6morP2u4hu")]
     #[derive(Serialize, AbiExample)]
     pub struct BankAbiTestWrapperFuture {
         #[serde(serialize_with = "wrapper_future")]
