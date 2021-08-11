@@ -12279,70 +12279,134 @@ pub mod tests {
     #[test]
     fn test_filter_zero_lamport_clean_for_incremental_snapshots() {
         solana_logger::setup();
-        let accounts_db = AccountsDb::new_single_for_tests();
-        let pubkey = solana_sdk::pubkey::new_rand();
         let slot = 10;
-        let account_info = AccountInfo {
-            store_id: 42,
-            offset: 123,
-            stored_size: 234,
-            lamports: 0,
-        };
-        let store_count = 0;
-        let mut key_set = HashSet::default();
-        key_set.insert(pubkey);
-        let mut store_counts = HashMap::default();
-        store_counts.insert(account_info.store_id, (store_count, key_set));
 
-        // scenario 1: zero lamport account GREATER THAN last full snapshot slot => remove from purges set
-        {
-            let max_clean_root = None;
-            let last_full_snapshot_slot = Some(slot - 1);
-            let mut purges_zero_lamports = HashMap::default();
-            purges_zero_lamports.insert(pubkey, (vec![(slot, account_info.clone())], 1));
-
-            accounts_db.filter_zero_lamport_clean_for_incremental_snapshots(
-                max_clean_root,
-                last_full_snapshot_slot,
-                &store_counts,
-                &mut purges_zero_lamports,
-            );
-
-            assert!(!purges_zero_lamports.contains_key(&pubkey));
+        struct TestParameters {
+            last_full_snapshot_slot: Option<Slot>,
+            max_clean_root: Option<Slot>,
+            should_contain: bool,
         }
 
-        // scenario 2: zero lamport account EQUAL TO last full snapshot slot => keep in purges set
-        {
-            let max_clean_root = None;
-            let last_full_snapshot_slot = Some(slot);
-            let mut purges_zero_lamports = HashMap::default();
-            purges_zero_lamports.insert(pubkey, (vec![(slot, account_info.clone())], 1));
-
-            accounts_db.filter_zero_lamport_clean_for_incremental_snapshots(
-                max_clean_root,
-                last_full_snapshot_slot,
-                &store_counts,
-                &mut purges_zero_lamports,
-            );
-
-            assert!(purges_zero_lamports.contains_key(&pubkey));
-        }
-
-        // scenario 3: zero lamport account LESS THAN full snapshot slot => keep in purges set
-        {
-            let max_clean_root = None;
-            let last_full_snapshot_slot = Some(slot + 1);
+        let do_test = |test_params: TestParameters| {
+            let account_info = AccountInfo {
+                store_id: 42,
+                offset: 123,
+                stored_size: 234,
+                lamports: 0,
+            };
+            let pubkey = solana_sdk::pubkey::new_rand();
+            let mut key_set = HashSet::default();
+            key_set.insert(pubkey);
+            let store_count = 0;
+            let mut store_counts = HashMap::default();
+            store_counts.insert(account_info.store_id, (store_count, key_set));
             let mut purges_zero_lamports = HashMap::default();
             purges_zero_lamports.insert(pubkey, (vec![(slot, account_info)], 1));
 
+            let accounts_db = AccountsDb::new_single_for_tests();
             accounts_db.filter_zero_lamport_clean_for_incremental_snapshots(
-                max_clean_root,
-                last_full_snapshot_slot,
+                test_params.max_clean_root,
+                test_params.last_full_snapshot_slot,
                 &store_counts,
                 &mut purges_zero_lamports,
             );
 
-            assert!(purges_zero_lamports.contains_key(&pubkey));
+            assert_eq!(
+                purges_zero_lamports.contains_key(&pubkey),
+                test_params.should_contain
+            );
+        };
+
+        // Scenario 1: last full snapshot is NONE
+        // In this scenario incremental snapshots are OFF, so always purge
+        {
+            let last_full_snapshot_slot = None;
+
+            do_test(TestParameters {
+                last_full_snapshot_slot,
+                max_clean_root: Some(slot),
+                should_contain: true,
+            });
+
+            do_test(TestParameters {
+                last_full_snapshot_slot,
+                max_clean_root: None,
+                should_contain: true,
+            });
+        }
+
+        // Scenario 2: last full snapshot is GREATER THAN zero lamport account slot
+        // In this scenario always purge, and just test the various permutations of
+        // `should_filter_for_incremental_snapshots` based on `max_clean_root`.
+        {
+            let last_full_snapshot_slot = Some(slot + 1);
+
+            do_test(TestParameters {
+                last_full_snapshot_slot,
+                max_clean_root: last_full_snapshot_slot,
+                should_contain: true,
+            });
+
+            do_test(TestParameters {
+                last_full_snapshot_slot,
+                max_clean_root: last_full_snapshot_slot.map(|s| s + 1),
+                should_contain: true,
+            });
+
+            do_test(TestParameters {
+                last_full_snapshot_slot,
+                max_clean_root: None,
+                should_contain: true,
+            });
+        }
+
+        // Scenario 3: last full snapshot is EQUAL TO zero lamport account slot
+        // In this scenario always purge, as it's the same as Scenario 2.
+        {
+            let last_full_snapshot_slot = Some(slot);
+
+            do_test(TestParameters {
+                last_full_snapshot_slot,
+                max_clean_root: last_full_snapshot_slot,
+                should_contain: true,
+            });
+
+            do_test(TestParameters {
+                last_full_snapshot_slot,
+                max_clean_root: last_full_snapshot_slot.map(|s| s + 1),
+                should_contain: true,
+            });
+
+            do_test(TestParameters {
+                last_full_snapshot_slot,
+                max_clean_root: None,
+                should_contain: true,
+            });
+        }
+
+        // Scenario 4: last full snapshot is LESS THAN zero lamport account slot
+        // In this scenario do *not* purge, except when `should_filter_for_incremental_snapshots`
+        // is false
+        {
+            let last_full_snapshot_slot = Some(slot - 1);
+
+            do_test(TestParameters {
+                last_full_snapshot_slot,
+                max_clean_root: last_full_snapshot_slot,
+                should_contain: true,
+            });
+
+            do_test(TestParameters {
+                last_full_snapshot_slot,
+                max_clean_root: last_full_snapshot_slot.map(|s| s + 1),
+                should_contain: false,
+            });
+
+            do_test(TestParameters {
+                last_full_snapshot_slot,
+                max_clean_root: None,
+                should_contain: false,
+            });
         }
     }
 }
