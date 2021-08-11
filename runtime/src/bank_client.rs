@@ -156,6 +156,7 @@ impl SyncClient for BankClient {
         _commitment_config: CommitmentConfig,
     ) -> Result<(Hash, FeeCalculator, u64)> {
         let (blockhash, fee_calculator) = self.bank.last_blockhash_with_fee_calculator();
+        #[allow(deprecated)]
         let last_valid_slot = self
             .bank
             .get_blockhash_last_valid_slot(&blockhash)

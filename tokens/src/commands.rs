@@ -19,6 +19,7 @@ use solana_client::{
     rpc_client::RpcClient,
     rpc_config::RpcSendTransactionConfig,
     rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
+    rpc_response::Fees,
 };
 use solana_sdk::{
     clock::Slot,
@@ -386,8 +387,12 @@ fn send_messages(
             if args.dry_run {
                 Ok((Transaction::new_unsigned(message), std::u64::MAX))
             } else {
-                let (blockhash, _fee_calculator, last_valid_slot) = client
-                    .get_recent_blockhash_with_commitment(CommitmentConfig::default())?
+                let Fees {
+                    blockhash,
+                    last_valid_block_height,
+                    ..
+                } = client
+                    .get_fees_with_commitment(CommitmentConfig::default())?
                     .value;
                 let transaction = Transaction::new(&signers, message, blockhash);
                 let config = RpcSendTransactionConfig {
@@ -395,11 +400,11 @@ fn send_messages(
                     ..RpcSendTransactionConfig::default()
                 };
                 client.send_transaction_with_config(&transaction, config)?;
-                Ok((transaction, last_valid_slot))
+                Ok((transaction, last_valid_block_height))
             }
         };
         match result {
-            Ok((transaction, last_valid_slot)) => {
+            Ok((transaction, last_valid_block_height)) => {
                 let new_stake_account_address_option =
                     args.stake_args.as_ref().map(|_| &new_stake_account_address);
                 db::set_transaction_info(
@@ -409,7 +414,7 @@ fn send_messages(
                     &transaction,
                     new_stake_account_address_option,
                     false,
-                    last_valid_slot,
+                    last_valid_block_height,
                     lockup_date,
                 )?;
             }
@@ -658,7 +663,7 @@ fn update_finalized_transactions(
             if info.finalized_date.is_some() {
                 None
             } else {
-                Some((&info.transaction, info.last_valid_slot))
+                Some((&info.transaction, info.last_valid_block_height))
             }
         })
         .collect();
@@ -700,8 +705,8 @@ fn log_transaction_confirmations(
     statuses: Vec<Option<TransactionStatus>>,
     confirmations: &mut Option<usize>,
 ) -> Result<(), Error> {
-    let root_slot = client.get_slot()?;
-    for ((transaction, last_valid_slot), opt_transaction_status) in unconfirmed_transactions
+    let finalized_block_height = client.get_block_height()?;
+    for ((transaction, last_valid_block_height), opt_transaction_status) in unconfirmed_transactions
         .into_iter()
         .zip(statuses.into_iter())
     {
@@ -709,8 +714,8 @@ fn log_transaction_confirmations(
             db,
             &transaction.signatures[0],
             opt_transaction_status,
-            last_valid_slot,
-            root_slot,
+            last_valid_block_height,
+            finalized_block_height,
         ) {
             Ok(Some(confs)) => {
                 *confirmations = Some(cmp::min(confs, confirmations.unwrap_or(usize::MAX)));
@@ -1982,7 +1987,7 @@ mod tests {
         let sender = Keypair::new();
         let recipient = Pubkey::new_unique();
         let amount = sol_to_lamports(1.0);
-        let last_valid_slot = 222;
+        let last_valid_block_height = 222;
         let transaction = transfer(&client, amount, &sender, &recipient).unwrap();
 
         // Queue db data
@@ -1993,7 +1998,7 @@ mod tests {
             &transaction,
             None,
             false,
-            last_valid_slot,
+            last_valid_block_height,
             None,
         )
         .unwrap();
@@ -2082,7 +2087,7 @@ mod tests {
                 new_stake_account_address: None,
                 finalized_date: None,
                 transaction,
-                last_valid_slot,
+                last_valid_block_height,
                 lockup_date: None,
             }
         );
@@ -2104,7 +2109,7 @@ mod tests {
         let sender = Keypair::new();
         let recipient = Pubkey::new_unique();
         let amount = sol_to_lamports(1.0);
-        let last_valid_slot = 222;
+        let last_valid_block_height = 222;
         let transaction = transfer(&client, amount, &sender, &recipient).unwrap();
 
         // Queue db data
@@ -2115,7 +2120,7 @@ mod tests {
             &transaction,
             None,
             false,
-            last_valid_slot,
+            last_valid_block_height,
             None,
         )
         .unwrap();
@@ -2186,7 +2191,7 @@ mod tests {
             new_stake_account_address: None,
             finalized_date: None,
             transaction,
-            last_valid_slot,
+            last_valid_block_height,
             lockup_date: None,
         }));
         assert!(transaction_info.contains(&TransactionInfo {
@@ -2195,7 +2200,7 @@ mod tests {
             new_stake_account_address: None,
             finalized_date: None,
             transaction: Transaction::new_unsigned(message),
-            last_valid_slot: std::u64::MAX,
+            last_valid_block_height: std::u64::MAX,
             lockup_date: None,
         }));
 
@@ -2281,7 +2286,7 @@ mod tests {
         let sender = Keypair::new();
         let recipient = Pubkey::new_unique();
         let amount = sol_to_lamports(1.0);
-        let last_valid_slot = 222;
+        let last_valid_block_height = 222;
         let transaction = transfer(&client, amount, &sender, &recipient).unwrap();
 
         // Queue unconfirmed transaction into db
@@ -2292,7 +2297,7 @@ mod tests {
             &transaction,
             None,
             false,
-            last_valid_slot,
+            last_valid_block_height,
             None,
         )
         .unwrap();
@@ -2374,7 +2379,7 @@ mod tests {
         let sender = Keypair::new();
         let recipient = Pubkey::new_unique();
         let amount = sol_to_lamports(1.0);
-        let last_valid_slot = 222;
+        let last_valid_block_height = 222;
         let transaction = transfer(&client, amount, &sender, &recipient).unwrap();
 
         // Queue unconfirmed transaction into db
@@ -2385,7 +2390,7 @@ mod tests {
             &transaction,
             None,
             false,
-            last_valid_slot,
+            last_valid_block_height,
             None,
         )
         .unwrap();
