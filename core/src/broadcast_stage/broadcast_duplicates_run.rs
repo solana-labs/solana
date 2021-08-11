@@ -72,7 +72,7 @@ impl BroadcastRun for BroadcastDuplicatesRun {
         keypair: &Keypair,
         _blockstore: &Arc<Blockstore>,
         receiver: &Receiver<WorkingBankEntry>,
-        socket_sender: &Sender<(TransmitShreds, Option<BroadcastShredBatchInfo>)>,
+        socket_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
         blockstore_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
     ) -> Result<()> {
         // 1) Pull entries from banking stage
@@ -194,13 +194,13 @@ impl BroadcastRun for BroadcastDuplicatesRun {
         blockstore_sender.send((data_shreds.clone(), None))?;
 
         // 3) Start broadcast step
-        let transmit_shreds = (bank.slot(), data_shreds.clone());
         info!(
             "{} Sending good shreds for slot {} to network",
             keypair.pubkey(),
             data_shreds.first().unwrap().slot()
         );
-        socket_sender.send((transmit_shreds, None))?;
+        assert!(data_shreds.iter().all(|shred| shred.slot() == bank.slot()));
+        socket_sender.send((data_shreds, None))?;
 
         // Special handling of last shred to cause partition
         if let Some((original_last_data_shred, partition_last_data_shred)) = last_shreds {
@@ -221,11 +221,15 @@ impl BroadcastRun for BroadcastDuplicatesRun {
             // Store the original shreds that this node replayed
             blockstore_sender.send((original_last_data_shred.clone(), None))?;
 
-            let original_transmit_shreds = (bank.slot(), original_last_data_shred);
-            let partition_transmit_shreds = (bank.slot(), partition_last_data_shred);
+            assert!(original_last_data_shred
+                .iter()
+                .all(|shred| shred.slot() == bank.slot()));
+            assert!(partition_last_data_shred
+                .iter()
+                .all(|shred| shred.slot() == bank.slot()));
 
-            socket_sender.send((original_transmit_shreds, None))?;
-            socket_sender.send((partition_transmit_shreds, None))?;
+            socket_sender.send((original_last_data_shred, None))?;
+            socket_sender.send((partition_last_data_shred, None))?;
         }
         Ok(())
     }
@@ -237,7 +241,12 @@ impl BroadcastRun for BroadcastDuplicatesRun {
         sock: &UdpSocket,
         bank_forks: &Arc<RwLock<BankForks>>,
     ) -> Result<()> {
-        let ((slot, shreds), _) = receiver.lock().unwrap().recv()?;
+        let (shreds, _) = receiver.lock().unwrap().recv()?;
+        if shreds.is_empty() {
+            return Ok(());
+        }
+        let slot = shreds.first().unwrap().slot();
+        assert!(shreds.iter().all(|shred| shred.slot() == slot));
         let (root_bank, working_bank) = {
             let bank_forks = bank_forks.read().unwrap();
             (bank_forks.root_bank(), bank_forks.working_bank())

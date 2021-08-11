@@ -27,7 +27,7 @@ impl BroadcastRun for BroadcastFakeShredsRun {
         keypair: &Keypair,
         blockstore: &Arc<Blockstore>,
         receiver: &Receiver<WorkingBankEntry>,
-        socket_sender: &Sender<(TransmitShreds, Option<BroadcastShredBatchInfo>)>,
+        socket_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
         blockstore_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
     ) -> Result<()> {
         // 1) Pull entries from banking stage
@@ -93,11 +93,13 @@ impl BroadcastRun for BroadcastFakeShredsRun {
         // 3) Start broadcast step
         //some indicates fake shreds
         let batch_info = Some(batch_info);
-        socket_sender.send(((slot, Arc::new(fake_data_shreds)), batch_info.clone()))?;
-        socket_sender.send(((slot, Arc::new(fake_coding_shreds)), batch_info))?;
+        assert!(fake_data_shreds.iter().all(|shred| shred.slot() == slot));
+        assert!(fake_coding_shreds.iter().all(|shred| shred.slot() == slot));
+        socket_sender.send((Arc::new(fake_data_shreds), batch_info.clone()))?;
+        socket_sender.send((Arc::new(fake_coding_shreds), batch_info))?;
         //none indicates real shreds
-        socket_sender.send(((slot, data_shreds), None))?;
-        socket_sender.send(((slot, Arc::new(coding_shreds)), None))?;
+        socket_sender.send((data_shreds, None))?;
+        socket_sender.send((Arc::new(coding_shreds), None))?;
 
         Ok(())
     }
@@ -108,7 +110,7 @@ impl BroadcastRun for BroadcastFakeShredsRun {
         sock: &UdpSocket,
         _bank_forks: &Arc<RwLock<BankForks>>,
     ) -> Result<()> {
-        for ((_slot, data_shreds), batch_info) in receiver.lock().unwrap().iter() {
+        for (data_shreds, batch_info) in receiver.lock().unwrap().iter() {
             let fake = batch_info.is_some();
             let peers = cluster_info.tvu_peers();
             peers.iter().enumerate().for_each(|(i, peer)| {

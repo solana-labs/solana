@@ -2,32 +2,37 @@
 
 extern crate test;
 
-use rand::{thread_rng, Rng};
-use solana_core::{
-    broadcast_stage::{broadcast_metrics::TransmitShredsStats, broadcast_shreds, BroadcastStage},
-    cluster_nodes::ClusterNodes,
+use {
+    rand::{thread_rng, Rng},
+    solana_core::{
+        broadcast_stage::{
+            broadcast_metrics::TransmitShredsStats, broadcast_shreds, BroadcastStage,
+        },
+        cluster_nodes::ClusterNodesCache,
+    },
+    solana_gossip::{
+        cluster_info::{ClusterInfo, Node},
+        contact_info::ContactInfo,
+    },
+    solana_ledger::{
+        genesis_utils::{create_genesis_config, GenesisConfigInfo},
+        shred::Shred,
+    },
+    solana_runtime::{bank::Bank, bank_forks::BankForks},
+    solana_sdk::{
+        pubkey,
+        signature::Keypair,
+        timing::{timestamp, AtomicInterval},
+    },
+    solana_streamer::socket::SocketAddrSpace,
+    std::{
+        collections::HashMap,
+        net::UdpSocket,
+        sync::{Arc, RwLock},
+        time::Duration,
+    },
+    test::Bencher,
 };
-use solana_gossip::{
-    cluster_info::{ClusterInfo, Node},
-    contact_info::ContactInfo,
-};
-use solana_ledger::{
-    genesis_utils::{create_genesis_config, GenesisConfigInfo},
-    shred::Shred,
-};
-use solana_runtime::{bank::Bank, bank_forks::BankForks};
-use solana_sdk::{
-    pubkey,
-    signature::Keypair,
-    timing::{timestamp, AtomicInterval},
-};
-use solana_streamer::socket::SocketAddrSpace;
-use std::{
-    collections::HashMap,
-    net::UdpSocket,
-    sync::{Arc, RwLock},
-};
-use test::Bencher;
 
 #[bench]
 fn broadcast_shreds_bench(bencher: &mut Bencher) {
@@ -56,7 +61,10 @@ fn broadcast_shreds_bench(bencher: &mut Bencher) {
         stakes.insert(id, thread_rng().gen_range(1, NUM_PEERS) as u64);
     }
     let cluster_info = Arc::new(cluster_info);
-    let cluster_nodes = ClusterNodes::<BroadcastStage>::new(&cluster_info, &stakes);
+    let cluster_nodes_cache = ClusterNodesCache::<BroadcastStage>::new(
+        8,                      // cap
+        Duration::from_secs(5), // ttl
+    );
     let shreds = Arc::new(shreds);
     let last_datapoint = Arc::new(AtomicInterval::default());
     bencher.iter(move || {
@@ -64,10 +72,10 @@ fn broadcast_shreds_bench(bencher: &mut Bencher) {
         broadcast_shreds(
             &socket,
             &shreds,
-            &cluster_nodes,
+            &cluster_nodes_cache,
             &last_datapoint,
             &mut TransmitShredsStats::default(),
-            cluster_info.id(),
+            &cluster_info,
             &bank_forks,
             &SocketAddrSpace::Unspecified,
         )
