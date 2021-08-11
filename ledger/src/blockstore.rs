@@ -69,7 +69,9 @@ use {
 
 pub mod blockstore_purge;
 mod blockstore_shreds;
-use blockstore_shreds::{ShredWAL, DATA_SHRED_DIRECTORY, DEFAULT_MAX_WAL_SHREDS, SHRED_DIRECTORY};
+use blockstore_shreds::{DATA_SHRED_DIRECTORY, SHRED_DIRECTORY};
+mod blockstore_shred_wal;
+use blockstore_shred_wal::{ShredWAL, DEFAULT_MAX_WAL_SHREDS};
 
 pub const BLOCKSTORE_DIRECTORY: &str = "rocksdb";
 
