@@ -2598,13 +2598,13 @@ impl ReplayStage {
         has_new_vote_been_rooted: &mut bool,
         voted_signatures: &mut Vec<Signature>,
     ) {
-        bank_forks.write().unwrap().set_root(
+        let mut w_bank_forks = bank_forks.write().unwrap();
+        w_bank_forks.set_root(
             new_root,
             accounts_background_request_sender,
             highest_confirmed_root,
         );
-        let r_bank_forks = bank_forks.read().unwrap();
-        let new_root_bank = &r_bank_forks[new_root];
+        let new_root_bank = &w_bank_forks[new_root];
         if !*has_new_vote_been_rooted {
             for signature in voted_signatures.iter() {
                 if new_root_bank.get_signature_status(signature).is_some() {
@@ -2616,8 +2616,11 @@ impl ReplayStage {
                 std::mem::take(voted_signatures);
             }
         }
-        progress.handle_new_root(&r_bank_forks);
-        heaviest_subtree_fork_choice.set_root((new_root, r_bank_forks.root_bank().hash()));
+        progress.handle_new_root(&w_bank_forks);
+        let root_bank_hash = w_bank_forks.root_bank().hash();
+        drop(w_bank_forks);
+
+        heaviest_subtree_fork_choice.set_root((new_root, root_bank_hash));
         let mut slots_ge_root = duplicate_slots_tracker.split_off(&new_root);
         // duplicate_slots_tracker now only contains entries >= `new_root`
         std::mem::swap(duplicate_slots_tracker, &mut slots_ge_root);
