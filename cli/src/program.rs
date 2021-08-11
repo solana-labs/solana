@@ -2088,15 +2088,9 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
                     }
                 }
 
-<<<<<<< HEAD
-                slot = rpc_client.get_slot()?;
-                progress_bar.set_message(&format!(
-                    "[{}/{}] Transactions confirmed. Retrying in {} slots",
-=======
                 block_height = rpc_client.get_block_height()?;
-                progress_bar.set_message(format!(
+                progress_bar.set_message(&format!(
                     "[{}/{}] Transactions confirmed. Retrying in {} blocks",
->>>>>>> 5970083b4 (Use last_valid_block_height in services and client apps (#19163))
                     num_transactions - pending_transactions.len(),
                     num_transactions,
                     last_valid_block_height.saturating_sub(block_height)
