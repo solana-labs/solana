@@ -122,10 +122,10 @@ mod tests {
     use crate::{
         blockhash_query,
         rpc_request::RpcRequest,
-        rpc_response::{Response, RpcFeeCalculator, RpcResponseContext},
+        rpc_response::{Response, RpcFeeCalculator, RpcFees, RpcResponseContext},
     };
     use clap::App;
-    use serde_json::{self, json, Value};
+    use serde_json::{self, json};
     use solana_account_decoder::{UiAccount, UiAccountEncoding};
     use solana_sdk::{account::Account, hash::hash, nonce, system_program};
     use std::collections::HashMap;
@@ -288,10 +288,12 @@ mod tests {
         let rpc_fee_calc = FeeCalculator::new(42);
         let get_recent_blockhash_response = json!(Response {
             context: RpcResponseContext { slot: 1 },
-            value: json!((
-                Value::String(rpc_blockhash.to_string()),
-                serde_json::to_value(rpc_fee_calc.clone()).unwrap()
-            )),
+            value: json!(RpcFees {
+                blockhash: rpc_blockhash.to_string(),
+                fee_calculator: rpc_fee_calc.clone(),
+                last_valid_slot: 42,
+                last_valid_block_height: 42,
+            }),
         });
         let get_fee_calculator_for_blockhash_response = json!(Response {
             context: RpcResponseContext { slot: 1 },
@@ -300,10 +302,7 @@ mod tests {
             }),
         });
         let mut mocks = HashMap::new();
-        mocks.insert(
-            RpcRequest::GetRecentBlockhash,
-            get_recent_blockhash_response.clone(),
-        );
+        mocks.insert(RpcRequest::GetFees, get_recent_blockhash_response.clone());
         let rpc_client = RpcClient::new_mock_with_mocks("".to_string(), mocks);
         assert_eq!(
             BlockhashQuery::default()
@@ -312,10 +311,7 @@ mod tests {
             (rpc_blockhash, rpc_fee_calc.clone()),
         );
         let mut mocks = HashMap::new();
-        mocks.insert(
-            RpcRequest::GetRecentBlockhash,
-            get_recent_blockhash_response.clone(),
-        );
+        mocks.insert(RpcRequest::GetFees, get_recent_blockhash_response.clone());
         mocks.insert(
             RpcRequest::GetFeeCalculatorForBlockhash,
             get_fee_calculator_for_blockhash_response,
@@ -328,10 +324,7 @@ mod tests {
             (test_blockhash, rpc_fee_calc),
         );
         let mut mocks = HashMap::new();
-        mocks.insert(
-            RpcRequest::GetRecentBlockhash,
-            get_recent_blockhash_response,
-        );
+        mocks.insert(RpcRequest::GetFees, get_recent_blockhash_response);
         let rpc_client = RpcClient::new_mock_with_mocks("".to_string(), mocks);
         assert_eq!(
             BlockhashQuery::None(test_blockhash)
