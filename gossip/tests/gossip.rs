@@ -21,7 +21,7 @@ use {
     solana_streamer::socket::SocketAddrSpace,
     solana_vote_program::{vote_instruction, vote_state::Vote},
     std::{
-        net::{SocketAddr, UdpSocket},
+        net::UdpSocket,
         sync::{
             atomic::{AtomicBool, Ordering},
             Arc, RwLock,
@@ -219,7 +219,7 @@ pub fn cluster_info_retransmit() {
     let peers = c1.tvu_peers();
     let retransmit_peers: Vec<_> = peers.iter().collect();
 
-    let dests: Vec<&SocketAddr> = ClusterInfo::get_retransmit_to_dests(
+    let dests: Vec<_> = ClusterInfo::get_retransmit_to_dests(
         &retransmit_peers,
         &SocketAddrSpace::Unspecified,
         false,

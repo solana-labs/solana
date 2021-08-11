@@ -39,7 +39,7 @@ use {
             hash_set::HashSet,
             {BTreeMap, BTreeSet, HashMap},
         },
-        net::{SocketAddr, UdpSocket},
+        net::UdpSocket,
         ops::DerefMut,
         sync::{
             atomic::{AtomicBool, AtomicU64, Ordering},
@@ -391,13 +391,17 @@ fn retransmit(
             // TODO: Consider forwarding the packet to the root node here.
             retransmit_tree_mismatch += 1;
         }
-        let mut dest_addrs: Vec<&SocketAddr> = if anchor_node {
+        // If the node is on the critical path (i.e. the first node in each
+        // neighborhood), it should send the packet to tvu socket of its
+        // children and also tvu_forward socket of its neighbors. Otherwise it
+        // should only forward to tvu_forward socket of its children.
+        let mut dest_addrs: Vec<_> = if anchor_node {
             // First neighbor is this node itself, so skip it.
             ClusterInfo::get_retransmit_to_dests(&neighbors[1..], socket_addr_space, true)
         } else {
             vec![]
         };
-        let child_addrs: Vec<&SocketAddr> =
+        let child_addrs: Vec<_> =
             ClusterInfo::get_retransmit_to_dests(&children, socket_addr_space, !anchor_node);
         dest_addrs.extend(child_addrs);
         compute_turbine_peers.stop();
@@ -409,7 +413,7 @@ fn retransmit(
             .or_default() += 1;
 
         let mut retransmit_time = Measure::start("retransmit_to");
-        ClusterInfo::retransmit_to(sock, &dest_addrs, packet);
+        ClusterInfo::retransmit_to(sock, &dest_addrs[..], packet);
         retransmit_time.stop();
         retransmit_total += retransmit_time.as_us();
     }

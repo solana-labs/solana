@@ -1236,28 +1236,28 @@ impl ClusterInfo {
             .collect()
     }
 
-    pub fn get_retransmit_to_dests<'a>(
-        peers: &[&'a ContactInfo],
+    pub fn get_retransmit_to_dests(
+        peers: &[&ContactInfo],
         socket_addr_space: &SocketAddrSpace,
         forwarded: bool,
-    ) -> Vec<&'a SocketAddr> {
-        let dests: Vec<&SocketAddr> = if forwarded {
+    ) -> Vec<SocketAddr> {
+        let dests: Vec<SocketAddr> = if forwarded {
             peers
                 .iter()
-                .map(|peer| &peer.tvu_forwards)
+                .map(|peer| peer.tvu_forwards)
                 .filter(|addr| ContactInfo::is_valid_address(addr, socket_addr_space))
                 .collect()
         } else {
             peers
                 .iter()
-                .map(|peer| &peer.tvu)
+                .map(|peer| peer.tvu)
                 .filter(|addr| socket_addr_space.check(addr))
                 .collect()
         };
         dests
     }
 
-    pub fn retransmit_to(s: &UdpSocket, dests: &[&SocketAddr], packet: &Packet) {
+    pub fn retransmit_to(s: &UdpSocket, dests: &[SocketAddr], packet: &Packet) {
         trace!("retransmit orders {}", dests.len());
         let data = &packet.data[..packet.meta.size];
         if let Err(SendPktsError::IoError(ioerr, num_failed)) = multi_target_send(s, data, dests) {
