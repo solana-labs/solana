@@ -16,7 +16,7 @@ pub const DATA_SHRED_DIRECTORY: &str = "data";
 // This WAL will record shred operations, namely, insertions and deletions. In the event of a
 // system crash / reboot, the WAL will be played back to establish the state that was lost in
 // memory. As shreds are more permanently persisted to non-volatile storage in the database,
-// parts of the WAL may become unnecessary and can then be cleaned up.
+// individual log files in the WAL will become unnecessary and can be cleaned up.
 //
 // With the existence of delete operations, order matters and the WAL must replayed in the same
 // order that it was written.
@@ -26,9 +26,9 @@ pub struct ShredWAL {
     // The maximum number of shreds allowed in a single WAL file
     max_shreds: usize,
     // The number of shreds written to current WAL file
-    cur_shreds: usize,
+    num_cur_shreds: usize,
     // ID to current WAL file
-    cur_id: Option<u128>,
+    cur_id: u128,
     // Map of WAL ID to max slot contained in WAL
     max_slots: BTreeMap<u128, u64>,
 }
@@ -52,13 +52,22 @@ type RecoveredShreds = HashMap<Slot, Vec<Shred>>;
 impl ShredWAL {
     pub fn new(shred_db_path: &Path, max_shreds: usize) -> Result<ShredWAL> {
         let wal_path = shred_db_path.join(SHRED_WAL_DIRECTORY);
+        // New cur_id queried each time validator restarted; use .as_micros() to avoid
+        // filename collision from same timestamp if validator restarts very quickly
+        let cur_id = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_micros();
+        let mut max_slots = BTreeMap::new();
+        max_slots.insert(cur_id, 0);
         fs::create_dir_all(&wal_path)?;
+
         let wal = Self {
             wal_path,
             max_shreds,
-            cur_shreds: 0,
-            cur_id: None,
-            max_slots: BTreeMap::new(),
+            num_cur_shreds: 0,
+            cur_id,
+            max_slots,
         };
         Ok(wal)
     }
@@ -139,7 +148,7 @@ impl ShredWAL {
     // This function modifies the shreds in-place, so this function consumes the shred HashMap
     // instead of borrowing to avoid corrupted shreds being used later
     pub fn log_shred_write(&mut self, mut shreds: HashMap<(u64, u64), Shred>) -> Result<()> {
-        let mut log = self.open_or_create_log(shreds.len())?;
+        let mut log = self.open_log(shreds.len())?;
         let mut insert_max_slot = 0;
         let result: Result<Vec<_>> = shreds
             .iter_mut()
@@ -160,20 +169,19 @@ impl ShredWAL {
             .collect();
         // Check that all of the individual writes succeeded and then update state
         let _result = result?;
-        self.cur_shreds += shreds.len();
-        let cur_max_slot = *self.max_slots.get(&self.cur_id.unwrap()).unwrap();
-        self.max_slots.insert(
-            self.cur_id.unwrap(),
-            cmp::max(cur_max_slot, insert_max_slot),
-        );
+        self.num_cur_shreds += shreds.len();
+        let cur_max_slot = *self.max_slots.get(&self.cur_id).unwrap();
+        self.max_slots
+            .insert(self.cur_id, cmp::max(cur_max_slot, insert_max_slot));
         Ok(())
     }
 
-    // Mark the specified range of slots as purged in the log
+    // Mark the specified range of slots as purged in the log.
+    // std::ops::Range is of the format [start, end)
     pub fn log_shred_purge(&mut self, range: Range<Slot>) -> Result<()> {
         let entry = Self::encode_deletion_entry(&range);
         // A purge entry occupies the space of one shred
-        let mut log = self.open_or_create_log(1)?;
+        let mut log = self.open_log(1)?;
         log.write_all(&entry).map_err(|err| {
             BlockstoreError::Io(IoError::new(
                 ErrorKind::Other,
@@ -183,6 +191,7 @@ impl ShredWAL {
                 ),
             ))
         })?;
+        self.num_cur_shreds += 1;
         Ok(())
     }
 
@@ -199,7 +208,7 @@ impl ShredWAL {
             .iter()
             .filter(|(_, max_slot)| **max_slot <= last_flush_slot)
         {
-            if self.cur_id.is_some() && *id != self.cur_id.unwrap() {
+            if *id != self.cur_id {
                 updated_max_slots.remove(id);
                 let _ = fs::remove_file(self.id_path(*id));
             }
@@ -213,35 +222,33 @@ impl ShredWAL {
     }
 
     // Generate a new log ID and update metadata accordingly
+    // Log ID's will be strictly monotonically increasing
     fn update_log_id(&mut self) {
-        // .as_millis() provides enough granularity to avoid filename collision;
-        // observed collisions with .as_secs() with quick validator restart
-        self.cur_id = Some(
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_millis(),
-        );
-        self.cur_shreds = 0;
-        self.max_slots.insert(self.cur_id.unwrap(), 0);
+        self.cur_id += 1;
+        self.num_cur_shreds = 0;
+        self.max_slots.insert(self.cur_id, 0);
+        trace!("New shred wal id: {}", self.cur_id);
     }
 
     // Returns file handle to current log; creates a new log if
-    // a) one does not yet exist
-    // b) the write would push current log over max capacity
-    fn open_or_create_log(&mut self, write_size: usize) -> std::io::Result<fs::File> {
-        if self.cur_id.is_none() || self.cur_shreds + write_size > self.max_shreds {
+    // - A log does not yet exist
+    // - The write would push current log over max capacity; write_size is assumed
+    //   to be smaller than self.max_shreds. If this weren't the case, write_size
+    //   would dictate how large a log might be with current implemtnation
+    fn open_log(&mut self, write_size: usize) -> std::io::Result<fs::File> {
+        if self.num_cur_shreds + write_size > self.max_shreds {
             self.update_log_id();
-            fs::File::create(self.id_path(self.cur_id.unwrap()))
-        } else {
-            fs::OpenOptions::new()
-                .append(true)
-                .open(self.id_path(self.cur_id.unwrap()))
         }
+        fs::OpenOptions::new()
+            // .create(true) creates a new file, or opens if it already exists
+            .create(true)
+            // .append(true) ensures any contents in existing log are kept
+            .append(true)
+            .open(self.id_path(self.cur_id))
     }
 
     // Extract the range deletion information from an entry
-    // The range should be treated as [start, end)
+    // std::ops::Range is of the format [start, end)
     fn decode_deletion_entry(buffer: &[u8]) -> Range<Slot> {
         let start = u64::from_le_bytes(buffer[0..8].try_into().unwrap());
         let end = u64::from_le_bytes(buffer[8..16].try_into().unwrap());
@@ -249,6 +256,7 @@ impl ShredWAL {
     }
 
     // Encode a deletion range into an entry
+    // std::ops::Range is of the format [start, end)
     fn encode_deletion_entry(range: &Range<Slot>) -> Vec<u8> {
         let mut entry = vec![0; WAL_ENTRY_SIZE];
         entry[0..8].copy_from_slice(&range.start.to_le_bytes());
@@ -530,4 +538,143 @@ impl Blockstore {
                 .collect(),
         )
     }
+}
+
+#[cfg(test)]
+pub mod tests {
+    use super::*;
+    use crate::get_tmp_ledger_path;
+
+    fn test_flatten_recovered_shreds(
+        recovered_shreds: RecoveredShreds,
+    ) -> HashMap<(u64, u64), Shred> {
+        let mut result = HashMap::new();
+        for (slot, shreds) in recovered_shreds.into_iter() {
+            for shred in shreds {
+                result.insert((slot, shred.index() as u64), shred);
+            }
+        }
+        result
+    }
+
+    #[test]
+    fn test_wal_write_and_recover() {
+        solana_logger::setup();
+        // Construct the shreds
+        let entries_per_slot = 25;
+        let num_slots = 3;
+        let (mut shreds, _) = make_many_slot_entries(0, num_slots, entries_per_slot);
+        // Keep a copy of shreds to check against at end
+        let all_shreds: HashMap<(u64, u64), Shred> = shreds
+            .iter()
+            .cloned()
+            .map(|shred| ((shred.slot(), shred.index() as u64), shred))
+            .collect();
+        let shreds_per_slot = shreds.len() / num_slots as usize;
+
+        // Construct ShredWAL with log files sized to fit one slot
+        let ledger_path = get_tmp_ledger_path!();
+        let mut shred_wal = ShredWAL::new(&ledger_path, shreds_per_slot).unwrap();
+
+        // Insert the shreds, one slot per write
+        for _ in 0..num_slots {
+            let write_shreds: HashMap<(u64, u64), Shred> = shreds
+                .drain(0..shreds_per_slot)
+                .collect::<Vec<_>>()
+                .into_iter()
+                .map(|shred| ((shred.slot(), shred.index() as u64), shred))
+                .collect();
+            shred_wal.log_shred_write(write_shreds).unwrap();
+        }
+
+        // Read the shreds back from logs and ensure everything we inserted is present
+        let recoverd_shreds = test_flatten_recovered_shreds(shred_wal.recover().unwrap());
+        assert_eq!(all_shreds.len(), recoverd_shreds.len());
+        for (_, shred) in all_shreds.iter() {
+            assert_eq!(
+                shred,
+                recoverd_shreds
+                    .get(&(shred.slot(), shred.index() as u64))
+                    .unwrap()
+            );
+        }
+
+        drop(shred_wal);
+        fs::remove_dir_all(&ledger_path).unwrap();
+    }
+
+    #[test]
+    fn test_wal_purge() {
+        solana_logger::setup();
+        // Construct the shreds
+        let entries_per_slot = 25;
+        let num_slots = 16;
+        let (mut shreds, _) = make_many_slot_entries(0, num_slots, entries_per_slot);
+        // Keep a copy of shreds to check against at end
+        let all_shreds: HashMap<(u64, u64), Shred> = shreds
+            .iter()
+            .cloned()
+            .map(|shred| ((shred.slot(), shred.index() as u64), shred))
+            .collect();
+        let shreds_per_slot = shreds.len() / num_slots as usize;
+
+        // Construct ShredWAL with log files sized to fit one slot
+        let ledger_path = get_tmp_ledger_path!();
+        let mut shred_wal = ShredWAL::new(&ledger_path, 4 * shreds_per_slot).unwrap();
+
+        // Insert half the shreds, two slots per write
+        // (num_slots / 4) / (2 * shreds_per_slot) = 1/2 slots
+        for _ in 0..(num_slots / 4) {
+            let write_shreds: HashMap<(u64, u64), Shred> = shreds
+                .drain(0..2 * shreds_per_slot)
+                .collect::<Vec<_>>()
+                .into_iter()
+                .map(|shred| ((shred.slot(), shred.index() as u64), shred))
+                .collect();
+            shred_wal.log_shred_write(write_shreds).unwrap();
+        }
+
+        // Purge slots [0, 4), slots [4, 7] remain
+        shred_wal.log_shred_purge(0..4).unwrap();
+
+        // Insert the second half of the shreds, two slots per write
+        // (num_slots / 4) / (2 * shreds_per_slot) = 1/2 slots
+        for _ in 0..(num_slots / 4) {
+            let write_shreds: HashMap<(u64, u64), Shred> = shreds
+                .drain(0..2 * shreds_per_slot)
+                .collect::<Vec<_>>()
+                .into_iter()
+                .map(|shred| ((shred.slot(), shred.index() as u64), shred))
+                .collect();
+            shred_wal.log_shred_write(write_shreds).unwrap();
+        }
+
+        // Purge slots [6, 9) and [14, 16); slots [4, 5], [9, 13] remain
+        shred_wal.log_shred_purge(6..9).unwrap();
+        shred_wal.log_shred_purge(14..16).unwrap();
+
+        // Read the shreds back from logs and ensure everything we inserted is present
+        let recoverd_shreds = test_flatten_recovered_shreds(shred_wal.recover().unwrap());
+        for ((slot, index), shred) in all_shreds.iter() {
+            match slot {
+                4 | 5 | 9..=13 => {
+                    assert_eq!(shred, recoverd_shreds.get(&(*slot, *index)).unwrap());
+                }
+                _ => {}
+            }
+        }
+
+        drop(shred_wal);
+        fs::remove_dir_all(&ledger_path).unwrap();
+    }
+
+    #[test]
+    fn test_wal_encode_decode_deletion_entry() {
+        let range = 13..17;
+        let entry = ShredWAL::encode_deletion_entry(&range);
+        let decoded_range = ShredWAL::decode_deletion_entry(&entry);
+        assert_eq!(range, decoded_range);
+    }
+
+    // TODO: test ShredWAL::purge_logs(&mut self, last_flush_slot: Slot) {
 }
