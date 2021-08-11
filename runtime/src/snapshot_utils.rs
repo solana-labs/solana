@@ -705,7 +705,7 @@ pub struct BankFromArchiveTimings {
 }
 
 // From testing, 4 seems to be a sweet spot for ranges of 60M-360M accounts and 16-64 cores. This may need to be tuned later.
-const PARALLEL_UNTAR_READERS_DEFAULT: usize = 4;
+const PARALLEL_UNTAR_READERS_DEFAULT: usize = 1;
 
 /// Rebuild bank from snapshot archives.  Handles either just a full snapshot, or both a full
 /// snapshot and an incremental snapshot.
