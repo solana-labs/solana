@@ -13,7 +13,7 @@ use crate::{
     serve_repair_service::ServeRepairService,
     sigverify,
     snapshot_packager_service::{PendingSnapshotPackage, SnapshotPackagerService},
-    tower_storage::{FileTowerStorage, TowerStorage},
+    tower_storage::TowerStorage,
     tpu::{Tpu, DEFAULT_TPU_COALESCE_MS},
     tvu::{Sockets, Tvu, TvuConfig},
 };
@@ -183,7 +183,7 @@ impl Default for ValidatorConfig {
             wal_recovery_mode: None,
             poh_verify: true,
             require_tower: false,
-            tower_storage: Arc::new(FileTowerStorage::new(PathBuf::default())),
+            tower_storage: Arc::new(crate::tower_storage::NullTowerStorage::default()),
             debug_keys: None,
             contact_debug_interval: DEFAULT_CONTACT_DEBUG_INTERVAL_MILLIS,
             contact_save_interval: DEFAULT_CONTACT_SAVE_INTERVAL_MILLIS,

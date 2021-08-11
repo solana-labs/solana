@@ -1,5 +1,8 @@
 use {
-    crate::validator::{Validator, ValidatorConfig, ValidatorStartProgress},
+    crate::{
+        tower_storage::TowerStorage,
+        validator::{Validator, ValidatorConfig, ValidatorStartProgress},
+    },
     solana_client::rpc_client::RpcClient,
     solana_gossip::{
         cluster_info::{ClusterInfo, Node},
@@ -76,6 +79,7 @@ impl Default for TestValidatorNodeConfig {
 pub struct TestValidatorGenesis {
     fee_rate_governor: FeeRateGovernor,
     ledger_path: Option<PathBuf>,
+    tower_storage: Option<Arc<dyn TowerStorage>>,
     pub rent: Rent,
     rpc_config: JsonRpcConfig,
     rpc_ports: Option<(u16, u16)>, // (JsonRpc, JsonRpcPubSub), None == random ports
@@ -94,6 +98,11 @@ pub struct TestValidatorGenesis {
 impl TestValidatorGenesis {
     pub fn ledger_path<P: Into<PathBuf>>(&mut self, ledger_path: P) -> &mut Self {
         self.ledger_path = Some(ledger_path.into());
+        self
+    }
+
+    pub fn tower_storage(&mut self, tower_storage: Arc<dyn TowerStorage>) -> &mut Self {
+        self.tower_storage = Some(tower_storage);
         self
     }
 
@@ -484,7 +493,7 @@ impl TestValidator {
             }
         }
 
-        let validator_config = ValidatorConfig {
+        let mut validator_config = ValidatorConfig {
             rpc_addrs: Some((
                 SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), node.info.rpc.port()),
                 SocketAddr::new(
@@ -514,6 +523,9 @@ impl TestValidator {
             no_wait_for_vote_to_start_leader: true,
             ..ValidatorConfig::default()
         };
+        if let Some(ref tower_storage) = config.tower_storage {
+            validator_config.tower_storage = tower_storage.clone();
+        }
 
         let validator = Some(Validator::new(
             node,
