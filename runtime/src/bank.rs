@@ -5099,20 +5099,18 @@ impl Bank {
                 .zip(loaded_transaction.accounts.iter())
                 .filter(|(_i, (_pubkey, account))| (Stakes::is_stake(account)))
             {
-                if Stakes::is_stake(account) {
-                    if let Some(old_vote_account) = self.stakes.write().unwrap().store(
-                        pubkey,
-                        account,
-                        self.stake_program_v2_enabled(),
-                        self.check_init_vote_data_enabled(),
-                    ) {
-                        // TODO: one of the indices is redundant.
-                        overwritten_vote_accounts.push(OverwrittenVoteAccount {
-                            account: old_vote_account,
-                            transaction_index: i,
-                            transaction_result_index: i,
-                        });
-                    }
+                if let Some(old_vote_account) = self.stakes.write().unwrap().store(
+                    pubkey,
+                    account,
+                    self.stake_program_v2_enabled(),
+                    self.check_init_vote_data_enabled(),
+                ) {
+                    // TODO: one of the indices is redundant.
+                    overwritten_vote_accounts.push(OverwrittenVoteAccount {
+                        account: old_vote_account,
+                        transaction_index: i,
+                        transaction_result_index: i,
+                    });
                 }
             }
         }
