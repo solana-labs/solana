@@ -6,7 +6,7 @@ use {
     },
     std::{
         fs::{self, File},
-        io::BufReader,
+        io::{self, BufReader},
         path::PathBuf,
     },
 };
@@ -70,9 +70,10 @@ pub struct NullTowerStorage {}
 
 impl TowerStorage for NullTowerStorage {
     fn load(&self, _node_pubkey: &Pubkey) -> Result<SavedTower> {
-        Err(TowerError::WrongTower(
-            "NullTowerStorage has no storage".into(),
-        ))
+        Err(TowerError::IoError(io::Error::new(
+            io::ErrorKind::Other,
+            "NullTowerStorage::load() not available",
+        )))
     }
 
     fn store(&self, _saved_tower: &SavedTower) -> Result<()> {
