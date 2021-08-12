@@ -573,6 +573,7 @@ impl Validator {
                     bank_forks.clone(),
                     optimistically_confirmed_bank,
                     rpc_subscriptions.clone(),
+                    Arc::new(RwLock::new(Vec::default())),
                 )),
                 Some(bank_notification_sender),
             )

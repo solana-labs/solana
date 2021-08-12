@@ -63,6 +63,7 @@ impl OptimisticallyConfirmedBankTracker {
         bank_forks: Arc<RwLock<BankForks>>,
         optimistically_confirmed_bank: Arc<RwLock<OptimisticallyConfirmedBank>>,
         subscriptions: Arc<RpcSubscriptions>,
+        confirmed_bank_subscribers: Arc<RwLock<Vec<Sender<Slot>>>>,
     ) -> Self {
         let exit_ = exit.clone();
         let mut pending_optimistically_confirmed_banks = HashSet::new();
@@ -83,12 +84,13 @@ impl OptimisticallyConfirmedBankTracker {
                     &mut pending_optimistically_confirmed_banks,
                     &mut last_notified_confirmed_slot,
                     &mut highest_confirmed_slot,
+                    &confirmed_bank_subscribers,
                 ) {
                     break;
                 }
             })
             .unwrap();
-        Self { thread_hdl }
+        Self {thread_hdl}
     }
 
     fn recv_notification(
@@ -99,6 +101,7 @@ impl OptimisticallyConfirmedBankTracker {
         mut pending_optimistically_confirmed_banks: &mut HashSet<Slot>,
         mut last_notified_confirmed_slot: &mut Slot,
         mut highest_confirmed_slot: &mut Slot,
+        confirmed_bank_subscribers: &Arc<RwLock<Vec<Sender<Slot>>>>,
     ) -> Result<(), RecvTimeoutError> {
         let notification = receiver.recv_timeout(Duration::from_secs(1))?;
         Self::process_notification(
@@ -109,6 +112,7 @@ impl OptimisticallyConfirmedBankTracker {
             &mut pending_optimistically_confirmed_banks,
             &mut last_notified_confirmed_slot,
             &mut highest_confirmed_slot,
+            &confirmed_bank_subscribers,
         );
         Ok(())
     }
@@ -119,6 +123,7 @@ impl OptimisticallyConfirmedBankTracker {
         bank: &Arc<Bank>,
         last_notified_confirmed_slot: &mut Slot,
         pending_optimistically_confirmed_banks: &mut HashSet<Slot>,
+        confirmed_bank_subscribers: &Arc<RwLock<Vec<Sender<Slot>>>>, 
     ) {
         if bank.is_frozen() {
             if bank.slot() > *last_notified_confirmed_slot {
@@ -128,6 +133,15 @@ impl OptimisticallyConfirmedBankTracker {
                 );
                 subscriptions.notify_gossip_subscribers(bank.slot());
                 *last_notified_confirmed_slot = bank.slot();
+
+                for sender in confirmed_bank_subscribers.read().unwrap().iter() {
+                    match sender.send(bank.slot()) {
+                        Ok(_) => {},
+                        Err(err) => {
+                            info!("Failed to send slot update {:?}", err);
+                        }
+                    }
+                }
             }
         } else if bank.slot() > bank_forks.read().unwrap().root_bank().slot() {
             pending_optimistically_confirmed_banks.insert(bank.slot());
@@ -142,6 +156,7 @@ impl OptimisticallyConfirmedBankTracker {
         slot_threshold: Slot,
         mut last_notified_confirmed_slot: &mut Slot,
         mut pending_optimistically_confirmed_banks: &mut HashSet<Slot>,
+        confirmed_bank_subscribers: &Arc<RwLock<Vec<Sender<Slot>>>>, 
     ) {
         for confirmed_bank in bank.clone().parents_inclusive().iter().rev() {
             if confirmed_bank.slot() > slot_threshold {
@@ -155,6 +170,7 @@ impl OptimisticallyConfirmedBankTracker {
                     confirmed_bank,
                     &mut last_notified_confirmed_slot,
                     &mut pending_optimistically_confirmed_banks,
+                    confirmed_bank_subscribers,
                 );
             }
         }
@@ -168,6 +184,7 @@ impl OptimisticallyConfirmedBankTracker {
         mut pending_optimistically_confirmed_banks: &mut HashSet<Slot>,
         mut last_notified_confirmed_slot: &mut Slot,
         highest_confirmed_slot: &mut Slot,
+        confirmed_bank_subscribers: &Arc<RwLock<Vec<Sender<Slot>>>>, 
     ) {
         debug!("received bank notification: {:?}", notification);
         match notification {
@@ -189,6 +206,7 @@ impl OptimisticallyConfirmedBankTracker {
                             *highest_confirmed_slot,
                             &mut last_notified_confirmed_slot,
                             &mut pending_optimistically_confirmed_banks,
+                            confirmed_bank_subscribers,
                         );
 
                         *highest_confirmed_slot = slot;
@@ -237,6 +255,7 @@ impl OptimisticallyConfirmedBankTracker {
                         *last_notified_confirmed_slot,
                         &mut last_notified_confirmed_slot,
                         &mut pending_optimistically_confirmed_banks,
+                        confirmed_bank_subscribers,
                     );
 
                     let mut w_optimistically_confirmed_bank =

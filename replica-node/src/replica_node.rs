@@ -240,6 +240,7 @@ fn start_client_rpc_services(
             bank_forks.clone(),
             optimistically_confirmed_bank.clone(),
             subscriptions.clone(),
+            Arc::new(RwLock::new(Vec::default())),
         )),
     )
 }
