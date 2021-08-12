@@ -101,7 +101,7 @@ function MintAccountCard({
         coinInfo?.status === CoingeckoStatus.Loading && (
           <LoadingCard message="Loading token price data" />
         )}
-      {tokenPriceInfo && (
+      {tokenPriceInfo && tokenPriceInfo.price && (
         <div className="row">
           <div className="col-12 col-lg-4 col-xl">
             <div className="card">
