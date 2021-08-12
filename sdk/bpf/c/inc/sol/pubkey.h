@@ -3,7 +3,7 @@
  * @brief Solana Public key
  */
 
-#include <sol_types.h>
+#include <sol/types.h>
 
 #ifdef __cplusplus
 extern "C" {

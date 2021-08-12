@@ -3,7 +3,7 @@
  * @brief Solana string and memory system calls and utilities
  */
 
-#include <sol_types.h>
+#include <sol/types.h>
 
 #ifdef __cplusplus
 extern "C" {

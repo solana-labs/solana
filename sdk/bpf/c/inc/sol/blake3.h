@@ -3,7 +3,7 @@
  * @brief Solana Blake3 system call
  */
 
-#include <sol_types.h>
+#include <sol/types.h>
 
 #ifdef __cplusplus
 extern "C" {

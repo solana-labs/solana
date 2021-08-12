@@ -1,1 +1,1 @@
-#include <sol_deserialize_deprecated.h>
+#include <sol/deserialize_deprecated.h>

@@ -3,8 +3,8 @@
  * @brief Solana program entrypoint
  */
 
-#include <sol_types.h>
-#include <sol_pubkey.h>
+#include <sol/types.h>
+#include <sol/pubkey.h>
 
 #ifdef __cplusplus
 extern "C" {

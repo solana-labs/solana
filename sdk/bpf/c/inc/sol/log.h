@@ -3,9 +3,9 @@
  * @brief Solana logging utilities
  */
 
-#include <sol_types.h>
-#include <sol_string.h>
-#include <sol_entrypoint.h>
+#include <sol/types.h>
+#include <sol/string.h>
+#include <sol/entrypoint.h>
 
 #ifdef __cplusplus
 extern "C" {

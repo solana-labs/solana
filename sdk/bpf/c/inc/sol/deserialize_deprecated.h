@@ -4,9 +4,9 @@
  * a program with `BPFLoader1111111111111111111111111111111111`
  */
 
- #include <sol_types.h>
- #include <sol_pubkey.h>
- #include <sol_entrypoint.h>
+ #include <sol/types.h>
+ #include <sol/pubkey.h>
+ #include <sol/entrypoint.h>
 
 #ifdef __cplusplus
 extern "C" {

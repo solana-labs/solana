@@ -1,20 +1,20 @@
 #pragma once
 /**
- * @brief Solana C-based BPF program types utility functions
+ * @brief Solana C-based BPF program types and utility functions
  */
 
-#include <deserialize_deprecated.h>
-#include <sol_assert.h>
-#include <sol_blake3.h>
-#include <sol_cpi.h>
-#include <sol_deserialize.h>
-#include <sol_entrypoint.h>
-#include <sol_keccak.h>
-#include <sol_log.h>
-#include <sol_pubkey.h>
-#include <sol_secp256k1.h>
-#include <sol_sha.h>
-#include <sol_string.h>
-#include <sol_types.h>
+#include <sol/assert.h>
+#include <sol/blake3.h>
+#include <sol/cpi.h>
+#include <sol/deserialize.h>
+#include <sol/deserialize_deprecated.h>
+#include <sol/entrypoint.h>
+#include <sol/keccak.h>
+#include <sol/log.h>
+#include <sol/pubkey.h>
+#include <sol/secp256k1.h>
+#include <sol/sha.h>
+#include <sol/string.h>
+#include <sol/types.h>
 
 /**@}*/
