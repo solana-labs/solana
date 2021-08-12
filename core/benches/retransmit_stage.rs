@@ -17,11 +17,10 @@ use {
         shred::Shredder,
     },
     solana_measure::measure::Measure,
-    solana_perf::packet::{Packet, Packets},
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{
         hash::Hash,
-        pubkey,
+        pubkey::Pubkey,
         signature::{Keypair, Signer},
         system_transaction,
         timing::timestamp,
@@ -40,6 +39,13 @@ use {
     test::Bencher,
 };
 
+// TODO: The benchmark is ignored as it currently may indefinitely block.
+// The code incorrectly expects that the node receiving the shred on tvu socket
+// retransmits that to other nodes in its neighborhood. But that is no longer
+// the case since https://github.com/solana-labs/solana/pull/17716.
+// So depending on shred seed, peers may not receive packets and the receive
+// threads loop indefinitely.
+#[ignore]
 #[bench]
 #[allow(clippy::same_item_push)]
 fn bench_retransmitter(bencher: &mut Bencher) {
@@ -52,12 +58,7 @@ fn bench_retransmitter(bencher: &mut Bencher) {
     const NUM_PEERS: usize = 4;
     let mut peer_sockets = Vec::new();
     for _ in 0..NUM_PEERS {
-        // This ensures that cluster_info.id() is the root of turbine
-        // retransmit tree and so the shreds are retransmited to all other
-        // nodes in the cluster.
-        let id = std::iter::repeat_with(pubkey::new_rand)
-            .find(|pk| cluster_info.id() < *pk)
-            .unwrap();
+        let id = Pubkey::new_unique();
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let mut contact_info = ContactInfo::new_localhost(&id, timestamp());
         contact_info.tvu = socket.local_addr().unwrap();
@@ -76,8 +77,8 @@ fn bench_retransmitter(bencher: &mut Bencher) {
     let bank_forks = BankForks::new(bank0);
     let bank = bank_forks.working_bank();
     let bank_forks = Arc::new(RwLock::new(bank_forks));
-    let (packet_sender, packet_receiver) = channel();
-    let packet_receiver = Arc::new(Mutex::new(packet_receiver));
+    let (shreds_sender, shreds_receiver) = channel();
+    let shreds_receiver = Arc::new(Mutex::new(shreds_receiver));
     const NUM_THREADS: usize = 2;
     let sockets = (0..NUM_THREADS)
         .map(|_| UdpSocket::bind("0.0.0.0:0").unwrap())
@@ -109,7 +110,7 @@ fn bench_retransmitter(bencher: &mut Bencher) {
         bank_forks,
         leader_schedule_cache,
         cluster_info,
-        packet_receiver,
+        shreds_receiver,
         Arc::default(), // solana_rpc::max_slots::MaxSlots
         None,
     );
@@ -148,9 +149,7 @@ fn bench_retransmitter(bencher: &mut Bencher) {
             shred.set_index(index);
             index += 1;
             index %= 200;
-            let mut p = Packet::default();
-            shred.copy_to_packet(&mut p);
-            let _ = packet_sender.send(Packets::new(vec![p]));
+            let _ = shreds_sender.send(vec![shred.clone()]);
         }
         slot += 1;
 
