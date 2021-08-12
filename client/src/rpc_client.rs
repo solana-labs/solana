@@ -723,7 +723,7 @@ impl RpcClient {
             preflight_commitment: Some(preflight_commitment.commitment),
             ..config
         };
-        let serialized_encoded = serialize_encode_transaction(transaction, encoding)?;
+        let serialized_encoded = serialize_and_encode::<Transaction>(transaction, encoding)?;
         let signature_base58_str: String = match self.send(
             RpcRequest::SendTransaction,
             json!([serialized_encoded, config]),
@@ -860,7 +860,7 @@ impl RpcClient {
             commitment: Some(commitment),
             ..config
         };
-        let serialized_encoded = serialize_encode_transaction(transaction, encoding)?;
+        let serialized_encoded = serialize_and_encode::<Transaction>(transaction, encoding)?;
         self.send(
             RpcRequest::SimulateTransaction,
             json!([serialized_encoded, config]),
@@ -3002,10 +3002,8 @@ impl RpcClient {
     }
 
     pub fn get_fee_for_message(&self, blockhash: &Hash, message: &Message) -> ClientResult<u64> {
-        let serialized_encoded = serialize_encode_transaction(
-            &Transaction::new_unsigned(message.clone()),
-            UiTransactionEncoding::Base64,
-        )?;
+        let serialized_encoded =
+            serialize_and_encode::<Message>(message, UiTransactionEncoding::Base64)?;
         let result = self.send::<Response<Option<u64>>>(
             RpcRequest::GetFeeForMessage,
             json!([
@@ -3059,18 +3057,18 @@ impl RpcClient {
     }
 }
 
-fn serialize_encode_transaction(
-    transaction: &Transaction,
-    encoding: UiTransactionEncoding,
-) -> ClientResult<String> {
-    let serialized = serialize(transaction)
-        .map_err(|e| ClientErrorKind::Custom(format!("transaction serialization failed: {}", e)))?;
+pub fn serialize_and_encode<T>(input: &T, encoding: UiTransactionEncoding) -> ClientResult<String>
+where
+    T: serde::ser::Serialize,
+{
+    let serialized = serialize(input)
+        .map_err(|e| ClientErrorKind::Custom(format!("Serialization failed: {}", e)))?;
     let encoded = match encoding {
         UiTransactionEncoding::Base58 => bs58::encode(serialized).into_string(),
         UiTransactionEncoding::Base64 => base64::encode(serialized),
         _ => {
             return Err(ClientErrorKind::Custom(format!(
-                "unsupported transaction encoding: {}. Supported encodings: base58, base64",
+                "unsupported encoding: {}. Supported encodings: base58, base64",
                 encoding
             ))
             .into())

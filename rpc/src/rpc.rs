@@ -60,6 +60,7 @@ use {
         epoch_schedule::EpochSchedule,
         exit::Exit,
         hash::Hash,
+        message::Message,
         pubkey::Pubkey,
         sanitize::Sanitize,
         signature::{Keypair, Signature, Signer},
@@ -80,6 +81,7 @@ use {
         state::{Account as TokenAccount, Mint},
     },
     std::{
+        any::type_name,
         cmp::{max, min},
         collections::{HashMap, HashSet},
         net::SocketAddr,
@@ -1932,11 +1934,11 @@ impl JsonRpcRequestProcessor {
     fn get_fee_for_message(
         &self,
         blockhash: &Hash,
-        transaction: &Transaction,
+        message: &Message,
         commitment: Option<CommitmentConfig>,
     ) -> Result<RpcResponse<Option<u64>>> {
         let bank = self.bank(commitment);
-        let fee = bank.get_fee_for_message(blockhash, &transaction.message);
+        let fee = bank.get_fee_for_message(blockhash, message);
         Ok(new_response(&bank, fee))
     }
 }
@@ -3271,7 +3273,8 @@ pub mod rpc_full {
             debug!("send_transaction rpc request received");
             let config = config.unwrap_or_default();
             let encoding = config.encoding.unwrap_or(UiTransactionEncoding::Base58);
-            let (wire_transaction, transaction) = deserialize_transaction(data, encoding)?;
+            let (wire_transaction, transaction) =
+                decode_and_deserialize::<Transaction>(data, encoding)?;
 
             let preflight_commitment = config
                 .preflight_commitment
@@ -3371,7 +3374,7 @@ pub mod rpc_full {
             debug!("simulate_transaction rpc request received");
             let config = config.unwrap_or_default();
             let encoding = config.encoding.unwrap_or(UiTransactionEncoding::Base58);
-            let (_, mut transaction) = deserialize_transaction(data, encoding)?;
+            let (_, mut transaction) = decode_and_deserialize::<Transaction>(data, encoding)?;
 
             let bank = &*meta.bank(config.commitment);
             if config.sig_verify {
@@ -3612,8 +3615,8 @@ pub mod rpc_full {
             debug!("get_fee_for_message rpc request received");
             let blockhash = Hash::from_str(&blockhash)
                 .map_err(|e| Error::invalid_params(format!("{:?}", e)))?;
-            let (_, transaction) = deserialize_transaction(data, encoding)?;
-            meta.get_fee_for_message(&blockhash, &transaction, commitment)
+            let (_, message) = decode_and_deserialize::<Message>(data, encoding)?;
+            meta.get_fee_for_message(&blockhash, &message, commitment)
         }
     }
 }
@@ -3992,51 +3995,56 @@ pub mod rpc_obsolete_v1_7 {
     }
 }
 
-const WORST_CASE_BASE58_TX: usize = 1683; // Golden, bump if PACKET_DATA_SIZE changes
-const WORST_CASE_BASE64_TX: usize = 1644; // Golden, bump if PACKET_DATA_SIZE changes
-fn deserialize_transaction(
-    encoded_transaction: String,
+const MAX_BASE58_SIZE: usize = 1683; // Golden, bump if PACKET_DATA_SIZE changes
+const MAX_BASE64_SIZE: usize = 1644; // Golden, bump if PACKET_DATA_SIZE changes
+fn decode_and_deserialize<T>(
+    encoded: String,
     encoding: UiTransactionEncoding,
-) -> Result<(Vec<u8>, Transaction)> {
-    let wire_transaction = match encoding {
+) -> Result<(Vec<u8>, T)>
+where
+    T: serde::de::DeserializeOwned + Sanitize,
+{
+    let wire_output = match encoding {
         UiTransactionEncoding::Base58 => {
             inc_new_counter_info!("rpc-base58_encoded_tx", 1);
-            if encoded_transaction.len() > WORST_CASE_BASE58_TX {
+            if encoded.len() > MAX_BASE58_SIZE {
                 return Err(Error::invalid_params(format!(
-                    "encoded transaction too large: {} bytes (max: encoded/raw {}/{})",
-                    encoded_transaction.len(),
-                    WORST_CASE_BASE58_TX,
+                    "encoded {} too large: {} bytes (max: encoded/raw {}/{})",
+                    type_name::<T>(),
+                    encoded.len(),
+                    MAX_BASE58_SIZE,
                     PACKET_DATA_SIZE,
                 )));
             }
-            bs58::decode(encoded_transaction)
+            bs58::decode(encoded)
                 .into_vec()
                 .map_err(|e| Error::invalid_params(format!("{:?}", e)))?
         }
         UiTransactionEncoding::Base64 => {
             inc_new_counter_info!("rpc-base64_encoded_tx", 1);
-            if encoded_transaction.len() > WORST_CASE_BASE64_TX {
+            if encoded.len() > MAX_BASE64_SIZE {
                 return Err(Error::invalid_params(format!(
-                    "encoded transaction too large: {} bytes (max: encoded/raw {}/{})",
-                    encoded_transaction.len(),
-                    WORST_CASE_BASE64_TX,
+                    "encoded {} too large: {} bytes (max: encoded/raw {}/{})",
+                    type_name::<T>(),
+                    encoded.len(),
+                    MAX_BASE64_SIZE,
                     PACKET_DATA_SIZE,
                 )));
             }
-            base64::decode(encoded_transaction)
-                .map_err(|e| Error::invalid_params(format!("{:?}", e)))?
+            base64::decode(encoded).map_err(|e| Error::invalid_params(format!("{:?}", e)))?
         }
         _ => {
             return Err(Error::invalid_params(format!(
-                "unsupported transaction encoding: {}. Supported encodings: base58, base64",
+                "unsupported encoding: {}. Supported encodings: base58, base64",
                 encoding
             )))
         }
     };
-    if wire_transaction.len() > PACKET_DATA_SIZE {
+    if wire_output.len() > PACKET_DATA_SIZE {
         let err = format!(
-            "transaction too large: {} bytes (max: {} bytes)",
-            wire_transaction.len(),
+            "encoded {} too large: {} bytes (max: {} bytes)",
+            type_name::<T>(),
+            wire_output.len(),
             PACKET_DATA_SIZE
         );
         info!("{}", err);
@@ -4046,22 +4054,23 @@ fn deserialize_transaction(
         .with_limit(PACKET_DATA_SIZE as u64)
         .with_fixint_encoding()
         .allow_trailing_bytes()
-        .deserialize_from(&wire_transaction[..])
+        .deserialize_from(&wire_output[..])
         .map_err(|err| {
-            info!("transaction deserialize error: {:?}", err);
+            info!("deserialize error: {}", err);
             Error::invalid_params(&err.to_string())
         })
-        .and_then(|transaction: Transaction| {
-            if let Err(err) = transaction.sanitize() {
+        .and_then(|output: T| {
+            if let Err(err) = output.sanitize() {
                 Err(Error::invalid_params(format!(
-                    "invalid transaction: {}",
+                    "invalid {}: {}",
+                    type_name::<T>(),
                     err
                 )))
             } else {
-                Ok(transaction)
+                Ok(output)
             }
         })
-        .map(|transaction| (wire_transaction, transaction))
+        .map(|output| (wire_output, output))
 }
 
 pub(crate) fn create_validator_exit(exit: &Arc<AtomicBool>) -> Arc<RwLock<Exit>> {
@@ -5977,7 +5986,7 @@ pub mod tests {
         assert_eq!(
             res,
             Some(
-                r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"invalid transaction: index out of bounds"},"id":1}"#.to_string(),
+                r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"invalid solana_sdk::transaction::Transaction: index out of bounds"},"id":1}"#.to_string(),
             )
         );
         let mut bad_transaction = system_transaction::transfer(
@@ -6041,7 +6050,7 @@ pub mod tests {
         assert_eq!(
             res,
             Some(
-                r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"invalid transaction: index out of bounds"},"id":1}"#.to_string(),
+                r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"invalid solana_sdk::transaction::Transaction: index out of bounds"},"id":1}"#.to_string(),
             )
         );
     }
@@ -7737,66 +7746,68 @@ pub mod tests {
     fn test_worst_case_encoded_tx_goldens() {
         let ff_tx = vec![0xffu8; PACKET_DATA_SIZE];
         let tx58 = bs58::encode(&ff_tx).into_string();
-        assert_eq!(tx58.len(), WORST_CASE_BASE58_TX);
+        assert_eq!(tx58.len(), MAX_BASE58_SIZE);
         let tx64 = base64::encode(&ff_tx);
-        assert_eq!(tx64.len(), WORST_CASE_BASE64_TX);
+        assert_eq!(tx64.len(), MAX_BASE64_SIZE);
     }
 
     #[test]
-    fn test_deserialize_transaction_too_large_payloads_fail() {
+    fn test_decode_and_deserialize_too_large_payloads_fail() {
         // +2 because +1 still fits in base64 encoded worst-case
         let too_big = PACKET_DATA_SIZE + 2;
         let tx_ser = vec![0xffu8; too_big];
         let tx58 = bs58::encode(&tx_ser).into_string();
         let tx58_len = tx58.len();
         let expect58 = Error::invalid_params(format!(
-            "encoded transaction too large: {} bytes (max: encoded/raw {}/{})",
-            tx58_len, WORST_CASE_BASE58_TX, PACKET_DATA_SIZE,
+            "encoded solana_sdk::transaction::Transaction too large: {} bytes (max: encoded/raw {}/{})",
+            tx58_len, MAX_BASE58_SIZE, PACKET_DATA_SIZE,
         ));
         assert_eq!(
-            deserialize_transaction(tx58, UiTransactionEncoding::Base58).unwrap_err(),
+            decode_and_deserialize::<Transaction>(tx58, UiTransactionEncoding::Base58).unwrap_err(),
             expect58
         );
         let tx64 = base64::encode(&tx_ser);
         let tx64_len = tx64.len();
         let expect64 = Error::invalid_params(format!(
-            "encoded transaction too large: {} bytes (max: encoded/raw {}/{})",
-            tx64_len, WORST_CASE_BASE64_TX, PACKET_DATA_SIZE,
+            "encoded solana_sdk::transaction::Transaction too large: {} bytes (max: encoded/raw {}/{})",
+            tx64_len, MAX_BASE64_SIZE, PACKET_DATA_SIZE,
         ));
         assert_eq!(
-            deserialize_transaction(tx64, UiTransactionEncoding::Base64).unwrap_err(),
+            decode_and_deserialize::<Transaction>(tx64, UiTransactionEncoding::Base64).unwrap_err(),
             expect64
         );
         let too_big = PACKET_DATA_SIZE + 1;
         let tx_ser = vec![0x00u8; too_big];
         let tx58 = bs58::encode(&tx_ser).into_string();
         let expect = Error::invalid_params(format!(
-            "transaction too large: {} bytes (max: {} bytes)",
+            "encoded solana_sdk::transaction::Transaction too large: {} bytes (max: {} bytes)",
             too_big, PACKET_DATA_SIZE
         ));
         assert_eq!(
-            deserialize_transaction(tx58, UiTransactionEncoding::Base58).unwrap_err(),
+            decode_and_deserialize::<Transaction>(tx58, UiTransactionEncoding::Base58).unwrap_err(),
             expect
         );
         let tx64 = base64::encode(&tx_ser);
         assert_eq!(
-            deserialize_transaction(tx64, UiTransactionEncoding::Base64).unwrap_err(),
+            decode_and_deserialize::<Transaction>(tx64, UiTransactionEncoding::Base64).unwrap_err(),
             expect
         );
     }
 
     #[test]
-    fn test_deserialize_transaction_unsanitary() {
+    fn test_decode_and_deserialize_unsanitary() {
         let unsanitary_tx58 = "ju9xZWuDBX4pRxX2oZkTjxU5jB4SSTgEGhX8bQ8PURNzyzqKMPPpNvWihx8zUe\
              FfrbVNoAaEsNKZvGzAnTDy5bhNT9kt6KFCTBixpvrLCzg4M5UdFUQYrn1gdgjX\
              pLHxcaShD81xBNaFDgnA2nkkdHnKtZt4hVSfKAmw3VRZbjrZ7L2fKZBx21CwsG\
              hD6onjM2M3qZW5C8J6d1pj41MxKmZgPBSha3MyKkNLkAGFASK"
             .to_string();
 
-        let expect58 =
-            Error::invalid_params("invalid transaction: index out of bounds".to_string());
+        let expect58 = Error::invalid_params(
+            "invalid solana_sdk::transaction::Transaction: index out of bounds".to_string(),
+        );
         assert_eq!(
-            deserialize_transaction(unsanitary_tx58, UiTransactionEncoding::Base58).unwrap_err(),
+            decode_and_deserialize::<Transaction>(unsanitary_tx58, UiTransactionEncoding::Base58)
+                .unwrap_err(),
             expect58
         );
     }
