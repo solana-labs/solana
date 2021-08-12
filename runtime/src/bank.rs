@@ -185,7 +185,7 @@ impl ExecuteTimings {
 }
 
 type BankStatusCache = StatusCache<Result<()>>;
-#[frozen_abi(digest = "HhY4tMP5KZU9fw9VLpMMUikfvNVCLksocZBUKjt8ZjYH")]
+#[frozen_abi(digest = "9iDANtGXnSv6WK4vc2rvtrhVMHidKeBM9nQxm34nC79C")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 type TransactionAccountRefCells = Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>;
 type TransactionLoaderRefCells = Vec<Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>>;

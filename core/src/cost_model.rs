@@ -9,29 +9,9 @@
 //!
 use crate::execute_cost_table::ExecuteCostTable;
 use log::*;
+use solana_ledger::block_cost_limits::*;
 use solana_sdk::{pubkey::Pubkey, sanitized_transaction::SanitizedTransaction};
 use std::collections::HashMap;
-
-// 07-27-2021, compute_unit to microsecond conversion ratio collected from mainnet-beta
-// differs between instructions. Some bpf instruction has much higher CU/US ratio
-// (eg 7vxeyaXGLqcp66fFShqUdHxdacp4k4kwUpRSSeoZLCZ4 has average ratio 135), others
-// have lower ratio (eg 9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin has an average ratio 14).
-// With this, I am guestimating the flat_fee for sigver and account read/write
-// as following. This can be adjusted when needed.
-const SIGVER_COST: u64 = 1;
-const NON_SIGNED_READONLY_ACCOUNT_ACCESS_COST: u64 = 1;
-const NON_SIGNED_WRITABLE_ACCOUNT_ACCESS_COST: u64 = 2;
-const SIGNED_READONLY_ACCOUNT_ACCESS_COST: u64 =
-    SIGVER_COST + NON_SIGNED_READONLY_ACCOUNT_ACCESS_COST;
-const SIGNED_WRITABLE_ACCOUNT_ACCESS_COST: u64 =
-    SIGVER_COST + NON_SIGNED_WRITABLE_ACCOUNT_ACCESS_COST;
-
-// 07-27-2021, cost model limit is set to "worst case scenario", which is the
-// max compute unit it can execute. From mainnet-beta, the max CU of instruction
-// is 3753, round up to 4_000. Say we allows max 50_000 instruction per writable i
-// account, and  1_000_000 instruction per block. It comes to following limits:
-pub const ACCOUNT_MAX_COST: u64 = 200_000_000;
-pub const BLOCK_MAX_COST: u64 = 4_000_000_000;
 
 const MAX_WRITABLE_ACCOUNTS: usize = 256;
 
@@ -88,7 +68,7 @@ pub struct CostModel {
 
 impl Default for CostModel {
     fn default() -> Self {
-        CostModel::new(ACCOUNT_MAX_COST, BLOCK_MAX_COST)
+        CostModel::new(account_cost_max(), block_cost_max())
     }
 }
 
@@ -142,21 +122,13 @@ impl CostModel {
         // calculate account access cost
         let message = transaction.message();
         message.account_keys.iter().enumerate().for_each(|(i, k)| {
-            let is_signer = message.is_signer(i);
             let is_writable = message.is_writable(i);
 
-            if is_signer && is_writable {
+            if is_writable {
                 self.transaction_cost.writable_accounts.push(*k);
-                self.transaction_cost.account_access_cost += SIGNED_WRITABLE_ACCOUNT_ACCESS_COST;
-            } else if is_signer && !is_writable {
-                self.transaction_cost.account_access_cost += SIGNED_READONLY_ACCOUNT_ACCESS_COST;
-            } else if !is_signer && is_writable {
-                self.transaction_cost.writable_accounts.push(*k);
-                self.transaction_cost.account_access_cost +=
-                    NON_SIGNED_WRITABLE_ACCOUNT_ACCESS_COST;
+                self.transaction_cost.account_access_cost += account_write_cost();
             } else {
-                self.transaction_cost.account_access_cost +=
-                    NON_SIGNED_READONLY_ACCOUNT_ACCESS_COST;
+                self.transaction_cost.account_access_cost += account_read_cost();
             }
         });
         debug!(
@@ -418,9 +390,8 @@ mod tests {
                 .try_into()
                 .unwrap();
 
-        let expected_account_cost = SIGNED_WRITABLE_ACCOUNT_ACCESS_COST
-            + NON_SIGNED_WRITABLE_ACCOUNT_ACCESS_COST
-            + NON_SIGNED_READONLY_ACCOUNT_ACCESS_COST;
+        let expected_account_cost =
+            account_write_cost() + account_write_cost() + account_read_cost();
         let expected_execution_cost = 8;
 
         let mut cost_model = CostModel::default();
@@ -475,9 +446,8 @@ mod tests {
         );
 
         let number_threads = 10;
-        let expected_account_cost = SIGNED_WRITABLE_ACCOUNT_ACCESS_COST
-            + NON_SIGNED_WRITABLE_ACCOUNT_ACCESS_COST * 2
-            + NON_SIGNED_READONLY_ACCOUNT_ACCESS_COST * 2;
+        let expected_account_cost =
+            account_write_cost() + account_write_cost() * 2 + account_read_cost() * 2;
         let cost1 = 100;
         let cost2 = 200;
         // execution cost can be either 2 * Default (before write) or cost1+cost2 (after write)
