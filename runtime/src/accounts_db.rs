@@ -24,7 +24,8 @@ use crate::{
     accounts_hash::{AccountsHash, CalculateHashIntermediate, HashStats, PreviousPass},
     accounts_index::{
         AccountIndexGetResult, AccountSecondaryIndexes, AccountsIndex, AccountsIndexRootsStats,
-        IndexKey, IsCached, ScanResult, SlotList, SlotSlice, ZeroLamport, BINS_FOR_TESTING,
+        IndexKey, IsCached, RefCount, ScanResult, SlotList, SlotSlice, ZeroLamport,
+        BINS_FOR_TESTING,
     },
     ancestors::Ancestors,
     append_vec::{AppendVec, StoredAccountMeta, StoredMeta, StoredMetaWriteVersion},
@@ -977,6 +978,10 @@ pub struct AccountsDb {
     /// such that potentially a 0-lamport account update could be present which
     /// means we can remove the account from the index entirely.
     dirty_stores: DashMap<(Slot, AppendVecId), Arc<AccountStorageEntry>>,
+
+    /// Zero-lamport accounts that are *not* purged during clean because they need to stay alive
+    /// for incremental snapshot support.
+    zero_lamport_accounts_to_purge_after_full_snapshot: DashSet<(Slot, Pubkey)>,
 }
 
 #[derive(Debug, Default)]
@@ -1410,6 +1415,7 @@ impl AccountsDb {
             remove_unrooted_slots_synchronization: RemoveUnrootedSlotsSynchronization::default(),
             shrink_ratio: AccountShrinkThreshold::default(),
             dirty_stores: DashMap::default(),
+            zero_lamport_accounts_to_purge_after_full_snapshot: DashSet::default(),
         }
     }
 
@@ -1735,6 +1741,7 @@ impl AccountsDb {
     fn construct_candidate_clean_keys(
         &self,
         max_clean_root: Option<Slot>,
+        last_full_snapshot_slot: Option<Slot>,
         timings: &mut CleanKeyTimings,
     ) -> Vec<Pubkey> {
         let mut dirty_store_processing_time = Measure::start("dirty_store_processing");
@@ -1783,9 +1790,27 @@ impl AccountsDb {
         timings.delta_key_count = pubkeys.len() as u64;
 
         let mut hashset_to_vec = Measure::start("flat_map");
-        let pubkeys: Vec<Pubkey> = pubkeys.into_iter().collect();
+        let mut pubkeys: Vec<Pubkey> = pubkeys.into_iter().collect();
         hashset_to_vec.stop();
         timings.hashset_to_vec_us += hashset_to_vec.as_us();
+
+        // Check if we should purge any of the zero_lamport_accounts_to_purge_later, based on the
+        // last_full_snapshot_slot.
+        assert!(
+            last_full_snapshot_slot.is_some() || self.zero_lamport_accounts_to_purge_after_full_snapshot.is_empty(),
+            "if snapshots are disabled, then zero_lamport_accounts_to_purge_later should always be empty"
+        );
+        if let Some(last_full_snapshot_slot) = last_full_snapshot_slot {
+            self.zero_lamport_accounts_to_purge_after_full_snapshot
+                .retain(|(slot, pubkey)| {
+                    let is_candidate_for_clean =
+                        max_slot >= *slot && last_full_snapshot_slot >= *slot;
+                    if is_candidate_for_clean {
+                        pubkeys.push(*pubkey);
+                    }
+                    !is_candidate_for_clean
+                });
+        }
 
         pubkeys
     }
@@ -1794,7 +1819,12 @@ impl AccountsDb {
     // collection
     // Only remove those accounts where the entire rooted history of the account
     // can be purged because there are no live append vecs in the ancestors
-    pub fn clean_accounts(&self, max_clean_root: Option<Slot>, is_startup: bool) {
+    pub fn clean_accounts(
+        &self,
+        max_clean_root: Option<Slot>,
+        is_startup: bool,
+        last_full_snapshot_slot: Option<Slot>,
+    ) {
         let max_clean_root = self.max_clean_root(max_clean_root);
 
         // hold a lock to prevent slot shrinking from running because it might modify some rooted
@@ -1804,7 +1834,11 @@ impl AccountsDb {
         self.report_store_stats();
 
         let mut key_timings = CleanKeyTimings::default();
-        let pubkeys = self.construct_candidate_clean_keys(max_clean_root, &mut key_timings);
+        let pubkeys = self.construct_candidate_clean_keys(
+            max_clean_root,
+            last_full_snapshot_slot,
+            &mut key_timings,
+        );
 
         let total_keys_count = pubkeys.len();
         let mut accounts_scan = Measure::start("accounts_scan");
@@ -1938,17 +1972,13 @@ impl AccountsDb {
         Self::calc_delete_dependencies(&purges_zero_lamports, &mut store_counts);
         calc_deps_time.stop();
 
-        // Only keep purges_zero_lamports where the entire history of the account in the root set
-        // can be purged. All AppendVecs for those updates are dead.
         let mut purge_filter = Measure::start("purge_filter");
-        purges_zero_lamports.retain(|_pubkey, (account_infos, _ref_count)| {
-            for (_slot, account_info) in account_infos.iter() {
-                if store_counts.get(&account_info.store_id).unwrap().0 != 0 {
-                    return false;
-                }
-            }
-            true
-        });
+        self.filter_zero_lamport_clean_for_incremental_snapshots(
+            max_clean_root,
+            last_full_snapshot_slot,
+            &store_counts,
+            &mut purges_zero_lamports,
+        );
         purge_filter.stop();
 
         let mut reclaims_time = Measure::start("reclaims");
@@ -2075,6 +2105,76 @@ impl AccountsDb {
         if let Some(purge_stats) = purge_stats {
             self.process_dead_slots(&dead_slots, purged_account_slots, purge_stats);
         }
+    }
+
+    /// During clean, some zero-lamport accounts that are marked for purge should *not* actually
+    /// get purged.  Filter out those accounts here.
+    ///
+    /// When using incremental snapshots, do not purge zero-lamport accounts if the slot is higher
+    /// than the last full snapshot slot.  This is to protect against the following scenario:
+    ///
+    ///   ```text
+    ///   A full snapshot is taken, and it contains an account with a non-zero balance.  Later,
+    ///   that account's  goes to zero.  Evntually cleaning runs, and before, this account would be
+    ///   cleaned up.  Finally, an incremental snapshot is taken.
+    ///
+    ///   Later, the incremental (and full) snapshot is used to rebuild the bank and accounts
+    ///   database (e.x. if the node restarts).  The full snapshot _does_ contain the account (from
+    ///   above) and its balance is non-zero, however, since the account was cleaned up in a later
+    ///   slot, the incremental snapshot does not contain any info about this account, thus, the
+    ///   accounts database will contain the old info from this account, which has its old non-zero
+    ///   balance.  Very bad!
+    ///   ```
+    ///
+    /// This filtering step can be skipped if there is no `last_full_snapshot_slot`, or if the
+    /// `max_clean_root` is less-than-or-equal-to the `last_full_snapshot_slot`.
+    fn filter_zero_lamport_clean_for_incremental_snapshots(
+        &self,
+        max_clean_root: Option<Slot>,
+        last_full_snapshot_slot: Option<Slot>,
+        store_counts: &HashMap<AppendVecId, (usize, HashSet<Pubkey>)>,
+        purges_zero_lamports: &mut HashMap<Pubkey, (SlotList<AccountInfo>, RefCount)>,
+    ) {
+        let should_filter_for_incremental_snapshots =
+            max_clean_root.unwrap_or(Slot::MAX) > last_full_snapshot_slot.unwrap_or(Slot::MAX);
+        assert!(
+            last_full_snapshot_slot.is_some() || !should_filter_for_incremental_snapshots,
+            "if filtering for incremental snapshots, then snapshots should be enabled",
+        );
+
+        purges_zero_lamports.retain(|pubkey, (slot_account_infos, _ref_count)| {
+            // Only keep purges_zero_lamports where the entire history of the account in the root set
+            // can be purged. All AppendVecs for those updates are dead.
+            for (_slot, account_info) in slot_account_infos.iter() {
+                if store_counts.get(&account_info.store_id).unwrap().0 != 0 {
+                    return false;
+                }
+            }
+
+            // Exit early if not filtering more for incremental snapshots
+            if !should_filter_for_incremental_snapshots {
+                return true;
+            }
+
+            let slot_account_info_at_highest_slot = slot_account_infos
+                .iter()
+                .max_by_key(|(slot, _account_info)| slot);
+
+            slot_account_info_at_highest_slot.map_or(true, |(slot, account_info)| {
+                // Do *not* purge zero-lamport accounts if the slot is greater than the last full
+                // snapshot slot.  Since we're `retain`ing the accounts-to-purge, I felt creating
+                // the `cannot_purge` variable made this easier to understand.  Accounts that do
+                // not get purged here are added to a list so they be considered for purging later
+                // (i.e. after the next full snapshot).
+                assert!(account_info.is_zero_lamport());
+                let cannot_purge = *slot > last_full_snapshot_slot.unwrap();
+                if cannot_purge {
+                    self.zero_lamport_accounts_to_purge_after_full_snapshot
+                        .insert((*slot, *pubkey));
+                }
+                !cannot_purge
+            })
+        });
     }
 
     // Must be kept private!, does sensitive cleanup that should only be called from
@@ -2482,7 +2582,7 @@ impl AccountsDb {
         num_candidates
     }
 
-    pub fn shrink_all_slots(&self, is_startup: bool) {
+    pub fn shrink_all_slots(&self, is_startup: bool, last_full_snapshot_slot: Option<Slot>) {
         const DIRTY_STORES_CLEANING_THRESHOLD: usize = 10_000;
         const OUTER_CHUNK_SIZE: usize = 2000;
         const INNER_CHUNK_SIZE: usize = OUTER_CHUNK_SIZE / 8;
@@ -2496,7 +2596,7 @@ impl AccountsDb {
                     }
                 });
                 if self.dirty_stores.len() > DIRTY_STORES_CLEANING_THRESHOLD {
-                    self.clean_accounts(None, is_startup);
+                    self.clean_accounts(None, is_startup, last_full_snapshot_slot);
                 }
             });
         } else {
@@ -2507,7 +2607,7 @@ impl AccountsDb {
                     self.do_shrink_slot_forced_v1(slot);
                 }
                 if self.dirty_stores.len() > DIRTY_STORES_CLEANING_THRESHOLD {
-                    self.clean_accounts(None, is_startup);
+                    self.clean_accounts(None, is_startup, last_full_snapshot_slot);
                 }
             }
         }
@@ -7220,7 +7320,7 @@ pub mod tests {
         // overwrite old rooted account version; only the r_slot_0_stores.count() should be
         // decremented
         db.store_uncached(2, &[(&pubkeys[0], &account)]);
-        db.clean_accounts(None, false);
+        db.clean_accounts(None, false, None);
         {
             let slot_0_stores = &db.storage.get_slot_stores(0).unwrap();
             let slot_1_stores = &db.storage.get_slot_stores(1).unwrap();
@@ -7659,7 +7759,7 @@ pub mod tests {
 
         //slot is gone
         accounts.print_accounts_stats("pre-clean");
-        accounts.clean_accounts(None, false);
+        accounts.clean_accounts(None, false, None);
         assert!(accounts.storage.0.get(&0).is_none());
 
         //new value is there
@@ -7742,7 +7842,7 @@ pub mod tests {
 
         // Slot 1 should be removed, slot 0 cannot be removed because it still has
         // the latest update for pubkey 2
-        accounts.clean_accounts(None, false);
+        accounts.clean_accounts(None, false, None);
         assert!(accounts.storage.get_slot_stores(0).is_some());
         assert!(accounts.storage.get_slot_stores(1).is_none());
 
@@ -7777,7 +7877,7 @@ pub mod tests {
         assert_eq!(accounts.accounts_index.ref_count_from_storage(&pubkey1), 3);
         assert_eq!(accounts.accounts_index.ref_count_from_storage(&pubkey2), 1);
 
-        accounts.clean_accounts(None, false);
+        accounts.clean_accounts(None, false, None);
         // Slots 0 and 1 should each have been cleaned because all of their
         // accounts are zero lamports
         assert!(accounts.storage.get_slot_stores(0).is_none());
@@ -7791,7 +7891,7 @@ pub mod tests {
         assert_eq!(accounts.accounts_index.ref_count_from_storage(&pubkey1), 1);
         assert_eq!(accounts.accounts_index.ref_count_from_storage(&pubkey2), 0);
 
-        accounts.clean_accounts(None, false);
+        accounts.clean_accounts(None, false, None);
         // Slot 2 will now be cleaned, which will leave account 1 with a ref count of 0
         assert!(accounts.storage.get_slot_stores(2).is_none());
         assert_eq!(accounts.accounts_index.ref_count_from_storage(&pubkey1), 0);
@@ -7818,7 +7918,7 @@ pub mod tests {
 
         // Slot 0 should be removed, and
         // zero-lamport account should be cleaned
-        accounts.clean_accounts(None, false);
+        accounts.clean_accounts(None, false, None);
 
         assert!(accounts.storage.get_slot_stores(0).is_none());
         assert!(accounts.storage.get_slot_stores(1).is_none());
@@ -7858,7 +7958,7 @@ pub mod tests {
         assert_eq!(accounts.alive_account_count_in_slot(0), 1);
         assert_eq!(accounts.alive_account_count_in_slot(1), 1);
 
-        accounts.clean_accounts(None, false);
+        accounts.clean_accounts(None, false, None);
 
         //now old state is cleaned up
         assert_eq!(accounts.alive_account_count_in_slot(0), 0);
@@ -7892,7 +7992,7 @@ pub mod tests {
 
         accounts.print_accounts_stats("");
 
-        accounts.clean_accounts(None, false);
+        accounts.clean_accounts(None, false, None);
 
         //Old state behind zero-lamport account is cleaned up
         assert_eq!(accounts.alive_account_count_in_slot(0), 0);
@@ -8002,7 +8102,7 @@ pub mod tests {
             accounts.account_indexes.keys = None;
         }
 
-        accounts.clean_accounts(None, false);
+        accounts.clean_accounts(None, false, None);
 
         //both zero lamport and normal accounts are cleaned up
         assert_eq!(accounts.alive_account_count_in_slot(0), 0);
@@ -8052,13 +8152,13 @@ pub mod tests {
         // updates in later slots in slot 1
         assert_eq!(accounts.alive_account_count_in_slot(0), 1);
         assert_eq!(accounts.alive_account_count_in_slot(1), 1);
-        accounts.clean_accounts(Some(0), false);
+        accounts.clean_accounts(Some(0), false, None);
         assert_eq!(accounts.alive_account_count_in_slot(0), 1);
         assert_eq!(accounts.alive_account_count_in_slot(1), 1);
         assert!(accounts.accounts_index.get(&pubkey, None, None).is_some());
 
         // Now the account can be cleaned up
-        accounts.clean_accounts(Some(1), false);
+        accounts.clean_accounts(Some(1), false, None);
         assert_eq!(accounts.alive_account_count_in_slot(0), 0);
         assert_eq!(accounts.alive_account_count_in_slot(1), 0);
 
@@ -8083,7 +8183,7 @@ pub mod tests {
         assert_eq!(accounts.accounts_index.uncleaned_roots_len(), 1);
 
         //now uncleaned roots are cleaned up
-        accounts.clean_accounts(None, false);
+        accounts.clean_accounts(None, false, None);
         assert_eq!(accounts.accounts_index.uncleaned_roots_len(), 0);
     }
 
@@ -8100,7 +8200,7 @@ pub mod tests {
         assert_eq!(accounts.accounts_index.uncleaned_roots_len(), 1);
 
         //now uncleaned roots are cleaned up
-        accounts.clean_accounts(None, false);
+        accounts.clean_accounts(None, false, None);
         assert_eq!(accounts.accounts_index.uncleaned_roots_len(), 0);
     }
 
@@ -8112,7 +8212,7 @@ pub mod tests {
 
         // Create 100 accounts in slot 0
         create_account(&accounts, &mut pubkeys, 0, 100, 0, 0);
-        accounts.clean_accounts(None, false);
+        accounts.clean_accounts(None, false, None);
         check_accounts(&accounts, &pubkeys, 0, 100, 1);
 
         // do some updates to those accounts and re-check
@@ -8148,7 +8248,7 @@ pub mod tests {
 
         // Modify first 20 of the accounts from slot 0 in slot 2
         modify_accounts(&accounts, &pubkeys, latest_slot, 20, 4);
-        accounts.clean_accounts(None, false);
+        accounts.clean_accounts(None, false, None);
         // Overwrite account 31 from slot 0 with lamports=0 into slot 2.
         // Slot 2 should now have 20 + 1 = 21 accounts
         let account = AccountSharedData::new(0, 0, AccountSharedData::default().owner());
@@ -8162,7 +8262,7 @@ pub mod tests {
         accounts.add_root(latest_slot);
         assert!(check_storage(&accounts, 2, 31));
 
-        accounts.clean_accounts(None, false);
+        accounts.clean_accounts(None, false, None);
         // The first 20 accounts of slot 0 have been updated in slot 2, as well as
         // accounts 30 and  31 (overwritten with zero-lamport accounts in slot 1 and
         // slot 2 respectively), so only 78 accounts are left in slot 0's storage entries.
@@ -8298,7 +8398,7 @@ pub mod tests {
 
         accounts.print_accounts_stats("pre_purge");
 
-        accounts.clean_accounts(None, false);
+        accounts.clean_accounts(None, false, None);
 
         accounts.print_accounts_stats("post_purge");
 
@@ -8363,7 +8463,7 @@ pub mod tests {
         info!("ancestors: {:?}", ancestors);
         let hash = accounts.update_accounts_hash_test(current_slot, &ancestors);
 
-        accounts.clean_accounts(None, false);
+        accounts.clean_accounts(None, false, None);
 
         assert_eq!(
             accounts.update_accounts_hash_test(current_slot, &ancestors),
@@ -8430,7 +8530,7 @@ pub mod tests {
 
         accounts.print_accounts_stats("accounts");
 
-        accounts.clean_accounts(None, false);
+        accounts.clean_accounts(None, false, None);
 
         accounts.print_accounts_stats("accounts_post_purge");
         let accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
@@ -8503,7 +8603,7 @@ pub mod tests {
     fn test_accounts_purge_chained_purge_before_snapshot_restore() {
         solana_logger::setup();
         with_chained_zero_lamport_accounts(|accounts, current_slot| {
-            accounts.clean_accounts(None, false);
+            accounts.clean_accounts(None, false, None);
             reconstruct_accounts_db_via_serialization(&accounts, current_slot)
         });
     }
@@ -8514,7 +8614,7 @@ pub mod tests {
         with_chained_zero_lamport_accounts(|accounts, current_slot| {
             let accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
             accounts.print_accounts_stats("after_reconstruct");
-            accounts.clean_accounts(None, false);
+            accounts.clean_accounts(None, false, None);
             reconstruct_accounts_db_via_serialization(&accounts, current_slot)
         });
     }
@@ -9265,7 +9365,7 @@ pub mod tests {
         accounts.print_count_and_status("before reconstruct");
         let accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
         accounts.print_count_and_status("before purge zero");
-        accounts.clean_accounts(None, false);
+        accounts.clean_accounts(None, false, None);
         accounts.print_count_and_status("after purge zero");
 
         assert_load_account(&accounts, current_slot, pubkey, old_lamport);
@@ -9326,7 +9426,7 @@ pub mod tests {
 
         accounts.print_accounts_stats("Post-B pre-clean");
 
-        accounts.clean_accounts(None, false);
+        accounts.clean_accounts(None, false, None);
 
         info!("post B");
         accounts.print_accounts_stats("Post-B");
@@ -9366,7 +9466,7 @@ pub mod tests {
 
         accounts.get_accounts_delta_hash(current_slot);
         accounts.add_root(current_slot);
-        accounts.clean_accounts(None, false);
+        accounts.clean_accounts(None, false, None);
 
         accounts.print_accounts_stats("Post-D clean");
 
@@ -9456,7 +9556,7 @@ pub mod tests {
         current_slot += 1;
         assert_eq!(3, accounts.ref_count_for_pubkey(&pubkey1));
         accounts.store_uncached(current_slot, &[(&pubkey1, &zero_lamport_account)]);
-        accounts.clean_accounts(None, false);
+        accounts.clean_accounts(None, false, None);
 
         assert_eq!(
             // Removed one reference from the dead slot (reference only counted once
@@ -9481,9 +9581,9 @@ pub mod tests {
         // If step C and step D should be purged, snapshot restore would cause
         // pubkey1 to be revived as the state of step A.
         // So, prevent that from happening by introducing refcount
-        accounts.clean_accounts(None, false);
+        accounts.clean_accounts(None, false, None);
         let accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
-        accounts.clean_accounts(None, false);
+        accounts.clean_accounts(None, false, None);
 
         info!("pubkey: {}", pubkey1);
         accounts.print_accounts_stats("pre_clean");
@@ -9498,10 +9598,10 @@ pub mod tests {
         accounts.add_root(current_slot);
 
         // Do clean
-        accounts.clean_accounts(None, false);
+        accounts.clean_accounts(None, false, None);
 
         // 2nd clean needed to clean-up pubkey1
-        accounts.clean_accounts(None, false);
+        accounts.clean_accounts(None, false, None);
 
         // Ensure pubkey2 is cleaned from the index finally
         assert_not_load_account(&accounts, current_slot, pubkey1);
@@ -9526,7 +9626,7 @@ pub mod tests {
                 accounts.shrink_candidate_slots();
             }
 
-            accounts.shrink_all_slots(*startup);
+            accounts.shrink_all_slots(*startup, None);
         }
     }
 
@@ -9642,13 +9742,13 @@ pub mod tests {
             accounts.get_accounts_delta_hash(current_slot);
             accounts.add_root(current_slot);
 
-            accounts.clean_accounts(None, false);
+            accounts.clean_accounts(None, false, None);
 
             assert_eq!(
                 pubkey_count,
                 accounts.all_account_count_in_append_vec(shrink_slot)
             );
-            accounts.shrink_all_slots(*startup);
+            accounts.shrink_all_slots(*startup, None);
             assert_eq!(
                 pubkey_count_after_shrink,
                 accounts.all_account_count_in_append_vec(shrink_slot)
@@ -9666,7 +9766,7 @@ pub mod tests {
                 .unwrap();
 
             // repeating should be no-op
-            accounts.shrink_all_slots(*startup);
+            accounts.shrink_all_slots(*startup, None);
             assert_eq!(
                 pubkey_count_after_shrink,
                 accounts.all_account_count_in_append_vec(shrink_slot)
@@ -9710,7 +9810,7 @@ pub mod tests {
         }
         accounts.get_accounts_delta_hash(current_slot);
         accounts.add_root(current_slot);
-        accounts.clean_accounts(None, false);
+        accounts.clean_accounts(None, false, None);
 
         assert_eq!(
             pubkey_count,
@@ -9726,7 +9826,7 @@ pub mod tests {
         );
 
         // Now, do full-shrink.
-        accounts.shrink_all_slots(false);
+        accounts.shrink_all_slots(false, None);
         assert_eq!(
             pubkey_count_after_shrink,
             accounts.all_account_count_in_append_vec(shrink_slot)
@@ -9855,7 +9955,7 @@ pub mod tests {
         accounts.get_accounts_delta_hash(current_slot);
         accounts.add_root(current_slot);
 
-        accounts.clean_accounts(None, false);
+        accounts.clean_accounts(None, false, None);
 
         assert_eq!(
             pubkey_count,
@@ -9870,7 +9970,7 @@ pub mod tests {
         );
 
         // Now, do full-shrink.
-        accounts.shrink_all_slots(false);
+        accounts.shrink_all_slots(false, None);
         assert_eq!(
             pubkey_count_after_shrink,
             accounts.all_account_count_in_append_vec(shrink_slot)
@@ -10084,7 +10184,7 @@ pub mod tests {
         accounts.flush_accounts_cache(true, None);
 
         // clear out the dirty keys
-        accounts.clean_accounts(None, false);
+        accounts.clean_accounts(None, false, None);
 
         // flush 1
         accounts.get_accounts_delta_hash(1);
@@ -10096,11 +10196,11 @@ pub mod tests {
         // clean to remove pubkey1 from 0,
         // shrink to shrink pubkey1 from 0
         // then another clean to remove pubkey1 from slot 1
-        accounts.clean_accounts(None, false);
+        accounts.clean_accounts(None, false, None);
 
         accounts.shrink_candidate_slots();
 
-        accounts.clean_accounts(None, false);
+        accounts.clean_accounts(None, false, None);
 
         accounts.print_accounts_stats("post-clean");
         assert_eq!(accounts.accounts_index.ref_count_from_storage(&pubkey1), 0);
@@ -10128,12 +10228,12 @@ pub mod tests {
             accounts.store_uncached(1, &[(key, &account)]);
         }
         accounts.add_root(1);
-        accounts.clean_accounts(None, false);
-        accounts.shrink_all_slots(false);
+        accounts.clean_accounts(None, false, None);
+        accounts.shrink_all_slots(false, None);
 
         // Clean again to flush the dirty stores
         // and allow them to be recycled in the next step
-        accounts.clean_accounts(None, false);
+        accounts.clean_accounts(None, false, None);
         accounts.print_accounts_stats("post-shrink");
         let num_stores = accounts.recycle_stores.read().unwrap().entry_count();
         assert!(num_stores > 0);
@@ -10180,7 +10280,7 @@ pub mod tests {
         db.add_root(1);
 
         // Only clean zero lamport accounts up to slot 0
-        db.clean_accounts(Some(0), false);
+        db.clean_accounts(Some(0), false, None);
 
         // Should still be able to find zero lamport account in slot 1
         assert_eq!(
@@ -10388,9 +10488,9 @@ pub mod tests {
 
         db.add_root(0);
         db.add_root(1);
-        db.clean_accounts(None, false);
+        db.clean_accounts(None, false, None);
         db.flush_accounts_cache(true, None);
-        db.clean_accounts(None, false);
+        db.clean_accounts(None, false, None);
         db.add_root(2);
 
         assert_eq!(db.read_only_accounts_cache.cache_len(), 0);
@@ -10438,7 +10538,7 @@ pub mod tests {
         db.add_root(1);
 
         // Clean should not remove anything yet as nothing has been flushed
-        db.clean_accounts(None, false);
+        db.clean_accounts(None, false, None);
         let account = db
             .do_load(
                 &Ancestors::default(),
@@ -10454,7 +10554,7 @@ pub mod tests {
         // Flush, then clean again. Should not need another root to initiate the cleaning
         // because `accounts_index.uncleaned_roots` should be correct
         db.flush_accounts_cache(true, None);
-        db.clean_accounts(None, false);
+        db.clean_accounts(None, false, None);
         assert!(db
             .do_load(
                 &Ancestors::default(),
@@ -10510,7 +10610,7 @@ pub mod tests {
         // Flush, then clean. Should not need another root to initiate the cleaning
         // because `accounts_index.uncleaned_roots` should be correct
         db.flush_accounts_cache(true, None);
-        db.clean_accounts(None, false);
+        db.clean_accounts(None, false, None);
 
         // The `zero_lamport_account_key` is still alive in slot 1, so refcount for the
         // pubkey should be 2
@@ -10669,7 +10769,7 @@ pub mod tests {
 
         // Run clean, unrooted slot 1 should not be purged, and still readable from the cache,
         // because we're still doing a scan on it.
-        db.clean_accounts(None, false);
+        db.clean_accounts(None, false, None);
         let account = db
             .do_load(
                 &scan_ancestors,
@@ -10683,7 +10783,7 @@ pub mod tests {
         // When the scan is over, clean should not panic and should not purge something
         // still in the cache.
         scan_tracker.exit().unwrap();
-        db.clean_accounts(None, false);
+        db.clean_accounts(None, false, None);
         let account = db
             .do_load(
                 &scan_ancestors,
@@ -11205,7 +11305,7 @@ pub mod tests {
         db.get_accounts_delta_hash(1);
 
         // Clean to remove outdated entry from slot 0
-        db.clean_accounts(Some(1), false);
+        db.clean_accounts(Some(1), false, None);
 
         // Shrink Slot 0
         let mut slot0_stores = db.storage.get_slot_storage_entries(0).unwrap();
@@ -11230,7 +11330,7 @@ pub mod tests {
         // Should be one store before clean for slot 0
         assert_eq!(db.storage.get_slot_storage_entries(0).unwrap().len(), 1);
         db.get_accounts_delta_hash(2);
-        db.clean_accounts(Some(2), false);
+        db.clean_accounts(Some(2), false, None);
 
         // No stores should exist for slot 0 after clean
         assert!(db.storage.get_slot_storage_entries(0).is_none());
@@ -11276,7 +11376,7 @@ pub mod tests {
         // Checking that the uncleaned_pubkeys are not pre-maturely removed
         // such that when the slots are rooted, and can actually be cleaned, then the
         // delta keys are still there.
-        db.clean_accounts(None, false);
+        db.clean_accounts(None, false, None);
 
         db.print_accounts_stats("post-clean1");
         // Check stores > 0
@@ -11291,12 +11391,12 @@ pub mod tests {
         db.store_uncached(2, &[(&account_key1, &account3)]);
         db.get_accounts_delta_hash(2);
 
-        db.clean_accounts(None, false);
+        db.clean_accounts(None, false, None);
         db.print_accounts_stats("post-clean2");
 
         // root slots 1
         db.add_root(1);
-        db.clean_accounts(None, false);
+        db.clean_accounts(None, false, None);
 
         db.print_accounts_stats("post-clean3");
 
@@ -11305,7 +11405,7 @@ pub mod tests {
         db.add_root(3);
 
         // Check that we can clean where max_root=3 and slot=2 is not rooted
-        db.clean_accounts(None, false);
+        db.clean_accounts(None, false, None);
 
         assert!(db.uncleaned_pubkeys.is_empty());
 
@@ -12106,7 +12206,7 @@ pub mod tests {
 
         // The later rooted zero-lamport update to `shared_key` cannot be cleaned
         // because it is kept alive by the unrooted slot.
-        accounts.clean_accounts(None, false);
+        accounts.clean_accounts(None, false, None);
         assert!(accounts
             .accounts_index
             .get_account_read_entry(&shared_key)
@@ -12117,11 +12217,196 @@ pub mod tests {
         accounts.purge_slot(slot0, 0, is_from_abs);
 
         // Now clean should clean up the remaining key
-        accounts.clean_accounts(None, false);
+        accounts.clean_accounts(None, false, None);
         assert!(accounts
             .accounts_index
             .get_account_read_entry(&shared_key)
             .is_none());
         assert!(accounts.storage.get_slot_storage_entries(slot0).is_none());
+    }
+
+    /// Test to make sure `clean_accounts()` works properly with the `last_full_snapshot_slot`
+    /// parameter.  Basically:
+    ///
+    /// - slot 1: set Account1's balance to non-zero
+    /// - slot 2: set Account1's balance to a different non-zero amount
+    /// - slot 3: set Account1's balance to zero
+    /// - call `clean_accounts()` with `max_clean_root` set to 2
+    ///     - ensure Account1 has *not* been purged
+    ///     - ensure the store from slot 1 is cleaned up
+    /// - call `clean_accounts()` with `last_full_snapshot_slot` set to 2
+    ///     - ensure Account1 has *not* been purged
+    /// - call `clean_accounts()` with `last_full_snapshot_slot` set to 3
+    ///     - ensure Account1 *has* been purged
+    #[test]
+    fn test_clean_accounts_with_last_full_snapshot_slot() {
+        solana_logger::setup();
+        let accounts_db = AccountsDb::new_single_for_tests();
+        let pubkey = solana_sdk::pubkey::new_rand();
+        let owner = solana_sdk::pubkey::new_rand();
+        let space = 0;
+
+        let slot1 = 1;
+        let account = AccountSharedData::new(111, space, &owner);
+        accounts_db.store_cached(slot1, &[(&pubkey, &account)]);
+        accounts_db.get_accounts_delta_hash(slot1);
+        accounts_db.add_root(slot1);
+
+        let slot2 = 2;
+        let account = AccountSharedData::new(222, space, &owner);
+        accounts_db.store_cached(slot2, &[(&pubkey, &account)]);
+        accounts_db.get_accounts_delta_hash(slot2);
+        accounts_db.add_root(slot2);
+
+        let slot3 = 3;
+        let account = AccountSharedData::new(0, space, &owner);
+        accounts_db.store_cached(slot3, &[(&pubkey, &account)]);
+        accounts_db.get_accounts_delta_hash(slot3);
+        accounts_db.add_root(slot3);
+
+        assert_eq!(accounts_db.ref_count_for_pubkey(&pubkey), 3);
+
+        accounts_db.clean_accounts(Some(slot2), false, Some(slot2));
+        assert_eq!(accounts_db.ref_count_for_pubkey(&pubkey), 2);
+
+        accounts_db.clean_accounts(None, false, Some(slot2));
+        assert_eq!(accounts_db.ref_count_for_pubkey(&pubkey), 1);
+
+        accounts_db.clean_accounts(None, false, Some(slot3));
+        assert_eq!(accounts_db.ref_count_for_pubkey(&pubkey), 0);
+    }
+
+    #[test]
+    fn test_filter_zero_lamport_clean_for_incremental_snapshots() {
+        solana_logger::setup();
+        let slot = 10;
+
+        struct TestParameters {
+            last_full_snapshot_slot: Option<Slot>,
+            max_clean_root: Option<Slot>,
+            should_contain: bool,
+        }
+
+        let do_test = |test_params: TestParameters| {
+            let account_info = AccountInfo {
+                store_id: 42,
+                offset: 123,
+                stored_size: 234,
+                lamports: 0,
+            };
+            let pubkey = solana_sdk::pubkey::new_rand();
+            let mut key_set = HashSet::default();
+            key_set.insert(pubkey);
+            let store_count = 0;
+            let mut store_counts = HashMap::default();
+            store_counts.insert(account_info.store_id, (store_count, key_set));
+            let mut purges_zero_lamports = HashMap::default();
+            purges_zero_lamports.insert(pubkey, (vec![(slot, account_info)], 1));
+
+            let accounts_db = AccountsDb::new_single_for_tests();
+            accounts_db.filter_zero_lamport_clean_for_incremental_snapshots(
+                test_params.max_clean_root,
+                test_params.last_full_snapshot_slot,
+                &store_counts,
+                &mut purges_zero_lamports,
+            );
+
+            assert_eq!(
+                purges_zero_lamports.contains_key(&pubkey),
+                test_params.should_contain
+            );
+        };
+
+        // Scenario 1: last full snapshot is NONE
+        // In this scenario incremental snapshots are OFF, so always purge
+        {
+            let last_full_snapshot_slot = None;
+
+            do_test(TestParameters {
+                last_full_snapshot_slot,
+                max_clean_root: Some(slot),
+                should_contain: true,
+            });
+
+            do_test(TestParameters {
+                last_full_snapshot_slot,
+                max_clean_root: None,
+                should_contain: true,
+            });
+        }
+
+        // Scenario 2: last full snapshot is GREATER THAN zero lamport account slot
+        // In this scenario always purge, and just test the various permutations of
+        // `should_filter_for_incremental_snapshots` based on `max_clean_root`.
+        {
+            let last_full_snapshot_slot = Some(slot + 1);
+
+            do_test(TestParameters {
+                last_full_snapshot_slot,
+                max_clean_root: last_full_snapshot_slot,
+                should_contain: true,
+            });
+
+            do_test(TestParameters {
+                last_full_snapshot_slot,
+                max_clean_root: last_full_snapshot_slot.map(|s| s + 1),
+                should_contain: true,
+            });
+
+            do_test(TestParameters {
+                last_full_snapshot_slot,
+                max_clean_root: None,
+                should_contain: true,
+            });
+        }
+
+        // Scenario 3: last full snapshot is EQUAL TO zero lamport account slot
+        // In this scenario always purge, as it's the same as Scenario 2.
+        {
+            let last_full_snapshot_slot = Some(slot);
+
+            do_test(TestParameters {
+                last_full_snapshot_slot,
+                max_clean_root: last_full_snapshot_slot,
+                should_contain: true,
+            });
+
+            do_test(TestParameters {
+                last_full_snapshot_slot,
+                max_clean_root: last_full_snapshot_slot.map(|s| s + 1),
+                should_contain: true,
+            });
+
+            do_test(TestParameters {
+                last_full_snapshot_slot,
+                max_clean_root: None,
+                should_contain: true,
+            });
+        }
+
+        // Scenario 4: last full snapshot is LESS THAN zero lamport account slot
+        // In this scenario do *not* purge, except when `should_filter_for_incremental_snapshots`
+        // is false
+        {
+            let last_full_snapshot_slot = Some(slot - 1);
+
+            do_test(TestParameters {
+                last_full_snapshot_slot,
+                max_clean_root: last_full_snapshot_slot,
+                should_contain: true,
+            });
+
+            do_test(TestParameters {
+                last_full_snapshot_slot,
+                max_clean_root: last_full_snapshot_slot.map(|s| s + 1),
+                should_contain: false,
+            });
+
+            do_test(TestParameters {
+                last_full_snapshot_slot,
+                max_clean_root: None,
+                should_contain: false,
+            });
+        }
     }
 }
