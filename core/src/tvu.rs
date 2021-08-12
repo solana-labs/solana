@@ -212,9 +212,9 @@ impl Tvu {
                 (Some(snapshot_config), Some(pending_snapshot_package))
             })
             .unwrap_or((None, None));
-        let (accounts_hash_sender, accounts_hash_receiver) = channel();
+        let (accounts_package_sender, accounts_package_receiver) = channel();
         let accounts_hash_verifier = AccountsHashVerifier::new(
-            accounts_hash_receiver,
+            accounts_package_receiver,
             pending_snapshot_package,
             exit,
             cluster_info,
@@ -233,7 +233,7 @@ impl Tvu {
                         Some(SnapshotRequestHandler {
                             snapshot_config,
                             snapshot_request_receiver,
-                            accounts_package_sender: accounts_hash_sender,
+                            accounts_package_sender,
                         }),
                     )
                 })

@@ -66,7 +66,7 @@ mod tests {
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         snapshot_archive_info::FullSnapshotArchiveInfo,
         snapshot_config::SnapshotConfig,
-        snapshot_package::{AccountsPackagePre, PendingSnapshotPackage, SnapshotPackage},
+        snapshot_package::{AccountsPackage, PendingSnapshotPackage},
         snapshot_utils::{
             self, ArchiveFormat, SnapshotVersion, DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
         },
@@ -275,7 +275,7 @@ mod tests {
         let snapshot_path = &snapshot_config.snapshot_path;
         let last_bank_snapshot_info = snapshot_utils::get_highest_bank_snapshot_info(snapshot_path)
             .expect("no snapshots found in path");
-        let snapshot_package = AccountsPackagePre::new_full_snapshot_package(
+        let accounts_package = AccountsPackage::new_for_full_snapshot(
             last_bank,
             &last_bank_snapshot_info,
             snapshot_path,
@@ -287,12 +287,11 @@ mod tests {
             None,
         )
         .unwrap();
-        let snapshot_package = snapshot_utils::process_accounts_package_pre(
-            snapshot_package,
+        let snapshot_package = snapshot_utils::process_accounts_package(
+            accounts_package,
             Some(last_bank.get_thread_pool()),
             None,
         );
-        let snapshot_package = SnapshotPackage::FullSnapshotPackage(snapshot_package);
         snapshot_package
             .archive_snapshot_package(DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN)
             .unwrap();
@@ -507,20 +506,18 @@ mod tests {
         let _package_receiver = std::thread::Builder::new()
             .name("package-receiver".to_string())
             .spawn(move || {
-                while let Ok(mut snapshot_package) = receiver.recv() {
+                while let Ok(mut accounts_package) = receiver.recv() {
                     // Only package the latest
                     while let Ok(new_snapshot_package) = receiver.try_recv() {
-                        snapshot_package = new_snapshot_package;
+                        accounts_package = new_snapshot_package;
                     }
 
-                    let snapshot_package =
-                        solana_runtime::snapshot_utils::process_accounts_package_pre(
-                            snapshot_package,
-                            Some(&thread_pool),
-                            None,
-                        );
-                    *pending_snapshot_package.lock().unwrap() =
-                        Some(SnapshotPackage::FullSnapshotPackage(snapshot_package));
+                    let snapshot_package = snapshot_utils::process_accounts_package(
+                        accounts_package,
+                        Some(&thread_pool),
+                        None,
+                    );
+                    *pending_snapshot_package.lock().unwrap() = Some(snapshot_package);
                 }
 
                 // Wait until the package is consumed by SnapshotPackagerService

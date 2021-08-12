@@ -21,69 +21,25 @@ use std::{
 use tempfile::TempDir;
 
 /// The sender side of the AccountsPackage channel, used by AccountsBackgroundService
-pub type AccountsPackageSender = Sender<AccountsPackagePre>;
+pub type AccountsPackageSender = Sender<AccountsPackage>;
 
 /// The receiver side of the AccountsPackage channel, used by AccountsHashVerifier
-pub type AccountsPackageReceiver = Receiver<AccountsPackagePre>;
+pub type AccountsPackageReceiver = Receiver<AccountsPackage>;
 
 /// The error type when sending an AccountsPackage over the channel fails
-pub type AccountsPackageSendError = SendError<AccountsPackagePre>;
+pub type AccountsPackageSendError = SendError<AccountsPackage>;
 
 /// The PendingSnapshotPackage passes a SnapshotPackage from AccountsHashVerifier to SnapshotPackagerService for archiving
 pub type PendingSnapshotPackage = Arc<Mutex<Option<SnapshotPackage>>>;
 
-/// This enum wraps an AccountsPackage to differentiate between a full snapshot package and an
-/// incremental snapshot package
-pub enum SnapshotPackage {
-    FullSnapshotPackage(AccountsPackage),
-    IncrementalSnapshotPackage(AccountsPackage),
-}
-
-impl SnapshotPackage {
-    /// Archive a SnapshotPackage
-    pub fn archive_snapshot_package(
-        &self,
-        maximum_snapshot_archives_to_retain: usize,
-    ) -> Result<()> {
-        match self {
-            SnapshotPackage::FullSnapshotPackage(accounts_package) => {
-                snapshot_utils::archive_snapshot_package(
-                    accounts_package,
-                    maximum_snapshot_archives_to_retain,
-                    snapshot_utils::TMP_FULL_SNAPSHOT_PREFIX,
-                )
-            }
-            SnapshotPackage::IncrementalSnapshotPackage(accounts_package) => {
-                snapshot_utils::archive_snapshot_package(
-                    accounts_package,
-                    maximum_snapshot_archives_to_retain,
-                    snapshot_utils::TMP_INCREMENTAL_SNAPSHOT_PREFIX,
-                )
-            }
-        }
-    }
-}
-
-impl SnapshotArchiveInfoGetter for SnapshotPackage {
-    fn snapshot_archive_info(&self) -> &SnapshotArchiveInfo {
-        match self {
-            SnapshotPackage::FullSnapshotPackage(accounts_package) => {
-                accounts_package.snapshot_archive_info()
-            }
-            SnapshotPackage::IncrementalSnapshotPackage(accounts_package) => {
-                accounts_package.snapshot_archive_info()
-            }
-        }
-    }
-}
-
 #[derive(Debug)]
-pub struct AccountsPackagePre {
+pub struct AccountsPackage {
+    pub snapshot_type: SnapshotType,
     pub slot: Slot,
     pub block_height: Slot,
     pub slot_deltas: Vec<BankSlotDelta>,
     pub snapshot_links: TempDir,
-    pub storages: SnapshotStorages,
+    pub snapshot_storages: SnapshotStorages,
     pub hash: Hash, // temporarily here while we still have to calculate hash before serializing bank
     pub archive_format: ArchiveFormat,
     pub snapshot_version: SnapshotVersion,
@@ -93,10 +49,11 @@ pub struct AccountsPackagePre {
     pub cluster_type: ClusterType,
 }
 
-impl AccountsPackagePre {
-    /// Create a snapshot package
+impl AccountsPackage {
+    /// Create an accounts package
     #[allow(clippy::too_many_arguments)]
     fn new(
+        snapshot_type: SnapshotType,
         bank: &Bank,
         bank_snapshot_info: &BankSnapshotInfo,
         status_cache_slot_deltas: Vec<BankSlotDelta>,
@@ -120,11 +77,12 @@ impl AccountsPackagePre {
         }
 
         Ok(Self {
+            snapshot_type,
             slot: bank.slot(),
             block_height: bank.block_height(),
             slot_deltas: status_cache_slot_deltas,
             snapshot_links: snapshot_tmpdir,
-            storages: snapshot_storages,
+            snapshot_storages,
             hash: bank.get_accounts_hash(),
             archive_format,
             snapshot_version,
@@ -136,8 +94,7 @@ impl AccountsPackagePre {
     }
 
     /// Package up bank snapshot files, snapshot storages, and slot deltas for a full snapshot.
-    #[allow(clippy::too_many_arguments)]
-    pub fn new_full_snapshot_package(
+    pub fn new_for_full_snapshot(
         bank: &Bank,
         bank_snapshot_info: &BankSnapshotInfo,
         snapshots_dir: impl AsRef<Path>,
@@ -163,6 +120,7 @@ impl AccountsPackagePre {
             .tempdir_in(snapshots_dir)?;
 
         Self::new(
+            SnapshotType::FullSnapshot,
             bank,
             bank_snapshot_info,
             status_cache_slot_deltas,
@@ -177,7 +135,7 @@ impl AccountsPackagePre {
 
     /// Package up bank snapshot files, snapshot storages, and slot deltas for an incremental snapshot.
     #[allow(clippy::too_many_arguments)]
-    pub fn new_incremental_snapshot_package(
+    pub fn new_for_incremental_snapshot(
         bank: &Bank,
         incremental_snapshot_base_slot: Slot,
         bank_snapshot_info: &BankSnapshotInfo,
@@ -213,6 +171,7 @@ impl AccountsPackagePre {
             .tempdir_in(snapshots_dir)?;
 
         Self::new(
+            SnapshotType::IncrementalSnapshot,
             bank,
             bank_snapshot_info,
             status_cache_slot_deltas,
@@ -226,28 +185,30 @@ impl AccountsPackagePre {
     }
 }
 
-pub struct AccountsPackage {
+pub struct SnapshotPackage {
+    pub snapshot_type: SnapshotType,
     pub snapshot_archive_info: SnapshotArchiveInfo,
     pub block_height: Slot,
     pub slot_deltas: Vec<BankSlotDelta>,
     pub snapshot_links: TempDir,
-    pub storages: SnapshotStorages,
+    pub snapshot_storages: SnapshotStorages,
     pub snapshot_version: SnapshotVersion,
 }
 
-impl AccountsPackage {
-    pub fn new(
+impl SnapshotPackage {
+    pub fn new_full_snapshot_package(
         slot: Slot,
         block_height: u64,
         slot_deltas: Vec<BankSlotDelta>,
         snapshot_links: TempDir,
-        storages: SnapshotStorages,
+        snapshot_storages: SnapshotStorages,
         snapshot_archive_path: PathBuf,
         hash: Hash,
         archive_format: ArchiveFormat,
         snapshot_version: SnapshotVersion,
     ) -> Self {
         Self {
+            snapshot_type: SnapshotType::FullSnapshot,
             snapshot_archive_info: SnapshotArchiveInfo {
                 path: snapshot_archive_path,
                 slot,
@@ -257,14 +218,56 @@ impl AccountsPackage {
             block_height,
             slot_deltas,
             snapshot_links,
-            storages,
+            snapshot_storages,
             snapshot_version,
         }
     }
+
+    pub fn new_incremental_snapshot_package(
+        slot: Slot,
+        block_height: u64,
+        slot_deltas: Vec<BankSlotDelta>,
+        snapshot_links: TempDir,
+        snapshot_storages: SnapshotStorages,
+        snapshot_archive_path: PathBuf,
+        hash: Hash,
+        archive_format: ArchiveFormat,
+        snapshot_version: SnapshotVersion,
+    ) -> Self {
+        Self {
+            snapshot_type: SnapshotType::IncrementalSnapshot,
+            snapshot_archive_info: SnapshotArchiveInfo {
+                path: snapshot_archive_path,
+                slot,
+                hash,
+                archive_format,
+            },
+            block_height,
+            slot_deltas,
+            snapshot_links,
+            snapshot_storages,
+            snapshot_version,
+        }
+    }
+
+    /// Archive a SnapshotPackage
+    pub fn archive_snapshot_package(
+        &self,
+        maximum_snapshot_archives_to_retain: usize,
+    ) -> Result<()> {
+        snapshot_utils::archive_snapshot_package(self, maximum_snapshot_archives_to_retain)
+    }
 }
 
-impl SnapshotArchiveInfoGetter for AccountsPackage {
+impl SnapshotArchiveInfoGetter for SnapshotPackage {
     fn snapshot_archive_info(&self) -> &SnapshotArchiveInfo {
         &self.snapshot_archive_info
     }
+}
+
+/// bprumo TODO: doc
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum SnapshotType {
+    FullSnapshot,
+    IncrementalSnapshot,
 }

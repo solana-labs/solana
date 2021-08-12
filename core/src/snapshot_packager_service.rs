@@ -79,7 +79,7 @@ mod tests {
     use solana_runtime::{
         accounts_db::AccountStorageEntry,
         bank::BankSlotDelta,
-        snapshot_package::{AccountsPackage, SnapshotPackage},
+        snapshot_package::SnapshotPackage,
         snapshot_utils::{self, ArchiveFormat, SnapshotVersion, SNAPSHOT_STATUS_CACHE_FILE_NAME},
     };
     use solana_sdk::hash::Hash;
@@ -163,7 +163,7 @@ mod tests {
             &Hash::default(),
             ArchiveFormat::TarBzip2,
         );
-        let snapshot_package = SnapshotPackage::FullSnapshotPackage(AccountsPackage::new(
+        let snapshot_package = SnapshotPackage::new_full_snapshot_package(
             5,
             5,
             vec![],
@@ -173,7 +173,7 @@ mod tests {
             Hash::default(),
             ArchiveFormat::TarBzip2,
             SnapshotVersion::default(),
-        ));
+        );
 
         // Make tarball from packageable snapshot
         snapshot_package

@@ -13,7 +13,8 @@ use {
             FullSnapshotArchiveInfo, IncrementalSnapshotArchiveInfo, SnapshotArchiveInfoGetter,
         },
         snapshot_package::{
-            AccountsPackage, AccountsPackagePre, AccountsPackageSendError, AccountsPackageSender,
+            AccountsPackage, AccountsPackageSendError, AccountsPackageSender, SnapshotPackage,
+            SnapshotType,
         },
         sorted_storages::SortedStorages,
     },
@@ -241,10 +242,14 @@ pub fn remove_tmp_snapshot_archives(snapshot_archives_dir: &Path) {
 
 /// Make a snapshot archive out of the AccountsPackage
 pub(crate) fn archive_snapshot_package(
-    snapshot_package: &AccountsPackage,
+    snapshot_package: &SnapshotPackage,
     maximum_snapshots_to_retain: usize,
-    staging_dir_prefix: impl AsRef<str>,
 ) -> Result<()> {
+    let staging_dir_prefix = match snapshot_package.snapshot_type {
+        SnapshotType::FullSnapshot => TMP_FULL_SNAPSHOT_PREFIX,
+        SnapshotType::IncrementalSnapshot => TMP_INCREMENTAL_SNAPSHOT_PREFIX,
+    };
+
     info!(
         "Generating snapshot archive for slot {}",
         snapshot_package.slot()
@@ -272,7 +277,7 @@ pub(crate) fn archive_snapshot_package(
     let staging_dir = tempfile::Builder::new()
         .prefix(&format!(
             "{}{}-",
-            staging_dir_prefix.as_ref(),
+            staging_dir_prefix,
             snapshot_package.slot()
         ))
         .tempdir_in(tar_dir)
@@ -292,7 +297,7 @@ pub(crate) fn archive_snapshot_package(
     .map_err(|e| SnapshotError::IoWithSource(e, "create staging symlinks"))?;
 
     // Add the AppendVecs into the compressible list
-    for storage in snapshot_package.storages.iter().flatten() {
+    for storage in snapshot_package.snapshot_storages.iter().flatten() {
         storage.flush()?;
         let storage_path = storage.get_path();
         let output_path = staging_accounts_dir.join(crate::append_vec::AppendVec::file_name(
@@ -324,7 +329,7 @@ pub(crate) fn archive_snapshot_package(
     // Tar the staging directory into the archive at `archive_path`
     let archive_path = tar_dir.join(format!(
         "{}{}.{}",
-        staging_dir_prefix.as_ref(),
+        staging_dir_prefix,
         snapshot_package.slot(),
         file_ext
     ));
@@ -1547,7 +1552,7 @@ pub fn snapshot_bank(
     let highest_bank_snapshot_info = get_highest_bank_snapshot_info(snapshots_dir)
         .expect("no snapshots found in config snapshots_dir");
 
-    let package = AccountsPackagePre::new_full_snapshot_package(
+    let package = AccountsPackage::new_for_full_snapshot(
         root_bank,
         &highest_bank_snapshot_info,
         snapshots_dir,
@@ -1664,7 +1669,7 @@ pub fn package_process_and_archive_full_snapshot(
     thread_pool: Option<&ThreadPool>,
     maximum_snapshots_to_retain: usize,
 ) -> Result<FullSnapshotArchiveInfo> {
-    let package = AccountsPackagePre::new_full_snapshot_package(
+    let accounts_package = AccountsPackage::new_for_full_snapshot(
         bank,
         bank_snapshot_info,
         snapshots_dir,
@@ -1676,15 +1681,16 @@ pub fn package_process_and_archive_full_snapshot(
         None,
     )?;
 
-    let package = process_and_archive_snapshot_package_pre(
-        package,
+    let snapshot_package = process_and_archive_accounts_package(
+        accounts_package,
         thread_pool,
         None,
         maximum_snapshots_to_retain,
-        TMP_FULL_SNAPSHOT_PREFIX,
     )?;
 
-    Ok(FullSnapshotArchiveInfo::new(package.snapshot_archive_info))
+    Ok(FullSnapshotArchiveInfo::new(
+        snapshot_package.snapshot_archive_info().to_owned(),
+    ))
 }
 
 /// Helper function to hold shared code to package, process, and archive incremental snapshots
@@ -1701,7 +1707,7 @@ pub fn package_process_and_archive_incremental_snapshot(
     thread_pool: Option<&ThreadPool>,
     maximum_snapshots_to_retain: usize,
 ) -> Result<IncrementalSnapshotArchiveInfo> {
-    let package = AccountsPackagePre::new_incremental_snapshot_package(
+    let accounts_package = AccountsPackage::new_for_incremental_snapshot(
         bank,
         incremental_snapshot_base_slot,
         bank_snapshot_info,
@@ -1714,46 +1720,47 @@ pub fn package_process_and_archive_incremental_snapshot(
         None,
     )?;
 
-    let package = process_and_archive_snapshot_package_pre(
-        package,
+    let snapshot_package = process_and_archive_accounts_package(
+        accounts_package,
         thread_pool,
         Some(incremental_snapshot_base_slot),
         maximum_snapshots_to_retain,
-        TMP_INCREMENTAL_SNAPSHOT_PREFIX,
     )?;
 
     Ok(IncrementalSnapshotArchiveInfo::new(
         incremental_snapshot_base_slot,
-        package.snapshot_archive_info,
+        snapshot_package.snapshot_archive_info().to_owned(),
     ))
 }
 
 /// Helper function to hold shared code to process and archive snapshot packages
-fn process_and_archive_snapshot_package_pre(
-    package_pre: AccountsPackagePre,
+fn process_and_archive_accounts_package(
+    accounts_package: AccountsPackage,
     thread_pool: Option<&ThreadPool>,
     incremental_snapshot_base_slot: Option<Slot>,
     maximum_snapshots_to_retain: usize,
-    staging_dir_prefix: impl AsRef<str>,
-) -> Result<AccountsPackage> {
-    let package =
-        process_accounts_package_pre(package_pre, thread_pool, incremental_snapshot_base_slot);
+) -> Result<SnapshotPackage> {
+    let snapshot_package = process_accounts_package(
+        accounts_package,
+        thread_pool,
+        incremental_snapshot_base_slot,
+    );
 
-    archive_snapshot_package(&package, maximum_snapshots_to_retain, staging_dir_prefix)?;
+    archive_snapshot_package(&snapshot_package, maximum_snapshots_to_retain)?;
 
-    Ok(package)
+    Ok(snapshot_package)
 }
 
-pub fn process_accounts_package_pre(
-    accounts_package: AccountsPackagePre,
+pub fn process_accounts_package(
+    accounts_package: AccountsPackage,
     thread_pool: Option<&ThreadPool>,
     incremental_snapshot_base_slot: Option<Slot>,
-) -> AccountsPackage {
+) -> SnapshotPackage {
     let mut time = Measure::start("hash");
 
     let hash = accounts_package.hash; // temporarily remaining here
     if let Some(expected_hash) = accounts_package.hash_for_testing {
-        let sorted_storages = SortedStorages::new(&accounts_package.storages);
+        let sorted_storages = SortedStorages::new(&accounts_package.snapshot_storages);
         let (hash, lamports) = AccountsDb::calculate_accounts_hash_without_index(
             &sorted_storages,
             thread_pool,
@@ -1774,33 +1781,47 @@ pub fn process_accounts_package_pre(
         ("calculate_hash", time.as_us(), i64),
     );
 
-    let snapshot_archive_path = match incremental_snapshot_base_slot {
-        None => build_full_snapshot_archive_path(
-            accounts_package.snapshot_output_dir,
-            accounts_package.slot,
-            &hash,
-            accounts_package.archive_format,
-        ),
-        Some(incremental_snapshot_base_slot) => build_incremental_snapshot_archive_path(
-            accounts_package.snapshot_output_dir,
-            incremental_snapshot_base_slot,
-            accounts_package.slot,
-            &hash,
-            accounts_package.archive_format,
-        ),
-    };
-
-    AccountsPackage::new(
-        accounts_package.slot,
-        accounts_package.block_height,
-        accounts_package.slot_deltas,
-        accounts_package.snapshot_links,
-        accounts_package.storages,
-        snapshot_archive_path,
-        hash,
-        accounts_package.archive_format,
-        accounts_package.snapshot_version,
-    )
+    match incremental_snapshot_base_slot {
+        None => {
+            let snapshot_archive_path = build_full_snapshot_archive_path(
+                accounts_package.snapshot_output_dir,
+                accounts_package.slot,
+                &hash,
+                accounts_package.archive_format,
+            );
+            SnapshotPackage::new_full_snapshot_package(
+                accounts_package.slot,
+                accounts_package.block_height,
+                accounts_package.slot_deltas,
+                accounts_package.snapshot_links,
+                accounts_package.snapshot_storages,
+                snapshot_archive_path,
+                hash,
+                accounts_package.archive_format,
+                accounts_package.snapshot_version,
+            )
+        }
+        Some(incremental_snapshot_base_slot) => {
+            let snapshot_archive_path = build_incremental_snapshot_archive_path(
+                accounts_package.snapshot_output_dir,
+                incremental_snapshot_base_slot,
+                accounts_package.slot,
+                &hash,
+                accounts_package.archive_format,
+            );
+            SnapshotPackage::new_incremental_snapshot_package(
+                accounts_package.slot,
+                accounts_package.block_height,
+                accounts_package.slot_deltas,
+                accounts_package.snapshot_links,
+                accounts_package.snapshot_storages,
+                snapshot_archive_path,
+                hash,
+                accounts_package.archive_format,
+                accounts_package.snapshot_version,
+            )
+        }
+    }
 }
 
 /// Filter snapshot storages and retain only the ones with slots _higher than_
