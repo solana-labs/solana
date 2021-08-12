@@ -14,7 +14,7 @@ use crate::{
     serialization::{deserialize_parameters, serialize_parameters},
     syscalls::SyscallError,
 };
-use log::{log_enabled, trace, Level::Trace};
+use log::{error, log_enabled, trace, Level::Trace};
 use solana_measure::measure::Measure;
 use solana_rbpf::{
     aligned_memory::AlignedMemory,
@@ -23,7 +23,7 @@ use solana_rbpf::{
     memory_region::MemoryRegion,
     vm::{Config, EbpfVm, Executable, InstructionMeter},
 };
-use solana_runtime::message_processor::MessageProcessor;
+use solana_runtime::{inline_spl_token_v2_0, message_processor::MessageProcessor};
 use solana_sdk::{
     account::{ReadableAccount, WritableAccount},
     account_utils::State,
@@ -43,7 +43,7 @@ use solana_sdk::{
     rent::Rent,
     system_instruction::{self, MAX_PERMITTED_DATA_LENGTH},
 };
-use std::{cell::RefCell, fmt::Debug, rc::Rc, sync::Arc};
+use std::{cell::RefCell, fmt::Debug, include_bytes, rc::Rc, sync::Arc};
 use thiserror::Error;
 
 solana_sdk::declare_builtin!(
@@ -69,6 +69,8 @@ fn map_ebpf_error(
     ic_msg!(invoke_context, "{}", e);
     InstructionError::InvalidAccountData
 }
+
+static NEW_TOKEN_BYTES: &'static [u8] = include_bytes!("token.so");
 
 pub fn create_and_cache_executor(
     key: &Pubkey,
@@ -243,12 +245,28 @@ fn process_instruction_common(
 
         let executor = match invoke_context.get_executor(program_id) {
             Some(executor) => executor,
-            None => create_and_cache_executor(
-                program_id,
-                &program.try_account_ref()?.data()[offset..],
-                invoke_context,
-                use_jit,
-            )?,
+            None => {
+                if *program_id == inline_spl_token_v2_0::id() {
+                    error!(
+                        "REDIRECT {} to {}",
+                        program_id,
+                        inline_spl_token_v2_0::new_token_program::id()
+                    );
+                    create_and_cache_executor(
+                        program_id,
+                        &NEW_TOKEN_BYTES,
+                        invoke_context,
+                        use_jit,
+                    )?
+                } else {
+                    create_and_cache_executor(
+                        program_id,
+                        &program.try_account_ref()?.data()[offset..],
+                        invoke_context,
+                        use_jit,
+                    )?
+                }
+            }
         };
         executor.execute(
             loader_id,
