@@ -9,6 +9,7 @@ use {
         fs::{self, File},
         io::{BufReader, Read},
         path::{
+            Component,
             Component::{CurDir, Normal},
             Path, PathBuf,
         },
@@ -161,9 +162,11 @@ where
         )?;
         total_count = checked_total_count_increment(total_count, limit_count)?;
 
-        // unpack_in does its own sanitization
-        // ref: https://docs.rs/tar/*/tar/struct.Entry.html#method.unpack_in
-        check_unpack_result(entry.unpack_in(unpack_dir)?, path_str)?;
+        if !sanitize_path(&entry.path()?, unpack_dir)? {
+            continue; // failed to sanitize path
+        }
+
+        check_unpack_result(entry.unpack(unpack_dir).map(|_unpack| true)?, path_str)?;
 
         // Sanitize permissions.
         let mode = match entry.header().entry_type() {
@@ -197,6 +200,53 @@ where
         perm.set_readonly(false);
         fs::set_permissions(dst, perm)
     }
+}
+
+fn sanitize_path(entry_path: &Path, dst: &Path) -> Result<bool> {
+    // code from: unpack_in does its own sanitization
+    // ref: https://docs.rs/tar/*/tar/struct.Entry.html#method.unpack_in
+    // we cannot call unpack_in because it errors if an unpack dir already exists
+
+    let mut file_dst = dst.to_path_buf();
+    {
+        let path = entry_path;
+        for part in path.components() {
+            match part {
+                // Leading '/' characters, root paths, and '.'
+                // components are just ignored and treated as "empty
+                // components"
+                Component::Prefix(..) | Component::RootDir | Component::CurDir => continue,
+
+                // If any part of the filename is '..', then skip over
+                // unpacking the file to prevent directory traversal
+                // security issues.  See, e.g.: CVE-2001-1267,
+                // CVE-2002-0399, CVE-2005-1918, CVE-2007-4131
+                Component::ParentDir => return Ok(false),
+
+                Component::Normal(part) => file_dst.push(part),
+            }
+        }
+    }
+
+    // Skip cases where only slashes or '.' parts were seen, because
+    // this is effectively an empty filename.
+    if *dst == *file_dst {
+        return Ok(true); // should this be false?
+    }
+
+    // Skip entries without a parent (i.e. outside of FS root)
+    let parent = match file_dst.parent() {
+        Some(p) => p,
+        None => return Ok(false),
+    };
+
+    //self.ensure_dir_created(&dst, parent)?;
+    fs::create_dir_all(parent)?;
+
+    // we have to decide if this is ok or not - we do want to untar exactly to the account folder, which may be on a different drive.
+    // we could validate against any of our account drives
+    // let canon_target = validate_inside_dst(&dst, parent)?;
+    Ok(true)
 }
 
 /// Map from AppendVec file name to unpacked file system location
