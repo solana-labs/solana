@@ -145,6 +145,7 @@ impl LedgerCleanupService {
             .cloned()
             .take_while(|slot| root > *slot + flush_interval)
             .collect();
+
         if slots_to_flush.is_empty() {
             trace!("No slots found to flush");
             return Ok(());
@@ -161,7 +162,7 @@ impl LedgerCleanupService {
             blockstore.flush_data_shreds_for_slot_to_fs(*slot)?;
         }
         flush_time.stop();
-        *last_flush_slot = root;
+        *last_flush_slot = *slots_to_flush.last().unwrap();
         info!(
             "flushed {} slots of shreds to disk, {}",
             slots_to_flush.len(),
@@ -380,7 +381,7 @@ mod tests {
     use super::*;
     use solana_ledger::blockstore::make_many_slot_entries;
     use solana_ledger::get_tmp_ledger_path;
-    use std::sync::mpsc::channel;
+    use std::{convert::TryInto, sync::mpsc::channel};
 
     #[test]
     fn test_cleanup1() {
@@ -488,6 +489,63 @@ mod tests {
             );
             slot += num_slots;
             num_slots *= 2;
+        }
+
+        drop(blockstore);
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    fn test_cleanup_flush() {
+        solana_logger::setup();
+        let blockstore_path = get_tmp_ledger_path!();
+        let blockstore = Blockstore::open(&blockstore_path).unwrap();
+        let (shreds, _) = make_many_slot_entries(0, 50, 5);
+        let num_shreds = shreds.len();
+        blockstore
+            .insert_shreds(shreds.clone(), None, false)
+            .unwrap();
+        let blockstore = Arc::new(blockstore);
+        let (sender, receiver) = channel();
+
+        // Send a signal that slot 50 has been rooted; with a flush interval
+        // of 10, slot 0 - 39 should get flushed from the cache
+        let mut last_flush_slot = 0;
+        let mut last_purge_slot = 0;
+        let highest_compaction_slot = Arc::new(AtomicU64::new(0));
+        sender.send(50).unwrap();
+        LedgerCleanupService::cleanup_ledger(
+            &receiver,
+            &blockstore,
+            // Large enough to fit all shreds
+            (num_shreds * 2).try_into().unwrap(),
+            &mut last_flush_slot,
+            10,
+            &mut last_purge_slot,
+            // Large enough that purge won't occur
+            100,
+            &highest_compaction_slot,
+        )
+        .unwrap();
+
+        assert_eq!(last_flush_slot, 39);
+        assert_eq!(last_purge_slot, 0);
+        assert_eq!(highest_compaction_slot.load(Ordering::Relaxed), 0);
+
+        // Confirm slots were flushed
+        for shred in shreds.iter() {
+            match shred.slot() {
+                0..=39 => {
+                    assert!(!blockstore.is_shred_in_cache(shred.slot(), shred.index().into()));
+                }
+                40..=49 => {
+                    assert!(blockstore.is_shred_in_cache(shred.slot(), shred.index().into()));
+                }
+                _ => {
+                    // Only slot 0 - 49 were created / inserted
+                    unreachable!();
+                }
+            }
         }
 
         drop(blockstore);

@@ -281,6 +281,13 @@ impl Blockstore {
                 .collect(),
         )
     }
+
+    // Used for tests only
+    pub fn is_shred_in_cache(&self, slot: Slot, index: u64) -> bool {
+        self.get_data_shred_from_cache(slot, index)
+            .unwrap()
+            .is_some()
+    }
 }
 
 #[cfg(test)]
