@@ -84,6 +84,12 @@ impl Blockstore {
             .insert(index, shred.payload.clone());
     }
 
+    // Shreds are stored by slot, and assumed to be full when pushed to disk. With these
+    // assumptions, we don't require the shred index for this function.
+    pub(crate) fn is_data_shred_on_fs(&self, slot: Slot) -> bool {
+        Path::new(&self.slot_data_shreds_path(slot)).exists()
+    }
+
     // TODO: change this back to pub(crate); possibly need to make wrapper in blockstore_purge instead
     // of in ledger_cleanup_service
     pub fn flush_data_shreds_for_slot_to_fs(&self, slot: Slot) -> Result<()> {
@@ -153,20 +159,23 @@ impl Blockstore {
         //    - If the shred is on disk, it is already accounted for and do nothing
         //    - If the shred is not on disk, it was in memory and lost when process died.
         //      So, re-insert it into the cache directly (to avoid having it in WAL twice)
-        // 2) If the shred is not in the index, perform a regular insert so the
-        //    the metadata is updated. Collect all of these until the end for perf.
+        // 2) If the shred is not in the index (including the case where there is no index for
+        //    the slot), perform a regular insert so the metadata is updated. Collect all of
+        //    these until the end for single insert.
         for (slot, mut shreds) in recovered_shreds.into_iter() {
             let shred_index_opt = self.index_cf.get(slot)?;
             match shred_index_opt {
                 Some(shred_index) => {
+                    // Shreds are stored by slot and assumed to be complete when stored on fs,
+                    // so we only need to read this once instead of inside below while loop.
+                    let shred_on_disk = self.is_data_shred_on_fs(slot);
                     while !shreds.is_empty() {
                         let shred = shreds.pop().unwrap();
                         let index = shred.index() as u64;
 
-                        // TODO: Maybe a helper that checks metadata but doesn't pull shred out
-                        // TODO: Handle case where this shred not in index, full insert
-                        let shred_on_disk = self.get_data_shred_from_fs(slot, index)?.is_some();
-                        if shred_index.data().is_present(index) && !shred_on_disk {
+                        if !shred_index.data().is_present(index) {
+                            full_insert_shreds.push(shred);
+                        } else if !shred_on_disk {
                             self.insert_data_shred_into_cache(slot, index, &shred)
                         }
                     }
