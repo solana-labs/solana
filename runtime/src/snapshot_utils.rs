@@ -2950,7 +2950,7 @@ mod tests {
             false,
             false,
             false,
-            crate::accounts_index::BINS_FOR_TESTING,
+            Some(crate::accounts_index::BINS_FOR_TESTING),
         )
         .unwrap();
         assert_eq!(
@@ -3012,7 +3012,7 @@ mod tests {
             false,
             false,
             false,
-            crate::accounts_index::BINS_FOR_TESTING,
+            Some(crate::accounts_index::BINS_FOR_TESTING),
         )
         .unwrap();
         assert_eq!(
