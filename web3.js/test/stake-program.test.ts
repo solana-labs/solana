@@ -504,6 +504,34 @@ describe('StakeProgram', () => {
       const balance = await connection.getBalance(newAccountPubkey);
       expect(balance).to.eq(minimumAmount + 2);
 
+      // Merge stake
+      let merge = StakeProgram.merge({
+        stakePubkey: newAccountPubkey,
+        sourceStakePubKey: newStake.publicKey,
+        authorizedPubkey: authorized.publicKey,
+      });
+      await sendAndConfirmTransaction(connection, merge, [authorized], {
+        preflightCommitment: 'confirmed',
+      });
+      const mergedBalance = await connection.getBalance(newAccountPubkey);
+      expect(mergedBalance).to.eq(2 * minimumAmount + 22);
+
+      // Resplit
+      split = StakeProgram.split({
+        stakePubkey: newAccountPubkey,
+        authorizedPubkey: authorized.publicKey,
+        splitStakePubkey: newStake.publicKey,
+        lamports: minimumAmount + 20,
+      });
+      await sendAndConfirmTransaction(
+        connection,
+        split,
+        [authorized, newStake],
+        {
+          preflightCommitment: 'confirmed',
+        },
+      );
+
       // Authorize to new account
       const newAuthorized = Keypair.generate();
       await connection.requestAirdrop(
@@ -540,6 +568,23 @@ describe('StakeProgram', () => {
         sendAndConfirmTransaction(
           connection,
           delegateNotAuthorized,
+          [authorized],
+          {
+            preflightCommitment: 'confirmed',
+          },
+        ),
+      ).to.be.rejected;
+
+      // Test accounts with different authorities can't be merged
+      let mergeNotAuthorized = StakeProgram.merge({
+        stakePubkey: newStake.publicKey,
+        sourceStakePubKey: newAccountPubkey,
+        authorizedPubkey: authorized.publicKey,
+      });
+      await expect(
+        sendAndConfirmTransaction(
+          connection,
+          mergeNotAuthorized,
           [authorized],
           {
             preflightCommitment: 'confirmed',
