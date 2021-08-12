@@ -1929,14 +1929,14 @@ impl JsonRpcRequestProcessor {
         new_response(&bank, is_valid)
     }
 
-    fn get_fee_for_transaction(
+    fn get_fee_for_message(
         &self,
         blockhash: &Hash,
         transaction: &Transaction,
         commitment: Option<CommitmentConfig>,
     ) -> Result<RpcResponse<Option<u64>>> {
         let bank = self.bank(commitment);
-        let fee = bank.get_fee_for_transaction(blockhash, &transaction.message);
+        let fee = bank.get_fee_for_message(blockhash, &transaction.message);
         Ok(new_response(&bank, fee))
     }
 }
@@ -3077,8 +3077,8 @@ pub mod rpc_full {
             commitment: Option<CommitmentConfig>,
         ) -> Result<RpcResponse<bool>>;
 
-        #[rpc(meta, name = "getFeeForTransaction")]
-        fn get_fee_for_transaction(
+        #[rpc(meta, name = "getFeeForMessage")]
+        fn get_fee_for_message(
             &self,
             meta: Self::Metadata,
             blockhash: String,
@@ -3601,7 +3601,7 @@ pub mod rpc_full {
             Ok(meta.is_blockhash_valid(&blockhash, commitment))
         }
 
-        fn get_fee_for_transaction(
+        fn get_fee_for_message(
             &self,
             meta: Self::Metadata,
             blockhash: String,
@@ -3609,11 +3609,11 @@ pub mod rpc_full {
             encoding: UiTransactionEncoding,
             commitment: Option<CommitmentConfig>,
         ) -> Result<RpcResponse<Option<u64>>> {
-            debug!("get_fee_for_transaction rpc request received");
+            debug!("get_fee_for_message rpc request received");
             let blockhash = Hash::from_str(&blockhash)
                 .map_err(|e| Error::invalid_params(format!("{:?}", e)))?;
             let (_, transaction) = deserialize_transaction(data, encoding)?;
-            meta.get_fee_for_transaction(&blockhash, &transaction, commitment)
+            meta.get_fee_for_message(&blockhash, &transaction, commitment)
         }
     }
 }

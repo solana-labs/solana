@@ -73,7 +73,7 @@ pub fn check_account_for_spend_multiple_fees_with_commitment(
     messages: &[&Message],
     commitment: CommitmentConfig,
 ) -> Result<(), CliError> {
-    let fee = get_fee_for_transaction(rpc_client, blockhash, messages)?;
+    let fee = get_fee_for_message(rpc_client, blockhash, messages)?;
     if !check_account_for_balance_with_commitment(
         rpc_client,
         account_pubkey,
@@ -98,14 +98,14 @@ pub fn check_account_for_spend_multiple_fees_with_commitment(
     Ok(())
 }
 
-pub fn get_fee_for_transaction(
+pub fn get_fee_for_message(
     rpc_client: &RpcClient,
     blockhash: &Hash,
     messages: &[&Message],
 ) -> Result<u64, CliError> {
     Ok(messages
         .iter()
-        .map(|message| rpc_client.get_fee_for_transaction(blockhash, message))
+        .map(|message| rpc_client.get_fee_for_message(blockhash, message))
         .collect::<Result<Vec<_>, _>>()?
         .iter()
         .sum())
@@ -194,7 +194,7 @@ mod tests {
             value: json!(2),
         });
         let mut mocks = HashMap::new();
-        mocks.insert(RpcRequest::GetFeeForTransaction, check_fee_response);
+        mocks.insert(RpcRequest::GetFeeForMessage, check_fee_response);
         mocks.insert(RpcRequest::GetBalance, account_balance_response.clone());
         let rpc_client = RpcClient::new_mock_with_mocks("".to_string(), mocks);
         assert!(check_account_for_fee(&rpc_client, &pubkey, &blockhash, &message1).is_err());
@@ -204,7 +204,7 @@ mod tests {
             value: json!(2),
         });
         let mut mocks = HashMap::new();
-        mocks.insert(RpcRequest::GetFeeForTransaction, check_fee_response);
+        mocks.insert(RpcRequest::GetFeeForMessage, check_fee_response);
         mocks.insert(RpcRequest::GetBalance, account_balance_response);
         let rpc_client = RpcClient::new_mock_with_mocks("".to_string(), mocks);
         assert!(check_account_for_multiple_fees(
@@ -226,7 +226,7 @@ mod tests {
         });
 
         let mut mocks = HashMap::new();
-        mocks.insert(RpcRequest::GetFeeForTransaction, check_fee_response);
+        mocks.insert(RpcRequest::GetFeeForMessage, check_fee_response);
         mocks.insert(RpcRequest::GetBalance, account_balance_response);
         let rpc_client = RpcClient::new_mock_with_mocks("".to_string(), mocks);
 
@@ -253,19 +253,19 @@ mod tests {
     }
 
     #[test]
-    fn test_get_fee_for_transaction() {
+    fn test_get_fee_for_message() {
         let check_fee_response = json!(Response {
             context: RpcResponseContext { slot: 1 },
             value: json!(1),
         });
         let mut mocks = HashMap::new();
-        mocks.insert(RpcRequest::GetFeeForTransaction, check_fee_response);
+        mocks.insert(RpcRequest::GetFeeForMessage, check_fee_response);
         let rpc_client = RpcClient::new_mock_with_mocks("".to_string(), mocks);
         let blockhash = rpc_client.get_latest_blockhash().unwrap();
 
         // No messages, no fee.
         assert_eq!(
-            get_fee_for_transaction(&rpc_client, &blockhash, &[]).unwrap(),
+            get_fee_for_message(&rpc_client, &blockhash, &[]).unwrap(),
             0
         );
 
@@ -275,7 +275,7 @@ mod tests {
         let ix0 = system_instruction::transfer(&pubkey0, &pubkey1, 1);
         let message0 = Message::new(&[ix0], Some(&pubkey0));
         assert_eq!(
-            get_fee_for_transaction(&rpc_client, &blockhash, &[&message0]).unwrap(),
+            get_fee_for_message(&rpc_client, &blockhash, &[&message0]).unwrap(),
             1
         );
 
@@ -285,11 +285,11 @@ mod tests {
             value: json!(0),
         });
         let mut mocks = HashMap::new();
-        mocks.insert(RpcRequest::GetFeeForTransaction, check_fee_response);
+        mocks.insert(RpcRequest::GetFeeForMessage, check_fee_response);
         let rpc_client = RpcClient::new_mock_with_mocks("".to_string(), mocks);
         let message = Message::default();
         assert_eq!(
-            get_fee_for_transaction(&rpc_client, &blockhash, &[&message, &message]).unwrap(),
+            get_fee_for_message(&rpc_client, &blockhash, &[&message, &message]).unwrap(),
             0
         );
     }

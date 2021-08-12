@@ -1,5 +1,5 @@
 use crate::{
-    checks::{check_account_for_balance_with_commitment, get_fee_for_transaction},
+    checks::{check_account_for_balance_with_commitment, get_fee_for_message},
     cli::CliError,
 };
 use clap::ArgMatches;
@@ -146,7 +146,7 @@ where
     let fee = match blockhash {
         Some(blockhash) => {
             let dummy_message = build_message(0);
-            get_fee_for_transaction(rpc_client, blockhash, &[&dummy_message])?
+            get_fee_for_message(rpc_client, blockhash, &[&dummy_message])?
         }
         None => 0, // Offline, cannot calulate fee
     };

@@ -100,7 +100,7 @@ pub fn check_spl_token_balances(
     let blockhash = client.get_latest_blockhash()?;
     let fees: u64 = messages
         .iter()
-        .map(|message| client.get_fee_for_transaction(&blockhash, message))
+        .map(|message| client.get_fee_for_message(&blockhash, message))
         .collect::<Result<Vec<_>, _>>()
         .unwrap()
         .iter()

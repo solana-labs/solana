@@ -2678,7 +2678,7 @@ impl Bank {
 
     #[deprecated(
         since = "1.8.0",
-        note = "Please use `last_blockhash` and `get_fee_for_transaction` instead"
+        note = "Please use `last_blockhash` and `get_fee_for_message` instead"
     )]
     pub fn last_blockhash_with_fee_calculator(&self) -> (Hash, FeeCalculator) {
         let blockhash_queue = self.blockhash_queue.read().unwrap();
@@ -2693,19 +2693,19 @@ impl Bank {
         )
     }
 
-    #[deprecated(since = "1.8.0", note = "Please use `get_fee_for_transaction` instead")]
+    #[deprecated(since = "1.8.0", note = "Please use `get_fee_for_message` instead")]
     pub fn get_fee_calculator(&self, hash: &Hash) -> Option<FeeCalculator> {
         let blockhash_queue = self.blockhash_queue.read().unwrap();
         #[allow(deprecated)]
         blockhash_queue.get_fee_calculator(hash).cloned()
     }
 
-    #[deprecated(since = "1.8.0", note = "Please use `get_fee_for_transaction` instead")]
+    #[deprecated(since = "1.8.0", note = "Please use `get_fee_for_message` instead")]
     pub fn get_fee_rate_governor(&self) -> &FeeRateGovernor {
         &self.fee_rate_governor
     }
 
-    pub fn get_fee_for_transaction(&self, hash: &Hash, message: &Message) -> Option<u64> {
+    pub fn get_fee_for_message(&self, hash: &Hash, message: &Message) -> Option<u64> {
         let blockhash_queue = self.blockhash_queue.read().unwrap();
         #[allow(deprecated)]
         let fee_calculator = blockhash_queue.get_fee_calculator(hash)?;
@@ -2737,7 +2737,7 @@ impl Bank {
 
     #[deprecated(
         since = "1.8.0",
-        note = "Please use `confirmed_last_blockhash` and `get_fee_for_transaction` instead"
+        note = "Please use `confirmed_last_blockhash` and `get_fee_for_message` instead"
     )]
     pub fn confirmed_last_blockhash_with_fee_calculator(&self) -> (Hash, FeeCalculator) {
         const NUM_BLOCKHASH_CONFIRMATIONS: usize = 3;
@@ -2758,11 +2758,9 @@ impl Bank {
 
         let parents = self.parents();
         if parents.is_empty() {
-            #[allow(deprecated)]
             self.last_blockhash()
         } else {
             let index = NUM_BLOCKHASH_CONFIRMATIONS.min(parents.len() - 1);
-            #[allow(deprecated)]
             parents[index].last_blockhash()
         }
     }

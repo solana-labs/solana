@@ -2207,7 +2207,7 @@ impl RpcClient {
 
     #[deprecated(
         since = "1.8.0",
-        note = "Please use `get_latest_blockhash` and `get_fee_for_transaction` instead"
+        note = "Please use `get_latest_blockhash` and `get_fee_for_message` instead"
     )]
     #[allow(deprecated)]
     pub fn get_fees(&self) -> ClientResult<Fees> {
@@ -2217,7 +2217,7 @@ impl RpcClient {
 
     #[deprecated(
         since = "1.8.0",
-        note = "Please use `get_latest_blockhash_with_commitment` and `get_fee_for_transaction` instead"
+        note = "Please use `get_latest_blockhash_with_commitment` and `get_fee_for_message` instead"
     )]
     #[allow(deprecated)]
     pub fn get_fees_with_commitment(&self, commitment_config: CommitmentConfig) -> RpcResult<Fees> {
@@ -2322,7 +2322,7 @@ impl RpcClient {
         })
     }
 
-    #[deprecated(since = "1.8.0", note = "Please `get_fee_for_transaction` instead")]
+    #[deprecated(since = "1.8.0", note = "Please `get_fee_for_message` instead")]
     #[allow(deprecated)]
     pub fn get_fee_calculator_for_blockhash(
         &self,
@@ -2336,7 +2336,7 @@ impl RpcClient {
 
     #[deprecated(
         since = "1.8.0",
-        note = "Please `get_latest_blockhash_with_commitment` and `get_fee_for_transaction` instead"
+        note = "Please `get_latest_blockhash_with_commitment` and `get_fee_for_message` instead"
     )]
     #[allow(deprecated)]
     pub fn get_fee_calculator_for_blockhash_with_commitment(
@@ -3001,17 +3001,13 @@ impl RpcClient {
         Ok(result.value)
     }
 
-    pub fn get_fee_for_transaction(
-        &self,
-        blockhash: &Hash,
-        message: &Message,
-    ) -> ClientResult<u64> {
+    pub fn get_fee_for_message(&self, blockhash: &Hash, message: &Message) -> ClientResult<u64> {
         let serialized_encoded = serialize_encode_transaction(
             &Transaction::new_unsigned(message.clone()),
             UiTransactionEncoding::Base64,
         )?;
         let result = self.send::<Response<Option<u64>>>(
-            RpcRequest::GetFeeForTransaction,
+            RpcRequest::GetFeeForMessage,
             json!([
                 blockhash.to_string(),
                 serialized_encoded,

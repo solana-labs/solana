@@ -570,15 +570,14 @@ impl TestValidator {
                 }
                 println!("Waiting for fees to stabilize {:?}...", num_tries);
                 match rpc_client.get_latest_blockhash() {
-                    Ok(blockhash) => match rpc_client.get_fee_for_transaction(&blockhash, &message)
-                    {
+                    Ok(blockhash) => match rpc_client.get_fee_for_message(&blockhash, &message) {
                         Ok(fee) => {
                             if fee != 0 {
                                 break;
                             }
                         }
                         Err(err) => {
-                            warn!("get_fee_for_transaction() failed: {:?}", err);
+                            warn!("get_fee_for_message() failed: {:?}", err);
                             break;
                         }
                     },

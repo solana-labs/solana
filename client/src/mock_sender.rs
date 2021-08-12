@@ -278,7 +278,7 @@ impl RpcSender for MockSender {
                     last_valid_block_height: 0,
                 },
             })?,
-            "getFeeForTransaction" => serde_json::to_value(Response {
+            "getFeeForMessage" => serde_json::to_value(Response {
                 context: RpcResponseContext { slot: 1 },
                 value: json!(Some(0)),
             })?,

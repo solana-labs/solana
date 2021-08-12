@@ -302,9 +302,9 @@ impl SyncClient for BankClient {
         Ok(self.bank.is_blockhash_valid(blockhash))
     }
 
-    fn get_fee_for_transaction(&self, blockhash: &Hash, message: &Message) -> Result<u64> {
+    fn get_fee_for_message(&self, blockhash: &Hash, message: &Message) -> Result<u64> {
         self.bank
-            .get_fee_for_transaction(blockhash, message)
+            .get_fee_for_message(blockhash, message)
             .ok_or_else(|| {
                 TransportError::IoError(io::Error::new(
                     io::ErrorKind::Other,

@@ -898,7 +898,7 @@ pub fn generate_and_fund_keypairs<T: 'static + Client + Send + Sync>(
         );
         let blockhash = client.get_latest_blockhash().unwrap();
         let max_fee = client
-            .get_fee_for_transaction(&blockhash, &single_sig_message)
+            .get_fee_for_message(&blockhash, &single_sig_message)
             .unwrap();
         let extra_fees = extra * max_fee;
         let total_keypairs = keypairs.len() as u64 + 1; // Add one for funding keypair

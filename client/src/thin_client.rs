@@ -600,9 +600,9 @@ impl SyncClient for ThinClient {
             .map_err(|e| e.into())
     }
 
-    fn get_fee_for_transaction(&self, blockhash: &Hash, message: &Message) -> TransportResult<u64> {
+    fn get_fee_for_message(&self, blockhash: &Hash, message: &Message) -> TransportResult<u64> {
         self.rpc_client()
-            .get_fee_for_transaction(blockhash, message)
+            .get_fee_for_message(blockhash, message)
             .map_err(|e| e.into())
     }
 

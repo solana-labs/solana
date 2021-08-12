@@ -427,8 +427,8 @@ fn run_accounts_bench(
         }
 
         let fee = client
-            .get_fee_for_transaction(&blockhash, &message)
-            .expect("get_fee_for_transaction");
+            .get_fee_for_message(&blockhash, &message)
+            .expect("get_fee_for_message");
         let lamports = min_balance + fee;
 
         for (i, balance) in balances.iter_mut().enumerate() {

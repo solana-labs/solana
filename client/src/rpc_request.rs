@@ -44,10 +44,10 @@ pub enum RpcRequest {
     GetEpochSchedule,
     #[deprecated(
         since = "1.8.0",
-        note = "Please use RpcRequest::GetFeeForTransaction instead"
+        note = "Please use RpcRequest::GetFeeForMessage instead"
     )]
     GetFeeCalculatorForBlockhash,
-    GetFeeForTransaction,
+    GetFeeForMessage,
     #[deprecated(
         since = "1.8.0",
         note = "Please do not use, will no longer be available in the future"
@@ -55,7 +55,7 @@ pub enum RpcRequest {
     GetFeeRateGovernor,
     #[deprecated(
         since = "1.8.0",
-        note = "Please use RpcRequest::GetFeeForTransaction instead"
+        note = "Please use RpcRequest::GetFeeForMessage instead"
     )]
     GetFees,
     GetFirstAvailableBlock,
@@ -131,7 +131,7 @@ impl fmt::Display for RpcRequest {
             RpcRequest::GetEpochInfo => "getEpochInfo",
             RpcRequest::GetEpochSchedule => "getEpochSchedule",
             RpcRequest::GetFeeCalculatorForBlockhash => "getFeeCalculatorForBlockhash",
-            RpcRequest::GetFeeForTransaction => "getFeeForTransaction",
+            RpcRequest::GetFeeForMessage => "getFeeForMessage",
             RpcRequest::GetFeeRateGovernor => "getFeeRateGovernor",
             RpcRequest::GetFees => "getFees",
             RpcRequest::GetFirstAvailableBlock => "getFirstAvailableBlock",
