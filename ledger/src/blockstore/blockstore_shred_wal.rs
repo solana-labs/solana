@@ -276,7 +276,7 @@ pub mod tests {
         let mut result = HashMap::new();
         for (slot, shreds) in recovered_shreds.into_iter() {
             for shred in shreds {
-                result.insert((slot, shred.index() as u64), shred);
+                result.insert((slot, shred.index().into()), shred);
             }
         }
         result
@@ -293,7 +293,7 @@ pub mod tests {
         let all_shreds: HashMap<(u64, u64), Shred> = shreds
             .iter()
             .cloned()
-            .map(|shred| ((shred.slot(), shred.index() as u64), shred))
+            .map(|shred| ((shred.slot(), shred.index().into()), shred))
             .collect();
         let shreds_per_slot = shreds.len() / num_slots as usize;
 
@@ -307,7 +307,7 @@ pub mod tests {
                 .drain(0..shreds_per_slot)
                 .collect::<Vec<_>>()
                 .into_iter()
-                .map(|shred| ((shred.slot(), shred.index() as u64), shred))
+                .map(|shred| ((shred.slot(), shred.index().into()), shred))
                 .collect();
             shred_wal.log_shred_write(write_shreds).unwrap();
         }
@@ -319,7 +319,7 @@ pub mod tests {
             assert_eq!(
                 shred,
                 recoverd_shreds
-                    .get(&(shred.slot(), shred.index() as u64))
+                    .get(&(shred.slot(), shred.index().into()))
                     .unwrap()
             );
         }
@@ -339,7 +339,7 @@ pub mod tests {
         let all_shreds: HashMap<(u64, u64), Shred> = shreds
             .iter()
             .cloned()
-            .map(|shred| ((shred.slot(), shred.index() as u64), shred))
+            .map(|shred| ((shred.slot(), shred.index().into()), shred))
             .collect();
         let shreds_per_slot = shreds.len() / num_slots as usize;
 
@@ -369,7 +369,7 @@ pub mod tests {
                 .drain(0..2 * shreds_per_slot)
                 .collect::<Vec<_>>()
                 .into_iter()
-                .map(|shred| ((shred.slot(), shred.index() as u64), shred))
+                .map(|shred| ((shred.slot(), shred.index().into()), shred))
                 .collect();
             shred_wal.log_shred_write(write_shreds).unwrap();
         }
