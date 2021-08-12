@@ -23,6 +23,15 @@ mkdir ~/my-solana-wallet
 solana-keygen new --outfile ~/my-solana-wallet/my-keypair.json
 ```
 
+or use docker instead of cli install:
+```
+SOLANA_WALLET_DIR=~/my-solana-wallet
+SOLANA_KEYPAIR_FILENAME=my-keypair.json
+mkdir -p ${SOLANA_WALLET_DIR}
+docker run -it --rm --entrypoint "solana-keygen" --volume ${SOLANA_WALLET_DIR}:/tmp/solana \
+  solanalabs/solana:stable new --outfile /tmp/solana/${SOLANA_KEYPAIR_FILENAME}
+```
+
 This file contains your **unencrypted** keypair. In fact, even if you specify
 a password, that password applies to the recovery seed phrase, not the file. Do
 not share this file with others. Anyone with access to this file will have access
