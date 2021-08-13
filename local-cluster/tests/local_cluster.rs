@@ -2008,8 +2008,13 @@ fn test_snapshots_restart_validity() {
 #[allow(unused_attributes)]
 #[ignore]
 fn test_fail_entry_verification_leader() {
-    let (cluster, _) =
-        test_faulty_node(BroadcastStageType::FailEntryVerification, vec![60, 50, 60]);
+    let leader_stake = (DUPLICATE_THRESHOLD * 100.0) as u64 + 1;
+    let validator_stake1 = (100 - leader_stake) / 2;
+    let validator_stake2 = 100 - leader_stake - validator_stake1;
+    let (cluster, _) = test_faulty_node(
+        BroadcastStageType::FailEntryVerification,
+        vec![leader_stake, validator_stake1, validator_stake2],
+    );
     cluster.check_for_new_roots(
         16,
         "test_fail_entry_verification_leader",

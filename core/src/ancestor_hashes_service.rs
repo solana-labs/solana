@@ -1367,7 +1367,7 @@ mod test {
 
         // Simulate Replay dumping this slot
         let mut duplicate_slots_to_repair = DuplicateSlotsToRepair::default();
-        duplicate_slots_to_repair.insert((dead_slot, Hash::new_unique()));
+        duplicate_slots_to_repair.insert(dead_slot, Hash::new_unique());
         ReplayStage::dump_then_repair_correct_slots(
             &mut duplicate_slots_to_repair,
             &mut bank_forks.read().unwrap().ancestors(),
