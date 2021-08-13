@@ -1111,6 +1111,9 @@ impl<T: IsCached> AccountsIndex<T> {
         //error!("do_scan_accounts, {}, {}, {}, range: {:?}", file!(), line!(), metric_name, range);
 
         let all_and_unsorted = metric_name == "load_to_collect_rent_eagerly_scan_elapsed";
+        if all_and_unsorted {
+            error!("all_and_unsorted");
+        }
 
         if metric_name.is_empty() {
             error!(
