@@ -797,7 +797,7 @@ impl Blockstore {
         &self,
         shreds: Vec<Shred>,
         is_repaired: Vec<bool>,
-        leader_schedule: Option<&Arc<LeaderScheduleCache>>,
+        leader_schedule: Option<&LeaderScheduleCache>,
         is_trusted: bool,
         handle_duplicate: &F,
         metrics: &mut BlockstoreInsertionMetrics,
@@ -1040,7 +1040,7 @@ impl Blockstore {
     pub fn insert_shreds(
         &self,
         shreds: Vec<Shred>,
-        leader_schedule: Option<&Arc<LeaderScheduleCache>>,
+        leader_schedule: Option<&LeaderScheduleCache>,
         is_trusted: bool,
     ) -> Result<(Vec<CompletedDataSetInfo>, Vec<usize>)> {
         let shreds_len = shreds.len();
@@ -1223,7 +1223,7 @@ impl Blockstore {
         index_meta_time: &mut u64,
         is_trusted: bool,
         handle_duplicate: &F,
-        leader_schedule: Option<&Arc<LeaderScheduleCache>>,
+        leader_schedule: Option<&LeaderScheduleCache>,
         shred_source: ShredSource,
     ) -> std::result::Result<Vec<(u32, u32)>, InsertDataShredError>
     where
@@ -1358,7 +1358,7 @@ impl Blockstore {
         slot_meta: &SlotMeta,
         just_inserted_data_shreds: &HashMap<(u64, u64), Shred>,
         last_root: &RwLock<u64>,
-        leader_schedule: Option<&Arc<LeaderScheduleCache>>,
+        leader_schedule: Option<&LeaderScheduleCache>,
         shred_source: ShredSource,
     ) -> bool {
         use crate::shred::SHRED_PAYLOAD_SIZE;

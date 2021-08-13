@@ -601,9 +601,9 @@ impl RetransmitStage {
             verified_receiver,
             retransmit_sender,
             repair_socket,
-            exit,
+            exit.clone(),
             repair_info,
-            leader_schedule_cache,
+            leader_schedule_cache.clone(),
             move |id, shred, working_bank, last_root| {
                 let is_connected = cfg
                     .as_ref()
