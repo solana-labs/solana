@@ -43,9 +43,20 @@ pub trait NonceKeyedAccount {
         signers: &HashSet<Pubkey>,
         invoke_context: &dyn InvokeContext,
     ) -> Result<(), InstructionError>;
+    fn is_nonce_account(&self) -> bool;
 }
 
 impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
+    fn is_nonce_account(&self) -> bool {
+        let state = AccountUtilsState::<Versions>::state(self)
+            .map(|x| x.convert_to_current())
+            .ok();
+        if Some(State::Uninitialized) == state || state.is_none() {
+            false
+        } else {
+            true
+        }
+    }
     fn advance_nonce_account(
         &self,
         signers: &HashSet<Pubkey>,

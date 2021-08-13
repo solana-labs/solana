@@ -79,7 +79,7 @@ fn allocate(
 
     // if it looks like the `to` account is already in use, bail
     //   (note that the id check is also enforced by message_processor)
-    if !account.data().is_empty() || !system_program::check_id(account.owner()) {
+    if !system_program::check_id(account.owner()) {
         ic_msg!(
             invoke_context,
             "Allocate: account {:?} already in use",
@@ -406,6 +406,13 @@ pub fn process_instruction(
         }
         SystemInstruction::Allocate { space } => {
             let keyed_account = keyed_account_at_index(keyed_accounts, 0)?;
+            if keyed_account.is_nonce_account() {
+                ic_msg!(
+                    invoke_context,
+                    "Allocate: cannot re-allocate data for existing nonce account",
+                );
+                return Err(SystemError::AccountAlreadyInUse.into());
+            }
             let mut account = keyed_account.try_account_ref_mut()?;
             let address = Address::create(keyed_account.unsigned_key(), None, invoke_context)?;
             allocate(&mut account, &address, space, &signers, invoke_context)
@@ -417,6 +424,13 @@ pub fn process_instruction(
             owner,
         } => {
             let keyed_account = keyed_account_at_index(keyed_accounts, 0)?;
+            if keyed_account.is_nonce_account() {
+                ic_msg!(
+                    invoke_context,
+                    "Allocate: cannot re-allocate data for existing nonce account",
+                );
+                return Err(SystemError::AccountAlreadyInUse.into());
+            }
             let mut account = keyed_account.try_account_ref_mut()?;
             let address = Address::create(
                 keyed_account.unsigned_key(),
