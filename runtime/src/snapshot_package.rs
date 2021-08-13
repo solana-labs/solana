@@ -20,12 +20,12 @@ use std::{
 };
 use tempfile::TempDir;
 
-pub type AccountsPackageSender = Sender<AccountsPackagePre>;
-pub type AccountsPackageReceiver = Receiver<AccountsPackagePre>;
-pub type AccountsPackageSendError = SendError<AccountsPackagePre>;
+pub type AccountsPackageSender = Sender<AccountsPackage>;
+pub type AccountsPackageReceiver = Receiver<AccountsPackage>;
+pub type AccountsPackageSendError = SendError<AccountsPackage>;
 
 #[derive(Debug)]
-pub struct AccountsPackagePre {
+pub struct AccountsPackage {
     pub slot: Slot,
     pub block_height: Slot,
     pub slot_deltas: Vec<BankSlotDelta>,
@@ -40,8 +40,8 @@ pub struct AccountsPackagePre {
     pub cluster_type: ClusterType,
 }
 
-impl AccountsPackagePre {
-    /// Create a snapshot package
+impl AccountsPackage {
+    /// Create an accounts package
     #[allow(clippy::too_many_arguments)]
     fn new(
         bank: &Bank,
@@ -84,7 +84,7 @@ impl AccountsPackagePre {
 
     /// Package up bank snapshot files, snapshot storages, and slot deltas for a full snapshot.
     #[allow(clippy::too_many_arguments)]
-    pub fn new_full_snapshot_package(
+    pub fn new_for_full_snapshot(
         bank: &Bank,
         bank_snapshot_info: &BankSnapshotInfo,
         snapshots_dir: impl AsRef<Path>,
@@ -120,7 +120,7 @@ impl AccountsPackagePre {
 
     /// Package up bank snapshot files, snapshot storages, and slot deltas for an incremental snapshot.
     #[allow(clippy::too_many_arguments)]
-    pub fn new_incremental_snapshot_package(
+    pub fn new_for_incremental_snapshot(
         bank: &Bank,
         incremental_snapshot_base_slot: Slot,
         bank_snapshot_info: &BankSnapshotInfo,
@@ -169,7 +169,7 @@ impl AccountsPackagePre {
     }
 }
 
-pub struct AccountsPackage {
+pub struct SnapshotPackage {
     pub snapshot_archive_info: SnapshotArchiveInfo,
     pub block_height: Slot,
     pub slot_deltas: Vec<BankSlotDelta>,
@@ -178,7 +178,7 @@ pub struct AccountsPackage {
     pub snapshot_version: SnapshotVersion,
 }
 
-impl AccountsPackage {
+impl SnapshotPackage {
     pub fn new(
         slot: Slot,
         block_height: u64,
@@ -206,7 +206,7 @@ impl AccountsPackage {
     }
 }
 
-impl SnapshotArchiveInfoGetter for AccountsPackage {
+impl SnapshotArchiveInfoGetter for SnapshotPackage {
     fn snapshot_archive_info(&self) -> &SnapshotArchiveInfo {
         &self.snapshot_archive_info
     }
