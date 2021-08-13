@@ -28,7 +28,7 @@ solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.8.0" }
 name = "solana_perf"
 
 [dev-dependencies]
-matches = "0.1.6"
+matches = "0.1.9"
 
 [[bench]]
 name = "sigverify"
