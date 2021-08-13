@@ -18,7 +18,7 @@ indexmap = { version = "1.7", features = ["rayon"] }
 itertools = "0.10.1"
 log = "0.4.14"
 lru = "0.6.6"
-matches = "0.1.8"
+matches = "0.1.9"
 num-traits = "0.2"
 rand = "0.7.0"
 rand_chacha = "0.2.2"
@@ -46,7 +46,7 @@ solana-vote-program = { path = "../programs/vote", version = "=1.8.0" }
 thiserror = "1.0"
 
 [dev-dependencies]
-matches = "0.1.6"
+matches = "0.1.9"
 num_cpus = "1.13.0"
 serial_test = "0.5.1"
 
