@@ -12,6 +12,7 @@ use solana_measure::measure::Measure;
 use solana_runtime::inline_spl_token_v2_0;
 use solana_sdk::{
     commitment_config::CommitmentConfig,
+    instruction::{AccountMeta, Instruction},
     message::Message,
     pubkey::Pubkey,
     rpc_port::DEFAULT_RPC_PORT,
@@ -33,10 +34,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-// Create and close messages both require 2 signatures; if transaction construction changes, update
-// this magic number
-const NUM_SIGNATURES: u64 = 2;
-
 pub fn airdrop_lamports(
     client: &RpcClient,
     faucet_addr: &SocketAddr,
@@ -55,7 +52,7 @@ pub fn airdrop_lamports(
             id.pubkey(),
         );
 
-        let (blockhash, _fee_calculator) = client.get_recent_blockhash().unwrap();
+        let blockhash = client.get_latest_blockhash().unwrap();
         match request_airdrop_transaction(faucet_addr, &id.pubkey(), airdrop_amount, blockhash) {
             Ok(transaction) => {
                 let mut tries = 0;
@@ -375,10 +372,10 @@ fn run_accounts_bench(
 
     info!("Targeting {}", entrypoint_addr);
 
-    let mut last_blockhash = Instant::now();
+    let mut latest_blockhash = Instant::now();
     let mut last_log = Instant::now();
     let mut count = 0;
-    let mut recent_blockhash = client.get_recent_blockhash().expect("blockhash");
+    let mut blockhash = client.get_latest_blockhash().expect("blockhash");
     let mut tx_sent_count = 0;
     let mut total_accounts_created = 0;
     let mut total_accounts_closed = 0;
@@ -406,16 +403,32 @@ fn run_accounts_bench(
 
     let executor = TransactionExecutor::new(entrypoint_addr);
 
+    // Create and close messages both require 2 signatures, fake a 2 signature message to calculate fees
+    let message = Message::new(
+        &[
+            Instruction::new_with_bytes(
+                Pubkey::new_unique(),
+                &[],
+                vec![AccountMeta::new(Pubkey::new_unique(), true)],
+            ),
+            Instruction::new_with_bytes(
+                Pubkey::new_unique(),
+                &[],
+                vec![AccountMeta::new(Pubkey::new_unique(), true)],
+            ),
+        ],
+        None,
+    );
+
     loop {
-        if last_blockhash.elapsed().as_millis() > 10_000 {
-            recent_blockhash = client.get_recent_blockhash().expect("blockhash");
-            last_blockhash = Instant::now();
+        if latest_blockhash.elapsed().as_millis() > 10_000 {
+            blockhash = client.get_latest_blockhash().expect("blockhash");
+            latest_blockhash = Instant::now();
         }
 
-        let fee = recent_blockhash
-            .1
-            .lamports_per_signature
-            .saturating_mul(NUM_SIGNATURES);
+        let fee = client
+            .get_fee_for_message(&blockhash, &message)
+            .expect("get_fee_for_message");
         let lamports = min_balance + fee;
 
         for (i, balance) in balances.iter_mut().enumerate() {
@@ -464,7 +477,7 @@ fn run_accounts_bench(
                                     mint,
                                 );
                                 let signers: Vec<&Keypair> = vec![keypair, &base_keypair];
-                                Transaction::new(&signers, message, recent_blockhash.0)
+                                Transaction::new(&signers, message, blockhash)
                             })
                             .collect();
                         balances[i] = balances[i].saturating_sub(lamports * txs.len() as u64);
@@ -496,7 +509,7 @@ fn run_accounts_bench(
                                 mint.is_some(),
                             );
                             let signers: Vec<&Keypair> = vec![payer_keypairs[0], &base_keypair];
-                            Transaction::new(&signers, message, recent_blockhash.0)
+                            Transaction::new(&signers, message, blockhash)
                         })
                         .collect();
                     balances[0] = balances[0].saturating_sub(fee * txs.len() as u64);

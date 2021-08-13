@@ -191,8 +191,8 @@ fn test_local_cluster_signature_subscribe() {
         non_bootstrap_info.client_facing_addr(),
         VALIDATOR_PORT_RANGE,
     );
-    let (blockhash, _fee_calculator, _last_valid_slot) = tx_client
-        .get_recent_blockhash_with_commitment(CommitmentConfig::processed())
+    let (blockhash, _) = tx_client
+        .get_latest_blockhash_with_commitment(CommitmentConfig::processed())
         .unwrap();
 
     let mut transaction = system_transaction::transfer(
@@ -1475,8 +1475,8 @@ fn generate_frozen_account_panic(mut cluster: LocalCluster, frozen_account: Arc<
     let mut i = 0;
     while !solana_runtime::accounts_db::FROZEN_ACCOUNT_PANIC.load(Ordering::Relaxed) {
         // Transfer from frozen account
-        let (blockhash, _fee_calculator, _last_valid_slot) = client
-            .get_recent_blockhash_with_commitment(CommitmentConfig::processed())
+        let (blockhash, _) = client
+            .get_latest_blockhash_with_commitment(CommitmentConfig::processed())
             .unwrap();
         client
             .async_transfer(
@@ -3246,8 +3246,8 @@ fn setup_transfer_scan_threads(
                 if exit_.load(Ordering::Relaxed) {
                     return;
                 }
-                let (blockhash, _fee_calculator, _last_valid_slot) = client
-                    .get_recent_blockhash_with_commitment(CommitmentConfig::processed())
+                let (blockhash, _) = client
+                    .get_latest_blockhash_with_commitment(CommitmentConfig::processed())
                     .unwrap();
                 for i in 0..starting_keypairs_.len() {
                     client

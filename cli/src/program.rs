@@ -23,7 +23,6 @@ use solana_client::{
     rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig},
     rpc_filter::{Memcmp, MemcmpEncodedBytes, RpcFilterType},
     rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
-    rpc_response::Fees,
     tpu_client::{TpuClient, TpuClientConfig},
 };
 use solana_rbpf::{
@@ -1067,7 +1066,7 @@ fn process_set_authority(
     };
 
     trace!("Set a new authority");
-    let (blockhash, _) = rpc_client.get_recent_blockhash()?;
+    let blockhash = rpc_client.get_latest_blockhash()?;
 
     let mut tx = if let Some(ref pubkey) = program_pubkey {
         Transaction::new_unsigned(Message::new(
@@ -1343,7 +1342,7 @@ fn close(
     recipient_pubkey: &Pubkey,
     authority_signer: &dyn Signer,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let (blockhash, _) = rpc_client.get_recent_blockhash()?;
+    let blockhash = rpc_client.get_latest_blockhash()?;
 
     let mut tx = Transaction::new_unsigned(Message::new(
         &[bpf_loader_upgradeable::close(
@@ -1891,14 +1890,14 @@ fn check_payer(
     balance_needed: u64,
     messages: &[&Message],
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let (_, fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let blockhash = rpc_client.get_latest_blockhash()?;
 
     // Does the payer have enough?
     check_account_for_spend_multiple_fees_with_commitment(
         rpc_client,
         &config.signers[0].pubkey(),
         balance_needed,
-        &fee_calculator,
+        &blockhash,
         messages,
         config.commitment,
     )?;
@@ -1920,7 +1919,7 @@ fn send_deploy_messages(
     if let Some(message) = initial_message {
         if let Some(initial_signer) = initial_signer {
             trace!("Preparing the required accounts");
-            let (blockhash, _) = rpc_client.get_recent_blockhash()?;
+            let blockhash = rpc_client.get_latest_blockhash()?;
 
             let mut initial_transaction = Transaction::new_unsigned(message.clone());
             // Most of the initial_transaction combinations require both the fee-payer and new program
@@ -1943,13 +1942,8 @@ fn send_deploy_messages(
     if let Some(write_messages) = write_messages {
         if let Some(write_signer) = write_signer {
             trace!("Writing program data");
-            let Fees {
-                blockhash,
-                last_valid_block_height,
-                ..
-            } = rpc_client
-                .get_fees_with_commitment(config.commitment)?
-                .value;
+            let (blockhash, last_valid_block_height) =
+                rpc_client.get_latest_blockhash_with_commitment(config.commitment)?;
             let mut write_transactions = vec![];
             for message in write_messages.iter() {
                 let mut tx = Transaction::new_unsigned(message.clone());
@@ -1972,7 +1966,7 @@ fn send_deploy_messages(
     if let Some(message) = final_message {
         if let Some(final_signers) = final_signers {
             trace!("Deploying program");
-            let (blockhash, _) = rpc_client.get_recent_blockhash()?;
+            let blockhash = rpc_client.get_latest_blockhash()?;
 
             let mut final_tx = Transaction::new_unsigned(message.clone());
             let mut signers = final_signers.to_vec();
@@ -2141,11 +2135,8 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
         send_retries -= 1;
 
         // Re-sign any failed transactions with a new blockhash and retry
-        let Fees {
-            blockhash,
-            last_valid_block_height: new_last_valid_block_height,
-            ..
-        } = rpc_client.get_fees_with_commitment(commitment)?.value;
+        let (blockhash, new_last_valid_block_height) =
+            rpc_client.get_latest_blockhash_with_commitment(commitment)?;
         last_valid_block_height = new_last_valid_block_height;
         transactions = vec![];
         for (_, mut transaction) in pending_transactions.into_iter() {

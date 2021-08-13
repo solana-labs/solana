@@ -6,9 +6,9 @@ use {
         rpc_config::RpcBlockProductionConfig,
         rpc_request::RpcRequest,
         rpc_response::{
-            Response, RpcAccountBalance, RpcBlockProduction, RpcBlockProductionRange, RpcFees,
-            RpcResponseContext, RpcSimulateTransactionResult, RpcStakeActivation, RpcSupply,
-            RpcVersionInfo, RpcVoteAccountStatus, StakeActivationState,
+            Response, RpcAccountBalance, RpcBlockProduction, RpcBlockProductionRange, RpcBlockhash,
+            RpcFees, RpcResponseContext, RpcSimulateTransactionResult, RpcStakeActivation,
+            RpcSupply, RpcVersionInfo, RpcVoteAccountStatus, StakeActivationState,
         },
         rpc_sender::RpcSender,
     },
@@ -271,6 +271,17 @@ impl RpcSender for MockSender {
                     feature_set: Some(version.feature_set),
                 })
             }
+            "getLatestBlockhash" => serde_json::to_value(Response {
+                context: RpcResponseContext { slot: 1 },
+                value: RpcBlockhash {
+                    blockhash: PUBKEY.to_string(),
+                    last_valid_block_height: 0,
+                },
+            })?,
+            "getFeeForMessage" => serde_json::to_value(Response {
+                context: RpcResponseContext { slot: 1 },
+                value: json!(Some(0)),
+            })?,
             _ => Value::Null,
         };
         Ok(val)

@@ -19,7 +19,6 @@ use solana_client::{
     rpc_client::RpcClient,
     rpc_config::RpcSendTransactionConfig,
     rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
-    rpc_response::Fees,
 };
 use solana_sdk::{
     clock::Slot,
@@ -164,7 +163,7 @@ fn transfer<S: Signer>(
     let create_instruction =
         system_instruction::transfer(&sender_keypair.pubkey(), to_pubkey, lamports);
     let message = Message::new(&[create_instruction], Some(&sender_keypair.pubkey()));
-    let (recent_blockhash, _fees) = client.get_recent_blockhash()?;
+    let recent_blockhash = client.get_latest_blockhash()?;
     Ok(Transaction::new(
         &[sender_keypair],
         message,
@@ -387,13 +386,8 @@ fn send_messages(
             if args.dry_run {
                 Ok((Transaction::new_unsigned(message), std::u64::MAX))
             } else {
-                let Fees {
-                    blockhash,
-                    last_valid_block_height,
-                    ..
-                } = client
-                    .get_fees_with_commitment(CommitmentConfig::default())?
-                    .value;
+                let (blockhash, last_valid_block_height) =
+                    client.get_latest_blockhash_with_commitment(CommitmentConfig::default())?;
                 let transaction = Transaction::new(&signers, message, blockhash);
                 let config = RpcSendTransactionConfig {
                     skip_preflight: true,
@@ -448,14 +442,10 @@ fn distribute_allocations(
         &mut created_accounts,
     )?;
 
-    let num_signatures = messages
-        .iter()
-        .map(|message| message.header.num_required_signatures as usize)
-        .sum();
     if args.spl_token_args.is_some() {
-        check_spl_token_balances(num_signatures, allocations, client, args, created_accounts)?;
+        check_spl_token_balances(&messages, allocations, client, args, created_accounts)?;
     } else {
-        check_payer_balances(num_signatures, allocations, client, args)?;
+        check_payer_balances(&messages, allocations, client, args)?;
     }
 
     send_messages(client, db, allocations, args, exit, messages, stake_extras)?;
@@ -733,18 +723,21 @@ fn log_transaction_confirmations(
 }
 
 fn check_payer_balances(
-    num_signatures: usize,
+    messages: &[Message],
     allocations: &[Allocation],
     client: &RpcClient,
     args: &DistributeTokensArgs,
 ) -> Result<(), Error> {
     let mut undistributed_tokens: u64 = allocations.iter().map(|x| x.amount).sum();
 
-    let (_blockhash, fee_calculator) = client.get_recent_blockhash()?;
-    let fees = fee_calculator
-        .lamports_per_signature
-        .checked_mul(num_signatures as u64)
-        .unwrap();
+    let blockhash = client.get_latest_blockhash()?;
+    let fees = messages
+        .iter()
+        .map(|message| client.get_fee_for_message(&blockhash, message))
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap()
+        .iter()
+        .sum();
 
     let (distribution_source, unlocked_sol_source) = if let Some(stake_args) = &args.stake_args {
         let total_unlocked_sol = allocations.len() as u64 * stake_args.unlocked_sol;
@@ -988,7 +981,7 @@ pub fn test_process_create_stake_with_client(client: &RpcClient, sender_keypair:
     );
     let message = Message::new(&instructions, Some(&sender_keypair.pubkey()));
     let signers = [&sender_keypair, &stake_account_keypair];
-    let (blockhash, _fees) = client.get_recent_blockhash().unwrap();
+    let blockhash = client.get_latest_blockhash().unwrap();
     let transaction = Transaction::new(&signers, message, blockhash);
     client
         .send_and_confirm_transaction_with_spinner(&transaction)
@@ -1110,7 +1103,7 @@ pub fn test_process_distribute_stake_with_client(client: &RpcClient, sender_keyp
     );
     let message = Message::new(&instructions, Some(&sender_keypair.pubkey()));
     let signers = [&sender_keypair, &stake_account_keypair];
-    let (blockhash, _fees) = client.get_recent_blockhash().unwrap();
+    let blockhash = client.get_latest_blockhash().unwrap();
     let transaction = Transaction::new(&signers, message, blockhash);
     client
         .send_and_confirm_transaction_with_spinner(&transaction)
@@ -1210,11 +1203,23 @@ mod tests {
     use super::*;
     use solana_core::test_validator::TestValidator;
     use solana_sdk::{
+        instruction::AccountMeta,
         signature::{read_keypair_file, write_keypair_file, Signer},
         stake::instruction::StakeInstruction,
     };
     use solana_streamer::socket::SocketAddrSpace;
     use solana_transaction_status::TransactionConfirmationStatus;
+
+    fn one_signer_message() -> Message {
+        Message::new(
+            &[Instruction::new_with_bytes(
+                Pubkey::new_unique(),
+                &[],
+                vec![AccountMeta::new(Pubkey::default(), true)],
+            )],
+            None,
+        )
+    }
 
     #[test]
     fn test_process_token_allocations() {
@@ -1594,7 +1599,7 @@ mod tests {
             &sender_keypair_file,
             None,
         );
-        check_payer_balances(1, &allocations, &client, &args).unwrap();
+        check_payer_balances(&[one_signer_message()], &allocations, &client, &args).unwrap();
 
         // Unfunded payer
         let unfunded_payer = Keypair::new();
@@ -1607,7 +1612,9 @@ mod tests {
             .unwrap()
             .into();
 
-        let err_result = check_payer_balances(1, &allocations, &client, &args).unwrap_err();
+        let err_result =
+            check_payer_balances(&[one_signer_message()], &allocations, &client, &args)
+                .unwrap_err();
         if let Error::InsufficientFunds(sources, amount) = err_result {
             assert_eq!(
                 sources,
@@ -1644,7 +1651,9 @@ mod tests {
         args.fee_payer = read_keypair_file(&partially_funded_payer_keypair_file)
             .unwrap()
             .into();
-        let err_result = check_payer_balances(1, &allocations, &client, &args).unwrap_err();
+        let err_result =
+            check_payer_balances(&[one_signer_message()], &allocations, &client, &args)
+                .unwrap_err();
         if let Error::InsufficientFunds(sources, amount) = err_result {
             assert_eq!(
                 sources,
@@ -1697,7 +1706,7 @@ mod tests {
             &sender_keypair_file,
             None,
         );
-        check_payer_balances(1, &allocations, &client, &args).unwrap();
+        check_payer_balances(&[one_signer_message()], &allocations, &client, &args).unwrap();
 
         // Unfunded sender
         let unfunded_payer = Keypair::new();
@@ -1708,7 +1717,9 @@ mod tests {
             .into();
         args.fee_payer = read_keypair_file(&sender_keypair_file).unwrap().into();
 
-        let err_result = check_payer_balances(1, &allocations, &client, &args).unwrap_err();
+        let err_result =
+            check_payer_balances(&[one_signer_message()], &allocations, &client, &args)
+                .unwrap_err();
         if let Error::InsufficientFunds(sources, amount) = err_result {
             assert_eq!(sources, vec![FundingSource::SystemAccount].into());
             assert_eq!(amount, allocation_amount.to_string());
@@ -1722,7 +1733,9 @@ mod tests {
             .unwrap()
             .into();
 
-        let err_result = check_payer_balances(1, &allocations, &client, &args).unwrap_err();
+        let err_result =
+            check_payer_balances(&[one_signer_message()], &allocations, &client, &args)
+                .unwrap_err();
         if let Error::InsufficientFunds(sources, amount) = err_result {
             assert_eq!(sources, vec![FundingSource::FeePayer].into());
             assert_eq!(amount, fees_in_sol.to_string());
@@ -1756,7 +1769,7 @@ mod tests {
         );
         let message = Message::new(&instructions, Some(&sender_keypair.pubkey()));
         let signers = [sender_keypair, &stake_account_keypair];
-        let (blockhash, _fees) = client.get_recent_blockhash().unwrap();
+        let blockhash = client.get_latest_blockhash().unwrap();
         let transaction = Transaction::new(&signers, message, blockhash);
         client
             .send_and_confirm_transaction_with_spinner(&transaction)
@@ -1809,7 +1822,7 @@ mod tests {
             &sender_keypair_file,
             Some(stake_args),
         );
-        check_payer_balances(1, &allocations, &client, &args).unwrap();
+        check_payer_balances(&[one_signer_message()], &allocations, &client, &args).unwrap();
 
         // Underfunded stake-account
         let expensive_allocation_amount = 5000.0;
@@ -1818,8 +1831,13 @@ mod tests {
             amount: sol_to_lamports(expensive_allocation_amount),
             lockup_date: "".to_string(),
         }];
-        let err_result =
-            check_payer_balances(1, &expensive_allocations, &client, &args).unwrap_err();
+        let err_result = check_payer_balances(
+            &[one_signer_message()],
+            &expensive_allocations,
+            &client,
+            &args,
+        )
+        .unwrap_err();
         if let Error::InsufficientFunds(sources, amount) = err_result {
             assert_eq!(sources, vec![FundingSource::StakeAccount].into());
             assert_eq!(
@@ -1841,7 +1859,9 @@ mod tests {
             .unwrap()
             .into();
 
-        let err_result = check_payer_balances(1, &allocations, &client, &args).unwrap_err();
+        let err_result =
+            check_payer_balances(&[one_signer_message()], &allocations, &client, &args)
+                .unwrap_err();
         if let Error::InsufficientFunds(sources, amount) = err_result {
             assert_eq!(
                 sources,
@@ -1878,7 +1898,9 @@ mod tests {
         args.fee_payer = read_keypair_file(&partially_funded_payer_keypair_file)
             .unwrap()
             .into();
-        let err_result = check_payer_balances(1, &allocations, &client, &args).unwrap_err();
+        let err_result =
+            check_payer_balances(&[one_signer_message()], &allocations, &client, &args)
+                .unwrap_err();
         if let Error::InsufficientFunds(sources, amount) = err_result {
             assert_eq!(
                 sources,
@@ -1938,7 +1960,7 @@ mod tests {
             &sender_keypair_file,
             Some(stake_args),
         );
-        check_payer_balances(1, &allocations, &client, &args).unwrap();
+        check_payer_balances(&[one_signer_message()], &allocations, &client, &args).unwrap();
 
         // Unfunded sender
         let unfunded_payer = Keypair::new();
@@ -1949,7 +1971,9 @@ mod tests {
             .into();
         args.fee_payer = read_keypair_file(&sender_keypair_file).unwrap().into();
 
-        let err_result = check_payer_balances(1, &allocations, &client, &args).unwrap_err();
+        let err_result =
+            check_payer_balances(&[one_signer_message()], &allocations, &client, &args)
+                .unwrap_err();
         if let Error::InsufficientFunds(sources, amount) = err_result {
             assert_eq!(sources, vec![FundingSource::SystemAccount].into());
             assert_eq!(amount, unlocked_sol.to_string());
@@ -1963,7 +1987,9 @@ mod tests {
             .unwrap()
             .into();
 
-        let err_result = check_payer_balances(1, &allocations, &client, &args).unwrap_err();
+        let err_result =
+            check_payer_balances(&[one_signer_message()], &allocations, &client, &args)
+                .unwrap_err();
         if let Error::InsufficientFunds(sources, amount) = err_result {
             assert_eq!(sources, vec![FundingSource::FeePayer].into());
             assert_eq!(amount, fees_in_sol.to_string());

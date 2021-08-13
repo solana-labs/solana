@@ -28,6 +28,8 @@ use {
         exit::Exit,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
         hash::Hash,
+        instruction::{AccountMeta, Instruction},
+        message::Message,
         native_token::sol_to_lamports,
         pubkey::Pubkey,
         rent::Rent,
@@ -551,25 +553,40 @@ impl TestValidator {
         {
             let rpc_client =
                 RpcClient::new_with_commitment(rpc_url.clone(), CommitmentConfig::processed());
-
-            if let Ok(result) = rpc_client.get_fee_rate_governor() {
-                let fee_rate_governor = result.value;
-                if fee_rate_governor.target_lamports_per_signature > 0 {
-                    loop {
-                        match rpc_client.get_recent_blockhash() {
-                            Ok((_blockhash, fee_calculator)) => {
-                                if fee_calculator.lamports_per_signature != 0 {
-                                    break;
-                                }
-                            }
-                            Err(err) => {
-                                warn!("get_recent_blockhash() failed: {:?}", err);
+            let message = Message::new(
+                &[Instruction::new_with_bytes(
+                    Pubkey::new_unique(),
+                    &[],
+                    vec![AccountMeta::new(Pubkey::new_unique(), true)],
+                )],
+                None,
+            );
+            const MAX_TRIES: u64 = 10;
+            let mut num_tries = 0;
+            loop {
+                num_tries += 1;
+                if num_tries > MAX_TRIES {
+                    break;
+                }
+                println!("Waiting for fees to stabilize {:?}...", num_tries);
+                match rpc_client.get_latest_blockhash() {
+                    Ok(blockhash) => match rpc_client.get_fee_for_message(&blockhash, &message) {
+                        Ok(fee) => {
+                            if fee != 0 {
                                 break;
                             }
                         }
-                        sleep(Duration::from_millis(DEFAULT_MS_PER_SLOT));
+                        Err(err) => {
+                            warn!("get_fee_for_message() failed: {:?}", err);
+                            break;
+                        }
+                    },
+                    Err(err) => {
+                        warn!("get_latest_blockhash() failed: {:?}", err);
+                        break;
                     }
                 }
+                sleep(Duration::from_millis(DEFAULT_MS_PER_SLOT));
             }
         }
 
@@ -615,6 +632,7 @@ impl TestValidator {
     pub fn rpc_client(&self) -> (RpcClient, Hash, FeeCalculator) {
         let rpc_client =
             RpcClient::new_with_commitment(self.rpc_url.clone(), CommitmentConfig::processed());
+        #[allow(deprecated)]
         let (recent_blockhash, fee_calculator) = rpc_client
             .get_recent_blockhash()
             .expect("get_recent_blockhash");

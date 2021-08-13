@@ -148,6 +148,7 @@ impl SyncClient for BankClient {
     }
 
     fn get_recent_blockhash(&self) -> Result<(Hash, FeeCalculator)> {
+        #[allow(deprecated)]
         Ok(self.bank.last_blockhash_with_fee_calculator())
     }
 
@@ -155,6 +156,7 @@ impl SyncClient for BankClient {
         &self,
         _commitment_config: CommitmentConfig,
     ) -> Result<(Hash, FeeCalculator, u64)> {
+        #[allow(deprecated)]
         let (blockhash, fee_calculator) = self.bank.last_blockhash_with_fee_calculator();
         #[allow(deprecated)]
         let last_valid_slot = self
@@ -165,10 +167,12 @@ impl SyncClient for BankClient {
     }
 
     fn get_fee_calculator_for_blockhash(&self, blockhash: &Hash) -> Result<Option<FeeCalculator>> {
+        #[allow(deprecated)]
         Ok(self.bank.get_fee_calculator(blockhash))
     }
 
     fn get_fee_rate_governor(&self) -> Result<FeeRateGovernor> {
+        #[allow(deprecated)]
         Ok(self.bank.get_fee_rate_governor().clone())
     }
 
@@ -258,9 +262,10 @@ impl SyncClient for BankClient {
     }
 
     fn get_new_blockhash(&self, blockhash: &Hash) -> Result<(Hash, FeeCalculator)> {
-        let (last_blockhash, fee_calculator) = self.get_recent_blockhash()?;
-        if last_blockhash != *blockhash {
-            Ok((last_blockhash, fee_calculator))
+        #[allow(deprecated)]
+        let (recent_blockhash, fee_calculator) = self.get_recent_blockhash()?;
+        if recent_blockhash != *blockhash {
+            Ok((recent_blockhash, fee_calculator))
         } else {
             Err(TransportError::IoError(io::Error::new(
                 io::ErrorKind::Other,
@@ -271,6 +276,53 @@ impl SyncClient for BankClient {
 
     fn get_epoch_info(&self) -> Result<EpochInfo> {
         Ok(self.bank.get_epoch_info())
+    }
+
+    fn get_latest_blockhash(&self) -> Result<Hash> {
+        Ok(self.bank.last_blockhash())
+    }
+
+    fn get_latest_blockhash_with_commitment(
+        &self,
+        _commitment_config: CommitmentConfig,
+    ) -> Result<(Hash, u64)> {
+        let blockhash = self.bank.last_blockhash();
+        let last_valid_block_height = self
+            .bank
+            .get_blockhash_last_valid_block_height(&blockhash)
+            .expect("bank blockhash queue should contain blockhash");
+        Ok((blockhash, last_valid_block_height))
+    }
+
+    fn is_blockhash_valid(
+        &self,
+        blockhash: &Hash,
+        _commitment_config: CommitmentConfig,
+    ) -> Result<bool> {
+        Ok(self.bank.is_blockhash_valid(blockhash))
+    }
+
+    fn get_fee_for_message(&self, blockhash: &Hash, message: &Message) -> Result<u64> {
+        self.bank
+            .get_fee_for_message(blockhash, message)
+            .ok_or_else(|| {
+                TransportError::IoError(io::Error::new(
+                    io::ErrorKind::Other,
+                    "Unable calculate fee",
+                ))
+            })
+    }
+
+    fn get_new_latest_blockhash(&self, blockhash: &Hash) -> Result<Hash> {
+        let latest_blockhash = self.get_latest_blockhash()?;
+        if latest_blockhash != *blockhash {
+            Ok(latest_blockhash)
+        } else {
+            Err(TransportError::IoError(io::Error::new(
+                io::ErrorKind::Other,
+                "Unable to get new blockhash",
+            )))
+        }
     }
 }
 

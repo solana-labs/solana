@@ -38,6 +38,7 @@ use {
         epoch_schedule::EpochSchedule,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
         hash::Hash,
+        message::Message,
         pubkey::Pubkey,
         signature::Signature,
         transaction::{self, uses_durable_nonce, Transaction},
@@ -722,7 +723,7 @@ impl RpcClient {
             preflight_commitment: Some(preflight_commitment.commitment),
             ..config
         };
-        let serialized_encoded = serialize_encode_transaction(transaction, encoding)?;
+        let serialized_encoded = serialize_and_encode::<Transaction>(transaction, encoding)?;
         let signature_base58_str: String = match self.send(
             RpcRequest::SendTransaction,
             json!([serialized_encoded, config]),
@@ -859,7 +860,7 @@ impl RpcClient {
             commitment: Some(commitment),
             ..config
         };
-        let serialized_encoded = serialize_encode_transaction(transaction, encoding)?;
+        let serialized_encoded = serialize_and_encode::<Transaction>(transaction, encoding)?;
         self.send(
             RpcRequest::SimulateTransaction,
             json!([serialized_encoded, config]),
@@ -1981,9 +1982,8 @@ impl RpcClient {
             let signature = self.send_transaction(transaction)?;
 
             let recent_blockhash = if uses_durable_nonce(transaction).is_some() {
-                let (recent_blockhash, ..) = self
-                    .get_recent_blockhash_with_commitment(CommitmentConfig::processed())?
-                    .value;
+                let (recent_blockhash, ..) =
+                    self.get_latest_blockhash_with_commitment(CommitmentConfig::processed())?;
                 recent_blockhash
             } else {
                 transaction.message.recent_blockhash
@@ -1994,13 +1994,9 @@ impl RpcClient {
                     Some(Ok(_)) => return Ok(signature),
                     Some(Err(e)) => return Err(e.into()),
                     None => {
-                        let fee_calculator = self
-                            .get_fee_calculator_for_blockhash_with_commitment(
-                                &recent_blockhash,
-                                CommitmentConfig::processed(),
-                            )?
-                            .value;
-                        if fee_calculator.is_none() {
+                        if !self
+                            .is_blockhash_valid(&recent_blockhash, CommitmentConfig::processed())?
+                        {
                             // Block hash is not found by some reason
                             break 'sending;
                         } else if cfg!(not(test))
@@ -2209,10 +2205,21 @@ impl RpcClient {
         )
     }
 
+    #[deprecated(
+        since = "1.8.0",
+        note = "Please use `get_latest_blockhash` and `get_fee_for_message` instead"
+    )]
+    #[allow(deprecated)]
     pub fn get_fees(&self) -> ClientResult<Fees> {
+        #[allow(deprecated)]
         Ok(self.get_fees_with_commitment(self.commitment())?.value)
     }
 
+    #[deprecated(
+        since = "1.8.0",
+        note = "Please use `get_latest_blockhash_with_commitment` and `get_fee_for_message` instead"
+    )]
+    #[allow(deprecated)]
     pub fn get_fees_with_commitment(&self, commitment_config: CommitmentConfig) -> RpcResult<Fees> {
         let Response {
             context,
@@ -2237,13 +2244,21 @@ impl RpcClient {
         })
     }
 
+    #[deprecated(since = "1.8.0", note = "Please use `get_latest_blockhash` instead")]
+    #[allow(deprecated)]
     pub fn get_recent_blockhash(&self) -> ClientResult<(Hash, FeeCalculator)> {
+        #[allow(deprecated)]
         let (blockhash, fee_calculator, _last_valid_slot) = self
             .get_recent_blockhash_with_commitment(self.commitment())?
             .value;
         Ok((blockhash, fee_calculator))
     }
 
+    #[deprecated(
+        since = "1.8.0",
+        note = "Please use `get_latest_blockhash_with_commitment` instead"
+    )]
+    #[allow(deprecated)]
     pub fn get_recent_blockhash_with_commitment(
         &self,
         commitment_config: CommitmentConfig,
@@ -2307,15 +2322,23 @@ impl RpcClient {
         })
     }
 
+    #[deprecated(since = "1.8.0", note = "Please `get_fee_for_message` instead")]
+    #[allow(deprecated)]
     pub fn get_fee_calculator_for_blockhash(
         &self,
         blockhash: &Hash,
     ) -> ClientResult<Option<FeeCalculator>> {
+        #[allow(deprecated)]
         Ok(self
             .get_fee_calculator_for_blockhash_with_commitment(blockhash, self.commitment())?
             .value)
     }
 
+    #[deprecated(
+        since = "1.8.0",
+        note = "Please `get_latest_blockhash_with_commitment` and `get_fee_for_message` instead"
+    )]
+    #[allow(deprecated)]
     pub fn get_fee_calculator_for_blockhash_with_commitment(
         &self,
         blockhash: &Hash,
@@ -2335,6 +2358,11 @@ impl RpcClient {
         })
     }
 
+    #[deprecated(
+        since = "1.8.0",
+        note = "Please do not use, will no longer be available in the future"
+    )]
+    #[allow(deprecated)]
     pub fn get_fee_rate_governor(&self) -> RpcResult<FeeRateGovernor> {
         let Response {
             context,
@@ -2348,10 +2376,16 @@ impl RpcClient {
         })
     }
 
+    #[deprecated(
+        since = "1.8.0",
+        note = "Please use `get_new_latest_blockhash` instead"
+    )]
+    #[allow(deprecated)]
     pub fn get_new_blockhash(&self, blockhash: &Hash) -> ClientResult<(Hash, FeeCalculator)> {
         let mut num_retries = 0;
         let start = Instant::now();
         while start.elapsed().as_secs() < 5 {
+            #[allow(deprecated)]
             if let Ok((new_blockhash, fee_calculator)) = self.get_recent_blockhash() {
                 if new_blockhash != *blockhash {
                     return Ok((new_blockhash, fee_calculator));
@@ -2831,8 +2865,7 @@ impl RpcClient {
         config: RpcSendTransactionConfig,
     ) -> ClientResult<Signature> {
         let recent_blockhash = if uses_durable_nonce(transaction).is_some() {
-            self.get_recent_blockhash_with_commitment(CommitmentConfig::processed())?
-                .value
+            self.get_latest_blockhash_with_commitment(CommitmentConfig::processed())?
                 .0
         } else {
             transaction.message.recent_blockhash
@@ -2872,13 +2905,8 @@ impl RpcClient {
             let status = self
                 .get_signature_status_with_commitment(signature, CommitmentConfig::processed())?;
             if status.is_none() {
-                let blockhash_not_found = self
-                    .get_fee_calculator_for_blockhash_with_commitment(
-                        recent_blockhash,
-                        CommitmentConfig::processed(),
-                    )?
-                    .value
-                    .is_none();
+                let blockhash_not_found =
+                    !self.is_blockhash_valid(recent_blockhash, CommitmentConfig::processed())?;
                 if blockhash_not_found && now.elapsed() >= confirm_transaction_initial_timeout {
                     break (signature, status);
                 }
@@ -2936,6 +2964,84 @@ impl RpcClient {
         }
     }
 
+    pub fn get_latest_blockhash(&self) -> ClientResult<Hash> {
+        let (blockhash, _) = self.get_latest_blockhash_with_commitment(self.commitment())?;
+        Ok(blockhash)
+    }
+
+    pub fn get_latest_blockhash_with_commitment(
+        &self,
+        commitment: CommitmentConfig,
+    ) -> ClientResult<(Hash, u64)> {
+        let latest_blockhash = self
+            .send::<Response<RpcBlockhash>>(
+                RpcRequest::GetLatestBlockhash,
+                json!([self.maybe_map_commitment(commitment)?]),
+            )?
+            .value;
+
+        let blockhash = latest_blockhash.blockhash.parse().map_err(|_| {
+            ClientError::new_with_request(
+                RpcError::ParseError("Hash".to_string()).into(),
+                RpcRequest::GetLatestBlockhash,
+            )
+        })?;
+        Ok((blockhash, latest_blockhash.last_valid_block_height))
+    }
+
+    pub fn is_blockhash_valid(
+        &self,
+        blockhash: &Hash,
+        commitment: CommitmentConfig,
+    ) -> ClientResult<bool> {
+        let result = self.send::<Response<bool>>(
+            RpcRequest::IsBlockhashValid,
+            json!([blockhash.to_string(), commitment,]),
+        )?;
+        Ok(result.value)
+    }
+
+    pub fn get_fee_for_message(&self, blockhash: &Hash, message: &Message) -> ClientResult<u64> {
+        let serialized_encoded =
+            serialize_and_encode::<Message>(message, UiTransactionEncoding::Base64)?;
+        let result = self.send::<Response<Option<u64>>>(
+            RpcRequest::GetFeeForMessage,
+            json!([
+                blockhash.to_string(),
+                serialized_encoded,
+                UiTransactionEncoding::Base64,
+                self.commitment(),
+            ]),
+        )?;
+        result
+            .value
+            .ok_or_else(|| ClientErrorKind::Custom("Invalid blockhash".to_string()).into())
+    }
+
+    pub fn get_new_latest_blockhash(&self, blockhash: &Hash) -> ClientResult<Hash> {
+        let mut num_retries = 0;
+        let start = Instant::now();
+        while start.elapsed().as_secs() < 5 {
+            if let Ok(new_blockhash) = self.get_latest_blockhash() {
+                if new_blockhash != *blockhash {
+                    return Ok(new_blockhash);
+                }
+            }
+            debug!("Got same blockhash ({:?}), will retry...", blockhash);
+
+            // Retry ~twice during a slot
+            sleep(Duration::from_millis(DEFAULT_MS_PER_SLOT / 2));
+            num_retries += 1;
+        }
+        Err(RpcError::ForUser(format!(
+            "Unable to get new blockhash after {}ms (retried {} times), stuck at {}",
+            start.elapsed().as_millis(),
+            num_retries,
+            blockhash
+        ))
+        .into())
+    }
+
     pub fn send<T>(&self, request: RpcRequest, params: Value) -> ClientResult<T>
     where
         T: serde::de::DeserializeOwned,
@@ -2951,18 +3057,18 @@ impl RpcClient {
     }
 }
 
-fn serialize_encode_transaction(
-    transaction: &Transaction,
-    encoding: UiTransactionEncoding,
-) -> ClientResult<String> {
-    let serialized = serialize(transaction)
-        .map_err(|e| ClientErrorKind::Custom(format!("transaction serialization failed: {}", e)))?;
+pub fn serialize_and_encode<T>(input: &T, encoding: UiTransactionEncoding) -> ClientResult<String>
+where
+    T: serde::ser::Serialize,
+{
+    let serialized = serialize(input)
+        .map_err(|e| ClientErrorKind::Custom(format!("Serialization failed: {}", e)))?;
     let encoded = match encoding {
         UiTransactionEncoding::Base58 => bs58::encode(serialized).into_string(),
         UiTransactionEncoding::Base64 => base64::encode(serialized),
         _ => {
             return Err(ClientErrorKind::Custom(format!(
-                "unsupported transaction encoding: {}. Supported encodings: base58, base64",
+                "unsupported encoding: {}. Supported encodings: base58, base64",
                 encoding
             ))
             .into())
@@ -3094,12 +3200,14 @@ mod tests {
             .unwrap();
         assert_eq!(balance, 50);
 
+        #[allow(deprecated)]
         let blockhash: String = rpc_client
             .send(RpcRequest::GetRecentBlockhash, Value::Null)
             .unwrap();
         assert_eq!(blockhash, "deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhx");
 
         // Send erroneous parameter
+        #[allow(deprecated)]
         let blockhash: ClientResult<String> =
             rpc_client.send(RpcRequest::GetRecentBlockhash, json!(["parameter"]));
         assert!(blockhash.is_err());
@@ -3134,12 +3242,14 @@ mod tests {
 
         let expected_blockhash: Hash = PUBKEY.parse().unwrap();
 
-        let (blockhash, _fee_calculator) = rpc_client.get_recent_blockhash().expect("blockhash ok");
+        let blockhash = rpc_client.get_latest_blockhash().expect("blockhash ok");
         assert_eq!(blockhash, expected_blockhash);
 
         let rpc_client = RpcClient::new_mock("fails".to_string());
 
-        assert!(rpc_client.get_recent_blockhash().is_err());
+        #[allow(deprecated)]
+        let result = rpc_client.get_recent_blockhash();
+        assert!(result.is_err());
     }
 
     #[test]
@@ -3228,5 +3338,21 @@ mod tests {
         assert!(!prod.by_identity.is_empty());
 
         Ok(())
+    }
+
+    #[test]
+    fn test_get_latest_blockhash() {
+        let rpc_client = RpcClient::new_mock("succeeds".to_string());
+
+        let expected_blockhash: Hash = PUBKEY.parse().unwrap();
+
+        let blockhash = rpc_client.get_latest_blockhash().expect("blockhash ok");
+        assert_eq!(blockhash, expected_blockhash);
+
+        let rpc_client = RpcClient::new_mock("fails".to_string());
+
+        #[allow(deprecated)]
+        let is_err = rpc_client.get_latest_blockhash().is_err();
+        assert!(is_err);
     }
 }

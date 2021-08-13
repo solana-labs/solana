@@ -53,7 +53,7 @@ fn test_rpc_client() {
 
     let original_alice_balance = client.get_balance(&alice.pubkey()).unwrap();
 
-    let (blockhash, _fee_calculator) = client.get_recent_blockhash().unwrap();
+    let blockhash = client.get_latest_blockhash().unwrap();
 
     let tx = system_transaction::transfer(&alice, &bob_pubkey, sol_to_lamports(20.0), blockhash);
     let signature = client.send_transaction(&tx).unwrap();

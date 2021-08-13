@@ -2667,15 +2667,25 @@ impl Bank {
         self.blockhash_queue.read().unwrap().last_hash()
     }
 
+    pub fn is_blockhash_valid(&self, hash: &Hash) -> bool {
+        let blockhash_queue = self.blockhash_queue.read().unwrap();
+        blockhash_queue.check_hash(hash)
+    }
+
     pub fn get_minimum_balance_for_rent_exemption(&self, data_len: usize) -> u64 {
         self.rent_collector.rent.minimum_balance(data_len)
     }
 
+    #[deprecated(
+        since = "1.8.0",
+        note = "Please use `last_blockhash` and `get_fee_for_message` instead"
+    )]
     pub fn last_blockhash_with_fee_calculator(&self) -> (Hash, FeeCalculator) {
         let blockhash_queue = self.blockhash_queue.read().unwrap();
         let last_hash = blockhash_queue.last_hash();
         (
             last_hash,
+            #[allow(deprecated)]
             blockhash_queue
                 .get_fee_calculator(&last_hash)
                 .unwrap()
@@ -2683,13 +2693,24 @@ impl Bank {
         )
     }
 
+    #[deprecated(since = "1.8.0", note = "Please use `get_fee_for_message` instead")]
     pub fn get_fee_calculator(&self, hash: &Hash) -> Option<FeeCalculator> {
         let blockhash_queue = self.blockhash_queue.read().unwrap();
+        #[allow(deprecated)]
         blockhash_queue.get_fee_calculator(hash).cloned()
     }
 
+    #[deprecated(since = "1.8.0", note = "Please use `get_fee_for_message` instead")]
     pub fn get_fee_rate_governor(&self) -> &FeeRateGovernor {
         &self.fee_rate_governor
+    }
+
+    pub fn get_fee_for_message(&self, hash: &Hash, message: &Message) -> Option<u64> {
+        let blockhash_queue = self.blockhash_queue.read().unwrap();
+        #[allow(deprecated)]
+        let fee_calculator = blockhash_queue.get_fee_calculator(hash)?;
+        #[allow(deprecated)]
+        Some(fee_calculator.calculate_fee(message))
     }
 
     #[deprecated(
@@ -2714,15 +2735,33 @@ impl Bank {
             .map(|age| self.block_height + blockhash_queue.len() as u64 - age)
     }
 
-    pub fn confirmed_last_blockhash(&self) -> (Hash, FeeCalculator) {
+    #[deprecated(
+        since = "1.8.0",
+        note = "Please use `confirmed_last_blockhash` and `get_fee_for_message` instead"
+    )]
+    pub fn confirmed_last_blockhash_with_fee_calculator(&self) -> (Hash, FeeCalculator) {
         const NUM_BLOCKHASH_CONFIRMATIONS: usize = 3;
 
         let parents = self.parents();
         if parents.is_empty() {
+            #[allow(deprecated)]
             self.last_blockhash_with_fee_calculator()
         } else {
             let index = NUM_BLOCKHASH_CONFIRMATIONS.min(parents.len() - 1);
+            #[allow(deprecated)]
             parents[index].last_blockhash_with_fee_calculator()
+        }
+    }
+
+    pub fn confirmed_last_blockhash(&self) -> Hash {
+        const NUM_BLOCKHASH_CONFIRMATIONS: usize = 3;
+
+        let parents = self.parents();
+        if parents.is_empty() {
+            self.last_blockhash()
+        } else {
+            let index = NUM_BLOCKHASH_CONFIRMATIONS.min(parents.len() - 1);
+            parents[index].last_blockhash()
         }
     }
 
@@ -3400,6 +3439,7 @@ impl Bank {
                             let blockhash = blockhash_queue.last_hash();
                             (
                                 blockhash,
+                                #[allow(deprecated)]
                                 blockhash_queue
                                     .get_fee_calculator(&blockhash)
                                     .cloned()
@@ -3582,6 +3622,7 @@ impl Bank {
                     .map(|maybe_fee_calculator| (maybe_fee_calculator, true))
                     .unwrap_or_else(|| {
                         (
+                            #[allow(deprecated)]
                             hash_queue
                                 .get_fee_calculator(&tx.message().recent_blockhash)
                                 .cloned(),
@@ -3590,6 +3631,7 @@ impl Bank {
                     });
                 let fee_calculator = fee_calculator.ok_or(TransactionError::BlockhashNotFound)?;
 
+                #[allow(deprecated)]
                 let fee = fee_calculator.calculate_fee(tx.message());
 
                 let message = tx.message();
@@ -3658,6 +3700,7 @@ impl Bank {
         }
 
         let mut write_time = Measure::start("write_time");
+        #[allow(deprecated)]
         self.rc.accounts.store_cached(
             self.slot(),
             sanitized_txs.as_transactions_iter(),
@@ -8304,11 +8347,13 @@ pub(crate) mod tests {
 
         let mut bank = Bank::new_for_tests(&genesis_config);
         goto_end_of_slot(&mut bank);
+        #[allow(deprecated)]
         let (cheap_blockhash, cheap_fee_calculator) = bank.last_blockhash_with_fee_calculator();
         assert_eq!(cheap_fee_calculator.lamports_per_signature, 0);
 
         let mut bank = Bank::new_from_parent(&Arc::new(bank), &leader, 1);
         goto_end_of_slot(&mut bank);
+        #[allow(deprecated)]
         let (expensive_blockhash, expensive_fee_calculator) =
             bank.last_blockhash_with_fee_calculator();
         assert!(
