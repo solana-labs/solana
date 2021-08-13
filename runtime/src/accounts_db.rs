@@ -4585,7 +4585,11 @@ impl AccountsDb {
             .accounts_index
             .account_maps
             .iter()
-            .map(|btree| btree.read().unwrap().keys().cloned().collect::<Vec<_>>())
+            .map(|btree| {
+                let mut keys = btree.read().unwrap().keys().cloned().collect::<Vec<_>>();
+                keys.sort_unstable(); // hashmap is not ordered
+                keys
+            })
             .flatten()
             .collect();
         collect.stop();
