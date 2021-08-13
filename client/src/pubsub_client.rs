@@ -17,6 +17,7 @@ use {
     solana_sdk::signature::Signature,
     std::{
         marker::PhantomData,
+        net::TcpStream,
         sync::{
             atomic::{AtomicBool, Ordering},
             mpsc::{channel, Receiver},
@@ -25,7 +26,7 @@ use {
         thread::JoinHandle,
     },
     thiserror::Error,
-    tungstenite::{client::AutoStream, connect, Message, WebSocket},
+    tungstenite::{connect, stream::MaybeTlsStream, Message, WebSocket},
     url::{ParseError, Url},
 };
 
@@ -50,7 +51,7 @@ where
 {
     message_type: PhantomData<T>,
     operation: &'static str,
-    socket: Arc<RwLock<WebSocket<AutoStream>>>,
+    socket: Arc<RwLock<WebSocket<MaybeTlsStream<TcpStream>>>>,
     subscription_id: u64,
     t_cleanup: Option<JoinHandle<()>>,
     exit: Arc<AtomicBool>,
@@ -76,7 +77,7 @@ where
     T: DeserializeOwned,
 {
     fn send_subscribe(
-        writable_socket: &Arc<RwLock<WebSocket<AutoStream>>>,
+        writable_socket: &Arc<RwLock<WebSocket<MaybeTlsStream<TcpStream>>>>,
         body: String,
     ) -> Result<u64, PubsubClientError> {
         writable_socket
@@ -118,7 +119,7 @@ where
     }
 
     fn read_message(
-        writable_socket: &Arc<RwLock<WebSocket<AutoStream>>>,
+        writable_socket: &Arc<RwLock<WebSocket<MaybeTlsStream<TcpStream>>>>,
     ) -> Result<T, PubsubClientError> {
         let message = writable_socket.write().unwrap().read_message()?;
         let message_text = &message.into_text().unwrap();
