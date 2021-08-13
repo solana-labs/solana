@@ -1,7 +1,7 @@
 use crate::accountsdb_repl_server::{self, ReplicaAccountsServer};
 
 pub(crate) struct ReplicaAccountsServerImpl {}
-use std::{sync::{Arc, RwLock}, thread};
+use std::thread;
 
 impl ReplicaAccountsServer for ReplicaAccountsServerImpl {
     fn get_slot_accounts(
@@ -11,7 +11,7 @@ impl ReplicaAccountsServer for ReplicaAccountsServerImpl {
         Err(tonic::Status::unimplemented("Not implemented yet"))
     }
 
-    fn join(&self) -> thread::Result<()> {
+    fn join(&mut self) -> thread::Result<()> {
         Ok(())
     }
 }
@@ -20,6 +20,4 @@ impl ReplicaAccountsServerImpl {
     pub fn new() -> Self {
         Self {}
     }
-
-
 }

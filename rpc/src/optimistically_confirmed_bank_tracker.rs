@@ -90,7 +90,7 @@ impl OptimisticallyConfirmedBankTracker {
                 }
             })
             .unwrap();
-        Self {thread_hdl}
+        Self { thread_hdl }
     }
 
     fn recv_notification(
@@ -123,7 +123,7 @@ impl OptimisticallyConfirmedBankTracker {
         bank: &Arc<Bank>,
         last_notified_confirmed_slot: &mut Slot,
         pending_optimistically_confirmed_banks: &mut HashSet<Slot>,
-        confirmed_bank_subscribers: &Arc<RwLock<Vec<Sender<Slot>>>>, 
+        confirmed_bank_subscribers: &Arc<RwLock<Vec<Sender<Slot>>>>,
     ) {
         if bank.is_frozen() {
             if bank.slot() > *last_notified_confirmed_slot {
@@ -136,9 +136,13 @@ impl OptimisticallyConfirmedBankTracker {
 
                 for sender in confirmed_bank_subscribers.read().unwrap().iter() {
                     match sender.send(bank.slot()) {
-                        Ok(_) => {},
+                        Ok(_) => {}
                         Err(err) => {
-                            info!("Failed to send slot {:} update, error: {:?}", bank.slot(), err);
+                            info!(
+                                "Failed to send slot {:} update, error: {:?}",
+                                bank.slot(),
+                                err
+                            );
                         }
                     }
                 }
@@ -156,7 +160,7 @@ impl OptimisticallyConfirmedBankTracker {
         slot_threshold: Slot,
         mut last_notified_confirmed_slot: &mut Slot,
         mut pending_optimistically_confirmed_banks: &mut HashSet<Slot>,
-        confirmed_bank_subscribers: &Arc<RwLock<Vec<Sender<Slot>>>>, 
+        confirmed_bank_subscribers: &Arc<RwLock<Vec<Sender<Slot>>>>,
     ) {
         for confirmed_bank in bank.clone().parents_inclusive().iter().rev() {
             if confirmed_bank.slot() > slot_threshold {
@@ -184,7 +188,7 @@ impl OptimisticallyConfirmedBankTracker {
         mut pending_optimistically_confirmed_banks: &mut HashSet<Slot>,
         mut last_notified_confirmed_slot: &mut Slot,
         highest_confirmed_slot: &mut Slot,
-        confirmed_bank_subscribers: &Arc<RwLock<Vec<Sender<Slot>>>>, 
+        confirmed_bank_subscribers: &Arc<RwLock<Vec<Sender<Slot>>>>,
     ) {
         debug!("received bank notification: {:?}", notification);
         match notification {

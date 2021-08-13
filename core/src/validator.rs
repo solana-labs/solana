@@ -45,8 +45,7 @@ use {
         poh_service::{self, PohService},
     },
     solana_replica_lib::{
-        accountsdb_repl_server_factory,
-        accountsdb_repl_server::AccountsDbReplServer,
+        accountsdb_repl_server::AccountsDbReplServer, accountsdb_repl_server_factory,
     },
     solana_rpc::{
         max_slots::MaxSlots,
@@ -824,7 +823,7 @@ impl Validator {
             ip_echo_server,
             validator_exit: config.validator_exit.clone(),
             cluster_info,
-            accountsdb_repl_service
+            accountsdb_repl_service,
         }
     }
 
@@ -928,6 +927,12 @@ impl Validator {
             .expect("completed_data_sets_service");
         if let Some(ip_echo_server) = self.ip_echo_server {
             ip_echo_server.shutdown_background();
+        }
+
+        if let Some(accountsdb_repl_service) = self.accountsdb_repl_service {
+            accountsdb_repl_service
+                .join()
+                .expect("accountsdb_repl_service");
         }
     }
 }

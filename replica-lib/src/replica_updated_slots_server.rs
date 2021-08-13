@@ -3,9 +3,13 @@ use tonic;
 // tonic::include_proto!("accountsdb_repl");
 use {
     crate::accountsdb_repl_server::{self, ReplicaUpdatedSlotsServer},
-    crossbeam_channel::{Receiver},
+    crossbeam_channel::Receiver,
     solana_sdk::{clock::Slot, commitment_config::CommitmentLevel},
-    std::{collections::HashMap, sync::{Arc, RwLock}, thread::{self, Builder, JoinHandle}},
+    std::{
+        collections::HashMap,
+        sync::{Arc, RwLock},
+        thread::{self, Builder, JoinHandle},
+    },
 };
 
 /// The structure modelling the slots eligible for replication and
@@ -17,7 +21,7 @@ struct ReplicaEligibleSlotSet {
 
 pub(crate) struct ReplicaUpdatedSlotsServerImpl {
     eligible_slot_set: ReplicaEligibleSlotSet,
-    confirmed_bank_receiver_svc: JoinHandle<()>,
+    confirmed_bank_receiver_svc: Option<JoinHandle<()>>,
 }
 
 impl ReplicaUpdatedSlotsServer for ReplicaUpdatedSlotsServerImpl {
@@ -35,8 +39,11 @@ impl ReplicaUpdatedSlotsServer for ReplicaUpdatedSlotsServerImpl {
         Ok(accountsdb_repl_server::ReplicaUpdatedSlotsResponse { updated_slots })
     }
 
-    fn join(&self) -> thread::Result<()> {
-        self.confirmed_bank_receiver_svc.join()
+    fn join(&mut self) -> thread::Result<()> {
+        self.confirmed_bank_receiver_svc
+            .take()
+            .map(JoinHandle::join)
+            .unwrap()
     }
 }
 
@@ -45,13 +52,17 @@ impl ReplicaUpdatedSlotsServerImpl {
         let eligible_slot_set = ReplicaEligibleSlotSet::default();
         Self {
             eligible_slot_set: eligible_slot_set.clone(),
-            confirmed_bank_receiver_svc: Self::start_confirmed_bank_receiver(confirmed_bank_receiver, eligible_slot_set),
+            confirmed_bank_receiver_svc: Some(Self::start_confirmed_bank_receiver(
+                confirmed_bank_receiver,
+                eligible_slot_set,
+            )),
         }
     }
 
-    fn start_confirmed_bank_receiver(confirmed_bank_receiver: Receiver<Slot>,
-        eligible_slot_set: ReplicaEligibleSlotSet) -> JoinHandle<()> {
-
+    fn start_confirmed_bank_receiver(
+        confirmed_bank_receiver: Receiver<Slot>,
+        eligible_slot_set: ReplicaEligibleSlotSet,
+    ) -> JoinHandle<()> {
         Builder::new()
             .name("confirmed_bank_receiver".to_string())
             .spawn(move || {
@@ -62,5 +73,4 @@ impl ReplicaUpdatedSlotsServerImpl {
             })
             .unwrap()
     }
-
 }
