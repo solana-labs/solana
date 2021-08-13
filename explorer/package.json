@@ -5,7 +5,7 @@
   "dependencies": {
     "@bonfida/bot": "^0.5.3",
     "@metamask/jazzicon": "^2.0.0",
-    "@project-serum/serum": "^0.13.55",
+    "@project-serum/serum": "^0.13.57",
     "@react-hook/debounce": "^4.0.0",
     "@sentry/react": "^6.11.0",
     "@solana/spl-token-registry": "^0.2.214",
@@ -18,7 +18,7 @@
     "@types/chai": "^4.2.21",
     "@types/chart.js": "^2.9.34",
     "@types/classnames": "^2.3.1",
-    "@types/jest": "^27.0.0",
+    "@types/jest": "^27.0.1",
     "@types/node": "^16.6.0",
     "@types/react": "^17.0.17",
     "@types/react-dom": "^17.0.9",
