@@ -257,7 +257,12 @@ fn run_insert<F>(
     metrics: &mut BlockstoreInsertionMetrics,
     ws_metrics: &mut WindowServiceMetrics,
     completed_data_sets_sender: &CompletedDataSetsSender,
+<<<<<<< HEAD
     outstanding_requests: &RwLock<OutstandingRepairs>,
+=======
+    retransmit_sender: &Sender<Vec<Shred>>,
+    outstanding_requests: &RwLock<OutstandingShredRepairs>,
+>>>>>>> 7a8807b8b (retransmits shreds recovered from erasure codes)
 ) -> Result<()>
 where
     F: Fn(Shred),
@@ -284,7 +289,8 @@ where
         shreds,
         repairs,
         Some(leader_schedule_cache),
-        false,
+        false, // is_trusted
+        Some(retransmit_sender),
         &handle_duplicate,
         metrics,
     )?;
@@ -464,6 +470,7 @@ impl WindowService {
             insert_receiver,
             duplicate_sender,
             completed_data_sets_sender,
+            retransmit_sender.clone(),
             outstanding_requests,
         );
 
@@ -525,7 +532,12 @@ impl WindowService {
         insert_receiver: CrossbeamReceiver<(Vec<Shred>, Vec<Option<RepairMeta>>)>,
         check_duplicate_sender: CrossbeamSender<Shred>,
         completed_data_sets_sender: CompletedDataSetsSender,
+<<<<<<< HEAD
         outstanding_requests: Arc<RwLock<OutstandingRepairs>>,
+=======
+        retransmit_sender: Sender<Vec<Shred>>,
+        outstanding_requests: Arc<RwLock<OutstandingShredRepairs>>,
+>>>>>>> 7a8807b8b (retransmits shreds recovered from erasure codes)
     ) -> JoinHandle<()> {
         let mut handle_timeout = || {};
         let handle_error = || {
@@ -554,6 +566,7 @@ impl WindowService {
                         &mut metrics,
                         &mut ws_metrics,
                         &completed_data_sets_sender,
+                        &retransmit_sender,
                         &outstanding_requests,
                     ) {
                         if Self::should_exit_on_error(e, &mut handle_timeout, &handle_error) {

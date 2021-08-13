@@ -548,6 +548,8 @@ impl RetransmitStage {
         duplicate_slots_sender: Sender<Slot>,
     ) -> Self {
         let (retransmit_sender, retransmit_receiver) = channel();
+        // https://github.com/rust-lang/rust/issues/39364#issuecomment-634545136
+        let _retransmit_sender = retransmit_sender.clone();
 
         let retransmit_receiver = Arc::new(Mutex::new(retransmit_receiver));
         let t_retransmit = retransmitter(
@@ -702,7 +704,12 @@ mod tests {
         let cluster_info = Arc::new(cluster_info);
 
         let (retransmit_sender, retransmit_receiver) = channel();
+<<<<<<< HEAD
         let t_retransmit = retransmitter(
+=======
+        let _retransmit_sender = retransmit_sender.clone();
+        let _t_retransmit = retransmitter(
+>>>>>>> 7a8807b8b (retransmits shreds recovered from erasure codes)
             retransmit_socket,
             bank_forks,
             leader_schedule_cache,
