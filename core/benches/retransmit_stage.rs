@@ -107,7 +107,7 @@ fn bench_retransmitter(bencher: &mut Bencher) {
     let retransmitter_handles = retransmitter(
         Arc::new(sockets),
         bank_forks,
-        &leader_schedule_cache,
+        leader_schedule_cache,
         cluster_info,
         packet_receiver,
         Arc::default(), // solana_rpc::max_slots::MaxSlots
