@@ -14,10 +14,7 @@ use solana_sdk::{
     pubkey::{Pubkey, PUBKEY_BYTES},
 };
 use std::{
-    collections::{
-        btree_map::{self, BTreeMap, Entry},
-        HashSet,
-    },
+    collections::{btree_map::BTreeMap, hash_map::Entry, HashMap, HashSet},
     fmt::Debug,
     ops::{
         Bound,
@@ -32,14 +29,17 @@ use std::{
 use thiserror::Error;
 
 pub const ITER_BATCH_SIZE: usize = 1000;
-pub const BINS_DEFAULT: usize = 16;
+// higher # bins means fewer items per bin
+// fewer items per bin means fewer items to sort for a scan
+// higher # bins means more locks, resulting in less lock contention
+pub const BINS_DEFAULT: usize = 32768;
 pub const BINS_FOR_TESTING: usize = BINS_DEFAULT;
 pub const BINS_FOR_BENCHMARKS: usize = BINS_DEFAULT;
 pub type ScanResult<T> = Result<T, ScanError>;
 pub type SlotList<T> = Vec<(Slot, T)>;
 pub type SlotSlice<'s, T> = &'s [(Slot, T)];
 pub type RefCount = u64;
-pub type AccountMap<K, V> = BTreeMap<K, V>;
+pub type AccountMap<K, V> = HashMap<K, V>;
 
 type AccountMapEntry<T> = Arc<AccountMapEntryInner<T>>;
 
@@ -618,6 +618,23 @@ pub struct AccountsIndexIterator<'a, T> {
 }
 
 impl<'a, T> AccountsIndexIterator<'a, T> {
+    fn range<'b, R>(
+        map: &'b AccountMapsReadLock<'b, T>,
+        range: R,
+    ) -> Vec<(&'b Pubkey, &'b AccountMapEntry<T>)>
+    where
+        R: RangeBounds<Pubkey>,
+    {
+        let mut result = Vec::with_capacity(map.len());
+        for (k, v) in map.iter() {
+            if range.contains(k) {
+                result.push((k, v));
+            }
+        }
+        result.sort_unstable_by(|a, b| a.0.cmp(b.0));
+        result
+    }
+
     fn clone_bound(bound: Bound<&Pubkey>) -> Bound<Pubkey> {
         match bound {
             Unbounded => Unbounded,
@@ -691,7 +708,7 @@ impl<'a, T: 'static + Clone> Iterator for AccountsIndexIterator<'a, T> {
         let mut chunk: Vec<(Pubkey, AccountMapEntry<T>)> = Vec::with_capacity(ITER_BATCH_SIZE);
         'outer: for i in self.account_maps.iter().skip(start_bin).take(bin_range) {
             for (pubkey, account_map_entry) in
-                i.read().unwrap().range((self.start_bound, self.end_bound))
+                Self::range(&i.read().unwrap(), (self.start_bound, self.end_bound))
             {
                 if chunk.len() >= ITER_BATCH_SIZE {
                     break 'outer;
@@ -1172,7 +1189,7 @@ impl<T: IsCached> AccountsIndex<T> {
         if !dead_keys.is_empty() {
             for key in dead_keys.iter() {
                 let mut w_index = self.get_account_maps_write_lock(key);
-                if let btree_map::Entry::Occupied(index_entry) = w_index.entry(**key) {
+                if let Entry::Occupied(index_entry) = w_index.entry(**key) {
                     if index_entry.get().slot_list.read().unwrap().is_empty() {
                         index_entry.remove();
 
