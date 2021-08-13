@@ -1,10 +1,12 @@
 use {
     crate::{
+        fee_calculator::FeeCalculator,
         hash::Hash,
         instruction::{CompiledInstruction, Instruction},
         message::{MappedAddresses, MappedMessage, Message, MessageHeader},
         pubkey::Pubkey,
         sanitize::{Sanitize, SanitizeError},
+        secp256k1_program,
         serialize_utils::{append_slice, append_u16, append_u8},
     },
     std::convert::TryFrom,
@@ -255,5 +257,21 @@ impl SanitizedMessage {
             data: ix.data.clone(),
             accounts,
         })
+    }
+
+    /// Calculate the total fees for a transaction given a fee calculator
+    pub fn calculate_fee(&self, fee_calculator: &FeeCalculator) -> u64 {
+        let mut num_secp256k1_signatures: u64 = 0;
+        for (program_id, instruction) in self.program_instructions_iter() {
+            if secp256k1_program::check_id(program_id) && !instruction.data.is_empty() {
+                num_secp256k1_signatures =
+                    num_secp256k1_signatures.saturating_add(instruction.data[0] as u64);
+            }
+        }
+
+        fee_calculator.lamports_per_signature.saturating_mul(
+            u64::from(self.header().num_required_signatures)
+                .saturating_add(num_secp256k1_signatures),
+        )
     }
 }

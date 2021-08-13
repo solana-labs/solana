@@ -187,7 +187,7 @@ impl ExecuteTimings {
 }
 
 type BankStatusCache = StatusCache<Result<()>>;
-#[frozen_abi(digest = "AE8bF87P5R7nAe5y8ggynq66opVuVtUoD9J1xaaC9mQA")]
+#[frozen_abi(digest = "GT81Hdwrh73i55ScQvFqmzeHfUL42yxuavZods8VyzGc")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 type TransactionAccountRefCells = Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>;
 type TransactionLoaderRefCells = Vec<Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>>;
@@ -2707,12 +2707,11 @@ impl Bank {
         &self.fee_rate_governor
     }
 
-    pub fn get_fee_for_message(&self, hash: &Hash, message: &Message) -> Option<u64> {
+    pub fn get_fee_for_message(&self, hash: &Hash, message: &SanitizedMessage) -> Option<u64> {
         let blockhash_queue = self.blockhash_queue.read().unwrap();
         #[allow(deprecated)]
         let fee_calculator = blockhash_queue.get_fee_calculator(hash)?;
-        #[allow(deprecated)]
-        Some(fee_calculator.calculate_fee(message))
+        Some(message.calculate_fee(&fee_calculator))
     }
 
     #[deprecated(
@@ -3647,7 +3646,8 @@ impl Bank {
                         )
                     });
 
-                let fee = tx.calculate_fee(&fee_calculator);
+                let fee_calculator = fee_calculator.ok_or(TransactionError::BlockhashNotFound)?;
+                let fee = tx.message().calculate_fee(&fee_calculator);
 
                 match *res {
                     Err(TransactionError::InstructionError(_, _)) => {

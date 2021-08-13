@@ -110,7 +110,7 @@ impl TransactionStatusService {
                                 bank.get_fee_calculator(transaction.message().recent_blockhash())
                             })
                             .expect("FeeCalculator must exist");
-                        let fee = transaction.calculate_fee(&fee_calculator);
+                        let fee = transaction.message().calculate_fee(&fee_calculator);
                         let tx_account_locks = transaction.get_account_locks();
 
                         let inner_instructions = inner_instructions.map(|inner_instructions| {

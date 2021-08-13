@@ -60,7 +60,7 @@ use {
         epoch_schedule::EpochSchedule,
         exit::Exit,
         hash::Hash,
-        message::Message,
+        message::{Message, SanitizedMessage},
         pubkey::Pubkey,
         signature::{Keypair, Signature, Signer},
         stake::state::StakeState,
@@ -83,6 +83,7 @@ use {
         any::type_name,
         cmp::{max, min},
         collections::{HashMap, HashSet},
+        convert::TryFrom,
         net::SocketAddr,
         str::FromStr,
         sync::{
@@ -1933,7 +1934,7 @@ impl JsonRpcRequestProcessor {
     fn get_fee_for_message(
         &self,
         blockhash: &Hash,
-        message: &Message,
+        message: &SanitizedMessage,
         commitment: Option<CommitmentConfig>,
     ) -> Result<RpcResponse<Option<u64>>> {
         let bank = self.bank(commitment);
@@ -3372,7 +3373,8 @@ pub mod rpc_full {
             debug!("simulate_transaction rpc request received");
             let config = config.unwrap_or_default();
             let encoding = config.encoding.unwrap_or(UiTransactionEncoding::Base58);
-            let (_, mut unsanitized_tx) = decode_and_deserialize::<VersionedTransaction>(data, encoding)?;
+            let (_, mut unsanitized_tx) =
+                decode_and_deserialize::<VersionedTransaction>(data, encoding)?;
 
             let bank = &*meta.bank(config.commitment);
             if config.replace_recent_blockhash {
@@ -3604,13 +3606,11 @@ pub mod rpc_full {
             let blockhash = Hash::from_str(&blockhash)
                 .map_err(|e| Error::invalid_params(format!("{:?}", e)))?;
             let (_, message) = decode_and_deserialize::<Message>(data, encoding)?;
-            if let Err(err) = message.sanitize() {
-                Err(Error::invalid_params(format!(
-                    "invalid transaction message: {}", err
-                )))
-            } else {
-                meta.get_fee_for_message(&blockhash, &message, commitment)
-            }
+            SanitizedMessage::try_from(message)
+                .map_err(|err| {
+                    Error::invalid_params(format!("invalid transaction message: {}", err))
+                })
+                .and_then(|message| meta.get_fee_for_message(&blockhash, &message, commitment))
         }
     }
 }
@@ -3996,7 +3996,7 @@ fn decode_and_deserialize<T>(
     encoding: UiTransactionEncoding,
 ) -> Result<(Vec<u8>, T)>
 where
-    T: serde::de::DeserializeOwned + Sanitize,
+    T: serde::de::DeserializeOwned,
 {
     let wire_output = match encoding {
         UiTransactionEncoding::Base58 => {

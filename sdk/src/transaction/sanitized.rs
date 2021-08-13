@@ -2,7 +2,6 @@
 
 use {
     crate::{
-        fee_calculator::FeeCalculator,
         hash::Hash,
         message::{v0, MappedAddresses, MappedMessage, SanitizedMessage, VersionedMessage},
         nonce::NONCED_TX_MARKER_IX_INDEX,
@@ -223,21 +222,5 @@ impl SanitizedTransaction {
             }
         }
         Ok(())
-    }
-
-    /// Calculate the total fees for a transaction given a fee calculator
-    pub fn calculate_fee(&self, fee_calculator: &FeeCalculator) -> u64 {
-        let mut num_secp256k1_signatures: u64 = 0;
-        for (program_id, instruction) in self.message.program_instructions_iter() {
-            if secp256k1_program::check_id(program_id) && !instruction.data.is_empty() {
-                num_secp256k1_signatures =
-                    num_secp256k1_signatures.saturating_add(instruction.data[0] as u64);
-            }
-        }
-
-        fee_calculator.lamports_per_signature.saturating_mul(
-            u64::from(self.message.header().num_required_signatures)
-                .saturating_add(num_secp256k1_signatures),
-        )
     }
 }

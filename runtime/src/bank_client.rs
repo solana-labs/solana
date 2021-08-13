@@ -7,7 +7,7 @@ use solana_sdk::{
     fee_calculator::{FeeCalculator, FeeRateGovernor},
     hash::Hash,
     instruction::Instruction,
-    message::Message,
+    message::{Message, SanitizedMessage},
     pubkey::Pubkey,
     signature::{Keypair, Signature, Signer},
     signers::Signers,
@@ -16,6 +16,7 @@ use solana_sdk::{
     transport::{Result, TransportError},
 };
 use std::{
+    convert::TryFrom,
     io,
     sync::{
         mpsc::{channel, Receiver, Sender},
@@ -303,8 +304,9 @@ impl SyncClient for BankClient {
     }
 
     fn get_fee_for_message(&self, blockhash: &Hash, message: &Message) -> Result<u64> {
-        self.bank
-            .get_fee_for_message(blockhash, message)
+        SanitizedMessage::try_from(message.clone())
+            .ok()
+            .and_then(|message| self.bank.get_fee_for_message(blockhash, &message))
             .ok_or_else(|| {
                 TransportError::IoError(io::Error::new(
                     io::ErrorKind::Other,
