@@ -13,7 +13,7 @@ use {
             FullSnapshotArchiveInfo, IncrementalSnapshotArchiveInfo, SnapshotArchiveInfoGetter,
         },
         snapshot_package::{
-            AccountsPackage, AccountsPackagePre, AccountsPackageSendError, AccountsPackageSender,
+            AccountsPackage, AccountsPackageSendError, AccountsPackageSender, SnapshotPackage,
         },
         sorted_storages::SortedStorages,
     },
@@ -239,9 +239,9 @@ pub fn remove_tmp_snapshot_archives(snapshot_archives_dir: &Path) {
     }
 }
 
-/// Make a full snapshot archive out of the AccountsPackage
+/// Make a full snapshot archive out of the snapshot package
 pub fn archive_snapshot_package(
-    snapshot_package: &AccountsPackage,
+    snapshot_package: &SnapshotPackage,
     maximum_snapshots_to_retain: usize,
 ) -> Result<()> {
     info!(
@@ -1549,7 +1549,7 @@ pub fn snapshot_bank(
     let highest_bank_snapshot_info = get_highest_bank_snapshot_info(snapshots_dir)
         .expect("no snapshots found in config snapshots_dir");
 
-    let package = AccountsPackagePre::new_full_snapshot_package(
+    let accounts_package = AccountsPackage::new_for_full_snapshot(
         root_bank,
         &highest_bank_snapshot_info,
         snapshots_dir,
@@ -1561,7 +1561,7 @@ pub fn snapshot_bank(
         hash_for_testing,
     )?;
 
-    accounts_package_sender.send(package)?;
+    accounts_package_sender.send(accounts_package)?;
 
     Ok(())
 }
@@ -1666,7 +1666,7 @@ pub fn package_process_and_archive_full_snapshot(
     thread_pool: Option<&ThreadPool>,
     maximum_snapshots_to_retain: usize,
 ) -> Result<FullSnapshotArchiveInfo> {
-    let package = AccountsPackagePre::new_full_snapshot_package(
+    let accounts_package = AccountsPackage::new_for_full_snapshot(
         bank,
         bank_snapshot_info,
         snapshots_dir,
@@ -1678,14 +1678,16 @@ pub fn package_process_and_archive_full_snapshot(
         None,
     )?;
 
-    let package = process_and_archive_snapshot_package_pre(
-        package,
+    let snapshot_package = process_and_archive_accounts_package(
+        accounts_package,
         thread_pool,
         None,
         maximum_snapshots_to_retain,
     )?;
 
-    Ok(FullSnapshotArchiveInfo::new(package.snapshot_archive_info))
+    Ok(FullSnapshotArchiveInfo::new(
+        snapshot_package.snapshot_archive_info,
+    ))
 }
 
 /// Helper function to hold shared code to package, process, and archive incremental snapshots
@@ -1702,7 +1704,7 @@ pub fn package_process_and_archive_incremental_snapshot(
     thread_pool: Option<&ThreadPool>,
     maximum_snapshots_to_retain: usize,
 ) -> Result<IncrementalSnapshotArchiveInfo> {
-    let package = AccountsPackagePre::new_incremental_snapshot_package(
+    let accounts_package = AccountsPackage::new_for_incremental_snapshot(
         bank,
         incremental_snapshot_base_slot,
         bank_snapshot_info,
@@ -1715,8 +1717,8 @@ pub fn package_process_and_archive_incremental_snapshot(
         None,
     )?;
 
-    let package = process_and_archive_snapshot_package_pre(
-        package,
+    let snapshot_package = process_and_archive_accounts_package(
+        accounts_package,
         thread_pool,
         Some(incremental_snapshot_base_slot),
         maximum_snapshots_to_retain,
@@ -1724,30 +1726,33 @@ pub fn package_process_and_archive_incremental_snapshot(
 
     Ok(IncrementalSnapshotArchiveInfo::new(
         incremental_snapshot_base_slot,
-        package.snapshot_archive_info,
+        snapshot_package.snapshot_archive_info,
     ))
 }
 
-/// Helper function to hold shared code to process and archive snapshot packages
-fn process_and_archive_snapshot_package_pre(
-    package_pre: AccountsPackagePre,
+/// Helper function to hold shared code to process and archive accounts packages
+fn process_and_archive_accounts_package(
+    accounts_package: AccountsPackage,
     thread_pool: Option<&ThreadPool>,
     incremental_snapshot_base_slot: Option<Slot>,
     maximum_snapshots_to_retain: usize,
-) -> Result<AccountsPackage> {
-    let package =
-        process_accounts_package_pre(package_pre, thread_pool, incremental_snapshot_base_slot);
+) -> Result<SnapshotPackage> {
+    let snapshot_package = process_accounts_package(
+        accounts_package,
+        thread_pool,
+        incremental_snapshot_base_slot,
+    );
 
-    archive_snapshot_package(&package, maximum_snapshots_to_retain)?;
+    archive_snapshot_package(&snapshot_package, maximum_snapshots_to_retain)?;
 
-    Ok(package)
+    Ok(snapshot_package)
 }
 
-pub fn process_accounts_package_pre(
-    accounts_package: AccountsPackagePre,
+pub fn process_accounts_package(
+    accounts_package: AccountsPackage,
     thread_pool: Option<&ThreadPool>,
     incremental_snapshot_base_slot: Option<Slot>,
-) -> AccountsPackage {
+) -> SnapshotPackage {
     let mut time = Measure::start("hash");
 
     let hash = accounts_package.hash; // temporarily remaining here
@@ -1789,7 +1794,7 @@ pub fn process_accounts_package_pre(
         ),
     };
 
-    AccountsPackage::new(
+    SnapshotPackage::new(
         accounts_package.slot,
         accounts_package.block_height,
         accounts_package.slot_deltas,

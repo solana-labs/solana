@@ -1,6 +1,6 @@
 use solana_gossip::cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES};
 use solana_runtime::{
-    snapshot_archive_info::SnapshotArchiveInfoGetter, snapshot_package::AccountsPackage,
+    snapshot_archive_info::SnapshotArchiveInfoGetter, snapshot_package::SnapshotPackage,
     snapshot_utils,
 };
 use solana_sdk::{clock::Slot, hash::Hash};
@@ -13,7 +13,7 @@ use std::{
     time::Duration,
 };
 
-pub type PendingSnapshotPackage = Arc<Mutex<Option<AccountsPackage>>>;
+pub type PendingSnapshotPackage = Arc<Mutex<Option<SnapshotPackage>>>;
 
 pub struct SnapshotPackagerService {
     t_snapshot_packager: JoinHandle<()>,
@@ -81,7 +81,7 @@ mod tests {
     use solana_runtime::{
         accounts_db::AccountStorageEntry,
         bank::BankSlotDelta,
-        snapshot_package::AccountsPackage,
+        snapshot_package::SnapshotPackage,
         snapshot_utils::{self, ArchiveFormat, SnapshotVersion, SNAPSHOT_STATUS_CACHE_FILE_NAME},
     };
     use solana_sdk::hash::Hash;
@@ -165,7 +165,7 @@ mod tests {
             &Hash::default(),
             ArchiveFormat::TarBzip2,
         );
-        let snapshot_package = AccountsPackage::new(
+        let snapshot_package = SnapshotPackage::new(
             5,
             5,
             vec![],
