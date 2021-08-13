@@ -215,7 +215,7 @@ check that a CPI must use a subset of accounts provided to the calling program.
 
 The interest-bearing token program also requires the use of dynamic sysvars. For example,
 during the `AmountToUiAmount` instruction, the program needs to know the current
-time in order to properly convert from token amount to share amount.
+time in order to properly convert from share amount to token amount.
 
 Without dynamic sysvars, we need to create a system to tell what sysvars are
 needed for different instructions on each program, which creates complications
