@@ -288,7 +288,7 @@ fn retransmit(
     shreds_received: &Mutex<ShredFilterAndHasher>,
     max_slots: &MaxSlots,
     first_shreds_received: &Mutex<BTreeSet<Slot>>,
-    rpc_subscriptions: &Option<Arc<RpcSubscriptions>>,
+    rpc_subscriptions: Option<&RpcSubscriptions>,
 ) -> Result<()> {
     const RECV_TIMEOUT: Duration = Duration::from_secs(1);
     let r_lock = r.lock().unwrap();
@@ -443,7 +443,7 @@ fn retransmit(
 pub fn retransmitter(
     sockets: Arc<Vec<UdpSocket>>,
     bank_forks: Arc<RwLock<BankForks>>,
-    leader_schedule_cache: &Arc<LeaderScheduleCache>,
+    leader_schedule_cache: Arc<LeaderScheduleCache>,
     cluster_info: Arc<ClusterInfo>,
     r: Arc<Mutex<PacketReceiver>>,
     max_slots: Arc<MaxSlots>,
@@ -493,7 +493,7 @@ pub fn retransmitter(
                             &shreds_received,
                             &max_slots,
                             &first_shreds_received,
-                            &rpc_subscriptions,
+                            rpc_subscriptions.as_deref(),
                         ) {
                             match e {
                                 Error::RecvTimeout(RecvTimeoutError::Disconnected) => break,
@@ -511,7 +511,7 @@ pub fn retransmitter(
         .collect()
 }
 
-pub struct RetransmitStage {
+pub(crate) struct RetransmitStage {
     thread_hdls: Vec<JoinHandle<()>>,
     window_service: WindowService,
     cluster_slots_service: ClusterSlotsService,
@@ -520,16 +520,20 @@ pub struct RetransmitStage {
 impl RetransmitStage {
     #[allow(clippy::new_ret_no_self)]
     #[allow(clippy::too_many_arguments)]
-    pub fn new(
+    pub(crate) fn new(
         bank_forks: Arc<RwLock<BankForks>>,
-        leader_schedule_cache: &Arc<LeaderScheduleCache>,
+        leader_schedule_cache: Arc<LeaderScheduleCache>,
         blockstore: Arc<Blockstore>,
-        cluster_info: &Arc<ClusterInfo>,
+        cluster_info: Arc<ClusterInfo>,
         retransmit_sockets: Arc<Vec<UdpSocket>>,
         repair_socket: Arc<UdpSocket>,
         verified_receiver: Receiver<Vec<Packets>>,
+<<<<<<< HEAD
         exit: &Arc<AtomicBool>,
         rpc_completed_slots_receiver: CompletedSlotsReceiver,
+=======
+        exit: Arc<AtomicBool>,
+>>>>>>> 6e413331b (removes erroneous uses of Arc<...> from retransmit stage)
         cluster_slots_update_receiver: ClusterSlotsUpdateReceiver,
         epoch_schedule: EpochSchedule,
         cfg: Option<Arc<AtomicBool>>,
@@ -539,7 +543,7 @@ impl RetransmitStage {
         verified_vote_receiver: VerifiedVoteReceiver,
         repair_validators: Option<HashSet<Pubkey>>,
         completed_data_sets_sender: CompletedDataSetsSender,
-        max_slots: &Arc<MaxSlots>,
+        max_slots: Arc<MaxSlots>,
         rpc_subscriptions: Option<Arc<RpcSubscriptions>>,
         duplicate_slots_sender: Sender<Slot>,
     ) -> Self {
@@ -549,11 +553,16 @@ impl RetransmitStage {
         let t_retransmit = retransmitter(
             retransmit_sockets,
             bank_forks.clone(),
-            leader_schedule_cache,
+            leader_schedule_cache.clone(),
             cluster_info.clone(),
             retransmit_receiver,
+<<<<<<< HEAD
             Arc::clone(max_slots),
             rpc_subscriptions.clone(),
+=======
+            max_slots,
+            rpc_subscriptions,
+>>>>>>> 6e413331b (removes erroneous uses of Arc<...> from retransmit stage)
         );
 
         let rpc_completed_slots_hdl =
@@ -573,6 +582,11 @@ impl RetransmitStage {
             epoch_schedule,
             duplicate_slots_reset_sender,
             repair_validators,
+<<<<<<< HEAD
+=======
+            cluster_info,
+            cluster_slots,
+>>>>>>> 6e413331b (removes erroneous uses of Arc<...> from retransmit stage)
         };
         let window_service = WindowService::new(
             blockstore,
@@ -580,9 +594,9 @@ impl RetransmitStage {
             verified_receiver,
             retransmit_sender,
             repair_socket,
-            exit.clone(),
+            exit,
             repair_info,
-            leader_schedule_cache.clone(),
+            leader_schedule_cache,
             move |id, shred, working_bank, last_root| {
                 let is_connected = cfg
                     .as_ref()
@@ -616,7 +630,7 @@ impl RetransmitStage {
         }
     }
 
-    pub fn join(self) -> thread::Result<()> {
+    pub(crate) fn join(self) -> thread::Result<()> {
         for thread_hdl in self.thread_hdls {
             thread_hdl.join()?;
         }
@@ -689,7 +703,7 @@ mod tests {
         let t_retransmit = retransmitter(
             retransmit_socket,
             bank_forks,
-            &leader_schedule_cache,
+            leader_schedule_cache,
             cluster_info,
             Arc::new(Mutex::new(retransmit_receiver)),
             Arc::default(), // MaxSlots
