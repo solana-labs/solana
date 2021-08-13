@@ -460,6 +460,8 @@ impl RetransmitStage {
         ancestor_hashes_replay_update_receiver: AncestorHashesReplayUpdateReceiver,
     ) -> Self {
         let (retransmit_sender, retransmit_receiver) = channel();
+        // https://github.com/rust-lang/rust/issues/39364#issuecomment-634545136
+        let _retransmit_sender = retransmit_sender.clone();
 
         let retransmit_receiver = Arc::new(Mutex::new(retransmit_receiver));
         let thread_hdls = retransmitter(
@@ -598,6 +600,7 @@ mod tests {
         let cluster_info = Arc::new(cluster_info);
 
         let (retransmit_sender, retransmit_receiver) = channel();
+        let _retransmit_sender = retransmit_sender.clone();
         let _t_retransmit = retransmitter(
             retransmit_socket,
             bank_forks,
