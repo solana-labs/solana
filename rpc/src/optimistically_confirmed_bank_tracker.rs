@@ -138,7 +138,7 @@ impl OptimisticallyConfirmedBankTracker {
                     match sender.send(bank.slot()) {
                         Ok(_) => {},
                         Err(err) => {
-                            info!("Failed to send slot update {:?}", err);
+                            info!("Failed to send slot {:} update, error: {:?}", bank.slot(), err);
                         }
                     }
                 }

@@ -62,6 +62,7 @@ solana-perf = { path = "../perf", version = "=1.8.0" }
 solana-poh = { path = "../poh", version = "=1.8.0" }
 solana-program-test = { path = "../program-test", version = "=1.8.0" }
 solana-rpc = { path = "../rpc", version = "=1.8.0" }
+solana-replica-lib = { path = "../replica-lib", version = "=1.8.0" }
 solana-runtime = { path = "../runtime", version = "=1.8.0" }
 solana-sdk = { path = "../sdk", version = "=1.8.0" }
 solana-frozen-abi = { path = "../frozen-abi", version = "=1.8.0" }

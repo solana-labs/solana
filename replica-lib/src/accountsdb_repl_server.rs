@@ -1,5 +1,5 @@
-use std::sync::{Arc, RwLock};
-use tonic::{self, transport::Endpoint, Request};
+use std::{sync::{Arc, RwLock}, thread};
+use tonic::{self};
 
 tonic::include_proto!("accountsdb_repl");
 
@@ -8,6 +8,8 @@ pub trait ReplicaUpdatedSlotsServer {
         &self,
         request: &ReplicaUpdatedSlotsRequest,
     ) -> Result<ReplicaUpdatedSlotsResponse, tonic::Status>;
+
+    fn join(&self) -> thread::Result<()>;
 }
 
 pub trait ReplicaAccountsServer {
@@ -15,6 +17,7 @@ pub trait ReplicaAccountsServer {
         &self,
         request: &ReplicaAccountsRequest,
     ) -> Result<ReplicaAccountsResponse, tonic::Status>;
+    fn join(&self) -> thread::Result<()>;
 }
 
 pub struct AccountsDbReplServer {
@@ -52,5 +55,10 @@ impl AccountsDbReplServer {
             updated_slots_server,
             accounts_server,
         }
+    }
+
+    pub fn join(&self) -> thread::Result<()> {
+        self.updated_slots_server.read().unwrap().join()?;
+        self.accounts_server.read().unwrap().join()
     }
 }
