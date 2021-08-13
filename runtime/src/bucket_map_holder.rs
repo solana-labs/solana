@@ -106,6 +106,7 @@ pub struct BucketMapWriteHolder<V> {
     pub addrefs: AtomicU64,
     pub unrefs: AtomicU64,
     pub range: AtomicU64,
+    pub range_us: AtomicU64,
     pub keys: AtomicU64,
     pub inserts: AtomicU64,
     pub inserts_without_checking_disk: AtomicU64,
@@ -206,6 +207,7 @@ impl<V: IsCached> BucketMapWriteHolder<V> {
         let addrefs = AtomicU64::new(0);
         let unrefs = AtomicU64::new(0);
         let range = AtomicU64::new(0);
+        let range_us = AtomicU64::new(0);
         let keys = AtomicU64::new(0);
         let write_cache_flushes = AtomicU64::new(0);
         let bucket_flush_calls = AtomicU64::new(0);
@@ -268,6 +270,7 @@ impl<V: IsCached> BucketMapWriteHolder<V> {
             addrefs,
             unrefs,
             range,
+            range_us,
             keys,
             in_mem_only,
         }
@@ -933,7 +936,8 @@ impl<V: IsCached> BucketMapWriteHolder<V> {
     where
         R: RangeBounds<Pubkey>,
     {
-        if !self.in_mem_only {
+        let mut m = Measure::start("");
+        let r = if !self.in_mem_only {
             self.flush(ix, false, None);
             self.disk.range(ix, range).unwrap_or_default()
         } else {
@@ -946,7 +950,10 @@ impl<V: IsCached> BucketMapWriteHolder<V> {
                 }
             }
             result
-        }
+        };
+        m.stop();
+        self.range_us.fetch_add(m.as_us(), Ordering::Relaxed);
+        r
     }
 
     pub fn get(&self, key: &Pubkey) -> Option<(u64, Vec<SlotT<V>>)> {
@@ -1268,6 +1275,7 @@ impl<V: IsCached> BucketMapWriteHolder<V> {
             ("addrefs", self.addrefs.swap(0, Ordering::Relaxed), i64),
             ("unrefs", self.unrefs.swap(0, Ordering::Relaxed), i64),
             ("range", self.range.swap(0, Ordering::Relaxed), i64),
+            ("range_us", self.range_us.swap(0, Ordering::Relaxed), i64),
             ("keys", self.keys.swap(0, Ordering::Relaxed), i64),
             ("get", self.updates.swap(0, Ordering::Relaxed), i64),
             //("buckets", self.num_buckets(), i64),
