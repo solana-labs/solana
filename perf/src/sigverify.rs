@@ -177,20 +177,23 @@ fn do_get_packet_offsets(
             return Err(PacketError::InvalidSignatureLen);
         }
 
-        // next byte indicates if the transaction is versioned. If the top bit is set, the
-        // remaining bits encode a version number and the message header starts from the
-        // following byte. If the top bit is not set, this byte is the first byte of the
-        // message header.
+        // next byte indicates if the transaction is versioned. If the top bit
+        // is set, the remaining bits encode a version number. If the top bit is
+        // not set, this byte is the first byte of the message header.
         let message_prefix = packet.data[msg_start_offset];
         if message_prefix & MESSAGE_VERSION_PREFIX != 0 {
-            // currently only v0 is supported
-            if message_prefix != MESSAGE_VERSION_PREFIX {
-                return Err(PacketError::UnsupportedVersion);
-            }
+            let version = message_prefix & !MESSAGE_VERSION_PREFIX;
+            match version {
+                0 => {
+                    // header begins immediately after prefix byte
+                    msg_start_offset
+                        .checked_add(1)
+                        .ok_or(PacketError::InvalidLen)?
+                }
 
-            msg_start_offset
-                .checked_add(1)
-                .ok_or(PacketError::InvalidLen)?
+                // currently only v0 is supported
+                _ => return Err(PacketError::UnsupportedVersion),
+            }
         } else {
             msg_start_offset
         }
