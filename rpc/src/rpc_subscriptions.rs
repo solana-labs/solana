@@ -664,12 +664,16 @@ impl RpcSubscriptions {
         let mut total_time = Measure::start("notify_accounts_logs_programs_signatures");
         let mut num_accounts_found = 0;
         let mut num_accounts_notified = 0;
+        let mut num_accounts_subscribers = 0;
         let mut num_logs_found = 0;
         let mut num_logs_notified = 0;
+        let mut num_logs_subscribers = 0;
         let mut num_signatures_found = 0;
         let mut num_signatures_notified = 0;
+        let mut num_signatures_subscribers = 0;
         let mut num_programs_found = 0;
         let mut num_programs_notified = 0;
+        let mut num_programs_subscribers = 0;
         for subscription in subscriptions.values() {
             match subscription.params() {
                 SubscriptionParams::Account(params) => {
@@ -685,6 +689,7 @@ impl RpcSubscriptions {
                     );
 
                     num_accounts_found += 1;
+                    num_accounts_subscribers += subscription.num_subscribers();
                     if notified {
                         num_accounts_notified += 1;
                     }
@@ -701,6 +706,7 @@ impl RpcSubscriptions {
                         false,
                     );
                     num_logs_found += 1;
+                    num_logs_subscribers += subscription.num_subscribers();
                     if notified {
                         num_logs_notified += 1;
                     }
@@ -719,6 +725,7 @@ impl RpcSubscriptions {
                         false,
                     );
                     num_programs_found += 1;
+                    num_programs_subscribers += subscription.num_subscribers();
                     if notified {
                         num_programs_notified += 1;
                     }
@@ -737,6 +744,7 @@ impl RpcSubscriptions {
                         true, // Unsubscribe.
                     );
                     num_signatures_found += 1;
+                    num_signatures_subscribers += subscription.num_subscribers();
                     if notified {
                         num_signatures_notified += 1;
                     }
@@ -770,13 +778,18 @@ impl RpcSubscriptions {
                 "rpc_subscriptions",
                 ("source", source.to_string(), String),
                 ("num_account_subscriptions", num_accounts_found, i64),
+                ("num_account_subscribers", num_accounts_subscribers, i64),
                 ("num_account_pubkeys_notified", num_accounts_notified, i64),
                 ("num_logs_subscriptions", num_logs_found, i64),
+                ("num_logs_subscribers", num_logs_subscribers, i64),
                 ("num_logs_notified", num_logs_notified, i64),
                 ("num_program_subscriptions", num_programs_found, i64),
+                ("num_program_subscribers", num_programs_subscribers, i64),
                 ("num_programs_notified", num_programs_notified, i64),
                 ("num_signature_subscriptions", num_signatures_found, i64),
+                ("num_signature_subscribers", num_signatures_subscribers, i64),
                 ("num_signatures_notified", num_signatures_notified, i64),
+                ("notifications_time", total_time.as_us() as i64, i64),
             );
         }
     }

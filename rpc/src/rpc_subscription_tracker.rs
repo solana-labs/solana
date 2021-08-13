@@ -165,6 +165,10 @@ impl SubscriptionInfo {
     pub fn commitment(&self) -> Option<CommitmentConfig> {
         self.commitment
     }
+
+    pub fn num_subscribers(&self) -> usize {
+        self.token.strong_count()
+    }
 }
 
 struct LogsSubscriptionsIndex {
