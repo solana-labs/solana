@@ -2903,8 +2903,9 @@ mod tests {
             lamports_to_transfer,
             bank2.last_blockhash(),
         );
-        let (_blockhash, fee_calculator) = bank2.last_blockhash_with_fee_calculator();
-        let fee = fee_calculator.calculate_fee(tx.message());
+        let fee = bank2
+            .get_fee_for_message(&bank2.last_blockhash(), tx.message())
+            .unwrap();
         let tx = system_transaction::transfer(
             &key1,
             &key2.pubkey(),
