@@ -644,6 +644,7 @@ pub struct AccountsIndexIterator<'a, T: 'static + Clone + IsCached + std::fmt::D
     start_bound: Bound<Pubkey>,
     end_bound: Bound<Pubkey>,
     is_finished: bool,
+    all_and_unsorted: bool,
 }
 
 impl<'a, T: Clone + std::fmt::Debug + IsCached> AccountsIndexIterator<'a, T> {
@@ -690,11 +691,12 @@ impl<'a, T: Clone + std::fmt::Debug + IsCached> AccountsIndexIterator<'a, T> {
         (start_bin, bin_range)
     }
 
-    pub fn new<R>(index: &'a AccountsIndex<T>, range: Option<R>) -> Self
+    pub fn new<R>(index: &'a AccountsIndex<T>, range: Option<R>, all_and_unsorted: bool) -> Self
     where
         R: RangeBounds<Pubkey>,
     {
         Self {
+            all_and_unsorted,
             start_bound: range
                 .as_ref()
                 .map(|r| Self::clone_bound(r.start_bound()))
@@ -722,9 +724,9 @@ impl<'a, T: IsCached> Iterator for AccountsIndexIterator<'a, T> {
             for pubkey in i
                 .read()
                 .unwrap()
-                .range(Some((self.start_bound, self.end_bound)))
+                .range(Some((self.start_bound, self.end_bound)), self.all_and_unsorted)
             {
-                if chunk.len() >= ITER_BATCH_SIZE {
+                if chunk.len() >= ITER_BATCH_SIZE && !self.all_and_unsorted {
                     break 'outer;
                 }
                 let item = pubkey;
@@ -855,11 +857,11 @@ impl<T: IsCached> AccountsIndex<T> {
         (account_maps, bin_calculator, exit, flusher)
     }
 
-    fn iter<R>(&self, range: Option<R>) -> AccountsIndexIterator<T>
+    fn iter<R>(&self, range: Option<R>, all_and_unsorted: bool) -> AccountsIndexIterator<T>
     where
         R: RangeBounds<Pubkey>,
     {
-        AccountsIndexIterator::new(self, range)
+        AccountsIndexIterator::new(self, range, all_and_unsorted)
     }
 
     fn do_checked_scan_accounts<F, R>(
@@ -1108,6 +1110,8 @@ impl<T: IsCached> AccountsIndex<T> {
     {
         //error!("do_scan_accounts, {}, {}, {}, range: {:?}", file!(), line!(), metric_name, range);
 
+        let all_and_unsorted = metric_name == "load_to_collect_rent_eagerly_scan_elapsed";
+
         if metric_name.is_empty() {
             error!(
                 "empty metric name! {} {}, range: {:?}",
@@ -1126,7 +1130,7 @@ impl<T: IsCached> AccountsIndex<T> {
         let read_lock_elapsed = 0;
         let mut iterator_elapsed = 0;
         let mut iterator_timer = Measure::start("iterator_elapsed");
-        for pubkey_list in self.iter(range) {
+        for pubkey_list in self.iter(range, all_and_unsorted) {
             iterator_timer.stop();
             iterator_elapsed += iterator_timer.as_us();
             for (pubkey, slot_list) in pubkey_list {

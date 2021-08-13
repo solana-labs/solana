@@ -276,7 +276,7 @@ impl<V: IsCached> HybridBTreeMap<V> {
             _ => unbounded,
         }
     }
-    pub fn range<R>(&self, range: Option<R>) -> Vec<(Pubkey, SlotList<V>)>
+    pub fn range<R>(&self, range: Option<R>, all_and_unsorted: bool) -> Vec<(Pubkey, SlotList<V>)>
     where
         R: RangeBounds<Pubkey>,
     {
@@ -315,7 +315,9 @@ impl<V: IsCached> HybridBTreeMap<V> {
             let mut ks = self.disk.range(ix, range.as_ref());
             keys.append(&mut ks);
         });
-        keys.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+        if !all_and_unsorted {
+            keys.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+        }
         keys
     }
 
