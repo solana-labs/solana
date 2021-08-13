@@ -1,6 +1,7 @@
 //! `window_service` handles the data plane incoming shreds, storing them in
 //!   blockstore and retransmitting where required
 //!
+<<<<<<< HEAD
 use crate::{
     cluster_info_vote_listener::VerifiedVoteReceiver,
     cluster_slots::ClusterSlots,
@@ -34,10 +35,49 @@ use std::{
     sync::{Arc, RwLock},
     thread::{self, Builder, JoinHandle},
     time::{Duration, Instant},
+=======
+use {
+    crate::{
+        ancestor_hashes_service::AncestorHashesReplayUpdateReceiver,
+        cluster_info_vote_listener::VerifiedVoteReceiver,
+        completed_data_sets_service::CompletedDataSetsSender,
+        repair_response,
+        repair_service::{OutstandingShredRepairs, RepairInfo, RepairService},
+        result::{Error, Result},
+    },
+    crossbeam_channel::{
+        unbounded, Receiver as CrossbeamReceiver, RecvTimeoutError, Sender as CrossbeamSender,
+    },
+    rayon::{prelude::*, ThreadPool},
+    solana_gossip::cluster_info::ClusterInfo,
+    solana_ledger::{
+        blockstore::{self, Blockstore, BlockstoreInsertionMetrics, MAX_DATA_SHREDS_PER_SLOT},
+        leader_schedule_cache::LeaderScheduleCache,
+        shred::{Nonce, Shred},
+    },
+    solana_measure::measure::Measure,
+    solana_metrics::{inc_new_counter_debug, inc_new_counter_error},
+    solana_perf::packet::{Packet, Packets},
+    solana_rayon_threadlimit::get_thread_count,
+    solana_runtime::{bank::Bank, bank_forks::BankForks},
+    solana_sdk::{clock::Slot, packet::PACKET_DATA_SIZE, pubkey::Pubkey, timing::duration_as_ms},
+    solana_streamer::streamer::PacketSender,
+    std::collections::HashSet,
+    std::{
+        net::{SocketAddr, UdpSocket},
+        ops::Deref,
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc, RwLock,
+        },
+        thread::{self, Builder, JoinHandle},
+        time::{Duration, Instant},
+    },
+>>>>>>> b64eeb772 (removes erroneous uses of &Arc<...> from window-service)
 };
 
-pub type DuplicateSlotSender = CrossbeamSender<Slot>;
-pub type DuplicateSlotReceiver = CrossbeamReceiver<Slot>;
+type DuplicateSlotSender = CrossbeamSender<Slot>;
+pub(crate) type DuplicateSlotReceiver = CrossbeamReceiver<Slot>;
 
 #[derive(Default)]
 struct WindowServiceMetrics {
@@ -48,7 +88,7 @@ struct WindowServiceMetrics {
 }
 
 impl WindowServiceMetrics {
-    pub fn report_metrics(&self, metric_name: &'static str) {
+    fn report_metrics(&self, metric_name: &'static str) {
         datapoint_info!(
             metric_name,
             ("run_insert_count", self.run_insert_count as i64, i64),
@@ -79,10 +119,10 @@ fn verify_shred_slot(shred: &Shred, root: u64) -> bool {
 
 /// drop shreds that are from myself or not from the correct leader for the
 /// shred's slot
-pub fn should_retransmit_and_persist(
+pub(crate) fn should_retransmit_and_persist(
     shred: &Shred,
     bank: Option<Arc<Bank>>,
-    leader_schedule_cache: &Arc<LeaderScheduleCache>,
+    leader_schedule_cache: &LeaderScheduleCache,
     my_pubkey: &Pubkey,
     root: u64,
     shred_version: u16,
@@ -168,7 +208,11 @@ fn verify_repair(
 fn prune_shreds_invalid_repair(
     shreds: &mut Vec<Shred>,
     repair_infos: &mut Vec<Option<RepairMeta>>,
+<<<<<<< HEAD
     outstanding_requests: &Arc<RwLock<OutstandingRepairs>>,
+=======
+    outstanding_requests: &RwLock<OutstandingShredRepairs>,
+>>>>>>> b64eeb772 (removes erroneous uses of &Arc<...> from window-service)
 ) {
     assert_eq!(shreds.len(), repair_infos.len());
     let mut i = 0;
@@ -194,13 +238,17 @@ fn prune_shreds_invalid_repair(
 
 fn run_insert<F>(
     shred_receiver: &CrossbeamReceiver<(Vec<Shred>, Vec<Option<RepairMeta>>)>,
-    blockstore: &Arc<Blockstore>,
-    leader_schedule_cache: &Arc<LeaderScheduleCache>,
+    blockstore: &Blockstore,
+    leader_schedule_cache: &LeaderScheduleCache,
     handle_duplicate: F,
     metrics: &mut BlockstoreInsertionMetrics,
     ws_metrics: &mut WindowServiceMetrics,
     completed_data_sets_sender: &CompletedDataSetsSender,
+<<<<<<< HEAD
     outstanding_requests: &Arc<RwLock<OutstandingRepairs>>,
+=======
+    outstanding_requests: &RwLock<OutstandingShredRepairs>,
+>>>>>>> b64eeb772 (removes erroneous uses of &Arc<...> from window-service)
 ) -> Result<()>
 where
     F: Fn(Shred),
@@ -247,9 +295,9 @@ where
 }
 
 fn recv_window<F>(
-    blockstore: &Arc<Blockstore>,
-    leader_schedule_cache: &Arc<LeaderScheduleCache>,
-    bank_forks: &Arc<RwLock<BankForks>>,
+    blockstore: &Blockstore,
+    leader_schedule_cache: &LeaderScheduleCache,
+    bank_forks: &RwLock<BankForks>,
     insert_shred_sender: &CrossbeamSender<(Vec<Shred>, Vec<Option<RepairMeta>>)>,
     my_pubkey: &Pubkey,
     verified_receiver: &CrossbeamReceiver<Vec<Packets>>,
@@ -358,7 +406,7 @@ impl Drop for Finalizer {
     }
 }
 
-pub struct WindowService {
+pub(crate) struct WindowService {
     t_window: JoinHandle<()>,
     t_insert: JoinHandle<()>,
     t_check_duplicate: JoinHandle<()>,
@@ -367,15 +415,15 @@ pub struct WindowService {
 
 impl WindowService {
     #[allow(clippy::too_many_arguments)]
-    pub fn new<F>(
+    pub(crate) fn new<F>(
         blockstore: Arc<Blockstore>,
         cluster_info: Arc<ClusterInfo>,
         verified_receiver: CrossbeamReceiver<Vec<Packets>>,
         retransmit: PacketSender,
         repair_socket: Arc<UdpSocket>,
-        exit: &Arc<AtomicBool>,
+        exit: Arc<AtomicBool>,
         repair_info: RepairInfo,
-        leader_schedule_cache: &Arc<LeaderScheduleCache>,
+        leader_schedule_cache: Arc<LeaderScheduleCache>,
         shred_filter: F,
         cluster_slots: Arc<ClusterSlots>,
         verified_vote_receiver: VerifiedVoteReceiver,
@@ -420,9 +468,9 @@ impl WindowService {
         );
 
         let t_insert = Self::start_window_insert_thread(
-            exit,
-            &blockstore,
-            leader_schedule_cache,
+            exit.clone(),
+            blockstore.clone(),
+            leader_schedule_cache.clone(),
             insert_receiver,
             duplicate_sender,
             completed_data_sets_sender,
@@ -432,12 +480,12 @@ impl WindowService {
         let t_window = Self::start_recv_window_thread(
             cluster_info.id(),
             exit,
-            &blockstore,
+            blockstore,
             insert_sender,
             verified_receiver,
             shred_filter,
             leader_schedule_cache,
-            &bank_forks,
+            bank_forks,
             retransmit,
         );
 
@@ -482,17 +530,14 @@ impl WindowService {
     }
 
     fn start_window_insert_thread(
-        exit: &Arc<AtomicBool>,
-        blockstore: &Arc<Blockstore>,
-        leader_schedule_cache: &Arc<LeaderScheduleCache>,
+        exit: Arc<AtomicBool>,
+        blockstore: Arc<Blockstore>,
+        leader_schedule_cache: Arc<LeaderScheduleCache>,
         insert_receiver: CrossbeamReceiver<(Vec<Shred>, Vec<Option<RepairMeta>>)>,
         check_duplicate_sender: CrossbeamSender<Shred>,
         completed_data_sets_sender: CompletedDataSetsSender,
         outstanding_requests: Arc<RwLock<OutstandingRepairs>>,
     ) -> JoinHandle<()> {
-        let exit = exit.clone();
-        let blockstore = blockstore.clone();
-        let leader_schedule_cache = leader_schedule_cache.clone();
         let mut handle_timeout = || {};
         let handle_error = || {
             inc_new_counter_error!("solana-window-insert-error", 1, 1);
@@ -542,13 +587,13 @@ impl WindowService {
     #[allow(clippy::too_many_arguments)]
     fn start_recv_window_thread<F>(
         id: Pubkey,
-        exit: &Arc<AtomicBool>,
-        blockstore: &Arc<Blockstore>,
+        exit: Arc<AtomicBool>,
+        blockstore: Arc<Blockstore>,
         insert_sender: CrossbeamSender<(Vec<Shred>, Vec<Option<RepairMeta>>)>,
         verified_receiver: CrossbeamReceiver<Vec<Packets>>,
         shred_filter: F,
-        leader_schedule_cache: &Arc<LeaderScheduleCache>,
-        bank_forks: &Arc<RwLock<BankForks>>,
+        leader_schedule_cache: Arc<LeaderScheduleCache>,
+        bank_forks: Arc<RwLock<BankForks>>,
         retransmit: PacketSender,
     ) -> JoinHandle<()>
     where
@@ -557,10 +602,6 @@ impl WindowService {
             + std::marker::Send
             + std::marker::Sync,
     {
-        let exit = exit.clone();
-        let blockstore = blockstore.clone();
-        let bank_forks = bank_forks.clone();
-        let leader_schedule_cache = leader_schedule_cache.clone();
         Builder::new()
             .name("solana-window".to_string())
             .spawn(move || {
@@ -635,7 +676,7 @@ impl WindowService {
         }
     }
 
-    pub fn join(self) -> thread::Result<()> {
+    pub(crate) fn join(self) -> thread::Result<()> {
         self.t_window.join()?;
         self.t_insert.join()?;
         self.t_check_duplicate.join()?;
@@ -645,6 +686,7 @@ impl WindowService {
 
 #[cfg(test)]
 mod test {
+<<<<<<< HEAD
     use super::*;
     use solana_gossip::contact_info::ContactInfo;
     use solana_ledger::{
@@ -659,9 +701,26 @@ mod test {
         hash::Hash,
         signature::{Keypair, Signer},
         timing::timestamp,
+=======
+    use {
+        super::*,
+        solana_entry::entry::{create_ticks, Entry},
+        solana_gossip::contact_info::ContactInfo,
+        solana_ledger::{
+            blockstore::{make_many_slot_entries, Blockstore},
+            genesis_utils::create_genesis_config_with_leader,
+            get_tmp_ledger_path,
+            shred::{DataShredHeader, Shredder},
+        },
+        solana_sdk::{
+            epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
+            hash::Hash,
+            signature::{Keypair, Signer},
+            timing::timestamp,
+        },
+        solana_streamer::socket::SocketAddrSpace,
+>>>>>>> b64eeb772 (removes erroneous uses of &Arc<...> from window-service)
     };
-    use solana_streamer::socket::SocketAddrSpace;
-    use std::sync::Arc;
 
     fn local_entries_to_shred(
         entries: &[Entry],
