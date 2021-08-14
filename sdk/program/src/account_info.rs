@@ -220,6 +220,12 @@ pub fn next_account_infos<'a, 'b: 'a>(
     Ok(accounts)
 }
 
+impl<'a> AsRef<AccountInfo<'a>> for AccountInfo<'a> {
+    fn as_ref(&self) -> &AccountInfo<'a> {
+        self
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
