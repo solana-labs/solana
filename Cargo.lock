@@ -1316,7 +1316,7 @@ checksum = "11d1f66c65d1b777fc92a5b57a32c35dcb28b644a8c2c5fbc363cc90e8b99e60"
 dependencies = [
  "http",
  "prost",
- "tokio 1.9.0",
+ "tokio 1.10.0",
  "tokio-stream",
  "tonic",
  "tonic-build",
