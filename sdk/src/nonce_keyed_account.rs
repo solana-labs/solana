@@ -51,11 +51,7 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
         let state = AccountUtilsState::<Versions>::state(self)
             .map(|x| x.convert_to_current())
             .ok();
-        if Some(State::Uninitialized) == state || state.is_none() {
-            false
-        } else {
-            true
-        }
+        !(Some(State::Uninitialized) == state || state.is_none())
     }
     fn advance_nonce_account(
         &self,
