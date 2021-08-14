@@ -167,6 +167,15 @@ export type DeactivateStakeParams = {
 };
 
 /**
+ * Merge stake instruction params
+ */
+export type MergeStakeParams = {
+  stakePubkey: PublicKey;
+  sourceStakePubKey: PublicKey;
+  authorizedPubkey: PublicKey;
+};
+
+/**
  * Stake Instruction class
  */
 export class StakeInstruction {
@@ -328,6 +337,21 @@ export class StakeInstruction {
   }
 
   /**
+   * Decode a merge stake instruction and retrieve the instruction params.
+   */
+  static decodeMerge(instruction: TransactionInstruction): MergeStakeParams {
+    this.checkProgramId(instruction.programId);
+    this.checkKeyLength(instruction.keys, 3);
+    decodeData(STAKE_INSTRUCTION_LAYOUTS.Merge, instruction.data);
+
+    return {
+      stakePubkey: instruction.keys[0].pubkey,
+      sourceStakePubKey: instruction.keys[1].pubkey,
+      authorizedPubkey: instruction.keys[4].pubkey,
+    };
+  }
+
+  /**
    * Decode a withdraw stake instruction and retrieve the instruction params.
    */
   static decodeWithdraw(
@@ -399,7 +423,8 @@ export type StakeInstructionType =
   | 'Delegate'
   | 'Initialize'
   | 'Split'
-  | 'Withdraw';
+  | 'Withdraw'
+  | 'Merge';
 
 /**
  * An enumeration of valid stake InstructionType's
@@ -444,6 +469,10 @@ export const STAKE_INSTRUCTION_LAYOUTS: {
   },
   Deactivate: {
     index: 5,
+    layout: BufferLayout.struct([BufferLayout.u32('instruction')]),
+  },
+  Merge: {
+    index: 7,
     layout: BufferLayout.struct([BufferLayout.u32('instruction')]),
   },
   AuthorizeWithSeed: {
@@ -699,6 +728,31 @@ export class StakeProgram {
       keys: [
         {pubkey: stakePubkey, isSigner: false, isWritable: true},
         {pubkey: splitStakePubkey, isSigner: false, isWritable: true},
+        {pubkey: authorizedPubkey, isSigner: true, isWritable: false},
+      ],
+      programId: this.programId,
+      data,
+    });
+  }
+
+  /**
+   * Generate a Transaction that merges Stake accounts.
+   */
+  static merge(params: MergeStakeParams): Transaction {
+    const {stakePubkey, sourceStakePubKey, authorizedPubkey} = params;
+    const type = STAKE_INSTRUCTION_LAYOUTS.Merge;
+    const data = encodeData(type);
+
+    return new Transaction().add({
+      keys: [
+        {pubkey: stakePubkey, isSigner: false, isWritable: true},
+        {pubkey: sourceStakePubKey, isSigner: false, isWritable: true},
+        {pubkey: SYSVAR_CLOCK_PUBKEY, isSigner: false, isWritable: false},
+        {
+          pubkey: SYSVAR_STAKE_HISTORY_PUBKEY,
+          isSigner: false,
+          isWritable: false,
+        },
         {pubkey: authorizedPubkey, isSigner: true, isWritable: false},
       ],
       programId: this.programId,

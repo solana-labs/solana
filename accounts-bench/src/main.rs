@@ -102,7 +102,7 @@ fn main() {
     for x in 0..iterations {
         if clean {
             let mut time = Measure::start("clean");
-            accounts.accounts_db.clean_accounts(None, false);
+            accounts.accounts_db.clean_accounts(None, false, None);
             time.stop();
             println!("{}", time);
             for slot in 0..num_slots {

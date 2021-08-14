@@ -1,12 +1,12 @@
 use crate::{
-    checks::{calculate_fee, check_account_for_balance_with_commitment},
+    checks::{check_account_for_balance_with_commitment, get_fee_for_message},
     cli::CliError,
 };
 use clap::ArgMatches;
 use solana_clap_utils::{input_parsers::lamports_of_sol, offline::SIGN_ONLY_ARG};
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::{
-    commitment_config::CommitmentConfig, fee_calculator::FeeCalculator, message::Message,
+    commitment_config::CommitmentConfig, hash::Hash, message::Message,
     native_token::lamports_to_sol, pubkey::Pubkey,
 };
 
@@ -47,7 +47,7 @@ pub fn resolve_spend_tx_and_check_account_balance<F>(
     rpc_client: &RpcClient,
     sign_only: bool,
     amount: SpendAmount,
-    fee_calculator: &FeeCalculator,
+    blockhash: &Hash,
     from_pubkey: &Pubkey,
     build_message: F,
     commitment: CommitmentConfig,
@@ -59,7 +59,7 @@ where
         rpc_client,
         sign_only,
         amount,
-        fee_calculator,
+        blockhash,
         from_pubkey,
         from_pubkey,
         build_message,
@@ -71,7 +71,7 @@ pub fn resolve_spend_tx_and_check_account_balances<F>(
     rpc_client: &RpcClient,
     sign_only: bool,
     amount: SpendAmount,
-    fee_calculator: &FeeCalculator,
+    blockhash: &Hash,
     from_pubkey: &Pubkey,
     fee_pubkey: &Pubkey,
     build_message: F,
@@ -82,26 +82,28 @@ where
 {
     if sign_only {
         let (message, SpendAndFee { spend, fee: _ }) = resolve_spend_message(
+            rpc_client,
             amount,
-            fee_calculator,
+            None,
             0,
             from_pubkey,
             fee_pubkey,
             build_message,
-        );
+        )?;
         Ok((message, spend))
     } else {
         let from_balance = rpc_client
             .get_balance_with_commitment(from_pubkey, commitment)?
             .value;
         let (message, SpendAndFee { spend, fee }) = resolve_spend_message(
+            rpc_client,
             amount,
-            fee_calculator,
+            Some(blockhash),
             from_balance,
             from_pubkey,
             fee_pubkey,
             build_message,
-        );
+        )?;
         if from_pubkey == fee_pubkey {
             if from_balance == 0 || from_balance < spend + fee {
                 return Err(CliError::InsufficientFundsForSpendAndFee(
@@ -130,43 +132,46 @@ where
 }
 
 fn resolve_spend_message<F>(
+    rpc_client: &RpcClient,
     amount: SpendAmount,
-    fee_calculator: &FeeCalculator,
+    blockhash: Option<&Hash>,
     from_balance: u64,
     from_pubkey: &Pubkey,
     fee_pubkey: &Pubkey,
     build_message: F,
-) -> (Message, SpendAndFee)
+) -> Result<(Message, SpendAndFee), CliError>
 where
     F: Fn(u64) -> Message,
 {
-    match amount {
-        SpendAmount::Some(lamports) => {
-            let message = build_message(lamports);
-            let fee = calculate_fee(fee_calculator, &[&message]);
-            (
-                message,
-                SpendAndFee {
-                    spend: lamports,
-                    fee,
-                },
-            )
-        }
-        SpendAmount::All => {
+    let fee = match blockhash {
+        Some(blockhash) => {
             let dummy_message = build_message(0);
-            let fee = calculate_fee(fee_calculator, &[&dummy_message]);
+            get_fee_for_message(rpc_client, blockhash, &[&dummy_message])?
+        }
+        None => 0, // Offline, cannot calulate fee
+    };
+
+    match amount {
+        SpendAmount::Some(lamports) => Ok((
+            build_message(lamports),
+            SpendAndFee {
+                spend: lamports,
+                fee,
+            },
+        )),
+        SpendAmount::All => {
             let lamports = if from_pubkey == fee_pubkey {
                 from_balance.saturating_sub(fee)
             } else {
                 from_balance
             };
-            (
+            Ok((
                 build_message(lamports),
                 SpendAndFee {
                     spend: lamports,
                     fee,
                 },
-            )
+            ))
         }
     }
 }

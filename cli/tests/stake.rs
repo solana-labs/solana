@@ -356,7 +356,7 @@ fn test_offline_stake_delegation_and_deactivation() {
     process_command(&config_validator).unwrap();
 
     // Delegate stake offline
-    let (blockhash, _) = rpc_client.get_recent_blockhash().unwrap();
+    let blockhash = rpc_client.get_latest_blockhash().unwrap();
     config_offline.command = CliCommand::DelegateStake {
         stake_account_pubkey: stake_keypair.pubkey(),
         vote_account_pubkey: test_validator.vote_account_address(),
@@ -394,7 +394,7 @@ fn test_offline_stake_delegation_and_deactivation() {
     process_command(&config_payer).unwrap();
 
     // Deactivate stake offline
-    let (blockhash, _) = rpc_client.get_recent_blockhash().unwrap();
+    let blockhash = rpc_client.get_latest_blockhash().unwrap();
     config_offline.command = CliCommand::DeactivateStake {
         stake_account_pubkey: stake_keypair.pubkey(),
         stake_authority: 0,
@@ -714,7 +714,7 @@ fn test_stake_authorize() {
     // Offline assignment of new nonced stake authority
     let nonced_authority = Keypair::new();
     let nonced_authority_pubkey = nonced_authority.pubkey();
-    let (blockhash, _) = rpc_client.get_recent_blockhash().unwrap();
+    let blockhash = rpc_client.get_latest_blockhash().unwrap();
     config_offline.command = CliCommand::StakeAuthorize {
         stake_account_pubkey,
         new_authorizations: vec![StakeAuthorizationIndexed {
@@ -964,7 +964,7 @@ fn test_stake_authorize_with_fee_payer() {
     check_recent_balance(100_000 - SIG_FEE - SIG_FEE, &rpc_client, &payer_pubkey);
 
     // Assign authority with offline fee payer
-    let (blockhash, _) = rpc_client.get_recent_blockhash().unwrap();
+    let blockhash = rpc_client.get_latest_blockhash().unwrap();
     config_offline.command = CliCommand::StakeAuthorize {
         stake_account_pubkey,
         new_authorizations: vec![StakeAuthorizationIndexed {

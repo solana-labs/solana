@@ -351,7 +351,7 @@ pub fn process_authorize_nonce_account(
     memo: Option<&String>,
     new_authority: &Pubkey,
 ) -> ProcessResult {
-    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let latest_blockhash = rpc_client.get_latest_blockhash()?;
 
     let nonce_authority = config.signers[nonce_authority];
     let ixs = vec![authorize_nonce_account(
@@ -362,12 +362,12 @@ pub fn process_authorize_nonce_account(
     .with_memo(memo);
     let message = Message::new(&ixs, Some(&config.signers[0].pubkey()));
     let mut tx = Transaction::new_unsigned(message);
-    tx.try_sign(&config.signers, recent_blockhash)?;
+    tx.try_sign(&config.signers, latest_blockhash)?;
 
     check_account_for_fee_with_commitment(
         rpc_client,
         &config.signers[0].pubkey(),
-        &fee_calculator,
+        &latest_blockhash,
         &tx.message,
         config.commitment,
     )?;
@@ -434,13 +434,13 @@ pub fn process_create_nonce_account(
         Message::new(&ixs, Some(&config.signers[0].pubkey()))
     };
 
-    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let latest_blockhash = rpc_client.get_latest_blockhash()?;
 
     let (message, lamports) = resolve_spend_tx_and_check_account_balance(
         rpc_client,
         false,
         amount,
-        &fee_calculator,
+        &latest_blockhash,
         &config.signers[0].pubkey(),
         build_message,
         config.commitment,
@@ -468,7 +468,7 @@ pub fn process_create_nonce_account(
     }
 
     let mut tx = Transaction::new_unsigned(message);
-    tx.try_sign(&config.signers, recent_blockhash)?;
+    tx.try_sign(&config.signers, latest_blockhash)?;
     let merge_errors =
         get_feature_is_active(rpc_client, &merge_nonce_error_into_system_error::id())?;
     let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
@@ -544,14 +544,14 @@ pub fn process_new_nonce(
         &nonce_authority.pubkey(),
     )]
     .with_memo(memo);
-    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let latest_blockhash = rpc_client.get_latest_blockhash()?;
     let message = Message::new(&ixs, Some(&config.signers[0].pubkey()));
     let mut tx = Transaction::new_unsigned(message);
-    tx.try_sign(&config.signers, recent_blockhash)?;
+    tx.try_sign(&config.signers, latest_blockhash)?;
     check_account_for_fee_with_commitment(
         rpc_client,
         &config.signers[0].pubkey(),
-        &fee_calculator,
+        &latest_blockhash,
         &tx.message,
         config.commitment,
     )?;
@@ -611,7 +611,7 @@ pub fn process_withdraw_from_nonce_account(
     destination_account_pubkey: &Pubkey,
     lamports: u64,
 ) -> ProcessResult {
-    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let latest_blockhash = rpc_client.get_latest_blockhash()?;
 
     let nonce_authority = config.signers[nonce_authority];
     let ixs = vec![withdraw_nonce_account(
@@ -623,11 +623,11 @@ pub fn process_withdraw_from_nonce_account(
     .with_memo(memo);
     let message = Message::new(&ixs, Some(&config.signers[0].pubkey()));
     let mut tx = Transaction::new_unsigned(message);
-    tx.try_sign(&config.signers, recent_blockhash)?;
+    tx.try_sign(&config.signers, latest_blockhash)?;
     check_account_for_fee_with_commitment(
         rpc_client,
         &config.signers[0].pubkey(),
-        &fee_calculator,
+        &latest_blockhash,
         &tx.message,
         config.commitment,
     )?;

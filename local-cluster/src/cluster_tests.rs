@@ -66,8 +66,8 @@ pub fn spend_and_verify_all_nodes<S: ::std::hash::BuildHasher + Sync + Send>(
             )
             .expect("balance in source");
         assert!(bal > 0);
-        let (blockhash, _fee_calculator, _last_valid_slot) = client
-            .get_recent_blockhash_with_commitment(CommitmentConfig::confirmed())
+        let (blockhash, _) = client
+            .get_latest_blockhash_with_commitment(CommitmentConfig::confirmed())
             .unwrap();
         let mut transaction =
             system_transaction::transfer(funding_keypair, &random_keypair.pubkey(), 1, blockhash);
@@ -115,8 +115,8 @@ pub fn send_many_transactions(
             )
             .expect("balance in source");
         assert!(bal > 0);
-        let (blockhash, _fee_calculator, _last_valid_slot) = client
-            .get_recent_blockhash_with_commitment(CommitmentConfig::processed())
+        let (blockhash, _) = client
+            .get_latest_blockhash_with_commitment(CommitmentConfig::processed())
             .unwrap();
         let transfer_amount = thread_rng().gen_range(1, max_tokens_per_transfer);
 
@@ -241,8 +241,8 @@ pub fn kill_entry_and_spend_and_verify_rest(
             }
 
             let random_keypair = Keypair::new();
-            let (blockhash, _fee_calculator, _last_valid_slot) = client
-                .get_recent_blockhash_with_commitment(CommitmentConfig::processed())
+            let (blockhash, _) = client
+                .get_latest_blockhash_with_commitment(CommitmentConfig::processed())
                 .unwrap();
             let mut transaction = system_transaction::transfer(
                 funding_keypair,

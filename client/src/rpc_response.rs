@@ -43,6 +43,13 @@ pub struct RpcBlockhashFeeCalculator {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
+pub struct RpcBlockhash {
+    pub blockhash: String,
+    pub last_valid_block_height: u64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct RpcFees {
     pub blockhash: String,
     pub fee_calculator: FeeCalculator,

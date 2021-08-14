@@ -6,9 +6,9 @@ use {
         rpc_config::RpcBlockProductionConfig,
         rpc_request::RpcRequest,
         rpc_response::{
-            Response, RpcAccountBalance, RpcBlockProduction, RpcBlockProductionRange,
-            RpcResponseContext, RpcSimulateTransactionResult, RpcStakeActivation, RpcSupply,
-            RpcVersionInfo, RpcVoteAccountStatus, StakeActivationState,
+            Response, RpcAccountBalance, RpcBlockProduction, RpcBlockProductionRange, RpcBlockhash,
+            RpcFees, RpcResponseContext, RpcSimulateTransactionResult, RpcStakeActivation,
+            RpcSupply, RpcVersionInfo, RpcVoteAccountStatus, StakeActivationState,
         },
         rpc_sender::RpcSender,
     },
@@ -122,6 +122,16 @@ impl RpcSender for MockSender {
             "getFeeRateGovernor" => serde_json::to_value(Response {
                 context: RpcResponseContext { slot: 1 },
                 value: serde_json::to_value(FeeRateGovernor::default()).unwrap(),
+            })?,
+            "getFees" => serde_json::to_value(Response {
+                context: RpcResponseContext { slot: 1 },
+                value: serde_json::to_value(RpcFees {
+                    blockhash: PUBKEY.to_string(),
+                    fee_calculator: FeeCalculator::default(),
+                    last_valid_slot: 42,
+                    last_valid_block_height: 42,
+                })
+                .unwrap(),
             })?,
             "getSignatureStatuses" => {
                 let status: transaction::Result<()> = if self.url == "account_in_use" {
@@ -261,6 +271,17 @@ impl RpcSender for MockSender {
                     feature_set: Some(version.feature_set),
                 })
             }
+            "getLatestBlockhash" => serde_json::to_value(Response {
+                context: RpcResponseContext { slot: 1 },
+                value: RpcBlockhash {
+                    blockhash: PUBKEY.to_string(),
+                    last_valid_block_height: 0,
+                },
+            })?,
+            "getFeeForMessage" => serde_json::to_value(Response {
+                context: RpcResponseContext { slot: 1 },
+                value: json!(Some(0)),
+            })?,
             _ => Value::Null,
         };
         Ok(val)

@@ -62,7 +62,7 @@ impl BanksClient {
         &mut self,
         ctx: Context,
         commitment: CommitmentLevel,
-    ) -> impl Future<Output = io::Result<(FeeCalculator, Hash, Slot)>> + '_ {
+    ) -> impl Future<Output = io::Result<(FeeCalculator, Hash, u64)>> + '_ {
         self.inner
             .get_fees_with_commitment_and_context(ctx, commitment)
     }
@@ -82,6 +82,14 @@ impl BanksClient {
         commitment: CommitmentLevel,
     ) -> impl Future<Output = io::Result<Slot>> + '_ {
         self.inner.get_slot_with_context(ctx, commitment)
+    }
+
+    pub fn get_block_height_with_context(
+        &mut self,
+        ctx: Context,
+        commitment: CommitmentLevel,
+    ) -> impl Future<Output = io::Result<Slot>> + '_ {
+        self.inner.get_block_height_with_context(ctx, commitment)
     }
 
     pub fn process_transaction_with_commitment_and_context(
@@ -119,7 +127,7 @@ impl BanksClient {
     /// use them to calculate the transaction fee.
     pub fn get_fees(
         &mut self,
-    ) -> impl Future<Output = io::Result<(FeeCalculator, Hash, Slot)>> + '_ {
+    ) -> impl Future<Output = io::Result<(FeeCalculator, Hash, u64)>> + '_ {
         self.get_fees_with_commitment_and_context(context::current(), CommitmentLevel::default())
     }
 
@@ -195,10 +203,16 @@ impl BanksClient {
         self.process_transactions_with_commitment(transactions, CommitmentLevel::default())
     }
 
-    /// Return the most recent rooted slot height. All transactions at or below this height
-    /// are said to be finalized. The cluster will not fork to a higher slot height.
+    /// Return the most recent rooted slot. All transactions at or below this slot
+    /// are said to be finalized. The cluster will not fork to a higher slot.
     pub fn get_root_slot(&mut self) -> impl Future<Output = io::Result<Slot>> + '_ {
         self.get_slot_with_context(context::current(), CommitmentLevel::default())
+    }
+
+    /// Return the most recent rooted block height. All transactions at or below this height
+    /// are said to be finalized. The cluster will not fork to a higher block height.
+    pub fn get_root_block_height(&mut self) -> impl Future<Output = io::Result<Slot>> + '_ {
+        self.get_block_height_with_context(context::current(), CommitmentLevel::default())
     }
 
     /// Return the account at the given address at the slot corresponding to the given
@@ -386,7 +400,7 @@ mod tests {
         Runtime::new()?.block_on(async {
             let client_transport = start_local_server(bank_forks, block_commitment_cache).await;
             let mut banks_client = start_client(client_transport).await?;
-            let (_, recent_blockhash, last_valid_slot) = banks_client.get_fees().await?;
+            let (_, recent_blockhash, last_valid_block_height) = banks_client.get_fees().await?;
             let transaction = Transaction::new(&[&genesis.mint_keypair], message, recent_blockhash);
             let signature = transaction.signatures[0];
             banks_client.send_transaction(transaction).await?;
@@ -394,8 +408,8 @@ mod tests {
             let mut status = banks_client.get_transaction_status(signature).await?;
 
             while status.is_none() {
-                let root_slot = banks_client.get_root_slot().await?;
-                if root_slot > last_valid_slot {
+                let root_block_height = banks_client.get_root_block_height().await?;
+                if root_block_height > last_valid_block_height {
                     break;
                 }
                 sleep(Duration::from_millis(100)).await;

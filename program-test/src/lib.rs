@@ -451,12 +451,12 @@ fn setup_fee_calculator(bank: Bank) -> Bank {
     }
     let last_blockhash = bank.last_blockhash();
     // Make sure the new last_blockhash now requires a fee
-    assert_ne!(
-        bank.get_fee_calculator(&last_blockhash)
-            .expect("fee_calculator")
-            .lamports_per_signature,
-        0
-    );
+    #[allow(deprecated)]
+    let lamports_per_signature = bank
+        .get_fee_calculator(&last_blockhash)
+        .expect("fee_calculator")
+        .lamports_per_signature;
+    assert_ne!(lamports_per_signature, 0);
 
     bank
 }

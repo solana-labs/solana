@@ -82,12 +82,12 @@ impl VoteSimulator {
             for (pubkey, vote) in cluster_votes.iter() {
                 if vote.contains(&parent) {
                     let keypairs = self.validator_keypairs.get(pubkey).unwrap();
-                    let last_blockhash = parent_bank.last_blockhash();
+                    let latest_blockhash = parent_bank.last_blockhash();
                     let vote_tx = vote_transaction::new_vote_transaction(
                         // Must vote > root to be processed
                         vec![parent],
                         parent_bank.hash(),
-                        last_blockhash,
+                        latest_blockhash,
                         &keypairs.node_keypair,
                         &keypairs.vote_keypair,
                         &keypairs.vote_keypair,

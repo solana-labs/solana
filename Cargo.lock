@@ -5807,6 +5807,7 @@ dependencies = [
 name = "solana-streamer"
 version = "1.8.0"
 dependencies = [
+ "itertools 0.10.1",
  "libc",
  "log 0.4.14",
  "nix",
@@ -6714,9 +6715,9 @@ dependencies = [
 
 [[package]]
 name = "tonic"
-version = "0.5.1"
+version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "732f88450af985c51fed3243a313ccdd2b5a03bee78ec0b94d66509304777e5c"
+checksum = "796c5e1cd49905e65dd8e700d4cb1dffcbfdb4fc9d017de08c1a537afd83627c"
 dependencies = [
  "async-stream",
  "async-trait",
@@ -6746,9 +6747,9 @@ dependencies = [
 
 [[package]]
 name = "tonic-build"
-version = "0.5.1"
+version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d12faebbe071b06f486be82cc9318350814fdd07fcb28f3690840cd770599283"
+checksum = "12b52d07035516c2b74337d2ac7746075e7dcae7643816c1b12c5ff8a7484c08"
 dependencies = [
  "proc-macro2 1.0.24",
  "prost-build",

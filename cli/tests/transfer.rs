@@ -106,7 +106,7 @@ fn test_transfer() {
     check_recent_balance(50, &rpc_client, &offline_pubkey);
 
     // Offline transfer
-    let (blockhash, _) = rpc_client.get_recent_blockhash().unwrap();
+    let blockhash = rpc_client.get_latest_blockhash().unwrap();
     offline.command = CliCommand::Transfer {
         amount: SpendAmount::Some(10),
         to: recipient_pubkey,
@@ -318,7 +318,7 @@ fn test_transfer_multisession_signing() {
 
     check_ready(&rpc_client);
 
-    let (blockhash, _) = rpc_client.get_recent_blockhash().unwrap();
+    let blockhash = rpc_client.get_latest_blockhash().unwrap();
 
     // Offline fee-payer signs first
     let mut fee_payer_config = CliConfig::recent_for_tests();

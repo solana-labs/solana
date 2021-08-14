@@ -160,7 +160,7 @@ impl SnapshotRequestHandler {
                 // accounts that were included in the bank delta hash when the bank was frozen,
                 // and if we clean them here, the newly created snapshot's hash may not match
                 // the frozen hash.
-                snapshot_root_bank.clean_accounts(true, false);
+                snapshot_root_bank.clean_accounts(true, false, None);
                 clean_time.stop();
 
                 if accounts_db_caching_enabled {
@@ -399,7 +399,7 @@ impl AccountsBackgroundService {
                                 // slots >= bank.slot()
                                 bank.force_flush_accounts_cache();
                             }
-                            bank.clean_accounts(true, false);
+                            bank.clean_accounts(true, false, None);
                             last_cleaned_block_height = bank.block_height();
                         }
                     }

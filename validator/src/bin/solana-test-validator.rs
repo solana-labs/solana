@@ -8,7 +8,7 @@ use {
         },
     },
     solana_client::rpc_client::RpcClient,
-    solana_core::consensus::FileTowerStorage,
+    solana_core::tower_storage::FileTowerStorage,
     solana_faucet::faucet::{run_local_faucet_with_port, FAUCET_PORT},
     solana_rpc::rpc::JsonRpcConfig,
     solana_sdk::{
@@ -509,6 +509,8 @@ fn main() {
     let mut genesis = TestValidatorGenesis::default();
     genesis.max_ledger_shreds = value_of(&matches, "limit_ledger_size");
 
+    let tower_storage = Arc::new(FileTowerStorage::new(ledger_path.clone()));
+
     let admin_service_cluster_info = Arc::new(RwLock::new(None));
     admin_rpc_service::run(
         &ledger_path,
@@ -522,7 +524,7 @@ fn main() {
             validator_exit: genesis.validator_exit.clone(),
             authorized_voter_keypairs: genesis.authorized_voter_keypairs.clone(),
             cluster_info: admin_service_cluster_info.clone(),
-            tower_storage: Arc::new(FileTowerStorage::new(ledger_path.clone())),
+            tower_storage: tower_storage.clone(),
         },
     );
     let dashboard = if output == Output::Dashboard {
@@ -540,6 +542,7 @@ fn main() {
 
     genesis
         .ledger_path(&ledger_path)
+        .tower_storage(tower_storage)
         .add_account(
             faucet_pubkey,
             AccountSharedData::new(faucet_lamports, 0, &system_program::id()),

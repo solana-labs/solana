@@ -11,7 +11,7 @@ use crate::{
     },
     cluster_slots::ClusterSlots,
     completed_data_sets_service::CompletedDataSetsSender,
-    consensus::{Tower, TowerStorage},
+    consensus::Tower,
     cost_model::CostModel,
     cost_update_service::CostUpdateService,
     ledger_cleanup_service::LedgerCleanupService,
@@ -22,6 +22,7 @@ use crate::{
     sigverify_shreds::ShredSigVerifier,
     sigverify_stage::SigVerifyStage,
     snapshot_packager_service::PendingSnapshotPackage,
+    tower_storage::TowerStorage,
     voting_service::VotingService,
 };
 use crossbeam_channel::unbounded;
@@ -278,12 +279,16 @@ impl Tvu {
             bank_notification_sender,
             wait_for_vote_to_start_leader: tvu_config.wait_for_vote_to_start_leader,
             ancestor_hashes_replay_update_sender,
-            tower_storage,
+            tower_storage: tower_storage.clone(),
         };
 
         let (voting_sender, voting_receiver) = channel();
-        let voting_service =
-            VotingService::new(voting_receiver, cluster_info.clone(), poh_recorder.clone());
+        let voting_service = VotingService::new(
+            voting_receiver,
+            cluster_info.clone(),
+            poh_recorder.clone(),
+            tower_storage,
+        );
 
         let (cost_update_sender, cost_update_receiver): (
             Sender<ExecuteTimings>,
@@ -451,7 +456,7 @@ pub mod tests {
             )),
             &poh_recorder,
             tower,
-            Arc::new(crate::consensus::FileTowerStorage::default()),
+            Arc::new(crate::tower_storage::FileTowerStorage::default()),
             &leader_schedule_cache,
             &exit,
             block_commitment_cache,

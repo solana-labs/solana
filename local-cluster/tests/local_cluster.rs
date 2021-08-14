@@ -16,9 +16,10 @@ use {
         broadcast_stage::{
             broadcast_duplicates_run::BroadcastDuplicatesConfig, BroadcastStageType,
         },
-        consensus::{FileTowerStorage, Tower, SWITCH_FORK_THRESHOLD, VOTE_THRESHOLD_DEPTH},
+        consensus::{Tower, SWITCH_FORK_THRESHOLD, VOTE_THRESHOLD_DEPTH},
         optimistic_confirmation_verifier::OptimisticConfirmationVerifier,
         replay_stage::DUPLICATE_THRESHOLD,
+        tower_storage::FileTowerStorage,
         validator::ValidatorConfig,
     },
     solana_download_utils::download_snapshot,
@@ -190,8 +191,8 @@ fn test_local_cluster_signature_subscribe() {
         non_bootstrap_info.client_facing_addr(),
         VALIDATOR_PORT_RANGE,
     );
-    let (blockhash, _fee_calculator, _last_valid_slot) = tx_client
-        .get_recent_blockhash_with_commitment(CommitmentConfig::processed())
+    let (blockhash, _) = tx_client
+        .get_latest_blockhash_with_commitment(CommitmentConfig::processed())
         .unwrap();
 
     let mut transaction = system_transaction::transfer(
@@ -1474,8 +1475,8 @@ fn generate_frozen_account_panic(mut cluster: LocalCluster, frozen_account: Arc<
     let mut i = 0;
     while !solana_runtime::accounts_db::FROZEN_ACCOUNT_PANIC.load(Ordering::Relaxed) {
         // Transfer from frozen account
-        let (blockhash, _fee_calculator, _last_valid_slot) = client
-            .get_recent_blockhash_with_commitment(CommitmentConfig::processed())
+        let (blockhash, _) = client
+            .get_latest_blockhash_with_commitment(CommitmentConfig::processed())
             .unwrap();
         client
             .async_transfer(
@@ -2890,7 +2891,7 @@ fn do_test_future_tower(cluster_mode: ClusterMode) {
     let slots_per_epoch = 2048;
     let node_stakes = match cluster_mode {
         ClusterMode::MasterOnly => vec![100],
-        ClusterMode::MasterSlave => vec![100, 0],
+        ClusterMode::MasterSlave => vec![100, 1],
     };
 
     let validator_keys = vec![
@@ -3245,8 +3246,8 @@ fn setup_transfer_scan_threads(
                 if exit_.load(Ordering::Relaxed) {
                     return;
                 }
-                let (blockhash, _fee_calculator, _last_valid_slot) = client
-                    .get_recent_blockhash_with_commitment(CommitmentConfig::processed())
+                let (blockhash, _) = client
+                    .get_latest_blockhash_with_commitment(CommitmentConfig::processed())
                     .unwrap();
                 for i in 0..starting_keypairs_.len() {
                     client

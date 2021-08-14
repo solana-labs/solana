@@ -99,6 +99,11 @@ pub enum TransactionError {
     /// Transaction processing left an account with an outstanding borrowed reference
     #[error("Transaction processing left an account with an outstanding borrowed reference")]
     AccountBorrowOutstanding,
+
+    #[error(
+        "Transaction could not fit into current block without exceeding the Max Block Cost Limit"
+    )]
+    WouldExceedMaxBlockCostLimit,
 }
 
 pub type Result<T> = result::Result<T, TransactionError>;
