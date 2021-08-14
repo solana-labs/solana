@@ -1,8 +1,12 @@
-use std::{
-    sync::{Arc, RwLock},
-    thread,
+use {
+    log::*,
+    std::{
+        sync::{Arc, RwLock},
+        thread::{self, Builder, JoinHandle},
+    },
+    tokio::runtime::Runtime,
+    tonic::{self, transport},
 };
-use tonic::{self};
 
 tonic::include_proto!("accountsdb_repl");
 
@@ -23,6 +27,7 @@ pub trait ReplicaAccountsServer {
     fn join(&mut self) -> thread::Result<()>;
 }
 
+#[derive(Clone)]
 pub struct AccountsDbReplServer {
     updated_slots_server: Arc<RwLock<dyn ReplicaUpdatedSlotsServer + Sync + Send>>,
     accounts_server: Arc<RwLock<dyn ReplicaAccountsServer + Sync + Send>>,
@@ -64,4 +69,45 @@ impl AccountsDbReplServer {
         self.updated_slots_server.write().unwrap().join()?;
         self.accounts_server.write().unwrap().join()
     }
+}
+
+async fn run_accountsdb_repl_server(
+    server: AccountsDbReplServer,
+) -> Result<(), tonic::transport::Error> {
+    transport::Server::builder()
+        .add_service(accounts_db_repl_server::AccountsDbReplServer::new(server))
+        .serve("[::1]:50051".parse().unwrap())
+        .await
+}
+
+fn run_accountsdb_repl_server_in_runtime(runtime: Arc<Runtime>, server: AccountsDbReplServer) {
+    let result = runtime.block_on(run_accountsdb_repl_server(server));
+    match result {
+        Ok(_) => {
+            info!("AccountsDbReplServer finished");
+        }
+        Err(err) => {
+            error!("AccountsDbReplServer finished in error: {:}?", err);
+        }
+    }
+}
+
+pub fn start(server: &AccountsDbReplServer) -> JoinHandle<()> {
+    let server = server.clone();
+    let worker_thread = 1;
+    let runtime = Arc::new(
+        tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(worker_thread)
+            .thread_name("sol-accountsdb-repl-wrk")
+            .enable_all()
+            .build()
+            .expect("Runtime"),
+    );
+
+    Builder::new()
+        .name("sol-accountsdb-repl-rt".to_string())
+        .spawn(move || {
+            run_accountsdb_repl_server_in_runtime(runtime, server);
+        })
+        .unwrap()
 }
