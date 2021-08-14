@@ -10,9 +10,69 @@ pub use solana_perf::packet::{
 
 use solana_metrics::inc_new_counter_debug;
 pub use solana_sdk::packet::{Meta, Packet, PACKET_DATA_SIZE};
-use std::{io::Result, net::UdpSocket, time::Instant};
+use std::{io, io::Result, net::UdpSocket, time::Instant};
 
-pub fn recv_from(obj: &mut Packets, socket: &UdpSocket, max_wait_ms: u64) -> Result<usize> {
+#[derive(Default, Debug)]
+pub struct RecvFromMetrics {
+    call_count: usize,
+    recvmmsg_count: usize,
+    would_block_count: usize,
+    full_batch_first_call_count: usize,
+    full_batch_count: usize,
+    time_elapsed_count: usize,
+    packet_count: usize,
+    first_wait_elapsed_us: u64,
+    total_elapsed_us: u64,
+}
+
+impl RecvFromMetrics {
+    pub fn report_metrics(&self, metric_name: &'static str) {
+        datapoint_info!(
+            metric_name,
+            ("recv_from-call_count", self.call_count as i64, i64),
+            ("recv_from-recvmmsg_count", self.recvmmsg_count as i64, i64),
+            (
+                "recv_from-would_block_count",
+                self.would_block_count as i64,
+                i64
+            ),
+            (
+                "recv_from-full_batch_first_call_count",
+                self.full_batch_first_call_count as i64,
+                i64
+            ),
+            (
+                "recv_from-full_batch_count",
+                self.full_batch_count as i64,
+                i64
+            ),
+            (
+                "recv_from-time_elapsed_count",
+                self.time_elapsed_count as i64,
+                i64
+            ),
+            ("recv_from-packet_count", self.packet_count as i64, i64),
+            (
+                "recv_from-first_wait_elapsed_us",
+                self.first_wait_elapsed_us as i64,
+                i64
+            ),
+            (
+                "recv_from-total_elapsed_us",
+                self.total_elapsed_us as i64,
+                i64
+            ),
+        );
+    }
+}
+
+pub fn recv_from(
+    obj: &mut Packets,
+    socket: &UdpSocket,
+    max_wait_ms: u64,
+    metrics: &mut RecvFromMetrics,
+) -> Result<usize> {
+    let start = Instant::now();
     let mut i = 0;
     //DOCUMENTED SIDE-EFFECT
     //Performance out of the IO without poll
@@ -22,38 +82,60 @@ pub fn recv_from(obj: &mut Packets, socket: &UdpSocket, max_wait_ms: u64) -> Res
     //  * set it back to blocking before returning
     socket.set_nonblocking(false)?;
     trace!("receiving on {}", socket.local_addr().unwrap());
-    let start = Instant::now();
+    metrics.call_count += 1;
+
     loop {
         obj.packets.resize(
             std::cmp::min(i + NUM_RCVMMSGS, PACKETS_PER_BATCH),
             Packet::default(),
         );
+        metrics.recvmmsg_count += 1;
         match recv_mmsg(socket, &mut obj.packets[i..]) {
-            Err(_) if i > 0 => {
+            Err(e) if i > 0 => {
+                if e.kind() == io::ErrorKind::WouldBlock {
+                    metrics.would_block_count += 1;
+                }
                 if start.elapsed().as_millis() as u64 > max_wait_ms {
+                    metrics.time_elapsed_count += 1;
                     break;
                 }
             }
             Err(e) => {
                 trace!("recv_from err {:?}", e);
+                metrics.total_elapsed_us += start.elapsed().as_micros() as u64;
                 return Err(e);
             }
             Ok((_, npkts)) => {
+                trace!("got {} packets", npkts);
+                if npkts == 0 {
+                    break;
+                }
                 if i == 0 {
+                    metrics.first_wait_elapsed_us += start.elapsed().as_micros() as u64;
+                    if npkts >= PACKETS_PER_BATCH {
+                        metrics.full_batch_first_call_count += 1;
+                    }
                     socket.set_nonblocking(true)?;
                 }
-                trace!("got {} packets", npkts);
                 i += npkts;
                 // Try to batch into big enough buffers
                 // will cause less re-shuffling later on.
-                if start.elapsed().as_millis() as u64 > max_wait_ms || i >= PACKETS_PER_BATCH {
+                if i >= PACKETS_PER_BATCH {
+                    metrics.full_batch_count += 1;
+                    break;
+                }
+                if start.elapsed().as_millis() as u64 > max_wait_ms {
+                    metrics.time_elapsed_count += 1;
                     break;
                 }
             }
         }
     }
+
     obj.packets.truncate(i);
     inc_new_counter_debug!("packets-recv_count", i);
+    metrics.total_elapsed_us += start.elapsed().as_micros() as u64;
+    metrics.packet_count += i;
     Ok(i)
 }
 
@@ -95,6 +177,7 @@ mod tests {
         let addr = recv_socket.local_addr().unwrap();
         let send_socket = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let saddr = send_socket.local_addr().unwrap();
+        let mut metrics = RecvFromMetrics::default();
         let mut p = Packets::default();
 
         p.packets.resize(10, Packet::default());
@@ -105,7 +188,7 @@ mod tests {
         }
         send_to(&p, &send_socket, &SocketAddrSpace::Unspecified).unwrap();
 
-        let recvd = recv_from(&mut p, &recv_socket, 1).unwrap();
+        let recvd = recv_from(&mut p, &recv_socket, 1, &mut metrics).unwrap();
 
         assert_eq!(recvd, p.packets.len());
 
@@ -144,7 +227,9 @@ mod tests {
         let recv_socket = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let addr = recv_socket.local_addr().unwrap();
         let send_socket = UdpSocket::bind("127.0.0.1:0").expect("bind");
+        let mut metrics = RecvFromMetrics::default();
         let mut p = Packets::default();
+
         p.packets.resize(PACKETS_PER_BATCH, Packet::default());
 
         // Should only get PACKETS_PER_BATCH packets per iteration even
@@ -159,7 +244,7 @@ mod tests {
             send_to(&p, &send_socket, &SocketAddrSpace::Unspecified).unwrap();
         }
 
-        let recvd = recv_from(&mut p, &recv_socket, 100).unwrap();
+        let recvd = recv_from(&mut p, &recv_socket, 100, &mut metrics).unwrap();
 
         // Check we only got PACKETS_PER_BATCH packets
         assert_eq!(recvd, PACKETS_PER_BATCH);
