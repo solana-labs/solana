@@ -112,7 +112,7 @@ impl OptimisticallyConfirmedBankTracker {
             &mut pending_optimistically_confirmed_banks,
             &mut last_notified_confirmed_slot,
             &mut highest_confirmed_slot,
-            &confirmed_bank_subscribers,
+            confirmed_bank_subscribers,
         );
         Ok(())
     }

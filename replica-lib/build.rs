@@ -1,4 +1,3 @@
-use tonic_build;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // compiling protos using path on build time

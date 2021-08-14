@@ -5549,7 +5549,7 @@ dependencies = [
  "solana-sdk",
  "solana-version",
  "tempdir",
- "tokio 1.9.0",
+ "tokio 1.10.0",
  "tonic",
  "tonic-build",
 ]

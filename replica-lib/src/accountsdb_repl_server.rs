@@ -71,43 +71,68 @@ impl AccountsDbReplServer {
     }
 }
 
-async fn run_accountsdb_repl_server(
-    server: AccountsDbReplServer,
-) -> Result<(), tonic::transport::Error> {
-    transport::Server::builder()
-        .add_service(accounts_db_repl_server::AccountsDbReplServer::new(server))
-        .serve("[::1]:50051".parse().unwrap())
-        .await
+/// The service wraps the AccountsDbReplServer to make runnable in the tokio runtime
+/// and handles start and stop of the service.
+pub struct AccountsDbReplService {
+    accountsdb_repl_server: AccountsDbReplServer,
+    thread: JoinHandle<()>,
 }
 
-fn run_accountsdb_repl_server_in_runtime(runtime: Arc<Runtime>, server: AccountsDbReplServer) {
-    let result = runtime.block_on(run_accountsdb_repl_server(server));
-    match result {
-        Ok(_) => {
-            info!("AccountsDbReplServer finished");
-        }
-        Err(err) => {
-            error!("AccountsDbReplServer finished in error: {:}?", err);
+impl AccountsDbReplService {
+    pub fn new(
+        updated_slots_server: Arc<RwLock<dyn ReplicaUpdatedSlotsServer + Sync + Send>>,
+        accounts_server: Arc<RwLock<dyn ReplicaAccountsServer + Sync + Send>>,
+    ) -> Self {
+        let accountsdb_repl_server =
+            AccountsDbReplServer::new(updated_slots_server, accounts_server);
+
+        let worker_thread = 1;
+        let runtime = Arc::new(
+            tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(worker_thread)
+                .thread_name("sol-accountsdb-repl-wrk")
+                .enable_all()
+                .build()
+                .expect("Runtime"),
+        );
+
+        let server_cloned = accountsdb_repl_server.clone();
+        let thread = Builder::new()
+            .name("sol-accountsdb-repl-rt".to_string())
+            .spawn(move || {
+                Self::run_accountsdb_repl_server_in_runtime(runtime, server_cloned);
+            })
+            .unwrap();
+
+        Self {
+            accountsdb_repl_server,
+            thread,
         }
     }
-}
 
-pub fn start(server: &AccountsDbReplServer) -> JoinHandle<()> {
-    let server = server.clone();
-    let worker_thread = 1;
-    let runtime = Arc::new(
-        tokio::runtime::Builder::new_multi_thread()
-            .worker_threads(worker_thread)
-            .thread_name("sol-accountsdb-repl-wrk")
-            .enable_all()
-            .build()
-            .expect("Runtime"),
-    );
+    async fn run_accountsdb_repl_server(
+        server: AccountsDbReplServer,
+    ) -> Result<(), tonic::transport::Error> {
+        transport::Server::builder()
+            .add_service(accounts_db_repl_server::AccountsDbReplServer::new(server))
+            .serve("[::1]:50051".parse().unwrap())
+            .await
+    }
 
-    Builder::new()
-        .name("sol-accountsdb-repl-rt".to_string())
-        .spawn(move || {
-            run_accountsdb_repl_server_in_runtime(runtime, server);
-        })
-        .unwrap()
+    fn run_accountsdb_repl_server_in_runtime(runtime: Arc<Runtime>, server: AccountsDbReplServer) {
+        let result = runtime.block_on(Self::run_accountsdb_repl_server(server));
+        match result {
+            Ok(_) => {
+                info!("AccountsDbReplServer finished");
+            }
+            Err(err) => {
+                error!("AccountsDbReplServer finished in error: {:}?", err);
+            }
+        }
+    }
+
+    pub fn join(self) -> thread::Result<()> {
+        self.accountsdb_repl_server.join()?;
+        self.thread.join()
+    }
 }

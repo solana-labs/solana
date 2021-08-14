@@ -275,7 +275,7 @@ pub struct Validator {
     tvu: Tvu,
     ip_echo_server: Option<solana_net_utils::IpEchoServer>,
     pub cluster_info: Arc<ClusterInfo>,
-    accountsdb_repl_service: Option<AccountsDbReplServer>,
+    accountsdb_repl_service: Option<AccountsDbReplService>,
 }
 
 // in the distant future, get rid of ::new()/exit() and use Result properly...
