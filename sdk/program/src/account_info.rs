@@ -266,4 +266,13 @@ mod tests {
         assert_eq!(k4, *info2_3_4[2].key);
         assert_eq!(k5, *info5.key);
     }
+
+    #[test]
+    fn test_account_info_as_ref() {
+        let k = Pubkey::new_unique();
+        let l = &mut 0;
+        let d = &mut [0u8];
+        let info = AccountInfo::new(&k, false, false, l, d, &k, false, 0);
+        assert_eq!(info.key, info.as_ref().key);
+    }
 }
