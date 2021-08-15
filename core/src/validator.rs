@@ -45,7 +45,8 @@ use {
         poh_service::{self, PohService},
     },
     solana_replica_lib::{
-        accountsdb_repl_server::AccountsDbReplServer, accountsdb_repl_server_factory,
+        accountsdb_repl_server::{AccountsDbReplService, AccountsDbReplServiceConfig},
+        accountsdb_repl_server_factory,
     },
     solana_rpc::{
         max_slots::MaxSlots,
@@ -111,6 +112,7 @@ pub struct ValidatorConfig {
     pub account_paths: Vec<PathBuf>,
     pub account_shrink_paths: Option<Vec<PathBuf>>,
     pub rpc_config: JsonRpcConfig,
+    pub accountsdb_repl_service_config: Option<AccountsDbReplServiceConfig>,
     pub rpc_addrs: Option<(SocketAddr, SocketAddr)>, // (JsonRpc, JsonRpcPubSub)
     pub pubsub_config: PubSubConfig,
     pub snapshot_config: Option<SnapshotConfig>,
@@ -170,6 +172,7 @@ impl Default for ValidatorConfig {
             account_paths: Vec::new(),
             account_shrink_paths: None,
             rpc_config: JsonRpcConfig::default(),
+            accountsdb_repl_service_config: None,
             rpc_addrs: None,
             pubsub_config: PubSubConfig::default(),
             snapshot_config: None,
@@ -542,7 +545,12 @@ impl Validator {
 
             let (confirmed_bank_sender, confirmed_bank_receiver) = unbounded();
 
-            let accountsdb_repl_service = accountsdb_repl_server_factory::AccountsDbReplServerFactory::build_accountsdb_repl_server(confirmed_bank_receiver);
+            let accountsdb_repl_service = if let Some(accountsdb_repl_service_config) = &config.accountsdb_repl_service_config {
+                Some(accountsdb_repl_server_factory::AccountsDbReplServerFactory::build_accountsdb_repl_server(
+                    accountsdb_repl_service_config.clone(), confirmed_bank_receiver))
+            } else {
+                None
+            };
 
             let (bank_notification_sender, bank_notification_receiver) = unbounded();
             (
@@ -586,7 +594,7 @@ impl Validator {
                     Arc::new(RwLock::new(vec![confirmed_bank_sender])),
                 )),
                 Some(bank_notification_sender),
-                Some(accountsdb_repl_service),
+                accountsdb_repl_service,
             )
         } else {
             (None, None, None, None, None)

@@ -1,6 +1,7 @@
 use {
     log::*,
     std::{
+        net::SocketAddr,
         sync::{Arc, RwLock},
         thread::{self, Builder, JoinHandle},
     },
@@ -28,11 +29,12 @@ pub trait ReplicaAccountsServer {
 }
 
 #[derive(Clone)]
-pub struct AccountsDbReplServer {
+struct AccountsDbReplServer {
     updated_slots_server: Arc<RwLock<dyn ReplicaUpdatedSlotsServer + Sync + Send>>,
     accounts_server: Arc<RwLock<dyn ReplicaAccountsServer + Sync + Send>>,
 }
 
+/// Implementing the AccountsDbRepl interface declared by the protocol
 #[tonic::async_trait]
 impl accounts_db_repl_server::AccountsDbRepl for AccountsDbReplServer {
     async fn get_updated_slots(
@@ -71,6 +73,12 @@ impl AccountsDbReplServer {
     }
 }
 
+#[derive(Clone)]
+pub struct AccountsDbReplServiceConfig {
+    pub worker_threads: usize,
+    pub replica_server_addr: SocketAddr,
+}
+
 /// The service wraps the AccountsDbReplServer to make runnable in the tokio runtime
 /// and handles start and stop of the service.
 pub struct AccountsDbReplService {
@@ -80,16 +88,17 @@ pub struct AccountsDbReplService {
 
 impl AccountsDbReplService {
     pub fn new(
+        config: AccountsDbReplServiceConfig,
         updated_slots_server: Arc<RwLock<dyn ReplicaUpdatedSlotsServer + Sync + Send>>,
         accounts_server: Arc<RwLock<dyn ReplicaAccountsServer + Sync + Send>>,
     ) -> Self {
         let accountsdb_repl_server =
             AccountsDbReplServer::new(updated_slots_server, accounts_server);
 
-        let worker_thread = 1;
+        let worker_threads = config.worker_threads;
         let runtime = Arc::new(
             tokio::runtime::Builder::new_multi_thread()
-                .worker_threads(worker_thread)
+                .worker_threads(worker_threads)
                 .thread_name("sol-accountsdb-repl-wrk")
                 .enable_all()
                 .build()
@@ -100,7 +109,7 @@ impl AccountsDbReplService {
         let thread = Builder::new()
             .name("sol-accountsdb-repl-rt".to_string())
             .spawn(move || {
-                Self::run_accountsdb_repl_server_in_runtime(runtime, server_cloned);
+                Self::run_accountsdb_repl_server_in_runtime(config, runtime, server_cloned);
             })
             .unwrap();
 
@@ -111,16 +120,19 @@ impl AccountsDbReplService {
     }
 
     async fn run_accountsdb_repl_server(
+        config: AccountsDbReplServiceConfig,
         server: AccountsDbReplServer,
     ) -> Result<(), tonic::transport::Error> {
         transport::Server::builder()
             .add_service(accounts_db_repl_server::AccountsDbReplServer::new(server))
-            .serve("[::1]:50051".parse().unwrap())
+            .serve(config.replica_server_addr)
             .await
     }
 
-    fn run_accountsdb_repl_server_in_runtime(runtime: Arc<Runtime>, server: AccountsDbReplServer) {
-        let result = runtime.block_on(Self::run_accountsdb_repl_server(server));
+    fn run_accountsdb_repl_server_in_runtime(
+        config: AccountsDbReplServiceConfig,
+        runtime: Arc<Runtime>, server: AccountsDbReplServer) {
+        let result = runtime.block_on(Self::run_accountsdb_repl_server(config, server));
         match result {
             Ok(_) => {
                 info!("AccountsDbReplServer finished");

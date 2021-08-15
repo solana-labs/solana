@@ -6030,6 +6030,7 @@ dependencies = [
  "solana-net-utils",
  "solana-perf",
  "solana-poh",
+ "solana-replica-lib",
  "solana-rpc",
  "solana-runtime",
  "solana-sdk",

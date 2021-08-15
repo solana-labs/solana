@@ -1,6 +1,6 @@
 use {
     crate::{
-        accountsdb_repl_server::AccountsDbReplService,
+        accountsdb_repl_server::{AccountsDbReplService, AccountsDbReplServiceConfig},
         replica_accounts_server::ReplicaAccountsServerImpl,
         replica_updated_slots_server::ReplicaUpdatedSlotsServerImpl,
     },
@@ -13,9 +13,11 @@ pub struct AccountsDbReplServerFactory {}
 
 impl AccountsDbReplServerFactory {
     pub fn build_accountsdb_repl_server(
+        config: AccountsDbReplServiceConfig,
         confirmed_bank_receiver: Receiver<Slot>,
     ) -> AccountsDbReplService {
         AccountsDbReplService::new(
+            config,
             Arc::new(RwLock::new(ReplicaUpdatedSlotsServerImpl::new(
                 confirmed_bank_receiver,
             ))),
