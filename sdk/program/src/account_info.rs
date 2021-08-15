@@ -220,6 +220,12 @@ pub fn next_account_infos<'a, 'b: 'a>(
     Ok(accounts)
 }
 
+impl<'a> AsRef<AccountInfo<'a>> for AccountInfo<'a> {
+    fn as_ref(&self) -> &AccountInfo<'a> {
+        self
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -259,5 +265,14 @@ mod tests {
         assert_eq!(k3, *info2_3_4[1].key);
         assert_eq!(k4, *info2_3_4[2].key);
         assert_eq!(k5, *info5.key);
+    }
+
+    #[test]
+    fn test_account_info_as_ref() {
+        let k = Pubkey::new_unique();
+        let l = &mut 0;
+        let d = &mut [0u8];
+        let info = AccountInfo::new(&k, false, false, l, d, &k, false, 0);
+        assert_eq!(info.key, info.as_ref().key);
     }
 }
