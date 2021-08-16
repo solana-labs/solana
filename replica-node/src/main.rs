@@ -404,6 +404,6 @@ pub fn main() {
         replica_exit: Arc::new(RwLock::new(Exit::default())),
     };
 
-    let validator = ReplicaNode::new(config);
-    validator.join();
+    let replica = ReplicaNode::new(config);
+    replica.join();
 }
