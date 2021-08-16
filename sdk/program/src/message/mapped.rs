@@ -176,7 +176,7 @@ mod tests {
     fn test_has_duplicates() {
         let message = create_test_mapped_message().0;
 
-        assert_eq!(message.has_duplicates(), false);
+        assert!(!message.has_duplicates());
     }
 
     #[test]
