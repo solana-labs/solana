@@ -4,9 +4,13 @@ use {
         cluster_info::ClusterInfo, contact_info::ContactInfo, crds::Cursor, epoch_slots::EpochSlots,
     },
     solana_runtime::{bank::Bank, epoch_stakes::NodeIdToVoteAccounts},
-    solana_sdk::{clock::Slot, pubkey::Pubkey},
+    solana_sdk::{
+        clock::{Slot, DEFAULT_SLOTS_PER_EPOCH},
+        pubkey::Pubkey,
+    },
     std::{
         collections::{BTreeMap, HashMap},
+        ops::Range,
         sync::{Arc, Mutex, RwLock},
     },
 };
@@ -40,6 +44,8 @@ impl ClusterSlots {
     }
 
     fn update_internal(&self, root: Slot, epoch_slots_list: Vec<EpochSlots>) {
+        // Discard slots at or before current root or epochs ahead.
+        const SLOTS_DIFF_RANGE: Range<u64> = 1..2 * DEFAULT_SLOTS_PER_EPOCH;
         // Attach validator's total stake.
         let epoch_slots_list: Vec<_> = {
             let validator_stakes = self.validator_stakes.read().unwrap();
@@ -60,7 +66,10 @@ impl ClusterSlots {
                 epoch_slots
                     .to_slots(root)
                     .into_iter()
-                    .filter(|slot| *slot > root)
+                    .filter(|slot| {
+                        let diff = slot.saturating_sub(root);
+                        SLOTS_DIFF_RANGE.contains(&diff)
+                    })
                     .zip(std::iter::repeat((epoch_slots.from, stake)))
             })
             .into_group_map();
