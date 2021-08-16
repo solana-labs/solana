@@ -10,7 +10,6 @@ use {
     },
     std::{
         collections::{BTreeMap, HashMap},
-        ops::Range,
         sync::{Arc, Mutex, RwLock},
     },
 };
@@ -40,12 +39,11 @@ impl ClusterSlots {
             let mut cursor = self.cursor.lock().unwrap();
             cluster_info.get_epoch_slots(&mut cursor)
         };
-        self.update_internal(root_bank.slot(), epoch_slots);
+        let num_epoch_slots = root_bank.get_slots_in_epoch(root_bank.epoch());
+        self.update_internal(root_bank.slot(), epoch_slots, num_epoch_slots);
     }
 
-    fn update_internal(&self, root: Slot, epoch_slots_list: Vec<EpochSlots>) {
-        // Discard slots at or before current root or epochs ahead.
-        const SLOTS_DIFF_RANGE: Range<u64> = 1..2 * DEFAULT_SLOTS_PER_EPOCH;
+    fn update_internal(&self, root: Slot, epoch_slots_list: Vec<EpochSlots>, num_epoch_slots: u64) {
         // Attach validator's total stake.
         let epoch_slots_list: Vec<_> = {
             let validator_stakes = self.validator_stakes.read().unwrap();
@@ -60,16 +58,20 @@ impl ClusterSlots {
                 })
                 .collect()
         };
+        // Discard slots at or before current root or epochs ahead.
+        let slot_range = (root + 1)
+            ..root.saturating_add(
+                num_epoch_slots
+                    .max(DEFAULT_SLOTS_PER_EPOCH)
+                    .saturating_mul(2),
+            );
         let slot_nodes_stakes = epoch_slots_list
             .into_iter()
             .flat_map(|(epoch_slots, stake)| {
                 epoch_slots
                     .to_slots(root)
                     .into_iter()
-                    .filter(|slot| {
-                        let diff = slot.saturating_sub(root);
-                        SLOTS_DIFF_RANGE.contains(&diff)
-                    })
+                    .filter(|slot| slot_range.contains(slot))
                     .zip(std::iter::repeat((epoch_slots.from, stake)))
             })
             .into_group_map();
@@ -196,7 +198,7 @@ mod tests {
     #[test]
     fn test_update_noop() {
         let cs = ClusterSlots::default();
-        cs.update_internal(0, vec![]);
+        cs.update_internal(0, vec![], DEFAULT_SLOTS_PER_EPOCH);
         assert!(cs.cluster_slots.read().unwrap().is_empty());
     }
 
@@ -204,7 +206,7 @@ mod tests {
     fn test_update_empty() {
         let cs = ClusterSlots::default();
         let epoch_slot = EpochSlots::default();
-        cs.update_internal(0, vec![epoch_slot]);
+        cs.update_internal(0, vec![epoch_slot], DEFAULT_SLOTS_PER_EPOCH);
         assert!(cs.lookup(0).is_none());
     }
 
@@ -214,7 +216,7 @@ mod tests {
         let cs = ClusterSlots::default();
         let mut epoch_slot = EpochSlots::default();
         epoch_slot.fill(&[0], 0);
-        cs.update_internal(0, vec![epoch_slot]);
+        cs.update_internal(0, vec![epoch_slot], DEFAULT_SLOTS_PER_EPOCH);
         assert!(cs.lookup(0).is_none());
     }
 
@@ -223,7 +225,7 @@ mod tests {
         let cs = ClusterSlots::default();
         let mut epoch_slot = EpochSlots::default();
         epoch_slot.fill(&[1], 0);
-        cs.update_internal(0, vec![epoch_slot]);
+        cs.update_internal(0, vec![epoch_slot], DEFAULT_SLOTS_PER_EPOCH);
         assert!(cs.lookup(0).is_none());
         assert!(cs.lookup(1).is_some());
         assert_eq!(
@@ -353,7 +355,7 @@ mod tests {
         );
 
         *cs.validator_stakes.write().unwrap() = map;
-        cs.update_internal(0, vec![epoch_slot]);
+        cs.update_internal(0, vec![epoch_slot], DEFAULT_SLOTS_PER_EPOCH);
         assert!(cs.lookup(1).is_some());
         assert_eq!(
             cs.lookup(1)
