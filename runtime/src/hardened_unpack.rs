@@ -162,11 +162,17 @@ where
         )?;
         total_count = checked_total_count_increment(total_count, limit_count)?;
 
-        if !sanitize_path(&entry.path()?, unpack_dir)? {
-            continue; // failed to sanitize path
+        let target = sanitize_path(&entry.path()?, unpack_dir)?;
+        if target.is_none() {
+            continue; // failed
         }
+        let target = target.unwrap();
 
-        check_unpack_result(entry.unpack(unpack_dir).map(|_unpack| true)?, path_str)?;
+        let unpack = entry.unpack(target);
+        if unpack.is_err() {
+            error!("failing to unpack: {:?}", unpack_dir);
+        }
+        check_unpack_result(unpack.map(|_unpack| true)?, path_str)?;
 
         // Sanitize permissions.
         let mode = match entry.header().entry_type() {
@@ -202,7 +208,8 @@ where
     }
 }
 
-fn sanitize_path(entry_path: &Path, dst: &Path) -> Result<bool> {
+// return true if path is good
+fn sanitize_path(entry_path: &Path, dst: &Path) -> Result<Option<PathBuf>> {
     // code from: unpack_in does its own sanitization
     // ref: https://docs.rs/tar/*/tar/struct.Entry.html#method.unpack_in
     // we cannot call unpack_in because it errors if an unpack dir already exists
@@ -221,7 +228,7 @@ fn sanitize_path(entry_path: &Path, dst: &Path) -> Result<bool> {
                 // unpacking the file to prevent directory traversal
                 // security issues.  See, e.g.: CVE-2001-1267,
                 // CVE-2002-0399, CVE-2005-1918, CVE-2007-4131
-                Component::ParentDir => return Ok(false),
+                Component::ParentDir => return Ok(None),
 
                 Component::Normal(part) => file_dst.push(part),
             }
@@ -231,13 +238,13 @@ fn sanitize_path(entry_path: &Path, dst: &Path) -> Result<bool> {
     // Skip cases where only slashes or '.' parts were seen, because
     // this is effectively an empty filename.
     if *dst == *file_dst {
-        return Ok(true); // should this be false?
+        return Ok(None); // should this be false?
     }
 
     // Skip entries without a parent (i.e. outside of FS root)
     let parent = match file_dst.parent() {
         Some(p) => p,
-        None => return Ok(false),
+        None => return Ok(None),
     };
 
     //self.ensure_dir_created(&dst, parent)?;
@@ -246,7 +253,9 @@ fn sanitize_path(entry_path: &Path, dst: &Path) -> Result<bool> {
     // we have to decide if this is ok or not - we do want to untar exactly to the account folder, which may be on a different drive.
     // we could validate against any of our account drives
     // let canon_target = validate_inside_dst(&dst, parent)?;
-    Ok(true)
+
+    let target = parent.join(entry_path.file_name().unwrap()); // todo maybe ok_or
+    Ok(Some(target))
 }
 
 /// Map from AppendVec file name to unpacked file system location
