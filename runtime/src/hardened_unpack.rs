@@ -162,16 +162,13 @@ where
         )?;
         total_count = checked_total_count_increment(total_count, limit_count)?;
 
-        let target = sanitize_path(&entry.path()?, unpack_dir)?;
+        let target = sanitize_path(&entry.path()?, unpack_dir)?; // ? handles file system errors
         if target.is_none() {
-            continue; // failed
+            continue; // skip it
         }
         let target = target.unwrap();
 
         let unpack = entry.unpack(target);
-        if unpack.is_err() {
-            error!("failing to unpack: {:?}", unpack_dir);
-        }
         check_unpack_result(unpack.map(|_unpack| true)?, path_str)?;
 
         // Sanitize permissions.
@@ -208,12 +205,14 @@ where
     }
 }
 
-// return true if path is good
+// return Err on file system error
+// return Some(path) if path is good
+// return None if we should skip this file
 fn sanitize_path(entry_path: &Path, dst: &Path) -> Result<Option<PathBuf>> {
+    // We cannot call unpack_in because it errors if we try to use 2 account paths.
+    // So, this code is borrowed from unpack_in
     // code from: unpack_in does its own sanitization
     // ref: https://docs.rs/tar/*/tar/struct.Entry.html#method.unpack_in
-    // we cannot call unpack_in because it errors if an unpack dir already exists
-
     let mut file_dst = dst.to_path_buf();
     {
         let path = entry_path;
@@ -238,7 +237,7 @@ fn sanitize_path(entry_path: &Path, dst: &Path) -> Result<Option<PathBuf>> {
     // Skip cases where only slashes or '.' parts were seen, because
     // this is effectively an empty filename.
     if *dst == *file_dst {
-        return Ok(None); // should this be false?
+        return Ok(None);
     }
 
     // Skip entries without a parent (i.e. outside of FS root)
@@ -247,14 +246,9 @@ fn sanitize_path(entry_path: &Path, dst: &Path) -> Result<Option<PathBuf>> {
         None => return Ok(None),
     };
 
-    //self.ensure_dir_created(&dst, parent)?;
     fs::create_dir_all(parent)?;
 
-    // we have to decide if this is ok or not - we do want to untar exactly to the account folder, which may be on a different drive.
-    // we could validate against any of our account drives
-    // let canon_target = validate_inside_dst(&dst, parent)?;
-
-    let target = parent.join(entry_path.file_name().unwrap()); // todo maybe ok_or
+    let target = parent.join(entry_path.file_name().unwrap());
     Ok(Some(target))
 }
 
