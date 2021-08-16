@@ -785,9 +785,9 @@ checksum = "28b9d6de7f49e22cf97ad17fc4036ece69300032f45f78f30b4a4482cdc3f4a6"
 
 [[package]]
 name = "const_format"
-version = "0.2.17"
+version = "0.2.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41f4087b5a1164f92255f8b301c88fc8627e5abf5e25b5476f84b02e4b47795d"
+checksum = "49aad96768495418a04c9349327f32f2cd7e9bf8ac6b142534466048721c8ff5"
 dependencies = [
  "const_format_proc_macros",
 ]
