@@ -4497,18 +4497,16 @@ impl AccountsDb {
 
     fn calculate_accounts_hash(
         &self,
-        _slot: Slot,
-        _ancestors: &Ancestors,
-        _check_hash: bool,
+        slot: Slot,
+        ancestors: &Ancestors,
+        check_hash: bool,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
-        //use BankHashVerificationError::*;
-        let mut _collect = Measure::start("collect");
+        use BankHashVerificationError::*;
+        let mut collect = Measure::start("collect");
         // maybe required at some point:
         self.accounts_index.account_maps.par_iter().for_each(|i| {
             i.write().unwrap().flush();
         });
-panic!("");
-/*
         let keys: Vec<_> = self
             .accounts_index
             .account_maps
@@ -4517,8 +4515,9 @@ panic!("");
                 btree
                     .read()
                     .unwrap()
-                    .range(None::<Range<Pubkey>>)
+                    .range(None::<Range<Pubkey>>, false)
                     .into_iter()
+                    .map(|(key, _value)| key)
                     .collect::<Vec<_>>()
             })
             .flatten()
@@ -4620,7 +4619,6 @@ panic!("");
             ("collect", collect.as_us(), i64),
         );
         Ok((accumulated_hash, total_lamports))
-        */
     }
 
     pub fn get_accounts_hash(&self, slot: Slot) -> Hash {
