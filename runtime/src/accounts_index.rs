@@ -615,12 +615,14 @@ pub struct AccountsIndexIterator<'a, T> {
     start_bound: Bound<Pubkey>,
     end_bound: Bound<Pubkey>,
     is_finished: bool,
+    collect_all_unsorted: bool,
 }
 
 impl<'a, T> AccountsIndexIterator<'a, T> {
     fn range<'b, R>(
         map: &'b AccountMapsReadLock<'b, T>,
         range: R,
+        collect_all_unsorted: bool,
     ) -> Vec<(&'b Pubkey, &'b AccountMapEntry<T>)>
     where
         R: RangeBounds<Pubkey>,
@@ -631,7 +633,9 @@ impl<'a, T> AccountsIndexIterator<'a, T> {
                 result.push((k, v));
             }
         }
-        result.sort_unstable_by(|a, b| a.0.cmp(b.0));
+        if !collect_all_unsorted {
+            result.sort_unstable_by(|a, b| a.0.cmp(b.0));
+        }
         result
     }
 
@@ -678,7 +682,7 @@ impl<'a, T> AccountsIndexIterator<'a, T> {
         (start_bin, bin_range)
     }
 
-    pub fn new<R>(index: &'a AccountsIndex<T>, range: Option<R>) -> Self
+    pub fn new<R>(index: &'a AccountsIndex<T>, range: Option<R>, collect_all_unsorted: bool) -> Self
     where
         R: RangeBounds<Pubkey>,
     {
@@ -694,6 +698,7 @@ impl<'a, T> AccountsIndexIterator<'a, T> {
             account_maps: &index.account_maps,
             is_finished: false,
             bin_calculator: &index.bin_calculator,
+            collect_all_unsorted,
         }
     }
 }
@@ -707,10 +712,12 @@ impl<'a, T: 'static + Clone> Iterator for AccountsIndexIterator<'a, T> {
         let (start_bin, bin_range) = self.bin_start_and_range();
         let mut chunk: Vec<(Pubkey, AccountMapEntry<T>)> = Vec::with_capacity(ITER_BATCH_SIZE);
         'outer: for i in self.account_maps.iter().skip(start_bin).take(bin_range) {
-            for (pubkey, account_map_entry) in
-                Self::range(&i.read().unwrap(), (self.start_bound, self.end_bound))
-            {
-                if chunk.len() >= ITER_BATCH_SIZE {
+            for (pubkey, account_map_entry) in Self::range(
+                &i.read().unwrap(),
+                (self.start_bound, self.end_bound),
+                self.collect_all_unsorted,
+            ) {
+                if chunk.len() >= ITER_BATCH_SIZE && !self.collect_all_unsorted {
                     break 'outer;
                 }
                 let item = (*pubkey, account_map_entry.clone());
@@ -721,6 +728,8 @@ impl<'a, T: 'static + Clone> Iterator for AccountsIndexIterator<'a, T> {
         if chunk.is_empty() {
             self.is_finished = true;
             return None;
+        } else if self.collect_all_unsorted {
+            self.is_finished = true;
         }
 
         self.start_bound = Excluded(chunk.last().unwrap().0);
@@ -811,11 +820,11 @@ impl<T: IsCached> AccountsIndex<T> {
         (account_maps, bin_calculator)
     }
 
-    fn iter<R>(&self, range: Option<R>) -> AccountsIndexIterator<T>
+    fn iter<R>(&self, range: Option<R>, collect_all_unsorted: bool) -> AccountsIndexIterator<T>
     where
         R: RangeBounds<Pubkey>,
     {
-        AccountsIndexIterator::new(self, range)
+        AccountsIndexIterator::new(self, range, collect_all_unsorted)
     }
 
     fn do_checked_scan_accounts<F, R>(
@@ -825,6 +834,7 @@ impl<T: IsCached> AccountsIndex<T> {
         scan_bank_id: BankId,
         func: F,
         scan_type: ScanTypes<R>,
+        collect_all_unsorted: bool,
     ) -> Result<(), ScanError>
     where
         F: FnMut(&Pubkey, (&T, Slot)),
@@ -977,7 +987,14 @@ impl<T: IsCached> AccountsIndex<T> {
         match scan_type {
             ScanTypes::Unindexed(range) => {
                 // Pass "" not to log metrics, so RPC doesn't get spammy
-                self.do_scan_accounts(metric_name, ancestors, func, range, Some(max_root));
+                self.do_scan_accounts(
+                    metric_name,
+                    ancestors,
+                    func,
+                    range,
+                    Some(max_root),
+                    collect_all_unsorted,
+                );
             }
             ScanTypes::Indexed(IndexKey::ProgramId(program_id)) => {
                 self.do_scan_secondary_index(
@@ -1041,11 +1058,19 @@ impl<T: IsCached> AccountsIndex<T> {
         ancestors: &Ancestors,
         func: F,
         range: Option<R>,
+        collect_all_unsorted: bool,
     ) where
         F: FnMut(&Pubkey, (&T, Slot)),
         R: RangeBounds<Pubkey>,
     {
-        self.do_scan_accounts(metric_name, ancestors, func, range, None);
+        self.do_scan_accounts(
+            metric_name,
+            ancestors,
+            func,
+            range,
+            None,
+            collect_all_unsorted,
+        );
     }
 
     // Scan accounts and return latest version of each account that is either:
@@ -1058,6 +1083,7 @@ impl<T: IsCached> AccountsIndex<T> {
         mut func: F,
         range: Option<R>,
         max_root: Option<Slot>,
+        collect_all_unsorted: bool,
     ) where
         F: FnMut(&Pubkey, (&T, Slot)),
         R: RangeBounds<Pubkey>,
@@ -1071,7 +1097,7 @@ impl<T: IsCached> AccountsIndex<T> {
         let mut read_lock_elapsed = 0;
         let mut iterator_elapsed = 0;
         let mut iterator_timer = Measure::start("iterator_elapsed");
-        for pubkey_list in self.iter(range) {
+        for pubkey_list in self.iter(range, collect_all_unsorted) {
             iterator_timer.stop();
             iterator_elapsed += iterator_timer.as_us();
             for (pubkey, list) in pubkey_list {
@@ -1213,6 +1239,7 @@ impl<T: IsCached> AccountsIndex<T> {
     where
         F: FnMut(&Pubkey, (&T, Slot)),
     {
+        let collect_all_unsorted = false;
         // Pass "" not to log metrics, so RPC doesn't get spammy
         self.do_checked_scan_accounts(
             "",
@@ -1220,6 +1247,7 @@ impl<T: IsCached> AccountsIndex<T> {
             scan_bank_id,
             func,
             ScanTypes::Unindexed(None::<Range<Pubkey>>),
+            collect_all_unsorted,
         )
     }
 
@@ -1228,10 +1256,17 @@ impl<T: IsCached> AccountsIndex<T> {
         metric_name: &'static str,
         ancestors: &Ancestors,
         func: F,
+        collect_all_unsorted: bool,
     ) where
         F: FnMut(&Pubkey, (&T, Slot)),
     {
-        self.do_unchecked_scan_accounts(metric_name, ancestors, func, None::<Range<Pubkey>>);
+        self.do_unchecked_scan_accounts(
+            metric_name,
+            ancestors,
+            func,
+            None::<Range<Pubkey>>,
+            collect_all_unsorted,
+        );
     }
 
     /// call func with every pubkey and index visible from a given set of ancestors with range
@@ -1240,13 +1275,20 @@ impl<T: IsCached> AccountsIndex<T> {
         metric_name: &'static str,
         ancestors: &Ancestors,
         range: R,
+        collect_all_unsorted: bool,
         func: F,
     ) where
         F: FnMut(&Pubkey, (&T, Slot)),
         R: RangeBounds<Pubkey>,
     {
         // Only the rent logic should be calling this, which doesn't need the safety checks
-        self.do_unchecked_scan_accounts(metric_name, ancestors, func, Some(range));
+        self.do_unchecked_scan_accounts(
+            metric_name,
+            ancestors,
+            func,
+            Some(range),
+            collect_all_unsorted,
+        );
     }
 
     /// call func with every pubkey and index visible from a given set of ancestors
@@ -1260,6 +1302,8 @@ impl<T: IsCached> AccountsIndex<T> {
     where
         F: FnMut(&Pubkey, (&T, Slot)),
     {
+        let collect_all_unsorted = false;
+
         // Pass "" not to log metrics, so RPC doesn't get spammy
         self.do_checked_scan_accounts(
             "",
@@ -1267,6 +1311,7 @@ impl<T: IsCached> AccountsIndex<T> {
             scan_bank_id,
             func,
             ScanTypes::<Range<Pubkey>>::Indexed(index_key),
+            collect_all_unsorted,
         )
     }
 
@@ -2588,6 +2633,8 @@ pub mod tests {
         }
     }
 
+    const COLLECT_ALL_UNSORTED_FALSE: bool = false;
+
     #[test]
     fn test_get_empty() {
         let key = Keypair::new();
@@ -2597,7 +2644,12 @@ pub mod tests {
         assert!(index.get(&key.pubkey(), None, None).is_none());
 
         let mut num = 0;
-        index.unchecked_scan_accounts("", &ancestors, |_pubkey, _index| num += 1);
+        index.unchecked_scan_accounts(
+            "",
+            &ancestors,
+            |_pubkey, _index| num += 1,
+            COLLECT_ALL_UNSORTED_FALSE,
+        );
         assert_eq!(num, 0);
     }
 
@@ -2670,7 +2722,12 @@ pub mod tests {
         assert!(index.get(&key.pubkey(), None, None).is_none());
 
         let mut num = 0;
-        index.unchecked_scan_accounts("", &ancestors, |_pubkey, _index| num += 1);
+        index.unchecked_scan_accounts(
+            "",
+            &ancestors,
+            |_pubkey, _index| num += 1,
+            COLLECT_ALL_UNSORTED_FALSE,
+        );
         assert_eq!(num, 0);
     }
 
@@ -2703,12 +2760,22 @@ pub mod tests {
         assert!(index.get(pubkey, None, None).is_none());
 
         let mut num = 0;
-        index.unchecked_scan_accounts("", &ancestors, |_pubkey, _index| num += 1);
+        index.unchecked_scan_accounts(
+            "",
+            &ancestors,
+            |_pubkey, _index| num += 1,
+            COLLECT_ALL_UNSORTED_FALSE,
+        );
         assert_eq!(num, 0);
         ancestors.insert(slot, 0);
         assert!(index.get(pubkey, Some(&ancestors), None).is_some());
         assert_eq!(index.ref_count_from_storage(pubkey), 1);
-        index.unchecked_scan_accounts("", &ancestors, |_pubkey, _index| num += 1);
+        index.unchecked_scan_accounts(
+            "",
+            &ancestors,
+            |_pubkey, _index| num += 1,
+            COLLECT_ALL_UNSORTED_FALSE,
+        );
         assert_eq!(num, 1);
 
         // not zero lamports
@@ -2722,12 +2789,22 @@ pub mod tests {
         assert!(index.get(pubkey, None, None).is_none());
 
         let mut num = 0;
-        index.unchecked_scan_accounts("", &ancestors, |_pubkey, _index| num += 1);
+        index.unchecked_scan_accounts(
+            "",
+            &ancestors,
+            |_pubkey, _index| num += 1,
+            COLLECT_ALL_UNSORTED_FALSE,
+        );
         assert_eq!(num, 0);
         ancestors.insert(slot, 0);
         assert!(index.get(pubkey, Some(&ancestors), None).is_some());
         assert_eq!(index.ref_count_from_storage(pubkey), 0); // cached, so 0
-        index.unchecked_scan_accounts("", &ancestors, |_pubkey, _index| num += 1);
+        index.unchecked_scan_accounts(
+            "",
+            &ancestors,
+            |_pubkey, _index| num += 1,
+            COLLECT_ALL_UNSORTED_FALSE,
+        );
         assert_eq!(num, 1);
     }
 
@@ -2919,11 +2996,21 @@ pub mod tests {
         assert!(index.get(&key.pubkey(), None, None).is_none());
 
         let mut num = 0;
-        index.unchecked_scan_accounts("", &ancestors, |_pubkey, _index| num += 1);
+        index.unchecked_scan_accounts(
+            "",
+            &ancestors,
+            |_pubkey, _index| num += 1,
+            COLLECT_ALL_UNSORTED_FALSE,
+        );
         assert_eq!(num, 0);
         ancestors.insert(slot, 0);
         assert!(index.get(&key.pubkey(), Some(&ancestors), None).is_some());
-        index.unchecked_scan_accounts("", &ancestors, |_pubkey, _index| num += 1);
+        index.unchecked_scan_accounts(
+            "",
+            &ancestors,
+            |_pubkey, _index| num += 1,
+            COLLECT_ALL_UNSORTED_FALSE,
+        );
         assert_eq!(num, 1);
     }
 
@@ -2948,7 +3035,12 @@ pub mod tests {
         assert!(index.get(&key.pubkey(), Some(&ancestors), None).is_none());
 
         let mut num = 0;
-        index.unchecked_scan_accounts("", &ancestors, |_pubkey, _index| num += 1);
+        index.unchecked_scan_accounts(
+            "",
+            &ancestors,
+            |_pubkey, _index| num += 1,
+            COLLECT_ALL_UNSORTED_FALSE,
+        );
         assert_eq!(num, 0);
     }
 
@@ -2975,12 +3067,17 @@ pub mod tests {
 
         let mut num = 0;
         let mut found_key = false;
-        index.unchecked_scan_accounts("", &ancestors, |pubkey, _index| {
-            if pubkey == &key.pubkey() {
-                found_key = true
-            };
-            num += 1
-        });
+        index.unchecked_scan_accounts(
+            "",
+            &ancestors,
+            |pubkey, _index| {
+                if pubkey == &key.pubkey() {
+                    found_key = true
+                };
+                num += 1
+            },
+            COLLECT_ALL_UNSORTED_FALSE,
+        );
         assert_eq!(num, 1);
         assert!(found_key);
     }
@@ -3048,9 +3145,15 @@ pub mod tests {
 
         let ancestors = Ancestors::default();
         let mut scanned_keys = HashSet::new();
-        index.range_scan_accounts("", &ancestors, pubkey_range, |pubkey, _index| {
-            scanned_keys.insert(*pubkey);
-        });
+        index.range_scan_accounts(
+            "",
+            &ancestors,
+            pubkey_range,
+            COLLECT_ALL_UNSORTED_FALSE,
+            |pubkey, _index| {
+                scanned_keys.insert(*pubkey);
+            },
+        );
 
         let mut expected_len = 0;
         for key in &pubkeys[index_start..index_end] {
@@ -3119,9 +3222,14 @@ pub mod tests {
         let ancestors = Ancestors::default();
 
         let mut scanned_keys = HashSet::new();
-        index.unchecked_scan_accounts("", &ancestors, |pubkey, _index| {
-            scanned_keys.insert(*pubkey);
-        });
+        index.unchecked_scan_accounts(
+            "",
+            &ancestors,
+            |pubkey, _index| {
+                scanned_keys.insert(*pubkey);
+            },
+            COLLECT_ALL_UNSORTED_FALSE,
+        );
         assert_eq!(scanned_keys.len(), num_pubkeys);
     }
 
@@ -3137,7 +3245,7 @@ pub mod tests {
     #[test]
     fn test_accounts_iter_finished() {
         let (index, _) = setup_accounts_index_keys(0);
-        let mut iter = index.iter(None::<Range<Pubkey>>);
+        let mut iter = index.iter(None::<Range<Pubkey>>, COLLECT_ALL_UNSORTED_FALSE);
         assert!(iter.next().is_none());
         let mut gc = vec![];
         index.upsert(
@@ -3416,13 +3524,18 @@ pub mod tests {
 
         let mut num = 0;
         let mut found_key = false;
-        index.unchecked_scan_accounts("", &Ancestors::default(), |pubkey, _index| {
-            if pubkey == &key.pubkey() {
-                found_key = true;
-                assert_eq!(_index, (&true, 3));
-            };
-            num += 1
-        });
+        index.unchecked_scan_accounts(
+            "",
+            &Ancestors::default(),
+            |pubkey, _index| {
+                if pubkey == &key.pubkey() {
+                    found_key = true;
+                    assert_eq!(_index, (&true, 3));
+                };
+                num += 1
+            },
+            COLLECT_ALL_UNSORTED_FALSE,
+        );
         assert_eq!(num, 1);
         assert!(found_key);
     }
@@ -3980,20 +4093,40 @@ pub mod tests {
     #[test]
     fn test_bin_start_and_range() {
         let index = AccountsIndex::<bool>::default_for_tests();
-        let iter = AccountsIndexIterator::new(&index, None::<RangeInclusive<Pubkey>>);
+        let iter = AccountsIndexIterator::new(
+            &index,
+            None::<RangeInclusive<Pubkey>>,
+            COLLECT_ALL_UNSORTED_FALSE,
+        );
         assert_eq!((0, usize::MAX), iter.bin_start_and_range());
 
         let key_0 = Pubkey::new(&[0; 32]);
         let key_ff = Pubkey::new(&[0xff; 32]);
 
-        let iter = AccountsIndexIterator::new(&index, Some(RangeInclusive::new(key_0, key_ff)));
+        let iter = AccountsIndexIterator::new(
+            &index,
+            Some(RangeInclusive::new(key_0, key_ff)),
+            COLLECT_ALL_UNSORTED_FALSE,
+        );
         let bins = index.bins();
         assert_eq!((0, bins), iter.bin_start_and_range());
-        let iter = AccountsIndexIterator::new(&index, Some(RangeInclusive::new(key_ff, key_0)));
+        let iter = AccountsIndexIterator::new(
+            &index,
+            Some(RangeInclusive::new(key_ff, key_0)),
+            COLLECT_ALL_UNSORTED_FALSE,
+        );
         assert_eq!((bins - 1, 0), iter.bin_start_and_range());
-        let iter = AccountsIndexIterator::new(&index, Some((Included(key_0), Unbounded)));
+        let iter = AccountsIndexIterator::new(
+            &index,
+            Some((Included(key_0), Unbounded)),
+            COLLECT_ALL_UNSORTED_FALSE,
+        );
         assert_eq!((0, usize::MAX), iter.bin_start_and_range());
-        let iter = AccountsIndexIterator::new(&index, Some((Included(key_ff), Unbounded)));
+        let iter = AccountsIndexIterator::new(
+            &index,
+            Some((Included(key_ff), Unbounded)),
+            COLLECT_ALL_UNSORTED_FALSE,
+        );
         assert_eq!((bins - 1, usize::MAX), iter.bin_start_and_range());
 
         assert_eq!(
@@ -4010,30 +4143,58 @@ pub mod tests {
     fn test_start_end_bin() {
         let index = AccountsIndex::<bool>::default_for_tests();
         assert_eq!(index.bins(), BINS_DEFAULT);
-        let iter = AccountsIndexIterator::new(&index, None::<RangeInclusive<Pubkey>>);
+        let iter = AccountsIndexIterator::new(
+            &index,
+            None::<RangeInclusive<Pubkey>>,
+            COLLECT_ALL_UNSORTED_FALSE,
+        );
         assert_eq!(iter.start_bin(), 0); // no range, so 0
         assert_eq!(iter.end_bin_inclusive(), usize::MAX); // no range, so max
 
         let key = Pubkey::new(&[0; 32]);
-        let iter = AccountsIndexIterator::new(&index, Some(RangeInclusive::new(key, key)));
+        let iter = AccountsIndexIterator::new(
+            &index,
+            Some(RangeInclusive::new(key, key)),
+            COLLECT_ALL_UNSORTED_FALSE,
+        );
         assert_eq!(iter.start_bin(), 0); // start at pubkey 0, so 0
         assert_eq!(iter.end_bin_inclusive(), 0); // end at pubkey 0, so 0
-        let iter = AccountsIndexIterator::new(&index, Some((Included(key), Excluded(key))));
+        let iter = AccountsIndexIterator::new(
+            &index,
+            Some((Included(key), Excluded(key))),
+            COLLECT_ALL_UNSORTED_FALSE,
+        );
         assert_eq!(iter.start_bin(), 0); // start at pubkey 0, so 0
         assert_eq!(iter.end_bin_inclusive(), 0); // end at pubkey 0, so 0
-        let iter = AccountsIndexIterator::new(&index, Some((Excluded(key), Excluded(key))));
+        let iter = AccountsIndexIterator::new(
+            &index,
+            Some((Excluded(key), Excluded(key))),
+            COLLECT_ALL_UNSORTED_FALSE,
+        );
         assert_eq!(iter.start_bin(), 0); // start at pubkey 0, so 0
         assert_eq!(iter.end_bin_inclusive(), 0); // end at pubkey 0, so 0
 
         let key = Pubkey::new(&[0xff; 32]);
-        let iter = AccountsIndexIterator::new(&index, Some(RangeInclusive::new(key, key)));
+        let iter = AccountsIndexIterator::new(
+            &index,
+            Some(RangeInclusive::new(key, key)),
+            COLLECT_ALL_UNSORTED_FALSE,
+        );
         let bins = index.bins();
         assert_eq!(iter.start_bin(), bins - 1); // start at highest possible pubkey, so bins - 1
         assert_eq!(iter.end_bin_inclusive(), bins - 1);
-        let iter = AccountsIndexIterator::new(&index, Some((Included(key), Excluded(key))));
+        let iter = AccountsIndexIterator::new(
+            &index,
+            Some((Included(key), Excluded(key))),
+            COLLECT_ALL_UNSORTED_FALSE,
+        );
         assert_eq!(iter.start_bin(), bins - 1); // start at highest possible pubkey, so bins - 1
         assert_eq!(iter.end_bin_inclusive(), bins - 1);
-        let iter = AccountsIndexIterator::new(&index, Some((Excluded(key), Excluded(key))));
+        let iter = AccountsIndexIterator::new(
+            &index,
+            Some((Excluded(key), Excluded(key))),
+            COLLECT_ALL_UNSORTED_FALSE,
+        );
         assert_eq!(iter.start_bin(), bins - 1); // start at highest possible pubkey, so bins - 1
         assert_eq!(iter.end_bin_inclusive(), bins - 1);
     }
