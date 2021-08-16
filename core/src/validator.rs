@@ -588,7 +588,7 @@ impl Validator {
                     bank_forks.clone(),
                     optimistically_confirmed_bank,
                     rpc_subscriptions.clone(),
-                    Arc::new(RwLock::new(vec![confirmed_bank_sender])),
+                    Some(Arc::new(RwLock::new(vec![confirmed_bank_sender]))),
                 )),
                 Some(bank_notification_sender),
                 accountsdb_repl_service,

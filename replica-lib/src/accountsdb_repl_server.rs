@@ -1,11 +1,15 @@
 use {
+    futures_util::FutureExt,
     log::*,
     std::{
         net::SocketAddr,
         sync::{Arc, RwLock},
         thread::{self, Builder, JoinHandle},
     },
-    tokio::runtime::Runtime,
+    tokio::{
+        runtime::Runtime,
+        sync::oneshot::{self, Receiver, Sender},
+    },
     tonic::{self, transport},
 };
 
@@ -84,6 +88,7 @@ pub struct AccountsDbReplServiceConfig {
 pub struct AccountsDbReplService {
     accountsdb_repl_server: AccountsDbReplServer,
     thread: JoinHandle<()>,
+    exit_signal_sender: Sender<()>,
 }
 
 impl AccountsDbReplService {
@@ -106,26 +111,36 @@ impl AccountsDbReplService {
         );
 
         let server_cloned = accountsdb_repl_server.clone();
+        let (exit_signal_sender, exit_signal_receiver) = oneshot::channel::<()>();
+        // let sender = Arc::new(Mutex::new(Some(tx)));
+
         let thread = Builder::new()
             .name("sol-accountsdb-repl-rt".to_string())
             .spawn(move || {
-                Self::run_accountsdb_repl_server_in_runtime(config, runtime, server_cloned);
+                Self::run_accountsdb_repl_server_in_runtime(
+                    config,
+                    runtime,
+                    server_cloned,
+                    exit_signal_receiver,
+                );
             })
             .unwrap();
 
         Self {
             accountsdb_repl_server,
             thread,
+            exit_signal_sender,
         }
     }
 
     async fn run_accountsdb_repl_server(
         config: AccountsDbReplServiceConfig,
         server: AccountsDbReplServer,
+        exit_signal: Receiver<()>,
     ) -> Result<(), tonic::transport::Error> {
         transport::Server::builder()
             .add_service(accounts_db_repl_server::AccountsDbReplServer::new(server))
-            .serve(config.replica_server_addr)
+            .serve_with_shutdown(config.replica_server_addr, exit_signal.map(drop))
             .await
     }
 
@@ -133,8 +148,13 @@ impl AccountsDbReplService {
         config: AccountsDbReplServiceConfig,
         runtime: Arc<Runtime>,
         server: AccountsDbReplServer,
+        exit_signal: Receiver<()>,
     ) {
-        let result = runtime.block_on(Self::run_accountsdb_repl_server(config, server));
+        let result = runtime.block_on(Self::run_accountsdb_repl_server(
+            config,
+            server,
+            exit_signal,
+        ));
         match result {
             Ok(_) => {
                 info!("AccountsDbReplServer finished");
@@ -146,6 +166,7 @@ impl AccountsDbReplService {
     }
 
     pub fn join(self) -> thread::Result<()> {
+        let _ = self.exit_signal_sender.send(());
         self.accountsdb_repl_server.join()?;
         self.thread.join()
     }

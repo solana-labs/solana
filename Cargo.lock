@@ -5524,6 +5524,7 @@ dependencies = [
  "console 0.11.3",
  "crossbeam-channel",
  "futures 0.3.16",
+ "futures-util",
  "jsonrpc-core 17.1.0",
  "jsonrpc-core-client 17.1.0",
  "jsonrpc-derive 17.1.0",
