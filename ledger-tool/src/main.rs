@@ -144,7 +144,7 @@ fn output_entry(
                     })
                     .map(|transaction_status| transaction_status.into());
 
-                if let Some(legacy_tx) = transaction.legacy_transaction() {
+                if let Some(legacy_tx) = transaction.into_legacy_transaction() {
                     solana_cli_output::display::println_transaction(
                         &legacy_tx, &tx_status, "      ", None, None,
                     );

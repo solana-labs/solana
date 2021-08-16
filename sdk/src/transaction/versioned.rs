@@ -56,7 +56,7 @@ impl From<Transaction> for VersionedTransaction {
 
 impl VersionedTransaction {
     /// Returns a legacy transaction if the transaction message is legacy.
-    pub fn legacy_transaction(self) -> Option<Transaction> {
+    pub fn into_legacy_transaction(self) -> Option<Transaction> {
         match self.message {
             VersionedMessage::Legacy(message) => Some(Transaction {
                 signatures: self.signatures,

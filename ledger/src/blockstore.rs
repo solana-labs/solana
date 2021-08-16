@@ -1956,7 +1956,7 @@ impl Blockstore {
         iterator
             .map(|versioned_tx| {
                 // TODO: add support for versioned transactions
-                if let Some(transaction) = versioned_tx.legacy_transaction() {
+                if let Some(transaction) = versioned_tx.into_legacy_transaction() {
                     let signature = transaction.signatures[0];
                     Ok(TransactionWithStatusMeta {
                         transaction,
@@ -2251,7 +2251,7 @@ impl Blockstore {
 
             // TODO: support retrieving versioned transactions
             let transaction = transaction
-                .legacy_transaction()
+                .into_legacy_transaction()
                 .ok_or(BlockstoreError::UnsupportedTransactionVersion)?;
 
             let block_time = self.get_block_time(slot)?;
@@ -6186,7 +6186,7 @@ pub mod tests {
             .flat_map(|entry| entry.transactions)
             .map(|transaction| {
                 transaction
-                    .legacy_transaction()
+                    .into_legacy_transaction()
                     .expect("versioned transactions not supported")
             })
             .map(|transaction| {
@@ -7060,7 +7060,7 @@ pub mod tests {
             .filter(|entry| !entry.is_tick())
             .flat_map(|entry| entry.transactions)
             .map(|tx| {
-                tx.legacy_transaction()
+                tx.into_legacy_transaction()
                     .expect("versioned transactions not supported")
             })
             .map(|transaction| {
@@ -7163,7 +7163,7 @@ pub mod tests {
             .filter(|entry| !entry.is_tick())
             .flat_map(|entry| entry.transactions)
             .map(|tx| {
-                tx.legacy_transaction()
+                tx.into_legacy_transaction()
                     .expect("versioned transactions not supported")
             })
             .map(|transaction| {
@@ -7527,7 +7527,7 @@ pub mod tests {
                     }
                     for tx in entry.transactions {
                         let transaction = tx
-                            .legacy_transaction()
+                            .into_legacy_transaction()
                             .expect("versioned transactions not supported");
                         assert_eq!(transaction.signatures.len(), 1);
                         blockstore
@@ -7554,7 +7554,7 @@ pub mod tests {
                 for entry in entries.into_iter() {
                     for tx in entry.transactions {
                         let transaction = tx
-                            .legacy_transaction()
+                            .into_legacy_transaction()
                             .expect("versioned transactions not supported");
                         assert_eq!(transaction.signatures.len(), 1);
                         blockstore
