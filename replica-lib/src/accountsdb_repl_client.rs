@@ -1,16 +1,12 @@
 use {
     log::*,
     solana_sdk::clock::Slot,
-    std::{
-        net::SocketAddr,
-        sync::{Arc},
-    },
+    std::{net::SocketAddr, sync::Arc},
     tokio::runtime::Runtime,
     tonic::{self, transport::Endpoint, Request},
 };
 
 tonic::include_proto!("accountsdb_repl");
-
 
 pub struct AccountsDbReplClient {
     client: accounts_db_repl_client::AccountsDbReplClient<tonic::transport::Channel>,
@@ -39,7 +35,10 @@ impl AccountsDbReplClient {
             }
         };
         let client = accounts_db_repl_client::AccountsDbReplClient::connect(endpoint).await?;
-        info!("Successfully connected to the AccountsDb Replication server: {:?}", url);
+        info!(
+            "Successfully connected to the AccountsDb Replication server: {:?}",
+            url
+        );
         Ok(AccountsDbReplClient { client })
     }
 
@@ -72,10 +71,7 @@ pub struct AccountsDbReplClientService {
 }
 
 impl AccountsDbReplClientService {
-    pub fn new(
-        config: AccountsDbReplClientServiceConfig,
-    ) -> Result<Self, ReplicaRpcError> {
-
+    pub fn new(config: AccountsDbReplClientServiceConfig) -> Result<Self, ReplicaRpcError> {
         let runtime = Arc::new(
             tokio::runtime::Builder::new_multi_thread()
                 .worker_threads(config.worker_threads)
@@ -85,17 +81,16 @@ impl AccountsDbReplClientService {
                 .expect("Runtime"),
         );
 
-        let accountsdb_repl_client = runtime.block_on(AccountsDbReplClient::connect(&config.replica_server_addr))?;
+        let accountsdb_repl_client =
+            runtime.block_on(AccountsDbReplClient::connect(&config.replica_server_addr))?;
 
         Ok(Self {
             runtime,
             accountsdb_repl_client,
         })
     }
-    pub fn get_updated_slots(
-        &mut self,
-        last_slot: Slot,
-    ) -> Result<Vec<Slot>, ReplicaRpcError> {
-        self.runtime.block_on(self.accountsdb_repl_client.get_updated_slots(last_slot))
+    pub fn get_updated_slots(&mut self, last_slot: Slot) -> Result<Vec<Slot>, ReplicaRpcError> {
+        self.runtime
+            .block_on(self.accountsdb_repl_client.get_updated_slots(last_slot))
     }
 }

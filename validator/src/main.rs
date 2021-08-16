@@ -37,9 +37,7 @@ use {
     solana_ledger::blockstore_db::BlockstoreRecoveryMode,
     solana_perf::recycler::enable_recycler_warming,
     solana_poh::poh_service,
-    solana_replica_lib::{
-        accountsdb_repl_server::{AccountsDbReplServiceConfig},
-    },
+    solana_replica_lib::accountsdb_repl_server::AccountsDbReplServiceConfig,
     solana_rpc::{rpc::JsonRpcConfig, rpc_pubsub_service::PubSubConfig},
     solana_runtime::{
         accounts_db::{
@@ -2442,7 +2440,10 @@ pub fn main() {
 
         Some(AccountsDbReplServiceConfig {
             worker_threads: value_t_or_exit!(matches, "accountsdb_repl_threads", usize),
-            replica_server_addr: SocketAddr::new(accountsdb_repl_bind_address, accountsdb_repl_port),
+            replica_server_addr: SocketAddr::new(
+                accountsdb_repl_bind_address,
+                accountsdb_repl_port,
+            ),
         })
     } else {
         None

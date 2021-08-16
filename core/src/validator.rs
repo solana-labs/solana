@@ -545,12 +545,9 @@ impl Validator {
 
             let (confirmed_bank_sender, confirmed_bank_receiver) = unbounded();
 
-            let accountsdb_repl_service = if let Some(accountsdb_repl_service_config) = &config.accountsdb_repl_service_config {
-                Some(accountsdb_repl_server_factory::AccountsDbReplServerFactory::build_accountsdb_repl_server(
-                    accountsdb_repl_service_config.clone(), confirmed_bank_receiver))
-            } else {
-                None
-            };
+            let accountsdb_repl_service = config.accountsdb_repl_service_config.as_ref().map(|accountsdb_repl_service_config| {
+                accountsdb_repl_server_factory::AccountsDbReplServerFactory::build_accountsdb_repl_server(
+                    accountsdb_repl_service_config.clone(), confirmed_bank_receiver)});
 
             let (bank_notification_sender, bank_notification_receiver) = unbounded();
             (

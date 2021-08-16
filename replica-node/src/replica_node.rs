@@ -1,4 +1,5 @@
 use {
+    crate::accountsdb_repl_service::AccountsDbReplService,
     crossbeam_channel::unbounded,
     log::*,
     solana_download_utils::download_snapshot,
@@ -8,6 +9,7 @@ use {
         blockstore::Blockstore, blockstore_db::AccessType, blockstore_processor,
         leader_schedule_cache::LeaderScheduleCache,
     },
+    solana_replica_lib::accountsdb_repl_client::AccountsDbReplClientServiceConfig,
     solana_rpc::{
         max_slots::MaxSlots,
         optimistically_confirmed_bank_tracker::{
@@ -62,6 +64,7 @@ pub struct ReplicaNode {
     json_rpc_service: Option<JsonRpcService>,
     pubsub_service: Option<PubSubService>,
     optimistically_confirmed_bank_tracker: Option<OptimisticallyConfirmedBankTracker>,
+    accountsdb_repl_service: AccountsDbReplService,
 }
 
 // Struct maintaining information about banks
@@ -281,10 +284,21 @@ impl ReplicaNode {
                 &replica_config.socket_addr_space,
             );
 
+        let accountsdb_repl_client_config = AccountsDbReplClientServiceConfig {
+            worker_threads: 1,
+            replica_server_addr: replica_config.rpc_source_addr,
+        };
+
+        let last_replicated_slot = bank_info.bank_forks.read().unwrap().root_bank().slot();
+        let accountsdb_repl_service =
+            AccountsDbReplService::new(last_replicated_slot, accountsdb_repl_client_config)
+                .expect("Failed to start AccountsDb replication service");
+
         ReplicaNode {
             json_rpc_service,
             pubsub_service,
             optimistically_confirmed_bank_tracker,
+            accountsdb_repl_service,
         }
     }
 
@@ -304,5 +318,8 @@ impl ReplicaNode {
                 .join()
                 .expect("optimistically_confirmed_bank_tracker");
         }
+        self.accountsdb_repl_service
+            .join()
+            .expect("accountsdb_repl_service");
     }
 }

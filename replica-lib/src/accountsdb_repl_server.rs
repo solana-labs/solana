@@ -131,7 +131,9 @@ impl AccountsDbReplService {
 
     fn run_accountsdb_repl_server_in_runtime(
         config: AccountsDbReplServiceConfig,
-        runtime: Arc<Runtime>, server: AccountsDbReplServer) {
+        runtime: Arc<Runtime>,
+        server: AccountsDbReplServer,
+    ) {
         let result = runtime.block_on(Self::run_accountsdb_repl_server(config, server));
         match result {
             Ok(_) => {
