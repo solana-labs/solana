@@ -81,14 +81,12 @@ impl VersionedMessage {
     }
 
     /// Compute the blake3 hash of this transaction's message
-    #[cfg(not(target_arch = "bpf"))]
     pub fn hash(&self) -> Hash {
         let message_bytes = self.serialize();
         Self::hash_raw_message(&message_bytes)
     }
 
     /// Compute the blake3 hash of a raw transaction message
-    #[cfg(not(target_arch = "bpf"))]
     pub fn hash_raw_message(message_bytes: &[u8]) -> Hash {
         use blake3::traits::digest::Digest;
         use std::convert::TryFrom;

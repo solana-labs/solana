@@ -9,6 +9,7 @@ use {
         secp256k1_program,
         serialize_utils::{append_slice, append_u16, append_u8},
     },
+    bitflags::bitflags,
     std::convert::TryFrom,
 };
 
@@ -27,6 +28,14 @@ impl TryFrom<Message> for SanitizedMessage {
     fn try_from(message: Message) -> Result<Self, Self::Error> {
         message.sanitize()?;
         Ok(Self::Legacy(message))
+    }
+}
+
+bitflags! {
+    struct InstructionsSysvarAccountMeta: u8 {
+        const NONE = 0b00000000;
+        const IS_SIGNER = 0b00000001;
+        const IS_WRITABLE = 0b00000010;
     }
 }
 
@@ -60,7 +69,7 @@ impl SanitizedMessage {
     /// Returns the fee payer for the transaction
     pub fn fee_payer(&self) -> &Pubkey {
         self.get_account_key(0)
-            .expect("sanitized message always has payer at index 0")
+            .expect("sanitized message always has non-program fee payer at index 0")
     }
 
     /// The hash of a recent block, used for timing out a transaction
@@ -167,9 +176,6 @@ impl SanitizedMessage {
         index < self.header().num_required_signatures as usize
     }
 
-    const IS_SIGNER_BIT: usize = 0;
-    const IS_WRITABLE_BIT: usize = 1;
-
     // First encode the number of instructions:
     // [0..2 - num_instructions
     //
@@ -200,14 +206,14 @@ impl SanitizedMessage {
                 let account_index = *account_index as usize;
                 let is_signer = self.is_signer(account_index);
                 let is_writable = self.is_writable(account_index);
-                let mut meta_byte = 0;
+                let mut account_meta = InstructionsSysvarAccountMeta::NONE;
                 if is_signer {
-                    meta_byte |= 1 << Self::IS_SIGNER_BIT;
+                    account_meta |= InstructionsSysvarAccountMeta::IS_SIGNER;
                 }
                 if is_writable {
-                    meta_byte |= 1 << Self::IS_WRITABLE_BIT;
+                    account_meta |= InstructionsSysvarAccountMeta::IS_WRITABLE;
                 }
-                append_u8(&mut data, meta_byte);
+                append_u8(&mut data, account_meta.bits());
                 append_slice(
                     &mut data,
                     self.get_account_key(account_index).unwrap().as_ref(),
@@ -263,9 +269,11 @@ impl SanitizedMessage {
     pub fn calculate_fee(&self, fee_calculator: &FeeCalculator) -> u64 {
         let mut num_secp256k1_signatures: u64 = 0;
         for (program_id, instruction) in self.program_instructions_iter() {
-            if secp256k1_program::check_id(program_id) && !instruction.data.is_empty() {
-                num_secp256k1_signatures =
-                    num_secp256k1_signatures.saturating_add(instruction.data[0] as u64);
+            if secp256k1_program::check_id(program_id) {
+                if let Some(num_signatures) = instruction.data.get(0) {
+                    num_secp256k1_signatures =
+                        num_secp256k1_signatures.saturating_add(u64::from(*num_signatures));
+                }
             }
         }
 
@@ -273,5 +281,262 @@ impl SanitizedMessage {
             u64::from(self.header().num_required_signatures)
                 .saturating_add(num_secp256k1_signatures),
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        instruction::{AccountMeta, Instruction},
+        message::v0,
+        secp256k1_program, system_instruction,
+    };
+
+    #[test]
+    fn test_is_non_loader_key() {
+        let key0 = Pubkey::new_unique();
+        let key1 = Pubkey::new_unique();
+        let loader_key = Pubkey::new_unique();
+        let instructions = vec![
+            CompiledInstruction::new(1, &(), vec![0]),
+            CompiledInstruction::new(2, &(), vec![0, 1]),
+        ];
+
+        let message = SanitizedMessage::try_from(Message::new_with_compiled_instructions(
+            1,
+            0,
+            2,
+            vec![key0, key1, loader_key],
+            Hash::default(),
+            instructions,
+        ))
+        .unwrap();
+
+        assert!(message.is_non_loader_key(0));
+        assert!(message.is_non_loader_key(1));
+        assert!(!message.is_non_loader_key(2));
+    }
+
+    #[test]
+    fn test_num_readonly_accounts() {
+        let key0 = Pubkey::new_unique();
+        let key1 = Pubkey::new_unique();
+        let key2 = Pubkey::new_unique();
+        let key3 = Pubkey::new_unique();
+        let key4 = Pubkey::new_unique();
+        let key5 = Pubkey::new_unique();
+
+        let legacy_message = SanitizedMessage::try_from(Message {
+            header: MessageHeader {
+                num_required_signatures: 2,
+                num_readonly_signed_accounts: 1,
+                num_readonly_unsigned_accounts: 1,
+            },
+            account_keys: vec![key0, key1, key2, key3],
+            ..Message::default()
+        })
+        .unwrap();
+
+        assert_eq!(legacy_message.num_readonly_accounts(), 2);
+
+        let mapped_message = SanitizedMessage::V0(MappedMessage {
+            message: v0::Message {
+                header: MessageHeader {
+                    num_required_signatures: 2,
+                    num_readonly_signed_accounts: 1,
+                    num_readonly_unsigned_accounts: 1,
+                },
+                account_keys: vec![key0, key1, key2, key3],
+                ..v0::Message::default()
+            },
+            mapped_addresses: MappedAddresses {
+                writable: vec![key4],
+                readonly: vec![key5],
+            },
+        });
+
+        assert_eq!(mapped_message.num_readonly_accounts(), 3);
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn test_serialize_instructions() {
+        let program_id0 = Pubkey::new_unique();
+        let program_id1 = Pubkey::new_unique();
+        let id0 = Pubkey::new_unique();
+        let id1 = Pubkey::new_unique();
+        let id2 = Pubkey::new_unique();
+        let id3 = Pubkey::new_unique();
+        let instructions = vec![
+            Instruction::new_with_bincode(program_id0, &0, vec![AccountMeta::new(id0, false)]),
+            Instruction::new_with_bincode(program_id0, &0, vec![AccountMeta::new(id1, true)]),
+            Instruction::new_with_bincode(
+                program_id1,
+                &0,
+                vec![AccountMeta::new_readonly(id2, false)],
+            ),
+            Instruction::new_with_bincode(
+                program_id1,
+                &0,
+                vec![AccountMeta::new_readonly(id3, true)],
+            ),
+        ];
+
+        let message = Message::new(&instructions, Some(&id1));
+        let sanitized_message = SanitizedMessage::try_from(message.clone()).unwrap();
+        let serialized = sanitized_message.serialize_instructions();
+
+        // assert that SanitizedMessage::serialize_instructions has the same behavior as the
+        // deprecated Message::serialize_instructions method
+        assert_eq!(serialized, message.serialize_instructions());
+
+        // assert that Message::deserialize_instruction is compatible with SanitizedMessage::serialize_instructions
+        for (i, instruction) in instructions.iter().enumerate() {
+            assert_eq!(
+                Message::deserialize_instruction(i, &serialized).unwrap(),
+                *instruction
+            );
+        }
+    }
+
+    #[test]
+    fn test_calculate_fee() {
+        // Default: no fee.
+        let message =
+            SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique()))).unwrap();
+        assert_eq!(message.calculate_fee(&FeeCalculator::default()), 0);
+
+        // One signature, a fee.
+        assert_eq!(message.calculate_fee(&FeeCalculator::new(1)), 1);
+
+        // Two signatures, double the fee.
+        let key0 = Pubkey::new_unique();
+        let key1 = Pubkey::new_unique();
+        let ix0 = system_instruction::transfer(&key0, &key1, 1);
+        let ix1 = system_instruction::transfer(&key1, &key0, 1);
+        let message = SanitizedMessage::try_from(Message::new(&[ix0, ix1], Some(&key0))).unwrap();
+        assert_eq!(message.calculate_fee(&FeeCalculator::new(2)), 4);
+    }
+
+    #[test]
+    fn test_try_compile_instruction() {
+        let key0 = Pubkey::new_unique();
+        let key1 = Pubkey::new_unique();
+        let key2 = Pubkey::new_unique();
+        let program_id = Pubkey::new_unique();
+
+        let valid_instruction = Instruction {
+            program_id,
+            accounts: vec![
+                AccountMeta::new_readonly(key0, false),
+                AccountMeta::new_readonly(key1, false),
+                AccountMeta::new_readonly(key2, false),
+            ],
+            data: vec![],
+        };
+
+        let invalid_program_id_instruction = Instruction {
+            program_id: Pubkey::new_unique(),
+            accounts: vec![
+                AccountMeta::new_readonly(key0, false),
+                AccountMeta::new_readonly(key1, false),
+                AccountMeta::new_readonly(key2, false),
+            ],
+            data: vec![],
+        };
+
+        let invalid_account_key_instruction = Instruction {
+            program_id: Pubkey::new_unique(),
+            accounts: vec![
+                AccountMeta::new_readonly(key0, false),
+                AccountMeta::new_readonly(key1, false),
+                AccountMeta::new_readonly(Pubkey::new_unique(), false),
+            ],
+            data: vec![],
+        };
+
+        let legacy_message = SanitizedMessage::try_from(Message {
+            header: MessageHeader {
+                num_required_signatures: 1,
+                num_readonly_signed_accounts: 0,
+                num_readonly_unsigned_accounts: 0,
+            },
+            account_keys: vec![key0, key1, key2, program_id],
+            ..Message::default()
+        })
+        .unwrap();
+
+        let mapped_message = SanitizedMessage::V0(MappedMessage {
+            message: v0::Message {
+                header: MessageHeader {
+                    num_required_signatures: 1,
+                    num_readonly_signed_accounts: 0,
+                    num_readonly_unsigned_accounts: 0,
+                },
+                account_keys: vec![key0, key1],
+                ..v0::Message::default()
+            },
+            mapped_addresses: MappedAddresses {
+                writable: vec![key2],
+                readonly: vec![program_id],
+            },
+        });
+
+        for message in vec![legacy_message, mapped_message] {
+            assert_eq!(
+                message.try_compile_instruction(&valid_instruction),
+                Some(CompiledInstruction {
+                    program_id_index: 3,
+                    accounts: vec![0, 1, 2],
+                    data: vec![],
+                })
+            );
+
+            assert!(message
+                .try_compile_instruction(&invalid_program_id_instruction)
+                .is_none());
+            assert!(message
+                .try_compile_instruction(&invalid_account_key_instruction)
+                .is_none());
+        }
+    }
+
+    #[test]
+    fn test_calculate_fee_secp256k1() {
+        let key0 = Pubkey::new_unique();
+        let key1 = Pubkey::new_unique();
+        let ix0 = system_instruction::transfer(&key0, &key1, 1);
+
+        let mut secp_instruction1 = Instruction {
+            program_id: secp256k1_program::id(),
+            accounts: vec![],
+            data: vec![],
+        };
+        let mut secp_instruction2 = Instruction {
+            program_id: secp256k1_program::id(),
+            accounts: vec![],
+            data: vec![1],
+        };
+
+        let message = SanitizedMessage::try_from(Message::new(
+            &[
+                ix0.clone(),
+                secp_instruction1.clone(),
+                secp_instruction2.clone(),
+            ],
+            Some(&key0),
+        ))
+        .unwrap();
+        assert_eq!(message.calculate_fee(&FeeCalculator::new(1)), 2);
+
+        secp_instruction1.data = vec![0];
+        secp_instruction2.data = vec![10];
+        let message = SanitizedMessage::try_from(Message::new(
+            &[ix0, secp_instruction1, secp_instruction2],
+            Some(&key0),
+        ))
+        .unwrap();
+        assert_eq!(message.calculate_fee(&FeeCalculator::new(1)), 11);
     }
 }

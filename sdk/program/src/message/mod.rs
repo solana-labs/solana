@@ -3,12 +3,16 @@
 pub mod legacy;
 mod mapped;
 mod sanitized;
+#[cfg(not(target_arch = "bpf"))]
 pub mod v0;
 mod versions;
 
 pub use legacy::Message;
+#[cfg(not(target_arch = "bpf"))]
 pub use mapped::*;
+#[cfg(not(target_arch = "bpf"))]
 pub use sanitized::SanitizedMessage;
+#[cfg(not(target_arch = "bpf"))]
 pub use versions::*;
 
 /// The length of a message header in bytes

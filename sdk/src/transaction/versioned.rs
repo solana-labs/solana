@@ -27,13 +27,21 @@ pub struct VersionedTransaction {
 
 impl Sanitize for VersionedTransaction {
     fn sanitize(&self) -> std::result::Result<(), SanitizeError> {
-        if self.message.header().num_required_signatures as usize > self.signatures.len() {
+        self.message.sanitize()?;
+
+        // Once the "verify_tx_signatures_len" feature is enabled, this may be
+        // updated to an equality check.
+        if usize::from(self.message.header().num_required_signatures) > self.signatures.len() {
             return Err(SanitizeError::IndexOutOfBounds);
         }
+
+        // Signatures are verified before message keys are mapped so all signers
+        // must correspond to unmapped keys.
         if self.signatures.len() > self.message.unmapped_keys_len() {
             return Err(SanitizeError::IndexOutOfBounds);
         }
-        self.message.sanitize()
+
+        Ok(())
     }
 }
 
