@@ -7,7 +7,7 @@ use {
     solana_runtime::blockhash_queue::BlockhashQueue,
     solana_sdk::{
         hash::Hash,
-        signature::{Keypair, Signer},
+        signature::{Keypair, Signature, Signer},
         system_transaction,
     },
     std::collections::HashSet,
@@ -38,8 +38,8 @@ pub(super) struct BroadcastDuplicatesRun {
     prev_entry_hash: Option<Hash>,
     num_slots_broadcasted: usize,
     cluster_nodes_cache: Arc<ClusterNodesCache<BroadcastStage>>,
-    original_last_data_shreds: HashSet<Vec<u8>>,
-    partition_last_data_shreds: HashSet<Vec<u8>>,
+    original_last_data_shreds: HashSet<Signature>,
+    partition_last_data_shreds: HashSet<Signature>,
 }
 
 impl BroadcastDuplicatesRun {
@@ -204,16 +204,17 @@ impl BroadcastRun for BroadcastDuplicatesRun {
 
         // Special handling of last shred to cause partition
         if let Some((original_last_data_shred, partition_last_data_shred)) = last_shreds {
-            self.original_last_data_shreds.extend(
-                original_last_data_shred
-                    .iter()
-                    .map(|shred| shred.payload.clone()),
-            );
-            self.partition_last_data_shreds.extend(
-                partition_last_data_shred
-                    .iter()
-                    .map(|shred| shred.payload.clone()),
-            );
+            let pubkey = keypair.pubkey();
+            self.original_last_data_shreds
+                .extend(original_last_data_shred.iter().map(|shred| {
+                    assert!(shred.verify(&pubkey));
+                    shred.signature()
+                }));
+            self.partition_last_data_shreds
+                .extend(partition_last_data_shred.iter().map(|shred| {
+                    assert!(shred.verify(&pubkey));
+                    shred.signature()
+                }));
             let original_last_data_shred = Arc::new(original_last_data_shred);
             let partition_last_data_shred = Arc::new(partition_last_data_shred);
 
@@ -272,7 +273,7 @@ impl BroadcastRun for BroadcastDuplicatesRun {
                 if !socket_addr_space.check(&node.tvu) {
                     return None;
                 }
-                if self.original_last_data_shreds.contains(&shred.payload) {
+                if self.original_last_data_shreds.contains(&shred.signature()) {
                     // If the node is within the partitin skip the shred.
                     if cluster_partition.contains(&node.id) {
                         info!(
@@ -284,7 +285,7 @@ impl BroadcastRun for BroadcastDuplicatesRun {
                         return None;
                     }
                 }
-                if self.partition_last_data_shreds.contains(&shred.payload) {
+                if self.partition_last_data_shreds.contains(&shred.signature()) {
                     // If the node is not within the partitin skip the shred.
                     if !cluster_partition.contains(&node.id) {
                         info!(
