@@ -3341,22 +3341,64 @@ impl Bank {
         let sanitized_txs = batch.sanitized_transactions();
         debug!("processing transactions: {}", sanitized_txs.len());
         inc_new_counter_info!("bank-process_transactions", sanitized_txs.len());
+        let (
+            loaded_txs,
+            check_time,
+            load_time,
+        ) = self.load_transactions(
+            batch,
+            max_age,
+        );
+
+        let (
+            executed,
+            inner_instructions,
+            transaction_log_messages,
+            retryable_txs,
+            tx_count,
+            signature_count,
+            execution_time,
+        ) = self.execute_transactions(
+            batch,
+            &mut loaded_txs[..],
+            enable_cpi_recording,
+            enable_log_recording,
+            timings
+        );
+
+        debug!(
+            "check: {}us load: {}us execute: {}us txs_len={}",
+            check_time.as_us(),
+            load_time.as_us(),
+            execution_time.as_us(),
+            tx_count,
+        );
+        timings.check_us = timings.check_us.saturating_add(check_time.as_us());
+        timings.load_us = timings.load_us.saturating_add(load_time.as_us());
+        timings.execute_us = timings.execute_us.saturating_add(execution_time.as_us());
+
+        return (
+            loaded_txs,
+            executed,
+            inner_instructions,
+            transaction_log_messages,
+            retryable_txs,
+            tx_count,
+            signature_count,
+        );
+    }
+
+    pub fn load_transactions(
+        &self,
+        batch: &TransactionBatch,
+        max_age: usize,
+    ) -> (
+        Vec<TransactionLoadResult>,
+        Measure,
+        Measure,
+    ) {
+        let sanitized_txs = batch.sanitized_transactions();
         let mut error_counters = ErrorCounters::default();
-
-        let retryable_txs: Vec<_> = batch
-            .lock_results()
-            .iter()
-            .enumerate()
-            .filter_map(|(index, res)| match res {
-                Err(TransactionError::AccountInUse) => {
-                    error_counters.account_in_use += 1;
-                    Some(index)
-                }
-                Err(_) => None,
-                Ok(_) => None,
-            })
-            .collect();
-
         let mut check_time = Measure::start("check_transactions");
         let check_results = self.check_transactions(
             sanitized_txs,
@@ -3505,17 +3547,6 @@ impl Bank {
 
         execution_time.stop();
 
-        debug!(
-            "check: {}us load: {}us execute: {}us txs_len={}",
-            check_time.as_us(),
-            load_time.as_us(),
-            execution_time.as_us(),
-            sanitized_txs.len(),
-        );
-        timings.check_us = timings.check_us.saturating_add(check_time.as_us());
-        timings.load_us = timings.load_us.saturating_add(load_time.as_us());
-        timings.execute_us = timings.execute_us.saturating_add(execution_time.as_us());
-
         let mut tx_count: u64 = 0;
         let err_count = &mut error_counters.total;
         let transaction_log_collector_config =
@@ -3595,13 +3626,13 @@ impl Bank {
         }
         Self::update_error_counters(&error_counters);
         (
-            loaded_txs,
             executed,
             inner_instructions,
             transaction_log_messages,
             retryable_txs,
             tx_count,
             signature_count,
+            execution_time,
         )
     }
 
