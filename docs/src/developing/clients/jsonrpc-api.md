@@ -2413,7 +2413,9 @@ Returns information about the current supply.
 
 #### Parameters:
 
-- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+- `<object>` - (optional) Configuration object containing the following optional fields:
+  - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+  - (optional) `excludeNonCirculatingAccountsList: <bool>` - exclude non circulating accounts list from response
 
 #### Results:
 
@@ -2422,7 +2424,7 @@ The result will be an RpcResponse JSON object with `value` equal to a JSON objec
 - `total: <u64>` - Total supply in lamports
 - `circulating: <u64>` - Circulating supply in lamports
 - `nonCirculating: <u64>` - Non-circulating supply in lamports
-- `nonCirculatingAccounts: <array>` - an array of account addresses of non-circulating accounts, as strings
+- `nonCirculatingAccounts: <array>` - an array of account addresses of non-circulating accounts, as strings. If `excludeNonCirculatingAccountsList` is enabled, the returned array will be empty.
 
 #### Example:
 

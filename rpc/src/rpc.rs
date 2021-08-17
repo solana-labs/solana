@@ -763,25 +763,32 @@ impl JsonRpcRequestProcessor {
 
     fn get_supply(
         &self,
-        commitment: Option<CommitmentConfig>,
+        config: Option<RpcSupplyConfig>,
     ) -> RpcCustomResult<RpcResponse<RpcSupply>> {
-        let bank = self.bank(commitment);
+        let config = config.unwrap_or_default();
+        let bank = self.bank(config.commitment);
         let non_circulating_supply =
             calculate_non_circulating_supply(&bank).map_err(|e| RpcCustomError::ScanError {
                 message: e.to_string(),
             })?;
         let total_supply = bank.capitalization();
+        let non_circulating_accounts = if config.exclude_non_circulating_accounts_list {
+            vec![]
+        } else {
+            non_circulating_supply
+                .accounts
+                .iter()
+                .map(|pubkey| pubkey.to_string())
+                .collect()
+        };
+
         Ok(new_response(
             &bank,
             RpcSupply {
                 total: total_supply,
                 circulating: total_supply - non_circulating_supply.lamports,
                 non_circulating: non_circulating_supply.lamports,
-                non_circulating_accounts: non_circulating_supply
-                    .accounts
-                    .iter()
-                    .map(|pubkey| pubkey.to_string())
-                    .collect(),
+                non_circulating_accounts,
             },
         ))
     }
@@ -2702,7 +2709,7 @@ pub mod rpc_accounts {
         fn get_supply(
             &self,
             meta: Self::Metadata,
-            commitment: Option<CommitmentConfig>,
+            config: Option<RpcSupplyConfig>,
         ) -> Result<RpcResponse<RpcSupply>>;
 
         #[rpc(meta, name = "getStakeActivation")]
@@ -2856,10 +2863,10 @@ pub mod rpc_accounts {
         fn get_supply(
             &self,
             meta: Self::Metadata,
-            commitment: Option<CommitmentConfig>,
+            config: Option<RpcSupplyConfig>,
         ) -> Result<RpcResponse<RpcSupply>> {
             debug!("get_supply rpc request received");
-            Ok(meta.get_supply(commitment)?)
+            Ok(meta.get_supply(config)?)
         }
 
         fn get_stake_activation(
@@ -4653,6 +4660,21 @@ pub mod tests {
         for address in supply.non_circulating_accounts {
             assert!(expected_accounts.contains(&address));
         }
+    }
+
+    #[test]
+    fn test_get_supply_exclude_account_list() {
+        let bob_pubkey = solana_sdk::pubkey::new_rand();
+        let RpcHandler { io, meta, .. } = start_rpc_handler_with_tx(&bob_pubkey);
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getSupply","params":[{"excludeNonCirculatingAccountsList":true}]}"#;
+        let res = io.handle_request_sync(req, meta);
+        let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
+        let supply: RpcSupply = serde_json::from_value(json["result"]["value"].clone())
+            .expect("actual response deserialization");
+        assert_eq!(supply.non_circulating, 20);
+        assert!(supply.circulating >= TEST_MINT_LAMPORTS);
+        assert!(supply.total >= TEST_MINT_LAMPORTS + 20);
+        assert!(supply.non_circulating_accounts.is_empty());
     }
 
     #[test]
