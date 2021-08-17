@@ -1563,6 +1563,7 @@ impl Blockstore {
         if let Some(shreds) = self.get_data_shreds_for_slot_from_cache(slot, start_index) {
             shreds
         } else {
+            // No luck in the cache, let's try the filesystem
             self.get_data_shreds_for_slot_from_fs(slot, start_index)
                 .unwrap_or_else(|| Ok(vec![]))
         }
@@ -1726,14 +1727,13 @@ impl Blockstore {
                     .collect::<Vec<_>>()
             }
         };
-        let slot_cache = slot_cache.read().unwrap();
 
         let mut missing_indexes = vec![];
         let ticks_since_first_insert =
             DEFAULT_TICKS_PER_SECOND * (timestamp() - first_timestamp) / 1000;
 
         let mut prev_index = start_index;
-        'outer: for (index, shred) in slot_cache.iter() {
+        'outer: for (index, shred) in slot_cache.read().unwrap().iter() {
             if *index < start_index {
                 continue;
             }
