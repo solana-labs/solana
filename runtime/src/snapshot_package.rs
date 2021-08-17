@@ -16,13 +16,25 @@ use solana_sdk::hash::Hash;
 use std::{
     fs,
     path::{Path, PathBuf},
-    sync::mpsc::{Receiver, SendError, Sender},
+    sync::{
+        mpsc::{Receiver, SendError, Sender},
+        Arc, Mutex,
+    },
 };
 use tempfile::TempDir;
 
+/// The sender side of the AccountsPackage channel, used by AccountsBackgroundService
 pub type AccountsPackageSender = Sender<AccountsPackage>;
+
+/// The receiver side of the AccountsPackage channel, used by AccountsHashVerifier
 pub type AccountsPackageReceiver = Receiver<AccountsPackage>;
+
+/// The error type when sending an AccountsPackage over the channel fails
 pub type AccountsPackageSendError = SendError<AccountsPackage>;
+
+/// The PendingSnapshotPackage passes a SnapshotPackage from AccountsHashVerifier to
+/// SnapshotPackagerService for archiving
+pub type PendingSnapshotPackage = Arc<Mutex<Option<SnapshotPackage>>>;
 
 #[derive(Debug)]
 pub struct AccountsPackage {
@@ -176,9 +188,11 @@ pub struct SnapshotPackage {
     pub snapshot_links: TempDir,
     pub storages: SnapshotStorages,
     pub snapshot_version: SnapshotVersion,
+    pub snapshot_type: SnapshotType,
 }
 
 impl SnapshotPackage {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         slot: Slot,
         block_height: u64,
@@ -189,6 +203,7 @@ impl SnapshotPackage {
         hash: Hash,
         archive_format: ArchiveFormat,
         snapshot_version: SnapshotVersion,
+        snapshot_type: SnapshotType,
     ) -> Self {
         Self {
             snapshot_archive_info: SnapshotArchiveInfo {
@@ -202,6 +217,7 @@ impl SnapshotPackage {
             snapshot_links,
             storages,
             snapshot_version,
+            snapshot_type,
         }
     }
 }
@@ -209,5 +225,21 @@ impl SnapshotPackage {
 impl SnapshotArchiveInfoGetter for SnapshotPackage {
     fn snapshot_archive_info(&self) -> &SnapshotArchiveInfo {
         &self.snapshot_archive_info
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SnapshotType {
+    FullSnapshot,
+    IncrementalSnapshot,
+}
+
+impl SnapshotType {
+    /// Get the string prefix of the snapshot type
+    pub fn to_prefix(&self) -> &'static str {
+        match self {
+            SnapshotType::FullSnapshot => TMP_FULL_SNAPSHOT_PREFIX,
+            SnapshotType::IncrementalSnapshot => TMP_INCREMENTAL_SNAPSHOT_PREFIX,
+        }
     }
 }

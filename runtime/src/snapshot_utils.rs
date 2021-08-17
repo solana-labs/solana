@@ -14,6 +14,7 @@ use {
         },
         snapshot_package::{
             AccountsPackage, AccountsPackageSendError, AccountsPackageSender, SnapshotPackage,
+            SnapshotType,
         },
         sorted_storages::SortedStorages,
     },
@@ -239,10 +240,10 @@ pub fn remove_tmp_snapshot_archives(snapshot_archives_dir: &Path) {
     }
 }
 
-/// Make a full snapshot archive out of the snapshot package
+/// Make a snapshot archive out of the snapshot package
 pub fn archive_snapshot_package(
     snapshot_package: &SnapshotPackage,
-    maximum_snapshots_to_retain: usize,
+    maximum_snapshot_archives_to_retain: usize,
 ) -> Result<()> {
     info!(
         "Generating snapshot archive for slot {}",
@@ -268,10 +269,11 @@ pub fn archive_snapshot_package(
         .map_err(|e| SnapshotError::IoWithSource(e, "create archive path"))?;
 
     // Create the staging directories
+    let staging_dir_prefix = snapshot_package.snapshot_type.to_prefix();
     let staging_dir = tempfile::Builder::new()
         .prefix(&format!(
             "{}{}-",
-            TMP_FULL_SNAPSHOT_PREFIX,
+            staging_dir_prefix,
             snapshot_package.slot()
         ))
         .tempdir_in(tar_dir)
@@ -323,7 +325,7 @@ pub fn archive_snapshot_package(
     // Tar the staging directory into the archive at `archive_path`
     let archive_path = tar_dir.join(format!(
         "{}{}.{}",
-        TMP_FULL_SNAPSHOT_PREFIX,
+        staging_dir_prefix,
         snapshot_package.slot(),
         file_ext
     ));
@@ -371,7 +373,7 @@ pub fn archive_snapshot_package(
     fs::rename(&archive_path, &snapshot_package.path())
         .map_err(|e| SnapshotError::IoWithSource(e, "archive path rename"))?;
 
-    purge_old_snapshot_archives(tar_dir, maximum_snapshots_to_retain);
+    purge_old_snapshot_archives(tar_dir, maximum_snapshot_archives_to_retain);
 
     timer.stop();
     info!(
@@ -1794,6 +1796,11 @@ pub fn process_accounts_package(
         ),
     };
 
+    let snapshot_type = match incremental_snapshot_base_slot {
+        None => SnapshotType::FullSnapshot,
+        Some(_) => SnapshotType::IncrementalSnapshot,
+    };
+
     SnapshotPackage::new(
         accounts_package.slot,
         accounts_package.block_height,
@@ -1804,6 +1811,7 @@ pub fn process_accounts_package(
         hash,
         accounts_package.archive_format,
         accounts_package.snapshot_version,
+        snapshot_type,
     )
 }
 

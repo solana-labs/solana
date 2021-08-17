@@ -52,7 +52,7 @@ mod tests {
     use log::{info, trace};
     use solana_core::{
         accounts_hash_verifier::AccountsHashVerifier,
-        snapshot_packager_service::{PendingSnapshotPackage, SnapshotPackagerService},
+        snapshot_packager_service::SnapshotPackagerService,
     };
     use solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo};
     use solana_runtime::{
@@ -66,7 +66,7 @@ mod tests {
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         snapshot_archive_info::FullSnapshotArchiveInfo,
         snapshot_config::SnapshotConfig,
-        snapshot_package::AccountsPackage,
+        snapshot_package::{AccountsPackage, PendingSnapshotPackage},
         snapshot_utils::{
             self, ArchiveFormat, SnapshotVersion, DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
         },

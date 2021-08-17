@@ -1,19 +1,17 @@
 use solana_gossip::cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES};
 use solana_runtime::{
-    snapshot_archive_info::SnapshotArchiveInfoGetter, snapshot_package::SnapshotPackage,
+    snapshot_archive_info::SnapshotArchiveInfoGetter, snapshot_package::PendingSnapshotPackage,
     snapshot_utils,
 };
 use solana_sdk::{clock::Slot, hash::Hash};
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc, Mutex,
+        Arc,
     },
     thread::{self, Builder, JoinHandle},
     time::Duration,
 };
-
-pub type PendingSnapshotPackage = Arc<Mutex<Option<SnapshotPackage>>>;
 
 pub struct SnapshotPackagerService {
     t_snapshot_packager: JoinHandle<()>,
@@ -45,18 +43,21 @@ impl SnapshotPackagerService {
 
                     let snapshot_package = pending_snapshot_package.lock().unwrap().take();
                     if let Some(snapshot_package) = snapshot_package {
-                        if let Err(err) = snapshot_utils::archive_snapshot_package(
+                        match snapshot_utils::archive_snapshot_package(
                             &snapshot_package,
                             maximum_snapshots_to_retain,
                         ) {
-                            warn!("Failed to create snapshot archive: {}", err);
-                        } else {
-                            hashes.push((snapshot_package.slot(), *snapshot_package.hash()));
-                            while hashes.len() > MAX_SNAPSHOT_HASHES {
-                                hashes.remove(0);
+                            Ok(_) => {
+                                hashes.push((snapshot_package.slot(), *snapshot_package.hash()));
+                                while hashes.len() > MAX_SNAPSHOT_HASHES {
+                                    hashes.remove(0);
+                                }
+                                cluster_info.push_snapshot_hashes(hashes.clone());
                             }
-                            cluster_info.push_snapshot_hashes(hashes.clone());
-                        }
+                            Err(err) => {
+                                warn!("Failed to create snapshot archive: {}", err);
+                            }
+                        };
                     } else {
                         std::thread::sleep(Duration::from_millis(100));
                     }
@@ -81,7 +82,7 @@ mod tests {
     use solana_runtime::{
         accounts_db::AccountStorageEntry,
         bank::BankSlotDelta,
-        snapshot_package::SnapshotPackage,
+        snapshot_package::{SnapshotPackage, SnapshotType},
         snapshot_utils::{self, ArchiveFormat, SnapshotVersion, SNAPSHOT_STATUS_CACHE_FILE_NAME},
     };
     use solana_sdk::hash::Hash;
@@ -175,6 +176,7 @@ mod tests {
             Hash::default(),
             ArchiveFormat::TarBzip2,
             SnapshotVersion::default(),
+            SnapshotType::FullSnapshot,
         );
 
         // Make tarball from packageable snapshot
