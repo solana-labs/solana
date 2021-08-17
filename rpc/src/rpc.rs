@@ -3393,37 +3393,40 @@ pub mod rpc_full {
             if config.replace_recent_blockhash {
                 transaction.message.recent_blockhash = bank.last_blockhash();
             }
-            let injected_accounts: Option<Vec<(Pubkey, AccountSharedData)>> = if let Some(ref config_accounts) = config.accounts {
-                if let Some(injected_accounts) = &config_accounts.injected_accounts {
-                    let accounts_encoding = config_accounts
-                        .encoding
-                        .unwrap_or(UiAccountEncoding::Base64);
+            let injected_accounts: Option<Vec<(Pubkey, AccountSharedData)>> =
+                if let Some(ref config_accounts) = config.accounts {
+                    if let Some(injected_accounts) = &config_accounts.injected_accounts {
+                        let accounts_encoding = config_accounts
+                            .encoding
+                            .unwrap_or(UiAccountEncoding::Base64);
 
-                    if accounts_encoding == UiAccountEncoding::Binary
-                        || accounts_encoding == UiAccountEncoding::Base58
-                    {
-                        return Err(Error::invalid_params("base58 encoding not supported"));
-                    }
+                        if accounts_encoding == UiAccountEncoding::Binary
+                            || accounts_encoding == UiAccountEncoding::Base58
+                        {
+                            return Err(Error::invalid_params("base58 encoding not supported"));
+                        }
 
-                    let mut loaded_accounts = vec![];
-                    for RpcSimulateTransactionInjectedAccount {
-                        address,
-                        account_data,
-                    } in injected_accounts {
-                        let address = verify_pubkey(&address)?;
-                        loaded_accounts.push((
+                        let mut loaded_accounts = vec![];
+                        for RpcSimulateTransactionInjectedAccount {
                             address,
-                            UiAccount::decode(account_data)
-                                .ok_or(RpcCustomError::TransactionSimulationAccountDataInvalid)?
-                        ));
+                            account_data,
+                        } in injected_accounts
+                        {
+                            let address = verify_pubkey(address)?;
+                            loaded_accounts.push((
+                                address,
+                                UiAccount::decode(account_data).ok_or(
+                                    RpcCustomError::TransactionSimulationAccountDataInvalid,
+                                )?,
+                            ));
+                        }
+                        Some(loaded_accounts)
+                    } else {
+                        None
                     }
-                    Some(loaded_accounts)
                 } else {
                     None
-                }
-            } else {
-                None
-            };
+                };
 
             let TransactionSimulationResult {
                 result,
@@ -3431,7 +3434,10 @@ pub mod rpc_full {
                 post_simulation_accounts,
                 units_consumed,
             } = if let Some(mut injected_accounts) = injected_accounts {
-                bank.simulate_transaction_with_injected_accounts(&transaction, &mut injected_accounts)
+                bank.simulate_transaction_with_injected_accounts(
+                    &transaction,
+                    &mut injected_accounts,
+                )
             } else {
                 bank.simulate_transaction(&transaction)
             };

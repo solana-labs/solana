@@ -170,7 +170,7 @@ impl From<RpcCustomError> for Error {
                 ),
                 message: "Transaction simulation injected account data invalid".to_string(),
                 data: None,
-            }
+            },
         }
     }
 }

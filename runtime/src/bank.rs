@@ -2958,7 +2958,7 @@ impl Bank {
         &self,
         transaction: &Transaction,
         injected_accounts: &mut TransactionAccounts,
-     ) -> TransactionSimulationResult {
+    ) -> TransactionSimulationResult {
         assert!(self.is_frozen(), "simulation bank must be frozen");
 
         let batch = match SanitizedTransaction::try_from(transaction) {
@@ -2978,19 +2978,19 @@ impl Bank {
         let sanitized_txs = batch.sanitized_transactions();
         debug!("processing transactions: {}", sanitized_txs.len());
         inc_new_counter_info!("bank-process_transactions", sanitized_txs.len());
-        let (
-            mut loaded_txs,
-            check_time,
-            load_time,
-        ) = self.load_transactions(
+        let (mut loaded_txs, check_time, load_time) = self.load_transactions(
             &batch,
             MAX_PROCESSING_AGE - MAX_TRANSACTION_FORWARDING_DELAY,
         );
 
         for injected_account in injected_accounts.drain(0..) {
-            if !transaction.message().account_keys.contains(&injected_account.0) {
+            if !transaction
+                .message()
+                .account_keys
+                .contains(&injected_account.0)
+            {
                 return TransactionSimulationResult {
-                    result: Err(TransactionError::AccountNotFound.into()),
+                    result: Err(TransactionError::AccountNotFound),
                     logs: vec![],
                     post_simulation_accounts: vec![],
                     units_consumed: 0,
@@ -2998,11 +2998,14 @@ impl Bank {
             }
             if let Some(tx) = loaded_txs.first_mut() {
                 if let Ok(loaded_tx) = &mut tx.0 {
-                    loaded_tx.accounts.iter_mut().for_each(|(pubkey, tx_account)| {
-                        if *pubkey == injected_account.0 {
-                            *tx_account = injected_account.1.clone()
-                        }
-                    });
+                    loaded_tx
+                        .accounts
+                        .iter_mut()
+                        .for_each(|(pubkey, tx_account)| {
+                            if *pubkey == injected_account.0 {
+                                *tx_account = injected_account.1.clone()
+                            }
+                        });
                 };
             }
         }
@@ -3014,14 +3017,8 @@ impl Bank {
             _retryable_transactions,
             _transaction_count,
             _signature_count,
-            execution_time
-        ) = self.execute_transactions(
-            &batch,
-            &mut loaded_txs[..],
-            false,
-            true,
-            &mut timings
-        );
+            execution_time,
+        ) = self.execute_transactions(&batch, &mut loaded_txs[..], false, true, &mut timings);
 
         debug!(
             "check: {}us load: {}us execute: {}us txs_len={}",
@@ -3452,14 +3449,7 @@ impl Bank {
         let sanitized_txs = batch.sanitized_transactions();
         debug!("processing transactions: {}", sanitized_txs.len());
         inc_new_counter_info!("bank-process_transactions", sanitized_txs.len());
-        let (
-            mut loaded_txs,
-            check_time,
-            load_time,
-        ) = self.load_transactions(
-            batch,
-            max_age,
-        );
+        let (mut loaded_txs, check_time, load_time) = self.load_transactions(batch, max_age);
 
         let (
             executed,
@@ -3474,7 +3464,7 @@ impl Bank {
             &mut loaded_txs[..],
             enable_cpi_recording,
             enable_log_recording,
-            timings
+            timings,
         );
 
         debug!(
@@ -3488,7 +3478,7 @@ impl Bank {
         timings.load_us = timings.load_us.saturating_add(load_time.as_us());
         timings.execute_us = timings.execute_us.saturating_add(execution_time.as_us());
 
-        return (
+        (
             loaded_txs,
             executed,
             inner_instructions,
@@ -3496,18 +3486,14 @@ impl Bank {
             retryable_txs,
             tx_count,
             signature_count,
-        );
+        )
     }
 
     pub fn load_transactions(
         &self,
         batch: &TransactionBatch,
         max_age: usize,
-    ) -> (
-        Vec<TransactionLoadResult>,
-        Measure,
-        Measure,
-    ) {
+    ) -> (Vec<TransactionLoadResult>, Measure, Measure) {
         let sanitized_txs = batch.sanitized_transactions();
         let mut error_counters = ErrorCounters::default();
         let mut check_time = Measure::start("check_transactions");
@@ -3532,11 +3518,7 @@ impl Bank {
         load_time.stop();
 
         Self::update_error_counters(&error_counters);
-        return (
-            loaded_txs,
-            load_time,
-            check_time,
-        )
+        (loaded_txs, load_time, check_time)
     }
 
     #[allow(clippy::type_complexity)]
@@ -10859,7 +10841,7 @@ pub(crate) mod tests {
             units_consumed: _,
         } = bank0.simulate_transaction_with_injected_accounts(
             &tx0,
-            &mut vec![(keypair0.pubkey(), injected_keypair0_account)]
+            &mut vec![(keypair0.pubkey(), injected_keypair0_account)],
         );
 
         assert_eq!(result, Ok(()));
