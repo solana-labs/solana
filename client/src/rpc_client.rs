@@ -1711,8 +1711,7 @@ impl RpcClient {
 
     /// # RPC Reference
     ///
-    /// This method corresponds directly to the [`getSupply`] RPC
-    /// method with the `Commitment` option set to `processed`.
+    /// This method corresponds directly to the [`getSupply`] RPC method.
     ///
     /// [`getSupply`]: https://docs.solana.com/developing/clients/jsonrpc-api#getsupply
     ///
@@ -1808,8 +1807,7 @@ impl RpcClient {
 
     /// # RPC Reference
     ///
-    /// This method corresponds directly to the [`getVoteAccounts`]
-    /// RPC method with the `Commitment` set to `processed`.
+    /// This method corresponds directly to the [`getVoteAccounts`] RPC method.
     ///
     /// [`getVoteAccounts`]: https://docs.solana.com/developing/clients/jsonrpc-api#getvoteaccounts
     ///
