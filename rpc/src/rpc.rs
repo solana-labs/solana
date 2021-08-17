@@ -3406,11 +3406,14 @@ pub mod rpc_full {
                     }
 
                     let mut loaded_accounts = vec![];
-                    for (address_str, account_encoding) in injected_accounts {
-                        let address = verify_pubkey(&address_str)?;
+                    for RpcSimulateTransactionInjectedAccount {
+                        address,
+                        account_data,
+                    } in injected_accounts {
+                        let address = verify_pubkey(&address)?;
                         loaded_accounts.push((
                             address,
-                            UiAccount::decode(account_encoding)
+                            UiAccount::decode(account_data)
                                 .ok_or(RpcCustomError::TransactionSimulationAccountDataInvalid)?
                         ));
                     }
