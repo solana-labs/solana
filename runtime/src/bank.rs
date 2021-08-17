@@ -2952,6 +2952,117 @@ impl Bank {
         }
     }
 
+    /// Run transactions against a frozen bank without committing the results
+    /// while injecting `AccountSharedData` from an external source
+    pub fn simulate_transaction_with_injected_accounts(
+        &self,
+        transaction: &Transaction,
+        injected_accounts: &mut TransactionAccounts,
+     ) -> TransactionSimulationResult {
+        assert!(self.is_frozen(), "simulation bank must be frozen");
+
+        let batch = match SanitizedTransaction::try_from(transaction) {
+            Ok(sanitized_tx) => self.prepare_simulation_batch(sanitized_tx),
+            Err(err) => {
+                return TransactionSimulationResult {
+                    result: Err(err),
+                    logs: vec![],
+                    post_simulation_accounts: vec![],
+                    units_consumed: 0,
+                }
+            }
+        };
+
+        let mut timings = ExecuteTimings::default();
+
+        let sanitized_txs = batch.sanitized_transactions();
+        debug!("processing transactions: {}", sanitized_txs.len());
+        inc_new_counter_info!("bank-process_transactions", sanitized_txs.len());
+        let (
+            mut loaded_txs,
+            check_time,
+            load_time,
+        ) = self.load_transactions(
+            &batch,
+            MAX_PROCESSING_AGE - MAX_TRANSACTION_FORWARDING_DELAY,
+        );
+
+        for injected_account in injected_accounts.drain(0..) {
+            if !transaction.message().account_keys.contains(&injected_account.0) {
+                return TransactionSimulationResult {
+                    result: Err(TransactionError::AccountNotFound.into()),
+                    logs: vec![],
+                    post_simulation_accounts: vec![],
+                    units_consumed: 0,
+                };
+            }
+            if let Some(tx) = loaded_txs.first_mut() {
+                if let Ok(loaded_tx) = &mut tx.0 {
+                    loaded_tx.accounts.iter_mut().for_each(|(pubkey, tx_account)| {
+                        if *pubkey == injected_account.0 {
+                            *tx_account = injected_account.1.clone()
+                        }
+                    });
+                };
+            }
+        }
+
+        let (
+            executed,
+            _inner_instructions,
+            logs,
+            _retryable_transactions,
+            _transaction_count,
+            _signature_count,
+            execution_time
+        ) = self.execute_transactions(
+            &batch,
+            &mut loaded_txs[..],
+            false,
+            true,
+            &mut timings
+        );
+
+        debug!(
+            "check: {}us load: {}us execute: {}us txs_len={}",
+            check_time.as_us(),
+            load_time.as_us(),
+            execution_time.as_us(),
+            sanitized_txs.len(),
+        );
+        timings.check_us = timings.check_us.saturating_add(check_time.as_us());
+        timings.load_us = timings.load_us.saturating_add(load_time.as_us());
+        timings.execute_us = timings.execute_us.saturating_add(execution_time.as_us());
+
+        let result = executed[0].0.clone().map(|_| ());
+        let logs = logs.get(0).cloned().flatten().unwrap_or_default();
+        let post_simulation_accounts = loaded_txs
+            .into_iter()
+            .next()
+            .unwrap()
+            .0
+            .ok()
+            .map(|loaded_transaction| loaded_transaction.accounts.into_iter().collect::<Vec<_>>())
+            .unwrap_or_default();
+
+        let units_consumed = timings
+            .details
+            .per_program_timings
+            .iter()
+            .fold(0, |acc: u64, (_, program_timing)| {
+                acc.saturating_add(program_timing.accumulated_units)
+            });
+
+        debug!("simulate_transaction_with_injected_accounts: {:?}", timings);
+
+        TransactionSimulationResult {
+            result,
+            logs,
+            post_simulation_accounts,
+            units_consumed,
+        }
+    }
+
     pub fn unlock_accounts(&self, batch: &mut TransactionBatch) {
         if batch.needs_unlock {
             batch.needs_unlock = false;
@@ -3342,7 +3453,7 @@ impl Bank {
         debug!("processing transactions: {}", sanitized_txs.len());
         inc_new_counter_info!("bank-process_transactions", sanitized_txs.len());
         let (
-            loaded_txs,
+            mut loaded_txs,
             check_time,
             load_time,
         ) = self.load_transactions(
@@ -3409,7 +3520,7 @@ impl Bank {
         check_time.stop();
 
         let mut load_time = Measure::start("accounts_load");
-        let mut loaded_txs = self.rc.accounts.load_accounts(
+        let loaded_txs = self.rc.accounts.load_accounts(
             &self.ancestors,
             sanitized_txs.as_transactions_iter(),
             check_results,
@@ -3419,6 +3530,48 @@ impl Bank {
             &self.feature_set,
         );
         load_time.stop();
+
+        Self::update_error_counters(&error_counters);
+        return (
+            loaded_txs,
+            load_time,
+            check_time,
+        )
+    }
+
+    #[allow(clippy::type_complexity)]
+    pub fn execute_transactions(
+        &self,
+        batch: &TransactionBatch,
+        loaded_txs: &mut [TransactionLoadResult],
+        enable_cpi_recording: bool,
+        enable_log_recording: bool,
+        timings: &mut ExecuteTimings,
+    ) -> (
+        Vec<TransactionExecutionResult>,
+        Vec<Option<InnerInstructionsList>>,
+        Vec<Option<TransactionLogMessages>>,
+        Vec<usize>,
+        u64,
+        u64,
+        Measure,
+    ) {
+        let sanitized_txs = batch.sanitized_transactions();
+        let mut error_counters = ErrorCounters::default();
+
+        let retryable_txs: Vec<_> = batch
+            .lock_results()
+            .iter()
+            .enumerate()
+            .filter_map(|(index, res)| match res {
+                Err(TransactionError::AccountInUse) => {
+                    error_counters.account_in_use += 1;
+                    Some(index)
+                }
+                Err(_) => None,
+                Ok(_) => None,
+            })
+            .collect();
 
         let mut execution_time = Measure::start("execution_time");
         let mut signature_count: u64 = 0;
