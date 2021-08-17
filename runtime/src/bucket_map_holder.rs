@@ -17,6 +17,10 @@ pub struct BucketMapHolder<T: IndexValue> {
     next_bucket_to_flush: Mutex<usize>,
     bins: usize,
 
+    // how much mb are we allowed to keep in the in-mem index?
+    // Rest goes to disk.
+    pub mem_budget_mb: Option<usize>,
+
     /// startup is a special time for flush to focus on moving everything to disk as fast and efficiently as possible
     /// with less thread count limitations. LRU and access patterns are not important. Freeing memory
     /// and writing to disk in parallel are.
@@ -71,7 +75,7 @@ impl<T: IndexValue> BucketMapHolder<T> {
         self.count_ages_flushed.load(Ordering::Relaxed) >= self.bins
     }
 
-    pub fn new(bins: usize, _config: &Option<AccountsIndexConfig>) -> Self {
+    pub fn new(bins: usize, config: &Option<AccountsIndexConfig>) -> Self {
         Self {
             count_ages_flushed: AtomicUsize::default(),
             age: AtomicU8::default(),
@@ -80,6 +84,7 @@ impl<T: IndexValue> BucketMapHolder<T> {
             next_bucket_to_flush: Mutex::new(0),
             bins,
             startup: AtomicBool::default(),
+            mem_budget_mb: config.as_ref().and_then(|config| config.index_limit_mb),
             _phantom: std::marker::PhantomData::<T>::default(),
         }
     }
