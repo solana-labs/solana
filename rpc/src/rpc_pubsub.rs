@@ -333,30 +333,15 @@ impl RpcSolPubSubImpl {
         }
     }
 
-    fn check_subscription_count(&self) -> Result<()> {
-        let num_subscriptions = self.subscriptions.total();
-        debug!("Total existing subscriptions: {}", num_subscriptions);
-        if num_subscriptions >= self.config.max_active_subscriptions {
-            info!("Node subscription limit reached");
-            datapoint_info!("rpc-subscription", ("total", num_subscriptions, i64));
-            inc_new_counter_info!("rpc-subscription-refused-limit-reached", 1);
-            Err(Error {
-                code: ErrorCode::InternalError,
-                message: "Internal Error: Subscription refused. Node subscription limit reached"
-                    .into(),
-                data: None,
-            })
-        } else {
-            datapoint_info!("rpc-subscription", ("total", num_subscriptions + 1, i64));
-            Ok(())
-        }
-    }
-
-    fn subscribe(&self, params: SubscriptionParams) -> SubscriptionId {
-        let token = self.subscriptions.subscribe(params);
+    fn subscribe(&self, params: SubscriptionParams) -> Result<SubscriptionId> {
+        let token = self.subscriptions.subscribe(params).map_err(|_| Error {
+            code: ErrorCode::InternalError,
+            message: "Internal Error: Subscription refused. Node subscription limit reached".into(),
+            data: None,
+        })?;
         let id = token.id();
         self.current_subscriptions.insert(id, token);
-        id
+        Ok(id)
     }
 
     fn unsubscribe(&self, id: SubscriptionId) -> Result<bool> {
@@ -386,7 +371,6 @@ impl RpcSolPubSubInternal for RpcSolPubSubImpl {
         pubkey_str: String,
         config: Option<RpcAccountInfoConfig>,
     ) -> Result<SubscriptionId> {
-        self.check_subscription_count()?;
         let config = config.unwrap_or_default();
         let params = AccountSubscriptionParams {
             pubkey: param::<Pubkey>(&pubkey_str, "pubkey")?,
@@ -394,7 +378,7 @@ impl RpcSolPubSubInternal for RpcSolPubSubImpl {
             data_slice: config.data_slice,
             encoding: config.encoding.unwrap_or(UiAccountEncoding::Binary),
         };
-        Ok(self.subscribe(SubscriptionParams::Account(params)))
+        self.subscribe(SubscriptionParams::Account(params))
     }
 
     fn account_unsubscribe(&self, id: SubscriptionId) -> Result<bool> {
@@ -406,7 +390,6 @@ impl RpcSolPubSubInternal for RpcSolPubSubImpl {
         pubkey_str: String,
         config: Option<RpcProgramAccountsConfig>,
     ) -> Result<SubscriptionId> {
-        self.check_subscription_count()?;
         let config = config.unwrap_or_default();
         let params = ProgramSubscriptionParams {
             pubkey: param::<Pubkey>(&pubkey_str, "pubkey")?,
@@ -419,7 +402,7 @@ impl RpcSolPubSubInternal for RpcSolPubSubImpl {
             commitment: config.account_config.commitment.unwrap_or_default(),
             with_context: config.with_context.unwrap_or_default(),
         };
-        Ok(self.subscribe(SubscriptionParams::Program(params)))
+        self.subscribe(SubscriptionParams::Program(params))
     }
 
     fn program_unsubscribe(&self, id: SubscriptionId) -> Result<bool> {
@@ -431,7 +414,6 @@ impl RpcSolPubSubInternal for RpcSolPubSubImpl {
         filter: RpcTransactionLogsFilter,
         config: Option<RpcTransactionLogsConfig>,
     ) -> Result<SubscriptionId> {
-        self.check_subscription_count()?;
         let params = LogsSubscriptionParams {
             kind: match filter {
                 RpcTransactionLogsFilter::All => LogsSubscriptionKind::All,
@@ -449,7 +431,7 @@ impl RpcSolPubSubInternal for RpcSolPubSubImpl {
             },
             commitment: config.and_then(|c| c.commitment).unwrap_or_default(),
         };
-        Ok(self.subscribe(SubscriptionParams::Logs(params)))
+        self.subscribe(SubscriptionParams::Logs(params))
     }
 
     fn logs_unsubscribe(&self, id: SubscriptionId) -> Result<bool> {
@@ -461,14 +443,13 @@ impl RpcSolPubSubInternal for RpcSolPubSubImpl {
         signature_str: String,
         config: Option<RpcSignatureSubscribeConfig>,
     ) -> Result<SubscriptionId> {
-        self.check_subscription_count()?;
         let config = config.unwrap_or_default();
         let params = SignatureSubscriptionParams {
             signature: param::<Signature>(&signature_str, "signature")?,
             commitment: config.commitment.unwrap_or_default(),
             enable_received_notification: config.enable_received_notification.unwrap_or_default(),
         };
-        Ok(self.subscribe(SubscriptionParams::Signature(params)))
+        self.subscribe(SubscriptionParams::Signature(params))
     }
 
     fn signature_unsubscribe(&self, id: SubscriptionId) -> Result<bool> {
@@ -476,8 +457,7 @@ impl RpcSolPubSubInternal for RpcSolPubSubImpl {
     }
 
     fn slot_subscribe(&self) -> Result<SubscriptionId> {
-        self.check_subscription_count()?;
-        Ok(self.subscribe(SubscriptionParams::Slot))
+        self.subscribe(SubscriptionParams::Slot)
     }
 
     fn slot_unsubscribe(&self, id: SubscriptionId) -> Result<bool> {
@@ -485,8 +465,7 @@ impl RpcSolPubSubInternal for RpcSolPubSubImpl {
     }
 
     fn slots_updates_subscribe(&self) -> Result<SubscriptionId> {
-        self.check_subscription_count()?;
-        Ok(self.subscribe(SubscriptionParams::SlotsUpdates))
+        self.subscribe(SubscriptionParams::SlotsUpdates)
     }
 
     fn slots_updates_unsubscribe(&self, id: SubscriptionId) -> Result<bool> {
@@ -497,8 +476,7 @@ impl RpcSolPubSubInternal for RpcSolPubSubImpl {
         if !self.config.enable_vote_subscription {
             return Err(Error::new(jsonrpc_core::ErrorCode::MethodNotFound));
         }
-        self.check_subscription_count()?;
-        Ok(self.subscribe(SubscriptionParams::Vote))
+        self.subscribe(SubscriptionParams::Vote)
     }
 
     fn vote_unsubscribe(&self, id: SubscriptionId) -> Result<bool> {
@@ -509,8 +487,7 @@ impl RpcSolPubSubInternal for RpcSolPubSubImpl {
     }
 
     fn root_subscribe(&self) -> Result<SubscriptionId> {
-        self.check_subscription_count()?;
-        Ok(self.subscribe(SubscriptionParams::Root))
+        self.subscribe(SubscriptionParams::Root)
     }
 
     fn root_unsubscribe(&self, id: SubscriptionId) -> Result<bool> {

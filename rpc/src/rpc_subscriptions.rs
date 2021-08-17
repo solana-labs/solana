@@ -1,14 +1,15 @@
 //! The `pubsub` module implements a threaded subscription service on client RPC request
 
+use crate::rpc_pubsub_service::PubSubConfig;
 use {
     crate::{
         optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
         parsed_token_accounts::{get_parsed_token_account, get_parsed_token_accounts},
-        rpc_pubsub_service::DEFAULT_BROADCAST_CHANNEL_CAPACITY,
         rpc_subscription_tracker::{
             AccountSubscriptionParams, LogsSubscriptionKind, LogsSubscriptionParams,
             ProgramSubscriptionParams, SignatureSubscriptionParams, SubscriptionId,
             SubscriptionInfo, SubscriptionParams, SubscriptionToken, SubscriptionsTracker,
+            TooManySubscriptions,
         },
     },
     serde::Serialize,
@@ -349,21 +350,21 @@ impl RpcSubscriptions {
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         optimistically_confirmed_bank: Arc<RwLock<OptimisticallyConfirmedBank>>,
     ) -> Self {
-        Self::new_with_broadcast_channel_capacity(
+        Self::new_with_config(
             exit,
             bank_forks,
             block_commitment_cache,
             optimistically_confirmed_bank,
-            DEFAULT_BROADCAST_CHANNEL_CAPACITY,
+            &Default::default(),
         )
     }
 
-    pub fn new_with_broadcast_channel_capacity(
+    pub fn new_with_config(
         exit: &Arc<AtomicBool>,
         bank_forks: Arc<RwLock<BankForks>>,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         optimistically_confirmed_bank: Arc<RwLock<OptimisticallyConfirmedBank>>,
-        broadcast_channel_capacity: usize,
+        config: &PubSubConfig,
     ) -> Self {
         let (notification_sender, notification_receiver): (
             Sender<NotificationEntry>,
@@ -375,10 +376,11 @@ impl RpcSubscriptions {
         let _bank_forks = bank_forks.clone();
         let _block_commitment_cache = block_commitment_cache.clone();
         let exit_clone = exit.clone();
-        let subscriptions = SubscriptionsTracker::new(bank_forks.clone());
+        let subscriptions =
+            SubscriptionsTracker::new(bank_forks.clone(), config.max_active_subscriptions);
         let _subscriptions = subscriptions.clone();
 
-        let (broadcast_sender, _) = broadcast::channel(broadcast_channel_capacity);
+        let (broadcast_sender, _) = broadcast::channel(config.queue_capacity);
 
         let notifier = RpcNotifier {
             sender: broadcast_sender.clone(),
@@ -413,12 +415,11 @@ impl RpcSubscriptions {
     pub fn default_with_bank_forks(bank_forks: Arc<RwLock<BankForks>>) -> Self {
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
-        Self::new_with_broadcast_channel_capacity(
+        Self::new(
             &Arc::new(AtomicBool::new(false)),
             bank_forks,
             Arc::new(RwLock::new(BlockCommitmentCache::default())),
             optimistically_confirmed_bank,
-            DEFAULT_BROADCAST_CHANNEL_CAPACITY,
         )
     }
 
@@ -430,7 +431,10 @@ impl RpcSubscriptions {
         self.broadcast_sender.subscribe()
     }
 
-    pub fn subscribe(&self, params: SubscriptionParams) -> SubscriptionToken {
+    pub fn subscribe(
+        &self,
+        params: SubscriptionParams,
+    ) -> Result<SubscriptionToken, TooManySubscriptions> {
         match params {
             SubscriptionParams::Account(params) => self.add_account_subscription(params),
             // last_notified_slot is not utilized for these subscriptions
@@ -444,7 +448,10 @@ impl RpcSubscriptions {
         }
     }
 
-    fn add_account_subscription(&self, params: AccountSubscriptionParams) -> SubscriptionToken {
+    fn add_account_subscription(
+        &self,
+        params: AccountSubscriptionParams,
+    ) -> Result<SubscriptionToken, TooManySubscriptions> {
         let get_last_notified_slot = || {
             let slot = if params.commitment.is_finalized() {
                 self.block_commitment_cache

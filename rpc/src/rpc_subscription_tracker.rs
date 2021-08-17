@@ -16,6 +16,7 @@ use {
         fmt,
         sync::{Arc, Mutex, RwLock, Weak},
     },
+    thiserror::Error,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -171,6 +172,10 @@ impl SubscriptionInfo {
     }
 }
 
+#[derive(Debug, Error)]
+#[error("node subscription limit reached")]
+pub struct TooManySubscriptions(());
+
 struct LogsSubscriptionsIndex {
     all_count: usize,
     all_with_votes_count: usize,
@@ -240,6 +245,7 @@ impl LogsSubscriptionsIndex {
 struct SubscriptionsInner {
     by_id: HashMap<SubscriptionId, Arc<SubscriptionInfo>>,
     next_id: u64,
+    max_active_subscriptions: usize,
 
     // Below are indexes for fast access.
     logs_subscriptions_index: LogsSubscriptionsIndex,
@@ -255,8 +261,9 @@ struct SubscriptionsInner {
 pub struct SubscriptionsTracker(Arc<Mutex<SubscriptionsInner>>);
 
 impl SubscriptionsTracker {
-    pub fn new(bank_forks: Arc<RwLock<BankForks>>) -> Self {
+    pub fn new(bank_forks: Arc<RwLock<BankForks>>, max_active_subscriptions: usize) -> Self {
         SubscriptionsTracker(Arc::new(Mutex::new(SubscriptionsInner {
+            max_active_subscriptions,
             by_id: HashMap::new(),
             by_params: HashMap::new(),
             next_id: 0,
@@ -281,17 +288,22 @@ impl SubscriptionsTracker {
         &self,
         params: SubscriptionParams,
         last_notified_slot: impl FnOnce() -> Slot,
-    ) -> SubscriptionToken {
+    ) -> Result<SubscriptionToken, TooManySubscriptions> {
         let mut inner = &mut *self.0.lock().unwrap();
+        debug!("Total existing subscriptions: {}", inner.by_id.len());
         match inner.by_params.entry(params) {
-            Entry::Occupied(entry) => SubscriptionToken(
+            Entry::Occupied(entry) => Ok(SubscriptionToken(
                 entry
                     .get()
                     .token
                     .upgrade()
                     .expect("dead subscription encountered in by_params"),
-            ),
+            )),
             Entry::Vacant(entry) => {
+                if inner.by_id.len() >= inner.max_active_subscriptions {
+                    inc_new_counter_info!("rpc-subscription-refused-limit-reached", 1);
+                    return Err(TooManySubscriptions(()));
+                }
                 let id = SubscriptionId::from(inner.next_id);
                 inner.next_id += 1;
                 let token = SubscriptionToken(Arc::new(SubscriptionTokenInner {
@@ -328,7 +340,8 @@ impl SubscriptionsTracker {
                     inner.gossip_watchers.insert(id, Arc::clone(&info));
                 }
                 inner.by_id.insert(id, info);
-                token
+                datapoint_info!("rpc-subscription", ("total", inner.by_id.len(), i64));
+                Ok(token)
             }
         }
     }
@@ -422,6 +435,7 @@ impl Drop for SubscriptionTokenInner {
             } else {
                 warn!("Subscriptions inconsistency (missing entry in by_id)");
             }
+            datapoint_info!("rpc-subscription", ("total", inner.by_id.len(), i64));
         } else {
             warn!("cannot unsubscribe: mutex is poisoned");
         }

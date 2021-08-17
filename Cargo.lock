@@ -5374,6 +5374,7 @@ dependencies = [
  "spl-token",
  "stream-cancel",
  "symlink",
+ "thiserror",
  "tokio",
  "tokio-util",
 ]
