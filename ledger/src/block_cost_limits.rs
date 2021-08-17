@@ -23,7 +23,7 @@ pub const fn account_cost_max() -> u64 {
 }
 
 pub const fn compute_unit_to_us_ratio() -> u64 {
-     (MAX_INSTRUCTION_COST / AVG_INSTRUCTION_TIME_US) * SYSTEM_PARALLELISM;
+    (MAX_INSTRUCTION_COST / AVG_INSTRUCTION_TIME_US) * SYSTEM_PARALLELISM
 }
 
 pub const fn signature_cost() -> u64 {
