@@ -30,7 +30,7 @@ pub type StringAmount = String;
 pub type StringDecimals = String;
 
 /// A duplicate representation of an Account for pretty JSON serialization
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct UiAccount {
     pub lamports: u64,

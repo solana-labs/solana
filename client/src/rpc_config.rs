@@ -1,6 +1,6 @@
 use {
     crate::rpc_filter::RpcFilterType,
-    solana_account_decoder::{UiAccountEncoding, UiDataSliceConfig},
+    solana_account_decoder::{UiAccountEncoding, UiAccount, UiDataSliceConfig},
     solana_sdk::{
         clock::{Epoch, Slot},
         commitment_config::{CommitmentConfig, CommitmentLevel},
@@ -28,6 +28,7 @@ pub struct RpcSendTransactionConfig {
 pub struct RpcSimulateTransactionAccountsConfig {
     pub encoding: Option<UiAccountEncoding>,
     pub addresses: Vec<String>,
+    pub injected_accounts: Option<Vec<(String, UiAccount)>>,
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]

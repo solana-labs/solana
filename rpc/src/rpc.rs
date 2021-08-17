@@ -3393,12 +3393,45 @@ pub mod rpc_full {
             if config.replace_recent_blockhash {
                 transaction.message.recent_blockhash = bank.last_blockhash();
             }
+            let injected_accounts: Option<Vec<(Pubkey, AccountSharedData)>> = if let Some(ref config_accounts) = config.accounts {
+                if let Some(injected_accounts) = &config_accounts.injected_accounts {
+                    let accounts_encoding = config_accounts
+                        .encoding
+                        .unwrap_or(UiAccountEncoding::Base64);
+
+                    if accounts_encoding == UiAccountEncoding::Binary
+                        || accounts_encoding == UiAccountEncoding::Base58
+                    {
+                        return Err(Error::invalid_params("base58 encoding not supported"));
+                    }
+
+                    let mut loaded_accounts = vec![];
+                    for (address_str, account_encoding) in injected_accounts {
+                        let address = verify_pubkey(&address_str)?;
+                        loaded_accounts.push((
+                            address,
+                            UiAccount::decode(account_encoding)
+                                .ok_or(RpcCustomError::TransactionSimulationAccountDataInvalid)?
+                        ));
+                    }
+                    Some(loaded_accounts)
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
             let TransactionSimulationResult {
                 result,
                 logs,
                 post_simulation_accounts,
                 units_consumed,
-            } = bank.simulate_transaction(&transaction);
+            } = if let Some(mut injected_accounts) = injected_accounts {
+                bank.simulate_transaction_with_injected_accounts(&transaction, &mut injected_accounts)
+            } else {
+                bank.simulate_transaction(&transaction)
+            };
 
             let accounts = if let Some(config_accounts) = config.accounts {
                 let accounts_encoding = config_accounts
