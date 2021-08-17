@@ -1,19 +1,24 @@
 //! A library for generating a message from a sequence of instructions
 
 pub mod legacy;
-mod mapped;
-mod sanitized;
+
 #[cfg(not(target_arch = "bpf"))]
-pub mod v0;
-mod versions;
+#[path = ""]
+mod non_bpf_modules {
+    mod mapped;
+    mod sanitized;
+    pub mod v0;
+    mod versions;
+
+    pub use mapped::*;
+    pub use sanitized::*;
+    pub use versions::*;
+}
 
 pub use legacy::Message;
+
 #[cfg(not(target_arch = "bpf"))]
-pub use mapped::*;
-#[cfg(not(target_arch = "bpf"))]
-pub use sanitized::*;
-#[cfg(not(target_arch = "bpf"))]
-pub use versions::*;
+pub use non_bpf_modules::*;
 
 /// The length of a message header in bytes
 pub const MESSAGE_HEADER_LENGTH: usize = 3;
