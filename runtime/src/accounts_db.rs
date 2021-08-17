@@ -4969,11 +4969,8 @@ impl AccountsDb {
                     raw_lamports
                 };
 
-                let source_item = CalculateHashIntermediate::new_without_slot(
-                    loaded_account.loaded_hash(),
-                    balance,
-                    *pubkey,
-                );
+                let source_item =
+                    CalculateHashIntermediate::new(loaded_account.loaded_hash(), balance, *pubkey);
 
                 if check_hash {
                     let computed_hash = loaded_account.compute_hash(slot, pubkey);
@@ -6601,10 +6598,10 @@ pub mod tests {
         let pubkey255 = Pubkey::new(&[0xffu8; 32]);
 
         let mut raw_expected = vec![
-            CalculateHashIntermediate::new_without_slot(Hash::default(), 1, pubkey0),
-            CalculateHashIntermediate::new_without_slot(Hash::default(), 128, pubkey127),
-            CalculateHashIntermediate::new_without_slot(Hash::default(), 129, pubkey128),
-            CalculateHashIntermediate::new_without_slot(Hash::default(), 256, pubkey255),
+            CalculateHashIntermediate::new(Hash::default(), 1, pubkey0),
+            CalculateHashIntermediate::new(Hash::default(), 128, pubkey127),
+            CalculateHashIntermediate::new(Hash::default(), 129, pubkey128),
+            CalculateHashIntermediate::new(Hash::default(), 256, pubkey255),
         ];
 
         let expected_hashes = vec![
