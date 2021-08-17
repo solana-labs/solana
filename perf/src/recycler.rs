@@ -2,6 +2,7 @@ use rand::{thread_rng, Rng};
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, Weak};
+use solana_sdk::timing::AtomicInterval;
 
 // A temporary burst in the workload can cause a large number of allocations,
 // after which they will be recycled and still reside in memory. If the number
@@ -35,6 +36,7 @@ pub struct RecyclerX<T> {
     id: usize,
     // Shrink window times the exponential moving average size of gc.len().
     size_factor: AtomicUsize,
+    size_report: AtomicInterval,
 }
 
 impl<T: Default> Default for RecyclerX<T> {
@@ -46,6 +48,7 @@ impl<T: Default> Default for RecyclerX<T> {
             stats: RecyclerStats::default(),
             id,
             size_factor: AtomicUsize::default(),
+            size_report: AtomicInterval::default(),
         }
     }
 }
@@ -90,7 +93,7 @@ impl<T: Default + Reset + Sized> Recycler<T> {
     }
 
     pub fn allocate(&self, name: &'static str) -> T {
-        {
+        let gc_len = {
             const RECYCLER_SHRINK_WINDOW_HALF: usize = RECYCLER_SHRINK_WINDOW / 2;
             const RECYCLER_SHRINK_WINDOW_SUB_ONE: usize = RECYCLER_SHRINK_WINDOW - 1;
             let mut gc = self.recycler.gc.lock().unwrap();
@@ -120,7 +123,8 @@ impl<T: Default + Reset + Sized> Recycler<T> {
                 x.reset();
                 return x;
             }
-        }
+            gc.len()
+        };
         let total = self.recycler.stats.total.fetch_add(1, Ordering::Relaxed);
         trace!(
             "allocating new: total {} {:?} id: {} reuse: {} max_gc: {}",
@@ -130,6 +134,11 @@ impl<T: Default + Reset + Sized> Recycler<T> {
             self.recycler.stats.reuse.load(Ordering::Relaxed),
             self.recycler.stats.max_gc.load(Ordering::Relaxed),
         );
+        if self.recycler.size_report.should_update(10_000) {
+            datapoint_info!(name,
+                ("size", gc_len, i64)
+            );
+        }
 
         let mut t = T::default();
         t.set_recycler(Arc::downgrade(&self.recycler));
