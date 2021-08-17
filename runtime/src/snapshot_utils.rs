@@ -269,10 +269,7 @@ pub fn archive_snapshot_package(
         .map_err(|e| SnapshotError::IoWithSource(e, "create archive path"))?;
 
     // Create the staging directories
-    let staging_dir_prefix = match snapshot_package.snapshot_type {
-        SnapshotType::FullSnapshot => TMP_FULL_SNAPSHOT_PREFIX,
-        SnapshotType::IncrementalSnapshot => TMP_INCREMENTAL_SNAPSHOT_PREFIX,
-    };
+    let staging_dir_prefix = snapshot_package.snapshot_type.to_prefix();
     let staging_dir = tempfile::Builder::new()
         .prefix(&format!(
             "{}{}-",

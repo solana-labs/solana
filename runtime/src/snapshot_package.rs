@@ -228,7 +228,18 @@ impl SnapshotArchiveInfoGetter for SnapshotPackage {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SnapshotType {
     FullSnapshot,
     IncrementalSnapshot,
+}
+
+impl SnapshotType {
+    /// Get the string prefix of the snapshot type
+    pub fn to_prefix(&self) -> &'static str {
+        match self {
+            SnapshotType::FullSnapshot => TMP_FULL_SNAPSHOT_PREFIX,
+            SnapshotType::IncrementalSnapshot => TMP_INCREMENTAL_SNAPSHOT_PREFIX,
+        }
+    }
 }
