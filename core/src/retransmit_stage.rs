@@ -550,7 +550,7 @@ mod tests {
         },
         solana_net_utils::find_available_port_in_range,
         solana_sdk::signature::Keypair,
-        solana_streamer::socket::SocketAddrSpace,
+        solana_streamer::{packet::RecvFromMetrics, socket::SocketAddrSpace},
         std::net::{IpAddr, Ipv4Addr},
     };
 
@@ -615,7 +615,8 @@ mod tests {
         // it should send this over the sockets.
         retransmit_sender.send(vec![shred]).unwrap();
         let mut packets = Packets::new(vec![]);
-        solana_streamer::packet::recv_from(&mut packets, &me_retransmit, 1).unwrap();
+        let mut metrics = RecvFromMetrics::default();
+        solana_streamer::packet::recv_from(&mut packets, &me_retransmit, 1, &mut metrics).unwrap();
         assert_eq!(packets.packets.len(), 1);
         assert!(!packets.packets[0].meta.repair);
     }
