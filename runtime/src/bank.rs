@@ -2457,7 +2457,8 @@ impl Bank {
         clean.stop();
 
         let mut shrink = Measure::start("shrink");
-        self.shrink_all_slots(false, last_full_snapshot_slot);
+        const IS_STARTUP: bool = true; // this is only called at startup, and we want to use more threads
+        self.shrink_all_slots(IS_STARTUP, last_full_snapshot_slot);
         shrink.stop();
 
         info!(
