@@ -19,7 +19,10 @@ use {
         net::{SocketAddr, UdpSocket},
         path::Path,
         process::exit,
-        sync::{atomic::{AtomicBool, Ordering}, Arc},
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc,
+        },
         thread::sleep,
         time::{Duration, Instant},
     },

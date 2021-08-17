@@ -6,12 +6,13 @@ use {
     crossbeam_channel::Receiver,
     solana_sdk::{clock::Slot, commitment_config::CommitmentLevel},
     std::{
-        collections::HashMap,
+        collections::VecDeque,
         sync::{
             atomic::{AtomicBool, Ordering},
             Arc, RwLock,
         },
-        thread::{self, Builder, JoinHandle},
+        thread::{self, sleep, Builder, JoinHandle},
+        time::Duration,
     },
 };
 
@@ -19,12 +20,13 @@ use {
 /// their states.
 #[derive(Default, Clone)]
 struct ReplicaEligibleSlotSet {
-    slot_set: Arc<RwLock<HashMap<Slot, CommitmentLevel>>>,
+    slot_set: Arc<RwLock<VecDeque<(Slot, CommitmentLevel)>>>,
 }
 
 pub(crate) struct ReplicaUpdatedSlotsServerImpl {
     eligible_slot_set: ReplicaEligibleSlotSet,
-    confirmed_bank_receiver_svc: Option<JoinHandle<()>>,
+    confirmed_bank_receiver_service: Option<JoinHandle<()>>,
+    cleanup_service: Option<JoinHandle<()>>,
     exit_updated_slot_server: Arc<AtomicBool>,
 }
 
@@ -36,7 +38,7 @@ impl ReplicaUpdatedSlotsServer for ReplicaUpdatedSlotsServerImpl {
         let slot_set = self.eligible_slot_set.slot_set.read().unwrap();
         let updated_slots: Vec<u64> = slot_set
             .iter()
-            .filter(|(slot, _)| **slot > request.last_replicated_slot)
+            .filter(|(slot, _)| *slot > request.last_replicated_slot)
             .map(|(slot, _)| *slot)
             .collect();
 
@@ -45,12 +47,17 @@ impl ReplicaUpdatedSlotsServer for ReplicaUpdatedSlotsServerImpl {
 
     fn join(&mut self) -> thread::Result<()> {
         self.exit_updated_slot_server.store(true, Ordering::Relaxed);
-        self.confirmed_bank_receiver_svc
+        self.confirmed_bank_receiver_service
             .take()
             .map(JoinHandle::join)
             .unwrap()
+            .expect("confirmed_bank_receiver_service");
+
+        self.cleanup_service.take().map(JoinHandle::join).unwrap()
     }
 }
+
+const MAX_ELIGIBLE_SLOT_SET_SIZE: usize = 262144;
 
 impl ReplicaUpdatedSlotsServerImpl {
     pub fn new(confirmed_bank_receiver: Receiver<Slot>) -> Self {
@@ -59,16 +66,21 @@ impl ReplicaUpdatedSlotsServerImpl {
 
         Self {
             eligible_slot_set: eligible_slot_set.clone(),
-            confirmed_bank_receiver_svc: Some(Self::start_confirmed_bank_receiver(
+            confirmed_bank_receiver_service: Some(Self::run_confirmed_bank_receiver(
                 confirmed_bank_receiver,
+                eligible_slot_set.clone(),
+                exit_updated_slot_server.clone(),
+            )),
+            cleanup_service: Some(Self::run_cleanup_service(
                 eligible_slot_set,
+                MAX_ELIGIBLE_SLOT_SET_SIZE,
                 exit_updated_slot_server.clone(),
             )),
             exit_updated_slot_server,
         }
     }
 
-    fn start_confirmed_bank_receiver(
+    fn run_confirmed_bank_receiver(
         confirmed_bank_receiver: Receiver<Slot>,
         eligible_slot_set: ReplicaEligibleSlotSet,
         exit: Arc<AtomicBool>,
@@ -79,8 +91,28 @@ impl ReplicaUpdatedSlotsServerImpl {
                 while !exit.load(Ordering::Relaxed) {
                     if let Ok(slot) = confirmed_bank_receiver.recv() {
                         let mut slot_set = eligible_slot_set.slot_set.write().unwrap();
-                        slot_set.insert(slot, CommitmentLevel::Confirmed);
+                        slot_set.push_back((slot, CommitmentLevel::Confirmed));
                     }
+                }
+            })
+            .unwrap()
+    }
+
+    fn run_cleanup_service(
+        eligible_slot_set: ReplicaEligibleSlotSet,
+        max_set_size: usize,
+        exit: Arc<AtomicBool>,
+    ) -> JoinHandle<()> {
+        Builder::new()
+            .name("cleanup_service".to_string())
+            .spawn(move || {
+                while !exit.load(Ordering::Relaxed) {
+                    let mut slot_set = eligible_slot_set.slot_set.write().unwrap();
+                    let count_to_drain = slot_set.len().saturating_sub(max_set_size);
+                    if count_to_drain > 0 {
+                        drop(slot_set.drain(..count_to_drain));
+                    }
+                    sleep(Duration::from_millis(200));
                 }
             })
             .unwrap()
