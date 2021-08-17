@@ -34,7 +34,7 @@ solana-version = { path = "../version", version = "=1.8.0" }
 solana-vote-program = { path = "../programs/vote", version = "=1.8.0" }
 thiserror = "1.0"
 tokio = { version = "1", features = ["full"] }
-tungstenite = "0.14.0"
+tungstenite = "0.15.0"
 url = "2.2.2"
 
 [dev-dependencies]

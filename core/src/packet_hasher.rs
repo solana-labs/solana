@@ -1,10 +1,13 @@
 // Get a unique hash value for a packet
 // Used in retransmit and shred fetch to prevent dos with same packet data.
 
-use ahash::AHasher;
-use rand::{thread_rng, Rng};
-use solana_perf::packet::Packet;
-use std::hash::Hasher;
+use {
+    ahash::AHasher,
+    rand::{thread_rng, Rng},
+    solana_ledger::shred::Shred,
+    solana_perf::packet::Packet,
+    std::hash::Hasher,
+};
 
 #[derive(Clone)]
 pub struct PacketHasher {
@@ -22,9 +25,18 @@ impl Default for PacketHasher {
 }
 
 impl PacketHasher {
-    pub fn hash_packet(&self, packet: &Packet) -> u64 {
+    pub(crate) fn hash_packet(&self, packet: &Packet) -> u64 {
+        let size = packet.data.len().min(packet.meta.size);
+        self.hash_data(&packet.data[..size])
+    }
+
+    pub(crate) fn hash_shred(&self, shred: &Shred) -> u64 {
+        self.hash_data(&shred.payload)
+    }
+
+    fn hash_data(&self, data: &[u8]) -> u64 {
         let mut hasher = AHasher::new_with_keys(self.seed1, self.seed2);
-        hasher.write(&packet.data[0..packet.meta.size]);
+        hasher.write(data);
         hasher.finish()
     }
 

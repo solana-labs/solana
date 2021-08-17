@@ -7,7 +7,6 @@ use {
     },
     solana_vote_program::vote_state::VoteState,
     std::{
-        borrow::Borrow,
         cmp::Ordering,
         collections::{hash_map::Entry, HashMap},
         iter::FromIterator,
@@ -268,8 +267,8 @@ impl From<VoteAccountsHashMap> for VoteAccounts {
     }
 }
 
-impl Borrow<VoteAccountsHashMap> for VoteAccounts {
-    fn borrow(&self) -> &VoteAccountsHashMap {
+impl AsRef<VoteAccountsHashMap> for VoteAccounts {
+    fn as_ref(&self) -> &VoteAccountsHashMap {
         &self.vote_accounts
     }
 }

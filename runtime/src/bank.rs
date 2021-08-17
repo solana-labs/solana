@@ -2457,7 +2457,8 @@ impl Bank {
         clean.stop();
 
         let mut shrink = Measure::start("shrink");
-        self.shrink_all_slots(false, last_full_snapshot_slot);
+        const IS_STARTUP: bool = true; // this is only called at startup, and we want to use more threads
+        self.shrink_all_slots(IS_STARTUP, last_full_snapshot_slot);
         shrink.stop();
 
         info!(
@@ -5738,9 +5739,7 @@ pub(crate) mod tests {
     use crate::{
         accounts_background_service::{AbsRequestHandler, SendDroppedBankCallback},
         accounts_db::DEFAULT_ACCOUNTS_SHRINK_RATIO,
-        accounts_index::{
-            AccountIndex, AccountMap, AccountSecondaryIndexes, ScanError, ITER_BATCH_SIZE,
-        },
+        accounts_index::{AccountIndex, AccountSecondaryIndexes, ScanError, ITER_BATCH_SIZE},
         ancestors::Ancestors,
         genesis_utils::{
             activate_all_features, bootstrap_validator_stake_lamports,
@@ -7309,9 +7308,9 @@ pub(crate) mod tests {
         }
     }
 
-    fn map_to_test_bad_range() -> AccountMap<Pubkey, i8> {
-        let mut map: AccountMap<Pubkey, i8> = AccountMap::new();
-        // when empty, AccountMap (= std::collections::BTreeMap) doesn't sanitize given range...
+    fn map_to_test_bad_range() -> std::collections::BTreeMap<Pubkey, i8> {
+        let mut map = std::collections::BTreeMap::new();
+        // when empty, std::collections::BTreeMap doesn't sanitize given range...
         map.insert(solana_sdk::pubkey::new_rand(), 1);
         map
     }

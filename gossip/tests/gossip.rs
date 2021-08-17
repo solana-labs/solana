@@ -221,10 +221,10 @@ pub fn cluster_info_retransmit() {
 
     let dests: Vec<_> = ClusterInfo::get_retransmit_to_dests(
         &retransmit_peers,
-        &SocketAddrSpace::Unspecified,
         false,
+        &SocketAddrSpace::Unspecified,
     );
-    ClusterInfo::retransmit_to(&tn1, &dests, &p);
+    ClusterInfo::retransmit_to(&tn1, &dests, &p.data[..p.meta.size]);
 
     let res: Vec<_> = [tn1, tn2, tn3]
         .into_par_iter()

@@ -1238,8 +1238,8 @@ impl ClusterInfo {
 
     pub fn get_retransmit_to_dests(
         peers: &[&ContactInfo],
-        socket_addr_space: &SocketAddrSpace,
         forwarded: bool,
+        socket_addr_space: &SocketAddrSpace,
     ) -> Vec<SocketAddr> {
         let dests: Vec<SocketAddr> = if forwarded {
             peers
@@ -1257,9 +1257,8 @@ impl ClusterInfo {
         dests
     }
 
-    pub fn retransmit_to(s: &UdpSocket, dests: &[SocketAddr], packet: &Packet) {
+    pub fn retransmit_to(s: &UdpSocket, dests: &[SocketAddr], data: &[u8]) {
         trace!("retransmit orders {}", dests.len());
-        let data = &packet.data[..packet.meta.size];
         if let Err(SendPktsError::IoError(ioerr, num_failed)) = multi_target_send(s, data, dests) {
             inc_new_counter_info!("cluster_info-retransmit-packets", dests.len(), 1);
             inc_new_counter_error!("cluster_info-retransmit-error", num_failed, 1);
@@ -2920,18 +2919,24 @@ fn filter_on_shred_version(
 ) -> Option<Protocol> {
     let filter_values = |from: &Pubkey, values: &mut Vec<CrdsValue>, skipped_counter: &Counter| {
         let num_values = values.len();
+        // Node-instances are always exempted from shred-version check so that:
+        // * their propagation across cluster is expedited.
+        // * prevent two running instances of the same identity key cross
+        //   contaminate gossip between clusters.
         if crds.get_shred_version(from) == Some(self_shred_version) {
-            // Retain values with the same shred-vesion, or those which are
-            // contact-info so that shred-versions can be updated.
             values.retain(|value| match &value.data {
+                // Allow contact-infos so that shred-versions are updated.
                 CrdsData::ContactInfo(_) => true,
+                CrdsData::NodeInstance(_) => true,
+                // Only retain values with the same shred version.
                 _ => crds.get_shred_version(&value.pubkey()) == Some(self_shred_version),
             })
         } else {
-            // Only allow node to update its own contact info in case their
-            // shred-version changes.
             values.retain(|value| match &value.data {
+                // Allow node to update its own contact info in case their
+                // shred-version changes
                 CrdsData::ContactInfo(node) => node.id == *from,
+                CrdsData::NodeInstance(_) => true,
                 _ => false,
             })
         }

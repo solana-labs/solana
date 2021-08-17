@@ -21,7 +21,7 @@ use {
     },
     solana_core::{
         ledger_cleanup_service::{DEFAULT_MAX_LEDGER_SHREDS, DEFAULT_MIN_MAX_LEDGER_SHREDS},
-        tower_storage::FileTowerStorage,
+        tower_storage,
         tpu::DEFAULT_TPU_COALESCE_MS,
         validator::{
             is_snapshot_config_invalid, Validator, ValidatorConfig, ValidatorStartProgress,
@@ -1299,7 +1299,58 @@ pub fn main() {
                 .long("tower")
                 .value_name("DIR")
                 .takes_value(true)
-                .help("Use DIR as tower location [default: --ledger value]"),
+                .help("Use DIR as file tower storage location [default: --ledger value]"),
+        )
+        .arg(
+            Arg::with_name("tower_storage")
+                .long("tower-storage")
+                .possible_values(&["file", "etcd"])
+                .default_value("file")
+                .takes_value(true)
+                .help("Where to store the tower"),
+        )
+        .arg(
+            Arg::with_name("etcd_endpoint")
+                .long("etcd-endpoint")
+                .required_if("tower_storage", "etcd")
+                .value_name("HOST:PORT")
+                .takes_value(true)
+                .multiple(true)
+                .validator(solana_net_utils::is_host_port)
+                .help("etcd gRPC endpoint to connect with")
+        )
+        .arg(
+            Arg::with_name("etcd_domain_name")
+                .long("etcd-domain-name")
+                .required_if("tower_storage", "etcd")
+                .value_name("DOMAIN")
+                .default_value("localhost")
+                .takes_value(true)
+                .help("domain name against which to verify the etcd server’s TLS certificate")
+        )
+        .arg(
+            Arg::with_name("etcd_cacert_file")
+                .long("etcd-cacert-file")
+                .required_if("tower_storage", "etcd")
+                .value_name("FILE")
+                .takes_value(true)
+                .help("verify the TLS certificate of the etcd endpoint using this CA bundle")
+        )
+        .arg(
+            Arg::with_name("etcd_key_file")
+                .long("etcd-key-file")
+                .required_if("tower_storage", "etcd")
+                .value_name("FILE")
+                .takes_value(true)
+                .help("TLS key file to use when establishing a connection to the etcd endpoint")
+        )
+        .arg(
+            Arg::with_name("etcd_cert_file")
+                .long("etcd-cert-file")
+                .required_if("tower_storage", "etcd")
+                .value_name("FILE")
+                .takes_value(true)
+                .help("TLS certificate to use when establishing a connection to the etcd endpoint")
         )
         .arg(
             Arg::with_name("gossip_port")
@@ -1316,7 +1367,6 @@ pub fn main() {
                 .validator(solana_net_utils::is_host)
                 .help("Gossip DNS name or IP address for the validator to advertise in gossip \
                        [default: ask --entrypoint, or 127.0.0.1 when --entrypoint is not provided]"),
-
         )
         .arg(
             Arg::with_name("public_rpc_addr")
@@ -2296,13 +2346,50 @@ pub fn main() {
         .ok()
         .or_else(|| get_cluster_shred_version(&entrypoint_addrs));
 
-    let tower_path = value_t!(matches, "tower", PathBuf)
-        .ok()
-        .unwrap_or_else(|| ledger_path.clone());
+    let tower_storage: Arc<dyn solana_core::tower_storage::TowerStorage> =
+        match value_t_or_exit!(matches, "tower_storage", String).as_str() {
+            "file" => {
+                let tower_path = value_t!(matches, "tower", PathBuf)
+                    .ok()
+                    .unwrap_or_else(|| ledger_path.clone());
+
+                Arc::new(tower_storage::FileTowerStorage::new(tower_path))
+            }
+            "etcd" => {
+                let endpoints = values_t_or_exit!(matches, "etcd_endpoint", String);
+                let domain_name = value_t_or_exit!(matches, "etcd_domain_name", String);
+                let ca_certificate_file = value_t_or_exit!(matches, "etcd_cacert_file", String);
+                let identity_certificate_file = value_t_or_exit!(matches, "etcd_cert_file", String);
+                let identity_private_key_file = value_t_or_exit!(matches, "etcd_key_file", String);
+
+                let read = |file| {
+                    fs::read(&file).unwrap_or_else(|err| {
+                        eprintln!("Unable to read {}: {}", file, err);
+                        exit(1)
+                    })
+                };
+
+                let tls_config = tower_storage::EtcdTlsConfig {
+                    domain_name,
+                    ca_certificate: read(ca_certificate_file),
+                    identity_certificate: read(identity_certificate_file),
+                    identity_private_key: read(identity_private_key_file),
+                };
+
+                Arc::new(
+                    tower_storage::EtcdTowerStorage::new(endpoints, Some(tls_config))
+                        .unwrap_or_else(|err| {
+                            eprintln!("Failed to connect to etcd: {}", err);
+                            exit(1);
+                        }),
+                )
+            }
+            _ => unreachable!(),
+        };
 
     let mut validator_config = ValidatorConfig {
         require_tower: matches.is_present("require_tower"),
-        tower_storage: Arc::new(FileTowerStorage::new(tower_path)),
+        tower_storage,
         dev_halt_at_slot: value_t!(matches, "dev_halt_at_slot", Slot).ok(),
         expected_genesis_hash: matches
             .value_of("expected_genesis_hash")
