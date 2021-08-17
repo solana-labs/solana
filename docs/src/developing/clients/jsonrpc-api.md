@@ -3287,7 +3287,7 @@ Simulate sending a transaction
      - `encoding: <string>` - (optional) encoding for returned Account data, either  "base64" (default), "base64+zstd" or "jsonParsed".
         "jsonParsed" encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a parser cannot be found, the field falls back to binary encoding, detectable when the `data` field is type `<string>`.
      - `addresses: <array>` - An array of accounts to return, as base-58 encoded strings
-     - `injectedAccounts: <array>` - (optional) array of accounts to be injected into the transaction simulation request
+     - `injectedAccounts: <array>` - (optional) An array of accounts to be injected into the transaction simulation request
        - `<object>`: a JSON object containing:
           - `address: <string>` - the injected account address
           - `accountData: <object>` - the account data, a JSON object containing:
