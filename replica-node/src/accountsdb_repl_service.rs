@@ -30,6 +30,10 @@ impl AccountsDbReplService {
         Ok(Self { thread })
     }
 
+    // fn get_accounts_for_slot(mut accountsdb_repl_client: &AccountsDbReplClientService, slot: Slot) {
+
+    // }
+
     fn run_service(
         mut last_replicated_slot: Slot,
         mut accountsdb_repl_client: AccountsDbReplClientService,

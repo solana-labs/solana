@@ -112,6 +112,7 @@ impl ReplicaUpdatedSlotsServerImpl {
                     if count_to_drain > 0 {
                         drop(slot_set.drain(..count_to_drain));
                     }
+                    drop(slot_set);
                     sleep(Duration::from_millis(200));
                 }
             })
