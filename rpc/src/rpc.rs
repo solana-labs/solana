@@ -7786,19 +7786,25 @@ pub mod tests {
     }
 
     #[test]
-    fn test_decode_and_deserialize_unsanitary() {
+    fn test_sanitize_unsanitary() {
         let unsanitary_tx58 = "ju9xZWuDBX4pRxX2oZkTjxU5jB4SSTgEGhX8bQ8PURNzyzqKMPPpNvWihx8zUe\
              FfrbVNoAaEsNKZvGzAnTDy5bhNT9kt6KFCTBixpvrLCzg4M5UdFUQYrn1gdgjX\
              pLHxcaShD81xBNaFDgnA2nkkdHnKtZt4hVSfKAmw3VRZbjrZ7L2fKZBx21CwsG\
              hD6onjM2M3qZW5C8J6d1pj41MxKmZgPBSha3MyKkNLkAGFASK"
             .to_string();
 
+        let unsanitary_versioned_tx = decode_and_deserialize::<VersionedTransaction>(
+            unsanitary_tx58,
+            UiTransactionEncoding::Base58,
+        )
+        .unwrap()
+        .1;
         let expect58 = Error::invalid_params(
-            "invalid solana_sdk::transaction::Transaction: index out of bounds".to_string(),
+            "invalid transaction: Transaction failed to sanitize accounts offsets correctly"
+                .to_string(),
         );
         assert_eq!(
-            decode_and_deserialize::<Transaction>(unsanitary_tx58, UiTransactionEncoding::Base58)
-                .unwrap_err(),
+            sanitize_transaction(unsanitary_versioned_tx).unwrap_err(),
             expect58
         );
     }
