@@ -1137,14 +1137,21 @@ fn test_fork_choice_refresh_old_votes() {
 
             info!("Opened blockstores");
 
-            // Get latest votes
-            let (lighter_fork_latest_vote, _) = last_vote_in_tower(
+            // Get latest votes. We additionally check to make sure the vote has landed in
+            // blockstore. This is important because if we were the leader for the block there
+            // is a possibility of voting before broadcast has inserted in blockstore.
+            let lighter_fork_latest_vote = last_vote_in_tower_in_blockstore(
                 &lighter_fork_ledger_path,
                 &context.lighter_fork_validator_key,
+                &lighter_fork_blockstore,
             )
             .unwrap();
-            let (heaviest_fork_latest_vote, _) =
-                last_vote_in_tower(&heaviest_ledger_path, &context.heaviest_validator_key).unwrap();
+            let heaviest_fork_latest_vote = last_vote_in_tower_in_blockstore(
+                &heaviest_ledger_path,
+                &context.heaviest_validator_key,
+                &heaviest_blockstore,
+            )
+            .unwrap();
 
             // Find the first slot on the smaller fork
             let lighter_ancestors: BTreeSet<Slot> = std::iter::once(lighter_fork_latest_vote)
@@ -2640,6 +2647,21 @@ fn restore_tower(tower_path: &Path, node_pubkey: &Pubkey) -> Option<Tower> {
 
 fn last_vote_in_tower(tower_path: &Path, node_pubkey: &Pubkey) -> Option<(Slot, Hash)> {
     restore_tower(tower_path, node_pubkey).map(|tower| tower.last_voted_slot_hash().unwrap())
+}
+
+fn last_vote_in_tower_in_blockstore(
+    tower_path: &Path,
+    node_pubkey: &Pubkey,
+    blockstore: &Blockstore,
+) -> Option<Slot> {
+    restore_tower(tower_path, node_pubkey)
+        .map(|tower| tower.tower_slots())
+        .and_then(|slots| {
+            slots
+                .into_iter()
+                .rev()
+                .find(|&s| blockstore.meta(s).unwrap().is_some())
+        })
 }
 
 fn root_in_tower(tower_path: &Path, node_pubkey: &Pubkey) -> Option<Slot> {
