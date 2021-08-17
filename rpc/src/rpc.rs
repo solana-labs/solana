@@ -1162,14 +1162,10 @@ impl JsonRpcRequestProcessor {
         Ok(blocks)
     }
 
-<<<<<<< HEAD
     pub fn get_block_time(&self, slot: Slot) -> Result<Option<UnixTimestamp>> {
-=======
-    pub async fn get_block_time(&self, slot: Slot) -> Result<Option<UnixTimestamp>> {
         if slot == 0 {
             return Ok(Some(self.genesis_creation_time()));
         }
->>>>>>> c16721161 (Expose genesis block time via rpc (#19267))
         if slot
             <= self
                 .block_commitment_cache
