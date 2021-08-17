@@ -118,6 +118,15 @@ pub struct RpcLargestAccountsConfig {
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct RpcSupplyConfig {
+    #[serde(flatten)]
+    pub commitment: Option<CommitmentConfig>,
+    #[serde(default)]
+    pub exclude_non_circulating_accounts_list: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RpcEpochConfig {
     pub epoch: Option<Epoch>,
     #[serde(flatten)]
