@@ -362,10 +362,12 @@ fn execute_transactions(bank: &Bank, txs: &[Transaction]) -> Vec<ConfirmedTransa
             post_token_balances,
             log_messages,
         )| {
+            #[allow(deprecated)]
             let fee_calculator = nonce_rollback
                 .map(|nonce_rollback| nonce_rollback.fee_calculator())
                 .unwrap_or_else(|| bank.get_fee_calculator(&tx.message().recent_blockhash))
                 .expect("FeeCalculator must exist");
+            #[allow(deprecated)]
             let fee = fee_calculator.calculate_fee(tx.message());
 
             let inner_instructions = inner_instructions.map(|inner_instructions| {
@@ -1335,7 +1337,7 @@ fn assert_instruction_count() {
             ("solana_bpf_rust_noop", 478),
             ("solana_bpf_rust_param_passing", 46),
             ("solana_bpf_rust_rand", 481),
-            ("solana_bpf_rust_sanity", 907),
+            ("solana_bpf_rust_sanity", 922),
             ("solana_bpf_rust_secp256k1_recover", 301),
             ("solana_bpf_rust_sha", 32337),
         ]);

@@ -54,7 +54,7 @@ pub fn create_builtin_transactions(
                 .unwrap_or_else(|_| panic!("{}:{}", line!(), file!()));
 
             let instruction = create_invoke_instruction(rando0.pubkey(), program_id, &1u8);
-            let (blockhash, _fee_calculator) = bank_client.get_recent_blockhash().unwrap();
+            let blockhash = bank_client.get_latest_blockhash().unwrap();
             let message = Message::new(&[instruction], Some(&mint_keypair.pubkey()));
             Transaction::new(&[&rando0], message, blockhash)
         })
@@ -76,7 +76,7 @@ pub fn create_native_loader_transactions(
                 .unwrap_or_else(|_| panic!("{}:{}", line!(), file!()));
 
             let instruction = create_invoke_instruction(rando0.pubkey(), program_id, &1u8);
-            let (blockhash, _fee_calculator) = bank_client.get_recent_blockhash().unwrap();
+            let blockhash = bank_client.get_latest_blockhash().unwrap();
             let message = Message::new(&[instruction], Some(&mint_keypair.pubkey()));
             Transaction::new(&[&rando0], message, blockhash)
         })

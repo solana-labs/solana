@@ -16,16 +16,28 @@ use solana_sdk::hash::Hash;
 use std::{
     fs,
     path::{Path, PathBuf},
-    sync::mpsc::{Receiver, SendError, Sender},
+    sync::{
+        mpsc::{Receiver, SendError, Sender},
+        Arc, Mutex,
+    },
 };
 use tempfile::TempDir;
 
-pub type AccountsPackageSender = Sender<AccountsPackagePre>;
-pub type AccountsPackageReceiver = Receiver<AccountsPackagePre>;
-pub type AccountsPackageSendError = SendError<AccountsPackagePre>;
+/// The sender side of the AccountsPackage channel, used by AccountsBackgroundService
+pub type AccountsPackageSender = Sender<AccountsPackage>;
+
+/// The receiver side of the AccountsPackage channel, used by AccountsHashVerifier
+pub type AccountsPackageReceiver = Receiver<AccountsPackage>;
+
+/// The error type when sending an AccountsPackage over the channel fails
+pub type AccountsPackageSendError = SendError<AccountsPackage>;
+
+/// The PendingSnapshotPackage passes a SnapshotPackage from AccountsHashVerifier to
+/// SnapshotPackagerService for archiving
+pub type PendingSnapshotPackage = Arc<Mutex<Option<SnapshotPackage>>>;
 
 #[derive(Debug)]
-pub struct AccountsPackagePre {
+pub struct AccountsPackage {
     pub slot: Slot,
     pub block_height: Slot,
     pub slot_deltas: Vec<BankSlotDelta>,
@@ -40,8 +52,8 @@ pub struct AccountsPackagePre {
     pub cluster_type: ClusterType,
 }
 
-impl AccountsPackagePre {
-    /// Create a snapshot package
+impl AccountsPackage {
+    /// Create an accounts package
     #[allow(clippy::too_many_arguments)]
     fn new(
         bank: &Bank,
@@ -84,7 +96,7 @@ impl AccountsPackagePre {
 
     /// Package up bank snapshot files, snapshot storages, and slot deltas for a full snapshot.
     #[allow(clippy::too_many_arguments)]
-    pub fn new_full_snapshot_package(
+    pub fn new_for_full_snapshot(
         bank: &Bank,
         bank_snapshot_info: &BankSnapshotInfo,
         snapshots_dir: impl AsRef<Path>,
@@ -120,7 +132,7 @@ impl AccountsPackagePre {
 
     /// Package up bank snapshot files, snapshot storages, and slot deltas for an incremental snapshot.
     #[allow(clippy::too_many_arguments)]
-    pub fn new_incremental_snapshot_package(
+    pub fn new_for_incremental_snapshot(
         bank: &Bank,
         incremental_snapshot_base_slot: Slot,
         bank_snapshot_info: &BankSnapshotInfo,
@@ -169,16 +181,18 @@ impl AccountsPackagePre {
     }
 }
 
-pub struct AccountsPackage {
+pub struct SnapshotPackage {
     pub snapshot_archive_info: SnapshotArchiveInfo,
     pub block_height: Slot,
     pub slot_deltas: Vec<BankSlotDelta>,
     pub snapshot_links: TempDir,
     pub storages: SnapshotStorages,
     pub snapshot_version: SnapshotVersion,
+    pub snapshot_type: SnapshotType,
 }
 
-impl AccountsPackage {
+impl SnapshotPackage {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         slot: Slot,
         block_height: u64,
@@ -189,6 +203,7 @@ impl AccountsPackage {
         hash: Hash,
         archive_format: ArchiveFormat,
         snapshot_version: SnapshotVersion,
+        snapshot_type: SnapshotType,
     ) -> Self {
         Self {
             snapshot_archive_info: SnapshotArchiveInfo {
@@ -202,12 +217,29 @@ impl AccountsPackage {
             snapshot_links,
             storages,
             snapshot_version,
+            snapshot_type,
         }
     }
 }
 
-impl SnapshotArchiveInfoGetter for AccountsPackage {
+impl SnapshotArchiveInfoGetter for SnapshotPackage {
     fn snapshot_archive_info(&self) -> &SnapshotArchiveInfo {
         &self.snapshot_archive_info
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SnapshotType {
+    FullSnapshot,
+    IncrementalSnapshot,
+}
+
+impl SnapshotType {
+    /// Get the string prefix of the snapshot type
+    pub fn to_prefix(&self) -> &'static str {
+        match self {
+            SnapshotType::FullSnapshot => TMP_FULL_SNAPSHOT_PREFIX,
+            SnapshotType::IncrementalSnapshot => TMP_INCREMENTAL_SNAPSHOT_PREFIX,
+        }
     }
 }

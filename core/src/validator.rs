@@ -1,92 +1,99 @@
 //! The `validator` module hosts all the validator microservices.
 
-use crate::{
-    broadcast_stage::BroadcastStageType,
-    cache_block_meta_service::{CacheBlockMetaSender, CacheBlockMetaService},
-    cluster_info_vote_listener::VoteTracker,
-    completed_data_sets_service::CompletedDataSetsService,
-    consensus::{reconcile_blockstore_roots_with_tower, FileTowerStorage, Tower, TowerStorage},
-    cost_model::CostModel,
-    rewards_recorder_service::{RewardsRecorderSender, RewardsRecorderService},
-    sample_performance_service::SamplePerformanceService,
-    serve_repair::ServeRepair,
-    serve_repair_service::ServeRepairService,
-    sigverify,
-    snapshot_packager_service::{PendingSnapshotPackage, SnapshotPackagerService},
-    tpu::{Tpu, DEFAULT_TPU_COALESCE_MS},
-    tvu::{Sockets, Tvu, TvuConfig},
-};
-use crossbeam_channel::{bounded, unbounded};
-use rand::{thread_rng, Rng};
-use solana_entry::poh::compute_hash_time_ns;
-use solana_gossip::{
-    cluster_info::{
-        ClusterInfo, Node, DEFAULT_CONTACT_DEBUG_INTERVAL_MILLIS,
-        DEFAULT_CONTACT_SAVE_INTERVAL_MILLIS,
+use {
+    crate::{
+        broadcast_stage::BroadcastStageType,
+        cache_block_meta_service::{CacheBlockMetaSender, CacheBlockMetaService},
+        cluster_info_vote_listener::VoteTracker,
+        completed_data_sets_service::CompletedDataSetsService,
+        consensus::{reconcile_blockstore_roots_with_tower, Tower},
+        cost_model::CostModel,
+        rewards_recorder_service::{RewardsRecorderSender, RewardsRecorderService},
+        sample_performance_service::SamplePerformanceService,
+        serve_repair::ServeRepair,
+        serve_repair_service::ServeRepairService,
+        sigverify,
+        snapshot_packager_service::SnapshotPackagerService,
+        tower_storage::TowerStorage,
+        tpu::{Tpu, DEFAULT_TPU_COALESCE_MS},
+        tvu::{Sockets, Tvu, TvuConfig},
     },
-    contact_info::ContactInfo,
-    gossip_service::GossipService,
-};
-use solana_ledger::{
-    bank_forks_utils,
-    blockstore::{Blockstore, BlockstoreSignals, CompletedSlotsReceiver, PurgeType},
-    blockstore_db::BlockstoreRecoveryMode,
-    blockstore_processor::{self, TransactionStatusSender},
-    leader_schedule::FixedSchedule,
-    leader_schedule_cache::LeaderScheduleCache,
-};
-use solana_measure::measure::Measure;
-use solana_metrics::datapoint_info;
-use solana_poh::{
-    poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
-    poh_service::{self, PohService},
-};
-use solana_rpc::{
-    max_slots::MaxSlots,
-    optimistically_confirmed_bank_tracker::{
-        OptimisticallyConfirmedBank, OptimisticallyConfirmedBankTracker,
+    crossbeam_channel::{bounded, unbounded},
+    rand::{thread_rng, Rng},
+    solana_entry::poh::compute_hash_time_ns,
+    solana_gossip::{
+        cluster_info::{
+            ClusterInfo, Node, DEFAULT_CONTACT_DEBUG_INTERVAL_MILLIS,
+            DEFAULT_CONTACT_SAVE_INTERVAL_MILLIS,
+        },
+        contact_info::ContactInfo,
+        crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS,
+        gossip_service::GossipService,
     },
-    rpc::JsonRpcConfig,
-    rpc_completed_slots_service::RpcCompletedSlotsService,
-    rpc_pubsub_service::{PubSubConfig, PubSubService},
-    rpc_service::JsonRpcService,
-    rpc_subscriptions::RpcSubscriptions,
-    transaction_status_service::TransactionStatusService,
-};
-use solana_runtime::{
-    accounts_db::AccountShrinkThreshold,
-    accounts_index::AccountSecondaryIndexes,
-    bank::Bank,
-    bank_forks::BankForks,
-    commitment::BlockCommitmentCache,
-    hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
-    snapshot_archive_info::SnapshotArchiveInfoGetter,
-    snapshot_config::SnapshotConfig,
-    snapshot_utils,
-};
-use solana_sdk::{
-    clock::Slot,
-    epoch_schedule::MAX_LEADER_SCHEDULE_EPOCH_OFFSET,
-    exit::Exit,
-    genesis_config::GenesisConfig,
-    hash::Hash,
-    pubkey::Pubkey,
-    shred_version::compute_shred_version,
-    signature::{Keypair, Signer},
-    timing::timestamp,
-};
-use solana_streamer::socket::SocketAddrSpace;
-use solana_vote_program::vote_state::VoteState;
-use std::{
-    collections::HashSet,
-    net::SocketAddr,
-    ops::Deref,
-    path::{Path, PathBuf},
-    sync::atomic::{AtomicBool, AtomicU64, Ordering},
-    sync::mpsc::Receiver,
-    sync::{Arc, Mutex, RwLock},
-    thread::{sleep, Builder, JoinHandle},
-    time::{Duration, Instant},
+    solana_ledger::{
+        bank_forks_utils,
+        blockstore::{Blockstore, BlockstoreSignals, CompletedSlotsReceiver, PurgeType},
+        blockstore_db::BlockstoreRecoveryMode,
+        blockstore_processor::{self, TransactionStatusSender},
+        leader_schedule::FixedSchedule,
+        leader_schedule_cache::LeaderScheduleCache,
+    },
+    solana_measure::measure::Measure,
+    solana_metrics::datapoint_info,
+    solana_poh::{
+        poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
+        poh_service::{self, PohService},
+    },
+    solana_rpc::{
+        max_slots::MaxSlots,
+        optimistically_confirmed_bank_tracker::{
+            OptimisticallyConfirmedBank, OptimisticallyConfirmedBankTracker,
+        },
+        rpc::JsonRpcConfig,
+        rpc_completed_slots_service::RpcCompletedSlotsService,
+        rpc_pubsub_service::{PubSubConfig, PubSubService},
+        rpc_service::JsonRpcService,
+        rpc_subscriptions::RpcSubscriptions,
+        transaction_status_service::TransactionStatusService,
+    },
+    solana_runtime::{
+        accounts_db::AccountShrinkThreshold,
+        accounts_index::AccountSecondaryIndexes,
+        bank::Bank,
+        bank_forks::BankForks,
+        commitment::BlockCommitmentCache,
+        hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
+        snapshot_archive_info::SnapshotArchiveInfoGetter,
+        snapshot_config::SnapshotConfig,
+        snapshot_package::PendingSnapshotPackage,
+        snapshot_utils,
+    },
+    solana_sdk::{
+        clock::Slot,
+        epoch_schedule::MAX_LEADER_SCHEDULE_EPOCH_OFFSET,
+        exit::Exit,
+        genesis_config::GenesisConfig,
+        hash::Hash,
+        pubkey::Pubkey,
+        shred_version::compute_shred_version,
+        signature::{Keypair, Signer},
+        timing::timestamp,
+    },
+    solana_streamer::socket::SocketAddrSpace,
+    solana_vote_program::vote_state::VoteState,
+    std::{
+        collections::{HashMap, HashSet},
+        net::SocketAddr,
+        ops::Deref,
+        path::{Path, PathBuf},
+        sync::{
+            atomic::{AtomicBool, AtomicU64, Ordering},
+            mpsc::Receiver,
+            Arc, Mutex, RwLock,
+        },
+        thread::{sleep, Builder, JoinHandle},
+        time::{Duration, Instant},
+    },
 };
 
 const MAX_COMPLETED_DATA_SETS_IN_CHANNEL: usize = 100_000;
@@ -137,6 +144,7 @@ pub struct ValidatorConfig {
     pub poh_hashes_per_batch: u64,
     pub account_indexes: AccountSecondaryIndexes,
     pub accounts_db_caching_enabled: bool,
+    pub accounts_index_bins: Option<usize>,
     pub warp_slot: Option<Slot>,
     pub accounts_db_test_hash_calculation: bool,
     pub accounts_db_skip_shrink: bool,
@@ -182,7 +190,7 @@ impl Default for ValidatorConfig {
             wal_recovery_mode: None,
             poh_verify: true,
             require_tower: false,
-            tower_storage: Arc::new(FileTowerStorage::new(PathBuf::default())),
+            tower_storage: Arc::new(crate::tower_storage::NullTowerStorage::default()),
             debug_keys: None,
             contact_debug_interval: DEFAULT_CONTACT_DEBUG_INTERVAL_MILLIS,
             contact_save_interval: DEFAULT_CONTACT_SAVE_INTERVAL_MILLIS,
@@ -202,6 +210,7 @@ impl Default for ValidatorConfig {
             validator_exit: Arc::new(RwLock::new(Exit::default())),
             no_wait_for_vote_to_start_leader: true,
             accounts_shrink_ratio: AccountShrinkThreshold::default(),
+            accounts_index_bins: None,
         }
     }
 }
@@ -1130,6 +1139,7 @@ fn new_banks_from_ledger(
         debug_keys: config.debug_keys.clone(),
         account_indexes: config.account_indexes.clone(),
         accounts_db_caching_enabled: config.accounts_db_caching_enabled,
+        accounts_index_bins: config.accounts_index_bins,
         shrink_ratio: config.accounts_shrink_ratio,
         accounts_db_test_hash_calculation: config.accounts_db_test_hash_calculation,
         accounts_db_skip_shrink: config.accounts_db_skip_shrink,
@@ -1517,7 +1527,20 @@ fn get_stake_percent_in_gossip(bank: &Bank, cluster_info: &ClusterInfo, log: boo
     let mut offline_nodes = vec![];
 
     let mut total_activated_stake = 0;
-    let all_tvu_peers = cluster_info.all_tvu_peers();
+    let now = timestamp();
+    // Nodes contact infos are saved to disk and restored on validator startup.
+    // Staked nodes entries will not expire until an epoch after. So it
+    // is necessary here to filter for recent entries to establish liveness.
+    let peers: HashMap<_, _> = cluster_info
+        .all_tvu_peers()
+        .into_iter()
+        .filter(|node| {
+            let age = now.saturating_sub(node.wallclock);
+            // Contact infos are refreshed twice during this period.
+            age < CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS
+        })
+        .map(|node| (node.id, node))
+        .collect();
     let my_shred_version = cluster_info.my_shred_version();
     let my_id = cluster_info.id();
 
@@ -1533,10 +1556,7 @@ fn get_stake_percent_in_gossip(bank: &Bank, cluster_info: &ClusterInfo, log: boo
             .map(|vote_state| vote_state.node_pubkey)
             .unwrap_or_default();
 
-        if let Some(peer) = all_tvu_peers
-            .iter()
-            .find(|peer| peer.id == vote_state_node_pubkey)
-        {
+        if let Some(peer) = peers.get(&vote_state_node_pubkey) {
             if peer.shred_version == my_shred_version {
                 trace!(
                     "observed {} in gossip, (activated_stake={})",

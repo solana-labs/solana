@@ -6,8 +6,7 @@ use {
     jsonrpc_server_utils::tokio,
     log::*,
     solana_core::{
-        consensus::{Tower, TowerStorage},
-        validator::ValidatorStartProgress,
+        consensus::Tower, tower_storage::TowerStorage, validator::ValidatorStartProgress,
     },
     solana_gossip::cluster_info::ClusterInfo,
     solana_sdk::{

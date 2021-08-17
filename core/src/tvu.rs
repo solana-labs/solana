@@ -11,7 +11,7 @@ use crate::{
     },
     cluster_slots::ClusterSlots,
     completed_data_sets_service::CompletedDataSetsSender,
-    consensus::{Tower, TowerStorage},
+    consensus::Tower,
     cost_model::CostModel,
     cost_update_service::CostUpdateService,
     ledger_cleanup_service::LedgerCleanupService,
@@ -21,7 +21,7 @@ use crate::{
     shred_fetch_stage::ShredFetchStage,
     sigverify_shreds::ShredSigVerifier,
     sigverify_stage::SigVerifyStage,
-    snapshot_packager_service::PendingSnapshotPackage,
+    tower_storage::TowerStorage,
     voting_service::VotingService,
 };
 use crossbeam_channel::unbounded;
@@ -44,6 +44,7 @@ use solana_runtime::{
     bank_forks::BankForks,
     commitment::BlockCommitmentCache,
     snapshot_config::SnapshotConfig,
+    snapshot_package::PendingSnapshotPackage,
     vote_sender_types::ReplayVoteSender,
 };
 use solana_sdk::{pubkey::Pubkey, signature::Keypair};
@@ -174,13 +175,13 @@ impl Tvu {
             unbounded();
         let retransmit_stage = RetransmitStage::new(
             bank_forks.clone(),
-            leader_schedule_cache,
+            leader_schedule_cache.clone(),
             blockstore.clone(),
-            cluster_info,
+            cluster_info.clone(),
             Arc::new(retransmit_sockets),
             repair_socket,
             verified_receiver,
-            exit,
+            exit.clone(),
             cluster_slots_update_receiver,
             *bank_forks.read().unwrap().working_bank().epoch_schedule(),
             cfg,
@@ -190,7 +191,7 @@ impl Tvu {
             verified_vote_receiver,
             tvu_config.repair_validators,
             completed_data_sets_sender,
-            max_slots,
+            max_slots.clone(),
             Some(rpc_subscriptions.clone()),
             duplicate_slots_sender,
             ancestor_hashes_replay_update_receiver,
@@ -278,12 +279,16 @@ impl Tvu {
             bank_notification_sender,
             wait_for_vote_to_start_leader: tvu_config.wait_for_vote_to_start_leader,
             ancestor_hashes_replay_update_sender,
-            tower_storage,
+            tower_storage: tower_storage.clone(),
         };
 
         let (voting_sender, voting_receiver) = channel();
-        let voting_service =
-            VotingService::new(voting_receiver, cluster_info.clone(), poh_recorder.clone());
+        let voting_service = VotingService::new(
+            voting_receiver,
+            cluster_info.clone(),
+            poh_recorder.clone(),
+            tower_storage,
+        );
 
         let (cost_update_sender, cost_update_receiver): (
             Sender<ExecuteTimings>,
@@ -451,7 +456,7 @@ pub mod tests {
             )),
             &poh_recorder,
             tower,
-            Arc::new(crate::consensus::FileTowerStorage::default()),
+            Arc::new(crate::tower_storage::FileTowerStorage::default()),
             &leader_schedule_cache,
             &exit,
             block_commitment_cache,

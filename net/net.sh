@@ -901,6 +901,8 @@ while [[ -n $1 ]]; do
       extraPrimordialStakes=$2
       shift 2
     elif [[ $1 = --allow-private-addr ]]; then
+      # May also be added by loadConfigFile if 'gce.sh create' was invoked
+      # without -P.
       maybeAllowPrivateAddr="$1"
       shift 1
     else

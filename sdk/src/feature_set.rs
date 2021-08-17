@@ -187,6 +187,14 @@ pub mod stake_merge_with_unmatched_credits_observed {
     solana_sdk::declare_id!("meRgp4ArRPhD3KtCY9c5yAf2med7mBLsjKTPeVUHqBL");
 }
 
+pub mod gate_large_block {
+    solana_sdk::declare_id!("2ry7ygxiYURULZCrypHhveanvP5tzZ4toRwVp89oCNSj");
+}
+
+pub mod mem_overlap_fix {
+    solana_sdk::declare_id!("vXDCFK7gphrEmyf5VnKgLmqbdJ4UxD2eZH1qbdouYKF");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -228,6 +236,8 @@ lazy_static! {
         (merge_nonce_error_into_system_error::id(), "merge NonceError into SystemError"),
         (disable_fees_sysvar::id(), "disable fees sysvar"),
         (stake_merge_with_unmatched_credits_observed::id(), "allow merging active stakes with unmatched credits_observed #18985"),
+        (gate_large_block::id(), "validator checks block cost against max limit in realtime, reject if exceeds."),
+        (mem_overlap_fix::id(), "Memory overlap fix"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

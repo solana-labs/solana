@@ -2,7 +2,7 @@
  * @brief Instruction definitions for the invoked program
  */
 
-#include <solana_sdk.h>
+#include <sol/types.h>
 
 const uint8_t VERIFY_TRANSLATIONS = 0;
 const uint8_t RETURN_ERROR = 1;

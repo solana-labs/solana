@@ -10,8 +10,8 @@ use solana_sdk::{
     client::Client,
     clock::{DEFAULT_S_PER_SLOT, MAX_PROCESSING_AGE},
     commitment_config::CommitmentConfig,
-    fee_calculator::FeeCalculator,
     hash::Hash,
+    instruction::{AccountMeta, Instruction},
     message::Message,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
@@ -45,14 +45,12 @@ pub type Result<T> = std::result::Result<T, BenchTpsError>;
 
 pub type SharedTransactions = Arc<RwLock<VecDeque<Vec<(Transaction, u64)>>>>;
 
-fn get_recent_blockhash<T: Client>(client: &T) -> (Hash, FeeCalculator) {
+fn get_latest_blockhash<T: Client>(client: &T) -> Hash {
     loop {
-        match client.get_recent_blockhash_with_commitment(CommitmentConfig::processed()) {
-            Ok((blockhash, fee_calculator, _last_valid_slot)) => {
-                return (blockhash, fee_calculator)
-            }
+        match client.get_latest_blockhash_with_commitment(CommitmentConfig::processed()) {
+            Ok((blockhash, _)) => return blockhash,
             Err(err) => {
-                info!("Couldn't get recent blockhash: {:?}", err);
+                info!("Couldn't get last blockhash: {:?}", err);
                 sleep(Duration::from_secs(1));
             }
         };
@@ -239,19 +237,19 @@ where
 
     let shared_txs: SharedTransactions = Arc::new(RwLock::new(VecDeque::new()));
 
-    let recent_blockhash = Arc::new(RwLock::new(get_recent_blockhash(client.as_ref()).0));
+    let blockhash = Arc::new(RwLock::new(get_latest_blockhash(client.as_ref())));
     let shared_tx_active_thread_count = Arc::new(AtomicIsize::new(0));
     let total_tx_sent_count = Arc::new(AtomicUsize::new(0));
 
     let blockhash_thread = {
         let exit_signal = exit_signal.clone();
-        let recent_blockhash = recent_blockhash.clone();
+        let blockhash = blockhash.clone();
         let client = client.clone();
         let id = id.pubkey();
         Builder::new()
             .name("solana-blockhash-poller".to_string())
             .spawn(move || {
-                poll_blockhash(&exit_signal, &recent_blockhash, &client, &id);
+                poll_blockhash(&exit_signal, &blockhash, &client, &id);
             })
             .unwrap()
     };
@@ -271,7 +269,7 @@ where
     let start = Instant::now();
 
     generate_chunked_transfers(
-        recent_blockhash,
+        blockhash,
         &shared_txs,
         shared_tx_active_thread_count,
         source_keypair_chunks,
@@ -402,7 +400,7 @@ fn poll_blockhash<T: Client>(
     loop {
         let blockhash_updated = {
             let old_blockhash = *blockhash.read().unwrap();
-            if let Ok((new_blockhash, _fee)) = client.get_new_blockhash(&old_blockhash) {
+            if let Ok(new_blockhash) = client.get_new_latest_blockhash(&old_blockhash) {
                 *blockhash.write().unwrap() = new_blockhash;
                 blockhash_last_updated = Instant::now();
                 true
@@ -540,7 +538,7 @@ impl<'a> FundingTransactions<'a> for Vec<(&'a Keypair, Transaction)> {
                 self.len(),
             );
 
-            let (blockhash, _fee_calculator) = get_recent_blockhash(client.as_ref());
+            let blockhash = get_latest_blockhash(client.as_ref());
 
             // re-sign retained to_fund_txes with updated blockhash
             self.sign(blockhash);
@@ -732,7 +730,7 @@ pub fn airdrop_lamports<T: Client>(
             id.pubkey(),
         );
 
-        let (blockhash, _fee_calculator) = get_recent_blockhash(client);
+        let blockhash = get_latest_blockhash(client);
         match request_airdrop_transaction(faucet_addr, &id.pubkey(), airdrop_amount, blockhash) {
             Ok(transaction) => {
                 let mut tries = 0;
@@ -890,8 +888,18 @@ pub fn generate_and_fund_keypairs<T: 'static + Client + Send + Sync>(
     //   pay for the transaction fees in a new run.
     let enough_lamports = 8 * lamports_per_account / 10;
     if first_keypair_balance < enough_lamports || last_keypair_balance < enough_lamports {
-        let fee_rate_governor = client.get_fee_rate_governor().unwrap();
-        let max_fee = fee_rate_governor.max_lamports_per_signature;
+        let single_sig_message = Message::new(
+            &[Instruction::new_with_bytes(
+                Pubkey::new_unique(),
+                &[],
+                vec![AccountMeta::new(Pubkey::new_unique(), true)],
+            )],
+            None,
+        );
+        let blockhash = client.get_latest_blockhash().unwrap();
+        let max_fee = client
+            .get_fee_for_message(&blockhash, &single_sig_message)
+            .unwrap();
         let extra_fees = extra * max_fee;
         let total_keypairs = keypairs.len() as u64 + 1; // Add one for funding keypair
         let total = lamports_per_account * total_keypairs + extra_fees;

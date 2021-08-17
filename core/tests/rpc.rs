@@ -231,7 +231,7 @@ fn test_rpc_subscriptions() {
     transactions_socket.connect(test_validator.tpu()).unwrap();
 
     let rpc_client = RpcClient::new(test_validator.rpc_url());
-    let recent_blockhash = rpc_client.get_recent_blockhash().unwrap().0;
+    let recent_blockhash = rpc_client.get_latest_blockhash().unwrap();
 
     // Create transaction signatures to subscribe to
     let transactions: Vec<Transaction> = (0..1000)
@@ -406,7 +406,7 @@ fn test_tpu_send_transaction() {
     )
     .unwrap();
 
-    let recent_blockhash = rpc_client.get_recent_blockhash().unwrap().0;
+    let recent_blockhash = rpc_client.get_latest_blockhash().unwrap();
     let tx =
         system_transaction::transfer(&mint_keypair, &Pubkey::new_unique(), 42, recent_blockhash);
     assert!(tpu_client.send_transaction(&tx));
@@ -433,8 +433,8 @@ fn deserialize_rpc_error() -> ClientResult<()> {
 
     let bob = Keypair::new();
     let lamports = 50;
-    let (recent_blockhash, _) = rpc_client.get_recent_blockhash()?;
-    let mut tx = system_transaction::transfer(&alice, &bob.pubkey(), lamports, recent_blockhash);
+    let blockhash = rpc_client.get_latest_blockhash()?;
+    let mut tx = system_transaction::transfer(&alice, &bob.pubkey(), lamports, blockhash);
 
     // This will cause an error
     tx.signatures.clear();

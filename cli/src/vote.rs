@@ -605,19 +605,19 @@ pub fn process_create_vote_account(
         }
     }
 
-    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let latest_blockhash = rpc_client.get_latest_blockhash()?;
 
     let (message, _) = resolve_spend_tx_and_check_account_balance(
         rpc_client,
         false,
         amount,
-        &fee_calculator,
+        &latest_blockhash,
         &config.signers[0].pubkey(),
         build_message,
         config.commitment,
     )?;
     let mut tx = Transaction::new_unsigned(message);
-    tx.try_sign(&config.signers, recent_blockhash)?;
+    tx.try_sign(&config.signers, latest_blockhash)?;
     let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
     log_instruction_custom_error::<SystemError>(result, config)
 }
@@ -639,7 +639,7 @@ pub fn process_vote_authorize(
         (&authorized.pubkey(), "authorized_account".to_string()),
         (new_authorized_pubkey, "new_authorized_pubkey".to_string()),
     )?;
-    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let latest_blockhash = rpc_client.get_latest_blockhash()?;
     let vote_ix = if new_authorized_signer.is_some() {
         vote_instruction::authorize_checked(
             vote_account_pubkey,   // vote account to update
@@ -659,11 +659,11 @@ pub fn process_vote_authorize(
 
     let message = Message::new(&ixs, Some(&config.signers[0].pubkey()));
     let mut tx = Transaction::new_unsigned(message);
-    tx.try_sign(&config.signers, recent_blockhash)?;
+    tx.try_sign(&config.signers, latest_blockhash)?;
     check_account_for_fee_with_commitment(
         rpc_client,
         &config.signers[0].pubkey(),
-        &fee_calculator,
+        &latest_blockhash,
         &tx.message,
         config.commitment,
     )?;
@@ -686,7 +686,7 @@ pub fn process_vote_update_validator(
         (vote_account_pubkey, "vote_account_pubkey".to_string()),
         (&new_identity_pubkey, "new_identity_account".to_string()),
     )?;
-    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let latest_blockhash = rpc_client.get_latest_blockhash()?;
     let ixs = vec![vote_instruction::update_validator_identity(
         vote_account_pubkey,
         &authorized_withdrawer.pubkey(),
@@ -696,11 +696,11 @@ pub fn process_vote_update_validator(
 
     let message = Message::new(&ixs, Some(&config.signers[0].pubkey()));
     let mut tx = Transaction::new_unsigned(message);
-    tx.try_sign(&config.signers, recent_blockhash)?;
+    tx.try_sign(&config.signers, latest_blockhash)?;
     check_account_for_fee_with_commitment(
         rpc_client,
         &config.signers[0].pubkey(),
-        &fee_calculator,
+        &latest_blockhash,
         &tx.message,
         config.commitment,
     )?;
@@ -717,7 +717,7 @@ pub fn process_vote_update_commission(
     memo: Option<&String>,
 ) -> ProcessResult {
     let authorized_withdrawer = config.signers[withdraw_authority];
-    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let latest_blockhash = rpc_client.get_latest_blockhash()?;
     let ixs = vec![vote_instruction::update_commission(
         vote_account_pubkey,
         &authorized_withdrawer.pubkey(),
@@ -727,11 +727,11 @@ pub fn process_vote_update_commission(
 
     let message = Message::new(&ixs, Some(&config.signers[0].pubkey()));
     let mut tx = Transaction::new_unsigned(message);
-    tx.try_sign(&config.signers, recent_blockhash)?;
+    tx.try_sign(&config.signers, latest_blockhash)?;
     check_account_for_fee_with_commitment(
         rpc_client,
         &config.signers[0].pubkey(),
-        &fee_calculator,
+        &latest_blockhash,
         &tx.message,
         config.commitment,
     )?;
@@ -836,7 +836,7 @@ pub fn process_withdraw_from_vote_account(
     destination_account_pubkey: &Pubkey,
     memo: Option<&String>,
 ) -> ProcessResult {
-    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let latest_blockhash = rpc_client.get_latest_blockhash()?;
     let withdraw_authority = config.signers[withdraw_authority];
 
     let current_balance = rpc_client.get_balance(vote_account_pubkey)?;
@@ -865,11 +865,11 @@ pub fn process_withdraw_from_vote_account(
 
     let message = Message::new(&ixs, Some(&config.signers[0].pubkey()));
     let mut transaction = Transaction::new_unsigned(message);
-    transaction.try_sign(&config.signers, recent_blockhash)?;
+    transaction.try_sign(&config.signers, latest_blockhash)?;
     check_account_for_fee_with_commitment(
         rpc_client,
         &config.signers[0].pubkey(),
-        &fee_calculator,
+        &latest_blockhash,
         &transaction.message,
         config.commitment,
     )?;

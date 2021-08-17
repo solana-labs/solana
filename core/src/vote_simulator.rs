@@ -1,6 +1,8 @@
 use crate::{
     cluster_info_vote_listener::VoteTracker,
-    cluster_slot_state_verifier::{DuplicateSlotsTracker, GossipDuplicateConfirmedSlots},
+    cluster_slot_state_verifier::{
+        DuplicateSlotsTracker, EpochSlotsFrozenSlots, GossipDuplicateConfirmedSlots,
+    },
     cluster_slots::ClusterSlots,
     consensus::Tower,
     fork_choice::SelectVoteAndResetForkResult,
@@ -82,12 +84,12 @@ impl VoteSimulator {
             for (pubkey, vote) in cluster_votes.iter() {
                 if vote.contains(&parent) {
                     let keypairs = self.validator_keypairs.get(pubkey).unwrap();
-                    let last_blockhash = parent_bank.last_blockhash();
+                    let latest_blockhash = parent_bank.last_blockhash();
                     let vote_tx = vote_transaction::new_vote_transaction(
                         // Must vote > root to be processed
                         vec![parent],
                         parent_bank.hash(),
-                        last_blockhash,
+                        latest_blockhash,
                         &keypairs.node_keypair,
                         &keypairs.vote_keypair,
                         &keypairs.vote_keypair,
@@ -212,6 +214,7 @@ impl VoteSimulator {
             &mut UnfrozenGossipVerifiedVoteHashes::default(),
             &mut true,
             &mut Vec::new(),
+            &mut EpochSlotsFrozenSlots::default(),
         )
     }
 

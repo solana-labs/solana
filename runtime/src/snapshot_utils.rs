@@ -13,7 +13,8 @@ use {
             FullSnapshotArchiveInfo, IncrementalSnapshotArchiveInfo, SnapshotArchiveInfoGetter,
         },
         snapshot_package::{
-            AccountsPackage, AccountsPackagePre, AccountsPackageSendError, AccountsPackageSender,
+            AccountsPackage, AccountsPackageSendError, AccountsPackageSender, SnapshotPackage,
+            SnapshotType,
         },
         sorted_storages::SortedStorages,
     },
@@ -239,10 +240,10 @@ pub fn remove_tmp_snapshot_archives(snapshot_archives_dir: &Path) {
     }
 }
 
-/// Make a full snapshot archive out of the AccountsPackage
+/// Make a snapshot archive out of the snapshot package
 pub fn archive_snapshot_package(
-    snapshot_package: &AccountsPackage,
-    maximum_snapshots_to_retain: usize,
+    snapshot_package: &SnapshotPackage,
+    maximum_snapshot_archives_to_retain: usize,
 ) -> Result<()> {
     info!(
         "Generating snapshot archive for slot {}",
@@ -268,10 +269,11 @@ pub fn archive_snapshot_package(
         .map_err(|e| SnapshotError::IoWithSource(e, "create archive path"))?;
 
     // Create the staging directories
+    let staging_dir_prefix = snapshot_package.snapshot_type.to_prefix();
     let staging_dir = tempfile::Builder::new()
         .prefix(&format!(
             "{}{}-",
-            TMP_FULL_SNAPSHOT_PREFIX,
+            staging_dir_prefix,
             snapshot_package.slot()
         ))
         .tempdir_in(tar_dir)
@@ -323,7 +325,7 @@ pub fn archive_snapshot_package(
     // Tar the staging directory into the archive at `archive_path`
     let archive_path = tar_dir.join(format!(
         "{}{}.{}",
-        TMP_FULL_SNAPSHOT_PREFIX,
+        staging_dir_prefix,
         snapshot_package.slot(),
         file_ext
     ));
@@ -371,7 +373,7 @@ pub fn archive_snapshot_package(
     fs::rename(&archive_path, &snapshot_package.path())
         .map_err(|e| SnapshotError::IoWithSource(e, "archive path rename"))?;
 
-    purge_old_snapshot_archives(tar_dir, maximum_snapshots_to_retain);
+    purge_old_snapshot_archives(tar_dir, maximum_snapshot_archives_to_retain);
 
     timer.stop();
     info!(
@@ -796,8 +798,11 @@ pub fn bank_from_snapshot_archives(
     info!("{}", measure_rebuild);
 
     let mut measure_verify = Measure::start("verify");
-    if !bank.verify_snapshot_bank(test_hash_calculation, accounts_db_skip_shrink)
-        && limit_load_slot_count_from_snapshot.is_none()
+    if !bank.verify_snapshot_bank(
+        test_hash_calculation,
+        accounts_db_skip_shrink,
+        Some(full_snapshot_archive_info.slot()),
+    ) && limit_load_slot_count_from_snapshot.is_none()
     {
         panic!("Snapshot bank for slot {} failed to verify", bank.slot());
     }
@@ -1546,7 +1551,7 @@ pub fn snapshot_bank(
     let highest_bank_snapshot_info = get_highest_bank_snapshot_info(snapshots_dir)
         .expect("no snapshots found in config snapshots_dir");
 
-    let package = AccountsPackagePre::new_full_snapshot_package(
+    let accounts_package = AccountsPackage::new_for_full_snapshot(
         root_bank,
         &highest_bank_snapshot_info,
         snapshots_dir,
@@ -1558,7 +1563,7 @@ pub fn snapshot_bank(
         hash_for_testing,
     )?;
 
-    accounts_package_sender.send(package)?;
+    accounts_package_sender.send(accounts_package)?;
 
     Ok(())
 }
@@ -1582,7 +1587,7 @@ pub fn bank_to_full_snapshot_archive(
     assert!(bank.is_complete());
     bank.squash(); // Bank may not be a root
     bank.force_flush_accounts_cache();
-    bank.clean_accounts(true, false);
+    bank.clean_accounts(true, false, Some(bank.slot()));
     bank.update_accounts_hash();
     bank.rehash(); // Bank accounts may have been manually modified by the caller
 
@@ -1625,7 +1630,7 @@ pub fn bank_to_incremental_snapshot_archive(
     assert!(bank.slot() > full_snapshot_slot);
     bank.squash(); // Bank may not be a root
     bank.force_flush_accounts_cache();
-    bank.clean_accounts(true, false);
+    bank.clean_accounts(true, false, Some(full_snapshot_slot));
     bank.update_accounts_hash();
     bank.rehash(); // Bank accounts may have been manually modified by the caller
 
@@ -1663,7 +1668,7 @@ pub fn package_process_and_archive_full_snapshot(
     thread_pool: Option<&ThreadPool>,
     maximum_snapshots_to_retain: usize,
 ) -> Result<FullSnapshotArchiveInfo> {
-    let package = AccountsPackagePre::new_full_snapshot_package(
+    let accounts_package = AccountsPackage::new_for_full_snapshot(
         bank,
         bank_snapshot_info,
         snapshots_dir,
@@ -1675,14 +1680,16 @@ pub fn package_process_and_archive_full_snapshot(
         None,
     )?;
 
-    let package = process_and_archive_snapshot_package_pre(
-        package,
+    let snapshot_package = process_and_archive_accounts_package(
+        accounts_package,
         thread_pool,
         None,
         maximum_snapshots_to_retain,
     )?;
 
-    Ok(FullSnapshotArchiveInfo::new(package.snapshot_archive_info))
+    Ok(FullSnapshotArchiveInfo::new(
+        snapshot_package.snapshot_archive_info,
+    ))
 }
 
 /// Helper function to hold shared code to package, process, and archive incremental snapshots
@@ -1699,7 +1706,7 @@ pub fn package_process_and_archive_incremental_snapshot(
     thread_pool: Option<&ThreadPool>,
     maximum_snapshots_to_retain: usize,
 ) -> Result<IncrementalSnapshotArchiveInfo> {
-    let package = AccountsPackagePre::new_incremental_snapshot_package(
+    let accounts_package = AccountsPackage::new_for_incremental_snapshot(
         bank,
         incremental_snapshot_base_slot,
         bank_snapshot_info,
@@ -1712,8 +1719,8 @@ pub fn package_process_and_archive_incremental_snapshot(
         None,
     )?;
 
-    let package = process_and_archive_snapshot_package_pre(
-        package,
+    let snapshot_package = process_and_archive_accounts_package(
+        accounts_package,
         thread_pool,
         Some(incremental_snapshot_base_slot),
         maximum_snapshots_to_retain,
@@ -1721,30 +1728,33 @@ pub fn package_process_and_archive_incremental_snapshot(
 
     Ok(IncrementalSnapshotArchiveInfo::new(
         incremental_snapshot_base_slot,
-        package.snapshot_archive_info,
+        snapshot_package.snapshot_archive_info,
     ))
 }
 
-/// Helper function to hold shared code to process and archive snapshot packages
-fn process_and_archive_snapshot_package_pre(
-    package_pre: AccountsPackagePre,
+/// Helper function to hold shared code to process and archive accounts packages
+fn process_and_archive_accounts_package(
+    accounts_package: AccountsPackage,
     thread_pool: Option<&ThreadPool>,
     incremental_snapshot_base_slot: Option<Slot>,
     maximum_snapshots_to_retain: usize,
-) -> Result<AccountsPackage> {
-    let package =
-        process_accounts_package_pre(package_pre, thread_pool, incremental_snapshot_base_slot);
+) -> Result<SnapshotPackage> {
+    let snapshot_package = process_accounts_package(
+        accounts_package,
+        thread_pool,
+        incremental_snapshot_base_slot,
+    );
 
-    archive_snapshot_package(&package, maximum_snapshots_to_retain)?;
+    archive_snapshot_package(&snapshot_package, maximum_snapshots_to_retain)?;
 
-    Ok(package)
+    Ok(snapshot_package)
 }
 
-pub fn process_accounts_package_pre(
-    accounts_package: AccountsPackagePre,
+pub fn process_accounts_package(
+    accounts_package: AccountsPackage,
     thread_pool: Option<&ThreadPool>,
     incremental_snapshot_base_slot: Option<Slot>,
-) -> AccountsPackage {
+) -> SnapshotPackage {
     let mut time = Measure::start("hash");
 
     let hash = accounts_package.hash; // temporarily remaining here
@@ -1786,7 +1796,12 @@ pub fn process_accounts_package_pre(
         ),
     };
 
-    AccountsPackage::new(
+    let snapshot_type = match incremental_snapshot_base_slot {
+        None => SnapshotType::FullSnapshot,
+        Some(_) => SnapshotType::IncrementalSnapshot,
+    };
+
+    SnapshotPackage::new(
         accounts_package.slot,
         accounts_package.block_height,
         accounts_package.slot_deltas,
@@ -1796,6 +1811,7 @@ pub fn process_accounts_package_pre(
         hash,
         accounts_package.archive_format,
         accounts_package.snapshot_version,
+        snapshot_type,
     )
 }
 
@@ -1820,6 +1836,7 @@ mod tests {
     use solana_sdk::{
         genesis_config::create_genesis_config,
         signature::{Keypair, Signer},
+        system_transaction,
     };
     use std::mem::size_of;
 
@@ -2812,5 +2829,215 @@ mod tests {
         .unwrap();
 
         assert_eq!(deserialized_bank, *bank4);
+    }
+
+    /// Test that cleaning works well in the edge cases of zero-lamport accounts and snapshots.
+    /// Here's the scenario:
+    ///
+    /// slot 1:
+    ///     - send some lamports to Account1 (from Account2) to bring it to life
+    ///     - take a full snapshot
+    /// slot 2:
+    ///     - make Account1 have zero lamports (send back to Account2)
+    ///     - take an incremental snapshot
+    ///     - ensure deserializing from this snapshot is equal to this bank
+    /// slot 3:
+    ///     - remove Account2's reference back to slot 2 by transfering from the mint to Account2
+    /// slot 4:
+    ///     - ensure `clean_accounts()` has run and that Account1 is gone
+    ///     - take another incremental snapshot
+    ///     - ensure deserializing from this snapshots is equal to this bank
+    ///     - ensure Account1 hasn't come back from the dead
+    ///
+    /// The check at slot 4 will fail with the pre-incremental-snapshot cleaning logic.  Because
+    /// of the cleaning/purging at slot 4, the incremental snapshot at slot 4 will no longer have
+    /// information about Account1, but the full snapshost _does_ have info for Account1, which is
+    /// no longer correct!
+    #[test]
+    fn test_incremental_snapshots_handle_zero_lamport_accounts() {
+        solana_logger::setup();
+
+        let collector = Pubkey::new_unique();
+        let key1 = Keypair::new();
+        let key2 = Keypair::new();
+
+        let accounts_dir = tempfile::TempDir::new().unwrap();
+        let snapshots_dir = tempfile::TempDir::new().unwrap();
+        let snapshot_archives_dir = tempfile::TempDir::new().unwrap();
+        let snapshot_archive_format = ArchiveFormat::Tar;
+
+        let (genesis_config, mint_keypair) = create_genesis_config(1_000_000);
+
+        let lamports_to_transfer = 123_456;
+        let bank0 = Arc::new(Bank::new_with_paths_for_tests(
+            &genesis_config,
+            vec![accounts_dir.path().to_path_buf()],
+            &[],
+            None,
+            None,
+            AccountSecondaryIndexes::default(),
+            false,
+            AccountShrinkThreshold::default(),
+            false,
+        ));
+        bank0
+            .transfer(lamports_to_transfer, &mint_keypair, &key2.pubkey())
+            .unwrap();
+        while !bank0.is_complete() {
+            bank0.register_tick(&Hash::new_unique());
+        }
+
+        let slot = 1;
+        let bank1 = Arc::new(Bank::new_from_parent(&bank0, &collector, slot));
+        bank1
+            .transfer(lamports_to_transfer, &key2, &key1.pubkey())
+            .unwrap();
+        while !bank1.is_complete() {
+            bank1.register_tick(&Hash::new_unique());
+        }
+
+        let full_snapshot_slot = slot;
+        let full_snapshot_archive_info = bank_to_full_snapshot_archive(
+            snapshots_dir.path(),
+            &bank1,
+            None,
+            snapshot_archives_dir.path(),
+            snapshot_archive_format,
+            None,
+            DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+        )
+        .unwrap();
+
+        let slot = slot + 1;
+        let bank2 = Arc::new(Bank::new_from_parent(&bank1, &collector, slot));
+        let tx = system_transaction::transfer(
+            &key1,
+            &key2.pubkey(),
+            lamports_to_transfer,
+            bank2.last_blockhash(),
+        );
+        let fee = bank2
+            .get_fee_for_message(&bank2.last_blockhash(), tx.message())
+            .unwrap();
+        let tx = system_transaction::transfer(
+            &key1,
+            &key2.pubkey(),
+            lamports_to_transfer - fee,
+            bank2.last_blockhash(),
+        );
+        bank2.process_transaction(&tx).unwrap();
+        assert_eq!(
+            bank2.get_balance(&key1.pubkey()),
+            0,
+            "Ensure Account1's balance is zero"
+        );
+        while !bank2.is_complete() {
+            bank2.register_tick(&Hash::new_unique());
+        }
+
+        // Take an incremental snapshot and then do a roundtrip on the bank and ensure it
+        // deserializes correctly.
+        let incremental_snapshot_archive_info = bank_to_incremental_snapshot_archive(
+            snapshots_dir.path(),
+            &bank2,
+            full_snapshot_slot,
+            None,
+            snapshot_archives_dir.path(),
+            snapshot_archive_format,
+            None,
+            DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+        )
+        .unwrap();
+        let (deserialized_bank, _) = bank_from_snapshot_archives(
+            &[accounts_dir.path().to_path_buf()],
+            &[],
+            snapshots_dir.path(),
+            &full_snapshot_archive_info,
+            Some(&incremental_snapshot_archive_info),
+            &genesis_config,
+            None,
+            None,
+            AccountSecondaryIndexes::default(),
+            false,
+            None,
+            AccountShrinkThreshold::default(),
+            false,
+            false,
+            false,
+            Some(crate::accounts_index::BINS_FOR_TESTING),
+        )
+        .unwrap();
+        assert_eq!(
+            deserialized_bank, *bank2,
+            "Ensure rebuilding from an incremental snapshot works"
+        );
+
+        let slot = slot + 1;
+        let bank3 = Arc::new(Bank::new_from_parent(&bank2, &collector, slot));
+        // Update Account2 so that it no longer holds a reference to slot2
+        bank3
+            .transfer(lamports_to_transfer, &mint_keypair, &key2.pubkey())
+            .unwrap();
+        while !bank3.is_complete() {
+            bank3.register_tick(&Hash::new_unique());
+        }
+
+        let slot = slot + 1;
+        let bank4 = Arc::new(Bank::new_from_parent(&bank3, &collector, slot));
+        while !bank4.is_complete() {
+            bank4.register_tick(&Hash::new_unique());
+        }
+
+        // Ensure account1 has been cleaned/purged from everywhere
+        bank4.squash();
+        bank4.clean_accounts(true, false, Some(full_snapshot_slot));
+        assert!(
+            bank4.get_account_modified_slot(&key1.pubkey()).is_none(),
+            "Ensure Account1 has been cleaned and purged from AccountsDb"
+        );
+
+        // Take an incremental snapshot and then do a roundtrip on the bank and ensure it
+        // deserializes correctly
+        let incremental_snapshot_archive_info = bank_to_incremental_snapshot_archive(
+            snapshots_dir.path(),
+            &bank4,
+            full_snapshot_slot,
+            None,
+            snapshot_archives_dir.path(),
+            snapshot_archive_format,
+            None,
+            DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+        )
+        .unwrap();
+
+        let (deserialized_bank, _) = bank_from_snapshot_archives(
+            &[accounts_dir.path().to_path_buf()],
+            &[],
+            snapshots_dir.path(),
+            &full_snapshot_archive_info,
+            Some(&incremental_snapshot_archive_info),
+            &genesis_config,
+            None,
+            None,
+            AccountSecondaryIndexes::default(),
+            false,
+            None,
+            AccountShrinkThreshold::default(),
+            false,
+            false,
+            false,
+            Some(crate::accounts_index::BINS_FOR_TESTING),
+        )
+        .unwrap();
+        assert_eq!(
+            deserialized_bank, *bank4,
+            "Ensure rebuilding from an incremental snapshot works",
+        );
+        assert!(
+            deserialized_bank
+                .get_account_modified_slot(&key1.pubkey())
+                .is_none(),
+            "Ensure Account1 has not been brought back from the dead"
+        );
     }
 }
