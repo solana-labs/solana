@@ -28,7 +28,14 @@ pub struct RpcSendTransactionConfig {
 pub struct RpcSimulateTransactionAccountsConfig {
     pub encoding: Option<UiAccountEncoding>,
     pub addresses: Vec<String>,
-    pub injected_accounts: Option<Vec<(String, UiAccount)>>,
+    pub injected_accounts: Option<Vec<RpcSimulateTransactionInjectedAccount>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcSimulateTransactionInjectedAccount {
+    pub address: String,
+    pub account_data: UiAccount,
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
