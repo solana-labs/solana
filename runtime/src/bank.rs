@@ -1621,6 +1621,10 @@ impl Bank {
         &self.collector_id
     }
 
+    pub fn genesis_creation_time(&self) -> UnixTimestamp {
+        self.genesis_creation_time
+    }
+
     pub fn slot(&self) -> Slot {
         self.slot
     }

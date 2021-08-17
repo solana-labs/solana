@@ -71,8 +71,8 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_transaction_status::{
-        EncodedConfirmedTransaction, Reward, RewardType, TransactionConfirmationStatus,
-        TransactionStatus, UiConfirmedBlock, UiTransactionEncoding,
+        ConfirmedBlock, EncodedConfirmedTransaction, Reward, RewardType,
+        TransactionConfirmationStatus, TransactionStatus, UiConfirmedBlock, UiTransactionEncoding,
     },
     solana_vote_program::vote_state::{VoteState, MAX_LOCKOUT_HISTORY},
     spl_token_v2_0::{
@@ -230,6 +230,10 @@ impl JsonRpcRequestProcessor {
             );
             r_bank_forks.root_bank()
         })
+    }
+
+    fn genesis_creation_time(&self) -> UnixTimestamp {
+        self.bank(None).genesis_creation_time()
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -960,20 +964,25 @@ impl JsonRpcRequestProcessor {
             {
                 let result = self.blockstore.get_rooted_block(slot, true);
                 self.check_blockstore_root(&result, slot)?;
+                let configure_block = |confirmed_block: ConfirmedBlock| {
+                    let mut confirmed_block =
+                        confirmed_block.configure(encoding, transaction_details, show_rewards);
+                    if slot == 0 {
+                        confirmed_block.block_time = Some(self.genesis_creation_time());
+                        confirmed_block.block_height = Some(0);
+                    }
+                    confirmed_block
+                };
                 if result.is_err() {
                     if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
                         let bigtable_result =
                             bigtable_ledger_storage.get_confirmed_block(slot).await;
                         self.check_bigtable_result(&bigtable_result)?;
-                        return Ok(bigtable_result.ok().map(|confirmed_block| {
-                            confirmed_block.configure(encoding, transaction_details, show_rewards)
-                        }));
+                        return Ok(bigtable_result.ok().map(configure_block));
                     }
                 }
                 self.check_slot_cleaned_up(&result, slot)?;
-                return Ok(result.ok().map(|confirmed_block| {
-                    confirmed_block.configure(encoding, transaction_details, show_rewards)
-                }));
+                return Ok(result.ok().map(configure_block));
             } else if commitment.is_confirmed() {
                 // Check if block is confirmed
                 let confirmed_bank = self.bank(Some(CommitmentConfig::confirmed()));
@@ -1155,6 +1164,9 @@ impl JsonRpcRequestProcessor {
     }
 
     pub async fn get_block_time(&self, slot: Slot) -> Result<Option<UnixTimestamp>> {
+        if slot == 0 {
+            return Ok(Some(self.genesis_creation_time()));
+        }
         if slot
             <= self
                 .block_commitment_cache
