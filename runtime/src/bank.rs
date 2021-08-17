@@ -5049,7 +5049,11 @@ impl Bank {
 
         info!("verify_bank_hash..");
         let mut verify_time = Measure::start("verify_bank_hash");
-        let mut verify = self.verify_bank_hash(test_hash_calculation);
+        let _ = self.verify_bank_hash(test_hash_calculation);
+        info!("verify_bank_hash..2");
+        let _ = self.verify_bank_hash(test_hash_calculation); // temporarily run multiple times
+        info!("verify_bank_hash..3");
+        let mut verify = self.verify_bank_hash(test_hash_calculation); // temporarily run multiple times
         verify_time.stop();
 
         info!("verify_hash..");
