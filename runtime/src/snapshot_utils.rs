@@ -13,7 +13,8 @@ use {
             FullSnapshotArchiveInfo, IncrementalSnapshotArchiveInfo, SnapshotArchiveInfoGetter,
         },
         snapshot_package::{
-            AccountsPackage, AccountsPackagePre, AccountsPackageSendError, AccountsPackageSender,
+            AccountsPackage, AccountsPackageSendError, AccountsPackageSender, SnapshotPackage,
+            SnapshotType,
         },
         sorted_storages::SortedStorages,
     },
@@ -239,10 +240,10 @@ pub fn remove_tmp_snapshot_archives(snapshot_archives_dir: &Path) {
     }
 }
 
-/// Make a full snapshot archive out of the AccountsPackage
+/// Make a snapshot archive out of the snapshot package
 pub fn archive_snapshot_package(
-    snapshot_package: &AccountsPackage,
-    maximum_snapshots_to_retain: usize,
+    snapshot_package: &SnapshotPackage,
+    maximum_snapshot_archives_to_retain: usize,
 ) -> Result<()> {
     info!(
         "Generating snapshot archive for slot {}",
@@ -268,10 +269,11 @@ pub fn archive_snapshot_package(
         .map_err(|e| SnapshotError::IoWithSource(e, "create archive path"))?;
 
     // Create the staging directories
+    let staging_dir_prefix = snapshot_package.snapshot_type.to_prefix();
     let staging_dir = tempfile::Builder::new()
         .prefix(&format!(
             "{}{}-",
-            TMP_FULL_SNAPSHOT_PREFIX,
+            staging_dir_prefix,
             snapshot_package.slot()
         ))
         .tempdir_in(tar_dir)
@@ -323,7 +325,7 @@ pub fn archive_snapshot_package(
     // Tar the staging directory into the archive at `archive_path`
     let archive_path = tar_dir.join(format!(
         "{}{}.{}",
-        TMP_FULL_SNAPSHOT_PREFIX,
+        staging_dir_prefix,
         snapshot_package.slot(),
         file_ext
     ));
@@ -371,7 +373,7 @@ pub fn archive_snapshot_package(
     fs::rename(&archive_path, &snapshot_package.path())
         .map_err(|e| SnapshotError::IoWithSource(e, "archive path rename"))?;
 
-    purge_old_snapshot_archives(tar_dir, maximum_snapshots_to_retain);
+    purge_old_snapshot_archives(tar_dir, maximum_snapshot_archives_to_retain);
 
     timer.stop();
     info!(
@@ -1549,7 +1551,7 @@ pub fn snapshot_bank(
     let highest_bank_snapshot_info = get_highest_bank_snapshot_info(snapshots_dir)
         .expect("no snapshots found in config snapshots_dir");
 
-    let package = AccountsPackagePre::new_full_snapshot_package(
+    let accounts_package = AccountsPackage::new_for_full_snapshot(
         root_bank,
         &highest_bank_snapshot_info,
         snapshots_dir,
@@ -1561,7 +1563,7 @@ pub fn snapshot_bank(
         hash_for_testing,
     )?;
 
-    accounts_package_sender.send(package)?;
+    accounts_package_sender.send(accounts_package)?;
 
     Ok(())
 }
@@ -1666,7 +1668,7 @@ pub fn package_process_and_archive_full_snapshot(
     thread_pool: Option<&ThreadPool>,
     maximum_snapshots_to_retain: usize,
 ) -> Result<FullSnapshotArchiveInfo> {
-    let package = AccountsPackagePre::new_full_snapshot_package(
+    let accounts_package = AccountsPackage::new_for_full_snapshot(
         bank,
         bank_snapshot_info,
         snapshots_dir,
@@ -1678,14 +1680,16 @@ pub fn package_process_and_archive_full_snapshot(
         None,
     )?;
 
-    let package = process_and_archive_snapshot_package_pre(
-        package,
+    let snapshot_package = process_and_archive_accounts_package(
+        accounts_package,
         thread_pool,
         None,
         maximum_snapshots_to_retain,
     )?;
 
-    Ok(FullSnapshotArchiveInfo::new(package.snapshot_archive_info))
+    Ok(FullSnapshotArchiveInfo::new(
+        snapshot_package.snapshot_archive_info,
+    ))
 }
 
 /// Helper function to hold shared code to package, process, and archive incremental snapshots
@@ -1702,7 +1706,7 @@ pub fn package_process_and_archive_incremental_snapshot(
     thread_pool: Option<&ThreadPool>,
     maximum_snapshots_to_retain: usize,
 ) -> Result<IncrementalSnapshotArchiveInfo> {
-    let package = AccountsPackagePre::new_incremental_snapshot_package(
+    let accounts_package = AccountsPackage::new_for_incremental_snapshot(
         bank,
         incremental_snapshot_base_slot,
         bank_snapshot_info,
@@ -1715,8 +1719,8 @@ pub fn package_process_and_archive_incremental_snapshot(
         None,
     )?;
 
-    let package = process_and_archive_snapshot_package_pre(
-        package,
+    let snapshot_package = process_and_archive_accounts_package(
+        accounts_package,
         thread_pool,
         Some(incremental_snapshot_base_slot),
         maximum_snapshots_to_retain,
@@ -1724,30 +1728,33 @@ pub fn package_process_and_archive_incremental_snapshot(
 
     Ok(IncrementalSnapshotArchiveInfo::new(
         incremental_snapshot_base_slot,
-        package.snapshot_archive_info,
+        snapshot_package.snapshot_archive_info,
     ))
 }
 
-/// Helper function to hold shared code to process and archive snapshot packages
-fn process_and_archive_snapshot_package_pre(
-    package_pre: AccountsPackagePre,
+/// Helper function to hold shared code to process and archive accounts packages
+fn process_and_archive_accounts_package(
+    accounts_package: AccountsPackage,
     thread_pool: Option<&ThreadPool>,
     incremental_snapshot_base_slot: Option<Slot>,
     maximum_snapshots_to_retain: usize,
-) -> Result<AccountsPackage> {
-    let package =
-        process_accounts_package_pre(package_pre, thread_pool, incremental_snapshot_base_slot);
+) -> Result<SnapshotPackage> {
+    let snapshot_package = process_accounts_package(
+        accounts_package,
+        thread_pool,
+        incremental_snapshot_base_slot,
+    );
 
-    archive_snapshot_package(&package, maximum_snapshots_to_retain)?;
+    archive_snapshot_package(&snapshot_package, maximum_snapshots_to_retain)?;
 
-    Ok(package)
+    Ok(snapshot_package)
 }
 
-pub fn process_accounts_package_pre(
-    accounts_package: AccountsPackagePre,
+pub fn process_accounts_package(
+    accounts_package: AccountsPackage,
     thread_pool: Option<&ThreadPool>,
     incremental_snapshot_base_slot: Option<Slot>,
-) -> AccountsPackage {
+) -> SnapshotPackage {
     let mut time = Measure::start("hash");
 
     let hash = accounts_package.hash; // temporarily remaining here
@@ -1789,7 +1796,12 @@ pub fn process_accounts_package_pre(
         ),
     };
 
-    AccountsPackage::new(
+    let snapshot_type = match incremental_snapshot_base_slot {
+        None => SnapshotType::FullSnapshot,
+        Some(_) => SnapshotType::IncrementalSnapshot,
+    };
+
+    SnapshotPackage::new(
         accounts_package.slot,
         accounts_package.block_height,
         accounts_package.slot_deltas,
@@ -1799,6 +1811,7 @@ pub fn process_accounts_package_pre(
         hash,
         accounts_package.archive_format,
         accounts_package.snapshot_version,
+        snapshot_type,
     )
 }
 
@@ -2903,8 +2916,9 @@ mod tests {
             lamports_to_transfer,
             bank2.last_blockhash(),
         );
-        let (_blockhash, fee_calculator) = bank2.last_blockhash_with_fee_calculator();
-        let fee = fee_calculator.calculate_fee(tx.message());
+        let fee = bank2
+            .get_fee_for_message(&bank2.last_blockhash(), tx.message())
+            .unwrap();
         let tx = system_transaction::transfer(
             &key1,
             &key2.pubkey(),

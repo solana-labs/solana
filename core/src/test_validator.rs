@@ -292,7 +292,20 @@ impl TestValidatorGenesis {
     /// created at genesis.
     ///
     /// This function panics on initialization failure.
-    pub fn start(&self, socket_addr_space: SocketAddrSpace) -> (TestValidator, Keypair) {
+    pub fn start(&self) -> (TestValidator, Keypair) {
+        self.start_with_socket_addr_space(SocketAddrSpace::new(/*allow_private_addr=*/ true))
+    }
+
+    /// Start a test validator with the given `SocketAddrSpace`
+    ///
+    /// Returns a new `TestValidator` as well as the keypair for the mint account that will receive tokens
+    /// created at genesis.
+    ///
+    /// This function panics on initialization failure.
+    pub fn start_with_socket_addr_space(
+        &self,
+        socket_addr_space: SocketAddrSpace,
+    ) -> (TestValidator, Keypair) {
         let mint_keypair = Keypair::new();
         TestValidator::start(mint_keypair.pubkey(), self, socket_addr_space)
             .map(|test_validator| (test_validator, mint_keypair))

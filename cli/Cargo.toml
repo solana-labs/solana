@@ -17,7 +17,7 @@ clap = "2.33.1"
 criterion-stats = "0.3.0"
 ctrlc = { version = "3.1.9", features = ["termination"] }
 console = "0.14.1"
-const_format = "0.2.17"
+const_format = "0.2.18"
 dirs-next = "2.0.0"
 log = "0.4.14"
 Inflector = "0.11.4"

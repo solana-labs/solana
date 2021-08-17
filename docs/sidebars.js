@@ -101,6 +101,7 @@ module.exports = {
       "running-validator/validator-stake",
       "running-validator/validator-monitor",
       "running-validator/validator-info",
+      "running-validator/validator-failover",
       "running-validator/validator-troubleshoot",
     ],
     Clusters: [

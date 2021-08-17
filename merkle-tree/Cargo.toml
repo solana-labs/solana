@@ -15,7 +15,7 @@ fast-math = "0.1"
 
 # This can go once the BPF toolchain target Rust 1.42.0+
 [target.bpfel-unknown-unknown.dependencies]
-matches = "0.1.8"
+matches = "0.1.9"
 
 [dev-dependencies]
 hex = "0.4.3"

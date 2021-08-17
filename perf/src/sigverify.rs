@@ -11,7 +11,7 @@ use crate::recycler::Recycler;
 use rayon::ThreadPool;
 use solana_metrics::inc_new_counter_debug;
 use solana_rayon_threadlimit::get_thread_count;
-use solana_sdk::message::MESSAGE_HEADER_LENGTH;
+use solana_sdk::message::{MESSAGE_HEADER_LENGTH, MESSAGE_VERSION_PREFIX};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::short_vec::decode_shortu16_len;
 use solana_sdk::signature::Signature;
@@ -66,6 +66,7 @@ pub enum PacketError {
     InvalidSignatureLen,
     MismatchSignatureLen,
     PayerNotWritable,
+    UnsupportedVersion,
 }
 
 impl std::convert::From<std::boxed::Box<bincode::ErrorKind>> for PacketError {
@@ -152,10 +153,9 @@ fn do_get_packet_offsets(
     packet: &Packet,
     current_offset: usize,
 ) -> Result<PacketOffsets, PacketError> {
-    // should have at least 1 signature, sig lengths and the message header
+    // should have at least 1 signature and sig lengths
     let _ = 1usize
         .checked_add(size_of::<Signature>())
-        .and_then(|v| v.checked_add(MESSAGE_HEADER_LENGTH))
         .filter(|v| *v <= packet.meta.size)
         .ok_or(PacketError::InvalidLen)?;
 
@@ -170,28 +170,57 @@ fn do_get_packet_offsets(
         .and_then(|v| v.checked_add(sig_size))
         .ok_or(PacketError::InvalidLen)?;
 
-    let msg_start_offset_plus_one = msg_start_offset
+    // Determine the start of the message header by checking the message prefix bit.
+    let msg_header_offset = {
+        // Packet should have data for prefix bit
+        if msg_start_offset >= packet.meta.size {
+            return Err(PacketError::InvalidSignatureLen);
+        }
+
+        // next byte indicates if the transaction is versioned. If the top bit
+        // is set, the remaining bits encode a version number. If the top bit is
+        // not set, this byte is the first byte of the message header.
+        let message_prefix = packet.data[msg_start_offset];
+        if message_prefix & MESSAGE_VERSION_PREFIX != 0 {
+            let version = message_prefix & !MESSAGE_VERSION_PREFIX;
+            match version {
+                0 => {
+                    // header begins immediately after prefix byte
+                    msg_start_offset
+                        .checked_add(1)
+                        .ok_or(PacketError::InvalidLen)?
+                }
+
+                // currently only v0 is supported
+                _ => return Err(PacketError::UnsupportedVersion),
+            }
+        } else {
+            msg_start_offset
+        }
+    };
+
+    let msg_header_offset_plus_one = msg_header_offset
         .checked_add(1)
         .ok_or(PacketError::InvalidLen)?;
 
-    // Packet should have data at least for signatures, MessageHeader, 1 byte for Message.account_keys.len
-    let _ = msg_start_offset_plus_one
+    // Packet should have data at least for MessageHeader and 1 byte for Message.account_keys.len
+    let _ = msg_header_offset_plus_one
         .checked_add(MESSAGE_HEADER_LENGTH)
         .filter(|v| *v <= packet.meta.size)
         .ok_or(PacketError::InvalidSignatureLen)?;
 
     // read MessageHeader.num_required_signatures (serialized with u8)
-    let sig_len_maybe_trusted = packet.data[msg_start_offset];
+    let sig_len_maybe_trusted = packet.data[msg_header_offset];
 
-    let message_account_keys_len_offset = msg_start_offset
+    let message_account_keys_len_offset = msg_header_offset
         .checked_add(MESSAGE_HEADER_LENGTH)
-        .ok_or(PacketError::InvalidLen)?;
+        .ok_or(PacketError::InvalidSignatureLen)?;
 
     // This reads and compares the MessageHeader num_required_signatures and
     // num_readonly_signed_accounts bytes. If num_required_signatures is not larger than
     // num_readonly_signed_accounts, the first account is not debitable, and cannot be charged
     // required transaction fees.
-    let readonly_signer_offset = msg_start_offset_plus_one;
+    let readonly_signer_offset = msg_header_offset_plus_one;
     if sig_len_maybe_trusted <= packet.data[readonly_signer_offset] {
         return Err(PacketError::PayerNotWritable);
     }
@@ -571,22 +600,6 @@ mod tests {
     }
 
     #[test]
-    fn test_large_sigs() {
-        // use any large number to be misinterpreted as 2 bytes when decoded as short_vec
-        let required_num_sigs = 214;
-        let actual_num_sigs = 5;
-
-        let packet = packet_from_num_sigs(required_num_sigs, actual_num_sigs);
-
-        let unsanitized_packet_offsets = sigverify::do_get_packet_offsets(&packet, 0);
-
-        assert_eq!(
-            unsanitized_packet_offsets,
-            Err(PacketError::MismatchSignatureLen)
-        );
-    }
-
-    #[test]
     fn test_small_packet() {
         let tx = test_tx();
         let mut packet = sigverify::make_packet_from_transaction(tx);
@@ -717,6 +730,43 @@ mod tests {
         let res = sigverify::do_get_packet_offsets(&packet, 0);
 
         assert_eq!(res, Err(PacketError::PayerNotWritable));
+    }
+
+    #[test]
+    fn test_unsupported_version() {
+        let tx = test_tx();
+        let mut packet = sigverify::make_packet_from_transaction(tx);
+
+        let res = sigverify::do_get_packet_offsets(&packet, 0);
+
+        // set message version to 1
+        packet.data[res.unwrap().msg_start as usize] = MESSAGE_VERSION_PREFIX + 1;
+
+        let res = sigverify::do_get_packet_offsets(&packet, 0);
+        assert_eq!(res, Err(PacketError::UnsupportedVersion));
+    }
+
+    #[test]
+    fn test_versioned_message() {
+        let tx = test_tx();
+        let mut packet = sigverify::make_packet_from_transaction(tx);
+
+        let mut legacy_offsets = sigverify::do_get_packet_offsets(&packet, 0).unwrap();
+
+        // set message version to 0
+        let msg_start = legacy_offsets.msg_start as usize;
+        let msg_bytes = packet.data[msg_start..packet.meta.size].to_vec();
+        packet.data[msg_start] = MESSAGE_VERSION_PREFIX;
+        packet.meta.size += 1;
+        packet.data[msg_start + 1..packet.meta.size].copy_from_slice(&msg_bytes);
+
+        let offsets = sigverify::do_get_packet_offsets(&packet, 0).unwrap();
+        let expected_offsets = {
+            legacy_offsets.pubkey_start += 1;
+            legacy_offsets
+        };
+
+        assert_eq!(expected_offsets, offsets);
     }
 
     #[test]
