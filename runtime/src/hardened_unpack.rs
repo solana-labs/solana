@@ -214,6 +214,7 @@ fn sanitize_path(entry_path: &Path, dst: &Path) -> Result<Option<PathBuf>> {
     // code from: unpack_in does its own sanitization
     // ref: https://docs.rs/tar/*/tar/struct.Entry.html#method.unpack_in
     let mut file_dst = dst.to_path_buf();
+    const SKIP: Result<Option<PathBuf>> = Ok(None);
     {
         let path = entry_path;
         for part in path.components() {
@@ -227,7 +228,7 @@ fn sanitize_path(entry_path: &Path, dst: &Path) -> Result<Option<PathBuf>> {
                 // unpacking the file to prevent directory traversal
                 // security issues.  See, e.g.: CVE-2001-1267,
                 // CVE-2002-0399, CVE-2005-1918, CVE-2007-4131
-                Component::ParentDir => return Ok(None),
+                Component::ParentDir => return SKIP,
 
                 Component::Normal(part) => file_dst.push(part),
             }
@@ -237,19 +238,41 @@ fn sanitize_path(entry_path: &Path, dst: &Path) -> Result<Option<PathBuf>> {
     // Skip cases where only slashes or '.' parts were seen, because
     // this is effectively an empty filename.
     if *dst == *file_dst {
-        return Ok(None);
+        return SKIP;
     }
 
     // Skip entries without a parent (i.e. outside of FS root)
     let parent = match file_dst.parent() {
         Some(p) => p,
-        None => return Ok(None),
+        None => return SKIP,
     };
 
     fs::create_dir_all(parent)?;
-
+    validate_inside_dst(dst, parent)?;
     let target = parent.join(entry_path.file_name().unwrap());
+
     Ok(Some(target))
+}
+
+fn validate_inside_dst(dst: &Path, file_dst: &Path) -> Result<PathBuf> {
+    // Abort if target (canonical) parent is outside of `dst`
+    let canon_parent = file_dst.canonicalize().map_err(|err| {
+        UnpackError::Archive(format!(
+            "{} while canonicalizing {}",
+            err,
+            file_dst.display()
+        ))
+    })?;
+    let canon_target = dst.canonicalize().map_err(|err| {
+        UnpackError::Archive(format!("{} while canonicalizing {}", err, dst.display()))
+    })?;
+    if !canon_parent.starts_with(&canon_target) {
+        return Err(UnpackError::Archive(format!(
+            "trying to unpack outside of destination path: {}",
+            canon_target.display()
+        )));
+    }
+    Ok(canon_target)
 }
 
 /// Map from AppendVec file name to unpacked file system location
