@@ -4,8 +4,8 @@ use crate::{
         ScanStorageResult,
     },
     accounts_index::{
-        AccountSecondaryIndexes, AccountsIndexConfig, IndexKey, ScanResult, BINS_FOR_BENCHMARKS,
-        BINS_FOR_TESTING,
+        AccountSecondaryIndexes, AccountsIndexConfig, IndexKey, ScanResult,
+        ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS, ACCOUNTS_INDEX_CONFIG_FOR_TESTING,
     },
     ancestors::Ancestors,
     bank::{
@@ -140,7 +140,7 @@ impl Accounts {
             account_indexes,
             caching_enabled,
             shrink_ratio,
-            Some(BINS_FOR_TESTING),
+            Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
         )
     }
 
@@ -157,7 +157,7 @@ impl Accounts {
             account_indexes,
             caching_enabled,
             shrink_ratio,
-            Some(BINS_FOR_BENCHMARKS),
+            Some(ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS),
         )
     }
 

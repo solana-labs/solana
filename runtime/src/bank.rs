@@ -40,8 +40,8 @@ use crate::{
     },
     accounts_db::{AccountShrinkThreshold, ErrorCounters, SnapshotStorages},
     accounts_index::{
-        AccountSecondaryIndexes, AccountsIndexConfig, IndexKey, ScanResult, BINS_FOR_BENCHMARKS,
-        BINS_FOR_TESTING,
+        AccountSecondaryIndexes, AccountsIndexConfig, IndexKey, ScanResult,
+        ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS, ACCOUNTS_INDEX_CONFIG_FOR_TESTING,
     },
     ancestors::{Ancestors, AncestorsForSerialization},
     blockhash_queue::BlockhashQueue,
@@ -1191,7 +1191,7 @@ impl Bank {
             accounts_db_caching_enabled,
             shrink_ratio,
             debug_do_not_add_builtins,
-            Some(BINS_FOR_TESTING),
+            Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
         )
     }
 
@@ -1216,7 +1216,7 @@ impl Bank {
             accounts_db_caching_enabled,
             shrink_ratio,
             debug_do_not_add_builtins,
-            Some(BINS_FOR_BENCHMARKS),
+            Some(ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS),
         )
     }
 

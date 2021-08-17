@@ -33,10 +33,10 @@ use thiserror::Error;
 
 pub const ITER_BATCH_SIZE: usize = 1000;
 pub const BINS_DEFAULT: usize = 16;
-pub const BINS_FOR_TESTING: AccountsIndexConfig = AccountsIndexConfig {
+pub const ACCOUNTS_INDEX_CONFIG_FOR_TESTING: AccountsIndexConfig = AccountsIndexConfig {
     bins: Some(BINS_DEFAULT),
 };
-pub const BINS_FOR_BENCHMARKS: AccountsIndexConfig = AccountsIndexConfig {
+pub const ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS: AccountsIndexConfig = AccountsIndexConfig {
     bins: Some(BINS_DEFAULT),
 };
 pub type ScanResult<T> = Result<T, ScanError>;
@@ -770,7 +770,7 @@ pub struct AccountsIndex<T> {
 
 impl<T: IsCached> AccountsIndex<T> {
     pub fn default_for_tests() -> Self {
-        Self::new(Some(BINS_FOR_TESTING))
+        Self::new(Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING))
     }
 
     pub fn new(config: Option<AccountsIndexConfig>) -> Self {

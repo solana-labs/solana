@@ -25,7 +25,7 @@ use crate::{
     accounts_index::{
         AccountIndexGetResult, AccountSecondaryIndexes, AccountsIndex, AccountsIndexConfig,
         AccountsIndexRootsStats, IndexKey, IsCached, RefCount, ScanResult, SlotList, SlotSlice,
-        ZeroLamport, BINS_FOR_TESTING,
+        ZeroLamport, ACCOUNTS_INDEX_CONFIG_FOR_TESTING,
     },
     ancestors::Ancestors,
     append_vec::{AppendVec, StoredAccountMeta, StoredMeta, StoredMetaWriteVersion},
@@ -1426,7 +1426,7 @@ impl AccountsDb {
             AccountSecondaryIndexes::default(),
             false,
             AccountShrinkThreshold::default(),
-            Some(BINS_FOR_TESTING),
+            Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
         )
     }
 
@@ -6327,7 +6327,7 @@ impl AccountsDb {
             account_indexes,
             caching_enabled,
             shrink_ratio,
-            Some(BINS_FOR_TESTING),
+            Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
         )
     }
 

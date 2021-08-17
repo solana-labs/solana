@@ -2516,7 +2516,7 @@ mod tests {
             false,
             false,
             false,
-            Some(crate::accounts_index::BINS_FOR_TESTING),
+            Some(crate::accounts_index::ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
         )
         .unwrap();
 
@@ -2607,7 +2607,7 @@ mod tests {
             false,
             false,
             false,
-            Some(crate::accounts_index::BINS_FOR_TESTING),
+            Some(crate::accounts_index::ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
         )
         .unwrap();
 
@@ -2717,7 +2717,7 @@ mod tests {
             false,
             false,
             false,
-            Some(crate::accounts_index::BINS_FOR_TESTING),
+            Some(crate::accounts_index::ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
         )
         .unwrap();
 
@@ -2816,7 +2816,7 @@ mod tests {
             false,
             false,
             false,
-            Some(crate::accounts_index::BINS_FOR_TESTING),
+            Some(crate::accounts_index::ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
         )
         .unwrap();
 
@@ -2956,7 +2956,7 @@ mod tests {
             false,
             false,
             false,
-            Some(crate::accounts_index::BINS_FOR_TESTING),
+            Some(crate::accounts_index::ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
         )
         .unwrap();
         assert_eq!(
@@ -3018,7 +3018,7 @@ mod tests {
             false,
             false,
             false,
-            Some(crate::accounts_index::BINS_FOR_TESTING),
+            Some(crate::accounts_index::ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
         )
         .unwrap();
         assert_eq!(
