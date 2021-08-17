@@ -1,4 +1,6 @@
 use {
+    crate::rpc_subscriptions::{NotificationEntry, RpcNotification},
+    dashmap::{mapref::entry::Entry as DashEntry, DashMap},
     solana_account_decoder::{UiAccountEncoding, UiDataSliceConfig},
     solana_client::rpc_filter::RpcFilterType,
     solana_runtime::{
@@ -14,9 +16,13 @@ use {
             HashSet,
         },
         fmt,
-        sync::{Arc, Mutex, RwLock, Weak},
+        sync::{
+            atomic::{AtomicU64, Ordering},
+            Arc, RwLock, Weak,
+        },
     },
     thiserror::Error,
+    tokio::sync::broadcast,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -140,12 +146,118 @@ pub struct SignatureSubscriptionParams {
     pub enable_received_notification: bool,
 }
 
+#[derive(Clone)]
+pub struct SubscriptionControl(Arc<SubscriptionControlInner>);
+
+struct SubscriptionControlInner {
+    subscriptions: DashMap<SubscriptionParams, Weak<SubscriptionTokenInner>>,
+    next_id: AtomicU64,
+    max_active_subscriptions: usize,
+    sender: crossbeam_channel::Sender<NotificationEntry>,
+    broadcast_sender: broadcast::Sender<RpcNotification>,
+}
+
+impl SubscriptionControl {
+    pub fn new(
+        max_active_subscriptions: usize,
+        sender: crossbeam_channel::Sender<NotificationEntry>,
+        broadcast_sender: broadcast::Sender<RpcNotification>,
+    ) -> Self {
+        Self(Arc::new(SubscriptionControlInner {
+            subscriptions: DashMap::new(),
+            next_id: AtomicU64::new(0),
+            max_active_subscriptions,
+            sender,
+            broadcast_sender,
+        }))
+    }
+
+    pub fn broadcast_receiver(&self) -> broadcast::Receiver<RpcNotification> {
+        self.0.broadcast_sender.subscribe()
+    }
+
+    pub fn subscribe(
+        &self,
+        params: SubscriptionParams,
+    ) -> Result<SubscriptionToken, TooManySubscriptions> {
+        debug!(
+            "Total existing subscriptions: {}",
+            self.0.subscriptions.len()
+        );
+        let count = self.0.subscriptions.len();
+        match self.0.subscriptions.entry(params) {
+            DashEntry::Occupied(entry) => {
+                Ok(SubscriptionToken(entry.get().upgrade().expect(
+                    "dead subscription encountered in SubscriptionControl",
+                )))
+            }
+            DashEntry::Vacant(entry) => {
+                if count >= self.0.max_active_subscriptions {
+                    inc_new_counter_info!("rpc-subscription-refused-limit-reached", 1);
+                    return Err(TooManySubscriptions(()));
+                }
+                let id = SubscriptionId::from(self.0.next_id.fetch_add(1, Ordering::AcqRel));
+                let token = SubscriptionToken(Arc::new(SubscriptionTokenInner {
+                    control: Arc::clone(&self.0),
+                    params: entry.key().clone(),
+                    id,
+                }));
+                let _ = self
+                    .0
+                    .sender
+                    .send(NotificationEntry::Subscribed(token.0.params.clone(), id));
+                entry.insert(Arc::downgrade(&token.0));
+                datapoint_info!(
+                    "rpc-subscription",
+                    ("total", self.0.subscriptions.len(), i64)
+                );
+                Ok(token)
+            }
+        }
+    }
+
+    pub fn total(&self) -> usize {
+        self.0.subscriptions.len()
+    }
+
+    #[cfg(test)]
+    pub fn assert_subscribed(&self, params: &SubscriptionParams) {
+        assert!(self.0.subscriptions.contains_key(params));
+    }
+
+    #[cfg(test)]
+    pub fn assert_unsubscribed(&self, params: &SubscriptionParams) {
+        assert!(!self.0.subscriptions.contains_key(params));
+    }
+
+    #[cfg(test)]
+    pub fn account_subscribed(&self, pubkey: &Pubkey) -> bool {
+        self.0.subscriptions.iter().any(|item| {
+            if let SubscriptionParams::Account(params) = item.key() {
+                &params.pubkey == pubkey
+            } else {
+                false
+            }
+        })
+    }
+
+    #[cfg(test)]
+    pub fn signature_subscribed(&self, signature: &Signature) -> bool {
+        self.0.subscriptions.iter().any(|item| {
+            if let SubscriptionParams::Signature(params) = item.key() {
+                &params.signature == signature
+            } else {
+                false
+            }
+        })
+    }
+}
+
 #[derive(Debug)]
 pub struct SubscriptionInfo {
     id: SubscriptionId,
     params: SubscriptionParams,
     method: &'static str,
-    token: Weak<SubscriptionTokenInner>,
     pub last_notified_slot: RwLock<Slot>,
     commitment: Option<CommitmentConfig>,
 }
@@ -165,10 +277,6 @@ impl SubscriptionInfo {
 
     pub fn commitment(&self) -> Option<CommitmentConfig> {
         self.commitment
-    }
-
-    pub fn num_subscribers(&self) -> usize {
-        self.token.strong_count()
     }
 }
 
@@ -242,12 +350,7 @@ impl LogsSubscriptionsIndex {
     }
 }
 
-struct SubscriptionsInner {
-    by_id: HashMap<SubscriptionId, Arc<SubscriptionInfo>>,
-    next_id: u64,
-    max_active_subscriptions: usize,
-
-    // Below are indexes for fast access.
+pub struct SubscriptionsTracker {
     logs_subscriptions_index: LogsSubscriptionsIndex,
     by_params: HashMap<SubscriptionParams, Arc<SubscriptionInfo>>,
     by_signature: HashMap<Signature, HashMap<SubscriptionId, Arc<SubscriptionInfo>>>,
@@ -257,16 +360,10 @@ struct SubscriptionsInner {
     gossip_watchers: HashMap<SubscriptionId, Arc<SubscriptionInfo>>,
 }
 
-#[derive(Clone)]
-pub struct SubscriptionsTracker(Arc<Mutex<SubscriptionsInner>>);
-
 impl SubscriptionsTracker {
-    pub fn new(bank_forks: Arc<RwLock<BankForks>>, max_active_subscriptions: usize) -> Self {
-        SubscriptionsTracker(Arc::new(Mutex::new(SubscriptionsInner {
-            max_active_subscriptions,
-            by_id: HashMap::new(),
+    pub fn new(bank_forks: Arc<RwLock<BankForks>>) -> Self {
+        SubscriptionsTracker {
             by_params: HashMap::new(),
-            next_id: 0,
             logs_subscriptions_index: LogsSubscriptionsIndex {
                 all_count: 0,
                 all_with_votes_count: 0,
@@ -276,111 +373,104 @@ impl SubscriptionsTracker {
             by_signature: HashMap::new(),
             commitment_watchers: HashMap::new(),
             gossip_watchers: HashMap::new(),
-        })))
+        }
     }
 
     pub fn total(&self) -> usize {
-        let inner = self.0.lock().unwrap();
-        inner.by_id.len()
+        self.by_params.len()
     }
 
     pub fn subscribe(
-        &self,
+        &mut self,
         params: SubscriptionParams,
+        id: SubscriptionId,
         last_notified_slot: impl FnOnce() -> Slot,
-    ) -> Result<SubscriptionToken, TooManySubscriptions> {
-        let mut inner = &mut *self.0.lock().unwrap();
-        debug!("Total existing subscriptions: {}", inner.by_id.len());
-        match inner.by_params.entry(params) {
-            Entry::Occupied(entry) => Ok(SubscriptionToken(
-                entry
-                    .get()
-                    .token
-                    .upgrade()
-                    .expect("dead subscription encountered in by_params"),
-            )),
-            Entry::Vacant(entry) => {
-                if inner.by_id.len() >= inner.max_active_subscriptions {
-                    inc_new_counter_info!("rpc-subscription-refused-limit-reached", 1);
-                    return Err(TooManySubscriptions(()));
-                }
-                let id = SubscriptionId::from(inner.next_id);
-                inner.next_id += 1;
-                let token = SubscriptionToken(Arc::new(SubscriptionTokenInner {
-                    subscriptions: Arc::clone(&self.0),
-                    id,
-                }));
-                let params = entry.key().clone();
-                let info = Arc::new(SubscriptionInfo {
-                    token: Arc::downgrade(&token.0),
-                    last_notified_slot: RwLock::new(last_notified_slot()),
-                    id,
-                    commitment: params.commitment(),
-                    method: params.method(),
-                    params: params.clone(),
-                });
-                entry.insert(Arc::clone(&info));
-                match &params {
-                    SubscriptionParams::Logs(params) => {
-                        inner.logs_subscriptions_index.add(params);
+    ) {
+        let info = Arc::new(SubscriptionInfo {
+            last_notified_slot: RwLock::new(last_notified_slot()),
+            id,
+            commitment: params.commitment(),
+            method: params.method(),
+            params: params.clone(),
+        });
+        self.by_params.insert(params.clone(), Arc::clone(&info));
+        match &params {
+            SubscriptionParams::Logs(params) => {
+                self.logs_subscriptions_index.add(params);
+            }
+            SubscriptionParams::Signature(params) => {
+                self.by_signature
+                    .entry(params.signature)
+                    .or_default()
+                    .insert(id, Arc::clone(&info));
+            }
+            _ => {}
+        }
+        if info.params.is_commitment_watcher() {
+            self.commitment_watchers.insert(id, Arc::clone(&info));
+        }
+        if info.params.is_gossip_watcher() {
+            self.gossip_watchers.insert(id, Arc::clone(&info));
+        }
+    }
+
+    #[allow(clippy::collapsible_if)]
+    pub fn unsubscribe(&mut self, params: SubscriptionParams) {
+        let info = if let Some(info) = self.by_params.remove(&params) {
+            info
+        } else {
+            warn!("missing entry in SubscriptionTracker");
+            return;
+        };
+        match &params {
+            SubscriptionParams::Logs(params) => {
+                self.logs_subscriptions_index.remove(params);
+            }
+            SubscriptionParams::Signature(params) => {
+                if let Entry::Occupied(mut entry) = self.by_signature.entry(params.signature) {
+                    if entry.get_mut().remove(&info.id).is_none() {
+                        warn!("Subscriptions inconsistency (missing entry in by_signature)");
                     }
-                    SubscriptionParams::Signature(params) => {
-                        inner
-                            .by_signature
-                            .entry(params.signature)
-                            .or_default()
-                            .insert(id, Arc::clone(&info));
+                    if entry.get_mut().is_empty() {
+                        entry.remove();
                     }
-                    _ => {}
+                } else {
+                    warn!("Subscriptions inconsistency (missing entry in by_signature)");
                 }
-                if info.params.is_commitment_watcher() {
-                    inner.commitment_watchers.insert(id, Arc::clone(&info));
-                }
-                if info.params.is_gossip_watcher() {
-                    inner.gossip_watchers.insert(id, Arc::clone(&info));
-                }
-                inner.by_id.insert(id, info);
-                datapoint_info!("rpc-subscription", ("total", inner.by_id.len(), i64));
-                Ok(token)
+            }
+            _ => {}
+        }
+        if params.is_commitment_watcher() {
+            if self.commitment_watchers.remove(&info.id).is_none() {
+                warn!("Subscriptions inconsistency (missing entry in commitment_watchers)");
+            }
+        }
+        if params.is_gossip_watcher() {
+            if self.gossip_watchers.remove(&info.id).is_none() {
+                warn!("Subscriptions inconsistency (missing entry in gossip_watchers)");
             }
         }
     }
 
-    pub fn visit_by_params<F, T>(&self, params: &SubscriptionParams, f: F) -> Option<T>
-    where
-        F: FnOnce(&SubscriptionInfo) -> T,
-    {
-        let inner = self.0.lock().unwrap();
-        inner.by_params.get(params).map(|info| f(info))
+    pub fn by_params(&self) -> &HashMap<SubscriptionParams, Arc<SubscriptionInfo>> {
+        &self.by_params
     }
-
-    pub fn visit_by_signature<F, T>(&self, signature: &Signature, f: F) -> Option<T>
-    where
-        F: FnOnce(&HashMap<SubscriptionId, Arc<SubscriptionInfo>>) -> T,
-    {
-        let inner = self.0.lock().unwrap();
-        inner.by_signature.get(signature).map(f)
+    pub fn by_signature(
+        &self,
+    ) -> &HashMap<Signature, HashMap<SubscriptionId, Arc<SubscriptionInfo>>> {
+        &self.by_signature
     }
-
-    pub fn visit_commitment_watchers<F, T>(&self, f: F) -> T
-    where
-        F: FnOnce(&HashMap<SubscriptionId, Arc<SubscriptionInfo>>) -> T,
-    {
-        let inner = self.0.lock().unwrap();
-        f(&inner.commitment_watchers)
+    pub fn commitment_watchers(&self) -> &HashMap<SubscriptionId, Arc<SubscriptionInfo>> {
+        &self.commitment_watchers
     }
-
-    pub fn visit_gossip_watchers<F, T>(&self, f: F) -> T
-    where
-        F: FnOnce(&HashMap<SubscriptionId, Arc<SubscriptionInfo>>) -> T,
-    {
-        let inner = self.0.lock().unwrap();
-        f(&inner.gossip_watchers)
+    pub fn gossip_watchers(&self) -> &HashMap<SubscriptionId, Arc<SubscriptionInfo>> {
+        &self.gossip_watchers
     }
 }
 
 struct SubscriptionTokenInner {
-    subscriptions: Arc<Mutex<SubscriptionsInner>>,
+    control: Arc<SubscriptionControlInner>,
+    params: SubscriptionParams,
     id: SubscriptionId,
 }
 
@@ -395,49 +485,21 @@ impl fmt::Debug for SubscriptionTokenInner {
 impl Drop for SubscriptionTokenInner {
     #[allow(clippy::collapsible_if)]
     fn drop(&mut self) {
-        if let Ok(mut inner) = self.subscriptions.lock() {
-            if let Some(info) = inner.by_id.remove(&self.id) {
-                if inner.by_params.remove(&info.params).is_none() {
-                    warn!("Subscriptions inconsistency (missing entry in by_params)");
-                }
-                match &info.params {
-                    SubscriptionParams::Logs(params) => {
-                        inner.logs_subscriptions_index.remove(params);
-                    }
-                    SubscriptionParams::Signature(params) => {
-                        if let Entry::Occupied(mut entry) =
-                            inner.by_signature.entry(params.signature)
-                        {
-                            if entry.get_mut().remove(&self.id).is_none() {
-                                warn!(
-                                    "Subscriptions inconsistency (missing entry in by_signature)"
-                                );
-                            }
-                            if entry.get_mut().is_empty() {
-                                entry.remove();
-                            }
-                        } else {
-                            warn!("Subscriptions inconsistency (missing entry in by_signature)");
-                        }
-                    }
-                    _ => {}
-                }
-                if info.params.is_commitment_watcher() {
-                    if inner.commitment_watchers.remove(&self.id).is_none() {
-                        warn!("Subscriptions inconsistency (missing entry in commitment_watchers)");
-                    }
-                }
-                if info.params.is_gossip_watcher() {
-                    if inner.gossip_watchers.remove(&self.id).is_none() {
-                        warn!("Subscriptions inconsistency (missing entry in gossip_watchers)");
-                    }
-                }
-            } else {
-                warn!("Subscriptions inconsistency (missing entry in by_id)");
+        match self.control.subscriptions.entry(self.params.clone()) {
+            DashEntry::Vacant(_) => {
+                warn!("Subscriptions inconsistency (missing entry in by_params)");
             }
-            datapoint_info!("rpc-subscription", ("total", inner.by_id.len(), i64));
-        } else {
-            warn!("cannot unsubscribe: mutex is poisoned");
+            DashEntry::Occupied(entry) => {
+                let _ = self
+                    .control
+                    .sender
+                    .send(NotificationEntry::Unsubscribed(self.params.clone()));
+                entry.remove();
+                datapoint_info!(
+                    "rpc-subscription",
+                    ("total", self.control.subscriptions.len(), i64)
+                );
+            }
         }
     }
 }

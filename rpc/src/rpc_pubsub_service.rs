@@ -3,7 +3,7 @@
 use {
     crate::{
         rpc_pubsub::{RpcSolPubSubImpl, RpcSolPubSubInternal},
-        rpc_subscription_tracker::{SubscriptionId, SubscriptionToken},
+        rpc_subscription_tracker::{SubscriptionControl, SubscriptionId, SubscriptionToken},
         rpc_subscriptions::{RpcNotification, RpcSubscriptions},
     },
     dashmap::DashMap,
@@ -50,8 +50,8 @@ impl PubSubService {
         subscriptions: &Arc<RpcSubscriptions>,
         pubsub_addr: SocketAddr,
     ) -> (Trigger, Self) {
+        let subscription_control = subscriptions.control().clone();
         info!("rpc_pubsub bound to {:?}", pubsub_addr);
-        let subscriptions = subscriptions.clone();
         let (trigger, tripwire) = Tripwire::new();
         let thread_hdl = Builder::new()
             .name("solana-pubsub".to_string())
@@ -60,9 +60,12 @@ impl PubSubService {
                     .enable_all()
                     .build()
                     .expect("runtime creation failed");
-                if let Err(err) =
-                    runtime.block_on(listen(pubsub_addr, pubsub_config, subscriptions, tripwire))
-                {
+                if let Err(err) = runtime.block_on(listen(
+                    pubsub_addr,
+                    pubsub_config,
+                    subscription_control,
+                    tripwire,
+                )) {
                     error!("pubsub service failed: {}", err);
                 };
             })
@@ -141,20 +144,19 @@ pub fn test_connection(
     subscriptions: &Arc<RpcSubscriptions>,
 ) -> (RpcSolPubSubImpl, TestBroadcastReceiver) {
     let current_subscriptions = Arc::new(DashMap::new());
-    let broadcast_receiver = subscriptions.broadcast_receiver();
     let rpc_impl = RpcSolPubSubImpl::new(
         PubSubConfig {
             enable_vote_subscription: true,
             ..PubSubConfig::default()
         },
-        Arc::clone(subscriptions),
+        subscriptions.control().clone(),
         Arc::clone(&current_subscriptions),
     );
     let broadcast_handler = BroadcastHandler {
         current_subscriptions,
     };
     let receiver = TestBroadcastReceiver {
-        inner: broadcast_receiver,
+        inner: subscriptions.control().broadcast_receiver(),
         handler: broadcast_handler,
     };
     (rpc_impl, receiver)
@@ -162,7 +164,7 @@ pub fn test_connection(
 
 async fn handle_connection(
     socket: TcpStream,
-    subscriptions: Arc<RpcSubscriptions>,
+    subscription_control: SubscriptionControl,
     config: PubSubConfig,
     mut tripwire: Tripwire,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -175,12 +177,16 @@ async fn handle_connection(
     server.send_response(&accept).await?;
     let (mut sender, mut receiver) = server.into_builder().finish();
 
-    let mut broadcast_receiver = subscriptions.broadcast_receiver();
+    let mut broadcast_receiver = subscription_control.broadcast_receiver();
     let mut data = Vec::new();
     let current_subscriptions = Arc::new(DashMap::new());
 
     let mut json_rpc_handler = IoHandler::new();
-    let rpc_impl = RpcSolPubSubImpl::new(config, subscriptions, Arc::clone(&current_subscriptions));
+    let rpc_impl = RpcSolPubSubImpl::new(
+        config,
+        subscription_control,
+        Arc::clone(&current_subscriptions),
+    );
     json_rpc_handler.extend_with(rpc_impl.to_delegate());
     let broadcast_handler = BroadcastHandler {
         current_subscriptions,
@@ -234,7 +240,7 @@ async fn handle_connection(
 async fn listen(
     listen_address: SocketAddr,
     config: PubSubConfig,
-    subscriptions: Arc<RpcSubscriptions>,
+    subscription_control: SubscriptionControl,
     mut tripwire: Tripwire,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let listener = tokio::net::TcpListener::bind(&listen_address).await?;
@@ -243,13 +249,14 @@ async fn listen(
             result = listener.accept() => match result {
                 Ok((socket, addr)) => {
                     debug!("new client: {:?}", addr);
-                    let subscriptions = subscriptions.clone();
+                    let subscription_control = subscription_control.clone();
                     let config = config.clone();
                     let tripwire = tripwire.clone();
                     tokio::spawn(async move {
-                        if let Err(err) =
-                            handle_connection(socket, subscriptions, config, tripwire).await
-                        {
+                        let handle = handle_connection(
+                            socket, subscription_control, config, tripwire
+                        );
+                        if let Err(err) = handle.await {
                             debug!("connection handler error: {}", err);
                         }
                     });
