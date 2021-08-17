@@ -16,8 +16,26 @@ message ReplicaAccountsRequest {
     uint64 slot = 1;
 }
 
+message ReplicaAccountMeta {
+    string Pubkey = 1;
+    /// True if an Instruction requires a Transaction signature matching `pubkey`.
+    bool is_signer = 2;
+    /// True if the `pubkey` can be loaded as a read-write account.
+    bool is_writable = 3;
+}
+
+message ReplicaAccountData {
+    bytes data = 1;
+}
+
+message ReplicaAccountInfo {
+    ReplicaAccountMeta account_meta = 1;
+    string hash = 2;
+    ReplicaAccountData data = 3;
+}
+
 message ReplicaAccountsResponse {
-    repeated uint64 updated_slots = 1;
+    repeated ReplicaAccountInfo accounts = 1;
 }
 
 service AccountsDbRepl {
