@@ -11,6 +11,7 @@ use {
     },
     bitflags::bitflags,
     std::convert::TryFrom,
+    thiserror::Error,
 };
 
 /// Sanitized message of a transaction which includes a set of atomic
@@ -23,11 +24,39 @@ pub enum SanitizedMessage {
     V0(MappedMessage),
 }
 
+#[derive(PartialEq, Debug, Error, Eq, Clone)]
+pub enum SanitizeMessageError {
+    #[error("index out of bounds")]
+    IndexOutOfBounds,
+    #[error("value out of bounds")]
+    ValueOutOfBounds,
+    #[error("invalid value")]
+    InvalidValue,
+    #[error("duplicate account key")]
+    DuplicateAccountKey,
+}
+
+impl From<SanitizeError> for SanitizeMessageError {
+    fn from(err: SanitizeError) -> Self {
+        match err {
+            SanitizeError::IndexOutOfBounds => Self::IndexOutOfBounds,
+            SanitizeError::ValueOutOfBounds => Self::ValueOutOfBounds,
+            SanitizeError::InvalidValue => Self::InvalidValue,
+        }
+    }
+}
+
 impl TryFrom<Message> for SanitizedMessage {
-    type Error = SanitizeError;
+    type Error = SanitizeMessageError;
     fn try_from(message: Message) -> Result<Self, Self::Error> {
         message.sanitize()?;
-        Ok(Self::Legacy(message))
+
+        let sanitized_msg = Self::Legacy(message);
+        if sanitized_msg.has_duplicates() {
+            return Err(SanitizeMessageError::DuplicateAccountKey);
+        }
+
+        Ok(sanitized_msg)
     }
 }
 
@@ -292,6 +321,34 @@ mod tests {
         message::v0,
         secp256k1_program, system_instruction,
     };
+
+    #[test]
+    fn test_try_from_message() {
+        let dupe_key = Pubkey::new_unique();
+        let legacy_message_with_dupes = Message {
+            header: MessageHeader {
+                num_required_signatures: 1,
+                ..MessageHeader::default()
+            },
+            account_keys: vec![dupe_key, dupe_key],
+            ..Message::default()
+        };
+
+        assert_eq!(
+            SanitizedMessage::try_from(legacy_message_with_dupes).err(),
+            Some(SanitizeMessageError::DuplicateAccountKey),
+        );
+
+        let legacy_message_with_no_signers = Message {
+            account_keys: vec![Pubkey::new_unique()],
+            ..Message::default()
+        };
+
+        assert_eq!(
+            SanitizedMessage::try_from(legacy_message_with_no_signers).err(),
+            Some(SanitizeMessageError::IndexOutOfBounds),
+        );
+    }
 
     #[test]
     fn test_is_non_loader_key() {

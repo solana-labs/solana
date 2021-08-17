@@ -11,7 +11,7 @@ pub use legacy::Message;
 #[cfg(not(target_arch = "bpf"))]
 pub use mapped::*;
 #[cfg(not(target_arch = "bpf"))]
-pub use sanitized::SanitizedMessage;
+pub use sanitized::*;
 #[cfg(not(target_arch = "bpf"))]
 pub use versions::*;
 

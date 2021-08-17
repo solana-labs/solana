@@ -6,7 +6,7 @@ use {
     crate::{
         hash::Hash,
         instruction::{CompiledInstruction, Instruction, InstructionError},
-        message::Message,
+        message::{Message, SanitizeMessageError},
         nonce::NONCED_TX_MARKER_IX_INDEX,
         program_utils::limited_deserialize,
         pubkey::Pubkey,
@@ -123,6 +123,17 @@ pub type Result<T> = result::Result<T, TransactionError>;
 impl From<SanitizeError> for TransactionError {
     fn from(_: SanitizeError) -> Self {
         Self::SanitizeFailure
+    }
+}
+
+impl From<SanitizeMessageError> for TransactionError {
+    fn from(err: SanitizeMessageError) -> Self {
+        match err {
+            SanitizeMessageError::IndexOutOfBounds
+            | SanitizeMessageError::ValueOutOfBounds
+            | SanitizeMessageError::InvalidValue => Self::SanitizeFailure,
+            SanitizeMessageError::DuplicateAccountKey => Self::AccountLoadedTwice,
+        }
     }
 }
 
