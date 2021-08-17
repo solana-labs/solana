@@ -210,7 +210,6 @@ where
 fn sanitize_path(entry_path: &Path, dst: &Path) -> Result<Option<PathBuf>> {
     // We cannot call unpack_in because it errors if we try to use 2 account paths.
     // So, this code is borrowed from unpack_in
-    // code from: unpack_in does its own sanitization
     // ref: https://docs.rs/tar/*/tar/struct.Entry.html#method.unpack_in
     let mut file_dst = dst.to_path_buf();
     const SKIP: Result<Option<PathBuf>> = Ok(None);
