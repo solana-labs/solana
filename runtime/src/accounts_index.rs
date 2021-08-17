@@ -773,8 +773,8 @@ impl<T: IsCached> AccountsIndex<T> {
         Self::new(Some(BINS_FOR_TESTING))
     }
 
-    pub fn new(bins: Option<AccountsIndexConfig>) -> Self {
-        let (account_maps, bin_calculator) = Self::allocate_accounts_index(bins);
+    pub fn new(config: Option<AccountsIndexConfig>) -> Self {
+        let (account_maps, bin_calculator) = Self::allocate_accounts_index(config);
         Self {
             account_maps,
             bin_calculator,
@@ -794,9 +794,11 @@ impl<T: IsCached> AccountsIndex<T> {
     }
 
     fn allocate_accounts_index(
-        bins: Option<AccountsIndexConfig>,
+        config: Option<AccountsIndexConfig>,
     ) -> (LockMapType<T>, PubkeyBinCalculator16) {
-        let bins = bins.and_then(|config| config.bins).unwrap_or(BINS_DEFAULT);
+        let bins = config
+            .and_then(|config| config.bins)
+            .unwrap_or(BINS_DEFAULT);
         let account_maps = (0..bins)
             .into_iter()
             .map(|_| RwLock::new(AccountMap::default()))
