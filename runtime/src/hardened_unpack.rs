@@ -246,12 +246,17 @@ fn sanitize_path(entry_path: &Path, dst: &Path) -> Result<Option<PathBuf>> {
     };
 
     fs::create_dir_all(parent)?;
+
+    // Here we are different than untar_in. The code for tar::unpack_in internally calling unpack is a little different.
+    // ignore return value here
     validate_inside_dst(dst, parent)?;
     let target = parent.join(entry_path.file_name().unwrap());
 
     Ok(Some(target))
 }
 
+// copied from:
+// https://github.com/alexcrichton/tar-rs/blob/d90a02f582c03dfa0fd11c78d608d0974625ae5d/src/entry.rs#L781
 fn validate_inside_dst(dst: &Path, file_dst: &Path) -> Result<PathBuf> {
     // Abort if target (canonical) parent is outside of `dst`
     let canon_parent = file_dst.canonicalize().map_err(|err| {
