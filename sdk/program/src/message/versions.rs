@@ -26,11 +26,75 @@ pub const MESSAGE_VERSION_PREFIX: u8 = 0x80;
 /// which message version is serialized starting from version `0`. If the first
 /// is bit is not set, all bytes are used to encode the legacy `Message`
 /// format.
-#[frozen_abi(digest = "C4MZ7qztFJHUp1bVcuh7Gn43PQExadzEGyEb8UMn9unz")]
+#[frozen_abi(digest = "qKNCqQpsBZYQxS9P3hVcFr8hAF4VnqV6ZBdC6KoUvHJ")]
 #[derive(Debug, PartialEq, Eq, Clone, AbiEnumVisitor, AbiExample)]
 pub enum VersionedMessage {
     Legacy(Message),
     V0(v0::Message),
+}
+
+impl VersionedMessage {
+    pub fn header(&self) -> &MessageHeader {
+        match self {
+            Self::Legacy(message) => &message.header,
+            Self::V0(message) => &message.header,
+        }
+    }
+
+    pub fn unmapped_keys(self) -> Vec<Pubkey> {
+        match self {
+            Self::Legacy(message) => message.account_keys,
+            Self::V0(message) => message.account_keys,
+        }
+    }
+
+    pub fn unmapped_keys_iter(&self) -> impl Iterator<Item = &Pubkey> {
+        match self {
+            Self::Legacy(message) => message.account_keys.iter(),
+            Self::V0(message) => message.account_keys.iter(),
+        }
+    }
+
+    pub fn unmapped_keys_len(&self) -> usize {
+        match self {
+            Self::Legacy(message) => message.account_keys.len(),
+            Self::V0(message) => message.account_keys.len(),
+        }
+    }
+
+    pub fn recent_blockhash(&self) -> &Hash {
+        match self {
+            Self::Legacy(message) => &message.recent_blockhash,
+            Self::V0(message) => &message.recent_blockhash,
+        }
+    }
+
+    pub fn set_recent_blockhash(&mut self, recent_blockhash: Hash) {
+        match self {
+            Self::Legacy(message) => message.recent_blockhash = recent_blockhash,
+            Self::V0(message) => message.recent_blockhash = recent_blockhash,
+        }
+    }
+
+    pub fn serialize(&self) -> Vec<u8> {
+        bincode::serialize(self).unwrap()
+    }
+
+    /// Compute the blake3 hash of this transaction's message
+    pub fn hash(&self) -> Hash {
+        let message_bytes = self.serialize();
+        Self::hash_raw_message(&message_bytes)
+    }
+
+    /// Compute the blake3 hash of a raw transaction message
+    pub fn hash_raw_message(message_bytes: &[u8]) -> Hash {
+        use blake3::traits::digest::Digest;
+        use std::convert::TryFrom;
+        let mut hasher = blake3::Hasher::new();
+        hasher.update(b"solana-tx-message-v1");
+        hasher.update(message_bytes);
+        Hash(<[u8; crate::hash::HASH_BYTES]>::try_from(hasher.finalize().as_slice()).unwrap())
+    }
 }
 
 impl Default for VersionedMessage {

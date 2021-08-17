@@ -10,7 +10,7 @@
 use crate::execute_cost_table::ExecuteCostTable;
 use log::*;
 use solana_ledger::block_cost_limits::*;
-use solana_sdk::{pubkey::Pubkey, sanitized_transaction::SanitizedTransaction};
+use solana_sdk::{pubkey::Pubkey, transaction::SanitizedTransaction};
 use std::collections::HashMap;
 
 const MAX_WRITABLE_ACCOUNTS: usize = 256;
@@ -121,7 +121,7 @@ impl CostModel {
 
         // calculate account access cost
         let message = transaction.message();
-        message.account_keys.iter().enumerate().for_each(|(i, k)| {
+        message.account_keys_iter().enumerate().for_each(|(i, k)| {
             let is_writable = message.is_writable(i);
 
             if is_writable {
@@ -173,10 +173,8 @@ impl CostModel {
     fn find_transaction_cost(&self, transaction: &SanitizedTransaction) -> u64 {
         let mut cost: u64 = 0;
 
-        for instruction in &transaction.message().instructions {
-            let program_id =
-                transaction.message().account_keys[instruction.program_id_index as usize];
-            let instruction_cost = self.find_instruction_cost(&program_id);
+        for (program_id, instruction) in transaction.message().program_instructions_iter() {
+            let instruction_cost = self.find_instruction_cost(program_id);
             trace!(
                 "instruction {:?} has cost of {}",
                 instruction,

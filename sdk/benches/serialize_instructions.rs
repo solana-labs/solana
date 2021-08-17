@@ -3,9 +3,10 @@
 extern crate test;
 use bincode::{deserialize, serialize};
 use solana_sdk::instruction::{AccountMeta, Instruction};
-use solana_sdk::message::Message;
-use solana_sdk::pubkey;
+use solana_sdk::message::{Message, SanitizedMessage};
+use solana_sdk::pubkey::{self, Pubkey};
 use solana_sdk::sysvar::instructions;
+use std::convert::TryFrom;
 use test::Bencher;
 
 fn make_instructions() -> Vec<Instruction> {
@@ -25,7 +26,9 @@ fn bench_bincode_instruction_serialize(b: &mut Bencher) {
 #[bench]
 fn bench_manual_instruction_serialize(b: &mut Bencher) {
     let instructions = make_instructions();
-    let message = Message::new(&instructions, None);
+    let message =
+        SanitizedMessage::try_from(Message::new(&instructions, Some(&Pubkey::new_unique())))
+            .unwrap();
     b.iter(|| {
         test::black_box(message.serialize_instructions());
     });
@@ -43,7 +46,9 @@ fn bench_bincode_instruction_deserialize(b: &mut Bencher) {
 #[bench]
 fn bench_manual_instruction_deserialize(b: &mut Bencher) {
     let instructions = make_instructions();
-    let message = Message::new(&instructions, None);
+    let message =
+        SanitizedMessage::try_from(Message::new(&instructions, Some(&Pubkey::new_unique())))
+            .unwrap();
     let serialized = message.serialize_instructions();
     b.iter(|| {
         for i in 0..instructions.len() {
@@ -55,7 +60,9 @@ fn bench_manual_instruction_deserialize(b: &mut Bencher) {
 #[bench]
 fn bench_manual_instruction_deserialize_single(b: &mut Bencher) {
     let instructions = make_instructions();
-    let message = Message::new(&instructions, None);
+    let message =
+        SanitizedMessage::try_from(Message::new(&instructions, Some(&Pubkey::new_unique())))
+            .unwrap();
     let serialized = message.serialize_instructions();
     b.iter(|| {
         test::black_box(instructions::load_instruction_at(3, &serialized).unwrap());

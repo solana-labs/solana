@@ -35,7 +35,7 @@ use {
         sanitize::Sanitize,
         signature::{Keypair, Signature, Signer},
         timing::timestamp,
-        transaction::Transaction,
+        transaction::VersionedTransaction,
     },
     solana_storage_proto::{StoredExtendedRewards, StoredTransactionStatusMeta},
     solana_transaction_status::{
@@ -1890,9 +1890,12 @@ impl Blockstore {
         if slot_meta.is_full() {
             let slot_entries = self.get_slot_entries(slot, 0)?;
             if !slot_entries.is_empty() {
+                let blockhash = slot_entries
+                    .last()
+                    .map(|entry| entry.hash)
+                    .unwrap_or_else(|| panic!("Rooted slot {:?} must have blockhash", slot));
                 let slot_transaction_iterator = slot_entries
-                    .iter()
-                    .cloned()
+                    .into_iter()
                     .flat_map(|entry| entry.transactions)
                     .map(|transaction| {
                         if let Err(err) = transaction.sanitize() {
@@ -1917,9 +1920,6 @@ impl Blockstore {
                     Hash::default()
                 };
 
-                let blockhash = get_last_hash(slot_entries.iter())
-                    .unwrap_or_else(|| panic!("Rooted slot {:?} must have blockhash", slot));
-
                 let rewards = self
                     .rewards_cf
                     .get_protobuf_or_bincode::<StoredExtendedRewards>(slot)?
@@ -1937,7 +1937,7 @@ impl Blockstore {
                     blockhash: blockhash.to_string(),
                     parent_slot: slot_meta.parent_slot,
                     transactions: self
-                        .map_transactions_to_statuses(slot, slot_transaction_iterator),
+                        .map_transactions_to_statuses(slot, slot_transaction_iterator)?,
                     rewards,
                     block_time,
                     block_height,
@@ -1948,20 +1948,25 @@ impl Blockstore {
         Err(BlockstoreError::SlotUnavailable)
     }
 
-    pub fn map_transactions_to_statuses<'a>(
+    pub fn map_transactions_to_statuses(
         &self,
         slot: Slot,
-        iterator: impl Iterator<Item = Transaction> + 'a,
-    ) -> Vec<TransactionWithStatusMeta> {
+        iterator: impl Iterator<Item = VersionedTransaction>,
+    ) -> Result<Vec<TransactionWithStatusMeta>> {
         iterator
-            .map(|transaction| {
-                let signature = transaction.signatures[0];
-                TransactionWithStatusMeta {
-                    transaction,
-                    meta: self
-                        .read_transaction_status((signature, slot))
-                        .ok()
-                        .flatten(),
+            .map(|versioned_tx| {
+                // TODO: add support for versioned transactions
+                if let Some(transaction) = versioned_tx.into_legacy_transaction() {
+                    let signature = transaction.signatures[0];
+                    Ok(TransactionWithStatusMeta {
+                        transaction,
+                        meta: self
+                            .read_transaction_status((signature, slot))
+                            .ok()
+                            .flatten(),
+                    })
+                } else {
+                    Err(BlockstoreError::UnsupportedTransactionVersion)
                 }
             })
             .collect()
@@ -2243,6 +2248,12 @@ impl Blockstore {
             let transaction = self
                 .find_transaction_in_slot(slot, signature)?
                 .ok_or(BlockstoreError::TransactionStatusSlotMismatch)?; // Should not happen
+
+            // TODO: support retrieving versioned transactions
+            let transaction = transaction
+                .into_legacy_transaction()
+                .ok_or(BlockstoreError::UnsupportedTransactionVersion)?;
+
             let block_time = self.get_block_time(slot)?;
             Ok(Some(ConfirmedTransaction {
                 slot,
@@ -2261,7 +2272,7 @@ impl Blockstore {
         &self,
         slot: Slot,
         signature: Signature,
-    ) -> Result<Option<Transaction>> {
+    ) -> Result<Option<VersionedTransaction>> {
         let slot_entries = self.get_slot_entries(slot, 0)?;
         Ok(slot_entries
             .iter()
@@ -3995,7 +4006,7 @@ pub mod tests {
         packet::PACKET_DATA_SIZE,
         pubkey::Pubkey,
         signature::Signature,
-        transaction::TransactionError,
+        transaction::{Transaction, TransactionError},
     };
     use solana_storage_proto::convert::generated;
     use solana_transaction_status::{InnerInstructions, Reward, Rewards, TransactionTokenBalance};
@@ -6174,6 +6185,11 @@ pub mod tests {
             .filter(|entry| !entry.is_tick())
             .flat_map(|entry| entry.transactions)
             .map(|transaction| {
+                transaction
+                    .into_legacy_transaction()
+                    .expect("versioned transactions not supported")
+            })
+            .map(|transaction| {
                 let mut pre_balances: Vec<u64> = vec![];
                 let mut post_balances: Vec<u64> = vec![];
                 for (i, _account_key) in transaction.message.account_keys.iter().enumerate() {
@@ -7043,6 +7059,10 @@ pub mod tests {
             .cloned()
             .filter(|entry| !entry.is_tick())
             .flat_map(|entry| entry.transactions)
+            .map(|tx| {
+                tx.into_legacy_transaction()
+                    .expect("versioned transactions not supported")
+            })
             .map(|transaction| {
                 let mut pre_balances: Vec<u64> = vec![];
                 let mut post_balances: Vec<u64> = vec![];
@@ -7142,6 +7162,10 @@ pub mod tests {
             .cloned()
             .filter(|entry| !entry.is_tick())
             .flat_map(|entry| entry.transactions)
+            .map(|tx| {
+                tx.into_legacy_transaction()
+                    .expect("versioned transactions not supported")
+            })
             .map(|transaction| {
                 let mut pre_balances: Vec<u64> = vec![];
                 let mut post_balances: Vec<u64> = vec![];
@@ -7496,12 +7520,15 @@ pub mod tests {
                 let shreds = entries_to_test_shreds(entries.clone(), slot, slot - 1, true, 0);
                 blockstore.insert_shreds(shreds, None, false).unwrap();
 
-                for (i, entry) in entries.iter().enumerate() {
+                for (i, entry) in entries.into_iter().enumerate() {
                     if slot == 4 && i == 2 {
                         // Purge to freeze index 0 and write address-signatures in new primary index
                         blockstore.run_purge(0, 1, PurgeType::PrimaryIndex).unwrap();
                     }
-                    for transaction in &entry.transactions {
+                    for tx in entry.transactions {
+                        let transaction = tx
+                            .into_legacy_transaction()
+                            .expect("versioned transactions not supported");
                         assert_eq!(transaction.signatures.len(), 1);
                         blockstore
                             .write_transaction_status(
@@ -7524,8 +7551,11 @@ pub mod tests {
                 let shreds = entries_to_test_shreds(entries.clone(), slot, 8, true, 0);
                 blockstore.insert_shreds(shreds, None, false).unwrap();
 
-                for entry in entries.iter() {
-                    for transaction in &entry.transactions {
+                for entry in entries.into_iter() {
+                    for tx in entry.transactions {
+                        let transaction = tx
+                            .into_legacy_transaction()
+                            .expect("versioned transactions not supported");
                         assert_eq!(transaction.signatures.len(), 1);
                         blockstore
                             .write_transaction_status(
@@ -7895,7 +7925,7 @@ pub mod tests {
             let transaction_status_cf = blockstore.db.column::<cf::TransactionStatus>();
 
             let slot = 0;
-            let mut transactions: Vec<Transaction> = vec![];
+            let mut transactions: Vec<VersionedTransaction> = vec![];
             for x in 0..4 {
                 let transaction = Transaction::new_with_compiled_instructions(
                     &[&Keypair::new()],
@@ -7921,18 +7951,24 @@ pub mod tests {
                 transaction_status_cf
                     .put_protobuf((0, transaction.signatures[0], slot), &status)
                     .unwrap();
-                transactions.push(transaction);
+                transactions.push(transaction.into());
             }
             // Push transaction that will not have matching status, as a test case
-            transactions.push(Transaction::new_with_compiled_instructions(
-                &[&Keypair::new()],
-                &[solana_sdk::pubkey::new_rand()],
-                Hash::default(),
-                vec![solana_sdk::pubkey::new_rand()],
-                vec![CompiledInstruction::new(1, &(), vec![0])],
-            ));
+            transactions.push(
+                Transaction::new_with_compiled_instructions(
+                    &[&Keypair::new()],
+                    &[solana_sdk::pubkey::new_rand()],
+                    Hash::default(),
+                    vec![solana_sdk::pubkey::new_rand()],
+                    vec![CompiledInstruction::new(1, &(), vec![0])],
+                )
+                .into(),
+            );
 
-            let map = blockstore.map_transactions_to_statuses(slot, transactions.into_iter());
+            let map_result =
+                blockstore.map_transactions_to_statuses(slot, transactions.into_iter());
+            assert!(map_result.is_ok());
+            let map = map_result.unwrap();
             assert_eq!(map.len(), 5);
             for (x, m) in map.iter().take(4).enumerate() {
                 assert_eq!(m.meta.as_ref().unwrap().fee, x as u64);

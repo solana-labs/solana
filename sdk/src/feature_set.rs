@@ -195,6 +195,10 @@ pub mod mem_overlap_fix {
     solana_sdk::declare_id!("vXDCFK7gphrEmyf5VnKgLmqbdJ4UxD2eZH1qbdouYKF");
 }
 
+pub mod versioned_tx_message_enabled {
+    solana_sdk::declare_id!("3KZZ6Ks1885aGBQ45fwRcPXVBCtzUvxhUTkwKMR41Tca");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -238,6 +242,7 @@ lazy_static! {
         (stake_merge_with_unmatched_credits_observed::id(), "allow merging active stakes with unmatched credits_observed #18985"),
         (gate_large_block::id(), "validator checks block cost against max limit in realtime, reject if exceeds."),
         (mem_overlap_fix::id(), "Memory overlap fix"),
+        (versioned_tx_message_enabled::id(), "enable versioned transaction message processing"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

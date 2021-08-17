@@ -10,7 +10,7 @@ use log::*;
 use rand::{seq::SliceRandom, thread_rng};
 use rayon::{prelude::*, ThreadPool};
 use solana_entry::entry::{
-    create_ticks, Entry, EntrySlice, EntryType, EntryVerificationStatus, VerifyRecyclers,
+    self, create_ticks, Entry, EntrySlice, EntryType, EntryVerificationStatus, VerifyRecyclers,
 };
 use solana_measure::measure::Measure;
 use solana_metrics::{datapoint_error, inc_new_counter_debug};
@@ -38,7 +38,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{Keypair, Signature},
     timing,
-    transaction::{Result, Transaction, TransactionError},
+    transaction::{Result, SanitizedTransaction, TransactionError, VersionedTransaction},
 };
 use solana_transaction_status::token_balances::{
     collect_token_balances, TransactionTokenBalancesSet,
@@ -47,7 +47,6 @@ use solana_transaction_status::token_balances::{
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
-    convert::TryFrom,
     path::PathBuf,
     result,
     sync::{Arc, RwLock},
@@ -109,10 +108,13 @@ fn get_first_error(
     fee_collection_results: Vec<Result<()>>,
 ) -> Option<(Result<()>, Signature)> {
     let mut first_err = None;
-    for (result, transaction) in fee_collection_results.iter().zip(batch.transactions_iter()) {
+    for (result, transaction) in fee_collection_results
+        .iter()
+        .zip(batch.sanitized_transactions())
+    {
         if let Err(ref err) = result {
             if first_err.is_none() {
-                first_err = Some((result.clone(), transaction.signatures[0]));
+                first_err = Some((result.clone(), *transaction.signature()));
             }
             warn!(
                 "Unexpected validator error: {:?}, transaction: {:?}",
@@ -210,7 +212,7 @@ fn execute_batch(
     } = tx_results;
 
     if let Some(transaction_status_sender) = transaction_status_sender {
-        let txs = batch.transactions_iter().cloned().collect();
+        let transactions = batch.sanitized_transactions().to_vec();
         let post_token_balances = if record_token_balances {
             collect_token_balances(bank, batch, &mut mint_decimals)
         } else {
@@ -222,7 +224,7 @@ fn execute_batch(
 
         transaction_status_sender.send_transaction_status_batch(
             bank.clone(),
-            txs,
+            transactions,
             execution_results,
             balances,
             token_balances,
@@ -286,19 +288,23 @@ fn execute_batches(
 /// 4. Update the leader scheduler, goto 1
 pub fn process_entries(
     bank: &Arc<Bank>,
-    entries: &mut [Entry],
+    entries: Vec<Entry>,
     randomize: bool,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
 ) -> Result<()> {
+    let verify_transaction = {
+        let bank = bank.clone();
+        move |versioned_tx: VersionedTransaction| -> Result<SanitizedTransaction> {
+            bank.verify_transaction(versioned_tx, false)
+        }
+    };
+
     let mut timings = ExecuteTimings::default();
-    let mut entry_types: Vec<_> = entries
-        .iter()
-        .map(EntryType::try_from)
-        .collect::<Result<_>>()?;
+    let mut entries = entry::verify_transactions(entries, Arc::new(verify_transaction))?;
     let result = process_entries_with_callback(
         bank,
-        &mut entry_types,
+        &mut entries,
         randomize,
         None,
         transaction_status_sender,
@@ -886,12 +892,14 @@ pub fn confirm_slot(
         None
     };
 
+    let verify_transaction = {
+        let bank = bank.clone();
+        move |versioned_tx: VersionedTransaction| -> Result<SanitizedTransaction> {
+            bank.verify_transaction(versioned_tx, skip_verification)
+        }
+    };
     let check_start = Instant::now();
-    let mut entries = entries.verify_and_hash_transactions(
-        skip_verification,
-        bank.libsecp256k1_0_5_upgrade_enabled(),
-        bank.verify_tx_signatures_len_enabled(),
-    )?;
+    let mut entries = entry::verify_transactions(entries, Arc::new(verify_transaction))?;
     let transaction_duration_us = timing::duration_as_us(&check_start.elapsed());
 
     let mut replay_elapsed = Measure::start("replay_elapsed");
@@ -1290,7 +1298,7 @@ pub enum TransactionStatusMessage {
 
 pub struct TransactionStatusBatch {
     pub bank: Arc<Bank>,
-    pub transactions: Vec<Transaction>,
+    pub transactions: Vec<SanitizedTransaction>,
     pub statuses: Vec<TransactionExecutionResult>,
     pub balances: TransactionBalancesSet,
     pub token_balances: TransactionTokenBalancesSet,
@@ -1309,7 +1317,7 @@ impl TransactionStatusSender {
     pub fn send_transaction_status_batch(
         &self,
         bank: Arc<Bank>,
-        transactions: Vec<Transaction>,
+        transactions: Vec<SanitizedTransaction>,
         statuses: Vec<TransactionExecutionResult>,
         balances: TransactionBalancesSet,
         token_balances: TransactionTokenBalancesSet,
@@ -2097,8 +2105,7 @@ pub mod tests {
         } = create_genesis_config(2);
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
         let keypair = Keypair::new();
-        let mut slot_entries =
-            create_ticks(genesis_config.ticks_per_slot, 1, genesis_config.hash());
+        let slot_entries = create_ticks(genesis_config.ticks_per_slot, 1, genesis_config.hash());
         let tx = system_transaction::transfer(
             &mint_keypair,
             &keypair.pubkey(),
@@ -2113,7 +2120,7 @@ pub mod tests {
         );
 
         // Now ensure the TX is accepted despite pointing to the ID of an empty entry.
-        process_entries(&bank, &mut slot_entries, true, None, None).unwrap();
+        process_entries(&bank, slot_entries, true, None, None).unwrap();
         assert_eq!(bank.process_transaction(&tx), Ok(()));
     }
 
@@ -2323,10 +2330,7 @@ pub mod tests {
         // ensure bank can process a tick
         assert_eq!(bank.tick_height(), 0);
         let tick = next_entry(&genesis_config.hash(), 1, vec![]);
-        assert_eq!(
-            process_entries(&bank, &mut [tick], true, None, None),
-            Ok(())
-        );
+        assert_eq!(process_entries(&bank, vec![tick], true, None, None), Ok(()));
         assert_eq!(bank.tick_height(), 1);
     }
 
@@ -2359,7 +2363,7 @@ pub mod tests {
         );
         let entry_2 = next_entry(&entry_1.hash, 1, vec![tx]);
         assert_eq!(
-            process_entries(&bank, &mut [entry_1, entry_2], true, None, None),
+            process_entries(&bank, vec![entry_1, entry_2], true, None, None),
             Ok(())
         );
         assert_eq!(bank.get_balance(&keypair1.pubkey()), 2);
@@ -2417,7 +2421,7 @@ pub mod tests {
         assert_eq!(
             process_entries(
                 &bank,
-                &mut [entry_1_to_mint, entry_2_to_3_mint_to_1],
+                vec![entry_1_to_mint, entry_2_to_3_mint_to_1],
                 false,
                 None,
                 None,
@@ -2489,7 +2493,7 @@ pub mod tests {
 
         assert!(process_entries(
             &bank,
-            &mut [entry_1_to_mint.clone(), entry_2_to_3_mint_to_1.clone()],
+            vec![entry_1_to_mint.clone(), entry_2_to_3_mint_to_1.clone()],
             false,
             None,
             None,
@@ -2501,15 +2505,15 @@ pub mod tests {
         assert_eq!(bank.get_balance(&keypair2.pubkey()), 4);
 
         // Check all accounts are unlocked
-        let txs1 = &entry_1_to_mint.transactions[..];
-        let txs2 = &entry_2_to_3_mint_to_1.transactions[..];
-        let batch1 = bank.prepare_batch(txs1.iter()).unwrap();
+        let txs1 = entry_1_to_mint.transactions;
+        let txs2 = entry_2_to_3_mint_to_1.transactions;
+        let batch1 = bank.prepare_entry_batch(txs1).unwrap();
         for result in batch1.lock_results() {
             assert!(result.is_ok());
         }
         // txs1 and txs2 have accounts that conflict, so we must drop txs1 first
         drop(batch1);
-        let batch2 = bank.prepare_batch(txs2.iter()).unwrap();
+        let batch2 = bank.prepare_entry_batch(txs2).unwrap();
         for result in batch2.lock_results() {
             assert!(result.is_ok());
         }
@@ -2597,7 +2601,7 @@ pub mod tests {
 
         assert!(process_entries(
             &bank,
-            &mut [
+            vec![
                 entry_1_to_mint,
                 entry_2_to_3_and_1_to_mint,
                 entry_conflict_itself,
@@ -2652,7 +2656,7 @@ pub mod tests {
             system_transaction::transfer(&keypair2, &keypair4.pubkey(), 1, bank.last_blockhash());
         let entry_2 = next_entry(&entry_1.hash, 1, vec![tx]);
         assert_eq!(
-            process_entries(&bank, &mut [entry_1, entry_2], true, None, None),
+            process_entries(&bank, vec![entry_1, entry_2], true, None, None),
             Ok(())
         );
         assert_eq!(bank.get_balance(&keypair3.pubkey()), 1);
@@ -2686,7 +2690,7 @@ pub mod tests {
         let present_account = AccountSharedData::new(1, 10, &Pubkey::default());
         bank.store_account(&present_account_key.pubkey(), &present_account);
 
-        let mut entries: Vec<_> = (0..NUM_TRANSFERS)
+        let entries: Vec<_> = (0..NUM_TRANSFERS)
             .step_by(NUM_TRANSFERS_PER_ENTRY)
             .map(|i| {
                 let mut transactions = (0..NUM_TRANSFERS_PER_ENTRY)
@@ -2712,10 +2716,7 @@ pub mod tests {
                 next_entry_mut(&mut hash, 0, transactions)
             })
             .collect();
-        assert_eq!(
-            process_entries(&bank, &mut entries, true, None, None),
-            Ok(())
-        );
+        assert_eq!(process_entries(&bank, entries, true, None, None), Ok(()));
     }
 
     #[test]
@@ -2776,7 +2777,7 @@ pub mod tests {
         // Transfer lamports to each other
         let entry = next_entry(&bank.last_blockhash(), 1, tx_vector);
         assert_eq!(
-            process_entries(&bank, &mut [entry], true, None, None),
+            process_entries(&bank, vec![entry], true, None, None),
             Ok(())
         );
         bank.squash();
@@ -2838,7 +2839,7 @@ pub mod tests {
         assert_eq!(
             process_entries(
                 &bank,
-                &mut [entry_1, tick, entry_2.clone()],
+                vec![entry_1, tick, entry_2.clone()],
                 true,
                 None,
                 None
@@ -2853,7 +2854,7 @@ pub mod tests {
             system_transaction::transfer(&keypair2, &keypair3.pubkey(), 1, bank.last_blockhash());
         let entry_3 = next_entry(&entry_2.hash, 1, vec![tx]);
         assert_eq!(
-            process_entries(&bank, &mut [entry_3], true, None, None),
+            process_entries(&bank, vec![entry_3], true, None, None),
             Err(TransactionError::AccountNotFound)
         );
     }
@@ -2933,7 +2934,7 @@ pub mod tests {
         );
 
         assert_eq!(
-            process_entries(&bank, &mut [entry_1_to_mint], false, None, None),
+            process_entries(&bank, vec![entry_1_to_mint], false, None, None),
             Err(TransactionError::AccountInUse)
         );
 
@@ -3094,7 +3095,7 @@ pub mod tests {
         let mut hash = bank.last_blockhash();
         let mut root: Option<Arc<Bank>> = None;
         loop {
-            let mut entries: Vec<_> = (0..NUM_TRANSFERS)
+            let entries: Vec<_> = (0..NUM_TRANSFERS)
                 .step_by(NUM_TRANSFERS_PER_ENTRY)
                 .map(|i| {
                     next_entry_mut(&mut hash, 0, {
@@ -3122,9 +3123,9 @@ pub mod tests {
                 })
                 .collect();
             info!("paying iteration {}", i);
-            process_entries(&bank, &mut entries, true, None, None).expect("paying failed");
+            process_entries(&bank, entries, true, None, None).expect("paying failed");
 
-            let mut entries: Vec<_> = (0..NUM_TRANSFERS)
+            let entries: Vec<_> = (0..NUM_TRANSFERS)
                 .step_by(NUM_TRANSFERS_PER_ENTRY)
                 .map(|i| {
                     next_entry_mut(
@@ -3145,12 +3146,12 @@ pub mod tests {
                 .collect();
 
             info!("refunding iteration {}", i);
-            process_entries(&bank, &mut entries, true, None, None).expect("refunding failed");
+            process_entries(&bank, entries, true, None, None).expect("refunding failed");
 
             // advance to next block
             process_entries(
                 &bank,
-                &mut (0..bank.ticks_per_slot())
+                (0..bank.ticks_per_slot())
                     .map(|_| next_entry_mut(&mut hash, 1, vec![]))
                     .collect::<Vec<_>>(),
                 true,
@@ -3198,7 +3199,7 @@ pub mod tests {
         let entry = next_entry(&new_blockhash, 1, vec![tx]);
         entries.push(entry);
 
-        process_entries(&bank0, &mut entries, true, None, None).unwrap();
+        process_entries(&bank0, entries, true, None, None).unwrap();
         assert_eq!(bank0.get_balance(&keypair.pubkey()), 1)
     }
 
@@ -3272,8 +3273,8 @@ pub mod tests {
             42,
             Hash::default(),
         );
-        let transactions = [account_not_found_tx, invalid_blockhash_tx];
-        let batch = bank.prepare_batch(transactions.iter()).unwrap();
+        let txs = vec![account_not_found_tx, invalid_blockhash_tx];
+        let batch = bank.prepare_batch(txs).unwrap();
         let (
             TransactionResults {
                 fee_collection_results,
@@ -3368,7 +3369,7 @@ pub mod tests {
             .collect();
         let entry = next_entry(&bank_1_blockhash, 1, vote_txs);
         let (replay_vote_sender, replay_vote_receiver) = unbounded();
-        let _ = process_entries(&bank1, &mut [entry], true, None, Some(&replay_vote_sender));
+        let _ = process_entries(&bank1, vec![entry], true, None, Some(&replay_vote_sender));
         let successes: BTreeSet<Pubkey> = replay_vote_receiver
             .try_iter()
             .map(|(vote_pubkey, _, _)| vote_pubkey)

@@ -548,6 +548,8 @@ impl TryFrom<tx_by_addr::TransactionError> for TransactionError {
             14 => TransactionError::SanitizeFailure,
             15 => TransactionError::ClusterMaintenance,
             16 => TransactionError::AccountBorrowOutstanding,
+            17 => TransactionError::WouldExceedMaxBlockCostLimit,
+            18 => TransactionError::UnsupportedVersion,
             _ => return Err("Invalid TransactionError"),
         })
     }
@@ -608,6 +610,9 @@ impl From<TransactionError> for tx_by_addr::TransactionError {
                 }
                 TransactionError::WouldExceedMaxBlockCostLimit => {
                     tx_by_addr::TransactionErrorType::WouldExceedMaxBlockCostLimit
+                }
+                TransactionError::UnsupportedVersion => {
+                    tx_by_addr::TransactionErrorType::UnsupportedVersion
                 }
             } as i32,
             instruction_error: match transaction_error {
@@ -884,6 +889,14 @@ mod test {
 
     #[test]
     fn test_transaction_error_encode() {
+        let transaction_error = TransactionError::AccountBorrowOutstanding;
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
         let transaction_error = TransactionError::AccountInUse;
         let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
             transaction_error.clone().into();
@@ -908,6 +921,14 @@ mod test {
             tx_by_addr_transaction_error.try_into().unwrap()
         );
 
+        let transaction_error = TransactionError::AlreadyProcessed;
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
         let transaction_error = TransactionError::BlockhashNotFound;
         let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
             transaction_error.clone().into();
@@ -925,14 +946,6 @@ mod test {
         );
 
         let transaction_error = TransactionError::ClusterMaintenance;
-        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
-            transaction_error.clone().into();
-        assert_eq!(
-            transaction_error,
-            tx_by_addr_transaction_error.try_into().unwrap()
-        );
-
-        let transaction_error = TransactionError::AlreadyProcessed;
         let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
             transaction_error.clone().into();
         assert_eq!(
@@ -997,6 +1010,22 @@ mod test {
         );
 
         let transaction_error = TransactionError::SignatureFailure;
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error = TransactionError::WouldExceedMaxBlockCostLimit;
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error = TransactionError::UnsupportedVersion;
         let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
             transaction_error.clone().into();
         assert_eq!(

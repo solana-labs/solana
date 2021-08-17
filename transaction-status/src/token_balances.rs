@@ -55,16 +55,16 @@ pub fn collect_token_balances(
 ) -> TransactionTokenBalances {
     let mut balances: TransactionTokenBalances = vec![];
 
-    for transaction in batch.transactions_iter() {
-        let account_keys = &transaction.message.account_keys;
-        let has_token_program = account_keys.iter().any(|p| is_token_program(p));
+    for transaction in batch.sanitized_transactions() {
+        let has_token_program = transaction
+            .message()
+            .account_keys_iter()
+            .any(|p| is_token_program(p));
 
         let mut transaction_balances: Vec<TransactionTokenBalance> = vec![];
         if has_token_program {
-            for (index, account_id) in account_keys.iter().enumerate() {
-                if is_token_program(account_id)
-                    || transaction.message.program_ids().contains(&account_id)
-                {
+            for (index, account_id) in transaction.message().account_keys_iter().enumerate() {
+                if transaction.message().is_invoked(index) || is_token_program(account_id) {
                     continue;
                 }
 
