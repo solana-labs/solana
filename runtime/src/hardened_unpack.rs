@@ -9,8 +9,7 @@ use {
         fs::{self, File},
         io::{BufReader, Read},
         path::{
-            Component,
-            Component::{CurDir, Normal},
+            Component::{self, CurDir, Normal},
             Path, PathBuf,
         },
         time::Instant,
