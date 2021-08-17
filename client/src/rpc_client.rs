@@ -1340,7 +1340,7 @@ impl RpcClient {
     ///
     /// [`TransactionError`]: solana_sdk::transaction::TransactionError
     ///
-    /// This method optional searches a node's full ledger history and (if
+    /// This method optionally searches a node's full ledger history and (if
     /// implemented) long-term storage.
     ///
     /// # RPC Reference
