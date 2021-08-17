@@ -2711,7 +2711,7 @@ impl Bank {
         let blockhash_queue = self.blockhash_queue.read().unwrap();
         #[allow(deprecated)]
         let fee_calculator = blockhash_queue.get_fee_calculator(hash)?;
-        Some(message.calculate_fee(&fee_calculator))
+        Some(message.calculate_fee(fee_calculator))
     }
 
     #[deprecated(
