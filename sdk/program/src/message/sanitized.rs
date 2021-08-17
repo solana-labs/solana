@@ -100,7 +100,7 @@ impl SanitizedMessage {
         }
         .map(move |ix| {
             (
-                self.get_account_key(ix.program_id_index as usize)
+                self.get_account_key(usize::from(ix.program_id_index))
                     .expect("program id index is sanitized"),
                 ix,
             )
@@ -173,7 +173,7 @@ impl SanitizedMessage {
     /// Returns true if the account at the specified index signed this
     /// message.
     pub fn is_signer(&self, index: usize) -> bool {
-        index < self.header().num_required_signatures as usize
+        index < usize::from(self.header().num_required_signatures)
     }
 
     // First encode the number of instructions:
@@ -242,12 +242,12 @@ impl SanitizedMessage {
             .map(|keys| keys.readonly.len())
             .unwrap_or_default();
         mapped_readonly_addresses
-            .saturating_add(self.header().num_readonly_signed_accounts as usize)
-            .saturating_add(self.header().num_readonly_unsigned_accounts as usize)
+            .saturating_add(usize::from(self.header().num_readonly_signed_accounts))
+            .saturating_add(usize::from(self.header().num_readonly_unsigned_accounts))
     }
 
     fn try_position(&self, key: &Pubkey) -> Option<u8> {
-        Some(self.account_keys_iter().position(|k| k == key)? as u8)
+        u8::try_from(self.account_keys_iter().position(|k| k == key)?).ok()
     }
 
     /// Try to compile an instruction using the account keys in this message.
