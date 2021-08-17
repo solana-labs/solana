@@ -10831,6 +10831,45 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn test_pre_post_balances_simulated_tx_with_account_injection() {
+        let (mut genesis_config, _mint_keypair) = create_genesis_config(500);
+        let fee_rate_governor = FeeRateGovernor::new(1, 0);
+        genesis_config.fee_rate_governor = fee_rate_governor;
+        let parent = Arc::new(Bank::new_for_tests(&genesis_config));
+        let bank0 = Arc::new(new_from_parent(&parent));
+
+        let keypair0 = Keypair::new();
+        let pubkey0 = solana_sdk::pubkey::new_rand();
+        let keypair0_account = AccountSharedData::new(8, 0, &Pubkey::default());
+        let account0 = AccountSharedData::new(11, 0, &Pubkey::default());
+        bank0.store_account(&keypair0.pubkey(), &keypair0_account);
+        bank0.store_account(&pubkey0, &account0);
+        bank0.freeze();
+
+        let blockhash = bank0.last_blockhash();
+
+        let tx0 = system_transaction::transfer(&keypair0, &pubkey0, 9, blockhash);
+
+        let injected_keypair0_account = AccountSharedData::new(16, 0, &Pubkey::default());
+
+        let TransactionSimulationResult {
+            result,
+            logs: _,
+            post_simulation_accounts,
+            units_consumed: _,
+        } = bank0.simulate_transaction_with_injected_accounts(
+            &tx0,
+            &mut vec![(keypair0.pubkey(), injected_keypair0_account)]
+        );
+
+        assert_eq!(result, Ok(()));
+        assert_eq!(post_simulation_accounts[0].0, keypair0.pubkey());
+        assert_eq!(post_simulation_accounts[0].1.lamports(), 7);
+        assert_eq!(post_simulation_accounts[1].0, pubkey0);
+        assert_eq!(post_simulation_accounts[1].1.lamports(), 20);
+    }
+
+    #[test]
     fn test_transaction_with_duplicate_accounts_in_instruction() {
         let (genesis_config, mint_keypair) = create_genesis_config(500);
         let mut bank = Bank::new_for_tests(&genesis_config);
