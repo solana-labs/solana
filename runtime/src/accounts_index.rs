@@ -33,8 +33,12 @@ use thiserror::Error;
 
 pub const ITER_BATCH_SIZE: usize = 1000;
 pub const BINS_DEFAULT: usize = 16;
-pub const BINS_FOR_TESTING: usize = BINS_DEFAULT;
-pub const BINS_FOR_BENCHMARKS: usize = BINS_DEFAULT;
+pub const ACCOUNTS_INDEX_CONFIG_FOR_TESTING: AccountsIndexConfig = AccountsIndexConfig {
+    bins: Some(BINS_DEFAULT),
+};
+pub const ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS: AccountsIndexConfig = AccountsIndexConfig {
+    bins: Some(BINS_DEFAULT),
+};
 pub type ScanResult<T> = Result<T, ScanError>;
 pub type SlotList<T> = Vec<(Slot, T)>;
 pub type SlotSlice<'s, T> = &'s [(Slot, T)];
@@ -76,6 +80,11 @@ pub enum AccountIndex {
 pub struct AccountSecondaryIndexesIncludeExclude {
     pub exclude: bool,
     pub keys: HashSet<Pubkey>,
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+pub struct AccountsIndexConfig {
+    pub bins: Option<usize>,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -761,11 +770,11 @@ pub struct AccountsIndex<T> {
 
 impl<T: IsCached> AccountsIndex<T> {
     pub fn default_for_tests() -> Self {
-        Self::new(Some(BINS_FOR_TESTING))
+        Self::new(Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING))
     }
 
-    pub fn new(bins: Option<usize>) -> Self {
-        let (account_maps, bin_calculator) = Self::allocate_accounts_index(bins);
+    pub fn new(config: Option<AccountsIndexConfig>) -> Self {
+        let (account_maps, bin_calculator) = Self::allocate_accounts_index(config);
         Self {
             account_maps,
             bin_calculator,
@@ -784,8 +793,12 @@ impl<T: IsCached> AccountsIndex<T> {
         }
     }
 
-    fn allocate_accounts_index(bins: Option<usize>) -> (LockMapType<T>, PubkeyBinCalculator16) {
-        let bins = bins.unwrap_or(BINS_DEFAULT);
+    fn allocate_accounts_index(
+        config: Option<AccountsIndexConfig>,
+    ) -> (LockMapType<T>, PubkeyBinCalculator16) {
+        let bins = config
+            .and_then(|config| config.bins)
+            .unwrap_or(BINS_DEFAULT);
         let account_maps = (0..bins)
             .into_iter()
             .map(|_| RwLock::new(AccountMap::default()))
@@ -4024,6 +4037,6 @@ pub mod tests {
     #[test]
     #[should_panic(expected = "bins.is_power_of_two()")]
     fn test_illegal_bins() {
-        AccountsIndex::<bool>::new(Some(3));
+        AccountsIndex::<bool>::new(Some(AccountsIndexConfig { bins: Some(3) }));
     }
 }

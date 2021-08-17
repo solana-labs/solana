@@ -203,7 +203,7 @@ mod tests {
             check_hash_calculation,
             false,
             false,
-            Some(solana_runtime::accounts_index::BINS_FOR_TESTING),
+            Some(solana_runtime::accounts_index::ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
         )
         .unwrap();
 
@@ -831,7 +831,7 @@ mod tests {
             false,
             false,
             false,
-            Some(solana_runtime::accounts_index::BINS_FOR_TESTING),
+            Some(solana_runtime::accounts_index::ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
         )?;
 
         assert_eq!(bank, &deserialized_bank);
@@ -1011,7 +1011,7 @@ mod tests {
             false,
             false,
             false,
-            Some(solana_runtime::accounts_index::BINS_FOR_TESTING),
+            Some(solana_runtime::accounts_index::ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
         )
         .unwrap();
 

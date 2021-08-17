@@ -1,7 +1,7 @@
 use {
     crate::{
         accounts_db::{AccountShrinkThreshold, AccountsDb},
-        accounts_index::AccountSecondaryIndexes,
+        accounts_index::{AccountSecondaryIndexes, AccountsIndexConfig},
         bank::{Bank, BankSlotDelta, Builtins},
         hardened_unpack::{unpack_snapshot, ParallelSelector, UnpackError, UnpackedAppendVecMap},
         serde_snapshot::{
@@ -728,7 +728,7 @@ pub fn bank_from_snapshot_archives(
     test_hash_calculation: bool,
     accounts_db_skip_shrink: bool,
     verify_index: bool,
-    accounts_index_bins: Option<usize>,
+    accounts_index_config: Option<AccountsIndexConfig>,
 ) -> Result<(Bank, BankFromArchiveTimings)> {
     check_are_snapshots_compatible(
         full_snapshot_archive_info,
@@ -792,7 +792,7 @@ pub fn bank_from_snapshot_archives(
         limit_load_slot_count_from_snapshot,
         shrink_ratio,
         verify_index,
-        accounts_index_bins,
+        accounts_index_config,
     )?;
     measure_rebuild.stop();
     info!("{}", measure_rebuild);
@@ -838,7 +838,7 @@ pub fn bank_from_latest_snapshot_archives(
     test_hash_calculation: bool,
     accounts_db_skip_shrink: bool,
     verify_index: bool,
-    accounts_index_bins: Option<usize>,
+    accounts_index_config: Option<AccountsIndexConfig>,
 ) -> Result<(Bank, BankFromArchiveTimings)> {
     let full_snapshot_archive_info = get_highest_full_snapshot_archive_info(&snapshot_archives_dir)
         .ok_or(SnapshotError::NoSnapshotArchives)?;
@@ -876,7 +876,7 @@ pub fn bank_from_latest_snapshot_archives(
         test_hash_calculation,
         accounts_db_skip_shrink,
         verify_index,
-        accounts_index_bins,
+        accounts_index_config,
     )?;
 
     verify_bank_against_expected_slot_hash(
@@ -1376,7 +1376,7 @@ fn rebuild_bank_from_snapshots(
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
     verify_index: bool,
-    accounts_index_bins: Option<usize>,
+    accounts_index_config: Option<AccountsIndexConfig>,
 ) -> Result<Bank> {
     let (full_snapshot_version, full_snapshot_root_paths) =
         verify_unpacked_snapshots_dir_and_version(
@@ -1424,7 +1424,7 @@ fn rebuild_bank_from_snapshots(
                     limit_load_slot_count_from_snapshot,
                     shrink_ratio,
                     verify_index,
-                    accounts_index_bins,
+                    accounts_index_config,
                 ),
             }?,
         )
@@ -2524,7 +2524,7 @@ mod tests {
             false,
             false,
             false,
-            Some(crate::accounts_index::BINS_FOR_TESTING),
+            Some(crate::accounts_index::ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
         )
         .unwrap();
 
@@ -2615,7 +2615,7 @@ mod tests {
             false,
             false,
             false,
-            Some(crate::accounts_index::BINS_FOR_TESTING),
+            Some(crate::accounts_index::ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
         )
         .unwrap();
 
@@ -2725,7 +2725,7 @@ mod tests {
             false,
             false,
             false,
-            Some(crate::accounts_index::BINS_FOR_TESTING),
+            Some(crate::accounts_index::ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
         )
         .unwrap();
 
@@ -2824,7 +2824,7 @@ mod tests {
             false,
             false,
             false,
-            Some(crate::accounts_index::BINS_FOR_TESTING),
+            Some(crate::accounts_index::ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
         )
         .unwrap();
 
@@ -2964,7 +2964,7 @@ mod tests {
             false,
             false,
             false,
-            Some(crate::accounts_index::BINS_FOR_TESTING),
+            Some(crate::accounts_index::ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
         )
         .unwrap();
         assert_eq!(
@@ -3026,7 +3026,7 @@ mod tests {
             false,
             false,
             false,
-            Some(crate::accounts_index::BINS_FOR_TESTING),
+            Some(crate::accounts_index::ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
         )
         .unwrap();
         assert_eq!(

@@ -45,6 +45,7 @@ use {
         },
         accounts_index::{
             AccountIndex, AccountSecondaryIndexes, AccountSecondaryIndexesIncludeExclude,
+            AccountsIndexConfig,
         },
         hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
         snapshot_archive_info::SnapshotArchiveInfoGetter,
@@ -2387,6 +2388,10 @@ pub fn main() {
             _ => unreachable!(),
         };
 
+    let accounts_index_config = value_t!(matches, "accounts_index_bins", usize)
+        .ok()
+        .map(|bins| AccountsIndexConfig { bins: Some(bins) });
+
     let mut validator_config = ValidatorConfig {
         require_tower: matches.is_present("require_tower"),
         tower_storage,
@@ -2484,7 +2489,7 @@ pub fn main() {
         account_indexes,
         accounts_db_caching_enabled: !matches.is_present("no_accounts_db_caching"),
         accounts_db_test_hash_calculation: matches.is_present("accounts_db_test_hash_calculation"),
-        accounts_index_bins: value_t!(matches, "accounts_index_bins", usize).ok(),
+        accounts_index_config,
         accounts_db_skip_shrink: matches.is_present("accounts_db_skip_shrink"),
         accounts_db_use_index_hash_calculation: matches.is_present("accounts_db_index_hashing"),
         tpu_coalesce_ms,

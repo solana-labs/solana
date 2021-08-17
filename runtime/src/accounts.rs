@@ -4,7 +4,8 @@ use crate::{
         ScanStorageResult,
     },
     accounts_index::{
-        AccountSecondaryIndexes, IndexKey, ScanResult, BINS_FOR_BENCHMARKS, BINS_FOR_TESTING,
+        AccountSecondaryIndexes, AccountsIndexConfig, IndexKey, ScanResult,
+        ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS, ACCOUNTS_INDEX_CONFIG_FOR_TESTING,
     },
     ancestors::Ancestors,
     bank::{
@@ -139,7 +140,7 @@ impl Accounts {
             account_indexes,
             caching_enabled,
             shrink_ratio,
-            Some(BINS_FOR_TESTING),
+            Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
         )
     }
 
@@ -156,7 +157,7 @@ impl Accounts {
             account_indexes,
             caching_enabled,
             shrink_ratio,
-            Some(BINS_FOR_BENCHMARKS),
+            Some(ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS),
         )
     }
 
@@ -166,7 +167,7 @@ impl Accounts {
         account_indexes: AccountSecondaryIndexes,
         caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
-        accounts_index_bins: Option<usize>,
+        accounts_index_config: Option<AccountsIndexConfig>,
     ) -> Self {
         Self {
             accounts_db: Arc::new(AccountsDb::new_with_config(
@@ -175,7 +176,7 @@ impl Accounts {
                 account_indexes,
                 caching_enabled,
                 shrink_ratio,
-                accounts_index_bins,
+                accounts_index_config,
             )),
             account_locks: Mutex::new(AccountLocks::default()),
         }
