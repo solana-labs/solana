@@ -6131,7 +6131,6 @@ pub mod tests {
             verify_signature(&tx.signatures[0].to_string()).unwrap(),
             tx.signatures[0]
         );
-
         let bad_signature = "a1b2c3d4";
         assert_eq!(
             verify_signature(&bad_signature.to_string()),

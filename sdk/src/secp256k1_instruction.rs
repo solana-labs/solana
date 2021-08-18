@@ -353,4 +353,19 @@ pub mod test {
             Err(Secp256k1Error::InvalidSignature)
         );
     }
+
+    #[test]
+    fn test_count_is_zero_but_sig_data_exists() {
+        solana_logger::setup();
+
+        let mut instruction_data = vec![0u8; DATA_START];
+        let offsets = SecpSignatureOffsets::default();
+        instruction_data[0] = 0;
+        let writer = std::io::Cursor::new(&mut instruction_data[1..]);
+        bincode::serialize_into(writer, &offsets).unwrap();
+        assert_eq!(
+            verify_eth_addresses(&instruction_data, &[&[0u8; 100]], false, true),
+            Err(Secp256k1Error::InvalidInstructionDataSize)
+        );
+    }
 }
