@@ -54,9 +54,9 @@ Post something like the following to #announcements (adjusting the text as appro
 >   --hard-fork SLOT_X                  # <-- NEW! IMPORTANT! REMOVE AFTER THIS RESTART
 >   --no-snapshot-fetch                 # <-- NEW! IMPORTANT! REMOVE AFTER THIS RESTART
 >   --entrypoint entrypoint.testnet.solana.com:8001
->   --trusted-validator 5D1fNXzvv5NjV1ysLjirC4WY92RNsVH18vjmcszZd8on
+>   --known-validator 5D1fNXzvv5NjV1ysLjirC4WY92RNsVH18vjmcszZd8on
 >   --expected-genesis-hash 4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY
->   --no-untrusted-rpc
+>   --only-known-rpc
 >   --limit-ledger-size
 >   ...                                # <-- your other --identity/--vote-account/etc arguments
 > ```
@@ -68,9 +68,9 @@ Post something like the following to #announcements (adjusting the text as appro
 >   --wait-for-supermajority SLOT_X     # <-- NEW! IMPORTANT! REMOVE AFTER THIS RESTART
 >   --expected-bank-hash NEW_BANK_HASH  # <-- NEW! IMPORTANT! REMOVE AFTER THIS RESTART
 >   --entrypoint entrypoint.testnet.solana.com:8001
->   --trusted-validator 5D1fNXzvv5NjV1ysLjirC4WY92RNsVH18vjmcszZd8on
+>   --known-validator 5D1fNXzvv5NjV1ysLjirC4WY92RNsVH18vjmcszZd8on
 >   --expected-genesis-hash 4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY
->   --no-untrusted-rpc
+>   --only-known-rpc
 >   --limit-ledger-size
 >   ...                                # <-- your other --identity/--vote-account/etc arguments
 > ```
