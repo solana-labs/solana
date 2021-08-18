@@ -547,7 +547,7 @@ impl Validator {
 
             let accountsdb_repl_service = config.accountsdb_repl_service_config.as_ref().map(|accountsdb_repl_service_config| {
                 accountsdb_repl_server_factory::AccountsDbReplServerFactory::build_accountsdb_repl_server(
-                    accountsdb_repl_service_config.clone(), confirmed_bank_receiver)});
+                    accountsdb_repl_service_config.clone(), confirmed_bank_receiver, bank_forks.clone())});
 
             let (bank_notification_sender, bank_notification_receiver) = unbounded();
             (

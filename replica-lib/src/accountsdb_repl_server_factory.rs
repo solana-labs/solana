@@ -5,6 +5,7 @@ use {
         replica_updated_slots_server::ReplicaUpdatedSlotsServerImpl,
     },
     crossbeam_channel::Receiver,
+    solana_runtime::{bank_forks::BankForks},
     solana_sdk::clock::Slot,
     std::sync::{Arc, RwLock},
 };
@@ -15,13 +16,14 @@ impl AccountsDbReplServerFactory {
     pub fn build_accountsdb_repl_server(
         config: AccountsDbReplServiceConfig,
         confirmed_bank_receiver: Receiver<Slot>,
+        bank_forks: Arc<RwLock<BankForks>>,
     ) -> AccountsDbReplService {
         AccountsDbReplService::new(
             config,
             Arc::new(RwLock::new(ReplicaUpdatedSlotsServerImpl::new(
                 confirmed_bank_receiver,
             ))),
-            Arc::new(RwLock::new(ReplicaAccountsServerImpl::new())),
+            Arc::new(RwLock::new(ReplicaAccountsServerImpl::new(bank_forks))),
         )
     }
 }
