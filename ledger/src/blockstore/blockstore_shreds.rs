@@ -65,6 +65,105 @@ impl Blockstore {
         Self::get_shreds_for_slot_from_fs(&path, start_index)
     }
 
+    pub(crate) fn find_missing_data_indexes_cache(
+        &self,
+        first_timestamp: u64,
+        start_index: u64,
+        end_index: u64,
+        max_missing: usize,
+        slot_cache: Arc<RwLock<ShredCache>>,
+    ) -> Vec<u64> {
+        let ticks_since_first_insert =
+            DEFAULT_TICKS_PER_SECOND * (timestamp() - first_timestamp) / 1000;
+
+        let mut missing_indexes = vec![];
+        let mut prev_index = start_index;
+        'outer: for (index, shred) in slot_cache.read().unwrap().iter() {
+            if *index < start_index {
+                continue;
+            }
+            // Get the tick that will be used to figure out the timeout for this hole
+            let reference_tick = u64::from(Shred::reference_tick_from_data(shred));
+            // Break out early if the higher index holes have not timed out yet
+            if ticks_since_first_insert < reference_tick + MAX_TURBINE_DELAY_IN_TICKS {
+                return missing_indexes;
+            }
+            // Insert any newly discovered holes
+            for i in prev_index..cmp::min(*index, end_index) {
+                missing_indexes.push(i);
+                if missing_indexes.len() == max_missing {
+                    break 'outer;
+                }
+            }
+            // Update prev_index before the end-early check as we may use prev_index after
+            prev_index = *index + 1;
+            if *index >= end_index {
+                break;
+            }
+        }
+        // If prev_index < end_index, there could be holes within [start_index, end_index)
+        // but that are greater than any shreds we have in the blockstore
+        if missing_indexes.len() < max_missing && prev_index < end_index {
+            for i in prev_index..end_index {
+                missing_indexes.push(i);
+                if missing_indexes.len() == max_missing {
+                    break;
+                }
+            }
+        }
+        missing_indexes
+    }
+
+    pub(crate) fn find_missing_data_indexes_fs(
+        &self,
+        first_timestamp: u64,
+        start_index: u64,
+        end_index: u64,
+        max_missing: usize,
+        shreds: Vec<Shred>,
+    ) -> Vec<u64> {
+        let ticks_since_first_insert =
+            DEFAULT_TICKS_PER_SECOND * (timestamp() - first_timestamp) / 1000;
+
+        let mut missing_indexes = vec![];
+        let mut prev_index = start_index;
+        'outer: for shred in shreds {
+            let index = u64::from(shred.index());
+            if index < start_index {
+                continue;
+            }
+            // Get the tick that will be used to figure out the timeout for this hole
+            let reference_tick = u64::from(shred.reference_tick());
+            // Break out early if the higher index holes have not timed out yet
+            if ticks_since_first_insert < reference_tick + MAX_TURBINE_DELAY_IN_TICKS {
+                return missing_indexes;
+            }
+            // Insert any newly discovered holes
+            for i in prev_index..cmp::min(index, end_index) {
+                missing_indexes.push(i);
+                if missing_indexes.len() == max_missing {
+                    break 'outer;
+                }
+            }
+            // Update prev_index before the end-early check as we may use prev_index after
+            prev_index = index + 1;
+            if index >= end_index {
+                break;
+            }
+        }
+        // If prev_index < end_index, there could be holes within [start_index, end_index)
+        // but that are greater than any shreds we have in the blockstore
+        if missing_indexes.len() < max_missing && prev_index < end_index {
+            for i in prev_index..end_index {
+                missing_indexes.push(i);
+                if missing_indexes.len() == max_missing {
+                    break;
+                }
+            }
+        }
+        missing_indexes
+    }
+
     pub(crate) fn insert_data_shred_into_cache(&self, slot: Slot, index: u64, shred: &Shred) {
         let data_slot_cache = self.data_slot_cache(slot).unwrap_or_else(|| {
             // Inner map for slot does not exist, let's create it
@@ -212,20 +311,18 @@ impl Blockstore {
         )?)
     }
 
+    pub(crate) fn data_slot_cache(&self, slot: Slot) -> Option<Arc<RwLock<ShredCache>>> {
+        self.data_shred_cache
+            .get(&slot)
+            .map(|res| res.value().clone())
+    }
+
     fn slot_data_shreds_path(&self, slot: Slot) -> String {
         Path::new(&self.data_shred_path)
             .join(slot.to_string())
             .to_str()
             .unwrap()
             .to_string()
-    }
-
-    // TODO: move stuff around such that this function doesn't have to be public;
-    // find_missing_data_indexes() uses this at the moment
-    pub(crate) fn data_slot_cache(&self, slot: Slot) -> Option<Arc<RwLock<ShredCache>>> {
-        self.data_shred_cache
-            .get(&slot)
-            .map(|res| res.value().clone())
     }
 
     fn get_shred_from_fs(slot_path: &str, index: u64) -> Result<Option<Vec<u8>>> {
