@@ -17,6 +17,7 @@ pub enum ReplicaRpcError {
     InvalidUrl(String),
     ConnectionError(String),
     GetSlotsError(String),
+    GetAccountsError(String),
 }
 
 impl From<tonic::transport::Error> for ReplicaRpcError {
@@ -56,6 +57,21 @@ impl AccountsDbReplClient {
             Err(status) => Err(ReplicaRpcError::GetSlotsError(status.to_string())),
         }
     }
+
+    pub async fn get_slot_accounts(
+        &mut self,
+        slot: Slot,
+    ) -> Result<Vec<ReplicaAccountInfo>, ReplicaRpcError> {
+        let request = ReplicaAccountsRequest {
+            slot,
+        };
+        let response = self.client.get_slot_accounts(Request::new(request)).await;
+
+        match response {
+            Ok(response) => Ok(response.into_inner().accounts),
+            Err(status) => Err(ReplicaRpcError::GetAccountsError(status.to_string())),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -89,8 +105,14 @@ impl AccountsDbReplClientService {
             accountsdb_repl_client,
         })
     }
+
     pub fn get_updated_slots(&mut self, last_slot: Slot) -> Result<Vec<Slot>, ReplicaRpcError> {
         self.runtime
             .block_on(self.accountsdb_repl_client.get_updated_slots(last_slot))
+    }
+
+    pub fn get_slot_accounts(&mut self, slot: Slot) -> Result<Vec<ReplicaAccountInfo>, ReplicaRpcError> {
+        self.runtime
+            .block_on(self.accountsdb_repl_client.get_slot_accounts(slot))
     }
 }

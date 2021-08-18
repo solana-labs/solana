@@ -138,6 +138,7 @@ impl AccountsDbReplService {
         server: AccountsDbReplServer,
         exit_signal: Receiver<()>,
     ) -> Result<(), tonic::transport::Error> {
+        info!("Running AccountsDbReplServer at the endpoint: {:?}", config.replica_server_addr);
         transport::Server::builder()
             .add_service(accounts_db_repl_server::AccountsDbReplServer::new(server))
             .serve_with_shutdown(config.replica_server_addr, exit_signal.map(drop))

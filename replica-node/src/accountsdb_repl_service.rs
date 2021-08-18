@@ -30,9 +30,19 @@ impl AccountsDbReplService {
         Ok(Self { thread })
     }
 
-    // fn get_accounts_for_slot(mut accountsdb_repl_client: &AccountsDbReplClientService, slot: Slot) {
+    fn replicate_accounts_for_slot(accountsdb_repl_client: &mut AccountsDbReplClientService, slot: Slot) {
 
-    // }
+        match accountsdb_repl_client.get_slot_accounts(slot) {
+            Err(err) => {
+                error!("Ran into error getting accounts for slot {:?}, error: {:?}", slot, err);
+            }
+            Ok(accounts) => {
+                for account in accounts.iter() {
+                    info!("Received account: {:?}", account);
+                }
+            }
+        }
+    }
 
     fn run_service(
         mut last_replicated_slot: Slot,
@@ -43,6 +53,9 @@ impl AccountsDbReplService {
                 Ok(slots) => {
                     info!("Received updated slots: {:?}", slots);
                     if !slots.is_empty() {
+                        for slot in slots.iter() {
+                            Self::replicate_accounts_for_slot(&mut accountsdb_repl_client, *slot);
+                        }
                         last_replicated_slot = slots[slots.len() - 1];
                     }
                 }
