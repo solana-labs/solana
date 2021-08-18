@@ -17,11 +17,11 @@ message ReplicaAccountsRequest {
 }
 
 message ReplicaAccountMeta {
-    string Pubkey = 1;
-    /// True if an Instruction requires a Transaction signature matching `pubkey`.
-    bool is_signer = 2;
-    /// True if the `pubkey` can be loaded as a read-write account.
-    bool is_writable = 3;
+    bytes Pubkey = 1;
+    uint64 lamports = 2;
+    bytes owner = 3;
+    bool executable = 4;
+    uint64 rent_epoch = 5;
 }
 
 message ReplicaAccountData {
@@ -30,7 +30,7 @@ message ReplicaAccountData {
 
 message ReplicaAccountInfo {
     ReplicaAccountMeta account_meta = 1;
-    string hash = 2;
+    bytes hash = 2;
     ReplicaAccountData data = 3;
 }
 
