@@ -49,7 +49,7 @@ solana-secp256k1-program = { path = "../programs/secp256k1", version = "=1.8.0" 
 solana-stake-program = { path = "../programs/stake", version = "=1.8.0" }
 solana-vote-program = { path = "../programs/vote", version = "=1.8.0" }
 symlink = "0.1.0"
-tar = "0.4.35"
+tar = "0.4.37"
 tempfile = "3.2.0"
 thiserror = "1.0"
 zstd = "0.9.0"
