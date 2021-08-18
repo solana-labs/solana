@@ -27,6 +27,7 @@ use crate::{
         AccountsIndexRootsStats, IndexKey, IsCached, RefCount, ScanResult, SlotList, SlotSlice,
         ZeroLamport, ACCOUNTS_INDEX_CONFIG_FOR_TESTING,
     },
+    address_map::AddressMapCache,
     ancestors::Ancestors,
     append_vec::{AppendVec, StoredAccountMeta, StoredMeta, StoredMetaWriteVersion},
     contains::Contains,
@@ -50,6 +51,7 @@ use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::{
     account::{AccountSharedData, ReadableAccount},
     clock::{BankId, Epoch, Slot},
+    epoch_schedule::EpochSchedule,
     genesis_config::ClusterType,
     hash::{Hash, Hasher},
     pubkey::Pubkey,
@@ -898,6 +900,9 @@ pub struct AccountsDb {
 
     pub accounts_cache: AccountsCache,
 
+    /// Cache for fast address lookups required by mapped transactions
+    pub address_map_cache: AddressMapCache,
+
     sender_bg_hasher: Option<Sender<CachedAccount>>,
     pub read_only_accounts_cache: ReadOnlyAccountsCache,
 
@@ -1366,10 +1371,16 @@ type GenerateIndexAccountsMap<'a> = HashMap<Pubkey, IndexAccountMapEntry<'a>>;
 
 impl AccountsDb {
     pub fn default_for_tests() -> Self {
-        Self::default_with_accounts_index(AccountInfoAccountsIndex::default_for_tests())
+        Self::default_with_accounts_index(
+            AccountInfoAccountsIndex::default_for_tests(),
+            EpochSchedule::default(),
+        )
     }
 
-    fn default_with_accounts_index(accounts_index: AccountInfoAccountsIndex) -> Self {
+    fn default_with_accounts_index(
+        accounts_index: AccountInfoAccountsIndex,
+        epoch_schedule: EpochSchedule,
+    ) -> Self {
         let num_threads = get_thread_count();
         const MAX_READ_ONLY_CACHE_DATA_SIZE: usize = 200_000_000;
 
@@ -1416,6 +1427,7 @@ impl AccountsDb {
             shrink_ratio: AccountShrinkThreshold::default(),
             dirty_stores: DashMap::default(),
             zero_lamport_accounts_to_purge_after_full_snapshot: DashSet::default(),
+            address_map_cache: AddressMapCache::new(epoch_schedule),
         }
     }
 
@@ -1427,6 +1439,7 @@ impl AccountsDb {
             false,
             AccountShrinkThreshold::default(),
             Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
+            EpochSchedule::default(),
         )
     }
 
@@ -1437,6 +1450,7 @@ impl AccountsDb {
         caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
         accounts_index_config: Option<AccountsIndexConfig>,
+        epoch_schedule: EpochSchedule,
     ) -> Self {
         let accounts_index = AccountsIndex::new(accounts_index_config);
         let mut new = if !paths.is_empty() {
@@ -1447,7 +1461,7 @@ impl AccountsDb {
                 account_indexes,
                 caching_enabled,
                 shrink_ratio,
-                ..Self::default_with_accounts_index(accounts_index)
+                ..Self::default_with_accounts_index(accounts_index, epoch_schedule)
             }
         } else {
             // Create a temporary set of accounts directories, used primarily
@@ -1460,7 +1474,7 @@ impl AccountsDb {
                 account_indexes,
                 caching_enabled,
                 shrink_ratio,
-                ..Self::default_with_accounts_index(accounts_index)
+                ..Self::default_with_accounts_index(accounts_index, epoch_schedule)
             }
         };
 
@@ -6022,6 +6036,11 @@ impl AccountsDb {
                     stored_account,
                 },
             )| {
+                if solana_address_map_program::check_id(&stored_account.account_meta.owner) {
+                    self.address_map_cache
+                        .populate_cache(&stored_account.meta.pubkey, stored_account.data);
+                }
+
                 if secondary {
                     self.accounts_index.update_secondary_indexes(
                         &pubkey,
@@ -6328,6 +6347,7 @@ impl AccountsDb {
             caching_enabled,
             shrink_ratio,
             Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
+            EpochSchedule::default(),
         )
     }
 

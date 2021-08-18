@@ -6,6 +6,7 @@ pub mod accounts_cache;
 pub mod accounts_db;
 pub mod accounts_hash;
 pub mod accounts_index;
+pub mod address_map;
 pub mod ancestors;
 pub mod append_vec;
 pub mod bank;

@@ -344,6 +344,7 @@ where
         shrink_ratio,
         verify_index,
         accounts_index_config,
+        bank_fields.epoch_schedule,
     )?;
     accounts_db.freeze_accounts(
         &Ancestors::from(&bank_fields.ancestors),
@@ -396,6 +397,7 @@ fn reconstruct_accountsdb_from_fields<E>(
     shrink_ratio: AccountShrinkThreshold,
     verify_index: bool,
     accounts_index_config: Option<AccountsIndexConfig>,
+    epoch_schedule: EpochSchedule,
 ) -> Result<AccountsDb, Error>
 where
     E: SerializableStorage + std::marker::Sync,
@@ -407,6 +409,7 @@ where
         caching_enabled,
         shrink_ratio,
         accounts_index_config,
+        epoch_schedule,
     );
 
     let AccountsDbFields(

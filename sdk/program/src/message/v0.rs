@@ -123,6 +123,36 @@ impl Message {
     pub fn serialize(&self) -> Vec<u8> {
         bincode::serialize(&(MESSAGE_VERSION_PREFIX, self)).unwrap()
     }
+
+    /// Total number of writable indexes used for address map indexes in this
+    /// message.
+    pub fn num_writable_map_indexes(&self) -> usize {
+        self.address_map_indexes
+            .iter()
+            .map(|indexes| indexes.writable.len())
+            .sum()
+    }
+
+    /// Total number of readonly indexes used for address map indexes in this
+    /// message.
+    pub fn num_readonly_map_indexes(&self) -> usize {
+        self.address_map_indexes
+            .iter()
+            .map(|indexes| indexes.readonly.len())
+            .sum()
+    }
+
+    /// Iterator of address map keys and the writable and readonly indexes used
+    /// by this message.
+    pub fn address_map_indexes_iter(&self) -> impl Iterator<Item = (&Pubkey, &AddressMapIndexes)> {
+        let address_map_keys_start = self
+            .account_keys
+            .len()
+            .saturating_sub(self.address_map_indexes.len());
+        self.account_keys[address_map_keys_start..]
+            .iter()
+            .zip(self.address_map_indexes.iter())
+    }
 }
 
 #[cfg(test)]
@@ -139,7 +169,7 @@ mod tests {
             },
             account_keys: vec![Pubkey::new_unique(), Pubkey::new_unique()],
             address_map_indexes: vec![AddressMapIndexes {
-                writable: vec![],
+                writable: vec![1],
                 readonly: vec![0],
             }],
             ..Message::default()
@@ -201,7 +231,7 @@ mod tests {
         .is_err());
 
         assert!(Message {
-            account_keys: (0..u8::MAX).map(|_| Pubkey::new_unique()).collect(),
+            account_keys: (0..=u8::MAX - 2).map(|_| Pubkey::new_unique()).collect(),
             instructions: vec![CompiledInstruction {
                 program_id_index: 1,
                 accounts: vec![u8::MAX],
@@ -213,7 +243,7 @@ mod tests {
         .is_ok());
 
         assert!(Message {
-            account_keys: (0..u8::MAX - 1).map(|_| Pubkey::new_unique()).collect(),
+            account_keys: (0..=u8::MAX - 3).map(|_| Pubkey::new_unique()).collect(),
             instructions: vec![CompiledInstruction {
                 program_id_index: 1,
                 accounts: vec![u8::MAX],
@@ -286,14 +316,14 @@ mod tests {
         .is_err());
 
         assert!(Message {
-            account_keys: (0..u8::MAX).map(|_| Pubkey::new_unique()).collect(),
+            account_keys: (0..=u8::MAX - 2).map(|_| Pubkey::new_unique()).collect(),
             ..simple_message()
         }
         .sanitize()
         .is_ok());
 
         assert!(Message {
-            account_keys: (0..256).map(|_| Pubkey::new_unique()).collect(),
+            account_keys: (0..=u8::MAX - 1).map(|_| Pubkey::new_unique()).collect(),
             ..simple_message()
         }
         .sanitize()
@@ -393,5 +423,41 @@ mod tests {
         let message = simple_message();
         let versioned_msg = VersionedMessage::V0(message.clone());
         assert_eq!(message.serialize(), versioned_msg.serialize());
+    }
+
+    #[test]
+    fn test_num_writable_map_indexes() {
+        let message = Message::default();
+        assert_eq!(message.num_writable_map_indexes(), 0);
+
+        let message = simple_message();
+        assert_eq!(message.num_writable_map_indexes(), 1);
+
+        let message = two_map_message();
+        assert_eq!(message.num_writable_map_indexes(), 2);
+    }
+
+    #[test]
+    fn test_num_readonly_map_indexes() {
+        let message = Message::default();
+        assert_eq!(message.num_readonly_map_indexes(), 0);
+
+        let message = simple_message();
+        assert_eq!(message.num_readonly_map_indexes(), 1);
+
+        let message = two_map_message();
+        assert_eq!(message.num_readonly_map_indexes(), 2);
+    }
+
+    #[test]
+    fn address_map_indexes_iter() {
+        let message = Message::default();
+        assert_eq!(message.address_map_indexes_iter().count(), 0);
+
+        let message = simple_message();
+        assert_eq!(message.address_map_indexes_iter().count(), 1);
+
+        let message = two_map_message();
+        assert_eq!(message.address_map_indexes_iter().count(), 2);
     }
 }
