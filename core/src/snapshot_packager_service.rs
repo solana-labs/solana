@@ -82,10 +82,10 @@ mod tests {
     use solana_runtime::{
         accounts_db::AccountStorageEntry,
         bank::BankSlotDelta,
-        snapshot_package::{SnapshotPackage, SnapshotType},
+        snapshot_package::{AccountsPackage, SnapshotPackage},
         snapshot_utils::{self, ArchiveFormat, SnapshotVersion, SNAPSHOT_STATUS_CACHE_FILE_NAME},
     };
-    use solana_sdk::hash::Hash;
+    use solana_sdk::{genesis_config::ClusterType, hash::Hash};
     use std::{
         fs::{self, remove_dir_all, OpenOptions},
         io::Write,
@@ -121,8 +121,8 @@ mod tests {
     fn create_and_verify_snapshot(temp_dir: &Path) {
         let accounts_dir = temp_dir.join("accounts");
         let snapshots_dir = temp_dir.join("snapshots");
-        let snapshot_package_output_path = temp_dir.join("snapshots_output");
-        fs::create_dir_all(&snapshot_package_output_path).unwrap();
+        let snapshot_archives_dir = temp_dir.join("snapshot_archives");
+        fs::create_dir_all(&snapshot_archives_dir).unwrap();
 
         fs::create_dir_all(&accounts_dir).unwrap();
         // Create some storage entries
@@ -160,23 +160,24 @@ mod tests {
         }
 
         // Create a packageable snapshot
-        let output_tar_path = snapshot_utils::build_full_snapshot_archive_path(
-            snapshot_package_output_path,
-            42,
-            &Hash::default(),
-            ArchiveFormat::TarBzip2,
-        );
+        let accounts_package = AccountsPackage {
+            slot: 5,
+            block_height: 5,
+            slot_deltas: vec![],
+            snapshot_links: link_snapshots_dir,
+            storages: vec![storage_entries],
+            hash: Hash::default(),
+            snapshot_version: SnapshotVersion::default(),
+            expected_capitalization: 0, // value does  not matter
+            hash_for_testing: None,     // value does not matter
+            cluster_type: ClusterType::MainnetBeta, // value does not matter
+        };
+        let archive_format = ArchiveFormat::TarBzip2;
         let snapshot_package = SnapshotPackage::new(
-            5,
-            5,
-            vec![],
-            link_snapshots_dir,
-            vec![storage_entries],
-            output_tar_path.clone(),
-            Hash::default(),
-            ArchiveFormat::TarBzip2,
-            SnapshotVersion::default(),
-            SnapshotType::FullSnapshot,
+            accounts_package,
+            snapshot_archives_dir,
+            archive_format,
+            None,
         );
 
         // Make tarball from packageable snapshot
@@ -201,10 +202,10 @@ mod tests {
 
         // Check archive is correct
         snapshot_utils::verify_snapshot_archive(
-            output_tar_path,
+            snapshot_package.path(),
             snapshots_dir,
             accounts_dir,
-            ArchiveFormat::TarBzip2,
+            archive_format,
         );
     }
 }

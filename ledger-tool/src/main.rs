@@ -2239,7 +2239,6 @@ fn main() {
                         Some(snapshot_version),
                         output_directory,
                         ArchiveFormat::TarZstd,
-                        None,
                         maximum_snapshots_to_retain,
                     )
                     .unwrap_or_else(|err| {

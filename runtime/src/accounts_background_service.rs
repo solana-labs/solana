@@ -176,9 +176,7 @@ impl SnapshotRequestHandler {
                     status_cache_slot_deltas,
                     &self.accounts_package_sender,
                     &self.snapshot_config.snapshot_path,
-                    &self.snapshot_config.snapshot_package_output_path,
                     self.snapshot_config.snapshot_version,
-                    &self.snapshot_config.archive_format,
                     hash_for_testing,
                 );
                 if r.is_err() {

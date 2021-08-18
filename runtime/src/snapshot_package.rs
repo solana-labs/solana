@@ -1,18 +1,10 @@
 use crate::{
     accounts_db::SnapshotStorages,
     bank::{Bank, BankSlotDelta},
-};
-use crate::{
     snapshot_archive_info::{SnapshotArchiveInfo, SnapshotArchiveInfoGetter},
-    snapshot_utils::{
-        ArchiveFormat, BankSnapshotInfo, Result, SnapshotVersion, TMP_FULL_SNAPSHOT_PREFIX,
-        TMP_INCREMENTAL_SNAPSHOT_PREFIX,
-    },
+    snapshot_utils::{self, ArchiveFormat, BankSnapshotInfo, Result, SnapshotVersion},
 };
-use log::*;
-use solana_sdk::clock::Slot;
-use solana_sdk::genesis_config::ClusterType;
-use solana_sdk::hash::Hash;
+use solana_sdk::{clock::Slot, genesis_config::ClusterType, hash::Hash};
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -44,9 +36,7 @@ pub struct AccountsPackage {
     pub snapshot_links: TempDir,
     pub storages: SnapshotStorages,
     pub hash: Hash, // temporarily here while we still have to calculate hash before serializing bank
-    pub archive_format: ArchiveFormat,
     pub snapshot_version: SnapshotVersion,
-    pub snapshot_output_dir: PathBuf,
     pub expected_capitalization: u64,
     pub hash_for_testing: Option<Hash>,
     pub cluster_type: ClusterType,
@@ -54,18 +44,23 @@ pub struct AccountsPackage {
 
 impl AccountsPackage {
     /// Create an accounts package
-    #[allow(clippy::too_many_arguments)]
-    fn new(
+    pub fn new(
         bank: &Bank,
         bank_snapshot_info: &BankSnapshotInfo,
+        snapshots_dir: impl AsRef<Path>,
         status_cache_slot_deltas: Vec<BankSlotDelta>,
-        snapshot_package_output_path: impl AsRef<Path>,
         snapshot_storages: SnapshotStorages,
-        archive_format: ArchiveFormat,
         snapshot_version: SnapshotVersion,
         hash_for_testing: Option<Hash>,
-        snapshot_tmpdir: TempDir,
     ) -> Result<Self> {
+        let snapshot_tmpdir = tempfile::Builder::new()
+            .prefix(&format!(
+                "{}{}-",
+                snapshot_utils::TMP_BANK_SNAPSHOT_PREFIX,
+                bank.slot()
+            ))
+            .tempdir_in(snapshots_dir)?;
+
         // Hard link the snapshot into a tmpdir, to ensure its not removed prior to packaging.
         {
             let snapshot_hardlink_dir = snapshot_tmpdir
@@ -85,99 +80,11 @@ impl AccountsPackage {
             snapshot_links: snapshot_tmpdir,
             storages: snapshot_storages,
             hash: bank.get_accounts_hash(),
-            archive_format,
             snapshot_version,
-            snapshot_output_dir: snapshot_package_output_path.as_ref().to_path_buf(),
             expected_capitalization: bank.capitalization(),
             hash_for_testing,
             cluster_type: bank.cluster_type(),
         })
-    }
-
-    /// Package up bank snapshot files, snapshot storages, and slot deltas for a full snapshot.
-    #[allow(clippy::too_many_arguments)]
-    pub fn new_for_full_snapshot(
-        bank: &Bank,
-        bank_snapshot_info: &BankSnapshotInfo,
-        snapshots_dir: impl AsRef<Path>,
-        status_cache_slot_deltas: Vec<BankSlotDelta>,
-        snapshot_package_output_path: impl AsRef<Path>,
-        snapshot_storages: SnapshotStorages,
-        archive_format: ArchiveFormat,
-        snapshot_version: SnapshotVersion,
-        hash_for_testing: Option<Hash>,
-    ) -> Result<Self> {
-        info!(
-            "Package full snapshot for bank: {} has {} account storage entries",
-            bank.slot(),
-            snapshot_storages.len()
-        );
-
-        let snapshot_tmpdir = tempfile::Builder::new()
-            .prefix(&format!("{}{}-", TMP_FULL_SNAPSHOT_PREFIX, bank.slot()))
-            .tempdir_in(snapshots_dir)?;
-
-        Self::new(
-            bank,
-            bank_snapshot_info,
-            status_cache_slot_deltas,
-            snapshot_package_output_path,
-            snapshot_storages,
-            archive_format,
-            snapshot_version,
-            hash_for_testing,
-            snapshot_tmpdir,
-        )
-    }
-
-    /// Package up bank snapshot files, snapshot storages, and slot deltas for an incremental snapshot.
-    #[allow(clippy::too_many_arguments)]
-    pub fn new_for_incremental_snapshot(
-        bank: &Bank,
-        incremental_snapshot_base_slot: Slot,
-        bank_snapshot_info: &BankSnapshotInfo,
-        snapshots_dir: impl AsRef<Path>,
-        status_cache_slot_deltas: Vec<BankSlotDelta>,
-        snapshot_package_output_path: impl AsRef<Path>,
-        snapshot_storages: SnapshotStorages,
-        archive_format: ArchiveFormat,
-        snapshot_version: SnapshotVersion,
-        hash_for_testing: Option<Hash>,
-    ) -> Result<Self> {
-        info!(
-            "Package incremental snapshot for bank {} (from base slot {}) has {} account storage entries",
-            bank.slot(),
-            incremental_snapshot_base_slot,
-            snapshot_storages.len()
-        );
-
-        assert!(
-            snapshot_storages.iter().all(|storage| storage
-                .iter()
-                .all(|entry| entry.slot() > incremental_snapshot_base_slot)),
-            "Incremental snapshot package must only contain storage entries where slot > incremental snapshot base slot (i.e. full snapshot slot)!"
-        );
-
-        let snapshot_tmpdir = tempfile::Builder::new()
-            .prefix(&format!(
-                "{}{}-{}-",
-                TMP_INCREMENTAL_SNAPSHOT_PREFIX,
-                incremental_snapshot_base_slot,
-                bank.slot()
-            ))
-            .tempdir_in(snapshots_dir)?;
-
-        Self::new(
-            bank,
-            bank_snapshot_info,
-            status_cache_slot_deltas,
-            snapshot_package_output_path,
-            snapshot_storages,
-            archive_format,
-            snapshot_version,
-            hash_for_testing,
-            snapshot_tmpdir,
-        )
     }
 }
 
@@ -192,31 +99,50 @@ pub struct SnapshotPackage {
 }
 
 impl SnapshotPackage {
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
-        slot: Slot,
-        block_height: u64,
-        slot_deltas: Vec<BankSlotDelta>,
-        snapshot_links: TempDir,
-        storages: SnapshotStorages,
-        snapshot_archive_path: PathBuf,
-        hash: Hash,
+        mut accounts_package: AccountsPackage,
+        snapshot_archives_dir: PathBuf,
         archive_format: ArchiveFormat,
-        snapshot_version: SnapshotVersion,
-        snapshot_type: SnapshotType,
+        incremental_snapshot_base_slot: Option<Slot>,
     ) -> Self {
+        let (snapshot_type, snapshot_archive_path) = match incremental_snapshot_base_slot {
+            None => {
+                let snapshot_archive_path = snapshot_utils::build_full_snapshot_archive_path(
+                    snapshot_archives_dir,
+                    accounts_package.slot,
+                    &accounts_package.hash,
+                    archive_format,
+                );
+                (SnapshotType::FullSnapshot, snapshot_archive_path)
+            }
+            Some(incremental_snapshot_base_slot) => {
+                let snapshot_archive_path = snapshot_utils::build_incremental_snapshot_archive_path(
+                    snapshot_archives_dir,
+                    incremental_snapshot_base_slot,
+                    accounts_package.slot,
+                    &accounts_package.hash,
+                    archive_format,
+                );
+                snapshot_utils::filter_snapshot_storages_for_incremental_snapshot(
+                    &mut accounts_package.storages,
+                    incremental_snapshot_base_slot,
+                );
+                (SnapshotType::IncrementalSnapshot, snapshot_archive_path)
+            }
+        };
+
         Self {
             snapshot_archive_info: SnapshotArchiveInfo {
                 path: snapshot_archive_path,
-                slot,
-                hash,
+                slot: accounts_package.slot,
+                hash: accounts_package.hash,
                 archive_format,
             },
-            block_height,
-            slot_deltas,
-            snapshot_links,
-            storages,
-            snapshot_version,
+            block_height: accounts_package.block_height,
+            slot_deltas: accounts_package.slot_deltas,
+            snapshot_links: accounts_package.snapshot_links,
+            storages: accounts_package.storages,
+            snapshot_version: accounts_package.snapshot_version,
             snapshot_type,
         }
     }
@@ -238,8 +164,10 @@ impl SnapshotType {
     /// Get the string prefix of the snapshot type
     pub fn to_prefix(&self) -> &'static str {
         match self {
-            SnapshotType::FullSnapshot => TMP_FULL_SNAPSHOT_PREFIX,
-            SnapshotType::IncrementalSnapshot => TMP_INCREMENTAL_SNAPSHOT_PREFIX,
+            SnapshotType::FullSnapshot => snapshot_utils::TMP_FULL_SNAPSHOT_ARCHIVE_PREFIX,
+            SnapshotType::IncrementalSnapshot => {
+                snapshot_utils::TMP_INCREMENTAL_SNAPSHOT_ARCHIVE_PREFIX
+            }
         }
     }
 }
