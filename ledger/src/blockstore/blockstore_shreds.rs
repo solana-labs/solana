@@ -7,8 +7,10 @@ use crate::shred::SHRED_PAYLOAD_SIZE;
 use std::collections::BTreeMap;
 use std::{fs, io::Read, io::Seek, io::SeekFrom, io::Write};
 
-pub const SHRED_DIRECTORY: &str = "shreds";
-pub const DATA_SHRED_DIRECTORY: &str = "data";
+pub(crate) const SHRED_DIRECTORY: &str = "shreds";
+pub(crate) const DATA_SHRED_DIRECTORY: &str = "data";
+
+pub(crate) type ShredCache = BTreeMap<u64, Vec<u8>>;
 
 impl Blockstore {
     pub(crate) fn get_data_shred_from_cache(
@@ -43,9 +45,6 @@ impl Blockstore {
             slot_cache
                 .iter()
                 .filter_map(|(shred_index, shred)| {
-                    // TODO: a quick search showed we exclusively use get_data_shreds_for_slot()
-                    // with index = 0. As such, at the cost of flexibility to get partial slots
-                    // (not sure of the use case for this), we could remove this index check
                     if shred_index >= &start_index {
                         Some(Shred::new_from_serialized_shred(shred.to_vec()))
                     } else {
@@ -196,8 +195,15 @@ impl Blockstore {
             // First, check if we have a cache for this slot
             let slot_cache = match self.data_slot_cache(slot) {
                 Some(slot_cache) => slot_cache,
-                // TODO: depending on how caller uses this, may want to return SlotUnavailable
-                None => return Ok(()),
+                None => {
+                    // TODO: An error here indicates cache/keys out of sync, not
+                    // sure what we should do here
+                    error!(
+                        "Slot {} was picked to be flushed, but not actually in cache",
+                        slot
+                    );
+                    return Ok(());
+                }
             };
 
             let path = self.slot_data_shreds_path(slot);

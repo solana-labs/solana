@@ -69,7 +69,7 @@ use {
 
 pub mod blockstore_purge;
 mod blockstore_shreds;
-use blockstore_shreds::{DATA_SHRED_DIRECTORY, SHRED_DIRECTORY};
+use blockstore_shreds::{ShredCache, DATA_SHRED_DIRECTORY, SHRED_DIRECTORY};
 mod blockstore_shred_wal;
 use blockstore_shred_wal::{ShredWAL, DEFAULT_MAX_WAL_SHREDS};
 
@@ -132,8 +132,6 @@ pub struct BlockstoreSignals {
     pub ledger_signal_receiver: Receiver<bool>,
     pub completed_slots_receiver: CompletedSlotsReceiver,
 }
-
-type ShredCache = BTreeMap<u64, Vec<u8>>;
 
 // ledger window
 pub struct Blockstore {
@@ -1726,7 +1724,7 @@ impl Blockstore {
                 start_index,
                 end_index,
                 max_missing,
-                slot_cache
+                slot_cache,
             )
         } else if let Some(Ok(shreds)) = self.get_data_shreds_for_slot_from_fs(slot, start_index) {
             self.find_missing_data_indexes_fs(
@@ -1734,11 +1732,10 @@ impl Blockstore {
                 start_index,
                 end_index,
                 max_missing,
-                shreds
+                shreds,
             )
         } else {
-            return (start_index..cmp::min(end_index, start_index + max_missing as u64))
-                .collect::<Vec<_>>()
+            (start_index..cmp::min(end_index, start_index + max_missing as u64)).collect::<Vec<_>>()
         }
     }
 
