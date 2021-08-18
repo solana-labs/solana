@@ -20,8 +20,9 @@ use solana_sdk::{
     epoch_schedule::EpochSchedule,
     feature_set::{
         cpi_data_cost, enforce_aligned_host_addrs, keccak256_syscall_enabled,
-        libsecp256k1_0_5_upgrade_enabled, memory_ops_syscalls, secp256k1_recover_syscall_enabled,
-        set_upgrade_authority_via_cpi_enabled, sysvar_via_syscall, update_data_on_realloc,
+        libsecp256k1_0_5_upgrade_enabled, mem_overlap_fix, memory_ops_syscalls,
+        secp256k1_recover_syscall_enabled, set_upgrade_authority_via_cpi_enabled,
+        sysvar_via_syscall, update_data_on_realloc,
     },
     hash::{Hasher, HASH_BYTES},
     ic_msg,
@@ -295,6 +296,7 @@ pub fn bind_syscall_context_objects<'a>(
             cost: invoke_context.get_bpf_compute_budget().cpi_bytes_per_unit,
             compute_meter: invoke_context.get_compute_meter(),
             loader_id,
+            mem_overlap_fix: invoke_context.is_feature_active(&mem_overlap_fix::id()),
         }),
     );
     bind_feature_gated_syscall_context_object!(
@@ -1205,11 +1207,17 @@ impl<'a> SyscallObject<BpfError> for SyscallKeccak256<'a> {
     }
 }
 
+fn check_overlapping(src_addr: u64, dst_addr: u64, n: u64) -> bool {
+    (src_addr <= dst_addr && src_addr + n > dst_addr)
+        || (dst_addr <= src_addr && dst_addr + n > src_addr)
+}
+
 /// memcpy
 pub struct SyscallMemcpy<'a> {
     cost: u64,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     loader_id: &'a Pubkey,
+    mem_overlap_fix: bool,
 }
 impl<'a> SyscallObject<BpfError> for SyscallMemcpy<'a> {
     fn call(
@@ -1222,8 +1230,11 @@ impl<'a> SyscallObject<BpfError> for SyscallMemcpy<'a> {
         memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
-        // cannot be overlapping
-        if dst_addr + n > src_addr && src_addr > dst_addr {
+        if if self.mem_overlap_fix {
+            check_overlapping(src_addr, dst_addr, n)
+        } else {
+            dst_addr + n > src_addr && src_addr > dst_addr
+        } {
             *result = Err(SyscallError::CopyOverlapping.into());
             return;
         }
@@ -1243,7 +1254,7 @@ impl<'a> SyscallObject<BpfError> for SyscallMemcpy<'a> {
         *result = Ok(0);
     }
 }
-/// memcpy
+/// memmove
 pub struct SyscallMemmove<'a> {
     cost: u64,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
@@ -3376,5 +3387,16 @@ mod tests {
             result.unwrap();
             assert_eq!(got_rent, src_rent);
         }
+    }
+
+    #[test]
+    fn test_overlapping() {
+        assert!(!check_overlapping(10, 7, 3));
+        assert!(check_overlapping(10, 8, 3));
+        assert!(check_overlapping(10, 9, 3));
+        assert!(check_overlapping(10, 10, 3));
+        assert!(check_overlapping(10, 11, 3));
+        assert!(check_overlapping(10, 12, 3));
+        assert!(!check_overlapping(10, 13, 3));
     }
 }
