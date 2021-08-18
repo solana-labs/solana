@@ -81,6 +81,9 @@ while [[ -n $1 ]]; do
     elif [[ $1 == --allow-private-addr ]]; then
       args+=("$1")
       shift
+    elif [[ $1 == --accounts-db-skip-shrink ]]; then
+      args+=("$1")
+      shift
     else
       echo "Unknown argument: $1"
       $program --help
