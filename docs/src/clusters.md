@@ -114,7 +114,6 @@ The identity of the `--trusted-validator`s are:
 ## Mainnet Beta
 
 A permissionless, persistent cluster for early token holders and launch partners.
-Currently, rewards and inflation are disabled.
 
 - Tokens that are issued on Mainnet Beta are **real** SOL
 - If you have paid money to purchase/be issued tokens, such as through our
