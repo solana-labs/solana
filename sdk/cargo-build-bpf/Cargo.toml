@@ -12,11 +12,22 @@ publish = false
 [dependencies]
 bzip2 = "0.3.3"
 clap = "2.33.3"
+<<<<<<< HEAD
 regex = "1.4.5"
 cargo_metadata = "0.12.0"
 solana-sdk = { path = "..", version = "=1.7.11" }
 solana-download-utils = { path = "../../download-utils", version = "=1.7.11" }
 tar = "0.4.28"
+=======
+regex = "1.5.4"
+cargo_metadata = "0.14.0"
+solana-sdk = { path = "..", version = "=1.8.0" }
+solana-download-utils = { path = "../../download-utils", version = "=1.8.0" }
+tar = "0.4.37"
+
+[dev-dependencies]
+serial_test = "*"
+>>>>>>> 89a31ff47 (change untar to use unpack instead of unpack_in (#19216))
 
 [features]
 program = []

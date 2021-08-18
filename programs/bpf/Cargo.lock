@@ -3820,9 +3820,15 @@ dependencies = [
 
 [[package]]
 name = "tar"
+<<<<<<< HEAD
 version = "0.4.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c8a4c1d0bee3230179544336c15eefb563cf0302955d962e456542323e8c2e8a"
+=======
+version = "0.4.37"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d6f5515d3add52e0bbdcad7b83c388bb36ba7b754dda3b5f5bc2d38640cdba5c"
+>>>>>>> 89a31ff47 (change untar to use unpack instead of unpack_in (#19216))
 dependencies = [
  "filetime",
  "libc",
