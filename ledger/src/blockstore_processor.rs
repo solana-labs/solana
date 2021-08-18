@@ -64,7 +64,7 @@ pub struct BlockCostCapacityMeter {
 
 impl Default for BlockCostCapacityMeter {
     fn default() -> Self {
-        BlockCostCapacityMeter::new(block_cost_max())
+        BlockCostCapacityMeter::new(BLOCK_COST_MAX)
     }
 }
 

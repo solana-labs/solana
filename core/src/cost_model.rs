@@ -55,7 +55,7 @@ pub struct CostModel {
 
 impl Default for CostModel {
     fn default() -> Self {
-        CostModel::new(account_cost_max(), block_cost_max())
+        CostModel::new(ACCOUNT_COST_MAX, BLOCK_COST_MAX)
     }
 }
 
@@ -109,9 +109,9 @@ impl CostModel {
 
             if is_writable {
                 self.transaction_cost.writable_accounts.push(*k);
-                self.transaction_cost.account_access_cost += account_write_cost();
+                self.transaction_cost.account_access_cost += ACCOUNT_WRITE_COST;
             } else {
-                self.transaction_cost.account_access_cost += account_read_cost();
+                self.transaction_cost.account_access_cost += ACCOUNT_READ_COST;
             }
         });
         self.transaction_cost.execution_cost = self.find_transaction_cost(transaction);
@@ -362,8 +362,7 @@ mod tests {
         let tx =
             system_transaction::transfer(&mint_keypair, &Keypair::new().pubkey(), 2, start_hash);
 
-        let expected_account_cost =
-            account_write_cost() + account_write_cost() + account_read_cost();
+        let expected_account_cost = ACCOUNT_WRITE_COST + ACCOUNT_WRITE_COST + ACCOUNT_READ_COST;
         let expected_execution_cost = 8;
 
         let mut cost_model = CostModel::default();
@@ -416,7 +415,7 @@ mod tests {
 
         let number_threads = 10;
         let expected_account_cost =
-            account_write_cost() + account_write_cost() * 2 + account_read_cost() * 2;
+            ACCOUNT_WRITE_COST + ACCOUNT_WRITE_COST * 2 + ACCOUNT_READ_COST * 2;
         let cost1 = 100;
         let cost2 = 200;
         // execution cost can be either 2 * Default (before write) or cost1+cost2 (after write)
