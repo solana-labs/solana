@@ -1965,12 +1965,16 @@ impl JsonRpcRequestProcessor {
 fn verify_transaction(
     transaction: &SanitizedTransaction,
     libsecp256k1_0_5_upgrade_enabled: bool,
+    libsecp256k1_fail_on_bad_count: bool,
 ) -> Result<()> {
     if transaction.verify().is_err() {
         return Err(RpcCustomError::TransactionSignatureVerificationFailure.into());
     }
 
-    if let Err(e) = transaction.verify_precompiles(libsecp256k1_0_5_upgrade_enabled) {
+    if let Err(e) = transaction.verify_precompiles(
+        libsecp256k1_0_5_upgrade_enabled,
+        libsecp256k1_fail_on_bad_count,
+    ) {
         return Err(RpcCustomError::TransactionPrecompileVerificationFailure(e).into());
     }
 
@@ -3324,6 +3328,7 @@ pub mod rpc_full {
                 if let Err(e) = verify_transaction(
                     &transaction,
                     preflight_bank.libsecp256k1_0_5_upgrade_enabled(),
+                    preflight_bank.libsecp256k1_fail_on_bad_count(),
                 ) {
                     return Err(e);
                 }
@@ -3409,7 +3414,11 @@ pub mod rpc_full {
 
             let transaction = sanitize_transaction(unsanitized_tx)?;
             if config.sig_verify {
-                verify_transaction(&transaction, bank.libsecp256k1_0_5_upgrade_enabled())?;
+                verify_transaction(
+                    &transaction,
+                    bank.libsecp256k1_0_5_upgrade_enabled(),
+                    bank.libsecp256k1_fail_on_bad_count(),
+                )?;
             }
 
             let TransactionSimulationResult {
@@ -6122,6 +6131,7 @@ pub mod tests {
             verify_signature(&tx.signatures[0].to_string()).unwrap(),
             tx.signatures[0]
         );
+
         let bad_signature = "a1b2c3d4";
         assert_eq!(
             verify_signature(&bad_signature.to_string()),

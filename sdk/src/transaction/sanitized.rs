@@ -203,7 +203,11 @@ impl SanitizedTransaction {
     }
 
     /// Verify the encoded secp256k1 signatures in this transaction
-    pub fn verify_precompiles(&self, libsecp256k1_0_5_upgrade_enabled: bool) -> Result<()> {
+    pub fn verify_precompiles(
+        &self,
+        libsecp256k1_0_5_upgrade_enabled: bool,
+        libsecp256k1_fail_on_bad_count: bool,
+    ) -> Result<()> {
         for (program_id, instruction) in self.message.program_instructions_iter() {
             if secp256k1_program::check_id(program_id) {
                 let instruction_datas: Vec<_> = self
@@ -217,6 +221,7 @@ impl SanitizedTransaction {
                     data,
                     &instruction_datas,
                     libsecp256k1_0_5_upgrade_enabled,
+                    libsecp256k1_fail_on_bad_count,
                 );
                 e.map_err(|_| TransactionError::InvalidAccountIndex)?;
             }

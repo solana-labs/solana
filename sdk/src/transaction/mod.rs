@@ -426,7 +426,11 @@ impl Transaction {
             .collect()
     }
 
-    pub fn verify_precompiles(&self, libsecp256k1_0_5_upgrade_enabled: bool) -> Result<()> {
+    pub fn verify_precompiles(
+        &self,
+        libsecp256k1_0_5_upgrade_enabled: bool,
+        libsecp256k1_fail_on_bad_count: bool,
+    ) -> Result<()> {
         for instruction in &self.message().instructions {
             // The Transaction may not be sanitized at this point
             if instruction.program_id_index as usize >= self.message().account_keys.len() {
@@ -445,6 +449,7 @@ impl Transaction {
                     data,
                     &instruction_datas,
                     libsecp256k1_0_5_upgrade_enabled,
+                    libsecp256k1_fail_on_bad_count,
                 );
                 e.map_err(|_| TransactionError::InvalidAccountIndex)?;
             }
