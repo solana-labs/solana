@@ -2970,22 +2970,27 @@ impl Bank {
     /// while injecting `AccountSharedData` from an external source
     pub fn simulate_transaction_with_injected_accounts(
         &self,
-        transaction: &Transaction,
+        transaction: SanitizedTransaction,
         injected_accounts: &mut TransactionAccounts,
     ) -> TransactionSimulationResult {
         assert!(self.is_frozen(), "simulation bank must be frozen");
 
-        let batch = match SanitizedTransaction::try_from(transaction) {
-            Ok(sanitized_tx) => self.prepare_simulation_batch(sanitized_tx),
-            Err(err) => {
+        for injected_account in injected_accounts.iter() {
+            if transaction
+                .message()
+                .account_keys_iter()
+                .all(|key| *key != injected_account.0)
+            {
                 return TransactionSimulationResult {
-                    result: Err(err),
+                    result: Err(TransactionError::AccountNotFound),
                     logs: vec![],
                     post_simulation_accounts: vec![],
                     units_consumed: 0,
-                }
+                };
             }
-        };
+        }
+
+        let batch = self.prepare_simulation_batch(transaction);
 
         let mut timings = ExecuteTimings::default();
 
@@ -2998,18 +3003,6 @@ impl Bank {
         );
 
         for injected_account in injected_accounts.drain(0..) {
-            if !transaction
-                .message()
-                .account_keys
-                .contains(&injected_account.0)
-            {
-                return TransactionSimulationResult {
-                    result: Err(TransactionError::AccountNotFound),
-                    logs: vec![],
-                    post_simulation_accounts: vec![],
-                    units_consumed: 0,
-                };
-            }
             if let Some(tx) = loaded_txs.first_mut() {
                 if let Ok(loaded_tx) = &mut tx.0 {
                     loaded_tx
@@ -10935,7 +10928,15 @@ pub(crate) mod tests {
 
         let blockhash = bank0.last_blockhash();
 
-        let tx0 = system_transaction::transfer(&keypair0, &pubkey0, 9, blockhash);
+        let tx0 = VersionedTransaction::from(system_transaction::transfer(
+            &keypair0, &pubkey0, 9, blockhash,
+        ));
+
+        let message_hash = tx0.message.hash();
+        let sanitized_tx = SanitizedTransaction::try_create(tx0, message_hash, |_| {
+            Err(TransactionError::UnsupportedVersion)
+        })
+        .unwrap();
 
         let injected_keypair0_account = AccountSharedData::new(16, 0, &Pubkey::default());
 
@@ -10945,7 +10946,7 @@ pub(crate) mod tests {
             post_simulation_accounts,
             units_consumed: _,
         } = bank0.simulate_transaction_with_injected_accounts(
-            &tx0,
+            sanitized_tx,
             &mut vec![(keypair0.pubkey(), injected_keypair0_account)],
         );
 

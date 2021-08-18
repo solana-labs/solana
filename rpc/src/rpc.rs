@@ -3453,11 +3453,11 @@ pub mod rpc_full {
                 units_consumed,
             } = if let Some(mut injected_accounts) = injected_accounts {
                 bank.simulate_transaction_with_injected_accounts(
-                    &transaction,
+                    transaction,
                     &mut injected_accounts,
                 )
             } else {
-                bank.simulate_transaction(&transaction)
+                bank.simulate_transaction(transaction)
             };
 
             let accounts = if let Some(config_accounts) = config.accounts {
