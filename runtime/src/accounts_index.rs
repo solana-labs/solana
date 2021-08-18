@@ -4037,6 +4037,9 @@ pub mod tests {
     #[test]
     #[should_panic(expected = "bins.is_power_of_two()")]
     fn test_illegal_bins() {
-        AccountsIndex::<bool>::new(Some(AccountsIndexConfig { bins: Some(3) }));
+        AccountsIndex::<bool>::new(Some(AccountsIndexConfig {
+            bins: Some(3),
+            ..AccountsIndexConfig::default()
+        }));
     }
 }

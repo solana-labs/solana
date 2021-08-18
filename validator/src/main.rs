@@ -2390,7 +2390,12 @@ pub fn main() {
 
     let accounts_index_config = value_t!(matches, "accounts_index_bins", usize)
         .ok()
-        .map(|bins| AccountsIndexConfig { bins: Some(bins) });
+        .map(|bins| {
+            AccountsIndexConfig {
+                bins: Some(bins),
+                ..AccountsIndexConfig::default()
+            }
+        });
 
     let mut validator_config = ValidatorConfig {
         require_tower: matches.is_present("require_tower"),

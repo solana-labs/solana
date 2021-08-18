@@ -1886,8 +1886,10 @@ fn main() {
         ("verify", Some(arg_matches)) => {
             let accounts_index_config = value_t!(arg_matches, "accounts_index_bins", usize)
                 .ok()
-                .map(|bins| AccountsIndexConfig { bins: Some(bins) });
-
+                .map(|bins| AccountsIndexConfig {
+                    bins: Some(bins),
+                    ..AccountsIndexConfig::default()
+                });
             let process_options = ProcessOptions {
                 dev_halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
                 new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
