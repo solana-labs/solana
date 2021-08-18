@@ -19,15 +19,10 @@ use solana_sdk::{
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     epoch_schedule::EpochSchedule,
     feature_set::{
-<<<<<<< HEAD
         cpi_data_cost, enforce_aligned_host_addrs, keccak256_syscall_enabled,
-        libsecp256k1_0_5_upgrade_enabled, memory_ops_syscalls, secp256k1_recover_syscall_enabled,
-        set_upgrade_authority_via_cpi_enabled, sysvar_via_syscall, update_data_on_realloc,
-=======
-        blake3_syscall_enabled, disable_fees_sysvar, enforce_aligned_host_addrs,
         libsecp256k1_0_5_upgrade_enabled, mem_overlap_fix, memory_ops_syscalls,
-        secp256k1_recover_syscall_enabled,
->>>>>>> 9be988db4 (Fix memoverlap check (#19232))
+        secp256k1_recover_syscall_enabled, set_upgrade_authority_via_cpi_enabled,
+        sysvar_via_syscall, update_data_on_realloc,
     },
     hash::{Hasher, HASH_BYTES},
     ic_msg,
