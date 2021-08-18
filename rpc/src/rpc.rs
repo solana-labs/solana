@@ -60,20 +60,19 @@ use {
         epoch_schedule::EpochSchedule,
         exit::Exit,
         hash::Hash,
-        message::Message,
+        message::{Message, SanitizedMessage},
         pubkey::Pubkey,
-        sanitize::Sanitize,
         signature::{Keypair, Signature, Signer},
         stake::state::StakeState,
         stake_history::StakeHistory,
         system_instruction,
         sysvar::stake_history,
-        transaction::{self, Transaction, TransactionError},
+        transaction::{self, SanitizedTransaction, TransactionError, VersionedTransaction},
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_transaction_status::{
-        EncodedConfirmedTransaction, Reward, RewardType, TransactionConfirmationStatus,
-        TransactionStatus, UiConfirmedBlock, UiTransactionEncoding,
+        ConfirmedBlock, EncodedConfirmedTransaction, Reward, RewardType,
+        TransactionConfirmationStatus, TransactionStatus, UiConfirmedBlock, UiTransactionEncoding,
     },
     solana_vote_program::vote_state::{VoteState, MAX_LOCKOUT_HISTORY},
     spl_token_v2_0::{
@@ -84,6 +83,7 @@ use {
         any::type_name,
         cmp::{max, min},
         collections::{HashMap, HashSet},
+        convert::TryFrom,
         net::SocketAddr,
         str::FromStr,
         sync::{
@@ -230,6 +230,10 @@ impl JsonRpcRequestProcessor {
             );
             r_bank_forks.root_bank()
         })
+    }
+
+    fn genesis_creation_time(&self) -> UnixTimestamp {
+        self.bank(None).genesis_creation_time()
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -759,25 +763,32 @@ impl JsonRpcRequestProcessor {
 
     fn get_supply(
         &self,
-        commitment: Option<CommitmentConfig>,
+        config: Option<RpcSupplyConfig>,
     ) -> RpcCustomResult<RpcResponse<RpcSupply>> {
-        let bank = self.bank(commitment);
+        let config = config.unwrap_or_default();
+        let bank = self.bank(config.commitment);
         let non_circulating_supply =
             calculate_non_circulating_supply(&bank).map_err(|e| RpcCustomError::ScanError {
                 message: e.to_string(),
             })?;
         let total_supply = bank.capitalization();
+        let non_circulating_accounts = if config.exclude_non_circulating_accounts_list {
+            vec![]
+        } else {
+            non_circulating_supply
+                .accounts
+                .iter()
+                .map(|pubkey| pubkey.to_string())
+                .collect()
+        };
+
         Ok(new_response(
             &bank,
             RpcSupply {
                 total: total_supply,
                 circulating: total_supply - non_circulating_supply.lamports,
                 non_circulating: non_circulating_supply.lamports,
-                non_circulating_accounts: non_circulating_supply
-                    .accounts
-                    .iter()
-                    .map(|pubkey| pubkey.to_string())
-                    .collect(),
+                non_circulating_accounts,
             },
         ))
     }
@@ -960,20 +971,25 @@ impl JsonRpcRequestProcessor {
             {
                 let result = self.blockstore.get_rooted_block(slot, true);
                 self.check_blockstore_root(&result, slot)?;
+                let configure_block = |confirmed_block: ConfirmedBlock| {
+                    let mut confirmed_block =
+                        confirmed_block.configure(encoding, transaction_details, show_rewards);
+                    if slot == 0 {
+                        confirmed_block.block_time = Some(self.genesis_creation_time());
+                        confirmed_block.block_height = Some(0);
+                    }
+                    confirmed_block
+                };
                 if result.is_err() {
                     if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
                         let bigtable_result =
                             bigtable_ledger_storage.get_confirmed_block(slot).await;
                         self.check_bigtable_result(&bigtable_result)?;
-                        return Ok(bigtable_result.ok().map(|confirmed_block| {
-                            confirmed_block.configure(encoding, transaction_details, show_rewards)
-                        }));
+                        return Ok(bigtable_result.ok().map(configure_block));
                     }
                 }
                 self.check_slot_cleaned_up(&result, slot)?;
-                return Ok(result.ok().map(|confirmed_block| {
-                    confirmed_block.configure(encoding, transaction_details, show_rewards)
-                }));
+                return Ok(result.ok().map(configure_block));
             } else if commitment.is_confirmed() {
                 // Check if block is confirmed
                 let confirmed_bank = self.bank(Some(CommitmentConfig::confirmed()));
@@ -1155,6 +1171,9 @@ impl JsonRpcRequestProcessor {
     }
 
     pub async fn get_block_time(&self, slot: Slot) -> Result<Option<UnixTimestamp>> {
+        if slot == 0 {
+            return Ok(Some(self.genesis_creation_time()));
+        }
         if slot
             <= self
                 .block_commitment_cache
@@ -1934,7 +1953,7 @@ impl JsonRpcRequestProcessor {
     fn get_fee_for_message(
         &self,
         blockhash: &Hash,
-        message: &Message,
+        message: &SanitizedMessage,
         commitment: Option<CommitmentConfig>,
     ) -> Result<RpcResponse<Option<u64>>> {
         let bank = self.bank(commitment);
@@ -1944,7 +1963,7 @@ impl JsonRpcRequestProcessor {
 }
 
 fn verify_transaction(
-    transaction: &Transaction,
+    transaction: &SanitizedTransaction,
     libsecp256k1_0_5_upgrade_enabled: bool,
 ) -> Result<()> {
     if transaction.verify().is_err() {
@@ -2184,15 +2203,11 @@ fn get_token_program_id_and_mint(
 
 fn _send_transaction(
     meta: JsonRpcRequestProcessor,
-    transaction: Transaction,
+    signature: Signature,
     wire_transaction: Vec<u8>,
     last_valid_block_height: u64,
     durable_nonce_info: Option<(Pubkey, Hash)>,
 ) -> Result<String> {
-    if transaction.signatures.is_empty() {
-        return Err(RpcCustomError::TransactionSignatureVerificationFailure.into());
-    }
-    let signature = transaction.signatures[0];
     let transaction_info = TransactionInfo::new(
         signature,
         wire_transaction,
@@ -2694,7 +2709,7 @@ pub mod rpc_accounts {
         fn get_supply(
             &self,
             meta: Self::Metadata,
-            commitment: Option<CommitmentConfig>,
+            config: Option<RpcSupplyConfig>,
         ) -> Result<RpcResponse<RpcSupply>>;
 
         #[rpc(meta, name = "getStakeActivation")]
@@ -2848,10 +2863,10 @@ pub mod rpc_accounts {
         fn get_supply(
             &self,
             meta: Self::Metadata,
-            commitment: Option<CommitmentConfig>,
+            config: Option<RpcSupplyConfig>,
         ) -> Result<RpcResponse<RpcSupply>> {
             debug!("get_supply rpc request received");
-            Ok(meta.get_supply(commitment)?)
+            Ok(meta.get_supply(config)?)
         }
 
         fn get_stake_activation(
@@ -3255,9 +3270,15 @@ pub mod rpc_full {
                 Error::internal_error()
             })?;
 
+            let signature = if !transaction.signatures.is_empty() {
+                transaction.signatures[0]
+            } else {
+                return Err(RpcCustomError::TransactionSignatureVerificationFailure.into());
+            };
+
             _send_transaction(
                 meta,
-                transaction,
+                signature,
                 wire_transaction,
                 last_valid_block_height,
                 None,
@@ -3273,26 +3294,23 @@ pub mod rpc_full {
             debug!("send_transaction rpc request received");
             let config = config.unwrap_or_default();
             let encoding = config.encoding.unwrap_or(UiTransactionEncoding::Base58);
-            let (wire_transaction, transaction) =
-                decode_and_deserialize::<Transaction>(data, encoding)?;
+            let (wire_transaction, unsanitized_tx) =
+                decode_and_deserialize::<VersionedTransaction>(data, encoding)?;
 
             let preflight_commitment = config
                 .preflight_commitment
                 .map(|commitment| CommitmentConfig { commitment });
             let preflight_bank = &*meta.bank(preflight_commitment);
+            let transaction = sanitize_transaction(unsanitized_tx)?;
+            let signature = *transaction.signature();
 
             let mut last_valid_block_height = preflight_bank
-                .get_blockhash_last_valid_block_height(&transaction.message.recent_blockhash)
+                .get_blockhash_last_valid_block_height(transaction.message().recent_blockhash())
                 .unwrap_or(0);
 
-            let durable_nonce_info = solana_sdk::transaction::uses_durable_nonce(&transaction)
-                .and_then(|nonce_ix| {
-                    solana_sdk::transaction::get_nonce_pubkey_from_instruction(
-                        nonce_ix,
-                        &transaction,
-                    )
-                })
-                .map(|&pubkey| (pubkey, transaction.message.recent_blockhash));
+            let durable_nonce_info = transaction
+                .get_durable_nonce()
+                .map(|&pubkey| (pubkey, *transaction.message().recent_blockhash()));
             if durable_nonce_info.is_some() {
                 // While it uses a defined constant, this last_valid_block_height value is chosen arbitrarily.
                 // It provides a fallback timeout for durable-nonce transaction retries in case of
@@ -3333,7 +3351,7 @@ pub mod rpc_full {
                     logs,
                     post_simulation_accounts: _,
                     units_consumed,
-                } = preflight_bank.simulate_transaction(&transaction)
+                } = preflight_bank.simulate_transaction(transaction)
                 {
                     match err {
                         TransactionError::BlockhashNotFound => {
@@ -3358,7 +3376,7 @@ pub mod rpc_full {
 
             _send_transaction(
                 meta,
-                transaction,
+                signature,
                 wire_transaction,
                 last_valid_block_height,
                 durable_nonce_info,
@@ -3374,24 +3392,24 @@ pub mod rpc_full {
             debug!("simulate_transaction rpc request received");
             let config = config.unwrap_or_default();
             let encoding = config.encoding.unwrap_or(UiTransactionEncoding::Base58);
-            let (_, mut transaction) = decode_and_deserialize::<Transaction>(data, encoding)?;
+            let (_, mut unsanitized_tx) =
+                decode_and_deserialize::<VersionedTransaction>(data, encoding)?;
 
             let bank = &*meta.bank(config.commitment);
-            if config.sig_verify {
-                if config.replace_recent_blockhash {
+            if config.replace_recent_blockhash {
+                if config.sig_verify {
                     return Err(Error::invalid_params(
                         "sigVerify may not be used with replaceRecentBlockhash",
                     ));
                 }
-
-                if let Err(e) =
-                    verify_transaction(&transaction, bank.libsecp256k1_0_5_upgrade_enabled())
-                {
-                    return Err(e);
-                }
+                unsanitized_tx
+                    .message
+                    .set_recent_blockhash(bank.last_blockhash());
             }
-            if config.replace_recent_blockhash {
-                transaction.message.recent_blockhash = bank.last_blockhash();
+
+            let transaction = sanitize_transaction(unsanitized_tx)?;
+            if config.sig_verify {
+                verify_transaction(&transaction, bank.libsecp256k1_0_5_upgrade_enabled())?;
             }
             let injected_accounts: Option<Vec<(Pubkey, AccountSharedData)>> =
                 if let Some(ref config_accounts) = config.accounts {
@@ -3466,21 +3484,11 @@ pub mod rpc_full {
                     accounts.push(if result.is_err() {
                         None
                     } else {
-                        (0..transaction.message.account_keys.len())
-                            .position(|i| {
-                                post_simulation_accounts
-                                    .get(i)
-                                    .map(|(key, _account)| *key == address)
-                                    .unwrap_or(false)
-                            })
-                            .map(|i| {
-                                UiAccount::encode(
-                                    &address,
-                                    &post_simulation_accounts[i].1,
-                                    accounts_encoding,
-                                    None,
-                                    None,
-                                )
+                        post_simulation_accounts
+                            .iter()
+                            .find(|(key, _account)| key == &address)
+                            .map(|(pubkey, account)| {
+                                UiAccount::encode(pubkey, account, accounts_encoding, None, None)
                             })
                     });
                 }
@@ -3658,7 +3666,11 @@ pub mod rpc_full {
             let blockhash = Hash::from_str(&blockhash)
                 .map_err(|e| Error::invalid_params(format!("{:?}", e)))?;
             let (_, message) = decode_and_deserialize::<Message>(data, encoding)?;
-            meta.get_fee_for_message(&blockhash, &message, commitment)
+            SanitizedMessage::try_from(message)
+                .map_err(|err| {
+                    Error::invalid_params(format!("invalid transaction message: {}", err))
+                })
+                .and_then(|message| meta.get_fee_for_message(&blockhash, &message, commitment))
         }
     }
 }
@@ -4044,7 +4056,7 @@ fn decode_and_deserialize<T>(
     encoding: UiTransactionEncoding,
 ) -> Result<(Vec<u8>, T)>
 where
-    T: serde::de::DeserializeOwned + Sanitize,
+    T: serde::de::DeserializeOwned,
 {
     let wire_output = match encoding {
         UiTransactionEncoding::Base58 => {
@@ -4101,18 +4113,15 @@ where
             info!("deserialize error: {}", err);
             Error::invalid_params(&err.to_string())
         })
-        .and_then(|output: T| {
-            if let Err(err) = output.sanitize() {
-                Err(Error::invalid_params(format!(
-                    "invalid {}: {}",
-                    type_name::<T>(),
-                    err
-                )))
-            } else {
-                Ok(output)
-            }
-        })
         .map(|output| (wire_output, output))
+}
+
+fn sanitize_transaction(transaction: VersionedTransaction) -> Result<SanitizedTransaction> {
+    let message_hash = transaction.message.hash();
+    SanitizedTransaction::try_create(transaction, message_hash, |_| {
+        Err(TransactionError::UnsupportedVersion)
+    })
+    .map_err(|err| Error::invalid_params(format!("invalid transaction: {}", err)))
 }
 
 pub(crate) fn create_validator_exit(exit: &Arc<AtomicBool>) -> Arc<RwLock<Exit>> {
@@ -4156,7 +4165,7 @@ pub fn create_test_transactions_and_populate_blockstore(
         Hash::default(),
     );
     let entry_3 = solana_entry::entry::next_entry(&entry_2.hash, 1, vec![fail_tx]);
-    let mut entries = vec![entry_1, entry_2, entry_3];
+    let entries = vec![entry_1, entry_2, entry_3];
 
     let shreds = solana_ledger::blockstore::entries_to_test_shreds(
         entries.clone(),
@@ -4182,7 +4191,7 @@ pub fn create_test_transactions_and_populate_blockstore(
     // that they are matched properly by get_rooted_block
     let _result = solana_ledger::blockstore_processor::process_entries(
         &bank,
-        &mut entries,
+        entries,
         true,
         Some(
             &solana_ledger::blockstore_processor::TransactionStatusSender {
@@ -4235,7 +4244,7 @@ pub mod tests {
             signature::{Keypair, Signer},
             system_program, system_transaction,
             timing::slot_duration_from_slots_per_year,
-            transaction::{self, TransactionError},
+            transaction::{self, Transaction, TransactionError},
         },
         solana_transaction_status::{
             EncodedConfirmedBlock, EncodedTransaction, EncodedTransactionWithStatusMeta,
@@ -4692,6 +4701,21 @@ pub mod tests {
         for address in supply.non_circulating_accounts {
             assert!(expected_accounts.contains(&address));
         }
+    }
+
+    #[test]
+    fn test_get_supply_exclude_account_list() {
+        let bob_pubkey = solana_sdk::pubkey::new_rand();
+        let RpcHandler { io, meta, .. } = start_rpc_handler_with_tx(&bob_pubkey);
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getSupply","params":[{"excludeNonCirculatingAccountsList":true}]}"#;
+        let res = io.handle_request_sync(req, meta);
+        let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
+        let supply: RpcSupply = serde_json::from_value(json["result"]["value"].clone())
+            .expect("actual response deserialization");
+        assert_eq!(supply.non_circulating, 20);
+        assert!(supply.circulating >= TEST_MINT_LAMPORTS);
+        assert!(supply.total >= TEST_MINT_LAMPORTS + 20);
+        assert!(supply.non_circulating_accounts.is_empty());
     }
 
     #[test]
@@ -6028,7 +6052,7 @@ pub mod tests {
         assert_eq!(
             res,
             Some(
-                r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"invalid solana_sdk::transaction::Transaction: index out of bounds"},"id":1}"#.to_string(),
+                r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"invalid transaction: Transaction failed to sanitize accounts offsets correctly"},"id":1}"#.to_string(),
             )
         );
         let mut bad_transaction = system_transaction::transfer(
@@ -6092,7 +6116,7 @@ pub mod tests {
         assert_eq!(
             res,
             Some(
-                r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"invalid solana_sdk::transaction::Transaction: index out of bounds"},"id":1}"#.to_string(),
+                r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"invalid transaction: Transaction failed to sanitize accounts offsets correctly"},"id":1}"#.to_string(),
             )
         );
     }
@@ -7837,19 +7861,25 @@ pub mod tests {
     }
 
     #[test]
-    fn test_decode_and_deserialize_unsanitary() {
+    fn test_sanitize_unsanitary() {
         let unsanitary_tx58 = "ju9xZWuDBX4pRxX2oZkTjxU5jB4SSTgEGhX8bQ8PURNzyzqKMPPpNvWihx8zUe\
              FfrbVNoAaEsNKZvGzAnTDy5bhNT9kt6KFCTBixpvrLCzg4M5UdFUQYrn1gdgjX\
              pLHxcaShD81xBNaFDgnA2nkkdHnKtZt4hVSfKAmw3VRZbjrZ7L2fKZBx21CwsG\
              hD6onjM2M3qZW5C8J6d1pj41MxKmZgPBSha3MyKkNLkAGFASK"
             .to_string();
 
+        let unsanitary_versioned_tx = decode_and_deserialize::<VersionedTransaction>(
+            unsanitary_tx58,
+            UiTransactionEncoding::Base58,
+        )
+        .unwrap()
+        .1;
         let expect58 = Error::invalid_params(
-            "invalid solana_sdk::transaction::Transaction: index out of bounds".to_string(),
+            "invalid transaction: Transaction failed to sanitize accounts offsets correctly"
+                .to_string(),
         );
         assert_eq!(
-            decode_and_deserialize::<Transaction>(unsanitary_tx58, UiTransactionEncoding::Base58)
-                .unwrap_err(),
+            sanitize_transaction(unsanitary_versioned_tx).unwrap_err(),
             expect58
         );
     }

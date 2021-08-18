@@ -3,7 +3,7 @@ use crate::{
     genesis_utils::{self, GenesisConfigInfo, ValidatorVoteKeypairs},
     vote_sender_types::ReplayVoteSender,
 };
-use solana_sdk::{pubkey::Pubkey, sanitized_transaction::SanitizedTransaction, signature::Signer};
+use solana_sdk::{pubkey::Pubkey, signature::Signer, transaction::SanitizedTransaction};
 use solana_vote_program::vote_transaction;
 
 pub fn setup_bank_and_vote_pubkeys_for_tests(
@@ -44,8 +44,8 @@ pub fn find_and_send_votes(
             assert!(execution_results[old_account.transaction_result_index]
                 .0
                 .is_ok());
-            let transaction = &sanitized_txs[old_account.transaction_index];
-            if let Some(parsed_vote) = vote_transaction::parse_vote_transaction(transaction) {
+            let tx = &sanitized_txs[old_account.transaction_index];
+            if let Some(parsed_vote) = vote_transaction::parse_sanitized_vote_transaction(tx) {
                 if parsed_vote.1.slots.last().is_some() {
                     let _ = vote_sender.send(parsed_vote);
                 }

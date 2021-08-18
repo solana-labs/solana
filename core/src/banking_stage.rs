@@ -34,17 +34,15 @@ use solana_sdk::{
     },
     message::Message,
     pubkey::Pubkey,
-    sanitized_transaction::SanitizedTransaction,
     short_vec::decode_shortu16_len,
     signature::Signature,
     timing::{duration_as_ms, timestamp, AtomicInterval},
-    transaction::{self, Transaction, TransactionError},
+    transaction::{self, SanitizedTransaction, TransactionError, VersionedTransaction},
 };
 use solana_transaction_status::token_balances::{
     collect_token_balances, TransactionTokenBalancesSet,
 };
 use std::{
-    borrow::Cow,
     cmp,
     collections::{HashMap, VecDeque},
     env,
@@ -729,9 +727,9 @@ impl BankingStage {
     }
 
     #[allow(clippy::match_wild_err_arm)]
-    fn record_transactions<'a>(
+    fn record_transactions(
         bank_slot: Slot,
-        txs: impl Iterator<Item = &'a Transaction>,
+        txs: &[SanitizedTransaction],
         results: &[TransactionExecutionResult],
         recorder: &TransactionRecorder,
     ) -> (Result<usize, PohRecorderError>, Vec<usize>) {
@@ -740,9 +738,9 @@ impl BankingStage {
             .iter()
             .zip(txs)
             .enumerate()
-            .filter_map(|(i, ((r, _n), x))| {
+            .filter_map(|(i, ((r, _n), tx))| {
                 if Bank::can_commit(r) {
-                    Some((x.clone(), i))
+                    Some((tx.to_versioned_transaction(), i))
                 } else {
                     None
                 }
@@ -835,7 +833,7 @@ impl BankingStage {
 
         let mut record_time = Measure::start("record_time");
         let (num_to_commit, retryable_record_txs) =
-            Self::record_transactions(bank.slot(), batch.transactions_iter(), &results, poh);
+            Self::record_transactions(bank.slot(), batch.sanitized_transactions(), &results, poh);
         inc_new_counter_info!(
             "banking_stage-record_transactions_num_to_commit",
             *num_to_commit.as_ref().unwrap_or(&0)
@@ -865,7 +863,7 @@ impl BankingStage {
 
             bank_utils::find_and_send_votes(sanitized_txs, &tx_results, Some(gossip_vote_sender));
             if let Some(transaction_status_sender) = transaction_status_sender {
-                let txs = batch.transactions_iter().cloned().collect();
+                let txs = batch.sanitized_transactions().to_vec();
                 let post_balances = bank.collect_balances(batch);
                 let post_token_balances = collect_token_balances(bank, batch, &mut mint_decimals);
                 transaction_status_sender.send_transaction_status_batch(
@@ -1050,19 +1048,22 @@ impl BankingStage {
         libsecp256k1_0_5_upgrade_enabled: bool,
         cost_tracker: &Arc<RwLock<CostTracker>>,
         banking_stage_stats: &BankingStageStats,
-    ) -> (Vec<SanitizedTransaction<'static>>, Vec<usize>, Vec<usize>) {
+    ) -> (Vec<SanitizedTransaction>, Vec<usize>, Vec<usize>) {
         let mut retryable_transaction_packet_indexes: Vec<usize> = vec![];
 
         let verified_transactions_with_packet_indexes: Vec<_> = transaction_indexes
             .iter()
             .filter_map(|tx_index| {
                 let p = &msgs.packets[*tx_index];
-                let tx: Transaction = limited_deserialize(&p.data[0..p.meta.size]).ok()?;
-                tx.verify_precompiles(libsecp256k1_0_5_upgrade_enabled)
-                    .ok()?;
+                let tx: VersionedTransaction = limited_deserialize(&p.data[0..p.meta.size]).ok()?;
                 let message_bytes = Self::packet_message(p)?;
                 let message_hash = Message::hash_raw_message(message_bytes);
-                let tx = SanitizedTransaction::try_create(Cow::Owned(tx), message_hash).ok()?;
+                let tx = SanitizedTransaction::try_create(tx, message_hash, |_| {
+                    Err(TransactionError::UnsupportedVersion)
+                })
+                .ok()?;
+                tx.verify_precompiles(libsecp256k1_0_5_upgrade_enabled)
+                    .ok()?;
                 Some((tx, *tx_index))
             })
             .collect();
@@ -1565,12 +1566,12 @@ mod tests {
         signature::{Keypair, Signer},
         system_instruction::SystemError,
         system_transaction,
-        transaction::TransactionError,
+        transaction::{Transaction, TransactionError},
     };
     use solana_streamer::socket::SocketAddrSpace;
     use solana_transaction_status::TransactionWithStatusMeta;
     use std::{
-        convert::TryInto,
+        convert::{TryFrom, TryInto},
         net::SocketAddr,
         path::Path,
         sync::{
@@ -1794,7 +1795,7 @@ mod tests {
                 if !entries.is_empty() {
                     blockhash = entries.last().unwrap().hash;
                     for entry in entries {
-                        bank.process_transactions(entry.transactions.iter())
+                        bank.process_entry_transactions(entry.transactions)
                             .iter()
                             .for_each(|x| assert_eq!(*x, Ok(())));
                     }
@@ -1906,8 +1907,8 @@ mod tests {
                 .collect();
 
             let bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config);
-            for entry in &entries {
-                bank.process_transactions(entry.transactions.iter())
+            for entry in entries {
+                bank.process_entry_transactions(entry.transactions)
                     .iter()
                     .for_each(|x| assert_eq!(*x, Ok(())));
             }
@@ -1918,6 +1919,12 @@ mod tests {
             assert_eq!(bank.get_balance(&alice.pubkey()), 2);
         }
         Blockstore::destroy(&ledger_path).unwrap();
+    }
+
+    fn sanitize_transactions(txs: Vec<Transaction>) -> Vec<SanitizedTransaction> {
+        txs.into_iter()
+            .map(|tx| SanitizedTransaction::try_from(tx).unwrap())
+            .collect()
     }
 
     #[test]
@@ -1964,20 +1971,15 @@ mod tests {
             let keypair2 = Keypair::new();
             let pubkey2 = solana_sdk::pubkey::new_rand();
 
-            let transactions = vec![
+            let txs = sanitize_transactions(vec![
                 system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_config.hash()),
                 system_transaction::transfer(&keypair2, &pubkey2, 1, genesis_config.hash()),
-            ];
+            ]);
 
             let mut results = vec![(Ok(()), None), (Ok(()), None)];
-            let _ = BankingStage::record_transactions(
-                bank.slot(),
-                transactions.iter(),
-                &results,
-                &recorder,
-            );
+            let _ = BankingStage::record_transactions(bank.slot(), &txs, &results, &recorder);
             let (_bank, (entry, _tick_height)) = entry_receiver.recv().unwrap();
-            assert_eq!(entry.transactions.len(), transactions.len());
+            assert_eq!(entry.transactions.len(), txs.len());
 
             // InstructionErrors should still be recorded
             results[0] = (
@@ -1987,39 +1989,27 @@ mod tests {
                 )),
                 None,
             );
-            let (res, retryable) = BankingStage::record_transactions(
-                bank.slot(),
-                transactions.iter(),
-                &results,
-                &recorder,
-            );
+            let (res, retryable) =
+                BankingStage::record_transactions(bank.slot(), &txs, &results, &recorder);
             res.unwrap();
             assert!(retryable.is_empty());
             let (_bank, (entry, _tick_height)) = entry_receiver.recv().unwrap();
-            assert_eq!(entry.transactions.len(), transactions.len());
+            assert_eq!(entry.transactions.len(), txs.len());
 
             // Other TransactionErrors should not be recorded
             results[0] = (Err(TransactionError::AccountNotFound), None);
-            let (res, retryable) = BankingStage::record_transactions(
-                bank.slot(),
-                transactions.iter(),
-                &results,
-                &recorder,
-            );
+            let (res, retryable) =
+                BankingStage::record_transactions(bank.slot(), &txs, &results, &recorder);
             res.unwrap();
             assert!(retryable.is_empty());
             let (_bank, (entry, _tick_height)) = entry_receiver.recv().unwrap();
-            assert_eq!(entry.transactions.len(), transactions.len() - 1);
+            assert_eq!(entry.transactions.len(), txs.len() - 1);
 
             // Once bank is set to a new bank (setting bank.slot() + 1 in record_transactions),
             // record_transactions should throw MaxHeightReached and return the set of retryable
             // txs
-            let (res, retryable) = BankingStage::record_transactions(
-                bank.slot() + 1,
-                transactions.iter(),
-                &results,
-                &recorder,
-            );
+            let (res, retryable) =
+                BankingStage::record_transactions(bank.slot() + 1, &txs, &results, &recorder);
             assert_matches!(res, Err(PohRecorderError::MaxHeightReached));
             // The first result was an error so it's filtered out. The second result was Ok(),
             // so it should be marked as retryable

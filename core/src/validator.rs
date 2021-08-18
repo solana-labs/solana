@@ -13,7 +13,7 @@ use {
         serve_repair::ServeRepair,
         serve_repair_service::ServeRepairService,
         sigverify,
-        snapshot_packager_service::{PendingSnapshotPackage, SnapshotPackagerService},
+        snapshot_packager_service::SnapshotPackagerService,
         tower_storage::TowerStorage,
         tpu::{Tpu, DEFAULT_TPU_COALESCE_MS},
         tvu::{Sockets, Tvu, TvuConfig},
@@ -58,13 +58,14 @@ use {
     },
     solana_runtime::{
         accounts_db::AccountShrinkThreshold,
-        accounts_index::AccountSecondaryIndexes,
+        accounts_index::{AccountSecondaryIndexes, AccountsIndexConfig},
         bank::Bank,
         bank_forks::BankForks,
         commitment::BlockCommitmentCache,
         hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_config::SnapshotConfig,
+        snapshot_package::PendingSnapshotPackage,
         snapshot_utils,
     },
     solana_sdk::{
@@ -143,7 +144,7 @@ pub struct ValidatorConfig {
     pub poh_hashes_per_batch: u64,
     pub account_indexes: AccountSecondaryIndexes,
     pub accounts_db_caching_enabled: bool,
-    pub accounts_index_bins: Option<usize>,
+    pub accounts_index_config: Option<AccountsIndexConfig>,
     pub warp_slot: Option<Slot>,
     pub accounts_db_test_hash_calculation: bool,
     pub accounts_db_skip_shrink: bool,
@@ -209,7 +210,7 @@ impl Default for ValidatorConfig {
             validator_exit: Arc::new(RwLock::new(Exit::default())),
             no_wait_for_vote_to_start_leader: true,
             accounts_shrink_ratio: AccountShrinkThreshold::default(),
-            accounts_index_bins: None,
+            accounts_index_config: None,
         }
     }
 }
@@ -1138,7 +1139,7 @@ fn new_banks_from_ledger(
         debug_keys: config.debug_keys.clone(),
         account_indexes: config.account_indexes.clone(),
         accounts_db_caching_enabled: config.accounts_db_caching_enabled,
-        accounts_index_bins: config.accounts_index_bins,
+        accounts_index_config: config.accounts_index_config,
         shrink_ratio: config.accounts_shrink_ratio,
         accounts_db_test_hash_calculation: config.accounts_db_test_hash_calculation,
         accounts_db_skip_shrink: config.accounts_db_skip_shrink,

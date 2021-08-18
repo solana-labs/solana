@@ -1,7 +1,7 @@
 use {
     crate::{
         accounts_db::{AccountShrinkThreshold, AccountsDb},
-        accounts_index::AccountSecondaryIndexes,
+        accounts_index::{AccountSecondaryIndexes, AccountsIndexConfig},
         bank::{Bank, BankSlotDelta, Builtins},
         hardened_unpack::{unpack_snapshot, ParallelSelector, UnpackError, UnpackedAppendVecMap},
         serde_snapshot::{
@@ -14,6 +14,7 @@ use {
         },
         snapshot_package::{
             AccountsPackage, AccountsPackageSendError, AccountsPackageSender, SnapshotPackage,
+            SnapshotType,
         },
         sorted_storages::SortedStorages,
     },
@@ -239,10 +240,10 @@ pub fn remove_tmp_snapshot_archives(snapshot_archives_dir: &Path) {
     }
 }
 
-/// Make a full snapshot archive out of the snapshot package
+/// Make a snapshot archive out of the snapshot package
 pub fn archive_snapshot_package(
     snapshot_package: &SnapshotPackage,
-    maximum_snapshots_to_retain: usize,
+    maximum_snapshot_archives_to_retain: usize,
 ) -> Result<()> {
     info!(
         "Generating snapshot archive for slot {}",
@@ -268,10 +269,11 @@ pub fn archive_snapshot_package(
         .map_err(|e| SnapshotError::IoWithSource(e, "create archive path"))?;
 
     // Create the staging directories
+    let staging_dir_prefix = snapshot_package.snapshot_type.to_prefix();
     let staging_dir = tempfile::Builder::new()
         .prefix(&format!(
             "{}{}-",
-            TMP_FULL_SNAPSHOT_PREFIX,
+            staging_dir_prefix,
             snapshot_package.slot()
         ))
         .tempdir_in(tar_dir)
@@ -323,7 +325,7 @@ pub fn archive_snapshot_package(
     // Tar the staging directory into the archive at `archive_path`
     let archive_path = tar_dir.join(format!(
         "{}{}.{}",
-        TMP_FULL_SNAPSHOT_PREFIX,
+        staging_dir_prefix,
         snapshot_package.slot(),
         file_ext
     ));
@@ -371,7 +373,7 @@ pub fn archive_snapshot_package(
     fs::rename(&archive_path, &snapshot_package.path())
         .map_err(|e| SnapshotError::IoWithSource(e, "archive path rename"))?;
 
-    purge_old_snapshot_archives(tar_dir, maximum_snapshots_to_retain);
+    purge_old_snapshot_archives(tar_dir, maximum_snapshot_archives_to_retain);
 
     timer.stop();
     info!(
@@ -726,7 +728,7 @@ pub fn bank_from_snapshot_archives(
     test_hash_calculation: bool,
     accounts_db_skip_shrink: bool,
     verify_index: bool,
-    accounts_index_bins: Option<usize>,
+    accounts_index_config: Option<AccountsIndexConfig>,
 ) -> Result<(Bank, BankFromArchiveTimings)> {
     check_are_snapshots_compatible(
         full_snapshot_archive_info,
@@ -790,7 +792,7 @@ pub fn bank_from_snapshot_archives(
         limit_load_slot_count_from_snapshot,
         shrink_ratio,
         verify_index,
-        accounts_index_bins,
+        accounts_index_config,
     )?;
     measure_rebuild.stop();
     info!("{}", measure_rebuild);
@@ -836,7 +838,7 @@ pub fn bank_from_latest_snapshot_archives(
     test_hash_calculation: bool,
     accounts_db_skip_shrink: bool,
     verify_index: bool,
-    accounts_index_bins: Option<usize>,
+    accounts_index_config: Option<AccountsIndexConfig>,
 ) -> Result<(Bank, BankFromArchiveTimings)> {
     let full_snapshot_archive_info = get_highest_full_snapshot_archive_info(&snapshot_archives_dir)
         .ok_or(SnapshotError::NoSnapshotArchives)?;
@@ -874,7 +876,7 @@ pub fn bank_from_latest_snapshot_archives(
         test_hash_calculation,
         accounts_db_skip_shrink,
         verify_index,
-        accounts_index_bins,
+        accounts_index_config,
     )?;
 
     verify_bank_against_expected_slot_hash(
@@ -1374,7 +1376,7 @@ fn rebuild_bank_from_snapshots(
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
     verify_index: bool,
-    accounts_index_bins: Option<usize>,
+    accounts_index_config: Option<AccountsIndexConfig>,
 ) -> Result<Bank> {
     let (full_snapshot_version, full_snapshot_root_paths) =
         verify_unpacked_snapshots_dir_and_version(
@@ -1422,7 +1424,7 @@ fn rebuild_bank_from_snapshots(
                     limit_load_slot_count_from_snapshot,
                     shrink_ratio,
                     verify_index,
-                    accounts_index_bins,
+                    accounts_index_config,
                 ),
             }?,
         )
@@ -1794,6 +1796,11 @@ pub fn process_accounts_package(
         ),
     };
 
+    let snapshot_type = match incremental_snapshot_base_slot {
+        None => SnapshotType::FullSnapshot,
+        Some(_) => SnapshotType::IncrementalSnapshot,
+    };
+
     SnapshotPackage::new(
         accounts_package.slot,
         accounts_package.block_height,
@@ -1804,6 +1811,7 @@ pub fn process_accounts_package(
         hash,
         accounts_package.archive_format,
         accounts_package.snapshot_version,
+        snapshot_type,
     )
 }
 
@@ -1829,8 +1837,9 @@ mod tests {
         genesis_config::create_genesis_config,
         signature::{Keypair, Signer},
         system_transaction,
+        transaction::SanitizedTransaction,
     };
-    use std::mem::size_of;
+    use std::{convert::TryFrom, mem::size_of};
 
     #[test]
     fn test_serialize_snapshot_data_file_under_limit() {
@@ -2516,7 +2525,7 @@ mod tests {
             false,
             false,
             false,
-            Some(crate::accounts_index::BINS_FOR_TESTING),
+            Some(crate::accounts_index::ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
         )
         .unwrap();
 
@@ -2607,7 +2616,7 @@ mod tests {
             false,
             false,
             false,
-            Some(crate::accounts_index::BINS_FOR_TESTING),
+            Some(crate::accounts_index::ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
         )
         .unwrap();
 
@@ -2717,7 +2726,7 @@ mod tests {
             false,
             false,
             false,
-            Some(crate::accounts_index::BINS_FOR_TESTING),
+            Some(crate::accounts_index::ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
         )
         .unwrap();
 
@@ -2816,7 +2825,7 @@ mod tests {
             false,
             false,
             false,
-            Some(crate::accounts_index::BINS_FOR_TESTING),
+            Some(crate::accounts_index::ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
         )
         .unwrap();
 
@@ -2902,12 +2911,13 @@ mod tests {
 
         let slot = slot + 1;
         let bank2 = Arc::new(Bank::new_from_parent(&bank1, &collector, slot));
-        let tx = system_transaction::transfer(
+        let tx = SanitizedTransaction::try_from(system_transaction::transfer(
             &key1,
             &key2.pubkey(),
             lamports_to_transfer,
             bank2.last_blockhash(),
-        );
+        ))
+        .unwrap();
         let fee = bank2
             .get_fee_for_message(&bank2.last_blockhash(), tx.message())
             .unwrap();
@@ -2956,7 +2966,7 @@ mod tests {
             false,
             false,
             false,
-            Some(crate::accounts_index::BINS_FOR_TESTING),
+            Some(crate::accounts_index::ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
         )
         .unwrap();
         assert_eq!(
@@ -3018,7 +3028,7 @@ mod tests {
             false,
             false,
             false,
-            Some(crate::accounts_index::BINS_FOR_TESTING),
+            Some(crate::accounts_index::ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
         )
         .unwrap();
         assert_eq!(

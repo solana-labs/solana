@@ -220,7 +220,7 @@ pub fn cluster_info_retransmit() {
     let retransmit_peers: Vec<_> = peers.iter().collect();
     ClusterInfo::retransmit_to(
         &retransmit_peers,
-        &p,
+        &p.data[..p.meta.size],
         &tn1,
         false,
         &SocketAddrSpace::Unspecified,

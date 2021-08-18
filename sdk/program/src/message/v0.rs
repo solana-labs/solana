@@ -1,9 +1,7 @@
-#![allow(clippy::integer_arithmetic)]
-
 use crate::{
     hash::Hash,
     instruction::CompiledInstruction,
-    message::MessageHeader,
+    message::{MessageHeader, MESSAGE_VERSION_PREFIX},
     pubkey::Pubkey,
     sanitize::{Sanitize, SanitizeError},
     short_vec,
@@ -62,8 +60,8 @@ impl Sanitize for Message {
     fn sanitize(&self) -> Result<(), SanitizeError> {
         // signing area and read-only non-signing area should not
         // overlap
-        if self.header.num_required_signatures as usize
-            + self.header.num_readonly_unsigned_accounts as usize
+        if usize::from(self.header.num_required_signatures)
+            .saturating_add(usize::from(self.header.num_readonly_unsigned_accounts))
             > self.account_keys.len()
         {
             return Err(SanitizeError::IndexOutOfBounds);
@@ -76,7 +74,7 @@ impl Sanitize for Message {
 
         // there cannot be more address maps than read-only unsigned accounts.
         let num_address_map_indexes = self.address_map_indexes.len();
-        if num_address_map_indexes > self.header.num_readonly_unsigned_accounts as usize {
+        if num_address_map_indexes > usize::from(self.header.num_readonly_unsigned_accounts) {
             return Err(SanitizeError::IndexOutOfBounds);
         }
 
@@ -102,7 +100,7 @@ impl Sanitize for Message {
         }
 
         for ci in &self.instructions {
-            if ci.program_id_index as usize >= num_loaded_accounts {
+            if usize::from(ci.program_id_index) >= num_loaded_accounts {
                 return Err(SanitizeError::IndexOutOfBounds);
             }
             // A program cannot be a payer.
@@ -110,7 +108,7 @@ impl Sanitize for Message {
                 return Err(SanitizeError::IndexOutOfBounds);
             }
             for ai in &ci.accounts {
-                if *ai as usize >= num_loaded_accounts {
+                if usize::from(*ai) >= num_loaded_accounts {
                     return Err(SanitizeError::IndexOutOfBounds);
                 }
             }
@@ -120,9 +118,17 @@ impl Sanitize for Message {
     }
 }
 
+impl Message {
+    /// Serialize this message with a version #0 prefix using bincode encoding.
+    pub fn serialize(&self) -> Vec<u8> {
+        bincode::serialize(&(MESSAGE_VERSION_PREFIX, self)).unwrap()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::message::VersionedMessage;
 
     fn simple_message() -> Message {
         Message {
@@ -380,5 +386,12 @@ mod tests {
         }
         .sanitize()
         .is_err());
+    }
+
+    #[test]
+    fn test_serialize() {
+        let message = simple_message();
+        let versioned_msg = VersionedMessage::V0(message.clone());
+        assert_eq!(message.serialize(), versioned_msg.serialize());
     }
 }

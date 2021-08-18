@@ -1241,7 +1241,7 @@ impl ClusterInfo {
     /// We need to avoid having obj locked while doing a io, such as the `send_to`
     pub fn retransmit_to(
         peers: &[&ContactInfo],
-        packet: &Packet,
+        data: &[u8],
         s: &UdpSocket,
         forwarded: bool,
         socket_addr_space: &SocketAddrSpace,
@@ -1260,8 +1260,6 @@ impl ClusterInfo {
                 .filter(|addr| socket_addr_space.check(addr))
                 .collect()
         };
-        let data = &packet.data[..packet.meta.size];
-
         if let Err(SendPktsError::IoError(ioerr, num_failed)) = multi_target_send(s, data, &dests) {
             inc_new_counter_info!("cluster_info-retransmit-packets", dests.len(), 1);
             inc_new_counter_error!("cluster_info-retransmit-error", num_failed, 1);

@@ -293,7 +293,7 @@ fn process_transaction_and_record_inner(
 ) -> (Result<(), TransactionError>, Vec<Vec<CompiledInstruction>>) {
     let signature = tx.signatures.get(0).unwrap().clone();
     let txs = vec![tx];
-    let tx_batch = bank.prepare_batch(txs.iter()).unwrap();
+    let tx_batch = bank.prepare_batch(txs).unwrap();
     let (mut results, _, mut inner_instructions, _transaction_logs) = bank
         .load_execute_and_commit_transactions(
             &tx_batch,
@@ -315,8 +315,8 @@ fn process_transaction_and_record_inner(
     )
 }
 
-fn execute_transactions(bank: &Bank, txs: &[Transaction]) -> Vec<ConfirmedTransaction> {
-    let batch = bank.prepare_batch(txs.iter()).unwrap();
+fn execute_transactions(bank: &Bank, txs: Vec<Transaction>) -> Vec<ConfirmedTransaction> {
+    let batch = bank.prepare_batch(txs.clone()).unwrap();
     let mut timings = ExecuteTimings::default();
     let mut mint_decimals = HashMap::new();
     let tx_pre_token_balances = collect_token_balances(&bank, &batch, &mut mint_decimals);
@@ -2402,13 +2402,13 @@ fn test_program_upgradeable_locks() {
     let results1 = {
         let (bank, invoke_tx, upgrade_tx) =
             setup_program_upgradeable_locks(&payer_keypair, &buffer_keypair, &program_keypair);
-        execute_transactions(&bank, &[upgrade_tx, invoke_tx])
+        execute_transactions(&bank, vec![upgrade_tx, invoke_tx])
     };
 
     let results2 = {
         let (bank, invoke_tx, upgrade_tx) =
             setup_program_upgradeable_locks(&payer_keypair, &buffer_keypair, &program_keypair);
-        execute_transactions(&bank, &[invoke_tx, upgrade_tx])
+        execute_transactions(&bank, vec![invoke_tx, upgrade_tx])
     };
 
     if false {
