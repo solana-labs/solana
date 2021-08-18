@@ -32,7 +32,7 @@ use std::{
 use thiserror::Error;
 
 pub const ITER_BATCH_SIZE: usize = 1000;
-pub const BINS_DEFAULT: usize = 16;
+pub const BINS_DEFAULT: usize = 32768;
 pub const ACCOUNTS_INDEX_CONFIG_FOR_TESTING: AccountsIndexConfig = AccountsIndexConfig {
     bins: Some(BINS_DEFAULT),
 };
