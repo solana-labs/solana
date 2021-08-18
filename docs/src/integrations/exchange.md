@@ -13,8 +13,8 @@ operations with a bundled monitoring tool.
 
 This setup enables you:
 
-- to have a trusted gateway to the Solana mainnet-beta cluster to get data and
-  submit withdrawal transactions
+- to have a self-administered gateway to the Solana mainnet-beta cluster to get
+  data and submit withdrawal transactions
 - to have full control over how much historical block data is retained
 - to maintain your service availability even if one node fails
 
@@ -97,7 +97,7 @@ announcement. For security-related releases, more urgent action may be needed.
 ### Ledger Continuity
 
 By default, each of your nodes will boot from a snapshot provided by one of your
-trusted validators. This snapshot reflects the current state of the chain, but
+known validators. This snapshot reflects the current state of the chain, but
 does not contain the complete historical ledger. If one of your node exits and
 boots from a new snapshot, there may be a gap in the ledger on that node. In
 order to prevent this issue, add the `--no-snapshot-fetch` parameter to your
@@ -112,7 +112,7 @@ It is important to note that the amount of historical ledger available to your
 nodes from the rest of the network is limited at any point in time. Once
 operational if your validators experience significant downtime they may not be
 able to catch up to the network and will need to download a new snapshot from a
-trusted validator. In doing so your validators will now have a gap in its
+known validator. In doing so your validators will now have a gap in its
 historical ledger data that cannot be filled.
 
 ### Minimizing Validator Port Exposure

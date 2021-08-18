@@ -17,7 +17,7 @@ static content and less appealing for transaction processing. The clients poll
 for transaction status instead of being notified, giving the false impression
 of higher confirmation times. Furthermore, what clients can poll for is
 limited, preventing them from making reasonable real-time decisions, such as
-recognizing a transaction is confirmed as soon as particular, trusted
+recognizing a transaction is confirmed as soon as particular, known
 validators vote on it.
 
 ## Proposed Solution
