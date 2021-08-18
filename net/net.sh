@@ -309,11 +309,7 @@ startBootstrapLeader() {
          ${#clientIpList[@]} \"$benchTpsExtraArgs\" \
          ${#clientIpList[@]} \"$benchExchangeExtraArgs\" \
          \"$genesisOptions\" \
-<<<<<<< HEAD
-         \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize $maybeWaitForSupermajority\" \
-=======
-         \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize $maybeWaitForSupermajority $maybeAllowPrivateAddr $maybeAccountsDbSkipShrink\" \
->>>>>>> 1d375ff2d (Plumb accounts-db-skip-shrink through testnet scripts (#19290))
+         \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize $maybeWaitForSupermajority $maybeAccountsDbSkipShrink\" \
          \"$gpuMode\" \
          \"$maybeWarpSlot\" \
          \"$waitForNodeInit\" \
@@ -385,11 +381,7 @@ startNode() {
          ${#clientIpList[@]} \"$benchTpsExtraArgs\" \
          ${#clientIpList[@]} \"$benchExchangeExtraArgs\" \
          \"$genesisOptions\" \
-<<<<<<< HEAD
-         \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize $maybeWaitForSupermajority\" \
-=======
-         \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize $maybeWaitForSupermajority $maybeAllowPrivateAddr $maybeAccountsDbSkipShrink\" \
->>>>>>> 1d375ff2d (Plumb accounts-db-skip-shrink through testnet scripts (#19290))
+         \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize $maybeWaitForSupermajority $maybeAccountsDbSkipShrink\" \
          \"$gpuMode\" \
          \"$maybeWarpSlot\" \
          \"$waitForNodeInit\" \
@@ -790,11 +782,7 @@ maybeLimitLedgerSize=""
 maybeSkipLedgerVerify=""
 maybeDisableAirdrops=""
 maybeWaitForSupermajority=""
-<<<<<<< HEAD
-=======
-maybeAllowPrivateAddr=""
 maybeAccountsDbSkipShrink=""
->>>>>>> 1d375ff2d (Plumb accounts-db-skip-shrink through testnet scripts (#19290))
 debugBuild=false
 doBuild=true
 gpuMode=auto
@@ -919,17 +907,9 @@ while [[ -n $1 ]]; do
     elif [[ $1 == --extra-primordial-stakes ]]; then
       extraPrimordialStakes=$2
       shift 2
-<<<<<<< HEAD
-=======
-    elif [[ $1 = --allow-private-addr ]]; then
-      # May also be added by loadConfigFile if 'gce.sh create' was invoked
-      # without -P.
-      maybeAllowPrivateAddr="$1"
-      shift 1
     elif [[ $1 = --accounts-db-skip-shrink ]]; then
       maybeAccountsDbSkipShrink="$1"
       shift 1
->>>>>>> 1d375ff2d (Plumb accounts-db-skip-shrink through testnet scripts (#19290))
     else
       usage "Unknown long option: $1"
     fi

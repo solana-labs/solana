@@ -75,18 +75,9 @@ while [[ -n $1 ]]; do
     elif [[ $1 == --maximum-snapshots-to-retain ]]; then
       args+=("$1" "$2")
       shift 2
-<<<<<<< HEAD
-=======
-    elif [[ $1 == --no-snapshot-fetch ]]; then
-      args+=("$1")
-      shift
-    elif [[ $1 == --allow-private-addr ]]; then
-      args+=("$1")
-      shift
     elif [[ $1 == --accounts-db-skip-shrink ]]; then
       args+=("$1")
       shift
->>>>>>> 1d375ff2d (Plumb accounts-db-skip-shrink through testnet scripts (#19290))
     else
       echo "Unknown argument: $1"
       $program --help
