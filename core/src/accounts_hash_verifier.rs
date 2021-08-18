@@ -1,7 +1,7 @@
 // Service to verify accounts hashes with other trusted validator nodes.
 //
 // Each interval, publish the snapshat hash which is the full accounts state
-// hash on gossip. Monitor gossip for messages from validators in the --trusted-validators
+// hash on gossip. Monitor gossip for messages from validators in the `--known-validator`s
 // set and halt the node if a mismatch is detected.
 
 use rayon::ThreadPool;

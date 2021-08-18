@@ -37,8 +37,8 @@ solana-validator \
   --no-voting \
   --enable-rpc-transaction-history \
   --limit-ledger-size \
-  --trusted-validator <VALIDATOR_ADDRESS> \
-  --no-untrusted-rpc
+  --known-validator <VALIDATOR_ADDRESS> \
+  --only-known-rpc
 ```
 
 Customize `--ledger` to your desired ledger storage location, and `--rpc-port` to the port you want to expose.
@@ -56,7 +56,7 @@ default limit value used by `--limit-ledger-size`. More information about
 selecting a custom limit value is [available
 here](https://github.com/solana-labs/solana/blob/583cec922b6107e0f85c7e14cb5e642bc7dfb340/core/src/ledger_cleanup_service.rs#L15-L26).
 
-Specifying one or more `--trusted-validator` parameters can protect you from booting from a malicious snapshot. [More on the value of booting with trusted validators](../running-validator/validator-start.md#trusted-validators)
+Specifying one or more `--known-validator` parameters can protect you from booting from a malicious snapshot. [More on the value of booting with known validators](../running-validator/validator-start.md#known-validators)
 
 Optional parameters to consider:
 
