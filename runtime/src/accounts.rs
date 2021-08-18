@@ -27,6 +27,7 @@ use solana_sdk::{
     account_utils::StateMut,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     clock::{BankId, Slot, INITIAL_RENT_EPOCH},
+    epoch_schedule::EpochSchedule,
     feature_set::{self, FeatureSet},
     fee_calculator::FeeCalculator,
     genesis_config::ClusterType,
@@ -141,6 +142,7 @@ impl Accounts {
             caching_enabled,
             shrink_ratio,
             Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
+            EpochSchedule::default(),
         )
     }
 
@@ -158,6 +160,7 @@ impl Accounts {
             caching_enabled,
             shrink_ratio,
             Some(ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS),
+            EpochSchedule::default(),
         )
     }
 
@@ -168,6 +171,7 @@ impl Accounts {
         caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
         accounts_index_config: Option<AccountsIndexConfig>,
+        epoch_schedule: EpochSchedule,
     ) -> Self {
         Self {
             accounts_db: Arc::new(AccountsDb::new_with_config(
@@ -177,6 +181,7 @@ impl Accounts {
                 caching_enabled,
                 shrink_ratio,
                 accounts_index_config,
+                epoch_schedule,
             )),
             account_locks: Mutex::new(AccountLocks::default()),
         }

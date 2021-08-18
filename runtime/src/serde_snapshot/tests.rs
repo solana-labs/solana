@@ -84,6 +84,7 @@ where
         AccountShrinkThreshold::default(),
         false,
         Some(crate::accounts_index::ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
+        EpochSchedule::default(),
     )
 }
 

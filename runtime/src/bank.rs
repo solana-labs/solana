@@ -43,6 +43,7 @@ use crate::{
         AccountSecondaryIndexes, AccountsIndexConfig, IndexKey, ScanResult,
         ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS, ACCOUNTS_INDEX_CONFIG_FOR_TESTING,
     },
+    address_map::{AddressMapCache, AddressMapPendingChanges},
     ancestors::{Ancestors, AncestorsForSerialization},
     blockhash_queue::BlockhashQueue,
     builtins::{self, ActivationType},
@@ -1035,6 +1036,9 @@ pub struct Bank {
     pub drop_callback: RwLock<OptionalDropCallback>,
 
     pub freeze_started: AtomicBool,
+
+    /// Pending address map changes queued by this bank
+    pub pending_address_map_changes: AddressMapPendingChanges,
 }
 
 impl Default for BlockhashQueue {
@@ -1160,6 +1164,7 @@ impl Bank {
             feature_set: Arc::<FeatureSet>::default(),
             drop_callback: RwLock::<OptionalDropCallback>::default(),
             freeze_started: AtomicBool::default(),
+            pending_address_map_changes: AddressMapPendingChanges::new(Slot::default()),
         }
     }
 
@@ -1233,6 +1238,7 @@ impl Bank {
             accounts_db_caching_enabled,
             shrink_ratio,
             accounts_index_config,
+            genesis_config.epoch_schedule,
         );
         let mut bank = Self::default_with_accounts(accounts);
         bank.ancestors = Ancestors::from(vec![bank.slot()]);
@@ -1378,6 +1384,7 @@ impl Bank {
                     .map(|drop_callback| drop_callback.clone_box()),
             )),
             freeze_started: AtomicBool::new(false),
+            pending_address_map_changes: AddressMapPendingChanges::new(slot),
         };
 
         datapoint_info!(
@@ -1520,6 +1527,7 @@ impl Bank {
             feature_set: new(),
             drop_callback: RwLock::new(OptionalDropCallback(None)),
             freeze_started: AtomicBool::new(fields.hash != Hash::default()),
+            pending_address_map_changes: AddressMapPendingChanges::new(fields.slot),
         };
         bank.finish_init(
             genesis_config,
@@ -2422,7 +2430,7 @@ impl Bank {
     pub fn squash(&self) {
         self.freeze();
 
-        //this bank and all its parents are now on the rooted path
+        // this bank and all its parents are now on the rooted path
         let mut roots = vec![self.slot()];
         roots.append(&mut self.parents().iter().map(|p| p.slot()).collect());
 
@@ -2432,6 +2440,18 @@ impl Bank {
             self.rc.accounts.add_root(*slot);
         }
         squash_accounts_time.stop();
+
+        let mut squash_address_map_time = Measure::start("squash_address_map_time");
+        // Only apply changes for parents of the squashed bank, the squashed
+        // bank will have its changes applied when one of its descendant is
+        // squashed. This approach avoids applying changes twice for the same bank.
+        self.parents().iter().rev().for_each(|rooted_parent_bank| {
+            self.address_map_cache().update_cache(
+                &rooted_parent_bank.pending_address_map_changes,
+                rooted_parent_bank.epoch,
+            );
+        });
+        squash_address_map_time.stop();
 
         *self.rc.parent.write().unwrap() = None;
 
@@ -2444,7 +2464,12 @@ impl Bank {
         datapoint_debug!(
             "tower-observed",
             ("squash_accounts_ms", squash_accounts_time.as_ms(), i64),
-            ("squash_cache_ms", squash_cache_time.as_ms(), i64)
+            ("squash_cache_ms", squash_cache_time.as_ms(), i64),
+            (
+                "squash_address_map_ms",
+                squash_address_map_time.as_ms(),
+                i64
+            )
         );
     }
 
@@ -2792,6 +2817,10 @@ impl Bank {
 
     pub fn is_block_boundary(&self, tick_height: u64) -> bool {
         tick_height % self.ticks_per_slot == 0
+    }
+
+    pub fn address_map_cache(&self) -> &AddressMapCache {
+        &self.rc.accounts.accounts_db.address_map_cache
     }
 
     /// Prepare a transaction batch from a list of legacy transactionsy. Used for tests only.
@@ -5148,7 +5177,7 @@ impl Bank {
         self.epoch_schedule.get_leader_schedule_epoch(slot)
     }
 
-    /// a bank-level cache of vote accounts
+    /// update bank-level cache of stake, vote, and address map accounts
     fn update_cached_accounts(
         &self,
         txs: &[SanitizedTransaction],
@@ -5165,21 +5194,25 @@ impl Bank {
             let message = tx.message();
             let loaded_transaction = raccs.as_ref().unwrap();
 
-            for (_i, (pubkey, account)) in (0..message.account_keys_len())
-                .zip(loaded_transaction.accounts.iter())
-                .filter(|(_i, (_pubkey, account))| (Stakes::is_stake(account)))
+            for (_i, (pubkey, account)) in
+                (0..message.account_keys_len()).zip(loaded_transaction.accounts.iter())
             {
-                if let Some(old_vote_account) = self.stakes.write().unwrap().store(
-                    pubkey,
-                    account,
-                    self.check_init_vote_data_enabled(),
-                ) {
-                    // TODO: one of the indices is redundant.
-                    overwritten_vote_accounts.push(OverwrittenVoteAccount {
-                        account: old_vote_account,
-                        transaction_index: i,
-                        transaction_result_index: i,
-                    });
+                if Stakes::is_stake(account) {
+                    if let Some(old_vote_account) = self.stakes.write().unwrap().store(
+                        pubkey,
+                        account,
+                        self.check_init_vote_data_enabled(),
+                    ) {
+                        // TODO: one of the indices is redundant.
+                        overwritten_vote_accounts.push(OverwrittenVoteAccount {
+                            account: old_vote_account,
+                            transaction_index: i,
+                            transaction_result_index: i,
+                        });
+                    }
+                } else if AddressMapCache::is_address_map(account) {
+                    self.pending_address_map_changes
+                        .record(pubkey, account.data());
                 }
             }
         }
