@@ -20,6 +20,7 @@ else
 fi
 
 no_restart=0
+maybeRequireTower=true
 
 args=()
 while [[ -n $1 ]]; do
@@ -84,6 +85,9 @@ while [[ -n $1 ]]; do
     elif [[ $1 == --accounts-db-skip-shrink ]]; then
       args+=("$1")
       shift
+    elif [[ $1 == --skip-require-tower ]]; then
+      maybeRequireTower=false
+      shift
     else
       echo "Unknown argument: $1"
       $program --help
@@ -108,8 +112,11 @@ ledger_dir="$SOLANA_CONFIG_DIR"/bootstrap-validator
   exit 1
 }
 
+if [[ $maybeRequireTower = true ]]; then
+  args+=(--require-tower)
+fi
+
 args+=(
-  --require-tower
   --ledger "$ledger_dir"
   --rpc-port 8899
   --snapshot-interval-slots 200
