@@ -32,6 +32,16 @@ impl PubkeyBinCalculator16 {
         let as_ref = pubkey.as_ref();
         ((as_ref[0] as usize * 256 + as_ref[1] as usize) as usize) >> self.shift_bits
     }
+
+    // return lowest pubkey that would go into the specified bin
+    pub fn pubkey_start_inclusive(&self, bin: usize) -> Pubkey {
+        let mut result = Pubkey::default();
+        let prefix = bin << self.shift_bits;
+        let array = result.as_mut();
+        array[0] = ((prefix / 256) & 0xff) as u8;
+        array[1] = (prefix & 0xff) as u8;
+        result
+    }
 }
 
 #[cfg(test)]

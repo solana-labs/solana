@@ -5820,7 +5820,9 @@ pub(crate) mod tests {
     use crate::{
         accounts_background_service::{AbsRequestHandler, SendDroppedBankCallback},
         accounts_db::DEFAULT_ACCOUNTS_SHRINK_RATIO,
-        accounts_index::{AccountIndex, AccountSecondaryIndexes, ScanError, ITER_BATCH_SIZE},
+        accounts_index::{
+            tests::ITER_BATCH_SIZE, AccountIndex, AccountSecondaryIndexes, ScanError,
+        },
         ancestors::Ancestors,
         genesis_utils::{
             activate_all_features, bootstrap_validator_stake_lamports,

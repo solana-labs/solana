@@ -31,7 +31,6 @@ use std::{
 };
 use thiserror::Error;
 
-pub const ITER_BATCH_SIZE: usize = 1000;
 pub const BINS_DEFAULT: usize = 16;
 pub const ACCOUNTS_INDEX_CONFIG_FOR_TESTING: AccountsIndexConfig = AccountsIndexConfig {
     bins: Some(BINS_DEFAULT),
@@ -697,26 +696,31 @@ impl<'a, T: 'static + Clone> Iterator for AccountsIndexIterator<'a, T> {
             return None;
         }
         let (start_bin, bin_range) = self.bin_start_and_range();
-        let mut chunk: Vec<(Pubkey, AccountMapEntry<T>)> = Vec::with_capacity(ITER_BATCH_SIZE);
-        'outer: for i in self.account_maps.iter().skip(start_bin).take(bin_range) {
-            for (pubkey, account_map_entry) in
-                i.read().unwrap().range((self.start_bound, self.end_bound))
-            {
-                if chunk.len() >= ITER_BATCH_SIZE {
-                    break 'outer;
-                }
+        let end_bin = start_bin + bin_range;
+        for bin in start_bin..end_bin {
+            let map = self.account_maps[bin].read().unwrap();
+            let mut chunk: Vec<(Pubkey, AccountMapEntry<T>)> = Vec::with_capacity(map.len());
+            for (pubkey, account_map_entry) in map.range((self.start_bound, self.end_bound)) {
                 let item = (*pubkey, account_map_entry.clone());
                 chunk.push(item);
             }
-        }
 
-        if chunk.is_empty() {
-            self.is_finished = true;
-            return None;
+            if !chunk.is_empty() {
+                // return all items from this bin
+                let next_bin = bin + 1;
+                if next_bin >= end_bin {
+                    // done iterating because we've returned everything from the last bin we were looking in based on the range
+                    self.is_finished = true;
+                } else {
+                    // continue iterating at the start pubkey of the next bin
+                    self.start_bound =
+                        Included(self.bin_calculator.pubkey_start_inclusive(next_bin));
+                }
+                return Some(chunk);
+            }
         }
-
-        self.start_bound = Excluded(chunk.last().unwrap().0);
-        Some(chunk)
+        self.is_finished = true;
+        None
     }
 }
 
@@ -3076,6 +3080,8 @@ pub mod tests {
             }
         }
     }
+
+    pub const ITER_BATCH_SIZE: usize = 1000;
 
     #[test]
     fn test_range_scan_accounts() {
