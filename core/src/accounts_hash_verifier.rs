@@ -102,7 +102,7 @@ impl AccountsHashVerifier {
     ) {
         Self::verify_accounts_package_hash(&accounts_package, thread_pool);
 
-        Self::push_hashes_to_cluster(
+        Self::push_accounts_hashes_to_cluster(
             &accounts_package,
             cluster_info,
             trusted_validators,
@@ -141,7 +141,7 @@ impl AccountsHashVerifier {
         );
     }
 
-    fn push_hashes_to_cluster(
+    fn push_accounts_hashes_to_cluster(
         accounts_package: &AccountsPackage,
         cluster_info: &ClusterInfo,
         trusted_validators: Option<&HashSet<Pubkey>>,
