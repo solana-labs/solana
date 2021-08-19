@@ -31,7 +31,7 @@ pub mod instructions_sysvar_enabled {
 }
 
 pub mod instructions_sysvar_owned_by_sysvar {
-    solana_sdk::declare_id!("DMrxRAhXK5DNeDtqdnsL8ygRdYCnS2cNUyjvh2FK8keY");
+    solana_sdk::declare_id!("H3kBSaKdeiUsyHmeHqjJYNc27jesXZ6zWj3zWkowQbkV");
 }
 
 pub mod deprecate_rewards_sysvar {
