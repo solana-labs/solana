@@ -32,11 +32,7 @@ impl ReplicaAccountsServer for ReplicaAccountsServerImpl {
                         let account_meta = Some(ReplicaAccountMeta {
                             pubkey: stored_account_meta.meta.pubkey.to_bytes().to_vec(),
                             lamports: stored_account_meta.account_meta.lamports,
-                            owner: stored_account_meta
-                                .account_meta
-                                .owner
-                                .to_bytes()
-                                .to_vec(),
+                            owner: stored_account_meta.account_meta.owner.to_bytes().to_vec(),
                             executable: stored_account_meta.account_meta.executable,
                             rent_epoch: stored_account_meta.account_meta.rent_epoch,
                         });

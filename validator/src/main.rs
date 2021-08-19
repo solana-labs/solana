@@ -1751,6 +1751,7 @@ pub fn main() {
             Arg::with_name("enable_accountsdb_repl")
                 .long("enable-accountsdb-repl")
                 .takes_value(false)
+                .hidden(true)
                 .help("Enable AccountsDb Replication"),
         )
         .arg(
@@ -1759,6 +1760,7 @@ pub fn main() {
                 .value_name("HOST")
                 .takes_value(true)
                 .validator(solana_net_utils::is_host)
+                .hidden(true)
                 .help("IP address to bind the AccountsDb Replication port [default: use --bind-address]"),
         )
         .arg(
@@ -1767,6 +1769,7 @@ pub fn main() {
                 .value_name("PORT")
                 .takes_value(true)
                 .validator(solana_validator::port_validator)
+                .hidden(true)
                 .help("Enable AccountsDb Replication Service on this port"),
         )
         .arg(
@@ -1776,6 +1779,7 @@ pub fn main() {
                 .validator(is_parsable::<usize>)
                 .takes_value(true)
                 .default_value(&default_accountsdb_repl_threads)
+                .hidden(true)
                 .help("Number of threads to use for servicing AccountsDb Replication requests"),
         )
         .arg(
