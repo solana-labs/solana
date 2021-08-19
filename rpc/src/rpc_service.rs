@@ -26,10 +26,8 @@ use {
     solana_metrics::inc_new_counter_info,
     solana_poh::poh_recorder::PohRecorder,
     solana_runtime::{
-        bank_forks::BankForks,
-        commitment::BlockCommitmentCache,
-        snapshot_archive_info::SnapshotArchiveInfoGetter,
-        snapshot_config::{LastFullSnapshotSlot, SnapshotConfig},
+        bank_forks::BankForks, commitment::BlockCommitmentCache,
+        snapshot_archive_info::SnapshotArchiveInfoGetter, snapshot_config::SnapshotConfig,
         snapshot_utils,
     },
     solana_sdk::{
@@ -493,6 +491,7 @@ mod tests {
         },
         solana_runtime::{
             bank::Bank,
+            snapshot_config::LastFullSnapshotSlot,
             snapshot_utils::{
                 ArchiveFormat, SnapshotVersion, DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
             },
