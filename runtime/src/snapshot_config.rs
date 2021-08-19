@@ -31,5 +31,7 @@ pub struct SnapshotConfig {
     pub maximum_snapshots_to_retain: usize,
 
     /// Runtime information of the last full snapshot slot
-    pub last_full_snapshot_slot: Arc<RwLock<Option<Slot>>>,
+    pub last_full_snapshot_slot: LastFullSnapshotSlot,
 }
+
+pub type LastFullSnapshotSlot = Arc<RwLock<Option<Slot>>>;
