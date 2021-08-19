@@ -93,7 +93,7 @@ certainly work for the CPI case, but this would not work RPC or Transaction case
 
 ## Proposed Solution
 
-The callee can set the return data using a new system call `sol_returndata(u8 *buf, u64 length)`.
+The callee can set the return data using a new system call `sol_set_return_data(u8 *buf, u64 length)`.
 This function does not return and signals success for execution of the contract. There is a limit
 of 1024 bytes for the returndata.
 
