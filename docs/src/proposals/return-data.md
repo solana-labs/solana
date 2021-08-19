@@ -97,7 +97,7 @@ The callee can set the return data using a new system call `sol_set_return_data(
 This function does not return and signals success for execution of the contract. There is a limit
 of 1024 bytes for the returndata.
 
-The caller can retrieve the return data of the callee by a new system call:
+The caller can retrieve the return data of the callee by using a new variant of the `sol_invoke` system call:
 
 ```
 fn sol_invoke_signed_rust_return_data(
