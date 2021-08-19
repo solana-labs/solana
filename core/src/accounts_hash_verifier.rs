@@ -13,6 +13,7 @@ use solana_runtime::{
     snapshot_config::SnapshotConfig,
     snapshot_package::{
         AccountsPackage, AccountsPackageReceiver, PendingSnapshotPackage, SnapshotPackage,
+        SnapshotType,
     },
     snapshot_utils,
     sorted_storages::SortedStorages,
@@ -220,7 +221,21 @@ impl AccountsHashVerifier {
                                 Some(incremental_snapshot_base_slot),
                             );
 
-                            *pending_snapshot_package.lock().unwrap() = Some(snapshot_package);
+                            let mut pending_snapshot_package = pending_snapshot_package.lock().unwrap();
+
+                            // Conditionally submit an incremental snapshot package for archiving.
+                            // Submit the package _unless_ the pending snapshot package contains a
+                            // full snapshot package.
+                            let can_submit = pending_snapshot_package.as_ref().map_or(true, |pending_snapshot_package| {
+                                pending_snapshot_package.snapshot_type == SnapshotType::IncrementalSnapshot
+                            });
+
+                            if can_submit {
+                                *pending_snapshot_package = Some(snapshot_package);
+                            }
+                            else {
+                                info!("Not submitting incremental snapshot for archiving; there is still a pending full snapshot package waiting to be archived.");
+                            }
                         }
                     };
                 }
