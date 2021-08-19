@@ -309,7 +309,7 @@ startBootstrapLeader() {
          ${#clientIpList[@]} \"$benchTpsExtraArgs\" \
          ${#clientIpList[@]} \"$benchExchangeExtraArgs\" \
          \"$genesisOptions\" \
-         \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize $maybeWaitForSupermajority\" \
+         \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize $maybeWaitForSupermajority $maybeAccountsDbSkipShrink\" \
          \"$gpuMode\" \
          \"$maybeWarpSlot\" \
          \"$waitForNodeInit\" \
@@ -381,7 +381,7 @@ startNode() {
          ${#clientIpList[@]} \"$benchTpsExtraArgs\" \
          ${#clientIpList[@]} \"$benchExchangeExtraArgs\" \
          \"$genesisOptions\" \
-         \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize $maybeWaitForSupermajority\" \
+         \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize $maybeWaitForSupermajority $maybeAccountsDbSkipShrink\" \
          \"$gpuMode\" \
          \"$maybeWarpSlot\" \
          \"$waitForNodeInit\" \
@@ -782,6 +782,7 @@ maybeLimitLedgerSize=""
 maybeSkipLedgerVerify=""
 maybeDisableAirdrops=""
 maybeWaitForSupermajority=""
+maybeAccountsDbSkipShrink=""
 debugBuild=false
 doBuild=true
 gpuMode=auto
@@ -906,6 +907,9 @@ while [[ -n $1 ]]; do
     elif [[ $1 == --extra-primordial-stakes ]]; then
       extraPrimordialStakes=$2
       shift 2
+    elif [[ $1 = --accounts-db-skip-shrink ]]; then
+      maybeAccountsDbSkipShrink="$1"
+      shift 1
     else
       usage "Unknown long option: $1"
     fi
