@@ -1046,6 +1046,7 @@ impl BankingStage {
         msgs: &Packets,
         transaction_indexes: &[usize],
         libsecp256k1_0_5_upgrade_enabled: bool,
+        libsecp256k1_fail_on_bad_count: bool,
         cost_tracker: &Arc<RwLock<CostTracker>>,
         banking_stage_stats: &BankingStageStats,
     ) -> (Vec<SanitizedTransaction>, Vec<usize>, Vec<usize>) {
@@ -1062,8 +1063,11 @@ impl BankingStage {
                     Err(TransactionError::UnsupportedVersion)
                 })
                 .ok()?;
-                tx.verify_precompiles(libsecp256k1_0_5_upgrade_enabled)
-                    .ok()?;
+                tx.verify_precompiles(
+                    libsecp256k1_0_5_upgrade_enabled,
+                    libsecp256k1_fail_on_bad_count,
+                )
+                .ok()?;
                 Some((tx, *tx_index))
             })
             .collect();
@@ -1158,6 +1162,7 @@ impl BankingStage {
                 msgs,
                 &packet_indexes,
                 bank.libsecp256k1_0_5_upgrade_enabled(),
+                bank.libsecp256k1_fail_on_bad_count(),
                 cost_tracker,
                 banking_stage_stats,
             );
@@ -1260,6 +1265,7 @@ impl BankingStage {
                 msgs,
                 transaction_indexes,
                 bank.libsecp256k1_0_5_upgrade_enabled(),
+                bank.libsecp256k1_fail_on_bad_count(),
                 cost_tracker,
                 banking_stage_stats,
             );
