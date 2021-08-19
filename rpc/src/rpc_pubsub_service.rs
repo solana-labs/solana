@@ -10,24 +10,28 @@ use {
     jsonrpc_core::IoHandler,
     soketto::handshake::{server, Server},
     std::{
+        io,
         net::SocketAddr,
         str,
         sync::Arc,
         thread::{self, Builder, JoinHandle},
     },
     stream_cancel::{Trigger, Tripwire},
-    tokio::{net::TcpStream, pin, select},
+    thiserror::Error,
+    tokio::{net::TcpStream, pin, select, sync::broadcast},
     tokio_util::compat::TokioAsyncReadCompatExt,
 };
 
 pub const MAX_ACTIVE_SUBSCRIPTIONS: usize = 1_000_000;
-pub const DEFAULT_BROADCAST_CHANNEL_CAPACITY: usize = 1_000_000;
+pub const DEFAULT_QUEUE_CAPACITY_ITEMS: usize = 10_000_000;
+pub const DEFAULT_QUEUE_CAPACITY_BYTES: usize = 256 * 1024 * 1024;
 
 #[derive(Debug, Clone)]
 pub struct PubSubConfig {
     pub enable_vote_subscription: bool,
     pub max_active_subscriptions: usize,
-    pub queue_capacity: usize,
+    pub queue_capacity_items: usize,
+    pub queue_capacity_bytes: usize,
 }
 
 impl Default for PubSubConfig {
@@ -35,7 +39,8 @@ impl Default for PubSubConfig {
         Self {
             enable_vote_subscription: false,
             max_active_subscriptions: MAX_ACTIVE_SUBSCRIPTIONS,
-            queue_capacity: DEFAULT_BROADCAST_CHANNEL_CAPACITY,
+            queue_capacity_items: DEFAULT_QUEUE_CAPACITY_ITEMS,
+            queue_capacity_bytes: DEFAULT_QUEUE_CAPACITY_BYTES,
         }
     }
 }
@@ -88,7 +93,7 @@ struct BroadcastHandler {
 }
 
 impl BroadcastHandler {
-    fn handle(&self, notification: RpcNotification) -> Option<Arc<str>> {
+    fn handle(&self, notification: RpcNotification) -> Result<Option<Arc<String>>, Error> {
         if self
             .current_subscriptions
             .contains_key(&notification.subscription_id)
@@ -97,9 +102,13 @@ impl BroadcastHandler {
                 self.current_subscriptions
                     .remove(&notification.subscription_id);
             }
-            Some(notification.json)
+            notification
+                .json
+                .upgrade()
+                .ok_or(Error::NotificationIsGone)
+                .map(Some)
         } else {
-            None
+            Ok(None)
         }
     }
 }
@@ -123,7 +132,7 @@ impl TestBroadcastReceiver {
         loop {
             match self.inner.try_recv() {
                 Ok(notification) => {
-                    if let Some(json) = self.handler.handle(notification) {
+                    if let Some(json) = self.handler.handle(notification).expect("handler failed") {
                         return json.to_string();
                     }
                 }
@@ -162,12 +171,24 @@ pub fn test_connection(
     (rpc_impl, receiver)
 }
 
+#[derive(Debug, Error)]
+enum Error {
+    #[error("handshake error: {0}")]
+    Handshake(#[from] soketto::handshake::Error),
+    #[error("connection error: {0}")]
+    Connection(#[from] soketto::connection::Error),
+    #[error("broadcast queue error: {0}")]
+    Broadcast(#[from] broadcast::error::RecvError),
+    #[error("client has lagged behind (notification is gone)")]
+    NotificationIsGone,
+}
+
 async fn handle_connection(
     socket: TcpStream,
     subscription_control: SubscriptionControl,
     config: PubSubConfig,
     mut tripwire: Tripwire,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), Error> {
     let mut server = Server::new(socket.compat());
     let request = server.receive_request().await?;
     let accept = server::Response::Accept {
@@ -205,17 +226,16 @@ async fn handle_connection(
                         Err(soketto::connection::Error::Closed) => return Ok(()),
                         Err(err) => return Err(err.into()),
                     },
-                    result = broadcast_receiver.recv() => match result {
-                        Ok(notification) => {
-                            if let Some(json) = broadcast_handler.handle(notification) {
-                                sender.send_text(&json).await?;
-
-                            }
-                        }
+                    result = broadcast_receiver.recv() => {
                         // In both possible error cases (closed or lagged) we disconnect the client.
-                        Err(_) => return Ok(()),
+                        if let Some(json) = broadcast_handler.handle(result?)? {
+                            sender.send_text(&*json).await?;
+                        }
                     },
-                    _ = &mut tripwire => return Ok(()),
+                    _ = &mut tripwire => {
+                        warn!("disconnecting websocket client: shutting down");
+                        return Ok(())
+                    },
                 }
             }
         }
@@ -242,13 +262,13 @@ async fn listen(
     config: PubSubConfig,
     subscription_control: SubscriptionControl,
     mut tripwire: Tripwire,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> io::Result<()> {
     let listener = tokio::net::TcpListener::bind(&listen_address).await?;
     loop {
         select! {
             result = listener.accept() => match result {
                 Ok((socket, addr)) => {
-                    debug!("new client: {:?}", addr);
+                    debug!("new client ({:?})", addr);
                     let subscription_control = subscription_control.clone();
                     let config = config.clone();
                     let tripwire = tripwire.clone();
@@ -256,8 +276,9 @@ async fn listen(
                         let handle = handle_connection(
                             socket, subscription_control, config, tripwire
                         );
-                        if let Err(err) = handle.await {
-                            debug!("connection handler error: {}", err);
+                        match handle.await {
+                            Ok(()) => debug!("connection closed ({:?})", addr),
+                            Err(err) => warn!("connection handler error ({:?}): {}", addr, err),
                         }
                     });
                 }

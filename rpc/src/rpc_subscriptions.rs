@@ -37,12 +37,12 @@ use {
     },
     solana_vote_program::vote_state::Vote,
     std::{
-        collections::HashMap,
+        collections::{HashMap, VecDeque},
         io::Cursor,
         iter, str,
         sync::{
             atomic::{AtomicBool, Ordering},
-            Arc, RwLock,
+            Arc, RwLock, Weak,
         },
         thread::{Builder, JoinHandle},
         time::Duration,
@@ -177,12 +177,47 @@ where
 pub struct RpcNotification {
     pub subscription_id: SubscriptionId,
     pub is_final: bool,
-    pub json: Arc<str>,
+    pub json: Weak<String>,
+}
+
+struct RecentItems {
+    queue: VecDeque<Arc<String>>,
+    total_bytes: usize,
+    max_len: usize,
+    max_total_bytes: usize,
+}
+
+impl RecentItems {
+    fn new(max_len: usize, max_total_bytes: usize) -> Self {
+        Self {
+            queue: VecDeque::new(),
+            total_bytes: 0,
+            max_len,
+            max_total_bytes,
+        }
+    }
+
+    fn push(&mut self, item: Arc<String>) {
+        self.total_bytes = self
+            .total_bytes
+            .checked_add(item.len())
+            .expect("total bytes overflow");
+        self.queue.push_back(item);
+
+        while self.total_bytes > self.max_total_bytes || self.queue.len() > self.max_len {
+            let item = self.queue.pop_front().expect("can't be empty");
+            self.total_bytes = self
+                .total_bytes
+                .checked_sub(item.len())
+                .expect("total bytes underflow");
+        }
+    }
 }
 
 struct RpcNotifier {
     sender: broadcast::Sender<RpcNotification>,
     buf: Vec<u8>,
+    recent_items: RecentItems,
 }
 
 #[derive(Debug, Serialize)]
@@ -215,15 +250,17 @@ impl RpcNotifier {
         serde_json::to_writer(Cursor::new(&mut self.buf), &notification)
             .expect("serialization never fails");
         let buf_str = str::from_utf8(&self.buf).expect("json is always utf-8");
+        let buf_arc = Arc::new(String::from(buf_str));
 
         let notification = RpcNotification {
             subscription_id: subscription.id(),
-            json: buf_str.into(),
+            json: Arc::downgrade(&buf_arc),
             is_final,
         };
         // There is an unlikely case where this can fail: if the last subscription is closed
         // just as the notifier generates a notification for it.
         let _ = self.sender.send(notification);
+        self.recent_items.push(buf_arc);
     }
 }
 
@@ -415,11 +452,15 @@ impl RpcSubscriptions {
         let exit_clone = exit.clone();
         let subscriptions = SubscriptionsTracker::new(bank_forks.clone());
 
-        let (broadcast_sender, _) = broadcast::channel(config.queue_capacity);
+        let (broadcast_sender, _) = broadcast::channel(config.queue_capacity_items);
 
         let notifier = RpcNotifier {
             sender: broadcast_sender.clone(),
             buf: Vec::new(),
+            recent_items: RecentItems::new(
+                config.queue_capacity_items,
+                config.queue_capacity_bytes,
+            ),
         };
         let t_cleanup = Builder::new()
             .name("solana-rpc-notifications".to_string())
@@ -622,8 +663,7 @@ impl RpcSubscriptions {
                         }
                         NotificationEntry::SignaturesReceived((slot, slot_signatures)) => {
                             for slot_signature in &slot_signatures {
-                                if let Some(subs) =
-                                    subscriptions.by_signature().get(&slot_signature)
+                                if let Some(subs) = subscriptions.by_signature().get(slot_signature)
                                 {
                                     for subscription in subs.values() {
                                         if let SubscriptionParams::Signature(params) =

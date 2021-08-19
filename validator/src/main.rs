@@ -1062,7 +1062,10 @@ pub fn main() {
 
     let default_rpc_pubsub_max_active_subscriptions =
         PubSubConfig::default().max_active_subscriptions.to_string();
-    let default_rpc_pubsub_queue_capacity = PubSubConfig::default().queue_capacity.to_string();
+    let default_rpc_pubsub_queue_capacity_items =
+        PubSubConfig::default().queue_capacity_items.to_string();
+    let default_rpc_pubsub_queue_capacity_bytes =
+        PubSubConfig::default().queue_capacity_bytes.to_string();
     let default_rpc_send_transaction_retry_ms = ValidatorConfig::default()
         .send_transaction_retry_ms
         .to_string();
@@ -1778,13 +1781,23 @@ pub fn main() {
                        across all connections."),
         )
         .arg(
-            Arg::with_name("rpc_pubsub_queue_capacity")
-                .long("rpc-pubsub-queue-capacity")
+            Arg::with_name("rpc_pubsub_queue_capacity_items")
+                .long("rpc-pubsub-queue-capacity-items")
                 .takes_value(true)
                 .value_name("NUMBER")
                 .validator(is_parsable::<usize>)
-                .default_value(&default_rpc_pubsub_queue_capacity)
+                .default_value(&default_rpc_pubsub_queue_capacity_items)
                 .help("The maximum number of notifications that RPC PubSub will store \
+                       across all connections."),
+        )
+        .arg(
+            Arg::with_name("rpc_pubsub_queue_capacity_bytes")
+                .long("rpc-pubsub-queue-capacity-bytes")
+                .takes_value(true)
+                .value_name("BYTES")
+                .validator(is_parsable::<usize>)
+                .default_value(&default_rpc_pubsub_queue_capacity_bytes)
+                .help("The maximum total size of notifications that RPC PubSub will store \
                        across all connections."),
         )
         .arg(
@@ -2580,7 +2593,16 @@ pub fn main() {
                 "rpc_pubsub_max_active_subscriptions",
                 usize
             ),
-            queue_capacity: value_t_or_exit!(matches, "rpc_pubsub_queue_capacity", usize),
+            queue_capacity_items: value_t_or_exit!(
+                matches,
+                "rpc_pubsub_queue_capacity_items",
+                usize
+            ),
+            queue_capacity_bytes: value_t_or_exit!(
+                matches,
+                "rpc_pubsub_queue_capacity_bytes",
+                usize
+            ),
         },
         voting_disabled: matches.is_present("no_voting") || restricted_repair_only_mode,
         wait_for_supermajority: value_t!(matches, "wait_for_supermajority", Slot).ok(),
