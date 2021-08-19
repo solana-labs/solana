@@ -10,33 +10,25 @@ pub const SYSTEM_PARALLELISM: u64 = 10;
 pub const MAX_INSTRUCTION_COST: u64 = 200_000;
 pub const MAX_NUMBER_BPF_INSTRUCTIONS_PER_ACCOUNT: u64 = 200;
 
-pub const fn max_instructions_per_block() -> u64 {
-    (MAX_BLOCK_TIME_US / AVG_INSTRUCTION_TIME_US) * SYSTEM_PARALLELISM
-}
+// 4_000
+pub const MAX_INSTRUCTIONS_PER_BLOCK: u64 =
+    (MAX_BLOCK_TIME_US / AVG_INSTRUCTION_TIME_US) * SYSTEM_PARALLELISM;
 
-pub const fn block_cost_max() -> u64 {
-    MAX_INSTRUCTION_COST * max_instructions_per_block() * 10
-}
+// 8_000_000_000
+pub const BLOCK_COST_MAX: u64 = MAX_INSTRUCTION_COST * MAX_INSTRUCTIONS_PER_BLOCK * 10;
 
-pub const fn account_cost_max() -> u64 {
-    MAX_INSTRUCTION_COST * max_instructions_per_block()
-}
+// 800_000_000
+pub const ACCOUNT_COST_MAX: u64 = MAX_INSTRUCTION_COST * MAX_INSTRUCTIONS_PER_BLOCK;
 
-pub const fn compute_unit_to_us_ratio() -> u64 {
-    (MAX_INSTRUCTION_COST / AVG_INSTRUCTION_TIME_US) * SYSTEM_PARALLELISM
-}
+// 2_000
+pub const COMPUTE_UNIT_TO_US_RATIO: u64 =
+    (MAX_INSTRUCTION_COST / AVG_INSTRUCTION_TIME_US) * SYSTEM_PARALLELISM;
 
-pub const fn signature_cost() -> u64 {
-    // signature takes average 10us
-    compute_unit_to_us_ratio() * 10
-}
+// signature takes average 10us, or 20K CU
+pub const SIGNATURE_COST: u64 = COMPUTE_UNIT_TO_US_RATIO * 10;
 
-pub const fn account_read_cost() -> u64 {
-    // read account averages 5us
-    compute_unit_to_us_ratio() * 5
-}
+// read account averages 5us, or 10K CU
+pub const ACCOUNT_READ_COST: u64 = COMPUTE_UNIT_TO_US_RATIO * 5;
 
-pub const fn account_write_cost() -> u64 {
-    // write account averages 25us
-    compute_unit_to_us_ratio() * 25
-}
+// write account averages 25us, or 50K CU
+pub const ACCOUNT_WRITE_COST: u64 = COMPUTE_UNIT_TO_US_RATIO * 25;
