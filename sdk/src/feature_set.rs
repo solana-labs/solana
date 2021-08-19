@@ -199,6 +199,10 @@ pub mod libsecp256k1_fail_on_bad_count {
     solana_sdk::declare_id!("8aXvSuopd1PUj7UhehfXJRg6619RHp8ZvwTyyJHdUYsj");
 }
 
+pub mod close_upgradeable_program_accounts {
+    solana_sdk::declare_id!("EQMtCuSAkMVF9ZdhGuABtgvyXJLtSRF5AQKv1RNsrhj7");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -241,7 +245,8 @@ lazy_static! {
         (gate_large_block::id(), "validator checks block cost against max limit in realtime, reject if exceeds."),
         (mem_overlap_fix::id(), "memory overlap fix"),
         (versioned_tx_message_enabled::id(), "enable versioned transaction message processing"),
-        (libsecp256k1_fail_on_bad_count::id(), "Fail libsec256k1_verify if count appears wrong")
+        (libsecp256k1_fail_on_bad_count::id(), "Fail libsec256k1_verify if count appears wrong"),
+        (close_upgradeable_program_accounts::id(), "enable closing upgradeable program accounts"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
