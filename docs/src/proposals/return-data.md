@@ -100,7 +100,7 @@ of 1024 bytes for the returndata.
 The caller can retrieve the return data of the callee by using a new variant of the `sol_invoke` system call:
 
 ```
-fn sol_invoke_signed_rust_return_data(
+fn sol_invoke_signed_return_data_rust(
     instruction_addr: *const u8,
     account_infos_addr: *const u8,
     account_infos_len: u64,
@@ -110,7 +110,7 @@ fn sol_invoke_signed_rust_return_data(
     return_data_length: *mut u64,
 ) -> u64;
 
-uint64_t sol_invoke_signed_c_return_data(
+uint64_t sol_invoke_signed_return_data_c(
   const SolInstruction *instruction,
   const SolAccountInfo *account_infos,
   int account_infos_len,
