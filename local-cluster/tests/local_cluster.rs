@@ -1147,14 +1147,8 @@ fn test_fork_choice_refresh_old_votes() {
             .unwrap();
             let (heaviest_fork_latest_vote, _) =
                 last_vote_in_tower(&heaviest_ledger_path, &context.heaviest_validator_key).unwrap();
-            while lighter_fork_blockstore
-                .meta(lighter_fork_latest_vote)
-                .unwrap()
-                .is_none()
-                || heaviest_blockstore
-                    .meta(heaviest_fork_latest_vote)
-                    .unwrap()
-                    .is_none()
+            while !lighter_fork_blockstore.is_full(lighter_fork_latest_vote)
+                || !heaviest_blockstore.is_full(heaviest_fork_latest_vote)
             {
                 sleep(Duration::from_millis(100));
             }
