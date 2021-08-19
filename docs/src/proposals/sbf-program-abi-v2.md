@@ -1,5 +1,5 @@
 ---
-title: ABI v2
+title: SBF Program ABI v2
 ---
 
 ABI between loader and program entrypoint, as well as syscalls such as (cross program) invocation and account reallocation.
@@ -38,41 +38,48 @@ Everything is in little endian.
 struct Map {
   number_of_entries: u16,
   attribute: [u16; number_of_entries],
-  value_offset: [u32; number_of_entries + 1],
-  is_value_indirect: [u8; number_of_entries],
+  value_offset: [u32; number_of_entries],
   values: [Value],
 }
 
-enum Value {
+struct FatPtr {
+  address: u64,
+  length: u32,
+}
+
+union Value {
   Direct([u8]),
-  Indirect({ pointer: u64, length: u32 }),
+  Indirect([FatPtr]),
 }
 ```
 
 ### Memory Mapping / Regions
 Additional to the mandatory RBPF memory regions (null, program, stack, heap) we would add `2 + number_of_accounts_in_instruction` memory regions to the VM mapping.
 
+The idea is to serialize the meta data of all accounts once per transaction, and only serialize a few attributes like `AccountIsSigner` and `AccountIsWritable` which are currently stored in `KeyedAccounts` per instruction. Then these two meta data regions and the `number_of_accounts_in_instruction` account data regions are mapped directly by pointers and not copied anymore. Furthermore, the `PreAccount`s become obsolete as well because the writability of an account can be enforced by the memory mapping.
+
 #### Read-only meta data region:
 - Transaction context:
-  - `NumberOfAccountsInTransaction = 1`: `u32`
-  - `AccountKey = 2`: `[Pubkey; NumberOfAccountsInTransaction]`
-  - `AccountIsExecutable = 3`: `[bool; NumberOfAccountsInTransaction]`
-  - `AccountOwner = 4`: `[Pubkey; NumberOfAccountsInTransaction]`
-  - `AccountLamports = 5`: `[u64; NumberOfAccountsInTransaction]`
-  - `AccountData = 6`: `[&[u8]; NumberOfAccountsInTransaction]`
-  - `InvocationStackFrame = 7`: `Map`
+  - `NumberOfAccountsInTransaction = 0`: `u32`
+  - `AccountKey = 1`: `[Pubkey; NumberOfAccountsInTransaction]`
+  - `AccountIsExecutable = 2`: `[bool; NumberOfAccountsInTransaction]`
+  - `AccountOwner = 3`: `[Pubkey; NumberOfAccountsInTransaction]`
+  - `AccountLamports = 4`: `[u64; NumberOfAccountsInTransaction]`
+  - `AccountData = 5`: `[&[u8]; NumberOfAccountsInTransaction]`
+  - `InvocationStackHeight = 6`: `u16`
+  - `InvocationStack = 7`: `[Map; InvocationStackHeight]`
 - Instruction context:
-  - `ParentStackFrame = 8`: `Map`
-  - `InstructionData = 9`: `[u8]`
-  - `NumberOfAccountsInInstruction = 10`: `u32`
-  - `InstructionAccountIndices = 11`: `[u32; NumberOfAccountsInInstruction]`
-  - `ProgramAccountIndex = 12`: `u32`
-  - `AccountIsSigner = 13`: `[bool; NumberOfAccountsInInstruction]`
-  - `AccountIsWritable = 14`: `[bool; NumberOfAccountsInInstruction]`
-  - `WritableAttributes = 15`: `Map`
+  - `InstructionData = 8`: `[u8]`
+  - `NumberOfAccountsInInstruction = 9`: `u16`
+  - `InstructionAccountIndices = 10`: `[u32; NumberOfAccountsInInstruction]`
+  - `ProgramAccountIndex = 11`: `u32`
+  - `AccountIsSigner = 12`: `[bool; NumberOfAccountsInInstruction]`
+  - `AccountIsWritable = 13`: `[bool; NumberOfAccountsInInstruction]`
+  - `WritableAttributes = 14`: `Map`
 
 #### Read-write meta data region:
 - Instruction context:
+  - `AccountIsExecutable`,
   - `AccountOwner`,
   - `AccountLamports`,
 
@@ -81,6 +88,14 @@ Additional to the mandatory RBPF memory regions (null, program, stack, heap) we 
 - But virtual and physical addresses stay the same throughout the transaction
 - Read-only or read-write depends on the instruction context
 - Content: `[u8]`
+
+### Syscalls
+
+#### Cross Program Invocation
+TODO
+
+#### Account Reallocation / Resizing
+TODO
 
 ### Usage / Integration
 Replace `KeyedAccounts`, `serialize_parameters`, `deserialize_parameters` and parts of the `InvokeContext` with a new interface which directly operates on the new encoding. It would be used by the runtime and programs alike.
