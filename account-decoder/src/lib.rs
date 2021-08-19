@@ -28,6 +28,7 @@ use {
 
 pub type StringAmount = String;
 pub type StringDecimals = String;
+pub const MAX_BS58_BYTES: usize = 128;
 
 /// A duplicate representation of an Account for pretty JSON serialization
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -64,7 +65,6 @@ impl UiAccount {
         account: &T,
         data_slice_config: Option<UiDataSliceConfig>,
     ) -> String {
-        const MAX_BS58_BYTES: usize = 128;
         if account.data().len() <= MAX_BS58_BYTES {
             bs58::encode(slice_data(account.data(), data_slice_config)).into_string()
         } else {
