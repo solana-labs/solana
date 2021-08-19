@@ -1410,11 +1410,7 @@ impl Bank {
             new.apply_feature_activations(false, false);
         }
 
-        let cloned = new
-            .stakes
-            .read()
-            .unwrap()
-            .clone_with_epoch(epoch, new.stake_program_v2_enabled());
+        let cloned = new.stakes.read().unwrap().clone_with_epoch(epoch);
         *new.stakes.write().unwrap() = cloned;
 
         let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
@@ -2037,12 +2033,8 @@ impl Bank {
 
         let old_vote_balance_and_staked = self.stakes.read().unwrap().vote_balance_and_staked();
 
-        let validator_point_value = self.pay_validator_rewards(
-            prev_epoch,
-            validator_rewards,
-            reward_calc_tracer,
-            self.stake_program_v2_enabled(),
-        );
+        let validator_point_value =
+            self.pay_validator_rewards(prev_epoch, validator_rewards, reward_calc_tracer);
 
         if !self
             .feature_set
@@ -2179,7 +2171,6 @@ impl Bank {
         rewarded_epoch: Epoch,
         rewards: u64,
         reward_calc_tracer: &mut Option<impl FnMut(&RewardCalculationEvent)>,
-        fix_stake_deactivate: bool,
     ) -> f64 {
         let stake_history = self.stakes.read().unwrap().history().clone();
 
@@ -2193,13 +2184,8 @@ impl Bank {
                     .map(move |(_stake_pubkey, stake_account)| (stake_account, vote_account))
             })
             .map(|(stake_account, vote_account)| {
-                stake_state::calculate_points(
-                    stake_account,
-                    vote_account,
-                    Some(&stake_history),
-                    fix_stake_deactivate,
-                )
-                .unwrap_or(0)
+                stake_state::calculate_points(stake_account, vote_account, Some(&stake_history))
+                    .unwrap_or(0)
             })
             .sum();
 
@@ -2243,7 +2229,6 @@ impl Bank {
                     &point_value,
                     Some(&stake_history),
                     &mut reward_calc_tracer.as_mut(),
-                    fix_stake_deactivate,
                 );
                 if let Ok((stakers_reward, _voters_reward)) = redeemed {
                     self.store_account(stake_pubkey, stake_account);
@@ -4513,7 +4498,6 @@ impl Bank {
             self.stakes.write().unwrap().store(
                 pubkey,
                 account,
-                self.stake_program_v2_enabled(),
                 self.check_init_vote_data_enabled(),
             );
         }
@@ -5221,7 +5205,6 @@ impl Bank {
                 if let Some(old_vote_account) = self.stakes.write().unwrap().store(
                     pubkey,
                     account,
-                    self.stake_program_v2_enabled(),
                     self.check_init_vote_data_enabled(),
                 ) {
                     // TODO: one of the indices is redundant.
@@ -7831,7 +7814,7 @@ pub(crate) mod tests {
                     .map(move |(_stake_pubkey, stake_account)| (stake_account, vote_account))
             })
             .map(|(stake_account, vote_account)| {
-                stake_state::calculate_points(stake_account, vote_account, None, true).unwrap_or(0)
+                stake_state::calculate_points(stake_account, vote_account, None).unwrap_or(0)
             })
             .sum();
 
@@ -9377,7 +9360,7 @@ pub(crate) mod tests {
             // epoch_stakes are a snapshot at the leader_schedule_slot_offset boundary
             //   in the prior epoch (0 in this case)
             assert_eq!(
-                leader_stake.stake(0, None, true),
+                leader_stake.stake(0, None),
                 vote_accounts.unwrap().get(&leader_vote_account).unwrap().0
             );
 
@@ -9393,7 +9376,7 @@ pub(crate) mod tests {
 
         assert!(child.epoch_vote_accounts(epoch).is_some());
         assert_eq!(
-            leader_stake.stake(child.epoch(), None, true),
+            leader_stake.stake(child.epoch(), None),
             child
                 .epoch_vote_accounts(epoch)
                 .unwrap()
@@ -9411,7 +9394,7 @@ pub(crate) mod tests {
         );
         assert!(child.epoch_vote_accounts(epoch).is_some());
         assert_eq!(
-            leader_stake.stake(child.epoch(), None, true),
+            leader_stake.stake(child.epoch(), None),
             child
                 .epoch_vote_accounts(epoch)
                 .unwrap()

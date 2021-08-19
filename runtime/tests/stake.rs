@@ -81,7 +81,6 @@ fn warmed_up(bank: &Bank, stake_pubkey: &Pubkey) -> bool {
                 )
                 .unwrap(),
             ),
-            true,
         )
 }
 
@@ -96,7 +95,6 @@ fn get_staked(bank: &Bank, stake_pubkey: &Pubkey) -> u64 {
                 )
                 .unwrap(),
             ),
-            true,
         )
 }
 

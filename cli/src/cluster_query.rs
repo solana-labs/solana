@@ -1,7 +1,6 @@
 use crate::{
     cli::{CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult},
     spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
-    stake::is_stake_program_v2_enabled,
 };
 use clap::{value_t, value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand};
 use console::{style, Emoji};
@@ -1749,8 +1748,6 @@ pub fn process_show_stakes(
     let stake_history = from_account(&stake_history_account).ok_or_else(|| {
         CliError::RpcRequestError("Failed to deserialize stake history".to_string())
     })?;
-    // At v1.6, this check can be removed and simply passed as `true`
-    let stake_program_v2_enabled = is_stake_program_v2_enabled(rpc_client)?;
 
     let mut stake_accounts: Vec<CliKeyedStakeState> = vec![];
     for (stake_pubkey, stake_account) in all_stake_accounts {
@@ -1766,7 +1763,6 @@ pub fn process_show_stakes(
                                 use_lamports_unit,
                                 &stake_history,
                                 &clock,
-                                stake_program_v2_enabled,
                             ),
                         });
                     }
@@ -1785,7 +1781,6 @@ pub fn process_show_stakes(
                                 use_lamports_unit,
                                 &stake_history,
                                 &clock,
-                                stake_program_v2_enabled,
                             ),
                         });
                     }

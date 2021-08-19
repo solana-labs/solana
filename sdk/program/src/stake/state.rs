@@ -282,14 +282,8 @@ impl Delegation {
         self.activation_epoch == std::u64::MAX
     }
 
-    pub fn stake(
-        &self,
-        epoch: Epoch,
-        history: Option<&StakeHistory>,
-        fix_stake_deactivate: bool,
-    ) -> u64 {
-        self.stake_activating_and_deactivating(epoch, history, fix_stake_deactivate)
-            .0
+    pub fn stake(&self, epoch: Epoch, history: Option<&StakeHistory>) -> u64 {
+        self.stake_activating_and_deactivating(epoch, history).0
     }
 
     // returned tuple is (effective, activating, deactivating) stake
@@ -298,13 +292,11 @@ impl Delegation {
         &self,
         target_epoch: Epoch,
         history: Option<&StakeHistory>,
-        fix_stake_deactivate: bool,
     ) -> (u64, u64, u64) {
         let delegated_stake = self.stake;
 
         // first, calculate an effective and activating stake
-        let (effective_stake, activating_stake) =
-            self.stake_and_activating(target_epoch, history, fix_stake_deactivate);
+        let (effective_stake, activating_stake) = self.stake_and_activating(target_epoch, history);
 
         // then de-activate some portion if necessary
         if target_epoch < self.deactivation_epoch {
@@ -381,14 +373,13 @@ impl Delegation {
         &self,
         target_epoch: Epoch,
         history: Option<&StakeHistory>,
-        fix_stake_deactivate: bool,
     ) -> (u64, u64) {
         let delegated_stake = self.stake;
 
         if self.is_bootstrap() {
             // fully effective immediately
             (delegated_stake, 0)
-        } else if fix_stake_deactivate && self.activation_epoch == self.deactivation_epoch {
+        } else if self.activation_epoch == self.deactivation_epoch {
             // activated but instantly deactivated; no stake at all regardless of target_epoch
             // this must be after the bootstrap check and before all-is-activating check
             (0, 0)
@@ -494,13 +485,8 @@ pub struct Stake {
 }
 
 impl Stake {
-    pub fn stake(
-        &self,
-        epoch: Epoch,
-        history: Option<&StakeHistory>,
-        fix_stake_deactivate: bool,
-    ) -> u64 {
-        self.delegation.stake(epoch, history, fix_stake_deactivate)
+    pub fn stake(&self, epoch: Epoch, history: Option<&StakeHistory>) -> u64 {
+        self.delegation.stake(epoch, history)
     }
 
     pub fn split(
