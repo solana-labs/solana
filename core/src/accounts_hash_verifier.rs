@@ -112,7 +112,7 @@ impl AccountsHashVerifier {
             fault_injection_rate_slots,
         );
 
-        Self::handle_snapshot(accounts_package, pending_snapshot_package, snapshot_config);
+        Self::submit_for_packaging(accounts_package, pending_snapshot_package, snapshot_config);
     }
 
     fn verify_accounts_package_hash(
@@ -182,7 +182,7 @@ impl AccountsHashVerifier {
         cluster_info.push_accounts_hashes(hashes.clone());
     }
 
-    fn handle_snapshot(
+    fn submit_for_packaging(
         accounts_package: AccountsPackage,
         pending_snapshot_package: Option<&PendingSnapshotPackage>,
         snapshot_config: Option<&SnapshotConfig>,
