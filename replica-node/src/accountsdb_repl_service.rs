@@ -4,7 +4,7 @@ use {
     solana_replica_lib::accountsdb_repl_client::{
         AccountsDbReplClientService, AccountsDbReplClientServiceConfig, ReplicaRpcError,
     },
-    solana_sdk::clock::Slot,
+    solana_sdk::{clock::Slot, pubkey::Pubkey},
     std::{
         thread::{self, sleep, Builder, JoinHandle},
         time::Duration,
@@ -38,7 +38,7 @@ impl AccountsDbReplService {
             }
             Ok(accounts) => {
                 for account in accounts.iter() {
-                    info!("Received account: {:?}", account);
+                    info!("Received account: {:?}", Pubkey::new(&account.account_meta.as_ref().unwrap().pubkey));
                 }
             }
         }
