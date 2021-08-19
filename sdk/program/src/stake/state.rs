@@ -454,27 +454,6 @@ impl Delegation {
             (delegated_stake, 0)
         }
     }
-
-    pub fn rewrite_stake(
-        &mut self,
-        account_balance: u64,
-        rent_exempt_balance: u64,
-    ) -> Option<(u64, u64)> {
-        // note that this will intentionally overwrite innocent
-        // deactivated-then-immeditealy-withdrawn stake accounts as well
-        // this is chosen to minimize the risks from complicated logic,
-        // over some unneeded rewrites
-        let corrected_stake = account_balance.saturating_sub(rent_exempt_balance);
-        if self.stake != corrected_stake {
-            // this could result in creating a 0-staked account;
-            // rewards and staking calc can handle it.
-            let (old, new) = (self.stake, corrected_stake);
-            self.stake = corrected_stake;
-            Some((old, new))
-        } else {
-            None
-        }
-    }
 }
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Clone, Copy, AbiExample)]
