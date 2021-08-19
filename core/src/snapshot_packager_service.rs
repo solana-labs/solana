@@ -1,6 +1,8 @@
 use solana_gossip::cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES};
 use solana_runtime::{
-    snapshot_archive_info::SnapshotArchiveInfoGetter, snapshot_package::PendingSnapshotPackage,
+    snapshot_archive_info::SnapshotArchiveInfoGetter,
+    snapshot_config::SnapshotConfig,
+    snapshot_package::{PendingSnapshotPackage, SnapshotType},
     snapshot_utils,
 };
 use solana_sdk::{clock::Slot, hash::Hash};
@@ -23,7 +25,7 @@ impl SnapshotPackagerService {
         starting_snapshot_hash: Option<(Slot, Hash)>,
         exit: &Arc<AtomicBool>,
         cluster_info: &Arc<ClusterInfo>,
-        maximum_snapshots_to_retain: usize,
+        snapshot_config: SnapshotConfig,
     ) -> Self {
         let exit = exit.clone();
         let cluster_info = cluster_info.clone();
@@ -45,9 +47,14 @@ impl SnapshotPackagerService {
                     if let Some(snapshot_package) = snapshot_package {
                         match snapshot_utils::archive_snapshot_package(
                             &snapshot_package,
-                            maximum_snapshots_to_retain,
+                            snapshot_config.maximum_snapshots_to_retain,
                         ) {
                             Ok(_) => {
+                                if snapshot_package.snapshot_type == SnapshotType::FullSnapshot {
+                                    *snapshot_config.last_full_snapshot_slot.write().unwrap() =
+                                        Some(snapshot_package.slot());
+                                }
+
                                 hashes.push((snapshot_package.slot(), *snapshot_package.hash()));
                                 while hashes.len() > MAX_SNAPSHOT_HASHES {
                                     hashes.remove(0);

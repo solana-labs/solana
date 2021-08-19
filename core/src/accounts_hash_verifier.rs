@@ -15,7 +15,6 @@ use solana_runtime::{
         AccountsPackage, AccountsPackageReceiver, PendingSnapshotPackage, SnapshotPackage,
         SnapshotType,
     },
-    snapshot_utils,
     sorted_storages::SortedStorages,
 };
 use solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey};
@@ -206,38 +205,39 @@ impl AccountsHashVerifier {
                     % snapshot_config.incremental_snapshot_archive_interval_slots
                     == 0
                 {
-                    let last_full_snapshot_slot =
-                        snapshot_utils::get_highest_full_snapshot_archive_slot(
-                            &snapshot_config.snapshot_package_output_path,
-                        );
+                    // Conditionally submit an incremental snapshot package for archiving.
+                    // Submit the package _unless_ the pending snapshot package contains a
+                    // full snapshot package.
+                    let can_submit = pending_snapshot_package.lock().unwrap().as_ref().map_or(
+                        true,
+                        |snapshot_package| {
+                            snapshot_package.snapshot_type == SnapshotType::IncrementalSnapshot
+                        },
+                    );
 
-                    match last_full_snapshot_slot {
-                        None => warn!("No full snapshot archive found; will not process incremental snapshot package!"),
-                        Some(incremental_snapshot_base_slot) => {
-                            let snapshot_package = SnapshotPackage::new(
-                                accounts_package,
-                                snapshot_config.snapshot_package_output_path.clone(),
-                                snapshot_config.archive_format,
-                                Some(incremental_snapshot_base_slot),
-                            );
+                    if can_submit {
+                        // NOTE: Read the value of the last full snapshot slot _after_ checking
+                        // `can_submit`.  This way we know a full snapshot is not in the middle of
+                        // being archived, and therefore the value of the last full snapshot slot
+                        // is correct.
+                        let last_full_snapshot_slot =
+                            *snapshot_config.last_full_snapshot_slot.read().unwrap();
+                        match last_full_snapshot_slot {
+                            None => warn!("No full snapshot archive found; will not process incremental snapshot package!"),
+                            Some(incremental_snapshot_base_slot) => {
+                                let snapshot_package = SnapshotPackage::new(
+                                    accounts_package,
+                                    snapshot_config.snapshot_package_output_path.clone(),
+                                    snapshot_config.archive_format,
+                                    Some(incremental_snapshot_base_slot),
+                                );
+                                *pending_snapshot_package.lock().unwrap() = Some(snapshot_package);
 
-                            let mut pending_snapshot_package = pending_snapshot_package.lock().unwrap();
-
-                            // Conditionally submit an incremental snapshot package for archiving.
-                            // Submit the package _unless_ the pending snapshot package contains a
-                            // full snapshot package.
-                            let can_submit = pending_snapshot_package.as_ref().map_or(true, |pending_snapshot_package| {
-                                pending_snapshot_package.snapshot_type == SnapshotType::IncrementalSnapshot
-                            });
-
-                            if can_submit {
-                                *pending_snapshot_package = Some(snapshot_package);
                             }
-                            else {
-                                info!("Not submitting incremental snapshot for archiving; there is still a pending full snapshot package waiting to be archived.");
-                            }
-                        }
-                    };
+                        };
+                    } else {
+                        info!("Not submitting incremental snapshot for archiving; there is still a pending full snapshot package waiting to be archived.");
+                    }
                 }
             };
         };
@@ -370,6 +370,7 @@ mod tests {
             archive_format: ArchiveFormat::Tar,
             snapshot_version: SnapshotVersion::default(),
             maximum_snapshots_to_retain: usize::MAX,
+            last_full_snapshot_slot: Default::default(),
         };
         for i in 0..MAX_SNAPSHOT_HASHES + 1 {
             let accounts_package = AccountsPackage {

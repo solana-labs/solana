@@ -2617,6 +2617,7 @@ pub fn main() {
         archive_format,
         snapshot_version,
         maximum_snapshots_to_retain,
+        last_full_snapshot_slot: Default::default(),
     });
 
     validator_config.accounts_hash_interval_slots =
