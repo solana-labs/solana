@@ -5,7 +5,7 @@ use {
         replica_updated_slots_server::ReplicaUpdatedSlotsServerImpl,
     },
     crossbeam_channel::Receiver,
-    solana_runtime::{bank_forks::BankForks},
+    solana_runtime::bank_forks::BankForks,
     solana_sdk::clock::Slot,
     std::sync::{Arc, RwLock},
 };

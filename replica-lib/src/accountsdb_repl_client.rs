@@ -62,9 +62,7 @@ impl AccountsDbReplClient {
         &mut self,
         slot: Slot,
     ) -> Result<Vec<ReplicaAccountInfo>, ReplicaRpcError> {
-        let request = ReplicaAccountsRequest {
-            slot,
-        };
+        let request = ReplicaAccountsRequest { slot };
         let response = self.client.get_slot_accounts(Request::new(request)).await;
 
         match response {
@@ -111,7 +109,10 @@ impl AccountsDbReplClientService {
             .block_on(self.accountsdb_repl_client.get_updated_slots(last_slot))
     }
 
-    pub fn get_slot_accounts(&mut self, slot: Slot) -> Result<Vec<ReplicaAccountInfo>, ReplicaRpcError> {
+    pub fn get_slot_accounts(
+        &mut self,
+        slot: Slot,
+    ) -> Result<Vec<ReplicaAccountInfo>, ReplicaRpcError> {
         self.runtime
             .block_on(self.accountsdb_repl_client.get_slot_accounts(slot))
     }

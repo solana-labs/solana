@@ -30,15 +30,23 @@ impl AccountsDbReplService {
         Ok(Self { thread })
     }
 
-    fn replicate_accounts_for_slot(accountsdb_repl_client: &mut AccountsDbReplClientService, slot: Slot) {
-
+    fn replicate_accounts_for_slot(
+        accountsdb_repl_client: &mut AccountsDbReplClientService,
+        slot: Slot,
+    ) {
         match accountsdb_repl_client.get_slot_accounts(slot) {
             Err(err) => {
-                error!("Ran into error getting accounts for slot {:?}, error: {:?}", slot, err);
+                error!(
+                    "Ran into error getting accounts for slot {:?}, error: {:?}",
+                    slot, err
+                );
             }
             Ok(accounts) => {
                 for account in accounts.iter() {
-                    info!("Received account: {:?}", Pubkey::new(&account.account_meta.as_ref().unwrap().pubkey));
+                    debug!(
+                        "Received account: {:?}",
+                        Pubkey::new(&account.account_meta.as_ref().unwrap().pubkey)
+                    );
                 }
             }
         }
