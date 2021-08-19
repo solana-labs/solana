@@ -1,15 +1,3 @@
-<<<<<<< HEAD
-use crate::serve_repair::RepairType;
-use itertools::Itertools;
-use solana_gossip::{
-    cluster_info::ClusterInfo, contact_info::ContactInfo, crds::Cursor, epoch_slots::EpochSlots,
-};
-use solana_runtime::{bank_forks::BankForks, epoch_stakes::NodeIdToVoteAccounts};
-use solana_sdk::{clock::Slot, pubkey::Pubkey};
-use std::{
-    collections::{BTreeMap, HashMap, HashSet},
-    sync::{Arc, Mutex, RwLock},
-=======
 use {
     itertools::Itertools,
     solana_gossip::{
@@ -21,7 +9,6 @@ use {
         collections::{BTreeMap, HashMap},
         sync::{Arc, Mutex, RwLock},
     },
->>>>>>> 2fc112edc (removes unused code from cluster-slots)
 };
 
 // Limit the size of cluster-slots map in case
@@ -168,11 +155,7 @@ impl ClusterSlots {
             .collect()
     }
 
-<<<<<<< HEAD
-    pub fn compute_weights_exclude_noncomplete(
-=======
-    pub(crate) fn compute_weights_exclude_nonfrozen(
->>>>>>> 2fc112edc (removes unused code from cluster-slots)
+    pub(crate) fn compute_weights_exclude_noncomplete(
         &self,
         slot: Slot,
         repair_peers: &[ContactInfo],
@@ -188,24 +171,6 @@ impl ClusterSlots {
             })
             .collect()
     }
-<<<<<<< HEAD
-
-    pub fn generate_repairs_for_missing_slots(
-        &self,
-        self_id: &Pubkey,
-        root: Slot,
-    ) -> Vec<RepairType> {
-        let my_slots = self.collect(self_id);
-        self.cluster_slots
-            .read()
-            .unwrap()
-            .keys()
-            .filter(|x| **x > root && !my_slots.contains(*x))
-            .map(|x| RepairType::HighestShred(*x, 0))
-            .collect()
-    }
-=======
->>>>>>> 2fc112edc (removes unused code from cluster-slots)
 }
 
 #[cfg(test)]
@@ -390,43 +355,4 @@ mod tests {
             Some(&1)
         );
     }
-<<<<<<< HEAD
-
-    #[test]
-    fn test_generate_repairs() {
-        let cs = ClusterSlots::default();
-        let mut epoch_slot = EpochSlots::default();
-        epoch_slot.fill(&[1], 0);
-        cs.update_internal(0, vec![epoch_slot]);
-        let self_id = solana_sdk::pubkey::new_rand();
-        assert_eq!(
-            cs.generate_repairs_for_missing_slots(&self_id, 0),
-            vec![RepairType::HighestShred(1, 0)]
-        )
-    }
-
-    #[test]
-    fn test_collect_my_slots() {
-        let cs = ClusterSlots::default();
-        let mut epoch_slot = EpochSlots::default();
-        epoch_slot.fill(&[1], 0);
-        let self_id = epoch_slot.from;
-        cs.update_internal(0, vec![epoch_slot]);
-        let slots: Vec<Slot> = cs.collect(&self_id).into_iter().collect();
-        assert_eq!(slots, vec![1]);
-    }
-
-    #[test]
-    fn test_generate_repairs_existing() {
-        let cs = ClusterSlots::default();
-        let mut epoch_slot = EpochSlots::default();
-        epoch_slot.fill(&[1], 0);
-        let self_id = epoch_slot.from;
-        cs.update_internal(0, vec![epoch_slot]);
-        assert!(cs
-            .generate_repairs_for_missing_slots(&self_id, 0)
-            .is_empty());
-    }
-=======
->>>>>>> 2fc112edc (removes unused code from cluster-slots)
 }
