@@ -2415,13 +2415,13 @@ export class Connection {
   async getMultipleAccountsInfo(
     publicKeys: PublicKey[],
     commitment?: Commitment,
-  ): Promise<AccountInfo<Buffer>[] | null> {
+  ): Promise<(AccountInfo<Buffer> | null)[]> {
     const keys = publicKeys.map(key => key.toBase58());
     const args = this._buildArgs([keys], commitment, 'base64');
     const unsafeRes = await this._rpcRequest('getMultipleAccounts', args);
     const res = create(
       unsafeRes,
-      jsonRpcResultAndContext(nullable(array(AccountInfoResult))),
+      jsonRpcResultAndContext(array(nullable(AccountInfoResult))),
     );
     if ('error' in res) {
       throw new Error(
