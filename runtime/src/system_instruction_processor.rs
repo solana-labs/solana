@@ -1386,9 +1386,9 @@ mod tests {
             bank.squash();
             bank.force_flush_accounts_cache();
             // do clean and assert that it actually did its job
-            assert_eq!(3, bank.get_snapshot_storages().len());
+            assert_eq!(3, bank.get_snapshot_storages(None).len());
             bank.clean_accounts(false, false, None);
-            assert_eq!(2, bank.get_snapshot_storages().len());
+            assert_eq!(2, bank.get_snapshot_storages(None).len());
         });
     }
 
