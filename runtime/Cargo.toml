@@ -48,13 +48,8 @@ solana-secp256k1-program = { path = "../programs/secp256k1", version = "=1.7.11"
 solana-stake-program = { path = "../programs/stake", version = "=1.7.11" }
 solana-vote-program = { path = "../programs/vote", version = "=1.7.11" }
 symlink = "0.1.0"
-<<<<<<< HEAD
-tar = "0.4.28"
-tempfile = "3.1.0"
-=======
 tar = "0.4.37"
-tempfile = "3.2.0"
->>>>>>> 89a31ff47 (change untar to use unpack instead of unpack_in (#19216))
+tempfile = "3.1.0"
 thiserror = "1.0"
 zstd = "0.5.1"
 

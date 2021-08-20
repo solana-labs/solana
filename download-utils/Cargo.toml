@@ -12,21 +12,12 @@ edition = "2018"
 [dependencies]
 bzip2 = "0.3.3"
 console = "0.14.1"
-<<<<<<< HEAD
 indicatif = "0.15.0"
 log = "0.4.11"
 reqwest = { version = "0.11.2", default-features = false, features = ["blocking", "rustls-tls", "json"] }
 solana-sdk = { path = "../sdk", version = "=1.7.11" }
 solana-runtime = { path = "../runtime", version = "=1.7.11" }
-tar = "0.4.28"
-=======
-indicatif = "0.16.2"
-log = "0.4.14"
-reqwest = { version = "0.11.4", default-features = false, features = ["blocking", "rustls-tls", "json"] }
-solana-sdk = { path = "../sdk", version = "=1.8.0" }
-solana-runtime = { path = "../runtime", version = "=1.8.0" }
 tar = "0.4.37"
->>>>>>> 89a31ff47 (change untar to use unpack instead of unpack_in (#19216))
 
 [lib]
 crate-type = ["lib"]
