@@ -1042,9 +1042,9 @@ fn test_kill_partition_switch_threshold_progress() {
     \-------- 4 (38%, heavier fork)
 */
 // where the 2% that voted on slot 1 don't see their votes land in a block
-// and thus without integrating votes from gossip into fork choice, will
-// deem slot 4 the heavier fork and try to switch to slot 4, which doesn't pass the
-// switch threshold. This stalls the network.
+// due to blockhash expiration, and thus without resigning their votes with
+// a newer blockhash, will deem slot 4 the heavier fork and try to switch to
+// slot 4, which doesn't pass the switch threshold. This stalls the network.
 
 // We do this by:
 // 1) Creating a partition so all three nodes don't see each other
@@ -1137,7 +1137,9 @@ fn test_fork_choice_refresh_old_votes() {
 
             info!("Opened blockstores");
 
-            // Get latest votes
+            // Get latest votes. We additionally check to make sure the vote has landed in
+            // blockstore. This is important because if we were the leader for the block there
+            // is a possibility of voting before broadcast has inserted in blockstore.
             let (lighter_fork_latest_vote, _) = last_vote_in_tower(
                 &lighter_fork_ledger_path,
                 &context.lighter_fork_validator_key,
@@ -1145,6 +1147,11 @@ fn test_fork_choice_refresh_old_votes() {
             .unwrap();
             let (heaviest_fork_latest_vote, _) =
                 last_vote_in_tower(&heaviest_ledger_path, &context.heaviest_validator_key).unwrap();
+            while !lighter_fork_blockstore.is_full(lighter_fork_latest_vote)
+                || !heaviest_blockstore.is_full(heaviest_fork_latest_vote)
+            {
+                sleep(Duration::from_millis(100));
+            }
 
             // Find the first slot on the smaller fork
             let lighter_ancestors: BTreeSet<Slot> = std::iter::once(lighter_fork_latest_vote)
