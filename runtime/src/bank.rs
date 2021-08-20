@@ -985,8 +985,6 @@ pub struct Bank {
 
     pub lazy_rent_collection: AtomicBool,
 
-    pub no_stake_rewrite: AtomicBool,
-
     // this is temporary field only to remove rewards_pool entirely
     pub rewards_pool_pubkeys: Arc<HashSet<Pubkey>>,
 
@@ -1067,6 +1065,118 @@ impl Bank {
         )
     }
 
+<<<<<<< HEAD
+=======
+    fn default_with_accounts(accounts: Accounts) -> Self {
+        Self {
+            rc: BankRc::new(accounts, Slot::default()),
+            src: StatusCacheRc::default(),
+            blockhash_queue: RwLock::<BlockhashQueue>::default(),
+            ancestors: Ancestors::default(),
+            hash: RwLock::<Hash>::default(),
+            parent_hash: Hash::default(),
+            parent_slot: Slot::default(),
+            hard_forks: Arc::<RwLock<HardForks>>::default(),
+            transaction_count: AtomicU64::default(),
+            transaction_error_count: AtomicU64::default(),
+            transaction_entries_count: AtomicU64::default(),
+            transactions_per_entry_max: AtomicU64::default(),
+            tick_height: AtomicU64::default(),
+            signature_count: AtomicU64::default(),
+            capitalization: AtomicU64::default(),
+            max_tick_height: u64::default(),
+            hashes_per_tick: Option::<u64>::default(),
+            ticks_per_slot: u64::default(),
+            ns_per_slot: u128::default(),
+            genesis_creation_time: UnixTimestamp::default(),
+            slots_per_year: f64::default(),
+            unused: u64::default(),
+            slot: Slot::default(),
+            bank_id: BankId::default(),
+            epoch: Epoch::default(),
+            block_height: u64::default(),
+            collector_id: Pubkey::default(),
+            collector_fees: AtomicU64::default(),
+            fee_calculator: FeeCalculator::default(),
+            fee_rate_governor: FeeRateGovernor::default(),
+            collected_rent: AtomicU64::default(),
+            rent_collector: RentCollector::default(),
+            epoch_schedule: EpochSchedule::default(),
+            inflation: Arc::<RwLock<Inflation>>::default(),
+            stakes: RwLock::<Stakes>::default(),
+            epoch_stakes: HashMap::<Epoch, EpochStakes>::default(),
+            is_delta: AtomicBool::default(),
+            message_processor: MessageProcessor::default(),
+            compute_budget: Option::<ComputeBudget>::default(),
+            feature_builtins: Arc::<Vec<(Builtin, Pubkey, ActivationType)>>::default(),
+            last_vote_sync: AtomicU64::default(),
+            rewards: RwLock::<Vec<(Pubkey, RewardInfo)>>::default(),
+            cluster_type: Option::<ClusterType>::default(),
+            lazy_rent_collection: AtomicBool::default(),
+            rewards_pool_pubkeys: Arc::<HashSet<Pubkey>>::default(),
+            cached_executors: RwLock::<CowCachedExecutors>::default(),
+            transaction_debug_keys: Option::<Arc<HashSet<Pubkey>>>::default(),
+            transaction_log_collector_config: Arc::<RwLock<TransactionLogCollectorConfig>>::default(
+            ),
+            transaction_log_collector: Arc::<RwLock<TransactionLogCollector>>::default(),
+            feature_set: Arc::<FeatureSet>::default(),
+            drop_callback: RwLock::<OptionalDropCallback>::default(),
+            freeze_started: AtomicBool::default(),
+        }
+    }
+
+    pub fn new_with_paths_for_tests(
+        genesis_config: &GenesisConfig,
+        paths: Vec<PathBuf>,
+        frozen_account_pubkeys: &[Pubkey],
+        debug_keys: Option<Arc<HashSet<Pubkey>>>,
+        additional_builtins: Option<&Builtins>,
+        account_indexes: AccountSecondaryIndexes,
+        accounts_db_caching_enabled: bool,
+        shrink_ratio: AccountShrinkThreshold,
+        debug_do_not_add_builtins: bool,
+    ) -> Self {
+        Self::new_with_paths(
+            genesis_config,
+            paths,
+            frozen_account_pubkeys,
+            debug_keys,
+            additional_builtins,
+            account_indexes,
+            accounts_db_caching_enabled,
+            shrink_ratio,
+            debug_do_not_add_builtins,
+            Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
+        )
+    }
+
+    pub fn new_with_paths_for_benches(
+        genesis_config: &GenesisConfig,
+        paths: Vec<PathBuf>,
+        frozen_account_pubkeys: &[Pubkey],
+        debug_keys: Option<Arc<HashSet<Pubkey>>>,
+        additional_builtins: Option<&Builtins>,
+        account_indexes: AccountSecondaryIndexes,
+        accounts_db_caching_enabled: bool,
+        shrink_ratio: AccountShrinkThreshold,
+        debug_do_not_add_builtins: bool,
+    ) -> Self {
+        Self::new_with_paths(
+            genesis_config,
+            paths,
+            frozen_account_pubkeys,
+            debug_keys,
+            additional_builtins,
+            account_indexes,
+            accounts_db_caching_enabled,
+            shrink_ratio,
+            debug_do_not_add_builtins,
+            Some(ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS),
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+>>>>>>> 73aa004c5 (stake: Remove v2 program references (#19308))
     pub fn new_with_paths(
         genesis_config: &GenesisConfig,
         paths: Vec<PathBuf>,
@@ -1211,7 +1321,6 @@ impl Bank {
             rewards: RwLock::new(vec![]),
             cluster_type: parent.cluster_type,
             lazy_rent_collection: AtomicBool::new(parent.lazy_rent_collection.load(Relaxed)),
-            no_stake_rewrite: AtomicBool::new(parent.no_stake_rewrite.load(Relaxed)),
             rewards_pool_pubkeys: parent.rewards_pool_pubkeys.clone(),
             cached_executors: RwLock::new(
                 (*parent.cached_executors.read().unwrap()).clone_with_epoch(epoch),
@@ -1252,11 +1361,7 @@ impl Bank {
             new.apply_feature_activations(false, false);
         }
 
-        let cloned = new
-            .stakes
-            .read()
-            .unwrap()
-            .clone_with_epoch(epoch, new.stake_program_v2_enabled());
+        let cloned = new.stakes.read().unwrap().clone_with_epoch(epoch);
         *new.stakes.write().unwrap() = cloned;
 
         let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
@@ -1370,7 +1475,6 @@ impl Bank {
             rewards: new(),
             cluster_type: Some(genesis_config.cluster_type),
             lazy_rent_collection: new(),
-            no_stake_rewrite: new(),
             rewards_pool_pubkeys: new(),
             cached_executors: RwLock::new(CowCachedExecutors::new(Arc::new(RwLock::new(
                 CachedExecutors::new(MAX_CACHED_EXECUTORS, fields.epoch),
@@ -1776,41 +1880,6 @@ impl Bank {
         self.epoch_schedule.get_slots_in_epoch(prev_epoch) as f64 / self.slots_per_year
     }
 
-    fn rewrite_stakes(&self) -> (usize, usize) {
-        let mut examined_count = 0;
-        let mut rewritten_count = 0;
-        self.cloned_stake_delegations()
-            .into_iter()
-            .for_each(|(stake_pubkey, _delegation)| {
-                examined_count += 1;
-                if let Some(mut stake_account) = self.get_account_with_fixed_root(&stake_pubkey) {
-                    if let Ok(result) =
-                        stake_state::rewrite_stakes(&mut stake_account, &self.rent_collector.rent)
-                    {
-                        self.store_account(&stake_pubkey, &stake_account);
-                        let message = format!("rewrote stake: {}, {:?}", stake_pubkey, result);
-                        info!("{}", message);
-                        datapoint_info!("stake_info", ("info", message, String));
-                        rewritten_count += 1;
-                    }
-                }
-            });
-
-        info!(
-            "bank (slot: {}): rewrite_stakes: {} accounts rewritten / {} accounts examined",
-            self.slot(),
-            rewritten_count,
-            examined_count,
-        );
-        datapoint_info!(
-            "rewrite-stakes",
-            ("examined_count", examined_count, i64),
-            ("rewritten_count", rewritten_count, i64)
-        );
-
-        (examined_count, rewritten_count)
-    }
-
     // Calculates the starting-slot for inflation from the activation slot.
     // This method assumes that `pico_inflation` will be enabled before `full_inflation`, giving
     // precedence to the latter. However, since `pico_inflation` is fixed-rate Inflation, should
@@ -1877,12 +1946,8 @@ impl Bank {
 
         let old_vote_balance_and_staked = self.stakes.read().unwrap().vote_balance_and_staked();
 
-        let validator_point_value = self.pay_validator_rewards(
-            prev_epoch,
-            validator_rewards,
-            reward_calc_tracer,
-            self.stake_program_v2_enabled(),
-        );
+        let validator_point_value =
+            self.pay_validator_rewards(prev_epoch, validator_rewards, reward_calc_tracer);
 
         if !self
             .feature_set
@@ -2019,7 +2084,6 @@ impl Bank {
         rewarded_epoch: Epoch,
         rewards: u64,
         reward_calc_tracer: &mut Option<impl FnMut(&RewardCalculationEvent)>,
-        fix_stake_deactivate: bool,
     ) -> f64 {
         let stake_history = self.stakes.read().unwrap().history().clone();
 
@@ -2033,13 +2097,8 @@ impl Bank {
                     .map(move |(_stake_pubkey, stake_account)| (stake_account, vote_account))
             })
             .map(|(stake_account, vote_account)| {
-                stake_state::calculate_points(
-                    stake_account,
-                    vote_account,
-                    Some(&stake_history),
-                    fix_stake_deactivate,
-                )
-                .unwrap_or(0)
+                stake_state::calculate_points(stake_account, vote_account, Some(&stake_history))
+                    .unwrap_or(0)
             })
             .sum();
 
@@ -2083,7 +2142,6 @@ impl Bank {
                     &point_value,
                     Some(&stake_history),
                     &mut reward_calc_tracer.as_mut(),
-                    fix_stake_deactivate,
                 );
                 if let Ok((stakers_reward, _voters_reward)) = redeemed {
                     self.store_account(stake_pubkey, stake_account);
@@ -3707,7 +3765,6 @@ impl Bank {
     #[cfg(test)]
     fn restore_old_behavior_for_fragile_tests(&self) {
         self.lazy_rent_collection.store(true, Relaxed);
-        self.no_stake_rewrite.store(true, Relaxed);
     }
 
     fn enable_eager_rent_collection(&self) -> bool {
@@ -4221,7 +4278,6 @@ impl Bank {
             self.stakes.write().unwrap().store(
                 pubkey,
                 account,
-                self.stake_program_v2_enabled(),
                 self.check_init_vote_data_enabled(),
             );
         }
@@ -4883,6 +4939,7 @@ impl Bank {
                 .zip(loaded_transaction.accounts.iter())
                 .filter(|(_i, (_pubkey, account))| (Stakes::is_stake(account)))
             {
+<<<<<<< HEAD
                 if Stakes::is_stake(account) {
                     if let Some(old_vote_account) = self.stakes.write().unwrap().store(
                         pubkey,
@@ -4897,6 +4954,19 @@ impl Bank {
                             transaction_result_index: i,
                         });
                     }
+=======
+                if let Some(old_vote_account) = self.stakes.write().unwrap().store(
+                    pubkey,
+                    account,
+                    self.check_init_vote_data_enabled(),
+                ) {
+                    // TODO: one of the indices is redundant.
+                    overwritten_vote_accounts.push(OverwrittenVoteAccount {
+                        account: old_vote_account,
+                        transaction_index: i,
+                        transaction_result_index: i,
+                    });
+>>>>>>> 73aa004c5 (stake: Remove v2 program references (#19308))
                 }
             }
         }
@@ -5108,11 +5178,6 @@ impl Bank {
             .is_active(&feature_set::no_overflow_rent_distribution::id())
     }
 
-    pub fn stake_program_v2_enabled(&self) -> bool {
-        self.feature_set
-            .is_active(&feature_set::stake_program_v2::id())
-    }
-
     pub fn check_init_vote_data_enabled(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::check_init_vote_data::id())
@@ -5181,16 +5246,6 @@ impl Bank {
 
         if new_feature_activations.contains(&feature_set::spl_token_v2_set_authority_fix::id()) {
             self.apply_spl_token_v2_set_authority_fix();
-        }
-        // Remove me after a while around v1.6
-        if !self.no_stake_rewrite.load(Relaxed)
-            && new_feature_activations.contains(&feature_set::rewrite_stake::id())
-        {
-            // to avoid any potential risk of wrongly rewriting accounts in the future,
-            // only do this once, taking small risk of unknown
-            // bugs which again creates bad stake accounts..
-
-            self.rewrite_stakes();
         }
         if new_feature_activations.contains(&feature_set::rent_for_sysvars::id()) {
             // when this feature is activated, immediately all of existing sysvars are susceptible
@@ -7477,7 +7532,7 @@ pub(crate) mod tests {
                     .map(move |(_stake_pubkey, stake_account)| (stake_account, vote_account))
             })
             .map(|(stake_account, vote_account)| {
-                stake_state::calculate_points(stake_account, vote_account, None, true).unwrap_or(0)
+                stake_state::calculate_points(stake_account, vote_account, None).unwrap_or(0)
             })
             .sum();
 
@@ -9016,7 +9071,7 @@ pub(crate) mod tests {
             // epoch_stakes are a snapshot at the leader_schedule_slot_offset boundary
             //   in the prior epoch (0 in this case)
             assert_eq!(
-                leader_stake.stake(0, None, true),
+                leader_stake.stake(0, None),
                 vote_accounts.unwrap().get(&leader_vote_account).unwrap().0
             );
 
@@ -9032,7 +9087,7 @@ pub(crate) mod tests {
 
         assert!(child.epoch_vote_accounts(epoch).is_some());
         assert_eq!(
-            leader_stake.stake(child.epoch(), None, true),
+            leader_stake.stake(child.epoch(), None),
             child
                 .epoch_vote_accounts(epoch)
                 .unwrap()
@@ -9050,7 +9105,7 @@ pub(crate) mod tests {
         );
         assert!(child.epoch_vote_accounts(epoch).is_some());
         assert_eq!(
-            leader_stake.stake(child.epoch(), None, true),
+            leader_stake.stake(child.epoch(), None),
             child
                 .epoch_vote_accounts(epoch)
                 .unwrap()
@@ -12981,6 +13036,7 @@ pub(crate) mod tests {
     }
 
     #[test]
+<<<<<<< HEAD
     fn test_stake_rewrite() {
         let GenesisConfigInfo { genesis_config, .. } =
             create_genesis_config_with_leader(500, &solana_sdk::pubkey::new_rand(), 1);
@@ -13001,6 +13057,8 @@ pub(crate) mod tests {
     }
 
     #[test]
+=======
+>>>>>>> 73aa004c5 (stake: Remove v2 program references (#19308))
     fn test_get_inflation_start_slot_devnet_testnet() {
         let GenesisConfigInfo {
             mut genesis_config, ..
