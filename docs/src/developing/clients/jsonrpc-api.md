@@ -2247,10 +2247,7 @@ Result:
 
 ### getSlot
 
-Returns the slot associated with the given commitment level
-
-If the commitment level is not provided, then this method returns the highest
-finalized slot.
+Returns the slot that has reached the [given or default commitment level](jsonrpc-api.md#configuring-state-commitment)
 
 #### Parameters:
 
