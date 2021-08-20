@@ -125,7 +125,7 @@ sets more data than this buffer, an error should be returned. On successful exit
 will contain the actual length returned by the callee.
 
 For a normal RPC or Transaction, the returndata is base64-encoded and stored along side the sol_log
-strings.
+strings in the [stable log](https://github.com/solana-labs/solana/blob/95292841947763bdd47ef116b40fc34d0585bca8/sdk/src/process_instruction.rs#L275-L281).
 
 ## Note on returning errors
 
