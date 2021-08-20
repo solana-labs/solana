@@ -41,7 +41,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
         &mut self,
         blockstore: &Arc<Blockstore>,
         receiver: &Receiver<WorkingBankEntry>,
-        socket_sender: &Sender<(TransmitShreds, Option<BroadcastShredBatchInfo>)>,
+        socket_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
         blockstore_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
     ) -> Result<()> {
         // 1) Pull entries from banking stage
@@ -108,7 +108,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
         let data_shreds = Arc::new(data_shreds);
         blockstore_sender.send((data_shreds.clone(), None))?;
         // 4) Start broadcast step
-        socket_sender.send(((bank.slot(), data_shreds), None))?;
+        socket_sender.send((data_shreds, None))?;
         if let Some((good_last_data_shred, bad_last_data_shred)) = last_shreds {
             // Stash away the good shred so we can rewrite them later
             self.good_shreds.extend(good_last_data_shred.clone());
@@ -127,7 +127,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
             // Store the bad shred so we serve bad repairs to validators catching up
             blockstore_sender.send((bad_last_data_shred.clone(), None))?;
             // Send bad shreds to rest of network
-            socket_sender.send(((bank.slot(), bad_last_data_shred), None))?;
+            socket_sender.send((bad_last_data_shred, None))?;
         }
         Ok(())
     }
@@ -138,27 +138,26 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
         sock: &UdpSocket,
         bank_forks: &Arc<RwLock<BankForks>>,
     ) -> Result<()> {
-        let ((slot, shreds), _) = receiver.lock().unwrap().recv()?;
-        let (root_bank, working_bank) = {
-            let bank_forks = bank_forks.read().unwrap();
-            (bank_forks.root_bank(), bank_forks.working_bank())
-        };
-        // Broadcast data
-        let cluster_nodes =
-            self.cluster_nodes_cache
-                .get(slot, &root_bank, &working_bank, cluster_info);
+        let (shreds, _) = receiver.lock().unwrap().recv()?;
         broadcast_shreds(
             sock,
             &shreds,
-            &cluster_nodes,
+            &self.cluster_nodes_cache,
             &Arc::new(AtomicInterval::default()),
             &mut TransmitShredsStats::default(),
+<<<<<<< HEAD
             cluster_info.socket_addr_space(),
             cluster_info.id(),
             bank_forks,
         )?;
 
         Ok(())
+=======
+            cluster_info,
+            bank_forks,
+            cluster_info.socket_addr_space(),
+        )
+>>>>>>> 1deb4add8 (removes Slot from TransmitShreds (#19327))
     }
     fn record(
         &mut self,

@@ -183,7 +183,7 @@ impl StandardBroadcastRun {
     fn process_receive_results(
         &mut self,
         blockstore: &Arc<Blockstore>,
-        socket_sender: &Sender<(TransmitShreds, Option<BroadcastShredBatchInfo>)>,
+        socket_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
         blockstore_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
         receive_results: ReceiveResults,
     ) -> Result<()> {
@@ -247,7 +247,8 @@ impl StandardBroadcastRun {
                 ),
             });
             let shreds = Arc::new(prev_slot_shreds);
-            socket_sender.send(((slot, shreds.clone()), batch_info.clone()))?;
+            debug_assert!(shreds.iter().all(|shred| shred.slot() == slot));
+            socket_sender.send((shreds.clone(), batch_info.clone()))?;
             blockstore_sender.send((shreds, batch_info))?;
         }
 
@@ -273,7 +274,8 @@ impl StandardBroadcastRun {
 
         // Send data shreds
         let data_shreds = Arc::new(data_shreds);
-        socket_sender.send(((bank.slot(), data_shreds.clone()), batch_info.clone()))?;
+        debug_assert!(data_shreds.iter().all(|shred| shred.slot() == bank.slot()));
+        socket_sender.send((data_shreds.clone(), batch_info.clone()))?;
         blockstore_sender.send((data_shreds, batch_info.clone()))?;
 
         // Create and send coding shreds
@@ -284,7 +286,10 @@ impl StandardBroadcastRun {
             &mut process_stats,
         );
         let coding_shreds = Arc::new(coding_shreds);
-        socket_sender.send(((bank.slot(), coding_shreds.clone()), batch_info.clone()))?;
+        debug_assert!(coding_shreds
+            .iter()
+            .all(|shred| shred.slot() == bank.slot()));
+        socket_sender.send((coding_shreds.clone(), batch_info.clone()))?;
         blockstore_sender.send((coding_shreds, batch_info))?;
 
         coding_send_time.stop();
@@ -342,23 +347,11 @@ impl StandardBroadcastRun {
         &mut self,
         sock: &UdpSocket,
         cluster_info: &ClusterInfo,
-        slot: Slot,
         shreds: Arc<Vec<Shred>>,
         broadcast_shred_batch_info: Option<BroadcastShredBatchInfo>,
         bank_forks: &Arc<RwLock<BankForks>>,
     ) -> Result<()> {
         trace!("Broadcasting {:?} shreds", shreds.len());
-        // Get the list of peers to broadcast to
-        let mut get_peers_time = Measure::start("broadcast::get_peers");
-        let (root_bank, working_bank) = {
-            let bank_forks = bank_forks.read().unwrap();
-            (bank_forks.root_bank(), bank_forks.working_bank())
-        };
-        let cluster_nodes =
-            self.cluster_nodes_cache
-                .get(slot, &root_bank, &working_bank, cluster_info);
-        get_peers_time.stop();
-
         let mut transmit_stats = TransmitShredsStats::default();
         // Broadcast the shreds
         let mut transmit_time = Measure::start("broadcast_shreds");
@@ -366,17 +359,20 @@ impl StandardBroadcastRun {
         broadcast_shreds(
             sock,
             &shreds,
-            &cluster_nodes,
+            &self.cluster_nodes_cache,
             &self.last_datapoint_submit,
             &mut transmit_stats,
+<<<<<<< HEAD
             cluster_info.socket_addr_space(),
             cluster_info.id(),
+=======
+            cluster_info,
+>>>>>>> 1deb4add8 (removes Slot from TransmitShreds (#19327))
             bank_forks,
         )?;
         transmit_time.stop();
 
         transmit_stats.transmit_elapsed = transmit_time.as_us();
-        transmit_stats.get_peers_elapsed = get_peers_time.as_us();
         transmit_stats.num_shreds = shreds.len();
 
         // Process metrics
@@ -457,7 +453,7 @@ impl BroadcastRun for StandardBroadcastRun {
         &mut self,
         blockstore: &Arc<Blockstore>,
         receiver: &Receiver<WorkingBankEntry>,
-        socket_sender: &Sender<(TransmitShreds, Option<BroadcastShredBatchInfo>)>,
+        socket_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
         blockstore_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
     ) -> Result<()> {
         let receive_results = broadcast_utils::recv_slot_entries(receiver)?;
@@ -477,8 +473,8 @@ impl BroadcastRun for StandardBroadcastRun {
         sock: &UdpSocket,
         bank_forks: &Arc<RwLock<BankForks>>,
     ) -> Result<()> {
-        let ((slot, shreds), slot_start_ts) = receiver.lock().unwrap().recv()?;
-        self.broadcast(sock, cluster_info, slot, shreds, slot_start_ts, bank_forks)
+        let (shreds, batch_info) = receiver.lock().unwrap().recv()?;
+        self.broadcast(sock, cluster_info, shreds, batch_info, bank_forks)
     }
     fn record(
         &mut self,
