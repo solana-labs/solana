@@ -201,10 +201,7 @@ pub(crate) mod tests {
         let result: Vec<_> = epoch_stakes_and_lockouts(&bank, first_leader_schedule_epoch);
         assert_eq!(
             result,
-            vec![(
-                leader_stake.stake(first_leader_schedule_epoch, None, true),
-                None
-            )]
+            vec![(leader_stake.stake(first_leader_schedule_epoch, None), None)]
         );
 
         // epoch stakes and lockouts are saved off for the future epoch, should
@@ -215,14 +212,8 @@ pub(crate) mod tests {
             from_account::<StakeHistory, _>(&bank.get_account(&stake_history::id()).unwrap())
                 .unwrap();
         let mut expected = vec![
-            (
-                leader_stake.stake(bank.epoch(), Some(&stake_history), true),
-                None,
-            ),
-            (
-                other_stake.stake(bank.epoch(), Some(&stake_history), true),
-                None,
-            ),
+            (leader_stake.stake(bank.epoch(), Some(&stake_history)), None),
+            (other_stake.stake(bank.epoch(), Some(&stake_history)), None),
         ];
 
         expected.sort();
