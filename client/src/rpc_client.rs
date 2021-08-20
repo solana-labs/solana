@@ -1742,10 +1742,8 @@ impl RpcClient {
 
     /// # RPC Reference
     ///
-    /// This method corresponds directly to the
-    /// [`getLargestAccounts`] RPC method, with the `Commitment`
-    /// option set to `processed` and the `filter` option set to
-    /// `Circulating`.
+    /// This method corresponds directly to the [`getLargestAccounts`] RPC
+    /// method.
     ///
     /// [`getLargestAccounts`]: https://docs.solana.com/developing/clients/jsonrpc-api#getlargestaccounts
     ///
