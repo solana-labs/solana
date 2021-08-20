@@ -113,7 +113,7 @@ associated with your seed phrase.
 
 > Copy the derived address to a USB stick for easy usage on networked computers
 
-If needed, you can access your root pubkey using the `ASK` keyword:
+If needed, you can access the legacy, raw keypair's pubkey by instead passing the `ASK` keyword:
 
 ```bash
 solana-keygen pubkey ASK
