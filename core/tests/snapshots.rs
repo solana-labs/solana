@@ -501,7 +501,7 @@ mod tests {
             None,
             &exit,
             &cluster_info,
-            DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+            snapshot_test_config.snapshot_config.clone(),
         );
 
         let thread_pool = accounts_db::make_min_priority_thread_pool();
@@ -921,9 +921,7 @@ mod tests {
             None,
             &exit,
             &cluster_info,
-            snapshot_test_config
-                .snapshot_config
-                .maximum_snapshots_to_retain,
+            snapshot_test_config.snapshot_config.clone(),
         );
 
         let accounts_hash_verifier = AccountsHashVerifier::new(

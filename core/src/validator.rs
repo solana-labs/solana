@@ -634,7 +634,7 @@ impl Validator {
                     snapshot_hash,
                     &exit,
                     &cluster_info,
-                    snapshot_config.maximum_snapshots_to_retain,
+                    snapshot_config.clone(),
                 );
                 (
                     Some(snapshot_packager_service),
@@ -1219,6 +1219,8 @@ fn new_banks_from_ledger(
             error!("Unable to create snapshot: {}", err);
             abort();
         });
+        *snapshot_config.last_full_snapshot_slot.write().unwrap() =
+            Some(full_snapshot_archive_info.slot());
         info!(
             "created snapshot: {}",
             full_snapshot_archive_info.path().display()
