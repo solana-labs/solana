@@ -14,7 +14,7 @@ use {
     serde::{Deserialize, Serialize},
     solana_account_decoder::{
         parse_token::{spl_token_id_v2_0, token_amount_to_ui_amount, UiTokenAmount},
-        UiAccount, UiAccountEncoding, UiDataSliceConfig,
+        UiAccount, UiAccountEncoding, UiDataSliceConfig, MAX_BASE58_BYTES,
     },
     solana_client::{
         rpc_cache::LargestAccountsCache,
@@ -2103,9 +2103,9 @@ fn encode_account<T: ReadableAccount>(
     data_slice: Option<UiDataSliceConfig>,
 ) -> Result<UiAccount> {
     if (encoding == UiAccountEncoding::Binary || encoding == UiAccountEncoding::Base58)
-        && account.data().len() > 128
+        && account.data().len() > MAX_BASE58_BYTES
     {
-        let message = "Encoded binary (base 58) data should be less than 128 bytes, please use Base64 encoding.".to_string();
+        let message = format!("Encoded binary (base 58) data should be less than {} bytes, please use Base64 encoding.", MAX_BASE58_BYTES);
         Err(error::Error {
             code: error::ErrorCode::InvalidRequest,
             message,

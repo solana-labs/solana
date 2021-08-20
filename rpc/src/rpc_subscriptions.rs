@@ -1384,6 +1384,26 @@ pub(crate) mod tests {
         inner_receiver.recv().expect("recv error")
     }
 
+    fn make_account_result(lamports: u64, subscription: u64, data: &str) -> serde_json::Value {
+        json!({
+           "jsonrpc": "2.0",
+           "method": "accountNotification",
+           "params": {
+               "result": {
+                   "context": { "slot": 1 },
+                   "value": {
+                       "data": data,
+                       "executable": false,
+                       "lamports": lamports,
+                       "owner": "11111111111111111111111111111111",
+                       "rentEpoch": 0,
+                    },
+               },
+               "subscription": subscription,
+           }
+        })
+    }
+
     #[test]
     #[serial]
     fn test_check_account_subscribe() {
@@ -1400,12 +1420,6 @@ pub(crate) mod tests {
         bank_forks.write().unwrap().insert(bank1);
         let alice = Keypair::new();
 
-        let (create_sub, _id_receiver, create_recv) = Subscriber::new_test("accountNotification");
-        let (close_sub, _id_receiver, close_recv) = Subscriber::new_test("accountNotification");
-
-        let create_sub_id = SubscriptionId::Number(0);
-        let close_sub_id = SubscriptionId::Number(1);
-
         let exit = Arc::new(AtomicBool::new(false));
         let subscriptions = RpcSubscriptions::new(
             &exit,
@@ -1415,25 +1429,8 @@ pub(crate) mod tests {
             ))),
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
         );
-        subscriptions.add_account_subscription(
-            alice.pubkey(),
-            Some(RpcAccountInfoConfig {
-                commitment: Some(CommitmentConfig::processed()),
-                encoding: None,
-                data_slice: None,
-            }),
-            create_sub_id.clone(),
-            create_sub,
-        );
 
-        assert!(subscriptions
-            .subscriptions
-            .account_subscriptions
-            .read()
-            .unwrap()
-            .contains_key(&alice.pubkey()));
-
-        let tx = system_transaction::create_account(
+        let tx0 = system_transaction::create_account(
             &mint_keypair,
             &alice,
             blockhash,
@@ -1441,92 +1438,77 @@ pub(crate) mod tests {
             0,
             &system_program::id(),
         );
-        bank_forks
-            .write()
-            .unwrap()
-            .get(1)
-            .unwrap()
-            .process_transaction(&tx)
-            .unwrap();
-        let commitment_slots = CommitmentSlots {
-            slot: 1,
-            ..CommitmentSlots::default()
-        };
-        subscriptions.notify_subscribers(commitment_slots);
-        let (response, _) = robust_poll_or_panic(create_recv);
-        let expected = json!({
-           "jsonrpc": "2.0",
-           "method": "accountNotification",
-           "params": {
-               "result": {
-                   "context": { "slot": 1 },
-                   "value": {
-                       "data": "",
-                       "executable": false,
-                       "lamports": 1,
-                       "owner": "11111111111111111111111111111111",
-                       "rentEpoch": 0,
-                    },
-               },
-               "subscription": 0,
-           }
-        });
-        assert_eq!(serde_json::to_string(&expected).unwrap(), response);
-        subscriptions.remove_account_subscription(&create_sub_id);
+        let expected0 = make_account_result(1, 0, "");
 
-        subscriptions.add_account_subscription(
-            alice.pubkey(),
-            Some(RpcAccountInfoConfig {
-                commitment: Some(CommitmentConfig::processed()),
-                encoding: None,
-                data_slice: None,
-            }),
-            close_sub_id.clone(),
-            close_sub,
-        );
-
-        let tx = {
+        let tx1 = {
             let instruction =
                 system_instruction::transfer(&alice.pubkey(), &mint_keypair.pubkey(), 1);
             let message = Message::new(&[instruction], Some(&mint_keypair.pubkey()));
             Transaction::new(&[&alice, &mint_keypair], message, blockhash)
         };
+        let expected1 = make_account_result(0, 1, "");
 
-        bank_forks
-            .write()
-            .unwrap()
-            .get(1)
-            .unwrap()
-            .process_transaction(&tx)
-            .unwrap();
-        subscriptions.notify_subscribers(commitment_slots);
-        let (response, _) = robust_poll_or_panic(close_recv);
-        let expected = json!({
-           "jsonrpc": "2.0",
-           "method": "accountNotification",
-           "params": {
-               "result": {
-                   "context": { "slot": 1 },
-                   "value": {
-                       "data": "",
-                       "executable": false,
-                       "lamports": 0,
-                       "owner": "11111111111111111111111111111111",
-                       "rentEpoch": 0,
-                    },
-               },
-               "subscription": 1,
-           }
-        });
-        assert_eq!(serde_json::to_string(&expected).unwrap(), response);
-        subscriptions.remove_account_subscription(&close_sub_id);
+        let tx2 = system_transaction::create_account(
+            &mint_keypair,
+            &alice,
+            blockhash,
+            1,
+            1024,
+            &system_program::id(),
+        );
+        let expected2 = make_account_result(1, 2, "error: data too large for bs58 encoding");
 
-        assert!(!subscriptions
-            .subscriptions
-            .account_subscriptions
-            .read()
-            .unwrap()
-            .contains_key(&alice.pubkey()));
+        let subscribe_cases = vec![
+            (alice.pubkey(), tx0, expected0),
+            (alice.pubkey(), tx1, expected1),
+            (alice.pubkey(), tx2, expected2),
+        ];
+
+        for (i, (pubkey, tx, expected)) in subscribe_cases.iter().enumerate() {
+            let (sub, _id_receiver, recv) = Subscriber::new_test("accountNotification");
+            let sub_id = SubscriptionId::Number(i as u64);
+            subscriptions.add_account_subscription(
+                *pubkey,
+                Some(RpcAccountInfoConfig {
+                    commitment: Some(CommitmentConfig::processed()),
+                    encoding: None,
+                    data_slice: None,
+                }),
+                sub_id.clone(),
+                sub,
+            );
+
+            assert!(subscriptions
+                .subscriptions
+                .account_subscriptions
+                .read()
+                .unwrap()
+                .contains_key(pubkey));
+
+            bank_forks
+                .read()
+                .unwrap()
+                .get(1)
+                .unwrap()
+                .process_transaction(tx)
+                .unwrap();
+            let commitment_slots = CommitmentSlots {
+                slot: 1,
+                ..CommitmentSlots::default()
+            };
+            subscriptions.notify_subscribers(commitment_slots);
+            let (response, _) = robust_poll_or_panic(recv);
+
+            assert_eq!(serde_json::to_string(&expected).unwrap(), response);
+            subscriptions.remove_account_subscription(&sub_id);
+
+            assert!(!subscriptions
+                .subscriptions
+                .account_subscriptions
+                .read()
+                .unwrap()
+                .contains_key(pubkey));
+        }
     }
 
     #[test]
