@@ -2115,7 +2115,6 @@ impl AccountsDb {
         debug!("do_shrink_slot_stores: slot: {}", slot);
         let mut stored_accounts: HashMap<Pubkey, FoundStoredAccount> = HashMap::new();
         let mut original_bytes = 0;
-        let mut num_stores = 0;
         for store in stores {
             let mut start = 0;
             original_bytes += store.total_bytes();
@@ -2139,7 +2138,6 @@ impl AccountsDb {
                 }
                 start = next;
             }
-            num_stores += 1;
         }
 
         let mut index_read_elapsed = Measure::start("index_read_elapsed");
@@ -2170,19 +2168,6 @@ impl AccountsDb {
 
         index_read_elapsed.stop();
         let aligned_total: u64 = Self::page_align(alive_total as u64);
-
-        // This shouldn't happen if alive_bytes/approx_stored_count are accurate
-        if Self::should_not_shrink(aligned_total, original_bytes, num_stores) {
-            self.shrink_stats
-                .skipped_shrink
-                .fetch_add(1, Ordering::Relaxed);
-            for pubkey in unrefed_pubkeys {
-                if let Some(locked_entry) = self.accounts_index.get_account_read_entry(pubkey) {
-                    locked_entry.addref();
-                }
-            }
-            return 0;
-        }
 
         let total_starting_accounts = stored_accounts.len();
         let total_accounts_after_shrink = alive_accounts.len();
