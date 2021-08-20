@@ -141,8 +141,8 @@ mod tests {
             let snapshot_config = SnapshotConfig {
                 full_snapshot_archive_interval_slots,
                 incremental_snapshot_archive_interval_slots,
-                snapshot_package_output_path: snapshot_archives_dir.path().to_path_buf(),
-                snapshot_path: bank_snapshots_dir.path().to_path_buf(),
+                snapshot_archives_dir: snapshot_archives_dir.path().to_path_buf(),
+                snapshots_dir: bank_snapshots_dir.path().to_path_buf(),
                 archive_format: ArchiveFormat::TarBzip2,
                 snapshot_version,
                 maximum_snapshots_to_retain: DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
@@ -166,17 +166,17 @@ mod tests {
         old_genesis_config: &GenesisConfig,
         account_paths: &[PathBuf],
     ) {
-        let (snapshot_path, snapshot_package_output_path) = old_bank_forks
+        let (snapshot_path, snapshot_archives_dir) = old_bank_forks
             .snapshot_config
             .as_ref()
-            .map(|c| (&c.snapshot_path, &c.snapshot_package_output_path))
+            .map(|c| (&c.snapshots_dir, &c.snapshot_archives_dir))
             .unwrap();
 
         let old_last_bank = old_bank_forks.get(old_last_slot).unwrap();
 
         let check_hash_calculation = false;
         let full_snapshot_archive_path = snapshot_utils::build_full_snapshot_archive_path(
-            snapshot_package_output_path.to_path_buf(),
+            snapshot_archives_dir.to_path_buf(),
             old_last_bank.slot(),
             &old_last_bank.get_accounts_hash(),
             ArchiveFormat::TarBzip2,
@@ -191,7 +191,7 @@ mod tests {
                 .snapshot_config
                 .as_ref()
                 .unwrap()
-                .snapshot_path,
+                .snapshots_dir,
             &full_snapshot_archive_info,
             None,
             old_genesis_config,
@@ -273,7 +273,7 @@ mod tests {
         // Generate a snapshot package for last bank
         let last_bank = bank_forks.get(last_slot).unwrap();
         let snapshot_config = &snapshot_test_config.snapshot_config;
-        let snapshot_path = &snapshot_config.snapshot_path;
+        let snapshot_path = &snapshot_config.snapshots_dir;
         let last_bank_snapshot_info = snapshot_utils::get_highest_bank_snapshot_info(snapshot_path)
             .expect("no snapshots found in path");
         let accounts_package = AccountsPackage::new_for_full_snapshot(
@@ -281,7 +281,7 @@ mod tests {
             &last_bank_snapshot_info,
             snapshot_path,
             last_bank.src.slot_deltas(&last_bank.src.roots()),
-            &snapshot_config.snapshot_package_output_path,
+            &snapshot_config.snapshot_archives_dir,
             last_bank.get_snapshot_storages(None),
             ArchiveFormat::TarBzip2,
             snapshot_version,
@@ -357,8 +357,8 @@ mod tests {
         let bank_forks = &mut snapshot_test_config.bank_forks;
         let bank_snapshots_dir = &snapshot_test_config.bank_snapshots_dir;
         let snapshot_config = &snapshot_test_config.snapshot_config;
-        let snapshot_path = &snapshot_config.snapshot_path;
-        let snapshot_package_output_path = &snapshot_config.snapshot_package_output_path;
+        let snapshot_path = &snapshot_config.snapshots_dir;
+        let snapshot_archives_dir = &snapshot_config.snapshot_archives_dir;
         let mint_keypair = &snapshot_test_config.genesis_config_info.mint_keypair;
         let genesis_config = &snapshot_test_config.genesis_config_info.genesis_config;
 
@@ -413,7 +413,7 @@ mod tests {
                 vec![],
                 package_sender,
                 snapshot_path,
-                snapshot_package_output_path,
+                snapshot_archives_dir,
                 snapshot_config.snapshot_version,
                 &snapshot_config.archive_format,
                 None,
@@ -462,7 +462,7 @@ mod tests {
                 fs_extra::dir::copy(&last_snapshot_path, &saved_snapshots_dir, &options).unwrap();
 
                 saved_archive_path = Some(snapshot_utils::build_full_snapshot_archive_path(
-                    snapshot_package_output_path.to_path_buf(),
+                    snapshot_archives_dir.to_path_buf(),
                     slot,
                     &accounts_hash,
                     ArchiveFormat::TarBzip2,
@@ -754,15 +754,15 @@ mod tests {
     ) -> snapshot_utils::Result<()> {
         let slot = bank.slot();
         info!("Making full snapshot archive from bank at slot: {}", slot);
-        let bank_snapshot_info = snapshot_utils::get_bank_snapshots(&snapshot_config.snapshot_path)
+        let bank_snapshot_info = snapshot_utils::get_bank_snapshots(&snapshot_config.snapshots_dir)
             .into_iter()
             .find(|elem| elem.slot == slot)
             .ok_or_else(|| Error::new(ErrorKind::Other, "did not find snapshot with this path"))?;
         snapshot_utils::package_process_and_archive_full_snapshot(
             bank,
             &bank_snapshot_info,
-            &snapshot_config.snapshot_path,
-            &snapshot_config.snapshot_package_output_path,
+            &snapshot_config.snapshots_dir,
+            &snapshot_config.snapshot_archives_dir,
             bank.get_snapshot_storages(None),
             snapshot_config.archive_format,
             snapshot_config.snapshot_version,
@@ -783,7 +783,7 @@ mod tests {
             "Making incremental snapshot archive from bank at slot: {}, and base slot: {}",
             slot, incremental_snapshot_base_slot,
         );
-        let bank_snapshot_info = snapshot_utils::get_bank_snapshots(&snapshot_config.snapshot_path)
+        let bank_snapshot_info = snapshot_utils::get_bank_snapshots(&snapshot_config.snapshots_dir)
             .into_iter()
             .find(|elem| elem.slot == slot)
             .ok_or_else(|| Error::new(ErrorKind::Other, "did not find snapshot with this path"))?;
@@ -799,8 +799,8 @@ mod tests {
             bank,
             incremental_snapshot_base_slot,
             &bank_snapshot_info,
-            &snapshot_config.snapshot_path,
-            &snapshot_config.snapshot_package_output_path,
+            &snapshot_config.snapshots_dir,
+            &snapshot_config.snapshot_archives_dir,
             storages,
             snapshot_config.archive_format,
             snapshot_config.snapshot_version,
@@ -818,8 +818,8 @@ mod tests {
         genesis_config: &GenesisConfig,
     ) -> snapshot_utils::Result<()> {
         let (deserialized_bank, _) = snapshot_utils::bank_from_latest_snapshot_archives(
-            &snapshot_config.snapshot_path,
-            &snapshot_config.snapshot_package_output_path,
+            &snapshot_config.snapshots_dir,
+            &snapshot_config.snapshot_archives_dir,
             &[accounts_dir],
             &[],
             genesis_config,
@@ -996,10 +996,8 @@ mod tests {
         info!("Awake! Rebuilding bank from latest snapshot archives...");
 
         let (deserialized_bank, _) = snapshot_utils::bank_from_latest_snapshot_archives(
-            &snapshot_test_config.snapshot_config.snapshot_path,
-            &snapshot_test_config
-                .snapshot_config
-                .snapshot_package_output_path,
+            &snapshot_test_config.snapshot_config.snapshots_dir,
+            &snapshot_test_config.snapshot_config.snapshot_archives_dir,
             &[snapshot_test_config.accounts_dir.as_ref().to_path_buf()],
             &[],
             &snapshot_test_config.genesis_config_info.genesis_config,

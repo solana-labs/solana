@@ -217,7 +217,7 @@ fn get_archive_ext(archive_format: ArchiveFormat) -> &'static str {
 
 /// If the validator halts in the middle of `archive_snapshot_package()`, the temporary staging
 /// directory won't be cleaned up.  Call this function to clean them up.
-pub fn remove_tmp_snapshot_archives(snapshot_archives_dir: &Path) {
+pub fn remove_tmp_snapshot_archives(snapshot_archives_dir: impl AsRef<Path>) {
     if let Ok(entries) = fs::read_dir(snapshot_archives_dir) {
         for entry in entries.filter_map(|entry| entry.ok()) {
             let file_name = entry
@@ -1535,20 +1535,20 @@ pub fn snapshot_bank(
     root_bank: &Bank,
     status_cache_slot_deltas: Vec<BankSlotDelta>,
     accounts_package_sender: &AccountsPackageSender,
-    snapshots_dir: &Path,
-    snapshot_package_output_path: &Path,
+    snapshots_dir: impl AsRef<Path>,
+    snapshot_archives_dir: impl AsRef<Path>,
     snapshot_version: SnapshotVersion,
     archive_format: &ArchiveFormat,
     hash_for_testing: Option<Hash>,
 ) -> Result<()> {
     let storages = root_bank.get_snapshot_storages(None);
     let mut add_snapshot_time = Measure::start("add-snapshot-ms");
-    add_bank_snapshot(snapshots_dir, root_bank, &storages, snapshot_version)?;
+    add_bank_snapshot(&snapshots_dir, root_bank, &storages, snapshot_version)?;
     add_snapshot_time.stop();
     inc_new_counter_info!("add-snapshot-ms", add_snapshot_time.as_ms() as usize);
 
     // Package the relevant snapshots
-    let highest_bank_snapshot_info = get_highest_bank_snapshot_info(snapshots_dir)
+    let highest_bank_snapshot_info = get_highest_bank_snapshot_info(&snapshots_dir)
         .expect("no snapshots found in config snapshots_dir");
 
     let accounts_package = AccountsPackage::new_for_full_snapshot(
@@ -1556,7 +1556,7 @@ pub fn snapshot_bank(
         &highest_bank_snapshot_info,
         snapshots_dir,
         status_cache_slot_deltas,
-        snapshot_package_output_path,
+        snapshot_archives_dir,
         storages,
         *archive_format,
         snapshot_version,
@@ -1577,7 +1577,7 @@ pub fn bank_to_full_snapshot_archive(
     snapshots_dir: impl AsRef<Path>,
     bank: &Bank,
     snapshot_version: Option<SnapshotVersion>,
-    snapshot_package_output_path: impl AsRef<Path>,
+    snapshot_archives_dir: impl AsRef<Path>,
     archive_format: ArchiveFormat,
     thread_pool: Option<&ThreadPool>,
     maximum_snapshots_to_retain: usize,
@@ -1599,7 +1599,7 @@ pub fn bank_to_full_snapshot_archive(
         bank,
         &bank_snapshot_info,
         &temp_dir,
-        snapshot_package_output_path,
+        snapshot_archives_dir,
         storages,
         archive_format,
         snapshot_version,
@@ -1619,7 +1619,7 @@ pub fn bank_to_incremental_snapshot_archive(
     bank: &Bank,
     full_snapshot_slot: Slot,
     snapshot_version: Option<SnapshotVersion>,
-    snapshot_package_output_path: impl AsRef<Path>,
+    snapshot_archives_dir: impl AsRef<Path>,
     archive_format: ArchiveFormat,
     thread_pool: Option<&ThreadPool>,
     maximum_snapshots_to_retain: usize,
@@ -1647,7 +1647,7 @@ pub fn bank_to_incremental_snapshot_archive(
         full_snapshot_slot,
         &bank_snapshot_info,
         &temp_dir,
-        snapshot_package_output_path,
+        snapshot_archives_dir,
         storages,
         archive_format,
         snapshot_version,
@@ -1661,7 +1661,7 @@ pub fn package_process_and_archive_full_snapshot(
     bank: &Bank,
     bank_snapshot_info: &BankSnapshotInfo,
     snapshots_dir: impl AsRef<Path>,
-    snapshot_package_output_path: impl AsRef<Path>,
+    snapshot_archives_dir: impl AsRef<Path>,
     snapshot_storages: SnapshotStorages,
     archive_format: ArchiveFormat,
     snapshot_version: SnapshotVersion,
@@ -1673,7 +1673,7 @@ pub fn package_process_and_archive_full_snapshot(
         bank_snapshot_info,
         snapshots_dir,
         bank.src.slot_deltas(&bank.src.roots()),
-        snapshot_package_output_path,
+        snapshot_archives_dir,
         snapshot_storages,
         archive_format,
         snapshot_version,
@@ -1699,7 +1699,7 @@ pub fn package_process_and_archive_incremental_snapshot(
     incremental_snapshot_base_slot: Slot,
     bank_snapshot_info: &BankSnapshotInfo,
     snapshots_dir: impl AsRef<Path>,
-    snapshot_package_output_path: impl AsRef<Path>,
+    snapshot_archives_dir: impl AsRef<Path>,
     snapshot_storages: SnapshotStorages,
     archive_format: ArchiveFormat,
     snapshot_version: SnapshotVersion,
@@ -1712,7 +1712,7 @@ pub fn package_process_and_archive_incremental_snapshot(
         bank_snapshot_info,
         snapshots_dir,
         bank.src.slot_deltas(&bank.src.roots()),
-        snapshot_package_output_path,
+        snapshot_archives_dir,
         snapshot_storages,
         archive_format,
         snapshot_version,
@@ -1782,13 +1782,13 @@ pub fn process_accounts_package(
 
     let snapshot_archive_path = match incremental_snapshot_base_slot {
         None => build_full_snapshot_archive_path(
-            accounts_package.snapshot_output_dir,
+            accounts_package.snapshot_archives_dir,
             accounts_package.slot,
             &hash,
             accounts_package.archive_format,
         ),
         Some(incremental_snapshot_base_slot) => build_incremental_snapshot_archive_path(
-            accounts_package.snapshot_output_dir,
+            accounts_package.snapshot_archives_dir,
             incremental_snapshot_base_slot,
             accounts_package.slot,
             &hash,
