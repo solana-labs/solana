@@ -49,7 +49,7 @@ use {
         },
         hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
         snapshot_archive_info::SnapshotArchiveInfoGetter,
-        snapshot_config::SnapshotConfig,
+        snapshot_config::{LastFullSnapshotSlot, SnapshotConfig},
         snapshot_utils::{
             self, ArchiveFormat, SnapshotVersion, DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
         },
@@ -2621,6 +2621,7 @@ pub fn main() {
         archive_format,
         snapshot_version,
         maximum_snapshots_to_retain,
+        last_full_snapshot_slot: LastFullSnapshotSlot::default(),
     });
 
     validator_config.accounts_hash_interval_slots =
