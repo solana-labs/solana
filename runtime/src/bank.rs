@@ -1065,118 +1065,6 @@ impl Bank {
         )
     }
 
-<<<<<<< HEAD
-=======
-    fn default_with_accounts(accounts: Accounts) -> Self {
-        Self {
-            rc: BankRc::new(accounts, Slot::default()),
-            src: StatusCacheRc::default(),
-            blockhash_queue: RwLock::<BlockhashQueue>::default(),
-            ancestors: Ancestors::default(),
-            hash: RwLock::<Hash>::default(),
-            parent_hash: Hash::default(),
-            parent_slot: Slot::default(),
-            hard_forks: Arc::<RwLock<HardForks>>::default(),
-            transaction_count: AtomicU64::default(),
-            transaction_error_count: AtomicU64::default(),
-            transaction_entries_count: AtomicU64::default(),
-            transactions_per_entry_max: AtomicU64::default(),
-            tick_height: AtomicU64::default(),
-            signature_count: AtomicU64::default(),
-            capitalization: AtomicU64::default(),
-            max_tick_height: u64::default(),
-            hashes_per_tick: Option::<u64>::default(),
-            ticks_per_slot: u64::default(),
-            ns_per_slot: u128::default(),
-            genesis_creation_time: UnixTimestamp::default(),
-            slots_per_year: f64::default(),
-            unused: u64::default(),
-            slot: Slot::default(),
-            bank_id: BankId::default(),
-            epoch: Epoch::default(),
-            block_height: u64::default(),
-            collector_id: Pubkey::default(),
-            collector_fees: AtomicU64::default(),
-            fee_calculator: FeeCalculator::default(),
-            fee_rate_governor: FeeRateGovernor::default(),
-            collected_rent: AtomicU64::default(),
-            rent_collector: RentCollector::default(),
-            epoch_schedule: EpochSchedule::default(),
-            inflation: Arc::<RwLock<Inflation>>::default(),
-            stakes: RwLock::<Stakes>::default(),
-            epoch_stakes: HashMap::<Epoch, EpochStakes>::default(),
-            is_delta: AtomicBool::default(),
-            message_processor: MessageProcessor::default(),
-            compute_budget: Option::<ComputeBudget>::default(),
-            feature_builtins: Arc::<Vec<(Builtin, Pubkey, ActivationType)>>::default(),
-            last_vote_sync: AtomicU64::default(),
-            rewards: RwLock::<Vec<(Pubkey, RewardInfo)>>::default(),
-            cluster_type: Option::<ClusterType>::default(),
-            lazy_rent_collection: AtomicBool::default(),
-            rewards_pool_pubkeys: Arc::<HashSet<Pubkey>>::default(),
-            cached_executors: RwLock::<CowCachedExecutors>::default(),
-            transaction_debug_keys: Option::<Arc<HashSet<Pubkey>>>::default(),
-            transaction_log_collector_config: Arc::<RwLock<TransactionLogCollectorConfig>>::default(
-            ),
-            transaction_log_collector: Arc::<RwLock<TransactionLogCollector>>::default(),
-            feature_set: Arc::<FeatureSet>::default(),
-            drop_callback: RwLock::<OptionalDropCallback>::default(),
-            freeze_started: AtomicBool::default(),
-        }
-    }
-
-    pub fn new_with_paths_for_tests(
-        genesis_config: &GenesisConfig,
-        paths: Vec<PathBuf>,
-        frozen_account_pubkeys: &[Pubkey],
-        debug_keys: Option<Arc<HashSet<Pubkey>>>,
-        additional_builtins: Option<&Builtins>,
-        account_indexes: AccountSecondaryIndexes,
-        accounts_db_caching_enabled: bool,
-        shrink_ratio: AccountShrinkThreshold,
-        debug_do_not_add_builtins: bool,
-    ) -> Self {
-        Self::new_with_paths(
-            genesis_config,
-            paths,
-            frozen_account_pubkeys,
-            debug_keys,
-            additional_builtins,
-            account_indexes,
-            accounts_db_caching_enabled,
-            shrink_ratio,
-            debug_do_not_add_builtins,
-            Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
-        )
-    }
-
-    pub fn new_with_paths_for_benches(
-        genesis_config: &GenesisConfig,
-        paths: Vec<PathBuf>,
-        frozen_account_pubkeys: &[Pubkey],
-        debug_keys: Option<Arc<HashSet<Pubkey>>>,
-        additional_builtins: Option<&Builtins>,
-        account_indexes: AccountSecondaryIndexes,
-        accounts_db_caching_enabled: bool,
-        shrink_ratio: AccountShrinkThreshold,
-        debug_do_not_add_builtins: bool,
-    ) -> Self {
-        Self::new_with_paths(
-            genesis_config,
-            paths,
-            frozen_account_pubkeys,
-            debug_keys,
-            additional_builtins,
-            account_indexes,
-            accounts_db_caching_enabled,
-            shrink_ratio,
-            debug_do_not_add_builtins,
-            Some(ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS),
-        )
-    }
-
-    #[allow(clippy::too_many_arguments)]
->>>>>>> 73aa004c5 (stake: Remove v2 program references (#19308))
     pub fn new_with_paths(
         genesis_config: &GenesisConfig,
         paths: Vec<PathBuf>,
@@ -4939,12 +4827,10 @@ impl Bank {
                 .zip(loaded_transaction.accounts.iter())
                 .filter(|(_i, (_pubkey, account))| (Stakes::is_stake(account)))
             {
-<<<<<<< HEAD
                 if Stakes::is_stake(account) {
                     if let Some(old_vote_account) = self.stakes.write().unwrap().store(
                         pubkey,
                         account,
-                        self.stake_program_v2_enabled(),
                         self.check_init_vote_data_enabled(),
                     ) {
                         // TODO: one of the indices is redundant.
@@ -4954,19 +4840,6 @@ impl Bank {
                             transaction_result_index: i,
                         });
                     }
-=======
-                if let Some(old_vote_account) = self.stakes.write().unwrap().store(
-                    pubkey,
-                    account,
-                    self.check_init_vote_data_enabled(),
-                ) {
-                    // TODO: one of the indices is redundant.
-                    overwritten_vote_accounts.push(OverwrittenVoteAccount {
-                        account: old_vote_account,
-                        transaction_index: i,
-                        transaction_result_index: i,
-                    });
->>>>>>> 73aa004c5 (stake: Remove v2 program references (#19308))
                 }
             }
         }
@@ -13036,29 +12909,6 @@ pub(crate) mod tests {
     }
 
     #[test]
-<<<<<<< HEAD
-    fn test_stake_rewrite() {
-        let GenesisConfigInfo { genesis_config, .. } =
-            create_genesis_config_with_leader(500, &solana_sdk::pubkey::new_rand(), 1);
-        let bank = Arc::new(Bank::new(&genesis_config));
-
-        // quickest way of creting bad stake account
-        let bootstrap_stake_pubkey = bank
-            .cloned_stake_delegations()
-            .keys()
-            .next()
-            .copied()
-            .unwrap();
-        let mut bootstrap_stake_account = bank.get_account(&bootstrap_stake_pubkey).unwrap();
-        bootstrap_stake_account.set_lamports(10000000);
-        bank.store_account(&bootstrap_stake_pubkey, &bootstrap_stake_account);
-
-        assert_eq!(bank.rewrite_stakes(), (1, 1));
-    }
-
-    #[test]
-=======
->>>>>>> 73aa004c5 (stake: Remove v2 program references (#19308))
     fn test_get_inflation_start_slot_devnet_testnet() {
         let GenesisConfigInfo {
             mut genesis_config, ..
