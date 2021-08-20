@@ -2362,7 +2362,7 @@ impl AccountsDb {
             // `store_accounts_frozen()` above may have purged accounts from some
             // other storage entries (the ones that were just overwritten by this
             // new storage entry). This means some of those stores might have caused
-            // this slot to be read to `self.shrink_candidate_slots`, so delete
+            // this slot to be added to `self.shrink_candidate_slots`, so delete
             // those here
             self.shrink_candidate_slots.lock().unwrap().remove(&slot);
 
@@ -2524,7 +2524,9 @@ impl AccountsDb {
         let mut shrink_slots: ShrinkCandidates = HashMap::new();
         for usage in &store_usage {
             let alive_ratio = (total_alive_bytes as f64) / (total_bytes as f64);
-            if alive_ratio > shrink_ratio {
+            let store = &usage.store;
+            let after_shrink_size = Self::page_align(store.alive_bytes() as u64);
+            if after_shrink_size > 0 && alive_ratio > shrink_ratio {
                 // we have reached our goal, stop
                 debug!(
                     "Shrinking goal can be achieved at slot {:?}, total_alive_bytes: {:?} \
@@ -2533,9 +2535,7 @@ impl AccountsDb {
                 );
                 break;
             }
-            let store = &usage.store;
             let current_store_size = store.total_bytes();
-            let after_shrink_size = Self::page_align(store.alive_bytes() as u64);
             let bytes_saved = current_store_size.saturating_sub(after_shrink_size);
             total_bytes -= bytes_saved;
             shrink_slots
