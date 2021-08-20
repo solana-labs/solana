@@ -35,6 +35,7 @@ use solana_sdk::{
     native_loader, nonce,
     nonce::NONCED_TX_MARKER_IX_INDEX,
     pubkey::Pubkey,
+    system_program, sysvar,
     transaction::{Result, SanitizedTransaction, TransactionError},
 };
 use std::{
@@ -197,12 +198,21 @@ impl Accounts {
         }
     }
 
-    fn construct_instructions_account(message: &SanitizedMessage) -> AccountSharedData {
+    fn construct_instructions_account(
+        message: &SanitizedMessage,
+        is_owned_by_sysvar: bool,
+    ) -> AccountSharedData {
         let mut data = message.serialize_instructions();
         // add room for current instruction index.
         data.resize(data.len() + 2, 0);
+        let owner = if is_owned_by_sysvar {
+            sysvar::id()
+        } else {
+            system_program::id()
+        };
         AccountSharedData::from(Account {
             data,
+            owner,
             ..Account::default()
         })
     }
@@ -243,7 +253,11 @@ impl Accounts {
                         if message.is_writable(i) {
                             return Err(TransactionError::InvalidAccountIndex);
                         }
-                        Self::construct_instructions_account(message)
+                        Self::construct_instructions_account(
+                            message,
+                            feature_set
+                                .is_active(&feature_set::instructions_sysvar_owned_by_sysvar::id()),
+                        )
                     } else {
                         let (account, rent) = self
                             .accounts_db
