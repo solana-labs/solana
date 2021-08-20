@@ -19,7 +19,7 @@ pub struct SnapshotConfig {
     pub snapshot_archives_dir: PathBuf,
 
     /// Path to the directory where bank snapshots are stored
-    pub snapshots_dir: PathBuf,
+    pub bank_snapshots_dir: PathBuf,
 
     /// The archive format to use for snapshots
     pub archive_format: ArchiveFormat,

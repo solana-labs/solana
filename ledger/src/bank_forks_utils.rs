@@ -43,10 +43,10 @@ pub fn load(
     if let Some(snapshot_config) = snapshot_config {
         info!(
             "Initializing snapshot path: {}",
-            snapshot_config.snapshots_dir.display()
+            snapshot_config.bank_snapshots_dir.display()
         );
-        let _ = fs::remove_dir_all(&snapshot_config.snapshots_dir);
-        fs::create_dir_all(&snapshot_config.snapshots_dir)
+        let _ = fs::remove_dir_all(&snapshot_config.bank_snapshots_dir);
+        fs::create_dir_all(&snapshot_config.bank_snapshots_dir)
             .expect("Couldn't create snapshot directory");
 
         if snapshot_utils::get_highest_full_snapshot_archive_info(
@@ -118,7 +118,7 @@ fn load_from_snapshot(
     }
 
     let (deserialized_bank, timings) = snapshot_utils::bank_from_latest_snapshot_archives(
-        &snapshot_config.snapshots_dir,
+        &snapshot_config.bank_snapshots_dir,
         &snapshot_config.snapshot_archives_dir,
         &account_paths,
         &process_options.frozen_accounts,

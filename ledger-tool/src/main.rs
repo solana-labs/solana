@@ -699,7 +699,7 @@ fn load_bank_forks(
     process_options: ProcessOptions,
     snapshot_archive_path: Option<PathBuf>,
 ) -> bank_forks_utils::LoadResult {
-    let snapshots_dir = blockstore
+    let bank_snapshots_dir = blockstore
         .ledger_path()
         .join(if blockstore.is_primary_access() {
             "snapshot"
@@ -715,7 +715,7 @@ fn load_bank_forks(
             full_snapshot_archive_interval_slots: 0, // Value doesn't matter
             incremental_snapshot_archive_interval_slots: Slot::MAX,
             snapshot_archives_dir,
-            snapshots_dir,
+            bank_snapshots_dir,
             archive_format: ArchiveFormat::TarBzip2,
             snapshot_version: SnapshotVersion::default(),
             maximum_snapshots_to_retain: DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,

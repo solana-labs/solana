@@ -45,7 +45,7 @@ pub struct ReplicaNodeConfig {
     pub rpc_pubsub_addr: SocketAddr,
     pub ledger_path: PathBuf,
     pub snapshot_archives_dir: PathBuf,
-    pub snapshots_dir: PathBuf,
+    pub bank_snapshots_dir: PathBuf,
     pub account_paths: Vec<PathBuf>,
     pub snapshot_info: (Slot, Hash),
     pub cluster_info: Arc<ClusterInfo>,
@@ -95,7 +95,8 @@ fn initialize_from_snapshot(
     )
     .unwrap();
 
-    fs::create_dir_all(&snapshot_config.snapshots_dir).expect("Couldn't create snapshot directory");
+    fs::create_dir_all(&snapshot_config.bank_snapshots_dir)
+        .expect("Couldn't create snapshot directory");
 
     let archive_info = snapshot_utils::get_highest_full_snapshot_archive_info(
         &replica_config.snapshot_archives_dir,
@@ -110,12 +111,12 @@ fn initialize_from_snapshot(
 
     info!(
         "Build bank from snapshot archive: {:?}",
-        &snapshot_config.snapshots_dir
+        &snapshot_config.bank_snapshots_dir
     );
     let (bank0, _) = snapshot_utils::bank_from_snapshot_archives(
         &replica_config.account_paths,
         &[],
-        &snapshot_config.snapshots_dir,
+        &snapshot_config.bank_snapshots_dir,
         &archive_info,
         None,
         genesis_config,
@@ -259,7 +260,7 @@ impl ReplicaNode {
             full_snapshot_archive_interval_slots: std::u64::MAX,
             incremental_snapshot_archive_interval_slots: std::u64::MAX,
             snapshot_archives_dir: replica_config.snapshot_archives_dir.clone(),
-            snapshots_dir: replica_config.snapshots_dir.clone(),
+            bank_snapshots_dir: replica_config.bank_snapshots_dir.clone(),
             archive_format: ArchiveFormat::TarBzip2,
             snapshot_version: snapshot_utils::SnapshotVersion::default(),
             maximum_snapshots_to_retain:

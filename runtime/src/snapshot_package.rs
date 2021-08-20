@@ -99,7 +99,7 @@ impl AccountsPackage {
     pub fn new_for_full_snapshot(
         bank: &Bank,
         bank_snapshot_info: &BankSnapshotInfo,
-        snapshots_dir: impl AsRef<Path>,
+        bank_snapshots_dir: impl AsRef<Path>,
         status_cache_slot_deltas: Vec<BankSlotDelta>,
         snapshot_archives_dir: impl AsRef<Path>,
         snapshot_storages: SnapshotStorages,
@@ -115,7 +115,7 @@ impl AccountsPackage {
 
         let snapshot_tmpdir = tempfile::Builder::new()
             .prefix(&format!("{}{}-", TMP_FULL_SNAPSHOT_PREFIX, bank.slot()))
-            .tempdir_in(snapshots_dir)?;
+            .tempdir_in(bank_snapshots_dir)?;
 
         Self::new(
             bank,
@@ -136,7 +136,7 @@ impl AccountsPackage {
         bank: &Bank,
         incremental_snapshot_base_slot: Slot,
         bank_snapshot_info: &BankSnapshotInfo,
-        snapshots_dir: impl AsRef<Path>,
+        bank_snapshots_dir: impl AsRef<Path>,
         status_cache_slot_deltas: Vec<BankSlotDelta>,
         snapshot_archives_dir: impl AsRef<Path>,
         snapshot_storages: SnapshotStorages,
@@ -165,7 +165,7 @@ impl AccountsPackage {
                 incremental_snapshot_base_slot,
                 bank.slot()
             ))
-            .tempdir_in(snapshots_dir)?;
+            .tempdir_in(bank_snapshots_dir)?;
 
         Self::new(
             bank,

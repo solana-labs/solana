@@ -2580,11 +2580,11 @@ pub fn main() {
     } else {
         ledger_path.clone()
     };
-    let snapshots_dir = snapshot_archives_dir.join("snapshot");
-    fs::create_dir_all(&snapshots_dir).unwrap_or_else(|err| {
+    let bank_snapshots_dir = snapshot_archives_dir.join("snapshot");
+    fs::create_dir_all(&bank_snapshots_dir).unwrap_or_else(|err| {
         eprintln!(
             "Failed to create snapshots directory {:?}: {}",
-            snapshots_dir, err
+            bank_snapshots_dir, err
         );
         exit(1);
     });
@@ -2616,7 +2616,7 @@ pub fn main() {
             std::u64::MAX
         },
         incremental_snapshot_archive_interval_slots: Slot::MAX,
-        snapshots_dir,
+        bank_snapshots_dir,
         snapshot_archives_dir: snapshot_archives_dir.clone(),
         archive_format,
         snapshot_version,

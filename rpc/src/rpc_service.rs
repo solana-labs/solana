@@ -605,7 +605,7 @@ mod tests {
                 full_snapshot_archive_interval_slots: 0,
                 incremental_snapshot_archive_interval_slots: u64::MAX,
                 snapshot_archives_dir: PathBuf::from("/"),
-                snapshots_dir: PathBuf::from("/"),
+                bank_snapshots_dir: PathBuf::from("/"),
                 archive_format: ArchiveFormat::TarBzip2,
                 snapshot_version: SnapshotVersion::default(),
                 maximum_snapshots_to_retain: DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,

@@ -523,7 +523,7 @@ impl TestValidator {
             snapshot_config: Some(SnapshotConfig {
                 full_snapshot_archive_interval_slots: 100,
                 incremental_snapshot_archive_interval_slots: Slot::MAX,
-                snapshots_dir: ledger_path.join("snapshot"),
+                bank_snapshots_dir: ledger_path.join("snapshot"),
                 snapshot_archives_dir: ledger_path.to_path_buf(),
                 archive_format: ArchiveFormat::Tar,
                 snapshot_version: SnapshotVersion::default(),

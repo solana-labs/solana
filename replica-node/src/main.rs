@@ -283,7 +283,7 @@ pub fn main() {
     } else {
         ledger_path.clone()
     };
-    let snapshots_dir = snapshot_archives_dir.join("snapshot");
+    let bank_snapshots_dir = snapshot_archives_dir.join("snapshot");
 
     let account_paths: Vec<PathBuf> =
         if let Ok(account_paths) = values_t!(matches, "account_paths", String) {
@@ -363,7 +363,7 @@ pub fn main() {
         rpc_pubsub_addr: rpc_addrs.1,
         ledger_path,
         snapshot_archives_dir,
-        snapshots_dir,
+        bank_snapshots_dir,
         account_paths,
         snapshot_info: snapshot_info.unwrap(),
         cluster_info,

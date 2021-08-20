@@ -294,7 +294,7 @@ mod tests {
             full_snapshot_archive_interval_slots,
             incremental_snapshot_archive_interval_slots: Slot::MAX,
             snapshot_archives_dir: PathBuf::default(),
-            snapshots_dir: PathBuf::default(),
+            bank_snapshots_dir: PathBuf::default(),
             archive_format: ArchiveFormat::Tar,
             snapshot_version: SnapshotVersion::default(),
             maximum_snapshots_to_retain: usize::MAX,

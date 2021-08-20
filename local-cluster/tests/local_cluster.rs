@@ -3475,13 +3475,13 @@ fn setup_snapshot_validator_config(
     num_account_paths: usize,
 ) -> SnapshotValidatorConfig {
     // Create the snapshot config
-    let snapshot_dir = tempfile::tempdir_in(farf_dir()).unwrap();
+    let bank_snapshots_dir = tempfile::tempdir_in(farf_dir()).unwrap();
     let snapshot_archives_dir = tempfile::tempdir_in(farf_dir()).unwrap();
     let snapshot_config = SnapshotConfig {
         full_snapshot_archive_interval_slots: snapshot_interval_slots,
         incremental_snapshot_archive_interval_slots: Slot::MAX,
         snapshot_archives_dir: snapshot_archives_dir.path().to_path_buf(),
-        snapshots_dir: snapshot_dir.path().to_path_buf(),
+        bank_snapshots_dir: bank_snapshots_dir.path().to_path_buf(),
         archive_format: ArchiveFormat::TarBzip2,
         snapshot_version: snapshot_utils::SnapshotVersion::default(),
         maximum_snapshots_to_retain: snapshot_utils::DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
@@ -3500,7 +3500,7 @@ fn setup_snapshot_validator_config(
     };
 
     SnapshotValidatorConfig {
-        _snapshot_dir: snapshot_dir,
+        _snapshot_dir: bank_snapshots_dir,
         snapshot_archives_dir,
         account_storage_dirs,
         validator_config,

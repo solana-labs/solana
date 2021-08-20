@@ -117,13 +117,13 @@ fn setup_snapshot_validator_config(
     num_account_paths: usize,
 ) -> SnapshotValidatorConfig {
     // Create the snapshot config
-    let snapshot_dir = tempfile::tempdir_in(farf_dir()).unwrap();
+    let bank_snapshots_dir = tempfile::tempdir_in(farf_dir()).unwrap();
     let snapshot_archives_dir = tempfile::tempdir_in(farf_dir()).unwrap();
     let snapshot_config = SnapshotConfig {
         full_snapshot_archive_interval_slots: snapshot_interval_slots,
         incremental_snapshot_archive_interval_slots: Slot::MAX,
         snapshot_archives_dir: snapshot_archives_dir.path().to_path_buf(),
-        snapshots_dir: snapshot_dir.path().to_path_buf(),
+        bank_snapshots_dir: bank_snapshots_dir.path().to_path_buf(),
         archive_format: ArchiveFormat::TarBzip2,
         snapshot_version: snapshot_utils::SnapshotVersion::default(),
         maximum_snapshots_to_retain: snapshot_utils::DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
@@ -142,7 +142,7 @@ fn setup_snapshot_validator_config(
     };
 
     SnapshotValidatorConfig {
-        _snapshot_dir: snapshot_dir,
+        _snapshot_dir: bank_snapshots_dir,
         snapshot_archives_dir,
         account_storage_dirs,
         validator_config,
@@ -229,7 +229,7 @@ fn test_replica_bootstrap() {
     let ledger_path = ledger_dir.path();
     let snapshot_output_dir = tempfile::tempdir_in(farf_dir()).unwrap();
     let snapshot_archives_dir = snapshot_output_dir.path();
-    let snapshots_dir = snapshot_archives_dir.join("snapshot");
+    let bank_snapshots_dir = snapshot_archives_dir.join("snapshot");
     let account_paths: Vec<PathBuf> = vec![ledger_path.join("accounts")];
 
     let port = solana_net_utils::find_available_port_in_range(ip_addr, (8301, 8400)).unwrap();
@@ -265,7 +265,7 @@ fn test_replica_bootstrap() {
         rpc_pubsub_addr,
         ledger_path: ledger_path.to_path_buf(),
         snapshot_archives_dir: snapshot_archives_dir.to_path_buf(),
-        snapshots_dir,
+        bank_snapshots_dir,
         account_paths,
         snapshot_info: archive_snapshot_hash,
         cluster_info,
