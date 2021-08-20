@@ -9304,6 +9304,28 @@ pub mod tests {
     }
 
     #[test]
+    fn test_get_snapshot_storages_with_base_slot() {
+        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+
+        let key = Pubkey::default();
+        let account = AccountSharedData::new(1, 0, &key);
+
+        let slot = 10;
+        db.store_uncached(slot, &[(&key, &account)]);
+        db.add_root(slot);
+        assert_eq!(
+            0,
+            db.get_snapshot_storages(slot + 1, Some(slot), None).0.len()
+        );
+        assert_eq!(
+            1,
+            db.get_snapshot_storages(slot + 1, Some(slot - 1), None)
+                .0
+                .len()
+        );
+    }
+
+    #[test]
     #[should_panic(expected = "double remove of account in slot: 0/store: 0!!")]
     fn test_storage_remove_account_double_remove() {
         let accounts = AccountsDb::new(Vec::new(), &ClusterType::Development);
