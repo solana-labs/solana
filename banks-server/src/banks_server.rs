@@ -1,4 +1,3 @@
-use crate::send_transaction_service::{SendTransactionService, TransactionInfo};
 use bincode::{deserialize, serialize};
 use futures::{future, prelude::stream::StreamExt};
 use solana_banks_interface::{
@@ -14,6 +13,10 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::Signature,
     transaction::{self, Transaction},
+};
+use solana_transaction::{
+    send_transaction_service::{SendTransactionService, TransactionInfo},
+    tpu_info::NullTpuInfo,
 };
 use std::{
     io,
@@ -161,6 +164,7 @@ impl Banks for BanksServer {
             signature,
             serialize(&transaction).unwrap(),
             last_valid_block_height,
+            None,
         );
         self.transaction_sender.send(info).unwrap();
     }
@@ -250,6 +254,7 @@ impl Banks for BanksServer {
             signature,
             serialize(&transaction).unwrap(),
             last_valid_block_height,
+            None,
         );
         self.transaction_sender.send(info).unwrap();
         self.poll_signature_status(&signature, blockhash, last_valid_block_height, commitment)
@@ -302,7 +307,14 @@ pub async fn start_tcp_server(
         .map(move |chan| {
             let (sender, receiver) = channel();
 
-            SendTransactionService::new(tpu_addr, &bank_forks, receiver);
+            SendTransactionService::new::<NullTpuInfo>(
+                tpu_addr,
+                &bank_forks,
+                None,
+                receiver,
+                5_000,
+                0,
+            );
 
             let server =
                 BanksServer::new(bank_forks.clone(), block_commitment_cache.clone(), sender);

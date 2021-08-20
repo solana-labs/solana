@@ -4429,9 +4429,9 @@ dependencies = [
  "log 0.4.14",
  "mio 0.7.13",
  "solana-banks-interface",
- "solana-metrics",
  "solana-runtime",
  "solana-sdk",
+ "solana-transaction",
  "tarpc",
  "tokio 1.10.0",
  "tokio-serde",
@@ -5574,6 +5574,7 @@ dependencies = [
  "solana-stake-program",
  "solana-storage-bigtable",
  "solana-streamer",
+ "solana-transaction",
  "solana-transaction-status",
  "solana-version",
  "solana-vote-program",
@@ -5884,6 +5885,17 @@ dependencies = [
  "spl-token",
  "tempfile",
  "thiserror",
+]
+
+[[package]]
+name = "solana-transaction"
+version = "1.8.0"
+dependencies = [
+ "log 0.4.14",
+ "solana-logger 1.8.0",
+ "solana-metrics",
+ "solana-runtime",
+ "solana-sdk",
 ]
 
 [[package]]
