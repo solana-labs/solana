@@ -224,6 +224,7 @@ mod tests {
     use super::*;
     use solana_gossip::{cluster_info::make_accounts_hashes_message, contact_info::ContactInfo};
     use solana_runtime::{
+        snapshot_config::LastFullSnapshotSlot,
         snapshot_package::SnapshotType,
         snapshot_utils::{ArchiveFormat, SnapshotVersion},
     };
@@ -297,6 +298,7 @@ mod tests {
             archive_format: ArchiveFormat::Tar,
             snapshot_version: SnapshotVersion::default(),
             maximum_snapshots_to_retain: usize::MAX,
+            last_full_snapshot_slot: LastFullSnapshotSlot::default(),
         };
         for i in 0..MAX_SNAPSHOT_HASHES + 1 {
             let slot = full_snapshot_archive_interval_slots + i as u64;

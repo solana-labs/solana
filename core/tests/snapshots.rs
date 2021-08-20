@@ -65,7 +65,7 @@ mod tests {
         bank_forks::BankForks,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         snapshot_archive_info::FullSnapshotArchiveInfo,
-        snapshot_config::SnapshotConfig,
+        snapshot_config::{LastFullSnapshotSlot, SnapshotConfig},
         snapshot_package::{AccountsPackage, PendingSnapshotPackage},
         snapshot_utils::{
             self, ArchiveFormat, SnapshotVersion, DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
@@ -146,6 +146,7 @@ mod tests {
                 archive_format: ArchiveFormat::TarBzip2,
                 snapshot_version,
                 maximum_snapshots_to_retain: DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+                last_full_snapshot_slot: LastFullSnapshotSlot::default(),
             };
             bank_forks.set_snapshot_config(Some(snapshot_config.clone()));
             SnapshotTestConfig {
