@@ -1,4 +1,3 @@
-// TODO: Merge this implementation with the one at `banks-server/src/send_transaction_service.rs`
 use {
     crate::tpu_info::TpuInfo,
     log::*,
