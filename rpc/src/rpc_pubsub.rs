@@ -827,6 +827,7 @@ mod tests {
             max_active_subscriptions: MAX_ACTIVE_SUBSCRIPTIONS,
         };
         let session = create_session();
+        let encoding = UiAccountEncoding::Base64;
         let (subscriber, _id_receiver, receiver) = Subscriber::new_test("accountNotification");
         rpc.account_subscribe(
             session,
@@ -834,7 +835,7 @@ mod tests {
             stake_account.pubkey().to_string(),
             Some(RpcAccountInfoConfig {
                 commitment: Some(CommitmentConfig::processed()),
-                encoding: None,
+                encoding: Some(encoding),
                 data_slice: None,
             }),
         );
@@ -873,7 +874,7 @@ mod tests {
                    "value": {
                        "owner": stake_program_id.to_string(),
                        "lamports": 51,
-                       "data": bs58::encode(expected_data).into_string(),
+                       "data": [base64::encode(expected_data), encoding],
                        "executable": false,
                        "rentEpoch": 0,
                    },
