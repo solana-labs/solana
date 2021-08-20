@@ -1541,7 +1541,7 @@ pub fn snapshot_bank(
     archive_format: &ArchiveFormat,
     hash_for_testing: Option<Hash>,
 ) -> Result<()> {
-    let storages = root_bank.get_snapshot_storages();
+    let storages = root_bank.get_snapshot_storages(None);
     let mut add_snapshot_time = Measure::start("add-snapshot-ms");
     add_bank_snapshot(snapshots_dir, root_bank, &storages, snapshot_version)?;
     add_snapshot_time.stop();
@@ -1592,7 +1592,7 @@ pub fn bank_to_full_snapshot_archive(
     bank.rehash(); // Bank accounts may have been manually modified by the caller
 
     let temp_dir = tempfile::tempdir_in(snapshots_dir)?;
-    let storages = bank.get_snapshot_storages();
+    let storages = bank.get_snapshot_storages(None);
     let bank_snapshot_info = add_bank_snapshot(&temp_dir, bank, &storages, snapshot_version)?;
 
     package_process_and_archive_full_snapshot(
@@ -1636,7 +1636,7 @@ pub fn bank_to_incremental_snapshot_archive(
 
     let temp_dir = tempfile::tempdir_in(snapshots_dir)?;
     let storages = {
-        let mut storages = bank.get_snapshot_storages();
+        let mut storages = bank.get_snapshot_storages(Some(full_snapshot_slot));
         filter_snapshot_storages_for_incremental_snapshot(&mut storages, full_snapshot_slot);
         storages
     };

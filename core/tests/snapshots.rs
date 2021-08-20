@@ -282,7 +282,7 @@ mod tests {
             snapshot_path,
             last_bank.src.slot_deltas(&last_bank.src.roots()),
             &snapshot_config.snapshot_package_output_path,
-            last_bank.get_snapshot_storages(),
+            last_bank.get_snapshot_storages(None),
             ArchiveFormat::TarBzip2,
             snapshot_version,
             None,
@@ -364,7 +364,7 @@ mod tests {
 
         // Take snapshot of zeroth bank
         let bank0 = bank_forks.get(0).unwrap();
-        let storages = bank0.get_snapshot_storages();
+        let storages = bank0.get_snapshot_storages(None);
         snapshot_utils::add_bank_snapshot(snapshot_path, bank0, &storages, snapshot_version)
             .unwrap();
 
@@ -424,7 +424,7 @@ mod tests {
             if slot == saved_slot as u64 {
                 // Find the relevant snapshot storages
                 let snapshot_storage_files: HashSet<_> = bank_forks[slot]
-                    .get_snapshot_storages()
+                    .get_snapshot_storages(None)
                     .into_iter()
                     .flatten()
                     .map(|s| s.get_path())
@@ -763,7 +763,7 @@ mod tests {
             &bank_snapshot_info,
             &snapshot_config.snapshot_path,
             &snapshot_config.snapshot_package_output_path,
-            bank.get_snapshot_storages(),
+            bank.get_snapshot_storages(None),
             snapshot_config.archive_format,
             snapshot_config.snapshot_version,
             None,
@@ -788,7 +788,7 @@ mod tests {
             .find(|elem| elem.slot == slot)
             .ok_or_else(|| Error::new(ErrorKind::Other, "did not find snapshot with this path"))?;
         let storages = {
-            let mut storages = bank.get_snapshot_storages();
+            let mut storages = bank.get_snapshot_storages(Some(incremental_snapshot_base_slot));
             snapshot_utils::filter_snapshot_storages_for_incremental_snapshot(
                 &mut storages,
                 incremental_snapshot_base_slot,
