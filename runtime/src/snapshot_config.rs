@@ -15,11 +15,11 @@ pub struct SnapshotConfig {
     /// Generate a new incremental snapshot archive every this many slots
     pub incremental_snapshot_archive_interval_slots: Slot,
 
-    /// Where to store the latest packaged snapshot archives
-    pub snapshot_package_output_path: PathBuf,
+    /// Path to the directory where snapshot archives are stored
+    pub snapshot_archives_dir: PathBuf,
 
-    /// Where to place the bank snapshots for recent slots
-    pub snapshot_path: PathBuf,
+    /// Path to the directory where bank snapshots are stored
+    pub bank_snapshots_dir: PathBuf,
 
     /// The archive format to use for snapshots
     pub archive_format: ArchiveFormat,

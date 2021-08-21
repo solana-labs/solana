@@ -278,12 +278,12 @@ pub fn main() {
     );
 
     let ledger_path = PathBuf::from(matches.value_of("ledger_path").unwrap());
-    let snapshot_output_dir = if let Some(snapshots) = matches.value_of("snapshots") {
+    let snapshot_archives_dir = if let Some(snapshots) = matches.value_of("snapshots") {
         PathBuf::from(snapshots)
     } else {
         ledger_path.clone()
     };
-    let snapshot_path = snapshot_output_dir.join("snapshot");
+    let bank_snapshots_dir = snapshot_archives_dir.join("snapshot");
 
     let account_paths: Vec<PathBuf> =
         if let Ok(account_paths) = values_t!(matches, "account_paths", String) {
@@ -348,7 +348,7 @@ pub fn main() {
         &node,
         expected_shred_version,
         &peer_pubkey,
-        &snapshot_output_dir,
+        &snapshot_archives_dir,
         socket_addr_space,
     );
 
@@ -362,8 +362,8 @@ pub fn main() {
         rpc_addr: rpc_addrs.0,
         rpc_pubsub_addr: rpc_addrs.1,
         ledger_path,
-        snapshot_output_dir,
-        snapshot_path,
+        snapshot_archives_dir,
+        bank_snapshots_dir,
         account_paths,
         snapshot_info: snapshot_info.unwrap(),
         cluster_info,

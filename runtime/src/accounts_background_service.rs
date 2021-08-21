@@ -175,8 +175,8 @@ impl SnapshotRequestHandler {
                     &snapshot_root_bank,
                     status_cache_slot_deltas,
                     &self.accounts_package_sender,
-                    &self.snapshot_config.snapshot_path,
-                    &self.snapshot_config.snapshot_package_output_path,
+                    &self.snapshot_config.bank_snapshots_dir,
+                    &self.snapshot_config.snapshot_archives_dir,
                     self.snapshot_config.snapshot_version,
                     &self.snapshot_config.archive_format,
                     hash_for_testing,
@@ -192,7 +192,7 @@ impl SnapshotRequestHandler {
 
                 // Cleanup outdated snapshots
                 let mut purge_old_snapshots_time = Measure::start("purge_old_snapshots_time");
-                snapshot_utils::purge_old_bank_snapshots(&self.snapshot_config.snapshot_path);
+                snapshot_utils::purge_old_bank_snapshots(&self.snapshot_config.bank_snapshots_dir);
                 purge_old_snapshots_time.stop();
                 total_time.stop();
 

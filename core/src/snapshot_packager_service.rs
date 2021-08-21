@@ -121,8 +121,8 @@ mod tests {
     fn create_and_verify_snapshot(temp_dir: &Path) {
         let accounts_dir = temp_dir.join("accounts");
         let snapshots_dir = temp_dir.join("snapshots");
-        let snapshot_package_output_path = temp_dir.join("snapshots_output");
-        fs::create_dir_all(&snapshot_package_output_path).unwrap();
+        let snapshot_archives_dir = temp_dir.join("snapshots_output");
+        fs::create_dir_all(&snapshot_archives_dir).unwrap();
 
         fs::create_dir_all(&accounts_dir).unwrap();
         // Create some storage entries
@@ -161,7 +161,7 @@ mod tests {
 
         // Create a packageable snapshot
         let output_tar_path = snapshot_utils::build_full_snapshot_archive_path(
-            snapshot_package_output_path,
+            snapshot_archives_dir,
             42,
             &Hash::default(),
             ArchiveFormat::TarBzip2,

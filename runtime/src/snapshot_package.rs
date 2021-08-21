@@ -46,7 +46,7 @@ pub struct AccountsPackage {
     pub hash: Hash, // temporarily here while we still have to calculate hash before serializing bank
     pub archive_format: ArchiveFormat,
     pub snapshot_version: SnapshotVersion,
-    pub snapshot_output_dir: PathBuf,
+    pub snapshot_archives_dir: PathBuf,
     pub expected_capitalization: u64,
     pub hash_for_testing: Option<Hash>,
     pub cluster_type: ClusterType,
@@ -59,7 +59,7 @@ impl AccountsPackage {
         bank: &Bank,
         bank_snapshot_info: &BankSnapshotInfo,
         status_cache_slot_deltas: Vec<BankSlotDelta>,
-        snapshot_package_output_path: impl AsRef<Path>,
+        snapshot_archives_dir: impl AsRef<Path>,
         snapshot_storages: SnapshotStorages,
         archive_format: ArchiveFormat,
         snapshot_version: SnapshotVersion,
@@ -87,7 +87,7 @@ impl AccountsPackage {
             hash: bank.get_accounts_hash(),
             archive_format,
             snapshot_version,
-            snapshot_output_dir: snapshot_package_output_path.as_ref().to_path_buf(),
+            snapshot_archives_dir: snapshot_archives_dir.as_ref().to_path_buf(),
             expected_capitalization: bank.capitalization(),
             hash_for_testing,
             cluster_type: bank.cluster_type(),
@@ -99,9 +99,9 @@ impl AccountsPackage {
     pub fn new_for_full_snapshot(
         bank: &Bank,
         bank_snapshot_info: &BankSnapshotInfo,
-        snapshots_dir: impl AsRef<Path>,
+        bank_snapshots_dir: impl AsRef<Path>,
         status_cache_slot_deltas: Vec<BankSlotDelta>,
-        snapshot_package_output_path: impl AsRef<Path>,
+        snapshot_archives_dir: impl AsRef<Path>,
         snapshot_storages: SnapshotStorages,
         archive_format: ArchiveFormat,
         snapshot_version: SnapshotVersion,
@@ -115,13 +115,13 @@ impl AccountsPackage {
 
         let snapshot_tmpdir = tempfile::Builder::new()
             .prefix(&format!("{}{}-", TMP_FULL_SNAPSHOT_PREFIX, bank.slot()))
-            .tempdir_in(snapshots_dir)?;
+            .tempdir_in(bank_snapshots_dir)?;
 
         Self::new(
             bank,
             bank_snapshot_info,
             status_cache_slot_deltas,
-            snapshot_package_output_path,
+            snapshot_archives_dir,
             snapshot_storages,
             archive_format,
             snapshot_version,
@@ -136,9 +136,9 @@ impl AccountsPackage {
         bank: &Bank,
         incremental_snapshot_base_slot: Slot,
         bank_snapshot_info: &BankSnapshotInfo,
-        snapshots_dir: impl AsRef<Path>,
+        bank_snapshots_dir: impl AsRef<Path>,
         status_cache_slot_deltas: Vec<BankSlotDelta>,
-        snapshot_package_output_path: impl AsRef<Path>,
+        snapshot_archives_dir: impl AsRef<Path>,
         snapshot_storages: SnapshotStorages,
         archive_format: ArchiveFormat,
         snapshot_version: SnapshotVersion,
@@ -165,13 +165,13 @@ impl AccountsPackage {
                 incremental_snapshot_base_slot,
                 bank.slot()
             ))
-            .tempdir_in(snapshots_dir)?;
+            .tempdir_in(bank_snapshots_dir)?;
 
         Self::new(
             bank,
             bank_snapshot_info,
             status_cache_slot_deltas,
-            snapshot_package_output_path,
+            snapshot_archives_dir,
             snapshot_storages,
             archive_format,
             snapshot_version,
