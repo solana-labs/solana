@@ -759,7 +759,7 @@ mod tests {
                 .into_iter()
                 .find(|elem| elem.slot == slot)
                 .ok_or_else(|| {
-                    Error::new(ErrorKind::Other, "did not find snapshot with this path")
+                    Error::new(ErrorKind::Other, "did not find bank snapshot with this path")
                 })?;
         snapshot_utils::package_process_and_archive_full_snapshot(
             bank,
