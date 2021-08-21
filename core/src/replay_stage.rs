@@ -942,23 +942,16 @@ impl ReplayStage {
                             );
                             return false;
                         }
-                    } else {
-                        warn!(
-                            "Trying to purge slot {} which does not exist in bank forks",
-                            *duplicate_slot
+                        Self::purge_unconfirmed_duplicate_slot(
+                            *duplicate_slot,
+                            ancestors,
+                            descendants,
+                            progress,
+                            &root_bank,
+                            bank_forks,
+                            blockstore,
                         );
-                        return false;
                     }
-
-                    Self::purge_unconfirmed_duplicate_slot(
-                        *duplicate_slot,
-                        ancestors,
-                        descendants,
-                        progress,
-                        &root_bank,
-                        bank_forks,
-                        blockstore,
-                    );
                     warn!(
                         "Notifying repair service to repair duplicate slot: {}",
                         *duplicate_slot,
@@ -967,6 +960,9 @@ impl ReplayStage {
                         "replay_stage-repair-dumped-slot-request",
                         ("duplicate_slot", *duplicate_slot, i64),
                     );
+                    // Even if bank is not in BankForks, we should still send repair signal.
+                    // This is because the bank may have been purged earlier if one of its
+                    // ancestors was also the wrong version of a duplicate slot.
                     let _ = duplicate_slot_repair_request_sender.send(*duplicate_slot);
                     true
                 // TODO: Send signal to repair to repair the correct version of
@@ -5022,13 +5018,13 @@ pub mod tests {
         // Simulate getting multiple signals from EpochSlots about the same slots,
         // we should only send the repair signal once if the slot hasn't been dumped + replayed
         // more than once
-        let num_replay_iterations = 10;
+        let num_epoch_slots_signals = 10;
         // Before this signal, we had no idea we needed to repair this slot
         assert!(duplicate_slots_to_repair.is_empty());
         // `expected_repair_results` is what we expect in `duplicate_slots_to_repair`.
         let mut expected_repair_results: HashMap<Slot, Hash> = HashMap::new();
         let mut actual_repair_requests_count_per_slot: HashMap<Slot, usize> = HashMap::new();
-        for i in 0..num_replay_iterations {
+        for i in 0..num_epoch_slots_signals {
             // Send repetitve frozen signals from EpochSlots for all the ancestors of the dead
             // slots
             let mut ancestors = bank_forks.read().unwrap().ancestors();
@@ -5085,6 +5081,7 @@ pub mod tests {
             let (duplicate_slot_repair_request_sender, duplicate_slot_repair_request_receiver) =
                 unbounded();
             let mut descendants = bank_forks.read().unwrap().descendants().clone();
+
             ReplayStage::dump_then_repair_correct_slots(
                 &mut duplicate_slots_to_repair,
                 &mut ancestors,
