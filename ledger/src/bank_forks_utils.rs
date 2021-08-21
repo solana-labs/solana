@@ -42,7 +42,7 @@ pub fn load(
 ) -> LoadResult {
     if let Some(snapshot_config) = snapshot_config {
         info!(
-            "Initializing snapshot path: {}",
+            "Initializing bank snapshot path: {}",
             snapshot_config.bank_snapshots_dir.display()
         );
         let _ = fs::remove_dir_all(&snapshot_config.bank_snapshots_dir);
