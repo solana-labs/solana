@@ -96,7 +96,7 @@ fn initialize_from_snapshot(
     .unwrap();
 
     fs::create_dir_all(&snapshot_config.bank_snapshots_dir)
-        .expect("Couldn't create snapshot directory");
+        .expect("Couldn't create bank snapshot directory");
 
     let archive_info = snapshot_utils::get_highest_full_snapshot_archive_info(
         &replica_config.snapshot_archives_dir,
