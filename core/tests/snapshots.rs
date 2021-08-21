@@ -276,7 +276,7 @@ mod tests {
         let bank_snapshots_dir = &snapshot_config.bank_snapshots_dir;
         let last_bank_snapshot_info =
             snapshot_utils::get_highest_bank_snapshot_info(bank_snapshots_dir)
-                .expect("no snapshots found in path");
+                .expect("no bank snapshots found in path");
         let accounts_package = AccountsPackage::new_for_full_snapshot(
             last_bank,
             &last_bank_snapshot_info,
