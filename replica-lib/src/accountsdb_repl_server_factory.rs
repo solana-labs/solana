@@ -2,7 +2,7 @@ use {
     crate::{
         accountsdb_repl_server::{AccountsDbReplService, AccountsDbReplServiceConfig},
         replica_accounts_server::ReplicaAccountsServerImpl,
-        replica_updated_slots_server::ReplicaUpdatedSlotsServerImpl,
+        replica_confirmed_slots_server::ReplicaSlotConfirmationServerImpl,
     },
     crossbeam_channel::Receiver,
     solana_runtime::bank_forks::BankForks,
@@ -20,7 +20,7 @@ impl AccountsDbReplServerFactory {
     ) -> AccountsDbReplService {
         AccountsDbReplService::new(
             config,
-            Arc::new(RwLock::new(ReplicaUpdatedSlotsServerImpl::new(
+            Arc::new(RwLock::new(ReplicaSlotConfirmationServerImpl::new(
                 confirmed_bank_receiver,
             ))),
             Arc::new(RwLock::new(ReplicaAccountsServerImpl::new(bank_forks))),

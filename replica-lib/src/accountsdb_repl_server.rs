@@ -15,8 +15,8 @@ use {
 
 tonic::include_proto!("accountsdb_repl");
 
-pub trait ReplicaUpdatedSlotsServer {
-    fn get_updated_slots(
+pub trait ReplicaSlotConfirmationServer {
+    fn get_confirmed_slots(
         &self,
         request: &ReplicaUpdatedSlotsRequest,
     ) -> Result<ReplicaUpdatedSlotsResponse, tonic::Status>;
@@ -34,19 +34,19 @@ pub trait ReplicaAccountsServer {
 
 #[derive(Clone)]
 struct AccountsDbReplServer {
-    updated_slots_server: Arc<RwLock<dyn ReplicaUpdatedSlotsServer + Sync + Send>>,
+    confirmed_slots_server: Arc<RwLock<dyn ReplicaSlotConfirmationServer + Sync + Send>>,
     accounts_server: Arc<RwLock<dyn ReplicaAccountsServer + Sync + Send>>,
 }
 
 /// Implementing the AccountsDbRepl interface declared by the protocol
 #[tonic::async_trait]
 impl accounts_db_repl_server::AccountsDbRepl for AccountsDbReplServer {
-    async fn get_updated_slots(
+    async fn get_confirmed_slots(
         &self,
         request: tonic::Request<ReplicaUpdatedSlotsRequest>,
     ) -> Result<tonic::Response<ReplicaUpdatedSlotsResponse>, tonic::Status> {
-        let server = self.updated_slots_server.read().unwrap();
-        let result = server.get_updated_slots(&request.into_inner());
+        let server = self.confirmed_slots_server.read().unwrap();
+        let result = server.get_confirmed_slots(&request.into_inner());
         result.map(tonic::Response::new)
     }
 
@@ -62,17 +62,17 @@ impl accounts_db_repl_server::AccountsDbRepl for AccountsDbReplServer {
 
 impl AccountsDbReplServer {
     pub fn new(
-        updated_slots_server: Arc<RwLock<dyn ReplicaUpdatedSlotsServer + Sync + Send>>,
+        confirmed_slots_server: Arc<RwLock<dyn ReplicaSlotConfirmationServer + Sync + Send>>,
         accounts_server: Arc<RwLock<dyn ReplicaAccountsServer + Sync + Send>>,
     ) -> Self {
         Self {
-            updated_slots_server,
+            confirmed_slots_server,
             accounts_server,
         }
     }
 
     pub fn join(self) -> thread::Result<()> {
-        self.updated_slots_server.write().unwrap().join()?;
+        self.confirmed_slots_server.write().unwrap().join()?;
         self.accounts_server.write().unwrap().join()
     }
 }
@@ -94,11 +94,11 @@ pub struct AccountsDbReplService {
 impl AccountsDbReplService {
     pub fn new(
         config: AccountsDbReplServiceConfig,
-        updated_slots_server: Arc<RwLock<dyn ReplicaUpdatedSlotsServer + Sync + Send>>,
+        confirmed_slots_server: Arc<RwLock<dyn ReplicaSlotConfirmationServer + Sync + Send>>,
         accounts_server: Arc<RwLock<dyn ReplicaAccountsServer + Sync + Send>>,
     ) -> Self {
         let accountsdb_repl_server =
-            AccountsDbReplServer::new(updated_slots_server, accounts_server);
+            AccountsDbReplServer::new(confirmed_slots_server, accounts_server);
 
         let worker_threads = config.worker_threads;
         let runtime = Arc::new(

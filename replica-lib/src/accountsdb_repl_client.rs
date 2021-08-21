@@ -43,14 +43,14 @@ impl AccountsDbReplClient {
         Ok(AccountsDbReplClient { client })
     }
 
-    pub async fn get_updated_slots(
+    pub async fn get_confirmed_slots(
         &mut self,
         last_slot: Slot,
     ) -> Result<Vec<Slot>, ReplicaRpcError> {
         let request = ReplicaUpdatedSlotsRequest {
             last_replicated_slot: last_slot,
         };
-        let response = self.client.get_updated_slots(Request::new(request)).await;
+        let response = self.client.get_confirmed_slots(Request::new(request)).await;
 
         match response {
             Ok(response) => Ok(response.into_inner().updated_slots),
@@ -104,9 +104,9 @@ impl AccountsDbReplClientService {
         })
     }
 
-    pub fn get_updated_slots(&mut self, last_slot: Slot) -> Result<Vec<Slot>, ReplicaRpcError> {
+    pub fn get_confirmed_slots(&mut self, last_slot: Slot) -> Result<Vec<Slot>, ReplicaRpcError> {
         self.runtime
-            .block_on(self.accountsdb_repl_client.get_updated_slots(last_slot))
+            .block_on(self.accountsdb_repl_client.get_confirmed_slots(last_slot))
     }
 
     pub fn get_slot_accounts(

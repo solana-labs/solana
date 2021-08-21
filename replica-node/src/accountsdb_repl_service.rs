@@ -1,4 +1,4 @@
-/// Module responsible for replicating AccountsDb data from its peer to its local AccountsDb
+/// Module responsible for replicating AccountsDb data from its peer to its local AccountsDb in the replica-node
 use {
     log::*,
     solana_replica_lib::accountsdb_repl_client::{
@@ -57,7 +57,7 @@ impl AccountsDbReplService {
         mut accountsdb_repl_client: AccountsDbReplClientService,
     ) {
         loop {
-            match accountsdb_repl_client.get_updated_slots(last_replicated_slot) {
+            match accountsdb_repl_client.get_confirmed_slots(last_replicated_slot) {
                 Ok(slots) => {
                     info!("Received updated slots: {:?}", slots);
                     if !slots.is_empty() {

@@ -39,6 +39,6 @@ message ReplicaAccountsResponse {
 }
 
 service AccountsDbRepl {
-    rpc get_updated_slots(ReplicaUpdatedSlotsRequest) returns (ReplicaUpdatedSlotsResponse);
+    rpc get_confirmed_slots(ReplicaUpdatedSlotsRequest) returns (ReplicaUpdatedSlotsResponse);
     rpc get_slot_accounts(ReplicaAccountsRequest) returns (ReplicaAccountsResponse);
 }

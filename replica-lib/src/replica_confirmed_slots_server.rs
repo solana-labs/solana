@@ -2,7 +2,7 @@ use tonic;
 
 // tonic::include_proto!("accountsdb_repl");
 use {
-    crate::accountsdb_repl_server::{self, ReplicaUpdatedSlotsServer},
+    crate::accountsdb_repl_server::{self, ReplicaSlotConfirmationServer},
     crossbeam_channel::Receiver,
     solana_sdk::{clock::Slot, commitment_config::CommitmentLevel},
     std::{
@@ -23,15 +23,15 @@ struct ReplicaEligibleSlotSet {
     slot_set: Arc<RwLock<VecDeque<(Slot, CommitmentLevel)>>>,
 }
 
-pub(crate) struct ReplicaUpdatedSlotsServerImpl {
+pub(crate) struct ReplicaSlotConfirmationServerImpl {
     eligible_slot_set: ReplicaEligibleSlotSet,
     confirmed_bank_receiver_service: Option<JoinHandle<()>>,
     cleanup_service: Option<JoinHandle<()>>,
     exit_updated_slot_server: Arc<AtomicBool>,
 }
 
-impl ReplicaUpdatedSlotsServer for ReplicaUpdatedSlotsServerImpl {
-    fn get_updated_slots(
+impl ReplicaSlotConfirmationServer for ReplicaSlotConfirmationServerImpl {
+    fn get_confirmed_slots(
         &self,
         request: &accountsdb_repl_server::ReplicaUpdatedSlotsRequest,
     ) -> Result<accountsdb_repl_server::ReplicaUpdatedSlotsResponse, tonic::Status> {
@@ -59,7 +59,7 @@ impl ReplicaUpdatedSlotsServer for ReplicaUpdatedSlotsServerImpl {
 
 const MAX_ELIGIBLE_SLOT_SET_SIZE: usize = 262144;
 
-impl ReplicaUpdatedSlotsServerImpl {
+impl ReplicaSlotConfirmationServerImpl {
     pub fn new(confirmed_bank_receiver: Receiver<Slot>) -> Self {
         let eligible_slot_set = ReplicaEligibleSlotSet::default();
         let exit_updated_slot_server = Arc::new(AtomicBool::new(false));
