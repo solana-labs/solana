@@ -112,7 +112,6 @@ impl AccountsDbReplService {
 
         let server_cloned = accountsdb_repl_server.clone();
         let (exit_signal_sender, exit_signal_receiver) = oneshot::channel::<()>();
-        // let sender = Arc::new(Mutex::new(Some(tx)));
 
         let thread = Builder::new()
             .name("sol-accountsdb-repl-rt".to_string())
