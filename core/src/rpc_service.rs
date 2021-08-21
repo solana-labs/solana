@@ -34,7 +34,6 @@ use std::{
     sync::{mpsc::channel, Arc, Mutex, RwLock},
     thread::{self, Builder, JoinHandle},
 };
-use tokio::runtime;
 use tokio_util::codec::{BytesCodec, FramedRead};
 
 const LARGEST_ACCOUNTS_CACHE_DURATION: u64 = 60 * 60 * 2;
@@ -112,10 +111,8 @@ impl RpcRequestMiddleware {
     }
 
     #[cfg(unix)]
-    async fn open_no_follow(path: impl AsRef<Path>) -> std::io::Result<tokio_02::fs::File> {
-        // Stuck on tokio 0.2 until the jsonrpc crates upgrade
-        use tokio_02::fs::os::unix::OpenOptionsExt;
-        tokio_02::fs::OpenOptions::new()
+    async fn open_no_follow(path: impl AsRef<Path>) -> std::io::Result<tokio::fs::File> {
+        tokio::fs::OpenOptions::new()
             .read(true)
             .write(false)
             .create(false)
@@ -125,10 +122,9 @@ impl RpcRequestMiddleware {
     }
 
     #[cfg(not(unix))]
-    async fn open_no_follow(path: impl AsRef<Path>) -> std::io::Result<tokio_02::fs::File> {
+    async fn open_no_follow(path: impl AsRef<Path>) -> std::io::Result<tokio::fs::File> {
         // TODO: Is there any way to achieve the same on Windows?
-        // Stuck on tokio 0.2 until the jsonrpc crates upgrade
-        tokio_02::fs::File::open(path).await
+        tokio::fs::File::open(path).await
     }
 
     fn process_file_get(&self, path: &str) -> RequestMiddlewareAction {
@@ -294,9 +290,17 @@ impl JsonRpcService {
         )));
 
         let tpu_address = cluster_info.my_contact_info().tpu;
+
+        // sadly, some parts of our current rpc implemention block the jsonrpc's
+        // _socket-listening_ event loop for too long, due to (blocking) long IO or intesive CPU,
+        // causing no further processing of incoming requests and ultimatily innocent clients timing-out.
+        // So create a (shared) multi-threaded event_loop for jsonrpc and set its .threads() to 1,
+        // so that we avoid the single-threaded event loops from being created automatically by
+        // jsonrpc for threads when .threads(N > 1) is given.
         let runtime = Arc::new(
-            runtime::Builder::new_multi_thread()
-                .thread_name("rpc-runtime")
+            tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(rpc_threads)
+                .thread_name("sol-rpc-el")
                 .enable_all()
                 .build()
                 .expect("Runtime"),
@@ -351,7 +355,6 @@ impl JsonRpcService {
             health.clone(),
             cluster_info.clone(),
             genesis_hash,
-            runtime,
             bigtable_ledger_storage,
             optimistically_confirmed_bank,
             largest_accounts_cache,
@@ -376,23 +379,6 @@ impl JsonRpcService {
 
         let ledger_path = ledger_path.to_path_buf();
 
-        // sadly, some parts of our current rpc implemention block the jsonrpc's
-        // _socket-listening_ event loop for too long, due to (blocking) long IO or intesive CPU,
-        // causing no further processing of incoming requests and ultimatily innocent clients timing-out.
-        // So create a (shared) multi-threaded event_loop for jsonrpc and set its .threads() to 1,
-        // so that we avoid the single-threaded event loops from being created automatically by
-        // jsonrpc for threads when .threads(N > 1) is given.
-        let event_loop = {
-            // Stuck on tokio 0.2 until the jsonrpc crates upgrade
-            tokio_02::runtime::Builder::new()
-                .core_threads(rpc_threads)
-                .threaded_scheduler()
-                .enable_all()
-                .thread_name("sol-rpc-el")
-                .build()
-                .unwrap()
-        };
-
         let (close_handle_sender, close_handle_receiver) = channel();
         let thread_hdl = Builder::new()
             .name("solana-jsonrpc".to_string())
@@ -414,7 +400,7 @@ impl JsonRpcService {
                     io,
                     move |_req: &hyper::Request<hyper::Body>| request_processor.clone(),
                 )
-                .event_loop_executor(event_loop.handle().clone())
+                .event_loop_executor(runtime.handle().clone())
                 .threads(1)
                 .cors(DomainsValidation::AllowOnly(vec![
                     AccessControlAllowOrigin::Any,
@@ -481,6 +467,7 @@ mod tests {
     use solana_sdk::{genesis_config::ClusterType, signature::Signer};
     use std::io::Write;
     use std::net::{IpAddr, Ipv4Addr};
+    use tokio::runtime::Runtime;
 
     #[test]
     fn test_rpc_new() {
@@ -613,7 +600,7 @@ mod tests {
 
     #[test]
     fn test_process_file_get() {
-        let mut runtime = tokio_02::runtime::Runtime::new().unwrap();
+        let runtime = Runtime::new().unwrap();
 
         let ledger_path = get_tmp_ledger_path!();
         std::fs::create_dir(&ledger_path).unwrap();
