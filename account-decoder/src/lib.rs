@@ -28,6 +28,7 @@ use {
 
 pub type StringAmount = String;
 pub type StringDecimals = String;
+pub const MAX_BASE58_BYTES: usize = 128;
 
 /// A duplicate representation of an Account for pretty JSON serialization
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -60,6 +61,17 @@ pub enum UiAccountEncoding {
 }
 
 impl UiAccount {
+    fn encode_bs58<T: ReadableAccount>(
+        account: &T,
+        data_slice_config: Option<UiDataSliceConfig>,
+    ) -> String {
+        if account.data().len() <= MAX_BASE58_BYTES {
+            bs58::encode(slice_data(account.data(), data_slice_config)).into_string()
+        } else {
+            "error: data too large for bs58 encoding".to_string()
+        }
+    }
+
     pub fn encode<T: ReadableAccount>(
         pubkey: &Pubkey,
         account: &T,
@@ -68,13 +80,14 @@ impl UiAccount {
         data_slice_config: Option<UiDataSliceConfig>,
     ) -> Self {
         let data = match encoding {
-            UiAccountEncoding::Binary => UiAccountData::LegacyBinary(
-                bs58::encode(slice_data(account.data(), data_slice_config)).into_string(),
-            ),
-            UiAccountEncoding::Base58 => UiAccountData::Binary(
-                bs58::encode(slice_data(account.data(), data_slice_config)).into_string(),
-                encoding,
-            ),
+            UiAccountEncoding::Binary => {
+                let data = Self::encode_bs58(account, data_slice_config);
+                UiAccountData::LegacyBinary(data)
+            }
+            UiAccountEncoding::Base58 => {
+                let data = Self::encode_bs58(account, data_slice_config);
+                UiAccountData::Binary(data, encoding)
+            }
             UiAccountEncoding::Base64 => UiAccountData::Binary(
                 base64::encode(slice_data(account.data(), data_slice_config)),
                 encoding,
