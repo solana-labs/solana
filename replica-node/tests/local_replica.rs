@@ -45,7 +45,7 @@ const RUST_LOG_FILTER: &str =
 
 fn wait_for_next_snapshot(
     cluster: &LocalCluster,
-    snapshot_package_output_path: &Path,
+    snapshot_archives_dir: &Path,
 ) -> (PathBuf, (Slot, Hash)) {
     // Get slot after which this was generated
     let client = cluster
@@ -63,7 +63,7 @@ fn wait_for_next_snapshot(
     );
     loop {
         if let Some(full_snapshot_archive_info) =
-            snapshot_utils::get_highest_full_snapshot_archive_info(snapshot_package_output_path)
+            snapshot_utils::get_highest_full_snapshot_archive_info(snapshot_archives_dir)
         {
             trace!(
                 "full snapshot for slot {} exists",
@@ -117,13 +117,13 @@ fn setup_snapshot_validator_config(
     num_account_paths: usize,
 ) -> SnapshotValidatorConfig {
     // Create the snapshot config
-    let snapshot_dir = tempfile::tempdir_in(farf_dir()).unwrap();
+    let bank_snapshots_dir = tempfile::tempdir_in(farf_dir()).unwrap();
     let snapshot_archives_dir = tempfile::tempdir_in(farf_dir()).unwrap();
     let snapshot_config = SnapshotConfig {
         full_snapshot_archive_interval_slots: snapshot_interval_slots,
         incremental_snapshot_archive_interval_slots: Slot::MAX,
-        snapshot_package_output_path: snapshot_archives_dir.path().to_path_buf(),
-        snapshot_path: snapshot_dir.path().to_path_buf(),
+        snapshot_archives_dir: snapshot_archives_dir.path().to_path_buf(),
+        bank_snapshots_dir: bank_snapshots_dir.path().to_path_buf(),
         archive_format: ArchiveFormat::TarBzip2,
         snapshot_version: snapshot_utils::SnapshotVersion::default(),
         maximum_snapshots_to_retain: snapshot_utils::DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
@@ -142,7 +142,7 @@ fn setup_snapshot_validator_config(
     };
 
     SnapshotValidatorConfig {
-        _snapshot_dir: snapshot_dir,
+        _snapshot_dir: bank_snapshots_dir,
         snapshot_archives_dir,
         account_storage_dirs,
         validator_config,
@@ -204,15 +204,15 @@ fn test_replica_bootstrap() {
     info!("Contact info: {:?}", contact_info);
 
     // Get slot after which this was generated
-    let snapshot_package_output_path = &leader_snapshot_test_config
+    let snapshot_archives_dir = &leader_snapshot_test_config
         .validator_config
         .snapshot_config
         .as_ref()
         .unwrap()
-        .snapshot_package_output_path;
+        .snapshot_archives_dir;
     info!("Waiting for snapshot");
     let (archive_filename, archive_snapshot_hash) =
-        wait_for_next_snapshot(&cluster, snapshot_package_output_path);
+        wait_for_next_snapshot(&cluster, snapshot_archives_dir);
     info!("found: {:?}", archive_filename);
 
     let identity_keypair = Keypair::new();
@@ -228,8 +228,8 @@ fn test_replica_bootstrap() {
     let ledger_dir = tempfile::tempdir_in(farf_dir()).unwrap();
     let ledger_path = ledger_dir.path();
     let snapshot_output_dir = tempfile::tempdir_in(farf_dir()).unwrap();
-    let snapshot_output_path = snapshot_output_dir.path();
-    let snapshot_path = snapshot_output_path.join("snapshot");
+    let snapshot_archives_dir = snapshot_output_dir.path();
+    let bank_snapshots_dir = snapshot_archives_dir.join("snapshot");
     let account_paths: Vec<PathBuf> = vec![ledger_path.join("accounts")];
 
     let port = solana_net_utils::find_available_port_in_range(ip_addr, (8301, 8400)).unwrap();
@@ -253,7 +253,7 @@ fn test_replica_bootstrap() {
         &node,
         None,
         &contact_info.id,
-        snapshot_output_path,
+        snapshot_archives_dir,
         socket_addr_space,
     );
 
@@ -264,8 +264,8 @@ fn test_replica_bootstrap() {
         rpc_addr,
         rpc_pubsub_addr,
         ledger_path: ledger_path.to_path_buf(),
-        snapshot_output_dir: snapshot_output_path.to_path_buf(),
-        snapshot_path,
+        snapshot_archives_dir: snapshot_archives_dir.to_path_buf(),
+        bank_snapshots_dir,
         account_paths,
         snapshot_info: archive_snapshot_hash,
         cluster_info,

@@ -2247,7 +2247,7 @@ Result:
 
 ### getSlot
 
-Returns the current slot the node is processing
+Returns the slot that has reached the [given or default commitment level](jsonrpc-api.md#configuring-state-commitment)
 
 #### Parameters:
 

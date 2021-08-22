@@ -55,7 +55,7 @@ fn get_rpc_peer_node(
     cluster_entrypoints: &[ContactInfo],
     expected_shred_version: Option<u16>,
     peer_pubkey: &Pubkey,
-    snapshot_output_dir: &Path,
+    snapshot_archives_dir: &Path,
 ) -> Option<(ContactInfo, Option<(Slot, Hash)>)> {
     let mut newer_cluster_snapshot_timeout = None;
     let mut retry_reason = None;
@@ -110,7 +110,7 @@ fn get_rpc_peer_node(
         );
 
         let mut highest_snapshot_info: Option<(Slot, Hash)> =
-            snapshot_utils::get_highest_full_snapshot_archive_info(snapshot_output_dir).map(
+            snapshot_utils::get_highest_full_snapshot_archive_info(snapshot_archives_dir).map(
                 |snapshot_archive_info| {
                     (snapshot_archive_info.slot(), *snapshot_archive_info.hash())
                 },
@@ -238,7 +238,7 @@ pub fn get_rpc_peer_info(
     node: &Node,
     expected_shred_version: Option<u16>,
     peer_pubkey: &Pubkey,
-    snapshot_output_dir: &Path,
+    snapshot_archives_dir: &Path,
     socket_addr_space: SocketAddrSpace,
 ) -> (Arc<ClusterInfo>, ContactInfo, Option<(Slot, Hash)>) {
     let identity_keypair = Arc::new(identity_keypair);
@@ -260,7 +260,7 @@ pub fn get_rpc_peer_info(
         cluster_entrypoints,
         expected_shred_version,
         peer_pubkey,
-        snapshot_output_dir,
+        snapshot_archives_dir,
     );
     let rpc_node_details = rpc_node_details.unwrap();
 

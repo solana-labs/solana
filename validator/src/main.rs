@@ -403,7 +403,7 @@ fn get_rpc_node(
     blacklisted_rpc_nodes: &mut HashSet<Pubkey>,
     snapshot_not_required: bool,
     no_untrusted_rpc: bool,
-    snapshot_output_dir: &Path,
+    snapshot_archives_dir: &Path,
 ) -> Option<(ContactInfo, Option<(Slot, Hash)>)> {
     let mut blacklist_timeout = Instant::now();
     let mut newer_cluster_snapshot_timeout = None;
@@ -482,7 +482,7 @@ fn get_rpc_node(
         blacklist_timeout = Instant::now();
 
         let mut highest_snapshot_hash: Option<(Slot, Hash)> =
-            snapshot_utils::get_highest_full_snapshot_archive_info(snapshot_output_dir).map(
+            snapshot_utils::get_highest_full_snapshot_archive_info(snapshot_archives_dir).map(
                 |snapshot_archive_info| {
                     (snapshot_archive_info.slot(), *snapshot_archive_info.hash())
                 },
@@ -756,7 +756,7 @@ fn rpc_bootstrap(
     node: &Node,
     identity_keypair: &Arc<Keypair>,
     ledger_path: &Path,
-    snapshot_output_dir: &Path,
+    snapshot_archives_dir: &Path,
     vote_account: &Pubkey,
     authorized_voter_keypairs: Arc<RwLock<Vec<Arc<Keypair>>>>,
     cluster_entrypoints: &[ContactInfo],
@@ -817,7 +817,7 @@ fn rpc_bootstrap(
             &mut blacklisted_rpc_nodes,
             bootstrap_config.no_snapshot_fetch,
             bootstrap_config.no_untrusted_rpc,
-            snapshot_output_dir,
+            snapshot_archives_dir,
         );
         if rpc_node_details.is_none() {
             return;
@@ -874,7 +874,7 @@ fn rpc_bootstrap(
                 let mut use_local_snapshot = false;
 
                 if let Some(highest_local_snapshot_slot) =
-                    snapshot_utils::get_highest_full_snapshot_archive_slot(snapshot_output_dir)
+                    snapshot_utils::get_highest_full_snapshot_archive_slot(snapshot_archives_dir)
                 {
                     if highest_local_snapshot_slot
                         > snapshot_hash.0.saturating_sub(maximum_local_snapshot_age)
@@ -920,7 +920,7 @@ fn rpc_bootstrap(
                             };
                             let ret = download_snapshot(
                                 &rpc_contact_info.rpc,
-                                snapshot_output_dir,
+                                snapshot_archives_dir,
                                 snapshot_hash,
                                 use_progress_bar,
                                 maximum_snapshots_to_retain,
@@ -2575,16 +2575,16 @@ pub fn main() {
     let maximum_snapshot_download_abort =
         value_t_or_exit!(matches, "maximum_snapshot_download_abort", u64);
 
-    let snapshot_output_dir = if matches.is_present("snapshots") {
+    let snapshot_archives_dir = if matches.is_present("snapshots") {
         PathBuf::from(matches.value_of("snapshots").unwrap())
     } else {
         ledger_path.clone()
     };
-    let snapshot_path = snapshot_output_dir.join("snapshot");
-    fs::create_dir_all(&snapshot_path).unwrap_or_else(|err| {
+    let bank_snapshots_dir = snapshot_archives_dir.join("snapshot");
+    fs::create_dir_all(&bank_snapshots_dir).unwrap_or_else(|err| {
         eprintln!(
             "Failed to create snapshots directory {:?}: {}",
-            snapshot_path, err
+            bank_snapshots_dir, err
         );
         exit(1);
     });
@@ -2616,8 +2616,8 @@ pub fn main() {
             std::u64::MAX
         },
         incremental_snapshot_archive_interval_slots: Slot::MAX,
-        snapshot_path,
-        snapshot_package_output_path: snapshot_output_dir.clone(),
+        bank_snapshots_dir,
+        snapshot_archives_dir: snapshot_archives_dir.clone(),
         archive_format,
         snapshot_version,
         maximum_snapshots_to_retain,
@@ -2784,7 +2784,7 @@ pub fn main() {
     solana_metrics::set_panic_hook("validator");
 
     solana_entry::entry::init_poh();
-    solana_runtime::snapshot_utils::remove_tmp_snapshot_archives(&snapshot_output_dir);
+    solana_runtime::snapshot_utils::remove_tmp_snapshot_archives(&snapshot_archives_dir);
 
     let identity_keypair = Arc::new(identity_keypair);
 
@@ -2794,7 +2794,7 @@ pub fn main() {
             &node,
             &identity_keypair,
             &ledger_path,
-            &snapshot_output_dir,
+            &snapshot_archives_dir,
             &vote_account,
             authorized_voter_keypairs.clone(),
             &cluster_entrypoints,

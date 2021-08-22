@@ -149,7 +149,7 @@ impl RpcRequestMiddleware {
                     self.snapshot_config
                         .as_ref()
                         .unwrap()
-                        .snapshot_package_output_path
+                        .snapshot_archives_dir
                         .join(stem)
                 }
             }
@@ -204,7 +204,7 @@ impl RequestMiddleware for RpcRequestMiddleware {
                 // Convenience redirect to the latest snapshot
                 return if let Some(full_snapshot_archive_info) =
                     snapshot_utils::get_highest_full_snapshot_archive_info(
-                        &snapshot_config.snapshot_package_output_path,
+                        &snapshot_config.snapshot_archives_dir,
                     ) {
                     RpcRequestMiddleware::redirect(&format!(
                         "/{}",
@@ -604,8 +604,8 @@ mod tests {
             Some(SnapshotConfig {
                 full_snapshot_archive_interval_slots: 0,
                 incremental_snapshot_archive_interval_slots: u64::MAX,
-                snapshot_package_output_path: PathBuf::from("/"),
-                snapshot_path: PathBuf::from("/"),
+                snapshot_archives_dir: PathBuf::from("/"),
+                bank_snapshots_dir: PathBuf::from("/"),
                 archive_format: ArchiveFormat::TarBzip2,
                 snapshot_version: SnapshotVersion::default(),
                 maximum_snapshots_to_retain: DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,

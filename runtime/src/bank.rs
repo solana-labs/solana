@@ -483,13 +483,6 @@ impl BankRc {
             bank_id_generator: Arc::new(AtomicU64::new(0)),
         }
     }
-
-    pub fn get_snapshot_storages(&self, slot: Slot) -> SnapshotStorages {
-        self.accounts
-            .accounts_db
-            .get_snapshot_storages(slot, None)
-            .0
-    }
 }
 
 #[derive(Default, Debug, AbiExample)]
@@ -4904,8 +4897,12 @@ impl Bank {
         )
     }
 
-    pub fn get_snapshot_storages(&self) -> SnapshotStorages {
-        self.rc.get_snapshot_storages(self.slot())
+    pub fn get_snapshot_storages(&self, base_slot: Option<Slot>) -> SnapshotStorages {
+        self.rc
+            .accounts
+            .accounts_db
+            .get_snapshot_storages(self.slot(), base_slot, None)
+            .0
     }
 
     #[must_use]
