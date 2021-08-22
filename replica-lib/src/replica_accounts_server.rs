@@ -2,7 +2,10 @@ use {
     crate::accountsdb_repl_server::{
         self, ReplicaAccountData, ReplicaAccountInfo, ReplicaAccountMeta, ReplicaAccountsServer,
     },
-    solana_runtime::{accounts_cache::CachedAccount, accounts_db::LoadedAccount, append_vec::StoredAccountMeta, bank_forks::BankForks},
+    solana_runtime::{
+        accounts_cache::CachedAccount, accounts_db::LoadedAccount, append_vec::StoredAccountMeta,
+        bank_forks::BankForks,
+    },
     solana_sdk::account::Account,
     std::{
         cmp::Eq,
@@ -67,9 +70,9 @@ impl ReplicaAccountsServer for ReplicaAccountsServerImpl {
             None => Err(tonic::Status::not_found("The slot is not found")),
             Some(bank) => {
                 let accounts = bank.rc.accounts.scan_slot(slot, |account| match account {
-                    LoadedAccount::Stored(stored_account_meta) => {
-                        Some(ReplicaAccountInfo::from_stored_account_meta(&stored_account_meta))
-                    }
+                    LoadedAccount::Stored(stored_account_meta) => Some(
+                        ReplicaAccountInfo::from_stored_account_meta(&stored_account_meta),
+                    ),
                     LoadedAccount::Cached((_pubkey, cached_account)) => {
                         Some(ReplicaAccountInfo::from_cached_account(&cached_account))
                     }
