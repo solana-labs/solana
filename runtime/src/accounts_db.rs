@@ -1688,6 +1688,26 @@ impl AccountsDb {
         }
     }
 
+    pub fn num_recycle_stores(&self) -> usize {
+        self.recycle_stores.read().unwrap().entries.len()
+    }
+
+    pub fn num_total_stores(&self) -> usize {
+        self.storage
+            .0
+            .iter()
+            .map(|s| s.value().read().unwrap().len())
+            .sum::<usize>()
+    }
+
+    pub fn num_shrink_candidate_slots(&self) -> usize {
+        self.shrink_candidate_slots.lock().unwrap().len()
+    }
+
+    pub fn num_dirty_stores(&self) -> usize {
+        self.dirty_stores.len()
+    }
+
     /// Collect all the uncleaned slots, up to a max slot
     ///
     /// Search through the uncleaned Pubkeys and return all the slots, up to a maximum slot.
