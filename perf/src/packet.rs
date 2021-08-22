@@ -43,7 +43,7 @@ impl PacketTimer {
     pub fn extend_incoming_from(&mut self, newer: &PacketTimer) {
         debug_assert!(self.incoming_end.unwrap() < newer.incoming_end.unwrap());
         self.incoming_end = newer.incoming_end;
-        self.num_coalesced += 1;
+        self.num_coalesced = self.num_coalesced.saturating_add(1);
     }
 }
 
