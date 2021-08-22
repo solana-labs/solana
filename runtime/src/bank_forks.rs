@@ -380,6 +380,7 @@ mod tests {
             create_genesis_config, create_genesis_config_with_leader, GenesisConfigInfo,
         },
     };
+    use solana_measure::measure::Measure;
     use solana_sdk::hash::Hash;
     use solana_sdk::{
         clock::UnixTimestamp,
@@ -663,6 +664,123 @@ mod tests {
                 (5, vec![6]),
                 (6, vec![])
             ])
+        );
+    }
+
+    #[test]
+    fn test_banks_cleanup() {
+        use crate::accounts_db::AccountShrinkThreshold;
+        use crate::accounts_index::AccountSecondaryIndexes;
+        use rand::Rng;
+        use rayon::prelude::*;
+
+        solana_logger::setup();
+        let GenesisConfigInfo {
+            mut genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config_with_leader(
+            1_000_000_000_000,
+            &solana_sdk::pubkey::new_rand(),
+            42,
+        );
+        let slots_per_epoch = 64;
+        genesis_config.epoch_schedule = EpochSchedule::new(slots_per_epoch);
+        let bank0 = Bank::new_with_config(
+            &genesis_config,
+            AccountSecondaryIndexes::default(),
+            true,
+            AccountShrinkThreshold::default(),
+        );
+        let mut bank_forks = BankForks::new(bank0);
+        let bank0 = bank_forks[0].clone();
+
+        let client = crate::bank_client::BankClient::new_shared(&bank0);
+
+        warn!("setting up vote accounts");
+        let num_vote_accounts = 20;
+        let num_stake_accounts_per_vote_account = 10;
+        let mut time = Measure::start("create_vote_accounts");
+        for _ in 0..num_vote_accounts {
+            let vote_account = Keypair::new();
+            crate::stake_vote_utils::setup_vote_and_stake_accounts(
+                &client,
+                &vote_account,
+                &mint_keypair,
+                1,
+                num_stake_accounts_per_vote_account,
+            )
+            .unwrap();
+        }
+        time.stop();
+
+        warn!("gen keys {}", time);
+        let enable_forking = true;
+        let num_keys = 50;
+        let keys: Vec<_> = (0..num_keys)
+            .into_par_iter()
+            .map(|_| Keypair::new())
+            .collect();
+
+        let mut bank;
+        let highest_slot: u64 = slots_per_epoch * 3 + 1;
+        let mut amount = 0;
+        let mut start = Instant::now();
+        let original = Instant::now();
+        warn!("starting test..");
+        let mut forks = HashSet::new();
+        for i in 0..highest_slot {
+            let parent = if enable_forking && i > 0 && rand::thread_rng().gen_ratio(1, 100) {
+                forks.insert(i);
+                i - 1
+            } else {
+                i
+            };
+            let old_bank = match bank_forks.get(parent) {
+                Some(b) => b,
+                None => {
+                    panic!("bank not found? {} i: {}", parent, i);
+                }
+            };
+            bank = Bank::new_from_parent(old_bank, &Pubkey::default(), i + 1);
+            if let Err(e) = bank.transfer(
+                amount,
+                &mint_keypair,
+                &keys[(i % num_keys) as usize].pubkey(),
+            ) {
+                let b = bank.get_balance(&mint_keypair.pubkey());
+                warn!("error? {:?} balance: {}", e, b);
+            }
+            if i % num_keys == 0 {
+                amount = (amount + 1) % 10;
+            }
+            let new_root = i.saturating_sub(40);
+            if new_root > 0 && !forks.contains(&new_root) {
+                bank_forks.set_root(new_root, &AbsRequestSender::default(), None);
+                forks.retain(|i| *i > new_root);
+            }
+            if i % 200 == 0 {
+                bank.flush_accounts_cache_if_needed();
+                bank.clean_accounts(false, false, None);
+                warn!(
+                    "i: {} time: {:.2} slots/s = {:.2} avg s/s: {:.2}",
+                    i,
+                    start.elapsed().as_secs_f32(),
+                    1000f32 / start.elapsed().as_secs_f32(),
+                    i as f32 / original.elapsed().as_secs_f32(),
+                );
+                start = Instant::now();
+            }
+            bank_forks.insert(bank);
+        }
+
+        let bank = bank_forks.get(highest_slot).unwrap();
+        let num_pre_clean_stores = bank.rc.accounts.accounts_db.storage.0.len();
+        warn!("pre-clean: {}", num_pre_clean_stores);
+        bank.clean_accounts(false, false, None);
+        warn!(
+            "post-clean: {}",
+            bank.rc.accounts.accounts_db.storage.0.len()
         );
     }
 }

@@ -17,9 +17,12 @@ use {
         gossip_service::discover_cluster,
     },
     solana_ledger::create_new_tmp_ledger,
-    solana_runtime::genesis_utils::{
-        create_genesis_config_with_vote_accounts_and_cluster_type, GenesisConfigInfo,
-        ValidatorVoteKeypairs,
+    solana_runtime::{
+        genesis_utils::{
+            create_genesis_config_with_vote_accounts_and_cluster_type, GenesisConfigInfo,
+            ValidatorVoteKeypairs,
+        },
+        stake_vote_utils::setup_vote_and_stake_accounts,
     },
     solana_sdk::{
         account::Account,
@@ -29,26 +32,16 @@ use {
         commitment_config::CommitmentConfig,
         epoch_schedule::EpochSchedule,
         genesis_config::{ClusterType, GenesisConfig},
-        message::Message,
         poh_config::PohConfig,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
-        stake::{
-            config as stake_config, instruction as stake_instruction,
-            state::{Authorized, Lockup},
-        },
+        stake::config as stake_config,
         system_transaction,
-        transaction::Transaction,
     },
-    solana_stake_program::{config::create_account as create_stake_config_account, stake_state},
+    solana_stake_program::config::create_account as create_stake_config_account,
     solana_streamer::socket::SocketAddrSpace,
-    solana_vote_program::{
-        vote_instruction,
-        vote_state::{VoteInit, VoteState},
-    },
     std::{
         collections::HashMap,
-        io::{Error, ErrorKind, Result},
         iter,
         sync::{Arc, RwLock},
     },
@@ -364,11 +357,12 @@ impl LocalCluster {
                     "validator {} balance {}",
                     validator_pubkey, validator_balance
                 );
-                Self::setup_vote_and_stake_accounts(
+                setup_vote_and_stake_accounts(
                     &client,
                     voting_keypair.as_ref().unwrap(),
                     &validator_keypair,
                     stake,
+                    1,
                 )
                 .unwrap();
             }
@@ -506,138 +500,6 @@ impl LocalCluster {
                 CommitmentConfig::processed(),
             )
             .expect("get balance")
-    }
-
-    fn setup_vote_and_stake_accounts(
-        client: &ThinClient,
-        vote_account: &Keypair,
-        from_account: &Arc<Keypair>,
-        amount: u64,
-    ) -> Result<()> {
-        let vote_account_pubkey = vote_account.pubkey();
-        let node_pubkey = from_account.pubkey();
-        info!(
-            "setup_vote_and_stake_accounts: {}, {}",
-            node_pubkey, vote_account_pubkey
-        );
-        let stake_account_keypair = Keypair::new();
-        let stake_account_pubkey = stake_account_keypair.pubkey();
-
-        // Create the vote account if necessary
-        if client
-            .poll_get_balance_with_commitment(&vote_account_pubkey, CommitmentConfig::processed())
-            .unwrap_or(0)
-            == 0
-        {
-            // 1) Create vote account
-
-            let instructions = vote_instruction::create_account(
-                &from_account.pubkey(),
-                &vote_account_pubkey,
-                &VoteInit {
-                    node_pubkey,
-                    authorized_voter: vote_account_pubkey,
-                    authorized_withdrawer: vote_account_pubkey,
-                    commission: 0,
-                },
-                amount,
-            );
-            let message = Message::new(&instructions, Some(&from_account.pubkey()));
-            let mut transaction = Transaction::new(
-                &[from_account.as_ref(), vote_account],
-                message,
-                client
-                    .get_latest_blockhash_with_commitment(CommitmentConfig::processed())
-                    .unwrap()
-                    .0,
-            );
-            client
-                .retry_transfer(from_account, &mut transaction, 10)
-                .expect("fund vote");
-            client
-                .wait_for_balance_with_commitment(
-                    &vote_account_pubkey,
-                    Some(amount),
-                    CommitmentConfig::processed(),
-                )
-                .expect("get balance");
-
-            let instructions = stake_instruction::create_account_and_delegate_stake(
-                &from_account.pubkey(),
-                &stake_account_pubkey,
-                &vote_account_pubkey,
-                &Authorized::auto(&stake_account_pubkey),
-                &Lockup::default(),
-                amount,
-            );
-            let message = Message::new(&instructions, Some(&from_account.pubkey()));
-            let mut transaction = Transaction::new(
-                &[from_account.as_ref(), &stake_account_keypair],
-                message,
-                client
-                    .get_latest_blockhash_with_commitment(CommitmentConfig::processed())
-                    .unwrap()
-                    .0,
-            );
-
-            client
-                .send_and_confirm_transaction(
-                    &[from_account.as_ref(), &stake_account_keypair],
-                    &mut transaction,
-                    5,
-                    0,
-                )
-                .expect("delegate stake");
-            client
-                .wait_for_balance_with_commitment(
-                    &stake_account_pubkey,
-                    Some(amount),
-                    CommitmentConfig::processed(),
-                )
-                .expect("get balance");
-        } else {
-            warn!(
-                "{} vote_account already has a balance?!?",
-                vote_account_pubkey
-            );
-        }
-        info!("Checking for vote account registration of {}", node_pubkey);
-        match (
-            client
-                .get_account_with_commitment(&stake_account_pubkey, CommitmentConfig::processed()),
-            client.get_account_with_commitment(&vote_account_pubkey, CommitmentConfig::processed()),
-        ) {
-            (Ok(Some(stake_account)), Ok(Some(vote_account))) => {
-                match (
-                    stake_state::stake_from(&stake_account),
-                    VoteState::from(&vote_account),
-                ) {
-                    (Some(stake_state), Some(vote_state)) => {
-                        if stake_state.delegation.voter_pubkey != vote_account_pubkey
-                            || stake_state.delegation.stake != amount
-                        {
-                            Err(Error::new(ErrorKind::Other, "invalid stake account state"))
-                        } else if vote_state.node_pubkey != node_pubkey {
-                            Err(Error::new(ErrorKind::Other, "invalid vote account state"))
-                        } else {
-                            info!("node {} {:?} {:?}", node_pubkey, stake_state, vote_state);
-
-                            Ok(())
-                        }
-                    }
-                    (None, _) => Err(Error::new(ErrorKind::Other, "invalid stake account data")),
-                    (_, None) => Err(Error::new(ErrorKind::Other, "invalid vote account data")),
-                }
-            }
-            (Ok(None), _) | (Err(_), _) => Err(Error::new(
-                ErrorKind::Other,
-                "unable to retrieve stake account data",
-            )),
-            (_, Ok(None)) | (_, Err(_)) => Err(Error::new(
-                ErrorKind::Other,
-                "unable to retrieve vote account data",
-            )),
-        }
     }
 }
 
