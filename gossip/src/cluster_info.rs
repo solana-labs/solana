@@ -46,8 +46,8 @@ use {
         multi_bind_in_range, PortRange,
     },
     solana_perf::packet::{
-        limited_deserialize, to_packets_with_destination, Packet, Packets, PacketsRecycler,
-        PACKET_DATA_SIZE,
+        limited_deserialize, to_packets_with_destination, Packet, PacketTimer, Packets,
+        PacketsRecycler, PACKET_DATA_SIZE,
     },
     solana_rayon_threadlimit::get_thread_count,
     solana_runtime::bank_forks::BankForks,
@@ -1532,7 +1532,8 @@ impl ClusterInfo {
             require_stake_for_gossip,
         );
         if !reqs.is_empty() {
-            let packets = to_packets_with_destination(recycler.clone(), &reqs);
+            let mut packets = to_packets_with_destination(recycler.clone(), &reqs);
+            packets.timer.mark_outgoing_start();
             self.stats
                 .packets_sent_gossip_requests_count
                 .add_relaxed(packets.packets.len() as u64);
@@ -1774,6 +1775,7 @@ impl ClusterInfo {
         &self,
         // from address, crds filter, caller contact info
         requests: Vec<(SocketAddr, CrdsFilter, CrdsValue)>,
+        packet_timer: PacketTimer,
         thread_pool: &ThreadPool,
         recycler: &PacketsRecycler,
         stakes: &HashMap<Pubkey, u64>,
@@ -1809,7 +1811,7 @@ impl ClusterInfo {
             self.stats
                 .pull_requests_count
                 .add_relaxed(requests.len() as u64);
-            let response = self.handle_pull_requests(
+            let mut response = self.handle_pull_requests(
                 thread_pool,
                 recycler,
                 requests,
@@ -1817,6 +1819,8 @@ impl ClusterInfo {
                 require_stake_for_gossip,
             );
             if !response.is_empty() {
+                response.timer = packet_timer;
+                response.timer.mark_outgoing_start();
                 self.stats
                     .packets_sent_pull_responses_count
                     .add_relaxed(response.packets.len() as u64);
@@ -2107,13 +2111,16 @@ impl ClusterInfo {
     fn handle_batch_ping_messages<I>(
         &self,
         pings: I,
+        packet_timer: PacketTimer,
         recycler: &PacketsRecycler,
         response_sender: &PacketSender,
     ) where
         I: IntoIterator<Item = (SocketAddr, Ping)>,
     {
         let _st = ScopedTimer::from(&self.stats.handle_batch_ping_messages_time);
-        if let Some(response) = self.handle_ping_messages(pings, recycler) {
+        if let Some(mut response) = self.handle_ping_messages(pings, recycler) {
+            response.timer = packet_timer;
+            response.timer.mark_outgoing_start();
             let _ = response_sender.send(response);
         }
     }
@@ -2164,6 +2171,7 @@ impl ClusterInfo {
     fn handle_batch_push_messages(
         &self,
         messages: Vec<(Pubkey, Vec<CrdsValue>)>,
+        packet_timer: PacketTimer,
         thread_pool: &ThreadPool,
         recycler: &PacketsRecycler,
         stakes: &HashMap<Pubkey, u64>,
@@ -2241,6 +2249,8 @@ impl ClusterInfo {
             return;
         }
         let mut packets = to_packets_with_destination(recycler.clone(), &prune_messages);
+        packets.timer = packet_timer;
+        packets.timer.mark_outgoing_start();
         let num_prune_packets = packets.packets.len();
         self.stats
             .push_response_count
@@ -2293,9 +2303,11 @@ impl ClusterInfo {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn process_packets(
         &self,
         packets: VecDeque<(/*from:*/ SocketAddr, Protocol)>,
+        packet_timer: PacketTimer,
         thread_pool: &ThreadPool,
         recycler: &PacketsRecycler,
         response_sender: &PacketSender,
@@ -2389,10 +2401,11 @@ impl ClusterInfo {
             pull_responses.retain(|(_, data)| !data.is_empty());
             push_messages.retain(|(_, data)| !data.is_empty());
         }
-        self.handle_batch_ping_messages(ping_messages, recycler, response_sender);
+        self.handle_batch_ping_messages(ping_messages, packet_timer, recycler, response_sender);
         self.handle_batch_prune_messages(prune_messages);
         self.handle_batch_push_messages(
             push_messages,
+            packet_timer,
             thread_pool,
             recycler,
             stakes,
@@ -2404,6 +2417,7 @@ impl ClusterInfo {
         self.handle_batch_pong_messages(pong_messages, Instant::now());
         self.handle_batch_pull_requests(
             pull_requests,
+            packet_timer,
             thread_pool,
             recycler,
             stakes,
@@ -2419,13 +2433,16 @@ impl ClusterInfo {
     fn run_socket_consume(
         &self,
         receiver: &PacketReceiver,
-        sender: &Sender<Vec<(/*from:*/ SocketAddr, Protocol)>>,
+        sender: &Sender<(Vec<(/*from:*/ SocketAddr, Protocol)>, PacketTimer)>,
         thread_pool: &ThreadPool,
     ) -> Result<(), GossipError> {
         const RECV_TIMEOUT: Duration = Duration::from_secs(1);
-        let packets: Vec<_> = receiver.recv_timeout(RECV_TIMEOUT)?.packets.into();
+        let first_batch = receiver.recv_timeout(RECV_TIMEOUT)?;
+        let mut packet_timer = first_batch.timer;
+        let packets: Vec<_> = first_batch.packets.into();
         let mut packets = VecDeque::from(packets);
         for payload in receiver.try_iter() {
+            packet_timer.extend_incoming_from(&payload.timer);
             packets.extend(payload.packets.iter().cloned());
             let excess_count = packets.len().saturating_sub(MAX_GOSSIP_TRAFFIC);
             if excess_count > 0 {
@@ -2452,7 +2469,7 @@ impl ClusterInfo {
         self.stats
             .packets_received_verified_count
             .add_relaxed(packets.len() as u64);
-        Ok(sender.send(packets)?)
+        Ok(sender.send((packets, packet_timer))?)
     }
 
     /// Process messages from the network
@@ -2460,7 +2477,7 @@ impl ClusterInfo {
         &self,
         recycler: &PacketsRecycler,
         bank_forks: Option<&RwLock<BankForks>>,
-        receiver: &Receiver<Vec<(/*from:*/ SocketAddr, Protocol)>>,
+        receiver: &Receiver<(Vec<(/*from:*/ SocketAddr, Protocol)>, PacketTimer)>,
         response_sender: &PacketSender,
         thread_pool: &ThreadPool,
         last_print: &mut Instant,
@@ -2468,8 +2485,10 @@ impl ClusterInfo {
     ) -> Result<(), GossipError> {
         const RECV_TIMEOUT: Duration = Duration::from_secs(1);
         const SUBMIT_GOSSIP_STATS_INTERVAL: Duration = Duration::from_secs(2);
-        let mut packets = VecDeque::from(receiver.recv_timeout(RECV_TIMEOUT)?);
-        for payload in receiver.try_iter() {
+        let (packets, mut packet_timer) = receiver.recv_timeout(RECV_TIMEOUT)?;
+        let mut packets = VecDeque::from(packets);
+        for (payload, latest_timer) in receiver.try_iter() {
+            packet_timer.extend_incoming_from(&latest_timer);
             packets.extend(payload);
             let excess_count = packets.len().saturating_sub(MAX_GOSSIP_TRAFFIC);
             if excess_count > 0 {
@@ -2492,6 +2511,7 @@ impl ClusterInfo {
         };
         self.process_packets(
             packets,
+            packet_timer,
             thread_pool,
             recycler,
             response_sender,
@@ -2510,7 +2530,7 @@ impl ClusterInfo {
     pub(crate) fn start_socket_consume_thread(
         self: Arc<Self>,
         receiver: PacketReceiver,
-        sender: Sender<Vec<(/*from:*/ SocketAddr, Protocol)>>,
+        sender: Sender<(Vec<(/*from:*/ SocketAddr, Protocol)>, PacketTimer)>,
         exit: Arc<AtomicBool>,
     ) -> JoinHandle<()> {
         let thread_pool = ThreadPoolBuilder::new()
@@ -2538,7 +2558,7 @@ impl ClusterInfo {
     pub(crate) fn listen(
         self: Arc<Self>,
         bank_forks: Option<Arc<RwLock<BankForks>>>,
-        requests_receiver: Receiver<Vec<(/*from:*/ SocketAddr, Protocol)>>,
+        requests_receiver: Receiver<(Vec<(/*from:*/ SocketAddr, Protocol)>, PacketTimer)>,
         response_sender: PacketSender,
         should_check_duplicate_instance: bool,
         exit: Arc<AtomicBool>,

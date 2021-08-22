@@ -40,6 +40,7 @@ pub fn recv_from(obj: &mut Packets, socket: &UdpSocket, max_wait_ms: u64) -> Res
             }
             Ok((_, npkts)) => {
                 if i == 0 {
+                    obj.timer.mark_incoming_start();
                     socket.set_nonblocking(true)?;
                 }
                 trace!("got {} packets", npkts);
@@ -52,6 +53,7 @@ pub fn recv_from(obj: &mut Packets, socket: &UdpSocket, max_wait_ms: u64) -> Res
             }
         }
     }
+    obj.timer.mark_incoming_end();
     obj.packets.truncate(i);
     inc_new_counter_debug!("packets-recv_count", i);
     Ok(i)

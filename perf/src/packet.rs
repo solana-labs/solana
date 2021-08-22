@@ -3,16 +3,62 @@ use crate::{cuda_runtime::PinnedVec, recycler::Recycler};
 use bincode::config::Options;
 use serde::Serialize;
 pub use solana_sdk::packet::{Meta, Packet, PACKET_DATA_SIZE};
-use std::net::SocketAddr;
+use std::{net::SocketAddr, time::Instant};
 
 pub const NUM_PACKETS: usize = 1024 * 8;
 
 pub const PACKETS_PER_BATCH: usize = 128;
 pub const NUM_RCVMMSGS: usize = 128;
 
+#[derive(Copy, Clone, Debug, Default)]
+pub struct PacketTimer {
+    incoming_start: Option<Instant>,
+    incoming_initial_end: Option<Instant>,
+    incoming_end: Option<Instant>,
+    outgoing_start: Option<Instant>,
+    num_coalesced: u32,
+}
+
+impl PacketTimer {
+    pub fn from_incoming(time_start: Instant, time_end: Instant) -> PacketTimer {
+        PacketTimer {
+            incoming_start: Some(time_start),
+            incoming_end: Some(time_end),
+            ..Default::default()
+        }
+    }
+
+    pub fn mark_incoming_start(&mut self) {
+        if self.incoming_start == None {
+            self.incoming_start = Some(Instant::now());
+        }
+    }
+
+    pub fn mark_incoming_end(&mut self) {
+        let now = Instant::now();
+        if self.incoming_initial_end == None {
+            self.incoming_initial_end = Some(now);
+        }
+        self.incoming_end = Some(now);
+    }
+
+    pub fn mark_outgoing_start(&mut self) {
+        if self.outgoing_start == None {
+            self.outgoing_start = Some(Instant::now());
+        }
+    }
+
+    pub fn extend_incoming_from(&mut self, newer: &PacketTimer) {
+        debug_assert!(self.incoming_end.unwrap() < newer.incoming_end.unwrap());
+        self.incoming_end = newer.incoming_end;
+        self.num_coalesced += 1;
+    }
+}
+
 #[derive(Debug, Default, Clone)]
 pub struct Packets {
     pub packets: PinnedVec<Packet>,
+    pub timer: PacketTimer,
 }
 
 pub type PacketsRecycler = Recycler<PinnedVec<Packet>>;
@@ -20,12 +66,18 @@ pub type PacketsRecycler = Recycler<PinnedVec<Packet>>;
 impl Packets {
     pub fn new(packets: Vec<Packet>) -> Self {
         let packets = PinnedVec::from_vec(packets);
-        Self { packets }
+        Self {
+            packets,
+            ..Default::default()
+        }
     }
 
     pub fn with_capacity(capacity: usize) -> Self {
         let packets = PinnedVec::with_capacity(capacity);
-        Packets { packets }
+        Packets {
+            packets,
+            ..Default::default()
+        }
     }
 
     pub fn new_unpinned_with_recycler(
@@ -35,13 +87,19 @@ impl Packets {
     ) -> Self {
         let mut packets = recycler.allocate(name);
         packets.reserve(size);
-        Packets { packets }
+        Packets {
+            packets,
+            ..Default::default()
+        }
     }
 
     pub fn new_with_recycler(recycler: PacketsRecycler, size: usize, name: &'static str) -> Self {
         let mut packets = recycler.allocate(name);
         packets.reserve_and_pin(size);
-        Packets { packets }
+        Packets {
+            packets,
+            ..Default::default()
+        }
     }
 
     pub fn new_with_recycler_data(

@@ -443,7 +443,9 @@ impl ServeRepair {
                     stats.processed += 1;
                     let rsp =
                         Self::handle_repair(me, recycler, &from_addr, blockstore, request, stats);
-                    if let Some(rsp) = rsp {
+                    if let Some(mut rsp) = rsp {
+                        rsp.timer = packets.timer;
+                        rsp.timer.mark_outgoing_start();
                         let _ignore_disconnect = response_sender.send(rsp);
                     }
                 });
