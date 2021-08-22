@@ -20,14 +20,6 @@ pub struct PacketTimer {
 }
 
 impl PacketTimer {
-    pub fn from_incoming(time_start: Instant, time_end: Instant) -> PacketTimer {
-        PacketTimer {
-            incoming_start: Some(time_start),
-            incoming_end: Some(time_end),
-            ..Default::default()
-        }
-    }
-
     pub fn mark_incoming_start(&mut self) {
         if self.incoming_start == None {
             self.incoming_start = Some(Instant::now());
@@ -68,7 +60,7 @@ impl Packets {
         let packets = PinnedVec::from_vec(packets);
         Self {
             packets,
-            ..Default::default()
+            timer: PacketTimer::default(),
         }
     }
 
@@ -76,7 +68,7 @@ impl Packets {
         let packets = PinnedVec::with_capacity(capacity);
         Packets {
             packets,
-            ..Default::default()
+            timer: PacketTimer::default(),
         }
     }
 
@@ -89,7 +81,7 @@ impl Packets {
         packets.reserve(size);
         Packets {
             packets,
-            ..Default::default()
+            timer: PacketTimer::default(),
         }
     }
 
@@ -98,7 +90,7 @@ impl Packets {
         packets.reserve_and_pin(size);
         Packets {
             packets,
-            ..Default::default()
+            timer: PacketTimer::default(),
         }
     }
 
