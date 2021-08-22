@@ -2169,7 +2169,7 @@ impl ReplayStage {
                     let computed_bank_state = Tower::collect_vote_lockouts(
                         my_vote_pubkey,
                         bank_slot,
-                        bank.vote_accounts().into_iter(),
+                        &bank.vote_accounts(),
                         ancestors,
                         |slot| progress.get_hash(slot),
                         latest_validator_votes_for_frozen_banks,

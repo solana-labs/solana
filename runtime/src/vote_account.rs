@@ -31,7 +31,7 @@ struct VoteAccountInner {
 
 #[derive(Debug, AbiExample)]
 pub struct VoteAccounts {
-    vote_accounts: HashMap<Pubkey, (/*stake:*/ u64, VoteAccount)>,
+    vote_accounts: Arc<HashMap<Pubkey, (/*stake:*/ u64, VoteAccount)>>,
     // Inner Arc is meant to implement copy-on-write semantics as opposed to
     // sharing mutations (hence RwLock<Arc<...>> instead of Arc<RwLock<...>>).
     staked_nodes: RwLock<
@@ -46,7 +46,7 @@ pub struct VoteAccounts {
 }
 
 impl VoteAccount {
-    pub fn lamports(&self) -> u64 {
+    pub(crate) fn lamports(&self) -> u64 {
         self.0.account.lamports
     }
 
@@ -83,37 +83,43 @@ impl VoteAccounts {
         self.staked_nodes.read().unwrap().clone()
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (&Pubkey, &(u64, VoteAccount))> {
+    pub fn get(&self, pubkey: &Pubkey) -> Option<&(/*stake:*/ u64, VoteAccount)> {
+        self.vote_accounts.get(pubkey)
+    }
+
+    pub(crate) fn iter(&self) -> impl Iterator<Item = (&Pubkey, &(u64, VoteAccount))> {
         self.vote_accounts.iter()
     }
 
-    pub fn insert(&mut self, pubkey: Pubkey, (stake, vote_account): (u64, VoteAccount)) {
+    pub(crate) fn insert(&mut self, pubkey: Pubkey, (stake, vote_account): (u64, VoteAccount)) {
         self.add_node_stake(stake, &vote_account);
-        if let Some((stake, vote_account)) =
-            self.vote_accounts.insert(pubkey, (stake, vote_account))
-        {
+        let vote_accounts = Arc::make_mut(&mut self.vote_accounts);
+        if let Some((stake, vote_account)) = vote_accounts.insert(pubkey, (stake, vote_account)) {
             self.sub_node_stake(stake, &vote_account);
         }
     }
 
-    pub fn remove(&mut self, pubkey: &Pubkey) -> Option<(u64, VoteAccount)> {
-        let value = self.vote_accounts.remove(pubkey);
-        if let Some((stake, ref vote_account)) = value {
+    pub(crate) fn remove(&mut self, pubkey: &Pubkey) -> Option<(u64, VoteAccount)> {
+        let vote_accounts = Arc::make_mut(&mut self.vote_accounts);
+        let entry = vote_accounts.remove(pubkey);
+        if let Some((stake, ref vote_account)) = entry {
             self.sub_node_stake(stake, vote_account);
         }
-        value
+        entry
     }
 
-    pub fn add_stake(&mut self, pubkey: &Pubkey, delta: u64) {
-        if let Some((stake, vote_account)) = self.vote_accounts.get_mut(pubkey) {
+    pub(crate) fn add_stake(&mut self, pubkey: &Pubkey, delta: u64) {
+        let vote_accounts = Arc::make_mut(&mut self.vote_accounts);
+        if let Some((stake, vote_account)) = vote_accounts.get_mut(pubkey) {
             *stake += delta;
             let vote_account = vote_account.clone();
             self.add_node_stake(delta, &vote_account);
         }
     }
 
-    pub fn sub_stake(&mut self, pubkey: &Pubkey, delta: u64) {
-        if let Some((stake, vote_account)) = self.vote_accounts.get_mut(pubkey) {
+    pub(crate) fn sub_stake(&mut self, pubkey: &Pubkey, delta: u64) {
+        let vote_accounts = Arc::make_mut(&mut self.vote_accounts);
+        if let Some((stake, vote_account)) = vote_accounts.get_mut(pubkey) {
             *stake = stake
                 .checked_sub(delta)
                 .expect("subtraction value exceeds account's stake");
@@ -221,7 +227,7 @@ impl PartialEq<VoteAccountInner> for VoteAccountInner {
 impl Default for VoteAccounts {
     fn default() -> Self {
         Self {
-            vote_accounts: HashMap::default(),
+            vote_accounts: Arc::default(),
             staked_nodes: RwLock::default(),
             staked_nodes_once: Once::new(),
         }
@@ -257,8 +263,8 @@ impl PartialEq<VoteAccounts> for VoteAccounts {
 
 type VoteAccountsHashMap = HashMap<Pubkey, (/*stake:*/ u64, VoteAccount)>;
 
-impl From<VoteAccountsHashMap> for VoteAccounts {
-    fn from(vote_accounts: VoteAccountsHashMap) -> Self {
+impl From<Arc<VoteAccountsHashMap>> for VoteAccounts {
+    fn from(vote_accounts: Arc<VoteAccountsHashMap>) -> Self {
         Self {
             vote_accounts,
             staked_nodes: RwLock::default(),
@@ -273,12 +279,18 @@ impl AsRef<VoteAccountsHashMap> for VoteAccounts {
     }
 }
 
+impl From<&VoteAccounts> for Arc<VoteAccountsHashMap> {
+    fn from(vote_accounts: &VoteAccounts) -> Self {
+        Arc::clone(&vote_accounts.vote_accounts)
+    }
+}
+
 impl FromIterator<(Pubkey, (/*stake:*/ u64, VoteAccount))> for VoteAccounts {
     fn from_iter<I>(iter: I) -> Self
     where
         I: IntoIterator<Item = (Pubkey, (u64, VoteAccount))>,
     {
-        Self::from(HashMap::from_iter(iter))
+        Self::from(Arc::new(HashMap::from_iter(iter)))
     }
 }
 
@@ -297,7 +309,7 @@ impl<'de> Deserialize<'de> for VoteAccounts {
         D: Deserializer<'de>,
     {
         let vote_accounts = VoteAccountsHashMap::deserialize(deserializer)?;
-        Ok(Self::from(vote_accounts))
+        Ok(Self::from(Arc::new(vote_accounts)))
     }
 }
 
@@ -430,7 +442,7 @@ mod tests {
         let mut rng = rand::thread_rng();
         let vote_accounts_hash_map: HashMap<Pubkey, (u64, VoteAccount)> =
             new_rand_vote_accounts(&mut rng, 64).take(1024).collect();
-        let vote_accounts = VoteAccounts::from(vote_accounts_hash_map.clone());
+        let vote_accounts = VoteAccounts::from(Arc::new(vote_accounts_hash_map.clone()));
         assert!(vote_accounts.staked_nodes().len() > 32);
         assert_eq!(
             bincode::serialize(&vote_accounts).unwrap(),
@@ -452,12 +464,12 @@ mod tests {
         let data = bincode::serialize(&vote_accounts_hash_map).unwrap();
         let vote_accounts: VoteAccounts = bincode::deserialize(&data).unwrap();
         assert!(vote_accounts.staked_nodes().len() > 32);
-        assert_eq!(vote_accounts.vote_accounts, vote_accounts_hash_map);
+        assert_eq!(*vote_accounts.vote_accounts, vote_accounts_hash_map);
         let data = bincode::options()
             .serialize(&vote_accounts_hash_map)
             .unwrap();
         let vote_accounts: VoteAccounts = bincode::options().deserialize(&data).unwrap();
-        assert_eq!(vote_accounts.vote_accounts, vote_accounts_hash_map);
+        assert_eq!(*vote_accounts.vote_accounts, vote_accounts_hash_map);
     }
 
     #[test]
@@ -539,6 +551,40 @@ mod tests {
                     *stake,
                     more_stake + staked_nodes.get(pubkey).copied().unwrap_or_default()
                 );
+            }
+        }
+    }
+
+    // Asserts that returned vote-accounts are copy-on-write references.
+    #[test]
+    fn test_vote_accounts_cow() {
+        let mut rng = rand::thread_rng();
+        let mut accounts = new_rand_vote_accounts(&mut rng, 64);
+        // Add vote accounts.
+        let mut vote_accounts = VoteAccounts::default();
+        for (pubkey, (stake, vote_account)) in (&mut accounts).take(1024) {
+            vote_accounts.insert(pubkey, (stake, vote_account));
+        }
+        let vote_accounts_hashmap = Arc::<VoteAccountsHashMap>::from(&vote_accounts);
+        assert_eq!(vote_accounts_hashmap, vote_accounts.vote_accounts);
+        assert!(Arc::ptr_eq(
+            &vote_accounts_hashmap,
+            &vote_accounts.vote_accounts
+        ));
+        let (pubkey, (more_stake, vote_account)) =
+            accounts.find(|(_, (stake, _))| *stake != 0).unwrap();
+        vote_accounts.insert(pubkey, (more_stake, vote_account.clone()));
+        assert!(!Arc::ptr_eq(
+            &vote_accounts_hashmap,
+            &vote_accounts.vote_accounts
+        ));
+        assert_ne!(vote_accounts_hashmap, vote_accounts.vote_accounts);
+        let other = (more_stake, vote_account);
+        for (pk, value) in vote_accounts.iter() {
+            if *pk != pubkey {
+                assert_eq!(value, &vote_accounts_hashmap[pk]);
+            } else {
+                assert_eq!(value, &other);
             }
         }
     }

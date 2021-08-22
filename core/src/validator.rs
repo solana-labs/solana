@@ -1544,7 +1544,8 @@ fn get_stake_percent_in_gossip(bank: &Bank, cluster_info: &ClusterInfo, log: boo
     let my_shred_version = cluster_info.my_shred_version();
     let my_id = cluster_info.id();
 
-    for (_, (activated_stake, vote_account)) in bank.vote_accounts() {
+    for (activated_stake, vote_account) in bank.vote_accounts().values() {
+        let activated_stake = *activated_stake;
         total_activated_stake += activated_stake;
 
         if activated_stake == 0 {
