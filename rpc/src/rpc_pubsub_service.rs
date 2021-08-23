@@ -1,12 +1,13 @@
 //! The `pubsub` module implements a threaded subscription service on client RPC request
 
+use crate::rpc_subscription_tracker::SubscriptionParams;
 use {
     crate::{
         rpc_pubsub::{RpcSolPubSubImpl, RpcSolPubSubInternal},
         rpc_subscription_tracker::{SubscriptionControl, SubscriptionId, SubscriptionToken},
         rpc_subscriptions::{RpcNotification, RpcSubscriptions},
     },
-    dashmap::DashMap,
+    dashmap::{mapref::entry::Entry, DashMap},
     jsonrpc_core::IoHandler,
     soketto::handshake::{server, Server},
     std::{
@@ -92,15 +93,46 @@ struct BroadcastHandler {
     current_subscriptions: Arc<DashMap<SubscriptionId, SubscriptionToken>>,
 }
 
+fn count_final(params: &SubscriptionParams) {
+    match params {
+        SubscriptionParams::Account(_) => {
+            inc_new_counter_info!("rpc-pubsub-final-accounts", 1);
+        }
+        SubscriptionParams::Logs(_) => {
+            inc_new_counter_info!("rpc-pubsub-final-logs", 1);
+        }
+        SubscriptionParams::Program(_) => {
+            inc_new_counter_info!("rpc-pubsub-final-programs", 1);
+        }
+        SubscriptionParams::Signature(_) => {
+            inc_new_counter_info!("rpc-pubsub-final-signatures", 1);
+        }
+        SubscriptionParams::Slot => {
+            inc_new_counter_info!("rpc-pubsub-final-slots", 1);
+        }
+        SubscriptionParams::SlotsUpdates => {
+            inc_new_counter_info!("rpc-pubsub-final-slots-updates", 1);
+        }
+        SubscriptionParams::Root => {
+            inc_new_counter_info!("rpc-pubsub-final-roots", 1);
+        }
+        SubscriptionParams::Vote => {
+            inc_new_counter_info!("rpc-pubsub-final-votes", 1);
+        }
+    }
+}
+
 impl BroadcastHandler {
     fn handle(&self, notification: RpcNotification) -> Result<Option<Arc<String>>, Error> {
-        if self
+        if let Entry::Occupied(entry) = self
             .current_subscriptions
-            .contains_key(&notification.subscription_id)
+            .entry(notification.subscription_id)
         {
+            count_final(entry.get().params());
+
             if notification.is_final {
-                self.current_subscriptions
-                    .remove(&notification.subscription_id);
+                entry.remove();
+
             }
             notification
                 .json

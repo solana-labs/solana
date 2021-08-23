@@ -511,4 +511,8 @@ impl SubscriptionToken {
     pub fn id(&self) -> SubscriptionId {
         self.0.id
     }
+
+    pub fn params(&self) -> &SubscriptionParams {
+        &self.0.params
+    }
 }
