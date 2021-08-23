@@ -2,7 +2,7 @@ use {
     crate::address_map::{AddressMapPendingChanges, ACTIVATION_WARMUP, DEACTIVATION_COOLDOWN},
     dashmap::DashMap,
     log::warn,
-    solana_address_map_program::{AddressMapError, AddressMapState},
+    solana_address_map_program::{AddressMap, SerializationError},
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         clock::{Epoch, Slot},
@@ -14,7 +14,39 @@ use {
         atomic::{AtomicU64, Ordering},
         Arc,
     },
+    thiserror::Error,
 };
+
+#[derive(Error, Debug, PartialEq, Eq, Clone)]
+pub enum CacheError {
+    /// Address map was not found in the cache
+    #[error("Address map {0} was not found")]
+    MapNotFound(Pubkey),
+
+    /// Address map is inactive and may not be used
+    #[error("Address map {0} is inactive")]
+    MapInactive(Pubkey),
+
+    /// Address map has been activated but is still warming up
+    #[error("Address map {0} has been activated but is still activating until epoch {1}")]
+    MapStillActivating(Pubkey, Epoch),
+
+    /// Address map accessed with invalid entry index
+    #[error("Address map {0} does not contain an entry at index {1}")]
+    InvalidEntryIndex(Pubkey, u8),
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum MapStatus {
+    /// Address map has been activated but has not fully warmed up
+    Activating(Epoch),
+    /// Address map is active
+    Active,
+    /// Address map has deactivated but has not finished cooling down
+    Deactivating,
+    /// Address map is inactive
+    Inactive,
+}
 
 /// Cached address map with activation information.
 #[derive(Debug, PartialEq)]
@@ -25,15 +57,28 @@ struct CachedAddressMap {
 }
 
 impl CachedAddressMap {
-    /// Check if an address map has been activated and warmed up but has not yet
-    /// been reached the end of its deactivation cooldown, if deactivated.
-    fn is_active(&self, current_epoch: Epoch) -> bool {
+    /// Check the status of a cached address map to see if it is active for
+    /// mapping transaction message addresses.
+    fn status(&self, current_epoch: Epoch) -> MapStatus {
+        if current_epoch < self.activation_epoch {
+            return MapStatus::Inactive;
+        } else if Some(self.activation_epoch) == self.deactivation_epoch {
+            return MapStatus::Inactive;
+        }
+
         let first_active_epoch = self.activation_epoch.saturating_add(ACTIVATION_WARMUP);
-        let first_inactive_epoch = self
-            .deactivation_epoch
-            .map(|epoch| epoch.saturating_add(DEACTIVATION_COOLDOWN))
-            .unwrap_or(Epoch::MAX);
-        current_epoch >= first_active_epoch && current_epoch < first_inactive_epoch
+        if current_epoch < first_active_epoch {
+            MapStatus::Activating(first_active_epoch)
+        } else if let Some(deactivation_epoch) = self.deactivation_epoch {
+            let first_inactive_epoch = deactivation_epoch.saturating_add(DEACTIVATION_COOLDOWN);
+            if current_epoch < first_inactive_epoch {
+                MapStatus::Deactivating
+            } else {
+                MapStatus::Inactive
+            }
+        } else {
+            MapStatus::Active
+        }
     }
 }
 
@@ -66,11 +111,18 @@ impl AddressMapCache {
         &self,
         key: &Pubkey,
         current_epoch: Epoch,
-    ) -> Option<Arc<Vec<Pubkey>>> {
-        self.address_maps
-            .get(key)
-            .filter(|am| am.is_active(current_epoch))
-            .map(|am| am.entries.clone())
+    ) -> Result<Arc<Vec<Pubkey>>, CacheError> {
+        if let Some(address_map) = self.address_maps.get(key) {
+            match address_map.status(current_epoch) {
+                MapStatus::Active | MapStatus::Deactivating => Ok(Arc::clone(&address_map.entries)),
+                MapStatus::Activating(first_active_epoch) => {
+                    Err(CacheError::MapStillActivating(*key, first_active_epoch))
+                }
+                MapStatus::Inactive => Err(CacheError::MapInactive(*key)),
+            }
+        } else {
+            Err(CacheError::MapNotFound(*key))
+        }
     }
 
     /// Map a message's address map indexes to full addresses if the address
@@ -80,7 +132,7 @@ impl AddressMapCache {
         &self,
         message: &v0::Message,
         current_epoch: Epoch,
-    ) -> Option<MappedAddresses> {
+    ) -> Result<MappedAddresses, CacheError> {
         let mut mapped_addresses = MappedAddresses {
             writable: Vec::with_capacity(message.num_writable_map_indexes()),
             readonly: Vec::with_capacity(message.num_readonly_map_indexes()),
@@ -88,14 +140,18 @@ impl AddressMapCache {
 
         for (key, indexes) in message.address_map_indexes_iter() {
             let map_entries = self.get_active_map_entries(key, current_epoch)?;
-            let lookup_address = |index: &u8| map_entries.get(*index as usize).cloned();
+            let lookup_address = |index: &u8| -> Result<&Pubkey, CacheError> {
+                map_entries
+                    .get(usize::from(*index))
+                    .ok_or(CacheError::InvalidEntryIndex(*key, *index))
+            };
 
             mapped_addresses.writable.extend(
                 indexes
                     .writable
                     .iter()
                     .map(lookup_address)
-                    .collect::<Option<Vec<_>>>()?,
+                    .collect::<Result<Vec<_>, CacheError>>()?,
             );
 
             mapped_addresses.readonly.extend(
@@ -103,11 +159,11 @@ impl AddressMapCache {
                     .readonly
                     .iter()
                     .map(lookup_address)
-                    .collect::<Option<Vec<_>>>()?,
+                    .collect::<Result<Vec<_>, CacheError>>()?,
             );
         }
 
-        Some(mapped_addresses)
+        Ok(mapped_addresses)
     }
 
     /// Insert newly activated map into the cache
@@ -183,14 +239,12 @@ impl AddressMapCache {
     }
 
     /// Called during snapshot processing to populate the cache from rooted slots
-    pub fn populate_cache(&self, map_key: &Pubkey, map_data: &[u8]) {
-        let address_map = match bincode::deserialize::<AddressMapState>(map_data) {
-            Ok(AddressMapState::Initialized(address_map)) => address_map,
-            _ => {
-                return;
-            }
-        };
-
+    pub fn populate_cache(
+        &self,
+        map_key: &Pubkey,
+        map_data: &[u8],
+    ) -> Result<(), SerializationError> {
+        let address_map = AddressMap::deserialize(map_data)?;
         let activation_epoch = match address_map.activation_slot {
             Slot::MAX => None,
             slot => Some(self.epoch_schedule.get_epoch(slot)),
@@ -207,8 +261,7 @@ impl AddressMapCache {
         // will not encounter two different sets of address map entries at the
         // same address.
         if let Some(activation_epoch) = activation_epoch {
-            let result: Result<(), AddressMapError> = self
-                .address_maps
+            self.address_maps
                 .entry(*map_key)
                 .and_modify(|cached_address_map| {
                     // Entries and activation epoch cannot be modified after activation.
@@ -216,16 +269,14 @@ impl AddressMapCache {
                 })
                 .or_try_insert_with(|| {
                     Ok(CachedAddressMap {
-                        entries: Arc::new(address_map.try_deserialize_entries(map_data)?),
+                        entries: Arc::new(address_map.deserialize_entries(map_data)?),
                         activation_epoch,
                         deactivation_epoch,
                     })
                 })
-                .map(|_| ());
-
-            if let Err(err) = result {
-                warn!("Failed to cache invalid address map: {:?}", err);
-            }
+                .map(|_| ())
+        } else {
+            Ok(())
         }
     }
 }
@@ -234,11 +285,11 @@ impl AddressMapCache {
 mod tests {
     use super::*;
     use dashmap::DashSet;
-    use solana_address_map_program::AddressMap;
+    use solana_address_map_program::AddressMapState;
     use solana_sdk::message::v0::AddressMapIndexes;
 
     #[test]
-    fn test_cached_address_map_is_active() {
+    fn test_cached_address_map_status() {
         fn create_test_map(
             activation_epoch: Epoch,
             deactivation_epoch: Option<Epoch>,
@@ -250,51 +301,83 @@ mod tests {
             }
         }
 
-        assert!(!create_test_map(1, None).is_active(0));
-        assert!(!create_test_map(1, None).is_active(1));
-        assert!(!create_test_map(1, None).is_active(2));
-        assert!(create_test_map(1, None).is_active(3));
-        assert!(create_test_map(1, None).is_active(4));
+        assert_eq!(create_test_map(1, None).status(0), MapStatus::Inactive);
+        assert_eq!(create_test_map(1, None).status(1), MapStatus::Activating(3));
+        assert_eq!(create_test_map(1, None).status(2), MapStatus::Activating(3));
+        assert_eq!(create_test_map(1, None).status(3), MapStatus::Active);
+        assert_eq!(create_test_map(1, None).status(4), MapStatus::Active);
 
-        assert!(!create_test_map(1, Some(1)).is_active(0));
-        assert!(!create_test_map(1, Some(1)).is_active(1));
-        assert!(!create_test_map(1, Some(1)).is_active(2));
-        assert!(!create_test_map(1, Some(1)).is_active(3));
-        assert!(!create_test_map(1, Some(1)).is_active(4));
+        assert_eq!(create_test_map(1, Some(1)).status(0), MapStatus::Inactive);
+        assert_eq!(create_test_map(1, Some(1)).status(1), MapStatus::Inactive);
+        assert_eq!(create_test_map(1, Some(1)).status(2), MapStatus::Inactive);
+        assert_eq!(create_test_map(1, Some(1)).status(3), MapStatus::Inactive);
+        assert_eq!(create_test_map(1, Some(1)).status(4), MapStatus::Inactive);
 
-        assert!(!create_test_map(1, Some(2)).is_active(0));
-        assert!(!create_test_map(1, Some(2)).is_active(1));
-        assert!(!create_test_map(1, Some(2)).is_active(2));
-        assert!(create_test_map(1, Some(2)).is_active(3));
-        assert!(!create_test_map(1, Some(2)).is_active(4));
+        assert_eq!(create_test_map(1, Some(2)).status(0), MapStatus::Inactive);
+        assert_eq!(
+            create_test_map(1, Some(2)).status(1),
+            MapStatus::Activating(3)
+        );
+        assert_eq!(
+            create_test_map(1, Some(2)).status(2),
+            MapStatus::Activating(3)
+        );
+        assert_eq!(
+            create_test_map(1, Some(2)).status(3),
+            MapStatus::Deactivating
+        );
+        assert_eq!(create_test_map(1, Some(2)).status(4), MapStatus::Inactive);
     }
 
     #[test]
     fn test_get_active_map_entries() {
         let current_epoch = 10;
         let active_map_key = Pubkey::new_unique();
+        let activating_map_key = Pubkey::new_unique();
         let inactive_map_key = Pubkey::new_unique();
         let entries = Arc::new(vec![Pubkey::new_unique()]);
 
         let address_map_cache = {
             let cache = AddressMapCache::default();
-            cache.insert_activated_map(active_map_key, entries.clone(), 0);
-            cache.insert_activated_map(inactive_map_key, entries.clone(), current_epoch);
+            cache.insert_activated_map(
+                active_map_key,
+                entries.clone(),
+                current_epoch - ACTIVATION_WARMUP,
+            );
+            cache.insert_activated_map(activating_map_key, entries.clone(), current_epoch);
+            cache.insert_activated_map(inactive_map_key, entries.clone(), current_epoch + 1);
             cache
         };
 
         assert_eq!(
             address_map_cache.get_active_map_entries(&active_map_key, current_epoch),
-            Some(entries)
+            Ok(entries)
         );
 
-        assert!(address_map_cache
-            .get_active_map_entries(&inactive_map_key, current_epoch)
-            .is_none());
+        assert_eq!(
+            address_map_cache
+                .get_active_map_entries(&activating_map_key, current_epoch)
+                .err(),
+            Some(CacheError::MapStillActivating(
+                activating_map_key,
+                current_epoch + ACTIVATION_WARMUP
+            ))
+        );
 
-        assert!(address_map_cache
-            .get_active_map_entries(&Pubkey::new_unique(), current_epoch)
-            .is_none());
+        assert_eq!(
+            address_map_cache
+                .get_active_map_entries(&inactive_map_key, current_epoch)
+                .err(),
+            Some(CacheError::MapInactive(inactive_map_key))
+        );
+
+        let unknown_map_key = Pubkey::new_unique();
+        assert_eq!(
+            address_map_cache
+                .get_active_map_entries(&unknown_map_key, current_epoch)
+                .err(),
+            Some(CacheError::MapNotFound(unknown_map_key))
+        );
     }
 
     #[test]
@@ -341,7 +424,7 @@ mod tests {
                 },
                 current_epoch
             ),
-            Some(MappedAddresses {
+            Ok(MappedAddresses {
                 writable: vec![address_map1.1[0], address_map1.1[1]],
                 readonly: vec![address_map2.1[0], address_map2.1[1]],
             })
@@ -366,7 +449,7 @@ mod tests {
                 },
                 current_epoch
             ),
-            Some(MappedAddresses {
+            Ok(MappedAddresses {
                 writable: vec![address_map1.1[0], address_map2.1[0],],
                 readonly: vec![address_map1.1[1], address_map2.1[1],],
             })
@@ -374,46 +457,51 @@ mod tests {
 
         // Try to use invalid address map index
         assert_eq!(
-            address_map_cache.map_message_addresses(
-                &v0::Message {
-                    account_keys: vec![address_map1.0, address_map2.0,],
-                    address_map_indexes: vec![
-                        AddressMapIndexes {
-                            writable: vec![0, 1, 2],
-                            readonly: vec![],
-                        },
-                        AddressMapIndexes {
-                            writable: vec![0],
-                            readonly: vec![1],
-                        },
-                    ],
-                    ..v0::Message::default()
-                },
-                current_epoch
-            ),
-            None,
+            address_map_cache
+                .map_message_addresses(
+                    &v0::Message {
+                        account_keys: vec![address_map1.0, address_map2.0,],
+                        address_map_indexes: vec![
+                            AddressMapIndexes {
+                                writable: vec![0, 1, 2],
+                                readonly: vec![],
+                            },
+                            AddressMapIndexes {
+                                writable: vec![0],
+                                readonly: vec![1],
+                            },
+                        ],
+                        ..v0::Message::default()
+                    },
+                    current_epoch
+                )
+                .err(),
+            Some(CacheError::InvalidEntryIndex(address_map1.0, 2)),
         );
 
         // Try to map unknown address map
+        let unknown_map_key = Pubkey::new_unique();
         assert_eq!(
-            address_map_cache.map_message_addresses(
-                &v0::Message {
-                    account_keys: vec![address_map1.0, Pubkey::new_unique(),],
-                    address_map_indexes: vec![
-                        AddressMapIndexes {
-                            writable: vec![0],
-                            readonly: vec![1],
-                        },
-                        AddressMapIndexes {
-                            writable: vec![0],
-                            readonly: vec![1],
-                        },
-                    ],
-                    ..v0::Message::default()
-                },
-                current_epoch
-            ),
-            None,
+            address_map_cache
+                .map_message_addresses(
+                    &v0::Message {
+                        account_keys: vec![address_map1.0, unknown_map_key],
+                        address_map_indexes: vec![
+                            AddressMapIndexes {
+                                writable: vec![0],
+                                readonly: vec![1],
+                            },
+                            AddressMapIndexes {
+                                writable: vec![0],
+                                readonly: vec![1],
+                            },
+                        ],
+                        ..v0::Message::default()
+                    },
+                    current_epoch
+                )
+                .err(),
+            Some(CacheError::MapNotFound(unknown_map_key)),
         );
     }
 
@@ -494,7 +582,10 @@ mod tests {
         let cache = AddressMapCache::default();
         let map_key = Pubkey::new_unique();
         let map_data = vec![];
-        cache.populate_cache(&map_key, &map_data);
+        assert_eq!(
+            cache.populate_cache(&map_key, &map_data).err(),
+            Some(SerializationError::BincodeError)
+        );
         assert!(!cache.address_maps.contains_key(&map_key));
     }
 
@@ -503,7 +594,10 @@ mod tests {
         let cache = AddressMapCache::default();
         let map_key = Pubkey::new_unique();
         let uninitialized_data = bincode::serialize(&AddressMapState::Uninitialized).unwrap();
-        cache.populate_cache(&map_key, &uninitialized_data);
+        assert_eq!(
+            cache.populate_cache(&map_key, &uninitialized_data).err(),
+            Some(SerializationError::Uninitialized)
+        );
         assert!(!cache.address_maps.contains_key(&map_key));
     }
 
@@ -517,8 +611,11 @@ mod tests {
             deactivation_slot: 0,
             num_entries: 1,
         }
-        .serialize_with_entries_unchecked(&[]);
-        cache.populate_cache(&map_key, &map_data);
+        .serialize_with_entries(&[]);
+        assert_eq!(
+            cache.populate_cache(&map_key, &map_data).err(),
+            Some(SerializationError::InvalidNumEntries(1))
+        );
         assert!(!cache.address_maps.contains_key(&map_key));
     }
 
@@ -532,9 +629,8 @@ mod tests {
             deactivation_slot: 0,
             num_entries: 0,
         }
-        .try_serialize_with_entries(&[])
-        .unwrap();
-        cache.populate_cache(&map_key, &map_data);
+        .serialize_with_entries(&[]);
+        assert!(cache.populate_cache(&map_key, &map_data).is_ok());
         assert!(cache.address_maps.contains_key(&map_key));
     }
 
@@ -552,8 +648,8 @@ mod tests {
             num_entries: 2,
         };
         let map_key = Pubkey::new_unique();
-        let map_data = map.try_serialize_with_entries(&entries).unwrap();
-        cache.populate_cache(&map_key, &map_data);
+        let map_data = map.serialize_with_entries(&entries);
+        assert!(cache.populate_cache(&map_key, &map_data).is_ok());
         assert_eq!(
             cache.address_maps.get(&map_key).unwrap().value(),
             &CachedAddressMap {
@@ -567,8 +663,8 @@ mod tests {
         map.deactivation_slot = cache
             .epoch_schedule
             .get_first_slot_in_epoch(deactivation_epoch);
-        let updated_map_data = map.try_serialize_with_entries(&entries).unwrap();
-        cache.populate_cache(&map_key, &updated_map_data);
+        let updated_map_data = map.serialize_with_entries(&entries);
+        assert!(cache.populate_cache(&map_key, &updated_map_data).is_ok());
         assert_eq!(
             cache.address_maps.get(&map_key).unwrap().value(),
             &CachedAddressMap {

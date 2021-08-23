@@ -3,8 +3,7 @@ use {
         mapref::multiple::RefMulti as MapEntry, setref::multiple::RefMulti as SetEntry, DashMap,
         DashSet,
     },
-    log::warn,
-    solana_address_map_program::{AddressMapError, AddressMapState},
+    solana_address_map_program::{AddressMap, SerializationError},
     solana_sdk::{clock::Slot, pubkey::Pubkey},
     std::sync::Arc,
 };
@@ -58,46 +57,42 @@ impl AddressMapPendingChanges {
     }
 
     /// Record pending change for address map account if it was newly activated or deactivated
-    pub fn record(&self, key: &Pubkey, map_data: &[u8]) {
-        if let Ok(AddressMapState::Initialized(address_map)) =
-            bincode::deserialize::<AddressMapState>(map_data)
-        {
-            if self.slot == address_map.activation_slot {
-                let result: Result<(), AddressMapError> = self
-                    .activations
-                    .entry(*key)
-                    .or_try_insert_with(|| {
-                        Ok(Arc::new(address_map.try_deserialize_entries(map_data)?))
-                    })
-                    .map(|_| ());
-
-                if let Err(err) = result {
-                    warn!("Failed to cache invalid address map: {:?}", err);
-                }
-            }
-
-            // If an address map is deactivated in the same slot that it is
-            // activated, it will not be usable for mapping transaction
-            // addresses if the warmup time is less than or equal to the
-            // cooldown time. However, the cooldown must still be observed
-            // before the account can be closed.
-            if self.slot == address_map.deactivation_slot {
-                self.deactivations.insert(*key);
-            }
+    pub fn record(&self, key: &Pubkey, map_data: &[u8]) -> Result<(), SerializationError> {
+        let address_map = AddressMap::deserialize(map_data)?;
+        if self.slot == address_map.activation_slot {
+            self.activations
+                .entry(*key)
+                .or_try_insert_with(|| -> Result<_, SerializationError> {
+                    Ok(Arc::new(address_map.deserialize_entries(map_data)?))
+                })
+                .map(|_| ())?;
         }
+
+        // If an address map is deactivated in the same slot that it is
+        // activated, it will not be usable for mapping transaction
+        // addresses if the warmup time is less than or equal to the
+        // cooldown time. However, the cooldown must still be observed
+        // before the account can be closed.
+        if self.slot == address_map.deactivation_slot {
+            self.deactivations.insert(*key);
+        }
+
+        Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_address_map_program::AddressMap;
 
     #[test]
     fn test_record_uninitialized_map() {
         let changes = AddressMapPendingChanges::new(0);
         let map_key = Pubkey::new_unique();
-        changes.record(&map_key, &[]);
+        assert_eq!(
+            changes.record(&map_key, &[]).err(),
+            Some(SerializationError::BincodeError)
+        );
         assert!(changes.activations.get(&map_key).is_none());
         assert!(changes.deactivations.get(&map_key).is_none());
     }
@@ -113,8 +108,11 @@ mod tests {
             deactivation_slot: Slot::MAX,
             num_entries: 1,
         }
-        .serialize_with_entries_unchecked(&[]);
-        changes.record(&map_key, &map_data);
+        .serialize_with_entries(&[]);
+        assert_eq!(
+            changes.record(&map_key, &map_data).err(),
+            Some(SerializationError::InvalidNumEntries(1))
+        );
         assert!(changes.activations.get(&map_key).is_none());
         assert!(changes.deactivations.get(&map_key).is_none());
     }
@@ -131,9 +129,8 @@ mod tests {
             deactivation_slot: slot,
             num_entries: 2,
         }
-        .try_serialize_with_entries(&entries)
-        .unwrap();
-        changes.record(&map_key, &map_data);
+        .serialize_with_entries(&entries);
+        assert!(changes.record(&map_key, &map_data).is_ok());
         assert_eq!(
             changes.activations.get(&map_key).unwrap().value(),
             &Arc::new(entries),
@@ -153,9 +150,8 @@ mod tests {
             deactivation_slot: Slot::MAX,
             num_entries: 2,
         }
-        .try_serialize_with_entries(&entries)
-        .unwrap();
-        changes.record(&map_key, &map_data);
+        .serialize_with_entries(&entries);
+        assert!(changes.record(&map_key, &map_data).is_ok());
         assert_eq!(
             changes.activations.get(&map_key).unwrap().value().as_ref(),
             &entries,
@@ -175,9 +171,8 @@ mod tests {
             deactivation_slot: slot,
             num_entries: 2,
         }
-        .try_serialize_with_entries(&entries)
-        .unwrap();
-        changes.record(&map_key, &map_data);
+        .serialize_with_entries(&entries);
+        assert!(changes.record(&map_key, &map_data).is_ok());
         assert!(changes.activations.get(&map_key).is_none());
         assert!(changes.deactivations.get(&map_key).is_some());
     }
