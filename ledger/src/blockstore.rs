@@ -3464,14 +3464,13 @@ fn find_slot_meta_in_db_else_create(
 ) -> Result<Rc<RefCell<SlotMeta>>> {
     if let Some(slot_meta) = db.column::<cf::SlotMeta>().get(slot)? {
         insert_map.insert(slot, Rc::new(RefCell::new(slot_meta)));
-        Ok(insert_map.get(&slot).unwrap().clone())
     } else {
         // If this slot doesn't exist, make a orphan slot. This way we
         // remember which slots chained to this one when we eventually get a real shred
         // for this slot
         insert_map.insert(slot, Rc::new(RefCell::new(SlotMeta::new_orphan(slot))));
-        Ok(insert_map.get(&slot).unwrap().clone())
     }
+    Ok(insert_map.get(&slot).unwrap().clone())
 }
 
 // Find the slot metadata in the cache of dirty slot metadata we've previously touched
