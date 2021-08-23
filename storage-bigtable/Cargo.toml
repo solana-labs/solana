@@ -21,7 +21,7 @@ log = "0.4.14"
 prost = "0.8.0"
 prost-types = "0.8.0"
 rand_core = "0.6.3"
-serde = "1.0.127"
+serde = "1.0.128"
 serde_derive = "1.0.103"
 smpl_jwt = "0.6.0"
 solana-sdk = { path = "../sdk", version = "=1.8.0" }
