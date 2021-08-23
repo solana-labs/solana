@@ -62,22 +62,25 @@ impl CachedAddressMap {
     fn status(&self, current_epoch: Epoch) -> MapStatus {
         if current_epoch < self.activation_epoch {
             return MapStatus::Inactive;
-        } else if Some(self.activation_epoch) == self.deactivation_epoch {
-            return MapStatus::Inactive;
         }
 
         let first_active_epoch = self.activation_epoch.saturating_add(ACTIVATION_WARMUP);
+        let deactivation_epoch = self.deactivation_epoch.unwrap_or(Epoch::MAX);
+        let first_inactive_epoch = deactivation_epoch.saturating_add(DEACTIVATION_COOLDOWN);
+
+        // handle special case where a map can never be active
+        if first_active_epoch == first_inactive_epoch {
+            return MapStatus::Inactive;
+        }
+
         if current_epoch < first_active_epoch {
             MapStatus::Activating(first_active_epoch)
-        } else if let Some(deactivation_epoch) = self.deactivation_epoch {
-            let first_inactive_epoch = deactivation_epoch.saturating_add(DEACTIVATION_COOLDOWN);
-            if current_epoch < first_inactive_epoch {
-                MapStatus::Deactivating
-            } else {
-                MapStatus::Inactive
-            }
-        } else {
+        } else if current_epoch < deactivation_epoch {
             MapStatus::Active
+        } else if current_epoch < first_inactive_epoch {
+            MapStatus::Deactivating
+        } else {
+            MapStatus::Inactive
         }
     }
 }
@@ -283,6 +286,7 @@ impl AddressMapCache {
 
 #[cfg(test)]
 mod tests {
+    use super::MapStatus as Status;
     use super::*;
     use dashmap::DashSet;
     use solana_address_map_program::AddressMapState;
@@ -301,32 +305,31 @@ mod tests {
             }
         }
 
-        assert_eq!(create_test_map(1, None).status(0), MapStatus::Inactive);
-        assert_eq!(create_test_map(1, None).status(1), MapStatus::Activating(3));
-        assert_eq!(create_test_map(1, None).status(2), MapStatus::Activating(3));
-        assert_eq!(create_test_map(1, None).status(3), MapStatus::Active);
-        assert_eq!(create_test_map(1, None).status(4), MapStatus::Active);
+        assert_eq!(create_test_map(1, None).status(0), Status::Inactive);
+        assert_eq!(create_test_map(1, None).status(1), Status::Activating(3));
+        assert_eq!(create_test_map(1, None).status(2), Status::Activating(3));
+        assert_eq!(create_test_map(1, None).status(3), Status::Active);
+        assert_eq!(create_test_map(1, None).status(4), Status::Active);
 
-        assert_eq!(create_test_map(1, Some(1)).status(0), MapStatus::Inactive);
-        assert_eq!(create_test_map(1, Some(1)).status(1), MapStatus::Inactive);
-        assert_eq!(create_test_map(1, Some(1)).status(2), MapStatus::Inactive);
-        assert_eq!(create_test_map(1, Some(1)).status(3), MapStatus::Inactive);
-        assert_eq!(create_test_map(1, Some(1)).status(4), MapStatus::Inactive);
+        assert_eq!(create_test_map(1, Some(1)).status(0), Status::Inactive);
+        assert_eq!(create_test_map(1, Some(1)).status(1), Status::Inactive);
+        assert_eq!(create_test_map(1, Some(1)).status(2), Status::Inactive);
+        assert_eq!(create_test_map(1, Some(1)).status(3), Status::Inactive);
+        assert_eq!(create_test_map(1, Some(1)).status(4), Status::Inactive);
 
-        assert_eq!(create_test_map(1, Some(2)).status(0), MapStatus::Inactive);
-        assert_eq!(
-            create_test_map(1, Some(2)).status(1),
-            MapStatus::Activating(3)
-        );
-        assert_eq!(
-            create_test_map(1, Some(2)).status(2),
-            MapStatus::Activating(3)
-        );
-        assert_eq!(
-            create_test_map(1, Some(2)).status(3),
-            MapStatus::Deactivating
-        );
-        assert_eq!(create_test_map(1, Some(2)).status(4), MapStatus::Inactive);
+        assert_eq!(create_test_map(1, Some(2)).status(0), Status::Inactive);
+        assert_eq!(create_test_map(1, Some(2)).status(1), Status::Activating(3));
+        assert_eq!(create_test_map(1, Some(2)).status(2), Status::Activating(3));
+        assert_eq!(create_test_map(1, Some(2)).status(3), Status::Deactivating);
+        assert_eq!(create_test_map(1, Some(2)).status(4), Status::Inactive);
+
+        assert_eq!(create_test_map(1, Some(4)).status(0), Status::Inactive);
+        assert_eq!(create_test_map(1, Some(4)).status(1), Status::Activating(3));
+        assert_eq!(create_test_map(1, Some(4)).status(2), Status::Activating(3));
+        assert_eq!(create_test_map(1, Some(4)).status(3), Status::Active);
+        assert_eq!(create_test_map(1, Some(4)).status(4), Status::Deactivating);
+        assert_eq!(create_test_map(1, Some(4)).status(5), Status::Deactivating);
+        assert_eq!(create_test_map(1, Some(4)).status(6), Status::Inactive);
     }
 
     #[test]
