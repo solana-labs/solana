@@ -2,7 +2,7 @@ use {
     solana_gossip::cluster_info::ClusterInfo,
     solana_poh::poh_recorder::PohRecorder,
     solana_sdk::{clock::NUM_CONSECUTIVE_LEADER_SLOTS, pubkey::Pubkey},
-    solana_transaction::tpu_info::TpuInfo,
+    solana_send_transaction_service::tpu_info::TpuInfo,
     std::{
         collections::HashMap,
         net::SocketAddr,

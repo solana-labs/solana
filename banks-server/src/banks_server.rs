@@ -15,7 +15,7 @@ use {
         signature::Signature,
         transaction::{self, Transaction},
     },
-    solana_transaction::{
+    solana_send_transaction_service::{
         send_transaction_service::{SendTransactionService, TransactionInfo},
         tpu_info::NullTpuInfo,
     },

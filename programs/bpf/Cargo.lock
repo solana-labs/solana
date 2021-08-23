@@ -2439,7 +2439,7 @@ dependencies = [
  "solana-banks-interface",
  "solana-runtime",
  "solana-sdk",
- "solana-transaction",
+ "solana-send-transaction-service",
  "tarpc",
  "tokio",
  "tokio-serde",
@@ -3289,6 +3289,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-send-transaction-service"
+version = "1.8.0"
+dependencies = [
+ "log",
+ "solana-logger 1.8.0",
+ "solana-metrics",
+ "solana-runtime",
+ "solana-sdk",
+]
+
+[[package]]
 name = "solana-stake-program"
 version = "1.8.0"
 dependencies = [
@@ -3306,17 +3317,6 @@ dependencies = [
  "solana-sdk",
  "solana-vote-program",
  "thiserror",
-]
-
-[[package]]
-name = "solana-transaction"
-version = "1.8.0"
-dependencies = [
- "log",
- "solana-logger 1.8.0",
- "solana-metrics",
- "solana-runtime",
- "solana-sdk",
 ]
 
 [[package]]

@@ -66,11 +66,11 @@ use {
         sysvar::stake_history,
         transaction::{self, SanitizedTransaction, TransactionError, VersionedTransaction},
     },
-    solana_streamer::socket::SocketAddrSpace,
-    solana_transaction::{
+    solana_send_transaction_service::{
         send_transaction_service::{SendTransactionService, TransactionInfo},
         tpu_info::NullTpuInfo,
     },
+    solana_streamer::socket::SocketAddrSpace,
     solana_transaction_status::{
         ConfirmedBlock, EncodedConfirmedTransaction, Reward, RewardType,
         TransactionConfirmationStatus, TransactionStatus, UiConfirmedBlock, UiTransactionEncoding,
