@@ -136,7 +136,7 @@ mod tests {
         );
 
         assert_eq!(
-            AddressMap::deserialize(&vec![0u8; ADDRESS_MAP_ENTRIES_START]).err(),
+            AddressMap::deserialize(&[0u8; ADDRESS_MAP_ENTRIES_START]).err(),
             Some(SerializationError::Uninitialized),
         );
 
