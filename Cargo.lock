@@ -4429,9 +4429,9 @@ dependencies = [
  "log 0.4.14",
  "mio 0.7.13",
  "solana-banks-interface",
- "solana-metrics",
  "solana-runtime",
  "solana-sdk",
+ "solana-send-transaction-service",
  "tarpc",
  "tokio 1.10.0",
  "tokio-serde",
@@ -5571,6 +5571,7 @@ dependencies = [
  "solana-poh",
  "solana-runtime",
  "solana-sdk",
+ "solana-send-transaction-service",
  "solana-stake-program",
  "solana-storage-bigtable",
  "solana-streamer",
@@ -5726,6 +5727,17 @@ dependencies = [
  "libsecp256k1 0.6.0",
  "rand 0.7.3",
  "solana-logger 1.8.0",
+ "solana-sdk",
+]
+
+[[package]]
+name = "solana-send-transaction-service"
+version = "1.8.0"
+dependencies = [
+ "log 0.4.14",
+ "solana-logger 1.8.0",
+ "solana-metrics",
+ "solana-runtime",
  "solana-sdk",
 ]
 

@@ -2437,9 +2437,9 @@ dependencies = [
  "log",
  "mio",
  "solana-banks-interface",
- "solana-metrics",
  "solana-runtime",
  "solana-sdk",
+ "solana-send-transaction-service",
  "tarpc",
  "tokio",
  "tokio-serde",
@@ -3285,6 +3285,17 @@ dependencies = [
 name = "solana-secp256k1-program"
 version = "1.8.0"
 dependencies = [
+ "solana-sdk",
+]
+
+[[package]]
+name = "solana-send-transaction-service"
+version = "1.8.0"
+dependencies = [
+ "log",
+ "solana-logger 1.8.0",
+ "solana-metrics",
+ "solana-runtime",
  "solana-sdk",
 ]
 

@@ -2,11 +2,8 @@
 
 use {
     crate::{
-        max_slots::MaxSlots,
-        optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
-        parsed_token_accounts::*,
-        rpc_health::*,
-        send_transaction_service::{SendTransactionService, TransactionInfo},
+        max_slots::MaxSlots, optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
+        parsed_token_accounts::*, rpc_health::*,
     },
     bincode::{config::Options, serialize},
     jsonrpc_core::{futures::future, types::error, BoxFuture, Error, Metadata, Result},
@@ -68,6 +65,10 @@ use {
         system_instruction,
         sysvar::stake_history,
         transaction::{self, SanitizedTransaction, TransactionError, VersionedTransaction},
+    },
+    solana_send_transaction_service::{
+        send_transaction_service::{SendTransactionService, TransactionInfo},
+        tpu_info::NullTpuInfo,
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_transaction_status::{
@@ -294,7 +295,14 @@ impl JsonRpcRequestProcessor {
         ));
         let tpu_address = cluster_info.my_contact_info().tpu;
         let (sender, receiver) = channel();
-        SendTransactionService::new(tpu_address, &bank_forks, None, receiver, 1000, 1);
+        SendTransactionService::new::<NullTpuInfo>(
+            tpu_address,
+            &bank_forks,
+            None,
+            receiver,
+            1000,
+            1,
+        );
 
         Self {
             config: JsonRpcConfig::default(),
@@ -4400,7 +4408,14 @@ pub mod tests {
             Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
             max_complete_transaction_status_slot,
         );
-        SendTransactionService::new(tpu_address, &bank_forks, None, receiver, 1000, 1);
+        SendTransactionService::new::<NullTpuInfo>(
+            tpu_address,
+            &bank_forks,
+            None,
+            receiver,
+            1000,
+            1,
+        );
 
         cluster_info.insert_info(ContactInfo::new_with_pubkey_socketaddr(
             &leader_pubkey,
@@ -5983,7 +5998,14 @@ pub mod tests {
             Arc::new(LeaderScheduleCache::default()),
             Arc::new(AtomicU64::default()),
         );
-        SendTransactionService::new(tpu_address, &bank_forks, None, receiver, 1000, 1);
+        SendTransactionService::new::<NullTpuInfo>(
+            tpu_address,
+            &bank_forks,
+            None,
+            receiver,
+            1000,
+            1,
+        );
 
         let mut bad_transaction = system_transaction::transfer(
             &mint_keypair,
@@ -6265,7 +6287,14 @@ pub mod tests {
             Arc::new(LeaderScheduleCache::default()),
             Arc::new(AtomicU64::default()),
         );
-        SendTransactionService::new(tpu_address, &bank_forks, None, receiver, 1000, 1);
+        SendTransactionService::new::<NullTpuInfo>(
+            tpu_address,
+            &bank_forks,
+            None,
+            receiver,
+            1000,
+            1,
+        );
         assert_eq!(
             request_processor.get_block_commitment(0),
             RpcBlockCommitment {
