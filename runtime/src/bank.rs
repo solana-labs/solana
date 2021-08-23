@@ -2443,7 +2443,7 @@ impl Bank {
 
         let mut squash_address_map_time = Measure::start("squash_address_map_time");
         // Only apply changes for parents of the squashed bank, the squashed
-        // bank will have its changes applied when one of its descendant is
+        // bank will have its changes applied when one of its descendants is
         // squashed. This approach avoids applying changes twice for the same bank.
         self.parents().iter().rev().for_each(|rooted_parent_bank| {
             self.address_map_cache().update_cache(
@@ -5211,8 +5211,12 @@ impl Bank {
                         });
                     }
                 } else if AddressMapCache::is_address_map(account) {
-                    self.pending_address_map_changes
-                        .record(pubkey, account.data());
+                    if let Err(err) = self
+                        .pending_address_map_changes
+                        .record(pubkey, account.data())
+                    {
+                        warn!("Failed to cache invalid address map: {:?}", err);
+                    }
                 }
             }
         }

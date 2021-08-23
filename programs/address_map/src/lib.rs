@@ -47,49 +47,57 @@ pub struct AddressMap {
     // the account's data, starting from `ADDRESS_MAP_ENTRIES_START`.
 }
 
-#[derive(Error, Debug, PartialEq, Eq, Clone)]
-pub enum AddressMapError {
-    /// Address map data must have room for exactly `num_entries` addresses and
-    /// cannot have trailing bytes.
-    #[error("Entries data size is invalid")]
-    InvalidEntriesDataSize,
+#[derive(Error, Debug, PartialEq, Eq)]
+pub enum SerializationError {
+    /// Bincode serialization failed
+    #[error("Bincode serialization error")]
+    BincodeError,
+
+    /// Address map is uninitialized
+    #[error("Address map must be initialized")]
+    Uninitialized,
+
+    /// Address map data must have room for `num_entries` addresses.
+    #[error("Address map data too small for {0} address entries")]
+    InvalidNumEntries(u8),
+}
+
+impl From<bincode::Error> for SerializationError {
+    fn from(_: bincode::Error) -> Self {
+        Self::BincodeError
+    }
 }
 
 impl AddressMap {
+    /// Attempt to deserialize an initialized address map account.
+    pub fn deserialize(serialized_map: &[u8]) -> Result<AddressMap, SerializationError> {
+        let state = bincode::deserialize::<AddressMapState>(serialized_map)?;
+        match state {
+            AddressMapState::Initialized(address_map) => Ok(address_map),
+            AddressMapState::Uninitialized => Err(SerializationError::Uninitialized),
+        }
+    }
+
     /// Attempt to deserialize the address entries stored in an address map
-    /// account. Address map data must have room for exactly `num_entries`
-    /// addresses.
-    pub fn try_deserialize_entries(
+    /// account. Address map data must have room for `num_entries` addresses.
+    pub fn deserialize_entries(
         &self,
         serialized_map: &[u8],
-    ) -> Result<Vec<Pubkey>, AddressMapError> {
-        let entries_size = PUBKEY_BYTES.saturating_mul(self.num_entries as usize);
-        if serialized_map.len() == ADDRESS_MAP_ENTRIES_START.saturating_add(entries_size) {
-            Ok(serialized_map[ADDRESS_MAP_ENTRIES_START..]
-                .chunks(32)
+    ) -> Result<Vec<Pubkey>, SerializationError> {
+        let entries_size = PUBKEY_BYTES.saturating_mul(usize::from(self.num_entries));
+        let entries_end = ADDRESS_MAP_ENTRIES_START.saturating_add(entries_size);
+        if serialized_map.len() >= entries_end {
+            Ok(serialized_map[ADDRESS_MAP_ENTRIES_START..entries_end]
+                .chunks(PUBKEY_BYTES)
                 .map(|entry_bytes| Pubkey::new(entry_bytes))
                 .collect())
         } else {
-            Err(AddressMapError::InvalidEntriesDataSize)
+            Err(SerializationError::InvalidNumEntries(self.num_entries))
         }
     }
 
-    /// Attempt to serialize the address map along with its entries. The length
-    /// of `entries` must equal `num_entries` addresses.
-    pub fn try_serialize_with_entries(
-        &self,
-        entries: &[Pubkey],
-    ) -> Result<Vec<u8>, AddressMapError> {
-        if usize::from(self.num_entries) != entries.len() {
-            return Err(AddressMapError::InvalidEntriesDataSize);
-        }
-
-        Ok(self.serialize_with_entries_unchecked(entries))
-    }
-
-    /// Serialize the address map along with its entries. Used for tests only.
-    #[doc(hidden)]
-    pub fn serialize_with_entries_unchecked(&self, entries: &[Pubkey]) -> Vec<u8> {
+    /// Serialize the address map along with its entries.
+    pub fn serialize_with_entries(&self, entries: &[Pubkey]) -> Vec<u8> {
         let mut data = bincode::serialize(&(1u32, &self)).unwrap();
         data.resize(ADDRESS_MAP_ENTRIES_START, 0);
         for entry in entries {
@@ -121,7 +129,24 @@ mod tests {
     }
 
     #[test]
-    fn test_try_deserialize_entries() {
+    fn test_deserialize() {
+        assert_eq!(
+            AddressMap::deserialize(&[]).err(),
+            Some(SerializationError::BincodeError),
+        );
+
+        assert_eq!(
+            AddressMap::deserialize(&vec![0u8; ADDRESS_MAP_ENTRIES_START]).err(),
+            Some(SerializationError::Uninitialized),
+        );
+
+        let address_map = create_test_address_map(1);
+        let address_map_data = address_map.serialize_with_entries(&[]);
+        assert_eq!(AddressMap::deserialize(&address_map_data), Ok(address_map),);
+    }
+
+    #[test]
+    fn test_deserialize_entries() {
         for num_entries in [0, 1, 10, MAX_ADDRESS_MAP_ENTRIES] {
             let address_map = create_test_address_map(num_entries);
             let entries = {
@@ -130,55 +155,42 @@ mod tests {
                 vec
             };
 
-            let serialized_map = address_map.try_serialize_with_entries(&entries).unwrap();
+            let serialized_map = address_map.serialize_with_entries(&entries);
             assert_eq!(
-                address_map.try_deserialize_entries(&serialized_map),
+                address_map.deserialize_entries(&serialized_map),
                 Ok(entries),
             );
         }
     }
 
     #[test]
-    fn test_try_deserialize_entries_trailing_byte() {
+    fn test_deserialize_entries_trailing_bytes() {
         let address_map = create_test_address_map(0);
-        let mut serialized_map =
-            bincode::serialize(&AddressMapState::Initialized(address_map.clone())).unwrap();
+        let mut serialized_map = address_map.serialize_with_entries(&[]);
         serialized_map.resize(serialized_map.len() + 1, 0u8);
 
-        assert_eq!(
-            address_map.try_deserialize_entries(&serialized_map).err(),
-            Some(AddressMapError::InvalidEntriesDataSize),
-        );
+        assert!(address_map.deserialize_entries(&serialized_map).is_ok());
     }
 
     #[test]
-    fn test_try_deserialize_entries_too_small() {
+    fn test_deserialize_entries_too_small() {
         let address_map = create_test_address_map(1);
-        let serialized_map =
-            bincode::serialize(&AddressMapState::Initialized(address_map.clone())).unwrap();
+        let serialized_map = address_map.serialize_with_entries(&[]);
 
         assert_eq!(
-            address_map.try_deserialize_entries(&serialized_map).err(),
-            Some(AddressMapError::InvalidEntriesDataSize),
+            address_map.deserialize_entries(&serialized_map).err(),
+            Some(SerializationError::InvalidNumEntries(1)),
         );
     }
 
     #[test]
-    fn test_try_serialize_with_entries_failure() {
-        let address_map = create_test_address_map(0);
-        assert!(address_map
-            .try_serialize_with_entries(&[Pubkey::new_unique()])
-            .is_err());
-    }
-
-    #[test]
-    fn test_try_serialize_with_entries() {
+    fn test_serialize_with_entries() {
         let address_map = create_test_address_map(1);
         let entries = vec![Pubkey::new_unique()];
-        let serialized_map = address_map.try_serialize_with_entries(&entries).unwrap();
+        let serialized_map = address_map.serialize_with_entries(&entries);
 
         assert_eq!(
-            address_map.try_deserialize_entries(&serialized_map),
+            address_map.deserialize_entries(&serialized_map),
             Ok(entries)
         );
         assert_eq!(

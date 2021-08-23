@@ -6077,8 +6077,12 @@ impl AccountsDb {
                 },
             )| {
                 if solana_address_map_program::check_id(&stored_account.account_meta.owner) {
-                    self.address_map_cache
-                        .populate_cache(&stored_account.meta.pubkey, stored_account.data);
+                    if let Err(err) = self
+                        .address_map_cache
+                        .populate_cache(&stored_account.meta.pubkey, stored_account.data)
+                    {
+                        warn!("Failed to cache invalid address map: {:?}", err);
+                    }
                 }
 
                 if secondary {
