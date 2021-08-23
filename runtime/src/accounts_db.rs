@@ -2483,7 +2483,8 @@ impl AccountsDb {
     /// Given the input `ShrinkCandidates`, this function sorts the stores by their alive ratio
     /// in increasing order with the most sparse entries in the front. It will then simulate the
     /// shrinking by working on the most sparse entries first and if the overall alive ratio is
-    /// achieved, it will stop and return the filtered-down candidates.
+    /// achieved, it will stop and return the filtered-down candidates and the candidates which
+    /// are skipped in this round and might be eligible for the future shrink.
     fn select_candidates_by_total_usage(
         &self,
         shrink_slots: &ShrinkCandidates,
