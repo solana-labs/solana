@@ -7862,20 +7862,24 @@ pub mod tests {
         let pubkey2 = solana_sdk::pubkey::new_rand();
         let zero_lamport_account =
             AccountSharedData::new(0, 0, AccountSharedData::default().owner());
+        let non_zero_lamport_account =
+            AccountSharedData::new(1, 0, AccountSharedData::default().owner());
 
         // Store 2 accounts in slot 0, then update account 1 in two more slots
         accounts.store_uncached(0, &[(&pubkey1, &zero_lamport_account)]);
         accounts.store_uncached(0, &[(&pubkey2, &zero_lamport_account)]);
         accounts.store_uncached(1, &[(&pubkey1, &zero_lamport_account)]);
         accounts.store_uncached(2, &[(&pubkey1, &zero_lamport_account)]);
+        accounts.store_uncached(3, &[(&pubkey1, &non_zero_lamport_account)]);
         // Root all slots
         accounts.add_root(0);
         accounts.add_root(1);
         accounts.add_root(2);
+        accounts.add_root(3);
 
         // Account ref counts should match how many slots they were stored in
         // Account 1 = 3 slots; account 2 = 1 slot
-        assert_eq!(accounts.accounts_index.ref_count_from_storage(&pubkey1), 3);
+        assert_eq!(accounts.accounts_index.ref_count_from_storage(&pubkey1), 4);
         assert_eq!(accounts.accounts_index.ref_count_from_storage(&pubkey2), 1);
 
         accounts.clean_accounts(None, false, None);
@@ -7885,7 +7889,7 @@ pub mod tests {
         assert!(accounts.storage.get_slot_stores(1).is_none());
         // Slot 2 only has a zero lamport account as well. But, calc_delete_dependencies()
         // should exclude slot 2 from the clean due to changes in other slots
-        assert!(accounts.storage.get_slot_stores(2).is_some());
+        assert!(accounts.storage.get_slot_stores(2).is_none());
         // Index ref counts should be consistent with the slot stores. Account 1 ref count
         // should be 1 since slot 2 is the only alive slot; account 2 should have a ref
         // count of 0 due to slot 0 being dead
@@ -7895,7 +7899,7 @@ pub mod tests {
         accounts.clean_accounts(None, false, None);
         // Slot 2 will now be cleaned, which will leave account 1 with a ref count of 0
         assert!(accounts.storage.get_slot_stores(2).is_none());
-        assert_eq!(accounts.accounts_index.ref_count_from_storage(&pubkey1), 0);
+        assert_eq!(accounts.accounts_index.ref_count_from_storage(&pubkey1), 1);
     }
 
     #[test]
