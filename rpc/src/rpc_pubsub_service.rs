@@ -264,6 +264,7 @@ async fn listen(
     mut tripwire: Tripwire,
 ) -> io::Result<()> {
     let listener = tokio::net::TcpListener::bind(&listen_address).await?;
+    let counter = ConnectionCounter::new();
     loop {
         select! {
             result = listener.accept() => match result {
@@ -272,6 +273,7 @@ async fn listen(
                     let subscription_control = subscription_control.clone();
                     let config = config.clone();
                     let tripwire = tripwire.clone();
+                    let counter_token = counter.create_token();
                     tokio::spawn(async move {
                         let handle = handle_connection(
                             socket, subscription_control, config, tripwire
@@ -280,12 +282,54 @@ async fn listen(
                             Ok(()) => debug!("connection closed ({:?})", addr),
                             Err(err) => warn!("connection handler error ({:?}): {}", addr, err),
                         }
+                        drop(counter_token); // Force moving token into the task.
                     });
                 }
                 Err(e) => error!("couldn't accept connection: {:?}", e),
             },
             _ = &mut tripwire => return Ok(()),
         }
+    }
+}
+
+struct ConnectionCounter(Arc<()>);
+impl ConnectionCounter {
+    fn new() -> Self {
+        Self(Arc::new(()))
+    }
+
+    fn create_token(&self) -> ConnectionCounterToken {
+        // num_connections = strong_count
+        //    - 1 (in ConnectionCounter)
+        //    + 1 (connection that's being created)
+        datapoint_info!(
+            "rpc_pubsub_connections",
+            ("count", Arc::strong_count(&self.0), i64)
+        );
+        ConnectionCounterToken(self.0.clone())
+    }
+}
+
+struct ConnectionCounterToken(Arc<()>);
+
+impl Drop for ConnectionCounterToken {
+    fn drop(&mut self) {
+        // num_connections = strong_count
+        //    - 1 (in ConnectionCounter)
+        //    - 1 (connection that's being dropped)
+        datapoint_info!(
+            "rpc_pubsub_connections",
+            ("count", Arc::strong_count(&self.0) - 2, i64)
+        );
+    }
+}
+
+impl Drop for ConnectionCounter {
+    fn drop(&mut self) {
+        datapoint_info!(
+            "rpc_pubsub_connections",
+            ("count", Arc::strong_count(&self.0) - 2, i64)
+        );
     }
 }
 
