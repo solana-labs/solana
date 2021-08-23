@@ -2489,7 +2489,7 @@ impl AccountsDb {
         &self,
         shrink_slots: &ShrinkCandidates,
         shrink_ratio: f64,
-    ) -> (ShrinkCandidates, Option<ShrinkCandidates>) {
+    ) -> (ShrinkCandidates, ShrinkCandidates) {
         struct StoreUsageInfo {
             slot: Slot,
             alive_ratio: f64,
@@ -2527,6 +2527,8 @@ impl AccountsDb {
         for usage in &store_usage {
             let store = &usage.store;
             let alive_ratio = (total_alive_bytes as f64) / (total_bytes as f64);
+            debug!("alive_ratio: {:?} store_id: {:?}, store_ratio: {:?} requirment: {:?}, total_bytes: {:?} total_alive_bytes: {:?}",
+                alive_ratio, usage.store.append_vec_id(), usage.alive_ratio, shrink_ratio, total_bytes, total_alive_bytes);
             if alive_ratio > shrink_ratio {
                 // we have reached our goal, stop
                 debug!(
@@ -2541,7 +2543,7 @@ impl AccountsDb {
                         .insert(store.append_vec_id(), store.clone());
                 } else {
                     break;
-		}
+                }
             } else {
                 let current_store_size = store.total_bytes();
                 let after_shrink_size = Self::page_align(store.alive_bytes() as u64);
@@ -2559,7 +2561,7 @@ impl AccountsDb {
             measure.as_ms() as usize
         );
         inc_new_counter_info!("select_top_sparse_storage_entries-seeds", candidates_count);
-        (shrink_slots, Some(shrink_slots_next_batch))
+        (shrink_slots, shrink_slots_next_batch)
     }
 
     pub fn shrink_candidate_slots(&self) -> usize {
@@ -2567,7 +2569,9 @@ impl AccountsDb {
             std::mem::take(&mut *self.shrink_candidate_slots.lock().unwrap());
         let (shrink_slots, shrink_slots_next_batch) = {
             if let AccountShrinkThreshold::TotalSpace { shrink_ratio } = self.shrink_ratio {
-                self.select_candidates_by_total_usage(&shrink_candidates_slots, shrink_ratio)
+                let (shrink_slots, shrink_slots_next_batch) =
+                    self.select_candidates_by_total_usage(&shrink_candidates_slots, shrink_ratio);
+                (shrink_slots, Some(shrink_slots_next_batch))
             } else {
                 (shrink_candidates_slots, None)
             }
@@ -2589,12 +2593,8 @@ impl AccountsDb {
             measure_shrink_all_candidates.as_ms() as usize
         );
         inc_new_counter_info!("shrink_all_candidate_slots-count", shrink_candidates_count);
-        if let AccountShrinkThreshold::TotalSpace {
-            shrink_ratio: _shrink_ratio,
-        } = self.shrink_ratio
-        {
+        if let Some(shrink_slots_next_batch) = shrink_slots_next_batch {
             let mut shrink_slots = self.shrink_candidate_slots.lock().unwrap();
-            let shrink_slots_next_batch = shrink_slots_next_batch.unwrap();
             for (slot, stores) in shrink_slots_next_batch {
                 shrink_slots.entry(slot).or_default().extend(stores);
             }
@@ -9943,10 +9943,11 @@ pub mod tests {
         let accounts = AccountsDb::new_single_for_tests();
 
         let mut candidates: ShrinkCandidates = HashMap::new();
-        let output_candidates =
+        let (output_candidates, next_candidates) =
             accounts.select_candidates_by_total_usage(&candidates, DEFAULT_ACCOUNTS_SHRINK_RATIO);
 
         assert_eq!(0, output_candidates.len());
+        assert_eq!(0, next_candidates.len());
 
         // case 2: two candidates, only one selected
         let dummy_path = Path::new("");
@@ -9957,7 +9958,7 @@ pub mod tests {
         let entry1 = Arc::new(AccountStorageEntry::new(
             dummy_path, dummy_slot, dummy_id1, dummy_size,
         ));
-        entry1.alive_bytes.store(8000, Ordering::Relaxed);
+        entry1.alive_bytes.store(0, Ordering::Relaxed);
 
         candidates
             .entry(dummy_slot)
@@ -9968,17 +9969,35 @@ pub mod tests {
         let entry2 = Arc::new(AccountStorageEntry::new(
             dummy_path, dummy_slot, dummy_id2, dummy_size,
         ));
-        entry2.alive_bytes.store(3000, Ordering::Relaxed);
+        entry2.alive_bytes.store(0, Ordering::Relaxed);
         candidates
             .entry(dummy_slot)
             .or_default()
             .insert(entry2.append_vec_id(), entry2.clone());
 
-        let output_candidates =
-            accounts.select_candidates_by_total_usage(&candidates, DEFAULT_ACCOUNTS_SHRINK_RATIO);
+        let dummy_id3 = 55;
+        let entry3 = Arc::new(AccountStorageEntry::new(
+            dummy_path, dummy_slot, dummy_id3, dummy_size,
+        ));
+        entry3.alive_bytes.store(1000, Ordering::Relaxed);
+        candidates
+            .entry(dummy_slot)
+            .or_default()
+            .insert(entry3.append_vec_id(), entry3.clone());
+
+        let (output_candidates, next_candidates) =
+            accounts.select_candidates_by_total_usage(&candidates, 0.17);
         assert_eq!(1, output_candidates.len());
         assert_eq!(1, output_candidates[&dummy_slot].len());
-        assert!(output_candidates[&dummy_slot].contains(&entry2.append_vec_id()));
+        assert!(
+            output_candidates[&dummy_slot].contains(&entry1.append_vec_id())
+                || output_candidates[&dummy_slot].contains(&entry2.append_vec_id())
+        );
+        assert_eq!(1, next_candidates.len());
+        assert!(
+            next_candidates[&dummy_slot].contains(&entry1.append_vec_id())
+                || next_candidates[&dummy_slot].contains(&entry2.append_vec_id())
+        );
 
         // case 3: two candidates, both are selected
         candidates.clear();
@@ -10009,7 +10028,7 @@ pub mod tests {
             .or_default()
             .insert(entry2.append_vec_id(), entry2.clone());
 
-        let output_candidates =
+        let (output_candidates, next_candidates) =
             accounts.select_candidates_by_total_usage(&candidates, DEFAULT_ACCOUNTS_SHRINK_RATIO);
         assert_eq!(2, output_candidates.len());
         assert_eq!(1, output_candidates[&dummy_slot].len());
@@ -10017,6 +10036,7 @@ pub mod tests {
 
         assert!(output_candidates[&dummy_slot].contains(&entry1.append_vec_id()));
         assert!(output_candidates[&dummy_slot2].contains(&entry2.append_vec_id()));
+        assert_eq!(0, next_candidates.len());
     }
 
     #[test]
