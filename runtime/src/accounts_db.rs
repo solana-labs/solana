@@ -2488,7 +2488,7 @@ impl AccountsDb {
         &self,
         shrink_slots: &ShrinkCandidates,
         shrink_ratio: f64,
-    ) -> ShrinkCandidates {
+    ) -> (ShrinkCandidates, Option<ShrinkCandidates>) {
         struct StoreUsageInfo {
             slot: Slot,
             alive_ratio: f64,
@@ -2522,7 +2522,9 @@ impl AccountsDb {
         // Working from the beginning of store_usage which are the most sparse and see when we can stop
         // shrinking while still achieving the overall goals.
         let mut shrink_slots: ShrinkCandidates = HashMap::new();
+        let mut shrink_slots_next_batch: ShrinkCandidates = HashMap::new();
         for usage in &store_usage {
+            let store = &usage.store;
             let alive_ratio = (total_alive_bytes as f64) / (total_bytes as f64);
             if alive_ratio > shrink_ratio {
                 // we have reached our goal, stop
@@ -2531,17 +2533,24 @@ impl AccountsDb {
                     total_bytes: {:?}, alive_ratio: {:}, shrink_ratio: {:?}",
                     usage.slot, total_alive_bytes, total_bytes, alive_ratio, shrink_ratio
                 );
-                break;
+                if usage.alive_ratio < shrink_ratio {
+                    shrink_slots_next_batch
+                        .entry(usage.slot)
+                        .or_default()
+                        .insert(store.append_vec_id(), store.clone());
+                } else {
+                    break;
+		}
+            } else {
+                let current_store_size = store.total_bytes();
+                let after_shrink_size = Self::page_align(store.alive_bytes() as u64);
+                let bytes_saved = current_store_size.saturating_sub(after_shrink_size);
+                total_bytes -= bytes_saved;
+                shrink_slots
+                    .entry(usage.slot)
+                    .or_default()
+                    .insert(store.append_vec_id(), store.clone());
             }
-            let store = &usage.store;
-            let current_store_size = store.total_bytes();
-            let after_shrink_size = Self::page_align(store.alive_bytes() as u64);
-            let bytes_saved = current_store_size.saturating_sub(after_shrink_size);
-            total_bytes -= bytes_saved;
-            shrink_slots
-                .entry(usage.slot)
-                .or_default()
-                .insert(store.append_vec_id(), store.clone());
         }
         measure.stop();
         inc_new_counter_info!(
@@ -2549,17 +2558,17 @@ impl AccountsDb {
             measure.as_ms() as usize
         );
         inc_new_counter_info!("select_top_sparse_storage_entries-seeds", candidates_count);
-        shrink_slots
+        (shrink_slots, Some(shrink_slots_next_batch))
     }
 
     pub fn shrink_candidate_slots(&self) -> usize {
         let shrink_candidates_slots =
             std::mem::take(&mut *self.shrink_candidate_slots.lock().unwrap());
-        let shrink_slots = {
+        let (shrink_slots, shrink_slots_next_batch) = {
             if let AccountShrinkThreshold::TotalSpace { shrink_ratio } = self.shrink_ratio {
                 self.select_candidates_by_total_usage(&shrink_candidates_slots, shrink_ratio)
             } else {
-                shrink_candidates_slots
+                (shrink_candidates_slots, None)
             }
         };
 
@@ -2579,6 +2588,16 @@ impl AccountsDb {
             measure_shrink_all_candidates.as_ms() as usize
         );
         inc_new_counter_info!("shrink_all_candidate_slots-count", shrink_candidates_count);
+        if let AccountShrinkThreshold::TotalSpace {
+            shrink_ratio: _shrink_ratio,
+        } = self.shrink_ratio
+        {
+            let mut shrink_slots = self.shrink_candidate_slots.lock().unwrap();
+            let shrink_slots_next_batch = shrink_slots_next_batch.unwrap();
+            for (slot, stores) in shrink_slots_next_batch {
+                shrink_slots.entry(slot).or_default().extend(stores);
+            }
+        }
         num_candidates
     }
 
