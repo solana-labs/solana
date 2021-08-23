@@ -472,7 +472,7 @@ where
         now - packets.first().unwrap().timer.get_incoming_start().unwrap();
     stats.elapsed_last_recv_to_start +=
         now - packets.last().unwrap().timer.get_incoming_end().unwrap();
-    stats
+/*    stats
         .batch_span_us_hist
         .increment(
             (packets.last().unwrap().timer.get_incoming_end().unwrap()
@@ -480,7 +480,7 @@ where
             .as_micros() as u64,
         )
         .unwrap();
-/*    stats
+    stats
         .batch_first_recv_us_hist
         .increment(
             (now - packets.first().unwrap().timer.get_incoming_start().unwrap()).as_micros() as u64,
