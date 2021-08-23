@@ -148,6 +148,11 @@ impl LocalCluster {
                 .iter()
                 .zip(&config.node_stakes)
                 .filter_map(|((node_keypair, in_genesis), stake)| {
+                    info!(
+                        "STARTING LOCAL CLUSTER: key {} has {} stake",
+                        node_keypair.pubkey(),
+                        stake
+                    );
                     if *in_genesis {
                         Some((
                             ValidatorVoteKeypairs {
