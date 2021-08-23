@@ -480,12 +480,12 @@ where
             .as_micros() as u64,
         )
         .unwrap();
-    stats
+/*    stats
         .batch_first_recv_us_hist
         .increment(
             (now - packets.first().unwrap().timer.get_incoming_start().unwrap()).as_micros() as u64,
         )
-        .unwrap();
+        .unwrap();*/
 
     Ok(())
 }
