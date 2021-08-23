@@ -16,7 +16,7 @@ pub struct PacketTimer {
     incoming_initial_end: Option<Instant>,
     incoming_end: Option<Instant>,
     outgoing_start: Option<Instant>,
-    num_coalesced: u32,
+    num_coalesced: usize,
 }
 
 impl PacketTimer {
@@ -44,6 +44,18 @@ impl PacketTimer {
         debug_assert!(self.incoming_end.unwrap() < newer.incoming_end.unwrap());
         self.incoming_end = newer.incoming_end;
         self.num_coalesced = self.num_coalesced.saturating_add(1);
+    }
+
+    pub fn get_incoming_start(&self) -> Option<Instant> {
+        self.incoming_start
+    }
+
+    pub fn get_incoming_end(&self) -> Option<Instant> {
+        self.incoming_end
+    }
+
+    pub fn get_num_coalesced(&self) -> usize {
+        self.num_coalesced
     }
 }
 
