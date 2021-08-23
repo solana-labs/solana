@@ -81,7 +81,7 @@ struct ReceiveWindowStats {
     slots: HashMap<Slot, /*num shreds:*/ usize>,
     addrs: HashMap</*source:*/ SocketAddr, /*num packets:*/ usize>,
     since: Option<Instant>,
-    num_packet_batches: usize, // Packets structures
+    num_packet_batches: usize,    // Packets structures
     num_coalesced_batches: usize, // Packets structures coalesced before this stage
     elapsed_first_recv_to_start: Duration,
     elapsed_last_recv_to_start: Duration,
@@ -103,8 +103,16 @@ impl ReceiveWindowStats {
             ("num_shreds", self.num_shreds, i64),
             ("num_repairs", self.num_repairs, i64),
             ("elapsed_micros", self.elapsed.as_micros(), i64),
-            ("elapsed_first_recv_to_start_micros", self.elapsed_first_recv_to_start.as_micros(), i64),
-            ("elapsed_last_recv_to_start_micros", self.elapsed_last_recv_to_start.as_micros(), i64),
+            (
+                "elapsed_first_recv_to_start_micros",
+                self.elapsed_first_recv_to_start.as_micros(),
+                i64
+            ),
+            (
+                "elapsed_last_recv_to_start_micros",
+                self.elapsed_last_recv_to_start.as_micros(),
+                i64
+            ),
         );
         for (slot, num_shreds) in &self.slots {
             datapoint_info!(
@@ -388,12 +396,17 @@ where
         *stats.addrs.entry(packet.meta.addr()).or_default() += 1;
     }
 
-    let coalesced_batches: usize = packets.iter().map(|pkts| pkts.timer.get_num_coalesced()).sum();
+    let coalesced_batches: usize = packets
+        .iter()
+        .map(|pkts| pkts.timer.get_num_coalesced())
+        .sum();
     stats.elapsed += now.elapsed();
     stats.num_packet_batches += packets.len();
     stats.num_coalesced_batches += coalesced_batches;
-    stats.elapsed_first_recv_to_start += now - packets.first().unwrap().timer.get_incoming_start().unwrap();
-    stats.elapsed_last_recv_to_start += now - packets.last().unwrap().timer.get_incoming_end().unwrap();
+    stats.elapsed_first_recv_to_start +=
+        now - packets.first().unwrap().timer.get_incoming_start().unwrap();
+    stats.elapsed_last_recv_to_start +=
+        now - packets.last().unwrap().timer.get_incoming_end().unwrap();
 
     Ok(())
 }
