@@ -1944,6 +1944,7 @@ impl AccountsDb {
                     .map(|store_removed| store_removed.contains(&account_info.offset))
                     .unwrap_or(false);
                 if was_reclaimed {
+                    *ref_count -= 1; // since we aren't including this account info, we also have to decrement the expected refcount so the list len matches the expected ref count
                     return false;
                 }
                 if let Some(store_count) = store_counts.get_mut(&account_info.store_id) {
