@@ -117,62 +117,62 @@ impl ReceiveWindowStats {
             ),
             (
                 "batch_span_us_50pct",
-                self.batch_span_us_hist.percentile(50.0).unwrap(),
+                self.batch_span_us_hist.percentile(50.0).unwrap_or(0),
                 i64
             ),
             (
                 "batch_span_us_90pct",
-                self.batch_span_us_hist.percentile(90.0).unwrap(),
+                self.batch_span_us_hist.percentile(90.0).unwrap_or(0),
                 i64
             ),
             (
                 "batch_span_us_99pct",
-                self.batch_span_us_hist.percentile(99.0).unwrap(),
+                self.batch_span_us_hist.percentile(99.0).unwrap_or(0),
                 i64
             ),
             (
                 "batch_span_us_min",
-                self.batch_span_us_hist.minimum().unwrap(),
+                self.batch_span_us_hist.minimum().unwrap_or(0),
                 i64
             ),
             (
                 "batch_span_us_max",
-                self.batch_span_us_hist.maximum().unwrap(),
+                self.batch_span_us_hist.maximum().unwrap_or(0),
                 i64
             ),
             (
                 "batch_span_us_stddev",
-                self.batch_span_us_hist.stddev().unwrap(),
+                self.batch_span_us_hist.stddev().unwrap_or(0),
                 i64
             ),
             (
                 "batch_first_recv_us_50pct",
-                self.batch_first_recv_us_hist.percentile(50.0).unwrap(),
+                self.batch_first_recv_us_hist.percentile(50.0).unwrap_or(0),
                 i64
             ),
             (
                 "batch_first_recv_us_90pct",
-                self.batch_first_recv_us_hist.percentile(90.0).unwrap(),
+                self.batch_first_recv_us_hist.percentile(90.0).unwrap_or(0),
                 i64
             ),
             (
                 "batch_first_recv_us_99pct",
-                self.batch_first_recv_us_hist.percentile(99.0).unwrap(),
+                self.batch_first_recv_us_hist.percentile(99.0).unwrap_or(0),
                 i64
             ),
             (
                 "batch_first_recv_us_min",
-                self.batch_first_recv_us_hist.minimum().unwrap(),
+                self.batch_first_recv_us_hist.minimum().unwrap_or(0),
                 i64
             ),
             (
                 "batch_first_recv_us_max",
-                self.batch_first_recv_us_hist.maximum().unwrap(),
+                self.batch_first_recv_us_hist.maximum().unwrap_or(0),
                 i64
             ),
             (
                 "batch_first_recv_us_stddev",
-                self.batch_first_recv_us_hist.stddev().unwrap(),
+                self.batch_first_recv_us_hist.stddev().unwrap_or(0),
                 i64
             ),
         );
