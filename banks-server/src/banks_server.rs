@@ -167,6 +167,7 @@ impl Banks for BanksServer {
             serialize(&transaction).unwrap(),
             last_valid_block_height,
             None,
+            None,
         );
         self.transaction_sender.send(info).unwrap();
     }
@@ -256,6 +257,7 @@ impl Banks for BanksServer {
             signature,
             serialize(&transaction).unwrap(),
             last_valid_block_height,
+            None,
             None,
         );
         self.transaction_sender.send(info).unwrap();
