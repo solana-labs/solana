@@ -81,7 +81,7 @@ struct ReceiveWindowStats {
     slots: HashMap<Slot, /*num shreds:*/ usize>,
     addrs: HashMap</*source:*/ SocketAddr, /*num packets:*/ usize>,
     since: Option<Instant>,
-    num_packet_batches: usize, // Packets structures
+    num_packet_batches: usize,    // Packets structures
     num_coalesced_batches: usize, // Packets structures coalesced before this stage
     elapsed_first_recv_to_start: Duration,
     elapsed_last_recv_to_start: Duration,
@@ -402,7 +402,10 @@ where
         *stats.addrs.entry(packet.meta.addr()).or_default() += 1;
     }
 
-    let coalesced_batches: usize = packets.iter().map(|pkts| pkts.timer.get_num_coalesced()).sum();
+    let coalesced_batches: usize = packets
+        .iter()
+        .map(|pkts| pkts.timer.get_num_coalesced())
+        .sum();
     stats.elapsed += now.elapsed();
     stats.num_packet_batches += packets.len();
     stats.num_coalesced_batches += coalesced_batches;
