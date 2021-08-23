@@ -473,26 +473,24 @@ where
     stats.elapsed_last_recv_to_start +=
         now - packets.last().unwrap().timer.get_incoming_end().unwrap();
 
-    let last_time = packets.last().unwrap().timer.get_incoming_end().unwrap();
-    let first_time = packets.first().unwrap().timer.get_incoming_start().unwrap();
-    if first_time > last_time {
-        error!("first:{:?} last:{:?}", first_time, last_time);
-    }
-
-/*    stats
+    let first_time = packets
+        .iter()
+        .map(|pkts| pkts.timer.get_incoming_start().unwrap())
+        .min()
+        .unwrap();
+    let last_time = packets
+        .iter()
+        .map(|pkts| pkts.timer.get_incoming_end().unwrap())
+        .max()
+        .unwrap();
+    stats
         .batch_span_us_hist
-        .increment(
-            (packets.last().unwrap().timer.get_incoming_end().unwrap()
-                - packets.first().unwrap().timer.get_incoming_start().unwrap())
-            .as_micros() as u64,
-        )
+        .increment((last_time - first_time).as_micros() as u64)
         .unwrap();
     stats
         .batch_first_recv_us_hist
-        .increment(
-            (now - packets.first().unwrap().timer.get_incoming_start().unwrap()).as_micros() as u64,
-        )
-        .unwrap();*/
+        .increment((now - first_time).as_micros() as u64)
+        .unwrap();
 
     Ok(())
 }
