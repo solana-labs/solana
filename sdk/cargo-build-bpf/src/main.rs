@@ -587,10 +587,10 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
         check_undefined_symbols(config, &program_so);
 
         println!();
-        println!("Deploying this program will use the following generated keypair by default for the program's address:");
-        println!("  {}", program_keypair.display());
         println!("To deploy this program:");
         println!("  $ solana program deploy {}", program_so.display());
+        println!("The program address will default to this keypair (override with --program-id):");
+        println!("  {}", program_keypair.display());
     } else if config.dump {
         println!("Note: --dump is only available for crates with a cdylib target");
     }

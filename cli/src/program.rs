@@ -333,29 +333,31 @@ impl ProgramSubCommands for App<'_, '_> {
                 )
                 .subcommand(
                     SubCommand::with_name("close")
-                        .about("Close an account and withdraw all lamports")
+                        .about("Close a program or buffer account and withdraw all lamports")
                         .arg(
                             Arg::with_name("account")
                                 .index(1)
-                                .value_name("BUFFER_ACCOUNT_ADDRESS")
+                                .value_name("ACCOUNT_ADDRESS")
                                 .takes_value(true)
-                                .help("Address of the buffer account to close"),
+                                .help("Address of the program or buffer account to close"),
                         )
                         .arg(
                             Arg::with_name("buffers")
                                 .long("buffers")
                                 .conflicts_with("account")
                                 .required_unless("account")
-                                .help("Close every buffer accounts that match the authority")
+                                .help("Close all buffer accounts that match the authority")
                         )
                         .arg(
-                            Arg::with_name("buffer_authority")
-                                .long("buffer-authority")
+                            Arg::with_name("authority")
+                                .long("authority")
+                                .alias("buffer-authority")
                                 .value_name("AUTHORITY_SIGNER")
                                 .takes_value(true)
                                 .validator(is_valid_signer)
-                                .help("Authority [default: the default configured keypair]")
+                                .help("Upgrade or buffer authority [default: the default configured keypair]")
                         )
+
                         .arg(
                             pubkey!(Arg::with_name("recipient_account")
                                 .long("recipient")
@@ -626,7 +628,7 @@ pub fn parse_program_subcommand(
             };
 
             let (authority_signer, authority_pubkey) =
-                signer_of(matches, "buffer_authority", wallet_manager)?;
+                signer_of(matches, "authority", wallet_manager)?;
 
             let signer_info = default_signer.generate_unique_signers(
                 vec![
@@ -861,14 +863,14 @@ fn process_program_deploy(
                 } else {
                     return Err(format!(
                         "Program {} has been closed, use a new Program Id",
-                        programdata_address
+                        program_pubkey
                     )
                     .into());
                 }
             } else {
                 return Err(format!(
                     "Program {} has been closed, use a new Program Id",
-                    programdata_address
+                    program_pubkey
                 )
                 .into());
             }
@@ -1328,14 +1330,16 @@ fn close(
     account_pubkey: &Pubkey,
     recipient_pubkey: &Pubkey,
     authority_signer: &dyn Signer,
+    program_pubkey: Option<&Pubkey>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let blockhash = rpc_client.get_latest_blockhash()?;
 
     let mut tx = Transaction::new_unsigned(Message::new(
-        &[bpf_loader_upgradeable::close(
+        &[bpf_loader_upgradeable::close_any(
             account_pubkey,
             recipient_pubkey,
-            &authority_signer.pubkey(),
+            Some(&authority_signer.pubkey()),
+            program_pubkey,
         )],
         Some(&config.signers[0].pubkey()),
     ));
@@ -1396,6 +1400,7 @@ fn process_close(
                             &account_pubkey,
                             &recipient_pubkey,
                             authority_signer,
+                            None,
                         )?;
 
                         buffers.push(CliUpgradeableBuffer {
@@ -1435,6 +1440,7 @@ fn process_close(
                                     &programdata_pubkey,
                                     &recipient_pubkey,
                                     authority_signer,
+                                    Some(&account_pubkey),
                                 )?;
                                 return Ok(config.output_format.formatted_string(
                                     &CliUpgradeableProgramClosed {
@@ -1472,6 +1478,7 @@ fn process_close(
                 address,
                 &recipient_pubkey,
                 authority_signer,
+                None,
             )
             .is_ok()
             {
