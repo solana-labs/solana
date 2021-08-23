@@ -799,14 +799,7 @@ mod tests {
                         "did not find bank snapshot with this path",
                     )
                 })?;
-        let storages = {
-            let mut storages = bank.get_snapshot_storages(Some(incremental_snapshot_base_slot));
-            snapshot_utils::filter_snapshot_storages_for_incremental_snapshot(
-                &mut storages,
-                incremental_snapshot_base_slot,
-            );
-            storages
-        };
+        let storages = bank.get_snapshot_storages(Some(incremental_snapshot_base_slot));
         snapshot_utils::package_process_and_archive_incremental_snapshot(
             bank,
             incremental_snapshot_base_slot,
