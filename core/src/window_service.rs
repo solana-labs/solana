@@ -85,6 +85,8 @@ struct ReceiveWindowStats {
     num_coalesced_batches: usize, // Packets structures coalesced before this stage
     elapsed_first_recv_to_start: Duration,
     elapsed_last_recv_to_start: Duration,
+    batch_span_us_hist: histogram::Histogram,
+    batch_first_recv_us_hist: histogram::Histogram,
 }
 
 impl ReceiveWindowStats {
@@ -105,6 +107,18 @@ impl ReceiveWindowStats {
             ("elapsed_micros", self.elapsed.as_micros(), i64),
             ("elapsed_first_recv_to_start_micros", self.elapsed_first_recv_to_start.as_micros(), i64),
             ("elapsed_last_recv_to_start_micros", self.elapsed_last_recv_to_start.as_micros(), i64),
+            ("batch_span_us_50pct", self.batch_span_us_hist.percentile(50.0).unwrap(), i64),
+            ("batch_span_us_90pct", self.batch_span_us_hist.percentile(90.0).unwrap(), i64),
+            ("batch_span_us_99pct", self.batch_span_us_hist.percentile(99.0).unwrap(), i64),
+            ("batch_span_us_min", self.batch_span_us_hist.minimum().unwrap(), i64),
+            ("batch_span_us_max", self.batch_span_us_hist.maximum().unwrap(), i64),
+            ("batch_span_us_stddev", self.batch_span_us_hist.stddev().unwrap(), i64),
+            ("batch_first_recv_us_50pct", self.batch_first_recv_us_hist.percentile(50.0).unwrap(), i64),
+            ("batch_first_recv_us_90pct", self.batch_first_recv_us_hist.percentile(90.0).unwrap(), i64),
+            ("batch_first_recv_us_99pct", self.batch_first_recv_us_hist.percentile(99.0).unwrap(), i64),
+            ("batch_first_recv_us_min", self.batch_first_recv_us_hist.minimum().unwrap(), i64),
+            ("batch_first_recv_us_max", self.batch_first_recv_us_hist.maximum().unwrap(), i64),
+            ("batch_first_recv_us_stddev", self.batch_first_recv_us_hist.stddev().unwrap(), i64),
         );
         for (slot, num_shreds) in &self.slots {
             datapoint_info!(
@@ -394,6 +408,8 @@ where
     stats.num_coalesced_batches += coalesced_batches;
     stats.elapsed_first_recv_to_start += now - packets.first().unwrap().timer.get_incoming_start().unwrap();
     stats.elapsed_last_recv_to_start += now - packets.last().unwrap().timer.get_incoming_end().unwrap();
+    stats.batch_span_us_hist.increment((packets.last().unwrap().timer.get_incoming_end().unwrap() - packets.first().unwrap().timer.get_incoming_start().unwrap()).as_micros());
+    stats.batch_first_recv_us_hist.increment((now - packets.first().unwrap().timer.get_incoming_start()).as_micros());
 
     Ok(())
 }
