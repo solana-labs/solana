@@ -60,7 +60,7 @@ use rayon::{
 use serde::{Deserialize, Serialize};
 use solana_entry::entry::{create_ticks, Entry};
 use solana_measure::measure::Measure;
-use solana_perf::packet::{limited_deserialize, Packet};
+use solana_perf::packet::{limited_deserialize, Packet, PacketTimer};
 use solana_rayon_threadlimit::get_thread_count;
 use solana_runtime::bank::Bank;
 use solana_sdk::{
@@ -72,7 +72,10 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{Keypair, Signature, Signer},
 };
-use std::mem::size_of;
+use std::{
+    mem::size_of,
+    sync::mpsc::{Receiver, Sender},
+};
 use thiserror::Error;
 
 #[derive(Default, Clone)]
@@ -210,6 +213,15 @@ pub struct Shred {
     pub coding_header: CodingShredHeader,
     pub payload: Vec<u8>,
 }
+
+#[derive(Debug, Default, Clone)]
+pub struct Shreds {
+    pub shreds: Vec<Shred>,
+    pub timer: PacketTimer,
+}
+
+pub type ShredReceiver = Receiver<Shreds>;
+pub type ShredSender = Sender<Shreds>;
 
 impl Shred {
     fn deserialize_obj<'de, T>(index: &mut usize, size: usize, buf: &'de [u8]) -> bincode::Result<T>

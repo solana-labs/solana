@@ -23,7 +23,7 @@ use solana_ledger::{
     blockstore::{create_new_ledger, Blockstore, PurgeType},
     blockstore_db::{self, AccessType, BlockstoreRecoveryMode, Column, Database},
     blockstore_processor::ProcessOptions,
-    shred::Shred,
+    shred::{Shred, Shreds},
 };
 use solana_runtime::{
     accounts_index::AccountsIndexConfig,
@@ -1588,7 +1588,9 @@ fn main() {
                 if slot > ending_slot {
                     break;
                 }
-                if let Ok(shreds) = source.get_data_shreds_for_slot(slot, 0) {
+                if let Ok(shred_vec) = source.get_data_shreds_for_slot(slot, 0) {
+                    let mut shreds = Shreds::default();
+                    shreds.shreds = shred_vec;
                     if target.insert_shreds(shreds, None, true).is_err() {
                         warn!("error inserting shreds for slot {}", slot);
                     }

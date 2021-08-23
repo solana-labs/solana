@@ -3,7 +3,7 @@ use {
     crate::cluster_nodes::ClusterNodesCache,
     itertools::Itertools,
     solana_entry::entry::Entry,
-    solana_ledger::shred::Shredder,
+    solana_ledger::shred::{Shredder, Shreds},
     solana_runtime::blockhash_queue::BlockhashQueue,
     solana_sdk::{
         hash::Hash,
@@ -321,8 +321,12 @@ impl BroadcastRun for BroadcastDuplicatesRun {
         blockstore: &Arc<Blockstore>,
     ) -> Result<()> {
         let (all_shreds, _) = receiver.lock().unwrap().recv()?;
+        let mut shreds = Shreds::default();
+        shreds.shreds = all_shreds.to_vec();
+        // TODO mark timer origin
+        shreds.timer.mark_outgoing_start();
         blockstore
-            .insert_shreds(all_shreds.to_vec(), None, true)
+            .insert_shreds(shreds, None, true)
             .expect("Failed to insert shreds in blockstore");
         Ok(())
     }

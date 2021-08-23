@@ -1,6 +1,6 @@
 use super::*;
 use solana_entry::entry::Entry;
-use solana_ledger::shred::Shredder;
+use solana_ledger::shred::{Shredder, Shreds};
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::Keypair;
 
@@ -130,7 +130,11 @@ impl BroadcastRun for BroadcastFakeShredsRun {
         blockstore: &Arc<Blockstore>,
     ) -> Result<()> {
         for (data_shreds, _) in receiver.lock().unwrap().iter() {
-            blockstore.insert_shreds(data_shreds.to_vec(), None, true)?;
+            let mut shreds = Shreds::default();
+            shreds.shreds = data_shreds.to_vec();
+            // TODO mark timer origin
+            shreds.timer.mark_outgoing_start();
+            blockstore.insert_shreds(shreds, None, true)?;
         }
         Ok(())
     }

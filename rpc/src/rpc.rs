@@ -36,7 +36,7 @@ use {
     solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
     solana_ledger::{
         blockstore::Blockstore, blockstore_db::BlockstoreError, get_tmp_ledger_path,
-        leader_schedule_cache::LeaderScheduleCache,
+        leader_schedule_cache::LeaderScheduleCache, shred::Shreds,
     },
     solana_metrics::inc_new_counter_info,
     solana_perf::packet::PACKET_DATA_SIZE,
@@ -4132,13 +4132,16 @@ pub fn create_test_transactions_and_populate_blockstore(
     let entry_3 = solana_entry::entry::next_entry(&entry_2.hash, 1, vec![fail_tx]);
     let entries = vec![entry_1, entry_2, entry_3];
 
-    let shreds = solana_ledger::blockstore::entries_to_test_shreds(
+    let mut shreds = Shreds::default();
+    shreds.shreds = solana_ledger::blockstore::entries_to_test_shreds(
         entries.clone(),
         slot,
         previous_slot,
         true,
         0,
     );
+    // TODO mark timer outgoing origin
+    shreds.timer.mark_outgoing_start();
     blockstore.insert_shreds(shreds, None, false).unwrap();
     blockstore.set_roots(std::iter::once(&slot)).unwrap();
 

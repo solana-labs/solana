@@ -37,6 +37,7 @@ use {
         blockstore_processor::{self, TransactionStatusSender},
         leader_schedule::FixedSchedule,
         leader_schedule_cache::LeaderScheduleCache,
+        shred::Shreds,
     },
     solana_measure::measure::Measure,
     solana_metrics::datapoint_info,
@@ -1302,7 +1303,11 @@ fn backup_and_clear_blockstore(ledger_path: &Path, start_slot: Slot, shred_versi
             if let Ok(shreds) = blockstore.get_data_shreds_for_slot(slot, 0) {
                 if let Ok(ref backup_blockstore) = backup_blockstore {
                     copied += shreds.len();
-                    let _ = backup_blockstore.insert_shreds(shreds, None, true);
+                    let mut insert_shreds = Shreds::default();
+                    insert_shreds.shreds = shreds;
+                    // TODO mark timer origin
+                    insert_shreds.timer.mark_outgoing_start();
+                    let _ = backup_blockstore.insert_shreds(insert_shreds, None, true);
                 }
             }
             if last_print.elapsed().as_millis() > 3000 {

@@ -10,7 +10,7 @@ use {
     },
     solana_entry::entry::Entry,
     solana_ledger::shred::{
-        ProcessShredsStats, Shred, Shredder, MAX_DATA_SHREDS_PER_FEC_BLOCK,
+        ProcessShredsStats, Shred, Shredder, Shreds, MAX_DATA_SHREDS_PER_FEC_BLOCK,
         SHRED_TICK_REFERENCE_MASK,
     },
     solana_sdk::{
@@ -224,7 +224,10 @@ impl StandardBroadcastRun {
         // Insert the first shred so blockstore stores that the leader started this block
         // This must be done before the blocks are sent out over the wire.
         if !data_shreds.is_empty() && data_shreds[0].index() == 0 {
-            let first = vec![data_shreds[0].clone()];
+            let mut first = Shreds::default();
+            first.shreds = vec![data_shreds[0].clone()];
+            // TODO mark timer origin
+            first.timer.mark_outgoing_start();
             blockstore
                 .insert_shreds(first, None, true)
                 .expect("Failed to insert shreds in blockstore");
@@ -315,13 +318,17 @@ impl StandardBroadcastRun {
         // Insert shreds into blockstore
         let insert_shreds_start = Instant::now();
         // The first shred is inserted synchronously
-        let data_shreds = if !shreds.is_empty() && shreds[0].index() == 0 {
+        let mut insert_shreds = Shreds::default();
+        insert_shreds.shreds = if !shreds.is_empty() && shreds[0].index() == 0 {
             shreds[1..].to_vec()
         } else {
             shreds.to_vec()
         };
+        // TODO mark timer origin
+        insert_shreds.timer.mark_outgoing_start();
+
         blockstore
-            .insert_shreds(data_shreds, None, true)
+            .insert_shreds(insert_shreds, None, true)
             .expect("Failed to insert shreds in blockstore");
         let insert_shreds_elapsed = insert_shreds_start.elapsed();
         let new_insert_shreds_stats = InsertShredsStats {

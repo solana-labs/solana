@@ -13,7 +13,10 @@ use {
         erasure::ErasureConfig,
         leader_schedule_cache::LeaderScheduleCache,
         next_slots_iterator::NextSlotsIterator,
-        shred::{Result as ShredResult, Shred, Shredder, MAX_DATA_SHREDS_PER_FEC_BLOCK},
+        shred::{
+            Result as ShredResult, Shred, ShredSender, Shredder, Shreds,
+            MAX_DATA_SHREDS_PER_FEC_BLOCK,
+        },
     },
     bincode::deserialize,
     log::*,
@@ -54,7 +57,7 @@ use {
         rc::Rc,
         sync::{
             atomic::{AtomicBool, Ordering},
-            mpsc::{sync_channel, Receiver, Sender, SyncSender, TrySendError},
+            mpsc::{sync_channel, Receiver, SyncSender, TrySendError},
             Arc, Mutex, RwLock, RwLockWriteGuard,
         },
         time::Instant,
@@ -471,13 +474,15 @@ impl Blockstore {
                 if !is_slot_complete {
                     entries.pop().unwrap();
                 }
-                let shreds = entries_to_test_shreds(
+                let mut shreds = Shreds::default();
+                shreds.shreds = entries_to_test_shreds(
                     entries.clone(),
                     slot,
                     parent.unwrap_or(slot),
                     is_slot_complete,
                     0,
                 );
+                shreds.timer.mark_outgoing_start();
                 self.insert_shreds(shreds, None, false).unwrap();
             }
             walk.forward();
@@ -796,18 +801,18 @@ impl Blockstore {
 
     pub fn insert_shreds_handle_duplicate<F>(
         &self,
-        shreds: Vec<Shred>,
+        shreds: Shreds,
         is_repaired: Vec<bool>,
         leader_schedule: Option<&LeaderScheduleCache>,
         is_trusted: bool,
-        retransmit_sender: Option<&Sender<Vec<Shred>>>,
+        retransmit_sender: Option<&ShredSender>,
         handle_duplicate: &F,
         metrics: &mut BlockstoreInsertionMetrics,
     ) -> Result<(Vec<CompletedDataSetInfo>, Vec<usize>)>
     where
         F: Fn(Shred),
     {
-        assert_eq!(shreds.len(), is_repaired.len());
+        assert_eq!(shreds.shreds.len(), is_repaired.len());
         let mut total_start = Measure::start("Total elapsed");
         let mut start = Measure::start("Blockstore lock");
         let _lock = self.insert_shreds_lock.lock().unwrap();
@@ -823,12 +828,12 @@ impl Blockstore {
         let mut slot_meta_working_set = HashMap::new();
         let mut index_working_set = HashMap::new();
 
-        metrics.num_shreds += shreds.len();
+        metrics.num_shreds += shreds.shreds.len();
         let mut start = Measure::start("Shred insertion");
         let mut index_meta_time = 0;
         let mut newly_completed_data_sets: Vec<CompletedDataSetInfo> = vec![];
         let mut inserted_indices = Vec::new();
-        for (i, (shred, is_repaired)) in shreds.into_iter().zip(is_repaired).enumerate() {
+        for (i, (shred, is_repaired)) in shreds.shreds.into_iter().zip(is_repaired).enumerate() {
             if shred.is_data() {
                 let shred_source = if is_repaired {
                     ShredSource::Repaired
@@ -881,6 +886,7 @@ impl Blockstore {
             );
 
             metrics.num_recovered += recovered_data_shreds.len();
+
             let recovered_data_shreds: Vec<_> = recovered_data_shreds
                 .into_iter()
                 .filter_map(|shred| {
@@ -924,7 +930,10 @@ impl Blockstore {
                 .collect();
             if !recovered_data_shreds.is_empty() {
                 if let Some(retransmit_sender) = retransmit_sender {
-                    let _ = retransmit_sender.send(recovered_data_shreds);
+                    let mut recovered_shreds = Shreds::default();
+                    recovered_shreds.shreds = recovered_data_shreds;
+                    recovered_shreds.timer = shreds.timer;
+                    let _ = retransmit_sender.send(recovered_shreds);
                 }
             }
         }
@@ -1013,11 +1022,11 @@ impl Blockstore {
 
     pub fn insert_shreds(
         &self,
-        shreds: Vec<Shred>,
+        shreds: Shreds,
         leader_schedule: Option<&LeaderScheduleCache>,
         is_trusted: bool,
     ) -> Result<(Vec<CompletedDataSetInfo>, Vec<usize>)> {
-        let shreds_len = shreds.len();
+        let shreds_len = shreds.shreds.len();
         self.insert_shreds_handle_duplicate(
             shreds,
             vec![false; shreds_len],
@@ -1707,7 +1716,11 @@ impl Blockstore {
             all_shreds.append(&mut coding_shreds);
         }
         let num_data = all_shreds.iter().filter(|shred| shred.is_data()).count();
-        self.insert_shreds(all_shreds, None, false)?;
+        let mut shreds = Shreds::default();
+        shreds.shreds = all_shreds;
+        // TODO propagate timer from entries
+        shreds.timer.mark_outgoing_start();
+        self.insert_shreds(shreds, None, false)?;
         Ok(num_data)
     }
 
@@ -3682,10 +3695,13 @@ pub fn create_new_ledger(
     let version = solana_sdk::shred_version::version_from_hash(&last_hash);
 
     let shredder = Shredder::new(0, 0, 0, version).unwrap();
-    let shreds = shredder
+    let mut shreds = Shreds::default();
+    shreds.shreds = shredder
         .entries_to_shreds(&Keypair::new(), &entries, true, 0)
         .0;
-    assert!(shreds.last().unwrap().last_in_slot());
+    // TODO mark outgoing processing origin
+    shreds.timer.mark_outgoing_start();
+    assert!(shreds.shreds.last().unwrap().last_in_slot());
 
     blockstore.insert_shreds(shreds, None, false)?;
     blockstore.set_roots(std::iter::once(&0))?;

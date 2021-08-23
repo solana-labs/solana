@@ -19,7 +19,7 @@ use {
     solana_client::rpc_response::SlotUpdate,
     solana_gossip::cluster_info::{ClusterInfo, DATA_PLANE_FANOUT},
     solana_ledger::{
-        shred::Shred,
+        shred::{Shred, ShredReceiver},
         {blockstore::Blockstore, leader_schedule_cache::LeaderScheduleCache},
     },
     solana_measure::measure::Measure,
@@ -39,7 +39,7 @@ use {
         ops::DerefMut,
         sync::{
             atomic::{AtomicBool, AtomicU64, Ordering},
-            mpsc::{self, channel, RecvTimeoutError},
+            mpsc::{channel, RecvTimeoutError},
             Arc, Mutex, RwLock,
         },
         thread::{self, Builder, JoinHandle},
@@ -227,7 +227,7 @@ fn retransmit(
     bank_forks: &RwLock<BankForks>,
     leader_schedule_cache: &LeaderScheduleCache,
     cluster_info: &ClusterInfo,
-    shreds_receiver: &Mutex<mpsc::Receiver<Vec<Shred>>>,
+    shreds_receiver: &Mutex<ShredReceiver>,
     sock: &UdpSocket,
     id: u32,
     stats: &RetransmitStats,
@@ -240,11 +240,14 @@ fn retransmit(
 ) -> Result<()> {
     const RECV_TIMEOUT: Duration = Duration::from_secs(1);
     let shreds_receiver = shreds_receiver.lock().unwrap();
-    let mut shreds = shreds_receiver.recv_timeout(RECV_TIMEOUT)?;
+    let mut shreds_vec = vec![shreds_receiver.recv_timeout(RECV_TIMEOUT)?];
+    let mut num_shreds = shreds_vec[0].shreds.len();
     let mut timer_start = Measure::start("retransmit");
     while let Ok(more_shreds) = shreds_receiver.try_recv() {
-        shreds.extend(more_shreds);
-        if shreds.len() >= MAX_SHREDS_BATCH_SIZE {
+        // TODO coalesce here
+        num_shreds += more_shreds.shreds.len();
+        shreds_vec.push(more_shreds);
+        if num_shreds >= MAX_SHREDS_BATCH_SIZE {
             break;
         }
     }
@@ -261,67 +264,72 @@ fn retransmit(
     maybe_reset_shreds_received_cache(shreds_received, hasher_reset_ts);
     epoch_cache_update.stop();
 
-    let num_shreds = shreds.len();
     let my_id = cluster_info.id();
     let socket_addr_space = cluster_info.socket_addr_space();
     let mut retransmit_total = 0;
     let mut num_shreds_skipped = 0;
     let mut compute_turbine_peers_total = 0;
     let mut max_slot = 0;
-    for shred in shreds {
-        if should_skip_retransmit(&shred, shreds_received) {
-            num_shreds_skipped += 1;
-            continue;
-        }
-        let shred_slot = shred.slot();
-        max_slot = max_slot.max(shred_slot);
 
-        if let Some(rpc_subscriptions) = rpc_subscriptions {
-            if check_if_first_shred_received(shred_slot, first_shreds_received, &root_bank) {
-                rpc_subscriptions.notify_slot_update(SlotUpdate::FirstShredReceived {
-                    slot: shred_slot,
-                    timestamp: timestamp(),
-                });
+    for shreds in shreds_vec {
+        for shred in shreds.shreds {
+            if should_skip_retransmit(&shred, shreds_received) {
+                num_shreds_skipped += 1;
+                continue;
             }
-        }
+            let shred_slot = shred.slot();
+            max_slot = max_slot.max(shred_slot);
 
-        let mut compute_turbine_peers = Measure::start("turbine_start");
-        // TODO: consider using root-bank here for leader lookup!
-        let slot_leader = leader_schedule_cache.slot_leader_at(shred_slot, Some(&working_bank));
-        let cluster_nodes =
-            cluster_nodes_cache.get(shred_slot, &root_bank, &working_bank, cluster_info);
-        let shred_seed = shred.seed(slot_leader, &root_bank);
-        let (neighbors, children) =
-            cluster_nodes.get_retransmit_peers(shred_seed, DATA_PLANE_FANOUT, slot_leader);
-        let anchor_node = neighbors[0].id == my_id;
-        compute_turbine_peers.stop();
-        compute_turbine_peers_total += compute_turbine_peers.as_us();
+            if let Some(rpc_subscriptions) = rpc_subscriptions {
+                if check_if_first_shred_received(shred_slot, first_shreds_received, &root_bank) {
+                    rpc_subscriptions.notify_slot_update(SlotUpdate::FirstShredReceived {
+                        slot: shred_slot,
+                        timestamp: timestamp(),
+                    });
+                }
+            }
 
-        let mut retransmit_time = Measure::start("retransmit_to");
-        // If the node is on the critical path (i.e. the first node in each
-        // neighborhood), it should send the packet to tvu socket of its
-        // children and also tvu_forward socket of its neighbors. Otherwise it
-        // should only forward to tvu_forward socket of its children.
-        if anchor_node {
-            // First neighbor is this node itself, so skip it.
+            let mut compute_turbine_peers = Measure::start("turbine_start");
+            // TODO: consider using root-bank here for leader lookup!
+            let slot_leader = leader_schedule_cache.slot_leader_at(shred_slot, Some(&working_bank));
+            let cluster_nodes =
+                cluster_nodes_cache.get(shred_slot, &root_bank, &working_bank, cluster_info);
+            let shred_seed = shred.seed(slot_leader, &root_bank);
+            let (neighbors, children) =
+                cluster_nodes.get_retransmit_peers(shred_seed, DATA_PLANE_FANOUT, slot_leader);
+            let anchor_node = neighbors[0].id == my_id;
+            compute_turbine_peers.stop();
+            compute_turbine_peers_total += compute_turbine_peers.as_us();
+
+            let mut retransmit_time = Measure::start("retransmit_to");
+            // If the node is on the critical path (i.e. the first node in each
+            // neighborhood), it should send the packet to tvu socket of its
+            // children and also tvu_forward socket of its neighbors. Otherwise it
+            // should only forward to tvu_forward socket of its children.
+            if anchor_node {
+                // First neighbor is this node itself, so skip it.
+                ClusterInfo::retransmit_to(
+                    &neighbors[1..],
+                    &shred.payload,
+                    sock,
+                    true, // forward socket
+                    socket_addr_space,
+                );
+            }
             ClusterInfo::retransmit_to(
-                &neighbors[1..],
+                &children,
                 &shred.payload,
                 sock,
-                true, // forward socket
+                !anchor_node, // send to forward socket!
                 socket_addr_space,
             );
+            retransmit_time.stop();
+            retransmit_total += retransmit_time.as_us();
+
+            // TODO calculate times from shreds.timer
         }
-        ClusterInfo::retransmit_to(
-            &children,
-            &shred.payload,
-            sock,
-            !anchor_node, // send to forward socket!
-            socket_addr_space,
-        );
-        retransmit_time.stop();
-        retransmit_total += retransmit_time.as_us();
     }
+
     max_slots.retransmit.fetch_max(max_slot, Ordering::Relaxed);
     timer_start.stop();
     debug!(
@@ -361,7 +369,7 @@ pub fn retransmitter(
     bank_forks: Arc<RwLock<BankForks>>,
     leader_schedule_cache: Arc<LeaderScheduleCache>,
     cluster_info: Arc<ClusterInfo>,
-    shreds_receiver: Arc<Mutex<mpsc::Receiver<Vec<Shred>>>>,
+    shreds_receiver: Arc<Mutex<ShredReceiver>>,
     max_slots: Arc<MaxSlots>,
     rpc_subscriptions: Option<Arc<RpcSubscriptions>>,
 ) -> Vec<JoinHandle<()>> {

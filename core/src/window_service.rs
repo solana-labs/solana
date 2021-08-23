@@ -18,7 +18,7 @@ use {
     solana_ledger::{
         blockstore::{self, Blockstore, BlockstoreInsertionMetrics, MAX_DATA_SHREDS_PER_SLOT},
         leader_schedule_cache::LeaderScheduleCache,
-        shred::{Nonce, Shred},
+        shred::{Nonce, Shred, ShredSender, Shreds},
     },
     solana_measure::measure::Measure,
     solana_metrics::{inc_new_counter_debug, inc_new_counter_error},
@@ -33,7 +33,6 @@ use {
         net::{SocketAddr, UdpSocket},
         sync::{
             atomic::{AtomicBool, Ordering},
-            mpsc::Sender,
             Arc, RwLock,
         },
         thread::{self, Builder, JoinHandle},
@@ -276,7 +275,7 @@ fn run_insert<F>(
     metrics: &mut BlockstoreInsertionMetrics,
     ws_metrics: &mut WindowServiceMetrics,
     completed_data_sets_sender: &CompletedDataSetsSender,
-    retransmit_sender: &Sender<Vec<Shred>>,
+    retransmit_sender: &ShredSender,
     outstanding_requests: &RwLock<OutstandingShredRepairs>,
 ) -> Result<()>
 where
@@ -300,8 +299,12 @@ where
         .collect();
     prune_shreds_elapsed.stop();
 
+    let mut insert_shreds = Shreds::default();
+    insert_shreds.shreds = shreds;
+    // TODO propagate timer from incoming shreds
+    insert_shreds.timer.mark_outgoing_start();
     let (completed_data_sets, inserted_indices) = blockstore.insert_shreds_handle_duplicate(
-        shreds,
+        insert_shreds,
         repairs,
         Some(leader_schedule_cache),
         false, // is_trusted
@@ -329,7 +332,7 @@ fn recv_window<F>(
     bank_forks: &RwLock<BankForks>,
     insert_shred_sender: &CrossbeamSender<(Vec<Shred>, Vec<Option<RepairMeta>>)>,
     verified_receiver: &CrossbeamReceiver<Vec<Packets>>,
-    retransmit_sender: &Sender<Vec<Shred>>,
+    retransmit_sender: &ShredSender,
     shred_filter: F,
     thread_pool: &ThreadPool,
     stats: &mut ReceiveWindowStats,
@@ -374,16 +377,21 @@ where
             .flat_map_iter(|pkt| pkt.packets.iter().filter_map(handle_packet))
             .unzip()
     });
+
+    let mut retransmit_shreds = Shreds::default();
+    retransmit_shreds.shreds = shreds
+        .iter()
+        .zip(&repair_infos)
+        .filter(|(_, repair_info)| repair_info.is_none())
+        .map(|(shred, _)| shred)
+        .cloned()
+        .collect();
+    // TODO propagate timer from incoming packets
+    retransmit_shreds.timer.mark_outgoing_start();
+
     // Exclude repair packets from retransmit.
-    let _ = retransmit_sender.send(
-        shreds
-            .iter()
-            .zip(&repair_infos)
-            .filter(|(_, repair_info)| repair_info.is_none())
-            .map(|(shred, _)| shred)
-            .cloned()
-            .collect(),
-    );
+    let _ = retransmit_sender.send(retransmit_shreds);
+
     stats.num_repairs += repair_infos.iter().filter(|r| r.is_some()).count();
     stats.num_shreds += shreds.len();
     for shred in &shreds {
@@ -446,7 +454,7 @@ impl WindowService {
     pub(crate) fn new<F>(
         blockstore: Arc<Blockstore>,
         verified_receiver: CrossbeamReceiver<Vec<Packets>>,
-        retransmit_sender: Sender<Vec<Shred>>,
+        retransmit_sender: ShredSender,
         repair_socket: Arc<UdpSocket>,
         exit: Arc<AtomicBool>,
         repair_info: RepairInfo,
@@ -559,7 +567,7 @@ impl WindowService {
         insert_receiver: CrossbeamReceiver<(Vec<Shred>, Vec<Option<RepairMeta>>)>,
         check_duplicate_sender: CrossbeamSender<Shred>,
         completed_data_sets_sender: CompletedDataSetsSender,
-        retransmit_sender: Sender<Vec<Shred>>,
+        retransmit_sender: ShredSender,
         outstanding_requests: Arc<RwLock<OutstandingShredRepairs>>,
     ) -> JoinHandle<()> {
         let mut handle_timeout = || {};
@@ -618,7 +626,7 @@ impl WindowService {
         verified_receiver: CrossbeamReceiver<Vec<Packets>>,
         shred_filter: F,
         bank_forks: Arc<RwLock<BankForks>>,
-        retransmit_sender: Sender<Vec<Shred>>,
+        retransmit_sender: ShredSender,
     ) -> JoinHandle<()>
     where
         F: 'static

@@ -1,7 +1,7 @@
 use {
     super::*,
     crate::cluster_nodes::ClusterNodesCache,
-    solana_ledger::shred::Shredder,
+    solana_ledger::shred::{Shredder, Shreds},
     solana_sdk::{hash::Hash, signature::Keypair},
     std::{thread::sleep, time::Duration},
 };
@@ -155,8 +155,12 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
         blockstore: &Arc<Blockstore>,
     ) -> Result<()> {
         let (all_shreds, _) = receiver.lock().unwrap().recv()?;
+        let mut shreds = Shreds::default();
+        shreds.shreds = all_shreds.to_vec();
+        // TODO mark time origin
+        shreds.timer.mark_outgoing_start();
         blockstore
-            .insert_shreds(all_shreds.to_vec(), None, true)
+            .insert_shreds(shreds, None, true)
             .expect("Failed to insert shreds in blockstore");
         Ok(())
     }
