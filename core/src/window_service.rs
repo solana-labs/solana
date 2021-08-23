@@ -472,6 +472,13 @@ where
         now - packets.first().unwrap().timer.get_incoming_start().unwrap();
     stats.elapsed_last_recv_to_start +=
         now - packets.last().unwrap().timer.get_incoming_end().unwrap();
+
+    let last_time = packets.last().unwrap().timer.get_incoming_end().unwrap();
+    let first_time = packets.first().unwrap().timer.get_incoming_start().unwrap();
+    if first_time > last_time {
+        error!("first:{:?} last:{:?}", first_time, last_time);
+    }
+
 /*    stats
         .batch_span_us_hist
         .increment(
