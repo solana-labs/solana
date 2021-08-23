@@ -199,6 +199,9 @@ impl ReceiveWindowStats {
             since: Some(Instant::now()),
             ..Self::default()
         };
+
+        self.batch_span_us_hist.clear();
+        self.batch_first_recv_us_hist.clear();
     }
 }
 
@@ -703,6 +706,9 @@ impl WindowService {
             + std::marker::Sync,
     {
         let mut stats = ReceiveWindowStats::default();
+        stats.batch_span_us_hist = histogram::Histogram::new();
+        stats.batch_first_recv_us_hist = histogram::Histogram::new();
+
         Builder::new()
             .name("solana-window".to_string())
             .spawn(move || {
