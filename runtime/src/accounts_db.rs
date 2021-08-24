@@ -443,6 +443,7 @@ impl AccountStorageEntry {
         self.id.store(id, Ordering::Relaxed);
         self.approx_store_count.store(0, Ordering::Relaxed);
         self.alive_bytes.store(0, Ordering::Relaxed);
+        self.unref_done.store(false, Ordering::Relaxed);
     }
 
     pub fn status(&self) -> AccountStorageStatus {
