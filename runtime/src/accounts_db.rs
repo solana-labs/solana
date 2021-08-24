@@ -300,7 +300,7 @@ impl AccountStorage {
             .and_then(|storage_map| storage_map.read().unwrap().get(&store_id).cloned())
     }
 
-    fn get_slot_stores(&self, slot: Slot) -> Option<SlotStores> {
+    pub fn get_slot_stores(&self, slot: Slot) -> Option<SlotStores> {
         self.0.get(&slot).map(|result| result.value().clone())
     }
 
@@ -376,6 +376,8 @@ pub struct AccountStorageEntry {
     approx_store_count: AtomicUsize,
 
     alive_bytes: AtomicUsize,
+
+    pub(crate) unref_done: AtomicBool,
 }
 
 impl AccountStorageEntry {
@@ -391,6 +393,7 @@ impl AccountStorageEntry {
             count_and_status: RwLock::new((0, AccountStorageStatus::Available)),
             approx_store_count: AtomicUsize::new(0),
             alive_bytes: AtomicUsize::new(0),
+            unref_done: AtomicBool::new(false),
         }
     }
 
@@ -407,6 +410,7 @@ impl AccountStorageEntry {
             count_and_status: RwLock::new((0, AccountStorageStatus::Available)),
             approx_store_count: AtomicUsize::new(num_accounts),
             alive_bytes: AtomicUsize::new(0),
+            unref_done: AtomicBool::new(false),
         }
     }
 
@@ -2619,6 +2623,16 @@ impl AccountsDb {
         }
         remove_storages_elapsed.stop();
 
+        for s in &all_removed_slot_storages {
+            for (_store_id, store) in s.read().unwrap().iter() {
+                if !store.unref_done.swap(true, Ordering::Relaxed) {
+                    for a in store.accounts.accounts(0) {
+                        self.accounts_index.unref_from_storage(&a.meta.pubkey);
+                    }
+                }
+            }
+        }
+
         let num_stored_slots_removed = all_removed_slot_storages.len();
 
         let recycle_stores_write_elapsed =
@@ -3069,6 +3083,10 @@ impl AccountsDb {
             .purge_stats
             .recycle_stores_write_elapsed
             .fetch_add(recycle_stores_write_elapsed.as_us(), Ordering::Relaxed);
+    }
+
+    pub fn flush_accounts_cache_slot(&self, slot: Slot) {
+        self.flush_slot_cache(slot, None::<&mut fn(&_, &_) -> bool>);
     }
 
     // `force_flush` flushes all the cached roots `<= requested_flush_root`. It also then
@@ -4032,6 +4050,9 @@ impl AccountsDb {
         for slot in dead_slots.iter() {
             if let Some(slot_storage) = self.storage.get_slot_stores(*slot) {
                 for store in slot_storage.read().unwrap().values() {
+                    let already_unrefd = store.unref_done.swap(true, Ordering::Relaxed);
+                    assert!(!already_unrefd);
+
                     stores.push(store.clone());
                 }
             }
@@ -5848,7 +5869,7 @@ pub mod tests {
             }
         }
 
-        fn ref_count_for_pubkey(&self, pubkey: &Pubkey) -> RefCount {
+        pub fn ref_count_for_pubkey(&self, pubkey: &Pubkey) -> RefCount {
             self.accounts_index.ref_count_from_storage(&pubkey)
         }
     }
