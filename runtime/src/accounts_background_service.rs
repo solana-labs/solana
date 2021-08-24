@@ -6,7 +6,7 @@ use crate::{
     bank::{Bank, BankSlotDelta, DropCallback},
     bank_forks::BankForks,
     snapshot_config::SnapshotConfig,
-    snapshot_package::AccountsPackageSender,
+    snapshot_package::{AccountsPackageSender, SnapshotType},
     snapshot_utils,
 };
 use crossbeam_channel::{Receiver, SendError, Sender};
@@ -33,6 +33,7 @@ const SHRUNKEN_ACCOUNT_PER_SEC: usize = 250;
 const SHRUNKEN_ACCOUNT_PER_INTERVAL: usize =
     SHRUNKEN_ACCOUNT_PER_SEC / (1000 / INTERVAL_MS as usize);
 const CLEAN_INTERVAL_BLOCKS: u64 = 100;
+const SNAPSHOT_BANK_MAX_ATTEMPTS: usize = 10;
 
 // This value is chosen to spread the dropping cost over 3 expiration checks
 // RecycleStores are fully populated almost all of its lifetime. So, otherwise
@@ -155,12 +156,16 @@ impl SnapshotRequestHandler {
                 };
                 hash_time.stop();
 
+                let last_full_snapshot_slot = snapshot_utils::calculate_last_full_snapshot_slot(
+                    snapshot_root_bank.slot(),
+                    self.snapshot_config.full_snapshot_archive_interval_slots,
+                );
                 let mut clean_time = Measure::start("clean_time");
                 // Don't clean the slot we're snapshotting because it may have zero-lamport
                 // accounts that were included in the bank delta hash when the bank was frozen,
                 // and if we clean them here, the newly created snapshot's hash may not match
                 // the frozen hash.
-                snapshot_root_bank.clean_accounts(true, false, None);
+                snapshot_root_bank.clean_accounts(true, false, Some(last_full_snapshot_slot));
                 clean_time.stop();
 
                 if accounts_db_caching_enabled {
@@ -169,23 +174,60 @@ impl SnapshotRequestHandler {
                     shrink_time.stop();
                 }
 
+                let block_height = snapshot_root_bank.block_height();
+                let snapshot_type = if block_height
+                    % self.snapshot_config.full_snapshot_archive_interval_slots
+                    == 0
+                {
+                    Some(SnapshotType::FullSnapshot)
+                } else if block_height
+                    % self
+                        .snapshot_config
+                        .incremental_snapshot_archive_interval_slots
+                    == 0
+                {
+                    Some(SnapshotType::IncrementalSnapshot(last_full_snapshot_slot))
+                } else {
+                    None
+                };
+
                 // Generate an accounts package
+                let mut attempts = 0;
                 let mut snapshot_time = Measure::start("snapshot_time");
-                let r = snapshot_utils::snapshot_bank(
-                    &snapshot_root_bank,
-                    status_cache_slot_deltas,
-                    &self.accounts_package_sender,
-                    &self.snapshot_config.bank_snapshots_dir,
-                    &self.snapshot_config.snapshot_archives_dir,
-                    self.snapshot_config.snapshot_version,
-                    &self.snapshot_config.archive_format,
-                    hash_for_testing,
-                );
-                if r.is_err() {
+                loop {
+                    attempts += 1;
+                    let result = snapshot_utils::snapshot_bank(
+                        &snapshot_root_bank,
+                        status_cache_slot_deltas.clone(),
+                        &self.accounts_package_sender,
+                        &self.snapshot_config.bank_snapshots_dir,
+                        &self.snapshot_config.snapshot_archives_dir,
+                        self.snapshot_config.snapshot_version,
+                        self.snapshot_config.archive_format,
+                        hash_for_testing,
+                        snapshot_type,
+                    );
+
+                    if result.is_ok() {
+                        break;
+                    }
+
                     warn!(
-                        "Error generating snapshot for bank: {}, err: {:?}",
+                        "Error generating snapshot for bank. attempts: {}, slot: {}, err: {:?}",
+                        attempts,
                         snapshot_root_bank.slot(),
-                        r
+                        result
+                    );
+
+                    // Only require success for full snapshots.  Otherwise just log the error and
+                    // continue on.
+                    if snapshot_type != Some(SnapshotType::FullSnapshot) {
+                        break;
+                    }
+
+                    assert!(
+                        attempts <= SNAPSHOT_BANK_MAX_ATTEMPTS,
+                        "Unable to snapshot bank intended for full snapshot!"
                     );
                 }
                 snapshot_time.stop();
@@ -399,7 +441,18 @@ impl AccountsBackgroundService {
                                 // slots >= bank.slot()
                                 bank.force_flush_accounts_cache();
                             }
-                            bank.clean_accounts(true, false, None);
+                            let last_full_snapshot_slot = request_handler
+                                .snapshot_request_handler
+                                .as_ref()
+                                .map(|snapshot_request_handler| {
+                                    snapshot_utils::calculate_last_full_snapshot_slot(
+                                        bank.slot(),
+                                        snapshot_request_handler
+                                            .snapshot_config
+                                            .full_snapshot_archive_interval_slots,
+                                    )
+                                });
+                            bank.clean_accounts(true, false, last_full_snapshot_slot);
                             last_cleaned_block_height = bank.block_height();
                         }
                     }

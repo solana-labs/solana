@@ -1212,7 +1212,6 @@ fn new_banks_from_ledger(
             None,
             &snapshot_config.snapshot_archives_dir,
             snapshot_config.archive_format,
-            Some(bank_forks.root_bank().get_thread_pool()),
             snapshot_config.maximum_snapshots_to_retain,
         )
         .unwrap_or_else(|err| {
