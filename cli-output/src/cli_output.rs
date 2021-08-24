@@ -1956,6 +1956,29 @@ impl fmt::Display for CliUpgradeableProgram {
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct CliUpgradeableProgramClosed {
+    pub program_id: String,
+    pub lamports: u64,
+    #[serde(skip_serializing)]
+    pub use_lamports_unit: bool,
+}
+impl QuietDisplay for CliUpgradeableProgramClosed {}
+impl VerboseDisplay for CliUpgradeableProgramClosed {}
+impl fmt::Display for CliUpgradeableProgramClosed {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f)?;
+        writeln!(
+            f,
+            "Closed Program Id {}, {} reclaimed",
+            &self.program_id,
+            &build_balance_message(self.lamports, self.use_lamports_unit, true)
+        )?;
+        Ok(())
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CliUpgradeableBuffer {
     pub address: String,
     pub authority: String,

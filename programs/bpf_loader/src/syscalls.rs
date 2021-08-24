@@ -19,10 +19,16 @@ use solana_sdk::{
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     epoch_schedule::EpochSchedule,
     feature_set::{
+<<<<<<< HEAD
         cpi_data_cost, enforce_aligned_host_addrs, keccak256_syscall_enabled,
         libsecp256k1_0_5_upgrade_enabled, mem_overlap_fix, memory_ops_syscalls,
         secp256k1_recover_syscall_enabled, set_upgrade_authority_via_cpi_enabled,
         sysvar_via_syscall, update_data_on_realloc,
+=======
+        blake3_syscall_enabled, close_upgradeable_program_accounts, disable_fees_sysvar,
+        enforce_aligned_host_addrs, libsecp256k1_0_5_upgrade_enabled, mem_overlap_fix,
+        memory_ops_syscalls, secp256k1_recover_syscall_enabled,
+>>>>>>> a89f18014 (Allow closing upgradeable program accounts (#19319))
     },
     hash::{Hasher, HASH_BYTES},
     ic_msg,
@@ -2179,16 +2185,26 @@ fn check_account_infos(
 fn check_authorized_program(
     program_id: &Pubkey,
     instruction_data: &[u8],
+<<<<<<< HEAD
     invoke_context: &Ref<&mut dyn InvokeContext>,
+=======
+    close_upgradeable_program_accounts: bool,
+>>>>>>> a89f18014 (Allow closing upgradeable program accounts (#19319))
 ) -> Result<(), EbpfError<BpfError>> {
     if native_loader::check_id(program_id)
         || bpf_loader::check_id(program_id)
         || bpf_loader_deprecated::check_id(program_id)
         || (bpf_loader_upgradeable::check_id(program_id)
             && !(bpf_loader_upgradeable::is_upgrade_instruction(instruction_data)
+<<<<<<< HEAD
                 || (bpf_loader_upgradeable::is_set_authority_instruction(instruction_data)
                     && invoke_context
                         .is_feature_active(&set_upgrade_authority_via_cpi_enabled::id()))))
+=======
+                || bpf_loader_upgradeable::is_set_authority_instruction(instruction_data)
+                || (close_upgradeable_program_accounts
+                    && bpf_loader_upgradeable::is_close_instruction(instruction_data))))
+>>>>>>> a89f18014 (Allow closing upgradeable program accounts (#19319))
     {
         return Err(SyscallError::ProgramNotSupported(*program_id).into());
     }
@@ -2296,7 +2312,15 @@ fn call<'a>(
                 }
             })
             .collect::<Vec<bool>>();
+<<<<<<< HEAD
         check_authorized_program(&callee_program_id, &instruction.data, &invoke_context)?;
+=======
+        check_authorized_program(
+            &callee_program_id,
+            &instruction.data,
+            invoke_context.is_feature_active(&close_upgradeable_program_accounts::id()),
+        )?;
+>>>>>>> a89f18014 (Allow closing upgradeable program accounts (#19319))
         let (accounts, account_refs) = syscall.translate_accounts(
             &message.account_keys,
             callee_program_id_index,
