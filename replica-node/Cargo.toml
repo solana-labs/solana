@@ -22,7 +22,7 @@ jsonrpc-ipc-server = "17.0.0"
 jsonrpc-server-utils= "17.0.0"
 log = "0.4.11"
 rand = "0.7.0"
-serde = "1.0.128"
+serde = "1.0.129"
 solana-clap-utils = { path = "../clap-utils", version = "=1.8.0" }
 solana-cli-config = { path = "../cli-config", version = "=1.8.0" }
 solana-client = { path = "../client", version = "=1.8.0" }
