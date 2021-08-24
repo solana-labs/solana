@@ -2969,53 +2969,83 @@ impl RpcClient {
         Ok(blockhash)
     }
 
+    #[allow(deprecated)]
     pub fn get_latest_blockhash_with_commitment(
         &self,
         commitment: CommitmentConfig,
     ) -> ClientResult<(Hash, u64)> {
-        let latest_blockhash = self
-            .send::<Response<RpcBlockhash>>(
-                RpcRequest::GetLatestBlockhash,
-                json!([self.maybe_map_commitment(commitment)?]),
-            )?
-            .value;
-
-        let blockhash = latest_blockhash.blockhash.parse().map_err(|_| {
-            ClientError::new_with_request(
-                RpcError::ParseError("Hash".to_string()).into(),
-                RpcRequest::GetLatestBlockhash,
-            )
-        })?;
-        Ok((blockhash, latest_blockhash.last_valid_block_height))
+        let (blockhash, last_valid_block_height) =
+            if self.get_node_version()? < semver::Version::new(1, 8, 0) {
+                let Fees {
+                    blockhash,
+                    last_valid_block_height,
+                    ..
+                } = self.get_fees_with_commitment(commitment)?.value;
+                (blockhash, last_valid_block_height)
+            } else {
+                let RpcBlockhash {
+                    blockhash,
+                    last_valid_block_height,
+                } = self
+                    .send::<Response<RpcBlockhash>>(
+                        RpcRequest::GetLatestBlockhash,
+                        json!([self.maybe_map_commitment(commitment)?]),
+                    )?
+                    .value;
+                let blockhash = blockhash.parse().map_err(|_| {
+                    ClientError::new_with_request(
+                        RpcError::ParseError("Hash".to_string()).into(),
+                        RpcRequest::GetLatestBlockhash,
+                    )
+                })?;
+                (blockhash, last_valid_block_height)
+            };
+        Ok((blockhash, last_valid_block_height))
     }
 
+    #[allow(deprecated)]
     pub fn is_blockhash_valid(
         &self,
         blockhash: &Hash,
         commitment: CommitmentConfig,
     ) -> ClientResult<bool> {
-        let result = self.send::<Response<bool>>(
-            RpcRequest::IsBlockhashValid,
-            json!([blockhash.to_string(), commitment,]),
-        )?;
-        Ok(result.value)
+        let result = if self.get_node_version()? < semver::Version::new(1, 8, 0) {
+            self.get_fee_calculator_for_blockhash_with_commitment(blockhash, commitment)?
+                .value
+                .is_some()
+        } else {
+            self.send::<Response<bool>>(
+                RpcRequest::IsBlockhashValid,
+                json!([blockhash.to_string(), commitment,]),
+            )?
+            .value
+        };
+        Ok(result)
     }
 
+    #[allow(deprecated)]
     pub fn get_fee_for_message(&self, blockhash: &Hash, message: &Message) -> ClientResult<u64> {
-        let serialized_encoded =
-            serialize_and_encode::<Message>(message, UiTransactionEncoding::Base64)?;
-        let result = self.send::<Response<Option<u64>>>(
-            RpcRequest::GetFeeForMessage,
-            json!([
-                blockhash.to_string(),
-                serialized_encoded,
-                UiTransactionEncoding::Base64,
-                self.commitment(),
-            ]),
-        )?;
-        result
-            .value
-            .ok_or_else(|| ClientErrorKind::Custom("Invalid blockhash".to_string()).into())
+        if self.get_node_version()? < semver::Version::new(1, 8, 0) {
+            let Fees { fee_calculator, .. } = self.get_fees()?;
+            Ok(fee_calculator
+                .lamports_per_signature
+                .saturating_mul(message.header.num_required_signatures as u64))
+        } else {
+            let serialized_encoded =
+                serialize_and_encode::<Message>(message, UiTransactionEncoding::Base64)?;
+            let result = self.send::<Response<Option<u64>>>(
+                RpcRequest::GetFeeForMessage,
+                json!([
+                    blockhash.to_string(),
+                    serialized_encoded,
+                    UiTransactionEncoding::Base64,
+                    self.commitment(),
+                ]),
+            )?;
+            result
+                .value
+                .ok_or_else(|| ClientErrorKind::Custom("Invalid blockhash".to_string()).into())
+        }
     }
 
     pub fn get_new_latest_blockhash(&self, blockhash: &Hash) -> ClientResult<Hash> {
