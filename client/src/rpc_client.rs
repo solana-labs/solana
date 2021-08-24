@@ -125,8 +125,8 @@ impl RpcClientConfig {
 /// # let key = Keypair::new();
 /// # let to = solana_sdk::pubkey::new_rand();
 /// # let lamports = 50;
-/// # let latest_blockhash = Hash::default();
-/// # let tx = system_transaction::transfer(&key, &to, lamports, latest_blockhash);
+/// # let recent_blockhash = Hash::default();
+/// # let tx = system_transaction::transfer(&key, &to, lamports, recent_blockhash);
 /// let signature = rpc_client.send_transaction(&tx)?;
 /// let statuses = rpc_client.get_signature_statuses(&[signature])?.value;
 /// # Ok::<(), ClientError>(())
@@ -535,8 +535,8 @@ impl RpcClient {
     /// # let alice = Keypair::new();
     /// # let bob = Keypair::new();
     /// # let lamports = 50;
-    /// let latest_blockhash = rpc_client.get_latest_blockhash()?;
-    /// let tx = system_transaction::transfer(&alice, &bob.pubkey(), lamports, latest_blockhash);
+    /// let (recent_blockhash, _) = rpc_client.get_recent_blockhash()?;
+    /// let tx = system_transaction::transfer(&alice, &bob.pubkey(), lamports, recent_blockhash);
     /// let signature = rpc_client.send_transaction(&tx)?;
     ///
     /// loop {
@@ -592,8 +592,8 @@ impl RpcClient {
     /// # let alice = Keypair::new();
     /// # let bob = Keypair::new();
     /// # let lamports = 50;
-    /// let latest_blockhash = rpc_client.get_latest_blockhash()?;
-    /// let tx = system_transaction::transfer(&alice, &bob.pubkey(), lamports, latest_blockhash);
+    /// let (recent_blockhash, _) = rpc_client.get_recent_blockhash()?;
+    /// let tx = system_transaction::transfer(&alice, &bob.pubkey(), lamports, recent_blockhash);
     /// let signature = rpc_client.send_transaction(&tx)?;
     ///
     /// loop {
@@ -686,8 +686,8 @@ impl RpcClient {
     /// # let alice = Keypair::new();
     /// # let bob = Keypair::new();
     /// # let lamports = 50;
-    /// let latest_blockhash = rpc_client.get_latest_blockhash()?;
-    /// let tx = system_transaction::transfer(&alice, &bob.pubkey(), lamports, latest_blockhash);
+    /// let (recent_blockhash, _) = rpc_client.get_recent_blockhash()?;
+    /// let tx = system_transaction::transfer(&alice, &bob.pubkey(), lamports, recent_blockhash);
     /// let signature = rpc_client.send_transaction(&tx)?;
     /// # Ok::<(), ClientError>(())
     /// ```
@@ -777,8 +777,8 @@ impl RpcClient {
     /// # let alice = Keypair::new();
     /// # let bob = Keypair::new();
     /// # let lamports = 50;
-    /// let latest_blockhash = rpc_client.get_latest_blockhash()?;
-    /// let tx = system_transaction::transfer(&alice, &bob.pubkey(), lamports, latest_blockhash);
+    /// let (recent_blockhash, _) = rpc_client.get_recent_blockhash()?;
+    /// let tx = system_transaction::transfer(&alice, &bob.pubkey(), lamports, recent_blockhash);
     /// let config = RpcSendTransactionConfig {
     ///     skip_preflight: true,
     ///     .. RpcSendTransactionConfig::default()
@@ -904,8 +904,8 @@ impl RpcClient {
     /// # let alice = Keypair::new();
     /// # let bob = Keypair::new();
     /// # let lamports = 50;
-    /// let latest_blockhash = rpc_client.get_latest_blockhash()?;
-    /// let tx = system_transaction::transfer(&alice, &bob.pubkey(), lamports, latest_blockhash);
+    /// let (recent_blockhash, _) = rpc_client.get_recent_blockhash()?;
+    /// let tx = system_transaction::transfer(&alice, &bob.pubkey(), lamports, recent_blockhash);
     /// let result = rpc_client.simulate_transaction(&tx)?;
     /// assert!(result.value.err.is_none());
     /// # Ok::<(), ClientError>(())
@@ -980,8 +980,8 @@ impl RpcClient {
     /// # let alice = Keypair::new();
     /// # let bob = Keypair::new();
     /// # let lamports = 50;
-    /// let latest_blockhash = rpc_client.get_latest_blockhash()?;
-    /// let tx = system_transaction::transfer(&alice, &bob.pubkey(), lamports, latest_blockhash);
+    /// let (recent_blockhash, _) = rpc_client.get_recent_blockhash()?;
+    /// let tx = system_transaction::transfer(&alice, &bob.pubkey(), lamports, recent_blockhash);
     /// let config = RpcSimulateTransactionConfig {
     ///     sig_verify: true,
     ///     .. RpcSimulateTransactionConfig::default()
@@ -1086,8 +1086,8 @@ impl RpcClient {
     /// # let alice = Keypair::new();
     /// # let bob = Keypair::new();
     /// # let lamports = 50;
-    /// # let latest_blockhash = rpc_client.get_latest_blockhash()?;
-    /// # let tx = system_transaction::transfer(&alice, &bob.pubkey(), lamports, latest_blockhash);
+    /// # let (recent_blockhash, _) = rpc_client.get_recent_blockhash()?;
+    /// # let tx = system_transaction::transfer(&alice, &bob.pubkey(), lamports, recent_blockhash);
     /// let signature = rpc_client.send_transaction(&tx)?;
     /// let status = rpc_client.get_signature_status(&signature)?;
     /// # Ok::<(), ClientError>(())
@@ -1155,8 +1155,8 @@ impl RpcClient {
     /// // Send lamports from Alice to Bob and wait for the transaction to be processed
     /// # let bob = Keypair::new();
     /// # let lamports = 50;
-    /// let latest_blockhash = rpc_client.get_latest_blockhash()?;
-    /// let tx = system_transaction::transfer(&alice, &bob.pubkey(), lamports, latest_blockhash);
+    /// let (recent_blockhash, _) = rpc_client.get_recent_blockhash()?;
+    /// let tx = system_transaction::transfer(&alice, &bob.pubkey(), lamports, recent_blockhash);
     /// let signature = rpc_client.send_transaction(&tx)?;
     ///
     /// let status = loop {
@@ -1232,7 +1232,7 @@ impl RpcClient {
     /// # fn get_old_transaction_signature() -> Signature { Signature::default() }
     /// // Check if an old transaction exists
     /// let signature = get_old_transaction_signature();
-    /// let latest_blockhash = rpc_client.get_latest_blockhash()?;
+    /// let (recent_blockhash, _) = rpc_client.get_recent_blockhash()?;
     /// let statuses = rpc_client.get_signature_statuses_with_history(&[signature])?.value;
     /// if statuses[0].is_none() {
     ///     println!("old transaction does not exist");
@@ -1299,8 +1299,8 @@ impl RpcClient {
     /// # let alice = Keypair::new();
     /// # let bob = Keypair::new();
     /// # let lamports = 50;
-    /// # let latest_blockhash = rpc_client.get_latest_blockhash()?;
-    /// # let tx = system_transaction::transfer(&alice, &bob.pubkey(), lamports, latest_blockhash);
+    /// # let (recent_blockhash, _) = rpc_client.get_recent_blockhash()?;
+    /// # let tx = system_transaction::transfer(&alice, &bob.pubkey(), lamports, recent_blockhash);
     /// let signature = rpc_client.send_and_confirm_transaction(&tx)?;
     /// let commitment_config = CommitmentConfig::processed();
     /// let status = rpc_client.get_signature_status_with_commitment(
@@ -1366,8 +1366,8 @@ impl RpcClient {
     /// # let alice = Keypair::new();
     /// # let bob = Keypair::new();
     /// # let lamports = 50;
-    /// # let latest_blockhash = rpc_client.get_latest_blockhash()?;
-    /// # let tx = system_transaction::transfer(&alice, &bob.pubkey(), lamports, latest_blockhash);
+    /// # let (recent_blockhash, _) = rpc_client.get_recent_blockhash()?;
+    /// # let tx = system_transaction::transfer(&alice, &bob.pubkey(), lamports, recent_blockhash);
     /// let signature = rpc_client.send_transaction(&tx)?;
     /// let commitment_config = CommitmentConfig::processed();
     /// let search_transaction_history = true;
@@ -1651,12 +1651,12 @@ impl RpcClient {
     ///     1_000_000,
     /// );
     ///
-    /// let latest_blockhash = rpc_client.get_latest_blockhash()?;
+    /// let (recent_blockhash, _) = rpc_client.get_recent_blockhash()?;
     /// let tx = Transaction::new_signed_with_payer(
     ///     &instrs,
     ///     Some(&alice.pubkey()),
     ///     &[&alice, &stake_account],
-    ///     latest_blockhash,
+    ///     recent_blockhash,
     /// );
     ///
     /// rpc_client.send_and_confirm_transaction(&tx)?;
@@ -2337,8 +2337,8 @@ impl RpcClient {
     /// # let alice = Keypair::new();
     /// # let bob = Keypair::new();
     /// # let lamports = 50;
-    /// # let latest_blockhash = rpc_client.get_latest_blockhash()?;
-    /// # let tx = system_transaction::transfer(&alice, &bob.pubkey(), lamports, latest_blockhash);
+    /// # let (recent_blockhash, _) = rpc_client.get_recent_blockhash()?;
+    /// # let tx = system_transaction::transfer(&alice, &bob.pubkey(), lamports, recent_blockhash);
     /// # let signature = rpc_client.send_and_confirm_transaction(&tx)?;
     /// let config = GetConfirmedSignaturesForAddress2Config {
     ///     before: None,
@@ -2437,8 +2437,8 @@ impl RpcClient {
     /// # let alice = Keypair::new();
     /// # let bob = Keypair::new();
     /// # let lamports = 50;
-    /// # let latest_blockhash = rpc_client.get_latest_blockhash()?;
-    /// # let tx = system_transaction::transfer(&alice, &bob.pubkey(), lamports, latest_blockhash);
+    /// # let (recent_blockhash, _) = rpc_client.get_recent_blockhash()?;
+    /// # let tx = system_transaction::transfer(&alice, &bob.pubkey(), lamports, recent_blockhash);
     /// let signature = rpc_client.send_and_confirm_transaction(&tx)?;
     ///
     /// let transaction = rpc_client.get_transaction(
@@ -2484,8 +2484,8 @@ impl RpcClient {
     /// # let alice = Keypair::new();
     /// # let bob = Keypair::new();
     /// # let lamports = 50;
-    /// # let latest_blockhash = rpc_client.get_latest_blockhash()?;
-    /// # let tx = system_transaction::transfer(&alice, &bob.pubkey(), lamports, latest_blockhash);
+    /// # let (recent_blockhash, _) = rpc_client.get_recent_blockhash()?;
+    /// # let tx = system_transaction::transfer(&alice, &bob.pubkey(), lamports, recent_blockhash);
     /// let signature = rpc_client.send_and_confirm_transaction(&tx)?;
     /// let config = RpcTransactionConfig {
     ///     encoding: Some(UiTransactionEncoding::Json),
