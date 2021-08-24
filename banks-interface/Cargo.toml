@@ -11,7 +11,7 @@ edition = "2018"
 
 [dependencies]
 mio = "0.7.13"
-serde = { version = "1.0.128", features = ["derive"] }
+serde = { version = "1.0.129", features = ["derive"] }
 solana-sdk = { path = "../sdk", version = "=1.8.0" }
 tarpc = { version = "0.26.2", features = ["full"] }
 

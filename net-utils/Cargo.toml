@@ -15,7 +15,7 @@ clap = "2.33.1"
 log = "0.4.14"
 nix = "0.20.0"
 rand = "0.7.0"
-serde = "1.0.128"
+serde = "1.0.129"
 serde_derive = "1.0.103"
 socket2 = "0.4.1"
 solana-clap-utils = { path = "../clap-utils", version = "=1.8.0" }
