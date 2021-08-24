@@ -10585,7 +10585,6 @@ pub(crate) mod tests {
             true,
         ));
 
-        let account0 = AccountSharedData::new(1000, 32, &Pubkey::new_unique());
         let account_zero = AccountSharedData::new(0, 0, &Pubkey::new_unique());
 
         goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank0).unwrap());
@@ -10630,11 +10629,13 @@ pub(crate) mod tests {
             bank3.rc.accounts.accounts_db.ref_count_for_pubkey(&pubkey0),
             0
         );
-        assert_eq!(
-            bank3.rc.accounts.accounts_db.ref_count_for_pubkey(&pubkey0),
-            0
-        );
-
+        assert!(bank3
+            .rc
+            .accounts
+            .accounts_db
+            .storage
+            .get_slot_stores(1)
+            .is_none());
 
         bank3.print_accounts_stats();
     }

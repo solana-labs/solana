@@ -300,7 +300,7 @@ impl AccountStorage {
             .and_then(|storage_map| storage_map.read().unwrap().get(&store_id).cloned())
     }
 
-    fn get_slot_stores(&self, slot: Slot) -> Option<SlotStores> {
+    pub fn get_slot_stores(&self, slot: Slot) -> Option<SlotStores> {
         self.0.get(&slot).map(|result| result.value().clone())
     }
 
