@@ -4051,6 +4051,14 @@ impl Bank {
             .flush_accounts_cache(false, Some(self.slot()))
     }
 
+    #[cfg(test)]
+    pub fn flush_accounts_cache_slot(&self) {
+        self.rc
+            .accounts
+            .accounts_db
+            .flush_accounts_cache_slot(self.slot())
+    }
+
     pub fn expire_old_recycle_stores(&self) {
         self.rc.accounts.accounts_db.expire_old_recycle_stores()
     }
@@ -10579,7 +10587,6 @@ pub(crate) mod tests {
 
         let account0 = AccountSharedData::new(1000, 32, &Pubkey::new_unique());
         let account_zero = AccountSharedData::new(0, 0, &Pubkey::new_unique());
-        bank0.store_account(&pubkey0, &account0);
 
         goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank0).unwrap());
         bank0.freeze();
@@ -10594,6 +10601,7 @@ pub(crate) mod tests {
         bank1.deposit(&pubkey0, some_lamports);
         goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank1).unwrap());
         bank1.freeze();
+        bank1.flush_accounts_cache_slot();
 
         // Store some lamports for pubkey1 in bank 2, root bank 2
         let mut bank2 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 2));
@@ -10618,6 +10626,15 @@ pub(crate) mod tests {
         bank3.force_flush_accounts_cache();
 
         bank3.clean_accounts(false);
+        assert_eq!(
+            bank3.rc.accounts.accounts_db.ref_count_for_pubkey(&pubkey0),
+            0
+        );
+        assert_eq!(
+            bank3.rc.accounts.accounts_db.ref_count_for_pubkey(&pubkey0),
+            0
+        );
+
 
         bank3.print_accounts_stats();
     }

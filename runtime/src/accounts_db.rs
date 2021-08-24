@@ -2619,6 +2619,14 @@ impl AccountsDb {
         }
         remove_storages_elapsed.stop();
 
+        for s in &all_removed_slot_storages {
+            for (_store_id, store) in s.read().unwrap().iter() {
+                for a in store.accounts.accounts(0) {
+                    self.accounts_index.unref_from_storage(&a.meta.pubkey);
+                }
+            }
+        }
+
         let num_stored_slots_removed = all_removed_slot_storages.len();
 
         let recycle_stores_write_elapsed =
@@ -3069,6 +3077,10 @@ impl AccountsDb {
             .purge_stats
             .recycle_stores_write_elapsed
             .fetch_add(recycle_stores_write_elapsed.as_us(), Ordering::Relaxed);
+    }
+
+    pub fn flush_accounts_cache_slot(&self, slot: Slot) {
+        self.flush_slot_cache(slot, None::<&mut fn(&_, &_) -> bool>);
     }
 
     // `force_flush` flushes all the cached roots `<= requested_flush_root`. It also then
@@ -5848,7 +5860,7 @@ pub mod tests {
             }
         }
 
-        fn ref_count_for_pubkey(&self, pubkey: &Pubkey) -> RefCount {
+        pub fn ref_count_for_pubkey(&self, pubkey: &Pubkey) -> RefCount {
             self.accounts_index.ref_count_from_storage(&pubkey)
         }
     }
