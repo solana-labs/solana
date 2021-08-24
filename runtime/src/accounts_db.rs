@@ -3529,6 +3529,7 @@ impl AccountsDb {
         for s in &all_removed_slot_storages {
             for (_store_id, store) in s.read().unwrap().iter() {
                 if !store.unref_done.swap(true, Ordering::Relaxed) {
+                    panic!("carl's change should make this unnecessary");
                     for a in store.accounts.accounts(0) {
                         self.accounts_index.unref_from_storage(&a.meta.pubkey);
                     }
