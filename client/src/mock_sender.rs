@@ -6,16 +6,10 @@ use {
         rpc_config::RpcBlockProductionConfig,
         rpc_request::RpcRequest,
         rpc_response::{
-<<<<<<< HEAD
-            Response, RpcAccountBalance, RpcBlockProduction, RpcBlockProductionRange, RpcFees,
-            RpcResponseContext, RpcSimulateTransactionResult, RpcStakeActivation, RpcSupply,
-            RpcVersionInfo, RpcVoteAccountStatus, StakeActivationState,
-=======
-            Response, RpcAccountBalance, RpcBlockProduction, RpcBlockProductionRange, RpcBlockhash,
+            Response, RpcAccountBalance, RpcBlockProduction, RpcBlockProductionRange,
             RpcConfirmedTransactionStatusWithSignature, RpcContactInfo, RpcFees, RpcPerfSample,
             RpcResponseContext, RpcSimulateTransactionResult, RpcStakeActivation, RpcSupply,
             RpcVersionInfo, RpcVoteAccountInfo, RpcVoteAccountStatus, StakeActivationState,
->>>>>>> 628ad5891 (Document more RpcClient methods (#19236))
         },
         rpc_sender::RpcSender,
     },
@@ -335,19 +329,6 @@ impl RpcSender for MockSender {
                     feature_set: Some(version.feature_set),
                 })
             }
-<<<<<<< HEAD
-=======
-            "getLatestBlockhash" => serde_json::to_value(Response {
-                context: RpcResponseContext { slot: 1 },
-                value: RpcBlockhash {
-                    blockhash: PUBKEY.to_string(),
-                    last_valid_block_height: 0,
-                },
-            })?,
-            "getFeeForMessage" => serde_json::to_value(Response {
-                context: RpcResponseContext { slot: 1 },
-                value: json!(Some(0)),
-            })?,
             "getClusterNodes" => serde_json::to_value(vec![RpcContactInfo {
                 pubkey: PUBKEY.to_string(),
                 gossip: Some(SocketAddr::from(([10, 239, 6, 48], 8899))),
@@ -396,7 +377,6 @@ impl RpcSender for MockSender {
                 num_slots: 123,
                 sample_period_secs: 60,
             }])?,
->>>>>>> 628ad5891 (Document more RpcClient methods (#19236))
             _ => Value::Null,
         };
         Ok(val)
