@@ -829,18 +829,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6455c0ca19f0d2fbf751b908d5c55c1f5cbc65e03c4225427254b46890bdde1e"
 dependencies = [
  "cfg-if 1.0.0",
-<<<<<<< HEAD
- "crossbeam-epoch 0.9.1",
- "crossbeam-utils 0.8.1",
-=======
- "crossbeam-epoch",
+ "crossbeam-epoch 0.9.5",
  "crossbeam-utils 0.8.5",
->>>>>>> 82ea4891f (Bump to get off yanked crate (#19378))
 ]
 
 [[package]]
 name = "crossbeam-epoch"
-<<<<<<< HEAD
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "058ed274caafc1f60c4997b5fc07bf7dc7cca454af7c6e81edffe5f33f70dace"
@@ -856,10 +850,7 @@ dependencies = [
 
 [[package]]
 name = "crossbeam-epoch"
-version = "0.9.1"
-=======
 version = "0.9.5"
->>>>>>> 82ea4891f (Bump to get off yanked crate (#19378))
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4ec02e091aa634e2c3ada4a392989e7c3116673ef0ac5b72232439094d73b7fd"
 dependencies = [
@@ -3540,15 +3531,9 @@ version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9ab346ac5921dc62ffa9f89b7a773907511cdfa5490c572ae9be1be33e8afa4a"
 dependencies = [
-<<<<<<< HEAD
  "crossbeam-channel 0.5.0",
  "crossbeam-deque 0.8.1",
- "crossbeam-utils 0.8.1",
-=======
- "crossbeam-channel",
- "crossbeam-deque",
  "crossbeam-utils 0.8.5",
->>>>>>> 82ea4891f (Bump to get off yanked crate (#19378))
  "lazy_static",
  "num_cpus",
 ]
