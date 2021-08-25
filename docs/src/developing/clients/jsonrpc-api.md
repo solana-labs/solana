@@ -3246,6 +3246,8 @@ submission.
   - `skipPreflight: <bool>` - if true, skip the preflight transaction checks (default: false)
   - `preflightCommitment: <string>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment) level to use for preflight (default: `"finalized"`).
   - `encoding: <string>` - (optional) Encoding used for the transaction data. Either `"base58"` (*slow*, **DEPRECATED**), or `"base64"`. (default: `"base58"`).
+  - `maxRetries: <usize>` - (optional) Maximum number of times for the RPC node to retry sending the transaction to the leader.
+  If this parameter not provided, the RPC node will retry the transaction until it is finalized or until the blockhash expires.
 
 #### Results:
 
