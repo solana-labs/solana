@@ -156,18 +156,8 @@ impl Banks for BanksServer {
             .get_blockhash_last_valid_slot(&blockhash)
             .unwrap();
         let signature = transaction.signatures.get(0).cloned().unwrap_or_default();
-<<<<<<< HEAD
         let info =
             TransactionInfo::new(signature, serialize(&transaction).unwrap(), last_valid_slot);
-=======
-        let info = TransactionInfo::new(
-            signature,
-            serialize(&transaction).unwrap(),
-            last_valid_block_height,
-            None,
-            None,
-        );
->>>>>>> 7482861f4 (Add parameter to allow setting max-retries for SendTransaction rpc (#19387))
         self.transaction_sender.send(info).unwrap();
     }
 
@@ -244,18 +234,8 @@ impl Banks for BanksServer {
             .get_blockhash_last_valid_slot(blockhash)
             .unwrap();
         let signature = transaction.signatures.get(0).cloned().unwrap_or_default();
-<<<<<<< HEAD
         let info =
             TransactionInfo::new(signature, serialize(&transaction).unwrap(), last_valid_slot);
-=======
-        let info = TransactionInfo::new(
-            signature,
-            serialize(&transaction).unwrap(),
-            last_valid_block_height,
-            None,
-            None,
-        );
->>>>>>> 7482861f4 (Add parameter to allow setting max-retries for SendTransaction rpc (#19387))
         self.transaction_sender.send(info).unwrap();
         self.poll_signature_status(&signature, blockhash, last_valid_slot, commitment)
             .await

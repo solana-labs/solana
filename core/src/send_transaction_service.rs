@@ -402,17 +402,13 @@ mod test {
         info!("Expired transactions are dropped...");
         transactions.insert(
             Signature::default(),
-<<<<<<< HEAD:core/src/send_transaction_service.rs
-            TransactionInfo::new(Signature::default(), vec![], root_bank.slot() - 1, None),
-=======
             TransactionInfo::new(
                 Signature::default(),
                 vec![],
-                root_bank.block_height() - 1,
+                root_bank.slot() - 1,
                 None,
                 None,
             ),
->>>>>>> 7482861f4 (Add parameter to allow setting max-retries for SendTransaction rpc (#19387)):send-transaction-service/src/send_transaction_service.rs
         );
         let result = SendTransactionService::process_transactions(
             &working_bank,
@@ -435,17 +431,7 @@ mod test {
         info!("Rooted transactions are dropped...");
         transactions.insert(
             rooted_signature,
-<<<<<<< HEAD:core/src/send_transaction_service.rs
-            TransactionInfo::new(rooted_signature, vec![], working_bank.slot(), None),
-=======
-            TransactionInfo::new(
-                rooted_signature,
-                vec![],
-                working_bank.block_height(),
-                None,
-                None,
-            ),
->>>>>>> 7482861f4 (Add parameter to allow setting max-retries for SendTransaction rpc (#19387)):send-transaction-service/src/send_transaction_service.rs
+            TransactionInfo::new(rooted_signature, vec![], working_bank.slot(), None, None),
         );
         let result = SendTransactionService::process_transactions(
             &working_bank,
@@ -468,17 +454,7 @@ mod test {
         info!("Failed transactions are dropped...");
         transactions.insert(
             failed_signature,
-<<<<<<< HEAD:core/src/send_transaction_service.rs
-            TransactionInfo::new(failed_signature, vec![], working_bank.slot(), None),
-=======
-            TransactionInfo::new(
-                failed_signature,
-                vec![],
-                working_bank.block_height(),
-                None,
-                None,
-            ),
->>>>>>> 7482861f4 (Add parameter to allow setting max-retries for SendTransaction rpc (#19387)):send-transaction-service/src/send_transaction_service.rs
+            TransactionInfo::new(failed_signature, vec![], working_bank.slot(), None, None),
         );
         let result = SendTransactionService::process_transactions(
             &working_bank,
@@ -501,17 +477,13 @@ mod test {
         info!("Non-rooted transactions are kept...");
         transactions.insert(
             non_rooted_signature,
-<<<<<<< HEAD:core/src/send_transaction_service.rs
-            TransactionInfo::new(non_rooted_signature, vec![], working_bank.slot(), None),
-=======
             TransactionInfo::new(
                 non_rooted_signature,
                 vec![],
-                working_bank.block_height(),
+                working_bank.slot(),
                 None,
                 None,
             ),
->>>>>>> 7482861f4 (Add parameter to allow setting max-retries for SendTransaction rpc (#19387)):send-transaction-service/src/send_transaction_service.rs
         );
         let result = SendTransactionService::process_transactions(
             &working_bank,
@@ -535,18 +507,15 @@ mod test {
         info!("Unknown transactions are retried...");
         transactions.insert(
             Signature::default(),
-<<<<<<< HEAD:core/src/send_transaction_service.rs
-            TransactionInfo::new(Signature::default(), vec![], working_bank.slot(), None),
-=======
             TransactionInfo::new(
                 Signature::default(),
                 vec![],
-                working_bank.block_height(),
+                working_bank.slot(),
                 None,
                 None,
             ),
         );
-        let result = SendTransactionService::process_transactions::<NullTpuInfo>(
+        let result = SendTransactionService::process_transactions(
             &working_bank,
             &root_bank,
             &send_socket,
@@ -571,7 +540,7 @@ mod test {
             TransactionInfo::new(
                 Signature::default(),
                 vec![],
-                working_bank.block_height(),
+                working_bank.slot(),
                 None,
                 Some(0),
             ),
@@ -581,11 +550,10 @@ mod test {
             TransactionInfo::new(
                 Signature::default(),
                 vec![],
-                working_bank.block_height(),
+                working_bank.slot(),
                 None,
                 Some(1),
             ),
->>>>>>> 7482861f4 (Add parameter to allow setting max-retries for SendTransaction rpc (#19387)):send-transaction-service/src/send_transaction_service.rs
         );
         let result = SendTransactionService::process_transactions(
             &working_bank,
@@ -605,7 +573,7 @@ mod test {
                 ..ProcessTransactionsResult::default()
             }
         );
-        let result = SendTransactionService::process_transactions::<NullTpuInfo>(
+        let result = SendTransactionService::process_transactions(
             &working_bank,
             &root_bank,
             &send_socket,
