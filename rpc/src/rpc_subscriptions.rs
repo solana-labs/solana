@@ -843,6 +843,22 @@ impl RpcSubscriptions {
                 ("num_signatures_notified", num_signatures_notified, i64),
                 ("notifications_time", total_time.as_us() as i64, i64),
             );
+            inc_new_counter_info!(
+                "rpc-subscription-counter-num_accounts_notified",
+                num_accounts_notified
+            );
+            inc_new_counter_info!(
+                "rpc-subscription-counter-num_logs_notified",
+                num_logs_notified
+            );
+            inc_new_counter_info!(
+                "rpc-subscription-counter-num_programs_notified",
+                num_programs_notified
+            );
+            inc_new_counter_info!(
+                "rpc-subscription-counter-num_signatures_notified",
+                num_signatures_notified
+            );
         }
     }
 
