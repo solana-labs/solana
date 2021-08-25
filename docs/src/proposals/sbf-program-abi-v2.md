@@ -89,6 +89,24 @@ The idea is to serialize the meta data of all accounts once per transaction, and
 - Read-only or read-write depends on the instruction context
 - Content: `[u8]`
 
+### Writable Attributes
+Alternative options:
+- Three regions per account: Read-only metadata, writable metadata, account data
+- All meta data in readonly region, plus duplicate for writable metadata in extra region
+- Two regions: Definitely read-only metadata and potentially writable metadata including readonly accounts and unmapped accounts
+
+### Encoding Alignment
+Alternative options:
+- Tightly pack everything
+- Tightly pack attributes, pad values
+- Pad attributes and their values
+
+### Host and Guest (VM) Address Space for Indirections / Pointers
+Alternative options:
+- Store guest pointers only, map host on demand
+- Translate on every context switch (invocation, exit, syscall)
+- Store both guest and host, but encrypt host pointers
+
 ### Syscalls
 
 #### Cross Program Invocation
