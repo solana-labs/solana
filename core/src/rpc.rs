@@ -2163,6 +2163,7 @@ fn _send_transaction(
     wire_transaction: Vec<u8>,
     last_valid_slot: Slot,
     durable_nonce_info: Option<(Pubkey, Hash)>,
+    max_retries: Option<usize>,
 ) -> Result<String> {
     if transaction.signatures.is_empty() {
         return Err(RpcCustomError::TransactionSignatureVerificationFailure.into());
@@ -2173,6 +2174,7 @@ fn _send_transaction(
         wire_transaction,
         last_valid_slot,
         durable_nonce_info,
+        max_retries,
     );
     meta.transaction_sender
         .lock()
@@ -3112,7 +3114,14 @@ pub mod rpc_full {
                 Error::internal_error()
             })?;
 
-            _send_transaction(meta, transaction, wire_transaction, last_valid_slot, None)
+            _send_transaction(
+                meta,
+                transaction,
+                wire_transaction,
+                last_valid_slot,
+                None,
+                None,
+            )
         }
 
         fn send_transaction(
@@ -3204,6 +3213,7 @@ pub mod rpc_full {
                 wire_transaction,
                 last_valid_slot,
                 durable_nonce_info,
+                config.max_retries,
             )
         }
 
