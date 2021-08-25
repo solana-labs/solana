@@ -35,6 +35,8 @@ pub struct TransactionInfo {
     pub wire_transaction: Vec<u8>,
     pub last_valid_slot: Slot,
     pub durable_nonce_info: Option<(Pubkey, Hash)>,
+    pub max_retries: Option<usize>,
+    retries: usize,
 }
 
 impl TransactionInfo {
@@ -43,12 +45,15 @@ impl TransactionInfo {
         wire_transaction: Vec<u8>,
         last_valid_slot: Slot,
         durable_nonce_info: Option<(Pubkey, Hash)>,
+        max_retries: Option<usize>,
     ) -> Self {
         Self {
             signature,
             wire_transaction,
             last_valid_slot,
             durable_nonce_info,
+            max_retries,
+            retries: 0,
         }
     }
 }
@@ -100,6 +105,7 @@ struct ProcessTransactionsResult {
     rooted: u64,
     expired: u64,
     retried: u64,
+    max_retries_elapsed: u64,
     failed: u64,
     retained: u64,
 }
@@ -222,7 +228,7 @@ impl SendTransactionService {
     ) -> ProcessTransactionsResult {
         let mut result = ProcessTransactionsResult::default();
 
-        transactions.retain(|signature, transaction_info| {
+        transactions.retain(|signature, mut transaction_info| {
             if transaction_info.durable_nonce_info.is_some() {
                 inc_new_counter_info!("send_transaction_service-nonced", 1);
             }
@@ -249,6 +255,14 @@ impl SendTransactionService {
                 inc_new_counter_info!("send_transaction_service-expired", 1);
                 return false;
             }
+            if let Some(max_retries) = transaction_info.max_retries {
+                if transaction_info.retries >= max_retries {
+                    info!("Dropping transaction due to max retries: {}", signature);
+                    result.max_retries_elapsed += 1;
+                    inc_new_counter_info!("send_transaction_service-max_retries", 1);
+                    return false;
+                }
+            }
 
             match working_bank.get_signature_status_slot(signature) {
                 None => {
@@ -256,6 +270,7 @@ impl SendTransactionService {
                     // dropped or landed in another fork.  Re-send it
                     info!("Retrying transaction: {}", signature);
                     result.retried += 1;
+                    transaction_info.retries += 1;
                     inc_new_counter_info!("send_transaction_service-retry", 1);
                     let addresses = leader_info
                         .as_ref()
@@ -387,7 +402,17 @@ mod test {
         info!("Expired transactions are dropped...");
         transactions.insert(
             Signature::default(),
+<<<<<<< HEAD:core/src/send_transaction_service.rs
             TransactionInfo::new(Signature::default(), vec![], root_bank.slot() - 1, None),
+=======
+            TransactionInfo::new(
+                Signature::default(),
+                vec![],
+                root_bank.block_height() - 1,
+                None,
+                None,
+            ),
+>>>>>>> 7482861f4 (Add parameter to allow setting max-retries for SendTransaction rpc (#19387)):send-transaction-service/src/send_transaction_service.rs
         );
         let result = SendTransactionService::process_transactions(
             &working_bank,
@@ -410,7 +435,17 @@ mod test {
         info!("Rooted transactions are dropped...");
         transactions.insert(
             rooted_signature,
+<<<<<<< HEAD:core/src/send_transaction_service.rs
             TransactionInfo::new(rooted_signature, vec![], working_bank.slot(), None),
+=======
+            TransactionInfo::new(
+                rooted_signature,
+                vec![],
+                working_bank.block_height(),
+                None,
+                None,
+            ),
+>>>>>>> 7482861f4 (Add parameter to allow setting max-retries for SendTransaction rpc (#19387)):send-transaction-service/src/send_transaction_service.rs
         );
         let result = SendTransactionService::process_transactions(
             &working_bank,
@@ -433,7 +468,17 @@ mod test {
         info!("Failed transactions are dropped...");
         transactions.insert(
             failed_signature,
+<<<<<<< HEAD:core/src/send_transaction_service.rs
             TransactionInfo::new(failed_signature, vec![], working_bank.slot(), None),
+=======
+            TransactionInfo::new(
+                failed_signature,
+                vec![],
+                working_bank.block_height(),
+                None,
+                None,
+            ),
+>>>>>>> 7482861f4 (Add parameter to allow setting max-retries for SendTransaction rpc (#19387)):send-transaction-service/src/send_transaction_service.rs
         );
         let result = SendTransactionService::process_transactions(
             &working_bank,
@@ -456,7 +501,17 @@ mod test {
         info!("Non-rooted transactions are kept...");
         transactions.insert(
             non_rooted_signature,
+<<<<<<< HEAD:core/src/send_transaction_service.rs
             TransactionInfo::new(non_rooted_signature, vec![], working_bank.slot(), None),
+=======
+            TransactionInfo::new(
+                non_rooted_signature,
+                vec![],
+                working_bank.block_height(),
+                None,
+                None,
+            ),
+>>>>>>> 7482861f4 (Add parameter to allow setting max-retries for SendTransaction rpc (#19387)):send-transaction-service/src/send_transaction_service.rs
         );
         let result = SendTransactionService::process_transactions(
             &working_bank,
@@ -480,7 +535,57 @@ mod test {
         info!("Unknown transactions are retried...");
         transactions.insert(
             Signature::default(),
+<<<<<<< HEAD:core/src/send_transaction_service.rs
             TransactionInfo::new(Signature::default(), vec![], working_bank.slot(), None),
+=======
+            TransactionInfo::new(
+                Signature::default(),
+                vec![],
+                working_bank.block_height(),
+                None,
+                None,
+            ),
+        );
+        let result = SendTransactionService::process_transactions::<NullTpuInfo>(
+            &working_bank,
+            &root_bank,
+            &send_socket,
+            &tpu_address,
+            &mut transactions,
+            &None,
+            leader_forward_count,
+        );
+        assert_eq!(transactions.len(), 1);
+        assert_eq!(
+            result,
+            ProcessTransactionsResult {
+                retried: 1,
+                ..ProcessTransactionsResult::default()
+            }
+        );
+        transactions.clear();
+
+        info!("Transactions are only retried until max_retries");
+        transactions.insert(
+            Signature::new(&[1; 64]),
+            TransactionInfo::new(
+                Signature::default(),
+                vec![],
+                working_bank.block_height(),
+                None,
+                Some(0),
+            ),
+        );
+        transactions.insert(
+            Signature::new(&[2; 64]),
+            TransactionInfo::new(
+                Signature::default(),
+                vec![],
+                working_bank.block_height(),
+                None,
+                Some(1),
+            ),
+>>>>>>> 7482861f4 (Add parameter to allow setting max-retries for SendTransaction rpc (#19387)):send-transaction-service/src/send_transaction_service.rs
         );
         let result = SendTransactionService::process_transactions(
             &working_bank,
@@ -496,6 +601,24 @@ mod test {
             result,
             ProcessTransactionsResult {
                 retried: 1,
+                max_retries_elapsed: 1,
+                ..ProcessTransactionsResult::default()
+            }
+        );
+        let result = SendTransactionService::process_transactions::<NullTpuInfo>(
+            &working_bank,
+            &root_bank,
+            &send_socket,
+            &tpu_address,
+            &mut transactions,
+            &None,
+            leader_forward_count,
+        );
+        assert!(transactions.is_empty());
+        assert_eq!(
+            result,
+            ProcessTransactionsResult {
+                max_retries_elapsed: 1,
                 ..ProcessTransactionsResult::default()
             }
         );
@@ -559,6 +682,7 @@ mod test {
                 vec![],
                 last_valid_slot,
                 Some((nonce_address, durable_nonce)),
+                None,
             ),
         );
         let result = SendTransactionService::process_transactions(
@@ -586,6 +710,7 @@ mod test {
                 vec![],
                 last_valid_slot,
                 Some((nonce_address, Hash::new_unique())),
+                None,
             ),
         );
         let result = SendTransactionService::process_transactions(
@@ -615,6 +740,7 @@ mod test {
                 vec![],
                 last_valid_slot,
                 Some((nonce_address, Hash::new_unique())),
+                None,
             ),
         );
         let result = SendTransactionService::process_transactions(
@@ -642,6 +768,7 @@ mod test {
                 vec![],
                 root_bank.slot() - 1,
                 Some((nonce_address, durable_nonce)),
+                None,
             ),
         );
         let result = SendTransactionService::process_transactions(
@@ -670,6 +797,7 @@ mod test {
                 vec![],
                 last_valid_slot,
                 Some((nonce_address, Hash::new_unique())), // runtime should advance nonce on failed transactions
+                None,
             ),
         );
         let result = SendTransactionService::process_transactions(
@@ -698,6 +826,7 @@ mod test {
                 vec![],
                 last_valid_slot,
                 Some((nonce_address, Hash::new_unique())), // runtime advances nonce when transaction lands
+                None,
             ),
         );
         let result = SendTransactionService::process_transactions(
@@ -727,6 +856,7 @@ mod test {
                 vec![],
                 last_valid_slot,
                 Some((nonce_address, durable_nonce)),
+                None,
             ),
         );
         let result = SendTransactionService::process_transactions(

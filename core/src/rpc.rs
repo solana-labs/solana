@@ -2163,6 +2163,7 @@ fn _send_transaction(
     wire_transaction: Vec<u8>,
     last_valid_slot: Slot,
     durable_nonce_info: Option<(Pubkey, Hash)>,
+    max_retries: Option<usize>,
 ) -> Result<String> {
     if transaction.signatures.is_empty() {
         return Err(RpcCustomError::TransactionSignatureVerificationFailure.into());
@@ -2173,6 +2174,7 @@ fn _send_transaction(
         wire_transaction,
         last_valid_slot,
         durable_nonce_info,
+        max_retries,
     );
     meta.transaction_sender
         .lock()
@@ -3151,10 +3153,252 @@ pub mod rpc_full {
                 last_valid_slot = preflight_bank.slot() + MAX_RECENT_BLOCKHASHES as u64;
             }
 
+<<<<<<< HEAD:core/src/rpc.rs
+=======
+        #[rpc(meta, name = "isBlockhashValid")]
+        fn is_blockhash_valid(
+            &self,
+            meta: Self::Metadata,
+            blockhash: String,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<RpcResponse<bool>>;
+
+        #[rpc(meta, name = "getFeeForMessage")]
+        fn get_fee_for_message(
+            &self,
+            meta: Self::Metadata,
+            blockhash: String,
+            data: String,
+            encoding: UiTransactionEncoding,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<RpcResponse<Option<u64>>>;
+    }
+
+    pub struct FullImpl;
+    impl Full for FullImpl {
+        type Metadata = JsonRpcRequestProcessor;
+
+        fn get_recent_performance_samples(
+            &self,
+            meta: Self::Metadata,
+            limit: Option<usize>,
+        ) -> Result<Vec<RpcPerfSample>> {
+            debug!("get_recent_performance_samples request received");
+
+            let limit = limit.unwrap_or(PERFORMANCE_SAMPLES_LIMIT);
+
+            if limit > PERFORMANCE_SAMPLES_LIMIT {
+                return Err(Error::invalid_params(format!(
+                    "Invalid limit; max {}",
+                    PERFORMANCE_SAMPLES_LIMIT
+                )));
+            }
+
+            Ok(meta
+                .blockstore
+                .get_recent_perf_samples(limit)
+                .map_err(|err| {
+                    warn!("get_recent_performance_samples failed: {:?}", err);
+                    Error::invalid_request()
+                })?
+                .iter()
+                .map(|(slot, sample)| RpcPerfSample {
+                    slot: *slot,
+                    num_transactions: sample.num_transactions,
+                    num_slots: sample.num_slots,
+                    sample_period_secs: sample.sample_period_secs,
+                })
+                .collect())
+        }
+
+        fn get_cluster_nodes(&self, meta: Self::Metadata) -> Result<Vec<RpcContactInfo>> {
+            debug!("get_cluster_nodes rpc request received");
+            let cluster_info = &meta.cluster_info;
+            let socket_addr_space = cluster_info.socket_addr_space();
+            let valid_address_or_none = |addr: &SocketAddr| -> Option<SocketAddr> {
+                if ContactInfo::is_valid_address(addr, socket_addr_space) {
+                    Some(*addr)
+                } else {
+                    None
+                }
+            };
+            let my_shred_version = cluster_info.my_shred_version();
+            Ok(cluster_info
+                .all_peers()
+                .iter()
+                .filter_map(|(contact_info, _)| {
+                    if my_shred_version == contact_info.shred_version
+                        && ContactInfo::is_valid_address(&contact_info.gossip, socket_addr_space)
+                    {
+                        let (version, feature_set) = if let Some(version) =
+                            cluster_info.get_node_version(&contact_info.id)
+                        {
+                            (Some(version.to_string()), Some(version.feature_set))
+                        } else {
+                            (None, None)
+                        };
+                        Some(RpcContactInfo {
+                            pubkey: contact_info.id.to_string(),
+                            gossip: Some(contact_info.gossip),
+                            tpu: valid_address_or_none(&contact_info.tpu),
+                            rpc: valid_address_or_none(&contact_info.rpc),
+                            version,
+                            feature_set,
+                            shred_version: Some(my_shred_version),
+                        })
+                    } else {
+                        None // Exclude spy nodes
+                    }
+                })
+                .collect())
+        }
+
+        fn get_genesis_hash(&self, meta: Self::Metadata) -> Result<String> {
+            debug!("get_genesis_hash rpc request received");
+            Ok(meta.genesis_hash.to_string())
+        }
+
+        fn get_signature_statuses(
+            &self,
+            meta: Self::Metadata,
+            signature_strs: Vec<String>,
+            config: Option<RpcSignatureStatusConfig>,
+        ) -> BoxFuture<Result<RpcResponse<Vec<Option<TransactionStatus>>>>> {
+            debug!(
+                "get_signature_statuses rpc request received: {:?}",
+                signature_strs.len()
+            );
+            if signature_strs.len() > MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS {
+                return Box::pin(future::err(Error::invalid_params(format!(
+                    "Too many inputs provided; max {}",
+                    MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS
+                ))));
+            }
+            let mut signatures: Vec<Signature> = vec![];
+            for signature_str in signature_strs {
+                match verify_signature(&signature_str) {
+                    Ok(signature) => {
+                        signatures.push(signature);
+                    }
+                    Err(err) => return Box::pin(future::err(err)),
+                }
+            }
+            Box::pin(async move { meta.get_signature_statuses(signatures, config).await })
+        }
+
+        fn get_max_retransmit_slot(&self, meta: Self::Metadata) -> Result<Slot> {
+            debug!("get_max_retransmit_slot rpc request received");
+            Ok(meta.get_max_retransmit_slot())
+        }
+
+        fn get_max_shred_insert_slot(&self, meta: Self::Metadata) -> Result<Slot> {
+            debug!("get_max_shred_insert_slot rpc request received");
+            Ok(meta.get_max_shred_insert_slot())
+        }
+
+        fn request_airdrop(
+            &self,
+            meta: Self::Metadata,
+            pubkey_str: String,
+            lamports: u64,
+            config: Option<RpcRequestAirdropConfig>,
+        ) -> Result<String> {
+            debug!("request_airdrop rpc request received");
+            trace!(
+                "request_airdrop id={} lamports={} config: {:?}",
+                pubkey_str,
+                lamports,
+                &config
+            );
+
+            let faucet_addr = meta.config.faucet_addr.ok_or_else(Error::invalid_request)?;
+            let pubkey = verify_pubkey(&pubkey_str)?;
+
+            let config = config.unwrap_or_default();
+            let bank = meta.bank(config.commitment);
+
+            let blockhash = if let Some(blockhash) = config.recent_blockhash {
+                verify_hash(&blockhash)?
+            } else {
+                bank.confirmed_last_blockhash()
+            };
+            let last_valid_block_height = bank
+                .get_blockhash_last_valid_block_height(&blockhash)
+                .unwrap_or(0);
+
+            let transaction =
+                request_airdrop_transaction(&faucet_addr, &pubkey, lamports, blockhash).map_err(
+                    |err| {
+                        info!("request_airdrop_transaction failed: {:?}", err);
+                        Error::internal_error()
+                    },
+                )?;
+
+            let wire_transaction = serialize(&transaction).map_err(|err| {
+                info!("request_airdrop: serialize error: {:?}", err);
+                Error::internal_error()
+            })?;
+
+            let signature = if !transaction.signatures.is_empty() {
+                transaction.signatures[0]
+            } else {
+                return Err(RpcCustomError::TransactionSignatureVerificationFailure.into());
+            };
+
+            _send_transaction(
+                meta,
+                signature,
+                wire_transaction,
+                last_valid_block_height,
+                None,
+                None,
+            )
+        }
+
+        fn send_transaction(
+            &self,
+            meta: Self::Metadata,
+            data: String,
+            config: Option<RpcSendTransactionConfig>,
+        ) -> Result<String> {
+            debug!("send_transaction rpc request received");
+            let config = config.unwrap_or_default();
+            let encoding = config.encoding.unwrap_or(UiTransactionEncoding::Base58);
+            let (wire_transaction, unsanitized_tx) =
+                decode_and_deserialize::<VersionedTransaction>(data, encoding)?;
+
+            let preflight_commitment = config
+                .preflight_commitment
+                .map(|commitment| CommitmentConfig { commitment });
+            let preflight_bank = &*meta.bank(preflight_commitment);
+            let transaction = sanitize_transaction(unsanitized_tx)?;
+            let signature = *transaction.signature();
+
+            let mut last_valid_block_height = preflight_bank
+                .get_blockhash_last_valid_block_height(transaction.message().recent_blockhash())
+                .unwrap_or(0);
+
+            let durable_nonce_info = transaction
+                .get_durable_nonce()
+                .map(|&pubkey| (pubkey, *transaction.message().recent_blockhash()));
+            if durable_nonce_info.is_some() {
+                // While it uses a defined constant, this last_valid_block_height value is chosen arbitrarily.
+                // It provides a fallback timeout for durable-nonce transaction retries in case of
+                // malicious packing of the retry queue. Durable-nonce transactions are otherwise
+                // retried until the nonce is advanced.
+                last_valid_block_height =
+                    preflight_bank.block_height() + MAX_RECENT_BLOCKHASHES as u64;
+            }
+
+>>>>>>> 7482861f4 (Add parameter to allow setting max-retries for SendTransaction rpc (#19387)):rpc/src/rpc.rs
             if !config.skip_preflight {
                 if let Err(e) = verify_transaction(
                     &transaction,
                     preflight_bank.libsecp256k1_0_5_upgrade_enabled(),
+<<<<<<< HEAD:core/src/rpc.rs
+=======
+                    preflight_bank.libsecp256k1_fail_on_bad_count(),
+>>>>>>> 7482861f4 (Add parameter to allow setting max-retries for SendTransaction rpc (#19387)):rpc/src/rpc.rs
                 ) {
                     return Err(e);
                 }
@@ -3204,6 +3448,7 @@ pub mod rpc_full {
                 wire_transaction,
                 last_valid_slot,
                 durable_nonce_info,
+                config.max_retries,
             )
         }
 

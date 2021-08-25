@@ -21,6 +21,7 @@ pub struct RpcSendTransactionConfig {
     pub skip_preflight: bool,
     pub preflight_commitment: Option<CommitmentLevel>,
     pub encoding: Option<UiTransactionEncoding>,
+    pub max_retries: Option<usize>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
