@@ -2643,6 +2643,7 @@ impl AccountsDb {
         metric_name: &'static str,
         ancestors: &Ancestors,
         scan_func: F,
+        collect_all_unsorted: bool,
     ) -> A
     where
         F: Fn(&mut A, (&Pubkey, LoadedAccount, Slot)),
@@ -2660,6 +2661,7 @@ impl AccountsDb {
                     scan_func(&mut collector, (pubkey, loaded_account, slot));
                 }
             },
+            collect_all_unsorted,
         );
         collector
     }
@@ -2669,6 +2671,7 @@ impl AccountsDb {
         metric_name: &'static str,
         ancestors: &Ancestors,
         range: R,
+        collect_all_unsorted: bool,
         scan_func: F,
     ) -> A
     where
@@ -2681,6 +2684,7 @@ impl AccountsDb {
             metric_name,
             ancestors,
             range,
+            collect_all_unsorted,
             |pubkey, (account_info, slot)| {
                 // unlike other scan fns, this is called from Bank::collect_rent_eagerly(),
                 // which is on-consensus processing in the banking/replaying stage.
@@ -4589,7 +4593,11 @@ impl AccountsDb {
             .accounts_index
             .account_maps
             .iter()
-            .map(|btree| btree.read().unwrap().keys().cloned().collect::<Vec<_>>())
+            .map(|map| {
+                let mut keys = map.read().unwrap().keys().cloned().collect::<Vec<_>>();
+                keys.sort_unstable(); // hashmap is not ordered, but bins are relative to each other
+                keys
+            })
             .flatten()
             .collect();
         collect.stop();
@@ -7152,6 +7160,8 @@ pub mod tests {
         );
     }
 
+    const COLLECT_ALL_UNSORTED_FALSE: bool = false;
+
     #[test]
     fn test_accountsdb_latest_ancestor() {
         solana_logger::setup();
@@ -7182,6 +7192,7 @@ pub mod tests {
             |accounts: &mut Vec<AccountSharedData>, option| {
                 accounts.push(option.1.take_account());
             },
+            COLLECT_ALL_UNSORTED_FALSE,
         );
         assert_eq!(accounts, vec![account1]);
     }
@@ -8717,6 +8728,7 @@ pub mod tests {
             |accounts: &mut Vec<AccountSharedData>, option| {
                 accounts.push(option.1.take_account());
             },
+            COLLECT_ALL_UNSORTED_FALSE,
         );
         assert_eq!(accounts, vec![account0]);
 
@@ -8727,6 +8739,7 @@ pub mod tests {
             |accounts: &mut Vec<AccountSharedData>, option| {
                 accounts.push(option.1.take_account());
             },
+            COLLECT_ALL_UNSORTED_FALSE,
         );
         assert_eq!(accounts.len(), 2);
     }
