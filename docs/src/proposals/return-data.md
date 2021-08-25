@@ -94,35 +94,17 @@ certainly work for the CPI case, but this would not work RPC or Transaction case
 ## Proposed Solution
 
 The callee can set the return data using a new system call `sol_set_return_data(u8 *buf, u64 length)`.
-This function does not return and signals success for execution of the program instruction. There is a limit
-of 1024 bytes for the returndata.
+There is a limit of 1024 bytes for the returndata. This function can be called multiple times, and
+will simply overwrite what was written in the last call.
 
-The caller can retrieve the return data of the callee by using a new variant of the `sol_invoke` system call:
+The return data can be retrieved with `sol_get_return_data(u8 mut *buf, u64 length) -> u64`. This function
+returns the length of the return data.
 
-```
-fn sol_invoke_signed_return_data_rust(
-    instruction_addr: *const u8,
-    account_infos_addr: *const u8,
-    account_infos_len: u64,
-    signers_seeds_addr: *const u8,
-    signers_seeds_len: u64,
-    return_data_addr: *mut u8,
-    return_data_length: *mut u64,
-) -> u64;
+When an instruction calls `sol_invoke()`, the return data of the callee is copied into the return data
+of the current instruction. This means that any return data is automatically passed up the call stack,
+to the callee of the current instruction (or the RPC call).
 
-uint64_t sol_invoke_signed_return_data_c(
-  const SolInstruction *instruction,
-  const SolAccountInfo *account_infos,
-  int account_infos_len,
-  const SolSignerSeeds *signers_seeds,
-  int signers_seeds_len
-  uint8_t *return_data,
-  uint64_t *return_data_length,
-);
-```
-On entry, `return_data_length` should point to the size of the buffer at `return_data`. If the callee
-sets more data than this buffer, an error should be returned. On successful exit, `return_data_length`
-will contain the actual length returned by the callee.
+Passing a return buffer invoke the same compute cost as passing data as input.
 
 For a normal RPC or Transaction, the returndata is base64-encoded and stored along side the sol_log
 strings in the [stable log](https://github.com/solana-labs/solana/blob/95292841947763bdd47ef116b40fc34d0585bca8/sdk/src/process_instruction.rs#L275-L281).
