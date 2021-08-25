@@ -1,15 +1,17 @@
 //! The `pubsub` module implements a threaded subscription service on client RPC request
 
-use crate::rpc_subscription_tracker::SubscriptionParams;
 use {
     crate::{
         rpc_pubsub::{RpcSolPubSubImpl, RpcSolPubSubInternal},
-        rpc_subscription_tracker::{SubscriptionControl, SubscriptionId, SubscriptionToken},
+        rpc_subscription_tracker::{
+            SubscriptionControl, SubscriptionId, SubscriptionParams, SubscriptionToken,
+        },
         rpc_subscriptions::{RpcNotification, RpcSubscriptions},
     },
     dashmap::{mapref::entry::Entry, DashMap},
     jsonrpc_core::IoHandler,
     soketto::handshake::{server, Server},
+    solana_metrics::TokenCounter,
     std::{
         io,
         net::SocketAddr,
@@ -58,6 +60,7 @@ impl PubSubService {
     ) -> (Trigger, Self) {
         let subscription_control = subscriptions.control().clone();
         info!("rpc_pubsub bound to {:?}", pubsub_addr);
+
         let (trigger, tripwire) = Tripwire::new();
         let thread_hdl = Builder::new()
             .name("solana-pubsub".to_string())
@@ -132,7 +135,6 @@ impl BroadcastHandler {
 
             if notification.is_final {
                 entry.remove();
-
             }
             notification
                 .json
@@ -185,6 +187,7 @@ pub fn test_connection(
     subscriptions: &Arc<RpcSubscriptions>,
 ) -> (RpcSolPubSubImpl, TestBroadcastReceiver) {
     let current_subscriptions = Arc::new(DashMap::new());
+
     let rpc_impl = RpcSolPubSubImpl::new(
         PubSubConfig {
             enable_vote_subscription: true,
@@ -259,6 +262,7 @@ async fn handle_connection(
                         Err(err) => return Err(err.into()),
                     },
                     result = broadcast_receiver.recv() => {
+
                         // In both possible error cases (closed or lagged) we disconnect the client.
                         if let Some(json) = broadcast_handler.handle(result?)? {
                             sender.send_text(&*json).await?;
@@ -268,6 +272,7 @@ async fn handle_connection(
                         warn!("disconnecting websocket client: shutting down");
                         return Ok(())
                     },
+
                 }
             }
         }
@@ -296,7 +301,7 @@ async fn listen(
     mut tripwire: Tripwire,
 ) -> io::Result<()> {
     let listener = tokio::net::TcpListener::bind(&listen_address).await?;
-    let counter = ConnectionCounter::new();
+    let counter = TokenCounter::new("rpc_pubsub_connections");
     loop {
         select! {
             result = listener.accept() => match result {
@@ -321,47 +326,6 @@ async fn listen(
             },
             _ = &mut tripwire => return Ok(()),
         }
-    }
-}
-
-struct ConnectionCounter(Arc<()>);
-impl ConnectionCounter {
-    fn new() -> Self {
-        Self(Arc::new(()))
-    }
-
-    fn create_token(&self) -> ConnectionCounterToken {
-        // num_connections = strong_count
-        //    - 1 (in ConnectionCounter)
-        //    + 1 (connection that's being created)
-        datapoint_info!(
-            "rpc_pubsub_connections",
-            ("count", Arc::strong_count(&self.0), i64)
-        );
-        ConnectionCounterToken(self.0.clone())
-    }
-}
-
-struct ConnectionCounterToken(Arc<()>);
-
-impl Drop for ConnectionCounterToken {
-    fn drop(&mut self) {
-        // num_connections = strong_count
-        //    - 1 (in ConnectionCounter)
-        //    - 1 (connection that's being dropped)
-        datapoint_info!(
-            "rpc_pubsub_connections",
-            ("count", Arc::strong_count(&self.0) - 2, i64)
-        );
-    }
-}
-
-impl Drop for ConnectionCounter {
-    fn drop(&mut self) {
-        datapoint_info!(
-            "rpc_pubsub_connections",
-            ("count", Arc::strong_count(&self.0) - 2, i64)
-        );
     }
 }
 

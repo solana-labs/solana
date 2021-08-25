@@ -3,6 +3,7 @@ use {
     dashmap::{mapref::entry::Entry as DashEntry, DashMap},
     solana_account_decoder::{UiAccountEncoding, UiDataSliceConfig},
     solana_client::rpc_filter::RpcFilterType,
+    solana_metrics::{CounterToken, TokenCounter},
     solana_runtime::{
         bank::{TransactionLogCollectorConfig, TransactionLogCollectorFilter},
         bank_forks::BankForks,
@@ -155,6 +156,7 @@ struct SubscriptionControlInner {
     max_active_subscriptions: usize,
     sender: crossbeam_channel::Sender<NotificationEntry>,
     broadcast_sender: broadcast::Sender<RpcNotification>,
+    counter: TokenCounter,
 }
 
 impl SubscriptionControl {
@@ -169,6 +171,7 @@ impl SubscriptionControl {
             max_active_subscriptions,
             sender,
             broadcast_sender,
+            counter: TokenCounter::new("rpc_pubsub_total_subscriptions"),
         }))
     }
 
@@ -186,22 +189,27 @@ impl SubscriptionControl {
         );
         let count = self.0.subscriptions.len();
         match self.0.subscriptions.entry(params) {
-            DashEntry::Occupied(entry) => {
-                Ok(SubscriptionToken(entry.get().upgrade().expect(
-                    "dead subscription encountered in SubscriptionControl",
-                )))
-            }
+            DashEntry::Occupied(entry) => Ok(SubscriptionToken(
+                entry
+                    .get()
+                    .upgrade()
+                    .expect("dead subscription encountered in SubscriptionControl"),
+                self.0.counter.create_token(),
+            )),
             DashEntry::Vacant(entry) => {
                 if count >= self.0.max_active_subscriptions {
                     inc_new_counter_info!("rpc-subscription-refused-limit-reached", 1);
                     return Err(TooManySubscriptions(()));
                 }
                 let id = SubscriptionId::from(self.0.next_id.fetch_add(1, Ordering::AcqRel));
-                let token = SubscriptionToken(Arc::new(SubscriptionTokenInner {
-                    control: Arc::clone(&self.0),
-                    params: entry.key().clone(),
-                    id,
-                }));
+                let token = SubscriptionToken(
+                    Arc::new(SubscriptionTokenInner {
+                        control: Arc::clone(&self.0),
+                        params: entry.key().clone(),
+                        id,
+                    }),
+                    self.0.counter.create_token(),
+                );
                 let _ = self
                     .0
                     .sender
@@ -505,7 +513,7 @@ impl Drop for SubscriptionTokenInner {
 }
 
 #[derive(Clone)]
-pub struct SubscriptionToken(Arc<SubscriptionTokenInner>);
+pub struct SubscriptionToken(Arc<SubscriptionTokenInner>, CounterToken);
 
 impl SubscriptionToken {
     pub fn id(&self) -> SubscriptionId {
