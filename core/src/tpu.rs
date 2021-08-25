@@ -2,6 +2,7 @@
 //! multi-stage transaction processing pipeline in software.
 
 use crate::{
+    bank_cost_trackers::BankCostTrackers,
     banking_stage::BankingStage,
     broadcast_stage::{BroadcastStage, BroadcastStageType, RetransmitSlotsReceiver},
     cluster_info_vote_listener::{
@@ -9,7 +10,6 @@ use crate::{
         VerifiedVoteSender, VoteTracker,
     },
     cost_model::CostModel,
-    cost_tracker::CostTracker,
     fetch_stage::FetchStage,
     sigverify::TransactionSigVerifier,
     sigverify_stage::SigVerifyStage,
@@ -106,7 +106,7 @@ impl Tpu {
             cluster_confirmed_slot_sender,
         );
 
-        let cost_tracker = Arc::new(RwLock::new(CostTracker::new(cost_model.clone())));
+        let bank_cost_trackers = Arc::new(BankCostTrackers::new(cost_model.clone()));
         let banking_stage = BankingStage::new(
             cluster_info,
             poh_recorder,
@@ -114,7 +114,7 @@ impl Tpu {
             verified_vote_packets_receiver,
             transaction_status_sender,
             replay_vote_sender,
-            cost_tracker,
+            bank_cost_trackers,
         );
 
         let broadcast_stage = broadcast_type.new_broadcast_stage(
