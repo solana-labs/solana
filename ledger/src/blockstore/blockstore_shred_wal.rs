@@ -10,11 +10,18 @@
 //! With the existence of delete operations, order matters and the WAL must replayed in the same
 //! order that it was written.
 
-use super::*;
-use crate::shred::SHRED_PAYLOAD_SIZE;
-use std::collections::BTreeMap;
-use std::time::{SystemTime, UNIX_EPOCH};
-use std::{cmp, fs, io::Read, io::Write, ops::Range};
+use {
+    super::*,
+    crate::shred::SHRED_PAYLOAD_SIZE,
+    std::{
+        cmp,
+        collections::BTreeMap,
+        fs,
+        io::{Read, Write},
+        ops::Range,
+        time::{SystemTime, UNIX_EPOCH},
+    },
+};
 
 pub const SHRED_WAL_DIRECTORY: &str = "log";
 

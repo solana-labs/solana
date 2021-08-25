@@ -1,11 +1,15 @@
 //! Blockstore functions specific to the storage of shreds
 //!
 //! TODO: More documentation
-
-use super::*;
-use crate::shred::SHRED_PAYLOAD_SIZE;
-use std::collections::BTreeMap;
-use std::{fs, io::Read, io::Seek, io::SeekFrom, io::Write};
+use {
+    super::*,
+    crate::shred::SHRED_PAYLOAD_SIZE,
+    std::{
+        collections::BTreeMap,
+        fs,
+        io::{Read, Seek, SeekFrom, Write},
+    },
+};
 
 pub(crate) const SHRED_DIRECTORY: &str = "shreds";
 pub(crate) const DATA_SHRED_DIRECTORY: &str = "data";
