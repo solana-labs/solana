@@ -10,7 +10,6 @@ use solana_program::{
     msg,
     program_error::ProgramError,
     pubkey::Pubkey,
-    system_program,
     sysvar::{
         self, clock::Clock, epoch_schedule::EpochSchedule, instructions, rent::Rent,
         slot_hashes::SlotHashes, slot_history::SlotHistory, stake_history::StakeHistory, Sysvar,
