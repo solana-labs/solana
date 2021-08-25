@@ -160,11 +160,6 @@ impl Banks for BanksServer {
             signature,
             serialize(&transaction).unwrap(),
             last_valid_block_height,
-<<<<<<< HEAD
-=======
-            None,
-            None,
->>>>>>> 7482861f4 (Add parameter to allow setting max-retries for SendTransaction rpc (#19387))
         );
         self.transaction_sender.send(info).unwrap();
     }
@@ -252,11 +247,6 @@ impl Banks for BanksServer {
             signature,
             serialize(&transaction).unwrap(),
             last_valid_block_height,
-<<<<<<< HEAD
-=======
-            None,
-            None,
->>>>>>> 7482861f4 (Add parameter to allow setting max-retries for SendTransaction rpc (#19387))
         );
         self.transaction_sender.send(info).unwrap();
         self.poll_signature_status(&signature, blockhash, last_valid_block_height, commitment)
