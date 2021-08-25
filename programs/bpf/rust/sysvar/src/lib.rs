@@ -10,7 +10,6 @@ use solana_program::{
     msg,
     program_error::ProgramError,
     pubkey::Pubkey,
-    system_program,
     sysvar::{
         self, clock::Clock, epoch_schedule::EpochSchedule, instructions, rent::Rent,
         slot_hashes::SlotHashes, slot_history::SlotHistory, stake_history::StakeHistory, Sysvar,
@@ -47,7 +46,7 @@ pub fn process_instruction(
     // Instructions
     msg!("Instructions identifier:");
     sysvar::instructions::id().log();
-    assert_eq!(*accounts[4].owner, system_program::id());
+    assert_eq!(*accounts[4].owner, sysvar::id());
     let index = instructions::load_current_index(&accounts[4].try_borrow_data()?);
     assert_eq!(0, index);
 
