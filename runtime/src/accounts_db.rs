@@ -1594,21 +1594,8 @@ impl AccountsDb {
                 );
                 true
             } else {
-                let mut no_delete = false;
-                for (_slot, account_info) in account_infos {
-                    debug!(
-                        "calc_delete_dependencies()
-                        storage id: {},
-                        count len: {}",
-                        account_info.store_id,
-                        store_counts.get(&account_info.store_id).unwrap().0,
-                    );
-                    if store_counts.get(&account_info.store_id).unwrap().0 != 0 {
-                        no_delete = true;
-                        break;
-                    }
-                }
-                no_delete
+                assert_eq!(account_infos.len(), 1);
+                false
             };
             if no_delete {
                 let mut pending_store_ids: HashSet<usize> = HashSet::new();
