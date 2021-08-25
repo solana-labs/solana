@@ -2216,12 +2216,14 @@ fn _send_transaction(
     wire_transaction: Vec<u8>,
     last_valid_block_height: u64,
     durable_nonce_info: Option<(Pubkey, Hash)>,
+    max_retries: Option<usize>,
 ) -> Result<String> {
     let transaction_info = TransactionInfo::new(
         signature,
         wire_transaction,
         last_valid_block_height,
         durable_nonce_info,
+        max_retries,
     );
     meta.transaction_sender
         .lock()
@@ -3291,6 +3293,7 @@ pub mod rpc_full {
                 wire_transaction,
                 last_valid_block_height,
                 None,
+                None,
             )
         }
 
@@ -3390,6 +3393,7 @@ pub mod rpc_full {
                 wire_transaction,
                 last_valid_block_height,
                 durable_nonce_info,
+                config.max_retries,
             )
         }
 
