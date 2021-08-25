@@ -336,66 +336,62 @@ impl Blockstore {
     }
 
     fn get_shred_from_fs(slot_path: &str, index: u64) -> Result<Option<Vec<u8>>> {
-        // Shreds are grouped into files by slot, so pull out only the relevant shred from file
-        let path = Path::new(slot_path);
-        let mut file = match fs::File::open(path) {
-            Ok(file) => file,
-            Err(_err) => return Ok(None),
-        };
-        // Shreds are stored end to end, so the ith shred will occupy
-        // bytes [i * SHRED_PAYLOAD_SIZE, (i + 1) * SHRED_PAYLOAD_SIZE)
-        let payload_size = SHRED_PAYLOAD_SIZE as u64;
-        let metadata = fs::metadata(path)?;
-        // Ensure the file is long enough to contain desired shred
-        if metadata.len() < (index + 1) * payload_size {
-            // TODO: Double check that returning None instead of erroring is correct behavior
-            return Ok(None);
-        }
-        file.seek(SeekFrom::Start(index * payload_size))?;
-        let mut buffer = vec![0; SHRED_PAYLOAD_SIZE];
-        file.read_exact(&mut buffer)?;
-        Ok(Some(buffer))
+        // Use the same value for start and end index to signify we only want one payload
+        let mut payloads =
+            Self::get_shred_payloads_for_slot_from_fs(slot_path, index, Some(index))?;
+        Ok(payloads.pop())
     }
 
     fn get_shreds_for_slot_from_fs(
         slot_path: &str,
         start_index: u64,
     ) -> Option<ShredResult<Vec<Shred>>> {
-        let path = Path::new(slot_path);
-        let mut file = match fs::File::open(path) {
-            Ok(file) => file,
-            Err(_err) => return Some(Ok(vec![])),
-        };
-        // Shreds are stored end to end, so the ith shred will occupy
-        // bytes [i * SHRED_PAYLOAD_SIZE, (i + 1) * SHRED_PAYLOAD_SIZE)
-        let payload_size = SHRED_PAYLOAD_SIZE as u64;
-        let metadata = fs::metadata(path).ok()?;
-        // Ensure the file will contain at least one shred so we don't seek past end of file
-        if metadata.len() < (start_index + 1) * payload_size {
-            // TODO: Double check that empty list and not an error is correct behavior
-            return Some(Ok(vec![]));
-        }
-        // TODO: Check metadata.len() % payload_size == 0 ?
-        let num_shreds: usize = ((metadata.len() - (start_index * payload_size)) / payload_size)
-            .try_into()
-            .unwrap();
-        let mut buffers = vec![];
-        buffers.reserve(num_shreds);
-        // Move the cursor up to proper start position so first read grabs start_index
-        file.seek(SeekFrom::Start(start_index * payload_size))
-            .ok()?;
-        for i in 0..num_shreds {
-            let mut buffer = vec![0; SHRED_PAYLOAD_SIZE];
-            file.read_exact(&mut buffer).ok()?;
-            buffers.insert(i, buffer);
-        }
-
+        let payloads =
+            Self::get_shred_payloads_for_slot_from_fs(slot_path, start_index, None).ok()?;
         Some(
-            buffers
+            payloads
                 .into_iter()
                 .map(Shred::new_from_serialized_shred)
                 .collect(),
         )
+    }
+
+    fn get_shred_payloads_for_slot_from_fs(
+        slot_path: &str,
+        start_index: u64,
+        end_index: Option<u64>,
+    ) -> Result<Vec<Vec<u8>>> {
+        let path = Path::new(slot_path);
+        let mut file = match fs::File::open(path) {
+            Ok(file) => file,
+            Err(_err) => return Ok(vec![]),
+        };
+        // Shreds are stored end to end, so the ith shred will occupy
+        // bytes [i * SHRED_PAYLOAD_SIZE, (i + 1) * SHRED_PAYLOAD_SIZE)
+        let payload_size = SHRED_PAYLOAD_SIZE as u64;
+        let metadata = fs::metadata(path)?;
+        // Ensure the file will contain at least one shred so we don't seek past end of file
+        if metadata.len() < (start_index + 1) * payload_size {
+            // TODO: Double check that empty list and not an error is correct behavior
+            return Ok(vec![]);
+        }
+        // TODO: Check metadata.len() % payload_size == 0 ?
+        let num_shreds: usize = if let Some(end_index) = end_index {
+            (end_index - start_index + 1).try_into().unwrap()
+        } else {
+            ((metadata.len() - (start_index * payload_size)) / payload_size)
+                .try_into()
+                .unwrap()
+        };
+        let mut buffers = Vec::with_capacity(num_shreds);
+        // Move the cursor up to proper start position so first read grabs start_index
+        file.seek(SeekFrom::Start(start_index * payload_size))?;
+        for i in 0..num_shreds {
+            let mut buffer = vec![0; SHRED_PAYLOAD_SIZE];
+            file.read_exact(&mut buffer)?;
+            buffers.insert(i, buffer);
+        }
+        Ok(buffers)
     }
 
     // Used for tests only
