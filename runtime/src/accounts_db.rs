@@ -10144,6 +10144,42 @@ pub mod tests {
     }
 
     #[test]
+    fn test_zero_lamport_reclean() {
+        solana_logger::setup();
+
+        let mut accounts = AccountsDb::new_single_for_tests();
+        accounts.caching_enabled = false;
+
+        let pubkey1 = Pubkey::new_unique();
+        let pubkey2 = Pubkey::new_unique();
+
+        let some_lamport = 223;
+        let no_data = 0;
+        let owner = *AccountSharedData::default().owner();
+
+        let account = AccountSharedData::new(some_lamport, no_data, &owner);
+        let zero_lamport = AccountSharedData::new(0, no_data, &owner);
+
+        accounts.store_cached(0, &[(&pubkey1, &account)]);
+        accounts.store_cached(0, &[(&pubkey2, &zero_lamport)]);
+        accounts.add_root(0);
+        accounts.flush_accounts_cache(true, None);
+
+        accounts.clean_accounts(None, false, None);
+
+        accounts.store_cached(1, &[(&pubkey1, &zero_lamport)]);
+        accounts.add_root(1);
+        accounts.flush_accounts_cache(true, None);
+
+        accounts.clean_accounts(None, false, None);
+
+        accounts.print_accounts_stats("post-clean");
+
+        assert!(accounts.storage.get_slot_stores(0).is_none());
+        assert!(accounts.storage.get_slot_stores(1).is_none());
+    }
+
+    #[test]
     fn test_account_balance_for_capitalization_sysvar() {
         let normal_sysvar = solana_sdk::account::create_account_for_test(
             &solana_sdk::slot_history::SlotHistory::default(),
