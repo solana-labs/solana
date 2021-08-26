@@ -294,7 +294,7 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .conflicts_with("account")
                                 .conflicts_with("buffers")
                                 .required_unless_one(&["account", "buffers"])
-                                .help("Show every upgradebale program that matches the authority")
+                                .help("Show every upgradeable program that matches the authority")
                         )
                         .arg(
                             Arg::with_name("buffers")
@@ -1368,7 +1368,7 @@ fn process_show(
                         }))
                 } else {
                     Err(format!(
-                        "{} is not an upgradeble loader Buffer or Program account",
+                        "{} is not an upgradeable loader Buffer or Program account",
                         account_pubkey
                     )
                     .into())
@@ -1439,7 +1439,7 @@ fn process_dump(
                     Ok(format!("Wrote program to {}", output_location))
                 } else {
                     Err(format!(
-                        "{} is not an upgradeble loader buffer or program account",
+                        "{} is not an upgradeable loader buffer or program account",
                         account_pubkey
                     )
                     .into())
