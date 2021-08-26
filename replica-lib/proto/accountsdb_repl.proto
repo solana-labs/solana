@@ -4,11 +4,11 @@ syntax = "proto3";
 
 package accountsdb_repl;
 
-message ReplicaUpdatedSlotsRequest {
+message ReplicaSlotConfirmationRequest {
     uint64 last_replicated_slot = 1;
 }
 
-message ReplicaUpdatedSlotsResponse {
+message ReplicaSlotConfirmationResponse {
     repeated uint64 updated_slots = 1;
 }
 
@@ -39,6 +39,6 @@ message ReplicaAccountsResponse {
 }
 
 service AccountsDbRepl {
-    rpc get_confirmed_slots(ReplicaUpdatedSlotsRequest) returns (ReplicaUpdatedSlotsResponse);
+    rpc get_confirmed_slots(ReplicaSlotConfirmationRequest) returns (ReplicaSlotConfirmationResponse);
     rpc get_slot_accounts(ReplicaAccountsRequest) returns (ReplicaAccountsResponse);
 }

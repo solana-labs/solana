@@ -18,8 +18,8 @@ tonic::include_proto!("accountsdb_repl");
 pub trait ReplicaSlotConfirmationServer {
     fn get_confirmed_slots(
         &self,
-        request: &ReplicaUpdatedSlotsRequest,
-    ) -> Result<ReplicaUpdatedSlotsResponse, tonic::Status>;
+        request: &ReplicaSlotConfirmationRequest,
+    ) -> Result<ReplicaSlotConfirmationResponse, tonic::Status>;
 
     fn join(&mut self) -> thread::Result<()>;
 }
@@ -43,8 +43,8 @@ struct AccountsDbReplServer {
 impl accounts_db_repl_server::AccountsDbRepl for AccountsDbReplServer {
     async fn get_confirmed_slots(
         &self,
-        request: tonic::Request<ReplicaUpdatedSlotsRequest>,
-    ) -> Result<tonic::Response<ReplicaUpdatedSlotsResponse>, tonic::Status> {
+        request: tonic::Request<ReplicaSlotConfirmationRequest>,
+    ) -> Result<tonic::Response<ReplicaSlotConfirmationResponse>, tonic::Status> {
         let server = self.confirmed_slots_server.read().unwrap();
         let result = server.get_confirmed_slots(&request.into_inner());
         result.map(tonic::Response::new)

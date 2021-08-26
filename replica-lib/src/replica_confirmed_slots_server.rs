@@ -33,8 +33,8 @@ pub(crate) struct ReplicaSlotConfirmationServerImpl {
 impl ReplicaSlotConfirmationServer for ReplicaSlotConfirmationServerImpl {
     fn get_confirmed_slots(
         &self,
-        request: &accountsdb_repl_server::ReplicaUpdatedSlotsRequest,
-    ) -> Result<accountsdb_repl_server::ReplicaUpdatedSlotsResponse, tonic::Status> {
+        request: &accountsdb_repl_server::ReplicaSlotConfirmationRequest,
+    ) -> Result<accountsdb_repl_server::ReplicaSlotConfirmationResponse, tonic::Status> {
         let slot_set = self.eligible_slot_set.slot_set.read().unwrap();
         let updated_slots: Vec<u64> = slot_set
             .iter()
@@ -42,7 +42,7 @@ impl ReplicaSlotConfirmationServer for ReplicaSlotConfirmationServerImpl {
             .map(|(slot, _)| *slot)
             .collect();
 
-        Ok(accountsdb_repl_server::ReplicaUpdatedSlotsResponse { updated_slots })
+        Ok(accountsdb_repl_server::ReplicaSlotConfirmationResponse { updated_slots })
     }
 
     fn join(&mut self) -> thread::Result<()> {

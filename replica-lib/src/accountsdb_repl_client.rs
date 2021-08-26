@@ -47,7 +47,7 @@ impl AccountsDbReplClient {
         &mut self,
         last_slot: Slot,
     ) -> Result<Vec<Slot>, ReplicaRpcError> {
-        let request = ReplicaUpdatedSlotsRequest {
+        let request = ReplicaSlotConfirmationRequest {
             last_replicated_slot: last_slot,
         };
         let response = self.client.get_confirmed_slots(Request::new(request)).await;
