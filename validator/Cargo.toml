@@ -17,25 +17,14 @@ chrono = { version = "0.4.11", features = ["serde"] }
 clap = "2.33.1"
 console = "0.14.1"
 core_affinity = "0.5.10"
-<<<<<<< HEAD
 fd-lock = "2.0.0"
 indicatif = "0.15.0"
-jsonrpc-core = "17.1.0"
-jsonrpc-core-client = { version = "17.1.0", features = ["ipc", "ws"] }
-jsonrpc-derive = "17.1.0"
-jsonrpc-ipc-server = "17.1.0"
-jsonrpc-server-utils= "17.1.0"
-log = "0.4.11"
-=======
-fd-lock = "3.0.0"
-indicatif = "0.16.2"
 jsonrpc-core = "18.0.0"
 jsonrpc-core-client = { version = "18.0.0", features = ["ipc", "ws"] }
 jsonrpc-derive = "18.0.0"
 jsonrpc-ipc-server = "18.0.0"
 jsonrpc-server-utils= "18.0.0"
-log = "0.4.14"
->>>>>>> 8596db8f5 (Bump jsonrpc crates and remove old tokio (#18779))
+log = "0.4.11"
 num_cpus = "1.13.0"
 rand = "0.7.0"
 serde = "1.0.112"

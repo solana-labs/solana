@@ -1164,14 +1164,10 @@ impl JsonRpcRequestProcessor {
         Ok(blocks)
     }
 
-<<<<<<< HEAD
-    pub fn get_block_time(&self, slot: Slot) -> Result<Option<UnixTimestamp>> {
+    pub async fn get_block_time(&self, slot: Slot) -> Result<Option<UnixTimestamp>> {
         if slot == 0 {
             return Ok(Some(self.genesis_creation_time()));
         }
-=======
-    pub async fn get_block_time(&self, slot: Slot) -> Result<Option<UnixTimestamp>> {
->>>>>>> 8596db8f5 (Bump jsonrpc crates and remove old tokio (#18779))
         if slot
             <= self
                 .block_commitment_cache
@@ -2448,7 +2444,7 @@ pub mod rpc_full {
             meta: Self::Metadata,
             address_strs: Vec<String>,
             config: Option<RpcEpochConfig>,
-        ) -> Result<Vec<Option<RpcInflationReward>>>;
+        ) -> BoxFuture<Result<Vec<Option<RpcInflationReward>>>>;
 
         #[rpc(meta, name = "getInflationGovernor")]
         fn get_inflation_governor(
@@ -2517,7 +2513,7 @@ pub mod rpc_full {
             meta: Self::Metadata,
             signature_strs: Vec<String>,
             config: Option<RpcSignatureStatusConfig>,
-        ) -> Result<RpcResponse<Vec<Option<TransactionStatus>>>>;
+        ) -> BoxFuture<Result<RpcResponse<Vec<Option<TransactionStatus>>>>>;
 
         #[rpc(meta, name = "getMaxRetransmitSlot")]
         fn get_max_retransmit_slot(&self, meta: Self::Metadata) -> Result<Slot>;
@@ -2588,11 +2584,14 @@ pub mod rpc_full {
             meta: Self::Metadata,
             slot: Slot,
             config: Option<RpcEncodingConfigWrapper<RpcBlockConfig>>,
-        ) -> Result<Option<UiConfirmedBlock>>;
+        ) -> BoxFuture<Result<Option<UiConfirmedBlock>>>;
 
         #[rpc(meta, name = "getBlockTime")]
-        fn get_block_time(&self, meta: Self::Metadata, slot: Slot)
-            -> Result<Option<UnixTimestamp>>;
+        fn get_block_time(
+            &self,
+            meta: Self::Metadata,
+            slot: Slot,
+        ) -> BoxFuture<Result<Option<UnixTimestamp>>>;
 
         #[rpc(meta, name = "getBlocks")]
         fn get_blocks(
@@ -2601,7 +2600,7 @@ pub mod rpc_full {
             start_slot: Slot,
             config: Option<RpcBlocksConfigWrapper>,
             commitment: Option<CommitmentConfig>,
-        ) -> Result<Vec<Slot>>;
+        ) -> BoxFuture<Result<Vec<Slot>>>;
 
         #[rpc(meta, name = "getBlocksWithLimit")]
         fn get_blocks_with_limit(
@@ -2610,7 +2609,7 @@ pub mod rpc_full {
             start_slot: Slot,
             limit: usize,
             commitment: Option<CommitmentConfig>,
-        ) -> Result<Vec<Slot>>;
+        ) -> BoxFuture<Result<Vec<Slot>>>;
 
         #[rpc(meta, name = "getTransaction")]
         fn get_transaction(
@@ -2618,7 +2617,7 @@ pub mod rpc_full {
             meta: Self::Metadata,
             signature_str: String,
             config: Option<RpcEncodingConfigWrapper<RpcTransactionConfig>>,
-        ) -> Result<Option<EncodedConfirmedTransaction>>;
+        ) -> BoxFuture<Result<Option<EncodedConfirmedTransaction>>>;
 
         #[rpc(meta, name = "getSignaturesForAddress")]
         fn get_signatures_for_address(
@@ -2626,10 +2625,10 @@ pub mod rpc_full {
             meta: Self::Metadata,
             address: String,
             config: Option<RpcSignaturesForAddressConfig>,
-        ) -> Result<Vec<RpcConfirmedTransactionStatusWithSignature>>;
+        ) -> BoxFuture<Result<Vec<RpcConfirmedTransactionStatusWithSignature>>>;
 
         #[rpc(meta, name = "getFirstAvailableBlock")]
-        fn get_first_available_block(&self, meta: Self::Metadata) -> Result<Slot>;
+        fn get_first_available_block(&self, meta: Self::Metadata) -> BoxFuture<Result<Slot>>;
 
         #[rpc(meta, name = "getStakeActivation")]
         fn get_stake_activation(
@@ -2678,223 +2677,10 @@ pub mod rpc_full {
         fn get_token_accounts_by_owner(
             &self,
             meta: Self::Metadata,
-<<<<<<< HEAD
-=======
-            start_slot: Slot,
-            limit: u64,
-        ) -> Result<Vec<String>> {
-            debug!(
-                "get_slot_leaders rpc request received (start: {} limit: {})",
-                start_slot, limit
-            );
-
-            let limit = limit as usize;
-            if limit > MAX_GET_SLOT_LEADERS {
-                return Err(Error::invalid_params(format!(
-                    "Invalid limit; max {}",
-                    MAX_GET_SLOT_LEADERS
-                )));
-            }
-
-            Ok(meta
-                .get_slot_leaders(None, start_slot, limit)?
-                .into_iter()
-                .map(|identity| identity.to_string())
-                .collect())
-        }
-
-        fn get_block_production(
-            &self,
-            meta: Self::Metadata,
-            config: Option<RpcBlockProductionConfig>,
-        ) -> Result<RpcResponse<RpcBlockProduction>> {
-            debug!("get_block_production rpc request received");
-
-            let config = config.unwrap_or_default();
-            let filter_by_identity = if let Some(ref identity) = config.identity {
-                Some(verify_pubkey(identity)?)
-            } else {
-                None
-            };
-
-            let bank = meta.bank(config.commitment);
-            let (first_slot, last_slot) = match config.range {
-                None => (
-                    bank.epoch_schedule().get_first_slot_in_epoch(bank.epoch()),
-                    bank.slot(),
-                ),
-                Some(range) => {
-                    let first_slot = range.first_slot;
-                    let last_slot = range.last_slot.unwrap_or_else(|| bank.slot());
-                    if last_slot < first_slot {
-                        return Err(Error::invalid_params(format!(
-                            "lastSlot, {}, cannot be less than firstSlot, {}",
-                            last_slot, first_slot
-                        )));
-                    }
-                    (first_slot, last_slot)
-                }
-            };
-
-            let slot_history = bank.get_slot_history();
-            if first_slot < slot_history.oldest() {
-                return Err(Error::invalid_params(format!(
-                    "firstSlot, {}, is too small; min {}",
-                    first_slot,
-                    slot_history.oldest()
-                )));
-            }
-            if last_slot > slot_history.newest() {
-                return Err(Error::invalid_params(format!(
-                    "lastSlot, {}, is too large; max {}",
-                    last_slot,
-                    slot_history.newest()
-                )));
-            }
-
-            let slot_leaders = meta.get_slot_leaders(
-                config.commitment,
-                first_slot,
-                last_slot.saturating_sub(first_slot) as usize + 1, // +1 because last_slot is inclusive
-            )?;
-
-            let mut block_production: HashMap<_, (usize, usize)> = HashMap::new();
-
-            let mut slot = first_slot;
-            for identity in slot_leaders {
-                if let Some(ref filter_by_identity) = filter_by_identity {
-                    if identity != *filter_by_identity {
-                        slot += 1;
-                        continue;
-                    }
-                }
-
-                let mut entry = block_production.entry(identity).or_default();
-                if slot_history.check(slot) == solana_sdk::slot_history::Check::Found {
-                    entry.1 += 1; // Increment blocks_produced
-                }
-                entry.0 += 1; // Increment leader_slots
-                slot += 1;
-            }
-
-            Ok(new_response(
-                &bank,
-                RpcBlockProduction {
-                    by_identity: block_production
-                        .into_iter()
-                        .map(|(k, v)| (k.to_string(), v))
-                        .collect(),
-                    range: RpcBlockProductionRange {
-                        first_slot,
-                        last_slot,
-                    },
-                },
-            ))
-        }
-    }
-}
-
-// RPC interface that depends on AccountsDB
-// Expected to be provided by API nodes, but collected for easy separation and offloading to
-// accounts replica nodes in the future.
-pub mod rpc_accounts {
-    use super::*;
-    #[rpc]
-    pub trait AccountsData {
-        type Metadata;
-
-        #[rpc(meta, name = "getAccountInfo")]
-        fn get_account_info(
-            &self,
-            meta: Self::Metadata,
-            pubkey_str: String,
-            config: Option<RpcAccountInfoConfig>,
-        ) -> Result<RpcResponse<Option<UiAccount>>>;
-
-        #[rpc(meta, name = "getMultipleAccounts")]
-        fn get_multiple_accounts(
-            &self,
-            meta: Self::Metadata,
-            pubkey_strs: Vec<String>,
-            config: Option<RpcAccountInfoConfig>,
-        ) -> Result<RpcResponse<Vec<Option<UiAccount>>>>;
-
-        #[rpc(meta, name = "getProgramAccounts")]
-        fn get_program_accounts(
-            &self,
-            meta: Self::Metadata,
-            program_id_str: String,
-            config: Option<RpcProgramAccountsConfig>,
-        ) -> Result<OptionalContext<Vec<RpcKeyedAccount>>>;
-
-        #[rpc(meta, name = "getBlockCommitment")]
-        fn get_block_commitment(
-            &self,
-            meta: Self::Metadata,
-            block: Slot,
-        ) -> Result<RpcBlockCommitment<BlockCommitmentArray>>;
-
-        #[rpc(meta, name = "getLargestAccounts")]
-        fn get_largest_accounts(
-            &self,
-            meta: Self::Metadata,
-            config: Option<RpcLargestAccountsConfig>,
-        ) -> Result<RpcResponse<Vec<RpcAccountBalance>>>;
-
-        #[rpc(meta, name = "getSupply")]
-        fn get_supply(
-            &self,
-            meta: Self::Metadata,
-            commitment: Option<CommitmentConfig>,
-        ) -> Result<RpcResponse<RpcSupply>>;
-
-        #[rpc(meta, name = "getStakeActivation")]
-        fn get_stake_activation(
-            &self,
-            meta: Self::Metadata,
-            pubkey_str: String,
-            config: Option<RpcEpochConfig>,
-        ) -> Result<RpcStakeActivation>;
-
-        // SPL Token-specific RPC endpoints
-        // See https://github.com/solana-labs/solana-program-library/releases/tag/token-v2.0.0 for
-        // program details
-
-        #[rpc(meta, name = "getTokenAccountBalance")]
-        fn get_token_account_balance(
-            &self,
-            meta: Self::Metadata,
-            pubkey_str: String,
-            commitment: Option<CommitmentConfig>,
-        ) -> Result<RpcResponse<UiTokenAmount>>;
-
-        #[rpc(meta, name = "getTokenSupply")]
-        fn get_token_supply(
-            &self,
-            meta: Self::Metadata,
-            mint_str: String,
-            commitment: Option<CommitmentConfig>,
-        ) -> Result<RpcResponse<UiTokenAmount>>;
-
-        #[rpc(meta, name = "getTokenLargestAccounts")]
-        fn get_token_largest_accounts(
-            &self,
-            meta: Self::Metadata,
-            mint_str: String,
-            commitment: Option<CommitmentConfig>,
-        ) -> Result<RpcResponse<Vec<RpcTokenAccountBalance>>>;
-
-        #[rpc(meta, name = "getTokenAccountsByOwner")]
-        fn get_token_accounts_by_owner(
-            &self,
-            meta: Self::Metadata,
->>>>>>> 8596db8f5 (Bump jsonrpc crates and remove old tokio (#18779))
             owner_str: String,
             token_account_filter: RpcTokenAccountsFilter,
             config: Option<RpcAccountInfoConfig>,
         ) -> Result<RpcResponse<Vec<RpcKeyedAccount>>>;
-<<<<<<< HEAD
-=======
 
         #[rpc(meta, name = "getTokenAccountsByDelegate")]
         fn get_token_accounts_by_delegate(
@@ -2905,244 +2691,6 @@ pub mod rpc_accounts {
             config: Option<RpcAccountInfoConfig>,
         ) -> Result<RpcResponse<Vec<RpcKeyedAccount>>>;
     }
-
-    pub struct AccountsDataImpl;
-    impl AccountsData for AccountsDataImpl {
-        type Metadata = JsonRpcRequestProcessor;
-
-        fn get_account_info(
-            &self,
-            meta: Self::Metadata,
-            pubkey_str: String,
-            config: Option<RpcAccountInfoConfig>,
-        ) -> Result<RpcResponse<Option<UiAccount>>> {
-            debug!("get_account_info rpc request received: {:?}", pubkey_str);
-            let pubkey = verify_pubkey(&pubkey_str)?;
-            meta.get_account_info(&pubkey, config)
-        }
-
-        fn get_multiple_accounts(
-            &self,
-            meta: Self::Metadata,
-            pubkey_strs: Vec<String>,
-            config: Option<RpcAccountInfoConfig>,
-        ) -> Result<RpcResponse<Vec<Option<UiAccount>>>> {
-            debug!(
-                "get_multiple_accounts rpc request received: {:?}",
-                pubkey_strs.len()
-            );
-
-            let max_multiple_accounts = meta
-                .config
-                .max_multiple_accounts
-                .unwrap_or(MAX_MULTIPLE_ACCOUNTS);
-            if pubkey_strs.len() > max_multiple_accounts {
-                return Err(Error::invalid_params(format!(
-                    "Too many inputs provided; max {}",
-                    max_multiple_accounts
-                )));
-            }
-            let mut pubkeys: Vec<Pubkey> = vec![];
-            for pubkey_str in pubkey_strs {
-                pubkeys.push(verify_pubkey(&pubkey_str)?);
-            }
-            meta.get_multiple_accounts(pubkeys, config)
-        }
-
-        fn get_program_accounts(
-            &self,
-            meta: Self::Metadata,
-            program_id_str: String,
-            config: Option<RpcProgramAccountsConfig>,
-        ) -> Result<OptionalContext<Vec<RpcKeyedAccount>>> {
-            debug!(
-                "get_program_accounts rpc request received: {:?}",
-                program_id_str
-            );
-            let program_id = verify_pubkey(&program_id_str)?;
-            let (config, filters, with_context) = if let Some(config) = config {
-                (
-                    Some(config.account_config),
-                    config.filters.unwrap_or_default(),
-                    config.with_context.unwrap_or_default(),
-                )
-            } else {
-                (None, vec![], false)
-            };
-            if filters.len() > MAX_GET_PROGRAM_ACCOUNT_FILTERS {
-                return Err(Error::invalid_params(format!(
-                    "Too many filters provided; max {}",
-                    MAX_GET_PROGRAM_ACCOUNT_FILTERS
-                )));
-            }
-            for filter in &filters {
-                verify_filter(filter)?;
-            }
-            meta.get_program_accounts(&program_id, config, filters, with_context)
-        }
-
-        fn get_block_commitment(
-            &self,
-            meta: Self::Metadata,
-            block: Slot,
-        ) -> Result<RpcBlockCommitment<BlockCommitmentArray>> {
-            debug!("get_block_commitment rpc request received");
-            Ok(meta.get_block_commitment(block))
-        }
-
-        fn get_largest_accounts(
-            &self,
-            meta: Self::Metadata,
-            config: Option<RpcLargestAccountsConfig>,
-        ) -> Result<RpcResponse<Vec<RpcAccountBalance>>> {
-            debug!("get_largest_accounts rpc request received");
-            Ok(meta.get_largest_accounts(config)?)
-        }
-
-        fn get_supply(
-            &self,
-            meta: Self::Metadata,
-            commitment: Option<CommitmentConfig>,
-        ) -> Result<RpcResponse<RpcSupply>> {
-            debug!("get_supply rpc request received");
-            Ok(meta.get_supply(commitment)?)
-        }
-
-        fn get_stake_activation(
-            &self,
-            meta: Self::Metadata,
-            pubkey_str: String,
-            config: Option<RpcEpochConfig>,
-        ) -> Result<RpcStakeActivation> {
-            debug!(
-                "get_stake_activation rpc request received: {:?}",
-                pubkey_str
-            );
-            let pubkey = verify_pubkey(&pubkey_str)?;
-            meta.get_stake_activation(&pubkey, config)
-        }
-
-        fn get_token_account_balance(
-            &self,
-            meta: Self::Metadata,
-            pubkey_str: String,
-            commitment: Option<CommitmentConfig>,
-        ) -> Result<RpcResponse<UiTokenAmount>> {
-            debug!(
-                "get_token_account_balance rpc request received: {:?}",
-                pubkey_str
-            );
-            let pubkey = verify_pubkey(&pubkey_str)?;
-            meta.get_token_account_balance(&pubkey, commitment)
-        }
-
-        fn get_token_supply(
-            &self,
-            meta: Self::Metadata,
-            mint_str: String,
-            commitment: Option<CommitmentConfig>,
-        ) -> Result<RpcResponse<UiTokenAmount>> {
-            debug!("get_token_supply rpc request received: {:?}", mint_str);
-            let mint = verify_pubkey(&mint_str)?;
-            meta.get_token_supply(&mint, commitment)
-        }
-
-        fn get_token_largest_accounts(
-            &self,
-            meta: Self::Metadata,
-            mint_str: String,
-            commitment: Option<CommitmentConfig>,
-        ) -> Result<RpcResponse<Vec<RpcTokenAccountBalance>>> {
-            debug!(
-                "get_token_largest_accounts rpc request received: {:?}",
-                mint_str
-            );
-            let mint = verify_pubkey(&mint_str)?;
-            meta.get_token_largest_accounts(&mint, commitment)
-        }
-
-        fn get_token_accounts_by_owner(
-            &self,
-            meta: Self::Metadata,
-            owner_str: String,
-            token_account_filter: RpcTokenAccountsFilter,
-            config: Option<RpcAccountInfoConfig>,
-        ) -> Result<RpcResponse<Vec<RpcKeyedAccount>>> {
-            debug!(
-                "get_token_accounts_by_owner rpc request received: {:?}",
-                owner_str
-            );
-            let owner = verify_pubkey(&owner_str)?;
-            let token_account_filter = verify_token_account_filter(token_account_filter)?;
-            meta.get_token_accounts_by_owner(&owner, token_account_filter, config)
-        }
-
-        fn get_token_accounts_by_delegate(
-            &self,
-            meta: Self::Metadata,
-            delegate_str: String,
-            token_account_filter: RpcTokenAccountsFilter,
-            config: Option<RpcAccountInfoConfig>,
-        ) -> Result<RpcResponse<Vec<RpcKeyedAccount>>> {
-            debug!(
-                "get_token_accounts_by_delegate rpc request received: {:?}",
-                delegate_str
-            );
-            let delegate = verify_pubkey(&delegate_str)?;
-            let token_account_filter = verify_token_account_filter(token_account_filter)?;
-            meta.get_token_accounts_by_delegate(&delegate, token_account_filter, config)
-        }
-    }
-}
-
-// Full RPC interface that an API node is expected to provide
-// (rpc_minimal should also be provided by an API node)
-pub mod rpc_full {
-    use super::*;
-    #[rpc]
-    pub trait Full {
-        type Metadata;
-
-        #[rpc(meta, name = "getInflationReward")]
-        fn get_inflation_reward(
-            &self,
-            meta: Self::Metadata,
-            address_strs: Vec<String>,
-            config: Option<RpcEpochConfig>,
-        ) -> BoxFuture<Result<Vec<Option<RpcInflationReward>>>>;
-
-        #[rpc(meta, name = "getClusterNodes")]
-        fn get_cluster_nodes(&self, meta: Self::Metadata) -> Result<Vec<RpcContactInfo>>;
-
-        #[rpc(meta, name = "getRecentPerformanceSamples")]
-        fn get_recent_performance_samples(
-            &self,
-            meta: Self::Metadata,
-            limit: Option<usize>,
-        ) -> Result<Vec<RpcPerfSample>>;
-
-        #[rpc(meta, name = "getGenesisHash")]
-        fn get_genesis_hash(&self, meta: Self::Metadata) -> Result<String>;
->>>>>>> 8596db8f5 (Bump jsonrpc crates and remove old tokio (#18779))
-
-        #[rpc(meta, name = "getTokenAccountsByDelegate")]
-        fn get_token_accounts_by_delegate(
-            &self,
-            meta: Self::Metadata,
-<<<<<<< HEAD
-            delegate_str: String,
-            token_account_filter: RpcTokenAccountsFilter,
-            config: Option<RpcAccountInfoConfig>,
-        ) -> Result<RpcResponse<Vec<RpcKeyedAccount>>>;
-    }
-=======
-            signature_strs: Vec<String>,
-            config: Option<RpcSignatureStatusConfig>,
-        ) -> BoxFuture<Result<RpcResponse<Vec<Option<TransactionStatus>>>>>;
-
-        #[rpc(meta, name = "getMaxRetransmitSlot")]
-        fn get_max_retransmit_slot(&self, meta: Self::Metadata) -> Result<Slot>;
->>>>>>> 8596db8f5 (Bump jsonrpc crates and remove old tokio (#18779))
 
     pub struct FullImpl;
     impl Full for FullImpl {
@@ -3162,7 +2710,6 @@ pub mod rpc_full {
         fn get_multiple_accounts(
             &self,
             meta: Self::Metadata,
-<<<<<<< HEAD
             pubkey_strs: Vec<String>,
             config: Option<RpcAccountInfoConfig>,
         ) -> Result<RpcResponse<Vec<Option<UiAccount>>>> {
@@ -3187,34 +2734,12 @@ pub mod rpc_full {
             }
             meta.get_multiple_accounts(pubkeys, config)
         }
-=======
-            slot: Slot,
-            config: Option<RpcEncodingConfigWrapper<RpcBlockConfig>>,
-        ) -> BoxFuture<Result<Option<UiConfirmedBlock>>>;
-
-        #[rpc(meta, name = "getBlockTime")]
-        fn get_block_time(
-            &self,
-            meta: Self::Metadata,
-            slot: Slot,
-        ) -> BoxFuture<Result<Option<UnixTimestamp>>>;
-
-        #[rpc(meta, name = "getBlocks")]
-        fn get_blocks(
-            &self,
-            meta: Self::Metadata,
-            start_slot: Slot,
-            config: Option<RpcBlocksConfigWrapper>,
-            commitment: Option<CommitmentConfig>,
-        ) -> BoxFuture<Result<Vec<Slot>>>;
->>>>>>> 8596db8f5 (Bump jsonrpc crates and remove old tokio (#18779))
 
         fn get_minimum_balance_for_rent_exemption(
             &self,
             meta: Self::Metadata,
             data_len: usize,
             commitment: Option<CommitmentConfig>,
-<<<<<<< HEAD
         ) -> Result<u64> {
             debug!(
                 "get_minimum_balance_for_rent_exemption rpc request received: {:?}",
@@ -3225,14 +2750,10 @@ pub mod rpc_full {
             }
             Ok(meta.get_minimum_balance_for_rent_exemption(data_len, commitment))
         }
-=======
-        ) -> BoxFuture<Result<Vec<Slot>>>;
->>>>>>> 8596db8f5 (Bump jsonrpc crates and remove old tokio (#18779))
 
         fn get_program_accounts(
             &self,
             meta: Self::Metadata,
-<<<<<<< HEAD
             program_id_str: String,
             config: Option<RpcProgramAccountsConfig>,
         ) -> Result<OptionalContext<Vec<RpcKeyedAccount>>> {
@@ -3261,16 +2782,10 @@ pub mod rpc_full {
             }
             meta.get_program_accounts(&program_id, config, filters, with_context)
         }
-=======
-            signature_str: String,
-            config: Option<RpcEncodingConfigWrapper<RpcTransactionConfig>>,
-        ) -> BoxFuture<Result<Option<EncodedConfirmedTransaction>>>;
->>>>>>> 8596db8f5 (Bump jsonrpc crates and remove old tokio (#18779))
 
         fn get_inflation_governor(
             &self,
             meta: Self::Metadata,
-<<<<<<< HEAD
             commitment: Option<CommitmentConfig>,
         ) -> Result<RpcInflationGovernor> {
             debug!("get_inflation_governor rpc request received");
@@ -3281,15 +2796,6 @@ pub mod rpc_full {
             debug!("get_inflation_rate rpc request received");
             Ok(meta.get_inflation_rate())
         }
-=======
-            address: String,
-            config: Option<RpcSignaturesForAddressConfig>,
-        ) -> BoxFuture<Result<Vec<RpcConfirmedTransactionStatusWithSignature>>>;
-
-        #[rpc(meta, name = "getFirstAvailableBlock")]
-        fn get_first_available_block(&self, meta: Self::Metadata) -> BoxFuture<Result<Slot>>;
-    }
->>>>>>> 8596db8f5 (Bump jsonrpc crates and remove old tokio (#18779))
 
         fn get_epoch_schedule(&self, meta: Self::Metadata) -> Result<EpochSchedule> {
             debug!("get_epoch_schedule rpc request received");

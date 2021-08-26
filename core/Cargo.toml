@@ -83,13 +83,8 @@ serial_test = "0.4.0"
 solana-stake-program = { path = "../programs/stake", version = "=1.7.11" }
 solana-version = { path = "../version", version = "=1.7.11" }
 symlink = "0.1.0"
-<<<<<<< HEAD
 systemstat = "0.1.5"
-tokio_02 = { version = "0.2", package = "tokio", features = ["full"] }
-=======
-systemstat = "0.1.8"
 tokio = { version = "1", features = ["full"] }
->>>>>>> 8596db8f5 (Bump jsonrpc crates and remove old tokio (#18779))
 
 [build-dependencies]
 rustc_version = "0.2"
