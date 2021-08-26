@@ -3671,7 +3671,7 @@ dependencies = [
  "solana-logger 1.8.0",
  "solana-sdk",
  "solana_rbpf",
- "time 0.3.1",
+ "time 0.3.2",
 ]
 
 [[package]]
@@ -6418,9 +6418,9 @@ dependencies = [
 
 [[package]]
 name = "time"
-version = "0.3.1"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a776787d9c5d455bec3db044586ccdd8a9c74d5da5dc319fb80f3db08808fe6"
+checksum = "3e0a10c9a9fb3a5dce8c2239ed670f1a2569fcf42da035f5face1b19860d52b0"
 dependencies = [
  "libc",
 ]
