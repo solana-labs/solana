@@ -7,6 +7,8 @@ import { AddSpotMarketDetailsCard } from "./mango/AddSpotMarketDetailsCard";
 import { CancelPerpOrderDetailsCard } from "./mango/CancelPerpOrderDetailsCard";
 import { CancelSpotOrderDetailsCard } from "./mango/CancelSpotOrderDetailsCard";
 import { ChangePerpMarketParamsDetailsCard } from "./mango/ChangePerpMarketParamsDetailsCard";
+import { GenericConsumeEventsDetailsCard } from "./mango/GenericConsumeEventsDetailsCard";
+import { GenericMngoAccountDetailsCard } from "./mango/GenericMngoAccountDetailsCard";
 import { GenericPerpMngoDetailsCard } from "./mango/GenericPerpMngoDetailsCard";
 import { GenericSpotMngoDetailsCard } from "./mango/GenericSpotMngoDetailsCard";
 import { PlacePerpOrderDetailsCard } from "./mango/PlacePerpOrderDetailsCard";
@@ -38,12 +40,40 @@ export function MangoDetailsCard(props: {
     title = parseMangoInstructionTitle(ix);
 
     // todo
-    //     @microwavedcola could you add the following v3 instructions to your explorer PR? We'd like to vote on them in the coming weeks:
-    // 1) AddSpotMarket
-    // 2) AddPerpMarket
-    // 3) ChangePerpMarketParams (still needs to be released on npm)
-
+    // AddPerpMarket
     switch (title) {
+      case "InitMangoAccount":
+        return (
+          <GenericMngoAccountDetailsCard
+            mangoAccountKeyLocation={1}
+            title={"InitMangoAccount"}
+            {...props}
+          />
+        );
+      case "Deposit":
+        return (
+          <GenericMngoAccountDetailsCard
+            mangoAccountKeyLocation={1}
+            title={"Deposit"}
+            {...props}
+          />
+        );
+      case "Withdraw":
+        return (
+          <GenericMngoAccountDetailsCard
+            mangoAccountKeyLocation={1}
+            title={"Withdraw"}
+            {...props}
+          />
+        );
+      case "InitSpotOpenOrders":
+        return (
+          <GenericMngoAccountDetailsCard
+            mangoAccountKeyLocation={1}
+            title={"InitSpotOpenOrders"}
+            {...props}
+          />
+        );
       case "PlaceSpotOrder":
         return (
           <PlaceSpotOrderDetailsCard
@@ -65,6 +95,8 @@ export function MangoDetailsCard(props: {
             {...props}
           />
         );
+      case "ConsumeEvents":
+        return <GenericConsumeEventsDetailsCard {...props} />;
       case "CancelPerpOrder":
         return (
           <CancelPerpOrderDetailsCard
