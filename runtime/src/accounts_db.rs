@@ -1571,10 +1571,12 @@ impl AccountsDb {
         self.accounts_index.reset_uncleaned_roots(max_clean_root);
     }
 
-    fn calc_delete_dependencies(purges: &mut HashMap<Pubkey, (SlotList<AccountInfo>, u64)>) {
+    fn calc_delete_dependencies(
+        purges_zero_lamports: &mut HashMap<Pubkey, (SlotList<AccountInfo>, u64)>,
+    ) {
         // Only keep purges_zero_lamports where the entire history of the account in the root set
         // can be purged. All AppendVecs for those updates are dead.
-        purges.retain(|pubkey, (account_infos, ref_count_from_storage)| {
+        purges_zero_lamports.retain(|pubkey, (account_infos, ref_count_from_storage)| {
             if account_infos.len() as u64 != *ref_count_from_storage {
                 debug!(
                     "calc_delete_dependencies(),
@@ -7952,6 +7954,81 @@ pub mod tests {
     }
 
     #[test]
+    fn test_clean_accounts_removes_zero_lamport_accounts_in_nonempty_storage() {
+        solana_logger::setup();
+
+        let accounts = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let key0 = solana_sdk::pubkey::new_rand();
+        let key1 = solana_sdk::pubkey::new_rand();
+        let key2 = solana_sdk::pubkey::new_rand();
+
+        let zero_lamport_account =
+            AccountSharedData::new(0, 0, AccountSharedData::default().owner());
+        let nonzero_lamport_account =
+            AccountSharedData::new(1, 0, AccountSharedData::default().owner());
+
+        // Set up scenario where:
+        // Slot 0: {key0: 1, key1: 1}
+        // Slot 1: {key1: 0, key2: 0}
+        accounts.store_uncached(0, &[(&key0, &nonzero_lamport_account)]);
+        accounts.store_uncached(0, &[(&key1, &nonzero_lamport_account)]);
+        accounts.store_uncached(1, &[(&key1, &zero_lamport_account)]);
+        accounts.store_uncached(2, &[(&key2, &zero_lamport_account)]);
+
+        // Root all slots
+        accounts.add_root(0);
+        accounts.add_root(1);
+        accounts.add_root(2);
+
+        let check_key1_not_shadowed = || {
+            // Show `key1` has not been shadowed because the storage entry for slot 1
+            // is still:
+            // 1) accessible through the storage map
+            // 2) contains `key1`
+            let mut slot1_stores = accounts.storage.get_slot_storage_entries(1).unwrap();
+            assert_eq!(slot1_stores.len(), 1);
+            let slot1_store = slot1_stores.pop().unwrap();
+            let slot1_accounts = slot1_store.all_accounts();
+            assert!(slot1_accounts
+                .iter()
+                .any(
+                    |stored_account_meta| stored_account_meta.meta.pubkey == key1
+                        && stored_account_meta.account_meta.lamports == 0
+                ));
+            slot1_store
+        };
+
+        accounts.clean_accounts(None, false);
+
+        // key2 should be cleaned, but slot1 should not be removed since key1 is
+        // still keeping it alive
+        assert_eq!(accounts.accounts_index.ref_count_from_storage(&key2), 0);
+        // Ref count is 2 because neither slot 1 or slot 0 are dead yet, so the
+        // key has not been unref'd.
+        assert_eq!(accounts.accounts_index.ref_count_from_storage(&key1), 2);
+        // Check key1 has not been shadowed
+        let slot1_store = check_key1_not_shadowed();
+        assert_eq!(slot1_store.count(), 1);
+
+        // If we now update key0, this will allow slot 0 to be marked dead.
+        // This will add `key1` to the clean set for the *next* iteration of
+        // clean, but `key1` will not be added to the clean here.
+        accounts.store_uncached(3, &[(&key0, &nonzero_lamport_account)]);
+        accounts.add_root(3);
+        accounts.clean_accounts(None, false);
+        assert!(accounts.storage.get_slot_storage_entries(0).is_none());
+        assert_eq!(accounts.accounts_index.ref_count_from_storage(&key1), 1);
+        // Check key1 has not been shadowed
+        let slot1_store = check_key1_not_shadowed();
+        assert_eq!(slot1_store.count(), 1);
+
+        // This next clean will now fully clean up `key1`
+        accounts.clean_accounts(None, false);
+        assert!(accounts.storage.get_slot_storage_entries(1).is_none());
+        assert_eq!(accounts.accounts_index.ref_count_from_storage(&key1), 0);
+    }
+
+    #[test]
     fn test_clean_multiple_zero_lamport_decrements_index_ref_count() {
         solana_logger::setup();
 
@@ -9641,7 +9718,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_accounts_clean_after_snapshot_restore_then_old_revives() {
+    fn test_clean_accounts_after_snapshot_restore_then_old_revives() {
         solana_logger::setup();
         let old_lamport = 223;
         let zero_lamport = 0;
