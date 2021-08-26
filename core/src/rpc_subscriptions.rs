@@ -1326,7 +1326,6 @@ impl RpcSubscriptions {
 
 #[cfg(test)]
 pub(crate) mod tests {
-<<<<<<< HEAD:core/src/rpc_subscriptions.rs
     use super::*;
     use crate::optimistically_confirmed_bank_tracker::{
         BankNotification, OptimisticallyConfirmedBank, OptimisticallyConfirmedBankTracker,
@@ -1344,38 +1343,13 @@ pub(crate) mod tests {
         system_instruction, system_program, system_transaction,
         transaction::Transaction,
     };
-    use std::{fmt::Debug, sync::mpsc::channel};
+    use std::{
+        fmt::Debug,
+        sync::{atomic::Ordering::Relaxed, mpsc::channel},
+    };
     use tokio::{
         runtime::Runtime,
         time::{sleep, timeout},
-=======
-    use {
-        super::*,
-        crate::optimistically_confirmed_bank_tracker::{
-            BankNotification, OptimisticallyConfirmedBank, OptimisticallyConfirmedBankTracker,
-        },
-        jsonrpc_core::futures::StreamExt,
-        jsonrpc_pubsub::typed::Subscriber,
-        serial_test::serial,
-        solana_runtime::{
-            commitment::BlockCommitment,
-            genesis_utils::{create_genesis_config, GenesisConfigInfo},
-        },
-        solana_sdk::{
-            message::Message,
-            signature::{Keypair, Signer},
-            stake, system_instruction, system_program, system_transaction,
-            transaction::Transaction,
-        },
-        std::{
-            fmt::Debug,
-            sync::{atomic::Ordering::Relaxed, mpsc::channel},
-        },
-        tokio::{
-            runtime::Runtime,
-            time::{sleep, timeout},
-        },
->>>>>>> 1a372a792 (Fixing missing pubsub notification for programSubscribe and logsSubscribe (#19092)):rpc/src/rpc_subscriptions.rs
     };
 
     pub(crate) fn robust_poll_or_panic<T: Debug + Send + 'static>(
@@ -1655,7 +1629,7 @@ pub(crate) mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(100);
-        let bank = Bank::new_for_tests(&genesis_config);
+        let bank = Bank::new(&genesis_config);
         bank.lazy_rent_collection.store(true, Relaxed);
 
         let blockhash = bank.last_blockhash();
@@ -1674,7 +1648,7 @@ pub(crate) mod tests {
             blockhash,
             1,
             16,
-            &stake::program::id(),
+            &solana_stake_program::id(),
         );
 
         bank1.process_transaction(&tx).unwrap();
@@ -1690,7 +1664,7 @@ pub(crate) mod tests {
             blockhash,
             2,
             16,
-            &stake::program::id(),
+            &solana_stake_program::id(),
         );
         let bank2 = bank_forks.read().unwrap().get(2).unwrap().clone();
 
@@ -1707,7 +1681,7 @@ pub(crate) mod tests {
             blockhash,
             3,
             16,
-            &stake::program::id(),
+            &solana_stake_program::id(),
         );
         let bank3 = bank_forks.read().unwrap().get(3).unwrap().clone();
 
@@ -1731,7 +1705,7 @@ pub(crate) mod tests {
             optimistically_confirmed_bank.clone(),
         ));
         subscriptions.add_program_subscription(
-            stake::program::id(),
+            solana_stake_program::id(),
             Some(RpcProgramAccountsConfig {
                 account_config: RpcAccountInfoConfig {
                     commitment: Some(CommitmentConfig::confirmed()),
@@ -1748,7 +1722,7 @@ pub(crate) mod tests {
             .gossip_program_subscriptions
             .read()
             .unwrap()
-            .contains_key(&stake::program::id()));
+            .contains_key(&solana_stake_program::id()));
 
         let mut highest_confirmed_slot: Slot = 0;
         let mut last_notified_confirmed_slot: Slot = 0;
@@ -1826,7 +1800,7 @@ pub(crate) mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(100);
-        let bank = Bank::new_for_tests(&genesis_config);
+        let bank = Bank::new(&genesis_config);
         bank.lazy_rent_collection.store(true, Relaxed);
 
         let blockhash = bank.last_blockhash();
@@ -1845,7 +1819,7 @@ pub(crate) mod tests {
             blockhash,
             1,
             16,
-            &stake::program::id(),
+            &solana_stake_program::id(),
         );
 
         bank1.process_transaction(&tx).unwrap();
@@ -1861,7 +1835,7 @@ pub(crate) mod tests {
             blockhash,
             2,
             16,
-            &stake::program::id(),
+            &solana_stake_program::id(),
         );
         let bank2 = bank_forks.read().unwrap().get(2).unwrap().clone();
 
@@ -1885,7 +1859,7 @@ pub(crate) mod tests {
             optimistically_confirmed_bank.clone(),
         ));
         subscriptions.add_program_subscription(
-            stake::program::id(),
+            solana_stake_program::id(),
             Some(RpcProgramAccountsConfig {
                 account_config: RpcAccountInfoConfig {
                     commitment: Some(CommitmentConfig::confirmed()),
@@ -1902,7 +1876,7 @@ pub(crate) mod tests {
             .gossip_program_subscriptions
             .read()
             .unwrap()
-            .contains_key(&stake::program::id()));
+            .contains_key(&solana_stake_program::id()));
 
         let mut highest_confirmed_slot: Slot = 0;
         let mut last_notified_confirmed_slot: Slot = 0;
@@ -1934,7 +1908,7 @@ pub(crate) mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(100);
-        let bank = Bank::new_for_tests(&genesis_config);
+        let bank = Bank::new(&genesis_config);
         bank.lazy_rent_collection.store(true, Relaxed);
 
         let blockhash = bank.last_blockhash();
@@ -1953,7 +1927,7 @@ pub(crate) mod tests {
             blockhash,
             1,
             16,
-            &stake::program::id(),
+            &solana_stake_program::id(),
         );
 
         bank1.process_transaction(&tx).unwrap();
@@ -1969,7 +1943,7 @@ pub(crate) mod tests {
             blockhash,
             2,
             16,
-            &stake::program::id(),
+            &solana_stake_program::id(),
         );
         let bank2 = bank_forks.read().unwrap().get(2).unwrap().clone();
 
@@ -1993,7 +1967,7 @@ pub(crate) mod tests {
             optimistically_confirmed_bank.clone(),
         ));
         subscriptions.add_program_subscription(
-            stake::program::id(),
+            solana_stake_program::id(),
             Some(RpcProgramAccountsConfig {
                 account_config: RpcAccountInfoConfig {
                     commitment: Some(CommitmentConfig::confirmed()),
@@ -2010,7 +1984,7 @@ pub(crate) mod tests {
             .gossip_program_subscriptions
             .read()
             .unwrap()
-            .contains_key(&stake::program::id()));
+            .contains_key(&solana_stake_program::id()));
 
         let mut highest_confirmed_slot: Slot = 0;
         let mut last_notified_confirmed_slot: Slot = 0;
@@ -2062,7 +2036,7 @@ pub(crate) mod tests {
             blockhash,
             3,
             16,
-            &stake::program::id(),
+            &solana_stake_program::id(),
         );
         let bank3 = bank_forks.read().unwrap().get(3).unwrap().clone();
 

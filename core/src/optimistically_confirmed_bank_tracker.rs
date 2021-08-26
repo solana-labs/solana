@@ -111,9 +111,6 @@ impl OptimisticallyConfirmedBankTracker {
         Ok(())
     }
 
-<<<<<<< HEAD:core/src/optimistically_confirmed_bank_tracker.rs
-    pub(crate) fn process_notification(
-=======
     fn notify_or_defer(
         subscriptions: &Arc<RpcSubscriptions>,
         bank_forks: &Arc<RwLock<BankForks>>,
@@ -161,8 +158,7 @@ impl OptimisticallyConfirmedBankTracker {
         }
     }
 
-    pub fn process_notification(
->>>>>>> 1a372a792 (Fixing missing pubsub notification for programSubscribe and logsSubscribe (#19092)):rpc/src/optimistically_confirmed_bank_tracker.rs
+    pub(crate) fn process_notification(
         notification: BankNotification,
         bank_forks: &Arc<RwLock<BankForks>>,
         optimistically_confirmed_bank: &Arc<RwLock<OptimisticallyConfirmedBank>>,
@@ -349,12 +345,8 @@ mod tests {
         );
         assert_eq!(optimistically_confirmed_bank.read().unwrap().bank.slot(), 2);
         assert_eq!(pending_optimistically_confirmed_banks.len(), 1);
-<<<<<<< HEAD:core/src/optimistically_confirmed_bank_tracker.rs
-        assert_eq!(pending_optimistically_confirmed_banks.contains(&3), true);
-=======
         assert!(pending_optimistically_confirmed_banks.contains(&3));
         assert_eq!(highest_confirmed_slot, 3);
->>>>>>> 1a372a792 (Fixing missing pubsub notification for programSubscribe and logsSubscribe (#19092)):rpc/src/optimistically_confirmed_bank_tracker.rs
 
         // Test bank will only be cached when frozen
         let bank3 = bank_forks.read().unwrap().get(3).unwrap().clone();
@@ -388,12 +380,8 @@ mod tests {
         );
         assert_eq!(optimistically_confirmed_bank.read().unwrap().bank.slot(), 3);
         assert_eq!(pending_optimistically_confirmed_banks.len(), 1);
-<<<<<<< HEAD:core/src/optimistically_confirmed_bank_tracker.rs
-        assert_eq!(pending_optimistically_confirmed_banks.contains(&4), true);
-=======
         assert!(pending_optimistically_confirmed_banks.contains(&4));
         assert_eq!(highest_confirmed_slot, 4);
->>>>>>> 1a372a792 (Fixing missing pubsub notification for programSubscribe and logsSubscribe (#19092)):rpc/src/optimistically_confirmed_bank_tracker.rs
 
         let bank4 = bank_forks.read().unwrap().get(4).unwrap().clone();
         let bank5 = Bank::new_from_parent(&bank4, &Pubkey::default(), 5);
@@ -410,12 +398,8 @@ mod tests {
         );
         assert_eq!(optimistically_confirmed_bank.read().unwrap().bank.slot(), 5);
         assert_eq!(pending_optimistically_confirmed_banks.len(), 0);
-<<<<<<< HEAD:core/src/optimistically_confirmed_bank_tracker.rs
-        assert_eq!(pending_optimistically_confirmed_banks.contains(&4), false);
-=======
         assert!(!pending_optimistically_confirmed_banks.contains(&4));
         assert_eq!(highest_confirmed_slot, 4);
->>>>>>> 1a372a792 (Fixing missing pubsub notification for programSubscribe and logsSubscribe (#19092)):rpc/src/optimistically_confirmed_bank_tracker.rs
 
         // Banks <= root do not get added to pending list, even if not frozen
         let bank5 = bank_forks.read().unwrap().get(5).unwrap().clone();
@@ -439,11 +423,7 @@ mod tests {
         );
         assert_eq!(optimistically_confirmed_bank.read().unwrap().bank.slot(), 5);
         assert_eq!(pending_optimistically_confirmed_banks.len(), 0);
-<<<<<<< HEAD:core/src/optimistically_confirmed_bank_tracker.rs
-        assert_eq!(pending_optimistically_confirmed_banks.contains(&6), false);
-=======
         assert!(!pending_optimistically_confirmed_banks.contains(&6));
         assert_eq!(highest_confirmed_slot, 4);
->>>>>>> 1a372a792 (Fixing missing pubsub notification for programSubscribe and logsSubscribe (#19092)):rpc/src/optimistically_confirmed_bank_tracker.rs
     }
 }
