@@ -21,7 +21,7 @@ futures = "0.3.16"
 futures-util = "0.3.16"
 itertools = "0.10.1"
 lazy_static = "1.4.0"
-libc = "0.2.100"
+libc = "0.2.101"
 log = { version = "0.4.14" }
 num_cpus = "1.13.0"
 prost = "0.8.0"
