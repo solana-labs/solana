@@ -50,6 +50,7 @@ export enum PROGRAM_NAMES {
   SERUM_1 = "Serum Program v1",
   SERUM_2 = "Serum Program v2",
   SERUM_3 = "Serum Program v3",
+  MANGO_3 = "Mango Program v3",
 }
 
 const ALL_CLUSTERS = [
@@ -90,6 +91,7 @@ export const PROGRAM_DEPLOYMENTS = {
   [PROGRAM_NAMES.SERUM_1]: MAINNET_ONLY,
   [PROGRAM_NAMES.SERUM_2]: MAINNET_ONLY,
   [PROGRAM_NAMES.SERUM_3]: MAINNET_ONLY,
+  [PROGRAM_NAMES.MANGO_3]: MAINNET_ONLY,
 } as const;
 
 export const PROGRAM_NAME_BY_ID = {
@@ -121,6 +123,7 @@ export const PROGRAM_NAME_BY_ID = {
   BJ3jrUzddfuSrZHXSCxMUUQsjKEyLmuuyZebkcaFp2fg: PROGRAM_NAMES.SERUM_1,
   EUqojwWA2rd19FZrzeBncJsm38Jm1hEhE3zsmX3bRc2o: PROGRAM_NAMES.SERUM_2,
   "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin": PROGRAM_NAMES.SERUM_3,
+  mv3ekLzLbnVPNxjSKvqBpU3ZeZXPQdEC3bp5MDEBG68: PROGRAM_NAMES.MANGO_3,
 } as const;
 
 export type LoaderName = typeof LOADER_IDS[keyof typeof LOADER_IDS];

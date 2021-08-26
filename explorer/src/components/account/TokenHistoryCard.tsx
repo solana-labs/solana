@@ -51,6 +51,7 @@ import { useQuery } from "utils/url";
 import { TokenInfoMap } from "@solana/spl-token-registry";
 import { useTokenRegistry } from "providers/mints/token-registry";
 import { getTokenProgramInstructionName } from "utils/instruction";
+import { isMangoInstruction, parseMangoInstructionTitle } from "components/instruction/mango/types";
 
 const TRUNCATE_TOKEN_LENGTH = 10;
 const ALL_TOKENS = "";
@@ -498,6 +499,16 @@ const TokenTransactionRow = React.memo(
           ) {
             try {
               name = parseBonfidaBotInstructionTitle(transactionInstruction);
+            } catch (error) {
+              reportError(error, { signature: tx.signature });
+              return undefined;
+            }
+          } else if (
+            transactionInstruction &&
+            isMangoInstruction(transactionInstruction)
+          ) {
+            try {
+              name = parseMangoInstructionTitle(transactionInstruction);
             } catch (error) {
               reportError(error, { signature: tx.signature });
               return undefined;

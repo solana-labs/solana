@@ -39,6 +39,8 @@ import { BpfUpgradeableLoaderDetailsCard } from "components/instruction/bpf-upgr
 import { VoteDetailsCard } from "components/instruction/vote/VoteDetailsCard";
 import { isWormholeInstruction } from "components/instruction/wormhole/types";
 import { AssociatedTokenDetailsCard } from "components/instruction/AssociatedTokenDetailsCard";
+import { isMangoInstruction } from "components/instruction/mango/types";
+import { MangoDetailsCard } from "components/instruction/MangoDetails";
 
 export type InstructionDetailsProps = {
   tx: ParsedTransaction;
@@ -208,6 +210,8 @@ function renderInstructionCard({
 
   if (isBonfidaBotInstruction(transactionIx)) {
     return <BonfidaBotDetailsCard key={key} {...props} />;
+  } else if (isMangoInstruction(transactionIx)) {
+    return <MangoDetailsCard key={key} {...props} />;
   } else if (isSerumInstruction(transactionIx)) {
     return <SerumDetailsCard key={key} {...props} />;
   } else if (isTokenSwapInstruction(transactionIx)) {
