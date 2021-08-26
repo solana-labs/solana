@@ -3,11 +3,13 @@
 //! TODO: More documentation
 use {
     super::*,
-    crate::shred::SHRED_PAYLOAD_SIZE,
+    crate::shred::{ShredType, DATA_SHRED, SHRED_PAYLOAD_SIZE},
+    serde::{Deserialize, Serialize},
     std::{
         collections::BTreeMap,
         fs,
         io::{Read, Seek, SeekFrom, Write},
+        ops::Bound::{Included, Unbounded},
     },
 };
 
@@ -15,6 +17,47 @@ pub(crate) const SHRED_DIRECTORY: &str = "shreds";
 pub(crate) const DATA_SHRED_DIRECTORY: &str = "data";
 
 pub(crate) type ShredCache = BTreeMap<u64, Vec<u8>>;
+type ShredFileIndex = BTreeMap<u32, u32>;
+
+/// Store shreds on the filesystem in a slot-per-file manner. The
+/// file format consists of a header, an index, and a data section.
+/// - The header contains basic metadata
+/// - The index section contains a serialized BTreeMap mapping shred
+///   index to offset in the data section
+/// - The data section contained the serialized shreds end to ened
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+struct ShredFileHeader {
+    pub slot: Slot,
+    pub shred_type: ShredType,
+    pub num_shreds: u32,
+    // Offset (in bytes) of the index
+    pub index_offset: u32,
+    // Size (in bytes) of the index
+    pub index_size: u32,
+    // Offset (in bytes) of the data
+    pub data_offset: u32,
+    // Size (in bytes) of all the serialized shreds
+    pub data_size: u32,
+}
+
+// The following constant is computed by hand and hardcoded;
+// 'test_asdf` ensures the value is correct.
+const SIZE_OF_SHRED_FILE_HEADER: usize = 29;
+
+impl ShredFileHeader {
+    fn new(slot: Slot, cache: &ShredCache) -> Self {
+        let num_shreds: u32 = cache.len().try_into().unwrap();
+        Self {
+            slot,
+            shred_type: ShredType(DATA_SHRED),
+            num_shreds,
+            index_offset: SIZE_OF_SHRED_FILE_HEADER as u32,
+            index_size: num_shreds * 8,
+            data_offset: 0,
+            data_size: num_shreds * (SHRED_PAYLOAD_SIZE as u32),
+        }
+    }
+}
 
 impl Blockstore {
     pub(crate) fn get_data_shred_from_cache(
@@ -214,13 +257,31 @@ impl Blockstore {
             let temp_path = format!("{}.tmp", &path);
             let temp_path = Path::new(&temp_path);
 
-            // Write contents to a temporary file first. We will later rename the file;
-            // in this way, we approximate an atomic file write
-            // TODO: Should this check if file already exists instead of clobbering it
+            // Write contents to a temporary file first bit-by-bit. We will later rename the
+            // file, with this approach, the the file write will be "atomic".
+            // TODO: Make this handle file already existing (merge)
             let mut file = fs::File::create(temp_path)?;
+            let slot_cache = slot_cache.read().unwrap();
+            let mut header = ShredFileHeader::new(slot, &slot_cache);
+            let mut offset = 0;
+            let index: ShredFileIndex = slot_cache
+                .iter()
+                .map(|(index, _shred)| {
+                    let result = (*index as u32, offset as u32);
+                    offset += SHRED_PAYLOAD_SIZE;
+                    result
+                })
+                .collect();
+            let index = bincode::serialize(&index)?;
+            header.index_size = index.len() as u32;
+            header.data_offset = SIZE_OF_SHRED_FILE_HEADER as u32 + header.index_size;
+            header.data_size = offset as u32;
+
+            let header = bincode::serialize(&header)?;
+            file.write_all(&header)?;
+            file.write_all(&index)?;
+
             let result: Result<Vec<_>> = slot_cache
-                .read()
-                .unwrap()
                 .iter()
                 .map(|(_, shred)| {
                     file.write_all(shred).map_err(|err| {
@@ -231,6 +292,7 @@ impl Blockstore {
                     })
                 })
                 .collect();
+            drop(slot_cache);
             // Check that all of the individual writes succeeded
             let _result = result?;
             let path = Path::new(&path);
@@ -335,6 +397,7 @@ impl Blockstore {
             .to_string()
     }
 
+    // Convenience wrapper to retrieve a single shred payload from fs
     fn get_shred_from_fs(slot_path: &str, index: u64) -> Result<Option<Vec<u8>>> {
         // Use the same value for start and end index to signify we only want one payload
         let mut payloads =
@@ -342,6 +405,7 @@ impl Blockstore {
         Ok(payloads.pop())
     }
 
+    // Convenience wrapper to retrieve and deserialize shreds from fs
     fn get_shreds_for_slot_from_fs(
         slot_path: &str,
         start_index: u64,
@@ -356,6 +420,9 @@ impl Blockstore {
         )
     }
 
+    // Retrieve shreds from fs
+    // If end_index is Some(), range is inclusive on both ends
+    // If end_index is None, range is inclusive on start, unbounded on end
     fn get_shred_payloads_for_slot_from_fs(
         slot_path: &str,
         start_index: u64,
@@ -364,32 +431,42 @@ impl Blockstore {
         let path = Path::new(slot_path);
         let mut file = match fs::File::open(path) {
             Ok(file) => file,
-            Err(_err) => return Ok(vec![]),
+            Err(_err) => return Ok(Vec::new()),
         };
-        // Shreds are stored end to end, so the ith shred will occupy
-        // bytes [i * SHRED_PAYLOAD_SIZE, (i + 1) * SHRED_PAYLOAD_SIZE)
-        let payload_size = SHRED_PAYLOAD_SIZE as u64;
-        let metadata = fs::metadata(path)?;
-        // Ensure the file will contain at least one shred so we don't seek past end of file
-        if metadata.len() < (start_index + 1) * payload_size {
-            // TODO: Double check that empty list and not an error is correct behavior
-            return Ok(vec![]);
-        }
-        // TODO: Check metadata.len() % payload_size == 0 ?
-        let num_shreds: usize = if let Some(end_index) = end_index {
-            (end_index - start_index + 1).try_into().unwrap()
+
+        let mut header_buffer = vec![0; SIZE_OF_SHRED_FILE_HEADER];
+        file.read_exact(&mut header_buffer)?;
+        let header: ShredFileHeader = bincode::deserialize(&header_buffer)?;
+
+        let mut index_buffer = vec![0; header.index_size.try_into().unwrap()];
+        file.read_exact(&mut index_buffer)?;
+        let index: ShredFileIndex = bincode::deserialize(&index_buffer)?;
+
+        // Establish the bounds for the scan
+        let start = Included(start_index as u32);
+        let end = if let Some(end_index) = end_index {
+            Included(end_index as u32)
         } else {
-            ((metadata.len() - (start_index * payload_size)) / payload_size)
-                .try_into()
-                .unwrap()
+            Unbounded
         };
-        let mut buffers = Vec::with_capacity(num_shreds);
-        // Move the cursor up to proper start position so first read grabs start_index
-        file.seek(SeekFrom::Start(start_index * payload_size))?;
-        for i in 0..num_shreds {
+        let mut buffers = Vec::new();
+        // Grab the lowest entry in the search range:
+        // - If the result is Some(), do a file.seek() to get cursor to correct position.
+        // - If the result is None, there is no overlap between the search range and the
+        //   shreds actually present in the file.
+        if let Some((&_low_bound, &seek_offset)) = index.range((start, end)).next() {
+            // Prior to this call, the cursor is after the index / at begginning of data
+            // section. The offsets in ShredFileIndex are zero-indexed from this point,
+            // so we just seek forward whatever value was in the index.
+            file.seek(SeekFrom::Current(seek_offset as i64))?;
+        } else {
+            return Ok(buffers);
+        }
+
+        for (_index, _offset) in index.range((start, end)) {
             let mut buffer = vec![0; SHRED_PAYLOAD_SIZE];
             file.read_exact(&mut buffer)?;
-            buffers.insert(i, buffer);
+            buffers.push(buffer);
         }
         Ok(buffers)
     }
@@ -409,6 +486,7 @@ pub mod tests {
 
     #[test]
     fn test_get_data_shred_from_cache() {
+        solana_logger::setup();
         let ledger_path = get_tmp_ledger_path!();
         let ledger = Blockstore::open(&ledger_path).unwrap();
 
@@ -437,6 +515,7 @@ pub mod tests {
 
     #[test]
     fn test_flush_data_shreds_for_slot_to_fs() {
+        solana_logger::setup();
         let ledger_path = get_tmp_ledger_path!();
         let ledger = Blockstore::open(&ledger_path).unwrap();
 
