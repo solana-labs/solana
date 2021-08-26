@@ -1930,6 +1930,9 @@ pub struct CliUpgradeableProgram {
     pub authority: String,
     pub last_deploy_slot: u64,
     pub data_len: usize,
+    pub lamports: u64,
+    #[serde(skip_serializing)]
+    pub use_lamports_unit: bool,
 }
 impl QuietDisplay for CliUpgradeableProgram {}
 impl VerboseDisplay for CliUpgradeableProgram {}
@@ -1950,6 +1953,49 @@ impl fmt::Display for CliUpgradeableProgram {
             "Data Length:",
             &format!("{:?} ({:#x?}) bytes", self.data_len, self.data_len),
         )?;
+        writeln_name_value(
+            f,
+            "Balance:",
+            &build_balance_message(self.lamports, self.use_lamports_unit, true),
+        )?;
+        Ok(())
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliUpgradeablePrograms {
+    pub programs: Vec<CliUpgradeableProgram>,
+    #[serde(skip_serializing)]
+    pub use_lamports_unit: bool,
+}
+impl QuietDisplay for CliUpgradeablePrograms {}
+impl VerboseDisplay for CliUpgradeablePrograms {}
+impl fmt::Display for CliUpgradeablePrograms {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f)?;
+        writeln!(
+            f,
+            "{}",
+            style(format!(
+                "{:<44} | {:<9} | {:<44} | {}",
+                "Program Id", "Slot", "Authority", "Balance"
+            ))
+            .bold()
+        )?;
+        for program in self.programs.iter() {
+            writeln!(
+                f,
+                "{}",
+                &format!(
+                    "{:<44} | {:<9} | {:<44} | {}",
+                    program.program_id,
+                    program.last_deploy_slot,
+                    program.authority,
+                    build_balance_message(program.lamports, self.use_lamports_unit, true)
+                )
+            )?;
+        }
         Ok(())
     }
 }
@@ -1977,7 +2023,7 @@ impl fmt::Display for CliUpgradeableProgramClosed {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CliUpgradeableBuffer {
     pub address: String,
