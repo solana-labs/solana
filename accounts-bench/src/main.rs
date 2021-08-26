@@ -122,6 +122,7 @@ fn main() {
                 &ancestors,
                 None,
                 false,
+                None,
             );
             time_store.stop();
             if results != results_store {
