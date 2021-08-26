@@ -4469,6 +4469,14 @@ impl Bank {
             .flush_accounts_cache(false, Some(self.slot()))
     }
 
+    #[cfg(test)]
+    pub fn flush_accounts_cache_slot(&self) {
+        self.rc
+            .accounts
+            .accounts_db
+            .flush_accounts_cache_slot(self.slot())
+    }
+
     pub fn expire_old_recycle_stores(&self) {
         self.rc.accounts.accounts_db.expire_old_recycle_stores()
     }
@@ -11245,6 +11253,84 @@ pub(crate) mod tests {
             pubkey0_size / (pubkey0_size + bank0_total_size as f64) > DEFAULT_ACCOUNTS_SHRINK_RATIO
         );
         pubkey0_size as usize
+    }
+
+    #[test]
+    fn test_clean_nonrooted() {
+        solana_logger::setup();
+
+        let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000_000);
+        let pubkey0 = Pubkey::new(&[0; 32]);
+        let pubkey1 = Pubkey::new(&[1; 32]);
+
+        info!("pubkey0: {}", pubkey0);
+        info!("pubkey1: {}", pubkey1);
+
+        // Set root for bank 0, with caching enabled
+        let mut bank0 = Arc::new(Bank::new_with_config(
+            &genesis_config,
+            AccountSecondaryIndexes::default(),
+            true,
+            AccountShrinkThreshold::default(),
+        ));
+
+        let account_zero = AccountSharedData::new(0, 0, &Pubkey::new_unique());
+
+        goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank0).unwrap());
+        bank0.freeze();
+        bank0.squash();
+        // Flush now so that accounts cache cleaning doesn't clean up bank 0 when later
+        // slots add updates to the cache
+        bank0.force_flush_accounts_cache();
+
+        // Store some lamports in bank 1
+        let some_lamports = 123;
+        let mut bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
+        bank1.deposit(&pubkey0, some_lamports).unwrap();
+        goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank1).unwrap());
+        bank1.freeze();
+        bank1.flush_accounts_cache_slot();
+
+        bank1.print_accounts_stats();
+
+        // Store some lamports for pubkey1 in bank 2, root bank 2
+        // bank2's parent is bank0
+        let mut bank2 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 2));
+        bank2.deposit(&pubkey1, some_lamports).unwrap();
+        bank2.store_account(&pubkey0, &account_zero);
+        goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank2).unwrap());
+        bank2.freeze();
+        bank2.squash();
+        bank2.force_flush_accounts_cache();
+
+        bank2.print_accounts_stats();
+        drop(bank1);
+
+        // Clean accounts, which should add earlier slots to the shrink
+        // candidate set
+        bank2.clean_accounts(false, false, None);
+
+        let mut bank3 = Arc::new(Bank::new_from_parent(&bank2, &Pubkey::default(), 3));
+        bank3.deposit(&pubkey1, some_lamports + 1).unwrap();
+        goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank3).unwrap());
+        bank3.freeze();
+        bank3.squash();
+        bank3.force_flush_accounts_cache();
+
+        bank3.clean_accounts(false, false, None);
+        assert_eq!(
+            bank3.rc.accounts.accounts_db.ref_count_for_pubkey(&pubkey0),
+            2
+        );
+        assert!(bank3
+            .rc
+            .accounts
+            .accounts_db
+            .storage
+            .get_slot_stores(1)
+            .is_none());
+
+        bank3.print_accounts_stats();
     }
 
     #[test]
