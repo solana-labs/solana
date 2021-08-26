@@ -8799,10 +8799,10 @@ pub mod tests {
         );
         db.add_root(some_slot);
         let check_hash = true;
-        for use_index in [true, false] {
+        for use_index in &[true, false] {
             assert!(db
                 .calculate_accounts_hash_helper(
-                    use_index, some_slot, &ancestors, check_hash, false, None
+                    *use_index, some_slot, &ancestors, check_hash, false, None
                 )
                 .is_err());
         }
