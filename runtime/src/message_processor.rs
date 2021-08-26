@@ -18,7 +18,7 @@ use solana_sdk::{
     hash::Hash,
     ic_logger_msg, ic_msg,
     instruction::{CompiledInstruction, Instruction, InstructionError},
-    keyed_account::{create_keyed_accounts_unified, keyed_account_at_index, KeyedAccount},
+    keyed_account::{create_keyed_accounts_unified, KeyedAccount},
     message::Message,
     native_loader,
     process_instruction::{
@@ -31,12 +31,7 @@ use solana_sdk::{
     sysvar::instructions,
     transaction::TransactionError,
 };
-use std::{
-    cell::{Ref, RefCell},
-    collections::HashMap,
-    rc::Rc,
-    sync::Arc,
-};
+use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::Arc};
 
 pub struct Executors {
     pub executors: HashMap<Pubkey, Arc<dyn Executor>>,
@@ -553,6 +548,69 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
     fn get_fee_calculator(&self) -> &FeeCalculator {
         self.fee_calculator
     }
+    fn process_cross_program_instruction(
+        &mut self,
+        message: &Message,
+        accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        signers: &[Pubkey],
+    ) -> Result<(), InstructionError> {
+        if let Some(instruction) = message.instructions.get(0) {
+            let program_id = instruction.program_id(&message.account_keys);
+            MessageProcessor::verify_message(message, signers, self)?;
+            let caller_keyed_accounts = self.get_keyed_accounts()?;
+            let caller_write_privileges = message
+                .account_keys
+                .iter()
+                .map(|key| {
+                    if let Some(keyed_account) = caller_keyed_accounts
+                        .iter()
+                        .find(|keyed_account| key == keyed_account.unsigned_key())
+                    {
+                        keyed_account.is_writable()
+                    } else {
+                        false
+                    }
+                })
+                .collect::<Vec<bool>>();
+
+            // Verify the calling program hasn't misbehaved
+            self.verify_and_update(instruction, accounts, &caller_write_privileges)?;
+
+            // Construct keyed accounts
+            let executable_accounts = MessageProcessor::get_program_executables(program_id, self)?;
+            let keyed_accounts = MessageProcessor::create_keyed_accounts(
+                message,
+                instruction,
+                &executable_accounts,
+                accounts,
+            );
+
+            // Invoke callee
+            self.push(program_id, &keyed_accounts)?;
+
+            let mut message_processor = MessageProcessor::default();
+            for (program_id, process_instruction) in self.get_programs().iter() {
+                message_processor.add_program(*program_id, *process_instruction);
+            }
+
+            let mut result =
+                message_processor.process_instruction(program_id, &instruction.data, self);
+            if result.is_ok() {
+                // Verify the called program has not misbehaved
+                let write_privileges: Vec<bool> = (0..message.account_keys.len())
+                    .map(|i| message.is_writable(i))
+                    .collect();
+                result = self.verify_and_update(instruction, accounts, &write_privileges);
+            }
+
+            // Restore previous state
+            self.pop();
+            result
+        } else {
+            // This function is always called with a valid instruction, if that changes return an error
+            Err(InstructionError::GenericError)
+        }
+    }
 }
 pub struct ThisLogger {
     log_collector: Option<Rc<LogCollector>>,
@@ -658,6 +716,129 @@ impl MessageProcessor {
         self.add_program(program_id, process_instruction);
     }
 
+    #[allow(clippy::type_complexity)]
+    fn get_program_executables(
+        program_id: &Pubkey,
+        invoke_context: &dyn InvokeContext,
+    ) -> Result<Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>, InstructionError> {
+        let program_account = invoke_context.get_account(program_id).ok_or_else(|| {
+            ic_msg!(invoke_context, "Unknown program {}", program_id);
+            InstructionError::MissingAccount
+        })?;
+        if !program_account.borrow().executable() {
+            ic_msg!(invoke_context, "Account {} is not executable", program_id);
+            return Err(InstructionError::AccountNotExecutable);
+        }
+        let programdata = if program_account.borrow().owner() == &bpf_loader_upgradeable::id() {
+            if let UpgradeableLoaderState::Program {
+                programdata_address,
+            } = program_account.borrow().state()?
+            {
+                if let Some(account) = invoke_context.get_account(&programdata_address) {
+                    Some((programdata_address, account))
+                } else {
+                    ic_msg!(
+                        invoke_context,
+                        "Unknown upgradeable programdata account {}",
+                        programdata_address,
+                    );
+                    return Err(InstructionError::MissingAccount);
+                }
+            } else {
+                ic_msg!(
+                    invoke_context,
+                    "Upgradeable program account state not valid {}",
+                    program_id,
+                );
+                return Err(InstructionError::MissingAccount);
+            }
+        } else {
+            None
+        };
+        let mut executable_accounts = vec![(*program_id, program_account)];
+        if let Some(programdata) = programdata {
+            executable_accounts.push(programdata);
+        }
+        Ok(executable_accounts)
+    }
+
+    fn verify_message(
+        message: &Message,
+        signers: &[Pubkey],
+        invoke_context: &mut dyn InvokeContext,
+    ) -> Result<(), InstructionError> {
+        // Check for privilege escalation
+        let keyed_accounts = invoke_context.get_keyed_accounts()?;
+        for (account_index, account_key) in message.account_keys.iter().enumerate() {
+            let keyed_account = keyed_accounts
+                .iter()
+                .find_map(|keyed_account| {
+                    if account_key == keyed_account.unsigned_key() {
+                        Some(keyed_account)
+                    } else {
+                        None
+                    }
+                })
+                .ok_or_else(|| {
+                    ic_msg!(
+                        invoke_context,
+                        "Instruction references an unknown account {}",
+                        account_key
+                    );
+                    InstructionError::MissingAccount
+                })?;
+
+            // Readonly account cannot become writable
+            if message.is_writable(account_index) && !keyed_account.is_writable() {
+                ic_msg!(
+                    invoke_context,
+                    "{}'s writable privilege escalated",
+                    account_key
+                );
+                return Err(InstructionError::PrivilegeEscalation);
+            }
+
+            if message.is_signer(account_index) && // If message indicates account is signed
+            !( // one of the following needs to be true:
+                keyed_account.signer_key().is_some() // Signed in the parent instruction
+                || signers.contains(account_key) // Signed by the program
+            ) {
+                ic_msg!(
+                    invoke_context,
+                    "{}'s signer privilege escalated",
+                    account_key
+                );
+                return Err(InstructionError::PrivilegeEscalation);
+            }
+        }
+
+        // validate the caller has access to the program account and that it is executable
+        for instruction in &message.instructions {
+            let program_id = &message.account_keys[usize::from(instruction.program_id_index)];
+            match keyed_accounts
+                .iter()
+                .find(|keyed_account| program_id == keyed_account.unsigned_key())
+            {
+                Some(keyed_account) => {
+                    if !keyed_account.executable()? {
+                        ic_msg!(
+                            invoke_context,
+                            "Account {} is not executable",
+                            keyed_account.unsigned_key()
+                        );
+                        return Err(InstructionError::AccountNotExecutable);
+                    }
+                }
+                None => {
+                    ic_msg!(invoke_context, "Unknown program {}", program_id);
+                    return Err(InstructionError::MissingAccount);
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     /// Create the KeyedAccounts that will be passed to the program
     fn create_keyed_accounts<'a>(
         message: &'a Message,
@@ -715,291 +896,6 @@ impl MessageProcessor {
             }
         }
         Err(InstructionError::UnsupportedProgramId)
-    }
-
-    pub fn create_message(
-        instruction: &Instruction,
-        keyed_accounts: &[&KeyedAccount],
-        signers: &[Pubkey],
-        invoke_context: &Ref<&mut dyn InvokeContext>,
-    ) -> Result<(Message, Pubkey, usize), InstructionError> {
-        // Check for privilege escalation
-        for account in instruction.accounts.iter() {
-            let keyed_account = keyed_accounts
-                .iter()
-                .find_map(|keyed_account| {
-                    if &account.pubkey == keyed_account.unsigned_key() {
-                        Some(keyed_account)
-                    } else {
-                        None
-                    }
-                })
-                .ok_or_else(|| {
-                    ic_msg!(
-                        invoke_context,
-                        "Instruction references an unknown account {}",
-                        account.pubkey
-                    );
-                    InstructionError::MissingAccount
-                })?;
-            // Readonly account cannot become writable
-            if account.is_writable && !keyed_account.is_writable() {
-                ic_msg!(
-                    invoke_context,
-                    "{}'s writable privilege escalated",
-                    account.pubkey
-                );
-                return Err(InstructionError::PrivilegeEscalation);
-            }
-
-            if account.is_signer && // If message indicates account is signed
-            !( // one of the following needs to be true:
-                keyed_account.signer_key().is_some() // Signed in the parent instruction
-                || signers.contains(&account.pubkey) // Signed by the program
-            ) {
-                ic_msg!(
-                    invoke_context,
-                    "{}'s signer privilege escalated",
-                    account.pubkey
-                );
-                return Err(InstructionError::PrivilegeEscalation);
-            }
-        }
-
-        // validate the caller has access to the program account and that it is executable
-        let program_id = instruction.program_id;
-        match keyed_accounts
-            .iter()
-            .find(|keyed_account| &program_id == keyed_account.unsigned_key())
-        {
-            Some(keyed_account) => {
-                if !keyed_account.executable()? {
-                    ic_msg!(
-                        invoke_context,
-                        "Account {} is not executable",
-                        keyed_account.unsigned_key()
-                    );
-                    return Err(InstructionError::AccountNotExecutable);
-                }
-            }
-            None => {
-                ic_msg!(invoke_context, "Unknown program {}", program_id);
-                return Err(InstructionError::MissingAccount);
-            }
-        }
-
-        let message = Message::new(&[instruction.clone()], None);
-        let program_id_index = message.instructions[0].program_id_index as usize;
-
-        Ok((message, program_id, program_id_index))
-    }
-
-    /// Entrypoint for a cross-program invocation from a native program
-    pub fn native_invoke(
-        invoke_context: &mut dyn InvokeContext,
-        instruction: Instruction,
-        keyed_account_indices: &[usize],
-        signers: &[Pubkey],
-    ) -> Result<(), InstructionError> {
-        let invoke_context = RefCell::new(invoke_context);
-
-        let (
-            message,
-            executable_accounts,
-            accounts,
-            keyed_account_indices_reordered,
-            caller_write_privileges,
-        ) = {
-            let invoke_context = invoke_context.borrow();
-
-            // Translate and verify caller's data
-            let keyed_accounts = invoke_context.get_keyed_accounts()?;
-            let keyed_accounts = keyed_account_indices
-                .iter()
-                .map(|index| keyed_account_at_index(keyed_accounts, *index))
-                .collect::<Result<Vec<&KeyedAccount>, InstructionError>>()?;
-            let (message, callee_program_id, _) =
-                Self::create_message(&instruction, &keyed_accounts, signers, &invoke_context)?;
-            let keyed_accounts = invoke_context.get_keyed_accounts()?;
-            let mut caller_write_privileges = keyed_account_indices
-                .iter()
-                .map(|index| keyed_accounts[*index].is_writable())
-                .collect::<Vec<bool>>();
-            caller_write_privileges.insert(0, false);
-            let mut accounts = vec![];
-            let mut keyed_account_indices_reordered = vec![];
-            let keyed_accounts = invoke_context.get_keyed_accounts()?;
-            'root: for account_key in message.account_keys.iter() {
-                for keyed_account_index in keyed_account_indices {
-                    let keyed_account = &keyed_accounts[*keyed_account_index];
-                    if account_key == keyed_account.unsigned_key() {
-                        accounts.push((*account_key, Rc::new(keyed_account.account.clone())));
-                        keyed_account_indices_reordered.push(*keyed_account_index);
-                        continue 'root;
-                    }
-                }
-                ic_msg!(
-                    invoke_context,
-                    "Instruction references an unknown account {}",
-                    account_key
-                );
-                return Err(InstructionError::MissingAccount);
-            }
-
-            // Process instruction
-
-            invoke_context.record_instruction(&instruction);
-
-            let program_account =
-                invoke_context
-                    .get_account(&callee_program_id)
-                    .ok_or_else(|| {
-                        ic_msg!(invoke_context, "Unknown program {}", callee_program_id);
-                        InstructionError::MissingAccount
-                    })?;
-            if !program_account.borrow().executable() {
-                ic_msg!(
-                    invoke_context,
-                    "Account {} is not executable",
-                    callee_program_id
-                );
-                return Err(InstructionError::AccountNotExecutable);
-            }
-            let programdata = if program_account.borrow().owner() == &bpf_loader_upgradeable::id() {
-                if let UpgradeableLoaderState::Program {
-                    programdata_address,
-                } = program_account.borrow().state()?
-                {
-                    if let Some(account) = invoke_context.get_account(&programdata_address) {
-                        Some((programdata_address, account))
-                    } else {
-                        ic_msg!(
-                            invoke_context,
-                            "Unknown upgradeable programdata account {}",
-                            programdata_address,
-                        );
-                        return Err(InstructionError::MissingAccount);
-                    }
-                } else {
-                    ic_msg!(
-                        invoke_context,
-                        "Upgradeable program account state not valid {}",
-                        callee_program_id,
-                    );
-                    return Err(InstructionError::MissingAccount);
-                }
-            } else {
-                None
-            };
-            let mut executable_accounts = vec![(callee_program_id, program_account)];
-            if let Some(programdata) = programdata {
-                executable_accounts.push(programdata);
-            }
-            (
-                message,
-                executable_accounts,
-                accounts,
-                keyed_account_indices_reordered,
-                caller_write_privileges,
-            )
-        };
-
-        #[allow(clippy::deref_addrof)]
-        MessageProcessor::process_cross_program_instruction(
-            &message,
-            &executable_accounts,
-            &accounts,
-            &caller_write_privileges,
-            *(&mut *(invoke_context.borrow_mut())),
-        )?;
-
-        // Copy results back to caller
-
-        {
-            let invoke_context = invoke_context.borrow();
-            let keyed_accounts = invoke_context.get_keyed_accounts()?;
-            for (src_keyed_account_index, ((_key, account), dst_keyed_account_index)) in accounts
-                .iter()
-                .zip(keyed_account_indices_reordered)
-                .enumerate()
-            {
-                let dst_keyed_account = &keyed_accounts[dst_keyed_account_index];
-                let src_keyed_account = account.borrow();
-                if message.is_writable(src_keyed_account_index) && !src_keyed_account.executable() {
-                    if dst_keyed_account.data_len()? != src_keyed_account.data().len()
-                        && dst_keyed_account.data_len()? != 0
-                    {
-                        // Only support for `CreateAccount` at this time.
-                        // Need a way to limit total realloc size across multiple CPI calls
-                        ic_msg!(
-                            invoke_context,
-                            "Inner instructions do not support realloc, only SystemProgram::CreateAccount",
-                        );
-                        return Err(InstructionError::InvalidRealloc);
-                    }
-                    dst_keyed_account
-                        .try_account_ref_mut()?
-                        .set_lamports(src_keyed_account.lamports());
-                    dst_keyed_account
-                        .try_account_ref_mut()?
-                        .set_owner(*src_keyed_account.owner());
-                    dst_keyed_account
-                        .try_account_ref_mut()?
-                        .set_data(src_keyed_account.data().to_vec());
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Process a cross-program instruction
-    /// This method calls the instruction's program entrypoint function
-    pub fn process_cross_program_instruction(
-        message: &Message,
-        executable_accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
-        accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
-        caller_write_privileges: &[bool],
-        invoke_context: &mut dyn InvokeContext,
-    ) -> Result<(), InstructionError> {
-        if let Some(instruction) = message.instructions.get(0) {
-            let program_id = instruction.program_id(&message.account_keys);
-
-            // Verify the calling program hasn't misbehaved
-            invoke_context.verify_and_update(instruction, accounts, caller_write_privileges)?;
-
-            // Construct keyed accounts
-            let keyed_accounts =
-                Self::create_keyed_accounts(message, instruction, executable_accounts, accounts);
-
-            // Invoke callee
-            invoke_context.push(program_id, &keyed_accounts)?;
-
-            let mut message_processor = MessageProcessor::default();
-            for (program_id, process_instruction) in invoke_context.get_programs().iter() {
-                message_processor.add_program(*program_id, *process_instruction);
-            }
-
-            let mut result = message_processor.process_instruction(
-                program_id,
-                &instruction.data,
-                invoke_context,
-            );
-            if result.is_ok() {
-                // Verify the called program has not misbehaved
-                let write_privileges: Vec<bool> = (0..message.account_keys.len())
-                    .map(|i| message.is_writable(i))
-                    .collect();
-                result = invoke_context.verify_and_update(instruction, accounts, &write_privileges);
-            }
-
-            // Restore previous state
-            invoke_context.pop();
-            result
-        } else {
-            // This function is always called with a valid instruction, if that changes return an error
-            Err(InstructionError::GenericError)
-        }
     }
 
     /// Record the initial state of the accounts so that they can be compared
@@ -2360,21 +2256,9 @@ mod tests {
         );
 
         // not owned account modified by the caller (before the invoke)
-        let caller_write_privileges = message
-            .account_keys
-            .iter()
-            .enumerate()
-            .map(|(i, _)| message.is_writable(i))
-            .collect::<Vec<bool>>();
         accounts[0].1.borrow_mut().data_as_mut_slice()[0] = 1;
         assert_eq!(
-            MessageProcessor::process_cross_program_instruction(
-                &message,
-                &executable_accounts,
-                &accounts,
-                &caller_write_privileges,
-                &mut invoke_context,
-            ),
+            invoke_context.process_cross_program_instruction(&message, &accounts, &[],),
             Err(InstructionError::ExternalAccountDataModified)
         );
         accounts[0].1.borrow_mut().data_as_mut_slice()[0] = 0;
@@ -2420,20 +2304,8 @@ mod tests {
                 &fee_calculator,
             );
 
-            let caller_write_privileges = message
-                .account_keys
-                .iter()
-                .enumerate()
-                .map(|(i, _)| message.is_writable(i))
-                .collect::<Vec<bool>>();
             assert_eq!(
-                MessageProcessor::process_cross_program_instruction(
-                    &message,
-                    &executable_accounts,
-                    &accounts,
-                    &caller_write_privileges,
-                    &mut invoke_context,
-                ),
+                invoke_context.process_cross_program_instruction(&message, &accounts, &[],),
                 case.1
             );
         }

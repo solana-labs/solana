@@ -251,21 +251,6 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
         let message = Message::new(&[instruction.clone()], None);
         let program_id_index = message.instructions[0].program_id_index as usize;
         let program_id = message.account_keys[program_id_index];
-        let program_account_info = || {
-            for account_info in account_infos {
-                if account_info.unsigned_key() == &program_id {
-                    return account_info;
-                }
-            }
-            panic!("Program id {} wasn't found in account_infos", program_id);
-        };
-        // TODO don't have the caller's keyed_accounts so can't validate writer or signer escalation or deescalation yet
-        let caller_privileges = message
-            .account_keys
-            .iter()
-            .enumerate()
-            .map(|(i, _)| message.is_writable(i))
-            .collect::<Vec<bool>>();
 
         stable_log::program_invoke(&logger, &program_id, invoke_context.invoke_depth());
 
@@ -278,10 +263,6 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
                 rent_epoch: ai.rent_epoch,
             })
         }
-        let executables = vec![(
-            program_id,
-            Rc::new(RefCell::new(ai_to_a(program_account_info()))),
-        )];
 
         // Convert AccountInfos into Accounts
         let mut accounts = vec![];
@@ -301,37 +282,19 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
         );
 
         // Check Signers
-        for account_info in account_infos {
-            for instruction_account in &instruction.accounts {
-                if *account_info.unsigned_key() == instruction_account.pubkey
-                    && instruction_account.is_signer
-                    && !account_info.is_signer
-                {
-                    let mut program_signer = false;
-                    for seeds in signers_seeds.iter() {
-                        let signer = Pubkey::create_program_address(seeds, &caller).unwrap();
-                        if instruction_account.pubkey == signer {
-                            program_signer = true;
-                            break;
-                        }
-                    }
-                    if !program_signer {
-                        panic!("Missing signer for {}", instruction_account.pubkey);
-                    }
-                }
-            }
-        }
+        let signers = signers_seeds
+            .iter()
+            .map(|seeds| {
+                Pubkey::create_program_address(seeds, &caller)
+                    .map_err(|_| ProgramError::InvalidSeeds)
+            })
+            .collect::<Result<Vec<_>, ProgramError>>()?;
 
         invoke_context.record_instruction(instruction);
 
-        solana_runtime::message_processor::MessageProcessor::process_cross_program_instruction(
-            &message,
-            &executables,
-            &accounts,
-            &caller_privileges,
-            invoke_context,
-        )
-        .map_err(|err| ProgramError::try_from(err).unwrap_or_else(|err| panic!("{}", err)))?;
+        invoke_context
+            .process_cross_program_instruction(&message, &accounts, &signers)
+            .map_err(|err| ProgramError::try_from(err).unwrap_or_else(|err| panic!("{}", err)))?;
 
         // Copy writeable account modifications back into the caller's AccountInfos
         for (i, (pubkey, account)) in accounts.iter().enumerate().take(message.account_keys.len()) {

@@ -1,16 +1,106 @@
 #![cfg(feature = "full")]
 
 use solana_sdk::{
-    account::AccountSharedData,
+    account::{AccountSharedData, ReadableAccount, WritableAccount},
     compute_budget::ComputeBudget,
     fee_calculator::FeeCalculator,
     hash::Hash,
+    ic_msg,
     instruction::{CompiledInstruction, Instruction, InstructionError},
     keyed_account::{create_keyed_accounts_unified, KeyedAccount},
+    message::Message,
     pubkey::Pubkey,
     sysvar::Sysvar,
 };
 use std::{cell::RefCell, collections::HashSet, fmt::Debug, rc::Rc, sync::Arc};
+
+/// Entrypoint for a cross-program invocation from a native program
+pub fn native_invoke(
+    invoke_context: &mut dyn InvokeContext,
+    instruction: Instruction,
+    keyed_account_indices: &[usize],
+    signers: &[Pubkey],
+) -> Result<(), InstructionError> {
+    let invoke_context = RefCell::new(invoke_context);
+
+    let (message, accounts, keyed_account_indices_reordered) = {
+        let invoke_context = invoke_context.borrow();
+        let message = Message::new(std::slice::from_ref(&instruction), None);
+
+        // Translate and verify caller's data
+        let mut accounts = vec![];
+        let mut keyed_account_indices_reordered = vec![];
+        let keyed_accounts = invoke_context.get_keyed_accounts()?;
+        'root: for account_key in message.account_keys.iter() {
+            for keyed_account_index in keyed_account_indices {
+                let keyed_account = &keyed_accounts[*keyed_account_index];
+                if account_key == keyed_account.unsigned_key() {
+                    accounts.push((*account_key, Rc::new(keyed_account.account.clone())));
+                    keyed_account_indices_reordered.push(*keyed_account_index);
+                    continue 'root;
+                }
+            }
+            ic_msg!(
+                invoke_context,
+                "Instruction references an unknown account {}",
+                account_key
+            );
+            return Err(InstructionError::MissingAccount);
+        }
+
+        // Record the instruction
+
+        invoke_context.record_instruction(&instruction);
+
+        (message, accounts, keyed_account_indices_reordered)
+    };
+
+    // Process instruction
+
+    {
+        let mut invoke_context = invoke_context.borrow_mut();
+        invoke_context.process_cross_program_instruction(&message, &accounts, signers)?;
+    }
+
+    // Copy results back to caller
+
+    {
+        let invoke_context = invoke_context.borrow();
+        let keyed_accounts = invoke_context.get_keyed_accounts()?;
+        for (src_keyed_account_index, ((_key, account), dst_keyed_account_index)) in accounts
+            .iter()
+            .zip(keyed_account_indices_reordered)
+            .enumerate()
+        {
+            let dst_keyed_account = &keyed_accounts[dst_keyed_account_index];
+            let src_keyed_account = account.borrow();
+            if message.is_writable(src_keyed_account_index) && !src_keyed_account.executable() {
+                if dst_keyed_account.data_len()? != src_keyed_account.data().len()
+                    && dst_keyed_account.data_len()? != 0
+                {
+                    // Only support for `CreateAccount` at this time.
+                    // Need a way to limit total realloc size across multiple CPI calls
+                    ic_msg!(
+                            invoke_context,
+                            "Inner instructions do not support realloc, only SystemProgram::CreateAccount",
+                        );
+                    return Err(InstructionError::InvalidRealloc);
+                }
+                dst_keyed_account
+                    .try_account_ref_mut()?
+                    .set_lamports(src_keyed_account.lamports());
+                dst_keyed_account
+                    .try_account_ref_mut()?
+                    .set_owner(*src_keyed_account.owner());
+                dst_keyed_account
+                    .try_account_ref_mut()?
+                    .set_data(src_keyed_account.data().to_vec());
+            }
+        }
+    }
+
+    Ok(())
+}
 
 /// Prototype of a native loader entry point
 ///
@@ -51,7 +141,7 @@ impl<'a> InvokeContextStackFrame<'a> {
 pub trait InvokeContext {
     /// Push a stack frame onto the invocation stack
     ///
-    /// Used in MessageProcessor::process_cross_program_instruction
+    /// Used in Self::process_cross_program_instruction
     fn push(
         &mut self,
         key: &Pubkey,
@@ -59,7 +149,7 @@ pub trait InvokeContext {
     ) -> Result<(), InstructionError>;
     /// Pop a stack frame from the invocation stack
     ///
-    /// Used in MessageProcessor::process_cross_program_instruction
+    /// Used in Self::process_cross_program_instruction
     fn pop(&mut self);
     /// Current depth of the invocation stake
     fn invoke_depth(&self) -> usize;
@@ -113,6 +203,13 @@ pub trait InvokeContext {
     fn get_blockhash(&self) -> &Hash;
     /// Get this invocation's `FeeCalculator`
     fn get_fee_calculator(&self) -> &FeeCalculator;
+    /// Process cross program instruction
+    fn process_cross_program_instruction(
+        &mut self,
+        message: &Message,
+        accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        signers: &[Pubkey],
+    ) -> Result<(), InstructionError>;
 }
 
 /// Convenience macro to log a message with an `Rc<RefCell<dyn Logger>>`
@@ -538,5 +635,13 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
     }
     fn get_fee_calculator(&self) -> &FeeCalculator {
         &self.fee_calculator
+    }
+    fn process_cross_program_instruction(
+        &mut self,
+        _message: &Message,
+        _accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        _signers: &[Pubkey],
+    ) -> Result<(), InstructionError> {
+        Ok(())
     }
 }

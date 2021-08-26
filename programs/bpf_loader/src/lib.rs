@@ -22,7 +22,6 @@ use solana_rbpf::{
     verifier::{self, VerifierError},
     vm::{Config, EbpfVm, Executable, InstructionMeter},
 };
-use solana_runtime::message_processor::MessageProcessor;
 use solana_sdk::{
     account::{ReadableAccount, WritableAccount},
     account_utils::State,
@@ -39,7 +38,9 @@ use solana_sdk::{
     keyed_account::{from_keyed_account, keyed_account_at_index, KeyedAccount},
     loader_instruction::LoaderInstruction,
     loader_upgradeable_instruction::UpgradeableLoaderInstruction,
-    process_instruction::{stable_log, ComputeMeter, Executor, InvokeContext, Logger},
+    process_instruction::{
+        native_invoke, stable_log, ComputeMeter, Executor, InvokeContext, Logger,
+    },
     program_error::{ACCOUNT_NOT_RENT_EXEMPT, BORSH_IO_ERROR},
     program_utils::limited_deserialize,
     pubkey::Pubkey,
@@ -400,12 +401,8 @@ fn process_loader_upgradeable_instruction(
                 .iter()
                 .map(|seeds| Pubkey::create_program_address(*seeds, caller_program_id))
                 .collect::<Result<Vec<Pubkey>, solana_sdk::pubkey::PubkeyError>>()?;
-            MessageProcessor::native_invoke(
-                invoke_context,
-                instruction,
-                &[0, 1, 6],
-                signers.as_slice(),
-            )?;
+
+            native_invoke(invoke_context, instruction, &[0, 1, 6], signers.as_slice())?;
 
             // Load and verify the program bits
             let executor = create_executor(3, buffer_data_offset, invoke_context, use_jit)?;

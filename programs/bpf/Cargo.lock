@@ -2452,7 +2452,6 @@ dependencies = [
  "regex",
  "sha3",
  "solana-measure",
- "solana-runtime",
  "solana-sdk",
  "solana_rbpf",
  "thiserror",

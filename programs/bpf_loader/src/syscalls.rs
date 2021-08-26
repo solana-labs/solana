@@ -8,15 +8,12 @@ use solana_rbpf::{
     question_mark,
     vm::{EbpfVm, SyscallObject, SyscallRegistry},
 };
-use solana_runtime::message_processor::MessageProcessor;
 #[allow(deprecated)]
 use solana_sdk::sysvar::fees::Fees;
 use solana_sdk::{
     account::{Account, AccountSharedData, ReadableAccount},
     account_info::AccountInfo,
-    account_utils::StateMut,
-    blake3, bpf_loader, bpf_loader_deprecated,
-    bpf_loader_upgradeable::{self, UpgradeableLoaderState},
+    blake3, bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
     clock::Clock,
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     epoch_schedule::EpochSchedule,
@@ -29,7 +26,7 @@ use solana_sdk::{
     ic_msg,
     instruction::{AccountMeta, Instruction, InstructionError},
     keccak,
-    keyed_account::KeyedAccount,
+    message::Message,
     native_loader,
     process_instruction::{self, stable_log, ComputeMeter, InvokeContext, Logger},
     pubkey::{Pubkey, PubkeyError, MAX_SEEDS},
@@ -1554,7 +1551,6 @@ trait SyscallInvokeSigned<'a> {
     fn translate_accounts(
         &self,
         account_keys: &[Pubkey],
-        program_account_index: usize,
         account_infos_addr: u64,
         account_infos_len: u64,
         memory_mapping: &MemoryMapping,
@@ -1630,7 +1626,6 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
     fn translate_accounts(
         &self,
         account_keys: &[Pubkey],
-        program_account_index: usize,
         account_infos_addr: u64,
         account_infos_len: u64,
         memory_mapping: &MemoryMapping,
@@ -1748,7 +1743,6 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
 
         get_translated_accounts(
             account_keys,
-            program_account_index,
             &account_info_keys,
             account_infos,
             &invoke_context,
@@ -1964,7 +1958,6 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
     fn translate_accounts(
         &self,
         account_keys: &[Pubkey],
-        program_account_index: usize,
         account_infos_addr: u64,
         account_infos_len: u64,
         memory_mapping: &MemoryMapping,
@@ -2064,7 +2057,6 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
 
         get_translated_accounts(
             account_keys,
-            program_account_index,
             &account_info_keys,
             account_infos,
             &invoke_context,
@@ -2153,7 +2145,6 @@ impl<'a> SyscallObject<BpfError> for SyscallInvokeSignedC<'a> {
 
 fn get_translated_accounts<'a, T, F>(
     account_keys: &[Pubkey],
-    program_account_index: usize,
     account_info_keys: &[&Pubkey],
     account_infos: &[T],
     invoke_context: &Ref<&mut dyn InvokeContext>,
@@ -2164,7 +2155,7 @@ where
 {
     let mut accounts = Vec::with_capacity(account_keys.len());
     let mut refs = Vec::with_capacity(account_keys.len());
-    for (i, ref account_key) in account_keys.iter().enumerate() {
+    for account_key in account_keys {
         let account = invoke_context.get_account(account_key).ok_or_else(|| {
             ic_msg!(
                 invoke_context,
@@ -2174,16 +2165,16 @@ where
             SyscallError::InstructionError(InstructionError::MissingAccount)
         })?;
 
-        if i == program_account_index || account.borrow().executable() {
+        if account.borrow().executable() {
             // Use the known account
-            accounts.push((**account_key, account));
+            accounts.push((*account_key, account));
             refs.push(None);
         } else if let Some(account_info) =
             account_info_keys
                 .iter()
                 .zip(account_infos)
                 .find_map(|(key, account_info)| {
-                    if key == account_key {
+                    if key == &account_key {
                         Some(account_info)
                     } else {
                         None
@@ -2191,7 +2182,7 @@ where
                 })
         {
             let (account, account_ref) = do_translate(account_info, invoke_context)?;
-            accounts.push((**account_key, account));
+            accounts.push((*account_key, account));
             refs.push(account_ref);
         } else {
             ic_msg!(
@@ -2252,42 +2243,6 @@ fn check_authorized_program(
     Ok(())
 }
 
-#[allow(clippy::type_complexity)]
-fn get_upgradeable_executable(
-    callee_program_id: &Pubkey,
-    program_account: &Rc<RefCell<AccountSharedData>>,
-    invoke_context: &Ref<&mut dyn InvokeContext>,
-) -> Result<Option<(Pubkey, Rc<RefCell<AccountSharedData>>)>, EbpfError<BpfError>> {
-    if program_account.borrow().owner() == &bpf_loader_upgradeable::id() {
-        match program_account.borrow().state() {
-            Ok(UpgradeableLoaderState::Program {
-                programdata_address,
-            }) => {
-                if let Some(account) = invoke_context.get_account(&programdata_address) {
-                    Ok(Some((programdata_address, account)))
-                } else {
-                    ic_msg!(
-                        invoke_context,
-                        "Unknown upgradeable programdata account {}",
-                        programdata_address,
-                    );
-                    Err(SyscallError::InstructionError(InstructionError::MissingAccount).into())
-                }
-            }
-            _ => {
-                ic_msg!(
-                    invoke_context,
-                    "Invalid upgradeable program account {}",
-                    callee_program_id,
-                );
-                Err(SyscallError::InstructionError(InstructionError::InvalidAccountData).into())
-            }
-        }
-    } else {
-        Ok(None)
-    }
-}
-
 /// Call process instruction, common to both Rust and C
 fn call<'a>(
     syscall: &mut dyn SyscallInvokeSigned<'a>,
@@ -2298,7 +2253,7 @@ fn call<'a>(
     signers_seeds_len: u64,
     memory_mapping: &MemoryMapping,
 ) -> Result<u64, EbpfError<BpfError>> {
-    let (message, executables, accounts, account_refs, caller_write_privileges) = {
+    let (message, accounts, account_refs, signers) = {
         let invoke_context = syscall.get_context()?;
 
         invoke_context
@@ -2326,90 +2281,32 @@ fn call<'a>(
             memory_mapping,
             enforce_aligned_host_addrs,
         )?;
-        let keyed_account_refs = invoke_context
-            .get_keyed_accounts()
-            .map_err(SyscallError::InstructionError)?
-            .iter()
-            .collect::<Vec<&KeyedAccount>>();
-        let (message, callee_program_id, callee_program_id_index) =
-            MessageProcessor::create_message(
-                &instruction,
-                &keyed_account_refs,
-                &signers,
-                &invoke_context,
-            )
-            .map_err(SyscallError::InstructionError)?;
-        let caller_write_privileges = message
-            .account_keys
-            .iter()
-            .map(|key| {
-                if let Some(keyed_account) = keyed_account_refs
-                    .iter()
-                    .find(|keyed_account| key == keyed_account.unsigned_key())
-                {
-                    keyed_account.is_writable()
-                } else {
-                    false
-                }
-            })
-            .collect::<Vec<bool>>();
+        let message = Message::new(std::slice::from_ref(&instruction), None);
         check_authorized_program(
-            &callee_program_id,
+            &instruction.program_id,
             &instruction.data,
             invoke_context.is_feature_active(&close_upgradeable_program_accounts::id()),
         )?;
         let (accounts, account_refs) = syscall.translate_accounts(
             &message.account_keys,
-            callee_program_id_index,
             account_infos_addr,
             account_infos_len,
             memory_mapping,
         )?;
 
-        // Construct executables
-
-        let program_account = accounts
-            .get(callee_program_id_index)
-            .ok_or_else(|| {
-                ic_msg!(invoke_context, "Unknown program {}", callee_program_id,);
-                SyscallError::InstructionError(InstructionError::MissingAccount)
-            })?
-            .1
-            .clone();
-        let programdata_executable =
-            get_upgradeable_executable(&callee_program_id, &program_account, &invoke_context)?;
-        let mut executables = vec![(callee_program_id, program_account)];
-        if let Some(executable) = programdata_executable {
-            executables.push(executable);
-        }
-
         // Record the instruction
 
         invoke_context.record_instruction(&instruction);
 
-        (
-            message,
-            executables,
-            accounts,
-            account_refs,
-            caller_write_privileges,
-        )
+        (message, accounts, account_refs, signers)
     };
 
     // Process instruction
-
-    #[allow(clippy::deref_addrof)]
-    match MessageProcessor::process_cross_program_instruction(
-        &message,
-        &executables,
-        &accounts,
-        &caller_write_privileges,
-        *(&mut *(syscall.get_context_mut()?)),
-    ) {
-        Ok(()) => (),
-        Err(err) => {
-            return Err(SyscallError::InstructionError(err).into());
-        }
+    {
+        let mut invoke_context = syscall.get_context_mut()?;
+        invoke_context
+            .process_cross_program_instruction(&message, &accounts, &signers)
+            .map_err(SyscallError::InstructionError)?;
     }
 
     // Copy results back to caller
