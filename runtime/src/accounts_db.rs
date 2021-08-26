@@ -7686,7 +7686,7 @@ pub mod tests {
 
         //Old state behind zero-lamport account is cleaned up
         assert_eq!(accounts.alive_account_count_in_slot(0), 0);
-        assert_eq!(accounts.alive_account_count_in_slot(1), 2);
+        assert_eq!(accounts.alive_account_count_in_slot(1), 1);
     }
 
     #[test]

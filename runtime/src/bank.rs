@@ -13570,7 +13570,7 @@ pub(crate) mod tests {
         //! 3. A key with zero lamports is _only_ in an unrooted bank (key4)
         //!     - In this case, key4 should be cleaned up
         //! 4. A key with zero lamports is in both an unrooted _and_ rooted bank (key5)
-        //!     - In this case, key5's ref-count should be decremented correctly
+        //!     - In this case, key5's ref-count should be cleaned up
 
         let (genesis_config, mint_keypair) = create_genesis_config(100);
         let bank0 = Arc::new(Bank::new(&genesis_config));
@@ -13609,7 +13609,6 @@ pub(crate) mod tests {
         bank2.clean_accounts(false, false);
 
         let expected_ref_count_for_cleaned_up_keys = 0;
-        let expected_ref_count_for_keys_in_both_slot1_and_slot2 = 1;
 
         assert_eq!(
             bank2
@@ -13645,7 +13644,7 @@ pub(crate) mod tests {
                 .accounts_db
                 .accounts_index
                 .ref_count_from_storage(&key5.pubkey()),
-            expected_ref_count_for_keys_in_both_slot1_and_slot2,
+            expected_ref_count_for_cleaned_up_keys,
         );
 
         assert_eq!(
