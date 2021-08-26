@@ -2809,7 +2809,7 @@ dependencies = [
 
 [[package]]
 name = "solana-account-decoder"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
  "Inflector",
  "base64 0.12.3",
@@ -2831,7 +2831,7 @@ dependencies = [
 
 [[package]]
 name = "solana-banks-client"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
  "bincode",
  "borsh 0.9.0",
@@ -2839,7 +2839,7 @@ dependencies = [
  "futures 0.3.12",
  "mio 0.7.7",
  "solana-banks-interface",
- "solana-program 1.6.22",
+ "solana-program 1.6.23",
  "solana-sdk",
  "tarpc",
  "tokio 1.8.1",
@@ -2848,7 +2848,7 @@ dependencies = [
 
 [[package]]
 name = "solana-banks-interface"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
  "mio 0.7.7",
  "serde",
@@ -2858,7 +2858,7 @@ dependencies = [
 
 [[package]]
 name = "solana-banks-server"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
  "bincode",
  "futures 0.3.12",
@@ -2876,7 +2876,7 @@ dependencies = [
 
 [[package]]
 name = "solana-bpf-loader-program"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
  "bincode",
  "byteorder 1.3.4",
@@ -2894,7 +2894,7 @@ dependencies = [
 
 [[package]]
 name = "solana-bpf-programs"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
  "bincode",
  "byteorder 1.3.4",
@@ -2905,7 +2905,7 @@ dependencies = [
  "solana-account-decoder",
  "solana-bpf-loader-program",
  "solana-cli-output",
- "solana-logger 1.6.22",
+ "solana-logger 1.6.23",
  "solana-measure",
  "solana-runtime",
  "solana-sdk",
@@ -2916,272 +2916,272 @@ dependencies = [
 
 [[package]]
 name = "solana-bpf-rust-128bit"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
  "solana-bpf-rust-128bit-dep",
- "solana-program 1.6.22",
+ "solana-program 1.6.23",
 ]
 
 [[package]]
 name = "solana-bpf-rust-128bit-dep"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
- "solana-program 1.6.22",
+ "solana-program 1.6.23",
 ]
 
 [[package]]
 name = "solana-bpf-rust-alloc"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
- "solana-program 1.6.22",
+ "solana-program 1.6.23",
 ]
 
 [[package]]
 name = "solana-bpf-rust-call-depth"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
- "solana-program 1.6.22",
+ "solana-program 1.6.23",
 ]
 
 [[package]]
 name = "solana-bpf-rust-caller-access"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
- "solana-program 1.6.22",
+ "solana-program 1.6.23",
 ]
 
 [[package]]
 name = "solana-bpf-rust-custom-heap"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
- "solana-program 1.6.22",
+ "solana-program 1.6.23",
 ]
 
 [[package]]
 name = "solana-bpf-rust-dep-crate"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
  "byteorder 1.3.4",
- "solana-program 1.6.22",
+ "solana-program 1.6.23",
 ]
 
 [[package]]
 name = "solana-bpf-rust-deprecated-loader"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
- "solana-program 1.6.22",
+ "solana-program 1.6.23",
 ]
 
 [[package]]
 name = "solana-bpf-rust-dup-accounts"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
- "solana-program 1.6.22",
+ "solana-program 1.6.23",
 ]
 
 [[package]]
 name = "solana-bpf-rust-error-handling"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
  "num-derive 0.2.5",
  "num-traits",
- "solana-program 1.6.22",
+ "solana-program 1.6.23",
  "thiserror",
 ]
 
 [[package]]
 name = "solana-bpf-rust-external-spend"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
- "solana-program 1.6.22",
+ "solana-program 1.6.23",
 ]
 
 [[package]]
 name = "solana-bpf-rust-finalize"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
- "solana-program 1.6.22",
+ "solana-program 1.6.23",
 ]
 
 [[package]]
 name = "solana-bpf-rust-instruction-introspection"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
- "solana-program 1.6.22",
+ "solana-program 1.6.23",
 ]
 
 [[package]]
 name = "solana-bpf-rust-invoke"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
  "solana-bpf-rust-invoked",
- "solana-program 1.6.22",
+ "solana-program 1.6.23",
 ]
 
 [[package]]
 name = "solana-bpf-rust-invoke-and-error"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
- "solana-program 1.6.22",
+ "solana-program 1.6.23",
 ]
 
 [[package]]
 name = "solana-bpf-rust-invoke-and-ok"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
- "solana-program 1.6.22",
+ "solana-program 1.6.23",
 ]
 
 [[package]]
 name = "solana-bpf-rust-invoke-and-return"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
- "solana-program 1.6.22",
+ "solana-program 1.6.23",
 ]
 
 [[package]]
 name = "solana-bpf-rust-invoked"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
- "solana-program 1.6.22",
+ "solana-program 1.6.23",
 ]
 
 [[package]]
 name = "solana-bpf-rust-iter"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
- "solana-program 1.6.22",
+ "solana-program 1.6.23",
 ]
 
 [[package]]
 name = "solana-bpf-rust-many-args"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
  "solana-bpf-rust-many-args-dep",
- "solana-program 1.6.22",
+ "solana-program 1.6.23",
 ]
 
 [[package]]
 name = "solana-bpf-rust-many-args-dep"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
- "solana-program 1.6.22",
+ "solana-program 1.6.23",
 ]
 
 [[package]]
 name = "solana-bpf-rust-mem"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
- "solana-program 1.6.22",
+ "solana-program 1.6.23",
  "solana-program-test",
  "solana-sdk",
 ]
 
 [[package]]
 name = "solana-bpf-rust-membuiltins"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
  "solana-bpf-rust-mem",
- "solana-program 1.6.22",
+ "solana-program 1.6.23",
 ]
 
 [[package]]
 name = "solana-bpf-rust-noop"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
- "solana-program 1.6.22",
+ "solana-program 1.6.23",
 ]
 
 [[package]]
 name = "solana-bpf-rust-panic"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
- "solana-program 1.6.22",
+ "solana-program 1.6.23",
 ]
 
 [[package]]
 name = "solana-bpf-rust-param-passing"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
  "solana-bpf-rust-param-passing-dep",
- "solana-program 1.6.22",
+ "solana-program 1.6.23",
 ]
 
 [[package]]
 name = "solana-bpf-rust-param-passing-dep"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
- "solana-program 1.6.22",
+ "solana-program 1.6.23",
 ]
 
 [[package]]
 name = "solana-bpf-rust-rand"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
  "getrandom 0.1.14",
  "rand 0.7.3",
- "solana-program 1.6.22",
+ "solana-program 1.6.23",
 ]
 
 [[package]]
 name = "solana-bpf-rust-ro-modify"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
- "solana-program 1.6.22",
+ "solana-program 1.6.23",
 ]
 
 [[package]]
 name = "solana-bpf-rust-sanity"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
- "solana-program 1.6.22",
+ "solana-program 1.6.23",
 ]
 
 [[package]]
 name = "solana-bpf-rust-sha"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
- "solana-program 1.6.22",
+ "solana-program 1.6.23",
 ]
 
 [[package]]
 name = "solana-bpf-rust-spoof1"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
- "solana-program 1.6.22",
+ "solana-program 1.6.23",
 ]
 
 [[package]]
 name = "solana-bpf-rust-spoof1-system"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
- "solana-program 1.6.22",
+ "solana-program 1.6.23",
 ]
 
 [[package]]
 name = "solana-bpf-rust-sysvar"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
- "solana-program 1.6.22",
+ "solana-program 1.6.23",
 ]
 
 [[package]]
 name = "solana-bpf-rust-upgradeable"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
- "solana-program 1.6.22",
+ "solana-program 1.6.23",
 ]
 
 [[package]]
 name = "solana-bpf-rust-upgraded"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
- "solana-program 1.6.22",
+ "solana-program 1.6.23",
 ]
 
 [[package]]
 name = "solana-clap-utils"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
  "chrono",
  "clap",
@@ -3196,7 +3196,7 @@ dependencies = [
 
 [[package]]
 name = "solana-cli-config"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
  "dirs-next",
  "lazy_static",
@@ -3208,7 +3208,7 @@ dependencies = [
 
 [[package]]
 name = "solana-cli-output"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
  "Inflector",
  "base64 0.13.0",
@@ -3231,7 +3231,7 @@ dependencies = [
 
 [[package]]
 name = "solana-client"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
  "base64 0.13.0",
  "bincode",
@@ -3263,7 +3263,7 @@ dependencies = [
 
 [[package]]
 name = "solana-config-program"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
  "bincode",
  "chrono",
@@ -3276,7 +3276,7 @@ dependencies = [
 
 [[package]]
 name = "solana-crate-features"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
  "backtrace",
  "bytes 0.4.12",
@@ -3298,7 +3298,7 @@ dependencies = [
 
 [[package]]
 name = "solana-faucet"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
  "bincode",
  "byteorder 1.3.4",
@@ -3308,7 +3308,7 @@ dependencies = [
  "serde_derive",
  "solana-clap-utils",
  "solana-cli-config",
- "solana-logger 1.6.22",
+ "solana-logger 1.6.23",
  "solana-metrics",
  "solana-sdk",
  "solana-version",
@@ -3319,7 +3319,7 @@ dependencies = [
 
 [[package]]
 name = "solana-frozen-abi"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
  "bs58",
  "bv",
@@ -3330,8 +3330,8 @@ dependencies = [
  "serde",
  "serde_derive",
  "sha2",
- "solana-frozen-abi-macro 1.6.22",
- "solana-logger 1.6.22",
+ "solana-frozen-abi-macro 1.6.23",
+ "solana-logger 1.6.23",
  "thiserror",
 ]
 
@@ -3357,7 +3357,7 @@ dependencies = [
 
 [[package]]
 name = "solana-frozen-abi-macro"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
  "lazy_static",
  "proc-macro2 1.0.24",
@@ -3380,7 +3380,7 @@ dependencies = [
 
 [[package]]
 name = "solana-logger"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
  "env_logger",
  "lazy_static",
@@ -3400,7 +3400,7 @@ dependencies = [
 
 [[package]]
 name = "solana-measure"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
  "jemalloc-ctl",
  "jemallocator",
@@ -3411,7 +3411,7 @@ dependencies = [
 
 [[package]]
 name = "solana-metrics"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
  "env_logger",
  "gethostname",
@@ -3423,7 +3423,7 @@ dependencies = [
 
 [[package]]
 name = "solana-net-utils"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
  "bincode",
  "clap",
@@ -3434,7 +3434,7 @@ dependencies = [
  "serde_derive",
  "socket2 0.3.17",
  "solana-clap-utils",
- "solana-logger 1.6.22",
+ "solana-logger 1.6.23",
  "solana-version",
  "tokio 1.8.1",
  "url",
@@ -3442,7 +3442,7 @@ dependencies = [
 
 [[package]]
 name = "solana-program"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
  "bincode",
  "blake3",
@@ -3465,10 +3465,10 @@ dependencies = [
  "serde_derive",
  "sha2",
  "sha3",
- "solana-frozen-abi 1.6.22",
- "solana-frozen-abi-macro 1.6.22",
- "solana-logger 1.6.22",
- "solana-sdk-macro 1.6.22",
+ "solana-frozen-abi 1.6.23",
+ "solana-frozen-abi-macro 1.6.23",
+ "solana-logger 1.6.23",
+ "solana-sdk-macro 1.6.23",
  "thiserror",
 ]
 
@@ -3508,7 +3508,7 @@ dependencies = [
 
 [[package]]
 name = "solana-program-test"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
  "async-trait",
  "base64 0.12.3",
@@ -3522,7 +3522,7 @@ dependencies = [
  "solana-banks-client",
  "solana-banks-server",
  "solana-bpf-loader-program",
- "solana-logger 1.6.22",
+ "solana-logger 1.6.23",
  "solana-runtime",
  "solana-sdk",
  "solana-vote-program",
@@ -3532,7 +3532,7 @@ dependencies = [
 
 [[package]]
 name = "solana-rayon-threadlimit"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
  "lazy_static",
  "num_cpus",
@@ -3540,7 +3540,7 @@ dependencies = [
 
 [[package]]
 name = "solana-remote-wallet"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
  "base32",
  "console",
@@ -3559,7 +3559,7 @@ dependencies = [
 
 [[package]]
 name = "solana-runtime"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
  "arrayref",
  "bincode",
@@ -3589,9 +3589,9 @@ dependencies = [
  "serde",
  "serde_derive",
  "solana-config-program",
- "solana-frozen-abi 1.6.22",
- "solana-frozen-abi-macro 1.6.22",
- "solana-logger 1.6.22",
+ "solana-frozen-abi 1.6.23",
+ "solana-frozen-abi-macro 1.6.23",
+ "solana-logger 1.6.23",
  "solana-measure",
  "solana-metrics",
  "solana-rayon-threadlimit",
@@ -3608,7 +3608,7 @@ dependencies = [
 
 [[package]]
 name = "solana-sdk"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
  "assert_matches",
  "bincode",
@@ -3644,18 +3644,18 @@ dependencies = [
  "sha2",
  "sha3",
  "solana-crate-features",
- "solana-frozen-abi 1.6.22",
- "solana-frozen-abi-macro 1.6.22",
- "solana-logger 1.6.22",
- "solana-program 1.6.22",
- "solana-sdk-macro 1.6.22",
+ "solana-frozen-abi 1.6.23",
+ "solana-frozen-abi-macro 1.6.23",
+ "solana-logger 1.6.23",
+ "solana-program 1.6.23",
+ "solana-sdk-macro 1.6.23",
  "thiserror",
  "uriparse",
 ]
 
 [[package]]
 name = "solana-sdk-macro"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
  "bs58",
  "proc-macro2 1.0.24",
@@ -3679,20 +3679,20 @@ dependencies = [
 
 [[package]]
 name = "solana-secp256k1-program"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
  "bincode",
  "digest 0.9.0",
  "libsecp256k1",
  "rand 0.7.3",
  "sha3",
- "solana-logger 1.6.22",
+ "solana-logger 1.6.23",
  "solana-sdk",
 ]
 
 [[package]]
 name = "solana-stake-program"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
  "bincode",
  "log",
@@ -3702,8 +3702,8 @@ dependencies = [
  "serde",
  "serde_derive",
  "solana-config-program",
- "solana-frozen-abi 1.6.22",
- "solana-frozen-abi-macro 1.6.22",
+ "solana-frozen-abi 1.6.23",
+ "solana-frozen-abi-macro 1.6.23",
  "solana-metrics",
  "solana-sdk",
  "solana-vote-program",
@@ -3712,7 +3712,7 @@ dependencies = [
 
 [[package]]
 name = "solana-transaction-status"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
  "Inflector",
  "base64 0.12.3",
@@ -3735,21 +3735,21 @@ dependencies = [
 
 [[package]]
 name = "solana-version"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
  "log",
  "rustc_version",
  "serde",
  "serde_derive",
- "solana-frozen-abi 1.6.22",
- "solana-frozen-abi-macro 1.6.22",
- "solana-logger 1.6.22",
+ "solana-frozen-abi 1.6.23",
+ "solana-frozen-abi-macro 1.6.23",
+ "solana-logger 1.6.23",
  "solana-sdk",
 ]
 
 [[package]]
 name = "solana-vote-program"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
  "bincode",
  "log",
@@ -3758,9 +3758,9 @@ dependencies = [
  "rustc_version",
  "serde",
  "serde_derive",
- "solana-frozen-abi 1.6.22",
- "solana-frozen-abi-macro 1.6.22",
- "solana-logger 1.6.22",
+ "solana-frozen-abi 1.6.23",
+ "solana-frozen-abi-macro 1.6.23",
+ "solana-logger 1.6.23",
  "solana-metrics",
  "solana-sdk",
  "thiserror",
