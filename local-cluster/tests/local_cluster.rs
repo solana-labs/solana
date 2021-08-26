@@ -2609,7 +2609,7 @@ fn purge_slots(blockstore: &Blockstore, start_slot: Slot, slot_count: Slot) {
 }
 
 fn copy_blocks(end_slot: Slot, source: &Blockstore, dest: &Blockstore) {
-    for slot in std::iter::once(end_slot).chain(AncestorIterator::new(end_slot, &source)) {
+    for slot in std::iter::once(end_slot).chain(AncestorIterator::new(end_slot, source)) {
         let source_meta = source.meta(slot).unwrap().unwrap();
         assert!(source_meta.is_full());
 
@@ -2644,10 +2644,10 @@ fn last_vote_in_tower(tower_path: &Path, node_pubkey: &Pubkey) -> Option<(Slot, 
 // Fetches the last vote in the tower, blocking until it has also appeared in blockstore.
 // Fails if tower is empty
 fn last_vote_in_tower_wait(tower_path: &Path, node_pubkey: &Pubkey) -> Slot {
-    let (last_vote, _) = last_vote_in_tower(&tower_path, &node_pubkey).unwrap();
+    let (last_vote, _) = last_vote_in_tower(tower_path, node_pubkey).unwrap();
     loop {
         // We reopen in a loop to make sure we get updates
-        let blockstore = open_blockstore(&tower_path);
+        let blockstore = open_blockstore(tower_path);
         if blockstore.is_full(last_vote) {
             break;
         }
