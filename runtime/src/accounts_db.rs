@@ -1571,16 +1571,11 @@ impl AccountsDb {
         self.accounts_index.reset_uncleaned_roots(max_clean_root);
     }
 
-    fn calc_delete_dependencies(
-        purges: &HashMap<Pubkey, (SlotList<AccountInfo>, u64)>,
-        store_counts: &mut HashMap<AppendVecId, (usize, HashSet<Pubkey>)>,
-    ) {
-        // Another pass to check if there are some filtered accounts which
-        // do not match the criteria of deleting all appendvecs which contain them
-        // then increment their storage count.
-        let mut already_counted = HashSet::new();
-        for (pubkey, (account_infos, ref_count_from_storage)) in purges.iter() {
-            let no_delete = if account_infos.len() as u64 != *ref_count_from_storage {
+    fn calc_delete_dependencies(purges: &mut HashMap<Pubkey, (SlotList<AccountInfo>, u64)>) {
+        // Only keep purges_zero_lamports where the entire history of the account in the root set
+        // can be purged. All AppendVecs for those updates are dead.
+        purges.retain(|pubkey, (account_infos, ref_count_from_storage)| {
+            if account_infos.len() as u64 != *ref_count_from_storage {
                 debug!(
                     "calc_delete_dependencies(),
                     pubkey: {},
@@ -1592,38 +1587,12 @@ impl AccountsDb {
                     account_infos.len(),
                     ref_count_from_storage,
                 );
-                true
+                false
             } else {
                 assert_eq!(account_infos.len(), 1);
-                false
-            };
-            if no_delete {
-                let mut pending_store_ids: HashSet<usize> = HashSet::new();
-                for (_bank_id, account_info) in account_infos {
-                    if !already_counted.contains(&account_info.store_id) {
-                        pending_store_ids.insert(account_info.store_id);
-                    }
-                }
-                while !pending_store_ids.is_empty() {
-                    let id = pending_store_ids.iter().next().cloned().unwrap();
-                    pending_store_ids.remove(&id);
-                    if already_counted.contains(&id) {
-                        continue;
-                    }
-                    store_counts.get_mut(&id).unwrap().0 += 1;
-                    already_counted.insert(id);
-
-                    let affected_pubkeys = &store_counts.get(&id).unwrap().1;
-                    for key in affected_pubkeys {
-                        for (_slot, account_info) in &purges.get(key).unwrap().0 {
-                            if !already_counted.contains(&account_info.store_id) {
-                                pending_store_ids.insert(account_info.store_id);
-                            }
-                        }
-                    }
-                }
+                true
             }
-        }
+        })
     }
 
     fn background_hasher(receiver: Receiver<CachedAccount>) {
@@ -1968,7 +1937,7 @@ impl AccountsDb {
         store_counts_time.stop();
 
         let mut calc_deps_time = Measure::start("calc_deps");
-        Self::calc_delete_dependencies(&purges_zero_lamports, &mut store_counts);
+        Self::calc_delete_dependencies(&mut purges_zero_lamports);
         calc_deps_time.stop();
 
         let mut purge_filter = Measure::start("purge_filter");
@@ -1985,6 +1954,7 @@ impl AccountsDb {
         let pubkey_to_slot_set: Vec<_> = purges_zero_lamports
             .into_iter()
             .map(|(key, (slots_list, _ref_count))| {
+                assert_eq!(slots_list.len(), 1);
                 (
                     key,
                     slots_list
@@ -2028,7 +1998,6 @@ impl AccountsDb {
             ("accounts_scan", accounts_scan.as_us() as i64, i64),
             ("clean_old_rooted", clean_old_rooted.as_us() as i64, i64),
             ("store_counts", store_counts_time.as_us() as i64, i64),
-            ("purge_filter", purge_filter.as_us() as i64, i64),
             ("calc_deps", calc_deps_time.as_us() as i64, i64),
             ("reclaims", reclaims_time.as_us() as i64, i64),
             ("delta_key_count", key_timings.delta_key_count, i64),
@@ -6657,7 +6626,6 @@ pub mod tests {
         pubkey::PUBKEY_BYTES,
     };
     use std::{
-        iter::FromIterator,
         str::FromStr,
         thread::{self, sleep, Builder, JoinHandle},
         time::Duration,
@@ -10294,131 +10262,82 @@ pub mod tests {
     #[test]
     fn test_delete_dependencies() {
         solana_logger::setup();
-        let accounts_index = AccountsIndex::default_for_tests();
+
         let key0 = Pubkey::new_from_array([0u8; 32]);
         let key1 = Pubkey::new_from_array([1u8; 32]);
         let key2 = Pubkey::new_from_array([2u8; 32]);
-        let info0 = AccountInfo {
-            store_id: 0,
-            offset: 0,
-            stored_size: 0,
-            lamports: 0,
-        };
-        let info1 = AccountInfo {
-            store_id: 1,
-            offset: 0,
-            stored_size: 0,
-            lamports: 0,
-        };
-        let info2 = AccountInfo {
-            store_id: 2,
-            offset: 0,
-            stored_size: 0,
-            lamports: 0,
-        };
-        let info3 = AccountInfo {
-            store_id: 3,
-            offset: 0,
-            stored_size: 0,
-            lamports: 0,
-        };
-        let mut reclaims = vec![];
-        accounts_index.upsert(
-            0,
-            &key0,
-            &Pubkey::default(),
-            &[],
-            &AccountSecondaryIndexes::default(),
-            info0,
-            &mut reclaims,
-            UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
-        );
-        accounts_index.upsert(
-            1,
-            &key0,
-            &Pubkey::default(),
-            &[],
-            &AccountSecondaryIndexes::default(),
-            info1,
-            &mut reclaims,
-            UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
-        );
-        accounts_index.upsert(
-            1,
-            &key1,
-            &Pubkey::default(),
-            &[],
-            &AccountSecondaryIndexes::default(),
-            info1,
-            &mut reclaims,
-            UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
-        );
-        accounts_index.upsert(
-            2,
-            &key1,
-            &Pubkey::default(),
-            &[],
-            &AccountSecondaryIndexes::default(),
-            info2,
-            &mut reclaims,
-            UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
-        );
-        accounts_index.upsert(
-            2,
-            &key2,
-            &Pubkey::default(),
-            &[],
-            &AccountSecondaryIndexes::default(),
-            info2,
-            &mut reclaims,
-            UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
-        );
-        accounts_index.upsert(
-            3,
-            &key2,
-            &Pubkey::default(),
-            &[],
-            &AccountSecondaryIndexes::default(),
-            info3,
-            &mut reclaims,
-            UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
-        );
-        accounts_index.add_root(0, false);
-        accounts_index.add_root(1, false);
-        accounts_index.add_root(2, false);
-        accounts_index.add_root(3, false);
-        let mut purges = HashMap::new();
-        let (key0_entry, _) = accounts_index.get(&key0, None, None).unwrap();
-        purges.insert(key0, accounts_index.roots_and_ref_count(&key0_entry, None));
-        let (key1_entry, _) = accounts_index.get(&key1, None, None).unwrap();
-        purges.insert(key1, accounts_index.roots_and_ref_count(&key1_entry, None));
-        let (key2_entry, _) = accounts_index.get(&key2, None, None).unwrap();
-        purges.insert(key2, accounts_index.roots_and_ref_count(&key2_entry, None));
-        for (key, (list, ref_count)) in &purges {
-            info!(" purge {} ref_count {} =>", key, ref_count);
-            for x in list {
-                info!("  {:?}", x);
-            }
-        }
 
-        let mut store_counts = HashMap::new();
-        store_counts.insert(0, (0, HashSet::from_iter(vec![key0])));
-        store_counts.insert(1, (0, HashSet::from_iter(vec![key0, key1])));
-        store_counts.insert(2, (0, HashSet::from_iter(vec![key1, key2])));
-        store_counts.insert(3, (1, HashSet::from_iter(vec![key2])));
-        AccountsDb::calc_delete_dependencies(&purges, &mut store_counts);
-        let mut stores: Vec<_> = store_counts.keys().cloned().collect();
-        stores.sort_unstable();
-        for store in &stores {
-            info!(
-                "store: {:?} : {:?}",
-                store,
-                store_counts.get(store).unwrap()
-            );
-        }
-        for x in 0..3 {
-            assert!(store_counts[&x].0 >= 1);
-        }
+        let storage_entry1_id = 1;
+        let storage_entry2_id = 2;
+        let storage_entry3_id = 3;
+
+        // Set up (all zero lamport accounts):
+        // Slot 0: {key0}          key0 purged by update in slot 1
+        // Slot 1: {key0, key1}    key1 purged by update in slot 2
+        // Slot 2: {key1, key2}    key2 purged by update in slot 3
+        // Slot 3: {key2}
+        let mut alive_zero_lamport_keys = HashMap::new();
+
+        // Create the `alive_zero_lamport_keys`, `HashMap<Pubkey, (SlotList<AccountInfo>, u64)>` structure,
+        // after a simulated clean
+        let ref_count = 1;
+        let slot1 = 1;
+        alive_zero_lamport_keys.insert(
+            key0,
+            (
+                vec![(
+                    slot1,
+                    AccountInfo {
+                        store_id: storage_entry1_id,
+                        offset: 0,
+                        stored_size: 0,
+                        lamports: 0,
+                    },
+                )],
+                ref_count,
+            ),
+        );
+        let ref_count = 2;
+        let slot2 = 2;
+        alive_zero_lamport_keys.insert(
+            key1,
+            (
+                vec![(
+                    slot2,
+                    AccountInfo {
+                        store_id: storage_entry2_id,
+                        offset: 0,
+                        stored_size: 0,
+                        lamports: 0,
+                    },
+                )],
+                ref_count,
+            ),
+        );
+        let ref_count = 2;
+        let slot3 = 3;
+        alive_zero_lamport_keys.insert(
+            key2,
+            (
+                vec![(
+                    slot3,
+                    AccountInfo {
+                        store_id: storage_entry3_id,
+                        offset: 0,
+                        stored_size: 0,
+                        lamports: 0,
+                    },
+                )],
+                ref_count,
+            ),
+        );
+
+        AccountsDb::calc_delete_dependencies(&mut alive_zero_lamport_keys);
+
+        // Only key0 is cleanable
+        assert!(alive_zero_lamport_keys.contains_key(&key0));
+        assert!(!alive_zero_lamport_keys.contains_key(&key1));
+        assert!(!alive_zero_lamport_keys.contains_key(&key2));
     }
 
     #[test]
