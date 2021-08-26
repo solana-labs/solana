@@ -4698,11 +4698,11 @@ impl AccountsDb {
     }
 
     pub fn update_accounts_hash(&self, slot: Slot, ancestors: &Ancestors) -> (Hash, u64) {
-        self.update_accounts_hash_with_index_option(true, false, slot, ancestors, None, false)
+        self.update_accounts_hash_with_index_option(true, false, slot, ancestors, None, false, None)
     }
 
     pub fn update_accounts_hash_test(&self, slot: Slot, ancestors: &Ancestors) -> (Hash, u64) {
-        self.update_accounts_hash_with_index_option(true, true, slot, ancestors, None, false)
+        self.update_accounts_hash_with_index_option(true, true, slot, ancestors, None, false, None)
     }
 
     fn scan_multiple_account_storages_one_slot<F, B>(
@@ -4822,6 +4822,25 @@ impl AccountsDb {
             .collect()
     }
 
+    // storages are sorted by slot and have range info.
+    // if we know slots_per_epoch, then add all stores older than slots_per_epoch to dirty_stores so clean visits these slots
+    fn mark_old_slots_as_dirty(&self, storages: &SortedStorages, slots_per_epoch: Option<Slot>) {
+        if let Some(slots_per_epoch) = slots_per_epoch {
+            let max = storages.range().end;
+            let acceptable_straggler_slot_count = 100; // do nothing special for these old stores which will likely get cleaned up shortly
+            let sub = slots_per_epoch + acceptable_straggler_slot_count;
+            let in_epoch_range_start = max.saturating_sub(sub);
+            for slot in storages.range().start..in_epoch_range_start {
+                if let Some(storages) = storages.get(slot) {
+                    storages.iter().for_each(|store| {
+                        self.dirty_stores
+                            .insert((slot, store.id.load(Ordering::Relaxed)), store.clone());
+                    });
+                }
+            }
+        }
+    }
+
     fn calculate_accounts_hash_helper(
         &self,
         use_index: bool,
@@ -4829,6 +4848,7 @@ impl AccountsDb {
         ancestors: &Ancestors,
         check_hash: bool,
         can_cached_slot_be_unflushed: bool,
+        slots_per_epoch: Option<Slot>,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         if !use_index {
             let accounts_cache_and_ancestors = if can_cached_slot_be_unflushed {
@@ -4848,6 +4868,8 @@ impl AccountsDb {
                 min_root,
                 Some(slot),
             );
+
+            self.mark_old_slots_as_dirty(&storages, slots_per_epoch);
             sort_time.stop();
 
             let timings = HashStats {
@@ -4877,6 +4899,7 @@ impl AccountsDb {
         expected_capitalization: Option<u64>,
         can_cached_slot_be_unflushed: bool,
         check_hash: bool,
+        slots_per_epoch: Option<Slot>,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         let (hash, total_lamports) = self.calculate_accounts_hash_helper(
             use_index,
@@ -4884,6 +4907,7 @@ impl AccountsDb {
             ancestors,
             check_hash,
             can_cached_slot_be_unflushed,
+            slots_per_epoch,
         )?;
         if debug_verify {
             // calculate the other way (store or non-store) and verify results match.
@@ -4893,6 +4917,7 @@ impl AccountsDb {
                 ancestors,
                 check_hash,
                 can_cached_slot_be_unflushed,
+                None,
             )?;
 
             let success = hash == hash_other
@@ -4911,6 +4936,7 @@ impl AccountsDb {
         ancestors: &Ancestors,
         expected_capitalization: Option<u64>,
         can_cached_slot_be_unflushed: bool,
+        slots_per_epoch: Option<Slot>,
     ) -> (Hash, u64) {
         let check_hash = false;
         let (hash, total_lamports) = self
@@ -4922,6 +4948,7 @@ impl AccountsDb {
                 expected_capitalization,
                 can_cached_slot_be_unflushed,
                 check_hash,
+                slots_per_epoch,
             )
             .unwrap(); // unwrap here will never fail since check_hash = false
         let mut bank_hashes = self.bank_hashes.write().unwrap();
@@ -5125,6 +5152,7 @@ impl AccountsDb {
                 None,
                 can_cached_slot_be_unflushed,
                 check_hash,
+                None,
             )?;
 
         if calculated_lamports != total_lamports {
@@ -9031,12 +9059,13 @@ pub mod tests {
         );
         db.add_root(some_slot);
         let check_hash = true;
-        assert!(db
-            .calculate_accounts_hash_helper(false, some_slot, &ancestors, check_hash, false)
-            .is_err());
-        assert!(db
-            .calculate_accounts_hash_helper(true, some_slot, &ancestors, check_hash, false)
-            .is_err());
+        for use_index in [true, false] {
+            assert!(db
+                .calculate_accounts_hash_helper(
+                    use_index, some_slot, &ancestors, check_hash, false, None
+                )
+                .is_err());
+        }
     }
 
     #[test]
@@ -9055,9 +9084,11 @@ pub mod tests {
         db.add_root(some_slot);
         let check_hash = true;
         assert_eq!(
-            db.calculate_accounts_hash_helper(false, some_slot, &ancestors, check_hash, false)
-                .unwrap(),
-            db.calculate_accounts_hash_helper(true, some_slot, &ancestors, check_hash, false)
+            db.calculate_accounts_hash_helper(
+                false, some_slot, &ancestors, check_hash, false, None
+            )
+            .unwrap(),
+            db.calculate_accounts_hash_helper(true, some_slot, &ancestors, check_hash, false, None)
                 .unwrap(),
         );
     }

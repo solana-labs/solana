@@ -5011,6 +5011,7 @@ impl Bank {
         &self,
         use_index: bool,
         debug_verify: bool,
+        slots_per_epoch: Option<Slot>,
     ) -> Hash {
         let (hash, total_lamports) = self
             .rc
@@ -5023,6 +5024,7 @@ impl Bank {
                 &self.ancestors,
                 Some(self.capitalization()),
                 false,
+                slots_per_epoch,
             );
         if total_lamports != self.capitalization() {
             datapoint_info!(
@@ -5043,7 +5045,7 @@ impl Bank {
     }
 
     pub fn update_accounts_hash(&self) -> Hash {
-        self.update_accounts_hash_with_index_option(true, false)
+        self.update_accounts_hash_with_index_option(true, false, None)
     }
 
     /// A snapshot bank should be purged of 0 lamport accounts which are not part of the hash
