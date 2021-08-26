@@ -50,7 +50,7 @@ use crate::{
     inline_spl_token_v2_0,
     instruction_recorder::InstructionRecorder,
     log_collector::LogCollector,
-    message_processor::{ExecuteDetailsTimings, Executors, MessageProcessor},
+    message_processor::MessageProcessor,
     rent_collector::RentCollector,
     stake_weighted_timestamp::{
         calculate_stake_weighted_timestamp, MaxAllowableDrift, MAX_ALLOWABLE_DRIFT_PERCENTAGE,
@@ -68,6 +68,7 @@ use log::*;
 use rayon::ThreadPool;
 use solana_measure::measure::Measure;
 use solana_metrics::{datapoint_debug, inc_new_counter_debug, inc_new_counter_info};
+use solana_program_runtime::{ExecuteDetailsTimings, Executors};
 #[allow(deprecated)]
 use solana_sdk::recent_blockhashes_account;
 use solana_sdk::{
@@ -5766,10 +5767,10 @@ pub(crate) mod tests {
             create_genesis_config_with_leader, create_genesis_config_with_vote_accounts,
             GenesisConfigInfo, ValidatorVoteKeypairs,
         },
-        native_loader::NativeLoaderError,
         status_cache::MAX_CACHE_ENTRIES,
     };
     use crossbeam_channel::{bounded, unbounded};
+    use solana_program_runtime::NativeLoaderError;
     #[allow(deprecated)]
     use solana_sdk::sysvar::fees::Fees;
     use solana_sdk::{

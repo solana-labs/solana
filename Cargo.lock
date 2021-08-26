@@ -4492,6 +4492,7 @@ dependencies = [
  "rustversion",
  "sha3",
  "solana-measure",
+ "solana-program-runtime",
  "solana-runtime",
  "solana-sdk",
  "solana_rbpf",
@@ -4735,6 +4736,7 @@ dependencies = [
  "solana-net-utils",
  "solana-perf",
  "solana-poh",
+ "solana-program-runtime",
  "solana-program-test",
  "solana-rayon-threadlimit",
  "solana-rpc",
@@ -5441,6 +5443,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-program-runtime"
+version = "1.8.0"
+dependencies = [
+ "libc",
+ "libloading",
+ "log 0.4.14",
+ "num-derive",
+ "num-traits",
+ "rustc_version 0.4.0",
+ "serde",
+ "solana-frozen-abi 1.8.0",
+ "solana-frozen-abi-macro 1.8.0",
+ "solana-logger 1.8.0",
+ "solana-sdk",
+ "thiserror",
+]
+
+[[package]]
 name = "solana-program-test"
 version = "1.8.0"
 dependencies = [
@@ -5458,6 +5478,7 @@ dependencies = [
  "solana-banks-server",
  "solana-bpf-loader-program",
  "solana-logger 1.8.0",
+ "solana-program-runtime",
  "solana-runtime",
  "solana-sdk",
  "solana-vote-program",
@@ -5600,8 +5621,6 @@ dependencies = [
  "fnv",
  "itertools 0.10.1",
  "lazy_static",
- "libc",
- "libloading",
  "log 0.4.14",
  "memmap2 0.3.1",
  "num-derive",
@@ -5622,6 +5641,7 @@ dependencies = [
  "solana-measure",
  "solana-metrics",
  "solana-noop-program",
+ "solana-program-runtime",
  "solana-rayon-threadlimit",
  "solana-sdk",
  "solana-secp256k1-program",

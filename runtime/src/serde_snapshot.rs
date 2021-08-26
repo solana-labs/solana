@@ -11,7 +11,6 @@ use {
         blockhash_queue::BlockhashQueue,
         epoch_stakes::EpochStakes,
         hardened_unpack::UnpackedAppendVecMap,
-        message_processor::MessageProcessor,
         rent_collector::RentCollector,
         serde_snapshot::future::SerializableStorage,
         stakes::Stakes,
@@ -21,6 +20,7 @@ use {
     log::*,
     rayon::prelude::*,
     serde::{de::DeserializeOwned, Deserialize, Serialize},
+    solana_program_runtime::InstructionProcessor,
     solana_sdk::{
         clock::{Epoch, Slot, UnixTimestamp},
         epoch_schedule::EpochSchedule,

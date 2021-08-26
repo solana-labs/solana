@@ -9,6 +9,7 @@ use {
     log::*,
     solana_banks_client::start_client,
     solana_banks_server::banks_server::start_local_server,
+    solana_program_runtime::InstructionProcessor,
     solana_runtime::{
         bank::{Bank, Builtin, ExecuteTimings},
         bank_forks::BankForks,
@@ -324,7 +325,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
 
         invoke_context.record_instruction(instruction);
 
-        solana_runtime::message_processor::MessageProcessor::process_cross_program_instruction(
+        InstructionProcessor::process_cross_program_instruction(
             &message,
             &executables,
             &accounts,

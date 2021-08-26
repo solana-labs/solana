@@ -83,6 +83,7 @@ num_cpus = "1.13.0"
 reqwest = { version = "0.11.4", default-features = false, features = ["blocking", "rustls-tls", "json"] }
 serde_json = "1.0.66"
 serial_test = "0.5.1"
+solana-program-runtime = { path = "../program-runtime", version = "=1.8.0" }
 solana-stake-program = { path = "../programs/stake", version = "=1.8.0" }
 solana-version = { path = "../version", version = "=1.8.0" }
 static_assertions = "1.1.0"
