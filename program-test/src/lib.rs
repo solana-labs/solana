@@ -41,7 +41,7 @@ use {
         sysvar::{
             clock, epoch_schedule,
             fees::{self},
-            rent, Sysvar,
+            rent, Sysvar, SysvarId,
         },
     },
     solana_vote_program::vote_state::{VoteState, VoteStateVersions},
@@ -1043,6 +1043,18 @@ impl ProgramTestContext {
         let bank_forks = self.bank_forks.read().unwrap();
         let bank = bank_forks.working_bank();
         bank.store_account(address, account);
+    }
+
+    /// Create or overwrite a sysvar, subverting normal runtime checks.
+    ///
+    /// This method exists to make it easier to set up artificial situations
+    /// that would be difficult to replicate on a new test cluster. Beware
+    /// that it can be used to create states that would not be reachable
+    /// under normal conditions!
+    pub fn set_sysvar<T: SysvarId + Sysvar>(&self, sysvar: &T) {
+        let bank_forks = self.bank_forks.read().unwrap();
+        let bank = bank_forks.working_bank();
+        bank.set_sysvar_for_tests(sysvar);
     }
 
     /// Force the working bank ahead to a new slot
