@@ -14,7 +14,7 @@ clap = "2.33.1"
 log = "0.4.14"
 rayon = "1.5.1"
 serde_json = "1.0.66"
-serde_yaml = "0.8.19"
+serde_yaml = "0.8.20"
 solana-clap-utils = { path = "../clap-utils", version = "=1.8.0" }
 solana-core = { path = "../core", version = "=1.8.0" }
 solana-genesis = { path = "../genesis", version = "=1.8.0" }
