@@ -4540,6 +4540,8 @@ impl AccountsDb {
         let mut max_slot = 0;
         let mut newest_slot = 0;
         let mut oldest_slot = std::u64::MAX;
+        let mut total_bytes = 0;
+        let mut total_alive_bytes = 0;
         for iter_item in self.storage.0.iter() {
             let slot = iter_item.key();
             let slot_stores = iter_item.value().read().unwrap();
@@ -4560,9 +4562,21 @@ impl AccountsDb {
             if *slot < oldest_slot {
                 oldest_slot = *slot;
             }
+
+            for store in slot_stores.values() {
+                total_alive_bytes += Self::page_align(store.alive_bytes() as u64);
+                total_bytes += store.total_bytes();
+            }
         }
         info!("total_stores: {}, newest_slot: {}, oldest_slot: {}, max_slot: {} (num={}), min_slot: {} (num={})",
               total_count, newest_slot, oldest_slot, max_slot, max, min_slot, min);
+
+        let total_alive_ratio = if total_bytes > 0 {
+            total_alive_bytes as f64 / total_bytes as f64
+        } else {
+            0.
+        };
+
         datapoint_info!(
             "accounts_db-stores",
             ("total_count", total_count, i64),
@@ -4571,6 +4585,9 @@ impl AccountsDb {
                 self.recycle_stores.read().unwrap().entry_count() as u64,
                 i64
             ),
+            ("total_bytes", total_bytes, i64),
+            ("total_alive_bytes", total_alive_bytes, i64),
+            ("total_alive_ratio", total_alive_ratio, f64),
         );
         datapoint_info!(
             "accounts_db-perf-stats",
