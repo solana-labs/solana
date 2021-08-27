@@ -91,10 +91,6 @@ pub mod check_program_owner {
     solana_sdk::declare_id!("5XnbR5Es9YXEARRuP6mdvoxiW3hx5atNNeBmwVd8P3QD");
 }
 
-pub mod require_stake_for_gossip {
-    solana_sdk::declare_id!("6oNzd5Z3M2L1xo4Q5hoox7CR2DuW7m1ETLWH5jHJthwa");
-}
-
 pub mod enforce_aligned_host_addrs {
     solana_sdk::declare_id!("6Qob9Z4RwGdf599FDVCqsjuKjR8ZFR3oVs2ByRLWBsua");
 }
@@ -221,7 +217,6 @@ lazy_static! {
         (warp_timestamp_again::id(), "warp timestamp again, adjust bounding to 25% fast 80% slow #15204"),
         (check_init_vote_data::id(), "check initialized Vote data"),
         (check_program_owner::id(), "limit programs to operating on accounts owned by itself"),
-        (require_stake_for_gossip::id(), "require stakes for propagating crds values through gossip #15561"),
         (enforce_aligned_host_addrs::id(), "enforce aligned host addresses"),
         (stake_program_v4::id(), "solana_stake_program v4"),
         (memory_ops_syscalls::id(), "add syscalls for memory operations"),

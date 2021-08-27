@@ -53,7 +53,7 @@ use {
     solana_runtime::bank_forks::BankForks,
     solana_sdk::{
         clock::{Slot, DEFAULT_MS_PER_SLOT, DEFAULT_SLOTS_PER_EPOCH},
-        feature_set::{self, FeatureSet},
+        feature_set::FeatureSet,
         hash::Hash,
         pubkey::Pubkey,
         sanitize::{Sanitize, SanitizeError},
@@ -1439,18 +1439,14 @@ impl ClusterInfo {
             let _ = gossip_crds.insert(entry, now);
         }
     }
-    fn new_push_requests(
-        &self,
-        stakes: &HashMap<Pubkey, u64>,
-        require_stake_for_gossip: bool,
-    ) -> Vec<(SocketAddr, Protocol)> {
+    fn new_push_requests(&self, stakes: &HashMap<Pubkey, u64>) -> Vec<(SocketAddr, Protocol)> {
         let self_id = self.id();
         let mut push_messages = {
             let _st = ScopedTimer::from(&self.stats.new_push_requests);
             self.gossip
                 .new_push_messages(self.drain_push_queue(), timestamp())
         };
-        if require_stake_for_gossip {
+        if self.require_stake_for_gossip(stakes) {
             push_messages.retain(|_, data| {
                 retain_staked(data, stakes);
                 !data.is_empty()
@@ -1487,14 +1483,13 @@ impl ClusterInfo {
         gossip_validators: Option<&HashSet<Pubkey>>,
         stakes: &HashMap<Pubkey, u64>,
         generate_pull_requests: bool,
-        require_stake_for_gossip: bool,
     ) -> Vec<(SocketAddr, Protocol)> {
         self.trim_crds_table(CRDS_UNIQUE_PUBKEY_CAPACITY, stakes);
         // This will flush local pending push messages before generating
         // pull-request bloom filters, preventing pull responses to return the
         // same values back to the node itself. Note that packets will arrive
         // and are processed out of order.
-        let mut out: Vec<_> = self.new_push_requests(stakes, require_stake_for_gossip);
+        let mut out: Vec<_> = self.new_push_requests(stakes);
         self.stats
             .packets_sent_push_messages_count
             .add_relaxed(out.len() as u64);
@@ -1522,14 +1517,12 @@ impl ClusterInfo {
         stakes: &HashMap<Pubkey, u64>,
         sender: &PacketSender,
         generate_pull_requests: bool,
-        require_stake_for_gossip: bool,
     ) -> Result<(), GossipError> {
         let reqs = self.generate_new_gossip_requests(
             thread_pool,
             gossip_validators,
             stakes,
             generate_pull_requests,
-            require_stake_for_gossip,
         );
         if !reqs.is_empty() {
             let packets = to_packets_with_destination(recycler.clone(), &reqs);
@@ -1680,7 +1673,7 @@ impl ClusterInfo {
                         last_contact_info_save = start;
                     }
 
-                    let (stakes, feature_set) = match bank_forks {
+                    let (stakes, _feature_set) = match bank_forks {
                         Some(ref bank_forks) => {
                             let root_bank = bank_forks.read().unwrap().root_bank();
                             (
@@ -1690,8 +1683,6 @@ impl ClusterInfo {
                         }
                         None => (Arc::default(), None),
                     };
-                    let require_stake_for_gossip =
-                        self.require_stake_for_gossip(feature_set.as_deref(), &stakes);
                     let _ = self.run_gossip(
                         &thread_pool,
                         gossip_validators.as_ref(),
@@ -1699,7 +1690,6 @@ impl ClusterInfo {
                         &stakes,
                         &sender,
                         generate_pull_requests,
-                        require_stake_for_gossip,
                     );
                     if exit.load(Ordering::Relaxed) {
                         return;
@@ -1778,7 +1768,6 @@ impl ClusterInfo {
         recycler: &PacketsRecycler,
         stakes: &HashMap<Pubkey, u64>,
         response_sender: &PacketSender,
-        require_stake_for_gossip: bool,
     ) {
         let _st = ScopedTimer::from(&self.stats.handle_batch_pull_requests_time);
         if requests.is_empty() {
@@ -1809,13 +1798,7 @@ impl ClusterInfo {
             self.stats
                 .pull_requests_count
                 .add_relaxed(requests.len() as u64);
-            let response = self.handle_pull_requests(
-                thread_pool,
-                recycler,
-                requests,
-                stakes,
-                require_stake_for_gossip,
-            );
+            let response = self.handle_pull_requests(thread_pool, recycler, requests, stakes);
             if !response.is_empty() {
                 self.stats
                     .packets_sent_pull_responses_count
@@ -1889,7 +1872,6 @@ impl ClusterInfo {
         recycler: &PacketsRecycler,
         requests: Vec<PullData>,
         stakes: &HashMap<Pubkey, u64>,
-        require_stake_for_gossip: bool,
     ) -> Packets {
         const DEFAULT_EPOCH_DURATION_MS: u64 = DEFAULT_SLOTS_PER_EPOCH * DEFAULT_MS_PER_SLOT;
         let mut time = Measure::start("handle_pull_requests");
@@ -1924,7 +1906,7 @@ impl ClusterInfo {
                 now,
             )
         };
-        if require_stake_for_gossip {
+        if self.require_stake_for_gossip(stakes) {
             for resp in &mut pull_responses {
                 retain_staked(resp, stakes);
             }
@@ -2168,7 +2150,6 @@ impl ClusterInfo {
         recycler: &PacketsRecycler,
         stakes: &HashMap<Pubkey, u64>,
         response_sender: &PacketSender,
-        require_stake_for_gossip: bool,
     ) {
         let _st = ScopedTimer::from(&self.stats.handle_batch_push_messages_time);
         if messages.is_empty() {
@@ -2245,7 +2226,7 @@ impl ClusterInfo {
         self.stats
             .push_response_count
             .add_relaxed(packets.packets.len() as u64);
-        let new_push_requests = self.new_push_requests(stakes, require_stake_for_gossip);
+        let new_push_requests = self.new_push_requests(stakes);
         inc_new_counter_debug!("cluster_info-push_message-pushes", new_push_requests.len());
         for (address, request) in new_push_requests {
             if ContactInfo::is_valid_address(&address, &self.socket_addr_space) {
@@ -2266,30 +2247,14 @@ impl ClusterInfo {
         let _ = response_sender.send(packets);
     }
 
-    fn require_stake_for_gossip(
-        &self,
-        feature_set: Option<&FeatureSet>,
-        stakes: &HashMap<Pubkey, u64>,
-    ) -> bool {
-        match feature_set {
-            None => {
-                self.stats
-                    .require_stake_for_gossip_unknown_feature_set
-                    .add_relaxed(1);
-                false
-            }
-            Some(feature_set) => {
-                if !feature_set.is_active(&feature_set::require_stake_for_gossip::id()) {
-                    false
-                } else if stakes.len() < MIN_NUM_STAKED_NODES {
-                    self.stats
-                        .require_stake_for_gossip_unknown_stakes
-                        .add_relaxed(1);
-                    false
-                } else {
-                    true
-                }
-            }
+    fn require_stake_for_gossip(&self, stakes: &HashMap<Pubkey, u64>) -> bool {
+        if stakes.len() < MIN_NUM_STAKED_NODES {
+            self.stats
+                .require_stake_for_gossip_unknown_stakes
+                .add_relaxed(1);
+            false
+        } else {
+            true
         }
     }
 
@@ -2300,7 +2265,7 @@ impl ClusterInfo {
         recycler: &PacketsRecycler,
         response_sender: &PacketSender,
         stakes: &HashMap<Pubkey, u64>,
-        feature_set: Option<&FeatureSet>,
+        _feature_set: Option<&FeatureSet>,
         epoch_duration: Duration,
         should_check_duplicate_instance: bool,
     ) -> Result<(), GossipError> {
@@ -2378,8 +2343,7 @@ impl ClusterInfo {
         self.stats
             .packets_received_prune_messages_count
             .add_relaxed(prune_messages.len() as u64);
-        let require_stake_for_gossip = self.require_stake_for_gossip(feature_set, stakes);
-        if require_stake_for_gossip {
+        if self.require_stake_for_gossip(stakes) {
             for (_, data) in &mut pull_responses {
                 retain_staked(data, stakes);
             }
@@ -2397,7 +2361,6 @@ impl ClusterInfo {
             recycler,
             stakes,
             response_sender,
-            require_stake_for_gossip,
         );
         self.handle_batch_pull_responses(pull_responses, thread_pool, stakes, epoch_duration);
         self.trim_crds_table(CRDS_UNIQUE_PUBKEY_CAPACITY, stakes);
@@ -2408,7 +2371,6 @@ impl ClusterInfo {
             recycler,
             stakes,
             response_sender,
-            require_stake_for_gossip,
         );
         Ok(())
     }
@@ -3320,7 +3282,6 @@ mod tests {
             None,            // gossip_validators
             &HashMap::new(), // stakes
             true,            // generate_pull_requests
-            false,           // require_stake_for_gossip
         );
         //assert none of the addrs are invalid.
         reqs.iter().all(|(addr, _)| {
