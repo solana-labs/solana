@@ -1,6 +1,5 @@
 //! The `pubsub` module implements a threaded subscription service on client RPC request
 
-
 use {
     crate::{
         rpc_pubsub_service::PubSubConfig,
@@ -35,7 +34,7 @@ use {
 // `RpcSolPubSub` and the corresponding `gen_client` module are preserved
 // so the clients reliant on `gen_client::Client` do not break after this implementation is released.
 //
-// There are no compile-time checks that ensures the coherence between traits
+// There are no compile-time checks that ensure coherence between traits
 // so extra attention is required when adding a new method to the API.
 
 // Suppress needless_return due to
@@ -509,7 +508,6 @@ mod tests {
             rpc_subscriptions::RpcSubscriptions,
         },
         jsonrpc_core::{IoHandler, Response},
-
         serial_test::serial,
         solana_account_decoder::{parse_account_data::parse_account_data, UiAccountEncoding},
         solana_client::rpc_response::{
@@ -568,7 +566,6 @@ mod tests {
         Ok(())
     }
 
-
     #[test]
     #[serial]
     fn test_signature_subscribe() {
@@ -583,13 +580,11 @@ mod tests {
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let rpc_subscriptions = Arc::new(RpcSubscriptions::new(
-
             &Arc::new(AtomicBool::new(false)),
             bank_forks.clone(),
             Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests())),
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
         ));
-
 
         // Test signature subscriptions
         let tx = system_transaction::transfer(&alice, &bob_pubkey, 20, blockhash);
@@ -597,7 +592,6 @@ mod tests {
         let (rpc, mut receiver) = rpc_pubsub_service::test_connection(&rpc_subscriptions);
 
         rpc.signature_subscribe(
-
             tx.signatures[0].to_string(),
             Some(RpcSignatureSubscribeConfig {
                 commitment: Some(CommitmentConfig::finalized()),
@@ -633,7 +627,6 @@ mod tests {
         let (rpc, mut receiver) = rpc_pubsub_service::test_connection(&rpc_subscriptions);
 
         rpc.signature_subscribe(
-
             tx.signatures[0].to_string(),
             Some(RpcSignatureSubscribeConfig {
                 commitment: Some(CommitmentConfig::finalized()),
@@ -643,7 +636,6 @@ mod tests {
         .unwrap();
         let received_slot = 1;
         rpc_subscriptions.notify_signatures_received((received_slot, vec![tx.signatures[0]]));
-
 
         // Test signature confirmation notification
         let response = receiver.recv();
@@ -669,7 +661,6 @@ mod tests {
         let (rpc, mut receiver) = rpc_pubsub_service::test_connection(&rpc_subscriptions);
 
         rpc.signature_subscribe(
-
             tx.signatures[0].to_string(),
             Some(RpcSignatureSubscribeConfig {
                 commitment: Some(CommitmentConfig::confirmed()),
@@ -679,7 +670,6 @@ mod tests {
         .unwrap();
         let received_slot = 2;
         rpc_subscriptions.notify_signatures_received((received_slot, vec![tx.signatures[0]]));
-
 
         // Test signature confirmation notification
         let response = receiver.recv();
@@ -718,7 +708,6 @@ mod tests {
         let mut io = IoHandler::<()>::default();
         let subscriptions = Arc::new(RpcSubscriptions::default_with_bank_forks(bank_forks));
         let (rpc, _receiver) = rpc_pubsub_service::test_connection(&subscriptions);
-
 
         io.extend_with(rpc.to_delegate());
 
@@ -770,7 +759,6 @@ mod tests {
         bank_forks.write().unwrap().insert(bank1);
 
         let rpc_subscriptions = Arc::new(RpcSubscriptions::new(
-
             &Arc::new(AtomicBool::new(false)),
             bank_forks.clone(),
             Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests_with_slots(
@@ -781,11 +769,9 @@ mod tests {
 
         let (rpc, mut receiver) = rpc_pubsub_service::test_connection(&rpc_subscriptions);
 
-
         let encoding = UiAccountEncoding::Base64;
 
         rpc.account_subscribe(
-
             stake_account.pubkey().to_string(),
             Some(RpcAccountInfoConfig {
                 commitment: Some(CommitmentConfig::processed()),
@@ -885,7 +871,6 @@ mod tests {
         bank_forks.write().unwrap().insert(bank1);
 
         let rpc_subscriptions = Arc::new(RpcSubscriptions::new(
-
             &Arc::new(AtomicBool::new(false)),
             bank_forks.clone(),
             Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests_with_slots(
@@ -896,9 +881,7 @@ mod tests {
 
         let (rpc, mut receiver) = rpc_pubsub_service::test_connection(&rpc_subscriptions);
 
-
         rpc.account_subscribe(
-
             nonce_account.pubkey().to_string(),
             Some(RpcAccountInfoConfig {
                 commitment: Some(CommitmentConfig::processed()),
@@ -1014,7 +997,6 @@ mod tests {
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let bob = Keypair::new();
 
-
         let exit = Arc::new(AtomicBool::new(false));
         let rpc_subscriptions = Arc::new(RpcSubscriptions::new(
             &exit,
@@ -1026,7 +1008,6 @@ mod tests {
         let (rpc, mut receiver) = rpc_pubsub_service::test_connection(&rpc_subscriptions);
 
         rpc.account_subscribe(
-
             bob.pubkey().to_string(),
             Some(RpcAccountInfoConfig {
                 commitment: Some(CommitmentConfig::finalized()),
@@ -1066,7 +1047,6 @@ mod tests {
         bank_forks.write().unwrap().insert(bank1);
         let bob = Keypair::new();
 
-
         let exit = Arc::new(AtomicBool::new(false));
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests()));
 
@@ -1078,9 +1058,7 @@ mod tests {
         ));
         let (rpc, mut receiver) = rpc_pubsub_service::test_connection(&subscriptions);
 
-
         rpc.account_subscribe(
-
             bob.pubkey().to_string(),
             Some(RpcAccountInfoConfig {
                 commitment: Some(CommitmentConfig::finalized()),
@@ -1190,7 +1168,6 @@ mod tests {
 
         assert!(rpc.slot_unsubscribe(42.into()).is_err());
         assert!(rpc.slot_unsubscribe(sub_id).is_ok());
-
     }
 
     #[test]
@@ -1209,7 +1186,6 @@ mod tests {
         let bank = Bank::new_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
 
-
         // Setup Subscriptions
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
@@ -1218,7 +1194,6 @@ mod tests {
             bank_forks,
             block_commitment_cache,
             optimistically_confirmed_bank,
-
         ));
         // Setup RPC
         let (rpc, mut receiver) = rpc_pubsub_service::test_connection(&subscriptions);
@@ -1248,9 +1223,7 @@ mod tests {
         let (rpc, _receiver) = rpc_pubsub_service::test_connection(&rpc_subscriptions);
         let sub_id = rpc.vote_subscribe().unwrap();
 
-
         assert!(rpc.vote_unsubscribe(42.into()).is_err());
         assert!(rpc.vote_unsubscribe(sub_id).is_ok());
-
     }
 }

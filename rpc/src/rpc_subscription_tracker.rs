@@ -179,10 +179,7 @@ impl SubscriptionControl {
         self.0.broadcast_sender.subscribe()
     }
 
-    pub fn subscribe(
-        &self,
-        params: SubscriptionParams,
-    ) -> Result<SubscriptionToken, TooManySubscriptions> {
+    pub fn subscribe(&self, params: SubscriptionParams) -> Result<SubscriptionToken, Error> {
         debug!(
             "Total existing subscriptions: {}",
             self.0.subscriptions.len()
@@ -199,7 +196,7 @@ impl SubscriptionControl {
             DashEntry::Vacant(entry) => {
                 if count >= self.0.max_active_subscriptions {
                     inc_new_counter_info!("rpc-subscription-refused-limit-reached", 1);
-                    return Err(TooManySubscriptions(()));
+                    return Err(Error::TooManySubscriptions);
                 }
                 let id = SubscriptionId::from(self.0.next_id.fetch_add(1, Ordering::AcqRel));
                 let token = SubscriptionToken(
@@ -289,8 +286,10 @@ impl SubscriptionInfo {
 }
 
 #[derive(Debug, Error)]
-#[error("node subscription limit reached")]
-pub struct TooManySubscriptions(());
+pub enum Error {
+    #[error("node subscription limit reached")]
+    TooManySubscriptions,
+}
 
 struct LogsSubscriptionsIndex {
     all_count: usize,

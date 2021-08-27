@@ -440,7 +440,7 @@ impl RpcSubscriptions {
             bank_forks,
             block_commitment_cache,
             optimistically_confirmed_bank,
-            &Default::default(),
+            &PubSubConfig::default(),
         )
     }
 

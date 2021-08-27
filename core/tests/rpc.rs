@@ -1,4 +1,3 @@
-
 use bincode::serialize;
 use jsonrpc_core::futures::StreamExt;
 use jsonrpc_core_client::transports::ws;
@@ -11,10 +10,8 @@ use solana_client::{
     client_error::{ClientErrorKind, Result as ClientResult},
     rpc_client::RpcClient,
     rpc_config::{RpcAccountInfoConfig, RpcSignatureSubscribeConfig},
-    rpc_response::{Response as RpcResponse, RpcSignatureResult, SlotUpdate},
-
     rpc_request::RpcError,
-
+    rpc_response::{Response as RpcResponse, RpcSignatureResult, SlotUpdate},
     tpu_client::{TpuClient, TpuClientConfig},
 };
 use solana_core::test_validator::TestValidator;
@@ -38,7 +35,6 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::runtime::Runtime;
-
 
 macro_rules! json_req {
     ($method: expr, $params: expr) => {{
