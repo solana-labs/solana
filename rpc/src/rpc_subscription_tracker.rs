@@ -532,3 +532,200 @@ impl SubscriptionToken {
         &self.0.params
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::rpc_pubsub_service::PubSubConfig;
+    use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
+    use solana_runtime::bank::Bank;
+    use std::str::FromStr;
+
+    struct ControlWrapper {
+        control: SubscriptionControl,
+        receiver: crossbeam_channel::Receiver<NotificationEntry>,
+    }
+
+    impl ControlWrapper {
+        fn new() -> Self {
+            let (sender, receiver) = crossbeam_channel::unbounded();
+            let (broadcast_sender, _broadcast_receiver) = broadcast::channel(42);
+
+            let control = SubscriptionControl::new(
+                PubSubConfig::default().max_active_subscriptions,
+                sender,
+                broadcast_sender,
+            );
+            Self { control, receiver }
+        }
+
+        fn assert_subscribed(&self, expected_params: &SubscriptionParams, expected_id: u64) {
+            if let NotificationEntry::Subscribed(params, id) = self.receiver.recv().unwrap() {
+                assert_eq!(&params, expected_params);
+                assert_eq!(id, SubscriptionId::from(expected_id));
+            } else {
+                panic!("unexpected notification");
+            }
+            self.assert_silence();
+        }
+
+        fn assert_unsubscribed(&self, expected_params: &SubscriptionParams, expected_id: u64) {
+            if let NotificationEntry::Unsubscribed(params, id) = self.receiver.recv().unwrap() {
+                assert_eq!(&params, expected_params);
+                assert_eq!(id, SubscriptionId::from(expected_id));
+            } else {
+                panic!("unexpected notification");
+            }
+            self.assert_silence();
+        }
+
+        fn assert_silence(&self) {
+            assert!(self.receiver.try_recv().is_err());
+        }
+    }
+
+    #[test]
+    fn notify_subscribe() {
+        let control = ControlWrapper::new();
+        let token1 = control.control.subscribe(SubscriptionParams::Slot).unwrap();
+        control.assert_subscribed(&SubscriptionParams::Slot, 0);
+        drop(token1);
+        control.assert_unsubscribed(&SubscriptionParams::Slot, 0);
+    }
+
+    #[test]
+    fn notify_subscribe_multiple() {
+        let control = ControlWrapper::new();
+        let token1 = control.control.subscribe(SubscriptionParams::Slot).unwrap();
+        control.assert_subscribed(&SubscriptionParams::Slot, 0);
+        let token2 = token1.clone();
+        drop(token1);
+        let token3 = control.control.subscribe(SubscriptionParams::Slot).unwrap();
+        drop(token3);
+        control.assert_silence();
+        drop(token2);
+        control.assert_unsubscribed(&SubscriptionParams::Slot, 0);
+    }
+
+    #[test]
+    fn notify_subscribe_two_subscriptions() {
+        let control = ControlWrapper::new();
+        let token_slot1 = control.control.subscribe(SubscriptionParams::Slot).unwrap();
+        control.assert_subscribed(&SubscriptionParams::Slot, 0);
+
+        let signature_params = SubscriptionParams::Signature(SignatureSubscriptionParams {
+            signature: Signature::default(),
+            commitment: CommitmentConfig::processed(),
+            enable_received_notification: false,
+        });
+        let token_signature1 = control.control.subscribe(signature_params.clone()).unwrap();
+        control.assert_subscribed(&signature_params, 1);
+
+        let token_slot2 = control.control.subscribe(SubscriptionParams::Slot).unwrap();
+        let token_signature2 = control.control.subscribe(signature_params.clone()).unwrap();
+        drop(token_slot1);
+        control.assert_silence();
+        drop(token_slot2);
+        control.assert_unsubscribed(&SubscriptionParams::Slot, 0);
+        drop(token_signature2);
+        control.assert_silence();
+        drop(token_signature1);
+        control.assert_unsubscribed(&signature_params, 1);
+
+        let token_slot3 = control.control.subscribe(SubscriptionParams::Slot).unwrap();
+        control.assert_subscribed(&SubscriptionParams::Slot, 2);
+        drop(token_slot3);
+        control.assert_unsubscribed(&SubscriptionParams::Slot, 2);
+    }
+
+    #[test]
+    fn subscription_info() {
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
+        let bank = Bank::new_for_tests(&genesis_config);
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let mut tracker = SubscriptionsTracker::new(bank_forks);
+
+        tracker.subscribe(SubscriptionParams::Slot, 0.into(), || 0);
+        let info = tracker
+            .node_progress_watchers
+            .get(&SubscriptionParams::Slot)
+            .unwrap();
+        assert_eq!(info.commitment, None);
+        assert_eq!(info.params, SubscriptionParams::Slot);
+        assert_eq!(info.method, SubscriptionParams::Slot.method());
+        assert_eq!(info.id, SubscriptionId::from(0));
+        assert_eq!(*info.last_notified_slot.read().unwrap(), 0);
+
+        let account_params = SubscriptionParams::Account(AccountSubscriptionParams {
+            pubkey: Pubkey::from_str("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA").unwrap(),
+            commitment: CommitmentConfig::finalized(),
+            encoding: UiAccountEncoding::Base64Zstd,
+            data_slice: None,
+        });
+        tracker.subscribe(account_params.clone(), 1.into(), || 42);
+
+        let info = tracker
+            .commitment_watchers
+            .get(&SubscriptionId::from(1))
+            .unwrap();
+        assert_eq!(info.commitment, Some(CommitmentConfig::finalized()));
+        assert_eq!(info.params, account_params);
+        assert_eq!(info.method, account_params.method());
+        assert_eq!(info.id, SubscriptionId::from(1));
+        assert_eq!(*info.last_notified_slot.read().unwrap(), 42);
+    }
+
+    #[test]
+    fn subscription_indexes() {
+        fn counts(tracker: &SubscriptionsTracker) -> (usize, usize, usize, usize) {
+            (
+                tracker.by_signature.len(),
+                tracker.commitment_watchers.len(),
+                tracker.gossip_watchers.len(),
+                tracker.node_progress_watchers.len(),
+            )
+        }
+
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
+        let bank = Bank::new_for_tests(&genesis_config);
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let mut tracker = SubscriptionsTracker::new(bank_forks);
+
+        tracker.subscribe(SubscriptionParams::Slot, 0.into(), || 0);
+        assert_eq!(counts(&tracker), (0, 0, 0, 1));
+        tracker.unsubscribe(SubscriptionParams::Slot, 0.into());
+        assert_eq!(counts(&tracker), (0, 0, 0, 0));
+
+        let account_params = SubscriptionParams::Account(AccountSubscriptionParams {
+            pubkey: Pubkey::from_str("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA").unwrap(),
+            commitment: CommitmentConfig::finalized(),
+            encoding: UiAccountEncoding::Base64Zstd,
+            data_slice: None,
+        });
+        tracker.subscribe(account_params.clone(), 1.into(), || 0);
+        assert_eq!(counts(&tracker), (0, 1, 0, 0));
+        tracker.unsubscribe(account_params, 1.into());
+        assert_eq!(counts(&tracker), (0, 0, 0, 0));
+
+        let account_params2 = SubscriptionParams::Account(AccountSubscriptionParams {
+            pubkey: Pubkey::from_str("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA").unwrap(),
+            commitment: CommitmentConfig::confirmed(),
+            encoding: UiAccountEncoding::Base64Zstd,
+            data_slice: None,
+        });
+        tracker.subscribe(account_params2.clone(), 2.into(), || 0);
+        assert_eq!(counts(&tracker), (0, 0, 1, 0));
+        tracker.unsubscribe(account_params2, 2.into());
+        assert_eq!(counts(&tracker), (0, 0, 0, 0));
+
+        let signature_params = SubscriptionParams::Signature(SignatureSubscriptionParams {
+            signature: Signature::default(),
+            commitment: CommitmentConfig::processed(),
+            enable_received_notification: false,
+        });
+        tracker.subscribe(signature_params.clone(), 3.into(), || 0);
+        assert_eq!(counts(&tracker), (1, 1, 0, 0));
+        tracker.unsubscribe(signature_params, 3.into());
+        assert_eq!(counts(&tracker), (0, 0, 0, 0));
+    }
+}
