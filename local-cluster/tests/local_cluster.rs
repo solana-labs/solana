@@ -1133,12 +1133,12 @@ fn test_fork_choice_refresh_old_votes() {
             // Get latest votes. We make sure to wait until the vote has landed in
             // blockstore. This is important because if we were the leader for the block there
             // is a possibility of voting before broadcast has inserted in blockstore.
-            let lighter_fork_latest_vote = last_vote_in_tower_wait(
+            let lighter_fork_latest_vote = wait_for_last_vote_in_tower_to_land_in_ledger(
                 &lighter_fork_ledger_path,
                 &context.lighter_fork_validator_key,
             );
             let heaviest_fork_latest_vote =
-                last_vote_in_tower_wait(&heaviest_ledger_path, &context.heaviest_validator_key);
+                wait_for_last_vote_in_tower_to_land_in_ledger(&heaviest_ledger_path, &context.heaviest_validator_key);
 
             // Open ledgers
             let smallest_blockstore = open_blockstore(&smallest_ledger_path);
@@ -2643,11 +2643,11 @@ fn last_vote_in_tower(tower_path: &Path, node_pubkey: &Pubkey) -> Option<(Slot, 
 
 // Fetches the last vote in the tower, blocking until it has also appeared in blockstore.
 // Fails if tower is empty
-fn last_vote_in_tower_wait(tower_path: &Path, node_pubkey: &Pubkey) -> Slot {
-    let (last_vote, _) = last_vote_in_tower(tower_path, node_pubkey).unwrap();
+fn wait_for_last_vote_in_tower_to_land_in_ledger(ledger_path: &Path, node_pubkey: &Pubkey) -> Slot {
+    let (last_vote, _) = last_vote_in_tower(ledger_path, node_pubkey).unwrap();
     loop {
         // We reopen in a loop to make sure we get updates
-        let blockstore = open_blockstore(tower_path);
+        let blockstore = open_blockstore(ledger_path);
         if blockstore.is_full(last_vote) {
             break;
         }
@@ -2807,7 +2807,7 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
     info!("Create validator A's ledger");
     {
         // Find latest vote in B, and wait for it to reach blockstore
-        let b_last_vote = last_vote_in_tower_wait(&val_b_ledger_path, &validator_b_pubkey);
+        let b_last_vote = wait_for_last_vote_in_tower_to_land_in_ledger(&val_b_ledger_path, &validator_b_pubkey);
 
         // Now we copy these blocks to A
         let b_blockstore = open_blockstore(&val_b_ledger_path);
