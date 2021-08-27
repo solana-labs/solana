@@ -1,5 +1,6 @@
 use crate::{alloc, BpfError};
 use alloc::Alloc;
+use solana_program_runtime::InstructionProcessor;
 use solana_rbpf::{
     aligned_memory::AlignedMemory,
     ebpf,
@@ -8,7 +9,6 @@ use solana_rbpf::{
     question_mark,
     vm::{EbpfVm, SyscallObject, SyscallRegistry},
 };
-use solana_runtime::message_processor::MessageProcessor;
 #[allow(deprecated)]
 use solana_sdk::sysvar::fees::Fees;
 use solana_sdk::{
@@ -2332,7 +2332,7 @@ fn call<'a>(
             .iter()
             .collect::<Vec<&KeyedAccount>>();
         let (message, callee_program_id, callee_program_id_index) =
-            MessageProcessor::create_message(
+            InstructionProcessor::create_message(
                 &instruction,
                 &keyed_account_refs,
                 &signers,
@@ -2399,7 +2399,7 @@ fn call<'a>(
     // Process instruction
 
     #[allow(clippy::deref_addrof)]
-    match MessageProcessor::process_cross_program_instruction(
+    match InstructionProcessor::process_cross_program_instruction(
         &message,
         &executables,
         &accounts,

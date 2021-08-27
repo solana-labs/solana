@@ -78,7 +78,7 @@ pub(crate) struct DeserializableVersionedBank {
     pub(crate) unused_accounts: UnusedAccounts,
     pub(crate) epoch_stakes: HashMap<Epoch, EpochStakes>,
     pub(crate) is_delta: bool,
-    pub(crate) message_processor: MessageProcessor,
+    pub(crate) message_processor: InstructionProcessor,
 }
 
 impl From<DeserializableVersionedBank> for BankFieldsToDeserialize {
@@ -155,7 +155,7 @@ pub(crate) struct SerializableVersionedBank<'a> {
     pub(crate) unused_accounts: UnusedAccounts,
     pub(crate) epoch_stakes: &'a HashMap<Epoch, EpochStakes>,
     pub(crate) is_delta: bool,
-    pub(crate) message_processor: MessageProcessor,
+    pub(crate) message_processor: InstructionProcessor,
 }
 
 impl<'a> From<crate::bank::BankFieldsToSerialize<'a>> for SerializableVersionedBank<'a> {
