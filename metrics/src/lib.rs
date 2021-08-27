@@ -7,6 +7,7 @@ pub use crate::metrics::{flush, query, set_host_id, set_panic_hook, submit};
 use std::sync::Arc;
 
 /// A helper that sends the count of created tokens as a datapoint.
+#[allow(clippy::redundant_allocation)]
 pub struct TokenCounter(Arc<&'static str>);
 
 impl TokenCounter {
@@ -27,6 +28,7 @@ impl TokenCounter {
 }
 
 /// A token for `TokenCounter`.
+#[allow(clippy::redundant_allocation)]
 pub struct CounterToken(Arc<&'static str>);
 
 impl Clone for CounterToken {
