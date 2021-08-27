@@ -419,7 +419,6 @@ impl BankingStage {
                     {
                         reached_end_of_slot =
                             Some((poh_recorder.lock().unwrap().next_slot_leader(), bank));
-                        info!("TAO - reached end of slot {:?}", reached_end_of_slot);
                     }
                     new_tx_count += processed;
                     // Out of the buffered packets just retried, collect any still unprocessed
@@ -525,12 +524,6 @@ impl BankingStage {
         ) = {
             let poh = poh_recorder.lock().unwrap();
             bank_start = poh.bank_start();
-            if PohRecorder::get_bank_still_processing_txs(&bank_start).is_none() {
-                info!(
-                    "TAO - bank is finished {:?} at process_buffered_packets",
-                    bank_start
-                );
-            }
             (
                 poh.leader_after_n_slots(FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET),
                 PohRecorder::get_bank_still_processing_txs(&bank_start),
@@ -639,19 +632,6 @@ impl BankingStage {
         let mut buffered_packets = VecDeque::with_capacity(batch_limit);
         let banking_stage_stats = BankingStageStats::new(id);
         loop {
-            // TODO TAO -
-            {
-                if let Some(bank) = poh_recorder.lock().unwrap().bank() {
-                    info!(
-                        "TAO - main loop has current bank {:?}, parent bank {:?}",
-                        bank.slot(),
-                        bank.parent_slot()
-                    );
-                } else {
-                    info!("TAO - main loop has current bank NIL");
-                }
-            }
-
             let my_pubkey = cluster_info.id();
             while !buffered_packets.is_empty() {
                 let decision = Self::process_buffered_packets(
@@ -1363,7 +1343,6 @@ impl BankingStage {
             let packet_indexes = Self::generate_packet_indexes(&msgs.packets);
             let bank_start = poh.lock().unwrap().bank_start();
             if PohRecorder::get_bank_still_processing_txs(&bank_start).is_none() {
-                info!("TAO - bank is finished {:?} at process_packets", bank_start);
                 Self::push_unprocessed(
                     buffered_packets,
                     msgs,
