@@ -692,6 +692,10 @@ fn process_loader_upgradeable_instruction(
                         ic_logger_msg!(logger, "Program account is not writable");
                         return Err(InstructionError::InvalidArgument);
                     }
+                    if &program_account.owner()? != program_id {
+                        ic_logger_msg!(logger, "Program account not owned by loader");
+                        return Err(InstructionError::IncorrectProgramId);
+                    }
 
                     match program_account.state()? {
                         UpgradeableLoaderState::Program {
