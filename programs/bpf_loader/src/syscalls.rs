@@ -19,10 +19,10 @@ use solana_sdk::{
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     epoch_schedule::EpochSchedule,
     feature_set::{
-        cpi_data_cost, enforce_aligned_host_addrs, keccak256_syscall_enabled,
-        libsecp256k1_0_5_upgrade_enabled, mem_overlap_fix, memory_ops_syscalls,
-        secp256k1_recover_syscall_enabled, set_upgrade_authority_via_cpi_enabled,
-        sysvar_via_syscall, update_data_on_realloc,
+        close_upgradeable_program_accounts, cpi_data_cost, enforce_aligned_host_addrs,
+        keccak256_syscall_enabled, libsecp256k1_0_5_upgrade_enabled, mem_overlap_fix,
+        memory_ops_syscalls, secp256k1_recover_syscall_enabled,
+        set_upgrade_authority_via_cpi_enabled, sysvar_via_syscall, update_data_on_realloc,
     },
     hash::{Hasher, HASH_BYTES},
     ic_msg,
@@ -2188,7 +2188,10 @@ fn check_authorized_program(
             && !(bpf_loader_upgradeable::is_upgrade_instruction(instruction_data)
                 || (bpf_loader_upgradeable::is_set_authority_instruction(instruction_data)
                     && invoke_context
-                        .is_feature_active(&set_upgrade_authority_via_cpi_enabled::id()))))
+                        .is_feature_active(&set_upgrade_authority_via_cpi_enabled::id()))
+                || (bpf_loader_upgradeable::is_close_instruction(instruction_data)
+                    && invoke_context
+                        .is_feature_active(&close_upgradeable_program_accounts::id()))))
     {
         return Err(SyscallError::ProgramNotSupported(*program_id).into());
     }
