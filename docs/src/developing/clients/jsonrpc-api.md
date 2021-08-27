@@ -30,9 +30,7 @@ gives a convenient interface for the RPC methods.
 - [getClusterNodes](jsonrpc-api.md#getclusternodes)
 - [getEpochInfo](jsonrpc-api.md#getepochinfo)
 - [getEpochSchedule](jsonrpc-api.md#getepochschedule)
-- [getFeeCalculatorForBlockhash](jsonrpc-api.md#getfeecalculatorforblockhash)
-- [getFeeRateGovernor](jsonrpc-api.md#getfeerategovernor)
-- [getFees](jsonrpc-api.md#getfees)
+- [getFeeForMessage](jsonrpc-api.md#getfeeformessage)
 - [getFirstAvailableBlock](jsonrpc-api.md#getfirstavailableblock)
 - [getGenesisHash](jsonrpc-api.md#getgenesishash)
 - [getHealth](jsonrpc-api.md#gethealth)
@@ -41,13 +39,13 @@ gives a convenient interface for the RPC methods.
 - [getInflationRate](jsonrpc-api.md#getinflationrate)
 - [getInflationReward](jsonrpc-api.md#getinflationreward)
 - [getLargestAccounts](jsonrpc-api.md#getlargestaccounts)
+- [getLatestBlockhash](jsonrpc-api.md#getlatestblockhash)
 - [getLeaderSchedule](jsonrpc-api.md#getleaderschedule)
 - [getMaxRetransmitSlot](jsonrpc-api.md#getmaxretransmitslot)
 - [getMaxShredInsertSlot](jsonrpc-api.md#getmaxshredinsertslot)
 - [getMinimumBalanceForRentExemption](jsonrpc-api.md#getminimumbalanceforrentexemption)
 - [getMultipleAccounts](jsonrpc-api.md#getmultipleaccounts)
 - [getProgramAccounts](jsonrpc-api.md#getprogramaccounts)
-- [getRecentBlockhash](jsonrpc-api.md#getrecentblockhash)
 - [getRecentPerformanceSamples](jsonrpc-api.md#getrecentperformancesamples)
 - [getSignaturesForAddress](jsonrpc-api.md#getsignaturesforaddress)
 - [getSignatureStatuses](jsonrpc-api.md#getsignaturestatuses)
@@ -66,6 +64,7 @@ gives a convenient interface for the RPC methods.
 - [getTransactionCount](jsonrpc-api.md#gettransactioncount)
 - [getVersion](jsonrpc-api.md#getversion)
 - [getVoteAccounts](jsonrpc-api.md#getvoteaccounts)
+- [isBlockhashValid](jsonrpc-api.md#isblockhashvalid)
 - [minimumLedgerSlot](jsonrpc-api.md#minimumledgerslot)
 - [requestAirdrop](jsonrpc-api.md#requestairdrop)
 - [sendTransaction](jsonrpc-api.md#sendtransaction)
@@ -97,7 +96,11 @@ Unstable methods may see breaking changes in patch releases and may not be suppo
 - [getConfirmedBlocks](jsonrpc-api.md#getconfirmedblocks)
 - [getConfirmedBlocksWithLimit](jsonrpc-api.md#getconfirmedblockswithlimit)
 - [getConfirmedSignaturesForAddress2](jsonrpc-api.md#getconfirmedsignaturesforaddress2)
-- [getConfirmedTransaction](jsonrpc-api.md#getconfirmedtransaction)
+- [getConfirmedTransaction](jsonrpc-api.md#getconfirmedtransact)
+- [getFeeCalculatorForBlockhash](jsonrpc-api.md#getfeecalculatorforblockhash)
+- [getFeeRateGovernor](jsonrpc-api.md#getfeerategovernor)
+- [getFees](jsonrpc-api.md#getfees)
+- [getRecentBlockhash](jsonrpc-api.md#getrecentblockhash)
 
 ## Request Formatting
 
@@ -1139,6 +1142,47 @@ Result:
 }
 ```
 
+### getFeeForMessage
+
+Get the fee the network will charge for a particular Message
+
+#### Parameters:
+
+- `blockhash: <string>` - The blockhash of this block, as base-58 encoded string
+- `message: <string>` - Encoded Message
+  - `encoding: <string>` - (optional) Encoding used for the message data. Either `"base58"` (*slow*, **DEPRECATED**), or `"base64"`. (default: `"base58"`).
+- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment) (used for retrieving blockhash)
+
+#### Results:
+
+- `<u64>` - Fee corresponding to the message at the specified blockhash
+
+#### Example:
+
+Request:
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+{
+  "id":1,
+  "jsonrpc":"2.0",
+  "method":"getFeeForMessage",
+  "params":[
+    "FxVKTksYShgKjnFG3RQUEo2AEesDb4ZHGY3NGJ7KHd7F","AQABAgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEBAQAA",
+    "base64",
+    {
+      "commitment":"processed"
+    }
+  ]
+}
+'
+```
+
+Result:
+```json
+{"jsonrpc":"2.0","result":{"context":{"slot":5068},"value":5000},"id":1}
+```
+
+
 ### getFirstAvailableBlock
 
 Returns the slot of the lowest confirmed block that has not been purged from the ledger
@@ -1520,6 +1564,55 @@ Result:
     ]
   },
   "id": 1
+}
+```
+
+### getLatestBlockhash
+
+Returns the latest blockhash
+
+#### Parameters:
+
+- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment) (used for retrieving blockhash)
+
+#### Results:
+
+- `RpcResponse<object>` - RpcResponse JSON object with `value` field set to a JSON object including:
+- `blockhash: <string>` - a Hash as base-58 encoded string
+- `lastValidBlockHeight: u64` - Slot
+
+#### Example:
+
+Request:
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {
+    "id":1,
+    "jsonrpc":"2.0",
+    "method":"getLatestBlockhash",
+    "params":[
+      {
+        "commitment":"processed"
+      }
+    ]
+  }
+'
+```
+
+Result:
+```json
+{
+  "jsonrpc":"2.0",
+  "result":{
+    "context":{
+      "slot":2792
+    },
+    "value":{
+      "blockhash":"EkSnNWid2cvwEVnVx9aBqawnmiCNiDgp3gUdkDPTKN1N",
+      "lastValidBlockHeight":3090
+    }
+  },
+  "id":1
 }
 ```
 
@@ -3150,6 +3243,49 @@ Result:
     "delinquent": []
   },
   "id": 1
+}
+```
+
+### isBlockhashValid
+
+Returns whether a blockhash is still valid or not
+
+#### Parameters:
+
+- `blockhash: <string>` - the blockhash of this block, as base-58 encoded string
+- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment) (used for retrieving blockhash)
+
+#### Results:
+
+- `<bool>` - True if the blockhash is still valid
+
+#### Example:
+
+Request:
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {
+    "id":45,
+    "jsonrpc":"2.0",
+    "method":"isBlockhashValid",
+    "params":[
+      "J7rBdM6AecPDEZp8aPq5iPSNKVkU5Q76F3oAV4eW5wsW",
+      {"commitment":"processed"}
+    ]
+  }
+'
+```
+
+Result:
+```json
+{
+  "jsonrpc":"2.0",
+  "result":{
+    "context":{
+      "slot":2483
+    },
+    "value":false
+  },"id":1
 }
 ```
 
