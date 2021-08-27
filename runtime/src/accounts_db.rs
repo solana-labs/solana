@@ -2500,6 +2500,7 @@ impl AccountsDb {
         let mut total_alive_bytes: u64 = 0;
         let mut candidates_count: usize = 0;
         let mut total_bytes: u64 = 0;
+        let mut total_candidate_stores: i64 = 0;
         for (slot, slot_shrink_candidates) in shrink_slots {
             candidates_count += slot_shrink_candidates.len();
             for store in slot_shrink_candidates.values() {
@@ -2512,6 +2513,7 @@ impl AccountsDb {
                     alive_ratio,
                     store: store.clone(),
                 });
+                total_candidate_stores += 1;
             }
         }
         store_usage.sort_by(|a, b| {
@@ -2561,6 +2563,24 @@ impl AccountsDb {
             measure.as_ms() as usize
         );
         inc_new_counter_info!("select_top_sparse_storage_entries-seeds", candidates_count);
+        datapoint_info!(
+            "shrink-candidates",
+            (
+                "total_preliminary_candidate_stores",
+                total_candidate_stores,
+                i64
+            ),
+            (
+                "select_top_sparse_storage_entries-ms",
+                measure.as_ms() as u64,
+                i64
+            ),
+            (
+                "select_top_sparse_storage_entries-seeds",
+                candidates_count,
+                i64
+            ),
+        );
         (shrink_slots, shrink_slots_next_batch)
     }
 
