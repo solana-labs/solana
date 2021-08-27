@@ -2593,12 +2593,16 @@ impl AccountsDb {
             measure_shrink_all_candidates.as_ms() as usize
         );
         inc_new_counter_info!("shrink_all_candidate_slots-count", shrink_candidates_count);
+        let mut pended_counts: usize = 0;
         if let Some(shrink_slots_next_batch) = shrink_slots_next_batch {
             let mut shrink_slots = self.shrink_candidate_slots.lock().unwrap();
             for (slot, stores) in shrink_slots_next_batch {
+                pended_counts += stores.len();
                 shrink_slots.entry(slot).or_default().extend(stores);
             }
         }
+        inc_new_counter_info!("shrink_pended_stores-count", pended_counts);
+
         num_candidates
     }
 
