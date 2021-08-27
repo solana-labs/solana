@@ -60,8 +60,8 @@ impl BroadcastDuplicatesRun {
             prev_entry_hash: None,
             num_slots_broadcasted: 0,
             cluster_nodes_cache,
-            original_last_data_shreds: Arc::new(Mutex::new(HashSet::default())),
-            partition_last_data_shreds: Arc::new(Mutex::new(HashSet::default())),
+            original_last_data_shreds: Arc::<Mutex<HashSet<Signature>>>::default(),
+            partition_last_data_shreds: Arc::<Mutex<HashSet<Signature>>>::default(),
         }
     }
 }
@@ -281,15 +281,11 @@ impl BroadcastRun for BroadcastDuplicatesRun {
         let socket_addr_space = cluster_info.socket_addr_space();
         let packets: Vec<_> = shreds
             .iter()
-            .flat_map(|shred| {
+            .filter_map(|shred| {
                 let seed = shred.seed(Some(self_pubkey), &root_bank);
-                let node = cluster_nodes.get_broadcast_peer(seed);
-                if node.is_none() {
-                    return vec![];
-                }
-                let node = node.unwrap();
+                let node = cluster_nodes.get_broadcast_peer(seed)?;
                 if !socket_addr_space.check(&node.tvu) {
-                    return vec![];
+                    return None;
                 }
                 if self
                     .original_last_data_shreds
@@ -304,7 +300,7 @@ impl BroadcastRun for BroadcastDuplicatesRun {
                             shred.index(),
                             shred.slot()
                         );
-                        return vec![];
+                        return None;
                     }
                 } else if self
                     .partition_last_data_shreds
@@ -312,21 +308,27 @@ impl BroadcastRun for BroadcastDuplicatesRun {
                     .unwrap()
                     .remove(&shred.signature())
                 {
-                    // If the shred is part of the partition, broadcast it directly to
-                    // the partition node
-                    return cluster_partition
-                        .iter()
-                        .filter_map(|pubkey| {
-                            let tvu = cluster_info
-                                .lookup_contact_info(pubkey, |contact_info| contact_info.tvu)?;
-                            Some((&shred.payload, tvu))
-                        })
-                        .collect();
+                    // If the shred is part of the partition, broadcast it directly to the
+                    // partition node. This is to account for cases when the partition stake
+                    // is small such as in `test_duplicate_shreds_broadcast_leader()`, then
+                    // the partition node is never selected by get_broadcast_peer()
+                    return Some(
+                        cluster_partition
+                            .iter()
+                            .filter_map(|pubkey| {
+                                let tvu = cluster_info
+                                    .lookup_contact_info(pubkey, |contact_info| contact_info.tvu)?;
+                                Some((&shred.payload, tvu))
+                            })
+                            .collect(),
+                    );
                 }
 
-                vec![(&shred.payload, node.tvu)]
+                Some(vec![(&shred.payload, node.tvu)])
             })
+            .flatten()
             .collect();
+
         if let Err(SendPktsError::IoError(ioerr, _)) = batch_send(sock, &packets) {
             return Err(Error::Io(ioerr));
         }
