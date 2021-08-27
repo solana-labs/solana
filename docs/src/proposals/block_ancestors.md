@@ -8,7 +8,7 @@ useful in scenarios where we want to reason about the structure of the chain
 without having to repair and replay all the ancestors. Such scenarios usually include
 collecting vote hashes from the cluster, and inferring cluster state like the weight
 of different forks based solely on those vote hashes, without needing to perform
-full repair/replay. 
+full repair/replay.
 
 ## Introducing ancestor proofs to a block
 
@@ -32,7 +32,7 @@ hash(&[
     last_blockhash,
 ]
 ```
-4) A merkle proof showing that `blockhash_i` is indeed the correct blockhash for `bankhash_i`. 
+4) A merkle proof showing that `blockhash_i` is indeed the correct blockhash for `bankhash_i`.
 From 3) we can see that this implies we need the `parent_bank_hash`, `accounts_delta_hash`, and`signature_count_buf`. Luckily, the `parent_bank_hash` should be available in `A_{i-1}`, for all
 but the last ancestor proof, so we can reuse that.
 
@@ -61,7 +61,7 @@ TBD
 
 EpochSlots is currently used to find validators from which to repair a slot `S`
 
-#### Proposed Solution: 
+#### Proposed Solution:
 We can potentially use people's votes to determine who has which blocks. This might not be as effective for minor forks that people aren't voting on, or if votes are sparse in general. In such
 cases it could be more effective to calculate using turbine who is most likely to have the missing
 shreds we need, and stake-weight sample potential repair targets.
@@ -77,7 +77,7 @@ validator:
 1) Has not seen duplicate threshold of the cluster vote on any *single* version of the duplicate
 slot `S`.
 2) However, a sufficient portion of the cluster has voted on some set of descendants `D` of some
-version `X` of the duplicate slot, such that `X` is actually duplicate confirmed. 
+version `X` of the duplicate slot, such that `X` is actually duplicate confirmed.
 3) The validator has the wrong version of `S` and thus cannot replay the descendants.
 
 The current validator cannot handle this situation without EpochSlots because it has no way of
@@ -87,7 +87,7 @@ first dumping its incorrect version of the slot. Thus, this validator will never
 confirmation on the duplicate slot and will fail to dump its version and repair the correct version
 of `S`.
 
-#### Proposed Solution: 
+#### Proposed Solution:
 
 1) Introduce a new repair protocol to fetch the ancestor proofs of any given block `B`. The
 protocol looks like `GetAncestorProofs(Hash)`, where the `Hash` is the bank hash of `B`. Responders
@@ -98,7 +98,7 @@ of those votes in a tree very similar to the `HeaviestForkChoice` tree we use fo
 in that node.
 
 3) Nodes in the tree are weighted by the number of votes we've seen for that node or any of
-its descendants. 
+its descendants.
 
 4) Nodes in the tree also need to track when they get duplicate confirmation. This means there
 needs to be a historical record for all the validators that have *ever* voted on a particular branch
@@ -106,7 +106,7 @@ in the tree. This is not currently supported by `HeaviestForkChoice` as it curre
 LMD ghost, where it only tracks the *latest* vote made by each validator.
 
 4) There are two groups of trees we track, very similar to the structure managed in
-`repair_weight.rs` used for repair. 
+`repair_weight.rs` used for repair.
     a) One is the main "trunk" where the root of the tree is the validator's current root
     b) A set of "orphans". Each tree in the "orphans" represents a branch for which we don't
     know the connection to the main "trunk" in a). In other words, if a tree is in the "orphan"
