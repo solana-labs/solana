@@ -4,6 +4,7 @@
   "private": true,
   "dependencies": {
     "@bonfida/bot": "^0.5.3",
+    "@identity.com/solana-gateway-ts": "^0.3.0",
     "@metamask/jazzicon": "^2.0.0",
     "@project-serum/serum": "^0.13.57",
     "@react-hook/debounce": "^4.0.0",
@@ -69,5 +70,8 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "devDependencies": {
+    "deploy-aws-s3-cloudfront": "^3.4.2"
   }
 }

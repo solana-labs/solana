@@ -1,0 +1,155 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Launch a static website backed by an S3 bucket and served via https through cloudfront.
+  Assumes you have the following available already
+  * An address in mind (e.g. blog.example.com)
+  * An existing Route53 Hosted Zone for the domain
+  * A validated AWS ACM certificate arn for the desired web address which must be in eu-west-1
+Parameters:
+  HostedZoneID:
+    Description: >
+      The Hosted Zone ID in which to create the website's DNS record.
+    Type: "String"
+  WebsiteAddress:
+    Description: >
+      The web address to host the website at. Must be a subdomain of the hostedzone.
+      Do not prefix with http e.g. blog.m-taylor.co.uk.
+    Type: "String"
+  S3BucketName:
+    Description: Name of the s3 bucket to create for website source files.
+    Type: "String"
+  CloudFrontAccessIdentity:
+    Description: >
+      This is an AWS identity that allows CloudFront to access other restricted AWS resources.
+      It cannot be created by CloudFormation. Visit the following page and provide a name.
+      https://console.aws.amazon.com/cloudfront/home?#oai
+    Type: "String"
+  CloudFrontOriginPath:
+    Description: Path to serve files from in the S3 bucket
+    Type: "String"
+    Default: ""
+  CloudFrontPriceClass:
+    Description: >
+      Price Class dictates which global locations CloudFront will serve content from. See the
+      pricing page for more details. The cheapest is PriceClass_100 and serves US, Canada & EU
+    Type: "String"
+    Default: "PriceClass_100"
+  TlsCertificateArn:
+    Description: >
+      ARN for the HTTPS certificate covering the domain in WebsiteAddress. This object must be
+      created in us-east-1, regardless of which region this CloudFormation template is launched.
+    Type: "String"
+  WebsiteIndexDoc:
+    Description: Website index document
+    Type: "String"
+    Default: "index.html"
+  WebsiteErrorDoc:
+    Description: Website error document
+    Type: "String"
+    Default: "404.html"
+Conditions:
+  CreateRoute53Record:
+    Fn::Not:
+      - Fn::Equals:
+        - ""
+        - !Ref "HostedZoneID"
+Resources:
+  S3Bucket:
+    Type: "AWS::S3::Bucket"
+    DeletionPolicy: Retain
+    Properties:
+      BucketName: !Ref S3BucketName
+  S3BucketPolicy:
+    Type: "AWS::S3::BucketPolicy"
+    Properties:
+      Bucket: !Ref S3Bucket
+      PolicyDocument:
+        Statement:
+          -
+            Sid: "AllowCloudFrontAccessIdentity"
+            Effect: "Allow"
+            Action:
+              - "s3:GetObject"
+            Resource:
+              Fn::Join:
+                - ""
+                -
+                  - "arn:aws:s3:::"
+                  -
+                    Ref: "S3Bucket"
+                  - "/*"
+            Principal:
+              AWS:
+                Fn::Join:
+                  - " "
+                  -
+                    - "arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity"
+                    -
+                      !Ref CloudFrontAccessIdentity
+  R53Record:
+    Type: "AWS::Route53::RecordSet"
+    Condition: CreateRoute53Record
+    Properties:
+      Comment:
+        Fn::Join:
+          - ""
+          -
+            - "Alias CloudFront for "
+            -
+              Ref: "WebsiteAddress"
+      HostedZoneId: !Ref HostedZoneID
+      Type: A
+      Name: !Ref WebsiteAddress
+      AliasTarget:
+        DNSName: !GetAtt CFDistribution.DomainName
+        HostedZoneId: "Z2FDTNDATAQYW2"
+  CFDistribution:
+    Type: "AWS::CloudFront::Distribution"
+    DependsOn: "S3Bucket"
+    Properties:
+      DistributionConfig:
+        Aliases:
+          - !Ref WebsiteAddress
+        Origins:
+          - DomainName: !GetAtt S3Bucket.DomainName
+            OriginPath: !Ref CloudFrontOriginPath
+            Id: S3BucketOrigin
+            S3OriginConfig:
+              OriginAccessIdentity:
+                Fn::Join:
+                  - ""
+                  -
+                    - "origin-access-identity/cloudfront/"
+                    -
+                      Ref: CloudFrontAccessIdentity
+        Comment:
+          Fn::Join:
+            - ""
+            -
+              - "CloudFront origin for "
+              -
+                Ref: "WebsiteAddress"
+        DefaultCacheBehavior:
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          TargetOriginId: S3BucketOrigin
+          ForwardedValues:
+            QueryString: "false"
+            Cookies:
+              Forward: none
+          ViewerProtocolPolicy: redirect-to-https
+        DefaultRootObject: index.html
+        Enabled: "true"
+        HttpVersion: "http2"
+        PriceClass: !Ref CloudFrontPriceClass
+        ViewerCertificate:
+          AcmCertificateArn: !Ref TlsCertificateArn
+          SslSupportMethod: sni-only
+        # used to allow deep-linking of gateway token pages
+        CustomErrorResponses:
+        - ErrorCachingMinTTL: 10
+          ErrorCode: 403
+          ResponseCode: 200
+          ResponsePagePath: "/index.html"

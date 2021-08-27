@@ -9,6 +9,7 @@ import {
 } from "providers/accounts";
 import { StakeAccountSection } from "components/account/StakeAccountSection";
 import { TokenAccountSection } from "components/account/TokenAccountSection";
+import { GatewayTokenAccountSection } from "components/account/GatewayTokenAccountSection";
 import { ErrorCard } from "components/common/ErrorCard";
 import { LoadingCard } from "components/common/LoadingCard";
 import { useCluster, ClusterStatus } from "providers/cluster";
@@ -151,6 +152,7 @@ export function AccountHeader({
   const account = info?.data;
   const data = account?.details?.data;
   const isToken = data?.program === "spl-token" && data?.parsed.type === "mint";
+  const isGatewayProgram = data?.program === "gateway";
 
   if (tokenDetails || isToken) {
     return (
@@ -180,6 +182,15 @@ export function AccountHeader({
           </h2>
         </div>
       </div>
+    );
+  }
+  
+  if (isGatewayProgram) {
+    return (
+      <>
+        <h6 className="header-pretitle">Details</h6>
+        <h2 className="header-title">Gateway Token</h2>
+      </>
     );
   }
 
@@ -241,6 +252,8 @@ function DetailsSections({
 
 function InfoSection({ account }: { account: Account }) {
   const data = account?.details?.data;
+  
+  console.log(data);
 
   if (data && data.program === "bpf-upgradeable-loader") {
     return (
@@ -261,6 +274,8 @@ function InfoSection({ account }: { account: Account }) {
     );
   } else if (data && data.program === "spl-token") {
     return <TokenAccountSection account={account} tokenAccount={data.parsed} />;
+  } else if (data && data.program === "gateway") {
+    return <GatewayTokenAccountSection account={account} tokenAccount={data.parsed} />;
   } else if (data && data.program === "nonce") {
     return <NonceAccountSection account={account} nonceAccount={data.parsed} />;
   } else if (data && data.program === "vote") {

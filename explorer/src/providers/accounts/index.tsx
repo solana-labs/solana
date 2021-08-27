@@ -1,30 +1,30 @@
 import React from "react";
-import { PublicKey, Connection, StakeActivationData } from "@solana/web3.js";
-import { useCluster, Cluster } from "../cluster";
-import { HistoryProvider } from "./history";
-import { TokensProvider } from "./tokens";
-import { create } from "superstruct";
-import { ParsedInfo } from "validators";
-import { StakeAccount } from "validators/accounts/stake";
-import {
-  TokenAccount,
-  MintAccountInfo,
-  TokenAccountInfo,
-} from "validators/accounts/token";
+import {AccountInfo, Connection, ParsedAccountData, PublicKey, StakeActivationData} from "@solana/web3.js";
+import {GatewayTokenData, GatewayTokenState} from '@identity.com/solana-gateway-ts/dist/lib/GatewayTokenData'
+import {Cluster, useCluster} from "../cluster";
+import {HistoryProvider} from "./history";
+import {TokensProvider} from "./tokens";
+import {create} from "superstruct";
+import {ParsedInfo} from "validators";
+import {StakeAccount} from "validators/accounts/stake";
+import {MintAccountInfo, TokenAccount, TokenAccountInfo,} from "validators/accounts/token";
 import * as Cache from "providers/cache";
-import { ActionType, FetchStatus } from "providers/cache";
-import { reportError } from "utils/sentry";
-import { VoteAccount } from "validators/accounts/vote";
-import { NonceAccount } from "validators/accounts/nonce";
-import { SysvarAccount } from "validators/accounts/sysvar";
-import { ConfigAccount } from "validators/accounts/config";
-import { FlaggedAccountsProvider } from "./flagged-accounts";
+import {ActionType, FetchStatus} from "providers/cache";
+import {reportError} from "utils/sentry";
+import {VoteAccount} from "validators/accounts/vote";
+import {NonceAccount} from "validators/accounts/nonce";
+import {SysvarAccount} from "validators/accounts/sysvar";
+import {ConfigAccount} from "validators/accounts/config";
+import {FlaggedAccountsProvider} from "./flagged-accounts";
 import {
   ProgramDataAccount,
   ProgramDataAccountInfo,
   UpgradeableLoaderAccount,
 } from "validators/accounts/upgradeable-program";
-import { RewardsProvider } from "./rewards";
+import {RewardsProvider} from "./rewards";
+import {GatewayTokenAccount} from "../../validators/accounts/gateway";
+import {GatewayToken, State as GatewayState } from "@identity.com/solana-gateway-ts";
+
 export { useAccountHistory } from "./history";
 
 export type StakeProgramData = {
@@ -64,6 +64,11 @@ export type ConfigProgramData = {
   parsed: ConfigAccount;
 };
 
+export type GatewayTokenProgramData = {
+  program: "gateway";
+  parsed: GatewayTokenAccount;
+};
+
 export type ProgramData =
   | UpgradeableLoaderAccountData
   | StakeProgramData
@@ -71,7 +76,8 @@ export type ProgramData =
   | VoteProgramData
   | NonceProgramData
   | SysvarProgramData
-  | ConfigProgramData;
+  | ConfigProgramData
+  | GatewayTokenProgramData;
 
 export interface Details {
   executable: boolean;
@@ -84,6 +90,15 @@ export interface Account {
   pubkey: PublicKey;
   lamports: number;
   details?: Details;
+}
+
+export const GATEWAY_PROGRAM_ID = new PublicKey("gatem74V238djXdzWnJf94Wo1DcnuGkfijbf3AuBhfs");
+function fromGatewayTokenState(state: GatewayTokenState): GatewayState {
+  if (!!state.active) return GatewayState.ACTIVE;
+  if (!!state.revoked) return GatewayState.REVOKED;
+  if (!!state.frozen) return GatewayState.FROZEN;
+
+  throw new Error("Unrecognised state " + JSON.stringify(state));
 }
 
 type State = Cache.State<Account>;
@@ -115,6 +130,23 @@ export function AccountsProvider({ children }: AccountsProviderProps) {
       </DispatchContext.Provider>
     </StateContext.Provider>
   );
+}
+
+function parseGatewayToken(result: AccountInfo<Buffer>, pubkey: PublicKey):GatewayTokenProgramData {
+  const parsedData = GatewayTokenData.fromAccount(result.data);
+  const parsed = new GatewayToken(
+    parsedData.issuingGatekeeper.toPublicKey(),
+    parsedData.gatekeeperNetwork.toPublicKey(),
+    parsedData.owner.toPublicKey(),
+    fromGatewayTokenState(parsedData.state),
+    pubkey,
+    GATEWAY_PROGRAM_ID,
+    parsedData.expiry?.toNumber()
+  );
+  return {
+    program: "gateway",
+    parsed: {info: parsed},
+  }
 }
 
 async function fetchAccountInfo(
@@ -232,10 +264,16 @@ async function fetchAccountInfo(
               };
               break;
             default:
+              console.log("unrecognised program");
+              console.log(info);
               data = undefined;
           }
         } catch (error) {
           reportError(error, { url, address: pubkey.toBase58() });
+        }
+      } else {
+        if (result.owner.equals(GATEWAY_PROGRAM_ID)) {
+          data = parseGatewayToken(result as AccountInfo<Buffer>, pubkey);
         }
       }
 
