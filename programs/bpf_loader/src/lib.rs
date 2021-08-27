@@ -32,14 +32,10 @@ use solana_sdk::{
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     clock::Clock,
     entrypoint::{HEAP_LENGTH, SUCCESS},
-<<<<<<< HEAD
-    feature_set::{add_missing_program_error_mappings, upgradeable_close_instruction},
-=======
     feature_set::{
         add_missing_program_error_mappings, close_upgradeable_program_accounts,
-        stop_verify_mul64_imm_nonzero,
+        upgradeable_close_instruction,
     },
->>>>>>> a89f18014 (Allow closing upgradeable program accounts (#19319))
     ic_logger_msg, ic_msg,
     instruction::InstructionError,
     keyed_account::{from_keyed_account, keyed_account_at_index, KeyedAccount},
