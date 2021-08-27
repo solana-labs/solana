@@ -73,8 +73,8 @@ solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.7.11" 
 trees = "0.2.1"
 
 [dev-dependencies]
-jsonrpc-core = "17.1.0"
-jsonrpc-core-client = { version = "17.1.0", features = ["ipc", "ws"] }
+jsonrpc-core = "18.0.0"
+jsonrpc-core-client = { version = "18.0.0", features = ["ipc", "ws"] }
 matches = "0.1.6"
 num_cpus = "1.13.0"
 reqwest = { version = "0.11.2", default-features = false, features = ["blocking", "rustls-tls", "json"] }
@@ -84,7 +84,7 @@ solana-stake-program = { path = "../programs/stake", version = "=1.7.11" }
 solana-version = { path = "../version", version = "=1.7.11" }
 symlink = "0.1.0"
 systemstat = "0.1.5"
-tokio_02 = { version = "0.2", package = "tokio", features = ["full"] }
+tokio = { version = "1", features = ["full"] }
 
 [build-dependencies]
 rustc_version = "0.2"
