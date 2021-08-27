@@ -287,7 +287,14 @@ fn retransmit(
 
         let mut compute_turbine_peers = Measure::start("turbine_start");
         // TODO: consider using root-bank here for leader lookup!
-        let slot_leader = leader_schedule_cache.slot_leader_at(shred_slot, Some(&working_bank));
+        // Shreds' signatures should be verified before they reach here, and if
+        // the leader is unknown they should fail signature check. So here we
+        // should expect to know the slot leader and otherwise skip the shred.
+        let slot_leader =
+            match leader_schedule_cache.slot_leader_at(shred_slot, Some(&working_bank)) {
+                Some(pubkey) => pubkey,
+                None => continue,
+            };
         let cluster_nodes =
             cluster_nodes_cache.get(shred_slot, &root_bank, &working_bank, cluster_info);
         let shred_seed = shred.seed(slot_leader, &root_bank);
