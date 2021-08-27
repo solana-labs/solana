@@ -1137,8 +1137,10 @@ fn test_fork_choice_refresh_old_votes() {
                 &lighter_fork_ledger_path,
                 &context.lighter_fork_validator_key,
             );
-            let heaviest_fork_latest_vote =
-                wait_for_last_vote_in_tower_to_land_in_ledger(&heaviest_ledger_path, &context.heaviest_validator_key);
+            let heaviest_fork_latest_vote = wait_for_last_vote_in_tower_to_land_in_ledger(
+                &heaviest_ledger_path,
+                &context.heaviest_validator_key,
+            );
 
             // Open ledgers
             let smallest_blockstore = open_blockstore(&smallest_ledger_path);
@@ -2807,7 +2809,8 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
     info!("Create validator A's ledger");
     {
         // Find latest vote in B, and wait for it to reach blockstore
-        let b_last_vote = wait_for_last_vote_in_tower_to_land_in_ledger(&val_b_ledger_path, &validator_b_pubkey);
+        let b_last_vote =
+            wait_for_last_vote_in_tower_to_land_in_ledger(&val_b_ledger_path, &validator_b_pubkey);
 
         // Now we copy these blocks to A
         let b_blockstore = open_blockstore(&val_b_ledger_path);
