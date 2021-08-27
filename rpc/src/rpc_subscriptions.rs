@@ -87,7 +87,7 @@ pub enum NotificationEntry {
     Gossip(Slot),
     SignaturesReceived((Slot, Vec<Signature>)),
     Subscribed(SubscriptionParams, SubscriptionId),
-    Unsubscribed(SubscriptionParams),
+    Unsubscribed(SubscriptionParams, SubscriptionId),
 }
 
 impl std::fmt::Debug for NotificationEntry {
@@ -109,7 +109,9 @@ impl std::fmt::Debug for NotificationEntry {
             NotificationEntry::Subscribed(params, id) => {
                 write!(f, "Subscribed({:?}, {:?})", params, id)
             }
-            NotificationEntry::Unsubscribed(params) => write!(f, "Unsubscribed({:?})", params),
+            NotificationEntry::Unsubscribed(params, id) => {
+                write!(f, "Unsubscribed({:?}, {:?})", params, id)
+            }
         }
     }
 }
@@ -594,12 +596,13 @@ impl RpcSubscriptions {
                                 )
                             });
                         }
-                        NotificationEntry::Unsubscribed(params) => {
-                            subscriptions.unsubscribe(params);
+                        NotificationEntry::Unsubscribed(params, id) => {
+                            subscriptions.unsubscribe(params, id);
                         }
                         NotificationEntry::Slot(slot_info) => {
-                            if let Some(sub) =
-                                subscriptions.by_params().get(&SubscriptionParams::Slot)
+                            if let Some(sub) = subscriptions
+                                .node_progress_watchers()
+                                .get(&SubscriptionParams::Slot)
                             {
                                 debug!("slot notify: {:?}", slot_info);
                                 inc_new_counter_info!("rpc-subscription-notify-slot", 1);
@@ -608,7 +611,7 @@ impl RpcSubscriptions {
                         }
                         NotificationEntry::SlotUpdate(slot_update) => {
                             if let Some(sub) = subscriptions
-                                .by_params()
+                                .node_progress_watchers()
                                 .get(&SubscriptionParams::SlotsUpdates)
                             {
                                 inc_new_counter_info!("rpc-subscription-notify-slots-updates", 1);
@@ -625,8 +628,9 @@ impl RpcSubscriptions {
                                 hash: bs58::encode(vote_info.hash).into_string(),
                                 timestamp: vote_info.timestamp,
                             };
-                            if let Some(sub) =
-                                subscriptions.by_params().get(&SubscriptionParams::Vote)
+                            if let Some(sub) = subscriptions
+                                .node_progress_watchers()
+                                .get(&SubscriptionParams::Vote)
                             {
                                 debug!("vote notify: {:?}", vote_info);
                                 inc_new_counter_info!("rpc-subscription-notify-vote", 1);
@@ -634,8 +638,9 @@ impl RpcSubscriptions {
                             }
                         }
                         NotificationEntry::Root(root) => {
-                            if let Some(sub) =
-                                subscriptions.by_params().get(&SubscriptionParams::Root)
+                            if let Some(sub) = subscriptions
+                                .node_progress_watchers()
+                                .get(&SubscriptionParams::Root)
                             {
                                 debug!("root notify: {:?}", root);
                                 inc_new_counter_info!("rpc-subscription-notify-root", 1);

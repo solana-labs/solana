@@ -107,6 +107,16 @@ impl SubscriptionParams {
         };
         commitment.is_confirmed()
     }
+
+    fn is_node_progress_watcher(&self) -> bool {
+        matches!(
+            self,
+            SubscriptionParams::Slot
+                | SubscriptionParams::SlotsUpdates
+                | SubscriptionParams::Root
+                | SubscriptionParams::Vote
+        )
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -359,18 +369,18 @@ impl LogsSubscriptionsIndex {
 
 pub struct SubscriptionsTracker {
     logs_subscriptions_index: LogsSubscriptionsIndex,
-    by_params: HashMap<SubscriptionParams, Arc<SubscriptionInfo>>,
     by_signature: HashMap<Signature, HashMap<SubscriptionId, Arc<SubscriptionInfo>>>,
     // Accounts, logs, programs, signatures (not gossip)
     commitment_watchers: HashMap<SubscriptionId, Arc<SubscriptionInfo>>,
     // Accounts, logs, programs, signatures (gossip)
     gossip_watchers: HashMap<SubscriptionId, Arc<SubscriptionInfo>>,
+    // Slots, slots updates, roots, votes.
+    node_progress_watchers: HashMap<SubscriptionParams, Arc<SubscriptionInfo>>,
 }
 
 impl SubscriptionsTracker {
     pub fn new(bank_forks: Arc<RwLock<BankForks>>) -> Self {
         SubscriptionsTracker {
-            by_params: HashMap::new(),
             logs_subscriptions_index: LogsSubscriptionsIndex {
                 all_count: 0,
                 all_with_votes_count: 0,
@@ -380,11 +390,8 @@ impl SubscriptionsTracker {
             by_signature: HashMap::new(),
             commitment_watchers: HashMap::new(),
             gossip_watchers: HashMap::new(),
+            node_progress_watchers: HashMap::new(),
         }
-    }
-
-    pub fn total(&self) -> usize {
-        self.by_params.len()
     }
 
     pub fn subscribe(
@@ -400,7 +407,6 @@ impl SubscriptionsTracker {
             method: params.method(),
             params: params.clone(),
         });
-        self.by_params.insert(params.clone(), Arc::clone(&info));
         match &params {
             SubscriptionParams::Logs(params) => {
                 self.logs_subscriptions_index.add(params);
@@ -419,23 +425,21 @@ impl SubscriptionsTracker {
         if info.params.is_gossip_watcher() {
             self.gossip_watchers.insert(id, Arc::clone(&info));
         }
+        if info.params.is_node_progress_watcher() {
+            self.node_progress_watchers
+                .insert(info.params.clone(), Arc::clone(&info));
+        }
     }
 
     #[allow(clippy::collapsible_if)]
-    pub fn unsubscribe(&mut self, params: SubscriptionParams) {
-        let info = if let Some(info) = self.by_params.remove(&params) {
-            info
-        } else {
-            warn!("missing entry in SubscriptionTracker");
-            return;
-        };
+    pub fn unsubscribe(&mut self, params: SubscriptionParams, id: SubscriptionId) {
         match &params {
             SubscriptionParams::Logs(params) => {
                 self.logs_subscriptions_index.remove(params);
             }
             SubscriptionParams::Signature(params) => {
                 if let Entry::Occupied(mut entry) = self.by_signature.entry(params.signature) {
-                    if entry.get_mut().remove(&info.id).is_none() {
+                    if entry.get_mut().remove(&id).is_none() {
                         warn!("Subscriptions inconsistency (missing entry in by_signature)");
                     }
                     if entry.get_mut().is_empty() {
@@ -448,20 +452,22 @@ impl SubscriptionsTracker {
             _ => {}
         }
         if params.is_commitment_watcher() {
-            if self.commitment_watchers.remove(&info.id).is_none() {
+            if self.commitment_watchers.remove(&id).is_none() {
                 warn!("Subscriptions inconsistency (missing entry in commitment_watchers)");
             }
         }
         if params.is_gossip_watcher() {
-            if self.gossip_watchers.remove(&info.id).is_none() {
+            if self.gossip_watchers.remove(&id).is_none() {
                 warn!("Subscriptions inconsistency (missing entry in gossip_watchers)");
+            }
+        }
+        if params.is_node_progress_watcher() {
+            if self.node_progress_watchers.remove(&params).is_none() {
+                warn!("Subscriptions inconsistency (missing entry in node_progress_watchers)");
             }
         }
     }
 
-    pub fn by_params(&self) -> &HashMap<SubscriptionParams, Arc<SubscriptionInfo>> {
-        &self.by_params
-    }
     pub fn by_signature(
         &self,
     ) -> &HashMap<Signature, HashMap<SubscriptionId, Arc<SubscriptionInfo>>> {
@@ -472,6 +478,9 @@ impl SubscriptionsTracker {
     }
     pub fn gossip_watchers(&self) -> &HashMap<SubscriptionId, Arc<SubscriptionInfo>> {
         &self.gossip_watchers
+    }
+    pub fn node_progress_watchers(&self) -> &HashMap<SubscriptionParams, Arc<SubscriptionInfo>> {
+        &self.node_progress_watchers
     }
 }
 
@@ -497,10 +506,10 @@ impl Drop for SubscriptionTokenInner {
                 warn!("Subscriptions inconsistency (missing entry in by_params)");
             }
             DashEntry::Occupied(entry) => {
-                let _ = self
-                    .control
-                    .sender
-                    .send(NotificationEntry::Unsubscribed(self.params.clone()));
+                let _ = self.control.sender.send(NotificationEntry::Unsubscribed(
+                    self.params.clone(),
+                    self.id,
+                ));
                 entry.remove();
                 datapoint_info!(
                     "rpc-subscription",
