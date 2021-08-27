@@ -31,8 +31,8 @@ use solana_sdk::{
     clock::Clock,
     entrypoint::{HEAP_LENGTH, SUCCESS},
     feature_set::{
-        add_missing_program_error_mappings, close_upgradeable_program_accounts, fix_write_privs,
-        reduce_required_deploy_balance, stop_verify_mul64_imm_nonzero,
+        add_missing_program_error_mappings, close_upgradeable_program_accounts, do_support_realloc,
+        fix_write_privs, reduce_required_deploy_balance, stop_verify_mul64_imm_nonzero,
     },
     ic_logger_msg, ic_msg,
     instruction::{AccountMeta, InstructionError},
@@ -150,12 +150,19 @@ pub fn create_vm<'a>(
     program: &'a dyn Executable<BpfError, ThisInstructionMeter>,
     parameter_bytes: &mut [u8],
     invoke_context: &'a mut dyn InvokeContext,
+    orig_data_lens: &'a [usize],
 ) -> Result<EbpfVm<'a, BpfError, ThisInstructionMeter>, EbpfError<BpfError>> {
     let compute_budget = invoke_context.get_compute_budget();
     let mut heap =
         AlignedMemory::new_with_size(compute_budget.heap_size.unwrap_or(HEAP_LENGTH), HOST_ALIGN);
     let mut vm = EbpfVm::new(program, heap.as_slice_mut(), parameter_bytes)?;
-    syscalls::bind_syscall_context_objects(loader_id, &mut vm, invoke_context, heap)?;
+    syscalls::bind_syscall_context_objects(
+        loader_id,
+        &mut vm,
+        invoke_context,
+        heap,
+        orig_data_lens,
+    )?;
     Ok(vm)
 }
 
@@ -903,6 +910,7 @@ impl Executor for BpfExecutor {
                 self.executable.as_ref(),
                 parameter_bytes.as_slice_mut(),
                 invoke_context,
+                &account_lengths,
             ) {
                 Ok(info) => info,
                 Err(e) => {
@@ -979,6 +987,7 @@ impl Executor for BpfExecutor {
             keyed_accounts,
             parameter_bytes.as_slice(),
             &account_lengths,
+            invoke_context.is_feature_active(&do_support_realloc::id()),
         )?;
         deserialize_time.stop();
         invoke_context.update_timing(

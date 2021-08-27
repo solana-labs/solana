@@ -114,6 +114,29 @@ impl<'a> AccountInfo<'a> {
             .map_err(|_| ProgramError::AccountBorrowFailed)
     }
 
+    pub fn realloc(&self, new_len: usize) -> Result<(), ProgramError> {
+        unsafe {
+            // First set new length in the serialized data
+            let ptr = self.try_borrow_mut_data()?.as_mut_ptr().offset(-8) as *mut u64;
+            *ptr = new_len as u64;
+
+            // Then set the new length in the local slice
+            let ptr = &mut *(((self.data.as_ptr() as *const u64).offset(1) as u64) as *mut u64);
+            *ptr = new_len as u64;
+        }
+        Ok(())
+    }
+
+    pub fn assign(&self, new_owner: &Pubkey) {
+        // Set the non-mut owner field
+        unsafe {
+            std::ptr::write_volatile(
+                self.owner as *const Pubkey as *mut [u8; 32],
+                new_owner.to_bytes(),
+            );
+        }
+    }
+
     pub fn new(
         key: &'a Pubkey,
         is_signer: bool,

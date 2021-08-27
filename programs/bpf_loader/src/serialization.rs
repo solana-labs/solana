@@ -7,6 +7,7 @@ use solana_sdk::{
     instruction::InstructionError,
     keyed_account::KeyedAccount,
     pubkey::Pubkey,
+    system_instruction::MAX_PERMITTED_DATA_LENGTH,
 };
 use std::{
     io::prelude::*,
@@ -48,11 +49,12 @@ pub fn deserialize_parameters(
     keyed_accounts: &[KeyedAccount],
     buffer: &[u8],
     account_lengths: &[usize],
+    do_support_realloc: bool,
 ) -> Result<(), InstructionError> {
     if *loader_id == bpf_loader_deprecated::id() {
         deserialize_parameters_unaligned(keyed_accounts, buffer, account_lengths)
     } else {
-        deserialize_parameters_aligned(keyed_accounts, buffer, account_lengths)
+        deserialize_parameters_aligned(keyed_accounts, buffer, account_lengths, do_support_realloc)
     }
 }
 
@@ -261,6 +263,7 @@ pub fn deserialize_parameters_aligned(
     keyed_accounts: &[KeyedAccount],
     buffer: &[u8],
     account_lengths: &[usize],
+    do_support_realloc: bool,
 ) -> Result<(), InstructionError> {
     let mut start = size_of::<u64>(); // number of accounts
     for (i, (keyed_account, pre_len)) in keyed_accounts
@@ -285,13 +288,22 @@ pub fn deserialize_parameters_aligned(
             start += size_of::<u64>(); // lamports
             let post_len = LittleEndian::read_u64(&buffer[start..]) as usize;
             start += size_of::<u64>(); // data length
-            let mut data_end = start + *pre_len;
-            if post_len != *pre_len
-                && (post_len.saturating_sub(*pre_len)) <= MAX_PERMITTED_DATA_INCREASE
-            {
-                data_end = start + post_len;
-            }
-
+            let data_end = if do_support_realloc {
+                if post_len.saturating_sub(*pre_len) > MAX_PERMITTED_DATA_INCREASE
+                    || post_len > MAX_PERMITTED_DATA_LENGTH as usize
+                {
+                    return Err(InstructionError::InvalidRealloc);
+                }
+                start + post_len
+            } else {
+                let mut data_end = start + *pre_len;
+                if post_len != *pre_len
+                    && (post_len.saturating_sub(*pre_len)) <= MAX_PERMITTED_DATA_INCREASE
+                {
+                    data_end = start + post_len;
+                }
+                data_end
+            };
             account.set_data_from_slice(&buffer[start..data_end]);
             start += *pre_len + MAX_PERMITTED_DATA_INCREASE; // data
             start += (start as *const u8).align_offset(align_of::<u128>());
@@ -467,6 +479,7 @@ mod tests {
             &de_keyed_accounts,
             serialized.as_slice(),
             &account_lengths,
+            true,
         )
         .unwrap();
         for ((account, de_keyed_account), key) in
@@ -520,6 +533,7 @@ mod tests {
             &de_keyed_accounts,
             serialized.as_slice(),
             &account_lengths,
+            true,
         )
         .unwrap();
         for ((account, de_keyed_account), key) in

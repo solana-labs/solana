@@ -21,8 +21,9 @@ use solana_sdk::{
     feature_set::{
         allow_native_ids, blake3_syscall_enabled, check_seed_length,
         close_upgradeable_program_accounts, demote_program_write_locks, disable_fees_sysvar,
-        libsecp256k1_0_5_upgrade_enabled, mem_overlap_fix, return_data_syscall_enabled,
-        secp256k1_recover_syscall_enabled, sol_log_data_syscall_enabled,
+        do_support_realloc, libsecp256k1_0_5_upgrade_enabled, mem_overlap_fix,
+        return_data_syscall_enabled, secp256k1_recover_syscall_enabled,
+        sol_log_data_syscall_enabled,
     },
     hash::{Hasher, HASH_BYTES},
     ic_msg,
@@ -209,6 +210,7 @@ pub fn bind_syscall_context_objects<'a>(
     vm: &mut EbpfVm<'a, BpfError, crate::ThisInstructionMeter>,
     invoke_context: &'a mut dyn InvokeContext,
     heap: AlignedMemory,
+    orig_data_lens: &'a [usize],
 ) -> Result<(), EbpfError<BpfError>> {
     let compute_budget = invoke_context.get_compute_budget();
 
@@ -430,6 +432,7 @@ pub fn bind_syscall_context_objects<'a>(
     vm.bind_syscall_context_object(
         Box::new(SyscallInvokeSignedC {
             invoke_context: invoke_context.clone(),
+            orig_data_lens,
             loader_id,
         }),
         None,
@@ -437,6 +440,7 @@ pub fn bind_syscall_context_objects<'a>(
     vm.bind_syscall_context_object(
         Box::new(SyscallInvokeSignedRust {
             invoke_context: invoke_context.clone(),
+            orig_data_lens,
             loader_id,
         }),
         None,
@@ -1519,9 +1523,10 @@ impl<'a> SyscallObject<BpfError> for SyscallBlake3<'a> {
 
 // Cross-program invocation syscalls
 
-struct AccountReferences<'a> {
+struct CallerAccount<'a> {
     lamports: &'a mut u64,
     owner: &'a mut Pubkey,
+    original_data_len: usize,
     data: &'a mut [u8],
     vm_data_addr: u64,
     ref_to_len_in_vm: &'a mut u64,
@@ -1531,10 +1536,7 @@ struct AccountReferences<'a> {
 }
 type TranslatedAccounts<'a> = (
     Vec<usize>,
-    Vec<(
-        Rc<RefCell<AccountSharedData>>,
-        Option<AccountReferences<'a>>,
-    )>,
+    Vec<(Rc<RefCell<AccountSharedData>>, Option<CallerAccount<'a>>)>,
 );
 
 /// Implemented by language specific data structure translators
@@ -1567,6 +1569,7 @@ trait SyscallInvokeSigned<'a> {
 /// Cross-program invocation called from Rust
 pub struct SyscallInvokeSignedRust<'a> {
     invoke_context: Rc<RefCell<&'a mut dyn InvokeContext>>,
+    orig_data_lens: &'a [usize],
     loader_id: &'a Pubkey,
 }
 impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
@@ -1694,9 +1697,10 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
                 )
             };
 
-            Ok(AccountReferences {
+            Ok(CallerAccount {
                 lamports,
                 owner,
+                original_data_len: 0, // set later
                 data,
                 vm_data_addr,
                 ref_to_len_in_vm,
@@ -1711,6 +1715,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
             &account_info_keys,
             account_infos,
             invoke_context,
+            self.orig_data_lens,
             translate,
         )
     }
@@ -1839,6 +1844,7 @@ struct SolSignerSeedsC {
 /// Cross-program invocation called from C
 pub struct SyscallInvokeSignedC<'a> {
     invoke_context: Rc<RefCell<&'a mut dyn InvokeContext>>,
+    orig_data_lens: &'a [usize],
     loader_id: &'a Pubkey,
 }
 impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
@@ -1964,9 +1970,10 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
                 self.loader_id,
             )?;
 
-            Ok(AccountReferences {
+            Ok(CallerAccount {
                 lamports,
                 owner,
+                original_data_len: 0, // set later
                 data,
                 vm_data_addr,
                 ref_to_len_in_vm,
@@ -1981,6 +1988,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
             &account_info_keys,
             account_infos,
             invoke_context,
+            self.orig_data_lens,
             translate,
         )
     }
@@ -2065,10 +2073,11 @@ fn get_translated_accounts<'a, T, F>(
     account_info_keys: &[&Pubkey],
     account_infos: &[T],
     invoke_context: &mut dyn InvokeContext,
+    orig_data_lens: &[usize],
     do_translate: F,
 ) -> Result<TranslatedAccounts<'a>, EbpfError<BpfError>>
 where
-    F: Fn(&T, &mut dyn InvokeContext) -> Result<AccountReferences<'a>, EbpfError<BpfError>>,
+    F: Fn(&T, &mut dyn InvokeContext) -> Result<CallerAccount<'a>, EbpfError<BpfError>>,
 {
     let demote_program_write_locks =
         invoke_context.is_feature_active(&demote_program_write_locks::id());
@@ -2083,25 +2092,27 @@ where
                 account_indices.push(account_index);
                 accounts.push((account, None));
                 continue;
-            } else if let Some(account_ref_index) =
+            } else if let Some(caller_account_index) =
                 account_info_keys.iter().position(|key| *key == account_key)
             {
-                let account_ref = do_translate(&account_infos[account_ref_index], invoke_context)?;
+                let mut caller_account =
+                    do_translate(&account_infos[caller_account_index], invoke_context)?;
                 {
                     let mut account = account.borrow_mut();
-                    account.copy_into_owner_from_slice(account_ref.owner.as_ref());
-                    account.set_data_from_slice(account_ref.data);
-                    account.set_lamports(*account_ref.lamports);
-                    account.set_executable(account_ref.executable);
-                    account.set_rent_epoch(account_ref.rent_epoch);
+                    account.copy_into_owner_from_slice(caller_account.owner.as_ref());
+                    caller_account.original_data_len = orig_data_lens[caller_account_index];
+                    account.set_data_from_slice(caller_account.data);
+                    account.set_lamports(*caller_account.lamports);
+                    account.set_executable(caller_account.executable);
+                    account.set_rent_epoch(caller_account.rent_epoch);
                 }
-                let account_ref = if message.is_writable(i, demote_program_write_locks) {
-                    Some(account_ref)
+                let caller_account = if message.is_writable(i, demote_program_write_locks) {
+                    Some(caller_account)
                 } else {
                     None
                 };
                 account_indices.push(account_index);
-                accounts.push((account, account_ref));
+                accounts.push((account, caller_account));
                 continue;
             }
         }
@@ -2176,6 +2187,7 @@ fn call<'a>(
     invoke_context
         .get_compute_meter()
         .consume(invoke_context.get_compute_budget().invoke_units)?;
+    let do_support_realloc = invoke_context.is_feature_active(&do_support_realloc::id());
 
     // Translate and verify caller's data
     let instruction =
@@ -2219,13 +2231,14 @@ fn call<'a>(
     .map_err(SyscallError::InstructionError)?;
 
     // Copy results back to caller
-    for (account, account_ref) in accounts.iter_mut() {
-        let account = account.borrow();
-        if let Some(account_ref) = account_ref {
-            *account_ref.lamports = account.lamports();
-            *account_ref.owner = *account.owner();
-            if account_ref.data.len() != account.data().len() {
-                if !account_ref.data.is_empty() {
+    for (callee_account, caller_account) in accounts.iter_mut() {
+        if let Some(caller_account) = caller_account {
+            let callee_account = callee_account.borrow();
+            *caller_account.lamports = callee_account.lamports();
+            *caller_account.owner = *callee_account.owner();
+            let new_len = callee_account.data().len();
+            if caller_account.data.len() != new_len {
+                if !do_support_realloc && !caller_account.data.is_empty() {
                     // Only support for `CreateAccount` at this time.
                     // Need a way to limit total realloc size across multiple CPI calls
                     ic_msg!(
@@ -2236,28 +2249,36 @@ fn call<'a>(
                         SyscallError::InstructionError(InstructionError::InvalidRealloc).into(),
                     );
                 }
-                if account.data().len() > account_ref.data.len() + MAX_PERMITTED_DATA_INCREASE {
+                let data_overflow = if do_support_realloc {
+                    new_len > caller_account.original_data_len + MAX_PERMITTED_DATA_INCREASE
+                } else {
+                    new_len > caller_account.data.len() + MAX_PERMITTED_DATA_INCREASE
+                };
+                if data_overflow {
                     ic_msg!(
                         invoke_context,
-                        "SystemProgram::CreateAccount data size limited to {} in inner instructions",
+                        "Account data size realloc limited to {} in inner instructions",
                         MAX_PERMITTED_DATA_INCREASE
                     );
                     return Err(
                         SyscallError::InstructionError(InstructionError::InvalidRealloc).into(),
                     );
                 }
-                account_ref.data = translate_slice_mut::<u8>(
+                if new_len < caller_account.data.len() {
+                    caller_account.data[new_len..].fill(0);
+                }
+                caller_account.data = translate_slice_mut::<u8>(
                     memory_mapping,
-                    account_ref.vm_data_addr,
-                    account.data().len() as u64,
+                    caller_account.vm_data_addr,
+                    new_len as u64,
                     &bpf_loader_deprecated::id(), // Don't care since it is byte aligned
                 )?;
-                *account_ref.ref_to_len_in_vm = account.data().len() as u64;
-                *account_ref.serialized_len_ptr = account.data().len() as u64;
+                *caller_account.ref_to_len_in_vm = new_len as u64;
+                *caller_account.serialized_len_ptr = new_len as u64;
             }
-            account_ref
+            caller_account
                 .data
-                .copy_from_slice(&account.data()[0..account_ref.data.len()]);
+                .copy_from_slice(&callee_account.data()[0..new_len]);
         }
     }
 
