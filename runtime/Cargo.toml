@@ -32,6 +32,7 @@ rayon = "1.5.1"
 regex = "1.5.4"
 serde = { version = "1.0.130", features = ["rc"] }
 serde_derive = "1.0.103"
+solana-address-map-program = { path = "../programs/address-map", version = "=1.9.0" }
 solana-config-program = { path = "../programs/config", version = "=1.9.0" }
 solana-compute-budget-program = { path = "../programs/compute-budget", version = "=1.9.0" }
 solana-frozen-abi = { path = "../frozen-abi", version = "=1.9.0" }

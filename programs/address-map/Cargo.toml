@@ -1,0 +1,32 @@
+[package]
+name = "solana-address-map-program"
+version = "1.9.0"
+description = "Solana address map program"
+authors = ["Solana Maintainers <maintainers@solana.foundation>"]
+repository = "https://github.com/solana-labs/solana"
+license = "Apache-2.0"
+homepage = "https://solana.com/"
+documentation = "https://docs.rs/solana-address-map-program"
+edition = "2018"
+
+[dependencies]
+bincode = "1.3.3"
+log = "0.4.14"
+num-derive = "0.3"
+num-traits = "0.2"
+serde = { version = "1.0.127", features = ["derive"] }
+solana-frozen-abi = { path = "../../frozen-abi", version = "=1.9.0" }
+solana-frozen-abi-macro = { path = "../../frozen-abi/macro", version = "=1.9.0" }
+solana-program-runtime = { path = "../../program-runtime", version = "=1.9.0" }
+solana-sdk = { path = "../../sdk", version = "=1.9.0" }
+thiserror = "1.0"
+
+[build-dependencies]
+rustc_version = "0.4"
+
+[lib]
+crate-type = ["lib"]
+name = "solana_address_map_program"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
