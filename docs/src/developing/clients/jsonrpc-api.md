@@ -1149,8 +1149,7 @@ Get the fee the network will charge for a particular Message
 #### Parameters:
 
 - `blockhash: <string>` - The blockhash of this block, as base-58 encoded string
-- `message: <string>` - Encoded Message
-  - `encoding: <string>` - (optional) Encoding used for the message data. Either `"base58"` (*slow*, **DEPRECATED**), or `"base64"`. (default: `"base58"`).
+- `message: <string>` - Base-64 encoded Message
 - `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment) (used for retrieving blockhash)
 
 #### Results:
@@ -1168,7 +1167,6 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
   "method":"getFeeForMessage",
   "params":[
     "FxVKTksYShgKjnFG3RQUEo2AEesDb4ZHGY3NGJ7KHd7F","AQABAgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEBAQAA",
-    "base64",
     {
       "commitment":"processed"
     }

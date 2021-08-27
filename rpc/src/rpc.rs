@@ -3111,7 +3111,6 @@ pub mod rpc_full {
             meta: Self::Metadata,
             blockhash: String,
             data: String,
-            encoding: UiTransactionEncoding,
             commitment: Option<CommitmentConfig>,
         ) -> Result<RpcResponse<Option<u64>>>;
     }
@@ -3636,13 +3635,13 @@ pub mod rpc_full {
             meta: Self::Metadata,
             blockhash: String,
             data: String,
-            encoding: UiTransactionEncoding,
             commitment: Option<CommitmentConfig>,
         ) -> Result<RpcResponse<Option<u64>>> {
             debug!("get_fee_for_message rpc request received");
             let blockhash = Hash::from_str(&blockhash)
                 .map_err(|e| Error::invalid_params(format!("{:?}", e)))?;
-            let (_, message) = decode_and_deserialize::<Message>(data, encoding)?;
+            let (_, message) =
+                decode_and_deserialize::<Message>(data, UiTransactionEncoding::Base64)?;
             SanitizedMessage::try_from(message)
                 .map_err(|err| {
                     Error::invalid_params(format!("invalid transaction message: {}", err))
