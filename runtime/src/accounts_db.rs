@@ -2562,8 +2562,14 @@ impl AccountsDb {
             "shrink_select_top_sparse_storage_entries-ms",
             measure.as_ms() as usize
         );
-        inc_new_counter_info!("shrink_select_top_sparse_storage_entries-seeds", candidates_count);
-        inc_new_counter_info!("shrink_total_preliminary_candidate_stores", total_candidate_stores);
+        inc_new_counter_info!(
+            "shrink_select_top_sparse_storage_entries-seeds",
+            candidates_count
+        );
+        inc_new_counter_info!(
+            "shrink_total_preliminary_candidate_stores",
+            total_candidate_stores
+        );
 
         (shrink_slots, shrink_slots_next_batch)
     }
@@ -9961,106 +9967,228 @@ pub mod tests {
     }
 
     #[test]
-    fn test_select_candidates_by_total_usage() {
+    fn test_select_candidates_by_total_usage_no_candidates() {
+        // no input candidates -- none should be selected
         solana_logger::setup();
-
-        // case 1: no candidates
         let accounts = AccountsDb::new_single_for_tests();
+        let candidates: ShrinkCandidates = HashMap::new();
 
-        let mut candidates: ShrinkCandidates = HashMap::new();
-        let (output_candidates, next_candidates) =
+        let (selected_candidates, next_candidates) =
             accounts.select_candidates_by_total_usage(&candidates, DEFAULT_ACCOUNTS_SHRINK_RATIO);
 
-        assert_eq!(0, output_candidates.len());
+        assert_eq!(0, selected_candidates.len());
         assert_eq!(0, next_candidates.len());
+    }
 
-        // case 2: two candidates, only one selected
-        let dummy_path = Path::new("");
-        let dummy_slot = 12;
-        let dummy_size = 2 * PAGE_SIZE;
+    #[test]
+    fn test_select_candidates_by_total_usage_3_way_split_condition() {
+        // three candidates, one selected for shrink, one is put back to the candidate list and one is ignored
+        solana_logger::setup();
+        let accounts = AccountsDb::new_single_for_tests();
+        let mut candidates: ShrinkCandidates = HashMap::new();
 
-        let dummy_id1 = 22;
-        let entry1 = Arc::new(AccountStorageEntry::new(
-            dummy_path, dummy_slot, dummy_id1, dummy_size,
+        let common_store_path = Path::new("");
+        let common_slot_id = 12;
+        let store_file_size = 2 * PAGE_SIZE;
+
+        let store1_id = 22;
+        let store1 = Arc::new(AccountStorageEntry::new(
+            common_store_path,
+            common_slot_id,
+            store1_id,
+            store_file_size,
         ));
-        entry1.alive_bytes.store(0, Ordering::Relaxed);
+        store1.alive_bytes.store(0, Ordering::Relaxed);
 
         candidates
-            .entry(dummy_slot)
+            .entry(common_slot_id)
             .or_default()
-            .insert(entry1.append_vec_id(), entry1.clone());
+            .insert(store1.append_vec_id(), store1.clone());
 
-        let dummy_id2 = 44;
-        let entry2 = Arc::new(AccountStorageEntry::new(
-            dummy_path, dummy_slot, dummy_id2, dummy_size,
+        let store2_id = 44;
+        let store2 = Arc::new(AccountStorageEntry::new(
+            common_store_path,
+            common_slot_id,
+            store2_id,
+            store_file_size,
         ));
-        entry2.alive_bytes.store(0, Ordering::Relaxed);
-        candidates
-            .entry(dummy_slot)
-            .or_default()
-            .insert(entry2.append_vec_id(), entry2.clone());
 
-        let dummy_id3 = 55;
+        // The store2's alive_ratio is 0.5: as its page aligned alive size is 1 page.
+        let store2_alive_bytes = 1024;
+        store2
+            .alive_bytes
+            .store(store2_alive_bytes, Ordering::Relaxed);
+        candidates
+            .entry(common_slot_id)
+            .or_default()
+            .insert(store2.append_vec_id(), store2.clone());
+
+        let store3_id = 55;
         let entry3 = Arc::new(AccountStorageEntry::new(
-            dummy_path, dummy_slot, dummy_id3, dummy_size,
+            common_store_path,
+            common_slot_id,
+            store3_id,
+            store_file_size,
         ));
-        entry3.alive_bytes.store(1000, Ordering::Relaxed);
+
+        // The store3's alive ratio is 1.0 as its page-aligned alive size is 2 pages
+        let store3_alive_bytes = 1024 * 7;
+        entry3
+            .alive_bytes
+            .store(store3_alive_bytes, Ordering::Relaxed);
+
         candidates
-            .entry(dummy_slot)
+            .entry(common_slot_id)
             .or_default()
             .insert(entry3.append_vec_id(), entry3.clone());
 
-        let (output_candidates, next_candidates) =
-            accounts.select_candidates_by_total_usage(&candidates, 0.17);
-        assert_eq!(1, output_candidates.len());
-        assert_eq!(1, output_candidates[&dummy_slot].len());
-        assert!(
-            output_candidates[&dummy_slot].contains(&entry1.append_vec_id())
-                || output_candidates[&dummy_slot].contains(&entry2.append_vec_id())
-        );
+        // Set the target alive ratio to 0.6 so that we can just get rid of store1, the remaing two stores
+        // alive ratio can be > the target ratio: the actual ratio is 0.75 because of 3 alive pages / 4 total pages.
+        // The target ratio is also set to larger than store2's alive ratio: 0.5 so that it would be added
+        // to the candidates list for next round.
+        let target_alive_ratio = 0.6;
+        let (selected_candidates, next_candidates) =
+            accounts.select_candidates_by_total_usage(&candidates, target_alive_ratio);
+        assert_eq!(1, selected_candidates.len());
+        assert_eq!(1, selected_candidates[&common_slot_id].len());
+        assert!(selected_candidates[&common_slot_id].contains(&store1.append_vec_id()));
         assert_eq!(1, next_candidates.len());
-        assert!(
-            next_candidates[&dummy_slot].contains(&entry1.append_vec_id())
-                || next_candidates[&dummy_slot].contains(&entry2.append_vec_id())
-        );
+        assert!(next_candidates[&common_slot_id].contains(&store2.append_vec_id()));
+    }
 
-        // case 3: two candidates, both are selected
-        candidates.clear();
-        let dummy_size = 4 * PAGE_SIZE;
-        let dummy_id1 = 22;
-        let entry1 = Arc::new(AccountStorageEntry::new(
-            dummy_path, dummy_slot, dummy_id1, dummy_size,
+    #[test]
+    fn test_select_candidates_by_total_usage_2_way_split_condition() {
+        // three candidates, 2 are selected for shrink, one is ignored
+        solana_logger::setup();
+        let accounts = AccountsDb::new_single_for_tests();
+        let mut candidates: ShrinkCandidates = HashMap::new();
+
+        let common_store_path = Path::new("");
+        let common_slot_id = 12;
+        let store_file_size = 2 * PAGE_SIZE;
+
+        let store1_id = 22;
+        let store1 = Arc::new(AccountStorageEntry::new(
+            common_store_path,
+            common_slot_id,
+            store1_id,
+            store_file_size,
         ));
-        entry1.alive_bytes.store(3500, Ordering::Relaxed);
+        store1.alive_bytes.store(0, Ordering::Relaxed);
 
         candidates
-            .entry(dummy_slot)
+            .entry(common_slot_id)
             .or_default()
-            .insert(entry1.append_vec_id(), entry1.clone());
+            .insert(store1.append_vec_id(), store1.clone());
 
-        let dummy_id2 = 44;
-        let dummy_slot2 = 44;
-        let entry2 = Arc::new(AccountStorageEntry::new(
-            dummy_path,
-            dummy_slot2,
-            dummy_id2,
-            dummy_size,
+        let store2_id = 44;
+        let store2 = Arc::new(AccountStorageEntry::new(
+            common_store_path,
+            common_slot_id,
+            store2_id,
+            store_file_size,
         ));
-        entry2.alive_bytes.store(3000, Ordering::Relaxed);
+
+        // The store2's alive_ratio is 0.5: as its page aligned alive size is 1 page.
+        let store2_alive_bytes = 1024;
+        store2
+            .alive_bytes
+            .store(store2_alive_bytes, Ordering::Relaxed);
+        candidates
+            .entry(common_slot_id)
+            .or_default()
+            .insert(store2.append_vec_id(), store2.clone());
+
+        let store3_id = 55;
+        let entry3 = Arc::new(AccountStorageEntry::new(
+            common_store_path,
+            common_slot_id,
+            store3_id,
+            store_file_size,
+        ));
+
+        // The store3's alive ratio is 1.0 as its page-aligned alive size is 2 pages
+        let store3_alive_bytes = 1024 * 7;
+        entry3
+            .alive_bytes
+            .store(store3_alive_bytes, Ordering::Relaxed);
 
         candidates
-            .entry(dummy_slot2)
+            .entry(common_slot_id)
             .or_default()
-            .insert(entry2.append_vec_id(), entry2.clone());
+            .insert(entry3.append_vec_id(), entry3.clone());
 
-        let (output_candidates, next_candidates) =
-            accounts.select_candidates_by_total_usage(&candidates, DEFAULT_ACCOUNTS_SHRINK_RATIO);
-        assert_eq!(2, output_candidates.len());
-        assert_eq!(1, output_candidates[&dummy_slot].len());
-        assert_eq!(1, output_candidates[&dummy_slot2].len());
+        // Set the target ratio to default (0.8), both store1 and store2 must be selected and store3 is ignored.
+        let target_alive_ratio = DEFAULT_ACCOUNTS_SHRINK_RATIO;
+        let (selected_candidates, next_candidates) =
+            accounts.select_candidates_by_total_usage(&candidates, target_alive_ratio);
+        assert_eq!(1, selected_candidates.len());
+        assert_eq!(2, selected_candidates[&common_slot_id].len());
+        assert!(selected_candidates[&common_slot_id].contains(&store1.append_vec_id()));
+        assert!(selected_candidates[&common_slot_id].contains(&store2.append_vec_id()));
+        assert_eq!(0, next_candidates.len());
+    }
 
-        assert!(output_candidates[&dummy_slot].contains(&entry1.append_vec_id()));
-        assert!(output_candidates[&dummy_slot2].contains(&entry2.append_vec_id()));
+    #[test]
+    fn test_select_candidates_by_total_usage_all_clean() {
+        // 2 candidates, they must be selected to achieve the target alive ratio
+        solana_logger::setup();
+        let accounts = AccountsDb::new_single_for_tests();
+        let mut candidates: ShrinkCandidates = HashMap::new();
+
+        let slot1 = 12;
+        let common_store_path = Path::new("");
+
+        let store_file_size = 4 * PAGE_SIZE;
+        let store1_id = 22;
+        let store1 = Arc::new(AccountStorageEntry::new(
+            common_store_path,
+            slot1,
+            store1_id,
+            store_file_size,
+        ));
+
+        // store1 has 1 page-aligned alive bytes, its alive ratio is 1/4: 0.25
+        let store1_alive_bytes = 3 * 1024;
+        store1
+            .alive_bytes
+            .store(store1_alive_bytes, Ordering::Relaxed);
+
+        candidates
+            .entry(slot1)
+            .or_default()
+            .insert(store1.append_vec_id(), store1.clone());
+
+        let store2_id = 44;
+        let slot2 = 44;
+        let store2 = Arc::new(AccountStorageEntry::new(
+            common_store_path,
+            slot2,
+            store2_id,
+            store_file_size,
+        ));
+
+        // store2 has 2 page-aligned bytes, its alive ratio is 2/4: 0.5
+        let store2_alive_bytes = 5 * 1024;
+        store2
+            .alive_bytes
+            .store(store2_alive_bytes, Ordering::Relaxed);
+
+        candidates
+            .entry(slot2)
+            .or_default()
+            .insert(store2.append_vec_id(), store2.clone());
+
+        // Set the target ratio to default (0.8), both stores from the two different slots must be selected.
+        let target_alive_ratio = DEFAULT_ACCOUNTS_SHRINK_RATIO;
+        let (selected_candidates, next_candidates) =
+            accounts.select_candidates_by_total_usage(&candidates, target_alive_ratio);
+        assert_eq!(2, selected_candidates.len());
+        assert_eq!(1, selected_candidates[&slot1].len());
+        assert_eq!(1, selected_candidates[&slot2].len());
+
+        assert!(selected_candidates[&slot1].contains(&store1.append_vec_id()));
+        assert!(selected_candidates[&slot2].contains(&store2.append_vec_id()));
         assert_eq!(0, next_candidates.len());
     }
 
@@ -11566,18 +11694,24 @@ pub mod tests {
     fn test_recycle_stores_expiration() {
         solana_logger::setup();
 
-        let dummy_path = Path::new("");
-        let dummy_slot = 12;
-        let dummy_size = 1000;
+        let common_store_path = Path::new("");
+        let common_slot_id = 12;
+        let store_file_size = 1000;
 
-        let dummy_id1 = 22;
+        let store1_id = 22;
         let entry1 = Arc::new(AccountStorageEntry::new(
-            dummy_path, dummy_slot, dummy_id1, dummy_size,
+            common_store_path,
+            common_slot_id,
+            store1_id,
+            store_file_size,
         ));
 
-        let dummy_id2 = 44;
+        let store2_id = 44;
         let entry2 = Arc::new(AccountStorageEntry::new(
-            dummy_path, dummy_slot, dummy_id2, dummy_size,
+            common_store_path,
+            common_slot_id,
+            store2_id,
+            store_file_size,
         ));
 
         let mut recycle_stores = RecycleStores::default();
@@ -11599,10 +11733,10 @@ pub mod tests {
                 .iter()
                 .map(|(_, e)| e.append_vec_id())
                 .collect::<Vec<_>>(),
-            vec![dummy_id1, dummy_id2]
+            vec![store1_id, store2_id]
         );
         assert_eq!(recycle_stores.entry_count(), 2);
-        assert_eq!(recycle_stores.total_bytes(), dummy_size * 2);
+        assert_eq!(recycle_stores.total_bytes(), store_file_size * 2);
 
         // expiration for only too old entries
         recycle_stores.entries[0].0 =
@@ -11613,17 +11747,17 @@ pub mod tests {
                 .iter()
                 .map(|e| e.append_vec_id())
                 .collect::<Vec<_>>(),
-            vec![dummy_id1]
+            vec![store1_id]
         );
         assert_eq!(
             recycle_stores
                 .iter()
                 .map(|(_, e)| e.append_vec_id())
                 .collect::<Vec<_>>(),
-            vec![dummy_id2]
+            vec![store2_id]
         );
         assert_eq!(recycle_stores.entry_count(), 1);
-        assert_eq!(recycle_stores.total_bytes(), dummy_size);
+        assert_eq!(recycle_stores.total_bytes(), store_file_size);
     }
 
     const RACY_SLEEP_MS: u64 = 10;
@@ -12187,9 +12321,14 @@ pub mod tests {
         solana_logger::setup();
 
         let mut accounts = AccountsDb::new_single_for_tests();
-        let dummy_path = Path::new("");
-        let dummy_size = 2 * PAGE_SIZE;
-        let entry = Arc::new(AccountStorageEntry::new(dummy_path, 0, 1, dummy_size));
+        let common_store_path = Path::new("");
+        let store_file_size = 2 * PAGE_SIZE;
+        let entry = Arc::new(AccountStorageEntry::new(
+            common_store_path,
+            0,
+            1,
+            store_file_size,
+        ));
         match accounts.shrink_ratio {
             AccountShrinkThreshold::TotalSpace { shrink_ratio } => {
                 assert_eq!(
