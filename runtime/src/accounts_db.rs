@@ -2559,11 +2559,11 @@ impl AccountsDb {
         }
         measure.stop();
         inc_new_counter_info!(
-            "select_top_sparse_storage_entries-ms",
+            "shrink_select_top_sparse_storage_entries-ms",
             measure.as_ms() as usize
         );
-        inc_new_counter_info!("select_top_sparse_storage_entries-seeds", candidates_count);
-        inc_new_counter_info!("total_preliminary_candidate_stores", total_candidate_stores);
+        inc_new_counter_info!("shrink_select_top_sparse_storage_entries-seeds", candidates_count);
+        inc_new_counter_info!("shrink_total_preliminary_candidate_stores", total_candidate_stores);
 
         (shrink_slots, shrink_slots_next_batch)
     }
