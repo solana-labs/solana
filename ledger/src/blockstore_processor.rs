@@ -1114,7 +1114,7 @@ fn load_frozen_forks(
                     supermajority_root_from_vote_accounts(
                         bank.slot(),
                         bank.total_epoch_stake(),
-                        bank.vote_accounts(),
+                        &bank.vote_accounts(),
                     ).and_then(|supermajority_root| {
                         if supermajority_root > *root {
                             // If there's a cluster confirmed root greater than our last
@@ -1223,18 +1223,15 @@ fn supermajority_root(roots: &[(Slot, u64)], total_epoch_stake: u64) -> Option<S
     None
 }
 
-fn supermajority_root_from_vote_accounts<I>(
+fn supermajority_root_from_vote_accounts(
     bank_slot: Slot,
     total_epoch_stake: u64,
-    vote_accounts: I,
-) -> Option<Slot>
-where
-    I: IntoIterator<Item = (Pubkey, (u64, VoteAccount))>,
-{
+    vote_accounts: &HashMap<Pubkey, (/*stake:*/ u64, VoteAccount)>,
+) -> Option<Slot> {
     let mut roots_stakes: Vec<(Slot, u64)> = vote_accounts
-        .into_iter()
+        .iter()
         .filter_map(|(key, (stake, account))| {
-            if stake == 0 {
+            if *stake == 0 {
                 return None;
             }
 
@@ -1246,7 +1243,7 @@ where
                     );
                     None
                 }
-                Ok(vote_state) => vote_state.root_slot.map(|root_slot| (root_slot, stake)),
+                Ok(vote_state) => Some((vote_state.root_slot?, *stake)),
             }
         })
         .collect();
@@ -3591,7 +3588,7 @@ pub mod tests {
     #[allow(clippy::field_reassign_with_default)]
     fn test_supermajority_root_from_vote_accounts() {
         let convert_to_vote_accounts =
-            |roots_stakes: Vec<(Slot, u64)>| -> Vec<(Pubkey, (u64, VoteAccount))> {
+            |roots_stakes: Vec<(Slot, u64)>| -> HashMap<Pubkey, (u64, VoteAccount)> {
                 roots_stakes
                     .into_iter()
                     .map(|(root, stake)| {
@@ -3609,7 +3606,7 @@ pub mod tests {
                             (stake, VoteAccount::from(vote_account)),
                         )
                     })
-                    .collect_vec()
+                    .collect()
             };
 
         let total_stake = 10;
@@ -3617,22 +3614,19 @@ pub mod tests {
 
         // Supermajority root should be None
         assert!(
-            supermajority_root_from_vote_accounts(slot, total_stake, std::iter::empty()).is_none()
+            supermajority_root_from_vote_accounts(slot, total_stake, &HashMap::default()).is_none()
         );
 
         // Supermajority root should be None
         let roots_stakes = vec![(8, 1), (3, 1), (4, 1), (8, 1)];
         let accounts = convert_to_vote_accounts(roots_stakes);
-        assert!(
-            supermajority_root_from_vote_accounts(slot, total_stake, accounts.into_iter())
-                .is_none()
-        );
+        assert!(supermajority_root_from_vote_accounts(slot, total_stake, &accounts).is_none());
 
         // Supermajority root should be 4, has 7/10 of the stake
         let roots_stakes = vec![(8, 1), (3, 1), (4, 1), (8, 5)];
         let accounts = convert_to_vote_accounts(roots_stakes);
         assert_eq!(
-            supermajority_root_from_vote_accounts(slot, total_stake, accounts.into_iter()).unwrap(),
+            supermajority_root_from_vote_accounts(slot, total_stake, &accounts).unwrap(),
             4
         );
 
@@ -3640,7 +3634,7 @@ pub mod tests {
         let roots_stakes = vec![(8, 1), (3, 1), (4, 1), (8, 6)];
         let accounts = convert_to_vote_accounts(roots_stakes);
         assert_eq!(
-            supermajority_root_from_vote_accounts(slot, total_stake, accounts.into_iter()).unwrap(),
+            supermajority_root_from_vote_accounts(slot, total_stake, &accounts).unwrap(),
             8
         );
     }
