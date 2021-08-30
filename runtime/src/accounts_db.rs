@@ -2266,36 +2266,64 @@ impl AccountsDb {
         }
 
         let mut index_read_elapsed = Measure::start("index_read_elapsed");
-        let mut alive_total = 0;
+        let alive_total_collect = AtomicUsize::new(0);
 
-        let mut alive_accounts: Vec<_> = Vec::with_capacity(stored_accounts.len());
-        let mut unrefed_pubkeys = vec![];
-        for (pubkey, stored_account) in &stored_accounts {
-            let lookup = self.accounts_index.get_account_read_entry(pubkey);
-            if let Some(locked_entry) = lookup {
-                let is_alive = locked_entry.slot_list().iter().any(|(_slot, i)| {
-                    i.store_id == stored_account.store_id
-                        && i.offset == stored_account.account.offset
-                });
-                if !is_alive {
-                    // This pubkey was found in the storage, but no longer exists in the index.
-                    // It would have had a ref to the storage from the initial store, but it will
-                    // not exist in the re-written slot. Unref it to keep the index consistent with
-                    // rewriting the storage entries.
-                    unrefed_pubkeys.push(pubkey);
-                    locked_entry.unref();
-                    self.shrink_stats
-                        .dead_accounts
-                        .fetch_add(1, Ordering::Relaxed);
-                } else {
-                    alive_accounts.push((pubkey, stored_account));
-                    alive_total += stored_account.account_size;
-                    self.shrink_stats
-                        .alive_accounts
-                        .fetch_add(1, Ordering::Relaxed);
-                }
-            }
-        }
+        let len = stored_accounts.len();
+        let alive_accounts_collect = Mutex::new(Vec::with_capacity(len));
+        let unrefed_pubkeys_collect = Mutex::new(Vec::with_capacity(len));
+        self.thread_pool.install(|| {
+            let chunk_size = 50; // # accounts/thread
+            let chunks = len / chunk_size + 1;
+            (0..chunks).into_par_iter().for_each(|chunk| {
+                let mut alive_accounts = Vec::with_capacity(chunk_size);
+                let mut unrefed_pubkeys = Vec::with_capacity(chunk_size);
+                let mut alive_total = 0;
+                let skip = chunk * chunk_size;
+                stored_accounts.iter().skip(skip).take(chunk_size).for_each(
+                    |(pubkey, stored_account)| {
+                        let lookup = self.accounts_index.get_account_read_entry(pubkey);
+                        if let Some(locked_entry) = lookup {
+                            let is_alive = locked_entry.slot_list().iter().any(|(_slot, i)| {
+                                i.store_id == stored_account.store_id
+                                    && i.offset == stored_account.account.offset
+                            });
+                            if !is_alive {
+                                // This pubkey was found in the storage, but no longer exists in the index.
+                                // It would have had a ref to the storage from the initial store, but it will
+                                // not exist in the re-written slot. Unref it to keep the index consistent with
+                                // rewriting the storage entries.
+                                unrefed_pubkeys.push(pubkey);
+                                locked_entry.unref();
+                                self.shrink_stats
+                                    .dead_accounts
+                                    .fetch_add(1, Ordering::Relaxed);
+                            } else {
+                                alive_accounts.push((pubkey, stored_account));
+                                alive_total += stored_account.account_size;
+                                self.shrink_stats
+                                    .alive_accounts
+                                    .fetch_add(1, Ordering::Relaxed);
+                            }
+                        }
+                    },
+                );
+
+                // collect
+                alive_accounts_collect
+                    .lock()
+                    .unwrap()
+                    .append(&mut alive_accounts);
+                unrefed_pubkeys_collect
+                    .lock()
+                    .unwrap()
+                    .append(&mut unrefed_pubkeys);
+                alive_total_collect.fetch_add(alive_total, Ordering::Relaxed);
+            });
+        });
+
+        let alive_accounts = alive_accounts_collect.into_inner().unwrap();
+        let unrefed_pubkeys = unrefed_pubkeys_collect.into_inner().unwrap();
+        let alive_total = alive_total_collect.load(Ordering::Relaxed);
 
         index_read_elapsed.stop();
         let aligned_total: u64 = Self::page_align(alive_total as u64);
