@@ -14,8 +14,6 @@ use std::{
     time::Duration,
 };
 
-const ARCHIVE_SNAPSHOT_PACKAGE_MAX_ATTEMPTS: usize = 10;
-
 pub struct SnapshotPackagerService {
     t_snapshot_packager: JoinHandle<()>,
 }
@@ -51,41 +49,20 @@ impl SnapshotPackagerService {
                     }
                     let snapshot_package = snapshot_package.unwrap();
 
-                    let mut attempts = 0;
-                    loop {
-                        attempts += 1;
-                        let result = snapshot_utils::archive_snapshot_package(
-                            &snapshot_package,
-                            maximum_snapshots_to_retain,
-                        );
+                    // Archiving the snapshot package is not allowed to fail.
+                    // AccountsBackgroundService calls `clean_accounts()` with a value for
+                    // last_full_snapshot_slot that requires this archive call to succeed.
+                    snapshot_utils::archive_snapshot_package(
+                        &snapshot_package,
+                        maximum_snapshots_to_retain,
+                    )
+                    .expect("failed to archive snapshot package");
 
-                        if result.is_ok() {
-                            hashes.push((snapshot_package.slot(), *snapshot_package.hash()));
-                            while hashes.len() > MAX_SNAPSHOT_HASHES {
-                                hashes.remove(0);
-                            }
-                            cluster_info.push_snapshot_hashes(hashes.clone());
-                            break;
-                        }
-
-                        warn!(
-                            "Failed to create snapshot archive. attempts: {}, slot: {}, err: {:?}",
-                            attempts,
-                            snapshot_package.slot(),
-                            result
-                        );
-
-                        // Only require success for full snapshots.  Otherwise just log the error and
-                        // continue on.
-                        if snapshot_package.snapshot_type != SnapshotType::FullSnapshot {
-                            break;
-                        }
-
-                        assert!(
-                            attempts <= ARCHIVE_SNAPSHOT_PACKAGE_MAX_ATTEMPTS,
-                            "Unable to archive full snapshot package!"
-                        );
+                    hashes.push((snapshot_package.slot(), *snapshot_package.hash()));
+                    while hashes.len() > MAX_SNAPSHOT_HASHES {
+                        hashes.remove(0);
                     }
+                    cluster_info.push_snapshot_hashes(hashes.clone());
                 }
             })
             .unwrap();
