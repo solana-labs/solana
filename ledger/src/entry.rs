@@ -22,6 +22,7 @@ use solana_sdk::hash::Hash;
 use solana_sdk::packet::PACKET_DATA_SIZE;
 use solana_sdk::timing;
 use solana_sdk::transaction::Transaction;
+use solana_sdk::{feature_set, feature_set::FeatureSet};
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::ffi::OsStr;
@@ -359,8 +360,7 @@ pub trait EntrySlice {
     fn verify_and_hash_transactions(
         &self,
         skip_verification: bool,
-        libsecp256k1_0_5_upgrade_enabled: bool,
-        verify_tx_signatures_len: bool,
+        feature_set: &Arc<FeatureSet>,
     ) -> Option<Vec<EntryType<'_>>>;
 }
 
@@ -515,8 +515,7 @@ impl EntrySlice for [Entry] {
     fn verify_and_hash_transactions<'a>(
         &'a self,
         skip_verification: bool,
-        libsecp256k1_0_5_upgrade_enabled: bool,
-        verify_tx_signatures_len: bool,
+        feature_set: &Arc<FeatureSet>,
     ) -> Option<Vec<EntryType<'a>>> {
         let verify_and_hash = |tx: &'a Transaction| -> Option<HashedTransaction<'a>> {
             let message_hash = if !skip_verification {
@@ -524,9 +523,10 @@ impl EntrySlice for [Entry] {
                 if size > PACKET_DATA_SIZE as u64 {
                     return None;
                 }
-                tx.verify_precompiles(libsecp256k1_0_5_upgrade_enabled)
-                    .ok()?;
-                if verify_tx_signatures_len && !tx.verify_signatures_len() {
+                tx.verify_precompiles(feature_set).ok()?;
+                if feature_set.is_active(&feature_set::verify_tx_signatures_len::id())
+                    && !tx.verify_signatures_len()
+                {
                     return None;
                 }
                 tx.verify_and_hash_message().ok()?
@@ -924,22 +924,34 @@ mod tests {
         {
             let tx = make_transaction(TestCase::RemoveSignature);
             let entries = vec![next_entry(&recent_blockhash, 1, vec![tx])];
+            let features = Arc::new(feature_set::FeatureSet::default());
             assert!(entries[..]
-                .verify_and_hash_transactions(false, false, false)
+                .verify_and_hash_transactions(false, &features)
                 .is_some());
+            let mut features = feature_set::FeatureSet::default();
+            features
+                .active
+                .insert(feature_set::verify_tx_signatures_len::id(), 0);
+            let features = Arc::new(features);
             assert!(entries[..]
-                .verify_and_hash_transactions(false, false, true)
+                .verify_and_hash_transactions(false, &features)
                 .is_none());
         }
         // Too many signatures.
         {
             let tx = make_transaction(TestCase::AddSignature);
             let entries = vec![next_entry(&recent_blockhash, 1, vec![tx])];
+            let features = Arc::new(feature_set::FeatureSet::default());
             assert!(entries[..]
-                .verify_and_hash_transactions(false, false, false)
+                .verify_and_hash_transactions(false, &features)
                 .is_some());
+            let mut features = feature_set::FeatureSet::default();
+            features
+                .active
+                .insert(feature_set::verify_tx_signatures_len::id(), 0);
+            let features = Arc::new(features);
             assert!(entries[..]
-                .verify_and_hash_transactions(false, false, true)
+                .verify_and_hash_transactions(false, &features)
                 .is_none());
         }
     }
@@ -950,6 +962,7 @@ mod tests {
         let recent_blockhash = hash_new_rand(&mut rng);
         let keypair = Keypair::new();
         let pubkey = keypair.pubkey();
+        let features = Arc::new(feature_set::FeatureSet::default());
         let make_transaction = |size| {
             let ixs: Vec<_> = std::iter::repeat_with(|| {
                 system_instruction::transfer(&pubkey, &Pubkey::new_unique(), 1)
@@ -965,7 +978,7 @@ mod tests {
             let entries = vec![next_entry(&recent_blockhash, 1, vec![tx.clone()])];
             assert!(bincode::serialized_size(&tx).unwrap() <= PACKET_DATA_SIZE as u64);
             assert!(entries[..]
-                .verify_and_hash_transactions(false, false, false)
+                .verify_and_hash_transactions(false, &features)
                 .is_some());
         }
         // Big transaction.
@@ -974,7 +987,7 @@ mod tests {
             let entries = vec![next_entry(&recent_blockhash, 1, vec![tx.clone()])];
             assert!(bincode::serialized_size(&tx).unwrap() > PACKET_DATA_SIZE as u64);
             assert!(entries[..]
-                .verify_and_hash_transactions(false, false, false)
+                .verify_and_hash_transactions(false, &features)
                 .is_none());
         }
         // Assert that verify fails as soon as serialized
@@ -985,7 +998,7 @@ mod tests {
             assert_eq!(
                 bincode::serialized_size(&tx).unwrap() <= PACKET_DATA_SIZE as u64,
                 entries[..]
-                    .verify_and_hash_transactions(false, false, false)
+                    .verify_and_hash_transactions(false, &features)
                     .is_some(),
             );
         }

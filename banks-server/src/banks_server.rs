@@ -12,6 +12,7 @@ use solana_sdk::{
     account::Account,
     clock::Slot,
     commitment_config::CommitmentLevel,
+    feature_set::FeatureSet,
     fee_calculator::FeeCalculator,
     hash::Hash,
     pubkey::Pubkey,
@@ -142,11 +143,11 @@ impl BanksServer {
 
 fn verify_transaction(
     transaction: &Transaction,
-    libsecp256k1_0_5_upgrade_enabled: bool,
+    feature_set: &Arc<FeatureSet>,
 ) -> transaction::Result<()> {
     if let Err(err) = transaction.verify() {
         Err(err)
-    } else if let Err(err) = transaction.verify_precompiles(libsecp256k1_0_5_upgrade_enabled) {
+    } else if let Err(err) = transaction.verify_precompiles(feature_set) {
         Err(err)
     } else {
         Ok(())
@@ -236,10 +237,7 @@ impl Banks for BanksServer {
         transaction: Transaction,
         commitment: CommitmentLevel,
     ) -> Option<transaction::Result<()>> {
-        if let Err(err) = verify_transaction(
-            &transaction,
-            self.bank(commitment).libsecp256k1_0_5_upgrade_enabled(),
-        ) {
+        if let Err(err) = verify_transaction(&transaction, &self.bank(commitment).feature_set) {
             return Some(Err(err));
         }
 

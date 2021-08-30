@@ -58,6 +58,7 @@ use {
         epoch_info::EpochInfo,
         epoch_schedule::EpochSchedule,
         exit::Exit,
+        feature_set,
         hash::Hash,
         pubkey::Pubkey,
         sanitize::Sanitize,
@@ -1937,13 +1938,13 @@ fn optimize_filters(filters: &mut Vec<RpcFilterType>) {
 
 fn verify_transaction(
     transaction: &Transaction,
-    libsecp256k1_0_5_upgrade_enabled: bool,
+    feature_set: &Arc<feature_set::FeatureSet>,
 ) -> Result<()> {
     if transaction.verify().is_err() {
         return Err(RpcCustomError::TransactionSignatureVerificationFailure.into());
     }
 
-    if let Err(e) = transaction.verify_precompiles(libsecp256k1_0_5_upgrade_enabled) {
+    if let Err(e) = transaction.verify_precompiles(feature_set) {
         return Err(RpcCustomError::TransactionPrecompileVerificationFailure(e).into());
     }
 
@@ -3097,10 +3098,7 @@ pub mod rpc_full {
             }
 
             if !config.skip_preflight {
-                if let Err(e) = verify_transaction(
-                    &transaction,
-                    preflight_bank.libsecp256k1_0_5_upgrade_enabled(),
-                ) {
+                if let Err(e) = verify_transaction(&transaction, &preflight_bank.feature_set) {
                     return Err(e);
                 }
 
@@ -3172,9 +3170,7 @@ pub mod rpc_full {
                     ));
                 }
 
-                if let Err(e) =
-                    verify_transaction(&transaction, bank.libsecp256k1_0_5_upgrade_enabled())
-                {
+                if let Err(e) = verify_transaction(&transaction, &bank.feature_set) {
                     return Err(e);
                 }
             }
