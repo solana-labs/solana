@@ -3892,12 +3892,7 @@ impl RpcClient {
                 serialize_and_encode::<Message>(message, UiTransactionEncoding::Base64)?;
             let result = self.send::<Response<Option<u64>>>(
                 RpcRequest::GetFeeForMessage,
-                json!([
-                    blockhash.to_string(),
-                    serialized_encoded,
-                    UiTransactionEncoding::Base64,
-                    self.commitment(),
-                ]),
+                json!([blockhash.to_string(), serialized_encoded, self.commitment()]),
             )?;
             result
                 .value
