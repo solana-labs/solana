@@ -207,10 +207,7 @@ impl AccountsHashVerifier {
                 .unwrap()
                 .as_ref()
                 .map_or(true, |snapshot_package| {
-                    matches!(
-                        snapshot_package.snapshot_type,
-                        SnapshotType::IncrementalSnapshot(_)
-                    )
+                    snapshot_package.snapshot_type.is_incremental_snapshot()
                 }),
         };
 

@@ -187,3 +187,12 @@ pub enum SnapshotType {
     FullSnapshot,
     IncrementalSnapshot(Slot),
 }
+
+impl SnapshotType {
+    pub fn is_full_snapshot(&self) -> bool {
+        matches!(self, SnapshotType::FullSnapshot)
+    }
+    pub fn is_incremental_snapshot(&self) -> bool {
+        matches!(self, SnapshotType::IncrementalSnapshot(_))
+    }
+}
