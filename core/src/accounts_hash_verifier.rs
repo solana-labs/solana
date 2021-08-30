@@ -96,7 +96,7 @@ impl AccountsHashVerifier {
         pending_snapshot_package: Option<&PendingSnapshotPackage>,
         hashes: &mut Vec<(Slot, Hash)>,
         exit: &Arc<AtomicBool>,
-        fault_injection_rate_slots: Slot,
+        fault_injection_rate_slots: u64,
         snapshot_config: Option<&SnapshotConfig>,
         thread_pool: Option<&ThreadPool>,
     ) {
@@ -148,7 +148,7 @@ impl AccountsHashVerifier {
         halt_on_trusted_validator_accounts_hash_mismatch: bool,
         hashes: &mut Vec<(Slot, Hash)>,
         exit: &Arc<AtomicBool>,
-        fault_injection_rate_slots: Slot,
+        fault_injection_rate_slots: u64,
     ) {
         let hash = accounts_package.hash;
         if fault_injection_rate_slots != 0
