@@ -32,6 +32,7 @@ use solana_sdk::{
         Slot, DEFAULT_TICKS_PER_SLOT, MAX_PROCESSING_AGE, MAX_TRANSACTION_FORWARDING_DELAY,
         MAX_TRANSACTION_FORWARDING_DELAY_GPU,
     },
+    feature_set,
     message::Message,
     pubkey::Pubkey,
     short_vec::decode_shortu16_len,
@@ -1045,8 +1046,7 @@ impl BankingStage {
     fn transactions_from_packets(
         msgs: &Packets,
         transaction_indexes: &[usize],
-        libsecp256k1_0_5_upgrade_enabled: bool,
-        libsecp256k1_fail_on_bad_count: bool,
+        feature_set: &Arc<feature_set::FeatureSet>,
         cost_tracker: &Arc<RwLock<CostTracker>>,
         banking_stage_stats: &BankingStageStats,
         demote_program_write_locks: bool,
@@ -1064,11 +1064,7 @@ impl BankingStage {
                     Err(TransactionError::UnsupportedVersion)
                 })
                 .ok()?;
-                tx.verify_precompiles(
-                    libsecp256k1_0_5_upgrade_enabled,
-                    libsecp256k1_fail_on_bad_count,
-                )
-                .ok()?;
+                tx.verify_precompiles(feature_set).ok()?;
                 Some((tx, *tx_index))
             })
             .collect();
@@ -1163,8 +1159,7 @@ impl BankingStage {
             Self::transactions_from_packets(
                 msgs,
                 &packet_indexes,
-                bank.libsecp256k1_0_5_upgrade_enabled(),
-                bank.libsecp256k1_fail_on_bad_count(),
+                &bank.feature_set,
                 cost_tracker,
                 banking_stage_stats,
                 bank.demote_program_write_locks(),
@@ -1270,8 +1265,7 @@ impl BankingStage {
             Self::transactions_from_packets(
                 msgs,
                 transaction_indexes,
-                bank.libsecp256k1_0_5_upgrade_enabled(),
-                bank.libsecp256k1_fail_on_bad_count(),
+                &bank.feature_set,
                 cost_tracker,
                 banking_stage_stats,
                 bank.demote_program_write_locks(),

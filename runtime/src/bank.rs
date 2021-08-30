@@ -4928,7 +4928,7 @@ impl Bank {
         }
 
         if !skip_verification {
-            sanitized_tx.verify_precompiles(self.libsecp256k1_0_5_upgrade_enabled(), true)?;
+            sanitized_tx.verify_precompiles(&self.feature_set)?;
         }
 
         Ok(sanitized_tx)
@@ -5361,16 +5361,6 @@ impl Bank {
     pub fn verify_tx_signatures_len_enabled(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::verify_tx_signatures_len::id())
-    }
-
-    pub fn libsecp256k1_0_5_upgrade_enabled(&self) -> bool {
-        self.feature_set
-            .is_active(&feature_set::libsecp256k1_0_5_upgrade_enabled::id())
-    }
-
-    pub fn libsecp256k1_fail_on_bad_count(&self) -> bool {
-        self.feature_set
-            .is_active(&feature_set::libsecp256k1_fail_on_bad_count::id())
     }
 
     pub fn merge_nonce_error_into_system_error(&self) -> bool {

@@ -18,7 +18,9 @@ use {
     },
     serde::Serialize,
     solana_program::{system_instruction::SystemInstruction, system_program},
+    solana_sdk::feature_set,
     std::result,
+    std::sync::Arc,
     thiserror::Error,
 };
 
@@ -426,11 +428,7 @@ impl Transaction {
             .collect()
     }
 
-    pub fn verify_precompiles(
-        &self,
-        libsecp256k1_0_5_upgrade_enabled: bool,
-        libsecp256k1_fail_on_bad_count: bool,
-    ) -> Result<()> {
+    pub fn verify_precompiles(&self, feature_set: &Arc<feature_set::FeatureSet>) -> Result<()> {
         for instruction in &self.message().instructions {
             // The Transaction may not be sanitized at this point
             if instruction.program_id_index as usize >= self.message().account_keys.len() {
@@ -448,8 +446,8 @@ impl Transaction {
                 let e = verify_eth_addresses(
                     data,
                     &instruction_datas,
-                    libsecp256k1_0_5_upgrade_enabled,
-                    libsecp256k1_fail_on_bad_count,
+                    feature_set.is_active(&feature_set::libsecp256k1_0_5_upgrade_enabled::id()),
+                    feature_set.is_active(&feature_set::libsecp256k1_fail_on_bad_count::id()),
                 );
                 e.map_err(|_| TransactionError::InvalidAccountIndex)?;
             }
