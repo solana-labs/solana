@@ -5609,11 +5609,6 @@ impl Bank {
             .is_active(&feature_set::verify_tx_signatures_len::id())
     }
 
-    pub fn libsecp256k1_0_5_upgrade_enabled(&self) -> bool {
-        self.feature_set
-            .is_active(&feature_set::libsecp256k1_0_5_upgrade_enabled::id())
-    }
-
     pub fn merge_nonce_error_into_system_error(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::merge_nonce_error_into_system_error::id())

@@ -35,6 +35,7 @@ use solana_sdk::{
         Slot, DEFAULT_TICKS_PER_SLOT, MAX_PROCESSING_AGE, MAX_TRANSACTION_FORWARDING_DELAY,
         MAX_TRANSACTION_FORWARDING_DELAY_GPU,
     },
+    feature_set,
     message::Message,
     pubkey::Pubkey,
     short_vec::decode_shortu16_len,
@@ -1129,7 +1130,7 @@ impl BankingStage {
     fn transactions_from_packets(
         msgs: &Packets,
         transaction_indexes: &[usize],
-        libsecp256k1_0_5_upgrade_enabled: bool,
+        feature_set: &Arc<feature_set::FeatureSet>,
         votes_only: bool,
         cost_tracker: &Arc<RwLock<CostTracker>>,
         banking_stage_stats: &BankingStageStats,
@@ -1147,8 +1148,7 @@ impl BankingStage {
                 }
 
                 let tx: Transaction = limited_deserialize(&p.data[0..p.meta.size]).ok()?;
-                tx.verify_precompiles(libsecp256k1_0_5_upgrade_enabled)
-                    .ok()?;
+                tx.verify_precompiles(feature_set).ok()?;
 
                 Some((tx, *tx_index))
             })
@@ -1270,7 +1270,7 @@ impl BankingStage {
             Self::transactions_from_packets(
                 msgs,
                 &packet_indexes,
-                bank.libsecp256k1_0_5_upgrade_enabled(),
+                &bank.feature_set,
                 bank.vote_only_bank(),
                 cost_tracker,
                 banking_stage_stats,
@@ -1380,7 +1380,7 @@ impl BankingStage {
             Self::transactions_from_packets(
                 msgs,
                 &transaction_indexes,
-                bank.libsecp256k1_0_5_upgrade_enabled(),
+                &bank.feature_set,
                 bank.vote_only_bank(),
                 cost_tracker,
                 banking_stage_stats,
@@ -3204,6 +3204,7 @@ mod tests {
             &keypair,
             None,
         );
+        let features = Arc::new(feature_set::FeatureSet::default());
 
         // packets with no votes
         {
@@ -3212,10 +3213,11 @@ mod tests {
                 make_test_packets(vec![transfer_tx.clone(), transfer_tx.clone()], vote_indexes);
 
             let mut votes_only = false;
+
             let (txs, tx_packet_index, _) = BankingStage::transactions_from_packets(
                 &packets,
                 &packet_indexes,
-                false,
+                &features,
                 votes_only,
                 &Arc::new(RwLock::new(CostTracker::new(Arc::new(RwLock::new(
                     CostModel::default(),
@@ -3231,7 +3233,7 @@ mod tests {
             let (txs, tx_packet_index, _) = BankingStage::transactions_from_packets(
                 &packets,
                 &packet_indexes,
-                false,
+                &features,
                 votes_only,
                 &Arc::new(RwLock::new(CostTracker::new(Arc::new(RwLock::new(
                     CostModel::default(),
@@ -3256,7 +3258,7 @@ mod tests {
             let (txs, tx_packet_index, _) = BankingStage::transactions_from_packets(
                 &packets,
                 &packet_indexes,
-                false,
+                &features,
                 votes_only,
                 &Arc::new(RwLock::new(CostTracker::new(Arc::new(RwLock::new(
                     CostModel::default(),
@@ -3272,7 +3274,7 @@ mod tests {
             let (txs, tx_packet_index, _) = BankingStage::transactions_from_packets(
                 &packets,
                 &packet_indexes,
-                false,
+                &features,
                 votes_only,
                 &Arc::new(RwLock::new(CostTracker::new(Arc::new(RwLock::new(
                     CostModel::default(),
@@ -3292,12 +3294,13 @@ mod tests {
                 vec![vote_tx.clone(), vote_tx.clone(), vote_tx],
                 vote_indexes,
             );
+            let features = Arc::new(feature_set::FeatureSet::default());
 
             let mut votes_only = false;
             let (txs, tx_packet_index, _) = BankingStage::transactions_from_packets(
                 &packets,
                 &packet_indexes,
-                false,
+                &features,
                 votes_only,
                 &Arc::new(RwLock::new(CostTracker::new(Arc::new(RwLock::new(
                     CostModel::default(),
@@ -3313,7 +3316,7 @@ mod tests {
             let (txs, tx_packet_index, _) = BankingStage::transactions_from_packets(
                 &packets,
                 &packet_indexes,
-                false,
+                &features,
                 votes_only,
                 &Arc::new(RwLock::new(CostTracker::new(Arc::new(RwLock::new(
                     CostModel::default(),

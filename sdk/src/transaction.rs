@@ -5,6 +5,7 @@
 use crate::sanitize::{Sanitize, SanitizeError};
 use crate::secp256k1_instruction::verify_eth_addresses;
 use crate::{
+    feature_set,
     hash::Hash,
     instruction::{CompiledInstruction, Instruction, InstructionError},
     message::Message,
@@ -18,6 +19,7 @@ use crate::{
     system_program,
 };
 use std::result;
+use std::sync::Arc;
 use thiserror::Error;
 
 /// Reasons a transaction might be rejected.
@@ -409,7 +411,7 @@ impl Transaction {
             .collect()
     }
 
-    pub fn verify_precompiles(&self, libsecp256k1_0_5_upgrade_enabled: bool) -> Result<()> {
+    pub fn verify_precompiles(&self, feature_set: &Arc<feature_set::FeatureSet>) -> Result<()> {
         for instruction in &self.message().instructions {
             // The Transaction may not be sanitized at this point
             if instruction.program_id_index as usize >= self.message().account_keys.len() {
@@ -427,7 +429,7 @@ impl Transaction {
                 let e = verify_eth_addresses(
                     data,
                     &instruction_datas,
-                    libsecp256k1_0_5_upgrade_enabled,
+                    feature_set.is_active(&feature_set::libsecp256k1_0_5_upgrade_enabled::id()),
                 );
                 e.map_err(|_| TransactionError::InvalidAccountIndex)?;
             }
