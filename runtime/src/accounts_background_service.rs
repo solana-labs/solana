@@ -95,6 +95,7 @@ impl SnapshotRequestHandler {
         test_hash_calculation: bool,
         use_index_hash_calculation: bool,
         non_snapshot_time_us: u128,
+        last_full_snapshot_slot: &mut Option<Slot>,
     ) -> Option<u64> {
         self.snapshot_request_receiver
             .try_iter()
@@ -156,16 +157,12 @@ impl SnapshotRequestHandler {
                 };
                 hash_time.stop();
 
-                let last_full_snapshot_slot = snapshot_utils::calculate_last_full_snapshot_slot(
-                    snapshot_root_bank.slot(),
-                    self.snapshot_config.full_snapshot_archive_interval_slots,
-                );
                 let mut clean_time = Measure::start("clean_time");
                 // Don't clean the slot we're snapshotting because it may have zero-lamport
                 // accounts that were included in the bank delta hash when the bank was frozen,
                 // and if we clean them here, the newly created snapshot's hash may not match
                 // the frozen hash.
-                snapshot_root_bank.clean_accounts(true, false, Some(last_full_snapshot_slot));
+                snapshot_root_bank.clean_accounts(true, false, *last_full_snapshot_slot);
                 clean_time.stop();
 
                 if accounts_db_caching_enabled {
@@ -179,14 +176,18 @@ impl SnapshotRequestHandler {
                     % self.snapshot_config.full_snapshot_archive_interval_slots
                     == 0
                 {
+                    *last_full_snapshot_slot = Some(snapshot_root_bank.slot());
                     Some(SnapshotType::FullSnapshot)
                 } else if block_height
                     % self
                         .snapshot_config
                         .incremental_snapshot_archive_interval_slots
                     == 0
+                    && last_full_snapshot_slot.is_some()
                 {
-                    Some(SnapshotType::IncrementalSnapshot(last_full_snapshot_slot))
+                    Some(SnapshotType::IncrementalSnapshot(
+                        last_full_snapshot_slot.unwrap(),
+                    ))
                 } else {
                     None
                 };
@@ -303,6 +304,7 @@ impl AbsRequestHandler {
         test_hash_calculation: bool,
         use_index_hash_calculation: bool,
         non_snapshot_time_us: u128,
+        last_full_snapshot_slot: &mut Option<Slot>,
     ) -> Option<u64> {
         self.snapshot_request_handler
             .as_ref()
@@ -312,6 +314,7 @@ impl AbsRequestHandler {
                     test_hash_calculation,
                     use_index_hash_calculation,
                     non_snapshot_time_us,
+                    last_full_snapshot_slot,
                 )
             })
     }
@@ -342,6 +345,7 @@ impl AccountsBackgroundService {
         accounts_db_caching_enabled: bool,
         test_hash_calculation: bool,
         use_index_hash_calculation: bool,
+        mut last_full_snapshot_slot: Option<Slot>,
     ) -> Self {
         info!("AccountsBackgroundService active");
         let exit = exit.clone();
@@ -400,6 +404,7 @@ impl AccountsBackgroundService {
                         test_hash_calculation,
                         use_index_hash_calculation,
                         non_snapshot_time,
+                        &mut last_full_snapshot_slot,
                     );
                     if snapshot_block_height.is_some() {
                         last_snapshot_end_time = Some(Instant::now());
@@ -441,17 +446,6 @@ impl AccountsBackgroundService {
                                 // slots >= bank.slot()
                                 bank.force_flush_accounts_cache();
                             }
-                            let last_full_snapshot_slot = request_handler
-                                .snapshot_request_handler
-                                .as_ref()
-                                .map(|snapshot_request_handler| {
-                                    snapshot_utils::calculate_last_full_snapshot_slot(
-                                        bank.slot(),
-                                        snapshot_request_handler
-                                            .snapshot_config
-                                            .full_snapshot_archive_interval_slots,
-                                    )
-                                });
                             bank.clean_accounts(true, false, last_full_snapshot_slot);
                             last_cleaned_block_height = bank.block_height();
                         }

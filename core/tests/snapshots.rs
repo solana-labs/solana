@@ -268,7 +268,8 @@ mod tests {
                 // set_root should send a snapshot request
                 bank_forks.set_root(bank.slot(), &request_sender, None);
                 bank.update_accounts_hash();
-                snapshot_request_handler.handle_snapshot_requests(false, false, false, 0);
+                snapshot_request_handler
+                    .handle_snapshot_requests(false, false, false, 0, &mut None);
             }
         }
 
@@ -706,14 +707,19 @@ mod tests {
                 // set_root sends a snapshot request
                 bank_forks.set_root(bank.slot(), &request_sender, None);
                 bank.update_accounts_hash();
-                snapshot_request_handler.handle_snapshot_requests(false, false, false, 0);
+                snapshot_request_handler.handle_snapshot_requests(
+                    false,
+                    false,
+                    false,
+                    0,
+                    &mut last_full_snapshot_slot,
+                );
             }
 
             // Since AccountsBackgroundService isn't running, manually make a full snapshot archive
             // at the right interval
             if slot % FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS == 0 {
                 make_full_snapshot_archive(&bank, &snapshot_test_config.snapshot_config).unwrap();
-                last_full_snapshot_slot = Some(slot);
             }
             // Similarly, make an incremental snapshot archive at the right interval, but only if
             // there's been at least one full snapshot first, and a full snapshot wasn't already
@@ -940,6 +946,7 @@ mod tests {
             false,
             false,
             true,
+            None,
         );
 
         let mint_keypair = &snapshot_test_config.genesis_config_info.mint_keypair;
