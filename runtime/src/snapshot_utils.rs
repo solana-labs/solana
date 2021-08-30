@@ -1561,6 +1561,10 @@ pub fn snapshot_bank(
     // Package the relevant snapshots
     let highest_bank_snapshot_info = get_highest_bank_snapshot_info(&bank_snapshots_dir)
         .expect("no snapshots found in config bank_snapshots_dir");
+
+    // The result of get_highest_bank_snapshot_info() must be the same as the bank snapshot created
+    // by add_bank_snapshot() above.  Otherwise, the AccountsPackage would hardlink the wrong bank
+    // snapshot relative to the root_bank's slot and snapshot storages.
     assert_eq!(highest_bank_snapshot_info.slot, root_bank.slot());
 
     let accounts_package = AccountsPackage::new(
