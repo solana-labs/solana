@@ -38,7 +38,7 @@ pub struct ShredWAL {
     max_slots: BTreeMap<u128, u64>,
 }
 
-// TODO: revisit this value / correlate it to the cache size and/or flush interval
+// TODO: this value picked somewhat arbitrarily ...
 // Shreds are 1228 bytes, so WAL filesize will be at most 1228 * 1024 * 128 = 153.5 MB
 pub const DEFAULT_MAX_WAL_SHREDS: usize = 1024 * 128;
 
@@ -83,14 +83,18 @@ impl ShredWAL {
         let mut buffer_map = HashMap::new();
         // Log filenames are the timestamp at which they're created; we want to proceed
         // through log files in the same order that they were created (ascending)
-        // fs::read_dir() doesn't guaranteed results to be sorted, so we explicitly sort
+        // fs::read_dir() doesn't guarantee results to be sorted, so we must do so
         let dir = fs::read_dir(&self.wal_path)?;
         let mut logs: Vec<_> = dir.filter_map(|log| log.ok()).collect();
         logs.sort_by_key(|log| log.path());
         for log in logs {
-            // TODO: better error handling below line? We can probably fail
-            // if there is some unknown file in this directory
-            let log_id: u128 = log.file_name().to_str().unwrap().parse().unwrap();
+            // Panic if there are any extraneous files in the WAL directory
+            let log_id: u128 = log
+                .file_name()
+                .to_str()
+                .unwrap()
+                .parse()
+                .expect("Unable to parse sequence ID from WAL file");
             let mut log_max_slot = 0;
 
             let path = self.wal_path.join(log_id.to_string());
@@ -120,8 +124,11 @@ impl ShredWAL {
                                 }
                             }
                             _ => {
-                                warn!("Invalid WAL entry found of type ID: {:#X}", entry_type);
-                                // TODO: panic here ?
+                                panic!(
+                                    "Invalid WAL entry type {:#X} found in {:?}",
+                                    entry_type,
+                                    self.wal_path.join(log_id.to_string())
+                                );
                             }
                         }
                     }
