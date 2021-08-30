@@ -11,10 +11,12 @@ use {
         secp256k1_instruction::verify_eth_addresses,
         secp256k1_program,
         signature::Signature,
+        solana_sdk::feature_set,
         transaction::{Result, Transaction, TransactionError, VersionedTransaction},
     },
     solana_program::{system_instruction::SystemInstruction, system_program},
     std::convert::TryFrom,
+    std::sync::Arc,
 };
 
 /// Sanitized transaction and the hash of its message
@@ -203,11 +205,7 @@ impl SanitizedTransaction {
     }
 
     /// Verify the encoded secp256k1 signatures in this transaction
-    pub fn verify_precompiles(
-        &self,
-        libsecp256k1_0_5_upgrade_enabled: bool,
-        libsecp256k1_fail_on_bad_count: bool,
-    ) -> Result<()> {
+    pub fn verify_precompiles(&self, feature_set: &Arc<feature_set::FeatureSet>) -> Result<()> {
         for (program_id, instruction) in self.message.program_instructions_iter() {
             if secp256k1_program::check_id(program_id) {
                 let instruction_datas: Vec<_> = self
@@ -220,8 +218,8 @@ impl SanitizedTransaction {
                 let e = verify_eth_addresses(
                     data,
                     &instruction_datas,
-                    libsecp256k1_0_5_upgrade_enabled,
-                    libsecp256k1_fail_on_bad_count,
+                    feature_set.is_active(&feature_set::libsecp256k1_0_5_upgrade_enabled::id()),
+                    feature_set.is_active(&feature_set::libsecp256k1_fail_on_bad_count::id()),
                 );
                 e.map_err(|_| TransactionError::InvalidAccountIndex)?;
             }

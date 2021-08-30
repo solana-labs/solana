@@ -1,3 +1,5 @@
+use solana_sdk::feature_set::FeatureSet;
+
 use {
     bincode::{deserialize, serialize},
     futures::{future, prelude::stream::StreamExt},
@@ -135,15 +137,11 @@ impl BanksServer {
 
 fn verify_transaction(
     transaction: &Transaction,
-    libsecp256k1_0_5_upgrade_enabled: bool,
-    libsecp256k1_fail_on_bad_count: bool,
+    feature_set: &Arc<FeatureSet>,
 ) -> transaction::Result<()> {
     if let Err(err) = transaction.verify() {
         Err(err)
-    } else if let Err(err) = transaction.verify_precompiles(
-        libsecp256k1_0_5_upgrade_enabled,
-        libsecp256k1_fail_on_bad_count,
-    ) {
+    } else if let Err(err) = transaction.verify_precompiles(feature_set) {
         Err(err)
     } else {
         Ok(())
@@ -236,11 +234,7 @@ impl Banks for BanksServer {
         transaction: Transaction,
         commitment: CommitmentLevel,
     ) -> Option<transaction::Result<()>> {
-        if let Err(err) = verify_transaction(
-            &transaction,
-            self.bank(commitment).libsecp256k1_0_5_upgrade_enabled(),
-            self.bank(commitment).libsecp256k1_fail_on_bad_count(),
-        ) {
+        if let Err(err) = verify_transaction(&transaction, &self.bank(commitment).feature_set) {
             return Some(Err(err));
         }
 
