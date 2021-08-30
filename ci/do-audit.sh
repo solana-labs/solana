@@ -46,7 +46,5 @@ cargo_audit_ignores=(
   # https://github.com/paritytech/jsonrpc/issues/605
   --ignore RUSTSEC-2021-0079
 
-  --ignore RUSTSEC-2021-0093
-
 )
 scripts/cargo-for-all-lock-files.sh stable audit "${cargo_audit_ignores[@]}"
