@@ -124,7 +124,7 @@ point that it gets called back.
 
 ## Program Derived Addresses
 
-Program derived addresses allow programmaticly generated signature to be used
+Program derived addresses allow programmatically generated signatures to be used
 when [calling between programs](#cross-program-invocations).
 
 Using a program derived address, a program may be given the authority over an
