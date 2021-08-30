@@ -1,6 +1,5 @@
 import React from "react";
-import {AccountInfo, Connection, ParsedAccountData, PublicKey, StakeActivationData} from "@solana/web3.js";
-import {GatewayTokenData, GatewayTokenState} from '@identity.com/solana-gateway-ts/dist/lib/GatewayTokenData'
+import {AccountInfo, Connection, PublicKey, StakeActivationData} from "@solana/web3.js";
 import {Cluster, useCluster} from "../cluster";
 import {HistoryProvider} from "./history";
 import {TokensProvider} from "./tokens";
@@ -23,7 +22,7 @@ import {
 } from "validators/accounts/upgradeable-program";
 import {RewardsProvider} from "./rewards";
 import {GatewayTokenAccount} from "../../validators/accounts/gateway";
-import {GatewayToken, State as GatewayState } from "@identity.com/solana-gateway-ts";
+import {GatewayToken, State as GatewayState, GatewayTokenData, GatewayTokenState } from "@identity.com/solana-gateway-ts";
 
 export { useAccountHistory } from "./history";
 

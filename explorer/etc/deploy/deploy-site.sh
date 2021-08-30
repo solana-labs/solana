@@ -3,7 +3,7 @@ set -e
 set -u
 
 if [ "${STAGE}" == "prod" ]; then
-  DISTRIBUTION=EZ0FP8B01RWC9
+  DISTRIBUTION=EOP56P4FC19CM
   BUCKET=explorer.identity.com
 elif [ ${STAGE} == "preprod" ]; then
   DISTRIBUTION=???

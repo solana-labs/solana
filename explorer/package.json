@@ -4,7 +4,7 @@
   "private": true,
   "dependencies": {
     "@bonfida/bot": "^0.5.3",
-    "@identity.com/solana-gateway-ts": "^0.3.0",
+    "@identity.com/solana-gateway-ts": "^0.3.1",
     "@metamask/jazzicon": "^2.0.0",
     "@project-serum/serum": "^0.13.57",
     "@react-hook/debounce": "^4.0.0",
@@ -54,7 +54,9 @@
     "build": "react-scripts build",
     "test": "react-scripts test",
     "format": "prettier -c \"**/*.+(js|jsx|ts|tsx|json|css|md)\"",
-    "format:fix": "prettier --write \"**/*.+(js|jsx|ts|tsx|json|css|md)\""
+    "format:fix": "prettier --write \"**/*.+(js|jsx|ts|tsx|json|css|md)\"",
+    "predeploy": "npm run build",
+    "deploy": "STAGE=${STAGE:-dev} etc/deploy/deploy-site.sh"
   },
   "eslintConfig": {
     "extends": "react-app"
