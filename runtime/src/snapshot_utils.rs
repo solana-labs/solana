@@ -1579,7 +1579,8 @@ pub fn snapshot_bank(
         snapshot_version,
         hash_for_testing,
         snapshot_type,
-    )?;
+    )
+    .expect("failed to hard link bank snapshot into a tmpdir");
 
     accounts_package_sender.send(accounts_package)?;
 
