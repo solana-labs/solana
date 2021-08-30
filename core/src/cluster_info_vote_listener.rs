@@ -31,7 +31,6 @@ use {
         bank_forks::BankForks,
         commitment::VOTE_THRESHOLD_SIZE,
         epoch_stakes::{EpochAuthorizedVoters, EpochStakes},
-        stakes::Stakes,
         vote_sender_types::{ReplayVoteReceiver, ReplayedVote},
     },
     solana_sdk::{
@@ -609,7 +608,7 @@ impl ClusterInfoVoteListener {
             // The last vote slot, which is the greatest slot in the stack
             // of votes in a vote transaction, qualifies for optimistic confirmation.
             if slot == last_vote_slot {
-                let vote_accounts = Stakes::vote_accounts(epoch_stakes.stakes());
+                let vote_accounts = epoch_stakes.stakes().vote_accounts();
                 let stake = vote_accounts
                     .get(vote_pubkey)
                     .map(|(stake, _)| *stake)

@@ -23,7 +23,7 @@ use {
     solana_vote_program::vote_state::VoteState,
     std::{
         collections::HashMap,
-        sync::{RwLock, RwLockReadGuard},
+        sync::{Arc, RwLock, RwLockReadGuard},
     },
 };
 
@@ -200,7 +200,7 @@ impl Stakes {
                 .collect();
 
             // overwrite vote accounts so that staked nodes singleton is reset
-            self.vote_accounts = VoteAccounts::from(vote_accounts_for_next_epoch);
+            self.vote_accounts = VoteAccounts::from(Arc::new(vote_accounts_for_next_epoch));
         });
     }
 
@@ -327,8 +327,8 @@ impl Stakes {
         }
     }
 
-    pub fn vote_accounts(&self) -> &VoteAccountsHashMap {
-        self.vote_accounts.as_ref()
+    pub fn vote_accounts(&self) -> &VoteAccounts {
+        &self.vote_accounts
     }
 
     pub fn stake_delegations(&self) -> &HashMap<Pubkey, Delegation> {
