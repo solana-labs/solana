@@ -1,7 +1,6 @@
 import { SignatureResult, TransactionInstruction } from "@solana/web3.js";
 import { Address } from "components/common/Address";
 import { InstructionCard } from "../InstructionCard";
-import { getPerpMarketFromInstruction } from "./types";
 
 export function GenericMngoAccountDetailsCard(props: {
   ix: TransactionInstruction;

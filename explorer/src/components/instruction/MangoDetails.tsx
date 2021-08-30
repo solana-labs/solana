@@ -3,6 +3,7 @@ import { useCluster } from "providers/cluster";
 import { reportError } from "utils/sentry";
 import { InstructionCard } from "./InstructionCard";
 import { AddOracleDetailsCard } from "./mango/AddOracleDetailsCard";
+import { AddPerpMarketDetailsCard } from "./mango/AddPerpMarketDetailsCard";
 import { AddSpotMarketDetailsCard } from "./mango/AddSpotMarketDetailsCard";
 import { CancelPerpOrderDetailsCard } from "./mango/CancelPerpOrderDetailsCard";
 import { CancelSpotOrderDetailsCard } from "./mango/CancelSpotOrderDetailsCard";
@@ -14,6 +15,7 @@ import { GenericSpotMngoDetailsCard } from "./mango/GenericSpotMngoDetailsCard";
 import { PlacePerpOrderDetailsCard } from "./mango/PlacePerpOrderDetailsCard";
 import { PlaceSpotOrderDetailsCard } from "./mango/PlaceSpotOrderDetailsCard";
 import {
+  decodeAddPerpMarket,
   decodeAddSpotMarket,
   decodeCancelPerpOrder,
   decodeCancelSpotOrder,
@@ -39,8 +41,6 @@ export function MangoDetailsCard(props: {
   try {
     title = parseMangoInstructionTitle(ix);
 
-    // todo
-    // AddPerpMarket
     switch (title) {
       case "InitMangoAccount":
         return (
@@ -87,6 +87,10 @@ export function MangoDetailsCard(props: {
             info={decodeCancelSpotOrder(ix)}
             {...props}
           />
+        );
+      case "AddPerpMarket":
+        return (
+          <AddPerpMarketDetailsCard info={decodeAddPerpMarket(ix)} {...props} />
         );
       case "PlacePerpOrder":
         return (

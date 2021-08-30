@@ -14,8 +14,6 @@ import {
   TransactionInstruction,
 } from "@solana/web3.js";
 
-// todo: fix types in entire file
-
 const mainnetGroupConfig = Config.ids().getGroup(
   "mainnet",
   "mainnet.0"
@@ -280,6 +278,42 @@ export const decodeAddSpotMarket = (
     maxRate: decoded.AddSpotMarket.maxRate.toNumber(),
   };
   return addSpotMarket;
+};
+
+export type AddPerpMarket = {
+  marketIndex: number;
+  maintLeverage: number;
+  initLeverage: number;
+  liquidationFee: number;
+  makerFee: number;
+  takerFee: number;
+  baseLotSize: number;
+  quoteLotSize: number;
+  rate: number;
+  maxDepthBps: number;
+  targetPeriodLength: number;
+  mngoPerPeriod: number;
+};
+
+export const decodeAddPerpMarket = (
+  ix: TransactionInstruction
+): AddPerpMarket => {
+  const decoded = MangoInstructionLayout.decode(ix.data);
+  const addPerpMarket: AddPerpMarket = {
+    marketIndex: decoded.AddPerpMarket.marketIndex.toNumber(),
+    maintLeverage: decoded.AddPerpMarket.maintLeverage.toNumber(),
+    initLeverage: decoded.AddPerpMarket.initLeverage.toNumber(),
+    liquidationFee: decoded.AddPerpMarket.liquidationFee.toNumber(),
+    makerFee: decoded.AddPerpMarket.makerFee.toNumber(),
+    takerFee: decoded.AddPerpMarket.takerFee.toNumber(),
+    baseLotSize: decoded.AddPerpMarket.baseLotSize.toNumber(),
+    quoteLotSize: decoded.AddPerpMarket.quoteLotSize.toNumber(),
+    rate: decoded.AddPerpMarket.rate.toNumber(),
+    maxDepthBps: decoded.AddPerpMarket.maxDepthBps.toNumber(),
+    targetPeriodLength: decoded.AddPerpMarket.targetPeriodLength.toNumber(),
+    mngoPerPeriod: decoded.AddPerpMarket.mngoPerPeriod.toNumber(),
+  };
+  return addPerpMarket;
 };
 
 export type OrderLotDetails = {
