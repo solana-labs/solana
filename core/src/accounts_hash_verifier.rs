@@ -41,7 +41,7 @@ impl AccountsHashVerifier {
         cluster_info: &Arc<ClusterInfo>,
         trusted_validators: Option<HashSet<Pubkey>>,
         halt_on_trusted_validators_accounts_hash_mismatch: bool,
-        fault_injection_rate_slots: Slot,
+        fault_injection_rate_slots: u64,
         snapshot_config: Option<SnapshotConfig>,
     ) -> Self {
         let exit = exit.clone();
