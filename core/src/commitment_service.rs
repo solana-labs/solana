@@ -183,8 +183,8 @@ impl AggregateCommitmentService {
 
         let mut commitment = HashMap::new();
         let mut rooted_stake: Vec<(Slot, u64)> = Vec::new();
-        for (_, (lamports, account)) in bank.vote_accounts().into_iter() {
-            if lamports == 0 {
+        for (lamports, account) in bank.vote_accounts().values() {
+            if *lamports == 0 {
                 continue;
             }
             if let Ok(vote_state) = account.vote_state().as_ref() {
@@ -193,7 +193,7 @@ impl AggregateCommitmentService {
                     &mut rooted_stake,
                     vote_state,
                     ancestors,
-                    lamports,
+                    *lamports,
                 );
             }
         }

@@ -27,7 +27,7 @@ jsonrpc-server-utils= "18.0.0"
 log = "0.4.14"
 num_cpus = "1.13.0"
 rand = "0.7.0"
-serde = "1.0.127"
+serde = "1.0.130"
 solana-clap-utils = { path = "../clap-utils", version = "=1.8.0" }
 solana-cli-config = { path = "../cli-config", version = "=1.8.0" }
 solana-client = { path = "../client", version = "=1.8.0" }
@@ -52,7 +52,7 @@ solana-vote-program = { path = "../programs/vote", version = "=1.8.0" }
 symlink = "0.1.0"
 
 [target."cfg(unix)".dependencies]
-libc = "0.2.99"
+libc = "0.2.101"
 signal-hook = "0.2.3"
 
 [package.metadata.docs.rs]

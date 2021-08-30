@@ -196,8 +196,8 @@ impl Stakes {
         }
     }
 
-    pub fn vote_accounts(&self) -> &HashMap<Pubkey, (u64, VoteAccount)> {
-        self.vote_accounts.as_ref()
+    pub fn vote_accounts(&self) -> &VoteAccounts {
+        &self.vote_accounts
     }
 
     pub fn stake_delegations(&self) -> &HashMap<Pubkey, Delegation> {

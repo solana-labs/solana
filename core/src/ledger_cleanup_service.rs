@@ -15,8 +15,8 @@ use std::time::Duration;
 
 // - To try and keep the RocksDB size under 400GB:
 //   Seeing about 1600b/shred, using 2000b/shred for margin, so 200m shreds can be stored in 400gb.
-//   at 5k shreds/slot at 50k tps, this is 500k slots (~5 hours).
-//   At idle, 60 shreds/slot this is about 4m slots (18 days)
+//   at 5k shreds/slot at 50k tps, this is 40k slots (~4.4 hours).
+//   At idle, 60 shreds/slot this is about 3.33m slots (~15 days)
 // This is chosen to allow enough time for
 // - A validator to download a snapshot from a peer and boot from it
 // - To make sure that if a validator needs to reboot from its own snapshot, it has enough slots locally

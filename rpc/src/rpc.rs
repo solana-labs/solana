@@ -2,11 +2,8 @@
 
 use {
     crate::{
-        max_slots::MaxSlots,
-        optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
-        parsed_token_accounts::*,
-        rpc_health::*,
-        send_transaction_service::{SendTransactionService, TransactionInfo},
+        max_slots::MaxSlots, optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
+        parsed_token_accounts::*, rpc_health::*,
     },
     bincode::{config::Options, serialize},
     jsonrpc_core::{futures::future, types::error, BoxFuture, Error, Metadata, Result},
@@ -68,6 +65,10 @@ use {
         system_instruction,
         sysvar::stake_history,
         transaction::{self, SanitizedTransaction, TransactionError, VersionedTransaction},
+    },
+    solana_send_transaction_service::{
+        send_transaction_service::{SendTransactionService, TransactionInfo},
+        tpu_info::NullTpuInfo,
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_transaction_status::{
@@ -294,7 +295,14 @@ impl JsonRpcRequestProcessor {
         ));
         let tpu_address = cluster_info.my_contact_info().tpu;
         let (sender, receiver) = channel();
-        SendTransactionService::new(tpu_address, &bank_forks, None, receiver, 1000, 1);
+        SendTransactionService::new::<NullTpuInfo>(
+            tpu_address,
+            &bank_forks,
+            None,
+            receiver,
+            1000,
+            1,
+        );
 
         Self {
             config: JsonRpcConfig::default(),
@@ -2208,12 +2216,14 @@ fn _send_transaction(
     wire_transaction: Vec<u8>,
     last_valid_block_height: u64,
     durable_nonce_info: Option<(Pubkey, Hash)>,
+    max_retries: Option<usize>,
 ) -> Result<String> {
     let transaction_info = TransactionInfo::new(
         signature,
         wire_transaction,
         last_valid_block_height,
         durable_nonce_info,
+        max_retries,
     );
     meta.transaction_sender
         .lock()
@@ -3101,7 +3111,6 @@ pub mod rpc_full {
             meta: Self::Metadata,
             blockhash: String,
             data: String,
-            encoding: UiTransactionEncoding,
             commitment: Option<CommitmentConfig>,
         ) -> Result<RpcResponse<Option<u64>>>;
     }
@@ -3283,6 +3292,7 @@ pub mod rpc_full {
                 wire_transaction,
                 last_valid_block_height,
                 None,
+                None,
             )
         }
 
@@ -3382,6 +3392,7 @@ pub mod rpc_full {
                 wire_transaction,
                 last_valid_block_height,
                 durable_nonce_info,
+                config.max_retries,
             )
         }
 
@@ -3624,13 +3635,13 @@ pub mod rpc_full {
             meta: Self::Metadata,
             blockhash: String,
             data: String,
-            encoding: UiTransactionEncoding,
             commitment: Option<CommitmentConfig>,
         ) -> Result<RpcResponse<Option<u64>>> {
             debug!("get_fee_for_message rpc request received");
             let blockhash = Hash::from_str(&blockhash)
                 .map_err(|e| Error::invalid_params(format!("{:?}", e)))?;
-            let (_, message) = decode_and_deserialize::<Message>(data, encoding)?;
+            let (_, message) =
+                decode_and_deserialize::<Message>(data, UiTransactionEncoding::Base64)?;
             SanitizedMessage::try_from(message)
                 .map_err(|err| {
                     Error::invalid_params(format!("invalid transaction message: {}", err))
@@ -4400,7 +4411,14 @@ pub mod tests {
             Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
             max_complete_transaction_status_slot,
         );
-        SendTransactionService::new(tpu_address, &bank_forks, None, receiver, 1000, 1);
+        SendTransactionService::new::<NullTpuInfo>(
+            tpu_address,
+            &bank_forks,
+            None,
+            receiver,
+            1000,
+            1,
+        );
 
         cluster_info.insert_info(ContactInfo::new_with_pubkey_socketaddr(
             &leader_pubkey,
@@ -5983,7 +6001,14 @@ pub mod tests {
             Arc::new(LeaderScheduleCache::default()),
             Arc::new(AtomicU64::default()),
         );
-        SendTransactionService::new(tpu_address, &bank_forks, None, receiver, 1000, 1);
+        SendTransactionService::new::<NullTpuInfo>(
+            tpu_address,
+            &bank_forks,
+            None,
+            receiver,
+            1000,
+            1,
+        );
 
         let mut bad_transaction = system_transaction::transfer(
             &mint_keypair,
@@ -6265,7 +6290,14 @@ pub mod tests {
             Arc::new(LeaderScheduleCache::default()),
             Arc::new(AtomicU64::default()),
         );
-        SendTransactionService::new(tpu_address, &bank_forks, None, receiver, 1000, 1);
+        SendTransactionService::new::<NullTpuInfo>(
+            tpu_address,
+            &bank_forks,
+            None,
+            receiver,
+            1000,
+            1,
+        );
         assert_eq!(
             request_processor.get_block_commitment(0),
             RpcBlockCommitment {

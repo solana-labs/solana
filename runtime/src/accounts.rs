@@ -670,6 +670,7 @@ impl Accounts {
                 ancestors,
                 None,
                 can_cached_slot_be_unflushed,
+                None,
             )
             .1
     }
@@ -801,6 +802,7 @@ impl Accounts {
             "load_to_collect_rent_eagerly_scan_elapsed",
             ancestors,
             range,
+            true,
             |collector: &mut Vec<(Pubkey, AccountSharedData)>, option| {
                 Self::load_while_filtering(collector, option, |_| true)
             },
