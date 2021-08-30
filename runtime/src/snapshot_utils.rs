@@ -1554,7 +1554,8 @@ pub fn snapshot_bank(
         root_bank,
         &snapshot_storages,
         snapshot_version,
-    )?;
+    )
+    .expect("failed to serialize bank snapshot to disk");
     add_snapshot_time.stop();
     inc_new_counter_info!("add-snapshot-ms", add_snapshot_time.as_ms() as usize);
 

@@ -33,7 +33,6 @@ const SHRUNKEN_ACCOUNT_PER_SEC: usize = 250;
 const SHRUNKEN_ACCOUNT_PER_INTERVAL: usize =
     SHRUNKEN_ACCOUNT_PER_SEC / (1000 / INTERVAL_MS as usize);
 const CLEAN_INTERVAL_BLOCKS: u64 = 100;
-const SNAPSHOT_BANK_MAX_ATTEMPTS: usize = 10;
 
 // This value is chosen to spread the dropping cost over 3 expiration checks
 // RecycleStores are fully populated almost all of its lifetime. So, otherwise
@@ -192,46 +191,31 @@ impl SnapshotRequestHandler {
                     None
                 };
 
-                // Generate an accounts package
-                let mut attempts = 0;
+                // Snapshot the bank and send over an accounts package
                 let mut snapshot_time = Measure::start("snapshot_time");
-                loop {
-                    attempts += 1;
-                    let result = snapshot_utils::snapshot_bank(
-                        &snapshot_root_bank,
-                        status_cache_slot_deltas.clone(),
-                        &self.accounts_package_sender,
-                        &self.snapshot_config.bank_snapshots_dir,
-                        &self.snapshot_config.snapshot_archives_dir,
-                        self.snapshot_config.snapshot_version,
-                        self.snapshot_config.archive_format,
-                        hash_for_testing,
-                        snapshot_type,
-                    );
+                let result = snapshot_utils::snapshot_bank(
+                    &snapshot_root_bank,
+                    status_cache_slot_deltas.clone(),
+                    &self.accounts_package_sender,
+                    &self.snapshot_config.bank_snapshots_dir,
+                    &self.snapshot_config.snapshot_archives_dir,
+                    self.snapshot_config.snapshot_version,
+                    self.snapshot_config.archive_format,
+                    hash_for_testing,
+                    snapshot_type,
+                );
+                snapshot_time.stop();
 
-                    if result.is_ok() {
-                        break;
-                    }
-
+                // if there was an error while snapshotting the bank, it was due to the
+                // channel, and thus the node is coming down.  Can log it here and continue on.
+                if result.is_err() {
                     warn!(
-                        "Error generating snapshot for bank. attempts: {}, slot: {}, err: {:?}",
-                        attempts,
+                        "Error taking bank snapshot. slot: {}, snapshot type: {:?}, err: {:?}",
                         snapshot_root_bank.slot(),
+                        snapshot_type,
                         result
                     );
-
-                    // Only require success for full snapshots.  Otherwise just log the error and
-                    // continue on.
-                    if snapshot_type != Some(SnapshotType::FullSnapshot) {
-                        break;
-                    }
-
-                    assert!(
-                        attempts <= SNAPSHOT_BANK_MAX_ATTEMPTS,
-                        "Unable to snapshot bank intended for full snapshot!"
-                    );
                 }
-                snapshot_time.stop();
 
                 // Cleanup outdated snapshots
                 let mut purge_old_snapshots_time = Measure::start("purge_old_snapshots_time");
