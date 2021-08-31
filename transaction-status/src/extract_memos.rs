@@ -15,8 +15,8 @@ pub fn spl_memo_id_v3() -> Pubkey {
     Pubkey::new_from_array(spl_memo::id().to_bytes())
 }
 
-pub fn extract_and_fmt_memos(message: &Message) -> Option<String> {
-    let memos = extract_memos(message);
+pub fn extract_and_fmt_memos<T: ExtractMemos>(message: &T) -> Option<String> {
+    let memos = message.extract_memos();
     if memos.is_empty() {
         None
     } else {
@@ -24,20 +24,26 @@ pub fn extract_and_fmt_memos(message: &Message) -> Option<String> {
     }
 }
 
-fn extract_memos(message: &Message) -> Vec<String> {
-    let mut memos = vec![];
-    if message.account_keys.contains(&spl_memo_id_v1())
-        || message.account_keys.contains(&spl_memo_id_v3())
-    {
-        for instruction in &message.instructions {
-            let program_id = message.account_keys[instruction.program_id_index as usize];
-            if program_id == spl_memo_id_v1() || program_id == spl_memo_id_v3() {
-                let memo_len = instruction.data.len();
-                let parsed_memo = parse_memo_data(&instruction.data)
-                    .unwrap_or_else(|_| "(unparseable)".to_string());
-                memos.push(format!("[{}] {}", memo_len, parsed_memo));
+pub trait ExtractMemos {
+    fn extract_memos(&self) -> Vec<String>;
+}
+
+impl ExtractMemos for Message {
+    fn extract_memos(&self) -> Vec<String> {
+        let mut memos = vec![];
+        if self.account_keys.contains(&spl_memo_id_v1())
+            || self.account_keys.contains(&spl_memo_id_v3())
+        {
+            for instruction in &self.instructions {
+                let program_id = self.account_keys[instruction.program_id_index as usize];
+                if program_id == spl_memo_id_v1() || program_id == spl_memo_id_v3() {
+                    let memo_len = instruction.data.len();
+                    let parsed_memo = parse_memo_data(&instruction.data)
+                        .unwrap_or_else(|_| "(unparseable)".to_string());
+                    memos.push(format!("[{}] {}", memo_len, parsed_memo));
+                }
             }
         }
+        memos
     }
-    memos
 }
