@@ -1220,6 +1220,9 @@ struct ShrinkStats {
     bytes_removed: AtomicU64,
     bytes_written: AtomicU64,
     skipped_shrink: AtomicU64,
+    dead_accounts: AtomicU64,
+    alive_accounts: AtomicU64,
+    cancelled_shrink: AtomicU64,
 }
 
 impl ShrinkStats {
@@ -1306,6 +1309,21 @@ impl ShrinkStats {
                 (
                     "skipped_shrink",
                     self.skipped_shrink.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "alive_accounts",
+                    self.alive_accounts.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "dead_accounts",
+                    self.dead_accounts.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "cancelled_shrink",
+                    self.cancelled_shrink.swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
             );
@@ -2271,10 +2289,16 @@ impl AccountsDb {
                     // not exist in the re-written slot. Unref it to keep the index consistent with
                     // rewriting the storage entries.
                     unrefed_pubkeys.push(pubkey);
-                    locked_entry.unref()
+                    locked_entry.unref();
+                    self.shrink_stats
+                        .dead_accounts
+                        .fetch_add(1, Ordering::Relaxed);
                 } else {
                     alive_accounts.push((pubkey, stored_account));
                     alive_total += stored_account.account_size;
+                    self.shrink_stats
+                        .alive_accounts
+                        .fetch_add(1, Ordering::Relaxed);
                 }
             }
         }
@@ -2286,6 +2310,9 @@ impl AccountsDb {
         if Self::should_not_shrink(aligned_total, original_bytes, num_stores) {
             self.shrink_stats
                 .skipped_shrink
+                .fetch_add(1, Ordering::Relaxed);
+            self.shrink_stats
+                .cancelled_shrink
                 .fetch_add(1, Ordering::Relaxed);
             for pubkey in unrefed_pubkeys {
                 if let Some(locked_entry) = self.accounts_index.get_account_read_entry(pubkey) {
