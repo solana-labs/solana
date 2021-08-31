@@ -6,17 +6,10 @@ use crate::{
     cluster_slots::ClusterSlots,
     repair_weight::RepairWeight,
     result::Result,
-<<<<<<< HEAD
-    serve_repair::{RepairType, ServeRepair, DEFAULT_NONCE},
-};
-use crossbeam_channel::{Receiver as CrossbeamReceiver, Sender as CrossbeamSender};
-=======
-    serve_repair::{RepairType, ServeRepair, REPAIR_PEERS_CACHE_CAPACITY},
+    serve_repair::{RepairType, ServeRepair, DEFAULT_NONCE, REPAIR_PEERS_CACHE_CAPACITY},
 };
 use crossbeam_channel::{Receiver as CrossbeamReceiver, Sender as CrossbeamSender};
 use lru::LruCache;
-use solana_gossip::cluster_info::ClusterInfo;
->>>>>>> a0551b405 (persists repair-peers cache across repair service loops (#18400))
 use solana_ledger::{
     blockstore::{Blockstore, SlotMeta},
     shred::Nonce,

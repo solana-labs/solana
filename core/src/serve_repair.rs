@@ -8,25 +8,12 @@ use crate::{
     weighted_shuffle::weighted_best,
 };
 use bincode::serialize;
-<<<<<<< HEAD
-use rand::distributions::{Distribution, WeightedIndex};
-use solana_ledger::{blockstore::Blockstore, shred::Nonce};
-=======
 use lru::LruCache;
 use rand::{
     distributions::{Distribution, WeightedError, WeightedIndex},
     Rng,
 };
-use solana_gossip::{
-    cluster_info::{ClusterInfo, ClusterInfoError},
-    contact_info::ContactInfo,
-    weighted_shuffle::weighted_best,
-};
-use solana_ledger::{
-    blockstore::Blockstore,
-    shred::{Nonce, Shred},
-};
->>>>>>> a0551b405 (persists repair-peers cache across repair service loops (#18400))
+use solana_ledger::{blockstore::Blockstore, shred::Nonce};
 use solana_measure::measure::Measure;
 use solana_measure::thread_mem_usage;
 use solana_metrics::{datapoint_debug, inc_new_counter_debug};
@@ -49,14 +36,12 @@ use std::{
 
 /// the number of slots to respond with when responding to `Orphan` requests
 pub const MAX_ORPHAN_REPAIR_RESPONSES: usize = 10;
-<<<<<<< HEAD
 pub const DEFAULT_NONCE: u32 = 42;
-=======
+
 // Number of slots to cache their respective repair peers and sampling weights.
 pub(crate) const REPAIR_PEERS_CACHE_CAPACITY: usize = 128;
 // Limit cache entries ttl in order to avoid re-using outdated data.
 const REPAIR_PEERS_CACHE_TTL: Duration = Duration::from_secs(10);
->>>>>>> a0551b405 (persists repair-peers cache across repair service loops (#18400))
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum RepairType {
@@ -443,43 +428,19 @@ impl ServeRepair {
         // find a peer that appears to be accepting replication and has the desired slot, as indicated
         // by a valid tvu port location
         let slot = repair_request.slot();
-<<<<<<< HEAD
-        let (repair_peers, weighted_index) = match cache.entry(slot) {
-            Entry::Occupied(entry) => entry.into_mut(),
-            Entry::Vacant(entry) => {
-                let repair_peers = self.repair_peers(&repair_validators, slot);
-                if repair_peers.is_empty() {
-                    return Err(Error::from(ClusterInfoError::NoPeers));
-                }
-=======
         let repair_peers = match peers_cache.get(&slot) {
             Some(entry) if entry.asof.elapsed() < REPAIR_PEERS_CACHE_TTL => entry,
             _ => {
                 peers_cache.pop(&slot);
                 let repair_peers = self.repair_peers(repair_validators, slot);
->>>>>>> a0551b405 (persists repair-peers cache across repair service loops (#18400))
                 let weights = cluster_slots.compute_weights(slot, &repair_peers);
                 let repair_peers = RepairPeers::new(Instant::now(), &repair_peers, &weights)?;
                 peers_cache.put(slot, repair_peers);
                 peers_cache.get(&slot).unwrap()
             }
         };
-<<<<<<< HEAD
-        let n = weighted_index.sample(&mut rand::thread_rng());
-        let addr = repair_peers[n].serve_repair; // send the request to the peer's serve_repair port
-        let repair_peer_id = repair_peers[n].id;
-        let out = self.map_repair_request(
-            &repair_request,
-            &repair_peer_id,
-            repair_stats,
-            DEFAULT_NONCE,
-        )?;
-=======
         let (peer, addr) = repair_peers.sample(&mut rand::thread_rng());
-        let nonce =
-            outstanding_requests.add_request(repair_request, solana_sdk::timing::timestamp());
-        let out = self.map_repair_request(&repair_request, &peer, repair_stats, nonce)?;
->>>>>>> a0551b405 (persists repair-peers cache across repair service loops (#18400))
+        let out = self.map_repair_request(&repair_request, &peer, repair_stats, DEFAULT_NONCE)?;
         Ok((addr, out))
     }
 
