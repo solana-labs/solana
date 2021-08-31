@@ -17,7 +17,7 @@ use {
     solana_runtime::{
         accounts_index::AccountSecondaryIndexes,
         snapshot_archive_info::SnapshotArchiveInfoGetter,
-        snapshot_config::{LastFullSnapshotSlot, SnapshotConfig},
+        snapshot_config::SnapshotConfig,
         snapshot_utils::{self, ArchiveFormat},
     },
     solana_sdk::{
@@ -127,7 +127,6 @@ fn setup_snapshot_validator_config(
         archive_format: ArchiveFormat::TarBzip2,
         snapshot_version: snapshot_utils::SnapshotVersion::default(),
         maximum_snapshots_to_retain: snapshot_utils::DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
-        last_full_snapshot_slot: LastFullSnapshotSlot::default(),
     };
 
     // Create the account paths

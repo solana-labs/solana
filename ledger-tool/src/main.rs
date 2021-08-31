@@ -31,7 +31,7 @@ use solana_runtime::{
     bank_forks::BankForks,
     hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
     snapshot_archive_info::SnapshotArchiveInfoGetter,
-    snapshot_config::{LastFullSnapshotSlot, SnapshotConfig},
+    snapshot_config::SnapshotConfig,
     snapshot_utils::{
         self, ArchiveFormat, SnapshotVersion, DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
     },
@@ -719,7 +719,6 @@ fn load_bank_forks(
             archive_format: ArchiveFormat::TarBzip2,
             snapshot_version: SnapshotVersion::default(),
             maximum_snapshots_to_retain: DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
-            last_full_snapshot_slot: LastFullSnapshotSlot::default(),
         })
     };
     let account_paths = if let Some(account_paths) = arg_matches.value_of("account_paths") {

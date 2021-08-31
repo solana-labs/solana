@@ -23,7 +23,7 @@ use {
         bank_forks::BankForks,
         commitment::BlockCommitmentCache,
         hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
-        snapshot_config::{LastFullSnapshotSlot, SnapshotConfig},
+        snapshot_config::SnapshotConfig,
         snapshot_utils::{self, ArchiveFormat},
     },
     solana_sdk::{clock::Slot, exit::Exit, genesis_config::GenesisConfig, hash::Hash},
@@ -265,7 +265,6 @@ impl ReplicaNode {
             snapshot_version: snapshot_utils::SnapshotVersion::default(),
             maximum_snapshots_to_retain:
                 snapshot_utils::DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
-            last_full_snapshot_slot: LastFullSnapshotSlot::default(),
         };
 
         let bank_info =

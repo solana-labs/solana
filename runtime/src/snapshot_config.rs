@@ -1,10 +1,7 @@
 use crate::snapshot_utils::ArchiveFormat;
 use crate::snapshot_utils::SnapshotVersion;
 use solana_sdk::clock::Slot;
-use std::{
-    path::PathBuf,
-    sync::{Arc, RwLock},
-};
+use std::path::PathBuf;
 
 /// Snapshot configuration and runtime information
 #[derive(Clone, Debug)]
@@ -29,9 +26,4 @@ pub struct SnapshotConfig {
 
     /// Maximum number of full snapshot archives to retain
     pub maximum_snapshots_to_retain: usize,
-
-    /// Runtime information of the last full snapshot slot
-    pub last_full_snapshot_slot: LastFullSnapshotSlot,
 }
-
-pub type LastFullSnapshotSlot = Arc<RwLock<Option<Slot>>>;
