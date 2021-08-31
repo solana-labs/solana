@@ -1800,7 +1800,7 @@ impl ClusterInfo {
             self.stats
                 .pull_requests_count
                 .add_relaxed(requests.len() as u64);
-            let response = self.handle_pull_requests(thread_pool, recycler, requests, stakes);
+            let mut response = self.handle_pull_requests(thread_pool, recycler, requests, stakes);
             if !response.is_empty() {
                 response.timer = packet_timer;
                 response.timer.mark_outgoing_start();
