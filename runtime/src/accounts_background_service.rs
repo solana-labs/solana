@@ -7,7 +7,7 @@ use crate::{
     bank_forks::BankForks,
     snapshot_config::SnapshotConfig,
     snapshot_package::{AccountsPackageSender, SnapshotType},
-    snapshot_utils,
+    snapshot_utils::{self, SnapshotError},
 };
 use crossbeam_channel::{Receiver, SendError, Sender};
 use log::*;
@@ -95,7 +95,7 @@ impl SnapshotRequestHandler {
         use_index_hash_calculation: bool,
         non_snapshot_time_us: u128,
         last_full_snapshot_slot: &mut Option<Slot>,
-    ) -> Option<Result<u64, snapshot_utils::SnapshotError>> {
+    ) -> Option<Result<u64, SnapshotError>> {
         self.snapshot_request_receiver
             .try_iter()
             .last()
@@ -204,15 +204,18 @@ impl SnapshotRequestHandler {
                     hash_for_testing,
                     snapshot_type,
                 );
-                if let Err(e) = &result {
+                if let Err(e) = result {
                     warn!(
                         "Error taking bank snapshot. slot: {}, snapshot type: {:?}, err: {:?}",
                         snapshot_root_bank.slot(),
                         snapshot_type,
                         e,
                     );
+
+                    if e.is_fatal() {
+                        return Err(e);
+                    }
                 }
-                result?;
                 snapshot_time.stop();
 
                 // Cleanup outdated snapshots
@@ -242,6 +245,33 @@ impl SnapshotRequestHandler {
                 );
                 Ok(snapshot_root_bank.block_height())
             })
+    }
+}
+
+impl SnapshotError {
+    /// Check if a SnapshotError should be treated as 'fatal' by AccountsBackgroundService, and
+    /// `handle_snapshot_requests()` in particular.  Fatal errors will cause the node to shutdown.
+    /// Non-fatal errors are logged and then swallowed.
+    ///
+    /// All `SnapshotError`s are enumerated, and there is **NO** default case.  This way, if
+    /// a new error is added to SnapshotError, a conscious decision must be made on how it should
+    /// be handled.
+    fn is_fatal(&self) -> bool {
+        match self {
+            SnapshotError::Io(..) => true,
+            SnapshotError::Serialize(..) => true,
+            SnapshotError::ArchiveGenerationFailure(..) => true,
+            SnapshotError::StoragePathSymlinkInvalid => true,
+            SnapshotError::UnpackError(..) => true,
+            SnapshotError::AccountsPackageSendError(..) => true,
+            SnapshotError::IoWithSource(..) => true,
+            SnapshotError::PathToFileNameError(..) => true,
+            SnapshotError::FileNameToStrError(..) => true,
+            SnapshotError::ParseSnapshotArchiveFileNameError(..) => true,
+            SnapshotError::MismatchedBaseSlot(..) => true,
+            SnapshotError::NoSnapshotArchives => true,
+            SnapshotError::MismatchedSlotHash(..) => true,
+        }
     }
 }
 
@@ -287,7 +317,7 @@ impl AbsRequestHandler {
         use_index_hash_calculation: bool,
         non_snapshot_time_us: u128,
         last_full_snapshot_slot: &mut Option<Slot>,
-    ) -> Option<Result<u64, snapshot_utils::SnapshotError>> {
+    ) -> Option<Result<u64, SnapshotError>> {
         self.snapshot_request_handler
             .as_ref()
             .and_then(|snapshot_request_handler| {
