@@ -471,6 +471,7 @@ where
     let mut insert_shreds = Shreds::default();
     insert_shreds.timer = packet_timer;
     insert_shreds.timer.mark_outgoing_start();
+    insert_shreds.shreds = shreds;
     insert_shred_sender.send((insert_shreds, repair_infos))?;
 
     stats.num_packets += packets.iter().map(|pkt| pkt.packets.len()).sum::<usize>();
