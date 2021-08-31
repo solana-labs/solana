@@ -28,7 +28,7 @@ solana-sdk = { path = "../sdk", version = "=1.8.0" }
 solana-storage-proto = { path = "../storage-proto", version = "=1.8.0" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.8.0" }
 thiserror = "1.0"
-futures = "0.3.16"
+futures = "0.3.17"
 tonic = { version = "0.5.2", features = ["tls", "transport"] }
 zstd = "0.9.0"
 
