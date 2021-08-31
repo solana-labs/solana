@@ -95,7 +95,7 @@ impl SnapshotRequestHandler {
         use_index_hash_calculation: bool,
         non_snapshot_time_us: u128,
         last_full_snapshot_slot: &mut Option<Slot>,
-    ) -> Option<u64> {
+    ) -> Option<Result<u64, snapshot_utils::SnapshotError>> {
         self.snapshot_request_receiver
             .try_iter()
             .last()
@@ -204,18 +204,16 @@ impl SnapshotRequestHandler {
                     hash_for_testing,
                     snapshot_type,
                 );
-                snapshot_time.stop();
-
-                // if there was an error while snapshotting the bank, it was due to the
-                // channel, and thus the node is coming down.  Can log it here and continue on.
-                if result.is_err() {
+                if let Err(e) = &result {
                     warn!(
                         "Error taking bank snapshot. slot: {}, snapshot type: {:?}, err: {:?}",
                         snapshot_root_bank.slot(),
                         snapshot_type,
-                        result
+                        e,
                     );
                 }
+                result?;
+                snapshot_time.stop();
 
                 // Cleanup outdated snapshots
                 let mut purge_old_snapshots_time = Measure::start("purge_old_snapshots_time");
@@ -242,7 +240,7 @@ impl SnapshotRequestHandler {
                     ("total_us", total_time.as_us(), i64),
                     ("non_snapshot_time_us", non_snapshot_time_us, i64),
                 );
-                snapshot_root_bank.block_height()
+                Ok(snapshot_root_bank.block_height())
             })
     }
 }
@@ -289,7 +287,7 @@ impl AbsRequestHandler {
         use_index_hash_calculation: bool,
         non_snapshot_time_us: u128,
         last_full_snapshot_slot: &mut Option<Slot>,
-    ) -> Option<u64> {
+    ) -> Option<Result<u64, snapshot_utils::SnapshotError>> {
         self.snapshot_request_handler
             .as_ref()
             .and_then(|snapshot_request_handler| {
@@ -383,14 +381,15 @@ impl AccountsBackgroundService {
                     // request for `N` to the snapshot request channel before setting a root `R > N`, and
                     // snapshot_request_handler.handle_requests() will always look for the latest
                     // available snapshot in the channel.
-                    let snapshot_block_height = request_handler.handle_snapshot_requests(
-                        accounts_db_caching_enabled,
-                        test_hash_calculation,
-                        use_index_hash_calculation,
-                        non_snapshot_time,
-                        &mut last_full_snapshot_slot,
-                    );
-                    if snapshot_block_height.is_some() {
+                    let snapshot_block_height_option_result = request_handler
+                        .handle_snapshot_requests(
+                            accounts_db_caching_enabled,
+                            test_hash_calculation,
+                            use_index_hash_calculation,
+                            non_snapshot_time,
+                            &mut last_full_snapshot_slot,
+                        );
+                    if snapshot_block_height_option_result.is_some() {
                         last_snapshot_end_time = Some(Instant::now());
                     }
 
@@ -402,10 +401,16 @@ impl AccountsBackgroundService {
                         bank.flush_accounts_cache_if_needed();
                     }
 
-                    if let Some(snapshot_block_height) = snapshot_block_height {
+                    if let Some(snapshot_block_height_result) = snapshot_block_height_option_result
+                    {
                         // Safe, see proof above
-                        assert!(last_cleaned_block_height <= snapshot_block_height);
-                        last_cleaned_block_height = snapshot_block_height;
+                        if let Ok(snapshot_block_height) = snapshot_block_height_result {
+                            assert!(last_cleaned_block_height <= snapshot_block_height);
+                            last_cleaned_block_height = snapshot_block_height;
+                        } else {
+                            exit.store(true, Ordering::Relaxed);
+                            return;
+                        }
                     } else {
                         if accounts_db_caching_enabled {
                             bank.shrink_candidate_slots();
