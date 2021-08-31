@@ -140,6 +140,7 @@ pub struct Blockstore {
     code_shred_cf: LedgerColumn<cf::ShredCode>,
     transaction_status_cf: LedgerColumn<cf::TransactionStatus>,
     address_signatures_cf: LedgerColumn<cf::AddressSignatures>,
+    _transaction_memos_cf: LedgerColumn<cf::TransactionMemos>,
     transaction_status_index_cf: LedgerColumn<cf::TransactionStatusIndex>,
     active_transaction_status_index: RwLock<u64>,
     rewards_cf: LedgerColumn<cf::Rewards>,
@@ -342,6 +343,7 @@ impl Blockstore {
         let code_shred_cf = db.column();
         let transaction_status_cf = db.column();
         let address_signatures_cf = db.column();
+        let transaction_memos_cf = db.column();
         let transaction_status_index_cf = db.column();
         let rewards_cf = db.column();
         let blocktime_cf = db.column();
@@ -391,6 +393,7 @@ impl Blockstore {
             code_shred_cf,
             transaction_status_cf,
             address_signatures_cf,
+            _transaction_memos_cf: transaction_memos_cf,
             transaction_status_index_cf,
             active_transaction_status_index: RwLock::new(active_transaction_status_index),
             rewards_cf,
