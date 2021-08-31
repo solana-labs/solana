@@ -136,6 +136,9 @@ impl ClusterSlots {
     }
 
     pub fn compute_weights(&self, slot: Slot, repair_peers: &[ContactInfo]) -> Vec<u64> {
+        if repair_peers.is_empty() {
+            return Vec::default();
+        }
         let stakes = {
             let validator_stakes = self.validator_stakes.read().unwrap();
             repair_peers
