@@ -32,7 +32,10 @@ fn extract_memos(message: &Message) -> Vec<String> {
         for instruction in &message.instructions {
             let program_id = message.account_keys[instruction.program_id_index as usize];
             if program_id == spl_memo_id_v1() || program_id == spl_memo_id_v3() {
-                memos.push(parse_memo_data(&instruction.data).unwrap_or_default());
+                let memo_len = instruction.data.len();
+                let parsed_memo = parse_memo_data(&instruction.data)
+                    .unwrap_or_else(|_| "(unparseable)".to_string());
+                memos.push(format!("[{}] {}", memo_len, parsed_memo));
             }
         }
     }
