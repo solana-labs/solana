@@ -321,9 +321,7 @@ pub fn process_instruction(
 
     let me = &mut keyed_account_at_index(keyed_accounts, 0)?;
 
-    if invoke_context.is_feature_active(&feature_set::check_program_owner::id())
-        && me.owner()? != id()
-    {
+    if me.owner()? != id() {
         return Err(InstructionError::InvalidAccountOwner);
     }
 
