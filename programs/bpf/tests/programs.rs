@@ -34,14 +34,16 @@ use solana_sdk::{
     bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
     client::SyncClient,
     clock::MAX_PROCESSING_AGE,
+    compute_budget::{ComputeBudget, ComputeBudgetInstruction},
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
     keyed_account::KeyedAccount,
+    loader_instruction,
     message::Message,
     process_instruction::{InvokeContext, MockInvokeContext},
     pubkey::Pubkey,
     signature::{keypair_from_seed, Keypair, Signer},
-    system_instruction,
+    system_instruction, system_program, sysvar,
     sysvar::{clock, rent},
     transaction::{Transaction, TransactionError},
 };
@@ -98,8 +100,6 @@ fn write_bpf_program(
     program_keypair: &Keypair,
     elf: &[u8],
 ) {
-    use solana_sdk::loader_instruction;
-
     let chunk_size = 256; // Size of chunk just needs to fit into tx
     let mut offset = 0;
     for chunk in elf.chunks(chunk_size) {
@@ -562,11 +562,11 @@ fn test_program_bpf_duplicate_accounts() {
         let bank_client = BankClient::new_shared(&bank);
         let program_id = load_bpf_program(&bank_client, &bpf_loader::id(), &mint_keypair, program);
         let payee_account = AccountSharedData::new(10, 1, &program_id);
-        let payee_pubkey = solana_sdk::pubkey::new_rand();
+        let payee_pubkey = Pubkey::new_unique();
         bank.store_account(&payee_pubkey, &payee_account);
         let account = AccountSharedData::new(10, 1, &program_id);
 
-        let pubkey = solana_sdk::pubkey::new_rand();
+        let pubkey = Pubkey::new_unique();
         let account_metas = vec![
             AccountMeta::new(mint_keypair.pubkey(), true),
             AccountMeta::new(payee_pubkey, false),
@@ -807,7 +807,7 @@ fn test_program_bpf_invoke_sanity() {
         bank.store_account(&invoked_argument_keypair.pubkey(), &account);
 
         let from_keypair = Keypair::new();
-        let account = AccountSharedData::new(84, 0, &solana_sdk::system_program::id());
+        let account = AccountSharedData::new(84, 0, &system_program::id());
         bank.store_account(&from_keypair.pubkey(), &account);
 
         let (derived_key1, bump_seed1) =
@@ -828,7 +828,7 @@ fn test_program_bpf_invoke_sanity() {
             AccountMeta::new(derived_key1, false),
             AccountMeta::new(derived_key2, false),
             AccountMeta::new_readonly(derived_key3, false),
-            AccountMeta::new_readonly(solana_sdk::system_program::id(), false),
+            AccountMeta::new_readonly(system_program::id(), false),
             AccountMeta::new(from_keypair.pubkey(), true),
             AccountMeta::new_readonly(invoke_program_id, false),
         ];
@@ -861,8 +861,8 @@ fn test_program_bpf_invoke_sanity() {
             .collect();
         let expected_invoked_programs = match program.0 {
             Languages::C => vec![
-                solana_sdk::system_program::id(),
-                solana_sdk::system_program::id(),
+                system_program::id(),
+                system_program::id(),
                 invoked_program_id.clone(),
                 invoked_program_id.clone(),
                 invoked_program_id.clone(),
@@ -880,8 +880,8 @@ fn test_program_bpf_invoke_sanity() {
                 invoked_program_id.clone(),
             ],
             Languages::Rust => vec![
-                solana_sdk::system_program::id(),
-                solana_sdk::system_program::id(),
+                system_program::id(),
+                system_program::id(),
                 invoked_program_id.clone(),
                 invoked_program_id.clone(),
                 invoked_program_id.clone(),
@@ -901,7 +901,7 @@ fn test_program_bpf_invoke_sanity() {
                 invoked_program_id.clone(),
                 invoked_program_id.clone(),
                 invoked_program_id.clone(),
-                solana_sdk::system_program::id(),
+                system_program::id(),
             ],
         };
         assert_eq!(invoked_programs.len(), expected_invoked_programs.len());
@@ -1044,7 +1044,7 @@ fn test_program_bpf_invoke_sanity() {
         }
 
         // Attempt to realloc into unauthorized address space
-        let account = AccountSharedData::new(84, 0, &solana_sdk::system_program::id());
+        let account = AccountSharedData::new(84, 0, &system_program::id());
         bank.store_account(&from_keypair.pubkey(), &account);
         bank.store_account(&derived_key1, &AccountSharedData::default());
         let instruction = Instruction::new_with_bytes(
@@ -1073,7 +1073,7 @@ fn test_program_bpf_invoke_sanity() {
             .iter()
             .map(|ix| message.account_keys[ix.program_id_index as usize].clone())
             .collect();
-        assert_eq!(invoked_programs, vec![solana_sdk::system_program::id()]);
+        assert_eq!(invoked_programs, vec![system_program::id()]);
         assert_eq!(
             result.unwrap_err(),
             TransactionError::InstructionError(0, InstructionError::ProgramFailedToComplete)
@@ -1109,15 +1109,15 @@ fn test_program_bpf_program_id_spoofing() {
     );
 
     let from_pubkey = Pubkey::new_unique();
-    let account = AccountSharedData::new(10, 0, &solana_sdk::system_program::id());
+    let account = AccountSharedData::new(10, 0, &system_program::id());
     bank.store_account(&from_pubkey, &account);
 
     let to_pubkey = Pubkey::new_unique();
-    let account = AccountSharedData::new(0, 0, &solana_sdk::system_program::id());
+    let account = AccountSharedData::new(0, 0, &system_program::id());
     bank.store_account(&to_pubkey, &account);
 
     let account_metas = vec![
-        AccountMeta::new_readonly(solana_sdk::system_program::id(), false),
+        AccountMeta::new_readonly(system_program::id(), false),
         AccountMeta::new_readonly(malicious_system_pubkey, false),
         AccountMeta::new(from_pubkey, false),
         AccountMeta::new(to_pubkey, false),
@@ -1196,11 +1196,11 @@ fn test_program_bpf_ro_modify() {
     );
 
     let test_keypair = Keypair::new();
-    let account = AccountSharedData::new(10, 0, &solana_sdk::system_program::id());
+    let account = AccountSharedData::new(10, 0, &system_program::id());
     bank.store_account(&test_keypair.pubkey(), &account);
 
     let account_metas = vec![
-        AccountMeta::new_readonly(solana_sdk::system_program::id(), false),
+        AccountMeta::new_readonly(system_program::id(), false),
         AccountMeta::new(test_keypair.pubkey(), true),
     ];
 
@@ -1232,8 +1232,6 @@ fn test_program_bpf_ro_modify() {
 #[cfg(feature = "bpf_rust")]
 #[test]
 fn test_program_bpf_call_depth() {
-    use solana_sdk::compute_budget::ComputeBudget;
-
     solana_logger::setup();
 
     let GenesisConfigInfo {
@@ -1288,7 +1286,7 @@ fn test_program_bpf_compute_budget() {
     );
     let message = Message::new(
         &[
-            solana_sdk::compute_budget::ComputeBudgetInstruction::request_units(1),
+            ComputeBudgetInstruction::request_units(1),
             Instruction::new_with_bincode(program_id, &0, vec![]),
         ],
         Some(&mint_keypair.pubkey()),
@@ -1346,8 +1344,8 @@ fn assert_instruction_count() {
     let mut passed = true;
     println!("\n  {:36} expected actual  diff", "BPF program");
     for program in programs.iter() {
-        let program_id = solana_sdk::pubkey::new_rand();
-        let key = solana_sdk::pubkey::new_rand();
+        let program_id = Pubkey::new_unique();
+        let key = Pubkey::new_unique();
         let mut account = RefCell::new(AccountSharedData::default());
         let parameter_accounts = vec![KeyedAccount::new(&key, false, &mut account)];
         let count = run_program(program.0, &program_id, parameter_accounts, &[]).unwrap();
@@ -1392,10 +1390,7 @@ fn test_program_bpf_instruction_introspection() {
     );
 
     // Passing transaction
-    let account_metas = vec![AccountMeta::new_readonly(
-        solana_sdk::sysvar::instructions::id(),
-        false,
-    )];
+    let account_metas = vec![AccountMeta::new_readonly(sysvar::instructions::id(), false)];
     let instruction0 = Instruction::new_with_bytes(program_id, &[0u8, 0u8], account_metas.clone());
     let instruction1 = Instruction::new_with_bytes(program_id, &[0u8, 1u8], account_metas.clone());
     let instruction2 = Instruction::new_with_bytes(program_id, &[0u8, 2u8], account_metas);
@@ -1407,10 +1402,7 @@ fn test_program_bpf_instruction_introspection() {
     assert!(result.is_ok());
 
     // writable special instructions11111 key, should not be allowed
-    let account_metas = vec![AccountMeta::new(
-        solana_sdk::sysvar::instructions::id(),
-        false,
-    )];
+    let account_metas = vec![AccountMeta::new(sysvar::instructions::id(), false)];
     let instruction = Instruction::new_with_bytes(program_id, &[0], account_metas);
     let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
     assert_eq!(
@@ -1426,21 +1418,14 @@ fn test_program_bpf_instruction_introspection() {
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err().unwrap(),
-        TransactionError::InstructionError(
-            0,
-            solana_sdk::instruction::InstructionError::NotEnoughAccountKeys
-        )
+        TransactionError::InstructionError(0, InstructionError::NotEnoughAccountKeys)
     );
-    assert!(bank
-        .get_account(&solana_sdk::sysvar::instructions::id())
-        .is_none());
+    assert!(bank.get_account(&sysvar::instructions::id()).is_none());
 }
 
 #[cfg(feature = "bpf_rust")]
 #[test]
 fn test_program_bpf_test_use_latest_executor() {
-    use solana_sdk::{loader_instruction, system_instruction};
-
     solana_logger::setup();
 
     let GenesisConfigInfo {
@@ -1536,8 +1521,6 @@ fn test_program_bpf_test_use_latest_executor() {
 #[cfg(feature = "bpf_rust")]
 #[test]
 fn test_program_bpf_test_use_latest_executor2() {
-    use solana_sdk::{loader_instruction, system_instruction};
-
     solana_logger::setup();
 
     let GenesisConfigInfo {
@@ -2001,8 +1984,7 @@ fn test_program_bpf_c_dup() {
     bank.add_builtin(&name, id, entrypoint);
 
     let account_address = Pubkey::new_unique();
-    let account =
-        AccountSharedData::new_data(42, &[1_u8, 2, 3], &solana_sdk::system_program::id()).unwrap();
+    let account = AccountSharedData::new_data(42, &[1_u8, 2, 3], &system_program::id()).unwrap();
     bank.store_account(&account_address, &account);
 
     let bank_client = BankClient::new(bank);
@@ -2540,7 +2522,7 @@ fn test_program_bpf_ro_account_modify() {
     bank.store_account(&argument_keypair.pubkey(), &account);
 
     let from_keypair = Keypair::new();
-    let account = AccountSharedData::new(84, 0, &solana_sdk::system_program::id());
+    let account = AccountSharedData::new(84, 0, &system_program::id());
     bank.store_account(&from_keypair.pubkey(), &account);
 
     let mint_pubkey = mint_keypair.pubkey();
