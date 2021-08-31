@@ -212,7 +212,7 @@ impl GenerateIndexTimings {
     }
 }
 
-#[derive(Default, Debug, PartialEq, Clone)]
+#[derive(Default, Debug, PartialEq, Clone, Copy)]
 pub struct AccountInfo {
     /// index identifying the append storage
     store_id: AppendVecId,
@@ -7933,12 +7933,12 @@ pub mod tests {
         let (slot1, account_info1) = accounts
             .accounts_index
             .get(&pubkey1, Some(&ancestors), None)
-            .map(|(account_list1, index1)| account_list1.slot_list()[index1].clone())
+            .map(|(account_list1, index1)| account_list1.slot_list()[index1])
             .unwrap();
         let (slot2, account_info2) = accounts
             .accounts_index
             .get(&pubkey2, Some(&ancestors), None)
-            .map(|(account_list2, index2)| account_list2.slot_list()[index2].clone())
+            .map(|(account_list2, index2)| account_list2.slot_list()[index2])
             .unwrap();
         assert_eq!(slot1, 0);
         assert_eq!(slot1, slot2);
@@ -8490,12 +8490,12 @@ pub mod tests {
         let (slot1, account_info1) = accounts
             .accounts_index
             .get(&pubkey, None, None)
-            .map(|(account_list1, index1)| account_list1.slot_list()[index1].clone())
+            .map(|(account_list1, index1)| account_list1.slot_list()[index1])
             .unwrap();
         let (slot2, account_info2) = accounts
             .accounts_index
             .get(&pubkey2, None, None)
-            .map(|(account_list2, index2)| account_list2.slot_list()[index2].clone())
+            .map(|(account_list2, index2)| account_list2.slot_list()[index2])
             .unwrap();
         assert_eq!(slot1, current_slot);
         assert_eq!(slot1, slot2);
@@ -10324,7 +10324,7 @@ pub mod tests {
             &Pubkey::default(),
             &[],
             &AccountSecondaryIndexes::default(),
-            info1.clone(),
+            info1,
             &mut reclaims,
             UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
@@ -10344,7 +10344,7 @@ pub mod tests {
             &Pubkey::default(),
             &[],
             &AccountSecondaryIndexes::default(),
-            info2.clone(),
+            info2,
             &mut reclaims,
             UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
@@ -11142,7 +11142,7 @@ pub mod tests {
                 .get_account_read_entry(&account.meta.pubkey)
                 .map(|locked_entry| {
                     // Should only be one entry per key, since every key was only stored to slot 0
-                    locked_entry.slot_list()[0].clone()
+                    locked_entry.slot_list()[0]
                 })
                 .unwrap();
             let removed_data_size = account_info.1.stored_size;
