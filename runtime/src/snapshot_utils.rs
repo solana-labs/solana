@@ -1558,11 +1558,6 @@ pub fn snapshot_bank(
     add_snapshot_time.stop();
     inc_new_counter_info!("add-snapshot-ms", add_snapshot_time.as_ms() as usize);
 
-    // The result of add_bank_snapshot() must equal the root bank slot.
-    // Otherwise, the AccountsPackage would hardlink the wrong bank
-    // snapshot relative to the root_bank's slot and snapshot storages.
-    assert_eq!(bank_snapshot_info.slot, root_bank.slot());
-
     let accounts_package = AccountsPackage::new(
         root_bank,
         &bank_snapshot_info,
