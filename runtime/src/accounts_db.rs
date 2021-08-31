@@ -2733,7 +2733,7 @@ impl AccountsDb {
     where
         F: Fn(&mut A, Option<(&Pubkey, AccountSharedData, Slot)>),
         A: Default,
-        R: RangeBounds<Pubkey>,
+        R: RangeBounds<Pubkey> + std::fmt::Debug,
     {
         let mut collector = A::default();
         self.accounts_index.range_scan_accounts(

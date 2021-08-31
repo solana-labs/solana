@@ -850,7 +850,7 @@ impl<T: IsCached> AccountsIndex<T> {
     ) -> Result<(), ScanError>
     where
         F: FnMut(&Pubkey, (&T, Slot)),
-        R: RangeBounds<Pubkey>,
+        R: RangeBounds<Pubkey> + std::fmt::Debug,
     {
         {
             let locked_removed_bank_ids = self.removed_bank_ids.lock().unwrap();
@@ -1073,7 +1073,7 @@ impl<T: IsCached> AccountsIndex<T> {
         collect_all_unsorted: bool,
     ) where
         F: FnMut(&Pubkey, (&T, Slot)),
-        R: RangeBounds<Pubkey>,
+        R: RangeBounds<Pubkey> + std::fmt::Debug,
     {
         self.do_scan_accounts(
             metric_name,
@@ -1098,7 +1098,7 @@ impl<T: IsCached> AccountsIndex<T> {
         collect_all_unsorted: bool,
     ) where
         F: FnMut(&Pubkey, (&T, Slot)),
-        R: RangeBounds<Pubkey>,
+        R: RangeBounds<Pubkey> + std::fmt::Debug,
     {
         // TODO: expand to use mint index to find the `pubkey_list` below more efficiently
         // instead of scanning the entire range
@@ -1291,7 +1291,7 @@ impl<T: IsCached> AccountsIndex<T> {
         func: F,
     ) where
         F: FnMut(&Pubkey, (&T, Slot)),
-        R: RangeBounds<Pubkey>,
+        R: RangeBounds<Pubkey> + std::fmt::Debug,
     {
         // Only the rent logic should be calling this, which doesn't need the safety checks
         self.do_unchecked_scan_accounts(
