@@ -2607,14 +2607,18 @@ impl AccountsDb {
 
         let mut measure_shrink_all_candidates = Measure::start("shrink_all_candidate_slots-ms");
         let num_candidates = shrink_slots.len();
-        let mut shrink_candidates_count: usize = 0;
-        for (slot, slot_shrink_candidates) in shrink_slots {
-            shrink_candidates_count += slot_shrink_candidates.len();
-            let mut measure = Measure::start("shrink_candidate_slots-ms");
-            self.do_shrink_slot_stores(slot, slot_shrink_candidates.values(), false);
-            measure.stop();
-            inc_new_counter_info!("shrink_candidate_slots-ms", measure.as_ms() as usize);
-        }
+        let shrink_candidates_count: usize = self.thread_pool.install(|| {
+            shrink_slots
+                .into_par_iter()
+                .map(|(slot, slot_shrink_candidates)| {
+                    let mut measure = Measure::start("shrink_candidate_slots-ms");
+                    self.do_shrink_slot_stores(slot, slot_shrink_candidates.values(), false);
+                    measure.stop();
+                    inc_new_counter_info!("shrink_candidate_slots-ms", measure.as_ms() as usize);
+                    slot_shrink_candidates.len()
+                })
+                .sum()
+        });
         measure_shrink_all_candidates.stop();
         inc_new_counter_info!(
             "shrink_all_candidate_slots-ms",
