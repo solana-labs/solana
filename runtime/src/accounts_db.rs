@@ -10014,7 +10014,7 @@ pub mod tests {
         ));
 
         // The store2's alive_ratio is 0.5: as its page aligned alive size is 1 page.
-        let store2_alive_bytes = 1024;
+        let store2_alive_bytes = (PAGE_SIZE - 1) as usize;
         store2
             .alive_bytes
             .store(store2_alive_bytes, Ordering::Relaxed);
@@ -10032,7 +10032,7 @@ pub mod tests {
         ));
 
         // The store3's alive ratio is 1.0 as its page-aligned alive size is 2 pages
-        let store3_alive_bytes = 1024 * 7;
+        let store3_alive_bytes = (PAGE_SIZE + 1) as usize;
         entry3
             .alive_bytes
             .store(store3_alive_bytes, Ordering::Relaxed);
@@ -10042,7 +10042,7 @@ pub mod tests {
             .or_default()
             .insert(entry3.append_vec_id(), entry3.clone());
 
-        // Set the target alive ratio to 0.6 so that we can just get rid of store1, the remaing two stores
+        // Set the target alive ratio to 0.6 so that we can just get rid of store1, the remaining two stores
         // alive ratio can be > the target ratio: the actual ratio is 0.75 because of 3 alive pages / 4 total pages.
         // The target ratio is also set to larger than store2's alive ratio: 0.5 so that it would be added
         // to the candidates list for next round.
@@ -10090,7 +10090,7 @@ pub mod tests {
         ));
 
         // The store2's alive_ratio is 0.5: as its page aligned alive size is 1 page.
-        let store2_alive_bytes = 1024;
+        let store2_alive_bytes = (PAGE_SIZE - 1) as usize;
         store2
             .alive_bytes
             .store(store2_alive_bytes, Ordering::Relaxed);
@@ -10108,7 +10108,7 @@ pub mod tests {
         ));
 
         // The store3's alive ratio is 1.0 as its page-aligned alive size is 2 pages
-        let store3_alive_bytes = 1024 * 7;
+        let store3_alive_bytes = (PAGE_SIZE + 1) as usize;
         entry3
             .alive_bytes
             .store(store3_alive_bytes, Ordering::Relaxed);
@@ -10149,7 +10149,7 @@ pub mod tests {
         ));
 
         // store1 has 1 page-aligned alive bytes, its alive ratio is 1/4: 0.25
-        let store1_alive_bytes = 3 * 1024;
+        let store1_alive_bytes = (PAGE_SIZE - 1) as usize;
         store1
             .alive_bytes
             .store(store1_alive_bytes, Ordering::Relaxed);
@@ -10169,7 +10169,7 @@ pub mod tests {
         ));
 
         // store2 has 2 page-aligned bytes, its alive ratio is 2/4: 0.5
-        let store2_alive_bytes = 5 * 1024;
+        let store2_alive_bytes = (PAGE_SIZE + 1) as usize;
         store2
             .alive_bytes
             .store(store2_alive_bytes, Ordering::Relaxed);
