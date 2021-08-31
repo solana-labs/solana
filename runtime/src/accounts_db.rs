@@ -1222,7 +1222,6 @@ struct ShrinkStats {
     skipped_shrink: AtomicU64,
     dead_accounts: AtomicU64,
     alive_accounts: AtomicU64,
-    cancelled_shrink: AtomicU64,
 }
 
 impl ShrinkStats {
@@ -1319,11 +1318,6 @@ impl ShrinkStats {
                 (
                     "dead_accounts",
                     self.dead_accounts.swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
-                    "cancelled_shrink",
-                    self.cancelled_shrink.swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
             );
@@ -2310,9 +2304,6 @@ impl AccountsDb {
         if Self::should_not_shrink(aligned_total, original_bytes, num_stores) {
             self.shrink_stats
                 .skipped_shrink
-                .fetch_add(1, Ordering::Relaxed);
-            self.shrink_stats
-                .cancelled_shrink
                 .fetch_add(1, Ordering::Relaxed);
             for pubkey in unrefed_pubkeys {
                 if let Some(locked_entry) = self.accounts_index.get_account_read_entry(pubkey) {
