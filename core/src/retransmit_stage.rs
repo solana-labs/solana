@@ -43,7 +43,7 @@ use {
             Arc, Mutex, RwLock,
         },
         thread::{self, Builder, JoinHandle},
-        time::Duration,
+        time::{Duration, Instant},
     },
 };
 
@@ -70,9 +70,25 @@ struct RetransmitStats {
     compute_turbine_peers_total: AtomicU64,
 }
 
+#[derive(Default)]
+struct RetransmitHistStats {
+    batch_span_us_hist: histogram::Histogram,
+    batch_first_recv_us_hist: histogram::Histogram,
+}
+
+impl RetransmitHistStats {
+    fn new() -> RetransmitHistStats {
+        RetransmitHistStats {
+            batch_span_us_hist: histogram::Histogram::new(),
+            batch_first_recv_us_hist: histogram::Histogram::new(),
+        }
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn update_retransmit_stats(
     stats: &RetransmitStats,
+    hist_stats: &Mutex<RetransmitHistStats>,
     total_time: u64,
     num_shreds: usize,
     num_shreds_skipped: usize,
@@ -101,6 +117,7 @@ fn update_retransmit_stats(
         .epoch_cache_update
         .fetch_add(epoch_cach_update, Ordering::Relaxed);
     if stats.last_ts.should_update(2000) {
+        let mut hist_stats = hist_stats.lock().unwrap();
         datapoint_info!("retransmit-num_nodes", ("count", peers_len, i64));
         datapoint_info!(
             "retransmit-stage",
@@ -144,7 +161,65 @@ fn update_retransmit_stats(
                 stats.compute_turbine_peers_total.swap(0, Ordering::Relaxed) as i64,
                 i64
             ),
+            (
+                "batch_span_us_50pct",
+                hist_stats.batch_span_us_hist.percentile(50.0).unwrap_or(0),
+                i64
+            ),
+            (
+                "batch_span_us_90pct",
+                hist_stats.batch_span_us_hist.percentile(90.0).unwrap_or(0),
+                i64
+            ),
+            (
+                "batch_span_us_min",
+                hist_stats.batch_span_us_hist.minimum().unwrap_or(0),
+                i64
+            ),
+            (
+                "batch_span_us_max",
+                hist_stats.batch_span_us_hist.maximum().unwrap_or(0),
+                i64
+            ),
+            (
+                "batch_span_us_mean",
+                hist_stats.batch_span_us_hist.mean().unwrap_or(0),
+                i64
+            ),
+            (
+                "batch_first_recv_us_50pct",
+                hist_stats
+                    .batch_first_recv_us_hist
+                    .percentile(50.0)
+                    .unwrap_or(0),
+                i64
+            ),
+            (
+                "batch_first_recv_us_90pct",
+                hist_stats
+                    .batch_first_recv_us_hist
+                    .percentile(90.0)
+                    .unwrap_or(0),
+                i64
+            ),
+            (
+                "batch_first_recv_us_min",
+                hist_stats.batch_first_recv_us_hist.minimum().unwrap_or(0),
+                i64
+            ),
+            (
+                "batch_first_recv_us_max",
+                hist_stats.batch_first_recv_us_hist.maximum().unwrap_or(0),
+                i64
+            ),
+            (
+                "batch_first_recv_us_mean",
+                hist_stats.batch_first_recv_us_hist.mean().unwrap_or(0),
+                i64
+            ),
         );
+        hist_stats.batch_span_us_hist.clear();
+        hist_stats.batch_first_recv_us_hist.clear();
     }
 }
 
@@ -231,6 +306,7 @@ fn retransmit(
     sock: &UdpSocket,
     id: u32,
     stats: &RetransmitStats,
+    hist_stats: &Mutex<RetransmitHistStats>,
     cluster_nodes_cache: &ClusterNodesCache<RetransmitStage>,
     hasher_reset_ts: &AtomicU64,
     shreds_received: &Mutex<ShredFilterAndHasher>,
@@ -242,6 +318,10 @@ fn retransmit(
     let shreds_receiver = shreds_receiver.lock().unwrap();
     let mut shreds_vec = vec![shreds_receiver.recv_timeout(RECV_TIMEOUT)?];
     let mut num_shreds = shreds_vec[0].shreds.len();
+
+    let mut lowest_shred_time = shreds_vec[0].timer.get_incoming_start().unwrap();
+    let mut highest_shred_time = shreds_vec[0].timer.get_incoming_end().unwrap();
+
     let mut timer_start = Measure::start("retransmit");
     while let Ok(more_shreds) = shreds_receiver.try_recv() {
         // TODO coalesce here
@@ -272,6 +352,13 @@ fn retransmit(
     let mut max_slot = 0;
 
     for shreds in shreds_vec {
+        if shreds.timer.get_incoming_start().unwrap() < lowest_shred_time {
+            lowest_shred_time = shreds.timer.get_incoming_start().unwrap();
+        }
+        if shreds.timer.get_incoming_end().unwrap() > highest_shred_time {
+            highest_shred_time = shreds.timer.get_incoming_end().unwrap();
+        }
+
         for shred in shreds.shreds {
             if should_skip_retransmit(&shred, shreds_received) {
                 num_shreds_skipped += 1;
@@ -328,8 +415,22 @@ fn retransmit(
 
             // TODO calculate times from shreds.timer
         }
-        shreds.timer; //TODO record stats
+        hist_stats
+            .lock()
+            .unwrap()
+            .batch_first_recv_us_hist
+            .increment(
+                (Instant::now() - shreds.timer.get_incoming_start().unwrap()).as_micros() as u64,
+            )
+            .unwrap();
     }
+
+    hist_stats
+        .lock()
+        .unwrap()
+        .batch_span_us_hist
+        .increment((highest_shred_time - lowest_shred_time).as_micros() as u64)
+        .unwrap();
 
     max_slots.retransmit.fetch_max(max_slot, Ordering::Relaxed);
     timer_start.stop();
@@ -344,6 +445,7 @@ fn retransmit(
         cluster_nodes_cache.get(root_bank.slot(), &root_bank, &working_bank, cluster_info);
     update_retransmit_stats(
         stats,
+        hist_stats,
         timer_start.as_us(),
         num_shreds,
         num_shreds_skipped,
@@ -384,6 +486,9 @@ pub fn retransmitter(
         LruCache::new(DEFAULT_LRU_SIZE),
         PacketHasher::default(),
     )));
+
+    let hist_stats = Arc::new(Mutex::new(RetransmitHistStats::new()));
+
     let first_shreds_received = Arc::new(Mutex::new(BTreeSet::new()));
     (0..sockets.len())
         .map(|s| {
@@ -393,6 +498,7 @@ pub fn retransmitter(
             let shreds_receiver = shreds_receiver.clone();
             let cluster_info = cluster_info.clone();
             let stats = stats.clone();
+            let hist_stats = hist_stats.clone();
             let cluster_nodes_cache = Arc::clone(&cluster_nodes_cache);
             let hasher_reset_ts = Arc::clone(&hasher_reset_ts);
             let shreds_received = shreds_received.clone();
@@ -413,6 +519,7 @@ pub fn retransmitter(
                             &sockets[s],
                             s as u32,
                             &stats,
+                            &hist_stats,
                             &cluster_nodes_cache,
                             &hasher_reset_ts,
                             &shreds_received,
