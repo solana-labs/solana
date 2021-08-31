@@ -1,43 +1,21 @@
 use crate::accounts_index::AccountMapEntry;
-use crate::accounts_index::{IsCached, RefCount, SlotList, ACCOUNTS_INDEX_CONFIG_FOR_TESTING};
-use crate::bucket_map_holder::{BucketMapWriteHolder};
+use crate::accounts_index::{IsCached, SlotList, ACCOUNTS_INDEX_CONFIG_FOR_TESTING};
+use crate::bucket_map_holder::{BucketMapWriteHolder, K};
 
 use crate::pubkey_bins::PubkeyBinCalculator16;
 use solana_bucket_map::bucket_map::BucketMap;
 use solana_sdk::clock::Slot;
 use solana_sdk::pubkey::Pubkey;
-use std::collections::btree_map::BTreeMap;
 use std::fmt::Debug;
-use std::ops::Bound;
+// use std::ops::Bound;
 use std::ops::{Range, RangeBounds};
 use std::sync::Arc;
 
-type K = Pubkey;
-
-#[derive(Clone, Debug)]
-pub struct HybridAccountEntry<V: Clone + Debug> {
-    entry: V,
-    //exists_on_disk: bool,
-}
-//type V2<T: Clone + Debug> = HybridAccountEntry<T>;
 pub type V2<T> = AccountMapEntry<T>;
-/*
-trait RealEntry<T: Clone + Debug> {
-    fn real_entry(&self) -> T;
-}
-
-impl<T:Clone + Debug> RealEntry<T> for T {
-    fn real_entry(&self) -> T
-    {
-        self
-    }
-}
-*/
 pub type SlotT<T> = (Slot, T);
 
 #[derive(Debug)]
-pub struct HybridBTreeMap<V: 'static + Clone + IsCached + Debug> {
-    in_memory: BTreeMap<K, V2<V>>,
+pub struct HybridBTreeMap<V: IsCached> {
     disk: Arc<BucketMapWriteHolder<V>>,
     bin_index: usize,
     bins: usize,
@@ -87,20 +65,15 @@ impl<'a, K: 'a, V: 'a> Iterator for HybridBTreeMap<'a, V> {
 }
 */
 
-pub enum HybridEntry<'a, V: 'static + Clone + IsCached + Debug> {
-    /// A vacant entry.
-    Vacant(HybridVacantEntry<'a, V>),
-
-    /// An occupied entry.
-    Occupied(HybridOccupiedEntry<'a, V>),
-}
-
 pub struct Keys {
     keys: Vec<K>,
     index: usize,
 }
 
 impl Keys {
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
     pub fn len(&self) -> usize {
         self.keys.len()
     }
@@ -119,119 +92,19 @@ impl Iterator for Keys {
     }
 }
 
-pub struct Values<V: Clone + std::fmt::Debug> {
-    values: Vec<SlotList<V>>,
-    index: usize,
-}
-
-impl<V: Clone + std::fmt::Debug> Iterator for Values<V> {
-    type Item = V2<V>;
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.index >= self.values.len() {
-            None
-        } else {
-            let r = Some(AccountMapEntry {
-                slot_list: self.values[self.index].clone(),
-                ref_count: RefCount::MAX, // todo: no clone
-            });
-            self.index += 1;
-            r
-        }
-    }
-}
-
-pub struct HybridOccupiedEntry<'a, V: 'static + Clone + IsCached + Debug> {
-    pubkey: Pubkey,
-    entry: V2<V>,
-    map: &'a HybridBTreeMap<V>,
-}
-pub struct HybridVacantEntry<'a, V: 'static + Clone + IsCached + Debug> {
-    pubkey: Pubkey,
-    map: &'a HybridBTreeMap<V>,
-}
-
-impl<'a, V: 'a + Clone + IsCached + Debug> HybridOccupiedEntry<'a, V> {
-    pub fn get(&self) -> &V2<V> {
-        &self.entry
-    }
-    pub fn update(&mut self, new_data: &SlotList<V>, new_rc: Option<RefCount>) {
-        //error!("update: {}", self.pubkey);
-        self.map.disk.update(
-            &self.pubkey,
-            |previous| {
-                if previous.is_some() {
-                    //error!("update {} to {:?}", self.pubkey, new_data);
-                }
-                Some((new_data.clone(), new_rc.unwrap_or(self.entry.ref_count)))
-                // TODO no clone here
-            },
-            Some(&self.entry),
-        );
-        let g = self.map.disk.get(&self.pubkey).unwrap();
-        assert_eq!(format!("{:?}", g.1), format!("{:?}", new_data));
-    }
-    pub fn addref(&mut self) {
-        self.entry.ref_count += 1;
-
-        self.map
-            .disk
-            .addref(&self.pubkey, self.entry.ref_count, &self.entry.slot_list);
-        //error!("addref: {}, {}, {:?}", self.pubkey, self.entry.ref_count(), result);
-    }
-    pub fn unref(&mut self) {
-        self.entry.ref_count -= 1;
-        self.map
-            .disk
-            .unref(&self.pubkey, self.entry.ref_count, &self.entry.slot_list);
-        //error!("addref: {}, {}, {:?}", self.pubkey, self.entry.ref_count(), result);
-    }
-    /*
-    pub fn get_mut(&mut self) -> &mut V2<V> {
-        self.entry.get_mut()
-    }
-    */
-    pub fn key(&self) -> &K {
-        &self.pubkey
-    }
-    pub fn remove(self) {
-        self.map.disk.delete_key(&self.pubkey)
-    }
-}
-
-impl<'a, V: 'a + Clone + Debug + IsCached> HybridVacantEntry<'a, V> {
-    pub fn insert(self, value: V2<V>) {
-        // -> &'a mut V2<V> {
-        /*
-        let value = V2::<V> {
-            entry: value,
-            //exists_on_disk: false,
-        };
-        */
-        //let mut sl = SlotList::default();
-        //std::mem::swap(&mut sl, &mut value.slot_list);
-        self.map.disk.update(
-            &self.pubkey,
-            |_previous| {
-                Some((value.slot_list.clone() /* todo bad */, value.ref_count))
-            },
-            None,
-        );
-    }
-}
-
 impl<V: IsCached> HybridBTreeMap<V> {
     /// Creates an empty `BTreeMap`.
     pub fn new2(bucket_map: &Arc<BucketMapWriteHolder<V>>, bin_index: usize, bins: usize) -> Self {
         Self {
-            in_memory: BTreeMap::default(),
             disk: bucket_map.clone(),
             bin_index,
-            bins: bins, //bucket_map.num_buckets(),
+            bins, //bucket_map.num_buckets(),
         }
     }
 
     pub fn new_for_testing() -> Self {
-        let map = Self::new_bucket_map(ACCOUNTS_INDEX_CONFIG_FOR_TESTING);
+        let bins = ACCOUNTS_INDEX_CONFIG_FOR_TESTING.bins.unwrap();
+        let map = Self::new_bucket_map(bins);
         Self::new2(&map, 0, 1)
     }
 
@@ -270,13 +143,14 @@ impl<V: IsCached> HybridBTreeMap<V> {
     pub fn distribution(&self) {
         self.disk.distribution();
     }
+    /*
     fn bound<'a, T>(bound: Bound<&'a T>, unbounded: &'a T) -> &'a T {
         match bound {
             Bound::Included(b) | Bound::Excluded(b) => b,
             _ => unbounded,
         }
     }
-    pub fn range<R>(&self, range: Option<R>) -> Vec<(Pubkey, SlotList<V>)>
+    pub fn range2<R>(&self, range: Option<R>, all_and_unsorted: bool) -> Vec<(Pubkey, SlotList<V>)>
     where
         R: RangeBounds<Pubkey>,
     {
@@ -315,11 +189,23 @@ impl<V: IsCached> HybridBTreeMap<V> {
             let mut ks = self.disk.range(ix, range.as_ref());
             keys.append(&mut ks);
         });
-        keys.sort_unstable_by(|a, b| a.0.cmp(&b.0));
-        keys
+        if !all_and_unsorted {
+            keys.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+        }
+        panic!("");
+
+        //keys
+    }
+    */
+
+    pub fn iter<R>(&self, range: R) -> Vec<(K, V2<V>)>
+    where
+        R: RangeBounds<Pubkey>,
+    {
+        self.disk.range(self.bin_index, Some(&range))
     }
 
-    pub fn keys2(&self) -> Keys {
+    pub fn keys(&self) -> Keys {
         // used still?
         let num_buckets = self.disk.num_buckets();
         let start = num_buckets * self.bin_index / self.bins;
@@ -340,36 +226,9 @@ impl<V: IsCached> HybridBTreeMap<V> {
         keys.sort_unstable();
         Keys { keys, index: 0 }
     }
-    pub fn values(&self) -> Values<V> {
-        let num_buckets = self.disk.num_buckets();
-        if self.bin_index != 0 && self.disk.unified_backing {
-            return Values {
-                values: vec![],
-                index: 0,
-            };
-        }
-        // todo: this may be unsafe if we are asking for things with an update cache active. thankfully, we only call values at startup right now
-        let start = num_buckets * self.bin_index / self.bins;
-        let end = num_buckets * (self.bin_index + 1) / self.bins;
-        let len = (start..end)
-            .into_iter()
-            .map(|ix| self.disk.bucket_len(ix) as usize)
-            .sum::<usize>();
-        let mut values = Vec::with_capacity(len);
-        (start..end).into_iter().for_each(|ix| {
-            values.append(
-                &mut self
-                    .disk
-                    .values(ix, None::<&Range<Pubkey>>)
-                    .unwrap_or_default(),
-            )
-        });
-        //error!("getting values: {}, bin: {}, bins: {}, start: {}, end: {}", values.len(), self.bin_index, self.bins, start, end);
-        //keys.sort_unstable();
-        if self.bin_index == 0 {
-            //error!("getting values: {}, {}, {}", values.len(), start, end);
-        }
-        Values { values, index: 0 }
+
+    pub fn remove_if_slot_list_empty(&self, key: &Pubkey) -> bool {
+        self.disk.remove_if_slot_list_empty(self.bin_index, key)
     }
 
     pub fn upsert(
@@ -377,71 +236,26 @@ impl<V: IsCached> HybridBTreeMap<V> {
         pubkey: &Pubkey,
         new_value: AccountMapEntry<V>,
         reclaims: &mut SlotList<V>,
-        reclaims_must_be_empty: bool,
+        previous_slot_entry_was_cached: bool,
     ) {
         self.disk
-            .upsert(pubkey, new_value, reclaims, reclaims_must_be_empty);
-    }
-
-    pub fn entry(&mut self, key: K) -> HybridEntry<'_, V> {
-        match self.disk.get(&key) {
-            Some(entry) => HybridEntry::Occupied(HybridOccupiedEntry {
-                pubkey: key,
-                entry: AccountMapEntry::<V> {
-                    slot_list: entry.1,
-                    ref_count: entry.0,
-                },
-                map: self,
-            }),
-            None => HybridEntry::Vacant(HybridVacantEntry {
-                pubkey: key,
-                map: self,
-            }),
-        }
-    }
-
-    pub fn insert2(&mut self, key: K, value: V2<V>) {
-        match self.entry(key) {
-            HybridEntry::Occupied(_occupied) => {
-                panic!("");
-            }
-            HybridEntry::Vacant(vacant) => vacant.insert(value),
-        }
+            .upsert(pubkey, new_value, reclaims, previous_slot_entry_was_cached);
     }
 
     pub fn get(&self, key: &K) -> Option<V2<V>> {
-        let lookup = || {
-            let disk = self.disk.get(key);
-            disk.map(|disk| AccountMapEntry {
-                ref_count: disk.0,
-                slot_list: disk.1,
-            })
-        };
-
-        if true {
-            lookup()
-        } else {
-            let in_mem = self.in_memory.get(key);
-            match in_mem {
-                Some(in_mem) => Some(in_mem.clone()),
-                None => {
-                    // we have to load this into the in-mem cache so we can get a ref_count, if nothing else
-                    lookup()
-                    /*
-                    disk.map(|item| {
-                        self.in_memory.entry(*key).map(|entry| {
-
-                        }
-                    })*/
-                }
-            }
-        }
+        self.disk.get(key)
     }
     pub fn remove(&mut self, key: &K) {
         self.disk.delete_key(key); //.map(|x| x.entry)
     }
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
     pub fn len(&self) -> usize {
-        self.disk.keys3(self.bin_index, None::<&Range<Pubkey>>).map(|x| x.len()).unwrap_or_default()
+        self.disk
+            .keys3(self.bin_index, None::<&Range<Pubkey>>)
+            .map(|x| x.len())
+            .unwrap_or_default()
     }
 
     pub fn set_startup(&self, startup: bool) {

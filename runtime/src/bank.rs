@@ -170,20 +170,28 @@ pub struct ExecuteTimings {
     pub store_us: u64,
     pub total_batches_len: usize,
     pub num_execute_batches: u64,
+    pub p1: u128,
+    pub p2: u128,
+    pub p3: u128,
+    pub p4: u128,
+    pub p5: u128,
+    pub p6: u128,
+    pub p7: u128,
+    pub p8: u128,
+    pub p9: u128,
     pub details: ExecuteDetailsTimings,
 }
 impl ExecuteTimings {
     pub fn accumulate(&mut self, other: &ExecuteTimings) {
-        self.check_us = self.check_us.saturating_add(other.check_us);
-        self.load_us = self.load_us.saturating_add(other.load_us);
-        self.execute_us = self.execute_us.saturating_add(other.execute_us);
-        self.store_us = self.store_us.saturating_add(other.store_us);
-        self.total_batches_len = self
-            .total_batches_len
-            .saturating_add(other.total_batches_len);
-        self.num_execute_batches = self
-            .num_execute_batches
-            .saturating_add(other.num_execute_batches);
+        self.p1 += other.p1;
+        self.p2 += other.p2;
+        self.p3 += other.p3;
+        self.p4 += other.p4;
+        self.p5 += other.p5;
+        self.p6 += other.p6;
+        self.p7 += other.p7;
+        self.p8 += other.p8;
+        self.p9 += other.p9;
         self.details.accumulate(&other.details);
     }
 }
@@ -3927,13 +3935,32 @@ impl Bank {
         }
     }
 
+    fn load_next_rent_in_bg(&self, mut partition: Partition) {
+        // start, end, total
+        let range = partition.1 - partition.0;
+        partition.0 = partition.1;
+        partition.1 += range;
+        if partition.0 >= partition.2 || partition.1 >= partition.2 {
+            return;
+        }
+        let ancestors = self.ancestors.clone();
+        let accounts = self.rc.accounts.clone();
+        rayon::spawn(move || {
+            let subrange = Self::pubkey_range_from_partition(partition);
+
+            accounts.load_to_collect_rent_eagerly(&ancestors, subrange);
+        })
+    }
+
     fn collect_rent_in_partition(&self, partition: Partition) {
+        self.load_next_rent_in_bg(partition);
         let subrange = Self::pubkey_range_from_partition(partition);
 
         let accounts = self
             .rc
             .accounts
             .load_to_collect_rent_eagerly(&self.ancestors, subrange);
+
         let account_count = accounts.len();
 
         // parallelize?
@@ -4451,6 +4478,10 @@ impl Bank {
                 self.check_init_vote_data_enabled(),
             );
         }
+    }
+
+    pub fn report_store_timings(&self) {
+        self.rc.accounts.accounts_db.report_store_timings();
     }
 
     pub fn force_flush_accounts_cache(&self) {
@@ -5078,6 +5109,8 @@ impl Bank {
         // Order and short-circuiting is significant; verify_hash requires a valid bank hash
         verify = verify && self.verify_hash();
         verify2_time.stop();
+
+        //crate::accounts_db::AccountsDb::add_test_accounts(self.rc.accounts.clone());
 
         datapoint_info!(
             "verify_snapshot_bank",
@@ -12866,6 +12899,7 @@ pub(crate) mod tests {
                 u64,
             ) + std::marker::Send,
     {
+        solana_logger::setup();
         // Set up initial bank
         let mut genesis_config = create_genesis_config_with_leader(
             10,
@@ -13228,6 +13262,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_remove_unrooted_before_scan() {
+        solana_logger::setup();
         for accounts_db_caching_enabled in &[false, true] {
             test_store_scan_consistency(
                 *accounts_db_caching_enabled,

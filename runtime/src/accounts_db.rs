@@ -4662,12 +4662,16 @@ impl AccountsDb {
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         use BankHashVerificationError::*;
         let mut collect = Measure::start("collect");
+        // maybe required at some point:
+        self.accounts_index.account_maps.par_iter().for_each(|i| {
+            i.write().unwrap().flush();
+        });
         let keys: Vec<_> = self
             .accounts_index
             .account_maps
             .iter()
             .map(|map| {
-                let mut keys = map.read().unwrap().keys().cloned().collect::<Vec<_>>();
+                let mut keys = map.read().unwrap().keys().collect::<Vec<_>>();
                 keys.sort_unstable(); // hashmap is not ordered, but bins are relative to each other
                 keys
             })
@@ -5730,8 +5734,15 @@ impl AccountsDb {
         self.report_store_timings();
     }
 
-    fn report_store_timings(&self) {
+    pub fn report_store_timings(&self) {
         if self.stats.last_store_report.should_update(1000) {
+            self.accounts_index
+                .account_maps
+                .first()
+                .unwrap()
+                .read()
+                .unwrap()
+                .distribution();
             let (read_only_cache_hits, read_only_cache_misses) =
                 self.read_only_accounts_cache.get_and_reset_stats();
             datapoint_info!(
@@ -6171,6 +6182,13 @@ impl AccountsDb {
 
     #[allow(clippy::needless_collect)]
     pub fn generate_index(&self, limit_load_slot_count_from_snapshot: Option<usize>, verify: bool) {
+        self.accounts_index
+            .account_maps
+            .first()
+            .unwrap()
+            .read()
+            .unwrap()
+            .set_startup(true);
         let mut slots = self.storage.all_slots();
         #[allow(clippy::stable_sort_primitive)]
         slots.sort();
@@ -6185,7 +6203,7 @@ impl AccountsDb {
             let storage_info = StorageSizeAndCountMap::default();
             let total_processed_slots_across_all_threads = AtomicU64::new(0);
             let outer_slots_len = slots.len();
-            let chunk_size = (outer_slots_len / 7) + 1; // approximately 400k slots in a snapshot
+            let chunk_size = (outer_slots_len / 16) + 1; // approximately 400k slots in a snapshot
             let mut index_time = Measure::start("index");
             let insertion_time_us = AtomicU64::new(0);
             let storage_info_timings = Mutex::new(GenerateIndexTimings::default());
@@ -6334,6 +6352,7 @@ impl AccountsDb {
         stored_sizes_and_counts: StorageSizeAndCountMap,
         timings: &mut GenerateIndexTimings,
     ) {
+        assert!(!stored_sizes_and_counts.is_empty());
         // store count and size for each storage
         let mut storage_size_storages_time = Measure::start("storage_size_storages");
         for slot_stores in self.storage.0.iter() {
@@ -6350,7 +6369,8 @@ impl AccountsDb {
                     store.count_and_status.write().unwrap().0 = entry.count;
                     store.alive_bytes.store(entry.stored_size, Ordering::SeqCst);
                 } else {
-                    trace!("id: {} clearing count", id);
+                    // this is usually an error: error!("clearing count: id: {}, slot: {}", id, store.slot());
+                    error!("id: {} clearing count", id);
                     store.count_and_status.write().unwrap().0 = 0;
                 }
             }
@@ -6383,7 +6403,8 @@ impl AccountsDb {
         #[allow(clippy::stable_sort_primitive)]
         roots.sort();
         info!("{}: accounts_index roots: {:?}", label, roots,);
-        self.accounts_index.account_maps.iter().for_each(|i| {
+        self.accounts_index.account_maps.iter().for_each(|_i| {
+            /*
             for (pubkey, account_entry) in i.read().unwrap().iter() {
                 info!("  key: {} ref_count: {}", pubkey, account_entry.ref_count(),);
                 info!(
@@ -6391,6 +6412,7 @@ impl AccountsDb {
                     *account_entry.slot_list.read().unwrap()
                 );
             }
+            */
         });
     }
 
@@ -12415,14 +12437,15 @@ pub mod tests {
         ];
         // make sure accounts are in 2 different bins
         assert!(
-            accounts
-                .accounts_index
-                .bin_calculator
-                .bin_from_pubkey(&keys[0])
-                != accounts
+            (accounts.accounts_index.bins() == 1)
+                ^ (accounts
                     .accounts_index
                     .bin_calculator
-                    .bin_from_pubkey(&keys[1])
+                    .bin_from_pubkey(&keys[0])
+                    != accounts
+                        .accounts_index
+                        .bin_calculator
+                        .bin_from_pubkey(&keys[1]))
         );
         let account = AccountSharedData::new(1, 1, AccountSharedData::default().owner());
         let account_big = AccountSharedData::new(1, 1000, AccountSharedData::default().owner());
