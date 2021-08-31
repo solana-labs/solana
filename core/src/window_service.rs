@@ -461,14 +461,17 @@ where
     retransmit_shreds.timer.mark_outgoing_start();
 
     // Exclude repair packets from retransmit.
-    let _ = retransmit_sender.send(retransmit_shreds.clone());
+    let _ = retransmit_sender.send(retransmit_shreds);
 
     stats.num_repairs += repair_infos.iter().filter(|r| r.is_some()).count();
-    stats.num_shreds += retransmit_shreds.shreds.len();
-    for shred in &retransmit_shreds.shreds {
+    stats.num_shreds += shreds.len();
+    for shred in &shreds {
         *stats.slots.entry(shred.slot()).or_default() += 1;
     }
-    insert_shred_sender.send((retransmit_shreds, repair_infos))?;
+    let mut insert_shreds = Shreds::default();
+    insert_shreds.timer = packet_timer;
+    insert_shreds.timer.mark_outgoing_start();
+    insert_shred_sender.send((insert_shreds, repair_infos))?;
 
     stats.num_packets += packets.iter().map(|pkt| pkt.packets.len()).sum::<usize>();
     for packet in packets.iter().flat_map(|pkt| pkt.packets.iter()) {
