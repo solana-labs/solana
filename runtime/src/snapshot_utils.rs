@@ -1527,7 +1527,12 @@ where
         })
 }
 
-/// Gather the necessary elements for a snapshot of the given `root_bank`
+/// Gather the necessary elements for a snapshot of the given `root_bank`.
+///
+/// **DEVELOPER NOTE** Any error that is returned from this function may bring down the node!  This
+/// function is called from AccountsBackgroundService to handle snapshot requests.  Since taking a
+/// snapshot is not permitted to fail, any errors returned here will trigger the node to shutdown.
+/// So, be careful whenever adding new code that may return errors.
 pub fn snapshot_bank(
     root_bank: &Bank,
     status_cache_slot_deltas: Vec<BankSlotDelta>,
