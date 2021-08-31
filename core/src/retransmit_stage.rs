@@ -328,6 +328,7 @@ fn retransmit(
 
             // TODO calculate times from shreds.timer
         }
+        shreds.timer; //TODO record stats
     }
 
     max_slots.retransmit.fetch_max(max_slot, Ordering::Relaxed);
