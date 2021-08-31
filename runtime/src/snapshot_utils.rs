@@ -1733,15 +1733,6 @@ pub fn package_and_archive_incremental_snapshot(
     ))
 }
 
-pub fn calculate_last_full_snapshot_slot(
-    slot: Slot,
-    full_snapshot_archive_interval_slots: Slot,
-) -> Slot {
-    assert!(full_snapshot_archive_interval_slots > 0);
-    let remainder = slot % full_snapshot_archive_interval_slots;
-    slot - remainder
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2950,22 +2941,5 @@ mod tests {
                 .is_none(),
             "Ensure Account1 has not been brought back from the dead"
         );
-    }
-
-    #[test]
-    fn test_calculate_last_full_snapshot_slot() {
-        assert_eq!(calculate_last_full_snapshot_slot(0, 30), 0);
-        assert_eq!(calculate_last_full_snapshot_slot(1, 30), 0);
-        assert_eq!(calculate_last_full_snapshot_slot(29, 30), 0);
-        assert_eq!(calculate_last_full_snapshot_slot(30, 30), 30);
-        assert_eq!(calculate_last_full_snapshot_slot(31, 30), 30);
-        assert_eq!(calculate_last_full_snapshot_slot(120, 30), 120);
-        assert_eq!(calculate_last_full_snapshot_slot(121, 30), 120);
-        assert_eq!(calculate_last_full_snapshot_slot(122, 30), 120);
-        assert_eq!(calculate_last_full_snapshot_slot(123, 30), 120);
-        assert_eq!(calculate_last_full_snapshot_slot(147, 30), 120);
-        assert_eq!(calculate_last_full_snapshot_slot(148, 30), 120);
-        assert_eq!(calculate_last_full_snapshot_slot(149, 30), 120);
-        assert_eq!(calculate_last_full_snapshot_slot(150, 30), 150);
     }
 }
