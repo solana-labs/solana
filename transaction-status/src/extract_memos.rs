@@ -1,6 +1,9 @@
 use {
     crate::parse_instruction::parse_memo_data,
-    solana_sdk::{message::Message, pubkey::Pubkey},
+    solana_sdk::{
+        message::{Message, SanitizedMessage},
+        pubkey::Pubkey,
+    },
 };
 
 // A helper function to convert spl_memo::v1::id() as spl_sdk::pubkey::Pubkey to
@@ -37,6 +40,26 @@ impl ExtractMemos for Message {
             for instruction in &self.instructions {
                 let program_id = self.account_keys[instruction.program_id_index as usize];
                 if program_id == spl_memo_id_v1() || program_id == spl_memo_id_v3() {
+                    let memo_len = instruction.data.len();
+                    let parsed_memo = parse_memo_data(&instruction.data)
+                        .unwrap_or_else(|_| "(unparseable)".to_string());
+                    memos.push(format!("[{}] {}", memo_len, parsed_memo));
+                }
+            }
+        }
+        memos
+    }
+}
+
+impl ExtractMemos for SanitizedMessage {
+    fn extract_memos(&self) -> Vec<String> {
+        let mut memos = vec![];
+        if self
+            .account_keys_iter()
+            .any(|&pubkey| pubkey == spl_memo_id_v1() || pubkey == spl_memo_id_v3())
+        {
+            for (program_id, instruction) in self.program_instructions_iter() {
+                if *program_id == spl_memo_id_v1() || *program_id == spl_memo_id_v3() {
                     let memo_len = instruction.data.len();
                     let parsed_memo = parse_memo_data(&instruction.data)
                         .unwrap_or_else(|_| "(unparseable)".to_string());

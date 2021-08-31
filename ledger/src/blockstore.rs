@@ -140,7 +140,7 @@ pub struct Blockstore {
     code_shred_cf: LedgerColumn<cf::ShredCode>,
     transaction_status_cf: LedgerColumn<cf::TransactionStatus>,
     address_signatures_cf: LedgerColumn<cf::AddressSignatures>,
-    _transaction_memos_cf: LedgerColumn<cf::TransactionMemos>,
+    transaction_memos_cf: LedgerColumn<cf::TransactionMemos>,
     transaction_status_index_cf: LedgerColumn<cf::TransactionStatusIndex>,
     active_transaction_status_index: RwLock<u64>,
     rewards_cf: LedgerColumn<cf::Rewards>,
@@ -393,7 +393,7 @@ impl Blockstore {
             code_shred_cf,
             transaction_status_cf,
             address_signatures_cf,
-            _transaction_memos_cf: transaction_memos_cf,
+            transaction_memos_cf,
             transaction_status_index_cf,
             active_transaction_status_index: RwLock::new(active_transaction_status_index),
             rewards_cf,
@@ -2113,6 +2113,14 @@ impl Blockstore {
             )?;
         }
         Ok(())
+    }
+
+    pub fn read_transaction_memos(&self, signature: Signature) -> Result<Option<String>> {
+        self.transaction_memos_cf.get(signature)
+    }
+
+    pub fn write_transaction_memos(&self, signature: &Signature, memos: String) -> Result<()> {
+        self.transaction_memos_cf.put(*signature, &memos)
     }
 
     fn check_lowest_cleanup_slot(&self, slot: Slot) -> Result<std::sync::RwLockReadGuard<Slot>> {
