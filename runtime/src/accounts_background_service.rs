@@ -212,7 +212,7 @@ impl SnapshotRequestHandler {
                         e,
                     );
 
-                    if e.is_fatal() {
+                    if Self::is_snapshot_error_fatal(&e) {
                         return Err(e);
                     }
                 }
@@ -246,18 +246,16 @@ impl SnapshotRequestHandler {
                 Ok(snapshot_root_bank.block_height())
             })
     }
-}
 
-impl SnapshotError {
-    /// Check if a SnapshotError should be treated as 'fatal' by AccountsBackgroundService, and
+    /// Check if a SnapshotError should be treated as 'fatal' by SnapshotRequestHandler, and
     /// `handle_snapshot_requests()` in particular.  Fatal errors will cause the node to shutdown.
     /// Non-fatal errors are logged and then swallowed.
     ///
     /// All `SnapshotError`s are enumerated, and there is **NO** default case.  This way, if
     /// a new error is added to SnapshotError, a conscious decision must be made on how it should
     /// be handled.
-    fn is_fatal(&self) -> bool {
-        match self {
+    fn is_snapshot_error_fatal(err: &SnapshotError) -> bool {
+        match err {
             SnapshotError::Io(..) => true,
             SnapshotError::Serialize(..) => true,
             SnapshotError::ArchiveGenerationFailure(..) => true,
