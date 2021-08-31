@@ -28,6 +28,7 @@ ed25519-dalek = "=1.0.1"
 etcd-client = { version = "0.7.1", features = ["tls"]}
 fs_extra = "1.2.0"
 flate2 = "1.0"
+histogram = "*"
 indexmap = { version = "1.7", features = ["rayon"] }
 itertools = "0.10.1"
 libc = "0.2.101"

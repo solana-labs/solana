@@ -84,6 +84,8 @@ struct ReceiveWindowStats {
     num_coalesced_batches: usize, // Packets structures coalesced before this stage
     elapsed_first_recv_to_start: Duration,
     elapsed_last_recv_to_start: Duration,
+    batch_span_us_hist: histogram::Histogram,
+    batch_first_recv_us_hist: histogram::Histogram,
 }
 
 impl ReceiveWindowStats {
@@ -112,6 +114,66 @@ impl ReceiveWindowStats {
                 self.elapsed_last_recv_to_start.as_micros(),
                 i64
             ),
+            (
+                "batch_span_us_50pct",
+                self.batch_span_us_hist.percentile(50.0).unwrap_or(0),
+                i64
+            ),
+            (
+                "batch_span_us_90pct",
+                self.batch_span_us_hist.percentile(90.0).unwrap_or(0),
+                i64
+            ),
+            (
+                "batch_span_us_99pct",
+                self.batch_span_us_hist.percentile(99.0).unwrap_or(0),
+                i64
+            ),
+            (
+                "batch_span_us_min",
+                self.batch_span_us_hist.minimum().unwrap_or(0),
+                i64
+            ),
+            (
+                "batch_span_us_max",
+                self.batch_span_us_hist.maximum().unwrap_or(0),
+                i64
+            ),
+            (
+                "batch_span_us_stddev",
+                self.batch_span_us_hist.stddev().unwrap_or(0),
+                i64
+            ),
+            (
+                "batch_first_recv_us_50pct",
+                self.batch_first_recv_us_hist.percentile(50.0).unwrap_or(0),
+                i64
+            ),
+            (
+                "batch_first_recv_us_90pct",
+                self.batch_first_recv_us_hist.percentile(90.0).unwrap_or(0),
+                i64
+            ),
+            (
+                "batch_first_recv_us_99pct",
+                self.batch_first_recv_us_hist.percentile(99.0).unwrap_or(0),
+                i64
+            ),
+            (
+                "batch_first_recv_us_min",
+                self.batch_first_recv_us_hist.minimum().unwrap_or(0),
+                i64
+            ),
+            (
+                "batch_first_recv_us_max",
+                self.batch_first_recv_us_hist.maximum().unwrap_or(0),
+                i64
+            ),
+            (
+                "batch_first_recv_us_stddev",
+                self.batch_first_recv_us_hist.stddev().unwrap_or(0),
+                i64
+            ),
         );
         for (slot, num_shreds) in &self.slots {
             datapoint_info!(
@@ -136,6 +198,9 @@ impl ReceiveWindowStats {
             since: Some(Instant::now()),
             ..Self::default()
         };
+
+        self.batch_span_us_hist.clear();
+        self.batch_first_recv_us_hist.clear();
     }
 }
 
@@ -422,6 +487,25 @@ where
     stats.elapsed_last_recv_to_start +=
         now - packets.last().unwrap().timer.get_incoming_end().unwrap();
 
+    let first_time = packets
+        .iter()
+        .map(|pkts| pkts.timer.get_incoming_start().unwrap())
+        .min()
+        .unwrap();
+    let last_time = packets
+        .iter()
+        .map(|pkts| pkts.timer.get_incoming_end().unwrap())
+        .max()
+        .unwrap();
+    stats
+        .batch_span_us_hist
+        .increment((last_time - first_time).as_micros() as u64)
+        .unwrap();
+    stats
+        .batch_first_recv_us_hist
+        .increment((now - first_time).as_micros() as u64)
+        .unwrap();
+
     Ok(())
 }
 
@@ -641,6 +725,9 @@ impl WindowService {
             + std::marker::Sync,
     {
         let mut stats = ReceiveWindowStats::default();
+        stats.batch_span_us_hist = histogram::Histogram::new();
+        stats.batch_first_recv_us_hist = histogram::Histogram::new();
+
         Builder::new()
             .name("solana-window".to_string())
             .spawn(move || {

@@ -4694,6 +4694,7 @@ dependencies = [
  "etcd-client",
  "flate2",
  "fs_extra",
+ "histogram",
  "indexmap",
  "itertools 0.10.1",
  "jsonrpc-core 18.0.0",
