@@ -1549,7 +1549,7 @@ pub fn snapshot_bank(
         root_bank.get_snapshot_storages(incremental_snapshot_base_slot)
     });
     let mut add_snapshot_time = Measure::start("add-snapshot-ms");
-    add_bank_snapshot(
+    let bank_snapshot_info = add_bank_snapshot(
         &bank_snapshots_dir,
         root_bank,
         &snapshot_storages,
@@ -1559,18 +1559,9 @@ pub fn snapshot_bank(
     add_snapshot_time.stop();
     inc_new_counter_info!("add-snapshot-ms", add_snapshot_time.as_ms() as usize);
 
-    // Package the relevant snapshots
-    let highest_bank_snapshot_info = get_highest_bank_snapshot_info(&bank_snapshots_dir)
-        .expect("no snapshots found in config bank_snapshots_dir");
-
-    // The result of get_highest_bank_snapshot_info() must be the same as the bank snapshot created
-    // by add_bank_snapshot() above.  Otherwise, the AccountsPackage would hardlink the wrong bank
-    // snapshot relative to the root_bank's slot and snapshot storages.
-    assert_eq!(highest_bank_snapshot_info.slot, root_bank.slot());
-
     let accounts_package = AccountsPackage::new(
         root_bank,
-        &highest_bank_snapshot_info,
+        &bank_snapshot_info,
         bank_snapshots_dir,
         status_cache_slot_deltas,
         snapshot_archives_dir,
