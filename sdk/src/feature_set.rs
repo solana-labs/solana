@@ -26,10 +26,6 @@ use solana_sdk::{
 };
 use std::collections::{HashMap, HashSet};
 
-pub mod instructions_sysvar_enabled {
-    solana_sdk::declare_id!("EnvhHCLvg55P7PDtbvR1NwuTuAeodqpusV3MR5QEK8gs");
-}
-
 pub mod deprecate_rewards_sysvar {
     solana_sdk::declare_id!("GaBtBJvmS4Arjj5W1NmFcyvPjsHN38UGYDq2MDwbs9Qu");
 }
@@ -87,20 +83,12 @@ pub mod check_init_vote_data {
     solana_sdk::declare_id!("3ccR6QpxGYsAbWyfevEtBNGfWV4xBffxRj2tD6A9i39F");
 }
 
-pub mod check_program_owner {
-    solana_sdk::declare_id!("5XnbR5Es9YXEARRuP6mdvoxiW3hx5atNNeBmwVd8P3QD");
-}
-
 pub mod enforce_aligned_host_addrs {
     solana_sdk::declare_id!("6Qob9Z4RwGdf599FDVCqsjuKjR8ZFR3oVs2ByRLWBsua");
 }
 
 pub mod stake_program_v4 {
     solana_sdk::declare_id!("Dc7djyhP9aLfdq2zktpvskeAjpG56msCU1yexpxXiWZb");
-}
-
-pub mod memory_ops_syscalls {
-    solana_sdk::declare_id!("ENQi37wsVhTvFz2gUiZAAbqFEWGN2jwFsqdEDTE8A4MU");
 }
 
 pub mod secp256k1_recover_syscall_enabled {
@@ -202,8 +190,7 @@ pub mod close_upgradeable_program_accounts {
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
-        (instructions_sysvar_enabled::id(), "instructions sysvar"),
-        (deprecate_rewards_sysvar::id(), "deprecate unused rewards sysvar"),
+            (deprecate_rewards_sysvar::id(), "deprecate unused rewards sysvar"),
         (pico_inflation::id(), "pico inflation"),
         (full_inflation::devnet_and_testnet::id(), "full inflation on devnet and testnet"),
         (spl_token_v2_multisig_fix::id(), "spl-token multisig fix"),
@@ -216,10 +203,8 @@ lazy_static! {
         (full_inflation::mainnet::certusone::vote::id(), "community vote allowing Certus One to enable full inflation"),
         (warp_timestamp_again::id(), "warp timestamp again, adjust bounding to 25% fast 80% slow #15204"),
         (check_init_vote_data::id(), "check initialized Vote data"),
-        (check_program_owner::id(), "limit programs to operating on accounts owned by itself"),
         (enforce_aligned_host_addrs::id(), "enforce aligned host addresses"),
         (stake_program_v4::id(), "solana_stake_program v4"),
-        (memory_ops_syscalls::id(), "add syscalls for memory operations"),
         (secp256k1_recover_syscall_enabled::id(), "secp256k1_recover syscall"),
         (add_missing_program_error_mappings::id(), "add missing program error mappings"),
         (system_transfer_zero_check::id(), "perform all checks for transfers of 0 lamports"),
