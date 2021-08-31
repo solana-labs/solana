@@ -1,5 +1,6 @@
 use crate::{alloc, BpfError};
 use alloc::Alloc;
+use solana_program_runtime::InstructionProcessor;
 use solana_rbpf::{
     aligned_memory::AlignedMemory,
     ebpf,
@@ -8,7 +9,6 @@ use solana_rbpf::{
     question_mark,
     vm::{EbpfVm, SyscallObject, SyscallRegistry},
 };
-use solana_runtime::message_processor::MessageProcessor;
 #[allow(deprecated)]
 use solana_sdk::sysvar::fees::Fees;
 use solana_sdk::{
@@ -21,9 +21,9 @@ use solana_sdk::{
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     epoch_schedule::EpochSchedule,
     feature_set::{
-        blake3_syscall_enabled, disable_fees_sysvar, enforce_aligned_host_addrs,
-        libsecp256k1_0_5_upgrade_enabled, mem_overlap_fix, memory_ops_syscalls,
-        secp256k1_recover_syscall_enabled,
+        blake3_syscall_enabled, close_upgradeable_program_accounts, disable_fees_sysvar,
+        enforce_aligned_host_addrs, libsecp256k1_0_5_upgrade_enabled, mem_overlap_fix,
+        memory_ops_syscalls, secp256k1_recover_syscall_enabled,
     },
     hash::{Hasher, HASH_BYTES},
     ic_msg,
@@ -2236,13 +2236,16 @@ fn check_account_infos(
 fn check_authorized_program(
     program_id: &Pubkey,
     instruction_data: &[u8],
+    close_upgradeable_program_accounts: bool,
 ) -> Result<(), EbpfError<BpfError>> {
     if native_loader::check_id(program_id)
         || bpf_loader::check_id(program_id)
         || bpf_loader_deprecated::check_id(program_id)
         || (bpf_loader_upgradeable::check_id(program_id)
             && !(bpf_loader_upgradeable::is_upgrade_instruction(instruction_data)
-                || bpf_loader_upgradeable::is_set_authority_instruction(instruction_data)))
+                || bpf_loader_upgradeable::is_set_authority_instruction(instruction_data)
+                || (close_upgradeable_program_accounts
+                    && bpf_loader_upgradeable::is_close_instruction(instruction_data))))
     {
         return Err(SyscallError::ProgramNotSupported(*program_id).into());
     }
@@ -2329,7 +2332,7 @@ fn call<'a>(
             .iter()
             .collect::<Vec<&KeyedAccount>>();
         let (message, callee_program_id, callee_program_id_index) =
-            MessageProcessor::create_message(
+            InstructionProcessor::create_message(
                 &instruction,
                 &keyed_account_refs,
                 &signers,
@@ -2350,7 +2353,11 @@ fn call<'a>(
                 }
             })
             .collect::<Vec<bool>>();
-        check_authorized_program(&callee_program_id, &instruction.data)?;
+        check_authorized_program(
+            &callee_program_id,
+            &instruction.data,
+            invoke_context.is_feature_active(&close_upgradeable_program_accounts::id()),
+        )?;
         let (accounts, account_refs) = syscall.translate_accounts(
             &message.account_keys,
             callee_program_id_index,
@@ -2392,7 +2399,7 @@ fn call<'a>(
     // Process instruction
 
     #[allow(clippy::deref_addrof)]
-    match MessageProcessor::process_cross_program_instruction(
+    match InstructionProcessor::process_cross_program_instruction(
         &message,
         &executables,
         &accounts,

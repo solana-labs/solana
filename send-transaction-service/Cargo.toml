@@ -1,0 +1,20 @@
+[package]
+name = "solana-send-transaction-service"
+version = "1.8.0"
+description = "Solana send transaction service"
+authors = ["Solana Maintainers <maintainers@solana.foundation>"]
+repository = "https://github.com/solana-labs/solana"
+homepage = "https://solana.com/"
+documentation = "https://docs.rs/solana-send-transaction-service"
+license = "Apache-2.0"
+edition = "2018"
+
+[dependencies]
+log = "0.4.14"
+solana-logger = { path = "../logger", version = "=1.8.0" }
+solana-metrics = { path = "../metrics", version = "=1.8.0" }
+solana-runtime = { path = "../runtime", version = "=1.8.0" }
+solana-sdk = { path = "../sdk", version = "=1.8.0" }
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

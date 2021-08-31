@@ -61,13 +61,13 @@ log = "0.4.14"
 memmap2 = { version = "0.3.1", optional = true }
 num-derive = "0.3"
 num-traits = "0.2"
-pbkdf2 = { version = "0.8.0", default-features = false }
+pbkdf2 = { version = "0.9.0", default-features = false }
 qstring = "0.7.2"
 rand = { version = "0.7.0", optional = true }
 rand_chacha = { version = "0.2.2", optional = true }
 rand_core = "0.6.3"
 rustversion = "1.0.5"
-serde = "1.0.127"
+serde = "1.0.130"
 serde_bytes = "0.11"
 serde_derive = "1.0.103"
 serde_json = { version = "1.0.66", optional = true }

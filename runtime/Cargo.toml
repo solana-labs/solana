@@ -23,8 +23,6 @@ flate2 = "1.0.20"
 fnv = "1.0.7"
 itertools = "0.10.1"
 lazy_static = "1.4.0"
-libc = "0.2.99"
-libloading = "0.7.0"
 log = "0.4.14"
 memmap2 = "0.3.1"
 num-derive = { version = "0.3" }
@@ -34,7 +32,7 @@ ouroboros = "0.10.1"
 rand = "0.7.0"
 rayon = "1.5.1"
 regex = "1.5.4"
-serde = { version = "1.0.127", features = ["rc"] }
+serde = { version = "1.0.130", features = ["rc"] }
 serde_derive = "1.0.103"
 solana-config-program = { path = "../programs/config", version = "=1.8.0" }
 solana-compute-budget-program = { path = "../programs/compute-budget", version = "=1.8.0" }
@@ -43,6 +41,7 @@ solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "=1.8.0" }
 solana-logger = { path = "../logger", version = "=1.8.0" }
 solana-measure = { path = "../measure", version = "=1.8.0" }
 solana-metrics = { path = "../metrics", version = "=1.8.0" }
+solana-program-runtime = { path = "../program-runtime", version = "=1.8.0" }
 solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.8.0" }
 solana-sdk = { path = "../sdk", version = "=1.8.0" }
 solana-secp256k1-program = { path = "../programs/secp256k1", version = "=1.8.0" }

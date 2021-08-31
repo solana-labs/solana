@@ -1635,11 +1635,7 @@ pub fn bank_to_incremental_snapshot_archive(
     bank.rehash(); // Bank accounts may have been manually modified by the caller
 
     let temp_dir = tempfile::tempdir_in(bank_snapshots_dir)?;
-    let storages = {
-        let mut storages = bank.get_snapshot_storages(Some(full_snapshot_slot));
-        filter_snapshot_storages_for_incremental_snapshot(&mut storages, full_snapshot_slot);
-        storages
-    };
+    let storages = bank.get_snapshot_storages(Some(full_snapshot_slot));
     let bank_snapshot_info = add_bank_snapshot(&temp_dir, bank, &storages, snapshot_version)?;
 
     package_process_and_archive_incremental_snapshot(
@@ -1813,19 +1809,6 @@ pub fn process_accounts_package(
         accounts_package.snapshot_version,
         snapshot_type,
     )
-}
-
-/// Filter snapshot storages and retain only the ones with slots _higher than_
-/// `incremental_snapshot_base_slot`.
-pub fn filter_snapshot_storages_for_incremental_snapshot(
-    snapshot_storages: &mut SnapshotStorages,
-    incremental_snapshot_base_slot: Slot,
-) {
-    snapshot_storages.retain(|storage| {
-        storage
-            .first()
-            .map_or(false, |entry| entry.slot() > incremental_snapshot_base_slot)
-    });
 }
 
 #[cfg(test)]

@@ -2,6 +2,7 @@
 
 use {
     crate::{
+        cluster_tpu_info::ClusterTpuInfo,
         max_slots::MaxSlots,
         optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
         rpc::{
@@ -9,7 +10,6 @@ use {
             rpc_full::*, rpc_minimal::*, rpc_obsolete_v1_7::*, *,
         },
         rpc_health::*,
-        send_transaction_service::{LeaderInfo, SendTransactionService},
     },
     jsonrpc_core::{futures::prelude::*, MetaIoHandler},
     jsonrpc_http_server::{
@@ -34,6 +34,7 @@ use {
         exit::Exit, genesis_config::DEFAULT_GENESIS_DOWNLOAD_PATH, hash::Hash,
         native_token::lamports_to_sol, pubkey::Pubkey,
     },
+    solana_send_transaction_service::send_transaction_service::SendTransactionService,
     std::{
         collections::HashSet,
         net::SocketAddr,
@@ -381,7 +382,7 @@ impl JsonRpcService {
         );
 
         let leader_info =
-            poh_recorder.map(|recorder| LeaderInfo::new(cluster_info.clone(), recorder));
+            poh_recorder.map(|recorder| ClusterTpuInfo::new(cluster_info.clone(), recorder));
         let _send_transaction_service = Arc::new(SendTransactionService::new(
             tpu_address,
             &bank_forks,

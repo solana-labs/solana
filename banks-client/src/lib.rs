@@ -5,30 +5,32 @@
 //! but they are undocumented, may change over time, and are generally more
 //! cumbersome to use.
 
-use borsh::BorshDeserialize;
-use futures::{future::join_all, Future, FutureExt};
 pub use solana_banks_interface::{BanksClient as TarpcClient, TransactionStatus};
-use solana_banks_interface::{BanksRequest, BanksResponse};
-use solana_program::{
-    clock::Slot, fee_calculator::FeeCalculator, hash::Hash, program_pack::Pack, pubkey::Pubkey,
-    rent::Rent, sysvar::Sysvar,
+use {
+    borsh::BorshDeserialize,
+    futures::{future::join_all, Future, FutureExt},
+    solana_banks_interface::{BanksRequest, BanksResponse},
+    solana_program::{
+        clock::Slot, fee_calculator::FeeCalculator, hash::Hash, program_pack::Pack, pubkey::Pubkey,
+        rent::Rent, sysvar::Sysvar,
+    },
+    solana_sdk::{
+        account::{from_account, Account},
+        commitment_config::CommitmentLevel,
+        signature::Signature,
+        transaction::{self, Transaction},
+        transport,
+    },
+    std::io::{self, Error, ErrorKind},
+    tarpc::{
+        client::{self, NewClient, RequestDispatch},
+        context::{self, Context},
+        serde_transport::tcp,
+        ClientMessage, Response, Transport,
+    },
+    tokio::{net::ToSocketAddrs, time::Duration},
+    tokio_serde::formats::Bincode,
 };
-use solana_sdk::{
-    account::{from_account, Account},
-    commitment_config::CommitmentLevel,
-    signature::Signature,
-    transaction::{self, Transaction},
-    transport,
-};
-use std::io::{self, Error, ErrorKind};
-use tarpc::{
-    client::{self, NewClient, RequestDispatch},
-    context::{self, Context},
-    serde_transport::tcp,
-    ClientMessage, Response, Transport,
-};
-use tokio::{net::ToSocketAddrs, time::Duration};
-use tokio_serde::formats::Bincode;
 
 // This exists only for backward compatibility
 pub trait BanksClientExt {}

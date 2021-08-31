@@ -217,6 +217,12 @@ EOF
       if [[ -f net/keypairs/bootstrap-validator-identity.json ]]; then
         export BOOTSTRAP_VALIDATOR_IDENTITY_KEYPAIR=net/keypairs/bootstrap-validator-identity.json
       fi
+      if [[ -f net/keypairs/bootstrap-validator-stake.json ]]; then
+        export BOOTSTRAP_VALIDATOR_STAKE_KEYPAIR=net/keypairs/bootstrap-validator-stake.json
+      fi
+      if [[ -f net/keypairs/bootstrap-validator-vote.json ]]; then
+        export BOOTSTRAP_VALIDATOR_VOTE_KEYPAIR=net/keypairs/bootstrap-validator-vote.json
+      fi
       echo "remote-node.sh: Primordial stakes: $extraPrimordialStakes"
       if [[ "$extraPrimordialStakes" -gt 0 ]]; then
         if [[ "$extraPrimordialStakes" -gt "$numNodes" ]]; then

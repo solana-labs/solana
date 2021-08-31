@@ -143,7 +143,6 @@ pub(crate) struct GossipStats {
     pub(crate) push_response_count: Counter,
     pub(crate) push_vote_read: Counter,
     pub(crate) repair_peers: Counter,
-    pub(crate) require_stake_for_gossip_unknown_feature_set: Counter,
     pub(crate) require_stake_for_gossip_unknown_stakes: Counter,
     pub(crate) skip_pull_response_shred_version: Counter,
     pub(crate) skip_pull_shred_version: Counter,
@@ -420,11 +419,6 @@ pub(crate) fn submit_gossip_stats(
         (
             "packets_sent_push_messages_count",
             stats.packets_sent_push_messages_count.clear(),
-            i64
-        ),
-        (
-            "require_stake_for_gossip_unknown_feature_set",
-            stats.require_stake_for_gossip_unknown_feature_set.clear(),
             i64
         ),
         (
