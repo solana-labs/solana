@@ -4390,18 +4390,7 @@ impl Bank {
         }
     }
 
-    fn collect_rent_in_partition(&self, partition: Partition) -> usize {
-        let subrange = Self::pubkey_range_from_partition(partition);
-
-        self.rc.accounts.hold_range_in_memory(&subrange, true);
-
-        let accounts = self
-            .rc
-            .accounts
-            .load_to_collect_rent_eagerly(&self.ancestors, subrange.clone());
-        let account_count = accounts.len();
-
-        // parallelize?
+    fn collect_rent_from_accounts(&self, accounts: Vec<(Pubkey, AccountSharedData)>) {
         let rent_for_sysvars = self.rent_for_sysvars();
         let mut total_rent = 0;
         let mut rent_debits = RentDebits::default();
@@ -4423,8 +4412,69 @@ impl Bank {
         }
         self.collected_rent.fetch_add(total_rent, Relaxed);
         self.rewards.write().unwrap().append(&mut rent_debits.0);
+    }
 
-        self.rc.accounts.hold_range_in_memory(&subrange, false);
+    fn collect_rent_in_partition(&self, partition: Partition) -> usize {
+        let subrange_full = Self::pubkey_range_from_partition(partition);
+        self.rc.accounts.hold_range_in_memory(&subrange_full, true);
+        let num_threads = std::cmp::max(2, num_cpus::get() / 4) as Slot;
+        // divide the range into num_threads smaller ranges and process in parallel
+        // Note that 'pubkey_range_from_partition' cannot easily be re-used here to break the range smaller.
+        // It has special handling of 0..0 and partition_count changes affect all ranges unevenly.
+        let sz = std::mem::size_of::<u64>();
+        let get_be = |key: &Pubkey| u64::from_be_bytes(key.as_ref()[0..sz].try_into().unwrap());
+        let start_prefix = get_be(subrange_full.start());
+        let end_prefix_inclusive = get_be(subrange_full.end());
+        let range = end_prefix_inclusive - start_prefix;
+        let increment = range / num_threads;
+        let account_counts = self.rc.accounts.accounts_db.thread_pool.install(|| {
+            (0..num_threads)
+                .into_par_iter()
+                .map(|chunk| {
+                    let offset = |chunk| start_prefix + chunk * increment;
+                    let start = offset(chunk);
+                    let last = chunk == num_threads - 1;
+                    let merge_prefix = |prefix: u64, mut bound: Pubkey| {
+                        bound.as_mut()[0..sz].copy_from_slice(&prefix.to_be_bytes());
+                        bound
+                    };
+                    let start = merge_prefix(start, *subrange_full.start());
+                    let accounts = if last {
+                        let end = *subrange_full.end();
+                        let subrange = start..=end; // IN-clusive
+                        self.rc
+                            .accounts
+                            .load_to_collect_rent_eagerly(&self.ancestors, subrange)
+                    } else {
+                        let end = merge_prefix(offset(chunk + 1), *subrange_full.start());
+                        let subrange = start..end; // EX-clusive, the next 'start' will be this same value
+                        self.rc
+                            .accounts
+                            .load_to_collect_rent_eagerly(&self.ancestors, subrange)
+                    };
+
+                    let account_count = accounts.len();
+                    self.collect_rent_from_accounts(accounts);
+                    account_count
+                })
+                .collect::<Vec<_>>()
+        });
+
+        let mut account_count = 0;
+        let mut max = 0;
+        for count in account_counts {
+            max = std::cmp::max(max, count);
+            account_count += count;
+        }
+
+        self.rc.accounts.hold_range_in_memory(&subrange_full, false);
+
+        datapoint_info!(
+            "collect_rent_eagerly",
+            ("accounts", account_count, i64),
+            ("max_chunk", max, i64),
+            ("chunks", num_threads, i64),
+        );
         account_count
     }
 
