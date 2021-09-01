@@ -122,25 +122,21 @@ impl ClusterNodes<RetransmitStage> {
         &self,
         shred_seed: [u8; 32],
         fanout: usize,
-        slot_leader: Option<Pubkey>,
+        slot_leader: Pubkey,
     ) -> (
         Vec<&ContactInfo>, // neighbors
         Vec<&ContactInfo>, // children
     ) {
         // Exclude leader from list of nodes.
-        let index = self.index.iter().copied();
-        let (weights, index): (Vec<u64>, Vec<usize>) = match slot_leader {
-            None => {
-                error!("unknown leader for shred slot");
-                index.unzip()
-            }
-            Some(slot_leader) if slot_leader == self.pubkey => {
-                error!("retransmit from slot leader: {}", slot_leader);
-                index.unzip()
-            }
-            Some(slot_leader) => index
+        let (weights, index): (Vec<u64>, Vec<usize>) = if slot_leader == self.pubkey {
+            error!("retransmit from slot leader: {}", slot_leader);
+            self.index.iter().copied().unzip()
+        } else {
+            self.index
+                .iter()
                 .filter(|(_, i)| self.nodes[*i].pubkey() != slot_leader)
-                .unzip(),
+                .copied()
+                .unzip()
         };
         let index: Vec<_> = {
             let shuffle = weighted_shuffle(weights.into_iter(), shred_seed);
@@ -462,7 +458,7 @@ mod tests {
             let (neighbors_indices, children_indices) =
                 compute_retransmit_peers(fanout, self_index, &shuffled_index);
             let (neighbors, children) =
-                cluster_nodes.get_retransmit_peers(shred_seed, fanout, Some(slot_leader));
+                cluster_nodes.get_retransmit_peers(shred_seed, fanout, slot_leader);
             assert_eq!(children.len(), children_indices.len());
             for (node, index) in children.into_iter().zip(children_indices) {
                 assert_eq!(*node, peers[index]);
