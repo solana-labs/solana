@@ -2226,7 +2226,7 @@ impl AccountsDb {
         );
     }
 
-    fn do_shrink_slot_stores<'a, I>(&'a self, slot: Slot, stores: I, _is_startup: bool) -> usize
+    fn do_shrink_slot_stores<'a, I>(&'a self, slot: Slot, stores: I) -> usize
     where
         I: Iterator<Item = &'a Arc<AccountStorageEntry>>,
     {
@@ -2503,7 +2503,7 @@ impl AccountsDb {
 
     // Reads all accounts in given slot's AppendVecs and filter only to alive,
     // then create a minimum AppendVec filled with the alive.
-    fn shrink_slot_forced(&self, slot: Slot, is_startup: bool) -> usize {
+    fn shrink_slot_forced(&self, slot: Slot) -> usize {
         debug!("shrink_slot_forced: slot: {}", slot);
 
         if let Some(stores_lock) = self.storage.get_slot_stores(slot) {
@@ -2512,7 +2512,7 @@ impl AccountsDb {
             if !Self::is_shrinking_productive(slot, &stores) {
                 return 0;
             }
-            self.do_shrink_slot_stores(slot, stores.iter(), is_startup)
+            self.do_shrink_slot_stores(slot, stores.iter())
         } else {
             0
         }
@@ -2640,7 +2640,7 @@ impl AccountsDb {
                 .into_par_iter()
                 .map(|(slot, slot_shrink_candidates)| {
                     let mut measure = Measure::start("shrink_candidate_slots-ms");
-                    self.do_shrink_slot_stores(slot, slot_shrink_candidates.values(), false);
+                    self.do_shrink_slot_stores(slot, slot_shrink_candidates.values());
                     measure.stop();
                     inc_new_counter_info!("shrink_candidate_slots-ms", measure.as_ms() as usize);
                     slot_shrink_candidates.len()
@@ -2676,7 +2676,7 @@ impl AccountsDb {
             slots.chunks(OUTER_CHUNK_SIZE).for_each(|chunk| {
                 chunk.par_chunks(inner_chunk_size).for_each(|slots| {
                     for slot in slots {
-                        self.shrink_slot_forced(*slot, is_startup);
+                        self.shrink_slot_forced(*slot);
                     }
                 });
                 if self.dirty_stores.len() > DIRTY_STORES_CLEANING_THRESHOLD {
@@ -2686,7 +2686,7 @@ impl AccountsDb {
         } else {
             for slot in self.all_slots_in_storage() {
                 if self.caching_enabled {
-                    self.shrink_slot_forced(slot, false);
+                    self.shrink_slot_forced(slot);
                 } else {
                     self.do_shrink_slot_forced_v1(slot);
                 }
@@ -6548,7 +6548,7 @@ impl AccountsDb {
                 );
             }
 
-            self.do_shrink_slot_stores(slot, stores.iter(), false)
+            self.do_shrink_slot_stores(slot, stores.iter())
         } else {
             0
         }
