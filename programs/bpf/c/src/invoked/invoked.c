@@ -14,6 +14,9 @@ extern uint64_t entrypoint(const uint8_t *input) {
     return ERROR_INVALID_ARGUMENT;
   }
 
+  // on entry, return data must not be set
+  sol_assert(sol_get_return_data(NULL, 0, NULL) == 0);
+
   if (params.data_len == 0) {
     return SUCCESS;
   }
@@ -89,6 +92,12 @@ extern uint64_t entrypoint(const uint8_t *input) {
   }
   case RETURN_OK: {
     sol_log("return Ok");
+    return SUCCESS;
+  }
+  case SET_RETURN_DATA: {
+    sol_set_return_data((const uint8_t*)RETURN_DATA_VAL, sizeof(RETURN_DATA_VAL));
+    sol_log("set return data");
+    sol_assert(sol_get_return_data(NULL, 0, NULL) == sizeof(RETURN_DATA_VAL));
     return SUCCESS;
   }
   case RETURN_ERROR: {
