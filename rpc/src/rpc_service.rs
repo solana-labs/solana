@@ -113,17 +113,23 @@ impl RpcRequestMiddleware {
     }
 
     fn is_file_get_path(&self, path: &str) -> bool {
-        match path {
-            DEFAULT_GENESIS_DOWNLOAD_PATH => true,
-            _ => {
-                if self.snapshot_config.is_some() {
-                    self.full_snapshot_archive_path_regex.is_match(path)
-                        || self.incremental_snapshot_archive_path_regex.is_match(path)
-                } else {
-                    false
-                }
-            }
+        if path == DEFAULT_GENESIS_DOWNLOAD_PATH {
+            return true;
         }
+
+        if self.snapshot_config.is_none() {
+            return false;
+        }
+
+        let starting_character = '/';
+        if !path.starts_with(starting_character) {
+            return false;
+        }
+
+        let path = path.trim_start_matches(starting_character);
+
+        self.full_snapshot_archive_path_regex.is_match(path)
+            || self.incremental_snapshot_archive_path_regex.is_match(path)
     }
 
     #[cfg(unix)]
@@ -644,16 +650,16 @@ mod tests {
         assert!(rrm_with_snapshot_config
             .is_file_get_path("/snapshot-100-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar"));
 
-        assert!(!rrm_with_snapshot_config.is_file_get_path(
+        assert!(rrm_with_snapshot_config.is_file_get_path(
             "/incremental-snapshot-100-200-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.bz2"
         ));
-        assert!(!rrm_with_snapshot_config.is_file_get_path(
+        assert!(rrm_with_snapshot_config.is_file_get_path(
             "/incremental-snapshot-100-200-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.zst"
         ));
-        assert!(!rrm_with_snapshot_config.is_file_get_path(
+        assert!(rrm_with_snapshot_config.is_file_get_path(
             "/incremental-snapshot-100-200-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.gz"
         ));
-        assert!(!rrm_with_snapshot_config.is_file_get_path(
+        assert!(rrm_with_snapshot_config.is_file_get_path(
             "/incremental-snapshot-100-200-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar"
         ));
 
