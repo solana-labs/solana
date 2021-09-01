@@ -4748,6 +4748,7 @@ dependencies = [
  "solana-program-runtime",
  "solana-program-test",
  "solana-rayon-threadlimit",
+ "solana-replica-lib",
  "solana-rpc",
  "solana-runtime",
  "solana-sdk",
@@ -5523,6 +5524,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-replica-lib"
+version = "1.8.0"
+dependencies = [
+ "bincode",
+ "chrono",
+ "crossbeam-channel",
+ "futures 0.3.16",
+ "futures-util",
+ "log 0.4.14",
+ "prost",
+ "prost-types",
+ "serde",
+ "solana-logger 1.8.0",
+ "solana-metrics",
+ "solana-rpc",
+ "solana-runtime",
+ "solana-sdk",
+ "tokio 1.10.1",
+ "tonic",
+ "tonic-build",
+]
+
+[[package]]
 name = "solana-replica-node"
 version = "1.8.0"
 dependencies = [
@@ -5538,6 +5562,8 @@ dependencies = [
  "jsonrpc-ipc-server 17.1.0",
  "jsonrpc-server-utils 17.1.0",
  "log 0.4.14",
+ "prost",
+ "prost-types",
  "rand 0.7.3",
  "serde",
  "serial_test 0.5.1",
@@ -5553,6 +5579,7 @@ dependencies = [
  "solana-logger 1.8.0",
  "solana-metrics",
  "solana-net-utils",
+ "solana-replica-lib",
  "solana-rpc",
  "solana-runtime",
  "solana-sdk",
@@ -5561,6 +5588,8 @@ dependencies = [
  "solana-version",
  "solana-vote-program",
  "tempfile",
+ "tonic",
+ "tonic-build",
 ]
 
 [[package]]
@@ -5993,6 +6022,7 @@ dependencies = [
  "solana-net-utils",
  "solana-perf",
  "solana-poh",
+ "solana-replica-lib",
  "solana-rpc",
  "solana-runtime",
  "solana-sdk",

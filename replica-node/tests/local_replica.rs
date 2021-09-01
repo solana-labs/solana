@@ -9,6 +9,7 @@ use {
         local_cluster::{ClusterConfig, LocalCluster},
         validator_configs::*,
     },
+    solana_replica_lib::accountsdb_repl_server::AccountsDbReplServiceConfig,
     solana_replica_node::{
         replica_node::{ReplicaNode, ReplicaNodeConfig},
         replica_util,
@@ -132,11 +133,22 @@ fn setup_snapshot_validator_config(
     // Create the account paths
     let (account_storage_dirs, account_storage_paths) = generate_account_paths(num_account_paths);
 
+    let bind_ip_addr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
+    let accountsdb_repl_port =
+        solana_net_utils::find_available_port_in_range(bind_ip_addr, (1024, 65535)).unwrap();
+    let replica_server_addr = SocketAddr::new(bind_ip_addr, accountsdb_repl_port);
+
+    let accountsdb_repl_service_config = Some(AccountsDbReplServiceConfig {
+        worker_threads: 1,
+        replica_server_addr,
+    });
+
     // Create the validator config
     let validator_config = ValidatorConfig {
         snapshot_config: Some(snapshot_config),
         account_paths: account_storage_paths,
         accounts_hash_interval_slots: snapshot_interval_slots,
+        accountsdb_repl_service_config,
         ..ValidatorConfig::default()
     };
 
@@ -259,7 +271,14 @@ fn test_replica_bootstrap() {
     info!("The cluster info:\n{:?}", cluster_info.contact_info_trace());
 
     let config = ReplicaNodeConfig {
-        rpc_source_addr: contact_info.rpc,
+        rpc_peer_addr: contact_info.rpc,
+        accountsdb_repl_peer_addr: Some(
+            leader_snapshot_test_config
+                .validator_config
+                .accountsdb_repl_service_config
+                .unwrap()
+                .replica_server_addr,
+        ),
         rpc_addr,
         rpc_pubsub_addr,
         ledger_path: ledger_path.to_path_buf(),

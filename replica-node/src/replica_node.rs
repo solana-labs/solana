@@ -1,4 +1,5 @@
 use {
+    crate::accountsdb_repl_service::AccountsDbReplService,
     crossbeam_channel::unbounded,
     log::*,
     solana_download_utils::download_snapshot,
@@ -8,6 +9,7 @@ use {
         blockstore::Blockstore, blockstore_db::AccessType, blockstore_processor,
         leader_schedule_cache::LeaderScheduleCache,
     },
+    solana_replica_lib::accountsdb_repl_client::AccountsDbReplClientServiceConfig,
     solana_rpc::{
         max_slots::MaxSlots,
         optimistically_confirmed_bank_tracker::{
@@ -40,7 +42,8 @@ use {
 };
 
 pub struct ReplicaNodeConfig {
-    pub rpc_source_addr: SocketAddr,
+    pub rpc_peer_addr: SocketAddr,
+    pub accountsdb_repl_peer_addr: Option<SocketAddr>,
     pub rpc_addr: SocketAddr,
     pub rpc_pubsub_addr: SocketAddr,
     pub ledger_path: PathBuf,
@@ -62,6 +65,7 @@ pub struct ReplicaNode {
     json_rpc_service: Option<JsonRpcService>,
     pubsub_service: Option<PubSubService>,
     optimistically_confirmed_bank_tracker: Option<OptimisticallyConfirmedBankTracker>,
+    accountsdb_repl_service: Option<AccountsDbReplService>,
 }
 
 // Struct maintaining information about banks
@@ -86,7 +90,7 @@ fn initialize_from_snapshot(
     );
 
     download_snapshot(
-        &replica_config.rpc_source_addr,
+        &replica_config.rpc_peer_addr,
         &replica_config.snapshot_archives_dir,
         replica_config.snapshot_info,
         false,
@@ -240,6 +244,7 @@ fn start_client_rpc_services(
             bank_forks.clone(),
             optimistically_confirmed_bank.clone(),
             subscriptions.clone(),
+            None,
         )),
     )
 }
@@ -247,7 +252,7 @@ fn start_client_rpc_services(
 impl ReplicaNode {
     pub fn new(replica_config: ReplicaNodeConfig) -> Self {
         let genesis_config = download_then_check_genesis_hash(
-            &replica_config.rpc_source_addr,
+            &replica_config.rpc_peer_addr,
             &replica_config.ledger_path,
             None,
             MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
@@ -279,10 +284,31 @@ impl ReplicaNode {
                 &replica_config.socket_addr_space,
             );
 
+        let accountsdb_repl_client_config = AccountsDbReplClientServiceConfig {
+            worker_threads: 1,
+            replica_server_addr: replica_config.accountsdb_repl_peer_addr.unwrap(),
+        };
+
+        let last_replicated_slot = bank_info.bank_forks.read().unwrap().root_bank().slot();
+        info!(
+            "Starting AccountsDbReplService from slot {:?}",
+            last_replicated_slot
+        );
+        let accountsdb_repl_service = Some(
+            AccountsDbReplService::new(last_replicated_slot, accountsdb_repl_client_config)
+                .expect("Failed to start AccountsDb replication service"),
+        );
+
+        info!(
+            "Started AccountsDbReplService from slot {:?}",
+            last_replicated_slot
+        );
+
         ReplicaNode {
             json_rpc_service,
             pubsub_service,
             optimistically_confirmed_bank_tracker,
+            accountsdb_repl_service,
         }
     }
 
@@ -301,6 +327,11 @@ impl ReplicaNode {
             optimistically_confirmed_bank_tracker
                 .join()
                 .expect("optimistically_confirmed_bank_tracker");
+        }
+        if let Some(accountsdb_repl_service) = self.accountsdb_repl_service {
+            accountsdb_repl_service
+                .join()
+                .expect("accountsdb_repl_service");
         }
     }
 }

@@ -37,6 +37,7 @@ use {
     solana_ledger::blockstore_db::BlockstoreRecoveryMode,
     solana_perf::recycler::enable_recycler_warming,
     solana_poh::poh_service,
+    solana_replica_lib::accountsdb_repl_server::AccountsDbReplServiceConfig,
     solana_rpc::{rpc::JsonRpcConfig, rpc_pubsub_service::PubSubConfig},
     solana_runtime::{
         accounts_db::{
@@ -1058,6 +1059,7 @@ pub fn main() {
         .send_transaction_leader_forward_count
         .to_string();
     let default_rpc_threads = num_cpus::get().to_string();
+    let default_accountsdb_repl_threads = num_cpus::get().to_string();
     let default_max_snapshot_to_retain = &DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN.to_string();
     let default_min_snapshot_download_speed = &DEFAULT_MIN_SNAPSHOT_DOWNLOAD_SPEED.to_string();
     let default_max_snapshot_download_abort = &MAX_SNAPSHOT_DOWNLOAD_ABORT.to_string();
@@ -1746,6 +1748,41 @@ pub fn main() {
                 .help("Verifies blockstore roots on boot and fixes any gaps"),
         )
         .arg(
+            Arg::with_name("enable_accountsdb_repl")
+                .long("enable-accountsdb-repl")
+                .takes_value(false)
+                .hidden(true)
+                .help("Enable AccountsDb Replication"),
+        )
+        .arg(
+            Arg::with_name("accountsdb_repl_bind_address")
+                .long("accountsdb-repl-bind-address")
+                .value_name("HOST")
+                .takes_value(true)
+                .validator(solana_net_utils::is_host)
+                .hidden(true)
+                .help("IP address to bind the AccountsDb Replication port [default: use --bind-address]"),
+        )
+        .arg(
+            Arg::with_name("accountsdb_repl_port")
+                .long("accountsdb-repl-port")
+                .value_name("PORT")
+                .takes_value(true)
+                .validator(solana_validator::port_validator)
+                .hidden(true)
+                .help("Enable AccountsDb Replication Service on this port"),
+        )
+        .arg(
+            Arg::with_name("accountsdb_repl_threads")
+                .long("accountsdb-repl-threads")
+                .value_name("NUMBER")
+                .validator(is_parsable::<usize>)
+                .takes_value(true)
+                .default_value(&default_accountsdb_repl_threads)
+                .hidden(true)
+                .help("Number of threads to use for servicing AccountsDb Replication requests"),
+        )
+        .arg(
             Arg::with_name("halt_on_trusted_validators_accounts_hash_mismatch")
                 .alias("halt-on-trusted-validators-accounts-hash-mismatch")
                 .long("halt-on-known-validators-accounts-hash-mismatch")
@@ -2396,6 +2433,26 @@ pub fn main() {
         .ok()
         .map(|bins| AccountsIndexConfig { bins: Some(bins) });
 
+    let accountsdb_repl_service_config = if matches.is_present("enable_accountsdb_repl") {
+        let accountsdb_repl_bind_address = if matches.is_present("accountsdb_repl_bind_address") {
+            solana_net_utils::parse_host(matches.value_of("accountsdb_repl_bind_address").unwrap())
+                .expect("invalid accountsdb_repl_bind_address")
+        } else {
+            bind_address
+        };
+        let accountsdb_repl_port = value_t_or_exit!(matches, "accountsdb_repl_port", u16);
+
+        Some(AccountsDbReplServiceConfig {
+            worker_threads: value_t_or_exit!(matches, "accountsdb_repl_threads", usize),
+            replica_server_addr: SocketAddr::new(
+                accountsdb_repl_bind_address,
+                accountsdb_repl_port,
+            ),
+        })
+    } else {
+        None
+    };
+
     let mut validator_config = ValidatorConfig {
         require_tower: matches.is_present("require_tower"),
         tower_storage,
@@ -2436,6 +2493,7 @@ pub fn main() {
             account_indexes: account_indexes.clone(),
             rpc_scan_and_fix_roots: matches.is_present("rpc_scan_and_fix_roots"),
         },
+        accountsdb_repl_service_config,
         rpc_addrs: value_t!(matches, "rpc_port", u16).ok().map(|rpc_port| {
             (
                 SocketAddr::new(rpc_bind_address, rpc_port),
