@@ -59,6 +59,7 @@ pub enum RpcRequest {
     )]
     GetFees,
     GetFirstAvailableBlock,
+    GetFullSnapshotSlot,
     GetGenesisHash,
     GetHealth,
     GetIdentity,
@@ -80,7 +81,12 @@ pub enum RpcRequest {
     )]
     GetRecentBlockhash,
     GetRecentPerformanceSamples,
+    #[deprecated(
+        since = "1.8.0",
+        note = "Please use RpcClient::get_snapshot_slots() instead"
+    )]
     GetSnapshotSlot,
+    GetSnapshotSlots,
     GetSignaturesForAddress,
     GetSignatureStatuses,
     GetSlot,
@@ -136,6 +142,7 @@ impl fmt::Display for RpcRequest {
             RpcRequest::GetFeeRateGovernor => "getFeeRateGovernor",
             RpcRequest::GetFees => "getFees",
             RpcRequest::GetFirstAvailableBlock => "getFirstAvailableBlock",
+            RpcRequest::GetFullSnapshotSlot => "getFullSnapshotSlot",
             RpcRequest::GetGenesisHash => "getGenesisHash",
             RpcRequest::GetHealth => "getHealth",
             RpcRequest::GetIdentity => "getIdentity",
@@ -154,6 +161,7 @@ impl fmt::Display for RpcRequest {
             RpcRequest::GetRecentBlockhash => "getRecentBlockhash",
             RpcRequest::GetRecentPerformanceSamples => "getRecentPerformanceSamples",
             RpcRequest::GetSnapshotSlot => "getSnapshotSlot",
+            RpcRequest::GetSnapshotSlots => "getSnapshotSlots",
             RpcRequest::GetSignaturesForAddress => "getSignaturesForAddress",
             RpcRequest::GetSignatureStatuses => "getSignatureStatuses",
             RpcRequest::GetSlot => "getSlot",
