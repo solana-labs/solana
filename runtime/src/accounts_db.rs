@@ -12443,14 +12443,15 @@ pub mod tests {
         ];
         // make sure accounts are in 2 different bins
         assert!(
-            accounts
-                .accounts_index
-                .bin_calculator
-                .bin_from_pubkey(&keys[0])
-                != accounts
+            (accounts.accounts_index.bins() == 1)
+                ^ (accounts
                     .accounts_index
                     .bin_calculator
-                    .bin_from_pubkey(&keys[1])
+                    .bin_from_pubkey(&keys[0])
+                    != accounts
+                        .accounts_index
+                        .bin_calculator
+                        .bin_from_pubkey(&keys[1]))
         );
         let account = AccountSharedData::new(1, 1, AccountSharedData::default().owner());
         let account_big = AccountSharedData::new(1, 1000, AccountSharedData::default().owner());
