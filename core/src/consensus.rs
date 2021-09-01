@@ -408,7 +408,7 @@ impl Tower {
         vote_hash: Hash,
         last_voted_slot_in_bank: Option<Slot>,
     ) -> Option<Slot> {
-        trace!("{} record_vote for {}", self.node_pubkey, vote_slot);
+        info!("TEST_ {} record_vote for {}", self.node_pubkey, vote_slot);
         let old_root = self.root();
         let mut new_vote = Self::apply_vote_and_generate_vote_diff(
             &mut self.vote_state,
@@ -418,6 +418,7 @@ impl Tower {
         );
 
         new_vote.timestamp = self.maybe_timestamp(self.last_vote.last_voted_slot().unwrap_or(0));
+        info!("TEST_ tower records new vote {:?}, last vote {:?}", new_vote, self.last_vote);
         self.last_vote = new_vote;
 
         let new_root = self.root();
