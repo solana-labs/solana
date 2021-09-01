@@ -207,6 +207,10 @@ pub mod check_seed_length {
     solana_sdk::declare_id!("8HYXgkoKGreAMA3MfJkdjbKNVbfZRQP3jqFpa7iqN4v7");
 }
 
+pub mod return_data_syscall_enabled {
+    solana_sdk::declare_id!("BJVXq6NdLC7jCDGjfqJv7M1XHD4Y13VrpDqRF2U7UBcC");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -254,6 +258,7 @@ lazy_static! {
         (ed25519_program_enabled::id(), "enable builtin ed25519 signature verify program"),
         (allow_native_ids::id(), "allow native program ids in program derived addresses"),
         (check_seed_length::id(), "Check program address seed lengths"),
+        (return_data_syscall_enabled::id(), "enable sol_{set,get}_return_data syscall")
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
