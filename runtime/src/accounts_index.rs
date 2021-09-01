@@ -718,7 +718,7 @@ impl<'a, T: IsCached> Iterator for AccountsIndexIterator<'a, T> {
             return None;
         }
         let (start_bin, bin_range) = self.bin_start_and_range();
-        let mut chunk: Vec<(Pubkey, AccountMapEntry<T>)> = Vec::with_capacity(ITER_BATCH_SIZE);
+        let mut chunk = Vec::with_capacity(ITER_BATCH_SIZE);
         'outer: for i in self.account_maps.iter().skip(start_bin).take(bin_range) {
             for (pubkey, account_map_entry) in Self::range(
                 &i.read().unwrap(),
