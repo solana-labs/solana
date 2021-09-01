@@ -115,7 +115,7 @@
     "eslint-config-prettier": "^8.0.0",
     "eslint-plugin-import": "2.24.2",
     "eslint-plugin-mocha": "^9.0.0",
-    "eslint-plugin-prettier": "^3.0.0",
+    "eslint-plugin-prettier": "^4.0.0",
     "esm": "^3.2.25",
     "flow-bin": "^0.150.0",
     "flowgen": "^1.13.0",
