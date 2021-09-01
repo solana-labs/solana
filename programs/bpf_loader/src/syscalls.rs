@@ -22,8 +22,8 @@ use solana_sdk::{
         allow_native_ids, check_seed_length, close_upgradeable_program_accounts, cpi_data_cost,
         demote_program_write_locks, enforce_aligned_host_addrs, keccak256_syscall_enabled,
         libsecp256k1_0_5_upgrade_enabled, mem_overlap_fix, memory_ops_syscalls,
-        secp256k1_recover_syscall_enabled, set_upgrade_authority_via_cpi_enabled,
-        sysvar_via_syscall, update_data_on_realloc,
+        return_data_syscall_enabled, secp256k1_recover_syscall_enabled,
+        set_upgrade_authority_via_cpi_enabled, sysvar_via_syscall, update_data_on_realloc,
     },
     hash::{Hasher, HASH_BYTES},
     ic_msg,
@@ -32,6 +32,7 @@ use solana_sdk::{
     keyed_account::KeyedAccount,
     native_loader,
     process_instruction::{self, stable_log, ComputeMeter, InvokeContext, Logger},
+    program::MAX_RETURN_DATA,
     pubkey::{Pubkey, PubkeyError, MAX_SEEDS, MAX_SEED_LEN},
     rent::Rent,
     secp256k1_recover::{
@@ -42,6 +43,7 @@ use solana_sdk::{
 use std::{
     alloc::Layout,
     cell::{Ref, RefCell, RefMut},
+    cmp::min,
     mem::{align_of, size_of},
     rc::Rc,
     slice::from_raw_parts_mut,
@@ -61,9 +63,9 @@ pub enum SyscallError {
     Abort,
     #[error("BPF program Panicked in {0} at {1}:{2}")]
     Panic(String, u64, u64),
-    #[error("cannot borrow invoke context")]
+    #[error("Cannot borrow invoke context")]
     InvokeContextBorrowFailed,
-    #[error("malformed signer seed: {0}: {1:?}")]
+    #[error("Malformed signer seed: {0}: {1:?}")]
     MalformedSignerSeed(Utf8Error, Vec<u8>),
     #[error("Could not create program address with signer seeds: {0}")]
     BadSeeds(PubkeyError),
@@ -81,6 +83,8 @@ pub enum SyscallError {
     TooManyAccounts,
     #[error("Overlapping copy")]
     CopyOverlapping,
+    #[error("Return data too large ({0} > {1})")]
+    ReturnDataTooLarge(u64, u64),
 }
 impl From<SyscallError> for EbpfError<BpfError> {
     fn from(error: SyscallError) -> Self {
@@ -172,6 +176,14 @@ pub fn register_syscalls(
 
     // Memory allocator
     syscall_registry.register_syscall_by_name(b"sol_alloc_free_", SyscallAllocFree::call)?;
+
+    // Return data
+    if invoke_context.is_feature_active(&return_data_syscall_enabled::id()) {
+        syscall_registry
+            .register_syscall_by_name(b"sol_set_return_data", SyscallSetReturnData::call)?;
+        syscall_registry
+            .register_syscall_by_name(b"sol_get_return_data", SyscallGetReturnData::call)?;
+    }
 
     Ok(syscall_registry)
 }
@@ -346,6 +358,8 @@ pub fn bind_syscall_context_objects<'a>(
     );
 
     let is_sysvar_via_syscall_active = invoke_context.is_feature_active(&sysvar_via_syscall::id());
+    let is_return_data_syscall_active =
+        invoke_context.is_feature_active(&return_data_syscall_enabled::id());
 
     let invoke_context = Rc::new(RefCell::new(invoke_context));
 
@@ -377,6 +391,25 @@ pub fn bind_syscall_context_objects<'a>(
         vm,
         is_sysvar_via_syscall_active,
         Box::new(SyscallGetRentSysvar {
+            invoke_context: invoke_context.clone(),
+            loader_id,
+        }),
+    );
+
+    // Return data
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        is_return_data_syscall_active,
+        Box::new(SyscallSetReturnData {
+            invoke_context: invoke_context.clone(),
+            loader_id,
+        }),
+    );
+
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        is_return_data_syscall_active,
+        Box::new(SyscallGetReturnData {
             invoke_context: invoke_context.clone(),
             loader_id,
         }),
@@ -2494,6 +2527,142 @@ fn call<'a>(
     }
 
     Ok(SUCCESS)
+}
+
+// Return data handling
+pub struct SyscallSetReturnData<'a> {
+    invoke_context: Rc<RefCell<&'a mut dyn InvokeContext>>,
+    loader_id: &'a Pubkey,
+}
+impl<'a> SyscallObject<BpfError> for SyscallSetReturnData<'a> {
+    fn call(
+        &mut self,
+        addr: u64,
+        len: u64,
+        _arg3: u64,
+        _arg4: u64,
+        _arg5: u64,
+        memory_mapping: &MemoryMapping,
+        result: &mut Result<u64, EbpfError<BpfError>>,
+    ) {
+        let mut invoke_context = question_mark!(
+            self.invoke_context
+                .try_borrow_mut()
+                .map_err(|_| SyscallError::InvokeContextBorrowFailed),
+            result
+        );
+
+        let budget = invoke_context.get_bpf_compute_budget();
+
+        question_mark!(
+            invoke_context
+                .get_compute_meter()
+                .consume(len / budget.cpi_bytes_per_unit + budget.syscall_base_cost),
+            result
+        );
+
+        if len > MAX_RETURN_DATA as u64 {
+            *result = Err(SyscallError::ReturnDataTooLarge(len, MAX_RETURN_DATA as u64).into());
+            return;
+        }
+
+        if len == 0 {
+            invoke_context.set_return_data(None);
+        } else {
+            let return_data = question_mark!(
+                translate_slice::<u8>(memory_mapping, addr, len, self.loader_id, true),
+                result
+            );
+
+            let program_id = *question_mark!(
+                invoke_context
+                    .get_caller()
+                    .map_err(SyscallError::InstructionError),
+                result
+            );
+
+            invoke_context.set_return_data(Some((program_id, return_data.to_vec())));
+        }
+
+        *result = Ok(0);
+    }
+}
+
+pub struct SyscallGetReturnData<'a> {
+    invoke_context: Rc<RefCell<&'a mut dyn InvokeContext>>,
+    loader_id: &'a Pubkey,
+}
+impl<'a> SyscallObject<BpfError> for SyscallGetReturnData<'a> {
+    fn call(
+        &mut self,
+        return_data_addr: u64,
+        len: u64,
+        program_id_addr: u64,
+        _arg4: u64,
+        _arg5: u64,
+        memory_mapping: &MemoryMapping,
+        result: &mut Result<u64, EbpfError<BpfError>>,
+    ) {
+        let invoke_context = question_mark!(
+            self.invoke_context
+                .try_borrow()
+                .map_err(|_| SyscallError::InvokeContextBorrowFailed),
+            result
+        );
+
+        let budget = invoke_context.get_bpf_compute_budget();
+
+        question_mark!(
+            invoke_context
+                .get_compute_meter()
+                .consume(budget.syscall_base_cost),
+            result
+        );
+
+        if let Some((program_id, return_data)) = invoke_context.get_return_data() {
+            if len != 0 {
+                let length = min(return_data.len() as u64, len);
+
+                question_mark!(
+                    invoke_context
+                        .get_compute_meter()
+                        .consume((length + size_of::<Pubkey>() as u64) / budget.cpi_bytes_per_unit),
+                    result
+                );
+
+                let return_data_result = question_mark!(
+                    translate_slice_mut::<u8>(
+                        memory_mapping,
+                        return_data_addr,
+                        length,
+                        self.loader_id,
+                        true,
+                    ),
+                    result
+                );
+
+                return_data_result.copy_from_slice(&return_data[..length as usize]);
+
+                let program_id_result = question_mark!(
+                    translate_slice_mut::<Pubkey>(
+                        memory_mapping,
+                        program_id_addr,
+                        1,
+                        self.loader_id,
+                        true,
+                    ),
+                    result
+                );
+
+                program_id_result[0] = *program_id;
+            }
+
+            // Return the actual length, rather the length returned
+            *result = Ok(return_data.len() as u64);
+        } else {
+            *result = Ok(0);
+        }
+    }
 }
 
 #[cfg(test)]

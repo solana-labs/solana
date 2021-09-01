@@ -5449,6 +5449,7 @@ name = "solana-sdk"
 version = "1.8.1"
 dependencies = [
  "assert_matches",
+ "base64 0.13.0",
  "bincode",
  "borsh",
  "borsh-derive",

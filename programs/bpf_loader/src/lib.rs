@@ -940,6 +940,11 @@ impl Executor for BpfExecutor {
                 let trace_string = String::from_utf8(trace_buffer).unwrap();
                 trace!("BPF Program Instruction Trace:\n{}", trace_string);
             }
+            drop(vm);
+            let return_data = invoke_context.get_return_data();
+            if let Some((program_id, return_data)) = return_data {
+                stable_log::program_return_data(&logger, program_id, return_data);
+            }
             match result {
                 Ok(status) => {
                     if status != SUCCESS {
@@ -1271,6 +1276,7 @@ mod tests {
             accounts: vec![],
             sysvars: vec![],
             disabled_features: vec![].into_iter().collect(),
+            return_data: None,
         };
         assert_eq!(
             Err(InstructionError::ProgramFailedToComplete),

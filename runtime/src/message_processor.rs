@@ -292,6 +292,8 @@ pub struct ThisInvokeContext<'a> {
     ancestors: &'a Ancestors,
     #[allow(clippy::type_complexity)]
     sysvars: RefCell<Vec<(Pubkey, Option<Rc<Vec<u8>>>)>>,
+    // return data and program_id that set it
+    return_data: Option<(Pubkey, Vec<u8>)>,
 }
 impl<'a> ThisInvokeContext<'a> {
     #[allow(clippy::too_many_arguments)]
@@ -343,6 +345,7 @@ impl<'a> ThisInvokeContext<'a> {
             account_db,
             ancestors,
             sysvars: RefCell::new(vec![]),
+            return_data: None,
         };
         invoke_context
             .invoke_stack
@@ -523,6 +526,12 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         } else {
             None
         }
+    }
+    fn set_return_data(&mut self, return_data: Option<(Pubkey, Vec<u8>)>) {
+        self.return_data = return_data;
+    }
+    fn get_return_data(&self) -> &Option<(Pubkey, Vec<u8>)> {
+        &self.return_data
     }
 }
 pub struct ThisLogger {
@@ -971,6 +980,9 @@ impl MessageProcessor {
 
             // Verify the calling program hasn't misbehaved
             invoke_context.verify_and_update(instruction, accounts, caller_write_privileges)?;
+
+            // clear the return data
+            invoke_context.set_return_data(None);
 
             // Construct keyed accounts
             let demote_program_write_locks =

@@ -4,7 +4,7 @@
 
 use crate::{
     account_info::AccountInfo, entrypoint::ProgramResult, instruction::Instruction,
-    program_error::UNSUPPORTED_SYSVAR,
+    program_error::UNSUPPORTED_SYSVAR, pubkey::Pubkey,
 };
 use std::sync::{Arc, RwLock};
 
@@ -80,6 +80,10 @@ pub trait SyscallStubs: Sync + Send {
             *val = c;
         }
     }
+    fn sol_get_return_data(&self) -> Option<(Pubkey, Vec<u8>)> {
+        None
+    }
+    fn sol_set_return_data(&mut self, _data: &[u8]) {}
 }
 
 struct DefaultSyscallStubs {}
@@ -152,4 +156,12 @@ pub(crate) fn sol_memset(s: *mut u8, c: u8, n: usize) {
     unsafe {
         SYSCALL_STUBS.read().unwrap().sol_memset(s, c, n);
     }
+}
+
+pub(crate) fn sol_get_return_data() -> Option<(Pubkey, Vec<u8>)> {
+    SYSCALL_STUBS.read().unwrap().sol_get_return_data()
+}
+
+pub(crate) fn sol_set_return_data(data: &[u8]) {
+    SYSCALL_STUBS.write().unwrap().sol_set_return_data(data)
 }

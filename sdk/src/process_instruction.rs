@@ -100,6 +100,10 @@ pub trait InvokeContext {
     );
     /// Get sysvar data
     fn get_sysvar_data(&self, id: &Pubkey) -> Option<Rc<Vec<u8>>>;
+    /// Set the return data
+    fn set_return_data(&mut self, return_data: Option<(Pubkey, Vec<u8>)>);
+    /// Get the return data
+    fn get_return_data(&self) -> &Option<(Pubkey, Vec<u8>)>;
 }
 
 /// Convenience macro to log a message with an `Rc<RefCell<dyn Logger>>`
@@ -181,9 +185,12 @@ pub struct BpfComputeBudget {
     pub sysvar_base_cost: u64,
     /// Number of compute units consumed to call secp256k1_recover
     pub secp256k1_recover_cost: u64,
+    /// Number of compute units consumed to do a syscall without any work
+    pub syscall_base_cost: u64,
     /// Optional program heap region size, if `None` then loader default
     pub heap_size: Option<usize>,
 }
+
 impl Default for BpfComputeBudget {
     fn default() -> Self {
         Self::new()
@@ -206,6 +213,7 @@ impl BpfComputeBudget {
             max_cpi_instruction_size: 1280, // IPv6 Min MTU size
             cpi_bytes_per_unit: 250,        // ~50MB at 200,000 units
             sysvar_base_cost: 100,
+            syscall_base_cost: 100,
             secp256k1_recover_cost: 25_000,
             heap_size: None,
         }
@@ -259,6 +267,25 @@ pub mod stable_log {
     /// That is, any program-generated output is guaranteed to be prefixed by "Program log: "
     pub fn program_log(logger: &Rc<RefCell<dyn Logger>>, message: &str) {
         ic_logger_msg!(logger, "Program log: {}", message);
+    }
+
+    /// Log return data as from the program itself. This line will not be present if no return
+    /// data was set, or if the return data was set to zero length.
+    ///
+    /// The general form is:
+    ///
+    /// ```notrust
+    /// "Program return data: <program-id> <program-generated-data-in-base64>"
+    /// ```
+    ///
+    /// That is, any program-generated output is guaranteed to be prefixed by "Program return data: "
+    pub fn program_return_data(logger: &Rc<RefCell<dyn Logger>>, program_id: &Pubkey, data: &[u8]) {
+        ic_logger_msg!(
+            logger,
+            "Program return data: {} {}",
+            program_id,
+            base64::encode(data)
+        );
     }
 
     /// Log successful program execution.
@@ -335,7 +362,9 @@ pub struct MockInvokeContext<'a> {
     pub accounts: Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>,
     pub sysvars: Vec<(Pubkey, Option<Rc<Vec<u8>>>)>,
     pub disabled_features: HashSet<Pubkey>,
+    pub return_data: Option<(Pubkey, Vec<u8>)>,
 }
+
 impl<'a> MockInvokeContext<'a> {
     pub fn new(keyed_accounts: Vec<KeyedAccount<'a>>) -> Self {
         let bpf_compute_budget = BpfComputeBudget::default();
@@ -350,6 +379,7 @@ impl<'a> MockInvokeContext<'a> {
             accounts: vec![],
             sysvars: vec![],
             disabled_features: HashSet::default(),
+            return_data: None,
         };
         invoke_context
             .invoke_stack
@@ -466,5 +496,11 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
         self.sysvars
             .iter()
             .find_map(|(key, sysvar)| if id == key { sysvar.clone() } else { None })
+    }
+    fn set_return_data(&mut self, return_data: Option<(Pubkey, Vec<u8>)>) {
+        self.return_data = return_data;
+    }
+    fn get_return_data(&self) -> &Option<(Pubkey, Vec<u8>)> {
+        &self.return_data
     }
 }
