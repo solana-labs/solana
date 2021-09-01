@@ -11,24 +11,19 @@ import { Market } from "@project-serum/serum";
 import {
   AccountMeta,
   Connection,
+  PublicKey,
   TransactionInstruction,
 } from "@solana/web3.js";
 
-const mainnetGroupConfig = Config.ids().getGroup(
-  "mainnet",
-  "mainnet.0"
-) as GroupConfig;
-
-const devnetGroupConfig = Config.ids().getGroup(
-  "devnet",
-  "devnet.1"
-) as GroupConfig;
+// note: don't consider deprecated mainnet.0 group
+const mangoGroups = Config.ids().groups.filter(
+  (group) => group.name !== "mainnet.0"
+);
 
 export const isMangoInstruction = (instruction: TransactionInstruction) => {
-  return [
-    mainnetGroupConfig.mangoProgramId.toBase58(),
-    devnetGroupConfig.mangoProgramId.toBase58(),
-  ].includes(instruction.programId.toBase58());
+  return mangoGroups
+    .map((group) => group.mangoProgramId.toBase58())
+    .includes(instruction.programId.toBase58());
 };
 
 export const INSTRUCTION_LOOKUP: { [key: number]: string } = {
@@ -327,19 +322,19 @@ export function logAllKeys(keys: AccountMeta[]) {
   keys.map((key) => console.log(key.pubkey.toBase58()));
 }
 
+function findGroupConfig(programId: PublicKey): GroupConfig {
+  return mangoGroups.filter((group) =>
+    group.mangoProgramId.equals(programId)
+  )[0];
+}
+
 export function getPerpMarketFromInstruction(
   ix: TransactionInstruction,
   keyLocation: number
 ): PerpMarketConfig {
   const perpMarket = ix.keys[keyLocation];
-
-  if (ix.programId.equals(devnetGroupConfig.mangoProgramId)) {
-    return devnetGroupConfig.perpMarkets.filter((mangoPerpMarket) =>
-      perpMarket.pubkey.equals(mangoPerpMarket.publicKey)
-    )[0];
-  }
-
-  return mainnetGroupConfig.perpMarkets.filter((mangoPerpMarket) =>
+  const groupConfig = findGroupConfig(ix.programId);
+  return groupConfig.perpMarkets.filter((mangoPerpMarket) =>
     perpMarket.pubkey.equals(mangoPerpMarket.publicKey)
   )[0];
 }
@@ -349,12 +344,8 @@ export function getSpotMarketFromInstruction(
   keyLocation: number
 ): SpotMarketConfig {
   const spotMarket = ix.keys[keyLocation];
-  if (ix.programId.equals(devnetGroupConfig.mangoProgramId)) {
-    return devnetGroupConfig.spotMarkets.filter((mangoSpotMarket) =>
-      spotMarket.pubkey.equals(mangoSpotMarket.publicKey)
-    )[0];
-  }
-  return mainnetGroupConfig.spotMarkets.filter((mangoSpotMarket) =>
+  const groupConfig = findGroupConfig(ix.programId);
+  return groupConfig.spotMarkets.filter((mangoSpotMarket) =>
     spotMarket.pubkey.equals(mangoSpotMarket.publicKey)
   )[0];
 }
@@ -365,19 +356,12 @@ export async function getSpotMarketFromSpotMarketConfig(
   mangoSpotMarketConfig: SpotMarketConfig
 ): Promise<Market> {
   const connection = new Connection(clusterUrl);
-  if (ix.programId.equals(devnetGroupConfig.mangoProgramId)) {
-    return await Market.load(
-      connection,
-      mangoSpotMarketConfig.publicKey,
-      undefined,
-      devnetGroupConfig.serumProgramId
-    );
-  }
+  const groupConfig = findGroupConfig(ix.programId);
   return await Market.load(
     connection,
     mangoSpotMarketConfig.publicKey,
     undefined,
-    mainnetGroupConfig.serumProgramId
+    groupConfig.serumProgramId
   );
 }
 
@@ -400,16 +384,8 @@ export function spotMarketFromIndex(
   ix: TransactionInstruction,
   marketIndex: number
 ): String {
-  if (ix.programId.equals(devnetGroupConfig.mangoProgramId)) {
-    const spotMarketConfigs = devnetGroupConfig.spotMarkets.filter(
-      (spoartMarketConfig) => spoartMarketConfig.marketIndex === marketIndex
-    );
-    if (!spotMarketConfigs.length) {
-      return "UNKNOWN";
-    }
-    return spotMarketConfigs[0].name;
-  }
-  const spotMarketConfigs = mainnetGroupConfig.spotMarkets.filter(
+  const groupConfig = findGroupConfig(ix.programId);
+  const spotMarketConfigs = groupConfig.spotMarkets.filter(
     (spoartMarketConfig) => spoartMarketConfig.marketIndex === marketIndex
   );
   if (!spotMarketConfigs.length) {
