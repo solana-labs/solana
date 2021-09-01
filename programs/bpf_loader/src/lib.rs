@@ -343,6 +343,8 @@ fn process_loader_upgradeable_instruction(
                 return Err(InstructionError::ExecutableAccountNotRentExempt);
             }
 
+            let new_program_id = *program.unsigned_key();
+
             // Verify Buffer account
 
             if let UpgradeableLoaderState::Buffer { authority_address } = buffer.state()? {
@@ -382,7 +384,7 @@ fn process_loader_upgradeable_instruction(
             // Create ProgramData account
 
             let (derived_address, bump_seed) =
-                Pubkey::find_program_address(&[program.unsigned_key().as_ref()], program_id);
+                Pubkey::find_program_address(&[new_program_id.as_ref()], program_id);
             if derived_address != *programdata.unsigned_key() {
                 ic_logger_msg!(logger, "ProgramData address is not derived");
                 return Err(InstructionError::InvalidArgument);
@@ -396,7 +398,7 @@ fn process_loader_upgradeable_instruction(
                 program_id,
             );
             let caller_program_id = invoke_context.get_caller()?;
-            let signers = [&[program.unsigned_key().as_ref(), &[bump_seed]]]
+            let signers = [&[new_program_id.as_ref(), &[bump_seed]]]
                 .iter()
                 .map(|seeds| Pubkey::create_program_address(*seeds, caller_program_id))
                 .collect::<Result<Vec<Pubkey>, solana_sdk::pubkey::PubkeyError>>()?;
@@ -409,7 +411,7 @@ fn process_loader_upgradeable_instruction(
 
             // Load and verify the program bits
             let executor = create_executor(3, buffer_data_offset, invoke_context, use_jit)?;
-            invoke_context.add_executor(program_id, executor);
+            invoke_context.add_executor(&new_program_id, executor);
 
             let keyed_accounts = invoke_context.get_keyed_accounts()?;
             let payer = keyed_account_at_index(keyed_accounts, 0)?;
@@ -438,7 +440,7 @@ fn process_loader_upgradeable_instruction(
                 .checked_add_lamports(buffer.lamports()?)?;
             buffer.try_account_ref_mut()?.set_lamports(0);
 
-            ic_logger_msg!(logger, "Deployed program {:?}", program.unsigned_key());
+            ic_logger_msg!(logger, "Deployed program {:?}", new_program_id);
         }
         UpgradeableLoaderInstruction::Upgrade => {
             let programdata = keyed_account_at_index(keyed_accounts, 0)?;
@@ -474,6 +476,8 @@ fn process_loader_upgradeable_instruction(
                 ic_logger_msg!(logger, "Invalid Program account");
                 return Err(InstructionError::InvalidAccountData);
             }
+
+            let new_program_id = *program.unsigned_key();
 
             // Verify Buffer account
 
@@ -537,10 +541,9 @@ fn process_loader_upgradeable_instruction(
 
             // Load and verify the program bits
             let executor = create_executor(2, buffer_data_offset, invoke_context, use_jit)?;
-            let keyed_accounts = invoke_context.get_keyed_accounts()?;
-            let program = keyed_account_at_index(keyed_accounts, 1)?;
-            invoke_context.add_executor(program.unsigned_key(), executor);
+            invoke_context.add_executor(&new_program_id, executor);
 
+            let keyed_accounts = invoke_context.get_keyed_accounts()?;
             let programdata = keyed_account_at_index(keyed_accounts, 0)?;
             let buffer = keyed_account_at_index(keyed_accounts, 2)?;
             let spill = keyed_account_at_index(keyed_accounts, 3)?;
@@ -570,7 +573,7 @@ fn process_loader_upgradeable_instruction(
                 .try_account_ref_mut()?
                 .set_lamports(programdata_balance_required);
 
-            ic_logger_msg!(logger, "Upgraded program {:?}", program.unsigned_key());
+            ic_logger_msg!(logger, "Upgraded program {:?}", new_program_id);
         }
         UpgradeableLoaderInstruction::SetAuthority => {
             let account = keyed_account_at_index(keyed_accounts, 0)?;
