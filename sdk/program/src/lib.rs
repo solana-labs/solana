@@ -12,6 +12,7 @@ pub mod bpf_loader;
 pub mod bpf_loader_deprecated;
 pub mod bpf_loader_upgradeable;
 pub mod clock;
+pub mod compute_budget_program;
 pub mod decode_error;
 pub mod entrypoint;
 pub mod entrypoint_deprecated;

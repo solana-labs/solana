@@ -1,7 +1,7 @@
 #![allow(clippy::integer_arithmetic)]
 use crate::{
-    bpf_loader, bpf_loader_deprecated, config, decode_error::DecodeError, feature, hash::hashv,
-    secp256k1_program, stake, system_program, sysvar, vote,
+    bpf_loader, bpf_loader_deprecated, compute_budget_program, config, decode_error::DecodeError,
+    feature, hash::hashv, secp256k1_program, stake, system_program, sysvar, vote,
 };
 
 use borsh::{BorshDeserialize, BorshSchema, BorshSerialize};
@@ -374,6 +374,7 @@ impl Pubkey {
             bpf_loader::id(),
             bpf_loader_deprecated::id(),
             feature::id(),
+            compute_budget_program::id(),
             config::program::id(),
             stake::program::id(),
             stake::config::id(),
