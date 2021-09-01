@@ -133,6 +133,12 @@ pub struct ReadAccountMapEntry<T: IsCached> {
     slot_list_guard: RwLockReadGuard<'this, SlotList<T>>,
 }
 
+impl<T: IsCached> Debug for ReadAccountMapEntry<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{:?}", self.borrow_owned_entry())
+    }
+}
+
 impl<T: IsCached> ReadAccountMapEntry<T> {
     pub fn from_account_map_entry(account_map_entry: AccountMapEntry<T>) -> Self {
         ReadAccountMapEntryBuilder {

@@ -12181,10 +12181,8 @@ pub mod tests {
                 assert!(db.storage.get_slot_storage_entries(*slot).is_none());
                 assert!(db.accounts_cache.slot_cache(*slot).is_none());
                 let account_in_slot = slot_to_pubkey_map[slot];
-                assert!(db
-                    .accounts_index
-                    .get_account_read_entry(&account_in_slot)
-                    .is_none());
+                let item = db.accounts_index.get_account_read_entry(&account_in_slot);
+                assert!(item.is_none(), "item: {:?}", item);
             }
 
             // Wait for flush to finish before starting next trial
