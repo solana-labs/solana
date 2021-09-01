@@ -418,7 +418,10 @@ impl Tower {
         );
 
         new_vote.timestamp = self.maybe_timestamp(self.last_vote.last_voted_slot().unwrap_or(0));
-        info!("TEST_ tower records new vote {:?}, last vote {:?}", new_vote, self.last_vote);
+        info!(
+            "TEST_ tower records new vote {:?}, last vote {:?}",
+            new_vote, self.last_vote
+        );
         self.last_vote = new_vote;
 
         let new_root = self.root();

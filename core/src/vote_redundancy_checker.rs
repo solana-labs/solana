@@ -25,10 +25,20 @@ pub fn check_redundant_votes<'a, 'b>(
 
                     if is_redundant_by_vote_state(bank, &vote_account_pubkey, &vote) {
                         inc_new_counter_info!("bank-process_redundant_vote_transactions", 1);
-                        info!("TEST_ vote {:?} is redundant for slot {} vote account {:?}", vote, bank.slot(),vote_account_pubkey );
+                        info!(
+                            "TEST_ vote {:?} is redundant for slot {} vote account {:?}",
+                            vote,
+                            bank.slot(),
+                            vote_account_pubkey
+                        );
                         Err(TransactionError::AlreadyProcessed)
                     } else {
-                        info!("TEST_ vote {:?} is good for slot {} vote account {:?}", vote, bank.slot(),vote_account_pubkey );
+                        info!(
+                            "TEST_ vote {:?} is good for slot {} vote account {:?}",
+                            vote,
+                            bank.slot(),
+                            vote_account_pubkey
+                        );
                         Ok(())
                     }
                 } else {
