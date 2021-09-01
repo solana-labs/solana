@@ -307,12 +307,37 @@ impl BroadcastRun for BroadcastDuplicatesRun {
         let epoch = root_bank.get_leader_schedule_epoch(slot);
         let stakes = root_bank.epoch_staked_nodes(epoch).unwrap_or_default();
         let socket_addr_space = cluster_info.socket_addr_space();
+<<<<<<< HEAD
         for peer in cluster_info.tvu_peers() {
             // Forward shreds to circumvent gossip
             if stakes.get(&peer.id).is_some() {
                 shreds.iter().for_each(|shred| {
                     if socket_addr_space.check(&peer.tvu_forwards) {
                         sock.send_to(&shred.payload, &peer.tvu_forwards).unwrap();
+=======
+        let packets: Vec<_> = shreds
+            .iter()
+            .filter_map(|shred| {
+                let seed = shred.seed(self_pubkey, &root_bank);
+                let node = cluster_nodes.get_broadcast_peer(seed)?;
+                if !socket_addr_space.check(&node.tvu) {
+                    return None;
+                }
+                if self
+                    .original_last_data_shreds
+                    .lock()
+                    .unwrap()
+                    .remove(&shred.signature())
+                {
+                    if cluster_partition.contains(&node.id) {
+                        info!(
+                            "skipping node {} for original shred index {}, slot {}",
+                            node.id,
+                            shred.index(),
+                            shred.slot()
+                        );
+                        return None;
+>>>>>>> 6d9818b8e (skips retransmit for shreds with unknown slot leader (#19472))
                     }
                 });
             }

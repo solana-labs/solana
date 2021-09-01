@@ -49,6 +49,7 @@
 //! So, given a) - c), we must restrict data shred's payload length such that the entire coding
 //! payload can fit into one coding shred / packet.
 
+<<<<<<< HEAD
 use crate::{
     blockstore::MAX_DATA_SHREDS_PER_SLOT,
     entry::{create_ticks, Entry},
@@ -77,6 +78,33 @@ use solana_sdk::{
 };
 use std::{mem::size_of, ops::Deref, sync::Arc};
 use thiserror::Error;
+=======
+use {
+    crate::{blockstore::MAX_DATA_SHREDS_PER_SLOT, erasure::Session},
+    bincode::config::Options,
+    rayon::{
+        iter::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator},
+        slice::ParallelSlice,
+        ThreadPool,
+    },
+    serde::{Deserialize, Serialize},
+    solana_entry::entry::{create_ticks, Entry},
+    solana_measure::measure::Measure,
+    solana_perf::packet::{limited_deserialize, Packet},
+    solana_rayon_threadlimit::get_thread_count,
+    solana_runtime::bank::Bank,
+    solana_sdk::{
+        clock::Slot,
+        feature_set,
+        hash::{hashv, Hash},
+        packet::PACKET_DATA_SIZE,
+        pubkey::Pubkey,
+        signature::{Keypair, Signature, Signer},
+    },
+    std::{cell::RefCell, convert::TryInto, mem::size_of},
+    thiserror::Error,
+};
+>>>>>>> 6d9818b8e (skips retransmit for shreds with unknown slot leader (#19472))
 
 #[derive(Default, Clone)]
 pub struct ProcessShredsStats {
@@ -469,23 +497,19 @@ impl Shred {
         self.common_header.signature
     }
 
-    pub fn seed(&self, leader_pubkey: Option<Pubkey>, root_bank: &Bank) -> [u8; 32] {
-        if let Some(leader_pubkey) = leader_pubkey {
-            if enable_deterministic_seed(self.slot(), root_bank) {
-                let h = hashv(&[
-                    &self.slot().to_le_bytes(),
-                    &self.index().to_le_bytes(),
-                    &leader_pubkey.to_bytes(),
-                ]);
-                return h.to_bytes();
-            }
+    pub fn seed(&self, leader_pubkey: Pubkey, root_bank: &Bank) -> [u8; 32] {
+        if enable_deterministic_seed(self.slot(), root_bank) {
+            hashv(&[
+                &self.slot().to_le_bytes(),
+                &self.index().to_le_bytes(),
+                &leader_pubkey.to_bytes(),
+            ])
+            .to_bytes()
+        } else {
+            let signature = self.common_header.signature.as_ref();
+            let offset = signature.len().checked_sub(32).unwrap();
+            signature[offset..].try_into().unwrap()
         }
-
-        let mut seed = [0; 32];
-        let seed_len = seed.len();
-        let sig = self.common_header.signature.as_ref();
-        seed[0..seed_len].copy_from_slice(&sig[(sig.len() - seed_len)..]);
-        seed
     }
 
     pub fn is_data(&self) -> bool {
