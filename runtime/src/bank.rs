@@ -3927,7 +3927,25 @@ impl Bank {
         }
     }
 
+    fn load_next_rent_in_bg(&self, mut partition: Partition) {
+        // start, end, total
+        let range = partition.1 - partition.0;
+        partition.0 = partition.1;
+        partition.1 += range;
+        if partition.0 >= partition.2 || partition.1 >= partition.2 {
+            return;
+        }
+        let ancestors = self.ancestors.clone();
+        let accounts = self.rc.accounts.clone();
+        rayon::spawn(move || {
+            let subrange = Self::pubkey_range_from_partition(partition);
+
+            accounts.load_to_collect_rent_eagerly(&ancestors, subrange);
+        })
+    }
+
     fn collect_rent_in_partition(&self, partition: Partition) {
+        self.load_next_rent_in_bg(partition);
         let subrange = Self::pubkey_range_from_partition(partition);
 
         let accounts = self
