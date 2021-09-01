@@ -12,6 +12,7 @@
 #include <sol/keccak.h>
 #include <sol/log.h>
 #include <sol/pubkey.h>
+#include <sol/return_data.h>
 #include <sol/secp256k1.h>
 #include <sol/sha.h>
 #include <sol/string.h>

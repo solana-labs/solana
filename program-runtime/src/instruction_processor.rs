@@ -631,6 +631,9 @@ impl InstructionProcessor {
             // Verify the calling program hasn't misbehaved
             invoke_context.verify_and_update(instruction, accounts, caller_write_privileges)?;
 
+            // clear the return data
+            invoke_context.set_return_data(None);
+
             // Invoke callee
             invoke_context.push(program_id, message, instruction, program_indices, accounts)?;
 

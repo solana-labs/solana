@@ -117,6 +117,10 @@ pub trait InvokeContext {
     fn get_blockhash(&self) -> &Hash;
     /// Get this invocation's `FeeCalculator`
     fn get_fee_calculator(&self) -> &FeeCalculator;
+    /// Set the return data
+    fn set_return_data(&mut self, return_data: Option<(Pubkey, Vec<u8>)>);
+    /// Get the return data
+    fn get_return_data(&self) -> &Option<(Pubkey, Vec<u8>)>;
 }
 
 /// Convenience macro to log a message with an `Rc<RefCell<dyn Logger>>`
@@ -197,6 +201,8 @@ pub struct BpfComputeBudget {
     pub sysvar_base_cost: u64,
     /// Number of compute units consumed to call secp256k1_recover
     pub secp256k1_recover_cost: u64,
+    /// Number of compute units consumed to do a syscall without any work
+    pub syscall_base_cost: u64,
     /// Optional program heap region size, if `None` then loader default
     pub heap_size: Option<usize>,
 }
@@ -217,6 +223,7 @@ impl From<ComputeBudget> for BpfComputeBudget {
             max_cpi_instruction_size: item.max_cpi_instruction_size,
             cpi_bytes_per_unit: item.cpi_bytes_per_unit,
             sysvar_base_cost: item.sysvar_base_cost,
+            syscall_base_cost: item.syscall_base_cost,
             secp256k1_recover_cost: item.secp256k1_recover_cost,
             heap_size: item.heap_size,
         }
@@ -240,6 +247,7 @@ impl From<BpfComputeBudget> for ComputeBudget {
             cpi_bytes_per_unit: item.cpi_bytes_per_unit,
             sysvar_base_cost: item.sysvar_base_cost,
             secp256k1_recover_cost: item.secp256k1_recover_cost,
+            syscall_base_cost: item.syscall_base_cost,
             heap_size: item.heap_size,
         }
     }
@@ -311,6 +319,25 @@ pub mod stable_log {
     /// That is, any program-generated output is guaranteed to be prefixed by "Program log: "
     pub fn program_log(logger: &Rc<RefCell<dyn Logger>>, message: &str) {
         ic_logger_msg!(logger, "Program log: {}", message);
+    }
+
+    /// Log return data as from the program itself. This line will not be present if no return
+    /// data was set, or if the return data was set to zero length.
+    ///
+    /// The general form is:
+    ///
+    /// ```notrust
+    /// "Program return data: <program-id> <program-generated-data-in-base64>"
+    /// ```
+    ///
+    /// That is, any program-generated output is guaranteed to be prefixed by "Program return data: "
+    pub fn program_return_data(logger: &Rc<RefCell<dyn Logger>>, program_id: &Pubkey, data: &[u8]) {
+        ic_logger_msg!(
+            logger,
+            "Program return data: {} {}",
+            program_id,
+            base64::encode(data)
+        );
     }
 
     /// Log successful program execution.
@@ -397,7 +424,9 @@ pub struct MockInvokeContext<'a> {
     pub disabled_features: HashSet<Pubkey>,
     pub blockhash: Hash,
     pub fee_calculator: FeeCalculator,
+    pub return_data: Option<(Pubkey, Vec<u8>)>,
 }
+
 impl<'a> MockInvokeContext<'a> {
     pub fn new(keyed_accounts: Vec<KeyedAccount<'a>>) -> Self {
         let compute_budget = ComputeBudget::default();
@@ -415,6 +444,7 @@ impl<'a> MockInvokeContext<'a> {
             disabled_features: HashSet::default(),
             blockhash: Hash::default(),
             fee_calculator: FeeCalculator::default(),
+            return_data: None,
         };
         invoke_context
             .invoke_stack
@@ -542,5 +572,11 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
     }
     fn get_fee_calculator(&self) -> &FeeCalculator {
         &self.fee_calculator
+    }
+    fn set_return_data(&mut self, return_data: Option<(Pubkey, Vec<u8>)>) {
+        self.return_data = return_data;
+    }
+    fn get_return_data(&self) -> &Option<(Pubkey, Vec<u8>)> {
+        &self.return_data
     }
 }

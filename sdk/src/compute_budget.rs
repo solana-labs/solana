@@ -70,6 +70,8 @@ pub struct ComputeBudget {
     pub sysvar_base_cost: u64,
     /// Number of compute units consumed to call secp256k1_recover
     pub secp256k1_recover_cost: u64,
+    /// Number of compute units consumed to do a syscall without any work
+    pub syscall_base_cost: u64,
     /// Optional program heap region size, if `None` then loader default
     pub heap_size: Option<usize>,
 }
@@ -95,6 +97,7 @@ impl ComputeBudget {
             cpi_bytes_per_unit: 250,        // ~50MB at 200,000 units
             sysvar_base_cost: 100,
             secp256k1_recover_cost: 25_000,
+            syscall_base_cost: 100,
             heap_size: None,
         }
     }
