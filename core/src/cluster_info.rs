@@ -1159,14 +1159,10 @@ impl ClusterInfo {
             .map(map)
     }
 
-<<<<<<< HEAD:core/src/cluster_info.rs
-    pub(crate) fn get_epoch_slots(&self, cursor: &mut Cursor) -> Vec<EpochSlots> {
-=======
     /// Returns epoch-slots inserted since the given cursor.
     /// Excludes entries from nodes with unkown or different shred version.
-    pub fn get_epoch_slots(&self, cursor: &mut Cursor) -> Vec<EpochSlots> {
+    pub(crate) fn get_epoch_slots(&self, cursor: &mut Cursor) -> Vec<EpochSlots> {
         let self_shred_version = self.my_shred_version();
->>>>>>> 985280ec0 (excludes epoch-slots from nodes with unknown or different shred version (#17899)):gossip/src/cluster_info.rs
         let gossip = self.gossip.read().unwrap();
         let entries = gossip.crds.get_epoch_slots(cursor);
         entries
