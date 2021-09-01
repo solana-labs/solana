@@ -46,7 +46,7 @@ pub type AccountMap<V> = HashMap<Pubkey, V>;
 
 type AccountMapEntry<T> = Arc<AccountMapEntryInner<T>>;
 
-pub trait IsCached: 'static + Clone + Debug + PartialEq + ZeroLamport {
+pub trait IsCached: 'static + Clone + Debug + PartialEq + ZeroLamport + Copy {
     fn is_cached(&self) -> bool;
 }
 
@@ -1363,7 +1363,7 @@ impl<T: IsCached> AccountsIndex<T> {
                 slot_list.retain(|(slot, item)| {
                     let should_purge = slots_to_purge.contains(slot);
                     if should_purge {
-                        reclaims.push((*slot, item.clone()));
+                        reclaims.push((*slot, *item));
                         false
                     } else {
                         true
@@ -1709,7 +1709,7 @@ impl<T: IsCached> AccountsIndex<T> {
                 Self::can_purge_older_entries(max_clean_root, newest_root_in_slot_list, *slot)
                     && !value.is_cached();
             if should_purge {
-                reclaims.push((*slot, value.clone()));
+                reclaims.push((*slot, *value));
             }
             !should_purge
         });
@@ -2885,12 +2885,12 @@ pub mod tests {
                 &Pubkey::default(),
                 &[],
                 &AccountSecondaryIndexes::default(),
-                account_infos[0].clone(),
+                account_infos[0],
                 &mut gc,
                 UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
             );
         } else {
-            let items = vec![(key, account_infos[0].clone())];
+            let items = vec![(key, account_infos[0])];
             index.insert_new_if_missing_into_primary_index(slot0, items.len(), items.into_iter());
         }
         assert!(gc.is_empty());
@@ -2899,10 +2899,9 @@ pub mod tests {
         {
             let entry = index.get_account_read_entry(&key).unwrap();
             assert_eq!(entry.ref_count(), if is_cached { 0 } else { 1 });
-            let expected = vec![(slot0, account_infos[0].clone())];
+            let expected = vec![(slot0, account_infos[0])];
             assert_eq!(entry.slot_list().to_vec(), expected);
-            let new_entry =
-                WriteAccountMapEntry::new_entry_after_update(slot0, account_infos[0].clone());
+            let new_entry = WriteAccountMapEntry::new_entry_after_update(slot0, account_infos[0]);
             assert_eq!(
                 entry.slot_list().to_vec(),
                 new_entry.slot_list.read().unwrap().to_vec(),
@@ -2917,12 +2916,12 @@ pub mod tests {
                 &Pubkey::default(),
                 &[],
                 &AccountSecondaryIndexes::default(),
-                account_infos[1].clone(),
+                account_infos[1],
                 &mut gc,
                 UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
             );
         } else {
-            let items = vec![(key, account_infos[1].clone())];
+            let items = vec![(key, account_infos[1])];
             index.insert_new_if_missing_into_primary_index(slot1, items.len(), items.into_iter());
         }
         assert!(gc.is_empty());
@@ -2945,14 +2944,10 @@ pub mod tests {
             assert_eq!(entry.ref_count(), if is_cached { 0 } else { 2 });
             assert_eq!(
                 entry.slot_list().to_vec(),
-                vec![
-                    (slot0, account_infos[0].clone()),
-                    (slot1, account_infos[1].clone())
-                ]
+                vec![(slot0, account_infos[0]), (slot1, account_infos[1])]
             );
 
-            let new_entry =
-                WriteAccountMapEntry::new_entry_after_update(slot1, account_infos[1].clone());
+            let new_entry = WriteAccountMapEntry::new_entry_after_update(slot1, account_infos[1]);
             assert_eq!(entry.slot_list()[1], new_entry.slot_list.read().unwrap()[0],);
         }
     }
