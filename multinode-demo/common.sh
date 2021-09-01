@@ -9,6 +9,9 @@
 
 # shellcheck source=net/common.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. || exit 1; pwd)"/net/common.sh
+source ci/rust-version.sh stable
+source ci/rust-version.sh nightly
+cargo="$(readlink -f "./cargo")"
 
 prebuild=
 if [[ $1 = "--prebuild" ]]; then
@@ -57,7 +60,7 @@ else
       )
     fi
 
-    printf "cargo $CARGO_TOOLCHAIN run $maybe_release  --bin %s %s -- " "$program"
+    printf "$cargo $CARGO_TOOLCHAIN run $maybe_release  --bin %s %s -- " "$program"
   }
 fi
 
