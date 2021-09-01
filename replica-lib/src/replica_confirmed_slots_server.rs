@@ -1,6 +1,3 @@
-use tonic;
-
-// tonic::include_proto!("accountsdb_repl");
 use {
     crate::accountsdb_repl_server::{self, ReplicaSlotConfirmationServer},
     crossbeam_channel::Receiver,
@@ -14,6 +11,7 @@ use {
         thread::{self, sleep, Builder, JoinHandle},
         time::Duration,
     },
+    tonic,
 };
 
 /// The structure modelling the slots eligible for replication and
