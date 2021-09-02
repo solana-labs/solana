@@ -163,14 +163,6 @@ impl<T: IsCached> ReadAccountMapEntry<T> {
     pub fn ref_count(&self) -> RefCount {
         self.borrow_owned_entry().ref_count()
     }
-
-    pub fn unref(&self) {
-        self.borrow_owned_entry().add_un_ref(false);
-    }
-
-    pub fn addref(&self) {
-        self.borrow_owned_entry().add_un_ref(true);
-    }
 }
 
 #[self_referencing]
@@ -190,7 +182,7 @@ impl<T: IsCached> WriteAccountMapEntry<T> {
         .build()
     }
 
-    pub fn slot_list(&mut self) -> &SlotList<T> {
+    pub fn slot_list(&self) -> &SlotList<T> {
         &*self.borrow_slot_list_guard()
     }
 
@@ -201,8 +193,12 @@ impl<T: IsCached> WriteAccountMapEntry<T> {
         self.with_slot_list_guard_mut(user)
     }
 
-    pub fn ref_count(&self) -> &AtomicU64 {
-        &self.borrow_owned_entry().ref_count
+    pub fn unref(&self) {
+        self.borrow_owned_entry().add_un_ref(false);
+    }
+
+    pub fn addref(&self) {
+        self.borrow_owned_entry().add_un_ref(true);
     }
 
     // create an entry that is equivalent to this process:
@@ -329,7 +325,7 @@ impl<T: IsCached> WriteAccountMapEntry<T> {
         });
         if addref {
             // If it's the first non-cache insert, also bump the stored ref count
-            self.ref_count().fetch_add(1, Ordering::Relaxed);
+            self.addref();
         }
     }
 }
@@ -1193,7 +1189,7 @@ impl<T: IsCached> AccountsIndex<T> {
             .map(ReadAccountMapEntry::from_account_map_entry)
     }
 
-    fn get_account_write_entry(&self, pubkey: &Pubkey) -> Option<WriteAccountMapEntry<T>> {
+    pub fn get_account_write_entry(&self, pubkey: &Pubkey) -> Option<WriteAccountMapEntry<T>> {
         self.account_maps[self.bin_calculator.bin_from_pubkey(pubkey)]
             .read()
             .unwrap()
@@ -1680,7 +1676,7 @@ impl<T: IsCached> AccountsIndex<T> {
     }
 
     pub fn unref_from_storage(&self, pubkey: &Pubkey) {
-        if let Some(locked_entry) = self.get_account_read_entry(pubkey) {
+        if let Some(locked_entry) = self.get_account_write_entry(pubkey) {
             locked_entry.unref();
         }
     }

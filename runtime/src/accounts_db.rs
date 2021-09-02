@@ -2281,7 +2281,7 @@ impl AccountsDb {
                 let skip = chunk * chunk_size;
                 stored_accounts.iter().skip(skip).take(chunk_size).for_each(
                     |(pubkey, stored_account)| {
-                        let lookup = self.accounts_index.get_account_read_entry(pubkey);
+                        let lookup = self.accounts_index.get_account_write_entry(pubkey);
                         if let Some(locked_entry) = lookup {
                             let is_alive = locked_entry.slot_list().iter().any(|(_slot, i)| {
                                 i.store_id == stored_account.store_id
@@ -2292,12 +2292,14 @@ impl AccountsDb {
                                 // It would have had a ref to the storage from the initial store, but it will
                                 // not exist in the re-written slot. Unref it to keep the index consistent with
                                 // rewriting the storage entries.
-                                unrefed_pubkeys.push(pubkey);
                                 locked_entry.unref();
+                                drop(locked_entry);
+                                unrefed_pubkeys.push(pubkey);
                                 self.shrink_stats
                                     .dead_accounts
                                     .fetch_add(1, Ordering::Relaxed);
                             } else {
+                                drop(locked_entry);
                                 alive_accounts.push((pubkey, stored_account));
                                 alive_total += stored_account.account_size;
                                 self.shrink_stats
@@ -2334,7 +2336,7 @@ impl AccountsDb {
                 .skipped_shrink
                 .fetch_add(1, Ordering::Relaxed);
             for pubkey in unrefed_pubkeys {
-                if let Some(locked_entry) = self.accounts_index.get_account_read_entry(pubkey) {
+                if let Some(locked_entry) = self.accounts_index.get_account_write_entry(pubkey) {
                     locked_entry.addref();
                 }
             }
