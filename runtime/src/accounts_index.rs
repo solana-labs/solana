@@ -1233,18 +1233,30 @@ impl<T: IsCached> AccountsIndex<T> {
         if !dead_keys.is_empty() {
             for key in dead_keys.iter() {
                 let mut w_index = self.get_account_maps_write_lock(key);
-                if let Entry::Occupied(index_entry) = w_index.entry(**key) {
-                    if index_entry.get().slot_list.read().unwrap().is_empty() {
-                        index_entry.remove();
-
-                        // Note it's only safe to remove all the entries for this key
-                        // because we have the lock for this key's entry in the AccountsIndex,
-                        // so no other thread is also updating the index
-                        self.purge_secondary_indexes_by_inner_key(key, account_indexes);
-                    }
+                if self.remove_if_slot_list_empty(key, &mut w_index) {
+                    // Note it's only safe to remove all the entries for this key
+                    // because we have the lock for this key's entry in the AccountsIndex,
+                    // so no other thread is also updating the index
+                    self.purge_secondary_indexes_by_inner_key(key, account_indexes);
                 }
             }
         }
+    }
+
+    // If the slot list for pubkey exists in the index and is empty, remove the index entry for pubkey and return true.
+    // Return false otherwise.
+    fn remove_if_slot_list_empty(
+        &self,
+        pubkey: &Pubkey,
+        lock: &mut AccountMapsWriteLock<T>,
+    ) -> bool {
+        if let Entry::Occupied(index_entry) = lock.entry(*pubkey) {
+            if index_entry.get().slot_list.read().unwrap().is_empty() {
+                index_entry.remove();
+                return true;
+            }
+        }
+        false
     }
 
     /// call func with every pubkey and index visible from a given set of ancestors
