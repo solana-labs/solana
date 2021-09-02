@@ -437,7 +437,7 @@ impl From<ConfirmedTransactionStatusWithSignature> for RpcConfirmedTransactionSt
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
-pub struct SnapshotInfo {
-    pub highest_full_snapshot_slot: Slot,
-    pub highest_incremental_snapshot_slot: Option<Slot>,
+pub struct HighestSnapshotSlot {
+    pub full_snapshot_slot: Slot,
+    pub incremental_snapshot_slot: Option<Slot>,
 }

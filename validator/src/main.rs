@@ -148,7 +148,7 @@ fn wait_for_restart_window(
     let progress_bar = new_spinner_progress_bar();
     let monitor_start_time = SystemTime::now();
     loop {
-        let snapshot_slot = rpc_client.get_snapshot_slot().ok();
+        let highest_snapshot_slot = rpc_client.get_highest_snapshot_slot().ok();
         let epoch_info = rpc_client.get_epoch_info_with_commitment(CommitmentConfig::processed())?;
         let healthy = rpc_client.get_health().ok().is_some();
         let delinquent_stake_percentage = {
@@ -277,13 +277,14 @@ fn wait_for_restart_window(
                     }
                 };
 
+                let full_snapshot_slot = highest_snapshot_slot
+                    .map(|highest_snapshot_slot| highest_snapshot_slot.full_snapshot_slot);
                 match in_leader_schedule_hole {
                     Ok(_) => {
                         if restart_snapshot == None {
-                            restart_snapshot = snapshot_slot;
+                            restart_snapshot = full_snapshot_slot;
                         }
-
-                        if restart_snapshot == snapshot_slot && !monitoring_another_validator {
+                        if restart_snapshot == full_snapshot_slot && !monitoring_another_validator {
                             "Waiting for a new snapshot".to_string()
                         } else if delinquent_stake_percentage >= min_delinquency_percentage {
                             style("Delinquency too high").red().to_string()
@@ -314,10 +315,12 @@ fn wait_for_restart_window(
                 "".to_string()
             } else {
                 format!(
-                    "| Snapshot Slot: {}",
-                    snapshot_slot
-                        .map(|s| s.to_string())
-                        .unwrap_or_else(|| "-".to_string())
+                    "| Full Snapshot Slot: {}",
+                    highest_snapshot_slot
+                        .map(|highest_snapshot_slot| highest_snapshot_slot
+                            .full_snapshot_slot
+                            .to_string())
+                        .unwrap_or_else(|| '-'.to_string()),
                 )
             },
             delinquent_stake_percentage * 100.,
