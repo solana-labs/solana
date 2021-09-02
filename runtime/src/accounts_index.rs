@@ -623,7 +623,7 @@ pub struct AccountsIndexRootsStats {
     pub unrooted_cleaned_count: usize,
 }
 
-pub struct AccountsIndexIterator<'a, T> {
+pub struct AccountsIndexIterator<'a, T: IsCached> {
     account_maps: &'a LockMapTypeSlice<T>,
     bin_calculator: &'a PubkeyBinCalculator16,
     start_bound: Bound<Pubkey>,
@@ -632,7 +632,7 @@ pub struct AccountsIndexIterator<'a, T> {
     collect_all_unsorted: bool,
 }
 
-impl<'a, T> AccountsIndexIterator<'a, T> {
+impl<'a, T: IsCached> AccountsIndexIterator<'a, T> {
     fn range<'b, R>(
         map: &'b AccountMapsReadLock<'b, T>,
         range: R,
@@ -778,7 +778,7 @@ impl ScanSlotTracker {
 }
 
 #[derive(Debug)]
-pub struct AccountsIndex<T> {
+pub struct AccountsIndex<T: IsCached> {
     pub account_maps: LockMapType<T>,
     pub bin_calculator: PubkeyBinCalculator16,
     program_id_index: SecondaryIndex<DashMapSecondaryIndexEntry>,
