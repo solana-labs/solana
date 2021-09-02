@@ -1907,8 +1907,4 @@ mod tests {
         };
         check_poh_speed(&genesis_config, Some(10_000));
     }
-
-    // bprumo TODO: need to write a test that brings up a validator from a snapshot, processes
-    // block store that crosses a full snapshot interval, and then ensure that
-    // AccountsBackgroundService gets the right value for last_full_snapshot_slot
 }
