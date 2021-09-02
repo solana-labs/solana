@@ -13006,16 +13006,22 @@ pub(crate) mod tests {
         // Let threads run for a while, check the scans didn't see any mixed slots
         let min_expected_number_of_scans = 5;
         std::thread::sleep(Duration::new(5, 0));
+        let mut remaining_loops = 1000;
         loop {
             if num_banks_scanned.load(Relaxed) > min_expected_number_of_scans {
                 break;
             } else {
                 std::thread::sleep(Duration::from_millis(100));
             }
+            remaining_loops -= 1;
+            if remaining_loops == 0 {
+                break; // just quit and try to get the thread result (panic, etc.)
+            }
         }
         exit.store(true, Relaxed);
         scan_thread.join().unwrap();
         update_thread.join().unwrap();
+        assert!(remaining_loops > 0, "test timed out");
     }
 
     #[test]

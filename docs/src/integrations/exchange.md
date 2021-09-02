@@ -694,35 +694,35 @@ Signature: 3R6tsog17QM8KfzbcbdP4aoMfwgo6hBggJDVy7dZPVmH2xbCWjEj31JKD53NzMrf25ChF
 
 ### Depositing
 
-Since each `(user, mint)` pair requires a separate account on chain, it is
-recommended that an exchange create batches of token accounts in advance and assign them
-to users on request. These accounts should all be owned by exchange-controlled
-keypairs.
+Since each `(wallet, mint)` pair requires a separate account on chain. It is
+recommended that the addresses for these accounts be derived from SOL deposit
+wallets using the
+[Associated Token Account](https://spl.solana.com/associated-token-account) (ATA)
+scheme and that _only_ deposits from ATA addresses be accepted.
 
 Monitoring for deposit transactions should follow the [block polling](#poll-for-blocks)
 method described above. Each new block should be scanned for successful transactions
-issuing SPL Token [Transfer](https://github.com/solana-labs/solana-program-library/blob/096d3d4da51a8f63db5160b126ebc56b26346fc8/token/program/src/instruction.rs#L92)
-or [Transfer2](https://github.com/solana-labs/solana-program-library/blob/096d3d4da51a8f63db5160b126ebc56b26346fc8/token/program/src/instruction.rs#L252)
-instructions referencing user accounts, then querying the
-[token account balance](developing/clients/jsonrpc-api.md#gettokenaccountbalance)
-updates.
-
-[Considerations](https://github.com/solana-labs/solana/issues/12318) are being
-made to exend the `preBalance` and `postBalance` transaction status metadata
-fields to include SPL Token balance transfers.
+issuing SPL Token [Transfer](https://github.com/solana-labs/solana-program-library/blob/fc0d6a2db79bd6499f04b9be7ead0c400283845e/token/program/src/instruction.rs#L105)
+or [TransferChecked](https://github.com/solana-labs/solana-program-library/blob/fc0d6a2db79bd6499f04b9be7ead0c400283845e/token/program/src/instruction.rs#L268)
+instructions referencing user accounts. It is possible that a transfer is initiated
+by a smart contract via [Cross Program Invocation](/developing/programming-model/calling-between-programs#cross-program-invocations),
+so [inner instructions](/terminology#inner-instruction) must be checked as well.
+The `preTokenBalance` and `postTokenBalance` fields from the transaction's metadata
+must then be used to determine the effective balance change.
 
 ### Withdrawing
 
-The withdrawal address a user provides should be the same address used for
-regular SOL withdrawal.
+The withdrawal address a user provides must be the that of their SOL wallet.
 
 Before executing a withdrawal [transfer](#token-transfers),
 the exchange should check the address as
 [described above](#validating-user-supplied-account-addresses-for-withdrawals).
+Additionally this address must be owned by the System Program and have no account data.  If the address has no SOL balance, user confirmation should be obtained before proceeding with the withdrawal.  All other withdrawal addresses must be rejected.
 
-From the withdrawal address, the associated token account for the correct mint
-determined and the transfer issued to that account. Note that it's possible
-that the associated token account does not yet exist, at which point the
+From the withdrawal address, the [Associated Token Account](https://spl.solana.com/associated-token-account)
+(ATA) for the correct mint is derived and the transfer issued to that account via a
+[TransferChecked](https://github.com/solana-labs/solana-program-library/blob/fc0d6a2db79bd6499f04b9be7ead0c400283845e/token/program/src/instruction.rs#L268)
+instruction. Note that it is possible that the ATA address does not yet exist, at which point the
 exchange should fund the account on behalf of the user. For SPL Token v2
 accounts, funding the withdrawal account will require 0.00203928 SOL (2,039,280
 lamports).
