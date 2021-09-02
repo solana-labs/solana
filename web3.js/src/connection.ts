@@ -44,6 +44,8 @@ import type {FeeCalculator} from './fee-calculator';
 import type {TransactionSignature} from './transaction';
 import type {CompiledInstruction} from './message';
 
+const DEFAULT_SIGNATURE = bs58.encode(Buffer.alloc(64).fill(0));
+
 const PublicKeyFromString = coerce(
   instance(PublicKey),
   string(),
@@ -3430,9 +3432,22 @@ export class Connection {
    * Simulate a transaction
    */
   async simulateTransaction(
-    transaction: Transaction,
+    transactionOrMessage: Transaction | Message,
     signers?: Array<Signer>,
+    includeAccounts?: boolean | Array<PublicKey>,
   ): Promise<RpcResponseAndContext<SimulatedTransactionResponse>> {
+    let transaction;
+    if (transactionOrMessage instanceof Transaction) {
+      transaction = transactionOrMessage;
+    } else {
+      transaction = Transaction.populate(
+        transactionOrMessage,
+        new Array(transactionOrMessage.header.numRequiredSignatures).fill(
+          DEFAULT_SIGNATURE,
+        ),
+      );
+    }
+
     if (transaction.nonceInfo && signers) {
       transaction.sign(...signers);
     } else {
@@ -3466,13 +3481,29 @@ export class Connection {
       }
     }
 
-    const signData = transaction.serializeMessage();
+    const message = transaction._compile();
+    const signData = message.serialize();
     const wireTransaction = transaction._serialize(signData);
     const encodedTransaction = wireTransaction.toString('base64');
     const config: any = {
       encoding: 'base64',
       commitment: this.commitment,
     };
+
+    if (includeAccounts) {
+      const addresses = (
+        Array.isArray(includeAccounts)
+          ? includeAccounts
+          : message.accountKeys.filter(
+              (_, index) => !message.isProgramId(index),
+            )
+      ).map(key => key.toBase58());
+
+      config['accounts'] = {
+        encoding: 'base64',
+        addresses,
+      };
+    }
 
     if (signers) {
       config.sigVerify = true;
