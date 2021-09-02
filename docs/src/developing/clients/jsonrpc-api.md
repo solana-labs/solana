@@ -34,6 +34,7 @@ gives a convenient interface for the RPC methods.
 - [getFirstAvailableBlock](jsonrpc-api.md#getfirstavailableblock)
 - [getGenesisHash](jsonrpc-api.md#getgenesishash)
 - [getHealth](jsonrpc-api.md#gethealth)
+- [getHighestSnapshotSlot](jsonrpc-api.md#gethighestsnapshotslot)
 - [getIdentity](jsonrpc-api.md#getidentity)
 - [getInflationGovernor](jsonrpc-api.md#getinflationgovernor)
 - [getInflationRate](jsonrpc-api.md#getinflationrate)
@@ -53,7 +54,6 @@ gives a convenient interface for the RPC methods.
 - [getSlotLeader](jsonrpc-api.md#getslotleader)
 - [getSlotLeaders](jsonrpc-api.md#getslotleaders)
 - [getStakeActivation](jsonrpc-api.md#getstakeactivation)
-- [getSnapshotSlot](jsonrpc-api.md#getsnapshotslot)
 - [getSupply](jsonrpc-api.md#getsupply)
 - [getTokenAccountBalance](jsonrpc-api.md#gettokenaccountbalance)
 - [getTokenAccountsByDelegate](jsonrpc-api.md#gettokenaccountsbydelegate)
@@ -101,6 +101,7 @@ Unstable methods may see breaking changes in patch releases and may not be suppo
 - [getFeeRateGovernor](jsonrpc-api.md#getfeerategovernor)
 - [getFees](jsonrpc-api.md#getfees)
 - [getRecentBlockhash](jsonrpc-api.md#getrecentblockhash)
+- [getSnapshotSlot](jsonrpc-api.md#getsnapshotslot)
 
 ## Request Formatting
 
@@ -1296,6 +1297,46 @@ Unhealthy Result (if additional information is available)
 }
 ```
 
+### getHighestSnapshotSlot
+
+**NEW: This method is only available in solana-core v1.8 or newer. Please use
+[getSnapshotSlot](jsonrpc-api.md#getsnapshotslot) for solana-core v1.7**
+
+Returns the highest slot information that the node has snapshots for.
+
+This will find the highest full snapshot slot, and the highest incremental
+snapshot slot _based on_ the full snapshot slot, if there is one.
+
+#### Parameters:
+
+None
+
+#### Results:
+
+- `<object>`
+  - `full: <u64>` - Highest full snapshot slot
+  - `incremental: <u64 | undefined>` - Highest incremental snapshot slot _based on_ `full`
+
+
+#### Example:
+
+Request:
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0","id":1,"method":"getHighestSnapshotSlot"}
+'
+```
+
+Result:
+```json
+{"jsonrpc":"2.0","result":{"full":100,"incremental":110},"id":1}
+```
+
+Result when the node has no snapshot:
+```json
+{"jsonrpc":"2.0","error":{"code":-32008,"message":"No snapshot"},"id":1}
+```
+
 ### getIdentity
 
 Returns the identity pubkey for the current node
@@ -2119,38 +2160,6 @@ Result:
   ],
   "id": 1
 }
-```
-
-
-### getSnapshotSlot
-
-Returns the highest slot that the node has a snapshot for
-
-#### Parameters:
-
-None
-
-#### Results:
-
-- `<u64>` - Snapshot slot
-
-#### Example:
-
-Request:
-```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
-  {"jsonrpc":"2.0","id":1, "method":"getSnapshotSlot"}
-'
-```
-
-Result:
-```json
-{"jsonrpc":"2.0","result":100,"id":1}
-```
-
-Result when the node has no snapshot:
-```json
-{"jsonrpc":"2.0","error":{"code":-32008,"message":"No snapshot"},"id":1}
 ```
 
 ### getSignaturesForAddress
@@ -4777,4 +4786,38 @@ Result:
   },
   "id": 1
 }
+```
+
+### getSnapshotSlot
+
+**DEPRECATED: Please use [getHighestSnapshotSlot](jsonrpc-api.md#gethighestsnapshotslot) instead**
+This method is expected to be removed in solana-core v1.9
+
+Returns the highest slot that the node has a snapshot for
+
+#### Parameters:
+
+None
+
+#### Results:
+
+- `<u64>` - Snapshot slot
+
+#### Example:
+
+Request:
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0","id":1, "method":"getSnapshotSlot"}
+'
+```
+
+Result:
+```json
+{"jsonrpc":"2.0","result":100,"id":1}
+```
+
+Result when the node has no snapshot:
+```json
+{"jsonrpc":"2.0","error":{"code":-32008,"message":"No snapshot"},"id":1}
 ```

@@ -59,7 +59,8 @@ pub struct JsonRpcService {
 
 struct RpcRequestMiddleware {
     ledger_path: PathBuf,
-    snapshot_archive_path_regex: Regex,
+    full_snapshot_archive_path_regex: Regex,
+    incremental_snapshot_archive_path_regex: Regex,
     snapshot_config: Option<SnapshotConfig>,
     bank_forks: Arc<RwLock<BankForks>>,
     health: Arc<RpcHealth>,
@@ -74,8 +75,12 @@ impl RpcRequestMiddleware {
     ) -> Self {
         Self {
             ledger_path,
-            snapshot_archive_path_regex: Regex::new(
-                r"^/snapshot-\d+-[[:alnum:]]+\.(tar|tar\.bz2|tar\.zst|tar\.gz)$",
+            full_snapshot_archive_path_regex: Regex::new(
+                snapshot_utils::FULL_SNAPSHOT_ARCHIVE_FILENAME_REGEX,
+            )
+            .unwrap(),
+            incremental_snapshot_archive_path_regex: Regex::new(
+                snapshot_utils::INCREMENTAL_SNAPSHOT_ARCHIVE_FILENAME_REGEX,
             )
             .unwrap(),
             snapshot_config,
@@ -108,16 +113,23 @@ impl RpcRequestMiddleware {
     }
 
     fn is_file_get_path(&self, path: &str) -> bool {
-        match path {
-            DEFAULT_GENESIS_DOWNLOAD_PATH => true,
-            _ => {
-                if self.snapshot_config.is_some() {
-                    self.snapshot_archive_path_regex.is_match(path)
-                } else {
-                    false
-                }
-            }
+        if path == DEFAULT_GENESIS_DOWNLOAD_PATH {
+            return true;
         }
+
+        if self.snapshot_config.is_none() {
+            return false;
+        }
+
+        let starting_character = '/';
+        if !path.starts_with(starting_character) {
+            return false;
+        }
+
+        let path = path.trim_start_matches(starting_character);
+
+        self.full_snapshot_archive_path_regex.is_match(path)
+            || self.incremental_snapshot_archive_path_regex.is_match(path)
     }
 
     #[cfg(unix)]
@@ -497,6 +509,7 @@ mod tests {
             },
         },
         solana_sdk::{
+            clock::Slot,
             genesis_config::{ClusterType, DEFAULT_GENESIS_ARCHIVE},
             signature::Signer,
             signer::keypair::Keypair,
@@ -602,8 +615,8 @@ mod tests {
         let rrm_with_snapshot_config = RpcRequestMiddleware::new(
             PathBuf::from("/"),
             Some(SnapshotConfig {
-                full_snapshot_archive_interval_slots: 0,
-                incremental_snapshot_archive_interval_slots: u64::MAX,
+                full_snapshot_archive_interval_slots: Slot::MAX,
+                incremental_snapshot_archive_interval_slots: Slot::MAX,
                 snapshot_archives_dir: PathBuf::from("/"),
                 bank_snapshots_dir: PathBuf::from("/"),
                 archive_format: ArchiveFormat::TarBzip2,
@@ -622,6 +635,10 @@ mod tests {
         assert!(!rrm.is_file_get_path(
             "/snapshot-100-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.bz2"
         ));
+        assert!(!rrm.is_file_get_path(
+            "/incremental-snapshot-100-200-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.bz2"
+        ));
+
         assert!(rrm_with_snapshot_config.is_file_get_path(
             "/snapshot-100-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.bz2"
         ));
@@ -633,11 +650,32 @@ mod tests {
         assert!(rrm_with_snapshot_config
             .is_file_get_path("/snapshot-100-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar"));
 
+        assert!(rrm_with_snapshot_config.is_file_get_path(
+            "/incremental-snapshot-100-200-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.bz2"
+        ));
+        assert!(rrm_with_snapshot_config.is_file_get_path(
+            "/incremental-snapshot-100-200-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.zst"
+        ));
+        assert!(rrm_with_snapshot_config.is_file_get_path(
+            "/incremental-snapshot-100-200-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.gz"
+        ));
+        assert!(rrm_with_snapshot_config.is_file_get_path(
+            "/incremental-snapshot-100-200-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar"
+        ));
+
         assert!(!rrm_with_snapshot_config.is_file_get_path(
             "/snapshot-notaslotnumber-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.bz2"
         ));
+        assert!(!rrm_with_snapshot_config.is_file_get_path(
+            "/incremental-snapshot-notaslotnumber-200-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.bz2"
+        ));
+        assert!(!rrm_with_snapshot_config.is_file_get_path(
+            "/incremental-snapshot-100-notaslotnumber-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.bz2"
+        ));
 
         assert!(!rrm_with_snapshot_config.is_file_get_path("../../../test/snapshot-123-xxx.tar"));
+        assert!(!rrm_with_snapshot_config
+            .is_file_get_path("../../../test/incremental-snapshot-123-456-xxx.tar"));
 
         assert!(!rrm.is_file_get_path("/"));
         assert!(!rrm.is_file_get_path(".."));
