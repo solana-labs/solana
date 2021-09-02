@@ -13,7 +13,11 @@ export function CancelSpotOrderDetailsCard(props: {
 }) {
   const { ix, index, result, info, innerCards, childIndex } = props;
   const mangoAccount = ix.keys[2];
-  const mangoSpotMarket = getSpotMarketFromInstruction(ix, 4);
+  const spotMarketAccountMeta = ix.keys[4];
+  const mangoSpotMarketConfig = getSpotMarketFromInstruction(
+    ix,
+    spotMarketAccountMeta
+  );
 
   return (
     <InstructionCard
@@ -31,15 +35,17 @@ export function CancelSpotOrderDetailsCard(props: {
         </td>
       </tr>
 
-      <tr>
-        <td>Spot market</td>
-        <td className="text-lg-right">{mangoSpotMarket.name}</td>
-      </tr>
+      {mangoSpotMarketConfig !== undefined && (
+        <tr>
+          <td>Spot market</td>
+          <td className="text-lg-right">{mangoSpotMarketConfig.name}</td>
+        </tr>
+      )}
 
       <tr>
         <td>Spot market address</td>
         <td>
-          <Address pubkey={mangoSpotMarket.publicKey} alignRight link />
+          <Address pubkey={spotMarketAccountMeta.pubkey} alignRight link />
         </td>
       </tr>
 

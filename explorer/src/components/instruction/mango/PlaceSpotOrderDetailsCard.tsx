@@ -21,18 +21,28 @@ export function PlaceSpotOrderDetailsCard(props: {
 }) {
   const { ix, index, result, info, innerCards, childIndex } = props;
   const mangoAccount = ix.keys[1];
-  const mangoSpotMarketConfig = getSpotMarketFromInstruction(ix, 5);
+  const spotMarketAccountMeta = ix.keys[5];
+  const mangoSpotMarketConfig = getSpotMarketFromInstruction(
+    ix,
+    spotMarketAccountMeta
+  );
 
   const cluster = useCluster();
   const [orderLotDetails, setOrderLotDetails] =
     useState<OrderLotDetails | null>(null);
   useEffect(() => {
     async function getOrderLotDetails() {
+      if (mangoSpotMarketConfig === undefined) {
+        return;
+      }
       const mangoSpotMarket = await getSpotMarketFromSpotMarketConfig(
         ix,
         cluster.url,
         mangoSpotMarketConfig
       );
+      if (mangoSpotMarket === undefined) {
+        return;
+      }
       const maxBaseQuantity = mangoSpotMarket.baseSizeLotsToNumber(
         new BN(info.maxBaseQuantity.toString())
       );
@@ -63,39 +73,52 @@ export function PlaceSpotOrderDetailsCard(props: {
           <Address pubkey={mangoAccount.pubkey} alignRight link />
         </td>
       </tr>
-      <tr>
-        <td>Spot market</td>
-        <td className="text-lg-right">{mangoSpotMarketConfig.name}</td>
-      </tr>
+
+      {mangoSpotMarketConfig !== undefined && (
+        <tr>
+          <td>Spot market</td>
+          <td className="text-lg-right">{mangoSpotMarketConfig.name}</td>
+        </tr>
+      )}
+
       <tr>
         <td>Spot market address</td>
         <td>
-          <Address pubkey={mangoSpotMarketConfig.publicKey} alignRight link />
+          <Address pubkey={spotMarketAccountMeta.pubkey} alignRight link />
         </td>
       </tr>
+
       <tr>
         <td>Order type</td>
         <td className="text-lg-right">{info.orderType}</td>
       </tr>
+
       {info.clientId !== "0" && (
         <tr>
           <td>Client Id</td>
           <td className="text-lg-right">{info.clientId}</td>
         </tr>
       )}
+
       <tr>
         <td>Side</td>
         <td className="text-lg-right">{info.side}</td>
       </tr>
-      <tr>
-        <td>Limit price</td>
-        {/* todo fix price */}
-        <td className="text-lg-right">{orderLotDetails?.price} USDC</td>
-      </tr>
-      <tr>
-        <td>Size</td>
-        <td className="text-lg-right">{orderLotDetails?.size}</td>
-      </tr>
+
+      {orderLotDetails !== null && (
+        <tr>
+          <td>Limit price</td>
+          {/* todo fix price */}
+          <td className="text-lg-right">{orderLotDetails?.price} USDC</td>
+        </tr>
+      )}
+
+      {orderLotDetails !== null && (
+        <tr>
+          <td>Size</td>
+          <td className="text-lg-right">{orderLotDetails?.size}</td>
+        </tr>
+      )}
     </InstructionCard>
   );
 }

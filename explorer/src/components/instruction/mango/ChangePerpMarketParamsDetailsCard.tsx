@@ -19,7 +19,11 @@ export function ChangePerpMarketParamsDetailsCard(props: {
 }) {
   const { ix, index, result, info, innerCards, childIndex } = props;
 
-  const mangoPerpMarketConfig = getPerpMarketFromInstruction(ix, 1);
+  const perpMarketAccountMeta = ix.keys[1];
+  const mangoPerpMarketConfig = getPerpMarketFromInstruction(
+    ix,
+    perpMarketAccountMeta
+  );
 
   const cluster = useCluster();
   const [targetPeriodLength, setTargetPeriodLength] = useState<number | null>(
@@ -27,6 +31,9 @@ export function ChangePerpMarketParamsDetailsCard(props: {
   );
   useEffect(() => {
     async function getTargetPeriodLength() {
+      if (mangoPerpMarketConfig === undefined) {
+        return;
+      }
       const mangoPerpMarket = await getPerpMarketFromPerpMarketConfig(
         cluster.url,
         mangoPerpMarketConfig
@@ -36,6 +43,7 @@ export function ChangePerpMarketParamsDetailsCard(props: {
         mangoPerpMarket.liquidityMiningInfo.targetPeriodLength.toNumber()
       );
     }
+
     getTargetPeriodLength();
   }, [cluster, info, mangoPerpMarketConfig]);
 
@@ -75,7 +83,9 @@ export function ChangePerpMarketParamsDetailsCard(props: {
       {info.mngoPerPeriodOption && (
         <tr>
           <td>
-            MNGO per {moment.duration(targetPeriodLength, "seconds").humanize()}
+            MNGO per{" "}
+            {targetPeriodLength !== null &&
+              moment.duration(targetPeriodLength, "seconds").humanize()}
           </td>
           <td className="text-lg-right">
             {info.mngoPerPeriod} {}

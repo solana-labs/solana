@@ -21,13 +21,20 @@ export function PlacePerpOrderDetailsCard(props: {
 }) {
   const { ix, index, result, info, innerCards, childIndex } = props;
   const mangoAccount = ix.keys[1];
-  const mangoPerpMarketConfig = getPerpMarketFromInstruction(ix, 4);
+  const perpMarketAccountMeta = ix.keys[4];
+  const mangoPerpMarketConfig = getPerpMarketFromInstruction(
+    ix,
+    perpMarketAccountMeta
+  );
 
   const cluster = useCluster();
   const [orderLotDetails, setOrderLotDetails] =
     useState<OrderLotDetails | null>(null);
   useEffect(() => {
     async function getOrderLotDetails() {
+      if (mangoPerpMarketConfig === undefined) {
+        return;
+      }
       const mangoPerpMarket = await getPerpMarketFromPerpMarketConfig(
         cluster.url,
         mangoPerpMarketConfig
@@ -63,15 +70,17 @@ export function PlacePerpOrderDetailsCard(props: {
         </td>
       </tr>
 
-      <tr>
-        <td>Perp market</td>
-        <td className="text-lg-right">{mangoPerpMarketConfig.name}</td>
-      </tr>
+      {mangoPerpMarketConfig !== undefined && (
+        <tr>
+          <td>Perp market</td>
+          <td className="text-lg-right">{mangoPerpMarketConfig.name}</td>
+        </tr>
+      )}
 
       <tr>
         <td>Perp market address</td>
         <td>
-          <Address pubkey={mangoPerpMarketConfig.publicKey} alignRight link />
+          <Address pubkey={perpMarketAccountMeta.pubkey} alignRight link />
         </td>
       </tr>
 
@@ -91,15 +100,19 @@ export function PlacePerpOrderDetailsCard(props: {
         <td className="text-lg-right">{info.side}</td>
       </tr>
 
-      <tr>
-        <td>price</td>
-        <td className="text-lg-right">{orderLotDetails?.price} USDC</td>
-      </tr>
+      {orderLotDetails !== null && (
+        <tr>
+          <td>price</td>
+          <td className="text-lg-right">{orderLotDetails?.price} USDC</td>
+        </tr>
+      )}
 
-      <tr>
-        <td>quantity</td>
-        <td className="text-lg-right">{orderLotDetails?.size}</td>
-      </tr>
+      {orderLotDetails !== null && (
+        <tr>
+          <td>quantity</td>
+          <td className="text-lg-right">{orderLotDetails?.size}</td>
+        </tr>
+      )}
     </InstructionCard>
   );
 }

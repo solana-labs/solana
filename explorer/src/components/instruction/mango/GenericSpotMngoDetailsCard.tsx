@@ -24,9 +24,10 @@ export function GenericSpotMngoDetailsCard(props: {
     childIndex,
   } = props;
   const mangoAccount = ix.keys[accountKeyLocation];
-  const mangoSpotMarket = getSpotMarketFromInstruction(
+  const spotMarketAccountMeta = ix.keys[spotMarketkeyLocation];
+  const mangoSpotMarketConfig = getSpotMarketFromInstruction(
     ix,
-    spotMarketkeyLocation
+    spotMarketAccountMeta
   );
 
   return (
@@ -45,15 +46,17 @@ export function GenericSpotMngoDetailsCard(props: {
         </td>
       </tr>
 
-      <tr>
-        <td>Spot market</td>
-        <td className="text-lg-right">{mangoSpotMarket.name}</td>
-      </tr>
+      {mangoSpotMarketConfig !== undefined && (
+        <tr>
+          <td>Spot market</td>
+          <td className="text-lg-right">{mangoSpotMarketConfig.name}</td>
+        </tr>
+      )}
 
       <tr>
         <td>Spot market address</td>
         <td>
-          <Address pubkey={mangoSpotMarket.publicKey} alignRight link />
+          <Address pubkey={spotMarketAccountMeta.pubkey} alignRight link />
         </td>
       </tr>
     </InstructionCard>

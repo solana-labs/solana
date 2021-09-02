@@ -12,7 +12,11 @@ export function ConsumeEventsDetailsCard(props: {
 }) {
   const { ix, index, result, innerCards, childIndex } = props;
 
-  const mangoPerpMarket = getPerpMarketFromInstruction(ix, 2);
+  const perpMarketAccountMeta = ix.keys[2];
+  const mangoPerpMarketConfig = getPerpMarketFromInstruction(
+    ix,
+    perpMarketAccountMeta
+  );
 
   return (
     <InstructionCard
@@ -23,15 +27,17 @@ export function ConsumeEventsDetailsCard(props: {
       innerCards={innerCards}
       childIndex={childIndex}
     >
-      <tr>
-        <td>Perp market</td>
-        <td className="text-lg-right">{mangoPerpMarket.name}</td>
-      </tr>
+      {mangoPerpMarketConfig !== undefined && (
+        <tr>
+          <td>Perp market</td>
+          <td className="text-lg-right">{mangoPerpMarketConfig.name}</td>
+        </tr>
+      )}
 
       <tr>
         <td>Perp market address</td>
         <td>
-          <Address pubkey={mangoPerpMarket.publicKey} alignRight link />
+          <Address pubkey={perpMarketAccountMeta.pubkey} alignRight link />
         </td>
       </tr>
     </InstructionCard>
