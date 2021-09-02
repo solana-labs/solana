@@ -2126,7 +2126,7 @@ Result:
 **NEW: This method is only available in solana-core v1.8 or newer. Please use
 [getSnapshotSlot](jsonrpc-api.md#getsnapshotslot) for solana-core v1.7**
 
-Returns the highest slot that the node has snapshots for
+Returns the highest slot information that the node has snapshots for.
 
 This will find the highest full snapshot slot, and the highest incremental
 snapshot slot _based on_ the full snapshot slot, if there is one.

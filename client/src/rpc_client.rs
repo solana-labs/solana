@@ -1018,7 +1018,7 @@ impl RpcClient {
         )
     }
 
-    /// Returns the highest slot that the node has snapshots for.
+    /// Returns the highest slot information that the node has snapshots for.
     ///
     /// This will find the highest full snapshot slot, and the highest incremental snapshot slot
     /// _based on_ the full snapshot slot, if there is one.
@@ -1037,10 +1037,10 @@ impl RpcClient {
     /// #     client_error::ClientError,
     /// # };
     /// # let rpc_client = RpcClient::new_mock("succeeds".to_string());
-    /// let highest_snapshot_slot = rpc_client.get_highest_snapshot_slot()?;
+    /// let snapshot_slot_info = rpc_client.get_highest_snapshot_slot()?;
     /// # Ok::<(), ClientError>(())
     /// ```
-    pub fn get_highest_snapshot_slot(&self) -> ClientResult<HighestSnapshotSlot> {
+    pub fn get_highest_snapshot_slot(&self) -> ClientResult<RpcSnapshotSlotInfo> {
         self.send(RpcRequest::GetHighestSnapshotSlot, Value::Null)
     }
 

@@ -2277,7 +2277,7 @@ pub mod rpc_minimal {
         ) -> Result<u64>;
 
         #[rpc(meta, name = "getHighestSnapshotSlot")]
-        fn get_highest_snapshot_slot(&self, meta: Self::Metadata) -> Result<HighestSnapshotSlot>;
+        fn get_highest_snapshot_slot(&self, meta: Self::Metadata) -> Result<RpcSnapshotSlotInfo>;
 
         #[rpc(meta, name = "getTransactionCount")]
         fn get_transaction_count(
@@ -2373,7 +2373,7 @@ pub mod rpc_minimal {
             Ok(meta.get_block_height(commitment))
         }
 
-        fn get_highest_snapshot_slot(&self, meta: Self::Metadata) -> Result<HighestSnapshotSlot> {
+        fn get_highest_snapshot_slot(&self, meta: Self::Metadata) -> Result<RpcSnapshotSlotInfo> {
             debug!("get_highest_snapshot_slot rpc request received");
 
             if meta.snapshot_config.is_none() {
@@ -2394,7 +2394,7 @@ pub mod rpc_minimal {
                     full_snapshot_slot,
                 );
 
-            Ok(HighestSnapshotSlot {
+            Ok(RpcSnapshotSlotInfo {
                 full_snapshot_slot,
                 incremental_snapshot_slot,
             })
