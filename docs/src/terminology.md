@@ -139,7 +139,7 @@ An increase in token supply over time used to fund rewards for validation and to
 
 ## inner instruction
 
-See [cross-program invocation](terminology.md#cross-program-invocation).
+See [cross-program invocation](terminology.md#cross-program-invocation-cpi).
 
 ## instruction
 
