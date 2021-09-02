@@ -7998,7 +7998,7 @@ pub mod tests {
             slot1_store
         };
 
-        accounts.clean_accounts(None, false);
+        accounts.clean_accounts(None, false, None);
 
         // key2 should be cleaned, but slot1 should not be removed since key1 is
         // still keeping it alive
@@ -8015,7 +8015,7 @@ pub mod tests {
         // clean, but `key1` will not be added to the clean here.
         accounts.store_uncached(3, &[(&key0, &nonzero_lamport_account)]);
         accounts.add_root(3);
-        accounts.clean_accounts(None, false);
+        accounts.clean_accounts(None, false, None);
         assert!(accounts.storage.get_slot_storage_entries(0).is_none());
         assert_eq!(accounts.accounts_index.ref_count_from_storage(&key1), 1);
         // Check key1 has not been shadowed
@@ -8023,7 +8023,7 @@ pub mod tests {
         assert_eq!(slot1_store.count(), 1);
 
         // This next clean will now fully clean up `key1`
-        accounts.clean_accounts(None, false);
+        accounts.clean_accounts(None, false, None);
         assert!(accounts.storage.get_slot_storage_entries(1).is_none());
         assert_eq!(accounts.accounts_index.ref_count_from_storage(&key1), 0);
     }
@@ -10333,8 +10333,6 @@ pub mod tests {
             accounts.all_account_count_in_append_vec(shrink_slot)
         );
     }
-
-    const UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE: bool = false;
 
     #[test]
     fn test_delete_dependencies() {
