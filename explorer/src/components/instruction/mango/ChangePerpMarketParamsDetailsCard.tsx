@@ -45,7 +45,7 @@ export function ChangePerpMarketParamsDetailsCard(props: {
     }
 
     getTargetPeriodLength();
-  }, [cluster, info, mangoPerpMarketConfig]);
+  }, [cluster.url, mangoPerpMarketConfig]);
 
   return (
     <InstructionCard

@@ -36,7 +36,7 @@ export function PlaceSpotOrderDetailsCard(props: {
         return;
       }
       const mangoSpotMarket = await getSpotMarketFromSpotMarketConfig(
-        ix,
+        ix.programId,
         cluster.url,
         mangoSpotMarketConfig
       );
@@ -55,7 +55,13 @@ export function PlaceSpotOrderDetailsCard(props: {
       } as OrderLotDetails);
     }
     getOrderLotDetails();
-  }, [cluster, info, ix, mangoSpotMarketConfig]);
+  }, [
+    cluster.url,
+    info.maxBaseQuantity,
+    info.limitPrice,
+    ix.programId,
+    mangoSpotMarketConfig,
+  ]);
 
   return (
     <InstructionCard

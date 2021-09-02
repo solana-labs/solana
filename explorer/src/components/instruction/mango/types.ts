@@ -9,16 +9,32 @@ import {
 } from "@blockworks-foundation/mango-client";
 import { Market } from "@project-serum/serum";
 import {
+  AccountInfo,
   AccountMeta,
   Connection,
   PublicKey,
   TransactionInstruction,
 } from "@solana/web3.js";
 
-// note: don't consider deprecated mainnet.0 group
+// note: mainnet.1 suffices since its a superset of mainnet.0
 const mangoGroups = Config.ids().groups.filter(
   (group) => group.name !== "mainnet.0"
 );
+
+// caching of account info's by public keys
+let accountInfoCache: Record<string, Promise<AccountInfo<Buffer> | null>> = {};
+function getAccountInfo(
+  clusterUrl: string,
+  publicKey: PublicKey
+): Promise<AccountInfo<Buffer> | null> {
+  if (publicKey.toBase58() in accountInfoCache) {
+    return accountInfoCache[publicKey.toBase58()];
+  }
+  const connection = new Connection(clusterUrl);
+  const accountInfoPromise = connection.getAccountInfo(publicKey);
+  accountInfoCache[publicKey.toBase58()] = accountInfoPromise;
+  return accountInfoPromise;
+}
 
 function findGroupConfig(programId: PublicKey): GroupConfig | undefined {
   const filtered = mangoGroups.filter((group) =>
@@ -348,12 +364,12 @@ export function getSpotMarketFromInstruction(
 }
 
 export async function getSpotMarketFromSpotMarketConfig(
-  ix: TransactionInstruction,
+  programId: PublicKey,
   clusterUrl: string,
   mangoSpotMarketConfig: SpotMarketConfig
 ): Promise<Market | undefined> {
   const connection = new Connection(clusterUrl);
-  const groupConfig = findGroupConfig(ix.programId);
+  const groupConfig = findGroupConfig(programId);
   if (groupConfig === undefined) {
     return;
   }
@@ -385,9 +401,9 @@ export async function getPerpMarketFromPerpMarketConfig(
   clusterUrl: string,
   mangoPerpMarketConfig: PerpMarketConfig
 ): Promise<PerpMarket> {
-  const connection = new Connection(clusterUrl);
-  const acc = await connection.getAccountInfo(mangoPerpMarketConfig.publicKey);
+  const acc = await getAccountInfo(clusterUrl, mangoPerpMarketConfig.publicKey);
   const decoded = PerpMarketLayout.decode(acc?.data);
+
   return new PerpMarket(
     mangoPerpMarketConfig.publicKey,
     mangoPerpMarketConfig.baseDecimals,

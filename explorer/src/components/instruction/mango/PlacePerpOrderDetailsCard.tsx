@@ -51,7 +51,7 @@ export function PlacePerpOrderDetailsCard(props: {
       } as OrderLotDetails);
     }
     getOrderLotDetails();
-  }, [cluster, info, mangoPerpMarketConfig]);
+  }, [cluster.url, info.quantity, info.price, mangoPerpMarketConfig]);
 
   return (
     <InstructionCard
