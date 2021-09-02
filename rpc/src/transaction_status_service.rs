@@ -113,7 +113,8 @@ impl TransactionStatusService {
                             })
                             .expect("FeeCalculator must exist");
                         let fee = transaction.message().calculate_fee(&fee_calculator);
-                        let tx_account_locks = transaction.get_account_locks();
+                        let tx_account_locks =
+                            transaction.get_account_locks(bank.demote_program_write_locks());
 
                         let inner_instructions = inner_instructions.map(|inner_instructions| {
                             inner_instructions
