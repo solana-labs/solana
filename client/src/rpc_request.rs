@@ -59,11 +59,9 @@ pub enum RpcRequest {
     )]
     GetFees,
     GetFirstAvailableBlock,
-    GetFullSnapshotSlot,
     GetGenesisHash,
     GetHealth,
     GetIdentity,
-    GetIncrementalSnapshotSlot,
     GetInflationGovernor,
     GetInflationRate,
     GetInflationReward,
@@ -81,12 +79,12 @@ pub enum RpcRequest {
     )]
     GetRecentBlockhash,
     GetRecentPerformanceSamples,
+    GetSnapshotInfo,
     #[deprecated(
         since = "1.8.0",
-        note = "Please use RpcClient::get_snapshot_slots() instead"
+        note = "Please use RpcRequest::GetSnapshotInfo instead"
     )]
     GetSnapshotSlot,
-    GetSnapshotSlots,
     GetSignaturesForAddress,
     GetSignatureStatuses,
     GetSlot,
@@ -142,11 +140,9 @@ impl fmt::Display for RpcRequest {
             RpcRequest::GetFeeRateGovernor => "getFeeRateGovernor",
             RpcRequest::GetFees => "getFees",
             RpcRequest::GetFirstAvailableBlock => "getFirstAvailableBlock",
-            RpcRequest::GetFullSnapshotSlot => "getFullSnapshotSlot",
             RpcRequest::GetGenesisHash => "getGenesisHash",
             RpcRequest::GetHealth => "getHealth",
             RpcRequest::GetIdentity => "getIdentity",
-            RpcRequest::GetIncrementalSnapshotSlot => "getIncrementalSnapshotSlot",
             RpcRequest::GetInflationGovernor => "getInflationGovernor",
             RpcRequest::GetInflationRate => "getInflationRate",
             RpcRequest::GetInflationReward => "getInflationReward",
@@ -160,8 +156,8 @@ impl fmt::Display for RpcRequest {
             RpcRequest::GetProgramAccounts => "getProgramAccounts",
             RpcRequest::GetRecentBlockhash => "getRecentBlockhash",
             RpcRequest::GetRecentPerformanceSamples => "getRecentPerformanceSamples",
+            RpcRequest::GetSnapshotInfo => "getSnapshotInfo",
             RpcRequest::GetSnapshotSlot => "getSnapshotSlot",
-            RpcRequest::GetSnapshotSlots => "getSnapshotSlots",
             RpcRequest::GetSignaturesForAddress => "getSignaturesForAddress",
             RpcRequest::GetSignatureStatuses => "getSignatureStatuses",
             RpcRequest::GetSlot => "getSlot",
