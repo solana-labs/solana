@@ -3737,7 +3737,7 @@ pub fn create_new_ledger(
         // unpack into a temp dir, while completely discarding the unpacked files
         let unpack_check = unpack_genesis_archive(
             &archive_path,
-            &temp_dir.into_path(),
+            temp_dir.path(),
             max_genesis_archive_unpacked_size,
         );
         if let Err(unpack_err) = unpack_check {
