@@ -113,13 +113,13 @@ impl Dashboard {
             }
 
             let progress_bar = new_spinner_progress_bar();
-            let mut highest_snapshot_slot = None;
+            let mut snapshot_slot_info = None;
             for i in 0.. {
                 if exit.load(Ordering::Relaxed) {
                     break;
                 }
                 if i % 10 == 0 {
-                    highest_snapshot_slot = rpc_client.get_highest_snapshot_slot().ok();
+                    snapshot_slot_info = rpc_client.get_highest_snapshot_slot().ok();
                 }
 
                 match get_validator_stats(&rpc_client, &identity) {
@@ -163,18 +163,15 @@ impl Dashboard {
                             processed_slot,
                             confirmed_slot,
                             finalized_slot,
-                            highest_snapshot_slot
+                            snapshot_slot_info
                                 .as_ref()
-                                .map(|highest_snapshot_slot| highest_snapshot_slot
-                                    .full_snapshot_slot
-                                    .to_string())
+                                .map(|snapshot_slot_info| snapshot_slot_info.full.to_string())
                                 .unwrap_or_else(|| '-'.to_string()),
-                            highest_snapshot_slot
+                            snapshot_slot_info
                                 .as_ref()
-                                .map(|highest_snapshot_slot| highest_snapshot_slot
-                                    .incremental_snapshot_slot
-                                    .map(|incremental_snapshot_slot| incremental_snapshot_slot
-                                        .to_string()))
+                                .map(|snapshot_slot_info| snapshot_slot_info
+                                    .incremental
+                                    .map(|incremental| incremental.to_string()))
                                 .flatten()
                                 .unwrap_or_else(|| '-'.to_string()),
                             transaction_count,

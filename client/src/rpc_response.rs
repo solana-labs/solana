@@ -438,6 +438,6 @@ impl From<ConfirmedTransactionStatusWithSignature> for RpcConfirmedTransactionSt
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
 pub struct RpcSnapshotSlotInfo {
-    pub full_snapshot_slot: Slot,
-    pub incremental_snapshot_slot: Option<Slot>,
+    pub full: Slot,
+    pub incremental: Option<Slot>,
 }

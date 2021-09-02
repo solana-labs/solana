@@ -148,7 +148,7 @@ fn wait_for_restart_window(
     let progress_bar = new_spinner_progress_bar();
     let monitor_start_time = SystemTime::now();
     loop {
-        let highest_snapshot_slot = rpc_client.get_highest_snapshot_slot().ok();
+        let snapshot_slot_info = rpc_client.get_highest_snapshot_slot().ok();
         let epoch_info = rpc_client.get_epoch_info_with_commitment(CommitmentConfig::processed())?;
         let healthy = rpc_client.get_health().ok().is_some();
         let delinquent_stake_percentage = {
@@ -277,8 +277,8 @@ fn wait_for_restart_window(
                     }
                 };
 
-                let full_snapshot_slot = highest_snapshot_slot
-                    .map(|highest_snapshot_slot| highest_snapshot_slot.full_snapshot_slot);
+                let full_snapshot_slot =
+                    snapshot_slot_info.map(|snapshot_slot_info| snapshot_slot_info.full);
                 match in_leader_schedule_hole {
                     Ok(_) => {
                         if restart_snapshot == None {
@@ -316,10 +316,8 @@ fn wait_for_restart_window(
             } else {
                 format!(
                     "| Full Snapshot Slot: {}",
-                    highest_snapshot_slot
-                        .map(|highest_snapshot_slot| highest_snapshot_slot
-                            .full_snapshot_slot
-                            .to_string())
+                    snapshot_slot_info
+                        .map(|snapshot_slot_info| snapshot_slot_info.full.to_string())
                         .unwrap_or_else(|| '-'.to_string()),
                 )
             },

@@ -2138,8 +2138,8 @@ None
 #### Results:
 
 - `<object>`
-  - `full_snapshot_slot: <u64>` - Highest full snapshot slot
-  - `incremental_snapshot_slot: <u64 | null>` - Highest incremental snapshot slot _based on_ `full_snapshot_slot`
+  - `full: <u64>` - Highest full snapshot slot
+  - `incremental: <u64 | null>` - Highest incremental snapshot slot _based on_ `full`
 
 
 #### Example:
@@ -2153,7 +2153,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 Result:
 ```json
-{"jsonrpc":"2.0","result":{"full_snapshot_slot":100,"incremental_snapshot_slot":null},"id":1}
+{"jsonrpc":"2.0","result":{"full":100,"incremental":null},"id":1}
 ```
 
 Result when the node has no snapshot:

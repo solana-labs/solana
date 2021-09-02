@@ -2395,8 +2395,8 @@ pub mod rpc_minimal {
                 );
 
             Ok(RpcSnapshotSlotInfo {
-                full_snapshot_slot,
-                incremental_snapshot_slot,
+                full: full_snapshot_slot,
+                incremental: incremental_snapshot_slot,
             })
         }
 
