@@ -227,9 +227,10 @@ Returns all information associated with the account of provided Pubkey
 - `<object>` - (optional) Configuration object containing the following optional
 fields:
   - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
-  - `encoding: <string>` - encoding for Account data, either "base58" (*slow*), "base64", "base64+zstd", or "jsonParsed".
+  - `encoding: <string>` - encoding for Account data, either "base58" (*slow*), "base64", "base64+zstd", "empty", or "jsonParsed".
     "base58" is limited to Account data of less than 129 bytes.
     "base64" will return base64 encoded data for Account data of any size.
+    "empty" will always return the empty string in the account data field
     "base64+zstd" compresses the Account data using [Zstandard](https://facebook.github.io/zstd/) and base64-encodes the result.
     "jsonParsed" encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a parser cannot be found, the field falls back to "base64" encoding, detectable when the `data` field is type `<string>`.
   - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; only available for "base58", "base64" or "base64+zstd" encodings.
@@ -1804,10 +1805,11 @@ Returns the account information for a list of Pubkeys
 - `<array>` - An array of Pubkeys to query, as base-58 encoded strings
 - `<object>` - (optional) Configuration object containing the following optional fields:
   - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
-  - `encoding: <string>` - encoding for Account data, either "base58" (*slow*), "base64", "base64+zstd", or "jsonParsed".
+  - `encoding: <string>` - encoding for Account data, either "base58" (*slow*), "base64", "base64+zstd", "empty", or "jsonParsed".
     "base58" is limited to Account data of less than 129 bytes.
     "base64" will return base64 encoded data for Account data of any size.
     "base64+zstd" compresses the Account data using [Zstandard](https://facebook.github.io/zstd/) and base64-encodes the result.
+    "empty" will always return the empty string in the account data field
     "jsonParsed" encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a parser cannot be found, the field falls back to "base64" encoding, detectable when the `data` field is type `<string>`.
   - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; only available for "base58", "base64" or "base64+zstd" encodings.
 
@@ -1951,10 +1953,11 @@ Returns all accounts owned by the provided program Pubkey
 - `<string>` - Pubkey of program, as base-58 encoded string
 - `<object>` - (optional) Configuration object containing the following optional fields:
   - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
-  - `encoding: <string>` - encoding for Account data, either "base58" (*slow*), "base64", "base64+zstd", or "jsonParsed".
+  - `encoding: <string>` - encoding for Account data, either "base58" (*slow*), "base64", "base64+zstd", "empty", or "jsonParsed".
     "base58" is limited to Account data of less than 129 bytes.
     "base64" will return base64 encoded data for Account data of any size.
     "base64+zstd" compresses the Account data using [Zstandard](https://facebook.github.io/zstd/) and base64-encodes the result.
+    "empty" will always return the empty string in the account data field
     "jsonParsed" encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a parser cannot be found, the field falls back to "base64" encoding, detectable when the `data` field is type `<string>`.
   - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; only available for "base58", "base64" or "base64+zstd" encodings.
   - (optional) `filters: <array>` - filter results using various [filter objects](jsonrpc-api.md#filters); account must meet all filter criteria to be included in results
@@ -2620,7 +2623,7 @@ Returns all SPL Token accounts by approved Delegate.
   * `programId: <string>` - Pubkey of the Token program ID that owns the accounts, as base-58 encoded string
 - `<object>` - (optional) Configuration object containing the following optional fields:
   - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
-  - `encoding: <string>` - encoding for Account data, either "base58" (*slow*), "base64", "base64+zstd" or "jsonParsed".
+  - `encoding: <string>` - encoding for Account data, either "base58" (*slow*), "base64", "base64+zstd", "empty" or "jsonParsed".
     "jsonParsed" encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a valid mint cannot be found for a particular account, that account will be filtered out from results.
   - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; only available for "base58", "base64" or "base64+zstd" encodings.
 
@@ -2718,7 +2721,7 @@ Returns all SPL Token accounts by token owner.
   * `programId: <string>` - Pubkey of the Token program ID that owns the accounts, as base-58 encoded string
 - `<object>` - (optional) Configuration object containing the following optional fields:
   - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
-  - `encoding: <string>` - encoding for Account data, either "base58" (*slow*), "base64", "base64+zstd" or "jsonParsed".
+  - `encoding: <string>` - encoding for Account data, either "base58" (*slow*), "base64", "base64+zstd", "empty", or "jsonParsed".
     "jsonParsed" encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a valid mint cannot be found for a particular account, that account will be filtered out from results.
   - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; only available for "base58", "base64" or "base64+zstd" encodings.
 
@@ -3504,7 +3507,7 @@ Subscribe to an account to receive notifications when the lamports or data for a
 - `<string>` - account Pubkey, as base-58 encoded string
 - `<object>` - (optional) Configuration object containing the following optional fields:
   - `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
-  - `encoding: <string>` - encoding for Account data, either "base58" (*slow*), "base64", "base64+zstd" or "jsonParsed".
+  - `encoding: <string>` - encoding for Account data, either "base58" (*slow*), "base64", "base64+zstd", "empty", or "jsonParsed".
     "jsonParsed" encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a parser cannot be found, the field falls back to binary encoding, detectable when the `data` field is type `<string>`.
 
 #### Results:
@@ -3744,7 +3747,7 @@ Subscribe to a program to receive notifications when the lamports or data for a 
 - `<string>` - program_id Pubkey, as base-58 encoded string
 - `<object>` - (optional) Configuration object containing the following optional fields:
   - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
-  - `encoding: <string>` - encoding for Account data, either "base58" (*slow*), "base64", "base64+zstd" or "jsonParsed".
+  - `encoding: <string>` - encoding for Account data, either "base58" (*slow*), "base64", "base64+zstd", "empty", or "jsonParsed".
     "jsonParsed" encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a parser cannot be found, the field falls back to base64 encoding, detectable when the `data` field is type `<string>`.
   - (optional) `filters: <array>` - filter results using various [filter objects](jsonrpc-api.md#filters); account must meet all filter criteria to be included in results
 

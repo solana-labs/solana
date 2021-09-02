@@ -58,6 +58,7 @@ pub enum UiAccountEncoding {
     JsonParsed,
     #[serde(rename = "base64+zstd")]
     Base64Zstd,
+    Empty,
 }
 
 impl UiAccount {
@@ -117,6 +118,9 @@ impl UiAccount {
                     )
                 }
             }
+            UiAccountEncoding::Empty => {
+                UiAccountData::Binary(String::new(), UiAccountEncoding::Empty)
+            }
         };
         UiAccount {
             lamports: account.lamports(),
@@ -144,7 +148,9 @@ impl UiAccount {
                             .ok()
                     })
                     .flatten(),
-                UiAccountEncoding::Binary | UiAccountEncoding::JsonParsed => None,
+                UiAccountEncoding::Binary
+                | UiAccountEncoding::JsonParsed
+                | UiAccountEncoding::Empty => None,
             },
         }?;
         Some(T::create(
