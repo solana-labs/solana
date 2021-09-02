@@ -8,8 +8,9 @@ use {
         rpc_response::{
             Response, RpcAccountBalance, RpcBlockProduction, RpcBlockProductionRange, RpcBlockhash,
             RpcConfirmedTransactionStatusWithSignature, RpcContactInfo, RpcFees, RpcPerfSample,
-            RpcResponseContext, RpcSimulateTransactionResult, RpcStakeActivation, RpcSupply,
-            RpcVersionInfo, RpcVoteAccountInfo, RpcVoteAccountStatus, StakeActivationState,
+            RpcResponseContext, RpcSimulateTransactionResult, RpcSnapshotSlotInfo,
+            RpcStakeActivation, RpcSupply, RpcVersionInfo, RpcVoteAccountInfo,
+            RpcVoteAccountStatus, StakeActivationState,
         },
         rpc_sender::RpcSender,
     },
@@ -222,6 +223,10 @@ impl RpcSender for MockSender {
             "getMaxShredInsertSlot" => json![0],
             "requestAirdrop" => Value::String(Signature::new(&[8; 64]).to_string()),
             "getSnapshotSlot" => Value::Number(Number::from(0)),
+            "getHighestSnapshotSlot" => json!(RpcSnapshotSlotInfo {
+                full: 100,
+                incremental: Some(110),
+            }),
             "getBlockHeight" => Value::Number(Number::from(1234)),
             "getSlotLeaders" => json!([PUBKEY]),
             "getBlockProduction" => {

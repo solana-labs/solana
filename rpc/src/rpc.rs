@@ -2276,8 +2276,8 @@ pub mod rpc_minimal {
             commitment: Option<CommitmentConfig>,
         ) -> Result<u64>;
 
-        #[rpc(meta, name = "getSnapshotSlot")]
-        fn get_snapshot_slot(&self, meta: Self::Metadata) -> Result<Slot>;
+        #[rpc(meta, name = "getHighestSnapshotSlot")]
+        fn get_highest_snapshot_slot(&self, meta: Self::Metadata) -> Result<RpcSnapshotSlotInfo>;
 
         #[rpc(meta, name = "getTransactionCount")]
         fn get_transaction_count(
@@ -2373,16 +2373,31 @@ pub mod rpc_minimal {
             Ok(meta.get_block_height(commitment))
         }
 
-        fn get_snapshot_slot(&self, meta: Self::Metadata) -> Result<Slot> {
-            debug!("get_snapshot_slot rpc request received");
+        fn get_highest_snapshot_slot(&self, meta: Self::Metadata) -> Result<RpcSnapshotSlotInfo> {
+            debug!("get_highest_snapshot_slot rpc request received");
 
-            meta.snapshot_config
-                .and_then(|snapshot_config| {
-                    snapshot_utils::get_highest_full_snapshot_archive_slot(
-                        &snapshot_config.snapshot_archives_dir,
-                    )
-                })
-                .ok_or_else(|| RpcCustomError::NoSnapshot.into())
+            if meta.snapshot_config.is_none() {
+                return Err(RpcCustomError::NoSnapshot.into());
+            }
+
+            let snapshot_archives_dir = meta
+                .snapshot_config
+                .map(|snapshot_config| snapshot_config.snapshot_archives_dir)
+                .unwrap();
+
+            let full_snapshot_slot =
+                snapshot_utils::get_highest_full_snapshot_archive_slot(&snapshot_archives_dir)
+                    .ok_or(RpcCustomError::NoSnapshot)?;
+            let incremental_snapshot_slot =
+                snapshot_utils::get_highest_incremental_snapshot_archive_slot(
+                    &snapshot_archives_dir,
+                    full_snapshot_slot,
+                );
+
+            Ok(RpcSnapshotSlotInfo {
+                full: full_snapshot_slot,
+                incremental: incremental_snapshot_slot,
+            })
         }
 
         fn get_transaction_count(
@@ -3686,6 +3701,9 @@ pub mod rpc_deprecated_v1_8 {
             &self,
             meta: Self::Metadata,
         ) -> Result<RpcResponse<RpcFeeRateGovernor>>;
+
+        #[rpc(meta, name = "getSnapshotSlot")]
+        fn get_snapshot_slot(&self, meta: Self::Metadata) -> Result<Slot>;
     }
 
     pub struct DeprecatedV1_8Impl;
@@ -3728,6 +3746,18 @@ pub mod rpc_deprecated_v1_8 {
         ) -> Result<RpcResponse<RpcFeeRateGovernor>> {
             debug!("get_fee_rate_governor rpc request received");
             Ok(meta.get_fee_rate_governor())
+        }
+
+        fn get_snapshot_slot(&self, meta: Self::Metadata) -> Result<Slot> {
+            debug!("get_snapshot_slot rpc request received");
+
+            meta.snapshot_config
+                .and_then(|snapshot_config| {
+                    snapshot_utils::get_highest_full_snapshot_archive_slot(
+                        &snapshot_config.snapshot_archives_dir,
+                    )
+                })
+                .ok_or_else(|| RpcCustomError::NoSnapshot.into())
         }
     }
 }

@@ -1018,13 +1018,16 @@ impl RpcClient {
         )
     }
 
-    /// Returns the highest slot that the node has a snapshot for.
+    /// Returns the highest slot information that the node has snapshots for.
+    ///
+    /// This will find the highest full snapshot slot, and the highest incremental snapshot slot
+    /// _based on_ the full snapshot slot, if there is one.
     ///
     /// # RPC Reference
     ///
-    /// This method corresponds directly to the [`getSnapshotSlot`] RPC method.
+    /// This method corresponds directly to the [`getHighestSnapshotSlot`] RPC method.
     ///
-    /// [`getSnapshotSlot`]: https://docs.solana.com/developing/clients/jsonrpc-api#getsnapshotslot
+    /// [`getHighestSnapshotSlot`]: https://docs.solana.com/developing/clients/jsonrpc-api#gethighestsnapshotslot
     ///
     /// # Examples
     ///
@@ -1034,9 +1037,18 @@ impl RpcClient {
     /// #     client_error::ClientError,
     /// # };
     /// # let rpc_client = RpcClient::new_mock("succeeds".to_string());
-    /// let slot = rpc_client.get_snapshot_slot()?;
+    /// let snapshot_slot_info = rpc_client.get_highest_snapshot_slot()?;
     /// # Ok::<(), ClientError>(())
     /// ```
+    pub fn get_highest_snapshot_slot(&self) -> ClientResult<RpcSnapshotSlotInfo> {
+        self.send(RpcRequest::GetHighestSnapshotSlot, Value::Null)
+    }
+
+    #[deprecated(
+        since = "1.8.0",
+        note = "Please use RpcClient::get_highest_snapshot_slot() instead"
+    )]
+    #[allow(deprecated)]
     pub fn get_snapshot_slot(&self) -> ClientResult<Slot> {
         self.send(RpcRequest::GetSnapshotSlot, Value::Null)
     }

@@ -113,13 +113,13 @@ impl Dashboard {
             }
 
             let progress_bar = new_spinner_progress_bar();
-            let mut snapshot_slot = None;
+            let mut snapshot_slot_info = None;
             for i in 0.. {
                 if exit.load(Ordering::Relaxed) {
                     break;
                 }
                 if i % 10 == 0 {
-                    snapshot_slot = rpc_client.get_snapshot_slot().ok();
+                    snapshot_slot_info = rpc_client.get_highest_snapshot_slot().ok();
                 }
 
                 match get_validator_stats(&rpc_client, &identity) {
@@ -147,7 +147,7 @@ impl Dashboard {
                         progress_bar.set_message(format!(
                             "{}{}{}| \
                                     Processed Slot: {} | Confirmed Slot: {} | Finalized Slot: {} | \
-                                    Snapshot Slot: {} | \
+                                    Full Snapshot Slot: {} | Incremental Snapshot Slot: {} \
                                     Transactions: {} | {}",
                             uptime,
                             if health == "ok" {
@@ -163,9 +163,17 @@ impl Dashboard {
                             processed_slot,
                             confirmed_slot,
                             finalized_slot,
-                            snapshot_slot
-                                .map(|s| s.to_string())
-                                .unwrap_or_else(|| "-".to_string()),
+                            snapshot_slot_info
+                                .as_ref()
+                                .map(|snapshot_slot_info| snapshot_slot_info.full.to_string())
+                                .unwrap_or_else(|| '-'.to_string()),
+                            snapshot_slot_info
+                                .as_ref()
+                                .map(|snapshot_slot_info| snapshot_slot_info
+                                    .incremental
+                                    .map(|incremental| incremental.to_string()))
+                                .flatten()
+                                .unwrap_or_else(|| '-'.to_string()),
                             transaction_count,
                             identity_balance
                         ));
