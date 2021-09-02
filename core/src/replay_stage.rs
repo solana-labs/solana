@@ -2703,6 +2703,8 @@ impl ReplayStage {
             accounts_background_request_sender,
             highest_confirmed_root,
         );
+        // Dropping the bank_forks write lock and reacquiring as a read lock is
+        // safe because updates to bank_forks are only made by a single thread.
         let r_bank_forks = bank_forks.read().unwrap();
         let new_root_bank = &r_bank_forks[new_root];
         if !*has_new_vote_been_rooted {
