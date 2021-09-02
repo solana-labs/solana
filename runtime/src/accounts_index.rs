@@ -4155,7 +4155,7 @@ pub mod tests {
     #[test]
     fn test_start_end_bin() {
         let index = AccountsIndex::<bool>::default_for_tests();
-        assert_eq!(index.bins(), BINS_DEFAULT);
+        assert_eq!(index.bins(), BINS_FOR_TESTING);
         let iter = AccountsIndexIterator::new(
             &index,
             None::<RangeInclusive<Pubkey>>,
