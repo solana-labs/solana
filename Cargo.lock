@@ -5530,7 +5530,7 @@ dependencies = [
  "bincode",
  "chrono",
  "crossbeam-channel",
- "futures 0.3.16",
+ "futures 0.3.17",
  "futures-util",
  "log 0.4.14",
  "prost",
@@ -5541,7 +5541,7 @@ dependencies = [
  "solana-rpc",
  "solana-runtime",
  "solana-sdk",
- "tokio 1.10.1",
+ "tokio 1.11.0",
  "tonic",
  "tonic-build",
 ]
