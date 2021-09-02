@@ -708,19 +708,16 @@ instructions referencing user accounts. It is possible that a transfer is initia
 by a smart contract via [Cross Program Invocation](/developing/programming-model/calling-between-programs#cross-program-invocations),
 so [inner instructions](/terminology#inner-instruction) must be checked as well.
 The `preTokenBalance` and `postTokenBalance` fields from the transaction's metadata
-can then be used to determine the effective balance change.
+must then be used to determine the effective balance change.
 
 ### Withdrawing
 
-The withdrawal address a user provides should be the that of their SOL wallet.
+The withdrawal address a user provides must be the that of their SOL wallet.
 
 Before executing a withdrawal [transfer](#token-transfers),
 the exchange should check the address as
 [described above](#validating-user-supplied-account-addresses-for-withdrawals).
-Additionally it is recommended that the account at this address be owned by the
-System Program and that its SOL balance be non-zero.  Non-system owned withdrawal
-addresses should be rejected and zero-SOL-balance accounts should require user
-confirmation before proceeding.
+Additionally this address must be owned by the System Program and have no account data.  If the address has no SOL balance, user confirmation should be obtained before proceeding with the withdrawal.  All other withdrawal addresses must be rejected.
 
 From the withdrawal address, the [Associated Token Account](https://spl.solana.com/associated-token-account)
 (ATA) for the correct mint is derived and the transfer issued to that account via a
