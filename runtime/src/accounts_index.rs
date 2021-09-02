@@ -830,11 +830,12 @@ impl<T: IsCached> AccountsIndex<T> {
         let bins = config
             .and_then(|config| config.bins)
             .unwrap_or(BINS_DEFAULT);
+        // create bin_calculator early to verify # bins is reasonable
+        let bin_calculator = PubkeyBinCalculator16::new(bins);
         let account_maps = (0..bins)
             .into_iter()
-            .map(|_| RwLock::new(AccountMap::default()))
+            .map(|_bin| RwLock::new(AccountMap::new()))
             .collect::<Vec<_>>();
-        let bin_calculator = PubkeyBinCalculator16::new(bins);
         (account_maps, bin_calculator)
     }
 
