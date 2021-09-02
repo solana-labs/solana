@@ -190,7 +190,7 @@ impl<T: IsCached> WriteAccountMapEntry<T> {
         .build()
     }
 
-    pub fn slot_list(&mut self) -> &SlotList<T> {
+    pub fn slot_list(&self) -> &SlotList<T> {
         &*self.borrow_slot_list_guard()
     }
 
@@ -199,10 +199,6 @@ impl<T: IsCached> WriteAccountMapEntry<T> {
         user: impl for<'this> FnOnce(&mut RwLockWriteGuard<'this, SlotList<T>>) -> RT,
     ) -> RT {
         self.with_slot_list_guard_mut(user)
-    }
-
-    pub fn ref_count(&self) -> &AtomicU64 {
-        &self.borrow_owned_entry().ref_count
     }
 
     // create an entry that is equivalent to this process:
@@ -329,7 +325,7 @@ impl<T: IsCached> WriteAccountMapEntry<T> {
         });
         if addref {
             // If it's the first non-cache insert, also bump the stored ref count
-            self.ref_count().fetch_add(1, Ordering::Relaxed);
+            self.borrow_owned_entry().add_un_ref(true);
         }
     }
 }
