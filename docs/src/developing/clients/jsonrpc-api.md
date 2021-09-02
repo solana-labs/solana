@@ -2121,10 +2121,15 @@ Result:
 }
 ```
 
+### getHighestSnapshotSlot
 
-### getSnapshotSlot
+**NEW: This method is only available in solana-core v1.8 or newer. Please use
+[getSnapshotSlot](jsonrpc-api.md#getsnapshotslot) for solana-core v1.7**
 
-Returns the highest slot that the node has a snapshot for
+Returns the highest slot that the node has snapshots for
+
+This will find the highest full snapshot slot, and the highest incremental
+snapshot slot _based on_ the full snapshot slot, if there is one.
 
 #### Parameters:
 
@@ -2132,20 +2137,23 @@ None
 
 #### Results:
 
-- `<u64>` - Snapshot slot
+- `<object>`
+  - `full_snapshot_slot: <u64>` - Highest full snapshot slot
+  - `incremental_snapshot_slot: <u64 | null>` - Highest incremental snapshot slot _based on_ `full_snapshot_slot`
+
 
 #### Example:
 
 Request:
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
-  {"jsonrpc":"2.0","id":1, "method":"getSnapshotSlot"}
+  {"jsonrpc":"2.0","id":1, "method":"getHighestSnapshotSlot"}
 '
 ```
 
 Result:
 ```json
-{"jsonrpc":"2.0","result":100,"id":1}
+{"jsonrpc":"2.0","result":{"full_snapshot_slot":100,"incremental_snapshot_slot":null},"id":1}
 ```
 
 Result when the node has no snapshot:
@@ -4282,6 +4290,40 @@ Response:
 ```
 
 ## JSON RPC API Deprecated Methods
+
+### getSnapshotSlot
+
+**DEPRECATED: Please use [getHighestSnapshotSlot](jsonrpc-api.md#gethighestsnapshotslot) instead**
+This method is expected to be removed in solana-core v1.9
+
+Returns the highest slot that the node has a snapshot for
+
+#### Parameters:
+
+None
+
+#### Results:
+
+- `<u64>` - Snapshot slot
+
+#### Example:
+
+Request:
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0","id":1, "method":"getSnapshotSlot"}
+'
+```
+
+Result:
+```json
+{"jsonrpc":"2.0","result":100,"id":1}
+```
+
+Result when the node has no snapshot:
+```json
+{"jsonrpc":"2.0","error":{"code":-32008,"message":"No snapshot"},"id":1}
+```
 
 ### getConfirmedBlock
 
