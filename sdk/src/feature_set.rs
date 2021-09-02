@@ -187,6 +187,10 @@ pub mod close_upgradeable_program_accounts {
     solana_sdk::declare_id!("EQMtCuSAkMVF9ZdhGuABtgvyXJLtSRF5AQKv1RNsrhj7");
 }
 
+pub mod demote_program_write_locks {
+    solana_sdk::declare_id!("3E3jV7v9VcdJL8iYZUMax9DiDno8j7EWUVbhm9RtShj2");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -229,6 +233,7 @@ lazy_static! {
         (libsecp256k1_fail_on_bad_count::id(), "Fail libsec256k1_verify if count appears wrong"),
         (instructions_sysvar_owned_by_sysvar::id(), "fix owner for instructions sysvar"),
         (close_upgradeable_program_accounts::id(), "enable closing upgradeable program accounts"),
+        (demote_program_write_locks::id(), "demote program write locks to readonly #XXXXX"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
