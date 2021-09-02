@@ -224,8 +224,8 @@ impl RpcSender for MockSender {
             "requestAirdrop" => Value::String(Signature::new(&[8; 64]).to_string()),
             "getSnapshotSlot" => Value::Number(Number::from(0)),
             "getHighestSnapshotSlot" => json!(RpcSnapshotSlotInfo {
-                full: 0,
-                incremental: None,
+                full: 100,
+                incremental: Some(110),
             }),
             "getBlockHeight" => Value::Number(Number::from(1234)),
             "getSlotLeaders" => json!([PUBKEY]),

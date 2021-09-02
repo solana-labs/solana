@@ -1315,7 +1315,7 @@ None
 
 - `<object>`
   - `full: <u64>` - Highest full snapshot slot
-  - `incremental: <u64 | null>` - Highest incremental snapshot slot _based on_ `full`
+  - `incremental: <u64 | undefined>` - Highest incremental snapshot slot _based on_ `full`
 
 
 #### Example:
@@ -1323,13 +1323,13 @@ None
 Request:
 ```bash
 curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
-  {"jsonrpc":"2.0","id":1, "method":"getHighestSnapshotSlot"}
+  {"jsonrpc":"2.0","id":1,"method":"getHighestSnapshotSlot"}
 '
 ```
 
 Result:
 ```json
-{"jsonrpc":"2.0","result":{"full":100,"incremental":null},"id":1}
+{"jsonrpc":"2.0","result":{"full":100,"incremental":110},"id":1}
 ```
 
 Result when the node has no snapshot:
