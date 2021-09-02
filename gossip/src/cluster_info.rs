@@ -67,7 +67,9 @@ use {
         socket::SocketAddrSpace,
         streamer::{PacketReceiver, PacketSender},
     },
-    solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY,
+    solana_vote_program::{
+        vote_state::MAX_LOCKOUT_HISTORY, vote_transaction::parse_vote_transaction,
+    },
     std::{
         borrow::Cow,
         collections::{hash_map::Entry, HashMap, HashSet, VecDeque},
@@ -1004,6 +1006,16 @@ impl ClusterInfo {
                 .map(|(_ /*wallclock*/, ix)| ix)
         };
         let vote_index = vote_index.unwrap_or(num_crds_votes);
+        if (vote_index as usize) >= MAX_LOCKOUT_HISTORY {
+            let (_, vote, hash) = parse_vote_transaction(&vote).unwrap();
+            panic!(
+                "invalid vote index: {}, switch: {}, vote slots: {:?}, tower: {:?}",
+                vote_index,
+                hash.is_some(),
+                vote.slots,
+                tower
+            );
+        }
         self.push_vote_at_index(vote, vote_index);
     }
 

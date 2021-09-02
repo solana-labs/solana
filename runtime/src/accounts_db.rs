@@ -212,7 +212,7 @@ impl GenerateIndexTimings {
     }
 }
 
-#[derive(Default, Debug, PartialEq, Clone)]
+#[derive(Default, Debug, PartialEq, Clone, Copy)]
 pub struct AccountInfo {
     /// index identifying the append storage
     store_id: AppendVecId,
@@ -1220,6 +1220,8 @@ struct ShrinkStats {
     bytes_removed: AtomicU64,
     bytes_written: AtomicU64,
     skipped_shrink: AtomicU64,
+    dead_accounts: AtomicU64,
+    alive_accounts: AtomicU64,
 }
 
 impl ShrinkStats {
@@ -1306,6 +1308,16 @@ impl ShrinkStats {
                 (
                     "skipped_shrink",
                     self.skipped_shrink.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "alive_accounts",
+                    self.alive_accounts.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "dead_accounts",
+                    self.dead_accounts.swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
             );
@@ -2214,7 +2226,7 @@ impl AccountsDb {
         );
     }
 
-    fn do_shrink_slot_stores<'a, I>(&'a self, slot: Slot, stores: I, _is_startup: bool) -> usize
+    fn do_shrink_slot_stores<'a, I>(&'a self, slot: Slot, stores: I) -> usize
     where
         I: Iterator<Item = &'a Arc<AccountStorageEntry>>,
     {
@@ -2254,30 +2266,64 @@ impl AccountsDb {
         }
 
         let mut index_read_elapsed = Measure::start("index_read_elapsed");
-        let mut alive_total = 0;
+        let alive_total_collect = AtomicUsize::new(0);
 
-        let mut alive_accounts: Vec<_> = Vec::with_capacity(stored_accounts.len());
-        let mut unrefed_pubkeys = vec![];
-        for (pubkey, stored_account) in &stored_accounts {
-            let lookup = self.accounts_index.get_account_read_entry(pubkey);
-            if let Some(locked_entry) = lookup {
-                let is_alive = locked_entry.slot_list().iter().any(|(_slot, i)| {
-                    i.store_id == stored_account.store_id
-                        && i.offset == stored_account.account.offset
-                });
-                if !is_alive {
-                    // This pubkey was found in the storage, but no longer exists in the index.
-                    // It would have had a ref to the storage from the initial store, but it will
-                    // not exist in the re-written slot. Unref it to keep the index consistent with
-                    // rewriting the storage entries.
-                    unrefed_pubkeys.push(pubkey);
-                    locked_entry.unref()
-                } else {
-                    alive_accounts.push((pubkey, stored_account));
-                    alive_total += stored_account.account_size;
-                }
-            }
-        }
+        let len = stored_accounts.len();
+        let alive_accounts_collect = Mutex::new(Vec::with_capacity(len));
+        let unrefed_pubkeys_collect = Mutex::new(Vec::with_capacity(len));
+        self.thread_pool.install(|| {
+            let chunk_size = 50; // # accounts/thread
+            let chunks = len / chunk_size + 1;
+            (0..chunks).into_par_iter().for_each(|chunk| {
+                let mut alive_accounts = Vec::with_capacity(chunk_size);
+                let mut unrefed_pubkeys = Vec::with_capacity(chunk_size);
+                let mut alive_total = 0;
+                let skip = chunk * chunk_size;
+                stored_accounts.iter().skip(skip).take(chunk_size).for_each(
+                    |(pubkey, stored_account)| {
+                        let lookup = self.accounts_index.get_account_read_entry(pubkey);
+                        if let Some(locked_entry) = lookup {
+                            let is_alive = locked_entry.slot_list().iter().any(|(_slot, i)| {
+                                i.store_id == stored_account.store_id
+                                    && i.offset == stored_account.account.offset
+                            });
+                            if !is_alive {
+                                // This pubkey was found in the storage, but no longer exists in the index.
+                                // It would have had a ref to the storage from the initial store, but it will
+                                // not exist in the re-written slot. Unref it to keep the index consistent with
+                                // rewriting the storage entries.
+                                unrefed_pubkeys.push(pubkey);
+                                locked_entry.unref();
+                                self.shrink_stats
+                                    .dead_accounts
+                                    .fetch_add(1, Ordering::Relaxed);
+                            } else {
+                                alive_accounts.push((pubkey, stored_account));
+                                alive_total += stored_account.account_size;
+                                self.shrink_stats
+                                    .alive_accounts
+                                    .fetch_add(1, Ordering::Relaxed);
+                            }
+                        }
+                    },
+                );
+
+                // collect
+                alive_accounts_collect
+                    .lock()
+                    .unwrap()
+                    .append(&mut alive_accounts);
+                unrefed_pubkeys_collect
+                    .lock()
+                    .unwrap()
+                    .append(&mut unrefed_pubkeys);
+                alive_total_collect.fetch_add(alive_total, Ordering::Relaxed);
+            });
+        });
+
+        let alive_accounts = alive_accounts_collect.into_inner().unwrap();
+        let unrefed_pubkeys = unrefed_pubkeys_collect.into_inner().unwrap();
+        let alive_total = alive_total_collect.load(Ordering::Relaxed);
 
         index_read_elapsed.stop();
         let aligned_total: u64 = Self::page_align(alive_total as u64);
@@ -2457,7 +2503,7 @@ impl AccountsDb {
 
     // Reads all accounts in given slot's AppendVecs and filter only to alive,
     // then create a minimum AppendVec filled with the alive.
-    fn shrink_slot_forced(&self, slot: Slot, is_startup: bool) -> usize {
+    fn shrink_slot_forced(&self, slot: Slot) -> usize {
         debug!("shrink_slot_forced: slot: {}", slot);
 
         if let Some(stores_lock) = self.storage.get_slot_stores(slot) {
@@ -2466,7 +2512,7 @@ impl AccountsDb {
             if !Self::is_shrinking_productive(slot, &stores) {
                 return 0;
             }
-            self.do_shrink_slot_stores(slot, stores.iter(), is_startup)
+            self.do_shrink_slot_stores(slot, stores.iter())
         } else {
             0
         }
@@ -2483,12 +2529,13 @@ impl AccountsDb {
     /// Given the input `ShrinkCandidates`, this function sorts the stores by their alive ratio
     /// in increasing order with the most sparse entries in the front. It will then simulate the
     /// shrinking by working on the most sparse entries first and if the overall alive ratio is
-    /// achieved, it will stop and return the filtered-down candidates.
+    /// achieved, it will stop and return the filtered-down candidates and the candidates which
+    /// are skipped in this round and might be eligible for the future shrink.
     fn select_candidates_by_total_usage(
         &self,
         shrink_slots: &ShrinkCandidates,
         shrink_ratio: f64,
-    ) -> ShrinkCandidates {
+    ) -> (ShrinkCandidates, ShrinkCandidates) {
         struct StoreUsageInfo {
             slot: Slot,
             alive_ratio: f64,
@@ -2499,6 +2546,7 @@ impl AccountsDb {
         let mut total_alive_bytes: u64 = 0;
         let mut candidates_count: usize = 0;
         let mut total_bytes: u64 = 0;
+        let mut total_candidate_stores: usize = 0;
         for (slot, slot_shrink_candidates) in shrink_slots {
             candidates_count += slot_shrink_candidates.len();
             for store in slot_shrink_candidates.values() {
@@ -2511,6 +2559,7 @@ impl AccountsDb {
                     alive_ratio,
                     store: store.clone(),
                 });
+                total_candidate_stores += 1;
             }
         }
         store_usage.sort_by(|a, b| {
@@ -2522,8 +2571,12 @@ impl AccountsDb {
         // Working from the beginning of store_usage which are the most sparse and see when we can stop
         // shrinking while still achieving the overall goals.
         let mut shrink_slots: ShrinkCandidates = HashMap::new();
+        let mut shrink_slots_next_batch: ShrinkCandidates = HashMap::new();
         for usage in &store_usage {
+            let store = &usage.store;
             let alive_ratio = (total_alive_bytes as f64) / (total_bytes as f64);
+            debug!("alive_ratio: {:?} store_id: {:?}, store_ratio: {:?} requirment: {:?}, total_bytes: {:?} total_alive_bytes: {:?}",
+                alive_ratio, usage.store.append_vec_id(), usage.alive_ratio, shrink_ratio, total_bytes, total_alive_bytes);
             if alive_ratio > shrink_ratio {
                 // we have reached our goal, stop
                 debug!(
@@ -2531,54 +2584,85 @@ impl AccountsDb {
                     total_bytes: {:?}, alive_ratio: {:}, shrink_ratio: {:?}",
                     usage.slot, total_alive_bytes, total_bytes, alive_ratio, shrink_ratio
                 );
-                break;
+                if usage.alive_ratio < shrink_ratio {
+                    shrink_slots_next_batch
+                        .entry(usage.slot)
+                        .or_default()
+                        .insert(store.append_vec_id(), store.clone());
+                } else {
+                    break;
+                }
+            } else {
+                let current_store_size = store.total_bytes();
+                let after_shrink_size = Self::page_align(store.alive_bytes() as u64);
+                let bytes_saved = current_store_size.saturating_sub(after_shrink_size);
+                total_bytes -= bytes_saved;
+                shrink_slots
+                    .entry(usage.slot)
+                    .or_default()
+                    .insert(store.append_vec_id(), store.clone());
             }
-            let store = &usage.store;
-            let current_store_size = store.total_bytes();
-            let after_shrink_size = Self::page_align(store.alive_bytes() as u64);
-            let bytes_saved = current_store_size.saturating_sub(after_shrink_size);
-            total_bytes -= bytes_saved;
-            shrink_slots
-                .entry(usage.slot)
-                .or_default()
-                .insert(store.append_vec_id(), store.clone());
         }
         measure.stop();
         inc_new_counter_info!(
-            "select_top_sparse_storage_entries-ms",
+            "shrink_select_top_sparse_storage_entries-ms",
             measure.as_ms() as usize
         );
-        inc_new_counter_info!("select_top_sparse_storage_entries-seeds", candidates_count);
-        shrink_slots
+        inc_new_counter_info!(
+            "shrink_select_top_sparse_storage_entries-seeds",
+            candidates_count
+        );
+        inc_new_counter_info!(
+            "shrink_total_preliminary_candidate_stores",
+            total_candidate_stores
+        );
+
+        (shrink_slots, shrink_slots_next_batch)
     }
 
     pub fn shrink_candidate_slots(&self) -> usize {
         let shrink_candidates_slots =
             std::mem::take(&mut *self.shrink_candidate_slots.lock().unwrap());
-        let shrink_slots = {
+        let (shrink_slots, shrink_slots_next_batch) = {
             if let AccountShrinkThreshold::TotalSpace { shrink_ratio } = self.shrink_ratio {
-                self.select_candidates_by_total_usage(&shrink_candidates_slots, shrink_ratio)
+                let (shrink_slots, shrink_slots_next_batch) =
+                    self.select_candidates_by_total_usage(&shrink_candidates_slots, shrink_ratio);
+                (shrink_slots, Some(shrink_slots_next_batch))
             } else {
-                shrink_candidates_slots
+                (shrink_candidates_slots, None)
             }
         };
 
         let mut measure_shrink_all_candidates = Measure::start("shrink_all_candidate_slots-ms");
         let num_candidates = shrink_slots.len();
-        let mut shrink_candidates_count: usize = 0;
-        for (slot, slot_shrink_candidates) in shrink_slots {
-            shrink_candidates_count += slot_shrink_candidates.len();
-            let mut measure = Measure::start("shrink_candidate_slots-ms");
-            self.do_shrink_slot_stores(slot, slot_shrink_candidates.values(), false);
-            measure.stop();
-            inc_new_counter_info!("shrink_candidate_slots-ms", measure.as_ms() as usize);
-        }
+        let shrink_candidates_count: usize = self.thread_pool.install(|| {
+            shrink_slots
+                .into_par_iter()
+                .map(|(slot, slot_shrink_candidates)| {
+                    let mut measure = Measure::start("shrink_candidate_slots-ms");
+                    self.do_shrink_slot_stores(slot, slot_shrink_candidates.values());
+                    measure.stop();
+                    inc_new_counter_info!("shrink_candidate_slots-ms", measure.as_ms() as usize);
+                    slot_shrink_candidates.len()
+                })
+                .sum()
+        });
         measure_shrink_all_candidates.stop();
         inc_new_counter_info!(
             "shrink_all_candidate_slots-ms",
             measure_shrink_all_candidates.as_ms() as usize
         );
         inc_new_counter_info!("shrink_all_candidate_slots-count", shrink_candidates_count);
+        let mut pended_counts: usize = 0;
+        if let Some(shrink_slots_next_batch) = shrink_slots_next_batch {
+            let mut shrink_slots = self.shrink_candidate_slots.lock().unwrap();
+            for (slot, stores) in shrink_slots_next_batch {
+                pended_counts += stores.len();
+                shrink_slots.entry(slot).or_default().extend(stores);
+            }
+        }
+        inc_new_counter_info!("shrink_pended_stores-count", pended_counts);
+
         num_candidates
     }
 
@@ -2592,7 +2676,7 @@ impl AccountsDb {
             slots.chunks(OUTER_CHUNK_SIZE).for_each(|chunk| {
                 chunk.par_chunks(inner_chunk_size).for_each(|slots| {
                     for slot in slots {
-                        self.shrink_slot_forced(*slot, is_startup);
+                        self.shrink_slot_forced(*slot);
                     }
                 });
                 if self.dirty_stores.len() > DIRTY_STORES_CLEANING_THRESHOLD {
@@ -2602,7 +2686,7 @@ impl AccountsDb {
         } else {
             for slot in self.all_slots_in_storage() {
                 if self.caching_enabled {
-                    self.shrink_slot_forced(slot, false);
+                    self.shrink_slot_forced(slot);
                 } else {
                     self.do_shrink_slot_forced_v1(slot);
                 }
@@ -2677,7 +2761,7 @@ impl AccountsDb {
     where
         F: Fn(&mut A, Option<(&Pubkey, AccountSharedData, Slot)>),
         A: Default,
-        R: RangeBounds<Pubkey>,
+        R: RangeBounds<Pubkey> + std::fmt::Debug,
     {
         let mut collector = A::default();
         self.accounts_index.range_scan_accounts(
@@ -4516,6 +4600,8 @@ impl AccountsDb {
         let mut max_slot = 0;
         let mut newest_slot = 0;
         let mut oldest_slot = std::u64::MAX;
+        let mut total_bytes = 0;
+        let mut total_alive_bytes = 0;
         for iter_item in self.storage.0.iter() {
             let slot = iter_item.key();
             let slot_stores = iter_item.value().read().unwrap();
@@ -4536,9 +4622,21 @@ impl AccountsDb {
             if *slot < oldest_slot {
                 oldest_slot = *slot;
             }
+
+            for store in slot_stores.values() {
+                total_alive_bytes += Self::page_align(store.alive_bytes() as u64);
+                total_bytes += store.total_bytes();
+            }
         }
         info!("total_stores: {}, newest_slot: {}, oldest_slot: {}, max_slot: {} (num={}), min_slot: {} (num={})",
               total_count, newest_slot, oldest_slot, max_slot, max, min_slot, min);
+
+        let total_alive_ratio = if total_bytes > 0 {
+            total_alive_bytes as f64 / total_bytes as f64
+        } else {
+            0.
+        };
+
         datapoint_info!(
             "accounts_db-stores",
             ("total_count", total_count, i64),
@@ -4547,6 +4645,9 @@ impl AccountsDb {
                 self.recycle_stores.read().unwrap().entry_count() as u64,
                 i64
             ),
+            ("total_bytes", total_bytes, i64),
+            ("total_alive_bytes", total_alive_bytes, i64),
+            ("total_alive_ratio", total_alive_ratio, f64),
         );
         datapoint_info!(
             "accounts_db-perf-stats",
@@ -6447,7 +6548,7 @@ impl AccountsDb {
                 );
             }
 
-            self.do_shrink_slot_stores(slot, stores.iter(), false)
+            self.do_shrink_slot_stores(slot, stores.iter())
         } else {
             0
         }
@@ -7860,12 +7961,12 @@ pub mod tests {
         let (slot1, account_info1) = accounts
             .accounts_index
             .get(&pubkey1, Some(&ancestors), None)
-            .map(|(account_list1, index1)| account_list1.slot_list()[index1].clone())
+            .map(|(account_list1, index1)| account_list1.slot_list()[index1])
             .unwrap();
         let (slot2, account_info2) = accounts
             .accounts_index
             .get(&pubkey2, Some(&ancestors), None)
-            .map(|(account_list2, index2)| account_list2.slot_list()[index2].clone())
+            .map(|(account_list2, index2)| account_list2.slot_list()[index2])
             .unwrap();
         assert_eq!(slot1, 0);
         assert_eq!(slot1, slot2);
@@ -8417,12 +8518,12 @@ pub mod tests {
         let (slot1, account_info1) = accounts
             .accounts_index
             .get(&pubkey, None, None)
-            .map(|(account_list1, index1)| account_list1.slot_list()[index1].clone())
+            .map(|(account_list1, index1)| account_list1.slot_list()[index1])
             .unwrap();
         let (slot2, account_info2) = accounts
             .accounts_index
             .get(&pubkey2, None, None)
-            .map(|(account_list2, index2)| account_list2.slot_list()[index2].clone())
+            .map(|(account_list2, index2)| account_list2.slot_list()[index2])
             .unwrap();
         assert_eq!(slot1, current_slot);
         assert_eq!(slot1, slot2);
@@ -9916,87 +10017,229 @@ pub mod tests {
     }
 
     #[test]
-    fn test_select_candidates_by_total_usage() {
+    fn test_select_candidates_by_total_usage_no_candidates() {
+        // no input candidates -- none should be selected
         solana_logger::setup();
-
-        // case 1: no candidates
         let accounts = AccountsDb::new_single_for_tests();
+        let candidates: ShrinkCandidates = HashMap::new();
 
+        let (selected_candidates, next_candidates) =
+            accounts.select_candidates_by_total_usage(&candidates, DEFAULT_ACCOUNTS_SHRINK_RATIO);
+
+        assert_eq!(0, selected_candidates.len());
+        assert_eq!(0, next_candidates.len());
+    }
+
+    #[test]
+    fn test_select_candidates_by_total_usage_3_way_split_condition() {
+        // three candidates, one selected for shrink, one is put back to the candidate list and one is ignored
+        solana_logger::setup();
+        let accounts = AccountsDb::new_single_for_tests();
         let mut candidates: ShrinkCandidates = HashMap::new();
-        let output_candidates =
-            accounts.select_candidates_by_total_usage(&candidates, DEFAULT_ACCOUNTS_SHRINK_RATIO);
 
-        assert_eq!(0, output_candidates.len());
+        let common_store_path = Path::new("");
+        let common_slot_id = 12;
+        let store_file_size = 2 * PAGE_SIZE;
 
-        // case 2: two candidates, only one selected
-        let dummy_path = Path::new("");
-        let dummy_slot = 12;
-        let dummy_size = 2 * PAGE_SIZE;
-
-        let dummy_id1 = 22;
-        let entry1 = Arc::new(AccountStorageEntry::new(
-            dummy_path, dummy_slot, dummy_id1, dummy_size,
+        let store1_id = 22;
+        let store1 = Arc::new(AccountStorageEntry::new(
+            common_store_path,
+            common_slot_id,
+            store1_id,
+            store_file_size,
         ));
-        entry1.alive_bytes.store(8000, Ordering::Relaxed);
+        store1.alive_bytes.store(0, Ordering::Relaxed);
 
         candidates
-            .entry(dummy_slot)
+            .entry(common_slot_id)
             .or_default()
-            .insert(entry1.append_vec_id(), entry1.clone());
+            .insert(store1.append_vec_id(), store1.clone());
 
-        let dummy_id2 = 44;
-        let entry2 = Arc::new(AccountStorageEntry::new(
-            dummy_path, dummy_slot, dummy_id2, dummy_size,
+        let store2_id = 44;
+        let store2 = Arc::new(AccountStorageEntry::new(
+            common_store_path,
+            common_slot_id,
+            store2_id,
+            store_file_size,
         ));
-        entry2.alive_bytes.store(3000, Ordering::Relaxed);
+
+        // The store2's alive_ratio is 0.5: as its page aligned alive size is 1 page.
+        let store2_alive_bytes = (PAGE_SIZE - 1) as usize;
+        store2
+            .alive_bytes
+            .store(store2_alive_bytes, Ordering::Relaxed);
         candidates
-            .entry(dummy_slot)
+            .entry(common_slot_id)
             .or_default()
-            .insert(entry2.append_vec_id(), entry2.clone());
+            .insert(store2.append_vec_id(), store2.clone());
 
-        let output_candidates =
-            accounts.select_candidates_by_total_usage(&candidates, DEFAULT_ACCOUNTS_SHRINK_RATIO);
-        assert_eq!(1, output_candidates.len());
-        assert_eq!(1, output_candidates[&dummy_slot].len());
-        assert!(output_candidates[&dummy_slot].contains(&entry2.append_vec_id()));
-
-        // case 3: two candidates, both are selected
-        candidates.clear();
-        let dummy_size = 4 * PAGE_SIZE;
-        let dummy_id1 = 22;
-        let entry1 = Arc::new(AccountStorageEntry::new(
-            dummy_path, dummy_slot, dummy_id1, dummy_size,
+        let store3_id = 55;
+        let entry3 = Arc::new(AccountStorageEntry::new(
+            common_store_path,
+            common_slot_id,
+            store3_id,
+            store_file_size,
         ));
-        entry1.alive_bytes.store(3500, Ordering::Relaxed);
 
-        candidates
-            .entry(dummy_slot)
-            .or_default()
-            .insert(entry1.append_vec_id(), entry1.clone());
-
-        let dummy_id2 = 44;
-        let dummy_slot2 = 44;
-        let entry2 = Arc::new(AccountStorageEntry::new(
-            dummy_path,
-            dummy_slot2,
-            dummy_id2,
-            dummy_size,
-        ));
-        entry2.alive_bytes.store(3000, Ordering::Relaxed);
+        // The store3's alive ratio is 1.0 as its page-aligned alive size is 2 pages
+        let store3_alive_bytes = (PAGE_SIZE + 1) as usize;
+        entry3
+            .alive_bytes
+            .store(store3_alive_bytes, Ordering::Relaxed);
 
         candidates
-            .entry(dummy_slot2)
+            .entry(common_slot_id)
             .or_default()
-            .insert(entry2.append_vec_id(), entry2.clone());
+            .insert(entry3.append_vec_id(), entry3.clone());
 
-        let output_candidates =
-            accounts.select_candidates_by_total_usage(&candidates, DEFAULT_ACCOUNTS_SHRINK_RATIO);
-        assert_eq!(2, output_candidates.len());
-        assert_eq!(1, output_candidates[&dummy_slot].len());
-        assert_eq!(1, output_candidates[&dummy_slot2].len());
+        // Set the target alive ratio to 0.6 so that we can just get rid of store1, the remaining two stores
+        // alive ratio can be > the target ratio: the actual ratio is 0.75 because of 3 alive pages / 4 total pages.
+        // The target ratio is also set to larger than store2's alive ratio: 0.5 so that it would be added
+        // to the candidates list for next round.
+        let target_alive_ratio = 0.6;
+        let (selected_candidates, next_candidates) =
+            accounts.select_candidates_by_total_usage(&candidates, target_alive_ratio);
+        assert_eq!(1, selected_candidates.len());
+        assert_eq!(1, selected_candidates[&common_slot_id].len());
+        assert!(selected_candidates[&common_slot_id].contains(&store1.append_vec_id()));
+        assert_eq!(1, next_candidates.len());
+        assert!(next_candidates[&common_slot_id].contains(&store2.append_vec_id()));
+    }
 
-        assert!(output_candidates[&dummy_slot].contains(&entry1.append_vec_id()));
-        assert!(output_candidates[&dummy_slot2].contains(&entry2.append_vec_id()));
+    #[test]
+    fn test_select_candidates_by_total_usage_2_way_split_condition() {
+        // three candidates, 2 are selected for shrink, one is ignored
+        solana_logger::setup();
+        let accounts = AccountsDb::new_single_for_tests();
+        let mut candidates: ShrinkCandidates = HashMap::new();
+
+        let common_store_path = Path::new("");
+        let common_slot_id = 12;
+        let store_file_size = 2 * PAGE_SIZE;
+
+        let store1_id = 22;
+        let store1 = Arc::new(AccountStorageEntry::new(
+            common_store_path,
+            common_slot_id,
+            store1_id,
+            store_file_size,
+        ));
+        store1.alive_bytes.store(0, Ordering::Relaxed);
+
+        candidates
+            .entry(common_slot_id)
+            .or_default()
+            .insert(store1.append_vec_id(), store1.clone());
+
+        let store2_id = 44;
+        let store2 = Arc::new(AccountStorageEntry::new(
+            common_store_path,
+            common_slot_id,
+            store2_id,
+            store_file_size,
+        ));
+
+        // The store2's alive_ratio is 0.5: as its page aligned alive size is 1 page.
+        let store2_alive_bytes = (PAGE_SIZE - 1) as usize;
+        store2
+            .alive_bytes
+            .store(store2_alive_bytes, Ordering::Relaxed);
+        candidates
+            .entry(common_slot_id)
+            .or_default()
+            .insert(store2.append_vec_id(), store2.clone());
+
+        let store3_id = 55;
+        let entry3 = Arc::new(AccountStorageEntry::new(
+            common_store_path,
+            common_slot_id,
+            store3_id,
+            store_file_size,
+        ));
+
+        // The store3's alive ratio is 1.0 as its page-aligned alive size is 2 pages
+        let store3_alive_bytes = (PAGE_SIZE + 1) as usize;
+        entry3
+            .alive_bytes
+            .store(store3_alive_bytes, Ordering::Relaxed);
+
+        candidates
+            .entry(common_slot_id)
+            .or_default()
+            .insert(entry3.append_vec_id(), entry3.clone());
+
+        // Set the target ratio to default (0.8), both store1 and store2 must be selected and store3 is ignored.
+        let target_alive_ratio = DEFAULT_ACCOUNTS_SHRINK_RATIO;
+        let (selected_candidates, next_candidates) =
+            accounts.select_candidates_by_total_usage(&candidates, target_alive_ratio);
+        assert_eq!(1, selected_candidates.len());
+        assert_eq!(2, selected_candidates[&common_slot_id].len());
+        assert!(selected_candidates[&common_slot_id].contains(&store1.append_vec_id()));
+        assert!(selected_candidates[&common_slot_id].contains(&store2.append_vec_id()));
+        assert_eq!(0, next_candidates.len());
+    }
+
+    #[test]
+    fn test_select_candidates_by_total_usage_all_clean() {
+        // 2 candidates, they must be selected to achieve the target alive ratio
+        solana_logger::setup();
+        let accounts = AccountsDb::new_single_for_tests();
+        let mut candidates: ShrinkCandidates = HashMap::new();
+
+        let slot1 = 12;
+        let common_store_path = Path::new("");
+
+        let store_file_size = 4 * PAGE_SIZE;
+        let store1_id = 22;
+        let store1 = Arc::new(AccountStorageEntry::new(
+            common_store_path,
+            slot1,
+            store1_id,
+            store_file_size,
+        ));
+
+        // store1 has 1 page-aligned alive bytes, its alive ratio is 1/4: 0.25
+        let store1_alive_bytes = (PAGE_SIZE - 1) as usize;
+        store1
+            .alive_bytes
+            .store(store1_alive_bytes, Ordering::Relaxed);
+
+        candidates
+            .entry(slot1)
+            .or_default()
+            .insert(store1.append_vec_id(), store1.clone());
+
+        let store2_id = 44;
+        let slot2 = 44;
+        let store2 = Arc::new(AccountStorageEntry::new(
+            common_store_path,
+            slot2,
+            store2_id,
+            store_file_size,
+        ));
+
+        // store2 has 2 page-aligned bytes, its alive ratio is 2/4: 0.5
+        let store2_alive_bytes = (PAGE_SIZE + 1) as usize;
+        store2
+            .alive_bytes
+            .store(store2_alive_bytes, Ordering::Relaxed);
+
+        candidates
+            .entry(slot2)
+            .or_default()
+            .insert(store2.append_vec_id(), store2.clone());
+
+        // Set the target ratio to default (0.8), both stores from the two different slots must be selected.
+        let target_alive_ratio = DEFAULT_ACCOUNTS_SHRINK_RATIO;
+        let (selected_candidates, next_candidates) =
+            accounts.select_candidates_by_total_usage(&candidates, target_alive_ratio);
+        assert_eq!(2, selected_candidates.len());
+        assert_eq!(1, selected_candidates[&slot1].len());
+        assert_eq!(1, selected_candidates[&slot2].len());
+
+        assert!(selected_candidates[&slot1].contains(&store1.append_vec_id()));
+        assert!(selected_candidates[&slot2].contains(&store2.append_vec_id()));
+        assert_eq!(0, next_candidates.len());
     }
 
     #[test]
@@ -10109,7 +10352,7 @@ pub mod tests {
             &Pubkey::default(),
             &[],
             &AccountSecondaryIndexes::default(),
-            info1.clone(),
+            info1,
             &mut reclaims,
             UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
@@ -10129,7 +10372,7 @@ pub mod tests {
             &Pubkey::default(),
             &[],
             &AccountSecondaryIndexes::default(),
-            info2.clone(),
+            info2,
             &mut reclaims,
             UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
@@ -10927,7 +11170,7 @@ pub mod tests {
                 .get_account_read_entry(&account.meta.pubkey)
                 .map(|locked_entry| {
                     // Should only be one entry per key, since every key was only stored to slot 0
-                    locked_entry.slot_list()[0].clone()
+                    locked_entry.slot_list()[0]
                 })
                 .unwrap();
             let removed_data_size = account_info.1.stored_size;
@@ -11501,18 +11744,24 @@ pub mod tests {
     fn test_recycle_stores_expiration() {
         solana_logger::setup();
 
-        let dummy_path = Path::new("");
-        let dummy_slot = 12;
-        let dummy_size = 1000;
+        let common_store_path = Path::new("");
+        let common_slot_id = 12;
+        let store_file_size = 1000;
 
-        let dummy_id1 = 22;
+        let store1_id = 22;
         let entry1 = Arc::new(AccountStorageEntry::new(
-            dummy_path, dummy_slot, dummy_id1, dummy_size,
+            common_store_path,
+            common_slot_id,
+            store1_id,
+            store_file_size,
         ));
 
-        let dummy_id2 = 44;
+        let store2_id = 44;
         let entry2 = Arc::new(AccountStorageEntry::new(
-            dummy_path, dummy_slot, dummy_id2, dummy_size,
+            common_store_path,
+            common_slot_id,
+            store2_id,
+            store_file_size,
         ));
 
         let mut recycle_stores = RecycleStores::default();
@@ -11534,10 +11783,10 @@ pub mod tests {
                 .iter()
                 .map(|(_, e)| e.append_vec_id())
                 .collect::<Vec<_>>(),
-            vec![dummy_id1, dummy_id2]
+            vec![store1_id, store2_id]
         );
         assert_eq!(recycle_stores.entry_count(), 2);
-        assert_eq!(recycle_stores.total_bytes(), dummy_size * 2);
+        assert_eq!(recycle_stores.total_bytes(), store_file_size * 2);
 
         // expiration for only too old entries
         recycle_stores.entries[0].0 =
@@ -11548,17 +11797,17 @@ pub mod tests {
                 .iter()
                 .map(|e| e.append_vec_id())
                 .collect::<Vec<_>>(),
-            vec![dummy_id1]
+            vec![store1_id]
         );
         assert_eq!(
             recycle_stores
                 .iter()
                 .map(|(_, e)| e.append_vec_id())
                 .collect::<Vec<_>>(),
-            vec![dummy_id2]
+            vec![store2_id]
         );
         assert_eq!(recycle_stores.entry_count(), 1);
-        assert_eq!(recycle_stores.total_bytes(), dummy_size);
+        assert_eq!(recycle_stores.total_bytes(), store_file_size);
     }
 
     const RACY_SLEEP_MS: u64 = 10;
@@ -11932,10 +12181,8 @@ pub mod tests {
                 assert!(db.storage.get_slot_storage_entries(*slot).is_none());
                 assert!(db.accounts_cache.slot_cache(*slot).is_none());
                 let account_in_slot = slot_to_pubkey_map[slot];
-                assert!(db
-                    .accounts_index
-                    .get_account_read_entry(&account_in_slot)
-                    .is_none());
+                let item = db.accounts_index.get_account_read_entry(&account_in_slot);
+                assert!(item.is_none(), "item: {:?}", item);
             }
 
             // Wait for flush to finish before starting next trial
@@ -12122,9 +12369,14 @@ pub mod tests {
         solana_logger::setup();
 
         let mut accounts = AccountsDb::new_single_for_tests();
-        let dummy_path = Path::new("");
-        let dummy_size = 2 * PAGE_SIZE;
-        let entry = Arc::new(AccountStorageEntry::new(dummy_path, 0, 1, dummy_size));
+        let common_store_path = Path::new("");
+        let store_file_size = 2 * PAGE_SIZE;
+        let entry = Arc::new(AccountStorageEntry::new(
+            common_store_path,
+            0,
+            1,
+            store_file_size,
+        ));
         match accounts.shrink_ratio {
             AccountShrinkThreshold::TotalSpace { shrink_ratio } => {
                 assert_eq!(
@@ -12189,14 +12441,15 @@ pub mod tests {
         ];
         // make sure accounts are in 2 different bins
         assert!(
-            accounts
-                .accounts_index
-                .bin_calculator
-                .bin_from_pubkey(&keys[0])
-                != accounts
+            (accounts.accounts_index.bins() == 1)
+                ^ (accounts
                     .accounts_index
                     .bin_calculator
-                    .bin_from_pubkey(&keys[1])
+                    .bin_from_pubkey(&keys[0])
+                    != accounts
+                        .accounts_index
+                        .bin_calculator
+                        .bin_from_pubkey(&keys[1]))
         );
         let account = AccountSharedData::new(1, 1, AccountSharedData::default().owner());
         let account_big = AccountSharedData::new(1, 1000, AccountSharedData::default().owner());

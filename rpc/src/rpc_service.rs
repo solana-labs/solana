@@ -492,7 +492,6 @@ mod tests {
         },
         solana_runtime::{
             bank::Bank,
-            snapshot_config::LastFullSnapshotSlot,
             snapshot_utils::{
                 ArchiveFormat, SnapshotVersion, DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
             },
@@ -610,7 +609,6 @@ mod tests {
                 archive_format: ArchiveFormat::TarBzip2,
                 snapshot_version: SnapshotVersion::default(),
                 maximum_snapshots_to_retain: DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
-                last_full_snapshot_slot: LastFullSnapshotSlot::default(),
             }),
             bank_forks,
             RpcHealth::stub(),

@@ -42,25 +42,26 @@ impl SnapshotPackagerService {
                     }
 
                     let snapshot_package = pending_snapshot_package.lock().unwrap().take();
-                    if let Some(snapshot_package) = snapshot_package {
-                        match snapshot_utils::archive_snapshot_package(
-                            &snapshot_package,
-                            maximum_snapshots_to_retain,
-                        ) {
-                            Ok(_) => {
-                                hashes.push((snapshot_package.slot(), *snapshot_package.hash()));
-                                while hashes.len() > MAX_SNAPSHOT_HASHES {
-                                    hashes.remove(0);
-                                }
-                                cluster_info.push_snapshot_hashes(hashes.clone());
-                            }
-                            Err(err) => {
-                                warn!("Failed to create snapshot archive: {}", err);
-                            }
-                        };
-                    } else {
+                    if snapshot_package.is_none() {
                         std::thread::sleep(Duration::from_millis(100));
+                        continue;
                     }
+                    let snapshot_package = snapshot_package.unwrap();
+
+                    // Archiving the snapshot package is not allowed to fail.
+                    // AccountsBackgroundService calls `clean_accounts()` with a value for
+                    // last_full_snapshot_slot that requires this archive call to succeed.
+                    snapshot_utils::archive_snapshot_package(
+                        &snapshot_package,
+                        maximum_snapshots_to_retain,
+                    )
+                    .expect("failed to archive snapshot package");
+
+                    hashes.push((snapshot_package.slot(), *snapshot_package.hash()));
+                    while hashes.len() > MAX_SNAPSHOT_HASHES {
+                        hashes.remove(0);
+                    }
+                    cluster_info.push_snapshot_hashes(hashes.clone());
                 }
             })
             .unwrap();
@@ -82,6 +83,7 @@ mod tests {
     use solana_runtime::{
         accounts_db::AccountStorageEntry,
         bank::BankSlotDelta,
+        snapshot_archive_info::SnapshotArchiveInfo,
         snapshot_package::{SnapshotPackage, SnapshotType},
         snapshot_utils::{self, ArchiveFormat, SnapshotVersion, SNAPSHOT_STATUS_CACHE_FILE_NAME},
     };
@@ -160,24 +162,29 @@ mod tests {
         }
 
         // Create a packageable snapshot
+        let slot = 42;
+        let hash = Hash::default();
+        let archive_format = ArchiveFormat::TarBzip2;
         let output_tar_path = snapshot_utils::build_full_snapshot_archive_path(
             snapshot_archives_dir,
-            42,
-            &Hash::default(),
-            ArchiveFormat::TarBzip2,
+            slot,
+            &hash,
+            archive_format,
         );
-        let snapshot_package = SnapshotPackage::new(
-            5,
-            5,
-            vec![],
-            link_snapshots_dir,
-            vec![storage_entries],
-            output_tar_path.clone(),
-            Hash::default(),
-            ArchiveFormat::TarBzip2,
-            SnapshotVersion::default(),
-            SnapshotType::FullSnapshot,
-        );
+        let snapshot_package = SnapshotPackage {
+            snapshot_archive_info: SnapshotArchiveInfo {
+                path: output_tar_path.clone(),
+                slot,
+                hash,
+                archive_format,
+            },
+            block_height: slot,
+            slot_deltas: vec![],
+            snapshot_links: link_snapshots_dir,
+            snapshot_storages: vec![storage_entries],
+            snapshot_version: SnapshotVersion::default(),
+            snapshot_type: SnapshotType::FullSnapshot,
+        };
 
         // Make tarball from packageable snapshot
         snapshot_utils::archive_snapshot_package(
@@ -204,7 +211,7 @@ mod tests {
             output_tar_path,
             snapshots_dir,
             accounts_dir,
-            ArchiveFormat::TarBzip2,
+            archive_format,
         );
     }
 }

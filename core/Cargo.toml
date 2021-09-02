@@ -63,6 +63,7 @@ solana-perf = { path = "../perf", version = "=1.8.0" }
 solana-poh = { path = "../poh", version = "=1.8.0" }
 solana-program-test = { path = "../program-test", version = "=1.8.0" }
 solana-rpc = { path = "../rpc", version = "=1.8.0" }
+solana-replica-lib = { path = "../replica-lib", version = "=1.8.0" }
 solana-runtime = { path = "../runtime", version = "=1.8.0" }
 solana-sdk = { path = "../sdk", version = "=1.8.0" }
 solana-frozen-abi = { path = "../frozen-abi", version = "=1.8.0" }
@@ -82,7 +83,7 @@ jsonrpc-core-client = { version = "18.0.0", features = ["ipc", "ws"] }
 matches = "0.1.9"
 num_cpus = "1.13.0"
 reqwest = { version = "0.11.4", default-features = false, features = ["blocking", "rustls-tls", "json"] }
-serde_json = "1.0.66"
+serde_json = "1.0.67"
 serial_test = "0.5.1"
 solana-program-runtime = { path = "../program-runtime", version = "=1.8.0" }
 solana-stake-program = { path = "../programs/stake", version = "=1.8.0" }

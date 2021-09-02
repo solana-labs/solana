@@ -413,7 +413,7 @@ pub fn broadcast_shreds(
     let mut result = Ok(());
     let mut shred_select = Measure::start("shred_select");
     // Only the leader broadcasts shreds.
-    let leader = Some(cluster_info.id());
+    let leader = cluster_info.id();
     let (root_bank, working_bank) = {
         let bank_forks = bank_forks.read().unwrap();
         (bank_forks.root_bank(), bank_forks.working_bank())

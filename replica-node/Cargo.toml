@@ -21,6 +21,8 @@ jsonrpc-derive = "17.0.0"
 jsonrpc-ipc-server = "17.0.0"
 jsonrpc-server-utils= "17.0.0"
 log = "0.4.11"
+prost = "0.8.0"
+prost-types = "0.8.0"
 rand = "0.7.0"
 serde = "1.0.130"
 solana-clap-utils = { path = "../clap-utils", version = "=1.8.0" }
@@ -34,11 +36,13 @@ solana-logger = { path = "../logger", version = "=1.8.0" }
 solana-metrics = { path = "../metrics", version = "=1.8.0" }
 solana-net-utils = { path = "../net-utils", version = "=1.8.0" }
 solana-rpc = { path = "../rpc", version = "=1.8.0" }
+solana-replica-lib = { path = "../replica-lib", version = "=1.8.0" }
 solana-runtime = { path = "../runtime", version = "=1.8.0" }
 solana-sdk = { path = "../sdk", version = "=1.8.0" }
 solana-streamer = { path = "../streamer", version = "=1.8.0" }
 solana-version = { path = "../version", version = "=1.8.0" }
 solana-validator = { path = "../validator", version = "=1.8.0" }
+tonic = { version = "0.5.0", features = ["tls", "transport"] }
 
 [dev-dependencies]
 solana-core = { path = "../core", version = "=1.8.0" }
@@ -51,3 +55,6 @@ tempfile = "3.2.0"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
+
+[build-dependencies]
+tonic-build = "0.5.1"

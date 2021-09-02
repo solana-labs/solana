@@ -360,25 +360,20 @@ fn retransmit(
         }
 
         for shred in shreds.shreds {
-            if should_skip_retransmit(&shred, shreds_received) {
-                num_shreds_skipped += 1;
-                continue;
-            }
+
             let shred_slot = shred.slot();
             max_slot = max_slot.max(shred_slot);
 
-            if let Some(rpc_subscriptions) = rpc_subscriptions {
-                if check_if_first_shred_received(shred_slot, first_shreds_received, &root_bank) {
-                    rpc_subscriptions.notify_slot_update(SlotUpdate::FirstShredReceived {
-                        slot: shred_slot,
-                        timestamp: timestamp(),
-                    });
-                }
-            }
-
             let mut compute_turbine_peers = Measure::start("turbine_start");
             // TODO: consider using root-bank here for leader lookup!
-            let slot_leader = leader_schedule_cache.slot_leader_at(shred_slot, Some(&working_bank));
+            // Shreds' signatures should be verified before they reach here, and if
+            // the leader is unknown they should fail signature check. So here we
+            // should expect to know the slot leader and otherwise skip the shred.
+            let slot_leader =
+                match leader_schedule_cache.slot_leader_at(shred_slot, Some(&working_bank)) {
+                    Some(pubkey) => pubkey,
+                    None => continue,
+                };
             let cluster_nodes =
                 cluster_nodes_cache.get(shred_slot, &root_bank, &working_bank, cluster_info);
             let shred_seed = shred.seed(slot_leader, &root_bank);
@@ -396,24 +391,17 @@ fn retransmit(
             if anchor_node {
                 // First neighbor is this node itself, so skip it.
                 ClusterInfo::retransmit_to(
-                    &neighbors[1..],
+                    &children,
                     &shred.payload,
                     sock,
-                    true, // forward socket
+                    !anchor_node, // send to forward socket!
                     socket_addr_space,
                 );
-            }
-            ClusterInfo::retransmit_to(
-                &children,
-                &shred.payload,
-                sock,
-                !anchor_node, // send to forward socket!
-                socket_addr_space,
-            );
-            retransmit_time.stop();
-            retransmit_total += retransmit_time.as_us();
+                retransmit_time.stop();
+                retransmit_total += retransmit_time.as_us();
 
-            // TODO calculate times from shreds.timer
+                // TODO calculate times from shreds.timer
+            }
         }
         hist_stats
             .lock()

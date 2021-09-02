@@ -282,7 +282,7 @@ impl BroadcastRun for BroadcastDuplicatesRun {
         let packets: Vec<_> = shreds
             .iter()
             .filter_map(|shred| {
-                let seed = shred.seed(Some(self_pubkey), &root_bank);
+                let seed = shred.seed(self_pubkey, &root_bank);
                 let node = cluster_nodes.get_broadcast_peer(seed)?;
                 if !socket_addr_space.check(&node.tvu) {
                     return None;

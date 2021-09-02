@@ -10,8 +10,7 @@ use solana_sdk::{
     account::{AccountSharedData, ReadableAccount, WritableAccount},
     compute_budget::ComputeBudget,
     feature_set::{
-        instructions_sysvar_enabled, neon_evm_compute_budget, tx_wide_compute_cap,
-        updated_verify_policy, FeatureSet,
+        neon_evm_compute_budget, tx_wide_compute_cap, updated_verify_policy, FeatureSet,
     },
     fee_calculator::FeeCalculator,
     hash::Hash,
@@ -477,16 +476,14 @@ impl MessageProcessor {
     ) -> Result<(), InstructionError> {
         // Fixup the special instructions key if present
         // before the account pre-values are taken care of
-        if feature_set.is_active(&instructions_sysvar_enabled::id()) {
-            for (pubkey, accont) in accounts.iter().take(message.account_keys.len()) {
-                if instructions::check_id(pubkey) {
-                    let mut mut_account_ref = accont.borrow_mut();
-                    instructions::store_current_index(
-                        mut_account_ref.data_as_mut_slice(),
-                        instruction_index as u16,
-                    );
-                    break;
-                }
+        for (pubkey, accont) in accounts.iter().take(message.account_keys.len()) {
+            if instructions::check_id(pubkey) {
+                let mut mut_account_ref = accont.borrow_mut();
+                instructions::store_current_index(
+                    mut_account_ref.data_as_mut_slice(),
+                    instruction_index as u16,
+                );
+                break;
             }
         }
 

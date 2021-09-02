@@ -53,15 +53,15 @@ It will be a separate executable from the validator.
 
 The replica consists of the following major components:
 
-The `ReplicaUpdatedSlotsRequestor`: this service is responsible for periodically sending the
-request `ReplicaUpdatedSlotsRequest` to its peer validator or replica for the latest slots.
+The `ReplicaSlotConfirmationRequestor`: this service is responsible for periodically sending the
+request `ReplicaSlotConfirmationRequest` to its peer validator or replica for the latest slots.
 It specifies the latest slot (last_replicated_slot) for which the replica has already
 fetched the accounts information for. This maintains the ReplWorkingSlotSet and manages
 the lifecycle of BankForks, BlockCommitmentCache (for the highest confirmed slot) and
 the optimistically confirmed bank.
 
-The `ReplicaUpdatedSlotsServer`: this service is responsible for serving the
-`ReplicaUpdatedSlotsRequest` and sends the `ReplicaUpdatedSlotsResponse` back to the requestor.
+The `ReplicaSlotConfirmationServer`: this service is responsible for serving the
+`ReplicaSlotConfirmationRequest` and sends the `ReplicaSlotConfirmationResponse` back to the requestor.
 The response consists of a vector of new slots the validator knows of which is later than the
 specified last_replicated_slot. This service also runs in the main validator. This service
 gets the slots for replication from the BankForks, BlockCommitmentCache and OptimiscallyConfirmBank.
@@ -99,7 +99,7 @@ The replica node only serves the AccountsDb calls.
 
 The existing JsonRpcService requires `BankForks`, `OptimisticallyConfirmedBank` and
 `BlockCommitmentCache` to load the Bank. The JsonRpcAccountsService will need to use
-information obtained from ReplicaUpdatedSlotsResponse to construct the AccountsDb.
+information obtained from ReplicaSlotConfirmationResponse to construct the AccountsDb.
 
 The `AccountsBackgroundService`: this service also runs in the replica which is responsible
 for taking snapshots periodically and shrinking the AccountsDb and doing accounts cleaning.
@@ -175,8 +175,8 @@ Action Items
 
 1. Build the replica framework and executable
 2. Integrate snapshot restore code for bootstrap the AccountsDb.
-3. Develop the ReplicaUpdatedSlotsRequestor and ReplicaUpdatedSlotsServer interface code
-4. Develop the ReplicaUpdatedSlotsRequestor and ReplicaUpdatedSlotsServer detailed implementations: managing the ReplEligibleSlotSet lifecycle: adding new roots and deleting root to it. And interfaces managing ReplWorkingSlotSet interface: adding and removing. Develop component synthesising information from BankForks, BlockCommitmentCache and OptimistcallyConfirmedBank on the server side and maintaining information on the client side.
+3. Develop the ReplicaSlotConfirmationRequestor and ReplicaSlotConfirmationServer interface code
+4. Develop the ReplicaSlotConfirmationRequestor and ReplicaSlotConfirmationServer detailed implementations: managing the ReplEligibleSlotSet lifecycle: adding new roots and deleting root to it. And interfaces managing ReplWorkingSlotSet interface: adding and removing. Develop component synthesising information from BankForks, BlockCommitmentCache and OptimistcallyConfirmedBank on the server side and maintaining information on the client side.
 5. Develop the interface code for ReplicaAccountsRequestor and ReplicaAccountsServer
 6. Develop detailed implementation for ReplicaAccountsRequestor and ReplicaAccountsServer and develop the replication account storage serializer and deserializer.
 7. Develop the interface code JsonRpcAccountsService

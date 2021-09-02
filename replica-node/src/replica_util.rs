@@ -19,7 +19,10 @@ use {
         net::{SocketAddr, UdpSocket},
         path::Path,
         process::exit,
-        sync::{atomic::AtomicBool, Arc},
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc,
+        },
         thread::sleep,
         time::{Duration, Instant},
     },
@@ -263,6 +266,10 @@ pub fn get_rpc_peer_info(
         snapshot_archives_dir,
     );
     let rpc_node_details = rpc_node_details.unwrap();
+
+    // We no longer need the gossip node, stop it:
+    let gossip_exit_flag = gossip.1;
+    gossip_exit_flag.store(true, Ordering::Relaxed);
 
     (gossip.0, rpc_node_details.0, rpc_node_details.1)
 }
