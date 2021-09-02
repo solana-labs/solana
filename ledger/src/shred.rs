@@ -71,7 +71,12 @@ use {
         pubkey::Pubkey,
         signature::{Keypair, Signature, Signer},
     },
-    std::{cell::RefCell, convert::TryInto, mem::size_of, sync::mpsc::{Receiver, Sender}},
+    std::{
+        cell::RefCell,
+        convert::TryInto,
+        mem::size_of,
+        sync::mpsc::{Receiver, Sender},
+    },
     thiserror::Error,
 };
 
