@@ -360,9 +360,21 @@ fn retransmit(
         }
 
         for shred in shreds.shreds {
-
+            if should_skip_retransmit(&shred, shreds_received) {
+                num_shreds_skipped += 1;
+                continue;
+            }
             let shred_slot = shred.slot();
             max_slot = max_slot.max(shred_slot);
+
+            if let Some(rpc_subscriptions) = rpc_subscriptions {
+                if check_if_first_shred_received(shred_slot, first_shreds_received, &root_bank) {
+                    rpc_subscriptions.notify_slot_update(SlotUpdate::FirstShredReceived {
+                        slot: shred_slot,
+                        timestamp: timestamp(),
+                    });
+                }
+            }
 
             let mut compute_turbine_peers = Measure::start("turbine_start");
             // TODO: consider using root-bank here for leader lookup!
@@ -391,17 +403,25 @@ fn retransmit(
             if anchor_node {
                 // First neighbor is this node itself, so skip it.
                 ClusterInfo::retransmit_to(
-                    &children,
+                    &neighbors[1..],
                     &shred.payload,
                     sock,
-                    !anchor_node, // send to forward socket!
+                    true, // forward socket
                     socket_addr_space,
                 );
-                retransmit_time.stop();
-                retransmit_total += retransmit_time.as_us();
 
                 // TODO calculate times from shreds.timer
             }
+            ClusterInfo::retransmit_to(
+                &children,
+                &shred.payload,
+                sock,
+                !anchor_node, // send to forward socket!
+                socket_addr_space,
+            );
+
+            retransmit_time.stop();
+            retransmit_total += retransmit_time.as_us();
         }
         hist_stats
             .lock()
