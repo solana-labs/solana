@@ -239,6 +239,10 @@ pub mod sol_log_data_syscall_enabled {
     solana_sdk::declare_id!("HYPs7jyJ3KwQFdDpuSzMtVKf1MLJDaZRv3CSWvfUqdFo");
 }
 
+pub mod ed25519_program_enabled {
+    solana_sdk::declare_id!("E1TvTNipX8TKNHrhRC8SMuAwQmGY58TZ4drdztP3Gxwc");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -299,6 +303,7 @@ lazy_static! {
         (remove_native_loader::id(), "Remove support for the native loader"),
         (return_data_syscall_enabled::id(), "enable sol_{set,get}_return_data syscall"),
         (sol_log_data_syscall_enabled::id(), "enable sol_log_data syscall"),
+        (ed25519_program_enabled::id(), "enable builtin ed25519 signature verify program"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

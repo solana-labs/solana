@@ -5,6 +5,7 @@
 use crate::sanitize::{Sanitize, SanitizeError};
 use crate::secp256k1_instruction::verify_eth_addresses;
 use crate::{
+    ed25519_instruction::verify_signatures,
     feature_set,
     hash::Hash,
     instruction::{CompiledInstruction, Instruction, InstructionError},
@@ -431,6 +432,18 @@ impl Transaction {
                     &instruction_datas,
                     feature_set.is_active(&feature_set::libsecp256k1_0_5_upgrade_enabled::id()),
                 );
+                e.map_err(|_| TransactionError::InvalidAccountIndex)?;
+            } else if crate::ed25519_program::check_id(program_id)
+                && feature_set.is_active(&feature_set::ed25519_program_enabled::id())
+            {
+                let instruction_datas: Vec<_> = self
+                    .message()
+                    .instructions
+                    .iter()
+                    .map(|instruction| instruction.data.as_ref())
+                    .collect();
+                let data = &instruction.data;
+                let e = verify_signatures(data, &instruction_datas);
                 e.map_err(|_| TransactionError::InvalidAccountIndex)?;
             }
         }

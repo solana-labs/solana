@@ -3143,6 +3143,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-ed25519-program"
+version = "1.8.1"
+dependencies = [
+ "solana-sdk",
+]
+
+[[package]]
 name = "solana-faucet"
 version = "1.8.1"
 dependencies = [
@@ -3439,6 +3446,7 @@ dependencies = [
  "serde_derive",
  "solana-compute-budget-program",
  "solana-config-program",
+ "solana-ed25519-program",
  "solana-frozen-abi 1.8.1",
  "solana-frozen-abi-macro 1.8.1",
  "solana-logger 1.8.1",
@@ -3467,6 +3475,7 @@ dependencies = [
  "borsh-derive",
  "bs58 0.4.0",
  "bv",
+ "bytemuck",
  "byteorder 1.3.4",
  "chrono",
  "derivation-path",
