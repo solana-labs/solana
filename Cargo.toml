@@ -49,6 +49,7 @@ members = [
     "programs/compute-budget",
     "programs/config",
     "programs/exchange",
+    "programs/ed25519",
     "programs/secp256k1",
     "programs/stake",
     "programs/vote",

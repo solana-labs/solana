@@ -4690,6 +4690,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-ed25519-program"
+version = "1.8.1"
+dependencies = [
+ "bytemuck",
+ "ed25519-dalek",
+ "rand 0.7.3",
+ "solana-logger 1.8.1",
+ "solana-sdk",
+]
+
+[[package]]
 name = "solana-exchange-program"
 version = "1.8.1"
 dependencies = [
@@ -5424,6 +5435,7 @@ dependencies = [
  "serde_derive",
  "solana-compute-budget-program",
  "solana-config-program",
+ "solana-ed25519-program",
  "solana-frozen-abi 1.8.1",
  "solana-frozen-abi-macro 1.8.1",
  "solana-logger 1.8.1",
@@ -5460,6 +5472,7 @@ dependencies = [
  "borsh-derive",
  "bs58 0.4.0",
  "bv",
+ "bytemuck",
  "byteorder",
  "chrono",
  "curve25519-dalek 2.1.0",
