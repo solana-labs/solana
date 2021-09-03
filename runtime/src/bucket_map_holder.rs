@@ -1,8 +1,9 @@
 use crate::accounts_index::{AccountMapEntry, AccountMapEntryInner};
 use crate::accounts_index::{IsCached, RefCount, SlotList, SlotSlice, WriteAccountMapEntry};
+use crate::bucket_map_holder_stats::{BucketMapHolderStats};
 use crate::in_mem_accounts_index::{SlotT, V2};
 use crate::pubkey_bins::PubkeyBinCalculator16;
-use solana_bucket_map::bucket_map::{BucketMap, BucketMapDistribution, BucketMapKeyValue};
+use solana_bucket_map::bucket_map::{BucketMap, BucketMapKeyValue};
 use solana_measure::measure::Measure;
 use solana_sdk::pubkey::Pubkey;
 use std::collections::hash_map::Entry;
@@ -27,6 +28,8 @@ use std::hash::{BuildHasherDefault, Hasher};
 pub struct MyHasher {
     hash: u64,
 }
+
+pub type BucketMapWithEntryType<V> = BucketMap<SlotT<V>>;
 
 type CacheWriteLock<'a, T> = RwLockWriteGuard<'a, WriteCache<V2<T>>>;
 
@@ -61,44 +64,25 @@ type WriteCacheEntry<V> = AccountMapEntryInner<V>;
 //cache_ranges_held
 //}
 
+pub type Cache<V> = Vec<CacheBin<V>>;
+pub type CacheBin<V> = RwLock<WriteCache<WriteCacheEntryArc<V>>>;
+pub type CacheSlice<'a, V> = &'a[CacheBin<V>];
+
 #[derive(Debug)]
 pub struct BucketMapHolder<V: IsCached> {
     pub current_age: AtomicU8,
-    pub disk: BucketMap<SlotT<V>>,
-    pub cache: Vec<RwLock<WriteCache<WriteCacheEntryArc<V>>>>,
+    pub disk: BucketMapWithEntryType<V>,
+    pub cache: Cache<V>,
     pub cache_ranges_held: Vec<RwLock<Vec<Option<RangeInclusive<Pubkey>>>>>,
     pub stop_flush: Vec<AtomicU64>,
-    pub get_disk_us: AtomicU64,
-    pub update_dist_us: AtomicU64,
-    pub get_cache_us: AtomicU64,
-    pub update_cache_us: AtomicU64,
-    pub cache_flushes: AtomicU64,
-    pub bucket_flush_calls: AtomicU64,
     pub startup: AtomicBool,
-    pub get_purges: AtomicU64,
-    pub gets_from_disk: AtomicU64,
-    pub gets_from_disk_empty: AtomicU64,
-    pub gets_from_cache: AtomicU64,
-    pub updates: AtomicU64,
-    pub flush0: AtomicU64,
-    pub flush1: AtomicU64,
-    pub flush2: AtomicU64,
-    pub using_empty_get: AtomicU64,
-    pub insert_without_lookup: AtomicU64,
-    pub updates_in_cache: AtomicU64,
-    pub addrefs: AtomicU64,
-    pub unrefs: AtomicU64,
-    pub range: AtomicU64,
-    pub range_us: AtomicU64,
-    pub keys: AtomicU64,
-    pub inserts: AtomicU64,
-    pub inserts_without_checking_disk: AtomicU64,
-    pub deletes: AtomicU64,
+
     pub bins: usize,
     pub wait: WaitableCondvar,
     binner: PubkeyBinCalculator16,
     pub in_mem_only: bool,
     pub range_start_per_bin: Vec<Pubkey>,
+    pub stats: BucketMapHolderStats,
 }
 
 impl<V: IsCached> BucketMapHolder<V> {
@@ -221,15 +205,12 @@ impl<V: IsCached> BucketMapHolder<V> {
 
     pub fn bg_flusher(&self, exit: Arc<AtomicBool>) {
         let mut found_one = false;
-        let mut last = Instant::now();
         let mut aging = Instant::now();
         let mut current_age: u8 = 0;
 
-        let mut maybe_report = || {
-            if last.elapsed().as_millis() > 1000 {
-                self.report_stats();
-                last = Instant::now();
-            }
+        let maybe_report = || {
+            self.stats
+                .report_stats(self.in_mem_only, &self.disk, &self.cache);
         };
 
         loop {
@@ -257,37 +238,10 @@ impl<V: IsCached> BucketMapHolder<V> {
             }
         }
     }
-    pub fn new(bucket_map: BucketMap<SlotT<V>>) -> Self {
+    pub fn new(bucket_map: BucketMapWithEntryType<V>) -> Self {
         let in_mem_only = false;
         let current_age = AtomicU8::new(0);
-        let get_disk_us = AtomicU64::new(0);
-        let update_dist_us = AtomicU64::new(0);
-        let get_cache_us = AtomicU64::new(0);
-        let update_cache_us = AtomicU64::new(0);
-
-        let addrefs = AtomicU64::new(0);
-        let unrefs = AtomicU64::new(0);
-        let range = AtomicU64::new(0);
-        let range_us = AtomicU64::new(0);
-        let keys = AtomicU64::new(0);
-        let cache_flushes = AtomicU64::new(0);
-        let bucket_flush_calls = AtomicU64::new(0);
-        let get_purges = AtomicU64::new(0);
         let startup = AtomicBool::new(false);
-        let gets_from_disk = AtomicU64::new(0);
-        let gets_from_disk_empty = AtomicU64::new(0);
-        let using_empty_get = AtomicU64::new(0);
-        let insert_without_lookup = AtomicU64::new(0);
-        let gets_from_cache = AtomicU64::new(0);
-        let updates_in_cache = AtomicU64::new(0);
-        let inserts_without_checking_disk = AtomicU64::new(0);
-        let updates = AtomicU64::new(0);
-        let flush0 = AtomicU64::new(0);
-        let flush1 = AtomicU64::new(0);
-        let flush2 = AtomicU64::new(0);
-
-        let inserts = AtomicU64::new(0);
-        let deletes = AtomicU64::new(0);
         let bins = bucket_map.num_buckets();
         let cache = (0..bins)
             .map(|_i| RwLock::new(WriteCache::default()))
@@ -309,6 +263,7 @@ impl<V: IsCached> BucketMapHolder<V> {
         assert_eq!(bins, bucket_map.num_buckets());
 
         Self {
+            stats: BucketMapHolderStats::default(),
             stop_flush,
             range_start_per_bin,
             current_age,
@@ -317,33 +272,8 @@ impl<V: IsCached> BucketMapHolder<V> {
             cache,
             bins,
             wait,
-            using_empty_get,
-            insert_without_lookup,
-            gets_from_cache,
-            updates_in_cache,
-            inserts_without_checking_disk,
-            gets_from_disk,
-            gets_from_disk_empty,
-            deletes,
-            cache_flushes,
-            updates,
-            inserts,
-            flush0,
-            flush1,
-            flush2,
             binner,
-            get_purges,
-            bucket_flush_calls,
             startup,
-            get_disk_us,
-            update_dist_us,
-            get_cache_us,
-            update_cache_us,
-            addrefs,
-            unrefs,
-            range,
-            range_us,
-            keys,
             in_mem_only,
         }
     }
@@ -381,7 +311,9 @@ impl<V: IsCached> BucketMapHolder<V> {
         let (age_comp, do_age, next_age) = age
             .map(|age| (age, true, Self::add_age(age, DEFAULT_AGE)))
             .unwrap_or((0, false, 0));
-        self.bucket_flush_calls.fetch_add(1, Ordering::Relaxed);
+        self.stats
+            .bucket_flush_calls
+            .fetch_add(1, Ordering::Relaxed);
         let len = read_lock.len();
         let mut flush_keys = Vec::with_capacity(len);
         let mut delete_keys = Vec::with_capacity(len);
@@ -520,16 +452,18 @@ impl<V: IsCached> BucketMapHolder<V> {
         let len = wc.len();
         drop(wc);
 
-        self.flush0.fetch_add(m0.as_us(), Ordering::Relaxed);
-        self.flush1.fetch_add(m1.as_us(), Ordering::Relaxed);
-        self.flush2.fetch_add(m2.as_us(), Ordering::Relaxed);
+        self.stats.flush0.fetch_add(m0.as_us(), Ordering::Relaxed);
+        self.stats.flush1.fetch_add(m1.as_us(), Ordering::Relaxed);
+        self.stats.flush2.fetch_add(m2.as_us(), Ordering::Relaxed);
 
         if flushed != 0 {
-            self.cache_flushes
+            self.stats
+                .cache_flushes
                 .fetch_add(flushed as u64, Ordering::Relaxed);
         }
         if get_purges != 0 {
-            self.get_purges
+            self.stats
+                .get_purges
                 .fetch_add(get_purges as u64, Ordering::Relaxed);
         }
 
@@ -550,7 +484,7 @@ impl<V: IsCached> BucketMapHolder<V> {
         ix: usize,
         range: Option<&R>,
     ) -> Option<Vec<Pubkey>> {
-        self.keys.fetch_add(1, Ordering::Relaxed);
+        self.stats.keys.fetch_add(1, Ordering::Relaxed);
         if !self.in_mem_only {
             self.flush(ix, false, None);
             let keys = self.disk.keys(ix);
@@ -613,12 +547,12 @@ impl<V: IsCached> BucketMapHolder<V> {
         instance.set_age(self.set_age_to_future());
         instance.set_dirty(true);
         if instance.confirmed_not_on_disk() {
-            self.using_empty_get.fetch_add(1, Ordering::Relaxed);
+            self.stats.using_empty_get.fetch_add(1, Ordering::Relaxed);
             instance.ref_count.store(0, Ordering::Relaxed);
             assert!(instance.slot_list.read().unwrap().is_empty());
             instance.set_confirmed_not_on_disk(false); // we are inserted now if we were 'confirmed_not_on_disk' before. update_static below handles this fine
         }
-        self.updates_in_cache.fetch_add(1, Ordering::Relaxed);
+        self.stats.updates_in_cache.fetch_add(1, Ordering::Relaxed);
 
         let (slot, new_entry) = new_value.slot_list.write().unwrap().remove(0);
         let addref = WriteAccountMapEntry::update_slot_list(
@@ -632,7 +566,8 @@ impl<V: IsCached> BucketMapHolder<V> {
             instance.add_un_ref(true);
         }
         m1.stop();
-        self.update_cache_us
+        self.stats
+            .update_cache_us
             .fetch_add(m1.as_ns(), Ordering::Relaxed);
     }
 
@@ -762,11 +697,12 @@ impl<V: IsCached> BucketMapHolder<V> {
                     drop(slot_list);
                     vacant.insert(current);
                     m1.stop();
-                    self.update_cache_us
+                    self.stats
+                        .update_cache_us
                         .fetch_add(m1.as_ns(), Ordering::Relaxed);
                 } else {
                     // not on disk, not in cache, so add to cache
-                    self.inserts.fetch_add(1, Ordering::Relaxed);
+                    self.stats.inserts.fetch_add(1, Ordering::Relaxed);
                     new_value.set_dirty(true);
                     new_value.set_insert(true);
                     vacant.insert(new_value);
@@ -929,14 +865,14 @@ impl<V: IsCached> BucketMapHolder<V> {
     {
         if current_value.is_none() {
             // we are an insert
-            self.inserts.fetch_add(1, Ordering::Relaxed);
+            self.stats.inserts.fetch_add(1, Ordering::Relaxed);
         } else {
             if VERIFY_GET_ON_INSERT {
                 let ix = self.bucket_ix(key);
                 assert!(self.get(ix, key).is_some());
             }
             // if we have a previous value, then that item is currently open and locked, so it could not have been changed. Thus, this is an in-cache update as long as we are caching gets.
-            self.updates_in_cache.fetch_add(1, Ordering::Relaxed);
+            self.stats.updates_in_cache.fetch_add(1, Ordering::Relaxed);
         }
         self.upsert_in_cache(key, updatefn, current_value);
     }
@@ -957,11 +893,15 @@ impl<V: IsCached> BucketMapHolder<V> {
         let r = self.disk.get(key);
         let r = r.map(|(ref_count, slot_list)| Self::disk_to_cache_entry(ref_count, slot_list));
         m1.stop();
-        self.get_disk_us.fetch_add(m1.as_ns(), Ordering::Relaxed);
+        self.stats
+            .get_disk_us
+            .fetch_add(m1.as_ns(), Ordering::Relaxed);
         if r.is_some() {
-            self.gets_from_disk.fetch_add(1, Ordering::Relaxed);
+            self.stats.gets_from_disk.fetch_add(1, Ordering::Relaxed);
         } else {
-            self.gets_from_disk_empty.fetch_add(1, Ordering::Relaxed);
+            self.stats
+                .gets_from_disk_empty
+                .fetch_add(1, Ordering::Relaxed);
         }
         r
     }
@@ -998,7 +938,7 @@ impl<V: IsCached> BucketMapHolder<V> {
         key: &Pubkey,
     ) -> Option<()> {
         item_in_cache.set_age(self.set_age_to_future());
-        self.gets_from_cache.fetch_add(1, Ordering::Relaxed);
+        self.stats.gets_from_cache.fetch_add(1, Ordering::Relaxed);
         if item_in_cache.confirmed_not_on_disk() {
             return None; // does not really exist
         }
@@ -1089,7 +1029,7 @@ impl<V: IsCached> BucketMapHolder<V> {
             }
         }
         m.stop();
-        self.range_us.fetch_add(m.as_us(), Ordering::Relaxed);
+        self.stats.range_us.fetch_add(m.as_us(), Ordering::Relaxed);
     }
 
     fn range_contains_bound(
@@ -1176,7 +1116,9 @@ impl<V: IsCached> BucketMapHolder<V> {
             match res {
                 HashMapEntry::Occupied(occupied) => {
                     let res = occupied.get();
-                    self.get_cache_us.fetch_add(m1.as_ns(), Ordering::Relaxed);
+                    self.stats
+                        .get_cache_us
+                        .fetch_add(m1.as_ns(), Ordering::Relaxed);
                     self.get_caching(res, key).map(|_| res.clone())
                 }
                 HashMapEntry::Vacant(vacant) => {
@@ -1197,7 +1139,8 @@ impl<V: IsCached> BucketMapHolder<V> {
                         return None; // not on disk, not in cache, so get should return None
                     });
                     m1.stop();
-                    self.update_cache_us
+                    self.stats
+                        .update_cache_us
                         .fetch_add(m1.as_ns(), Ordering::Relaxed);
                     r.cloned()
                 }
@@ -1205,7 +1148,7 @@ impl<V: IsCached> BucketMapHolder<V> {
         }
     }
     pub fn delete_key(&self, ix: usize, key: &Pubkey) {
-        self.deletes.fetch_add(1, Ordering::Relaxed);
+        self.stats.deletes.fetch_add(1, Ordering::Relaxed);
         {
             let wc = &mut self.cache[ix].write().unwrap();
             wc.remove(key);
@@ -1213,200 +1156,5 @@ impl<V: IsCached> BucketMapHolder<V> {
         if !self.in_mem_only {
             self.disk.delete_key(key)
         }
-    }
-    pub fn report_stats(&self) {
-        let mut ct = 0;
-        for i in 0..self.bins {
-            ct += self.cache[i].read().unwrap().len();
-        }
-        let mut sum = 0;
-        let mut min = usize::MAX;
-        let mut max = 0;
-        let mut sumd = 0;
-        let mut mind = usize::MAX;
-        let mut maxd = 0;
-        let dist = if !self.in_mem_only {
-            let dist = self.disk.distribution();
-            for d in &dist.sizes {
-                let d = *d;
-                sum += d;
-                min = std::cmp::min(min, d);
-                max = std::cmp::max(max, d);
-            }
-            for d in &dist.data_sizes {
-                let d = *d;
-                sumd += d;
-                mind = std::cmp::min(min, d);
-                maxd = std::cmp::max(max, d);
-            }
-            dist
-        } else {
-            for d in &self.cache {
-                let d = d.read().unwrap().len();
-                sum += d;
-                min = std::cmp::min(min, d);
-                max = std::cmp::max(max, d);
-            }
-            BucketMapDistribution::default()
-        };
-        datapoint_info!(
-            "accounts_index",
-            ("items_in_cache", ct, i64),
-            ("min", min, i64),
-            ("max", max, i64),
-            ("sum", sum, i64),
-            ("index_entries_allocated", dist.index_entries_allocated, i64),
-            ("mind", mind, i64),
-            ("maxd", maxd, i64),
-            ("sumd", sumd, i64),
-            ("data_entries_allocated", dist.data_entries_allocated, i64),
-            ("data_q0", dist.quartiles.0, i64),
-            ("data_q1", dist.quartiles.1, i64),
-            ("data_q2", dist.quartiles.2, i64),
-            ("data_q3", dist.quartiles.3, i64),
-            (
-                "updates_not_in_cache",
-                self.updates.swap(0, Ordering::Relaxed),
-                i64
-            ),
-            ("flush0", self.flush0.swap(0, Ordering::Relaxed), i64),
-            ("flush1", self.flush1.swap(0, Ordering::Relaxed), i64),
-            ("flush2", self.flush2.swap(0, Ordering::Relaxed), i64),
-            (
-                "updates_in_cache",
-                self.updates_in_cache.swap(0, Ordering::Relaxed),
-                i64
-            ),
-            ("inserts", self.inserts.swap(0, Ordering::Relaxed), i64),
-            (
-                "inserts_without_checking_disk",
-                self.inserts_without_checking_disk
-                    .swap(0, Ordering::Relaxed),
-                i64
-            ),
-            ("deletes", self.deletes.swap(0, Ordering::Relaxed), i64),
-            (
-                "using_empty_get",
-                self.using_empty_get.swap(0, Ordering::Relaxed),
-                i64
-            ),
-            (
-                "insert_without_lookup",
-                self.insert_without_lookup.swap(0, Ordering::Relaxed),
-                i64
-            ),
-            //("insert_without_lookup", self.insert_without_lookup.load(Ordering::Relaxed), i64),
-            (
-                "gets_from_disk_empty",
-                self.gets_from_disk_empty.swap(0, Ordering::Relaxed),
-                i64
-            ),
-            (
-                "gets_from_disk",
-                self.gets_from_disk.swap(0, Ordering::Relaxed),
-                i64
-            ),
-            (
-                "gets_from_cache",
-                self.gets_from_cache.swap(0, Ordering::Relaxed),
-                i64
-            ),
-            (
-                "bucket_index_resizes",
-                self.disk.stats.index.resizes.swap(0, Ordering::Relaxed),
-                i64
-            ),
-            (
-                "bucket_index_resize_us",
-                self.disk.stats.index.resize_us.swap(0, Ordering::Relaxed),
-                i64
-            ),
-            (
-                "bucket_index_max",
-                *self.disk.stats.index.max_size.lock().unwrap(),
-                i64
-            ),
-            (
-                "bucket_index_new_file_us",
-                self.disk.stats.index.new_file_us.swap(0, Ordering::Relaxed),
-                i64
-            ),
-            (
-                "bucket_flush_file_us_us",
-                self.disk
-                    .stats
-                    .index
-                    .flush_file_us
-                    .swap(0, Ordering::Relaxed),
-                i64
-            ),
-            (
-                "bucket_mmap_us",
-                self.disk.stats.index.mmap_us.swap(0, Ordering::Relaxed),
-                i64
-            ),
-            (
-                "bucket_data_resizes",
-                self.disk.stats.data.resizes.swap(0, Ordering::Relaxed),
-                i64
-            ),
-            (
-                "bucket_data_resize_us",
-                self.disk.stats.data.resize_us.swap(0, Ordering::Relaxed),
-                i64
-            ),
-            (
-                "bucket_data_max",
-                *self.disk.stats.data.max_size.lock().unwrap(),
-                i64
-            ),
-            (
-                "bucket_data_new_file_us",
-                self.disk.stats.data.new_file_us.swap(0, Ordering::Relaxed),
-                i64
-            ),
-            (
-                "flushes",
-                self.cache_flushes.swap(0, Ordering::Relaxed),
-                i64
-            ),
-            (
-                "bin_flush_calls",
-                self.bucket_flush_calls.swap(0, Ordering::Relaxed),
-                i64
-            ),
-            (
-                "get_purges",
-                self.get_purges.swap(0, Ordering::Relaxed),
-                i64
-            ),
-            (
-                "get_disk_us",
-                self.get_disk_us.swap(0, Ordering::Relaxed) / 1000,
-                i64
-            ),
-            (
-                "update_dist_us",
-                self.update_dist_us.swap(0, Ordering::Relaxed) / 1000,
-                i64
-            ),
-            (
-                "get_cache_us",
-                self.get_cache_us.swap(0, Ordering::Relaxed) / 1000,
-                i64
-            ),
-            (
-                "update_cache_us",
-                self.update_cache_us.swap(0, Ordering::Relaxed) / 1000,
-                i64
-            ),
-            ("addrefs", self.addrefs.swap(0, Ordering::Relaxed), i64),
-            ("unrefs", self.unrefs.swap(0, Ordering::Relaxed), i64),
-            ("range", self.range.swap(0, Ordering::Relaxed), i64),
-            ("range_us", self.range_us.swap(0, Ordering::Relaxed), i64),
-            ("keys", self.keys.swap(0, Ordering::Relaxed), i64),
-            ("get", self.updates.swap(0, Ordering::Relaxed), i64),
-            //("buckets", self.num_buckets(), i64),
-        );
     }
 }
