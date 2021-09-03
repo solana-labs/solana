@@ -175,12 +175,9 @@ impl SanitizedMessage {
     /// Returns true if the account at the specified index is invoked as a
     /// program in this message.
     pub fn is_invoked(&self, key_index: usize) -> bool {
-        if let Ok(key_index) = u8::try_from(key_index) {
-            self.instructions()
-                .iter()
-                .any(|ix| ix.program_id_index == key_index)
-        } else {
-            false
+        match self {
+            Self::Legacy(message) => message.is_key_called_as_program(key_index),
+            Self::V0(message) => message.is_key_called_as_program(key_index),
         }
     }
 
@@ -198,7 +195,7 @@ impl SanitizedMessage {
         }
         match self {
             Self::Legacy(message) => message.is_writable(index, demote_program_write_locks),
-            Self::V0(message) => message.is_writable(index),
+            Self::V0(message) => message.is_writable(index, demote_program_write_locks),
         }
     }
 
