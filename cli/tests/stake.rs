@@ -30,6 +30,7 @@ use solana_streamer::socket::SocketAddrSpace;
 fn test_stake_delegation_force() {
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
+    let authorized_withdrawer = Keypair::new().pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
     let test_validator =
         TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr), SocketAddrSpace::Unspecified);
@@ -53,7 +54,7 @@ fn test_stake_delegation_force() {
         seed: None,
         identity_account: 0,
         authorized_voter: None,
-        authorized_withdrawer: None,
+        authorized_withdrawer,
         commission: 0,
         memo: None,
     };
