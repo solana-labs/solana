@@ -5079,19 +5079,11 @@ impl Bank {
             .is_active(&feature_set::merge_nonce_error_into_system_error::id())
     }
 
-<<<<<<< HEAD
-=======
-    pub fn versioned_tx_message_enabled(&self) -> bool {
-        self.feature_set
-            .is_active(&feature_set::versioned_tx_message_enabled::id())
-    }
-
     pub fn stake_program_advance_activating_credits_observed(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::stake_program_advance_activating_credits_observed::id())
     }
 
->>>>>>> 2c3bdedea (stake: Advance `credits_observed` on activation epoch (#19309))
     // Check if the wallclock time from bank creation to now has exceeded the allotted
     // time for transaction processing
     pub fn should_bank_still_be_processing_txs(
