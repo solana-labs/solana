@@ -1238,6 +1238,7 @@ fn new_banks_from_ledger(
             &snapshot_config.snapshot_archives_dir,
             snapshot_config.archive_format,
             snapshot_config.maximum_full_snapshot_archives_to_retain,
+            snapshot_config.maximum_incremental_snapshot_archives_to_retain,
         )
         .unwrap_or_else(|err| {
             error!("Unable to create snapshot: {}", err);

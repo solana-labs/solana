@@ -1708,6 +1708,7 @@ fn test_snapshot_download() {
         archive_snapshot_hash,
         false,
         snapshot_utils::DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+        snapshot_utils::DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
         &mut None,
     )
     .unwrap();

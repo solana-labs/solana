@@ -54,6 +54,7 @@ impl SnapshotPackagerService {
                     snapshot_utils::archive_snapshot_package(
                         &snapshot_package,
                         snapshot_config.maximum_full_snapshot_archives_to_retain,
+                        snapshot_config.maximum_incremental_snapshot_archives_to_retain,
                     )
                     .expect("failed to archive snapshot package");
 
@@ -190,6 +191,7 @@ mod tests {
         snapshot_utils::archive_snapshot_package(
             &snapshot_package,
             snapshot_utils::DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+            snapshot_utils::DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
         )
         .unwrap();
 

@@ -95,6 +95,7 @@ fn initialize_from_snapshot(
         replica_config.snapshot_info,
         false,
         snapshot_config.maximum_full_snapshot_archives_to_retain,
+        snapshot_config.maximum_incremental_snapshot_archives_to_retain,
         &mut None,
     )
     .unwrap();
