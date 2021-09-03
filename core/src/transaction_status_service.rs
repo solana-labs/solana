@@ -7,7 +7,9 @@ use solana_ledger::{
 use solana_runtime::bank::{
     Bank, InnerInstructionsList, NonceRollbackInfo, TransactionLogMessages,
 };
-use solana_transaction_status::{InnerInstructions, Reward, TransactionStatusMeta};
+use solana_transaction_status::{
+    extract_and_fmt_memos, InnerInstructions, Reward, TransactionStatusMeta,
+};
 use std::{
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering},
@@ -140,6 +142,12 @@ impl TransactionStatusService {
                                 .collect(),
                         );
 
+                        if let Some(memos) = extract_and_fmt_memos(transaction.message()) {
+                            blockstore
+                                .write_transaction_memos(&transaction.signatures[0], memos)
+                                .expect("Expect database write to succeed: TransactionMemos");
+                        }
+
                         blockstore
                             .write_transaction_status(
                                 slot,
@@ -158,7 +166,7 @@ impl TransactionStatusService {
                                     rewards,
                                 },
                             )
-                            .expect("Expect database write to succeed");
+                            .expect("Expect database write to succeed: TransactionStatus");
                     }
                 }
             }
