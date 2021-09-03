@@ -45,7 +45,7 @@ use crate::{
     },
     ancestors::{Ancestors, AncestorsForSerialization},
     blockhash_queue::BlockhashQueue,
-    builtins::{self, ActivationType},
+    builtins::{self, ActivationType, Builtin, Builtins},
     epoch_stakes::{EpochStakes, NodeVoteAccounts},
     inline_spl_token_v2_0,
     instruction_recorder::InstructionRecorder,
@@ -211,33 +211,6 @@ type RentCollectionCycleParams = (
 
 type EpochCount = u64;
 
-#[derive(Clone)]
-pub struct Builtin {
-    pub name: String,
-    pub id: Pubkey,
-    pub process_instruction_with_context: ProcessInstructionWithContext,
-}
-
-impl Builtin {
-    pub fn new(
-        name: &str,
-        id: Pubkey,
-        process_instruction_with_context: ProcessInstructionWithContext,
-    ) -> Self {
-        Self {
-            name: name.to_string(),
-            id,
-            process_instruction_with_context,
-        }
-    }
-}
-
-impl fmt::Debug for Builtin {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Builtin [name={}, id={}]", self.name, self.id)
-    }
-}
-
 /// Copy-on-write holder of CachedExecutors
 #[derive(AbiExample, Debug, Default)]
 struct CowCachedExecutors {
@@ -281,26 +254,6 @@ impl CowCachedExecutors {
         }
         self.executors.write()
     }
-}
-
-#[cfg(RUSTC_WITH_SPECIALIZATION)]
-impl AbiExample for Builtin {
-    fn example() -> Self {
-        Self {
-            name: String::default(),
-            id: Pubkey::default(),
-            process_instruction_with_context: |_, _, _| Ok(()),
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct Builtins {
-    /// Builtin programs that are always available
-    pub genesis_builtins: Vec<Builtin>,
-
-    /// Builtin programs activated dynamically by feature
-    pub feature_builtins: Vec<(Builtin, Pubkey, ActivationType)>,
 }
 
 const MAX_CACHED_EXECUTORS: usize = 100; // 10 MB assuming programs are around 100k
