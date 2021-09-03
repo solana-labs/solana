@@ -826,7 +826,7 @@ mod tests {
         accounts_dir: PathBuf,
         genesis_config: &GenesisConfig,
     ) -> snapshot_utils::Result<()> {
-        let (deserialized_bank, _) = snapshot_utils::bank_from_latest_snapshot_archives(
+        let (deserialized_bank, ..) = snapshot_utils::bank_from_latest_snapshot_archives(
             &snapshot_config.bank_snapshots_dir,
             &snapshot_config.snapshot_archives_dir,
             &[accounts_dir],
@@ -1002,7 +1002,7 @@ mod tests {
         std::thread::sleep(Duration::from_secs(5));
         info!("Awake! Rebuilding bank from latest snapshot archives...");
 
-        let (deserialized_bank, _) = snapshot_utils::bank_from_latest_snapshot_archives(
+        let (deserialized_bank, ..) = snapshot_utils::bank_from_latest_snapshot_archives(
             &snapshot_test_config.snapshot_config.bank_snapshots_dir,
             &snapshot_test_config.snapshot_config.snapshot_archives_dir,
             &[snapshot_test_config.accounts_dir.as_ref().to_path_buf()],
