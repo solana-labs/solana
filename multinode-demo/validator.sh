@@ -79,7 +79,7 @@ while [[ -n $1 ]]; do
       args+=("$1" "$2")
       shift 2
     elif [[ $1 = --authorized-withdrawer ]]; then
-      authorized_withdrawer_pubkey=$2
+      authorized_withdrawer=$2
       shift 2
     elif [[ $1 = --vote-account ]]; then
       vote_account=$2
