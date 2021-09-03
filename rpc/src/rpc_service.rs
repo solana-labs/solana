@@ -621,7 +621,8 @@ mod tests {
                 bank_snapshots_dir: PathBuf::from("/"),
                 archive_format: ArchiveFormat::TarBzip2,
                 snapshot_version: SnapshotVersion::default(),
-                maximum_snapshots_to_retain: DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+                maximum_full_snapshot_archives_to_retain:
+                    DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
             }),
             bank_forks,
             RpcHealth::stub(),

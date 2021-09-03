@@ -342,7 +342,7 @@ mod tests {
             bank_snapshots_dir: PathBuf::default(),
             archive_format: ArchiveFormat::Tar,
             snapshot_version: SnapshotVersion::default(),
-            maximum_snapshots_to_retain: usize::MAX,
+            maximum_full_snapshot_archives_to_retain: usize::MAX,
         };
         for i in 0..MAX_SNAPSHOT_HASHES + 1 {
             let accounts_package = AccountsPackage {

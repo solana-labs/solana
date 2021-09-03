@@ -94,7 +94,7 @@ fn initialize_from_snapshot(
         &replica_config.snapshot_archives_dir,
         replica_config.snapshot_info,
         false,
-        snapshot_config.maximum_snapshots_to_retain,
+        snapshot_config.maximum_full_snapshot_archives_to_retain,
         &mut None,
     )
     .unwrap();
@@ -268,7 +268,7 @@ impl ReplicaNode {
             bank_snapshots_dir: replica_config.bank_snapshots_dir.clone(),
             archive_format: ArchiveFormat::TarBzip2,
             snapshot_version: snapshot_utils::SnapshotVersion::default(),
-            maximum_snapshots_to_retain:
+            maximum_full_snapshot_archives_to_retain:
                 snapshot_utils::DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
         };
 

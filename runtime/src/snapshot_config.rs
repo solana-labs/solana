@@ -25,5 +25,5 @@ pub struct SnapshotConfig {
     pub snapshot_version: SnapshotVersion,
 
     /// Maximum number of full snapshot archives to retain
-    pub maximum_snapshots_to_retain: usize,
+    pub maximum_full_snapshot_archives_to_retain: usize,
 }
