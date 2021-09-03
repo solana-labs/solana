@@ -1591,6 +1591,19 @@ impl AccountsDb {
                 );
                 false
             } else {
+                // By this point after the first part of `clean_accounts()` has run,
+                // we know that given some `max_clean_root`:
+                //
+                // 1) `account_infos` only contains roots <= max_clean_root
+                // 2) At this point we know account_infos` cannot be empty because when
+                // we added this pubkey to `purges_zero_lamports` at the beginning of `clean_accounts()`,
+                // we only added slot lists with len >= 1. Then because the *newest* entry for this pubkey in
+                // the slot list cannot be cleaned by `clean_accounts_older_than_root`, then we know the
+                // len is still >= 1.
+                // 3) `account_infos` has length as <= 1. This is because any older entries than the
+                // newest entry in the list would have been cleaned up by `clean_accounts_older_than_root`
+
+                // From 2 + 3 we can conclude `account_infos.len() == 1`.
                 assert_eq!(account_infos.len(), 1);
                 true
             }
@@ -1826,11 +1839,13 @@ impl AccountsDb {
                                     let slot_list = locked_entry.slot_list();
                                     let (slot, account_info) = &slot_list[index];
                                     if account_info.lamports == 0 {
-                                        purges_zero_lamports.insert(
-                                            *pubkey,
-                                            self.accounts_index
-                                                .roots_and_ref_count(&locked_entry, max_clean_root),
-                                        );
+                                        let roots_and_ref_count = self
+                                            .accounts_index
+                                            .roots_and_ref_count(&locked_entry, max_clean_root);
+                                        if !roots_and_ref_count.0.is_empty() {
+                                            purges_zero_lamports
+                                                .insert(*pubkey, roots_and_ref_count);
+                                        }
                                     }
                                     // Release the lock
                                     let slot = *slot;
