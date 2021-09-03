@@ -42,7 +42,7 @@ pub const AGE_MS: usize = 400; // # of ms for age to advance by 1
 //  Note that if the bg flusher thread is too busy, the reporting will not be on time.
 pub const DEFAULT_AGE: u8 = 25;
 pub const VERIFY_GET_ON_INSERT: bool = false;
-pub const TRY_READ_LOCKS_FIRST: bool = false;
+pub const TRY_READ_LOCKS_FIRST: bool = true;
 
 impl Hasher for MyHasher {
     fn write(&mut self, bytes: &[u8]) {
