@@ -348,7 +348,7 @@ impl InstructionProcessor {
         instruction: &'a CompiledInstruction,
         executable_accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
         accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
-        demote_sysvar_write_locks: bool,
+        demote_program_write_locks: bool,
     ) -> Vec<(bool, bool, &'a Pubkey, &'a RefCell<AccountSharedData>)> {
         executable_accounts
             .iter()
@@ -357,7 +357,7 @@ impl InstructionProcessor {
                 let index = *index as usize;
                 (
                     message.is_signer(index),
-                    message.is_writable(index, demote_sysvar_write_locks),
+                    message.is_writable(index, demote_program_write_locks),
                     &accounts[index].0,
                     &accounts[index].1 as &RefCell<AccountSharedData>,
                 )

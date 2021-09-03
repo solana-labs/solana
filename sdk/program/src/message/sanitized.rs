@@ -190,9 +190,6 @@ impl SanitizedMessage {
     /// Returns true if the account at the specified index is writable by the
     /// instructions in this message.
     pub fn is_writable(&self, index: usize, demote_program_write_locks: bool) -> bool {
-        if demote_program_write_locks && self.is_invoked(index) {
-            return false;
-        }
         match self {
             Self::Legacy(message) => message.is_writable(index, demote_program_write_locks),
             Self::V0(message) => message.is_writable(index, demote_program_write_locks),
