@@ -26,4 +26,8 @@ pub struct SnapshotConfig {
 
     /// Maximum number of full snapshot archives to retain
     pub maximum_full_snapshot_archives_to_retain: usize,
+
+    /// Maximum number of incremental snapshot archives to retain
+    /// NOTE: Incremental snapshots will only be kept for the latest full snapshot
+    pub maximum_incremental_snapshot_archives_to_retain: usize,
 }

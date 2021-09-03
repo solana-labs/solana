@@ -18,6 +18,7 @@ use {
         snapshot_config::SnapshotConfig,
         snapshot_utils::{
             ArchiveFormat, SnapshotVersion, DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+            DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
         },
     },
     solana_sdk::{
@@ -529,6 +530,8 @@ impl TestValidator {
                 snapshot_version: SnapshotVersion::default(),
                 maximum_full_snapshot_archives_to_retain:
                     DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+                maximum_incremental_snapshot_archives_to_retain:
+                    DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
             }),
             enforce_ulimit_nofile: false,
             warp_slot: config.warp_slot,

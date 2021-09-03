@@ -343,6 +343,7 @@ mod tests {
             archive_format: ArchiveFormat::Tar,
             snapshot_version: SnapshotVersion::default(),
             maximum_full_snapshot_archives_to_retain: usize::MAX,
+            maximum_incremental_snapshot_archives_to_retain: usize::MAX,
         };
         for i in 0..MAX_SNAPSHOT_HASHES + 1 {
             let accounts_package = AccountsPackage {
