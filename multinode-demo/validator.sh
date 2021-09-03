@@ -206,7 +206,7 @@ if [[ -n $REQUIRE_KEYPAIRS ]]; then
   if [[ -z $vote_account ]]; then
     usage "Error: --vote-account not specified"
   fi
-  if [[ -z $authorized_withdrawer_pubkey ]]; then
+  if [[ -z $authorized_withdrawer ]]; then
     usage "Error: --authorized_withdrawer not specified"
   fi
 fi
@@ -236,6 +236,7 @@ faucet_address="${gossip_entrypoint%:*}":9900
 
 : "${identity:=$ledger_dir/identity.json}"
 : "${vote_account:=$ledger_dir/vote-account.json}"
+: "${authorized_withdrawer:=$ledger_dir/authorized-withdrawer.json}"
 
 default_arg --entrypoint "$gossip_entrypoint"
 if ((airdrops_enabled)); then
@@ -321,13 +322,7 @@ rpc_url=$($solana_gossip $maybe_allow_private_addr rpc-url --timeout 180 --entry
 
 [[ -r "$identity" ]] || $solana_keygen new --no-passphrase -so "$identity"
 [[ -r "$vote_account" ]] || $solana_keygen new --no-passphrase -so "$vote_account"
-if [ -z "$authorized_withdrawer_pubkey" ]; then
-    authorized_withdrawer_file=$ledger_dir/authorized-withdrawer.json
-    [[ -r "$authorized_withdrawer_file" ]] || $solana_keygen new --no-passphrase -so "$authorized_withdrawer_file";
-    authorized_withdrawer=$authorized_withdrawer_file
-else
-    authorized_withdrawer=$authorized_withdrawer_pubkey
-fi
+[[ -r "$authorized_withdrawer" ]] || $solana_keygen new --no-passphrase -so "$authorized_withdrawer"
 
 setup_validator_accounts "$node_sol"
 
