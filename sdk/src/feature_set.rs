@@ -195,6 +195,10 @@ pub mod demote_program_write_locks {
     solana_sdk::declare_id!("3E3jV7v9VcdJL8iYZUMax9DiDno8j7EWUVbhm9RtShj2");
 }
 
+pub mod ed25519_program_enabled {
+    solana_sdk::declare_id!("E1TvTNipX8TKNHrhRC8SMuAwQmGY58TZ4drdztP3Gxwc");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -234,11 +238,12 @@ lazy_static! {
         (gate_large_block::id(), "validator checks block cost against max limit in realtime, reject if exceeds."),
         (mem_overlap_fix::id(), "memory overlap fix"),
         (versioned_tx_message_enabled::id(), "enable versioned transaction message processing"),
-        (libsecp256k1_fail_on_bad_count::id(), "Fail libsec256k1_verify if count appears wrong"),
+        (libsecp256k1_fail_on_bad_count::id(), "fail libsec256k1_verify if count appears wrong"),
         (instructions_sysvar_owned_by_sysvar::id(), "fix owner for instructions sysvar"),
         (close_upgradeable_program_accounts::id(), "enable closing upgradeable program accounts"),
         (stake_program_advance_activating_credits_observed::id(), "Enable advancing credits observed for activation epoch #19309"),
         (demote_program_write_locks::id(), "demote program write locks to readonly #19593"),
+        (ed25519_program_enabled::id(), "enable builtin ed25519 signature verify program"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
