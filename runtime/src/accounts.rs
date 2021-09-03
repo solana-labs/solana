@@ -366,6 +366,10 @@ impl Accounts {
                             .program_instructions_iter()
                             .map(|(program_id, _ix)| {
                                 self.load_executable_accounts(ancestors, program_id, error_counters)
+                                    .map(|loaders| {
+                                        accounts.append(&mut loaders.clone());
+                                        loaders
+                                    })
                             })
                             .collect::<Result<TransactionLoaders>>()?;
                         Ok(LoadedTransaction {
@@ -1654,7 +1658,7 @@ mod tests {
         assert_eq!(loaded_accounts.len(), 1);
         match &loaded_accounts[0] {
             (Ok(loaded_transaction), _nonce_rollback) => {
-                assert_eq!(loaded_transaction.accounts.len(), 3);
+                assert_eq!(loaded_transaction.accounts.len(), 6);
                 assert_eq!(loaded_transaction.accounts[0].1, accounts[0].1);
                 assert_eq!(loaded_transaction.loaders.len(), 2);
                 assert_eq!(loaded_transaction.loaders[0].len(), 1);
