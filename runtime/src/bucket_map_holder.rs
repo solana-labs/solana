@@ -1,6 +1,6 @@
 use crate::accounts_index::{AccountMapEntry, AccountMapEntryInner};
 use crate::accounts_index::{IsCached, RefCount, SlotList, SlotSlice, WriteAccountMapEntry};
-use crate::bucket_map_holder_stats::{BucketMapHolderStats};
+use crate::bucket_map_holder_stats::BucketMapHolderStats;
 use crate::in_mem_accounts_index::{SlotT, V2};
 use crate::pubkey_bins::PubkeyBinCalculator16;
 use solana_bucket_map::bucket_map::{BucketMap, BucketMapKeyValue};
@@ -59,14 +59,9 @@ type MyBuildHasher = BuildHasherDefault<MyHasher>;
 type WriteCacheEntryArc<V> = AccountMapEntry<V>;
 type WriteCacheEntry<V> = AccountMapEntryInner<V>;
 
-// eventually: struct PerBucketData<V> {
-//cache: RwLock<WriteCache<WriteCacheEntryArc<V>>,
-//cache_ranges_held
-//}
-
 pub type Cache<V> = Vec<CacheBin<V>>;
 pub type CacheBin<V> = RwLock<WriteCache<WriteCacheEntryArc<V>>>;
-pub type CacheSlice<'a, V> = &'a[CacheBin<V>];
+pub type CacheSlice<'a, V> = &'a [CacheBin<V>];
 
 #[derive(Debug)]
 pub struct BucketMapHolder<V: IsCached> {
@@ -229,6 +224,7 @@ impl<V: IsCached> BucketMapHolder<V> {
             if age.is_none() && !found_one && self.wait.wait_timeout(Duration::from_millis(500)) {
                 continue;
             }
+            self.stats.bg_flush_cycles.fetch_add(1, Ordering::Relaxed);
             found_one = false;
             for ix in 0..self.bins {
                 if self.flush(ix, true, age).0 {

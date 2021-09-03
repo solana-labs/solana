@@ -103,6 +103,7 @@ impl BucketMapHolderStats {
             ("flush0", self.flush0.swap(0, Ordering::Relaxed), i64),
             ("flush1", self.flush1.swap(0, Ordering::Relaxed), i64),
             ("flush2", self.flush2.swap(0, Ordering::Relaxed), i64),
+            ("bg_flush_cycles", self.bg_flush_cycles.swap(0, Ordering::Relaxed), i64),
             (
                 "updates_in_cache",
                 self.updates_in_cache.swap(0, Ordering::Relaxed),
