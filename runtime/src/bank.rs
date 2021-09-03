@@ -1940,8 +1940,12 @@ impl Bank {
 
         let old_vote_balance_and_staked = self.stakes.read().unwrap().vote_balance_and_staked();
 
-        let validator_point_value =
-            self.pay_validator_rewards(prev_epoch, validator_rewards, reward_calc_tracer);
+        let validator_point_value = self.pay_validator_rewards(
+            prev_epoch,
+            validator_rewards,
+            reward_calc_tracer,
+            self.stake_program_advance_activating_credits_observed(),
+        );
 
         if !self
             .feature_set
@@ -2078,6 +2082,7 @@ impl Bank {
         rewarded_epoch: Epoch,
         rewards: u64,
         reward_calc_tracer: &mut Option<impl FnMut(&RewardCalculationEvent)>,
+        fix_activating_credits_observed: bool,
     ) -> f64 {
         let stake_history = self.stakes.read().unwrap().history().clone();
 
@@ -2136,6 +2141,7 @@ impl Bank {
                     &point_value,
                     Some(&stake_history),
                     &mut reward_calc_tracer.as_mut(),
+                    fix_activating_credits_observed,
                 );
                 if let Ok((stakers_reward, _voters_reward)) = redeemed {
                     self.store_account(stake_pubkey, stake_account);
@@ -5363,6 +5369,11 @@ impl Bank {
     pub fn versioned_tx_message_enabled(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::versioned_tx_message_enabled::id())
+    }
+
+    pub fn stake_program_advance_activating_credits_observed(&self) -> bool {
+        self.feature_set
+            .is_active(&feature_set::stake_program_advance_activating_credits_observed::id())
     }
 
     // Check if the wallclock time from bank creation to now has exceeded the allotted
