@@ -42,6 +42,7 @@ pub const AGE_MS: usize = 400; // # of ms for age to advance by 1
 //  Note that if the bg flusher thread is too busy, the reporting will not be on time.
 pub const DEFAULT_AGE: u8 = 25;
 pub const VERIFY_GET_ON_INSERT: bool = false;
+pub const TRY_READ_LOCKS_FIRST: bool = false;
 
 impl Hasher for MyHasher {
     fn write(&mut self, bytes: &[u8]) {
@@ -212,8 +213,8 @@ impl<V: IsCached> BucketMapHolder<V> {
             maybe_report();
             let mut age = None;
             if !self.in_mem_only && aging.elapsed().as_millis() as usize > AGE_MS {
-                // time of 1 slot
-                current_age = Self::add_age(current_age, 1); // % DEFAULT_AGE; // no reason to pass by something too often if we accidentally miss it...
+                // increment age to get rid of some older things in cache
+                current_age = Self::add_age(current_age, 1);
                 self.current_age.store(current_age, Ordering::Relaxed);
                 age = Some(current_age);
                 aging = Instant::now();
@@ -613,28 +614,28 @@ impl<V: IsCached> BucketMapHolder<V> {
         previous_slot_entry_was_cached: bool,
     ) {
         let ix = self.bucket_ix(key);
-        /*
-        // maybe to eliminate race conditions, we have to have a write lock?
-        // try read lock first
-        {
-            let m1 = Measure::start("upsert");
-            let wc = &mut self.cache[ix].read().unwrap();
-            let res = wc.get(key);
-            if let Some(occupied) = res {
-                // already in cache, so call update_static function
-                // this may only be technically necessary if !previous_slot_entry_was_cached, where we have to return reclaims
-                self.get_caching(occupied, key); // updates from disk if necessary
-                self.upsert_item_in_cache(
-                    occupied,
-                    new_value,
-                    reclaims,
-                    previous_slot_entry_was_cached,
-                    m1,
-                );
-                return;
+        if TRY_READ_LOCKS_FIRST {
+            // maybe to eliminate race conditions, we have to have a write lock?
+            // try read lock first
+            {
+                let m1 = Measure::start("upsert");
+                let wc = &mut self.cache[ix].read().unwrap();
+                let res = wc.get(key);
+                if let Some(occupied) = res {
+                    // already in cache, so call update_static function
+                    // this may only be technically necessary if !previous_slot_entry_was_cached, where we have to return reclaims
+                    self.get_caching(occupied, key); // updates from disk if necessary
+                    self.upsert_item_in_cache(
+                        occupied,
+                        new_value,
+                        reclaims,
+                        previous_slot_entry_was_cached,
+                        m1,
+                    );
+                    return;
+                }
             }
         }
-        */
 
         // try write lock
         let mut m1 = Measure::start("upsert_write");
@@ -1091,19 +1092,24 @@ impl<V: IsCached> BucketMapHolder<V> {
 
     pub fn get(&self, ix: usize, key: &Pubkey) -> Option<V2<V>> {
         let must_do_lookup_from_disk = false;
-        /*
-        require write lock to update from disk
-        {
+        if TRY_READ_LOCKS_FIRST {
             let mut m1 = Measure::start("get");
             let wc = &mut self.cache[ix].read().unwrap();
-            let res = wc.get(key);
+            let item_in_cache = wc.get(key);
             m1.stop();
-            if let Some(res) = res {
-                self.get_cache_us.fetch_add(m1.as_ns(), Ordering::Relaxed);
-                return self.get_caching(res, key).map(|_| res.clone());
+            if let Some(item_in_cache) = item_in_cache {
+                if item_in_cache.confirmed_not_on_disk() {
+                    self.get_cache_us.fetch_add(m1.as_ns(), Ordering::Relaxed);
+                    return None; // does not really exist
+                }
+
+                // we can't update the cache with only a read lock
+                if !item_in_cache.must_do_lookup_from_disk() {
+                    self.get_cache_us.fetch_add(m1.as_ns(), Ordering::Relaxed);
+                    return item_in_cache.clone();
+                }
             }
         }
-        */
         // get caching
         {
             let mut m1 = Measure::start("get2");
