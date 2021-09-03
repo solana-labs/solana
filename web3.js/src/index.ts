@@ -3,6 +3,7 @@ export * from './blockhash';
 export * from './bpf-loader-deprecated';
 export * from './bpf-loader';
 export * from './connection';
+export * from './ed25519-program';
 export * from './fee-calculator';
 export * from './keypair';
 export * from './loader';
