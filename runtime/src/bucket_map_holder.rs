@@ -397,15 +397,15 @@ impl<V: IsCached> BucketMapHolder<V> {
                         if lookup {
                             v.set_must_do_lookup_from_disk(false);
                         }
-                        let mut keep_this_in_cache = true;
-                        if v.insert() {
-                            keep_this_in_cache = Self::in_cache(&v.slot_list.read().unwrap());
-                        }
+                        let mut keep_this_in_cache = Self::in_cache(&v.slot_list.read().unwrap());
                         if keep_this_in_cache {
                             v.set_age(next_age); // keep newly updated stuff around
                         }
                         v.set_dirty(false);
                         v.set_insert(false);
+                        if self.startup.load(Ordering::Relaxed) {
+                            occupied.remove(); // if we're at startup, then we want to get things out of the cache as soon as possible
+                        }
                         flushed += 1;
                     }
                 }
@@ -429,7 +429,7 @@ impl<V: IsCached> BucketMapHolder<V> {
                     let item = occupied.get();
                     // if someone else dirtied it or aged it newer or someone is holding a refcount to the value, keep it in the cache
                     if item.dirty()
-                        || (do_age && item.age() != age_comp)
+                        || (do_age && (item.age() != age_comp && !startup))
                         || item.must_do_lookup_from_disk()
                         || Arc::strong_count(item) > 1
                     {
