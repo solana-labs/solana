@@ -20,7 +20,7 @@ of the account.
   [vote-update-validator](../cli/usage.md#solana-vote-update-validator).
 - To change the [vote authority](#vote-authority), use
   [vote-authorize-voter](../cli/usage.md#solana-vote-authorize-voter).
-- To change the [withdraw authority](#withdraw-authority), use
+- To change the [authorized withdrawer](#authorized-withdrawer), use
   [vote-authorize-withdrawer](../cli/usage.md#solana-vote-authorize-withdrawer).
 - To change the [commission](#commission), use
   [vote-update-commission](../cli/usage.md#solana-vote-update-commission).
@@ -95,26 +95,28 @@ multiple times. This allows the validator process to keep voting successfully
 when the network reaches an epoch boundary at which the validator's vote
 authority account changes.
 
-### Withdraw Authority
+### Authorized Withdrawer
 
-The _withdraw authority_ keypair is used to withdraw funds from a vote account
+The _authorized withdrawer_ keypair is used to withdraw funds from a vote account
 using the [withdraw-from-vote-account](../cli/usage.md#solana-withdraw-from-vote-account)
 command. Any network rewards a validator earns are deposited into the vote
-account and are only retrievable by signing with the withdraw authority keypair.
+account and are only retrievable by signing with the authorized withdrawer keypair.
 
-The withdraw authority is also required to sign any transaction to change
+The authorized withdrawer is also required to sign any transaction to change
 a vote account's [commission](#commission), and to change the validator
 identity on a vote account.
 
-Because the vote account could accrue a significant balance, consider keeping
-the withdraw authority keypair in an offline/cold wallet, as it is
-not needed to sign frequent transactions.
+Because theft of a authorized withdrawer keypair can give complete control over
+the operation of a validator to an attacker, is is advised to keep the withdraw
+authority keypair in an offline/cold wallet in a secure location.  The withdraw
+authority keypair is not needed during operation of a validator and should not
+stored on the validator itself.
 
-The withdraw authority can be set at vote account creation with the
-`--authorized-withdrawer` option. If this is not provided, the validator
-identity will be set as the withdraw authority by default.
+The authorized withdrawer must be set when the vote account is created.  It must
+not be set to a keypair that is the same as either the validator identity
+keypair or the vote authority keypair.
 
-The withdraw authority can be changed later with the
+The authorized withdrawer can be changed later with the
 [vote-authorize-withdrawer](../cli/usage.md#solana-vote-authorize-withdrawer)
 command.
 
@@ -155,13 +157,13 @@ with a live validator.
 
 ### Vote Account Validator Identity
 
-You will need access to the _withdraw authority_ keypair for the vote account to
+You will need access to the _authorized withdrawer_ keypair for the vote account to
 change the validator identity. The follow steps assume that
-`~/withdraw-authority.json` is that keypair.
+`~/authorized_withdrawer.json` is that keypair.
 
 1. Create the new validator identity keypair, `solana-keygen new -o ~/new-validator-keypair.json`.
 2. Ensure that the new identity account has been funded, `solana transfer ~/new-validator-keypair.json 500`.
-3. Run `solana vote-update-validator ~/vote-account-keypair.json ~/new-validator-keypair.json ~/withdraw-authority.json`
+3. Run `solana vote-update-validator ~/vote-account-keypair.json ~/new-validator-keypair.json ~/authorized_withdrawer.json`
    to modify the validator identity in your vote account
 4. Restart your validator with the new identity keypair for the `--identity` argument
 
