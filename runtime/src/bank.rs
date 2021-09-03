@@ -2811,9 +2811,12 @@ impl Bank {
             .into_iter()
             .map(|tx| {
                 let message_hash = tx.message.hash();
-                SanitizedTransaction::try_create(tx, message_hash, |_| {
-                    Err(TransactionError::UnsupportedVersion)
-                })
+                SanitizedTransaction::try_create(
+                    tx,
+                    message_hash,
+                    |_| Err(TransactionError::UnsupportedVersion),
+                    self.demote_program_write_locks(),
+                )
             })
             .collect::<Result<Vec<_>>>()?;
         let lock_results = self.rc.accounts.lock_accounts(sanitized_txs.iter());
@@ -4947,9 +4950,12 @@ impl Bank {
                 tx.message.hash()
             };
 
-            SanitizedTransaction::try_create(tx, message_hash, |_| {
-                Err(TransactionError::UnsupportedVersion)
-            })
+            SanitizedTransaction::try_create(
+                tx,
+                message_hash,
+                |_| Err(TransactionError::UnsupportedVersion),
+                self.demote_program_write_locks(),
+            )
         }?;
 
         if self.verify_tx_signatures_len_enabled() && !sanitized_tx.verify_signatures_len() {
@@ -5410,6 +5416,11 @@ impl Bank {
     pub fn versioned_tx_message_enabled(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::versioned_tx_message_enabled::id())
+    }
+
+    pub fn demote_program_write_locks(&self) -> bool {
+        self.feature_set
+            .is_active(&feature_set::demote_program_write_locks::id())
     }
 
     // Check if the wallclock time from bank creation to now has exceeded the allotted

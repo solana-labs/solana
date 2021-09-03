@@ -2,6 +2,7 @@ use {
     crate::{
         message::{legacy::BUILTIN_PROGRAMS_KEYS, v0},
         pubkey::Pubkey,
+        sanitize::SanitizeError,
         sysvar,
     },
     std::collections::HashSet,
@@ -103,6 +104,10 @@ impl MappedMessage {
             }
         }
         false
+    }
+
+    pub fn demote_program_write_locks(&mut self) -> Result<(), SanitizeError> {
+        Ok(())
     }
 }
 

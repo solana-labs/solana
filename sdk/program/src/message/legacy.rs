@@ -501,6 +501,44 @@ impl Message {
         }
         false
     }
+
+    /// Demote any write locks on designated program ids, and rewrite account keys accordingly
+    pub fn demote_program_write_locks(&mut self) -> Result<(), SanitizeError> {
+        let mut program_ids = vec![];
+        for id in self.program_ids() {
+            program_ids.push(*id);
+        }
+        for (instruction_index, program_id) in program_ids.into_iter().enumerate() {
+            if let Some(index) = self.account_keys.iter().position(|&key| key == program_id) {
+                if self.is_writable(index) {
+                    self.header.num_readonly_unsigned_accounts = self
+                        .header
+                        .num_readonly_unsigned_accounts
+                        .checked_add(1)
+                        .ok_or(SanitizeError::IndexOutOfBounds)?;
+                    self.account_keys.remove(index);
+                    self.account_keys.push(program_id);
+                    self.instructions[instruction_index].program_id_index =
+                        u8::try_from(self.account_keys.len().saturating_sub(1))
+                            .map_err(|_| SanitizeError::IndexOutOfBounds)?;
+                    for instruction in self.instructions.iter_mut() {
+                        if instruction.program_id_index as usize > index {
+                            instruction.program_id_index =
+                                instruction.program_id_index.saturating_sub(1);
+                        }
+                        for account_key in instruction.accounts.iter_mut() {
+                            if *account_key as usize > index {
+                                *account_key = account_key.saturating_sub(1);
+                            }
+                        }
+                    }
+                }
+            } else {
+                return Err(SanitizeError::IndexOutOfBounds);
+            }
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]

@@ -59,17 +59,22 @@ impl SanitizedTransaction {
         tx: VersionedTransaction,
         message_hash: Hash,
         address_mapper: impl Fn(&v0::Message) -> Result<MappedAddresses>,
+        demote_program_write_locks: bool,
     ) -> Result<Self> {
         tx.sanitize()?;
 
         let signatures = tx.signatures;
-        let message = match tx.message {
+        let mut message = match tx.message {
             VersionedMessage::Legacy(message) => SanitizedMessage::Legacy(message),
             VersionedMessage::V0(message) => SanitizedMessage::V0(MappedMessage {
                 mapped_addresses: address_mapper(&message)?,
                 message,
             }),
         };
+
+        if demote_program_write_locks {
+            message.demote_program_write_locks()?;
+        }
 
         if message.has_duplicates() {
             return Err(TransactionError::AccountLoadedTwice);

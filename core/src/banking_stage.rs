@@ -1049,6 +1049,7 @@ impl BankingStage {
         libsecp256k1_fail_on_bad_count: bool,
         cost_tracker: &Arc<RwLock<CostTracker>>,
         banking_stage_stats: &BankingStageStats,
+        demote_program_write_locks: bool,
     ) -> (Vec<SanitizedTransaction>, Vec<usize>, Vec<usize>) {
         let mut retryable_transaction_packet_indexes: Vec<usize> = vec![];
 
@@ -1059,9 +1060,12 @@ impl BankingStage {
                 let tx: VersionedTransaction = limited_deserialize(&p.data[0..p.meta.size]).ok()?;
                 let message_bytes = Self::packet_message(p)?;
                 let message_hash = Message::hash_raw_message(message_bytes);
-                let tx = SanitizedTransaction::try_create(tx, message_hash, |_| {
-                    Err(TransactionError::UnsupportedVersion)
-                })
+                let tx = SanitizedTransaction::try_create(
+                    tx,
+                    message_hash,
+                    |_| Err(TransactionError::UnsupportedVersion),
+                    demote_program_write_locks,
+                )
                 .ok()?;
                 tx.verify_precompiles(
                     libsecp256k1_0_5_upgrade_enabled,
@@ -1165,6 +1169,7 @@ impl BankingStage {
                 bank.libsecp256k1_fail_on_bad_count(),
                 cost_tracker,
                 banking_stage_stats,
+                bank.demote_program_write_locks(),
             );
         packet_conversion_time.stop();
         inc_new_counter_info!("banking_stage-packet_conversion", 1);
@@ -1268,6 +1273,7 @@ impl BankingStage {
                 bank.libsecp256k1_fail_on_bad_count(),
                 cost_tracker,
                 banking_stage_stats,
+                bank.demote_program_write_locks(),
             );
         unprocessed_packet_conversion_time.stop();
 

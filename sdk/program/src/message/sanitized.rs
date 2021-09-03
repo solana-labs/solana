@@ -311,6 +311,14 @@ impl SanitizedMessage {
                 .saturating_add(num_secp256k1_signatures),
         )
     }
+
+    /// Demote any write locks on designated program ids, and rewrite account keys accordingly
+    pub fn demote_program_write_locks(&mut self) -> Result<(), SanitizeError>{
+        match self {
+            Self::Legacy(message) => message.demote_program_write_locks(),
+            Self::V0(message) => message.demote_program_write_locks(),
+        }
+    }
 }
 
 #[cfg(test)]
