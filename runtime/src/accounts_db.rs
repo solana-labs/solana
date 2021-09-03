@@ -1946,7 +1946,6 @@ impl AccountsDb {
         self.filter_zero_lamport_clean_for_incremental_snapshots(
             max_clean_root,
             last_full_snapshot_slot,
-            &store_counts,
             &mut purges_zero_lamports,
         );
         purge_filter.stop();
@@ -2102,7 +2101,6 @@ impl AccountsDb {
         &self,
         max_clean_root: Option<Slot>,
         last_full_snapshot_slot: Option<Slot>,
-        store_counts: &HashMap<AppendVecId, (usize, HashSet<Pubkey>)>,
         purges_zero_lamports: &mut HashMap<Pubkey, (SlotList<AccountInfo>, RefCount)>,
     ) {
         let should_filter_for_incremental_snapshots =
@@ -2113,14 +2111,6 @@ impl AccountsDb {
         );
 
         purges_zero_lamports.retain(|pubkey, (slot_account_infos, _ref_count)| {
-            // Only keep purges_zero_lamports where the entire history of the account in the root set
-            // can be purged. All AppendVecs for those updates are dead.
-            for (_slot, account_info) in slot_account_infos.iter() {
-                if store_counts.get(&account_info.store_id).unwrap().0 != 0 {
-                    return false;
-                }
-            }
-
             // Exit early if not filtering more for incremental snapshots
             if !should_filter_for_incremental_snapshots {
                 return true;
@@ -12613,11 +12603,6 @@ pub mod tests {
                 lamports: 0,
             };
             let pubkey = solana_sdk::pubkey::new_rand();
-            let mut key_set = HashSet::default();
-            key_set.insert(pubkey);
-            let store_count = 0;
-            let mut store_counts = HashMap::default();
-            store_counts.insert(account_info.store_id, (store_count, key_set));
             let mut purges_zero_lamports = HashMap::default();
             purges_zero_lamports.insert(pubkey, (vec![(slot, account_info)], 1));
 
@@ -12625,7 +12610,6 @@ pub mod tests {
             accounts_db.filter_zero_lamport_clean_for_incremental_snapshots(
                 test_params.max_clean_root,
                 test_params.last_full_snapshot_slot,
-                &store_counts,
                 &mut purges_zero_lamports,
             );
 
