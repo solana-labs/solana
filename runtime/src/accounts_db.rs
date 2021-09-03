@@ -4695,7 +4695,7 @@ impl AccountsDb {
             .account_maps
             .iter()
             .map(|map| {
-                let mut keys = map.read().unwrap().keys().cloned().collect::<Vec<_>>();
+                let mut keys = map.read().unwrap().keys().collect::<Vec<_>>();
                 keys.sort_unstable(); // hashmap is not ordered, but bins are relative to each other
                 keys
             })
@@ -6197,8 +6197,19 @@ impl AccountsDb {
         insert_us
     }
 
+    fn set_startup(&self, startup: bool) {
+        self.accounts_index
+            .account_maps
+            .first()
+            .unwrap()
+            .read()
+            .unwrap()
+            .set_startup(startup);
+    }
+
     #[allow(clippy::needless_collect)]
     pub fn generate_index(&self, limit_load_slot_count_from_snapshot: Option<usize>, verify: bool) {
+        self.set_startup(true);
         let mut slots = self.storage.all_slots();
         #[allow(clippy::stable_sort_primitive)]
         slots.sort();
@@ -6213,7 +6224,7 @@ impl AccountsDb {
             let storage_info = StorageSizeAndCountMap::default();
             let total_processed_slots_across_all_threads = AtomicU64::new(0);
             let outer_slots_len = slots.len();
-            let chunk_size = (outer_slots_len / 7) + 1; // approximately 400k slots in a snapshot
+            let chunk_size = (outer_slots_len / 16) + 1; // approximately 400k slots in a snapshot
             let mut index_time = Measure::start("index");
             let insertion_time_us = AtomicU64::new(0);
             let storage_info_timings = Mutex::new(GenerateIndexTimings::default());
@@ -6289,7 +6300,7 @@ impl AccountsDb {
                 .account_maps
                 .iter()
                 .map(|map_bin| {
-                    let len = map_bin.read().unwrap().len();
+                    let len = map_bin.read().unwrap().len_expensive();
                     min_bin_size = std::cmp::min(min_bin_size, len);
                     max_bin_size = std::cmp::max(max_bin_size, len);
                     len
@@ -6321,6 +6332,7 @@ impl AccountsDb {
             }
             timings.report();
         }
+        self.set_startup(false);
     }
 
     fn update_storage_info(
@@ -6412,7 +6424,7 @@ impl AccountsDb {
         roots.sort();
         info!("{}: accounts_index roots: {:?}", label, roots,);
         self.accounts_index.account_maps.iter().for_each(|map| {
-            for (pubkey, account_entry) in map.read().unwrap().iter() {
+            for (pubkey, account_entry) in map.read().unwrap().iter(None::<&Range<Pubkey>>) {
                 info!("  key: {} ref_count: {}", pubkey, account_entry.ref_count(),);
                 info!(
                     "      slots: {:?}",

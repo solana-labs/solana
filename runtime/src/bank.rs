@@ -3956,7 +3956,13 @@ impl Bank {
 
     fn collect_rent_in_partition(&self, partition: Partition) {
         let subrange_full = Self::pubkey_range_from_partition(partition);
-        let num_threads = std::cmp::max(2, num_cpus::get() / 4) as Slot;
+        self.rc
+            .accounts
+            .accounts_db
+            .accounts_index
+            .hold_range_in_memory(&subrange_full, true);
+
+        let num_threads = std::cmp::max(2, num_cpus::get() / 8) as Slot;
         // divide the range into num_threads smaller ranges and process in parallel
         let sz = std::mem::size_of::<u64>();
         let get_be = |key: &Pubkey| u64::from_be_bytes(key.as_ref()[0..sz].try_into().unwrap());
@@ -4008,6 +4014,12 @@ impl Bank {
             ("max_chunk", max, i64),
             ("chunks", num_threads, i64),
         );
+
+        self.rc
+            .accounts
+            .accounts_db
+            .accounts_index
+            .hold_range_in_memory(&subrange_full, false);
     }
 
     // Mostly, the pair (start_index & end_index) is equivalent to this range:
