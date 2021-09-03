@@ -63,7 +63,7 @@ use std::{
     path::{Path, PathBuf},
     process::{exit, Command, Stdio},
     str::FromStr,
-    sync::{mpsc::channel, Arc, RwLock},
+    sync::{Arc, RwLock},
 };
 
 mod bigtable;
@@ -712,7 +712,7 @@ fn load_bank_forks(
         let snapshot_archives_dir =
             snapshot_archive_path.unwrap_or_else(|| blockstore.ledger_path().to_path_buf());
         Some(SnapshotConfig {
-            full_snapshot_archive_interval_slots: Slot::MAX,
+            full_snapshot_archive_interval_slots: 0, // Value doesn't matter
             incremental_snapshot_archive_interval_slots: Slot::MAX,
             snapshot_archives_dir,
             bank_snapshots_dir,
@@ -740,7 +740,6 @@ fn load_bank_forks(
         vec![non_primary_accounts_path]
     };
 
-    let (accounts_package_sender, _) = channel();
     bank_forks_utils::load(
         genesis_config,
         blockstore,
@@ -750,7 +749,6 @@ fn load_bank_forks(
         process_options,
         None,
         None,
-        accounts_package_sender,
     )
 }
 
@@ -1654,7 +1652,7 @@ fn main() {
                 process_options,
                 snapshot_archive_path,
             ) {
-                Ok((bank_forks, ..)) => {
+                Ok((bank_forks, _leader_schedule_cache, _snapshot_hash)) => {
                     println!(
                         "{}",
                         compute_shred_version(
@@ -1729,7 +1727,7 @@ fn main() {
                 process_options,
                 snapshot_archive_path,
             ) {
-                Ok((bank_forks, ..)) => {
+                Ok((bank_forks, _leader_schedule_cache, _snapshot_hash)) => {
                     println!("{}", &bank_forks.working_bank().hash());
                 }
                 Err(err) => {
@@ -1910,7 +1908,7 @@ fn main() {
                 AccessType::TryPrimaryThenSecondary,
                 wal_recovery_mode,
             );
-            let (bank_forks, ..) = load_bank_forks(
+            let (bank_forks, _, _) = load_bank_forks(
                 arg_matches,
                 &open_genesis_config_by(&ledger_path, arg_matches),
                 &blockstore,
@@ -1949,7 +1947,7 @@ fn main() {
                 process_options,
                 snapshot_archive_path,
             ) {
-                Ok((bank_forks, ..)) => {
+                Ok((bank_forks, _leader_schedule_cache, _snapshot_hash)) => {
                     let dot = graph_forks(&bank_forks, arg_matches.is_present("include_all_votes"));
 
                     let extension = Path::new(&output_file).extension();
@@ -2051,7 +2049,7 @@ fn main() {
                 },
                 snapshot_archive_path,
             ) {
-                Ok((bank_forks, ..)) => {
+                Ok((bank_forks, _leader_schedule_cache, _snapshot_hash)) => {
                     let mut bank = bank_forks
                         .get(snapshot_slot)
                         .unwrap_or_else(|| {
@@ -2281,7 +2279,7 @@ fn main() {
                 process_options,
                 snapshot_archive_path,
             ) {
-                Ok((bank_forks, ..)) => {
+                Ok((bank_forks, _leader_schedule_cache, _snapshot_hash)) => {
                     let slot = bank_forks.working_bank().slot();
                     let bank = bank_forks.get(slot).unwrap_or_else(|| {
                         eprintln!("Error: Slot {} is not available", slot);
@@ -2340,7 +2338,7 @@ fn main() {
                 process_options,
                 snapshot_archive_path,
             ) {
-                Ok((bank_forks, ..)) => {
+                Ok((bank_forks, _leader_schedule_cache, _snapshot_hash)) => {
                     let slot = bank_forks.working_bank().slot();
                     let bank = bank_forks.get(slot).unwrap_or_else(|| {
                         eprintln!("Error: Slot {} is not available", slot);
