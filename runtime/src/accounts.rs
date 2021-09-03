@@ -251,9 +251,6 @@ impl Accounts {
                     }
 
                     if solana_sdk::sysvar::instructions::check_id(key) {
-                        if message.is_writable(i, demote_program_write_locks) {
-                            return Err(TransactionError::InvalidAccountIndex);
-                        }
                         Self::construct_instructions_account(
                             message,
                             feature_set
