@@ -1974,13 +1974,13 @@ mod tests {
             .lock()
             .unwrap()
             .write_locks
-            .contains(&keypair0.pubkey()),);
+            .contains(&keypair0.pubkey()));
         assert!(accounts
             .account_locks
             .lock()
             .unwrap()
             .write_locks
-            .contains(&keypair1.pubkey()),);
+            .contains(&keypair1.pubkey()));
     }
 
     #[test]
