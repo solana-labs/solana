@@ -141,6 +141,7 @@ pub struct Blockstore {
     code_shred_cf: LedgerColumn<cf::ShredCode>,
     transaction_status_cf: LedgerColumn<cf::TransactionStatus>,
     address_signatures_cf: LedgerColumn<cf::AddressSignatures>,
+    transaction_memos_cf: LedgerColumn<cf::TransactionMemos>,
     transaction_status_index_cf: LedgerColumn<cf::TransactionStatusIndex>,
     active_transaction_status_index: RwLock<u64>,
     rewards_cf: LedgerColumn<cf::Rewards>,
@@ -343,6 +344,7 @@ impl Blockstore {
         let code_shred_cf = db.column();
         let transaction_status_cf = db.column();
         let address_signatures_cf = db.column();
+        let transaction_memos_cf = db.column();
         let transaction_status_index_cf = db.column();
         let rewards_cf = db.column();
         let blocktime_cf = db.column();
@@ -392,6 +394,7 @@ impl Blockstore {
             code_shred_cf,
             transaction_status_cf,
             address_signatures_cf,
+            transaction_memos_cf,
             transaction_status_index_cf,
             active_transaction_status_index: RwLock::new(active_transaction_status_index),
             rewards_cf,
@@ -2148,6 +2151,14 @@ impl Blockstore {
         Ok(())
     }
 
+    pub fn read_transaction_memos(&self, signature: Signature) -> Result<Option<String>> {
+        self.transaction_memos_cf.get(signature)
+    }
+
+    pub fn write_transaction_memos(&self, signature: &Signature, memos: String) -> Result<()> {
+        self.transaction_memos_cf.put(*signature, &memos)
+    }
+
     fn ensure_lowest_cleanup_slot(&self) -> (std::sync::RwLockReadGuard<Slot>, Slot) {
         // Ensures consistent result by using lowest_cleanup_slot as the lower bound
         // for reading columns that do not employ strong read consistency with slot-based
@@ -2631,12 +2642,13 @@ impl Blockstore {
             let transaction_status =
                 self.get_transaction_status(signature, &confirmed_unrooted_slots)?;
             let err = transaction_status.and_then(|(_slot, status)| status.status.err());
+            let memo = self.read_transaction_memos(signature)?;
             let block_time = self.get_block_time(slot)?;
             infos.push(ConfirmedTransactionStatusWithSignature {
                 signature,
                 slot,
                 err,
-                memo: None,
+                memo,
                 block_time,
             });
         }
