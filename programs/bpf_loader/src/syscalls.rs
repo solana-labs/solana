@@ -247,24 +247,25 @@ pub fn bind_syscall_context_objects<'a>(
         None,
     )?;
 
+
+    let allow_native_ids = invoke_context.is_feature_active(&allow_native_ids::id());
     vm.bind_syscall_context_object(
         Box::new(SyscallCreateProgramAddress {
             cost: compute_budget.create_program_address_units,
             compute_meter: invoke_context.get_compute_meter(),
             loader_id,
             enforce_aligned_host_addrs,
-            allow_native_ids: invoke_context.is_feature_active(&allow_native_ids::id()),
+            allow_native_ids,
         }),
         None,
     )?;
-
     vm.bind_syscall_context_object(
         Box::new(SyscallTryFindProgramAddress {
             cost: compute_budget.create_program_address_units,
             compute_meter: invoke_context.get_compute_meter(),
             loader_id,
             enforce_aligned_host_addrs,
-            allow_native_ids: invoke_context.is_feature_active(&allow_native_ids::id()),
+            allow_native_ids,
         }),
         None,
     )?;
@@ -839,7 +840,7 @@ fn translate_program_address_inputs<'a>(
 fn is_native_id(seeds: &[&[u8]], program_id: &Pubkey) -> bool {
     use solana_sdk::{config, feature, secp256k1_program, stake, system_program, vote};
     // Does more than just check native ids in order to emulate the same failure
-    // signature that `compute_program_address` had before the rmemal of the
+    // signature that `compute_program_address` had before the removal of the
     // check.
     if seeds.len() > MAX_SEEDS {
         return true;
