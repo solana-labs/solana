@@ -6411,8 +6411,8 @@ impl AccountsDb {
         #[allow(clippy::stable_sort_primitive)]
         roots.sort();
         info!("{}: accounts_index roots: {:?}", label, roots,);
-        self.accounts_index.account_maps.iter().for_each(|i| {
-            for (pubkey, account_entry) in i.read().unwrap().iter() {
+        self.accounts_index.account_maps.iter().for_each(|map| {
+            for (pubkey, account_entry) in map.read().unwrap().iter() {
                 info!("  key: {} ref_count: {}", pubkey, account_entry.ref_count(),);
                 info!(
                     "      slots: {:?}",
