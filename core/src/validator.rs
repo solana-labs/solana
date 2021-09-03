@@ -69,7 +69,7 @@ use {
         hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_config::SnapshotConfig,
-        snapshot_package::{AccountsPackageSender, PendingSnapshotPackage},
+        snapshot_package::PendingSnapshotPackage,
         snapshot_utils,
     },
     solana_sdk::{
@@ -92,7 +92,7 @@ use {
         path::{Path, PathBuf},
         sync::{
             atomic::{AtomicBool, AtomicU64, Ordering},
-            mpsc::{channel, Receiver},
+            mpsc::Receiver,
             Arc, Mutex, RwLock,
         },
         thread::{sleep, Builder, JoinHandle},
@@ -379,7 +379,7 @@ impl Validator {
                 .register_exit(Box::new(move || exit.store(true, Ordering::Relaxed)));
         }
 
-        let accounts_package_channel = channel();
+        let (replay_vote_sender, replay_vote_receiver) = unbounded();
         let (
             genesis_config,
             bank_forks,
@@ -387,7 +387,6 @@ impl Validator {
             ledger_signal_receiver,
             completed_slots_receiver,
             leader_schedule_cache,
-            last_full_snapshot_slot,
             snapshot_hash,
             TransactionHistoryServices {
                 transaction_status_sender,
@@ -409,7 +408,6 @@ impl Validator {
             config.enforce_ulimit_nofile,
             &start_progress,
             config.no_poh_speed_test,
-            accounts_package_channel.0.clone(),
         );
 
         *start_progress.write().unwrap() = ValidatorStartProgress::StartingServices;
@@ -709,7 +707,6 @@ impl Validator {
         let rpc_completed_slots_service =
             RpcCompletedSlotsService::spawn(completed_slots_receiver, rpc_subscriptions.clone());
 
-        let (replay_vote_sender, replay_vote_receiver) = unbounded();
         let tvu = Tvu::new(
             vote_account,
             authorized_voter_keypairs,
@@ -780,8 +777,6 @@ impl Validator {
             },
             &max_slots,
             &cost_model,
-            accounts_package_channel,
-            last_full_snapshot_slot,
         );
 
         let tpu = Tpu::new(
@@ -1074,7 +1069,7 @@ fn post_process_restored_tower(
         })
 }
 
-#[allow(clippy::type_complexity, clippy::too_many_arguments)]
+#[allow(clippy::type_complexity)]
 fn new_banks_from_ledger(
     validator_identity: &Pubkey,
     vote_account: &Pubkey,
@@ -1085,7 +1080,6 @@ fn new_banks_from_ledger(
     enforce_ulimit_nofile: bool,
     start_progress: &Arc<RwLock<ValidatorStartProgress>>,
     no_poh_speed_test: bool,
-    accounts_package_sender: AccountsPackageSender,
 ) -> (
     GenesisConfig,
     BankForks,
@@ -1093,7 +1087,6 @@ fn new_banks_from_ledger(
     Receiver<bool>,
     CompletedSlotsReceiver,
     LeaderScheduleCache,
-    Option<Slot>,
     Option<(Slot, Hash)>,
     TransactionHistoryServices,
     Tower,
@@ -1189,26 +1182,24 @@ fn new_banks_from_ledger(
             TransactionHistoryServices::default()
         };
 
-    let (mut bank_forks, mut leader_schedule_cache, last_full_snapshot_slot, snapshot_hash) =
-        bank_forks_utils::load(
-            &genesis_config,
-            &blockstore,
-            config.account_paths.clone(),
-            config.account_shrink_paths.clone(),
-            config.snapshot_config.as_ref(),
-            process_options,
-            transaction_history_services
-                .transaction_status_sender
-                .as_ref(),
-            transaction_history_services
-                .cache_block_meta_sender
-                .as_ref(),
-            accounts_package_sender,
-        )
-        .unwrap_or_else(|err| {
-            error!("Failed to load ledger: {:?}", err);
-            abort()
-        });
+    let (mut bank_forks, mut leader_schedule_cache, snapshot_hash) = bank_forks_utils::load(
+        &genesis_config,
+        &blockstore,
+        config.account_paths.clone(),
+        config.account_shrink_paths.clone(),
+        config.snapshot_config.as_ref(),
+        process_options,
+        transaction_history_services
+            .transaction_status_sender
+            .as_ref(),
+        transaction_history_services
+            .cache_block_meta_sender
+            .as_ref(),
+    )
+    .unwrap_or_else(|err| {
+        error!("Failed to load ledger: {:?}", err);
+        abort()
+    });
 
     if let Some(warp_slot) = config.warp_slot {
         let snapshot_config = config.snapshot_config.as_ref().unwrap_or_else(|| {
@@ -1286,7 +1277,6 @@ fn new_banks_from_ledger(
         ledger_signal_receiver,
         completed_slots_receiver,
         leader_schedule_cache,
-        last_full_snapshot_slot,
         snapshot_hash,
         transaction_history_services,
         tower,
