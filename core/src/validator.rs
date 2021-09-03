@@ -651,7 +651,7 @@ impl Validator {
                     snapshot_hash,
                     &exit,
                     &cluster_info,
-                    snapshot_config.maximum_full_snapshot_archives_to_retain,
+                    snapshot_config.clone(),
                 );
                 (
                     Some(snapshot_packager_service),

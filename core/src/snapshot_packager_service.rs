@@ -1,7 +1,7 @@
 use solana_gossip::cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES};
 use solana_runtime::{
-    snapshot_archive_info::SnapshotArchiveInfoGetter, snapshot_package::PendingSnapshotPackage,
-    snapshot_utils,
+    snapshot_archive_info::SnapshotArchiveInfoGetter, snapshot_config::SnapshotConfig,
+    snapshot_package::PendingSnapshotPackage, snapshot_utils,
 };
 use solana_sdk::{clock::Slot, hash::Hash};
 use std::{
@@ -23,7 +23,7 @@ impl SnapshotPackagerService {
         starting_snapshot_hash: Option<(Slot, Hash)>,
         exit: &Arc<AtomicBool>,
         cluster_info: &Arc<ClusterInfo>,
-        maximum_snapshots_to_retain: usize,
+        snapshot_config: SnapshotConfig,
     ) -> Self {
         let exit = exit.clone();
         let cluster_info = cluster_info.clone();
@@ -53,7 +53,7 @@ impl SnapshotPackagerService {
                     // last_full_snapshot_slot that requires this archive call to succeed.
                     snapshot_utils::archive_snapshot_package(
                         &snapshot_package,
-                        maximum_snapshots_to_retain,
+                        snapshot_config.maximum_full_snapshot_archives_to_retain,
                     )
                     .expect("failed to archive snapshot package");
 
