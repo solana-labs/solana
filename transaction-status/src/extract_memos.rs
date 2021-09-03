@@ -1,9 +1,6 @@
 use {
     crate::parse_instruction::parse_memo_data,
-    solana_sdk::{
-        message::{Message, SanitizedMessage},
-        pubkey::Pubkey,
-    },
+    solana_sdk::{message::Message, pubkey::Pubkey},
 };
 
 // A helper function to convert spl_memo::v1::id() as spl_sdk::pubkey::Pubkey to
@@ -54,30 +51,11 @@ impl ExtractMemos for Message {
     }
 }
 
-impl ExtractMemos for SanitizedMessage {
-    fn extract_memos(&self) -> Vec<String> {
-        let mut memos = vec![];
-        if self
-            .account_keys_iter()
-            .any(|&pubkey| pubkey == spl_memo_id_v1() || pubkey == spl_memo_id_v3())
-        {
-            for (program_id, instruction) in self.program_instructions_iter() {
-                maybe_push_parsed_memo(&mut memos, *program_id, &instruction.data);
-            }
-        }
-        memos
-    }
-}
-
 #[cfg(test)]
 mod test {
     use {
         super::*,
-        solana_sdk::{
-            hash::Hash,
-            instruction::CompiledInstruction,
-            message::{v0, MappedAddresses, MappedMessage, MessageHeader},
-        },
+        solana_sdk::{hash::Hash, instruction::CompiledInstruction},
     };
 
     #[test]
@@ -118,30 +96,8 @@ mod test {
                 spl_memo_id_v3(),
             ],
             Hash::default(),
-            memo_instructions.clone(),
+            memo_instructions,
         );
         assert_eq!(message.extract_memos(), expected_memos);
-
-        let sanitized_message = SanitizedMessage::Legacy(message);
-        assert_eq!(sanitized_message.extract_memos(), expected_memos);
-
-        let mapped_message = MappedMessage {
-            message: v0::Message {
-                header: MessageHeader {
-                    num_required_signatures: 1,
-                    num_readonly_signed_accounts: 0,
-                    num_readonly_unsigned_accounts: 3,
-                },
-                account_keys: vec![fee_payer],
-                instructions: memo_instructions,
-                ..v0::Message::default()
-            },
-            mapped_addresses: MappedAddresses {
-                writable: vec![],
-                readonly: vec![spl_memo_id_v1(), another_program_id, spl_memo_id_v3()],
-            },
-        };
-        let sanitized_mapped_message = SanitizedMessage::V0(mapped_message);
-        assert_eq!(sanitized_mapped_message.extract_memos(), expected_memos);
     }
 }

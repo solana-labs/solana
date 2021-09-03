@@ -2151,8 +2151,6 @@ impl Blockstore {
         Ok(())
     }
 
-<<<<<<< HEAD
-=======
     pub fn read_transaction_memos(&self, signature: Signature) -> Result<Option<String>> {
         self.transaction_memos_cf.get(signature)
     }
@@ -2161,18 +2159,6 @@ impl Blockstore {
         self.transaction_memos_cf.put(*signature, &memos)
     }
 
-    fn check_lowest_cleanup_slot(&self, slot: Slot) -> Result<std::sync::RwLockReadGuard<Slot>> {
-        // lowest_cleanup_slot is the last slot that was not cleaned up by LedgerCleanupService
-        let lowest_cleanup_slot = self.lowest_cleanup_slot.read().unwrap();
-        if *lowest_cleanup_slot > 0 && *lowest_cleanup_slot >= slot {
-            return Err(BlockstoreError::SlotCleanedUp);
-        }
-        // Make caller hold this lock properly; otherwise LedgerCleanupService can purge/compact
-        // needed slots here at any given moment
-        Ok(lowest_cleanup_slot)
-    }
-
->>>>>>> 5fa3e5744 (Populate memo in blockstore signatures-for-address (#19515))
     fn ensure_lowest_cleanup_slot(&self) -> (std::sync::RwLockReadGuard<Slot>, Slot) {
         // Ensures consistent result by using lowest_cleanup_slot as the lower bound
         // for reading columns that do not employ strong read consistency with slot-based
