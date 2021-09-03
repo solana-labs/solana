@@ -836,12 +836,7 @@ pub fn bank_from_latest_snapshot_archives(
     accounts_db_skip_shrink: bool,
     verify_index: bool,
     accounts_index_config: Option<AccountsIndexConfig>,
-) -> Result<(
-    Bank,
-    BankFromArchiveTimings,
-    FullSnapshotArchiveInfo,
-    Option<IncrementalSnapshotArchiveInfo>,
-)> {
+) -> Result<(Bank, BankFromArchiveTimings)> {
     let full_snapshot_archive_info = get_highest_full_snapshot_archive_info(&snapshot_archives_dir)
         .ok_or(SnapshotError::NoSnapshotArchives)?;
 
@@ -893,12 +888,7 @@ pub fn bank_from_latest_snapshot_archives(
         ),
     )?;
 
-    Ok((
-        bank,
-        timings,
-        full_snapshot_archive_info,
-        incremental_snapshot_archive_info,
-    ))
+    Ok((bank, timings))
 }
 
 /// Check to make sure the deserialized bank's slot and hash matches the snapshot archive's slot
@@ -2723,7 +2713,7 @@ mod tests {
         )
         .unwrap();
 
-        let (deserialized_bank, ..) = bank_from_latest_snapshot_archives(
+        let (deserialized_bank, _) = bank_from_latest_snapshot_archives(
             &bank_snapshots_dir,
             &snapshot_archives_dir,
             &[accounts_dir.as_ref().to_path_buf()],
