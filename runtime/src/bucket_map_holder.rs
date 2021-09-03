@@ -1099,14 +1099,14 @@ impl<V: IsCached> BucketMapHolder<V> {
             m1.stop();
             if let Some(item_in_cache) = item_in_cache {
                 if item_in_cache.confirmed_not_on_disk() {
-                    self.get_cache_us.fetch_add(m1.as_ns(), Ordering::Relaxed);
+                    self.stats.get_cache_us.fetch_add(m1.as_ns(), Ordering::Relaxed);
                     return None; // does not really exist
                 }
 
                 // we can't update the cache with only a read lock
                 if !item_in_cache.must_do_lookup_from_disk() {
-                    self.get_cache_us.fetch_add(m1.as_ns(), Ordering::Relaxed);
-                    return item_in_cache.clone();
+                    self.stats.get_cache_us.fetch_add(m1.as_ns(), Ordering::Relaxed);
+                    return Some(item_in_cache.clone());
                 }
             }
         }
