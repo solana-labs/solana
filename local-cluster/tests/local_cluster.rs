@@ -3536,6 +3536,8 @@ fn setup_snapshot_validator_config(
         snapshot_version: snapshot_utils::SnapshotVersion::default(),
         maximum_full_snapshot_archives_to_retain:
             snapshot_utils::DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+        maximum_incremental_snapshot_archives_to_retain:
+            snapshot_utils::DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
     };
 
     // Create the account paths
