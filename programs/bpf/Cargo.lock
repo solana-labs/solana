@@ -288,6 +288,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "bytemuck"
+version = "1.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "72957246c41db82b8ef88a5486143830adeb8227ef9837740bdec67724cf2c5b"
+dependencies = [
+ "bytemuck_derive",
+]
+
+[[package]]
+name = "bytemuck_derive"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8e215f8c2f9f79cb53c8335e687ffd07d5bfcb6fe5fc80723762d0be46e7cc54"
+dependencies = [
+ "proc-macro2 1.0.24",
+ "quote 1.0.6",
+ "syn 1.0.67",
+]
+
+[[package]]
 name = "byteorder"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2899,6 +2919,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-ed25519-program"
+version = "1.8.0"
+dependencies = [
+ "solana-sdk",
+]
+
+[[package]]
 name = "solana-faucet"
 version = "1.8.0"
 dependencies = [
@@ -3209,6 +3236,7 @@ dependencies = [
  "serde_derive",
  "solana-compute-budget-program",
  "solana-config-program",
+ "solana-ed25519-program",
  "solana-frozen-abi 1.8.0",
  "solana-frozen-abi-macro 1.8.0",
  "solana-logger 1.8.0",
@@ -3237,6 +3265,7 @@ dependencies = [
  "borsh-derive",
  "bs58 0.4.0",
  "bv",
+ "bytemuck",
  "byteorder 1.4.3",
  "chrono",
  "derivation-path",

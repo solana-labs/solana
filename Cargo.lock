@@ -508,6 +508,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72feb31ffc86498dacdbd0fcebb56138e7177a8cc5cea4516031d15ae85a742e"
 
 [[package]]
+name = "bytemuck"
+version = "1.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "72957246c41db82b8ef88a5486143830adeb8227ef9837740bdec67724cf2c5b"
+dependencies = [
+ "bytemuck_derive",
+]
+
+[[package]]
+name = "bytemuck_derive"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8e215f8c2f9f79cb53c8335e687ffd07d5bfcb6fe5fc80723762d0be46e7cc54"
+dependencies = [
+ "proc-macro2 1.0.24",
+ "quote 1.0.9",
+ "syn 1.0.67",
+]
+
+[[package]]
 name = "byteorder"
 version = "1.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4607,6 +4627,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-ed25519-program"
+version = "1.8.0"
+dependencies = [
+ "bytemuck",
+ "ed25519-dalek",
+ "rand 0.7.3",
+ "solana-logger 1.8.0",
+ "solana-sdk",
+]
+
+[[package]]
 name = "solana-entry"
 version = "1.8.0"
 dependencies = [
@@ -5455,6 +5486,7 @@ dependencies = [
  "serde_derive",
  "solana-compute-budget-program",
  "solana-config-program",
+ "solana-ed25519-program",
  "solana-frozen-abi 1.8.0",
  "solana-frozen-abi-macro 1.8.0",
  "solana-logger 1.8.0",
@@ -5492,6 +5524,7 @@ dependencies = [
  "borsh-derive",
  "bs58 0.4.0",
  "bv",
+ "bytemuck",
  "byteorder",
  "chrono",
  "curve25519-dalek 3.2.0",
