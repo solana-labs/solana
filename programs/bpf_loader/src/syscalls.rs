@@ -247,7 +247,6 @@ pub fn bind_syscall_context_objects<'a>(
         None,
     )?;
 
-
     let allow_native_ids = invoke_context.is_feature_active(&allow_native_ids::id());
     vm.bind_syscall_context_object(
         Box::new(SyscallCreateProgramAddress {
