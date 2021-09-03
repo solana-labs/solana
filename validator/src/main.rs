@@ -278,14 +278,17 @@ fn wait_for_restart_window(
                     }
                 };
 
-                let full_snapshot_slot =
-                    snapshot_slot_info.map(|snapshot_slot_info| snapshot_slot_info.full);
+                let snapshot_slot = snapshot_slot_info.map(|snapshot_slot_info| {
+                    snapshot_slot_info
+                        .incremental
+                        .unwrap_or(snapshot_slot_info.full)
+                });
                 match in_leader_schedule_hole {
                     Ok(_) => {
                         if restart_snapshot == None {
-                            restart_snapshot = full_snapshot_slot;
+                            restart_snapshot = snapshot_slot;
                         }
-                        if restart_snapshot == full_snapshot_slot && !monitoring_another_validator {
+                        if restart_snapshot == snapshot_slot && !monitoring_another_validator {
                             "Waiting for a new snapshot".to_string()
                         } else if delinquent_stake_percentage >= min_delinquency_percentage {
                             style("Delinquency too high").red().to_string()
@@ -316,9 +319,17 @@ fn wait_for_restart_window(
                 "".to_string()
             } else {
                 format!(
-                    "| Full Snapshot Slot: {}",
+                    "| Full Snapshot Slot: {} | Incremental Snapshot Slot: {}",
                     snapshot_slot_info
+                        .as_ref()
                         .map(|snapshot_slot_info| snapshot_slot_info.full.to_string())
+                        .unwrap_or_else(|| '-'.to_string()),
+                    snapshot_slot_info
+                        .as_ref()
+                        .map(|snapshot_slot_info| snapshot_slot_info
+                            .incremental
+                            .map(|incremental| incremental.to_string()))
+                        .flatten()
                         .unwrap_or_else(|| '-'.to_string()),
                 )
             },
