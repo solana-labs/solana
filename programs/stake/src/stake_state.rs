@@ -156,11 +156,13 @@ pub struct PointValue {
 }
 
 fn redeem_stake_rewards(
+    rewarded_epoch: Epoch,
     stake: &mut Stake,
     point_value: &PointValue,
     vote_state: &VoteState,
     stake_history: Option<&StakeHistory>,
     inflation_point_calc_tracer: &mut Option<impl FnMut(&InflationPointCalculationEvent)>,
+    fix_activating_credits_observed: bool,
 ) -> Option<(u64, u64)> {
     if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer {
         inflation_point_calc_tracer(&InflationPointCalculationEvent::CreditsObserved(
@@ -169,11 +171,13 @@ fn redeem_stake_rewards(
         ));
     }
     calculate_stake_rewards(
+        rewarded_epoch,
         stake,
         point_value,
         vote_state,
         stake_history,
         inflation_point_calc_tracer,
+        fix_activating_credits_observed,
     )
     .map(|(stakers_reward, voters_reward, credits_observed)| {
         if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer {
@@ -270,11 +274,13 @@ fn calculate_stake_points_and_credits(
 ///   * new value for credits_observed in the stake
 /// returns None if there's no payout or if any deserved payout is < 1 lamport
 fn calculate_stake_rewards(
+    rewarded_epoch: Epoch,
     stake: &Stake,
     point_value: &PointValue,
     vote_state: &VoteState,
     stake_history: Option<&StakeHistory>,
     inflation_point_calc_tracer: &mut Option<impl FnMut(&InflationPointCalculationEvent)>,
+    fix_activating_credits_observed: bool,
 ) -> Option<(u64, u64, u64)> {
     let (points, credits_observed) = calculate_stake_points_and_credits(
         stake,
@@ -284,7 +290,10 @@ fn calculate_stake_rewards(
     );
 
     // Drive credits_observed forward unconditionally when rewards are disabled
-    if point_value.rewards == 0 {
+    // or when this is the stake's activation epoch
+    if point_value.rewards == 0
+        || (fix_activating_credits_observed && stake.delegation.activation_epoch == rewarded_epoch)
+    {
         return Some((0, 0, credits_observed));
     }
 
@@ -1098,6 +1107,7 @@ pub fn redeem_rewards(
     point_value: &PointValue,
     stake_history: Option<&StakeHistory>,
     inflation_point_calc_tracer: &mut Option<impl FnMut(&InflationPointCalculationEvent)>,
+    fix_activating_credits_observed: bool,
 ) -> Result<(u64, u64), InstructionError> {
     if let StakeState::Stake(meta, mut stake) = stake_account.state()? {
         if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer {
@@ -1115,11 +1125,13 @@ pub fn redeem_rewards(
         }
 
         if let Some((stakers_reward, voters_reward)) = redeem_stake_rewards(
+            rewarded_epoch,
             &mut stake,
             point_value,
             vote_state,
             stake_history,
             inflation_point_calc_tracer,
+            fix_activating_credits_observed,
         ) {
             stake_account.checked_add_lamports(stakers_reward)?;
             vote_account.checked_add_lamports(voters_reward)?;
@@ -3359,6 +3371,7 @@ mod tests {
         assert_eq!(
             None,
             redeem_stake_rewards(
+                0,
                 &mut stake,
                 &PointValue {
                     rewards: 1_000_000_000,
@@ -3367,6 +3380,7 @@ mod tests {
                 &vote_state,
                 None,
                 &mut null_tracer(),
+                true,
             )
         );
 
@@ -3378,6 +3392,7 @@ mod tests {
         assert_eq!(
             Some((stake_lamports * 2, 0)),
             redeem_stake_rewards(
+                0,
                 &mut stake,
                 &PointValue {
                     rewards: 1,
@@ -3386,6 +3401,7 @@ mod tests {
                 &vote_state,
                 None,
                 &mut null_tracer(),
+                true,
             )
         );
 
@@ -3414,6 +3430,7 @@ mod tests {
         assert_eq!(
             None,
             calculate_stake_rewards(
+                0,
                 &stake,
                 &PointValue {
                     rewards: 1_000_000_000,
@@ -3422,6 +3439,7 @@ mod tests {
                 &vote_state,
                 None,
                 &mut null_tracer(),
+                true,
             )
         );
 
@@ -3456,6 +3474,7 @@ mod tests {
         assert_eq!(
             None,
             calculate_stake_rewards(
+                0,
                 &stake,
                 &PointValue {
                     rewards: 1_000_000_000,
@@ -3464,6 +3483,7 @@ mod tests {
                 &vote_state,
                 None,
                 &mut null_tracer(),
+                true,
             )
         );
 
@@ -3475,6 +3495,7 @@ mod tests {
         assert_eq!(
             Some((stake.delegation.stake * 2, 0, 2)),
             calculate_stake_rewards(
+                0,
                 &stake,
                 &PointValue {
                     rewards: 2,
@@ -3483,6 +3504,7 @@ mod tests {
                 &vote_state,
                 None,
                 &mut null_tracer(),
+                true,
             )
         );
 
@@ -3491,6 +3513,7 @@ mod tests {
         assert_eq!(
             Some((stake.delegation.stake, 0, 2)),
             calculate_stake_rewards(
+                0,
                 &stake,
                 &PointValue {
                     rewards: 1,
@@ -3499,6 +3522,7 @@ mod tests {
                 &vote_state,
                 None,
                 &mut null_tracer(),
+                true,
             )
         );
 
@@ -3510,6 +3534,7 @@ mod tests {
         assert_eq!(
             Some((stake.delegation.stake, 0, 3)),
             calculate_stake_rewards(
+                1,
                 &stake,
                 &PointValue {
                     rewards: 2,
@@ -3518,6 +3543,7 @@ mod tests {
                 &vote_state,
                 None,
                 &mut null_tracer(),
+                true,
             )
         );
 
@@ -3527,6 +3553,7 @@ mod tests {
         assert_eq!(
             Some((stake.delegation.stake * 2, 0, 4)),
             calculate_stake_rewards(
+                2,
                 &stake,
                 &PointValue {
                     rewards: 2,
@@ -3535,6 +3562,7 @@ mod tests {
                 &vote_state,
                 None,
                 &mut null_tracer(),
+                true,
             )
         );
 
@@ -3550,6 +3578,7 @@ mod tests {
                 4
             )),
             calculate_stake_rewards(
+                2,
                 &stake,
                 &PointValue {
                     rewards: 4,
@@ -3558,6 +3587,7 @@ mod tests {
                 &vote_state,
                 None,
                 &mut null_tracer(),
+                true,
             )
         );
 
@@ -3567,6 +3597,7 @@ mod tests {
         assert_eq!(
             None, // would be Some((0, 2 * 1 + 1 * 2, 4)),
             calculate_stake_rewards(
+                2,
                 &stake,
                 &PointValue {
                     rewards: 4,
@@ -3575,12 +3606,14 @@ mod tests {
                 &vote_state,
                 None,
                 &mut null_tracer(),
+                true,
             )
         );
         vote_state.commission = 99;
         assert_eq!(
             None, // would be Some((0, 2 * 1 + 1 * 2, 4)),
             calculate_stake_rewards(
+                2,
                 &stake,
                 &PointValue {
                     rewards: 4,
@@ -3589,6 +3622,7 @@ mod tests {
                 &vote_state,
                 None,
                 &mut null_tracer(),
+                true,
             )
         );
 
@@ -3598,6 +3632,7 @@ mod tests {
         assert_eq!(
             Some((0, 0, 4)),
             calculate_stake_rewards(
+                2,
                 &stake,
                 &PointValue {
                     rewards: 0,
@@ -3606,6 +3641,7 @@ mod tests {
                 &vote_state,
                 None,
                 &mut null_tracer(),
+                true,
             )
         );
 
@@ -3615,6 +3651,7 @@ mod tests {
         assert_eq!(
             Some((0, 0, 4)),
             calculate_stake_rewards(
+                2,
                 &stake,
                 &PointValue {
                     rewards: 0,
@@ -3623,6 +3660,7 @@ mod tests {
                 &vote_state,
                 None,
                 &mut null_tracer(),
+                true,
             )
         );
 
@@ -3630,6 +3668,50 @@ mod tests {
         assert_eq!(
             (0, 4),
             calculate_stake_points_and_credits(&stake, &vote_state, None, &mut null_tracer())
+        );
+
+        // get rewards and credits observed when not the activation epoch
+        vote_state.commission = 0;
+        stake.credits_observed = 3;
+        stake.delegation.activation_epoch = 1;
+        assert_eq!(
+            Some((
+                stake.delegation.stake, // epoch 2
+                0,
+                4
+            )),
+            calculate_stake_rewards(
+                2,
+                &stake,
+                &PointValue {
+                    rewards: 1,
+                    points: 1
+                },
+                &vote_state,
+                None,
+                &mut null_tracer(),
+                true,
+            )
+        );
+
+        // credits_observed is moved forward for the stake's activation epoch,
+        // and no rewards are perceived
+        stake.delegation.activation_epoch = 2;
+        stake.credits_observed = 3;
+        assert_eq!(
+            Some((0, 0, 4)),
+            calculate_stake_rewards(
+                2,
+                &stake,
+                &PointValue {
+                    rewards: 1,
+                    points: 1
+                },
+                &vote_state,
+                None,
+                &mut null_tracer(),
+                true,
+            )
         );
     }
 

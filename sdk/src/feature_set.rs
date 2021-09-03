@@ -183,6 +183,10 @@ pub mod close_upgradeable_program_accounts {
     solana_sdk::declare_id!("EQMtCuSAkMVF9ZdhGuABtgvyXJLtSRF5AQKv1RNsrhj7");
 }
 
+pub mod stake_program_advance_activating_credits_observed {
+    solana_sdk::declare_id!("SAdVFw3RZvzbo6DvySbSdBnHN4gkzSTH9dSxesyKKPj");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -229,6 +233,7 @@ lazy_static! {
         (gate_large_block::id(), "validator checks block cost against max limit in realtime, reject if exceeds."),
         (mem_overlap_fix::id(), "Memory overlap fix"),
         (close_upgradeable_program_accounts::id(), "enable closing upgradeable program accounts"),
+        (stake_program_advance_activating_credits_observed::id(), "Enable advancing credits observed for activation epoch #19309"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
