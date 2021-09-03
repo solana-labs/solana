@@ -916,7 +916,7 @@ fn rpc_bootstrap(
                             let maximum_snapshots_to_retain = if let Some(snapshot_config) =
                                 validator_config.snapshot_config.as_ref()
                             {
-                                snapshot_config.maximum_snapshots_to_retain
+                                snapshot_config.maximum_full_snapshot_archives_to_retain
                             } else {
                                 DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN
                             };
@@ -2627,7 +2627,7 @@ pub fn main() {
 
     let snapshot_interval_slots = value_t_or_exit!(matches, "snapshot_interval_slots", u64);
     let maximum_local_snapshot_age = value_t_or_exit!(matches, "maximum_local_snapshot_age", u64);
-    let maximum_snapshots_to_retain =
+    let maximum_full_snapshot_archives_to_retain =
         value_t_or_exit!(matches, "maximum_snapshots_to_retain", usize);
     let minimal_snapshot_download_speed =
         value_t_or_exit!(matches, "minimal_snapshot_download_speed", f32);
@@ -2679,7 +2679,7 @@ pub fn main() {
         snapshot_archives_dir: snapshot_archives_dir.clone(),
         archive_format,
         snapshot_version,
-        maximum_snapshots_to_retain,
+        maximum_full_snapshot_archives_to_retain,
     });
 
     validator_config.accounts_hash_interval_slots =

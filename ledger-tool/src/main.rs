@@ -718,7 +718,7 @@ fn load_bank_forks(
             bank_snapshots_dir,
             archive_format: ArchiveFormat::TarBzip2,
             snapshot_version: SnapshotVersion::default(),
-            maximum_snapshots_to_retain: DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+            maximum_full_snapshot_archives_to_retain: DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
         })
     };
     let account_paths = if let Some(account_paths) = arg_matches.value_of("account_paths") {
