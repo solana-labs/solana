@@ -71,7 +71,7 @@
     "crypto-hash": "^1.2.2",
     "jayson": "^3.4.4",
     "js-sha3": "^0.8.0",
-    "node-fetch": "^2.6.1",
+    "node-fetch": "^3.0.0",
     "rpc-websockets": "^7.4.2",
     "secp256k1": "^4.0.2",
     "superstruct": "^0.14.2",
