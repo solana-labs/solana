@@ -792,7 +792,10 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
             .for_each(|transaction| {
                 num_programs += transaction.message().instructions().len();
 
-                let tx_cost = cost_model.calculate_cost(&transaction);
+                let tx_cost = cost_model.calculate_cost(
+                    &transaction,
+                    true, // demote_program_write_locks
+                );
                 if cost_tracker.try_add(tx_cost).is_err() {
                     println!(
                         "Slot: {}, CostModel rejected transaction {:?}, stats {:?}!",

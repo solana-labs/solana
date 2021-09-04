@@ -24,6 +24,7 @@ use {
         compute_budget::ComputeBudget,
         entrypoint::{ProgramResult, SUCCESS},
         epoch_schedule::EpochSchedule,
+        feature_set::demote_program_write_locks,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
         genesis_config::{ClusterType, GenesisConfig},
         hash::Hash,
@@ -261,12 +262,14 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             }
             panic!("Program id {} wasn't found in account_infos", program_id);
         };
+        let demote_program_write_locks =
+            invoke_context.is_feature_active(&demote_program_write_locks::id());
         // TODO don't have the caller's keyed_accounts so can't validate writer or signer escalation or deescalation yet
         let caller_privileges = message
             .account_keys
             .iter()
             .enumerate()
-            .map(|(i, _)| message.is_writable(i))
+            .map(|(i, _)| message.is_writable(i, demote_program_write_locks))
             .collect::<Vec<bool>>();
 
         stable_log::program_invoke(&logger, &program_id, invoke_context.invoke_depth());
@@ -337,7 +340,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
 
         // Copy writeable account modifications back into the caller's AccountInfos
         for (i, (pubkey, account)) in accounts.iter().enumerate().take(message.account_keys.len()) {
-            if !message.is_writable(i) {
+            if !message.is_writable(i, demote_program_write_locks) {
                 continue;
             }
             for account_info in account_infos {

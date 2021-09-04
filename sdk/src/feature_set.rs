@@ -191,6 +191,10 @@ pub mod stake_program_advance_activating_credits_observed {
     solana_sdk::declare_id!("SAdVFw3RZvzbo6DvySbSdBnHN4gkzSTH9dSxesyKKPj");
 }
 
+pub mod demote_program_write_locks {
+    solana_sdk::declare_id!("3E3jV7v9VcdJL8iYZUMax9DiDno8j7EWUVbhm9RtShj2");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -234,6 +238,7 @@ lazy_static! {
         (instructions_sysvar_owned_by_sysvar::id(), "fix owner for instructions sysvar"),
         (close_upgradeable_program_accounts::id(), "enable closing upgradeable program accounts"),
         (stake_program_advance_activating_credits_observed::id(), "Enable advancing credits observed for activation epoch #19309"),
+        (demote_program_write_locks::id(), "demote program write locks to readonly #19593"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

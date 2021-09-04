@@ -4,7 +4,7 @@ use {
         pubkey::Pubkey,
         sysvar,
     },
-    std::collections::HashSet,
+    std::{collections::HashSet, convert::TryFrom},
 };
 
 /// Combination of a version #0 message and its mapped addresses
@@ -96,20 +96,32 @@ impl MappedMessage {
     }
 
     /// Returns true if the account at the specified index was loaded as writable
-    pub fn is_writable(&self, key_index: usize) -> bool {
+    pub fn is_writable(&self, key_index: usize, demote_program_write_locks: bool) -> bool {
         if self.is_writable_index(key_index) {
             if let Some(key) = self.get_account_key(key_index) {
-                return !(sysvar::is_sysvar_id(key) || BUILTIN_PROGRAMS_KEYS.contains(key));
+                return !(sysvar::is_sysvar_id(key) || BUILTIN_PROGRAMS_KEYS.contains(key)
+                    || (demote_program_write_locks && self.is_key_called_as_program(key_index)));
             }
         }
         false
+    }
+
+    /// Returns true if the account at the specified index is called as a program by an instruction
+    pub fn is_key_called_as_program(&self, key_index: usize) -> bool {
+        if let Ok(key_index) = u8::try_from(key_index) {
+            self.message.instructions
+                .iter()
+                .any(|ix| ix.program_id_index == key_index)
+        } else {
+            false
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{message::MessageHeader, system_program, sysvar};
+    use crate::{instruction::CompiledInstruction, message::MessageHeader, system_program, sysvar};
     use itertools::Itertools;
 
     fn create_test_mapped_message() -> (MappedMessage, [Pubkey; 6]) {
@@ -236,10 +248,42 @@ mod tests {
 
         mapped_msg.message.account_keys[0] = sysvar::clock::id();
         assert!(mapped_msg.is_writable_index(0));
-        assert!(!mapped_msg.is_writable(0));
+        assert!(!mapped_msg.is_writable(0, /*demote_program_write_locks=*/ true));
 
         mapped_msg.message.account_keys[0] = system_program::id();
         assert!(mapped_msg.is_writable_index(0));
-        assert!(!mapped_msg.is_writable(0));
+        assert!(!mapped_msg.is_writable(0, /*demote_program_write_locks=*/ true));
+    }
+
+    #[test]
+    fn test_demote_writable_program() {
+        let key0 = Pubkey::new_unique();
+        let key1 = Pubkey::new_unique();
+        let key2 = Pubkey::new_unique();
+        let mapped_msg = MappedMessage {
+            message: v0::Message {
+                header: MessageHeader {
+                    num_required_signatures: 1,
+                    num_readonly_signed_accounts: 0,
+                    num_readonly_unsigned_accounts: 0,
+                },
+                account_keys: vec![key0],
+                instructions: vec![
+                    CompiledInstruction {
+                        program_id_index: 2,
+                        accounts: vec![1],
+                        data: vec![],
+                    }
+                ],
+                ..v0::Message::default()
+            },
+            mapped_addresses: MappedAddresses {
+                writable: vec![key1, key2],
+                readonly: vec![],
+            },
+        };
+
+        assert!(mapped_msg.is_writable_index(2));
+        assert!(!mapped_msg.is_writable(2, /*demote_program_write_locks=*/ true));
     }
 }

@@ -1049,6 +1049,7 @@ impl BankingStage {
         libsecp256k1_fail_on_bad_count: bool,
         cost_tracker: &Arc<RwLock<CostTracker>>,
         banking_stage_stats: &BankingStageStats,
+        demote_program_write_locks: bool,
     ) -> (Vec<SanitizedTransaction>, Vec<usize>, Vec<usize>) {
         let mut retryable_transaction_packet_indexes: Vec<usize> = vec![];
 
@@ -1082,7 +1083,8 @@ impl BankingStage {
             verified_transactions_with_packet_indexes
                 .into_iter()
                 .filter_map(|(tx, tx_index)| {
-                    let result = cost_tracker_readonly.would_transaction_fit(&tx);
+                    let result = cost_tracker_readonly
+                        .would_transaction_fit(&tx, demote_program_write_locks);
                     if result.is_err() {
                         debug!("transaction {:?} would exceed limit: {:?}", tx, result);
                         retryable_transaction_packet_indexes.push(tx_index);
@@ -1165,6 +1167,7 @@ impl BankingStage {
                 bank.libsecp256k1_fail_on_bad_count(),
                 cost_tracker,
                 banking_stage_stats,
+                bank.demote_program_write_locks(),
             );
         packet_conversion_time.stop();
         inc_new_counter_info!("banking_stage-packet_conversion", 1);
@@ -1201,7 +1204,10 @@ impl BankingStage {
         let mut cost_tracking_time = Measure::start("cost_tracking_time");
         transactions.iter().enumerate().for_each(|(index, tx)| {
             if unprocessed_tx_indexes.iter().all(|&i| i != index) {
-                cost_tracker.write().unwrap().add_transaction_cost(tx);
+                cost_tracker
+                    .write()
+                    .unwrap()
+                    .add_transaction_cost(tx, bank.demote_program_write_locks());
             }
         });
         cost_tracking_time.stop();
@@ -1268,6 +1274,7 @@ impl BankingStage {
                 bank.libsecp256k1_fail_on_bad_count(),
                 cost_tracker,
                 banking_stage_stats,
+                bank.demote_program_write_locks(),
             );
         unprocessed_packet_conversion_time.stop();
 
