@@ -9,7 +9,7 @@ features on popular wallets, and we do our best to keep our documents up to date
 with the latest available features.
 
 If you have questions after reading the docs, feel free to reach out to us on
-our [Telegram](https://t.me/solanaio).
+our [Telegram](https://t.me/solana).
 
 For **technical support**, reach out to us on
 [Discord](https://discordapp.com/invite/pquxPsq), using the #wallet-support
