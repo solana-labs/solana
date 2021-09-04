@@ -26,7 +26,7 @@ use std::{
         atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering},
         Arc, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard,
     },
-    thread::{Builder, JoinHandle},
+    thread::JoinHandle,
 };
 use thiserror::Error;
 
@@ -880,24 +880,21 @@ impl<T: IsCached> AccountsIndex<T> {
 
         // create this early to verify # bins is reasonable
         let bin_calculator = PubkeyBinCalculator16::new(bins);
-        let exit = Arc::new(AtomicBool::new(false));
-        let exit_ = exit.clone();
         let bucket_map = InMemAccountsIndex::new_bucket_map(bins);
-        let bucket_map_ = bucket_map.clone();
-        let flusher = Some(
-            Builder::new()
-                .name("solana-index-flusher".to_string())
-                .spawn(move || {
-                    bucket_map_.bg_flusher(exit_);
-                })
-                .unwrap(),
-        );
-
+        
         let account_maps = (0..bins)
             .into_iter()
             .map(|bin| RwLock::new(AccountMap::new(&bucket_map, bin, bins)))
             .collect::<Vec<_>>();
+        let (exit, flusher) = Self::create_bg_flusher(&account_maps, false);
         (account_maps, bin_calculator, exit, flusher)
+    }
+
+    pub fn create_bg_flusher(maps: &LockMapType<T>, exit_when_idle: bool) -> (Arc<AtomicBool>, Option<JoinHandle<()>>) {
+        if let Some(map) = maps.first() {
+            return map.read().unwrap().create_bg_flusher(exit_when_idle);
+        }
+        (Arc::default(), None)
     }
 
     fn iter<R>(&self, range: Option<&R>, collect_all_unsorted: bool) -> AccountsIndexIterator<T>

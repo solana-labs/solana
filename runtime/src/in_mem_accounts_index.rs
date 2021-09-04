@@ -8,7 +8,9 @@ use solana_sdk::clock::Slot;
 use solana_sdk::pubkey::Pubkey;
 use std::fmt::Debug;
 use std::ops::{Range, RangeBounds};
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::thread::{Builder, JoinHandle};
 
 pub type V2<T> = AccountMapEntry<T>;
 pub type SlotT<T> = (Slot, T);
@@ -65,6 +67,21 @@ impl<V: IsCached> InMemAccountsIndex<V> {
     pub fn new_bucket_map(bins: usize) -> Arc<BucketMapHolder<V>> {
         let buckets = PubkeyBinCalculator16::log_2(bins as u32) as u8;
         Arc::new(BucketMapHolder::new(BucketMap::new_buckets(buckets)))
+    }
+
+    pub fn create_bg_flusher(&self, exit_when_idle: bool) -> (Arc<AtomicBool>, Option<JoinHandle<()>>) {
+        let bucket_map_ = self.disk.clone();
+        let exit = Arc::new(AtomicBool::new(false));
+        let exit_ = exit.clone();
+        let flusher = Some(
+            Builder::new()
+                .name("solana-index-flusher".to_string())
+                .spawn(move || {
+                    bucket_map_.bg_flusher(exit_, exit_when_idle);
+                })
+                .unwrap(),
+        );
+        (exit, flusher)
     }
 
     /*

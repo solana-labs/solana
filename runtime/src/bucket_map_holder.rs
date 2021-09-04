@@ -199,7 +199,7 @@ impl<V: IsCached> BucketMapHolder<V> {
         age.wrapping_add(inc)
     }
 
-    pub fn bg_flusher(&self, exit: Arc<AtomicBool>) {
+    pub fn bg_flusher(&self, exit: Arc<AtomicBool>, exit_when_idle: bool) {
         let mut found_one = false;
         let mut aging = Instant::now();
         let mut current_age: u8 = 0;
@@ -212,7 +212,7 @@ impl<V: IsCached> BucketMapHolder<V> {
         loop {
             maybe_report();
             let mut age = None;
-            if !self.in_mem_only && aging.elapsed().as_millis() as usize > AGE_MS {
+            if !exit_when_idle && !self.in_mem_only && aging.elapsed().as_millis() as usize > AGE_MS {
                 // increment age to get rid of some older things in cache
                 current_age = Self::add_age(current_age, 1);
                 self.current_age.store(current_age, Ordering::Relaxed);
@@ -222,8 +222,13 @@ impl<V: IsCached> BucketMapHolder<V> {
             if exit.load(Ordering::Relaxed) {
                 break;
             }
-            if age.is_none() && !found_one && self.wait.wait_timeout(Duration::from_millis(500)) {
-                continue;
+            if age.is_none() && !found_one {
+                if exit_when_idle && !self.startup.load(Ordering::Relaxed) {
+                    break;
+                }
+                if self.wait.wait_timeout(Duration::from_millis(200)) {
+                    continue;
+                }
             }
             self.stats.bg_flush_cycles.fetch_add(1, Ordering::Relaxed);
             found_one = false;
@@ -397,7 +402,7 @@ impl<V: IsCached> BucketMapHolder<V> {
                         if lookup {
                             v.set_must_do_lookup_from_disk(false);
                         }
-                        let mut keep_this_in_cache = Self::in_cache(&v.slot_list.read().unwrap());
+                        let keep_this_in_cache = Self::in_cache(&v.slot_list.read().unwrap());
                         if keep_this_in_cache {
                             v.set_age(next_age); // keep newly updated stuff around
                         }
