@@ -36,11 +36,11 @@ type CacheWriteLock<'a, T> = RwLockWriteGuard<'a, WriteCache<V2<T>>>;
 pub const AGE_MS: usize = 400; // # of ms for age to advance by 1
 
 // When something is intending to remain in the cache for a while, then:WriteCacheEntryArc
-//  add current age + DEFAULT_AGE to specify when this item should be thrown out of the cache.
-//  Example: setting DEFAULT_AGE to 10 would specify that a new entry in the cache would remain for
+//  add current age + DEFAULT_AGE_INCREMENT to specify when this item should be thrown out of the cache.
+//  Example: setting DEFAULT_AGE_INCREMENT to 10 would specify that a new entry in the cache would remain for
 //   10 * 400ms = ~4s.
 //  Note that if the bg flusher thread is too busy, the reporting will not be on time.
-pub const DEFAULT_AGE: u8 = 25;
+pub const DEFAULT_AGE_INCREMENT: u8 = 25;
 pub const VERIFY_GET_ON_INSERT: bool = false;
 pub const TRY_READ_LOCKS_FIRST: bool = true;
 
@@ -306,7 +306,7 @@ impl<V: IsCached> BucketMapHolder<V> {
         let startup = self.startup.load(Ordering::Relaxed);
 
         let (age_comp, do_age, next_age) = age
-            .map(|age| (age, true, Self::add_age(age, DEFAULT_AGE)))
+            .map(|age| (age, true, Self::add_age(age, DEFAULT_AGE_INCREMENT)))
             .unwrap_or((0, false, 0));
         self.stats
             .bucket_flush_calls
@@ -904,8 +904,13 @@ impl<V: IsCached> BucketMapHolder<V> {
     }
 
     fn set_age_to_future(&self) -> u8 {
+        let add_age = if self.startup.load(Ordering::Relaxed) {
+            1
+        } else {
+            DEFAULT_AGE_INCREMENT
+        };
         let current_age = self.current_age.load(Ordering::Relaxed);
-        Self::add_age(current_age, DEFAULT_AGE)
+        Self::add_age(current_age, add_age)
     }
 
     fn maybe_merge_disk_into_cache<F>(
