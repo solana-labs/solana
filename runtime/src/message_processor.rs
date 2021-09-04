@@ -9,7 +9,8 @@ use solana_sdk::{
     account_utils::StateMut,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     feature_set::{
-        instructions_sysvar_enabled, neon_evm_compute_budget, updated_verify_policy, FeatureSet,
+        demote_program_write_locks, instructions_sysvar_enabled, neon_evm_compute_budget,
+        updated_verify_policy, FeatureSet,
     },
     ic_logger_msg, ic_msg,
     instruction::{CompiledInstruction, Instruction, InstructionError},
@@ -300,6 +301,7 @@ impl<'a> ThisInvokeContext<'a> {
             instruction,
             executable_accounts,
             accounts,
+            feature_set.is_active(&demote_program_write_locks::id()),
         );
         let mut invoke_context = Self {
             invoke_stack: Vec::with_capacity(bpf_compute_budget.max_invoke_depth),
@@ -611,6 +613,7 @@ impl MessageProcessor {
         instruction: &'a CompiledInstruction,
         executable_accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
         accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        demote_program_write_locks: bool,
     ) -> Vec<(bool, bool, &'a Pubkey, &'a RefCell<AccountSharedData>)> {
         executable_accounts
             .iter()
@@ -619,7 +622,7 @@ impl MessageProcessor {
                 let index = *index as usize;
                 (
                     message.is_signer(index),
-                    message.is_writable(index),
+                    message.is_writable(index, demote_program_write_locks),
                     &accounts[index].0,
                     &accounts[index].1 as &RefCell<AccountSharedData>,
                 )
@@ -864,6 +867,8 @@ impl MessageProcessor {
 
         {
             let invoke_context = invoke_context.borrow();
+            let demote_program_write_locks =
+                invoke_context.is_feature_active(&demote_program_write_locks::id());
             let keyed_accounts = invoke_context.get_keyed_accounts()?;
             for (src_keyed_account_index, ((_key, account), dst_keyed_account_index)) in accounts
                 .iter()
@@ -872,7 +877,9 @@ impl MessageProcessor {
             {
                 let dst_keyed_account = &keyed_accounts[dst_keyed_account_index];
                 let src_keyed_account = account.borrow();
-                if message.is_writable(src_keyed_account_index) && !src_keyed_account.executable() {
+                if message.is_writable(src_keyed_account_index, demote_program_write_locks)
+                    && !src_keyed_account.executable()
+                {
                     if dst_keyed_account.data_len()? != src_keyed_account.data().len()
                         && dst_keyed_account.data_len()? != 0
                     {
@@ -916,8 +923,15 @@ impl MessageProcessor {
             invoke_context.verify_and_update(instruction, accounts, caller_write_privileges)?;
 
             // Construct keyed accounts
-            let keyed_accounts =
-                Self::create_keyed_accounts(message, instruction, executable_accounts, accounts);
+            let demote_program_write_locks =
+                invoke_context.is_feature_active(&demote_program_write_locks::id());
+            let keyed_accounts = Self::create_keyed_accounts(
+                message,
+                instruction,
+                executable_accounts,
+                accounts,
+                demote_program_write_locks,
+            );
 
             // Invoke callee
             invoke_context.push(program_id, &keyed_accounts)?;
@@ -935,7 +949,7 @@ impl MessageProcessor {
             if result.is_ok() {
                 // Verify the called program has not misbehaved
                 let write_privileges: Vec<bool> = (0..message.account_keys.len())
-                    .map(|i| message.is_writable(i))
+                    .map(|i| message.is_writable(i, demote_program_write_locks))
                     .collect();
                 result = invoke_context.verify_and_update(instruction, accounts, &write_privileges);
             }
@@ -984,6 +998,7 @@ impl MessageProcessor {
     }
 
     /// Verify the results of an instruction
+    #[allow(clippy::too_many_arguments)]
     pub fn verify(
         message: &Message,
         instruction: &CompiledInstruction,
@@ -994,6 +1009,7 @@ impl MessageProcessor {
         timings: &mut ExecuteDetailsTimings,
         logger: Rc<RefCell<dyn Logger>>,
         updated_verify_policy: bool,
+        demote_program_write_locks: bool,
     ) -> Result<(), InstructionError> {
         // Verify all executable accounts have zero outstanding refs
         Self::verify_account_references(executable_accounts)?;
@@ -1014,7 +1030,7 @@ impl MessageProcessor {
                 pre_accounts[unique_index]
                     .verify(
                         program_id,
-                        message.is_writable(account_index),
+                        message.is_writable(account_index, demote_program_write_locks),
                         rent,
                         &account,
                         timings,
@@ -1183,6 +1199,7 @@ impl MessageProcessor {
             timings,
             invoke_context.get_logger(),
             invoke_context.is_feature_active(&updated_verify_policy::id()),
+            invoke_context.is_feature_active(&demote_program_write_locks::id()),
         )?;
 
         timings.accumulate(&invoke_context.timings);
@@ -1338,7 +1355,7 @@ mod tests {
                 ))),
             ));
             let write_privileges: Vec<bool> = (0..message.account_keys.len())
-                .map(|i| message.is_writable(i))
+                .map(|i| message.is_writable(i, /*demote_program_write_locks=*/ true))
                 .collect();
             invoke_context
                 .verify_and_update(&message.instructions[0], &these_accounts, &write_privileges)
@@ -2234,6 +2251,8 @@ mod tests {
             metas.clone(),
         );
         let message = Message::new(&[instruction], None);
+        let feature_set = FeatureSet::all_enabled();
+        let demote_program_write_locks = feature_set.is_active(&demote_program_write_locks::id());
 
         let ancestors = Ancestors::default();
         let mut invoke_context = ThisInvokeContext::new(
@@ -2258,7 +2277,7 @@ mod tests {
             .account_keys
             .iter()
             .enumerate()
-            .map(|(i, _)| message.is_writable(i))
+            .map(|(i, _)| message.is_writable(i, demote_program_write_locks))
             .collect::<Vec<bool>>();
         accounts[0].1.borrow_mut().data_as_mut_slice()[0] = 1;
         assert_eq!(
@@ -2313,7 +2332,7 @@ mod tests {
                 .account_keys
                 .iter()
                 .enumerate()
-                .map(|(i, _)| message.is_writable(i))
+                .map(|(i, _)| message.is_writable(i, demote_program_write_locks))
                 .collect::<Vec<bool>>();
             assert_eq!(
                 MessageProcessor::process_cross_program_instruction(
