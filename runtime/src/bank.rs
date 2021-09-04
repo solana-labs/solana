@@ -2468,11 +2468,6 @@ impl Bank {
         tick_height % self.ticks_per_slot == 0
     }
 
-    pub fn demote_sysvar_write_locks(&self) -> bool {
-        self.feature_set
-            .is_active(&feature_set::demote_sysvar_write_locks::id())
-    }
-
     pub fn prepare_batch<'a, 'b>(
         &'a self,
         txs: impl Iterator<Item = &'b Transaction>,
@@ -2480,9 +2475,9 @@ impl Bank {
         let hashed_txs: Vec<HashedTransaction> = txs.map(HashedTransaction::from).collect();
         let lock_results = self.rc.accounts.lock_accounts(
             hashed_txs.as_transactions_iter(),
-            self.demote_sysvar_write_locks(),
+            self.demote_program_write_locks(),
         );
-        TransactionBatch::new(lock_results, &self, Cow::Owned(hashed_txs))
+        TransactionBatch::new(lock_results, self, Cow::Owned(hashed_txs))
     }
 
     pub fn prepare_hashed_batch<'a, 'b>(
@@ -2491,9 +2486,9 @@ impl Bank {
     ) -> TransactionBatch<'a, 'b> {
         let lock_results = self.rc.accounts.lock_accounts(
             hashed_txs.as_transactions_iter(),
-            self.demote_sysvar_write_locks(),
+            self.demote_program_write_locks(),
         );
-        TransactionBatch::new(lock_results, &self, Cow::Borrowed(hashed_txs))
+        TransactionBatch::new(lock_results, self, Cow::Borrowed(hashed_txs))
     }
 
     pub(crate) fn prepare_simulation_batch<'a, 'b>(
@@ -2563,7 +2558,7 @@ impl Bank {
             self.rc.accounts.unlock_accounts(
                 batch.transactions_iter(),
                 batch.lock_results(),
-                self.demote_sysvar_write_locks(),
+                self.demote_program_write_locks(),
             )
         }
     }
@@ -3303,8 +3298,8 @@ impl Bank {
             &self.rent_collector,
             &self.last_blockhash_with_fee_calculator(),
             self.fix_recent_blockhashes_sysvar_delay(),
-            self.demote_sysvar_write_locks(),
             self.merge_nonce_error_into_system_error(),
+            self.demote_program_write_locks(),
         );
         let rent_debits = self.collect_rent(executed, loaded_accounts);
 
@@ -4851,6 +4846,11 @@ impl Bank {
     pub fn merge_nonce_error_into_system_error(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::merge_nonce_error_into_system_error::id())
+    }
+
+    pub fn demote_program_write_locks(&self) -> bool {
+        self.feature_set
+            .is_active(&feature_set::demote_program_write_locks::id())
     }
 
     // Check if the wallclock time from bank creation to now has exceeded the allotted
@@ -7502,13 +7502,14 @@ pub(crate) mod tests {
         assert_eq!(bank.get_balance(&sysvar_pubkey), 1);
 
         bank.transfer(500, &mint_keypair, &normal_pubkey).unwrap();
-        bank.transfer(500, &mint_keypair, &sysvar_pubkey).unwrap();
+        bank.transfer(500, &mint_keypair, &sysvar_pubkey)
+            .unwrap_err();
         assert_eq!(bank.get_balance(&normal_pubkey), 500);
-        assert_eq!(bank.get_balance(&sysvar_pubkey), 501);
+        assert_eq!(bank.get_balance(&sysvar_pubkey), 1);
 
         let bank = Arc::new(new_from_parent(&bank));
         assert_eq!(bank.get_balance(&normal_pubkey), 500);
-        assert_eq!(bank.get_balance(&sysvar_pubkey), 501);
+        assert_eq!(bank.get_balance(&sysvar_pubkey), 1);
     }
 
     #[test]
