@@ -2267,7 +2267,7 @@ mod tests {
             BpfComputeBudget::default(),
             Rc::new(RefCell::new(Executors::default())),
             None,
-            Arc::new(FeatureSet::all_enabled()),
+            Arc::new(feature_set),
             Arc::new(Accounts::default()),
             &ancestors,
         );
