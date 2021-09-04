@@ -252,7 +252,11 @@ pub fn download_snapshot<'a, 'b>(
     maximum_snapshots_to_retain: usize,
     progress_notify_callback: &'a mut DownloadProgressCallbackOption<'b>,
 ) -> Result<(), String> {
-    snapshot_utils::purge_old_snapshot_archives(snapshot_archives_dir, maximum_snapshots_to_retain);
+    snapshot_utils::purge_old_snapshot_archives(
+        snapshot_archives_dir,
+        maximum_snapshots_to_retain,
+        snapshot_utils::DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+    );
 
     for compression in &[
         ArchiveFormat::TarZstd,
