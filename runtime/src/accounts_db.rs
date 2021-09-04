@@ -85,6 +85,20 @@ pub const DEFAULT_FILE_SIZE: u64 = PAGE_SIZE * 1024;
 pub const DEFAULT_NUM_THREADS: u32 = 8;
 pub const DEFAULT_NUM_DIRS: u32 = 4;
 
+// When calculating hashes, it is helpful to break the pubkeys found into bins based on the pubkey value.
+// More bins means smaller vectors to sort, copy, etc.
+pub const PUBKEY_BINS_FOR_CALCULATING_HASHES: usize = 65536;
+pub const NUM_SCAN_PASSES: usize = 2;
+pub const BINS_PER_PASS: usize = 32768; // PUBKEY_BINS_FOR_CALCULATING_HASHES / NUM_SCAN_PASSES
+
+// Without chunks, we end up with 1 output vec for each outer snapshot storage.
+// This results in too many vectors to be efficient.
+// Chunks when scanning storages to calculate hashes.
+// If this is too big, we don't get enough parallelism of scanning storages.
+// If this is too small, then we produce too many output vectors to iterate.
+// Metrics indicate a sweet spot in the 2.5k-5k range for mnb.
+const MAX_ITEMS_PER_CHUNK: Slot = 5_000;
+
 // A specially reserved storage id just for entries in the cache, so that
 // operations that take a storage entry can maintain a common interface
 // when interacting with cached accounts. This id is "virtual" in that it
@@ -4883,9 +4897,6 @@ impl AccountsDb {
         B: Send + Default,
         C: Send + Default,
     {
-        // Without chunks, we end up with 1 output vec for each outer snapshot storage.
-        // This results in too many vectors to be efficient.
-        const MAX_ITEMS_PER_CHUNK: Slot = 5_000;
         let chunks = 1 + (snapshot_storages.range_width() as Slot / MAX_ITEMS_PER_CHUNK);
         (0..chunks)
             .into_par_iter()
@@ -5188,10 +5199,6 @@ impl AccountsDb {
         )>,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         let mut scan_and_hash = move || {
-            // When calculating hashes, it is helpful to break the pubkeys found into bins based on the pubkey value.
-            // More bins means smaller vectors to sort, copy, etc.
-            const PUBKEY_BINS_FOR_CALCULATING_HASHES: usize = 65536;
-
             // # of passes should be a function of the total # of accounts that are active.
             // higher passes = slower total time, lower dynamic memory usage
             // lower passes = faster total time, higher dynamic memory usage
@@ -6883,13 +6890,12 @@ pub mod tests {
     fn test_accountsdb_scan_snapshot_stores_2nd_chunk() {
         // enough stores to get to 2nd chunk
         let bins = 1;
-        const MAX_ITEMS_PER_CHUNK: usize = 5_000;
         let slot = MAX_ITEMS_PER_CHUNK as Slot;
         let (storages, raw_expected) = sample_storages_and_account_in_slot(slot);
         let storage_data = vec![(&storages[0], slot)];
 
         let sorted_storages =
-            SortedStorages::new_debug(&storage_data[..], 0, MAX_ITEMS_PER_CHUNK + 1);
+            SortedStorages::new_debug(&storage_data[..], 0, MAX_ITEMS_PER_CHUNK as usize + 1);
 
         let mut stats = HashStats::default();
         let result = AccountsDb::scan_snapshot_stores(
@@ -6999,13 +7005,12 @@ pub mod tests {
         // enough stores to get to 2nd chunk
         // range is for only 1 bin out of 256.
         let bins = 256;
-        const MAX_ITEMS_PER_CHUNK: usize = 5_000;
         let slot = MAX_ITEMS_PER_CHUNK as Slot;
         let (storages, raw_expected) = sample_storages_and_account_in_slot(slot);
         let storage_data = vec![(&storages[0], slot)];
 
         let sorted_storages =
-            SortedStorages::new_debug(&storage_data[..], 0, MAX_ITEMS_PER_CHUNK + 1);
+            SortedStorages::new_debug(&storage_data[..], 0, MAX_ITEMS_PER_CHUNK as usize + 1);
 
         let mut stats = HashStats::default();
         let result = AccountsDb::scan_snapshot_stores(
