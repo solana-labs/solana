@@ -174,9 +174,7 @@ impl PohRecorderBank {
 
     pub fn working_bank_start(&self) -> Option<&BankStart> {
         match self {
-            PohRecorderBank::WorkingBank(bank_start) => {
-                Some(&bank_start)
-            },
+            PohRecorderBank::WorkingBank(bank_start) => Some(&bank_start),
             PohRecorderBank::LastResetBank(_last_reset_bank) => None,
         }
     }
@@ -755,13 +753,15 @@ impl PohRecorder {
         if let Some(bank_start) = bank_start {
             PohRecorderBank::WorkingBank(bank_start)
         } else {
-            PohRecorderBank::LastResetBank(self.last_reset_bank.clone())
+            PohRecorderBank::LastResetBank(self.start_bank.clone())
         }
     }
 
     // Filters the return result of PohRecorder::bank_start(), returns the bank
     // if it's still processing transactions
-    pub fn get_working_bank_if_not_expired<'a, 'b>(bank_start: &'b Option<&'a BankStart>) -> Option<&'a Arc<Bank>> {
+    pub fn get_working_bank_if_not_expired<'a, 'b>(
+        bank_start: &'b Option<&'a BankStart>,
+    ) -> Option<&'a Arc<Bank>> {
         bank_start
             .as_ref()
             .and_then(|bank_start| bank_start.get_working_bank_if_not_expired())
