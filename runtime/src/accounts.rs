@@ -172,15 +172,9 @@ impl Accounts {
 
     fn construct_instructions_account(
         message: &Message,
-<<<<<<< HEAD
-        demote_sysvar_write_locks: bool,
-    ) -> AccountSharedData {
-        let mut data = message.serialize_instructions(demote_sysvar_write_locks);
-=======
         demote_program_write_locks: bool,
     ) -> AccountSharedData {
         let mut data = message.serialize_instructions(demote_program_write_locks);
->>>>>>> fcda5d4a7 (Demote write locks on transaction program ids (backport #19593) (#19633))
         // add room for current instruction index.
         data.resize(data.len() + 2, 0);
         AccountSharedData::from(Account {
@@ -209,15 +203,9 @@ impl Accounts {
             let mut tx_rent: TransactionRent = 0;
             let mut accounts = Vec::with_capacity(message.account_keys.len());
             let mut account_deps = Vec::with_capacity(message.account_keys.len());
-            let demote_sysvar_write_locks =
-                feature_set.is_active(&feature_set::demote_sysvar_write_locks::id());
             let mut rent_debits = RentDebits::default();
-<<<<<<< HEAD
-=======
-            let rent_for_sysvars = feature_set.is_active(&feature_set::rent_for_sysvars::id());
             let demote_program_write_locks =
                 feature_set.is_active(&feature_set::demote_program_write_locks::id());
->>>>>>> fcda5d4a7 (Demote write locks on transaction program ids (backport #19593) (#19633))
 
             for (i, key) in message.account_keys.iter().enumerate() {
                 let account = if message.is_non_loader_key(key, i) {
@@ -228,34 +216,18 @@ impl Accounts {
                     if solana_sdk::sysvar::instructions::check_id(key)
                         && feature_set.is_active(&feature_set::instructions_sysvar_enabled::id())
                     {
-<<<<<<< HEAD
-                        if message.is_writable(i, demote_sysvar_write_locks) {
-                            return Err(TransactionError::InvalidAccountIndex);
-                        }
-                        Self::construct_instructions_account(message, demote_sysvar_write_locks)
-=======
                         if message.is_writable(i, demote_program_write_locks) {
                             return Err(TransactionError::InvalidAccountIndex);
                         }
                         Self::construct_instructions_account(message, demote_program_write_locks)
->>>>>>> fcda5d4a7 (Demote write locks on transaction program ids (backport #19593) (#19633))
                     } else {
                         let (account, rent) = self
                             .accounts_db
                             .load(ancestors, key)
                             .map(|(mut account, _)| {
-<<<<<<< HEAD
-                                if message.is_writable(i, demote_sysvar_write_locks) {
+                                if message.is_writable(i, demote_program_write_locks) {
                                     let rent_due = rent_collector
                                         .collect_from_existing_account(&key, &mut account);
-=======
-                                if message.is_writable(i, demote_program_write_locks) {
-                                    let rent_due = rent_collector.collect_from_existing_account(
-                                        key,
-                                        &mut account,
-                                        rent_for_sysvars,
-                                    );
->>>>>>> fcda5d4a7 (Demote write locks on transaction program ids (backport #19593) (#19633))
                                     (account, rent_due)
                                 } else {
                                     (account, 0)
@@ -804,7 +776,7 @@ impl Accounts {
         tx: &Transaction,
         result: &Result<()>,
         locks: &mut AccountLocks,
-        demote_sysvar_write_locks: bool,
+        demote_program_write_locks: bool,
     ) {
         match result {
             Err(TransactionError::AccountInUse) => (),
@@ -813,7 +785,7 @@ impl Accounts {
             _ => {
                 let (writable_keys, readonly_keys) = &tx
                     .message()
-                    .get_account_keys_by_lock_type(demote_sysvar_write_locks);
+                    .get_account_keys_by_lock_type(demote_program_write_locks);
                 for k in writable_keys {
                     locks.unlock_write(k);
                 }
@@ -842,18 +814,10 @@ impl Accounts {
     /// This function will prevent multiple threads from modifying the same account state at the
     /// same time
     #[must_use]
-<<<<<<< HEAD
-    pub fn lock_accounts<'a>(
-        &self,
-        txs: impl Iterator<Item = &'a Transaction>,
-        demote_sysvar_write_locks: bool,
-=======
-    #[allow(clippy::needless_collect)]
     pub fn lock_accounts<'a>(
         &self,
         txs: impl Iterator<Item = &'a Transaction>,
         demote_program_write_locks: bool,
->>>>>>> fcda5d4a7 (Demote write locks on transaction program ids (backport #19593) (#19633))
     ) -> Vec<Result<()>> {
         use solana_sdk::sanitize::Sanitize;
         let keys: Vec<Result<_>> = txs
@@ -866,11 +830,7 @@ impl Accounts {
 
                 Ok(tx
                     .message()
-<<<<<<< HEAD
-                    .get_account_keys_by_lock_type(demote_sysvar_write_locks))
-=======
                     .get_account_keys_by_lock_type(demote_program_write_locks))
->>>>>>> fcda5d4a7 (Demote write locks on transaction program ids (backport #19593) (#19633))
             })
             .collect();
         let mut account_locks = &mut self.account_locks.lock().unwrap();
@@ -889,25 +849,8 @@ impl Accounts {
         &self,
         txs: impl Iterator<Item = &'a Transaction>,
         results: &[Result<()>],
-<<<<<<< HEAD
-        demote_sysvar_write_locks: bool,
-    ) {
-=======
         demote_program_write_locks: bool,
     ) {
-        let keys: Vec<_> = txs
-            .zip(results)
-            .filter_map(|(tx, res)| match res {
-                Err(TransactionError::AccountInUse) => None,
-                Err(TransactionError::SanitizeFailure) => None,
-                Err(TransactionError::AccountLoadedTwice) => None,
-                _ => Some(
-                    tx.message
-                        .get_account_keys_by_lock_type(demote_program_write_locks),
-                ),
-            })
-            .collect();
->>>>>>> fcda5d4a7 (Demote write locks on transaction program ids (backport #19593) (#19633))
         let mut account_locks = self.account_locks.lock().unwrap();
         debug!("bank unlock accounts");
         for (tx, lock_result) in txs.zip(results) {
@@ -915,7 +858,7 @@ impl Accounts {
                 tx,
                 lock_result,
                 &mut account_locks,
-                demote_sysvar_write_locks,
+                demote_program_write_locks,
             );
         }
     }
@@ -932,7 +875,6 @@ impl Accounts {
         rent_collector: &RentCollector,
         last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
         fix_recent_blockhashes_sysvar_delay: bool,
-        demote_sysvar_write_locks: bool,
         merge_nonce_error_into_system_error: bool,
         demote_program_write_locks: bool,
     ) {
@@ -943,7 +885,6 @@ impl Accounts {
             rent_collector,
             last_blockhash_with_fee_calculator,
             fix_recent_blockhashes_sysvar_delay,
-            demote_sysvar_write_locks,
             merge_nonce_error_into_system_error,
             demote_program_write_locks,
         );
@@ -970,7 +911,6 @@ impl Accounts {
         rent_collector: &RentCollector,
         last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
         fix_recent_blockhashes_sysvar_delay: bool,
-        demote_sysvar_write_locks: bool,
         merge_nonce_error_into_system_error: bool,
         demote_program_write_locks: bool,
     ) -> Vec<(&'a Pubkey, &'a AccountSharedData)> {
@@ -1025,11 +965,7 @@ impl Accounts {
                     fee_payer_index = Some(i);
                 }
                 let is_fee_payer = Some(i) == fee_payer_index;
-<<<<<<< HEAD
-                if message.is_writable(i, demote_sysvar_write_locks)
-=======
                 if message.is_writable(i, demote_program_write_locks)
->>>>>>> fcda5d4a7 (Demote write locks on transaction program ids (backport #19593) (#19633))
                     && (res.is_ok()
                         || (maybe_nonce_rollback.is_some() && (is_nonce_account || is_fee_payer)))
                 {
@@ -1801,14 +1737,7 @@ mod tests {
             instructions,
         );
         let tx = Transaction::new(&[&keypair0], message, Hash::default());
-<<<<<<< HEAD
-        let results0 = accounts.lock_accounts(
-            [tx.clone()].iter(),
-            true, // demote_sysvar_write_locks
-        );
-=======
         let results0 = accounts.lock_accounts([tx.clone()].iter(), demote_program_write_locks);
->>>>>>> fcda5d4a7 (Demote write locks on transaction program ids (backport #19593) (#19633))
 
         assert!(results0[0].is_ok());
         assert_eq!(
@@ -1843,14 +1772,7 @@ mod tests {
         );
         let tx1 = Transaction::new(&[&keypair1], message, Hash::default());
         let txs = vec![tx0, tx1];
-<<<<<<< HEAD
-        let results1 = accounts.lock_accounts(
-            txs.iter(),
-            true, // demote_sysvar_write_locks
-        );
-=======
         let results1 = accounts.lock_accounts(txs.iter(), demote_program_write_locks);
->>>>>>> fcda5d4a7 (Demote write locks on transaction program ids (backport #19593) (#19633))
 
         assert!(results1[0].is_ok()); // Read-only account (keypair1) can be referenced multiple times
         assert!(results1[1].is_err()); // Read-only account (keypair1) cannot also be locked as writable
@@ -1865,21 +1787,8 @@ mod tests {
             2
         );
 
-<<<<<<< HEAD
-        accounts.unlock_accounts(
-            [tx].iter(),
-            &results0,
-            true, // demote_sysvar_write_locks
-        );
-        accounts.unlock_accounts(
-            txs.iter(),
-            &results1,
-            true, // demote_sysvar_write_locks
-        );
-=======
         accounts.unlock_accounts([tx].iter(), &results0, demote_program_write_locks);
         accounts.unlock_accounts(txs.iter(), &results1, demote_program_write_locks);
->>>>>>> fcda5d4a7 (Demote write locks on transaction program ids (backport #19593) (#19633))
         let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
         let message = Message::new_with_compiled_instructions(
             1,
@@ -1890,14 +1799,7 @@ mod tests {
             instructions,
         );
         let tx = Transaction::new(&[&keypair1], message, Hash::default());
-<<<<<<< HEAD
-        let results2 = accounts.lock_accounts(
-            [tx].iter(),
-            true, // demote_sysvar_write_locks
-        );
-=======
         let results2 = accounts.lock_accounts([tx].iter(), demote_program_write_locks);
->>>>>>> fcda5d4a7 (Demote write locks on transaction program ids (backport #19593) (#19633))
         assert!(results2[0].is_ok()); // Now keypair1 account can be locked as writable
 
         // Check that read-only lock with zero references is deleted
@@ -1967,30 +1869,15 @@ mod tests {
             let exit_clone = exit_clone.clone();
             loop {
                 let txs = vec![writable_tx.clone()];
-<<<<<<< HEAD
-                let results = accounts_clone.clone().lock_accounts(
-                    txs.iter(),
-                    true, // demote_sysvar_write_locks
-                );
-=======
                 let results = accounts_clone
                     .clone()
                     .lock_accounts(txs.iter(), demote_program_write_locks);
->>>>>>> fcda5d4a7 (Demote write locks on transaction program ids (backport #19593) (#19633))
                 for result in results.iter() {
                     if result.is_ok() {
                         counter_clone.clone().fetch_add(1, Ordering::SeqCst);
                     }
                 }
-<<<<<<< HEAD
-                accounts_clone.unlock_accounts(
-                    txs.iter(),
-                    &results,
-                    true, // demote_sysvar_write_locks
-                );
-=======
                 accounts_clone.unlock_accounts(txs.iter(), &results, demote_program_write_locks);
->>>>>>> fcda5d4a7 (Demote write locks on transaction program ids (backport #19593) (#19633))
                 if exit_clone.clone().load(Ordering::Relaxed) {
                     break;
                 }
@@ -1999,30 +1886,15 @@ mod tests {
         let counter_clone = counter;
         for _ in 0..5 {
             let txs = vec![readonly_tx.clone()];
-<<<<<<< HEAD
-            let results = accounts_arc.clone().lock_accounts(
-                txs.iter(),
-                true, // demote_sysvar_write_locks
-            );
-=======
             let results = accounts_arc
                 .clone()
                 .lock_accounts(txs.iter(), demote_program_write_locks);
->>>>>>> fcda5d4a7 (Demote write locks on transaction program ids (backport #19593) (#19633))
             if results[0].is_ok() {
                 let counter_value = counter_clone.clone().load(Ordering::SeqCst);
                 thread::sleep(time::Duration::from_millis(50));
                 assert_eq!(counter_value, counter_clone.clone().load(Ordering::SeqCst));
             }
-<<<<<<< HEAD
-            accounts_arc.unlock_accounts(
-                txs.iter(),
-                &results,
-                true, // demote_sysvar_write_locks
-            );
-=======
             accounts_arc.unlock_accounts(txs.iter(), &results, demote_program_write_locks);
->>>>>>> fcda5d4a7 (Demote write locks on transaction program ids (backport #19593) (#19633))
             thread::sleep(time::Duration::from_millis(50));
         }
         exit.store(true, Ordering::Relaxed);
@@ -2045,7 +1917,6 @@ mod tests {
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
             false,
-            AccountShrinkThreshold::default(),
         );
         accounts.store_slow_uncached(0, &keypair0.pubkey(), &account0);
         accounts.store_slow_uncached(0, &keypair1.pubkey(), &account1);
@@ -2180,7 +2051,6 @@ mod tests {
             &rent_collector,
             &(Hash::default(), FeeCalculator::default()),
             true,
-            true, // demote_sysvar_write_locks
             true, // merge_nonce_error_into_system_error
             true, // demote_program_write_locks
         );
@@ -2567,7 +2437,6 @@ mod tests {
             &rent_collector,
             &(next_blockhash, FeeCalculator::default()),
             true,
-            true, // demote_sysvar_write_locks
             true, // merge_nonce_error_into_system_error
             true, // demote_program_write_locks
         );
@@ -2685,7 +2554,6 @@ mod tests {
             &rent_collector,
             &(next_blockhash, FeeCalculator::default()),
             true,
-            true, // demote_sysvar_write_locks
             true, // merge_nonce_error_into_system_error
             true, // demote_program_write_locks
         );

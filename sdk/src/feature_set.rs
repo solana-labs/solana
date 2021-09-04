@@ -107,10 +107,6 @@ pub mod upgradeable_close_instruction {
     solana_sdk::declare_id!("FsPaByos3gA9bUEhp3EimQpQPCoSvCEigHod496NmABQ");
 }
 
-pub mod demote_sysvar_write_locks {
-    solana_sdk::declare_id!("86LJYRuq2zgtHuL3FccR6hqFJQMQkFoun4knAxcPiF1P");
-}
-
 pub mod sysvar_via_syscall {
     solana_sdk::declare_id!("7411E6gFQLDhQkdRjmpXwM1hzHMMoYQUjHicmvGPC1Nf");
 }
@@ -170,33 +166,10 @@ pub mod spl_token_v2_set_authority_fix {
     solana_sdk::declare_id!("FToKNBYyiF4ky9s8WsmLBXHCht17Ek7RXaLZGHzzQhJ1");
 }
 
-<<<<<<< HEAD
-=======
-pub mod stake_merge_with_unmatched_credits_observed {
-    solana_sdk::declare_id!("meRgp4ArRPhD3KtCY9c5yAf2med7mBLsjKTPeVUHqBL");
-}
-
-pub mod gate_large_block {
-    solana_sdk::declare_id!("2ry7ygxiYURULZCrypHhveanvP5tzZ4toRwVp89oCNSj");
-}
-
-pub mod mem_overlap_fix {
-    solana_sdk::declare_id!("vXDCFK7gphrEmyf5VnKgLmqbdJ4UxD2eZH1qbdouYKF");
-}
-
-pub mod close_upgradeable_program_accounts {
-    solana_sdk::declare_id!("EQMtCuSAkMVF9ZdhGuABtgvyXJLtSRF5AQKv1RNsrhj7");
-}
-
-pub mod stake_program_advance_activating_credits_observed {
-    solana_sdk::declare_id!("SAdVFw3RZvzbo6DvySbSdBnHN4gkzSTH9dSxesyKKPj");
-}
-
 pub mod demote_program_write_locks {
     solana_sdk::declare_id!("3E3jV7v9VcdJL8iYZUMax9DiDno8j7EWUVbhm9RtShj2");
 }
 
->>>>>>> fcda5d4a7 (Demote write locks on transaction program ids (backport #19593) (#19633))
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -222,7 +195,6 @@ lazy_static! {
         (require_stake_for_gossip::id(), "require stakes for propagating crds values through gossip #15561"),
         (cpi_data_cost::id(), "charge the compute budget for data passed via CPI"),
         (upgradeable_close_instruction::id(), "close upgradeable buffer accounts"),
-        (demote_sysvar_write_locks::id(), "demote builtins and sysvar write locks to readonly #15497"),
         (sysvar_via_syscall::id(), "provide sysvars via syscalls"),
         (check_duplicates_by_hash::id(), "use transaction message hash for duplicate check"),
         (enforce_aligned_host_addrs::id(), "enforce aligned host addresses"),
@@ -238,15 +210,7 @@ lazy_static! {
         (libsecp256k1_0_5_upgrade_enabled::id(), "upgrade libsecp256k1 to v0.5.0"),
         (merge_nonce_error_into_system_error::id(), "merge NonceError into SystemError"),
         (spl_token_v2_set_authority_fix::id(), "spl-token set_authority fix"),
-<<<<<<< HEAD
-=======
-        (stake_merge_with_unmatched_credits_observed::id(), "allow merging active stakes with unmatched credits_observed #18985"),
-        (gate_large_block::id(), "validator checks block cost against max limit in realtime, reject if exceeds."),
-        (mem_overlap_fix::id(), "Memory overlap fix"),
-        (close_upgradeable_program_accounts::id(), "enable closing upgradeable program accounts"),
-        (stake_program_advance_activating_credits_observed::id(), "Enable advancing credits observed for activation epoch #19309"),
         (demote_program_write_locks::id(), "demote program write locks to readonly #19593"),
->>>>>>> fcda5d4a7 (Demote write locks on transaction program ids (backport #19593) (#19633))
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
