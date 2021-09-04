@@ -337,6 +337,16 @@ impl Message {
             .collect()
     }
 
+    pub fn is_key_called_as_program(&self, key_index: usize) -> bool {
+        if let Ok(key_index) = u8::try_from(key_index) {
+            self.instructions
+                .iter()
+                .any(|ix| ix.program_id_index == key_index)
+        } else {
+            false
+        }
+    }
+
     pub fn is_key_passed_to_program(&self, index: usize) -> bool {
         if let Ok(index) = u8::try_from(index) {
             for ix in self.instructions.iter() {
@@ -363,7 +373,11 @@ impl Message {
         self.program_position(i).is_some()
     }
 
+<<<<<<< HEAD
     pub fn is_writable(&self, i: usize, demote_sysvar_write_locks: bool) -> bool {
+=======
+    pub fn is_writable(&self, i: usize, demote_program_write_locks: bool) -> bool {
+>>>>>>> fcda5d4a7 (Demote write locks on transaction program ids (backport #19593) (#19633))
         (i < (self.header.num_required_signatures - self.header.num_readonly_signed_accounts)
             as usize
             || (i >= self.header.num_required_signatures as usize
@@ -374,6 +388,7 @@ impl Message {
                 demote_sysvar_write_locks
                     && (sysvar::is_sysvar_id(&key) || BUILTIN_PROGRAMS_KEYS.contains(&key))
             }
+            && !(demote_program_write_locks && self.is_key_called_as_program(i))
     }
 
     pub fn is_signer(&self, i: usize) -> bool {
@@ -382,12 +397,20 @@ impl Message {
 
     pub fn get_account_keys_by_lock_type(
         &self,
+<<<<<<< HEAD
         demote_sysvar_write_locks: bool,
+=======
+        demote_program_write_locks: bool,
+>>>>>>> fcda5d4a7 (Demote write locks on transaction program ids (backport #19593) (#19633))
     ) -> (Vec<&Pubkey>, Vec<&Pubkey>) {
         let mut writable_keys = vec![];
         let mut readonly_keys = vec![];
         for (i, key) in self.account_keys.iter().enumerate() {
+<<<<<<< HEAD
             if self.is_writable(i, demote_sysvar_write_locks) {
+=======
+            if self.is_writable(i, demote_program_write_locks) {
+>>>>>>> fcda5d4a7 (Demote write locks on transaction program ids (backport #19593) (#19633))
                 writable_keys.push(key);
             } else {
                 readonly_keys.push(key);
@@ -409,7 +432,11 @@ impl Message {
     //   35..67 - program_id
     //   67..69 - data len - u16
     //   69..data_len - data
+<<<<<<< HEAD
     pub fn serialize_instructions(&self, demote_sysvar_write_locks: bool) -> Vec<u8> {
+=======
+    pub fn serialize_instructions(&self, demote_program_write_locks: bool) -> Vec<u8> {
+>>>>>>> fcda5d4a7 (Demote write locks on transaction program ids (backport #19593) (#19633))
         // 64 bytes is a reasonable guess, calculating exactly is slower in benchmarks
         let mut data = Vec::with_capacity(self.instructions.len() * (32 * 2));
         append_u16(&mut data, self.instructions.len() as u16);
@@ -424,7 +451,11 @@ impl Message {
             for account_index in &instruction.accounts {
                 let account_index = *account_index as usize;
                 let is_signer = self.is_signer(account_index);
+<<<<<<< HEAD
                 let is_writable = self.is_writable(account_index, demote_sysvar_write_locks);
+=======
+                let is_writable = self.is_writable(account_index, demote_program_write_locks);
+>>>>>>> fcda5d4a7 (Demote write locks on transaction program ids (backport #19593) (#19633))
                 let mut meta_byte = 0;
                 if is_signer {
                     meta_byte |= 1 << Self::IS_SIGNER_BIT;
@@ -863,6 +894,7 @@ mod tests {
             recent_blockhash: Hash::default(),
             instructions: vec![],
         };
+<<<<<<< HEAD
         let demote_sysvar_write_locks = true;
         assert_eq!(message.is_writable(0, demote_sysvar_write_locks), true);
         assert_eq!(message.is_writable(1, demote_sysvar_write_locks), false);
@@ -870,6 +902,15 @@ mod tests {
         assert_eq!(message.is_writable(3, demote_sysvar_write_locks), true);
         assert_eq!(message.is_writable(4, demote_sysvar_write_locks), true);
         assert_eq!(message.is_writable(5, demote_sysvar_write_locks), false);
+=======
+        let demote_program_write_locks = true;
+        assert!(message.is_writable(0, demote_program_write_locks));
+        assert!(!message.is_writable(1, demote_program_write_locks));
+        assert!(!message.is_writable(2, demote_program_write_locks));
+        assert!(message.is_writable(3, demote_program_write_locks));
+        assert!(message.is_writable(4, demote_program_write_locks));
+        assert!(!message.is_writable(5, demote_program_write_locks));
+>>>>>>> fcda5d4a7 (Demote write locks on transaction program ids (backport #19593) (#19633))
     }
 
     #[test]
@@ -897,9 +938,13 @@ mod tests {
             Some(&id1),
         );
         assert_eq!(
+<<<<<<< HEAD
             message.get_account_keys_by_lock_type(
                 true, // demote_sysvar_write_locks
             ),
+=======
+            message.get_account_keys_by_lock_type(/*demote_program_write_locks=*/ true),
+>>>>>>> fcda5d4a7 (Demote write locks on transaction program ids (backport #19593) (#19633))
             (vec![&id1, &id0], vec![&id3, &id2, &program_id])
         );
     }
@@ -929,9 +974,13 @@ mod tests {
         ];
 
         let message = Message::new(&instructions, Some(&id1));
+<<<<<<< HEAD
         let serialized = message.serialize_instructions(
             true, // demote_sysvar_write_locks
         );
+=======
+        let serialized = message.serialize_instructions(/*demote_program_write_locks=*/ true);
+>>>>>>> fcda5d4a7 (Demote write locks on transaction program ids (backport #19593) (#19633))
         for (i, instruction) in instructions.iter().enumerate() {
             assert_eq!(
                 Message::deserialize_instruction(i, &serialized).unwrap(),
@@ -952,9 +1001,13 @@ mod tests {
         ];
 
         let message = Message::new(&instructions, Some(&id1));
+<<<<<<< HEAD
         let serialized = message.serialize_instructions(
             true, // demote_sysvar_write_locks
         );
+=======
+        let serialized = message.serialize_instructions(/*demote_program_write_locks=*/ true);
+>>>>>>> fcda5d4a7 (Demote write locks on transaction program ids (backport #19593) (#19633))
         assert_eq!(
             Message::deserialize_instruction(instructions.len(), &serialized).unwrap_err(),
             SanitizeError::IndexOutOfBounds,

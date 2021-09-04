@@ -111,7 +111,11 @@ impl TransactionStatusService {
                         let fee = fee_calculator.calculate_fee(transaction.message());
                         let (writable_keys, readonly_keys) = transaction
                             .message
+<<<<<<< HEAD:core/src/transaction_status_service.rs
                             .get_account_keys_by_lock_type(bank.demote_sysvar_write_locks());
+=======
+                            .get_account_keys_by_lock_type(bank.demote_program_write_locks());
+>>>>>>> fcda5d4a7 (Demote write locks on transaction program ids (backport #19593) (#19633)):rpc/src/transaction_status_service.rs
 
                         let inner_instructions = inner_instructions.map(|inner_instructions| {
                             inner_instructions

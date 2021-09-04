@@ -140,7 +140,11 @@ fn format_account_mode(message: &Message, index: usize) -> String {
         } else {
             "-"
         },
+<<<<<<< HEAD
         if message.is_writable(index, /*demote_sysvar_write_locks=*/ true) {
+=======
+        if message.is_writable(index, /*demote_program_write_locks=*/ true) {
+>>>>>>> fcda5d4a7 (Demote write locks on transaction program ids (backport #19593) (#19633))
             "w" // comment for consistent rust fmt (no joking; lol)
         } else {
             "-"

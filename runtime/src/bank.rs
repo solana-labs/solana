@@ -2480,9 +2480,15 @@ impl Bank {
         let hashed_txs: Vec<HashedTransaction> = txs.map(HashedTransaction::from).collect();
         let lock_results = self.rc.accounts.lock_accounts(
             hashed_txs.as_transactions_iter(),
+<<<<<<< HEAD
             self.demote_sysvar_write_locks(),
         );
         TransactionBatch::new(lock_results, &self, Cow::Owned(hashed_txs))
+=======
+            self.demote_program_write_locks(),
+        );
+        TransactionBatch::new(lock_results, self, Cow::Owned(hashed_txs))
+>>>>>>> fcda5d4a7 (Demote write locks on transaction program ids (backport #19593) (#19633))
     }
 
     pub fn prepare_hashed_batch<'a, 'b>(
@@ -2491,9 +2497,15 @@ impl Bank {
     ) -> TransactionBatch<'a, 'b> {
         let lock_results = self.rc.accounts.lock_accounts(
             hashed_txs.as_transactions_iter(),
+<<<<<<< HEAD
             self.demote_sysvar_write_locks(),
         );
         TransactionBatch::new(lock_results, &self, Cow::Borrowed(hashed_txs))
+=======
+            self.demote_program_write_locks(),
+        );
+        TransactionBatch::new(lock_results, self, Cow::Borrowed(hashed_txs))
+>>>>>>> fcda5d4a7 (Demote write locks on transaction program ids (backport #19593) (#19633))
     }
 
     pub(crate) fn prepare_simulation_batch<'a, 'b>(
@@ -2563,7 +2575,11 @@ impl Bank {
             self.rc.accounts.unlock_accounts(
                 batch.transactions_iter(),
                 batch.lock_results(),
+<<<<<<< HEAD
                 self.demote_sysvar_write_locks(),
+=======
+                self.demote_program_write_locks(),
+>>>>>>> fcda5d4a7 (Demote write locks on transaction program ids (backport #19593) (#19633))
             )
         }
     }
@@ -3305,6 +3321,7 @@ impl Bank {
             self.fix_recent_blockhashes_sysvar_delay(),
             self.demote_sysvar_write_locks(),
             self.merge_nonce_error_into_system_error(),
+            self.demote_program_write_locks(),
         );
         let rent_debits = self.collect_rent(executed, loaded_accounts);
 
@@ -4853,6 +4870,19 @@ impl Bank {
             .is_active(&feature_set::merge_nonce_error_into_system_error::id())
     }
 
+<<<<<<< HEAD
+=======
+    pub fn stake_program_advance_activating_credits_observed(&self) -> bool {
+        self.feature_set
+            .is_active(&feature_set::stake_program_advance_activating_credits_observed::id())
+    }
+
+    pub fn demote_program_write_locks(&self) -> bool {
+        self.feature_set
+            .is_active(&feature_set::demote_program_write_locks::id())
+    }
+
+>>>>>>> fcda5d4a7 (Demote write locks on transaction program ids (backport #19593) (#19633))
     // Check if the wallclock time from bank creation to now has exceeded the allotted
     // time for transaction processing
     pub fn should_bank_still_be_processing_txs(

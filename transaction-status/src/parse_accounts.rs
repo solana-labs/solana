@@ -13,7 +13,11 @@ pub fn parse_accounts(message: &Message) -> Vec<ParsedAccount> {
     for (i, account_key) in message.account_keys.iter().enumerate() {
         accounts.push(ParsedAccount {
             pubkey: account_key.to_string(),
+<<<<<<< HEAD
             writable: message.is_writable(i, /*demote_sysvar_write_locks=*/ true),
+=======
+            writable: message.is_writable(i, /*demote_program_write_locks=*/ true),
+>>>>>>> fcda5d4a7 (Demote write locks on transaction program ids (backport #19593) (#19633))
             signer: message.is_signer(i),
         });
     }

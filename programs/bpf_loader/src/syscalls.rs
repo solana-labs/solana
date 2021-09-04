@@ -19,8 +19,14 @@ use solana_sdk::{
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     epoch_schedule::EpochSchedule,
     feature_set::{
+<<<<<<< HEAD
         cpi_data_cost, cpi_share_ro_and_exec_accounts, demote_sysvar_write_locks,
         enforce_aligned_host_addrs, keccak256_syscall_enabled, memory_ops_syscalls,
+=======
+        close_upgradeable_program_accounts, cpi_data_cost, demote_program_write_locks,
+        enforce_aligned_host_addrs, keccak256_syscall_enabled, libsecp256k1_0_5_upgrade_enabled,
+        mem_overlap_fix, memory_ops_syscalls, secp256k1_recover_syscall_enabled,
+>>>>>>> fcda5d4a7 (Demote write locks on transaction program ids (backport #19593) (#19633))
         set_upgrade_authority_via_cpi_enabled, sysvar_via_syscall, update_data_on_realloc,
     },
     hash::{Hasher, HASH_BYTES},
@@ -2146,7 +2152,11 @@ fn call<'a>(
         accounts,
         account_refs,
         caller_write_privileges,
+<<<<<<< HEAD
         demote_sysvar_write_locks,
+=======
+        demote_program_write_locks,
+>>>>>>> fcda5d4a7 (Demote write locks on transaction program ids (backport #19593) (#19633))
     ) = {
         let invoke_context = syscall.get_context()?;
 
@@ -2237,7 +2247,11 @@ fn call<'a>(
             accounts,
             account_refs,
             caller_write_privileges,
+<<<<<<< HEAD
             invoke_context.is_feature_active(&demote_sysvar_write_locks::id()),
+=======
+            invoke_context.is_feature_active(&demote_program_write_locks::id()),
+>>>>>>> fcda5d4a7 (Demote write locks on transaction program ids (backport #19593) (#19633))
         )
     };
 
@@ -2263,9 +2277,15 @@ fn call<'a>(
         for (i, (account, account_ref)) in accounts.iter().zip(account_refs).enumerate() {
             let account = account.borrow();
             if let Some(mut account_ref) = account_ref {
+<<<<<<< HEAD
                 if message.is_writable(i, demote_sysvar_write_locks) && !account.executable {
                     *account_ref.lamports = account.lamports;
                     *account_ref.owner = account.owner;
+=======
+                if message.is_writable(i, demote_program_write_locks) && !account.executable() {
+                    *account_ref.lamports = account.lamports();
+                    *account_ref.owner = *account.owner();
+>>>>>>> fcda5d4a7 (Demote write locks on transaction program ids (backport #19593) (#19633))
                     if account_ref.data.len() != account.data().len() {
                         if !account_ref.data.is_empty() {
                             // Only support for `CreateAccount` at this time.
