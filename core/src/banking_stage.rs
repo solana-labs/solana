@@ -965,8 +965,19 @@ impl BankingStage {
         msgs: &Packets,
         transaction_indexes: &[usize],
         libsecp256k1_0_5_upgrade_enabled: bool,
+<<<<<<< HEAD
     ) -> (Vec<HashedTransaction<'static>>, Vec<usize>) {
         transaction_indexes
+=======
+        libsecp256k1_fail_on_bad_count: bool,
+        cost_tracker: &Arc<RwLock<CostTracker>>,
+        banking_stage_stats: &BankingStageStats,
+        demote_program_write_locks: bool,
+    ) -> (Vec<SanitizedTransaction>, Vec<usize>, Vec<usize>) {
+        let mut retryable_transaction_packet_indexes: Vec<usize> = vec![];
+
+        let verified_transactions_with_packet_indexes: Vec<_> = transaction_indexes
+>>>>>>> decec3cd8 (Demote write locks on transaction program ids (#19593))
             .iter()
             .filter_map(|tx_index| {
                 let p = &msgs.packets[*tx_index];
@@ -980,7 +991,44 @@ impl BankingStage {
                     tx_index,
                 ))
             })
+<<<<<<< HEAD
             .unzip()
+=======
+            .collect();
+        banking_stage_stats.cost_tracker_check_count.fetch_add(
+            verified_transactions_with_packet_indexes.len(),
+            Ordering::Relaxed,
+        );
+
+        let mut cost_tracker_check_time = Measure::start("cost_tracker_check_time");
+        let (filtered_transactions, filter_transaction_packet_indexes) = {
+            let cost_tracker_readonly = cost_tracker.read().unwrap();
+            verified_transactions_with_packet_indexes
+                .into_iter()
+                .filter_map(|(tx, tx_index)| {
+                    let result = cost_tracker_readonly
+                        .would_transaction_fit(&tx, demote_program_write_locks);
+                    if result.is_err() {
+                        debug!("transaction {:?} would exceed limit: {:?}", tx, result);
+                        retryable_transaction_packet_indexes.push(tx_index);
+                        return None;
+                    }
+                    Some((tx, tx_index))
+                })
+                .unzip()
+        };
+        cost_tracker_check_time.stop();
+
+        banking_stage_stats
+            .cost_tracker_check_elapsed
+            .fetch_add(cost_tracker_check_time.as_us(), Ordering::Relaxed);
+
+        (
+            filtered_transactions,
+            filter_transaction_packet_indexes,
+            retryable_transaction_packet_indexes,
+        )
+>>>>>>> decec3cd8 (Demote write locks on transaction program ids (#19593))
     }
 
     /// This function filters pending packets that are still valid
@@ -1033,11 +1081,24 @@ impl BankingStage {
         banking_stage_stats: &BankingStageStats,
     ) -> (usize, usize, Vec<usize>) {
         let mut packet_conversion_time = Measure::start("packet_conversion");
+<<<<<<< HEAD
         let (transactions, transaction_to_packet_indexes) = Self::transactions_from_packets(
             msgs,
             &packet_indexes,
             bank.libsecp256k1_0_5_upgrade_enabled(),
         );
+=======
+        let (transactions, transaction_to_packet_indexes, retryable_packet_indexes) =
+            Self::transactions_from_packets(
+                msgs,
+                &packet_indexes,
+                bank.libsecp256k1_0_5_upgrade_enabled(),
+                bank.libsecp256k1_fail_on_bad_count(),
+                cost_tracker,
+                banking_stage_stats,
+                bank.demote_program_write_locks(),
+            );
+>>>>>>> decec3cd8 (Demote write locks on transaction program ids (#19593))
         packet_conversion_time.stop();
 
         debug!(
@@ -1059,7 +1120,21 @@ impl BankingStage {
         );
         process_tx_time.stop();
 
+<<<<<<< HEAD
         let unprocessed_tx_count = unprocessed_tx_indexes.len();
+=======
+        // applying cost of processed transactions to shared cost_tracker
+        let mut cost_tracking_time = Measure::start("cost_tracking_time");
+        transactions.iter().enumerate().for_each(|(index, tx)| {
+            if unprocessed_tx_indexes.iter().all(|&i| i != index) {
+                cost_tracker
+                    .write()
+                    .unwrap()
+                    .add_transaction_cost(tx, bank.demote_program_write_locks());
+            }
+        });
+        cost_tracking_time.stop();
+>>>>>>> decec3cd8 (Demote write locks on transaction program ids (#19593))
 
         let mut filter_pending_packets_time = Measure::start("filter_pending_packets_time");
         let filtered_unprocessed_packet_indexes = Self::filter_pending_packets_from_pending_txs(
@@ -1104,11 +1179,27 @@ impl BankingStage {
             }
         }
 
+<<<<<<< HEAD
         let (transactions, transaction_to_packet_indexes) = Self::transactions_from_packets(
             msgs,
             &transaction_indexes,
             bank.libsecp256k1_0_5_upgrade_enabled(),
         );
+=======
+        let mut unprocessed_packet_conversion_time =
+            Measure::start("unprocessed_packet_conversion");
+        let (transactions, transaction_to_packet_indexes, retry_packet_indexes) =
+            Self::transactions_from_packets(
+                msgs,
+                transaction_indexes,
+                bank.libsecp256k1_0_5_upgrade_enabled(),
+                bank.libsecp256k1_fail_on_bad_count(),
+                cost_tracker,
+                banking_stage_stats,
+                bank.demote_program_write_locks(),
+            );
+        unprocessed_packet_conversion_time.stop();
+>>>>>>> decec3cd8 (Demote write locks on transaction program ids (#19593))
 
         let tx_count = transaction_to_packet_indexes.len();
 

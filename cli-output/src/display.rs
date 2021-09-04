@@ -140,7 +140,7 @@ fn format_account_mode(message: &Message, index: usize) -> String {
         } else {
             "-"
         },
-        if message.is_writable(index) {
+        if message.is_writable(index, /*demote_program_write_locks=*/ true) {
             "w" // comment for consistent rust fmt (no joking; lol)
         } else {
             "-"

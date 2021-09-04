@@ -19,10 +19,16 @@ use solana_sdk::{
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     epoch_schedule::EpochSchedule,
     feature_set::{
+<<<<<<< HEAD
         close_upgradeable_program_accounts, cpi_data_cost, enforce_aligned_host_addrs,
         keccak256_syscall_enabled, libsecp256k1_0_5_upgrade_enabled, mem_overlap_fix,
         memory_ops_syscalls, secp256k1_recover_syscall_enabled,
         set_upgrade_authority_via_cpi_enabled, sysvar_via_syscall, update_data_on_realloc,
+=======
+        blake3_syscall_enabled, close_upgradeable_program_accounts, demote_program_write_locks,
+        disable_fees_sysvar, enforce_aligned_host_addrs, libsecp256k1_0_5_upgrade_enabled,
+        mem_overlap_fix, secp256k1_recover_syscall_enabled,
+>>>>>>> decec3cd8 (Demote write locks on transaction program ids (#19593))
     },
     hash::{Hasher, HASH_BYTES},
     ic_msg,
@@ -2244,7 +2250,14 @@ fn call<'a>(
     signers_seeds_len: u64,
     memory_mapping: &MemoryMapping,
 ) -> Result<u64, EbpfError<BpfError>> {
-    let (message, executables, accounts, account_refs, caller_write_privileges) = {
+    let (
+        message,
+        executables,
+        accounts,
+        account_refs,
+        caller_write_privileges,
+        demote_program_write_locks,
+    ) = {
         let invoke_context = syscall.get_context()?;
 
         invoke_context
@@ -2335,6 +2348,7 @@ fn call<'a>(
             accounts,
             account_refs,
             caller_write_privileges,
+            invoke_context.is_feature_active(&demote_program_write_locks::id()),
         )
     };
 
@@ -2360,7 +2374,7 @@ fn call<'a>(
         for (i, ((_key, account), account_ref)) in accounts.iter().zip(account_refs).enumerate() {
             let account = account.borrow();
             if let Some(mut account_ref) = account_ref {
-                if message.is_writable(i) && !account.executable() {
+                if message.is_writable(i, demote_program_write_locks) && !account.executable() {
                     *account_ref.lamports = account.lamports();
                     *account_ref.owner = *account.owner();
                     if account_ref.data.len() != account.data().len() {

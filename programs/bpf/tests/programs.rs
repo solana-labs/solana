@@ -1782,7 +1782,7 @@ fn test_program_bpf_upgrade_and_invoke_in_same_tx() {
         "solana_bpf_rust_panic",
     );
 
-    // Invoke, then upgrade the program, and then invoke again in same tx
+    // Attempt to invoke, then upgrade the program in same tx
     let message = Message::new(
         &[
             invoke_instruction.clone(),
@@ -1801,10 +1801,12 @@ fn test_program_bpf_upgrade_and_invoke_in_same_tx() {
         message.clone(),
         bank.last_blockhash(),
     );
+    // program_id is automatically demoted to readonly, preventing the upgrade, which requires
+    // writeability
     let (result, _) = process_transaction_and_record_inner(&bank, tx);
     assert_eq!(
         result.unwrap_err(),
-        TransactionError::InstructionError(2, InstructionError::ProgramFailedToComplete)
+        TransactionError::InstructionError(1, InstructionError::InvalidArgument)
     );
 }
 
@@ -2105,6 +2107,7 @@ fn test_program_bpf_upgrade_via_cpi() {
 
 #[cfg(feature = "bpf_rust")]
 #[test]
+<<<<<<< HEAD
 fn test_program_bpf_upgrade_self_via_cpi() {
     solana_logger::setup();
 
@@ -2196,6 +2199,8 @@ fn test_program_bpf_upgrade_self_via_cpi() {
 
 #[cfg(feature = "bpf_rust")]
 #[test]
+=======
+>>>>>>> decec3cd8 (Demote write locks on transaction program ids (#19593))
 fn test_program_bpf_set_upgrade_authority_via_cpi() {
     solana_logger::setup();
 
