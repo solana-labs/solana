@@ -166,7 +166,6 @@ impl Accounts {
         }
     }
 
-<<<<<<< HEAD
     /// Return true if the slice has any duplicate elements
     pub fn has_duplicates<T: PartialEq>(xs: &[T]) -> bool {
         // Note: This is an O(n^2) algorithm, but requires no heap allocations. The benchmark
@@ -180,16 +179,11 @@ impl Accounts {
         false
     }
 
-    fn construct_instructions_account(message: &Message) -> AccountSharedData {
-        let mut data = message.serialize_instructions();
-=======
     fn construct_instructions_account(
-        message: &SanitizedMessage,
-        is_owned_by_sysvar: bool,
+        message: &Message,
         demote_program_write_locks: bool,
     ) -> AccountSharedData {
         let mut data = message.serialize_instructions(demote_program_write_locks);
->>>>>>> decec3cd8 (Demote write locks on transaction program ids (#19593))
         // add room for current instruction index.
         data.resize(data.len() + 2, 0);
         AccountSharedData::from(Account {
@@ -230,26 +224,13 @@ impl Accounts {
                         payer_index = Some(i);
                     }
 
-<<<<<<< HEAD
                     if solana_sdk::sysvar::instructions::check_id(key)
                         && feature_set.is_active(&feature_set::instructions_sysvar_enabled::id())
                     {
-                        if message.is_writable(i) {
-                            return Err(TransactionError::InvalidAccountIndex);
-                        }
-                        Self::construct_instructions_account(message)
-=======
-                    if solana_sdk::sysvar::instructions::check_id(key) {
                         if message.is_writable(i, demote_program_write_locks) {
                             return Err(TransactionError::InvalidAccountIndex);
                         }
-                        Self::construct_instructions_account(
-                            message,
-                            feature_set
-                                .is_active(&feature_set::instructions_sysvar_owned_by_sysvar::id()),
-                            demote_program_write_locks,
-                        )
->>>>>>> decec3cd8 (Demote write locks on transaction program ids (#19593))
+                        Self::construct_instructions_account(message, demote_program_write_locks)
                     } else {
                         let (account, rent) = self
                             .accounts_db
@@ -884,8 +865,11 @@ impl Accounts {
     /// same time
     #[must_use]
     #[allow(clippy::needless_collect)]
-<<<<<<< HEAD
-    pub fn lock_accounts<'a>(&self, txs: impl Iterator<Item = &'a Transaction>) -> Vec<Result<()>> {
+    pub fn lock_accounts<'a>(
+        &self,
+        txs: impl Iterator<Item = &'a Transaction>,
+        demote_program_write_locks: bool,
+    ) -> Vec<Result<()>> {
         use solana_sdk::sanitize::Sanitize;
         let keys: Vec<Result<_>> = txs
             .map(|tx| {
@@ -895,17 +879,10 @@ impl Accounts {
                     return Err(TransactionError::AccountLoadedTwice);
                 }
 
-                Ok(tx.message().get_account_keys_by_lock_type())
+                Ok(tx
+                    .message()
+                    .get_account_keys_by_lock_type(demote_program_write_locks))
             })
-=======
-    pub fn lock_accounts<'a>(
-        &self,
-        txs: impl Iterator<Item = &'a SanitizedTransaction>,
-        demote_program_write_locks: bool,
-    ) -> Vec<Result<()>> {
-        let keys: Vec<_> = txs
-            .map(|tx| tx.get_account_locks(demote_program_write_locks))
->>>>>>> decec3cd8 (Demote write locks on transaction program ids (#19593))
             .collect();
         let mut account_locks = &mut self.account_locks.lock().unwrap();
         keys.into_iter()
@@ -932,11 +909,10 @@ impl Accounts {
                 Err(TransactionError::AccountInUse) => None,
                 Err(TransactionError::SanitizeFailure) => None,
                 Err(TransactionError::AccountLoadedTwice) => None,
-<<<<<<< HEAD
-                _ => Some(tx.message.get_account_keys_by_lock_type()),
-=======
-                _ => Some(tx.get_account_locks(demote_program_write_locks)),
->>>>>>> decec3cd8 (Demote write locks on transaction program ids (#19593))
+                _ => Some(
+                    tx.message
+                        .get_account_keys_by_lock_type(demote_program_write_locks),
+                ),
             })
             .collect();
         let mut account_locks = self.account_locks.lock().unwrap();
@@ -988,6 +964,7 @@ impl Accounts {
         self.accounts_db.add_root(slot)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn collect_accounts_to_store<'a>(
         &self,
         txs: impl Iterator<Item = &'a Transaction>,
@@ -1828,13 +1805,8 @@ mod tests {
             Hash::default(),
             instructions,
         );
-<<<<<<< HEAD
         let tx = Transaction::new(&[&keypair0], message, Hash::default());
-        let results0 = accounts.lock_accounts([tx.clone()].iter());
-=======
-        let tx = new_sanitized_tx(&[&keypair0], message, Hash::default());
         let results0 = accounts.lock_accounts([tx.clone()].iter(), demote_program_write_locks);
->>>>>>> decec3cd8 (Demote write locks on transaction program ids (#19593))
 
         assert!(results0[0].is_ok());
         assert_eq!(
@@ -1895,13 +1867,8 @@ mod tests {
             Hash::default(),
             instructions,
         );
-<<<<<<< HEAD
         let tx = Transaction::new(&[&keypair1], message, Hash::default());
-        let results2 = accounts.lock_accounts([tx].iter());
-=======
-        let tx = new_sanitized_tx(&[&keypair1], message, Hash::default());
         let results2 = accounts.lock_accounts([tx].iter(), demote_program_write_locks);
->>>>>>> decec3cd8 (Demote write locks on transaction program ids (#19593))
         assert!(results2[0].is_ok()); // Now keypair1 account can be locked as writable
 
         // Check that read-only lock with zero references is deleted
@@ -2015,7 +1982,7 @@ mod tests {
         let account2 = AccountSharedData::new(3, 0, &Pubkey::default());
         let account3 = AccountSharedData::new(4, 0, &Pubkey::default());
 
-        let accounts = Accounts::new_with_config_for_tests(
+        let accounts = Accounts::new_with_config(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
@@ -2038,7 +2005,7 @@ mod tests {
             Hash::default(),
             instructions,
         );
-        let tx = new_sanitized_tx(&[&keypair0], message, Hash::default());
+        let tx = Transaction::new(&[&keypair0], message, Hash::default());
         let results0 = accounts.lock_accounts([tx].iter(), demote_program_write_locks);
 
         assert!(results0[0].is_ok());

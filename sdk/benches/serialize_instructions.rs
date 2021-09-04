@@ -45,15 +45,8 @@ fn bench_bincode_instruction_deserialize(b: &mut Bencher) {
 #[bench]
 fn bench_manual_instruction_deserialize(b: &mut Bencher) {
     let instructions = make_instructions();
-<<<<<<< HEAD
     let message = Message::new(&instructions, None);
-    let serialized = message.serialize_instructions();
-=======
-    let message =
-        SanitizedMessage::try_from(Message::new(&instructions, Some(&Pubkey::new_unique())))
-            .unwrap();
     let serialized = message.serialize_instructions(DEMOTE_PROGRAM_WRITE_LOCKS);
->>>>>>> decec3cd8 (Demote write locks on transaction program ids (#19593))
     b.iter(|| {
         for i in 0..instructions.len() {
             test::black_box(instructions::load_instruction_at(i, &serialized).unwrap());
@@ -64,15 +57,8 @@ fn bench_manual_instruction_deserialize(b: &mut Bencher) {
 #[bench]
 fn bench_manual_instruction_deserialize_single(b: &mut Bencher) {
     let instructions = make_instructions();
-<<<<<<< HEAD
     let message = Message::new(&instructions, None);
-    let serialized = message.serialize_instructions();
-=======
-    let message =
-        SanitizedMessage::try_from(Message::new(&instructions, Some(&Pubkey::new_unique())))
-            .unwrap();
     let serialized = message.serialize_instructions(DEMOTE_PROGRAM_WRITE_LOCKS);
->>>>>>> decec3cd8 (Demote write locks on transaction program ids (#19593))
     b.iter(|| {
         test::black_box(instructions::load_instruction_at(3, &serialized).unwrap());
     });

@@ -111,15 +111,10 @@ impl TransactionStatusService {
                                 bank.get_fee_calculator(&transaction.message().recent_blockhash)
                             })
                             .expect("FeeCalculator must exist");
-<<<<<<< HEAD
                         let fee = fee_calculator.calculate_fee(transaction.message());
-                        let (writable_keys, readonly_keys) =
-                            transaction.message.get_account_keys_by_lock_type();
-=======
-                        let fee = transaction.message().calculate_fee(&fee_calculator);
-                        let tx_account_locks =
-                            transaction.get_account_locks(bank.demote_program_write_locks());
->>>>>>> decec3cd8 (Demote write locks on transaction program ids (#19593))
+                        let (writable_keys, readonly_keys) = transaction
+                            .message
+                            .get_account_keys_by_lock_type(bank.demote_program_write_locks());
 
                         let inner_instructions = inner_instructions.map(|inner_instructions| {
                             inner_instructions

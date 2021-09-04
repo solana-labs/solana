@@ -356,6 +356,16 @@ impl Message {
             .collect()
     }
 
+    pub fn is_key_called_as_program(&self, key_index: usize) -> bool {
+        if let Ok(key_index) = u8::try_from(key_index) {
+            self.instructions
+                .iter()
+                .any(|ix| ix.program_id_index == key_index)
+        } else {
+            false
+        }
+    }
+
     pub fn is_key_passed_to_program(&self, index: usize) -> bool {
         if let Ok(index) = u8::try_from(index) {
             for ix in self.instructions.iter() {
@@ -408,11 +418,14 @@ impl Message {
         i < self.header.num_required_signatures as usize
     }
 
-    pub fn get_account_keys_by_lock_type(&self) -> (Vec<&Pubkey>, Vec<&Pubkey>) {
+    pub fn get_account_keys_by_lock_type(
+        &self,
+        demote_program_write_locks: bool,
+    ) -> (Vec<&Pubkey>, Vec<&Pubkey>) {
         let mut writable_keys = vec![];
         let mut readonly_keys = vec![];
         for (i, key) in self.account_keys.iter().enumerate() {
-            if self.is_writable(i, /*demote_program_write_locks=*/ true) {
+            if self.is_writable(i, demote_program_write_locks) {
                 writable_keys.push(key);
             } else {
                 readonly_keys.push(key);
@@ -434,7 +447,7 @@ impl Message {
     //   35..67 - program_id
     //   67..69 - data len - u16
     //   69..data_len - data
-    pub fn serialize_instructions(&self) -> Vec<u8> {
+    pub fn serialize_instructions(&self, demote_program_write_locks: bool) -> Vec<u8> {
         // 64 bytes is a reasonable guess, calculating exactly is slower in benchmarks
         let mut data = Vec::with_capacity(self.instructions.len() * (32 * 2));
         append_u16(&mut data, self.instructions.len() as u16);
@@ -449,8 +462,7 @@ impl Message {
             for account_index in &instruction.accounts {
                 let account_index = *account_index as usize;
                 let is_signer = self.is_signer(account_index);
-                let is_writable =
-                    self.is_writable(account_index, /*demote_program_write_locks=*/ true);
+                let is_writable = self.is_writable(account_index, demote_program_write_locks);
                 let mut meta_byte = 0;
                 if is_signer {
                     meta_byte |= 1 << Self::IS_SIGNER_BIT;
@@ -923,7 +935,7 @@ mod tests {
             Some(&id1),
         );
         assert_eq!(
-            message.get_account_keys_by_lock_type(),
+            message.get_account_keys_by_lock_type(/*demote_program_write_locks=*/ true),
             (vec![&id1, &id0], vec![&id3, &id2, &program_id])
         );
     }
@@ -953,7 +965,7 @@ mod tests {
         ];
 
         let message = Message::new(&instructions, Some(&id1));
-        let serialized = message.serialize_instructions();
+        let serialized = message.serialize_instructions(/*demote_program_write_locks=*/ true);
         for (i, instruction) in instructions.iter().enumerate() {
             assert_eq!(
                 Message::deserialize_instruction(i, &serialized).unwrap(),
@@ -974,7 +986,7 @@ mod tests {
         ];
 
         let message = Message::new(&instructions, Some(&id1));
-        let serialized = message.serialize_instructions();
+        let serialized = message.serialize_instructions(/*demote_program_write_locks=*/ true);
         assert_eq!(
             Message::deserialize_instruction(instructions.len(), &serialized).unwrap_err(),
             SanitizeError::IndexOutOfBounds,
