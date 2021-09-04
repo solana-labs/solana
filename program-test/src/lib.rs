@@ -19,7 +19,11 @@ use {
         clock::{Clock, Slot},
         entrypoint::{ProgramResult, SUCCESS},
         epoch_schedule::EpochSchedule,
+<<<<<<< HEAD
         feature_set::demote_sysvar_write_locks,
+=======
+        feature_set::demote_program_write_locks,
+>>>>>>> decec3cd8 (Demote write locks on transaction program ids (#19593))
         fee_calculator::{FeeCalculator, FeeRateGovernor},
         genesis_config::{ClusterType, GenesisConfig},
         hash::Hash,
@@ -256,14 +260,23 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             }
             panic!("Program id {} wasn't found in account_infos", program_id);
         };
+<<<<<<< HEAD
         let demote_sysvar_write_locks =
             invoke_context.is_feature_active(&demote_sysvar_write_locks::id());
+=======
+        let demote_program_write_locks =
+            invoke_context.is_feature_active(&demote_program_write_locks::id());
+>>>>>>> decec3cd8 (Demote write locks on transaction program ids (#19593))
         // TODO don't have the caller's keyed_accounts so can't validate writer or signer escalation or deescalation yet
         let caller_privileges = message
             .account_keys
             .iter()
             .enumerate()
+<<<<<<< HEAD
             .map(|(i, _)| message.is_writable(i, demote_sysvar_write_locks))
+=======
+            .map(|(i, _)| message.is_writable(i, demote_program_write_locks))
+>>>>>>> decec3cd8 (Demote write locks on transaction program ids (#19593))
             .collect::<Vec<bool>>();
 
         stable_log::program_invoke(&logger, &program_id, invoke_context.invoke_depth());
@@ -333,8 +346,13 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
         .map_err(|err| ProgramError::try_from(err).unwrap_or_else(|err| panic!("{}", err)))?;
 
         // Copy writeable account modifications back into the caller's AccountInfos
+<<<<<<< HEAD
         for (i, account_pubkey) in message.account_keys.iter().enumerate() {
             if !message.is_writable(i, true) {
+=======
+        for (i, (pubkey, account)) in accounts.iter().enumerate().take(message.account_keys.len()) {
+            if !message.is_writable(i, demote_program_write_locks) {
+>>>>>>> decec3cd8 (Demote write locks on transaction program ids (#19593))
                 continue;
             }
 

@@ -170,6 +170,10 @@ pub mod spl_token_v2_set_authority_fix {
     solana_sdk::declare_id!("FToKNBYyiF4ky9s8WsmLBXHCht17Ek7RXaLZGHzzQhJ1");
 }
 
+pub mod demote_program_write_locks {
+    solana_sdk::declare_id!("3E3jV7v9VcdJL8iYZUMax9DiDno8j7EWUVbhm9RtShj2");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -210,7 +214,20 @@ lazy_static! {
         (updated_verify_policy::id(), "Update verify policy"),
         (libsecp256k1_0_5_upgrade_enabled::id(), "upgrade libsecp256k1 to v0.5.0"),
         (merge_nonce_error_into_system_error::id(), "merge NonceError into SystemError"),
+<<<<<<< HEAD
         (spl_token_v2_set_authority_fix::id(), "spl-token set_authority fix"),
+=======
+        (disable_fees_sysvar::id(), "disable fees sysvar"),
+        (stake_merge_with_unmatched_credits_observed::id(), "allow merging active stakes with unmatched credits_observed #18985"),
+        (gate_large_block::id(), "validator checks block cost against max limit in realtime, reject if exceeds."),
+        (mem_overlap_fix::id(), "memory overlap fix"),
+        (versioned_tx_message_enabled::id(), "enable versioned transaction message processing"),
+        (libsecp256k1_fail_on_bad_count::id(), "Fail libsec256k1_verify if count appears wrong"),
+        (instructions_sysvar_owned_by_sysvar::id(), "fix owner for instructions sysvar"),
+        (close_upgradeable_program_accounts::id(), "enable closing upgradeable program accounts"),
+        (stake_program_advance_activating_credits_observed::id(), "Enable advancing credits observed for activation epoch #19309"),
+        (demote_program_write_locks::id(), "demote program write locks to readonly #19593"),
+>>>>>>> decec3cd8 (Demote write locks on transaction program ids (#19593))
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

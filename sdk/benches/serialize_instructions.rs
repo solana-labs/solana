@@ -14,6 +14,8 @@ fn make_instructions() -> Vec<Instruction> {
     vec![inst; 4]
 }
 
+const DEMOTE_PROGRAM_WRITE_LOCKS: bool = true;
+
 #[bench]
 fn bench_bincode_instruction_serialize(b: &mut Bencher) {
     let instructions = make_instructions();
@@ -27,9 +29,13 @@ fn bench_manual_instruction_serialize(b: &mut Bencher) {
     let instructions = make_instructions();
     let message = Message::new(&instructions, None);
     b.iter(|| {
+<<<<<<< HEAD
         test::black_box(message.serialize_instructions(
             true, // demote_sysvar_write_locks
         ));
+=======
+        test::black_box(message.serialize_instructions(DEMOTE_PROGRAM_WRITE_LOCKS));
+>>>>>>> decec3cd8 (Demote write locks on transaction program ids (#19593))
     });
 }
 
@@ -45,10 +51,17 @@ fn bench_bincode_instruction_deserialize(b: &mut Bencher) {
 #[bench]
 fn bench_manual_instruction_deserialize(b: &mut Bencher) {
     let instructions = make_instructions();
+<<<<<<< HEAD
     let message = Message::new(&instructions, None);
     let serialized = message.serialize_instructions(
         true, // demote_sysvar_write_locks
     );
+=======
+    let message =
+        SanitizedMessage::try_from(Message::new(&instructions, Some(&Pubkey::new_unique())))
+            .unwrap();
+    let serialized = message.serialize_instructions(DEMOTE_PROGRAM_WRITE_LOCKS);
+>>>>>>> decec3cd8 (Demote write locks on transaction program ids (#19593))
     b.iter(|| {
         for i in 0..instructions.len() {
             test::black_box(instructions::load_instruction_at(i, &serialized).unwrap());
@@ -59,10 +72,17 @@ fn bench_manual_instruction_deserialize(b: &mut Bencher) {
 #[bench]
 fn bench_manual_instruction_deserialize_single(b: &mut Bencher) {
     let instructions = make_instructions();
+<<<<<<< HEAD
     let message = Message::new(&instructions, None);
     let serialized = message.serialize_instructions(
         true, // demote_sysvar_write_locks
     );
+=======
+    let message =
+        SanitizedMessage::try_from(Message::new(&instructions, Some(&Pubkey::new_unique())))
+            .unwrap();
+    let serialized = message.serialize_instructions(DEMOTE_PROGRAM_WRITE_LOCKS);
+>>>>>>> decec3cd8 (Demote write locks on transaction program ids (#19593))
     b.iter(|| {
         test::black_box(instructions::load_instruction_at(3, &serialized).unwrap());
     });

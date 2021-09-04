@@ -2468,21 +2468,70 @@ impl Bank {
         tick_height % self.ticks_per_slot == 0
     }
 
+<<<<<<< HEAD
     pub fn demote_sysvar_write_locks(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::demote_sysvar_write_locks::id())
+=======
+    /// Prepare a transaction batch from a list of legacy transactionsy. Used for tests only.
+    pub fn prepare_batch(&self, txs: Vec<Transaction>) -> Result<TransactionBatch> {
+        let sanitized_txs = txs
+            .into_iter()
+            .map(SanitizedTransaction::try_from)
+            .collect::<Result<Vec<_>>>()?;
+        let lock_results = self
+            .rc
+            .accounts
+            .lock_accounts(sanitized_txs.iter(), self.demote_program_write_locks());
+        Ok(TransactionBatch::new(
+            lock_results,
+            self,
+            Cow::Owned(sanitized_txs),
+        ))
+    }
+
+    /// Prepare a transaction batch from a list of versioned transactions from
+    /// an entry. Used for tests only.
+    pub fn prepare_entry_batch(&self, txs: Vec<VersionedTransaction>) -> Result<TransactionBatch> {
+        let sanitized_txs = txs
+            .into_iter()
+            .map(|tx| {
+                let message_hash = tx.message.hash();
+                SanitizedTransaction::try_create(tx, message_hash, |_| {
+                    Err(TransactionError::UnsupportedVersion)
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let lock_results = self
+            .rc
+            .accounts
+            .lock_accounts(sanitized_txs.iter(), self.demote_program_write_locks());
+        Ok(TransactionBatch::new(
+            lock_results,
+            self,
+            Cow::Owned(sanitized_txs),
+        ))
+>>>>>>> decec3cd8 (Demote write locks on transaction program ids (#19593))
     }
 
     pub fn prepare_batch<'a, 'b>(
         &'a self,
         txs: impl Iterator<Item = &'b Transaction>,
     ) -> TransactionBatch<'a, 'b> {
+<<<<<<< HEAD
         let hashed_txs: Vec<HashedTransaction> = txs.map(HashedTransaction::from).collect();
         let lock_results = self.rc.accounts.lock_accounts(
             hashed_txs.as_transactions_iter(),
             self.demote_sysvar_write_locks(),
         );
         TransactionBatch::new(lock_results, &self, Cow::Owned(hashed_txs))
+=======
+        let lock_results = self
+            .rc
+            .accounts
+            .lock_accounts(txs.iter(), self.demote_program_write_locks());
+        TransactionBatch::new(lock_results, self, Cow::Borrowed(txs))
+>>>>>>> decec3cd8 (Demote write locks on transaction program ids (#19593))
     }
 
     pub fn prepare_hashed_batch<'a, 'b>(
@@ -2561,9 +2610,15 @@ impl Bank {
         if batch.needs_unlock {
             batch.needs_unlock = false;
             self.rc.accounts.unlock_accounts(
+<<<<<<< HEAD
                 batch.transactions_iter(),
                 batch.lock_results(),
                 self.demote_sysvar_write_locks(),
+=======
+                batch.sanitized_transactions().iter(),
+                batch.lock_results(),
+                self.demote_program_write_locks(),
+>>>>>>> decec3cd8 (Demote write locks on transaction program ids (#19593))
             )
         }
     }
@@ -3305,6 +3360,7 @@ impl Bank {
             self.fix_recent_blockhashes_sysvar_delay(),
             self.demote_sysvar_write_locks(),
             self.merge_nonce_error_into_system_error(),
+            self.demote_program_write_locks(),
         );
         let rent_debits = self.collect_rent(executed, loaded_accounts);
 
@@ -4853,6 +4909,24 @@ impl Bank {
             .is_active(&feature_set::merge_nonce_error_into_system_error::id())
     }
 
+<<<<<<< HEAD
+=======
+    pub fn versioned_tx_message_enabled(&self) -> bool {
+        self.feature_set
+            .is_active(&feature_set::versioned_tx_message_enabled::id())
+    }
+
+    pub fn stake_program_advance_activating_credits_observed(&self) -> bool {
+        self.feature_set
+            .is_active(&feature_set::stake_program_advance_activating_credits_observed::id())
+    }
+
+    pub fn demote_program_write_locks(&self) -> bool {
+        self.feature_set
+            .is_active(&feature_set::demote_program_write_locks::id())
+    }
+
+>>>>>>> decec3cd8 (Demote write locks on transaction program ids (#19593))
     // Check if the wallclock time from bank creation to now has exceeded the allotted
     // time for transaction processing
     pub fn should_bank_still_be_processing_txs(
