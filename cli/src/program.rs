@@ -35,7 +35,6 @@ use solana_sdk::{
     account_utils::StateMut,
     bpf_loader, bpf_loader_deprecated,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-    commitment_config::CommitmentConfig,
     instruction::Instruction,
     instruction::InstructionError,
     loader_instruction,
@@ -2095,22 +2094,11 @@ fn send_deploy_messages(
     if let Some(write_messages) = write_messages {
         if let Some(write_signer) = write_signer {
             trace!("Writing program data");
-            let (blockhash, last_valid_block_height) =
-                rpc_client.get_latest_blockhash_with_commitment(config.commitment)?;
-            let mut write_transactions = vec![];
-            for message in write_messages.iter() {
-                let mut tx = Transaction::new_unsigned(message.clone());
-                tx.try_sign(&[payer_signer, write_signer], blockhash)?;
-                write_transactions.push(tx);
-            }
-
-            send_and_confirm_transactions_with_spinner(
+            send_and_confirm_messages_with_spinner(
                 rpc_client.clone(),
                 &config.websocket_url,
-                write_transactions,
+                write_messages,
                 &[payer_signer, write_signer],
-                config.commitment,
-                last_valid_block_height,
             )
             .map_err(|err| format!("Data writes to account failed: {}", err))?;
         }
@@ -2174,16 +2162,27 @@ fn report_ephemeral_mnemonic(words: usize, mnemonic: bip39::Mnemonic) {
     );
 }
 
-fn send_and_confirm_transactions_with_spinner<T: Signers>(
+fn send_and_confirm_messages_with_spinner<T: Signers>(
     rpc_client: Arc<RpcClient>,
     websocket_url: &str,
-    mut transactions: Vec<Transaction>,
-    signer_keys: &T,
-    commitment: CommitmentConfig,
-    mut last_valid_block_height: u64,
+    messages: &[Message],
+    signers: &T,
 ) -> Result<(), Box<dyn error::Error>> {
+    let commitment = rpc_client.commitment();
+
     let progress_bar = new_spinner_progress_bar();
+    let send_transaction_interval = Duration::from_millis(10); /* ~100 TPS */
     let mut send_retries = 5;
+
+    let (blockhash, mut last_valid_block_height) =
+        rpc_client.get_latest_blockhash_with_commitment(commitment)?;
+
+    let mut transactions = vec![];
+    for message in messages {
+        let mut transaction = Transaction::new_unsigned(message.clone());
+        transaction.try_sign(signers, blockhash)?;
+        transactions.push(transaction);
+    }
 
     progress_bar.set_message("Finding leader nodes...");
     let tpu_client = TpuClient::new(
@@ -2214,8 +2213,7 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
                 num_transactions
             ));
 
-            // Throttle transactions to about 100 TPS
-            sleep(Duration::from_millis(10));
+            sleep(send_transaction_interval);
         }
 
         // Collect statuses for all the transactions, drop those that are confirmed
@@ -2293,7 +2291,7 @@ fn send_and_confirm_transactions_with_spinner<T: Signers>(
         last_valid_block_height = new_last_valid_block_height;
         transactions = vec![];
         for (_, mut transaction) in pending_transactions.into_iter() {
-            transaction.try_sign(signer_keys, blockhash)?;
+            transaction.try_sign(signers, blockhash)?;
             transactions.push(transaction);
         }
     }
