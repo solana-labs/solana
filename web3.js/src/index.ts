@@ -17,6 +17,7 @@ export * from './transaction';
 export * from './validator-info';
 export * from './vote-account';
 export * from './sysvar';
+export * from './errors';
 export * from './util/borsh-schema';
 export * from './util/send-and-confirm-transaction';
 export * from './util/send-and-confirm-raw-transaction';
