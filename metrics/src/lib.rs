@@ -44,14 +44,20 @@ impl Clone for CounterToken {
 impl Drop for CounterToken {
     fn drop(&mut self) {
         // new_count = strong_count
-        //    - 1 (in TokenCounter)
+        //    - 1 (in TokenCounter, if it still exists)
         //    - 1 (token that's being dropped)
-        datapoint_info!(*self.0, ("count", Arc::strong_count(&self.0) - 2, i64));
+        datapoint_info!(
+            *self.0,
+            ("count", Arc::strong_count(&self.0).saturating_sub(2), i64)
+        );
     }
 }
 
 impl Drop for TokenCounter {
     fn drop(&mut self) {
-        datapoint_info!(*self.0, ("count", Arc::strong_count(&self.0) - 2, i64));
+        datapoint_info!(
+            *self.0,
+            ("count", Arc::strong_count(&self.0).saturating_sub(2), i64)
+        );
     }
 }
