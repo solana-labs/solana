@@ -75,7 +75,7 @@ impl<'a> ThisInvokeContext<'a> {
         rent: Rent,
         message: &'a Message,
         instruction: &'a CompiledInstruction,
-        executable_accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        executable_accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>, usize)],
         accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
         programs: &'a [(Pubkey, ProcessInstructionWithContext)],
         log_collector: Option<Rc<LogCollector>>,
@@ -264,14 +264,13 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
     fn is_feature_active(&self, feature_id: &Pubkey) -> bool {
         self.feature_set.is_active(feature_id)
     }
-    fn get_account(&self, pubkey: &Pubkey) -> Option<Rc<RefCell<AccountSharedData>>> {
-        self.accounts.iter().find_map(|(key, account)| {
+    fn get_account(&self, pubkey: &Pubkey) -> Option<(usize, Rc<RefCell<AccountSharedData>>)> {
+        for (index, (key, account)) in self.accounts.iter().enumerate().rev() {
             if key == pubkey {
-                Some(account.clone())
-            } else {
-                None
+                return Some((index, account.clone()));
             }
-        })
+        }
+        None
     }
     fn update_timing(
         &mut self,
@@ -380,9 +379,9 @@ impl MessageProcessor {
 
     /// Verify there are no outstanding borrows
     pub fn verify_account_references(
-        accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>, usize)],
     ) -> Result<(), InstructionError> {
-        for (_, account) in accounts.iter() {
+        for (_key, account, _account_index) in accounts.iter() {
             account
                 .try_borrow_mut()
                 .map_err(|_| InstructionError::AccountBorrowOutstanding)?;
@@ -396,7 +395,7 @@ impl MessageProcessor {
         message: &Message,
         instruction: &CompiledInstruction,
         pre_accounts: &[PreAccount],
-        executable_accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        executable_accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>, usize)],
         accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
         rent: &Rent,
         timings: &mut ExecuteDetailsTimings,
@@ -462,7 +461,7 @@ impl MessageProcessor {
         &self,
         message: &Message,
         instruction: &CompiledInstruction,
-        executable_accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        executable_accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>, usize)],
         accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
         rent_collector: &RentCollector,
         log_collector: Option<Rc<LogCollector>>,
@@ -554,7 +553,7 @@ impl MessageProcessor {
     pub fn process_message(
         &self,
         message: &Message,
-        loaders: &[Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>],
+        loaders: &[Vec<(Pubkey, Rc<RefCell<AccountSharedData>>, usize)>],
         accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
         rent_collector: &RentCollector,
         log_collector: Option<Rc<LogCollector>>,
@@ -752,6 +751,7 @@ mod tests {
         let accounts = vec![(
             solana_sdk::pubkey::new_rand(),
             Rc::new(RefCell::new(AccountSharedData::default())),
+            0,
         )];
 
         assert!(MessageProcessor::verify_account_references(&accounts).is_ok());
@@ -808,6 +808,9 @@ mod tests {
         let mut message_processor = MessageProcessor::default();
         message_processor.add_program(mock_system_program_id, mock_system_process_instruction);
 
+        let program_account = Rc::new(RefCell::new(create_loadable_account_for_test(
+            "mock_system_program",
+        )));
         let accounts = vec![
             (
                 solana_sdk::pubkey::new_rand(),
@@ -817,12 +820,9 @@ mod tests {
                 solana_sdk::pubkey::new_rand(),
                 AccountSharedData::new_ref(0, 1, &mock_system_program_id),
             ),
+            (mock_system_program_id, program_account.clone()),
         ];
-
-        let account = Rc::new(RefCell::new(create_loadable_account_for_test(
-            "mock_system_program",
-        )));
-        let loaders = vec![vec![(mock_system_program_id, account)]];
+        let loaders = vec![vec![(mock_system_program_id, program_account, 2)]];
 
         let executors = Rc::new(RefCell::new(Executors::default()));
         let ancestors = Ancestors::default();
@@ -996,6 +996,9 @@ mod tests {
         let mut message_processor = MessageProcessor::default();
         message_processor.add_program(mock_program_id, mock_system_process_instruction);
 
+        let program_account = Rc::new(RefCell::new(create_loadable_account_for_test(
+            "mock_system_program",
+        )));
         let accounts = vec![
             (
                 solana_sdk::pubkey::new_rand(),
@@ -1005,12 +1008,9 @@ mod tests {
                 solana_sdk::pubkey::new_rand(),
                 AccountSharedData::new_ref(0, 1, &mock_program_id),
             ),
+            (mock_program_id, program_account.clone()),
         ];
-
-        let account = Rc::new(RefCell::new(create_loadable_account_for_test(
-            "mock_system_program",
-        )));
-        let loaders = vec![vec![(mock_program_id, account)]];
+        let loaders = vec![vec![(mock_program_id, program_account, 2)]];
 
         let executors = Rc::new(RefCell::new(Executors::default()));
         let ancestors = Ancestors::default();
@@ -1163,10 +1163,6 @@ mod tests {
 
         let mut program_account = AccountSharedData::new(1, 0, &native_loader::id());
         program_account.set_executable(true);
-        let executable_accounts = vec![(
-            callee_program_id,
-            Rc::new(RefCell::new(program_account.clone())),
-        )];
 
         let owned_account = AccountSharedData::new(42, 1, &callee_program_id);
         let not_owned_account = AccountSharedData::new(84, 1, &solana_sdk::pubkey::new_rand());
@@ -1181,8 +1177,13 @@ mod tests {
                 solana_sdk::pubkey::new_rand(),
                 Rc::new(RefCell::new(not_owned_account)),
             ),
-            (callee_program_id, Rc::new(RefCell::new(program_account))),
+            (
+                callee_program_id,
+                Rc::new(RefCell::new(program_account.clone())),
+            ),
         ];
+        let executable_accounts =
+            vec![(callee_program_id, Rc::new(RefCell::new(program_account)), 2)];
 
         let compiled_instruction = CompiledInstruction::new(2, &(), vec![0, 1, 2]);
         let programs: Vec<(_, ProcessInstructionWithContext)> =

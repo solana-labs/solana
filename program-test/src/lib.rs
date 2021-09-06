@@ -274,6 +274,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
 
         stable_log::program_invoke(&logger, &program_id, invoke_context.invoke_depth());
 
+        // Convert AccountInfos into Accounts
         fn ai_to_a(ai: &AccountInfo) -> AccountSharedData {
             AccountSharedData::from(Account {
                 lamports: ai.lamports(),
@@ -283,12 +284,6 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
                 rent_epoch: ai.rent_epoch,
             })
         }
-        let executables = vec![(
-            program_id,
-            Rc::new(RefCell::new(ai_to_a(program_account_info()))),
-        )];
-
-        // Convert AccountInfos into Accounts
         let mut accounts = vec![];
         'outer: for key in &message.account_keys {
             for account_info in account_infos {
@@ -304,6 +299,15 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             message.account_keys.len(),
             "Missing or not enough accounts passed to invoke"
         );
+        let program_account = ai_to_a(program_account_info());
+        let (program_account_index, found_program_account) =
+            invoke_context.get_account(&program_id).unwrap();
+        assert_eq!(program_account, *(found_program_account.borrow()));
+        let executables = vec![(
+            program_id,
+            Rc::new(RefCell::new(program_account)),
+            program_account_index,
+        )];
 
         // Check Signers
         for account_info in account_infos {

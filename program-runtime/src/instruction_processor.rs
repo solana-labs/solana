@@ -346,13 +346,15 @@ impl InstructionProcessor {
     pub fn create_keyed_accounts<'a>(
         message: &'a Message,
         instruction: &'a CompiledInstruction,
-        executable_accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        executable_accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>, usize)],
         accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
         demote_program_write_locks: bool,
     ) -> Vec<(bool, bool, &'a Pubkey, &'a RefCell<AccountSharedData>)> {
         executable_accounts
             .iter()
-            .map(|(key, account)| (false, false, key, account as &RefCell<AccountSharedData>))
+            .map(|(key, account, _account_index)| {
+                (false, false, key, account as &RefCell<AccountSharedData>)
+            })
             .chain(instruction.accounts.iter().map(|index| {
                 let index = *index as usize;
                 (
@@ -535,13 +537,12 @@ impl InstructionProcessor {
 
             invoke_context.record_instruction(&instruction);
 
-            let program_account =
-                invoke_context
-                    .get_account(&callee_program_id)
-                    .ok_or_else(|| {
-                        ic_msg!(invoke_context, "Unknown program {}", callee_program_id);
-                        InstructionError::MissingAccount
-                    })?;
+            let (program_account_index, program_account) = invoke_context
+                .get_account(&callee_program_id)
+                .ok_or_else(|| {
+                    ic_msg!(invoke_context, "Unknown program {}", callee_program_id);
+                    InstructionError::MissingAccount
+                })?;
             if !program_account.borrow().executable() {
                 ic_msg!(
                     invoke_context,
@@ -550,13 +551,20 @@ impl InstructionProcessor {
                 );
                 return Err(InstructionError::AccountNotExecutable);
             }
-            let programdata = if program_account.borrow().owner() == &bpf_loader_upgradeable::id() {
+            let mut executable_accounts = vec![];
+            if program_account.borrow().owner() == &bpf_loader_upgradeable::id() {
                 if let UpgradeableLoaderState::Program {
                     programdata_address,
                 } = program_account.borrow().state()?
                 {
-                    if let Some(account) = invoke_context.get_account(&programdata_address) {
-                        Some((programdata_address, account))
+                    if let Some((programdata_account_index, programdata_account)) =
+                        invoke_context.get_account(&programdata_address)
+                    {
+                        executable_accounts.push((
+                            programdata_address,
+                            programdata_account,
+                            programdata_account_index,
+                        ));
                     } else {
                         ic_msg!(
                             invoke_context,
@@ -573,13 +581,11 @@ impl InstructionProcessor {
                     );
                     return Err(InstructionError::MissingAccount);
                 }
-            } else {
-                None
-            };
-            let mut executable_accounts = vec![(callee_program_id, program_account)];
-            if let Some(programdata) = programdata {
-                executable_accounts.push(programdata);
             }
+            executable_accounts.insert(
+                0,
+                (callee_program_id, program_account, program_account_index),
+            );
             (
                 message,
                 executable_accounts,
@@ -646,7 +652,7 @@ impl InstructionProcessor {
     /// This method calls the instruction's program entrypoint function
     pub fn process_cross_program_instruction(
         message: &Message,
-        executable_accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        executable_accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>, usize)],
         accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
         caller_write_privileges: &[bool],
         invoke_context: &mut dyn InvokeContext,

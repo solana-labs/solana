@@ -95,8 +95,8 @@ pub trait InvokeContext {
     fn record_instruction(&self, instruction: &Instruction);
     /// Get the bank's active feature set
     fn is_feature_active(&self, feature_id: &Pubkey) -> bool;
-    /// Get an account by its key
-    fn get_account(&self, pubkey: &Pubkey) -> Option<Rc<RefCell<AccountSharedData>>>;
+    /// Find an account_index and account by its key
+    fn get_account(&self, pubkey: &Pubkey) -> Option<(usize, Rc<RefCell<AccountSharedData>>)>;
     /// Update timing
     fn update_timing(
         &mut self,
@@ -509,10 +509,10 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
     fn is_feature_active(&self, feature_id: &Pubkey) -> bool {
         !self.disabled_features.contains(feature_id)
     }
-    fn get_account(&self, pubkey: &Pubkey) -> Option<Rc<RefCell<AccountSharedData>>> {
-        for (key, account) in self.accounts.iter() {
+    fn get_account(&self, pubkey: &Pubkey) -> Option<(usize, Rc<RefCell<AccountSharedData>>)> {
+        for (index, (key, account)) in self.accounts.iter().enumerate().rev() {
             if key == pubkey {
-                return Some(account.clone());
+                return Some((index, account.clone()));
             }
         }
         None

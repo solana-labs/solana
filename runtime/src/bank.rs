@@ -192,7 +192,7 @@ type BankStatusCache = StatusCache<Result<()>>;
 #[frozen_abi(digest = "5Br3PNyyX1L7XoS4jYLt5JTeMXowLSsu7v9LhokC8vnq")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 type TransactionAccountRefCells = Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>;
-type TransactionLoaderRefCells = Vec<Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>>;
+type TransactionLoaderRefCells = Vec<Vec<(Pubkey, Rc<RefCell<AccountSharedData>>, usize)>>;
 
 // Eager rent collection repeats in cyclic manner.
 // Each cycle is composed of <partition_count> number of tiny pubkey subranges
@@ -3148,7 +3148,9 @@ impl Bank {
             .iter_mut()
             .map(|v| {
                 v.drain(..)
-                    .map(|(pubkey, account)| (pubkey, Rc::new(RefCell::new(account))))
+                    .map(|(pubkey, account, account_index)| {
+                        (pubkey, Rc::new(RefCell::new(account)), account_index)
+                    })
                     .collect()
             })
             .collect();
@@ -3172,12 +3174,13 @@ impl Bank {
             ))
         }
         for (ls, mut lrcs) in loaders.iter_mut().zip(loader_refcells) {
-            for (pubkey, lrc) in lrcs.drain(..) {
+            for (pubkey, lrc, account_index) in lrcs.drain(..) {
                 ls.push((
                     pubkey,
                     Rc::try_unwrap(lrc)
                         .map_err(|_| TransactionError::AccountBorrowOutstanding)?
                         .into_inner(),
+                    account_index,
                 ))
             }
         }
@@ -3207,7 +3210,7 @@ impl Bank {
     fn get_executors(
         &self,
         message: &SanitizedMessage,
-        loaders: &[Vec<(Pubkey, AccountSharedData)>],
+        loaders: &[Vec<(Pubkey, AccountSharedData, usize)>],
     ) -> Rc<RefCell<Executors>> {
         let mut num_executors = message.account_keys_len();
         for instruction_loaders in loaders.iter() {
@@ -3223,7 +3226,7 @@ impl Bank {
             }
         }
         for instruction_loaders in loaders.iter() {
-            for (key, _) in instruction_loaders.iter() {
+            for (key, _account, _account_index) in instruction_loaders.iter() {
                 if let Some(executor) = cache.get(key) {
                     executors.insert(*key, executor);
                 }
@@ -12015,10 +12018,10 @@ pub(crate) mod tests {
 
         let loaders = &[
             vec![
-                (key3, AccountSharedData::default()),
-                (key4, AccountSharedData::default()),
+                (key3, AccountSharedData::default(), 3),
+                (key4, AccountSharedData::default(), 4),
             ],
-            vec![(key1, AccountSharedData::default())],
+            vec![(key1, AccountSharedData::default(), 2)],
         ];
 
         // don't do any work if not dirty
@@ -12083,8 +12086,8 @@ pub(crate) mod tests {
             SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique()))).unwrap();
 
         let loaders = &[vec![
-            (key1, AccountSharedData::default()),
-            (key2, AccountSharedData::default()),
+            (key1, AccountSharedData::default(), 0),
+            (key2, AccountSharedData::default(), 1),
         ]];
 
         // add one to root bank

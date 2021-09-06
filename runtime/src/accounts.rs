@@ -101,7 +101,7 @@ pub struct Accounts {
 // for the load instructions
 pub type TransactionAccounts = Vec<(Pubkey, AccountSharedData)>;
 pub type TransactionRent = u64;
-pub type TransactionLoaders = Vec<Vec<(Pubkey, AccountSharedData)>>;
+pub type TransactionLoaders = Vec<Vec<(Pubkey, AccountSharedData, usize)>>;
 #[derive(PartialEq, Debug, Clone)]
 pub struct LoadedTransaction {
     pub accounts: TransactionAccounts,
@@ -367,8 +367,15 @@ impl Accounts {
                             .map(|(program_id, _ix)| {
                                 self.load_executable_accounts(ancestors, program_id, error_counters)
                                     .map(|loaders| {
+                                        let base_index = accounts.len();
                                         accounts.append(&mut loaders.clone());
                                         loaders
+                                            .into_iter()
+                                            .enumerate()
+                                            .map(|(index, (key, account))| {
+                                                (key, account, base_index + index)
+                                            })
+                                            .collect::<Vec<_>>()
                                     })
                             })
                             .collect::<Result<TransactionLoaders>>()?;
@@ -1666,7 +1673,8 @@ mod tests {
                 for loaders in loaded_transaction.loaders.iter() {
                     for (i, accounts_subset) in loaders.iter().enumerate() {
                         // +1 to skip first not loader account
-                        assert_eq!(*accounts_subset, accounts[i + 1]);
+                        assert_eq!(accounts_subset.0, accounts[i + 1].0);
+                        assert_eq!(accounts_subset.1, accounts[i + 1].1);
                     }
                 }
             }
