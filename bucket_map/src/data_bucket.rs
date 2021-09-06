@@ -307,7 +307,7 @@ impl DataBucket {
             if new_capacity > self.capacity {
                 increment = new_capacity - self.capacity; // at least get closer to where we'd like to be
             }
-            error!("new data cap: {}, expected: {}", increment, expected_capacity);
+            error!("new data cap: {}, expected: {}, new: {}, existing: {}", increment, expected_capacity, new_capacity, self.capacity);
         }
         let index_grow = 1 << increment;
         let (new_map, new_file) = Self::new_map(
