@@ -3954,7 +3954,7 @@ pub fn destroy_test_ledger(ledger_path: &Path, blockstore: Blockstore) {
     // Destroying the blockstore without closing it first is undefined behavior; any
     // active
     drop(blockstore);
-    Blockstore::destroy(&ledger_path).expect("Expected successful blockstore destruction");
+    Blockstore::destroy(ledger_path).expect("Expected successful blockstore destruction");
     // Destroy the ledger directory, which may contain files such as genesis.bin
     fs::remove_dir_all(&ledger_path).expect("Expected successful ledger destruction");
 }
