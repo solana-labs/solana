@@ -236,7 +236,9 @@ impl<V: IsCached> BucketMapHolder<V> {
                 let timeout = self.wait.wait_timeout(Duration::from_millis(200));
                 m.stop();
                 if !exit_when_idle {
-                    self.stats.flushing_idle_us.fetch_add(m.as_us(), Ordering::Relaxed);
+                    self.stats
+                        .flushing_idle_us
+                        .fetch_add(m.as_us(), Ordering::Relaxed);
                 }
 
                 if timeout {
@@ -250,14 +252,14 @@ impl<V: IsCached> BucketMapHolder<V> {
                 self.stats.bg_flush_cycles.fetch_add(1, Ordering::Relaxed);
             }
             found_one = false;
-            let start = if exit_when_idle {
-                // start the exit when idle threads at random buckets to avoid all threads working on the same bucket
-                let random: usize = thread_rng().gen();
-                random % self.bins
-            } else {
-                0
-            };
-            for ix in start..self.bins {
+            for ix in 0..self.bins {
+                let ix = if exit_when_idle {
+                    // the other threads just choose random buckets to flush
+                    let random: usize = thread_rng().gen();
+                    random % self.bins
+                } else {
+                    ix
+                };
                 if !exit_when_idle {
                     self.stats.bins_flushed.fetch_add(1, Ordering::Relaxed);
                 }
