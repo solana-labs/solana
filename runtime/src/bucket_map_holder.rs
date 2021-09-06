@@ -3,7 +3,6 @@ use crate::accounts_index::{IsCached, RefCount, SlotList, SlotSlice, WriteAccoun
 use crate::bucket_map_holder_stats::BucketMapHolderStats;
 use crate::in_mem_accounts_index::{SlotT, V2};
 use crate::pubkey_bins::PubkeyBinCalculator16;
-use rand::{thread_rng, Rng};
 use solana_bucket_map::bucket_map::{BucketMap, BucketMapKeyValue};
 use solana_measure::measure::Measure;
 use solana_sdk::pubkey::Pubkey;
@@ -22,7 +21,7 @@ use std::convert::TryInto;
 
 pub type WriteCache<V> = HashMap<Pubkey, V, MyBuildHasher>;
 use crate::waitable_condvar::WaitableCondvar;
-use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, AtomicUsize};
 use std::time::Duration;
 
 use std::hash::{BuildHasherDefault, Hasher};
@@ -81,6 +80,7 @@ pub struct BucketMapHolder<V: IsCached> {
     pub in_mem_only: bool,
     pub range_start_per_bin: Vec<Pubkey>,
     pub stats: BucketMapHolderStats,
+    pub next_flush_index: AtomicUsize,
 }
 
 impl<V: IsCached> BucketMapHolder<V> {
@@ -253,14 +253,8 @@ impl<V: IsCached> BucketMapHolder<V> {
                 self.stats.bg_flush_cycles.fetch_add(1, Ordering::Relaxed);
             }
             found_one = false;
-            for ix in 0..self.bins {
-                let ix = if exit_when_idle {
-                    // the other threads just choose random buckets to flush
-                    let random: usize = thread_rng().gen();
-                    random % self.bins
-                } else {
-                    ix
-                };
+            for _iteration in 0..self.bins {
+                let ix = self.get_next_bucket_to_flush();
                 if !exit_when_idle {
                     self.stats.bins_flushed.fetch_add(1, Ordering::Relaxed);
                 }
@@ -287,6 +281,21 @@ impl<V: IsCached> BucketMapHolder<V> {
             .active_flush_threads
             .fetch_sub(1, Ordering::Relaxed);
     }
+
+    fn get_next_bucket_to_flush(&self) -> usize {
+        loop {
+            let ix = self.next_flush_index.fetch_add(1, Ordering::Relaxed);
+            if ix < self.bins {
+                return ix;
+            }
+            // we need to wrap around
+            if self.next_flush_index.compare_exchange(ix + 1, 1, Ordering::Relaxed, Ordering::Relaxed).is_ok() {
+                return 0; // we got 0 since we reset it to 0
+            }
+            // otherwise, some other thread swapped it first, so start over by adding to get the next index
+        }
+    }
+
     pub fn new(bucket_map: BucketMapWithEntryType<V>) -> Self {
         let in_mem_only = false;
         let current_age = AtomicU8::new(0);
@@ -324,6 +333,7 @@ impl<V: IsCached> BucketMapHolder<V> {
             binner,
             startup,
             in_mem_only,
+            next_flush_index: AtomicUsize::default(),
         }
     }
     pub fn set_startup(&self, startup: bool) {
