@@ -113,6 +113,7 @@ impl<V: IsCached> BucketMapHolder<V> {
                 new_value.set_must_do_lookup_from_disk(must_do_lookup_from_disk);
                 assert!(!new_value.confirmed_not_on_disk());
                 vacant.insert(new_value);
+                self.wait.notify_all();
             }
         }
     }
@@ -221,15 +222,15 @@ impl<V: IsCached> BucketMapHolder<V> {
                 age = Some(current_age);
                 aging = Instant::now();
             }
-            if exit.load(Ordering::Relaxed) {
+            if !exit_when_idle && exit.load(Ordering::Relaxed) {
                 break;
             }
             if age.is_none() && !found_one {
-                if exit_when_idle && !self.startup.load(Ordering::Relaxed) {
-                    error!("background flushing exiting");
-                    break;
-                }
                 if self.wait.wait_timeout(Duration::from_millis(200)) {
+                    if exit_when_idle && !exit.load(Ordering::Relaxed) {
+                        error!("background flushing exiting");
+                        break;
+                    }
                     continue;
                 }
             }
@@ -588,6 +589,7 @@ impl<V: IsCached> BucketMapHolder<V> {
         self.stats
             .update_cache_us
             .fetch_add(m1.as_ns(), Ordering::Relaxed);
+        self.wait.notify_all();
     }
 
     // If the slot list for pubkey exists in the index and is empty, remove the index entry for pubkey and return true.
@@ -726,6 +728,7 @@ impl<V: IsCached> BucketMapHolder<V> {
                     new_value.set_insert(true);
                     vacant.insert(new_value);
                 }
+                self.wait.notify_all();
             }
         }
     }

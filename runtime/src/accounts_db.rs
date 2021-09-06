@@ -6232,9 +6232,8 @@ impl AccountsDb {
                 (0..num_threads)
                     .into_iter()
                     .map(|_| {
-                        AccountsIndex::create_bg_flusher(&self.accounts_index.account_maps, true)
-                            .1
-                            .unwrap()
+                        let bg = AccountsIndex::create_bg_flusher(&self.accounts_index.account_maps, true);
+                        (bg.0, bg.1.unwrap())
                     })
                     .collect()
             } else {
@@ -6329,7 +6328,8 @@ impl AccountsDb {
             let storage_info_timings = storage_info_timings.into_inner().unwrap();
 
             let mut disk_flush_us = Measure::start("flushers");
-            flushers.into_iter().for_each(|join| join.join().unwrap());
+            flushers.iter().for_each(|(exit, _)| exit.store(true, Ordering::Relaxed));
+            flushers.into_iter().for_each(|(_, join)| join.join().unwrap());
             disk_flush_us.stop();
 
             let mut timings = GenerateIndexTimings {
