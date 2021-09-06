@@ -227,7 +227,7 @@ impl<V: IsCached> BucketMapHolder<V> {
             }
             if age.is_none() && !found_one {
                 if self.wait.wait_timeout(Duration::from_millis(200)) {
-                    if exit_when_idle && !exit.load(Ordering::Relaxed) {
+                    if exit_when_idle && exit.load(Ordering::Relaxed) {
                         error!("background flushing exiting");
                         break;
                     }
@@ -251,6 +251,9 @@ impl<V: IsCached> BucketMapHolder<V> {
                         error!("found one flushing: {}", ix);
                     }
                     found_one = true;
+                    if self.startup.load(Ordering::Relaxed) {
+                        self.wait.notify_all(); // if we're still in startup mode, then notify every thread that there are still dirty bins to make sure everyone keeps working
+                    }
                 }
             }
             if !found_one {
