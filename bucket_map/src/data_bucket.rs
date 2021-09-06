@@ -47,7 +47,7 @@ pub struct BucketMapStats {
 */
 // 23: 8,388,608
 // 24; // 16,777,216
-const DEFAULT_CAPACITY: u8 = 16;
+const DEFAULT_CAPACITY: u8 = 15;
 
 #[repr(C)]
 struct Header {
@@ -307,7 +307,6 @@ impl DataBucket {
             if new_capacity > self.capacity {
                 increment = new_capacity - self.capacity; // at least get closer to where we'd like to be
             }
-            error!("new data cap: {}, expected: {}, new: {}, existing: {}", increment, expected_capacity, new_capacity, self.capacity);
         }
         let index_grow = 1 << increment;
         let (new_map, new_file) = Self::new_map(
