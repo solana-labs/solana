@@ -51,7 +51,10 @@ import { useQuery } from "utils/url";
 import { TokenInfoMap } from "@solana/spl-token-registry";
 import { useTokenRegistry } from "providers/mints/token-registry";
 import { getTokenProgramInstructionName } from "utils/instruction";
-import { isMangoInstruction, parseMangoInstructionTitle } from "components/instruction/mango/types";
+import {
+  isMangoInstruction,
+  parseMangoInstructionTitle,
+} from "components/instruction/mango/types";
 
 const TRUNCATE_TOKEN_LENGTH = 10;
 const ALL_TOKENS = "";
