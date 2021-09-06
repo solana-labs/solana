@@ -412,6 +412,7 @@ impl<V: IsCached> BucketMapHolder<V> {
         if insert > 1_000 {
             // give buckets an idea of what was just inserted
             self.disk.set_expected_capacity(ix, insert);
+            error!("insert: {}", insert);
         }
 
         let mut m1 = Measure::start("flush_action");
