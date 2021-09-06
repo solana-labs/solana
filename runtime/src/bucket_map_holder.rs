@@ -3,7 +3,6 @@ use crate::accounts_index::{IsCached, RefCount, SlotList, SlotSlice, WriteAccoun
 use crate::bucket_map_holder_stats::BucketMapHolderStats;
 use crate::in_mem_accounts_index::{SlotT, V2};
 use crate::pubkey_bins::PubkeyBinCalculator16;
-use log::*;
 use rand::{thread_rng, Rng};
 use solana_bucket_map::bucket_map::{BucketMap, BucketMapKeyValue};
 use solana_measure::measure::Measure;
@@ -224,6 +223,7 @@ impl<V: IsCached> BucketMapHolder<V> {
             {
                 // increment age to get rid of some older things in cache
                 current_age = Self::add_age(current_age, 1);
+                self.stats.age.store(current_age as u64, Ordering::Relaxed);
                 self.current_age.store(current_age, Ordering::Relaxed);
                 age = Some(current_age);
                 aging = Instant::now();
@@ -414,7 +414,9 @@ impl<V: IsCached> BucketMapHolder<V> {
                     let v = occupied.get();
                     if v.dirty() {
                         if Arc::strong_count(v) > 1 {
-                            self.stats.strong_count_no_flush_dirty.fetch_add(1, Ordering::Relaxed);
+                            self.stats
+                                .strong_count_no_flush_dirty
+                                .fetch_add(1, Ordering::Relaxed);
                             // we have to have a write lock above to know that no client can get the value after this point until we're done flushing
                             // only work on dirty things when there are no outstanding refs to the value
                             continue;
@@ -488,7 +490,9 @@ impl<V: IsCached> BucketMapHolder<V> {
                     }
 
                     if Arc::strong_count(item) > 1 {
-                        self.stats.strong_count_no_purge.fetch_add(1, Ordering::Relaxed);
+                        self.stats
+                            .strong_count_no_purge
+                            .fetch_add(1, Ordering::Relaxed);
                     }
 
                     if self.stop_flush(ix) {

@@ -42,6 +42,7 @@ pub struct BucketMapHolderStats {
     pub flushing_idle_us: AtomicU64,
     pub strong_count_no_flush_dirty: AtomicU64,
     pub strong_count_no_purge: AtomicU64,
+    pub age: AtomicU64,
 }
 
 impl BucketMapHolderStats {
@@ -272,6 +273,11 @@ impl BucketMapHolderStats {
             (
                 "strong_count_no_purge",
                 self.strong_count_no_purge.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "age",
+                self.age.load(Ordering::Relaxed),
                 i64
             ),
         );
