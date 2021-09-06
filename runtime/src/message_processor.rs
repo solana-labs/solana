@@ -88,15 +88,8 @@ impl<'a> ThisInvokeContext<'a> {
         ancestors: &'a Ancestors,
         blockhash: &'a Hash,
         fee_calculator: &'a FeeCalculator,
-    ) -> Self {
+    ) -> Result<Self, InstructionError> {
         let pre_accounts = MessageProcessor::create_pre_accounts(message, instruction, accounts);
-        let keyed_accounts = InstructionProcessor::create_keyed_accounts(
-            message,
-            instruction,
-            executable_accounts,
-            accounts,
-            feature_set.is_active(&demote_program_write_locks::id()),
-        );
         let compute_meter = if feature_set.is_active(&tx_wide_compute_cap::id()) {
             compute_meter
         } else {
@@ -124,20 +117,24 @@ impl<'a> ThisInvokeContext<'a> {
             blockhash,
             fee_calculator,
         };
-        invoke_context
-            .invoke_stack
-            .push(InvokeContextStackFrame::new(
-                *program_id,
-                create_keyed_accounts_unified(&keyed_accounts),
-            ));
-        invoke_context
+        invoke_context.push(
+            program_id,
+            message,
+            instruction,
+            executable_accounts,
+            accounts,
+        )?;
+        Ok(invoke_context)
     }
 }
 impl<'a> InvokeContext for ThisInvokeContext<'a> {
     fn push(
         &mut self,
         key: &Pubkey,
-        keyed_accounts: &[(bool, bool, &Pubkey, &RefCell<AccountSharedData>)],
+        message: &Message,
+        instruction: &CompiledInstruction,
+        executable_indices: &[(Pubkey, Rc<RefCell<AccountSharedData>>, usize)],
+        instruction_accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
     ) -> Result<(), InstructionError> {
         if self.invoke_stack.len() > self.compute_budget.max_invoke_depth {
             return Err(InstructionError::CallDepth);
@@ -153,6 +150,35 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
             // Reentrancy not allowed unless caller is calling itself
             return Err(InstructionError::ReentrancyNotAllowed);
         }
+
+        // Create the KeyedAccounts that will be passed to the program
+        let demote_program_write_locks = self
+            .feature_set
+            .is_active(&demote_program_write_locks::id());
+        let keyed_accounts = executable_indices
+            .iter()
+            .map(|(key, account, account_index)| {
+                assert_eq!(*key, self.accounts[*account_index].0);
+                assert_eq!(*account, self.accounts[*account_index].1);
+                (
+                    false,
+                    false,
+                    key,
+                    account as &RefCell<AccountSharedData>,
+                    // &self.accounts[*account_index].0,
+                    // &self.accounts[*account_index].1 as &RefCell<AccountSharedData>,
+                )
+            })
+            .chain(instruction.accounts.iter().map(|index| {
+                let index = *index as usize;
+                (
+                    message.is_signer(index),
+                    message.is_writable(index, demote_program_write_locks),
+                    &instruction_accounts[index].0,
+                    &instruction_accounts[index].1 as &RefCell<AccountSharedData>,
+                )
+            }))
+            .collect::<Vec<_>>();
 
         // Alias the keys and account references in the provided keyed_accounts
         // with the ones already existing in self, so that the lifetime 'a matches.
@@ -520,7 +546,7 @@ impl MessageProcessor {
             ancestors,
             blockhash,
             fee_calculator,
-        );
+        )?;
 
         self.instruction_processor.process_instruction(
             program_id,
@@ -675,12 +701,21 @@ mod tests {
             &ancestors,
             &blockhash,
             &fee_calculator,
-        );
+        )
+        .unwrap();
 
         // Check call depth increases and has a limit
         let mut depth_reached = 1;
         for program_id in invoke_stack.iter().skip(1) {
-            if Err(InstructionError::CallDepth) == invoke_context.push(program_id, &[]) {
+            if Err(InstructionError::CallDepth)
+                == invoke_context.push(
+                    program_id,
+                    &message,
+                    &message.instructions[0],
+                    &[],
+                    &accounts,
+                )
+            {
                 break;
             }
             depth_reached += 1;
@@ -1223,7 +1258,8 @@ mod tests {
             &ancestors,
             &blockhash,
             &fee_calculator,
-        );
+        )
+        .unwrap();
 
         // not owned account modified by the caller (before the invoke)
         let caller_write_privileges = message
@@ -1284,7 +1320,8 @@ mod tests {
                 &ancestors,
                 &blockhash,
                 &fee_calculator,
-            );
+            )
+            .unwrap();
 
             let caller_write_privileges = message
                 .account_keys

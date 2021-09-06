@@ -7,6 +7,7 @@ use solana_sdk::{
     hash::Hash,
     instruction::{CompiledInstruction, Instruction, InstructionError},
     keyed_account::{create_keyed_accounts_unified, KeyedAccount},
+    message::Message,
     pubkey::Pubkey,
     sysvar::Sysvar,
 };
@@ -55,7 +56,10 @@ pub trait InvokeContext {
     fn push(
         &mut self,
         key: &Pubkey,
-        keyed_accounts: &[(bool, bool, &Pubkey, &RefCell<AccountSharedData>)],
+        message: &Message,
+        instruction: &CompiledInstruction,
+        executable_indices: &[(Pubkey, Rc<RefCell<AccountSharedData>>, usize)],
+        instruction_accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
     ) -> Result<(), InstructionError>;
     /// Pop a stack frame from the invocation stack
     ///
@@ -438,17 +442,19 @@ pub fn mock_set_sysvar<T: Sysvar>(
 }
 
 impl<'a> InvokeContext for MockInvokeContext<'a> {
+    #[allow(unreachable_code)] // TODO
     fn push(
         &mut self,
-        key: &Pubkey,
-        keyed_accounts: &[(bool, bool, &Pubkey, &RefCell<AccountSharedData>)],
+        _key: &Pubkey,
+        _message: &Message,
+        _instruction: &CompiledInstruction,
+        _executable_indices: &[(Pubkey, Rc<RefCell<AccountSharedData>>, usize)],
+        _instruction_accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
     ) -> Result<(), InstructionError> {
-        fn transmute_lifetime<'a, 'b>(value: Vec<KeyedAccount<'a>>) -> Vec<KeyedAccount<'b>> {
-            unsafe { std::mem::transmute(value) }
-        }
+        panic!("unimplemented");
         self.invoke_stack.push(InvokeContextStackFrame::new(
-            *key,
-            transmute_lifetime(create_keyed_accounts_unified(keyed_accounts)),
+            *_key,
+            create_keyed_accounts_unified(&[]),
         ));
         Ok(())
     }

@@ -342,31 +342,6 @@ impl InstructionProcessor {
         }
     }
 
-    /// Create the KeyedAccounts that will be passed to the program
-    pub fn create_keyed_accounts<'a>(
-        message: &'a Message,
-        instruction: &'a CompiledInstruction,
-        executable_accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>, usize)],
-        accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
-        demote_program_write_locks: bool,
-    ) -> Vec<(bool, bool, &'a Pubkey, &'a RefCell<AccountSharedData>)> {
-        executable_accounts
-            .iter()
-            .map(|(key, account, _account_index)| {
-                (false, false, key, account as &RefCell<AccountSharedData>)
-            })
-            .chain(instruction.accounts.iter().map(|index| {
-                let index = *index as usize;
-                (
-                    message.is_signer(index),
-                    message.is_writable(index, demote_program_write_locks),
-                    &accounts[index].0,
-                    &accounts[index].1 as &RefCell<AccountSharedData>,
-                )
-            }))
-            .collect::<Vec<_>>()
-    }
-
     /// Process an instruction
     /// This method calls the instruction's program entrypoint method
     pub fn process_instruction(
@@ -663,19 +638,14 @@ impl InstructionProcessor {
             // Verify the calling program hasn't misbehaved
             invoke_context.verify_and_update(instruction, accounts, caller_write_privileges)?;
 
-            // Construct keyed accounts
-            let demote_program_write_locks =
-                invoke_context.is_feature_active(&demote_program_write_locks::id());
-            let keyed_accounts = Self::create_keyed_accounts(
+            // Invoke callee
+            invoke_context.push(
+                program_id,
                 message,
                 instruction,
                 executable_accounts,
                 accounts,
-                demote_program_write_locks,
-            );
-
-            // Invoke callee
-            invoke_context.push(program_id, &keyed_accounts)?;
+            )?;
 
             let mut instruction_processor = InstructionProcessor::default();
             for (program_id, process_instruction) in invoke_context.get_programs().iter() {
@@ -689,6 +659,8 @@ impl InstructionProcessor {
             );
             if result.is_ok() {
                 // Verify the called program has not misbehaved
+                let demote_program_write_locks =
+                    invoke_context.is_feature_active(&demote_program_write_locks::id());
                 let write_privileges: Vec<bool> = (0..message.account_keys.len())
                     .map(|i| message.is_writable(i, demote_program_write_locks))
                     .collect();
