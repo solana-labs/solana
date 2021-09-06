@@ -11,9 +11,10 @@ use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 use std::ops::RangeBounds;
 use std::path::PathBuf;
+use log::*;
 use std::sync::Arc;
 use std::sync::RwLock;
-use std::{fs, sync::atomic::Ordering};
+use std::{fs, sync::atomic::{AtomicUsize, Ordering}};
 type RefCount = u64;
 
 pub struct BucketMapKeyValue<T> {
@@ -173,6 +174,11 @@ impl<T: Clone + Copy + std::fmt::Debug> BucketMap<T> {
     pub fn new_buckets(num_buckets_pow2: u8) -> Self {
         Self::new(num_buckets_pow2, Self::new_random_folders())
     }
+
+    pub fn set_expected_capacity(&self, ix: usize, count: usize) {
+        self.buckets[ix].read().unwrap().as_ref().map(|bucket| bucket.set_expected_capacity(count));
+    }
+
     pub fn num_buckets(&self) -> usize {
         self.buckets.len()
     }
@@ -362,6 +368,7 @@ struct Bucket<T> {
     data: Vec<DataBucket>,
     _phantom: PhantomData<T>,
     stats: Arc<BucketMapStats>,
+    expected_count: AtomicUsize,
 }
 
 type NumSlots = u64;
@@ -433,7 +440,12 @@ impl<T: Clone + Copy> Bucket<T> {
             data: vec![],
             _phantom: PhantomData::default(),
             stats,
+            expected_count: AtomicUsize::default(),
         }
+    }
+
+    pub fn set_expected_capacity(&self, count: usize) {
+        self.expected_count.store(count, Ordering::Relaxed);
     }
 
     fn keys(&self) -> Vec<Pubkey> {
@@ -678,7 +690,19 @@ impl<T: Clone + Copy> Bucket<T> {
         if self.index.capacity == sz {
             let mut m = Measure::start("");
             //debug!("GROW_INDEX: {}", sz);
-            for i in 1.. {
+            let mut increment = 1;
+            let count = self.expected_count.load(Ordering::Relaxed);
+            if count > 0 {
+                let new_capacity = (count as f64).log2().ceil() as u8; // use int log here?                
+                if new_capacity > self.index.capacity {
+                    increment = self.index.capacity - new_capacity; // at least get closer to where we'd like to be
+                    if increment > 2 {
+                        error!("new cap increases by: {}", increment);
+                    }
+                }
+            }
+
+            for i in increment.. {
                 //increasing the capacity by ^4 reduces the
                 //likelyhood of a re-index collision of 2^(max_search)^2
                 //1 in 2^32

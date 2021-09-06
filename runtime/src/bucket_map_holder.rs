@@ -368,8 +368,12 @@ impl<V: IsCached> BucketMapHolder<V> {
         let mut flushed = 0;
         let mut get_purges = 0;
         let mut m0 = Measure::start("flush1");
+        let mut insert = 0;
         for (k, v) in read_lock.iter() {
             let dirty = v.dirty();
+            if dirty && v.insert() {
+                insert += 1;
+            }
             let mut flush = dirty;
             // could add: || slot_list.len() > 1); // theory is that anything with a len > 1 will be dealt with fairly soon - it is 'hot'
             let keep_this_in_cache = Self::in_cache(&v.slot_list.read().unwrap());
@@ -405,6 +409,10 @@ impl<V: IsCached> BucketMapHolder<V> {
         }
         m0.stop();
         drop(read_lock);
+        if insert > 10_000 {
+            // give buckets an idea of what was just inserted
+            self.disk.set_expected_capacity(ix, insert);
+        }
 
         let mut m1 = Measure::start("flush_action");
         {
