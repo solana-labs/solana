@@ -155,6 +155,70 @@ fn test_spend_and_verify_all_nodes_3() {
 
 #[test]
 #[serial]
+fn test_send_transaction_service_forwards() {
+    solana_logger::setup_with_default(RUST_LOG_FILTER);
+    let slots_per_epoch = 100;
+    // Create a heavily staked node and one node that is lowly staked.
+    // The goal is for the lowly staked node to never show up in the
+    // leader schedule
+    let node_stakes = vec![1_000_000_000, 1];
+    let validator_config = ValidatorConfig::default();
+    let mut cluster_config = ClusterConfig {
+        cluster_lamports: 2_000_000_000,
+        validator_configs: make_identical_validator_configs(&validator_config, node_stakes.len()),
+        node_stakes,
+        slots_per_epoch,
+        stakers_slot_offset: slots_per_epoch,
+        skip_warmup_slots: true,
+        ticks_per_slot: 10,
+        ..ClusterConfig::default()
+    };
+    let cluster = LocalCluster::new(&mut cluster_config);
+    let nodes = cluster.get_node_pubkeys();
+
+    // Get low staked node contact info
+    let non_bootstrap_id = nodes
+        .into_iter()
+        .find(|id| *id != cluster.entry_point_info.id)
+        .unwrap();
+    info!("low staked node id: {}", non_bootstrap_id);
+    let non_bootstrap_info = cluster.get_contact_info(&non_bootstrap_id).unwrap();
+
+    let rpc_client = RpcClient::new_socket(non_bootstrap_info.rpc);
+
+    // Wait three epochs for leader schedule to expire
+    while rpc_client.get_slot().unwrap() < 3 * slots_per_epoch {
+        sleep(Duration::from_millis(100));
+    }
+
+    // Wait at most 10 seconds for response
+    let start = Instant::now();
+    loop {
+        // Send and confirm a transaction
+        let (blockhash, _fee_calculator) = rpc_client.get_recent_blockhash().unwrap();
+        let transaction = system_transaction::transfer(
+            &cluster.funding_keypair,
+            &solana_sdk::pubkey::new_rand(),
+            10,
+            blockhash,
+        );
+        if rpc_client
+            .send_and_confirm_transaction(&transaction)
+            .is_ok()
+        {
+            return;
+        }
+
+        if start.elapsed() > Duration::from_secs(10) {
+            panic!("Transaction was not processed");
+        }
+
+        sleep(Duration::from_millis(100));
+    }
+}
+
+#[test]
+#[serial]
 fn test_local_cluster_signature_subscribe() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     let num_nodes = 2;
