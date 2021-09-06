@@ -695,12 +695,11 @@ impl<T: Clone + Copy> Bucket<T> {
             if count > 0 {
                 let new_capacity = (count as f64).log2().ceil() as u8; // use int log here?                
                 if new_capacity > self.index.capacity {
-                    increment = self.index.capacity - new_capacity; // at least get closer to where we'd like to be
-                    if increment > 2 {
-                        error!("new cap increases by: {}", increment);
-                    }
+                    increment = new_capacity - self.index.capacity; // at least get closer to where we'd like to be
                 }
+                error!("new cap: {}", increment);
             }
+            
 
             for i in increment.. {
                 //increasing the capacity by ^4 reduces the
@@ -771,7 +770,7 @@ impl<T: Clone + Copy> Bucket<T> {
         }
         if self.data[sz.0 as usize].capacity == sz.1 {
             //debug!("GROW_DATA: {} {}", sz.0, sz.1);
-            self.data[sz.0 as usize].grow();
+            self.data[sz.0 as usize].grow(self.expected_count.load(Ordering::Relaxed));
         }
     }
 

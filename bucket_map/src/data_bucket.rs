@@ -7,6 +7,7 @@ use std::io::SeekFrom;
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Arc;
+use log::*;
 use std::sync::{
     atomic::{AtomicU64, Ordering},
     Mutex,
@@ -294,20 +295,30 @@ impl DataBucket {
         res
     }
 
-    pub fn grow(&mut self) {
+    pub fn grow(&mut self, expected_capacity: usize) {
         let mut m = Measure::start("grow");
         let old_cap = self.num_cells();
         let old_map = &self.mmap;
         let old_file = self.path.clone();
+
+        let mut increment = 1;
+        if expected_capacity > 0 {
+            let new_capacity = (expected_capacity as f64).log2().ceil() as u8; // use int log here?
+            if new_capacity > self.capacity {
+                increment = new_capacity - self.capacity; // at least get closer to where we'd like to be
+            }
+            error!("new data cap: {}", increment);
+        }
+        let index_grow = 1 << increment;
         let (new_map, new_file) = Self::new_map(
             &self.drives,
             self.cell_size as usize,
-            self.capacity + 1,
+            self.capacity + increment,
             &mut self.stats,
         );
         (0..old_cap as usize).into_iter().for_each(|i| {
             let old_ix = i * self.cell_size as usize;
-            let new_ix = old_ix * 2;
+            let new_ix = old_ix * index_grow;
             let dst_slice: &[u8] = &new_map[new_ix..new_ix + self.cell_size as usize];
             let src_slice: &[u8] = &old_map[old_ix..old_ix + self.cell_size as usize];
 
@@ -319,11 +330,11 @@ impl DataBucket {
         });
         self.mmap = new_map;
         self.path = new_file;
-        self.capacity += 1;
+        self.capacity += increment;
         self.bytes = 1 << self.capacity;
         remove_file(old_file).unwrap();
         m.stop();
-        let sz = 1 << self.capacity;
+        let sz = self.bytes;
         {
             let mut max = self.stats.max_size.lock().unwrap();
             *max = std::cmp::max(*max, sz);
