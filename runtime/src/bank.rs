@@ -3861,11 +3861,13 @@ impl Bank {
         }
 
         let mut measure = Measure::start("collect_rent_eagerly-ms");
-        self.rent_collection_partitions()
-            .into_par_iter()
-            .for_each(|partition| {
-                self.collect_rent_in_partition(partition);
-            });
+        self.rc.accounts.accounts_db.thread_pool.install(|| {
+            self.rent_collection_partitions()
+                .into_par_iter()
+                .for_each(|partition| {
+                    self.collect_rent_in_partition(partition);
+                });
+        });
         measure.stop();
         inc_new_counter_info!("collect_rent_eagerly-ms", measure.as_ms() as usize);
     }
