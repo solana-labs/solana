@@ -36,6 +36,10 @@ pub struct BucketMapHolderStats {
     pub inserts: AtomicU64,
     pub inserts_without_checking_disk: AtomicU64,
     pub deletes: AtomicU64,
+    pub bins_flushed: AtomicU64,
+    pub active_flushes: AtomicU64,
+    pub active_flush_threads: AtomicU64,
+    pub flushing_idle_us: AtomicU64,
 }
 
 impl BucketMapHolderStats {
@@ -103,7 +107,11 @@ impl BucketMapHolderStats {
             ("flush0", self.flush0.swap(0, Ordering::Relaxed), i64),
             ("flush1", self.flush1.swap(0, Ordering::Relaxed), i64),
             ("flush2", self.flush2.swap(0, Ordering::Relaxed), i64),
-            ("bg_flush_cycles", self.bg_flush_cycles.swap(0, Ordering::Relaxed), i64),
+            (
+                "bg_flush_cycles",
+                self.bg_flush_cycles.swap(0, Ordering::Relaxed),
+                i64
+            ),
             (
                 "updates_in_cache",
                 self.updates_in_cache.swap(0, Ordering::Relaxed),
@@ -234,7 +242,26 @@ impl BucketMapHolderStats {
             ("range_us", self.range_us.swap(0, Ordering::Relaxed), i64),
             ("keys", self.keys.swap(0, Ordering::Relaxed), i64),
             ("get", self.updates.swap(0, Ordering::Relaxed), i64),
-            //("buckets", self.num_buckets(), i64),
+            (
+                "bins_flushed",
+                self.bins_flushed.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "active_flushes",
+                self.active_flushes.load(Ordering::Relaxed),
+                i64
+            ),
+            (
+                "active_flush_threads",
+                self.active_flush_threads.load(Ordering::Relaxed),
+                i64
+            ),
+            (
+                "flushing_idle_us",
+                self.flushing_idle_us.swap(0, Ordering::Relaxed),
+                i64
+            ),
         );
     }
 }

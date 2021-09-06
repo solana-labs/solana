@@ -3,6 +3,7 @@ use crate::accounts_index::{IsCached, RefCount, SlotList, SlotSlice, WriteAccoun
 use crate::bucket_map_holder_stats::BucketMapHolderStats;
 use crate::in_mem_accounts_index::{SlotT, V2};
 use crate::pubkey_bins::PubkeyBinCalculator16;
+use log::*;
 use rand::{thread_rng, Rng};
 use solana_bucket_map::bucket_map::{BucketMap, BucketMapKeyValue};
 use solana_measure::measure::Measure;
@@ -14,7 +15,6 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::{RwLock, RwLockWriteGuard};
 use std::time::Instant;
-use log::*;
 pub type K = Pubkey;
 
 use std::collections::{hash_map::Entry as HashMapEntry, HashMap, HashSet};
@@ -208,16 +208,20 @@ impl<V: IsCached> BucketMapHolder<V> {
         let mut current_age: u8 = 0;
 
         let mut check_for_startup_mode = true;
-        
         let maybe_report = || {
             self.stats
                 .report_stats(self.in_mem_only, &self.disk, &self.cache);
         };
 
+        self.stats
+            .active_flush_threads
+            .fetch_add(1, Ordering::Relaxed);
+
         loop {
             maybe_report();
             let mut age = None;
-            if !exit_when_idle && !self.in_mem_only && aging.elapsed().as_millis() as usize > AGE_MS {
+            if !exit_when_idle && !self.in_mem_only && aging.elapsed().as_millis() as usize > AGE_MS
+            {
                 // increment age to get rid of some older things in cache
                 current_age = Self::add_age(current_age, 1);
                 self.current_age.store(current_age, Ordering::Relaxed);
@@ -228,33 +232,44 @@ impl<V: IsCached> BucketMapHolder<V> {
                 break;
             }
             if age.is_none() && !found_one {
-                if self.wait.wait_timeout(Duration::from_millis(200)) {
+                let mut m = Measure::start("idle");
+                let timeout = self.wait.wait_timeout(Duration::from_millis(200));
+                m.stop();
+                if !exit_when_idle {
+                    self.stats.flushing_idle_us.fetch_add(m.as_us(), Ordering::Relaxed);
+                }
+
+                if timeout {
                     if exit_when_idle && exit.load(Ordering::Relaxed) {
-                        error!("background flushing exiting");
                         break;
                     }
-                    continue;
+                    continue; // otherwise, loop and check for aging and likely wait again
                 }
             }
-            self.stats.bg_flush_cycles.fetch_add(1, Ordering::Relaxed);
+            if !exit_when_idle {
+                self.stats.bg_flush_cycles.fetch_add(1, Ordering::Relaxed);
+            }
             found_one = false;
             let start = if exit_when_idle {
                 // start the exit when idle threads at random buckets to avoid all threads working on the same bucket
                 let random: usize = thread_rng().gen();
                 random % self.bins
-            }
-            else {
+            } else {
                 0
             };
             for ix in start..self.bins {
+                if exit_when_idle {
+                    error!("flushing: {}", ix);
+                } else {
+                    self.stats.bins_flushed.fetch_add(1, Ordering::Relaxed);
+                }
                 if self.flush(ix, true, age).0 {
                     // this bin reported finding something dirty
                     if check_for_startup_mode {
                         if self.startup.load(Ordering::Relaxed) {
                             // if we're still in startup mode, then notify every thread that there are still dirty bins to make sure everyone keeps working
                             self.wait.notify_all();
-                        }
-                        else {
+                        } else {
                             check_for_startup_mode = false;
                         }
                     }
@@ -263,6 +278,10 @@ impl<V: IsCached> BucketMapHolder<V> {
                 }
             }
         }
+
+        self.stats
+            .active_flush_threads
+            .fetch_sub(1, Ordering::Relaxed);
     }
     pub fn new(bucket_map: BucketMapWithEntryType<V>) -> Self {
         let in_mem_only = false;
