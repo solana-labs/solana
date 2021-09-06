@@ -108,7 +108,6 @@ mod tests {
         let expected = vec![4].into_iter().collect();
         assert_eq!(result, expected);
 
-        drop(blockstore);
-        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
+        destroy_test_ledger(&blockstore_path, blockstore);
     }
 }

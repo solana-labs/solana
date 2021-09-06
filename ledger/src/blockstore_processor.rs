@@ -1407,8 +1407,11 @@ pub fn fill_blockstore_slot_with_ticks(
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::genesis_utils::{
-        create_genesis_config, create_genesis_config_with_leader, GenesisConfigInfo,
+    use crate::{
+        blockstore::destroy_test_ledger,
+        genesis_utils::{
+            create_genesis_config, create_genesis_config_with_leader, GenesisConfigInfo,
+        },
     };
     use crossbeam_channel::unbounded;
     use matches::assert_matches;
@@ -1485,6 +1488,8 @@ pub mod tests {
             },
         );
         assert_eq!(frozen_bank_slots(&bank_forks), vec![0]);
+
+        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
@@ -1545,6 +1550,8 @@ pub mod tests {
         assert_eq!(frozen_bank_slots(&bank_forks), vec![0, 2]);
         assert_eq!(bank_forks.working_bank().slot(), 2);
         assert_eq!(bank_forks.root(), 0);
+
+        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
@@ -1595,6 +1602,8 @@ pub mod tests {
         };
         let (bank_forks, ..) = test_process_blockstore(&genesis_config, &blockstore, opts);
         assert_eq!(frozen_bank_slots(&bank_forks), vec![0]);
+
+        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
@@ -1681,6 +1690,8 @@ pub mod tests {
 
         // slot 1 isn't "full", we stop at slot zero
         assert_eq!(frozen_bank_slots(&bank_forks), vec![0, 3]);
+
+        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
@@ -1760,6 +1771,8 @@ pub mod tests {
         verify_fork_infos(&bank_forks);
 
         assert_eq!(bank_forks.root(), 4);
+
+        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
@@ -1850,6 +1863,8 @@ pub mod tests {
 
         // Ensure bank_forks holds the right banks
         verify_fork_infos(&bank_forks);
+
+        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
@@ -1892,6 +1907,8 @@ pub mod tests {
             &[1, 0]
         );
         verify_fork_infos(&bank_forks);
+
+        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
@@ -1947,6 +1964,8 @@ pub mod tests {
         );
         assert_eq!(bank_forks.working_bank().slot(), 3);
         verify_fork_infos(&bank_forks);
+
+        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
@@ -1975,6 +1994,8 @@ pub mod tests {
         // Should see only the parent of the dead children
         assert_eq!(frozen_bank_slots(&bank_forks), vec![0]);
         verify_fork_infos(&bank_forks);
+
+        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
@@ -2033,6 +2054,8 @@ pub mod tests {
             .map(|bank| bank.slot())
             .next()
             .is_none());
+
+        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
@@ -2177,6 +2200,8 @@ pub mod tests {
         );
         assert_eq!(bank.tick_height(), 2 * genesis_config.ticks_per_slot);
         assert_eq!(bank.last_blockhash(), last_blockhash);
+
+        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
@@ -2198,6 +2223,8 @@ pub mod tests {
         assert_eq!(frozen_bank_slots(&bank_forks), vec![0]);
         let bank = bank_forks[0].clone();
         assert_eq!(bank.tick_height(), 1);
+
+        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
@@ -2215,6 +2242,8 @@ pub mod tests {
         PAR_THREAD_POOL.with(|pool| {
             assert_eq!(pool.borrow().current_num_threads(), 1);
         });
+
+        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
@@ -2231,6 +2260,8 @@ pub mod tests {
         let (_bank_forks, leader_schedule) =
             test_process_blockstore(&genesis_config, &blockstore, opts);
         assert_eq!(leader_schedule.max_schedules(), std::usize::MAX);
+
+        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
@@ -2292,6 +2323,8 @@ pub mod tests {
         };
         test_process_blockstore(&genesis_config, &blockstore, opts);
         assert_eq!(*callback_counter.write().unwrap(), 2);
+
+        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
@@ -2943,6 +2976,8 @@ pub mod tests {
         // Should be able to fetch slot 0 because we specified halting at slot 0, even
         // if there is a greater root at slot 1.
         assert!(bank_forks.get(0).is_some());
+
+        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
@@ -3032,6 +3067,8 @@ pub mod tests {
 
         // Check that bank forks has the correct banks
         verify_fork_infos(&bank_forks);
+
+        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
@@ -3531,6 +3568,8 @@ pub mod tests {
         let (bank_forks, ..) = test_process_blockstore(&genesis_config, &blockstore, opts);
 
         assert_eq!(bank_forks.root(), really_expected_root_slot);
+
+        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
