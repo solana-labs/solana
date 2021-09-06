@@ -414,6 +414,7 @@ impl<V: IsCached> BucketMapHolder<V> {
                     let v = occupied.get();
                     if v.dirty() {
                         if Arc::strong_count(v) > 1 {
+                            self.stats.strong_count_no_flush_dirty.fetch_add(1, Ordering::Relaxed);
                             // we have to have a write lock above to know that no client can get the value after this point until we're done flushing
                             // only work on dirty things when there are no outstanding refs to the value
                             continue;
@@ -482,9 +483,12 @@ impl<V: IsCached> BucketMapHolder<V> {
                     if item.dirty()
                         || (do_age && (item.age() != age_comp && !startup))
                         || item.must_do_lookup_from_disk()
-                        || Arc::strong_count(item) > 1
                     {
                         continue;
+                    }
+
+                    if Arc::strong_count(item) > 1 {
+                        self.stats.strong_count_no_purge.fetch_add(1, Ordering::Relaxed);
                     }
 
                     if self.stop_flush(ix) {

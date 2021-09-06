@@ -40,6 +40,8 @@ pub struct BucketMapHolderStats {
     pub active_flushes: AtomicU64,
     pub active_flush_threads: AtomicU64,
     pub flushing_idle_us: AtomicU64,
+    pub strong_count_no_flush_dirty: AtomicU64,
+    pub strong_count_no_purge: AtomicU64,
 }
 
 impl BucketMapHolderStats {
@@ -260,6 +262,16 @@ impl BucketMapHolderStats {
             (
                 "flushing_idle_us",
                 self.flushing_idle_us.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "strong_count_no_flush_dirty",
+                self.strong_count_no_flush_dirty.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "strong_count_no_purge",
+                self.strong_count_no_purge.swap(0, Ordering::Relaxed),
                 i64
             ),
         );
