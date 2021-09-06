@@ -11,7 +11,6 @@ use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 use std::ops::RangeBounds;
 use std::path::PathBuf;
-use log::*;
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::{fs, sync::atomic::{AtomicUsize, Ordering}};

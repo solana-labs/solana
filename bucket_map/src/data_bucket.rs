@@ -7,7 +7,6 @@ use std::io::SeekFrom;
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Arc;
-use log::*;
 use std::sync::{
     atomic::{AtomicU64, Ordering},
     Mutex,
