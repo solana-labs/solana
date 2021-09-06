@@ -27,7 +27,6 @@ use std::time::Duration;
 //   ~400 GB max ledger size
 //   200m / 5k = 40k slots (~4.5 hours) at 50k tps load
 //   200m / 60 = 3.33m slots (~15.4 days) at idle load
->>>>>>> c5b88e4d8 (Correct some errors and clean up calculation comments)
 pub const DEFAULT_MAX_LEDGER_SHREDS: u64 = 200_000_000;
 
 // Allow down to 50m shreds; 50m shred max gives ...
