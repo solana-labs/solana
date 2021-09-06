@@ -4041,6 +4041,18 @@ pub mod tests {
         entries
     }
 
+    // Used for tests only - cleanup up a ledger completely
+    // Any access to the DB outside of blockstore (ie cf handles) should be dropped prior to calling this
+    pub fn test_destroy_ledger(ledger_path: &Path, blockstore: Blockstore) {
+        // Destroying the blockstore without closing it first is undefined behavior; any
+        // active
+        drop(blockstore);
+        Blockstore::destroy(&ledger_path).expect("Expected successful blockstore destruction");
+        // Destroy the ledger directory, which may contain files such as genesis.bin
+        fs::remove_dir_all(&ledger_path).expect("Expected successful ledger destruction");
+    }
+
+
     #[test]
     fn test_create_new_ledger() {
         let mint_total = 1_000_000_000_000;
