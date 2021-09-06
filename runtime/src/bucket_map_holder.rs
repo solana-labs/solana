@@ -3,6 +3,7 @@ use crate::accounts_index::{IsCached, RefCount, SlotList, SlotSlice, WriteAccoun
 use crate::bucket_map_holder_stats::BucketMapHolderStats;
 use crate::in_mem_accounts_index::{SlotT, V2};
 use crate::pubkey_bins::PubkeyBinCalculator16;
+use rand::{thread_rng, Rng};
 use solana_bucket_map::bucket_map::{BucketMap, BucketMapKeyValue};
 use solana_measure::measure::Measure;
 use solana_sdk::pubkey::Pubkey;
@@ -13,6 +14,7 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::{RwLock, RwLockWriteGuard};
 use std::time::Instant;
+use log::*;
 pub type K = Pubkey;
 
 use std::collections::{hash_map::Entry as HashMapEntry, HashMap, HashSet};
@@ -224,6 +226,7 @@ impl<V: IsCached> BucketMapHolder<V> {
             }
             if age.is_none() && !found_one {
                 if exit_when_idle && !self.startup.load(Ordering::Relaxed) {
+                    error!("background flushing exiting");
                     break;
                 }
                 if self.wait.wait_timeout(Duration::from_millis(200)) {
@@ -232,11 +235,25 @@ impl<V: IsCached> BucketMapHolder<V> {
             }
             self.stats.bg_flush_cycles.fetch_add(1, Ordering::Relaxed);
             found_one = false;
-            for ix in 0..self.bins {
+            let start = if exit_when_idle {
+                // start the exit when idle threads at random buckets to avoid all threads working on the same bucket
+                let random: usize = thread_rng().gen();
+                random % self.bins
+            }
+            else {
+                0
+            };
+            for ix in start..self.bins {
                 if self.flush(ix, true, age).0 {
                     maybe_report();
+                    if !found_one {
+                        error!("found one flushing: {}", ix);
+                    }
                     found_one = true;
                 }
+            }
+            if !found_one {
+                error!("nobody still dirty: {}", exit_when_idle);
             }
         }
     }
