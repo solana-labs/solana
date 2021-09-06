@@ -207,6 +207,8 @@ impl<V: IsCached> BucketMapHolder<V> {
         let mut aging = Instant::now();
         let mut current_age: u8 = 0;
 
+        let mut check_for_startup_mode = true;
+        
         let maybe_report = || {
             self.stats
                 .report_stats(self.in_mem_only, &self.disk, &self.cache);
@@ -246,18 +248,19 @@ impl<V: IsCached> BucketMapHolder<V> {
             };
             for ix in start..self.bins {
                 if self.flush(ix, true, age).0 {
+                    // this bin reported finding something dirty
+                    if check_for_startup_mode {
+                        if self.startup.load(Ordering::Relaxed) {
+                            // if we're still in startup mode, then notify every thread that there are still dirty bins to make sure everyone keeps working
+                            self.wait.notify_all();
+                        }
+                        else {
+                            check_for_startup_mode = false;
+                        }
+                    }
                     maybe_report();
-                    if !found_one {
-                        error!("found one flushing: {}", ix);
-                    }
                     found_one = true;
-                    if self.startup.load(Ordering::Relaxed) {
-                        self.wait.notify_all(); // if we're still in startup mode, then notify every thread that there are still dirty bins to make sure everyone keeps working
-                    }
                 }
-            }
-            if !found_one {
-                error!("nobody still dirty: {}", exit_when_idle);
             }
         }
     }
