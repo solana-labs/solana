@@ -258,9 +258,7 @@ impl<V: IsCached> BucketMapHolder<V> {
                 0
             };
             for ix in start..self.bins {
-                if exit_when_idle {
-                    error!("flushing: {}", ix);
-                } else {
+                if !exit_when_idle {
                     self.stats.bins_flushed.fetch_add(1, Ordering::Relaxed);
                 }
                 self.stats.active_flushes.fetch_add(1, Ordering::Relaxed);
