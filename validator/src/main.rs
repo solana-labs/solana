@@ -925,19 +925,20 @@ fn rpc_bootstrap(
                                 gossip.take().unwrap();
                             cluster_info.save_contact_info();
                             gossip_exit_flag.store(true, Ordering::Relaxed);
-                            let maximum_snapshots_to_retain = if let Some(snapshot_config) =
+                            let (maximum_full_snapshot_archives_to_retain, maximum_incremental_snapshot_archives_to_retain) = if let Some(snapshot_config) =
                                 validator_config.snapshot_config.as_ref()
                             {
-                                snapshot_config.maximum_full_snapshot_archives_to_retain
+                                (snapshot_config.maximum_full_snapshot_archives_to_retain, snapshot_config.maximum_incremental_snapshot_archives_to_retain)
                             } else {
-                                DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN
+                                (DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN, DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN)
                             };
                             let ret = download_snapshot(
                                 &rpc_contact_info.rpc,
                                 snapshot_archives_dir,
                                 snapshot_hash,
                                 use_progress_bar,
-                                maximum_snapshots_to_retain,
+                                maximum_full_snapshot_archives_to_retain,
+                                maximum_incremental_snapshot_archives_to_retain,
                                 &mut Some(Box::new(|download_progress: &DownloadProgressRecord| {
                                     debug!("Download progress: {:?}", download_progress);
 

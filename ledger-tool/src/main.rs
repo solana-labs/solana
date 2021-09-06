@@ -2018,8 +2018,10 @@ fn main() {
                         })
                     });
 
-            let maximum_snapshots_to_retain =
+            let maximum_full_snapshot_archives_to_retain =
                 value_t_or_exit!(arg_matches, "maximum_snapshots_to_retain", usize);
+            let maximum_incremental_snapshot_archives_to_retain =
+                snapshot_utils::DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN;
             let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
             let blockstore = open_blockstore(
                 &ledger_path,
@@ -2235,7 +2237,8 @@ fn main() {
                         Some(snapshot_version),
                         output_directory,
                         ArchiveFormat::TarZstd,
-                        maximum_snapshots_to_retain,
+                        maximum_full_snapshot_archives_to_retain,
+                        maximum_incremental_snapshot_archives_to_retain,
                     )
                     .unwrap_or_else(|err| {
                         eprintln!("Unable to create snapshot: {}", err);

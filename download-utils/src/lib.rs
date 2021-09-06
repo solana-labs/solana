@@ -249,13 +249,14 @@ pub fn download_snapshot<'a, 'b>(
     snapshot_archives_dir: &Path,
     desired_snapshot_hash: (Slot, Hash),
     use_progress_bar: bool,
-    maximum_snapshots_to_retain: usize,
+    maximum_full_snapshot_archives_to_retain: usize,
+    maximum_incremental_snapshot_archives_to_retain: usize,
     progress_notify_callback: &'a mut DownloadProgressCallbackOption<'b>,
 ) -> Result<(), String> {
     snapshot_utils::purge_old_snapshot_archives(
         snapshot_archives_dir,
-        maximum_snapshots_to_retain,
-        snapshot_utils::DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+        maximum_full_snapshot_archives_to_retain,
+        maximum_incremental_snapshot_archives_to_retain,
     );
 
     for compression in &[
