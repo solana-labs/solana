@@ -263,7 +263,10 @@ impl<V: IsCached> BucketMapHolder<V> {
                 } else {
                     self.stats.bins_flushed.fetch_add(1, Ordering::Relaxed);
                 }
-                if self.flush(ix, true, age).0 {
+                self.stats.active_flushes.fetch_add(1, Ordering::Relaxed);
+                let found_dirty = self.flush(ix, true, age).0;
+                self.stats.active_flushes.fetch_sub(1, Ordering::Relaxed);
+                if found_dirty {
                     // this bin reported finding something dirty
                     if check_for_startup_mode {
                         if self.startup.load(Ordering::Relaxed) {
