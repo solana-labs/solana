@@ -697,7 +697,7 @@ impl<T: Clone + Copy> Bucket<T> {
                 if new_capacity > self.index.capacity {
                     increment = new_capacity - self.index.capacity; // at least get closer to where we'd like to be
                 }
-                error!("new cap: {}", increment);
+                error!("new cap: {}, expected: {}", increment, count);
             }
             
 
