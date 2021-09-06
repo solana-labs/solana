@@ -412,7 +412,7 @@ impl<V: IsCached> BucketMapHolder<V> {
         drop(read_lock);
         if insert > 1_000 {
             // give buckets an idea of what was just inserted
-            self.disk.set_expected_capacity(ix, insert);
+            //self.disk.set_expected_capacity(ix, insert);
             //error!("insert: {}", insert);
         }
 

@@ -47,7 +47,7 @@ pub struct BucketMapStats {
 */
 // 23: 8,388,608
 // 24; // 16,777,216
-const DEFAULT_CAPACITY: u8 = 15;
+const DEFAULT_CAPACITY: u8 = 5;
 
 #[repr(C)]
 struct Header {
