@@ -40,9 +40,10 @@ use solana_sdk::{
     loader_instruction,
     message::Message,
     native_token::Sol,
+    packet::PACKET_DATA_SIZE,
     process_instruction::MockInvokeContext,
     pubkey::Pubkey,
-    signature::{keypair_from_seed, read_keypair_file, Keypair, Signer},
+    signature::{keypair_from_seed, read_keypair_file, Keypair, Signature, Signer},
     signers::Signers,
     system_instruction::{self, SystemError},
     system_program,
@@ -62,8 +63,6 @@ use std::{
     thread::sleep,
     time::Duration,
 };
-
-const DATA_CHUNK_SIZE: usize = 229; // Keep program chunks under PACKET_DATA_SIZE
 
 #[derive(Debug, PartialEq)]
 pub enum ProgramCliCommand {
@@ -1683,6 +1682,23 @@ pub fn process_deploy(
     result
 }
 
+fn calculate_max_chunk_size<F>(create_msg: &F) -> usize
+where
+    F: Fn(u32, Vec<u8>) -> Message,
+{
+    let baseline_msg = create_msg(0, Vec::new());
+    let tx_size = bincode::serialized_size(&Transaction {
+        signatures: vec![
+            Signature::default();
+            baseline_msg.header.num_required_signatures as usize
+        ],
+        message: baseline_msg,
+    })
+    .unwrap() as usize;
+    // add 1 byte buffer to account for shortvec encoding
+    PACKET_DATA_SIZE.saturating_sub(tx_size).saturating_sub(1)
+}
+
 #[allow(clippy::too_many_arguments)]
 fn do_process_program_write_and_deploy(
     rpc_client: Arc<RpcClient>,
@@ -1755,25 +1771,25 @@ fn do_process_program_write_and_deploy(
 
             // Create and add write messages
 
-            let mut write_messages = vec![];
-            for (chunk, i) in program_data.chunks(DATA_CHUNK_SIZE).zip(0..) {
+            let payer_pubkey = config.signers[0].pubkey();
+            let create_msg = |offset: u32, bytes: Vec<u8>| {
                 let instruction = if loader_id == &bpf_loader_upgradeable::id() {
                     bpf_loader_upgradeable::write(
                         buffer_pubkey,
                         &buffer_authority_signer.pubkey(),
-                        (i * DATA_CHUNK_SIZE) as u32,
-                        chunk.to_vec(),
+                        offset,
+                        bytes,
                     )
                 } else {
-                    loader_instruction::write(
-                        buffer_pubkey,
-                        loader_id,
-                        (i * DATA_CHUNK_SIZE) as u32,
-                        chunk.to_vec(),
-                    )
+                    loader_instruction::write(buffer_pubkey, loader_id, offset, bytes)
                 };
-                let message = Message::new(&[instruction], Some(&config.signers[0].pubkey()));
-                write_messages.push(message);
+                Message::new(&[instruction], Some(&payer_pubkey))
+            };
+
+            let mut write_messages = vec![];
+            let chunk_size = calculate_max_chunk_size(&create_msg);
+            for (chunk, i) in program_data.chunks(chunk_size).zip(0..) {
+                write_messages.push(create_msg((i * chunk_size) as u32, chunk.to_vec()));
             }
 
             (initial_message, Some(write_messages), balance_needed)
@@ -1905,17 +1921,24 @@ fn do_process_program_upgrade(
                 None
             };
 
+            let buffer_signer_pubkey = buffer_signer.pubkey();
+            let upgrade_authority_pubkey = upgrade_authority.pubkey();
+            let payer_pubkey = config.signers[0].pubkey();
+            let create_msg = |offset: u32, bytes: Vec<u8>| {
+                let instruction = bpf_loader_upgradeable::write(
+                    &buffer_signer_pubkey,
+                    &upgrade_authority_pubkey,
+                    offset,
+                    bytes,
+                );
+                Message::new(&[instruction], Some(&payer_pubkey))
+            };
+
             // Create and add write messages
             let mut write_messages = vec![];
-            for (chunk, i) in program_data.chunks(DATA_CHUNK_SIZE).zip(0..) {
-                let instruction = bpf_loader_upgradeable::write(
-                    &buffer_signer.pubkey(),
-                    &upgrade_authority.pubkey(),
-                    (i * DATA_CHUNK_SIZE) as u32,
-                    chunk.to_vec(),
-                );
-                let message = Message::new(&[instruction], Some(&config.signers[0].pubkey()));
-                write_messages.push(message);
+            let chunk_size = calculate_max_chunk_size(&create_msg);
+            for (chunk, i) in program_data.chunks(chunk_size).zip(0..) {
+                write_messages.push(create_msg((i * chunk_size) as u32, chunk.to_vec()));
             }
 
             (initial_message, Some(write_messages), balance_needed)
