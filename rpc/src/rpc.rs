@@ -4162,14 +4162,16 @@ pub fn create_test_transactions_and_populate_blockstore(
     let entry_3 = solana_entry::entry::next_entry(&entry_2.hash, 1, vec![fail_tx]);
     let entries = vec![entry_1, entry_2, entry_3];
 
-    let mut shreds = Shreds::default();
-    shreds.shreds = solana_ledger::blockstore::entries_to_test_shreds(
-        entries.clone(),
-        slot,
-        previous_slot,
-        true,
-        0,
-    );
+    let mut shreds = Shreds {
+        inner_shreds: solana_ledger::blockstore::entries_to_test_shreds(
+            entries.clone(),
+            slot,
+            previous_slot,
+            true,
+            0,
+        ),
+        ..Default::default()
+    };
     // TODO mark timer outgoing origin
     shreds.timer.mark_outgoing_start();
     blockstore.insert_shreds(shreds, None, false).unwrap();

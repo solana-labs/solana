@@ -656,7 +656,7 @@ mod test {
         cluster_info::{ClusterInfo, Node},
         contact_info::ContactInfo,
     };
-    use solana_ledger::{blockstore::make_many_slot_entries, get_tmp_ledger_path};
+    use solana_ledger::{blockstore::make_many_slot_entries, get_tmp_ledger_path, shred::Shreds};
     use solana_runtime::{accounts_background_service::AbsRequestSender, bank_forks::BankForks};
     use solana_sdk::{hash::Hash, signature::Keypair};
     use solana_streamer::socket::SocketAddrSpace;
@@ -861,7 +861,7 @@ mod test {
             let (shreds, _) =
                 make_many_slot_entries(slot_to_query, MAX_ANCESTOR_RESPONSES as u64, 5);
             blockstore
-                .insert_shreds(shreds, None, false)
+                .insert_shreds(Shreds::new_from_vec(shreds), None, false)
                 .expect("Expect successful ledger write");
             let mut correct_bank_hashes = HashMap::new();
             for duplicate_confirmed_slot in
@@ -996,7 +996,7 @@ mod test {
         // Create slots [slot, slot + num_ancestors) with 5 shreds apiece
         let (shreds, _) = make_many_slot_entries(dead_slot, dead_slot, 5);
         blockstore
-            .insert_shreds(shreds, None, false)
+            .insert_shreds(Shreds::new_from_vec(shreds), None, false)
             .expect("Expect successful ledger write");
         for duplicate_confirmed_slot in 0..dead_slot {
             let bank_hash = correct_bank_hashes

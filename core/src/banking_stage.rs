@@ -1559,6 +1559,7 @@ mod tests {
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         get_tmp_ledger_path,
         leader_schedule_cache::LeaderScheduleCache,
+        shred::Shreds,
     };
     use solana_perf::packet::to_packets_chunked;
     use solana_poh::{
@@ -2563,7 +2564,9 @@ mod tests {
             poh_recorder.lock().unwrap().set_working_bank(working_bank);
 
             let shreds = entries_to_test_shreds(entries, bank.slot(), 0, true, 0);
-            blockstore.insert_shreds(shreds, None, false).unwrap();
+            blockstore
+                .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+                .unwrap();
             blockstore.set_roots(std::iter::once(&bank.slot())).unwrap();
 
             let (transaction_status_sender, transaction_status_receiver) = unbounded();

@@ -218,12 +218,28 @@ pub struct Shred {
 
 #[derive(Debug, Default, Clone)]
 pub struct Shreds {
-    pub shreds: Vec<Shred>,
+    pub inner_shreds: Vec<Shred>,
     pub timer: PacketTimer,
 }
 
-pub type ShredReceiver = Receiver<Shreds>;
-pub type ShredSender = Sender<Shreds>;
+impl Shreds {
+    pub fn new_from_vec(shreds: Vec<Shred>) -> Self {
+        Shreds {
+            inner_shreds: shreds,
+            ..Default::default()
+        }
+    }
+
+    pub fn new_from_shred(shred: Shred) -> Self {
+        Shreds {
+            inner_shreds: vec![shred],
+            ..Default::default()
+        }
+    }
+}
+
+pub type ShredsReceiver = Receiver<Shreds>;
+pub type ShredsSender = Sender<Shreds>;
 
 impl Shred {
     fn deserialize_obj<'de, T>(index: &mut usize, size: usize, buf: &'de [u8]) -> bincode::Result<T>

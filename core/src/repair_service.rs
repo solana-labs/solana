@@ -627,7 +627,7 @@ mod test {
         make_chaining_slot_entries, make_many_slot_entries, make_slot_entries,
     };
     use solana_ledger::shred::max_ticks_per_n_shreds;
-    use solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path};
+    use solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path, shred::Shreds};
     use solana_sdk::signature::Keypair;
     use solana_streamer::socket::SocketAddrSpace;
     use std::collections::HashSet;
@@ -650,7 +650,9 @@ mod test {
             let (mut shreds, _) = make_slot_entries(1, 0, 1);
             let (shreds2, _) = make_slot_entries(5, 2, 1);
             shreds.extend(shreds2);
-            blockstore.insert_shreds(shreds, None, false).unwrap();
+            blockstore
+                .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+                .unwrap();
             let mut repair_weight = RepairWeight::new(0);
             assert_eq!(
                 repair_weight.get_best_weighted_repairs(
@@ -682,7 +684,9 @@ mod test {
 
             // Write this shred to slot 2, should chain to slot 0, which we haven't received
             // any shreds for
-            blockstore.insert_shreds(shreds, None, false).unwrap();
+            blockstore
+                .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+                .unwrap();
             let mut repair_weight = RepairWeight::new(0);
 
             // Check that repair tries to patch the empty slot
@@ -728,7 +732,7 @@ mod test {
                 }
             }
             blockstore
-                .insert_shreds(shreds_to_write, None, false)
+                .insert_shreds(Shreds::new_from_vec(shreds_to_write), None, false)
                 .unwrap();
             // sleep so that the holes are ready for repair
             sleep(Duration::from_secs(1));
@@ -785,7 +789,9 @@ mod test {
             // Remove last shred (which is also last in slot) so that slot is not complete
             shreds.pop();
 
-            blockstore.insert_shreds(shreds, None, false).unwrap();
+            blockstore
+                .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+                .unwrap();
 
             // We didn't get the last shred for this slot, so ask for the highest shred for that slot
             let expected: Vec<ShredRepairType> =
@@ -820,7 +826,9 @@ mod test {
             let shreds = make_chaining_slot_entries(&slots, num_entries_per_slot);
             for (mut slot_shreds, _) in shreds.into_iter() {
                 slot_shreds.remove(0);
-                blockstore.insert_shreds(slot_shreds, None, false).unwrap();
+                blockstore
+                    .insert_shreds(Shreds::new_from_vec(slot_shreds), None, false)
+                    .unwrap();
             }
             // sleep to make slot eligible for repair
             sleep(Duration::from_secs(1));
@@ -874,7 +882,9 @@ mod test {
                 let parent = if i > 0 { i - 1 } else { 0 };
                 let (shreds, _) = make_slot_entries(i, parent, num_entries_per_slot as u64);
 
-                blockstore.insert_shreds(shreds, None, false).unwrap();
+                blockstore
+                    .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+                    .unwrap();
             }
 
             let end = 4;
@@ -914,7 +924,11 @@ mod test {
         let num_entries_per_slot = max_ticks_per_n_shreds(1, None) + 1;
         let (mut shreds, _) = make_slot_entries(dead_slot, dead_slot - 1, num_entries_per_slot);
         blockstore
-            .insert_shreds(shreds[..shreds.len() - 1].to_vec(), None, false)
+            .insert_shreds(
+                Shreds::new_from_vec(shreds[..shreds.len() - 1].to_vec()),
+                None,
+                false,
+            )
             .unwrap();
         assert!(
             RepairService::generate_duplicate_repairs_for_slot(&blockstore, dead_slot,).is_some()
@@ -922,7 +936,7 @@ mod test {
 
         // SlotMeta is full, should make no repairs
         blockstore
-            .insert_shreds(vec![shreds.pop().unwrap()], None, false)
+            .insert_shreds(Shreds::new_from_shred(shreds.pop().unwrap()), None, false)
             .unwrap();
         assert!(
             RepairService::generate_duplicate_repairs_for_slot(&blockstore, dead_slot,).is_none()
@@ -949,7 +963,11 @@ mod test {
         let num_entries_per_slot = max_ticks_per_n_shreds(1, None) + 1;
         let (mut shreds, _) = make_slot_entries(dead_slot, dead_slot - 1, num_entries_per_slot);
         blockstore
-            .insert_shreds(shreds[..shreds.len() - 1].to_vec(), None, false)
+            .insert_shreds(
+                Shreds::new_from_vec(shreds[..shreds.len() - 1].to_vec()),
+                None,
+                false,
+            )
             .unwrap();
 
         duplicate_slot_repair_statuses.insert(dead_slot, duplicate_status);
@@ -997,7 +1015,7 @@ mod test {
         // Insert rest of shreds. Slot is full, should get filtered from
         // `duplicate_slot_repair_statuses`
         blockstore
-            .insert_shreds(vec![shreds.pop().unwrap()], None, false)
+            .insert_shreds(Shreds::new_from_shred(shreds.pop().unwrap()), None, false)
             .unwrap();
         RepairService::generate_and_send_duplicate_repairs(
             &mut duplicate_slot_repair_statuses,

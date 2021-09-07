@@ -19,7 +19,7 @@ use {
     solana_client::rpc_response::SlotUpdate,
     solana_gossip::cluster_info::{ClusterInfo, DATA_PLANE_FANOUT},
     solana_ledger::{
-        shred::{Shred, ShredReceiver},
+        shred::{Shred, ShredsReceiver},
         {blockstore::Blockstore, leader_schedule_cache::LeaderScheduleCache},
     },
     solana_measure::measure::Measure,
@@ -302,7 +302,7 @@ fn retransmit(
     bank_forks: &RwLock<BankForks>,
     leader_schedule_cache: &LeaderScheduleCache,
     cluster_info: &ClusterInfo,
-    shreds_receiver: &Mutex<ShredReceiver>,
+    shreds_receiver: &Mutex<ShredsReceiver>,
     sock: &UdpSocket,
     id: u32,
     stats: &RetransmitStats,
@@ -317,7 +317,7 @@ fn retransmit(
     const RECV_TIMEOUT: Duration = Duration::from_secs(1);
     let shreds_receiver = shreds_receiver.lock().unwrap();
     let mut shreds_vec = vec![shreds_receiver.recv_timeout(RECV_TIMEOUT)?];
-    let mut num_shreds = shreds_vec[0].shreds.len();
+    let mut num_shreds = shreds_vec[0].inner_shreds.len();
 
     let mut lowest_shred_time = shreds_vec[0].timer.get_incoming_start().unwrap();
     let mut highest_shred_time = shreds_vec[0].timer.get_incoming_end().unwrap();
@@ -325,7 +325,7 @@ fn retransmit(
     let mut timer_start = Measure::start("retransmit");
     while let Ok(more_shreds) = shreds_receiver.try_recv() {
         // TODO coalesce here
-        num_shreds += more_shreds.shreds.len();
+        num_shreds += more_shreds.inner_shreds.len();
         shreds_vec.push(more_shreds);
         if num_shreds >= MAX_SHREDS_BATCH_SIZE {
             break;
@@ -359,7 +359,7 @@ fn retransmit(
             highest_shred_time = shreds.timer.get_incoming_end().unwrap();
         }
 
-        for shred in shreds.shreds {
+        for shred in shreds.inner_shreds {
             if should_skip_retransmit(&shred, shreds_received) {
                 num_shreds_skipped += 1;
                 continue;
@@ -480,7 +480,7 @@ pub fn retransmitter(
     bank_forks: Arc<RwLock<BankForks>>,
     leader_schedule_cache: Arc<LeaderScheduleCache>,
     cluster_info: Arc<ClusterInfo>,
-    shreds_receiver: Arc<Mutex<ShredReceiver>>,
+    shreds_receiver: Arc<Mutex<ShredsReceiver>>,
     max_slots: Arc<MaxSlots>,
     rpc_subscriptions: Option<Arc<RpcSubscriptions>>,
 ) -> Vec<JoinHandle<()>> {
@@ -671,6 +671,7 @@ mod tests {
             blockstore_processor::{process_blockstore, ProcessOptions},
             create_new_tmp_ledger,
             genesis_utils::{create_genesis_config, GenesisConfigInfo},
+            shred::Shreds,
         },
         solana_net_utils::find_available_port_in_range,
         solana_sdk::signature::Keypair,
@@ -737,7 +738,9 @@ mod tests {
 
         let shred = Shred::new_from_data(0, 0, 0, None, true, true, 0, 0x20, 0);
         // it should send this over the sockets.
-        retransmit_sender.send(vec![shred]).unwrap();
+        retransmit_sender
+            .send(Shreds::new_from_shred(shred))
+            .unwrap();
         let mut packets = Packets::new(vec![]);
         solana_streamer::packet::recv_from(&mut packets, &me_retransmit, 1).unwrap();
         assert_eq!(packets.packets.len(), 1);

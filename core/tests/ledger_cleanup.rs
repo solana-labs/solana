@@ -7,7 +7,7 @@ mod tests {
     use solana_core::ledger_cleanup_service::LedgerCleanupService;
     use solana_ledger::blockstore::{make_many_slot_entries, Blockstore};
     use solana_ledger::get_tmp_ledger_path;
-    use solana_ledger::shred::Shred;
+    use solana_ledger::shred::{Shred, Shreds};
     use solana_measure::measure::Measure;
     use std::collections::VecDeque;
     use std::str::FromStr;
@@ -332,7 +332,9 @@ mod tests {
                     if let Some(new_shreds) = new_shreds {
                         total += new_shreds.len();
                         total_batches += 1;
-                        let br = blockstore1.insert_shreds(new_shreds, None, false).unwrap();
+                        let br = blockstore1
+                            .insert_shreds(Shreds::new_from_vec(new_shreds), None, false)
+                            .unwrap();
                         total_inserted_shreds += br.1.len();
                         num_shreds += br.1.len();
                     } else {
@@ -511,7 +513,9 @@ mod tests {
 
         for i in 0..batches {
             let (shreds, _) = make_many_slot_entries(i * batch_size, batch_size, 1);
-            blockstore.insert_shreds(shreds, None, false).unwrap();
+            blockstore
+                .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+                .unwrap();
         }
 
         let u1 = blockstore.storage_size().unwrap() as f64;

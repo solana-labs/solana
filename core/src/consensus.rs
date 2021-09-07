@@ -1276,7 +1276,7 @@ pub mod test {
             vote_simulator::VoteSimulator,
         },
         itertools::Itertools,
-        solana_ledger::{blockstore::make_slot_entries, get_tmp_ledger_path},
+        solana_ledger::{blockstore::make_slot_entries, get_tmp_ledger_path, shred::Shreds},
         solana_runtime::bank::Bank,
         solana_sdk::{
             account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
@@ -2725,11 +2725,17 @@ pub mod test {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
 
             let (shreds, _) = make_slot_entries(1, 0, 42);
-            blockstore.insert_shreds(shreds, None, false).unwrap();
+            blockstore
+                .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+                .unwrap();
             let (shreds, _) = make_slot_entries(3, 1, 42);
-            blockstore.insert_shreds(shreds, None, false).unwrap();
+            blockstore
+                .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+                .unwrap();
             let (shreds, _) = make_slot_entries(4, 1, 42);
-            blockstore.insert_shreds(shreds, None, false).unwrap();
+            blockstore
+                .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+                .unwrap();
             assert!(!blockstore.is_root(0));
             assert!(!blockstore.is_root(1));
             assert!(!blockstore.is_root(3));
@@ -2756,11 +2762,17 @@ pub mod test {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
 
             let (shreds, _) = make_slot_entries(1, 0, 42);
-            blockstore.insert_shreds(shreds, None, false).unwrap();
+            blockstore
+                .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+                .unwrap();
             let (shreds, _) = make_slot_entries(3, 1, 42);
-            blockstore.insert_shreds(shreds, None, false).unwrap();
+            blockstore
+                .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+                .unwrap();
             let (shreds, _) = make_slot_entries(4, 1, 42);
-            blockstore.insert_shreds(shreds, None, false).unwrap();
+            blockstore
+                .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+                .unwrap();
             blockstore.set_roots(std::iter::once(&3)).unwrap();
             assert!(!blockstore.is_root(0));
             assert!(!blockstore.is_root(1));
@@ -2782,9 +2794,13 @@ pub mod test {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
 
             let (shreds, _) = make_slot_entries(1, 0, 42);
-            blockstore.insert_shreds(shreds, None, false).unwrap();
+            blockstore
+                .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+                .unwrap();
             let (shreds, _) = make_slot_entries(3, 1, 42);
-            blockstore.insert_shreds(shreds, None, false).unwrap();
+            blockstore
+                .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+                .unwrap();
             assert!(!blockstore.is_root(0));
             assert!(!blockstore.is_root(1));
             assert!(!blockstore.is_root(3));

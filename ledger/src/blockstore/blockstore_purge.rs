@@ -500,7 +500,9 @@ pub mod tests {
         let blockstore_path = get_tmp_ledger_path!();
         let blockstore = Blockstore::open(&blockstore_path).unwrap();
         let (shreds, _) = make_many_slot_entries(0, 50, 5);
-        blockstore.insert_shreds(shreds, None, false).unwrap();
+        blockstore
+            .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+            .unwrap();
 
         blockstore.purge_and_compact_slots(0, 5);
 
@@ -528,7 +530,9 @@ pub mod tests {
         let blockstore_path = get_tmp_ledger_path!();
         let blockstore = Blockstore::open(&blockstore_path).unwrap();
         let (shreds, _) = make_many_slot_entries(0, 5000, 10);
-        blockstore.insert_shreds(shreds, None, false).unwrap();
+        blockstore
+            .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+            .unwrap();
 
         blockstore.purge_and_compact_slots(0, 4999);
 
@@ -778,7 +782,9 @@ pub mod tests {
         for x in 0..index0_max_slot + 1 {
             let entries = make_slot_entries_with_transactions(1);
             let shreds = entries_to_test_shreds(entries.clone(), x, x.saturating_sub(1), true, 0);
-            blockstore.insert_shreds(shreds, None, false).unwrap();
+            blockstore
+                .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+                .unwrap();
             let signature = entries
                 .iter()
                 .cloned()
@@ -814,7 +820,9 @@ pub mod tests {
         for x in index0_max_slot + 1..index1_max_slot + 1 {
             let entries = make_slot_entries_with_transactions(1);
             let shreds = entries_to_test_shreds(entries.clone(), x, x.saturating_sub(1), true, 0);
-            blockstore.insert_shreds(shreds, None, false).unwrap();
+            blockstore
+                .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+                .unwrap();
             let signature: Signature = entries
                 .iter()
                 .cloned()
@@ -1218,7 +1226,9 @@ pub mod tests {
                 entries.append(&mut tick);
             }
             let shreds = entries_to_test_shreds(entries, slot, slot - 1, true, 0);
-            blockstore.insert_shreds(shreds, None, false).unwrap();
+            blockstore
+                .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+                .unwrap();
 
             let mut write_batch = blockstore.db.batch().unwrap();
             blockstore

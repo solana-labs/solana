@@ -155,8 +155,10 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
         blockstore: &Arc<Blockstore>,
     ) -> Result<()> {
         let (all_shreds, _) = receiver.lock().unwrap().recv()?;
-        let mut shreds = Shreds::default();
-        shreds.shreds = all_shreds.to_vec();
+        let mut shreds = Shreds {
+            inner_shreds: all_shreds.to_vec(),
+            ..Default::default()
+        };
         // TODO mark time origin
         shreds.timer.mark_outgoing_start();
         blockstore

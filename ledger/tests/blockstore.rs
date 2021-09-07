@@ -2,6 +2,7 @@ use solana_entry::entry;
 use solana_ledger::{
     blockstore::{self, Blockstore},
     get_tmp_ledger_path,
+    shred::Shreds,
 };
 use solana_sdk::hash::Hash;
 use std::sync::Arc;
@@ -25,7 +26,9 @@ fn test_multiple_threads_insert_shred() {
                 Builder::new()
                     .name("blockstore-writer".to_string())
                     .spawn(move || {
-                        blockstore_.insert_shreds(shreds, None, false).unwrap();
+                        blockstore_
+                            .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+                            .unwrap();
                     })
                     .unwrap()
             })

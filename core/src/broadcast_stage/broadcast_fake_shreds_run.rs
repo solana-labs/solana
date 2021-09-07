@@ -130,8 +130,10 @@ impl BroadcastRun for BroadcastFakeShredsRun {
         blockstore: &Arc<Blockstore>,
     ) -> Result<()> {
         for (data_shreds, _) in receiver.lock().unwrap().iter() {
-            let mut shreds = Shreds::default();
-            shreds.shreds = data_shreds.to_vec();
+            let mut shreds = Shreds {
+                inner_shreds: data_shreds.to_vec(),
+                ..Default::default()
+            };
             // TODO mark timer origin
             shreds.timer.mark_outgoing_start();
             blockstore.insert_shreds(shreds, None, true)?;

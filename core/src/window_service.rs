@@ -18,7 +18,7 @@ use {
     solana_ledger::{
         blockstore::{self, Blockstore, BlockstoreInsertionMetrics, MAX_DATA_SHREDS_PER_SLOT},
         leader_schedule_cache::LeaderScheduleCache,
-        shred::{Nonce, Shred, ShredSender, Shreds},
+        shred::{Nonce, Shred, Shreds, ShredsSender},
     },
     solana_measure::measure::Measure,
     solana_metrics::{inc_new_counter_debug, inc_new_counter_error},
@@ -340,7 +340,7 @@ fn run_insert<F>(
     metrics: &mut BlockstoreInsertionMetrics,
     ws_metrics: &mut WindowServiceMetrics,
     completed_data_sets_sender: &CompletedDataSetsSender,
-    retransmit_sender: &ShredSender,
+    retransmit_sender: &ShredsSender,
     outstanding_requests: &RwLock<OutstandingShredRepairs>,
 ) -> Result<()>
 where
@@ -351,14 +351,18 @@ where
     let (mut shreds, mut repair_infos) = shred_receiver.recv_timeout(timer)?;
     while let Ok((more_shreds, more_repair_infos)) = shred_receiver.try_recv() {
         shreds.timer.extend_incoming_from(&more_shreds.timer);
-        shreds.shreds.extend(more_shreds.shreds);
+        shreds.inner_shreds.extend(more_shreds.inner_shreds);
         repair_infos.extend(more_repair_infos);
     }
     shred_receiver_elapsed.stop();
-    ws_metrics.num_shreds_received += shreds.shreds.len() as u64;
+    ws_metrics.num_shreds_received += shreds.inner_shreds.len() as u64;
 
     let mut prune_shreds_elapsed = Measure::start("prune_shreds_elapsed");
-    prune_shreds_invalid_repair(&mut shreds.shreds, &mut repair_infos, outstanding_requests);
+    prune_shreds_invalid_repair(
+        &mut shreds.inner_shreds,
+        &mut repair_infos,
+        outstanding_requests,
+    );
     let repairs: Vec<_> = repair_infos
         .iter()
         .map(|repair_info| repair_info.is_some())
@@ -398,7 +402,7 @@ fn recv_window<F>(
     bank_forks: &RwLock<BankForks>,
     insert_shred_sender: &CrossbeamSender<(Shreds, Vec<Option<RepairMeta>>)>,
     verified_receiver: &CrossbeamReceiver<Vec<Packets>>,
-    retransmit_sender: &ShredSender,
+    retransmit_sender: &ShredsSender,
     shred_filter: F,
     thread_pool: &ThreadPool,
     stats: &mut ReceiveWindowStats,
@@ -448,15 +452,16 @@ where
             .unzip()
     });
 
-    let mut retransmit_shreds = Shreds::default();
-    retransmit_shreds.timer = packet_timer;
-    retransmit_shreds.shreds = shreds
-        .iter()
-        .zip(&repair_infos)
-        .filter(|(_, repair_info)| repair_info.is_none())
-        .map(|(shred, _)| shred)
-        .cloned()
-        .collect();
+    let mut retransmit_shreds = Shreds {
+        inner_shreds: shreds
+            .iter()
+            .zip(&repair_infos)
+            .filter(|(_, repair_info)| repair_info.is_none())
+            .map(|(shred, _)| shred)
+            .cloned()
+            .collect(),
+        timer: packet_timer,
+    };
     // TODO propagate timer from incoming packets
     retransmit_shreds.timer.mark_outgoing_start();
 
@@ -468,10 +473,11 @@ where
     for shred in &shreds {
         *stats.slots.entry(shred.slot()).or_default() += 1;
     }
-    let mut insert_shreds = Shreds::default();
-    insert_shreds.timer = packet_timer;
+    let mut insert_shreds = Shreds {
+        inner_shreds: shreds,
+        timer: packet_timer,
+    };
     insert_shreds.timer.mark_outgoing_start();
-    insert_shreds.shreds = shreds;
     insert_shred_sender.send((insert_shreds, repair_infos))?;
 
     stats.num_packets += packets.iter().map(|pkt| pkt.packets.len()).sum::<usize>();
@@ -548,7 +554,7 @@ impl WindowService {
     pub(crate) fn new<F>(
         blockstore: Arc<Blockstore>,
         verified_receiver: CrossbeamReceiver<Vec<Packets>>,
-        retransmit_sender: ShredSender,
+        retransmit_sender: ShredsSender,
         repair_socket: Arc<UdpSocket>,
         exit: Arc<AtomicBool>,
         repair_info: RepairInfo,
@@ -661,7 +667,7 @@ impl WindowService {
         insert_receiver: CrossbeamReceiver<(Shreds, Vec<Option<RepairMeta>>)>,
         check_duplicate_sender: CrossbeamSender<Shred>,
         completed_data_sets_sender: CompletedDataSetsSender,
-        retransmit_sender: ShredSender,
+        retransmit_sender: ShredsSender,
         outstanding_requests: Arc<RwLock<OutstandingShredRepairs>>,
     ) -> JoinHandle<()> {
         let mut handle_timeout = || {};
@@ -720,7 +726,7 @@ impl WindowService {
         verified_receiver: CrossbeamReceiver<Vec<Packets>>,
         shred_filter: F,
         bank_forks: Arc<RwLock<BankForks>>,
-        retransmit_sender: ShredSender,
+        retransmit_sender: ShredsSender,
     ) -> JoinHandle<()>
     where
         F: 'static
@@ -728,9 +734,11 @@ impl WindowService {
             + std::marker::Send
             + std::marker::Sync,
     {
-        let mut stats = ReceiveWindowStats::default();
-        stats.batch_span_us_hist = histogram::Histogram::new();
-        stats.batch_first_recv_us_hist = histogram::Histogram::new();
+        let mut stats = ReceiveWindowStats {
+            batch_span_us_hist: histogram::Histogram::new(),
+            batch_first_recv_us_hist: histogram::Histogram::new(),
+            ..Default::default()
+        };
 
         Builder::new()
             .name("solana-window".to_string())
@@ -816,7 +824,7 @@ mod test {
             blockstore::{make_many_slot_entries, Blockstore},
             genesis_utils::create_genesis_config_with_leader,
             get_tmp_ledger_path,
-            shred::{DataShredHeader, Shredder},
+            shred::{DataShredHeader, Shredder, Shreds},
         },
         solana_sdk::{
             epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
@@ -846,7 +854,7 @@ mod test {
         let mut shreds = local_entries_to_shred(&original_entries, 0, 0, &Keypair::new());
         shreds.reverse();
         blockstore
-            .insert_shreds(shreds, None, false)
+            .insert_shreds(Shreds::new_from_vec(shreds), None, false)
             .expect("Expect successful processing of shred");
 
         assert_eq!(blockstore.get_slot_entries(0, 0).unwrap(), original_entries);
@@ -966,7 +974,7 @@ mod test {
         let (duplicate_slot_sender, duplicate_slot_receiver) = unbounded();
         let (shreds, _) = make_many_slot_entries(5, 5, 10);
         blockstore
-            .insert_shreds(shreds.clone(), None, false)
+            .insert_shreds(Shreds::new_from_vec(shreds.clone()), None, false)
             .unwrap();
         let mut duplicate_shred = shreds[1].clone();
         duplicate_shred.set_slot(shreds[0].slot());

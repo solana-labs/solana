@@ -30,12 +30,9 @@ pub fn recv_from(obj: &mut Packets, socket: &UdpSocket, max_wait_ms: u64) -> Res
         );
         match recv_mmsg(socket, &mut obj.packets[i..]) {
             Err(_) if i > 0 => {
-                break;
-                /*
                 if start.elapsed().as_millis() as u64 > max_wait_ms {
                     break;
                 }
-                */
             }
             Err(e) => {
                 trace!("recv_from err {:?}", e);

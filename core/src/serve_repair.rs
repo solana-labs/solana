@@ -761,7 +761,7 @@ mod tests {
     use solana_ledger::{
         blockstore::make_many_slot_entries,
         blockstore_processor::fill_blockstore_slot_with_ticks,
-        shred::{max_ticks_per_n_shreds, Shred},
+        shred::{max_ticks_per_n_shreds, Shred, Shreds},
     };
     use solana_perf::packet::Packet;
     use solana_sdk::{hash::Hash, pubkey::Pubkey, signature::Keypair, timing::timestamp};
@@ -878,7 +878,7 @@ mod tests {
             let shred = Shred::new_from_data(slot, 1, 1, None, false, false, 0, 2, 0);
 
             blockstore
-                .insert_shreds(vec![shred], None, false)
+                .insert_shreds(Shreds::new_from_shred(shred), None, false)
                 .expect("Expect successful ledger write");
 
             let index = 1;
@@ -1031,7 +1031,7 @@ mod tests {
             let (shreds, _) = make_many_slot_entries(slot, num_slots, 5);
 
             blockstore
-                .insert_shreds(shreds, None, false)
+                .insert_shreds(Shreds::new_from_vec(shreds), None, false)
                 .expect("Expect successful ledger write");
 
             // We don't have slot `slot + num_slots`, so we don't know how to service this request
@@ -1100,7 +1100,7 @@ mod tests {
             shreds[0].payload.push(10);
             shreds[0].data_header.size = shreds[0].payload.len() as u16;
             blockstore
-                .insert_shreds(shreds, None, false)
+                .insert_shreds(Shreds::new_from_vec(shreds), None, false)
                 .expect("Expect successful ledger write");
             let nonce = 42;
             // Make sure repair response is corrupted
@@ -1161,7 +1161,7 @@ mod tests {
             let (shreds, _) = make_many_slot_entries(slot, num_slots, 5);
 
             blockstore
-                .insert_shreds(shreds, None, false)
+                .insert_shreds(Shreds::new_from_vec(shreds), None, false)
                 .expect("Expect successful ledger write");
 
             // We don't have slot `slot + num_slots`, so we return empty

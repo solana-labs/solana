@@ -460,7 +460,7 @@ pub mod test {
         blockstore::{make_slot_entries, Blockstore},
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         get_tmp_ledger_path,
-        shred::{max_ticks_per_n_shreds, ProcessShredsStats, Shredder},
+        shred::{max_ticks_per_n_shreds, ProcessShredsStats, Shredder, Shreds},
     };
     use solana_runtime::bank::Bank;
     use solana_sdk::{
@@ -553,10 +553,10 @@ pub mod test {
 
         // Insert all the shreds
         blockstore
-            .insert_shreds(all_data_shreds, None, true)
+            .insert_shreds(Shreds::new_from_vec(all_data_shreds), None, true)
             .unwrap();
         blockstore
-            .insert_shreds(all_coding_shreds, None, true)
+            .insert_shreds(Shreds::new_from_vec(all_coding_shreds), None, true)
             .unwrap();
 
         // Insert duplicate retransmit signal, blocks should

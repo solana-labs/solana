@@ -1328,8 +1328,10 @@ fn backup_and_clear_blockstore(ledger_path: &Path, start_slot: Slot, shred_versi
             if let Ok(shreds) = blockstore.get_data_shreds_for_slot(slot, 0) {
                 if let Ok(ref backup_blockstore) = backup_blockstore {
                     copied += shreds.len();
-                    let mut insert_shreds = Shreds::default();
-                    insert_shreds.shreds = shreds;
+                    let mut insert_shreds = Shreds {
+                        inner_shreds: shreds,
+                        ..Default::default()
+                    };
                     // TODO mark timer origin
                     insert_shreds.timer.mark_outgoing_start();
                     let _ = backup_blockstore.insert_shreds(insert_shreds, None, true);
@@ -1667,7 +1669,9 @@ pub fn is_snapshot_config_invalid(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_ledger::{create_new_tmp_ledger, genesis_utils::create_genesis_config_with_leader};
+    use solana_ledger::{
+        create_new_tmp_ledger, genesis_utils::create_genesis_config_with_leader, shred::Shreds,
+    };
     use solana_sdk::genesis_config::create_genesis_config;
     use solana_sdk::poh_config::PohConfig;
     use std::fs::remove_dir_all;
@@ -1727,7 +1731,9 @@ mod tests {
             let mut last_print = Instant::now();
             for i in 1..10 {
                 let shreds = blockstore::entries_to_test_shreds(entries.clone(), i, i - 1, true, 1);
-                blockstore.insert_shreds(shreds, None, true).unwrap();
+                blockstore
+                    .insert_shreds(Shreds::new_from_vec(shreds), None, true)
+                    .unwrap();
                 if last_print.elapsed().as_millis() > 5000 {
                     info!("inserted {}", i);
                     last_print = Instant::now();

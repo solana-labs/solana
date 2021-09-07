@@ -308,7 +308,7 @@ impl LedgerCleanupService {
 mod tests {
     use super::*;
     use solana_ledger::blockstore::make_many_slot_entries;
-    use solana_ledger::get_tmp_ledger_path;
+    use solana_ledger::{get_tmp_ledger_path, shred::Shreds};
     use std::sync::mpsc::channel;
 
     #[test]
@@ -317,7 +317,9 @@ mod tests {
         let blockstore_path = get_tmp_ledger_path!();
         let blockstore = Blockstore::open(&blockstore_path).unwrap();
         let (shreds, _) = make_many_slot_entries(0, 50, 5);
-        blockstore.insert_shreds(shreds, None, false).unwrap();
+        blockstore
+            .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+            .unwrap();
         let blockstore = Arc::new(blockstore);
         let (sender, receiver) = channel();
 
@@ -372,7 +374,9 @@ mod tests {
         let initial_slots = 50;
         let initial_entries = 5;
         let (shreds, _) = make_many_slot_entries(0, initial_slots, initial_entries);
-        blockstore.insert_shreds(shreds, None, false).unwrap();
+        blockstore
+            .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+            .unwrap();
         first_insert.stop();
         info!("{}", first_insert);
 
@@ -386,7 +390,9 @@ mod tests {
             let batches = num_slots / batch_size;
             for i in 0..batches {
                 let (shreds, _) = make_many_slot_entries(slot + i * batch_size, batch_size, 5);
-                blockstore.insert_shreds(shreds, None, false).unwrap();
+                blockstore
+                    .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+                    .unwrap();
                 if i % 100 == 0 {
                     info!("inserting..{} of {}", i, batches);
                 }

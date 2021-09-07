@@ -75,6 +75,7 @@ impl<'a> Iterator for AncestorIteratorWithHash<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::shred::Shreds;
     use solana_sdk::hash::Hash;
     use std::{collections::HashMap, path::Path};
     use trees::tr;
@@ -126,11 +127,17 @@ mod tests {
         let blockstore = Blockstore::open(&blockstore_path).unwrap();
 
         let (shreds, _) = make_slot_entries(0, 0, 42);
-        blockstore.insert_shreds(shreds, None, false).unwrap();
+        blockstore
+            .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+            .unwrap();
         let (shreds, _) = make_slot_entries(1, 0, 42);
-        blockstore.insert_shreds(shreds, None, false).unwrap();
+        blockstore
+            .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+            .unwrap();
         let (shreds, _) = make_slot_entries(2, 1, 42);
-        blockstore.insert_shreds(shreds, None, false).unwrap();
+        blockstore
+            .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+            .unwrap();
 
         assert_eq!(
             AncestorIterator::new(2, &blockstore).collect::<Vec<Slot>>(),

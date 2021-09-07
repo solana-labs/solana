@@ -137,7 +137,10 @@ pub fn get_best_repair_shreds<'a>(
 #[cfg(test)]
 pub mod test {
     use super::*;
-    use solana_ledger::{get_tmp_ledger_path, shred::Shred};
+    use solana_ledger::{
+        get_tmp_ledger_path,
+        shred::{Shred, Shreds},
+    };
     use solana_runtime::bank_utils;
     use solana_sdk::hash::Hash;
     use trees::tr;
@@ -276,7 +279,7 @@ pub mod test {
             })
             .collect();
         blockstore
-            .insert_shreds(completed_shreds, None, false)
+            .insert_shreds(Shreds::new_from_vec(completed_shreds), None, false)
             .unwrap();
         get_best_repair_shreds(
             &heaviest_subtree_fork_choice,

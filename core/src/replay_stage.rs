@@ -2863,8 +2863,9 @@ pub mod tests {
         genesis_utils::{create_genesis_config, create_genesis_config_with_leader},
         get_tmp_ledger_path,
         shred::{
-            CodingShredHeader, DataShredHeader, Shred, ShredCommonHeader, DATA_COMPLETE_SHRED,
-            SIZE_OF_COMMON_SHRED_HEADER, SIZE_OF_DATA_SHRED_HEADER, SIZE_OF_DATA_SHRED_PAYLOAD,
+            CodingShredHeader, DataShredHeader, Shred, ShredCommonHeader, Shreds,
+            DATA_COMPLETE_SHRED, SIZE_OF_COMMON_SHRED_HEADER, SIZE_OF_DATA_SHRED_HEADER,
+            SIZE_OF_DATA_SHRED_PAYLOAD,
         },
     };
     use solana_rpc::{
@@ -3066,7 +3067,9 @@ pub mod tests {
         // Insert shreds for slot NUM_CONSECUTIVE_LEADER_SLOTS,
         // chaining to slot 1
         let (shreds, _) = make_slot_entries(NUM_CONSECUTIVE_LEADER_SLOTS, 1, 8);
-        blockstore.insert_shreds(shreds, None, false).unwrap();
+        blockstore
+            .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+            .unwrap();
         assert!(bank_forks
             .read()
             .unwrap()
@@ -3088,7 +3091,9 @@ pub mod tests {
         // Insert shreds for slot 2 * NUM_CONSECUTIVE_LEADER_SLOTS,
         // chaining to slot 1
         let (shreds, _) = make_slot_entries(2 * NUM_CONSECUTIVE_LEADER_SLOTS, 1, 8);
-        blockstore.insert_shreds(shreds, None, false).unwrap();
+        blockstore
+            .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+            .unwrap();
         assert!(bank_forks
             .read()
             .unwrap()
@@ -3522,7 +3527,9 @@ pub mod tests {
                 &validator_keypairs.values().next().unwrap().node_keypair,
                 bank1.clone(),
             );
-            blockstore.insert_shreds(shreds, None, false).unwrap();
+            blockstore
+                .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+                .unwrap();
             let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
             let exit = Arc::new(AtomicBool::new(false));
             let res = ReplayStage::replay_blockstore_into_bank(

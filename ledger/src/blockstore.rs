@@ -14,7 +14,7 @@ use {
         leader_schedule_cache::LeaderScheduleCache,
         next_slots_iterator::NextSlotsIterator,
         shred::{
-            Result as ShredResult, Shred, ShredSender, Shredder, Shreds,
+            Result as ShredResult, Shred, Shredder, Shreds, ShredsSender,
             MAX_DATA_SHREDS_PER_FEC_BLOCK,
         },
     },
@@ -477,14 +477,16 @@ impl Blockstore {
                 if !is_slot_complete {
                     entries.pop().unwrap();
                 }
-                let mut shreds = Shreds::default();
-                shreds.shreds = entries_to_test_shreds(
-                    entries.clone(),
-                    slot,
-                    parent.unwrap_or(slot),
-                    is_slot_complete,
-                    0,
-                );
+                let mut shreds = Shreds {
+                    inner_shreds: entries_to_test_shreds(
+                        entries.clone(),
+                        slot,
+                        parent.unwrap_or(slot),
+                        is_slot_complete,
+                        0,
+                    ),
+                    ..Default::default()
+                };
                 shreds.timer.mark_outgoing_start();
                 self.insert_shreds(shreds, None, false).unwrap();
             }
@@ -808,14 +810,14 @@ impl Blockstore {
         is_repaired: Vec<bool>,
         leader_schedule: Option<&LeaderScheduleCache>,
         is_trusted: bool,
-        retransmit_sender: Option<&ShredSender>,
+        retransmit_sender: Option<&ShredsSender>,
         handle_duplicate: &F,
         metrics: &mut BlockstoreInsertionMetrics,
     ) -> Result<(Vec<CompletedDataSetInfo>, Vec<usize>)>
     where
         F: Fn(Shred),
     {
-        assert_eq!(shreds.shreds.len(), is_repaired.len());
+        assert_eq!(shreds.inner_shreds.len(), is_repaired.len());
         let mut total_start = Measure::start("Total elapsed");
         let mut start = Measure::start("Blockstore lock");
         let _lock = self.insert_shreds_lock.lock().unwrap();
@@ -831,12 +833,14 @@ impl Blockstore {
         let mut slot_meta_working_set = HashMap::new();
         let mut index_working_set = HashMap::new();
 
-        metrics.num_shreds += shreds.shreds.len();
+        metrics.num_shreds += shreds.inner_shreds.len();
         let mut start = Measure::start("Shred insertion");
         let mut index_meta_time = 0;
         let mut newly_completed_data_sets: Vec<CompletedDataSetInfo> = vec![];
         let mut inserted_indices = Vec::new();
-        for (i, (shred, is_repaired)) in shreds.shreds.into_iter().zip(is_repaired).enumerate() {
+        for (i, (shred, is_repaired)) in
+            shreds.inner_shreds.into_iter().zip(is_repaired).enumerate()
+        {
             if shred.is_data() {
                 let shred_source = if is_repaired {
                     ShredSource::Repaired
@@ -933,9 +937,10 @@ impl Blockstore {
                 .collect();
             if !recovered_data_shreds.is_empty() {
                 if let Some(retransmit_sender) = retransmit_sender {
-                    let mut recovered_shreds = Shreds::default();
-                    recovered_shreds.shreds = recovered_data_shreds;
-                    recovered_shreds.timer = shreds.timer;
+                    let recovered_shreds = Shreds {
+                        inner_shreds: recovered_data_shreds,
+                        timer: shreds.timer,
+                    };
                     let _ = retransmit_sender.send(recovered_shreds);
                 }
             }
@@ -1029,7 +1034,7 @@ impl Blockstore {
         leader_schedule: Option<&LeaderScheduleCache>,
         is_trusted: bool,
     ) -> Result<(Vec<CompletedDataSetInfo>, Vec<usize>)> {
-        let shreds_len = shreds.shreds.len();
+        let shreds_len = shreds.inner_shreds.len();
         self.insert_shreds_handle_duplicate(
             shreds,
             vec![false; shreds_len],
@@ -1719,8 +1724,10 @@ impl Blockstore {
             all_shreds.append(&mut coding_shreds);
         }
         let num_data = all_shreds.iter().filter(|shred| shred.is_data()).count();
-        let mut shreds = Shreds::default();
-        shreds.shreds = all_shreds;
+        let mut shreds = Shreds {
+            inner_shreds: all_shreds,
+            ..Default::default()
+        };
         // TODO propagate timer from entries
         shreds.timer.mark_outgoing_start();
         self.insert_shreds(shreds, None, false)?;
@@ -3706,13 +3713,15 @@ pub fn create_new_ledger(
     let version = solana_sdk::shred_version::version_from_hash(&last_hash);
 
     let shredder = Shredder::new(0, 0, 0, version).unwrap();
-    let mut shreds = Shreds::default();
-    shreds.shreds = shredder
-        .entries_to_shreds(&Keypair::new(), &entries, true, 0)
-        .0;
+    let mut shreds = Shreds {
+        inner_shreds: shredder
+            .entries_to_shreds(&Keypair::new(), &entries, true, 0)
+            .0,
+        ..Default::default()
+    };
     // TODO mark outgoing processing origin
     shreds.timer.mark_outgoing_start();
-    assert!(shreds.shreds.last().unwrap().last_in_slot());
+    assert!(shreds.inner_shreds.last().unwrap().last_in_slot());
 
     blockstore.insert_shreds(shreds, None, false)?;
     blockstore.set_roots(std::iter::once(&0))?;
@@ -4089,7 +4098,7 @@ pub mod tests {
         let last_shred = shreds.pop().unwrap();
         assert!(last_shred.index() > 0);
         ledger
-            .insert_shreds(vec![last_shred.clone()], None, false)
+            .insert_shreds(Shreds::new_from_shred(last_shred.clone()), None, false)
             .unwrap();
 
         let serialized_shred = ledger
@@ -4263,7 +4272,9 @@ pub mod tests {
 
         let ledger_path = get_tmp_ledger_path!();
         let ledger = Blockstore::open(&ledger_path).unwrap();
-        ledger.insert_shreds(shreds, None, false).unwrap();
+        ledger
+            .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+            .unwrap();
 
         let mut buf = [0; 4096];
         let (_, bytes) = ledger.get_data_shreds(slot, 0, 1, &mut buf).unwrap();
@@ -4321,7 +4332,9 @@ pub mod tests {
 
         let ledger_path = get_tmp_ledger_path!();
         let ledger = Blockstore::open(&ledger_path).unwrap();
-        ledger.insert_shreds(shreds, None, false).unwrap();
+        ledger
+            .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+            .unwrap();
 
         let mut buf = [0; 4096];
         assert!(ledger.get_data_shreds(slot, 0, 1, &mut buf).is_ok());
@@ -4352,7 +4365,9 @@ pub mod tests {
         // shreds starting from slot 0, index 0 should exist.
         assert!(shreds.len() > 1);
         let last_shred = shreds.pop().unwrap();
-        ledger.insert_shreds(vec![last_shred], None, false).unwrap();
+        ledger
+            .insert_shreds(Shreds::new_from_shred(last_shred), None, false)
+            .unwrap();
         assert!(ledger.get_slot_entries(0, 0).unwrap().is_empty());
 
         let meta = ledger
@@ -4362,7 +4377,9 @@ pub mod tests {
         assert!(meta.consumed == 0 && meta.received == num_shreds);
 
         // Insert the other shreds, check for consecutive returned entries
-        ledger.insert_shreds(shreds, None, false).unwrap();
+        ledger
+            .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+            .unwrap();
         let result = ledger.get_slot_entries(0, 0).unwrap();
 
         assert_eq!(result, entries);
@@ -4396,7 +4413,9 @@ pub mod tests {
         // Insert shreds in reverse, check for consecutive returned shreds
         for i in (0..num_shreds).rev() {
             let shred = shreds.pop().unwrap();
-            ledger.insert_shreds(vec![shred], None, false).unwrap();
+            ledger
+                .insert_shreds(Shreds::new_from_shred(shred), None, false)
+                .unwrap();
             let result = ledger.get_slot_entries(0, 0).unwrap();
 
             let meta = ledger
@@ -4474,7 +4493,7 @@ pub mod tests {
             let entries = create_ticks(8, 0, Hash::default());
             let shreds = entries_to_test_shreds(entries[0..4].to_vec(), 1, 0, false, 0);
             blockstore
-                .insert_shreds(shreds, None, false)
+                .insert_shreds(Shreds::new_from_vec(shreds), None, false)
                 .expect("Expected successful write of shreds");
 
             let mut shreds1 = entries_to_test_shreds(entries[4..].to_vec(), 1, 0, false, 0);
@@ -4482,7 +4501,7 @@ pub mod tests {
                 b.set_index(8 + i as u32);
             }
             blockstore
-                .insert_shreds(shreds1, None, false)
+                .insert_shreds(Shreds::new_from_vec(shreds1), None, false)
                 .expect("Expected successful write of shreds");
 
             assert_eq!(
@@ -4516,7 +4535,7 @@ pub mod tests {
                     index += 1;
                 }
                 blockstore
-                    .insert_shreds(shreds, None, false)
+                    .insert_shreds(Shreds::new_from_vec(shreds), None, false)
                     .expect("Expected successful write of shreds");
                 assert_eq!(
                     blockstore
@@ -4549,7 +4568,7 @@ pub mod tests {
                     entries_to_test_shreds(entries.clone(), slot, slot.saturating_sub(1), false, 0);
                 assert!(shreds.len() as u64 >= shreds_per_slot);
                 blockstore
-                    .insert_shreds(shreds, None, false)
+                    .insert_shreds(Shreds::new_from_vec(shreds), None, false)
                     .expect("Expected successful write of shreds");
                 assert_eq!(blockstore.get_slot_entries(slot, 0).unwrap(), entries);
             }
@@ -4584,7 +4603,9 @@ pub mod tests {
                     }
                 }
 
-                blockstore.insert_shreds(odd_shreds, None, false).unwrap();
+                blockstore
+                    .insert_shreds(Shreds::new_from_vec(odd_shreds), None, false)
+                    .unwrap();
 
                 assert_eq!(blockstore.get_slot_entries(slot, 0).unwrap(), vec![]);
 
@@ -4602,7 +4623,9 @@ pub mod tests {
                     assert_eq!(meta.last_index, std::u64::MAX);
                 }
 
-                blockstore.insert_shreds(even_shreds, None, false).unwrap();
+                blockstore
+                    .insert_shreds(Shreds::new_from_vec(even_shreds), None, false)
+                    .unwrap();
 
                 assert_eq!(
                     blockstore.get_slot_entries(slot, 0).unwrap(),
@@ -4634,13 +4657,13 @@ pub mod tests {
         let num_shreds = shreds.len();
         assert!(num_shreds > 1);
         assert!(blockstore
-            .insert_shreds(shreds[1..].to_vec(), None, false)
+            .insert_shreds(Shreds::new_from_vec(shreds[1..].to_vec()), None, false)
             .unwrap()
             .0
             .is_empty());
         assert_eq!(
             blockstore
-                .insert_shreds(vec![shreds[0].clone()], None, false)
+                .insert_shreds(Shreds::new_from_shred(shreds[0].clone()), None, false)
                 .unwrap()
                 .0,
             vec![CompletedDataSetInfo {
@@ -4651,7 +4674,7 @@ pub mod tests {
         );
         // Inserting shreds again doesn't trigger notification
         assert!(blockstore
-            .insert_shreds(shreds, None, false)
+            .insert_shreds(Shreds::new_from_vec(shreds), None, false)
             .unwrap()
             .0
             .is_empty());
@@ -4676,19 +4699,21 @@ pub mod tests {
         // Insert second shred, but we're missing the first shred, so no consecutive
         // shreds starting from slot 0, index 0 should exist.
         ledger
-            .insert_shreds(vec![shreds.remove(1)], None, false)
+            .insert_shreds(Shreds::new_from_shred(shreds.remove(1)), None, false)
             .unwrap();
         let timer = Duration::new(1, 0);
         assert!(recvr.recv_timeout(timer).is_err());
         // Insert first shred, now we've made a consecutive block
         ledger
-            .insert_shreds(vec![shreds.remove(0)], None, false)
+            .insert_shreds(Shreds::new_from_shred(shreds.remove(0)), None, false)
             .unwrap();
         // Wait to get notified of update, should only be one update
         assert!(recvr.recv_timeout(timer).is_ok());
         assert!(recvr.try_recv().is_err());
         // Insert the rest of the ticks
-        ledger.insert_shreds(shreds, None, false).unwrap();
+        ledger
+            .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+            .unwrap();
         // Wait to get notified of update, should only be one update
         assert!(recvr.recv_timeout(timer).is_ok());
         assert!(recvr.try_recv().is_err());
@@ -4707,7 +4732,9 @@ pub mod tests {
         }
 
         // Should be no updates, since no new chains from block 0 were formed
-        ledger.insert_shreds(shreds, None, false).unwrap();
+        ledger
+            .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+            .unwrap();
         assert!(recvr.recv_timeout(timer).is_err());
 
         // Insert a shred for each slot that doesn't make a consecutive block, we
@@ -4720,7 +4747,9 @@ pub mod tests {
             })
             .collect();
 
-        ledger.insert_shreds(shreds, None, false).unwrap();
+        ledger
+            .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+            .unwrap();
         assert!(recvr.recv_timeout(timer).is_err());
 
         // For slots 1..num_slots/2, fill in the holes in one batch insertion,
@@ -4728,13 +4757,17 @@ pub mod tests {
         let missing_shreds2 = missing_shreds
             .drain((num_slots / 2) as usize..)
             .collect_vec();
-        ledger.insert_shreds(missing_shreds, None, false).unwrap();
+        ledger
+            .insert_shreds(Shreds::new_from_vec(missing_shreds), None, false)
+            .unwrap();
         assert!(recvr.recv_timeout(timer).is_ok());
         assert!(recvr.try_recv().is_err());
 
         // Fill in the holes for each of the remaining slots, we should get a single update
         // for each
-        ledger.insert_shreds(missing_shreds2, None, false).unwrap();
+        ledger
+            .insert_shreds(Shreds::new_from_vec(missing_shreds2), None, false)
+            .unwrap();
 
         // Destroying database without closing it first is undefined behavior
         drop(ledger);
@@ -4759,11 +4792,15 @@ pub mod tests {
 
         let shred0 = shreds.remove(0);
         // Insert all but the first shred in the slot, should not be considered complete
-        ledger.insert_shreds(shreds, None, false).unwrap();
+        ledger
+            .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+            .unwrap();
         assert!(recvr.try_recv().is_err());
 
         // Insert first shred, slot should now be considered complete
-        ledger.insert_shreds(vec![shred0], None, false).unwrap();
+        ledger
+            .insert_shreds(Shreds::new_from_shred(shred0), None, false)
+            .unwrap();
         assert_eq!(recvr.try_recv().unwrap(), vec![0]);
     }
 
@@ -4790,23 +4827,27 @@ pub mod tests {
 
         // Insert all but the first shred in the slot, should not be considered complete
         let orphan_child0 = orphan_child.remove(0);
-        ledger.insert_shreds(orphan_child, None, false).unwrap();
+        ledger
+            .insert_shreds(Shreds::new_from_vec(orphan_child), None, false)
+            .unwrap();
         assert!(recvr.try_recv().is_err());
 
         // Insert first shred, slot should now be considered complete
         ledger
-            .insert_shreds(vec![orphan_child0], None, false)
+            .insert_shreds(Shreds::new_from_shred(orphan_child0), None, false)
             .unwrap();
         assert_eq!(recvr.try_recv().unwrap(), vec![slots[2]]);
 
         // Insert the shreds for the orphan_slot
         let orphan_shred0 = orphan_shreds.remove(0);
-        ledger.insert_shreds(orphan_shreds, None, false).unwrap();
+        ledger
+            .insert_shreds(Shreds::new_from_vec(orphan_shreds), None, false)
+            .unwrap();
         assert!(recvr.try_recv().is_err());
 
         // Insert first shred, slot should now be considered complete
         ledger
-            .insert_shreds(vec![orphan_shred0], None, false)
+            .insert_shreds(Shreds::new_from_shred(orphan_shred0), None, false)
             .unwrap();
         assert_eq!(recvr.try_recv().unwrap(), vec![slots[1]]);
     }
@@ -4838,7 +4879,9 @@ pub mod tests {
             .collect();
 
         all_shreds.shuffle(&mut thread_rng());
-        ledger.insert_shreds(all_shreds, None, false).unwrap();
+        ledger
+            .insert_shreds(Shreds::new_from_vec(all_shreds), None, false)
+            .unwrap();
         let mut result = recvr.try_recv().unwrap();
         result.sort_unstable();
         slots.push(disconnected_slot);
@@ -4862,7 +4905,9 @@ pub mod tests {
             let shreds1 = shreds
                 .drain(shreds_per_slot..2 * shreds_per_slot)
                 .collect_vec();
-            blockstore.insert_shreds(shreds1, None, false).unwrap();
+            blockstore
+                .insert_shreds(Shreds::new_from_vec(shreds1), None, false)
+                .unwrap();
             let s1 = blockstore.meta(1).unwrap().unwrap();
             assert!(s1.next_slots.is_empty());
             // Slot 1 is not trunk because slot 0 hasn't been inserted yet
@@ -4874,7 +4919,9 @@ pub mod tests {
             let shreds2 = shreds
                 .drain(shreds_per_slot..2 * shreds_per_slot)
                 .collect_vec();
-            blockstore.insert_shreds(shreds2, None, false).unwrap();
+            blockstore
+                .insert_shreds(Shreds::new_from_vec(shreds2), None, false)
+                .unwrap();
             let s2 = blockstore.meta(2).unwrap().unwrap();
             assert!(s2.next_slots.is_empty());
             // Slot 2 is not trunk because slot 0 hasn't been inserted yet
@@ -4892,7 +4939,9 @@ pub mod tests {
 
             // 3) Write to the zeroth slot, check that every slot
             // is now part of the trunk
-            blockstore.insert_shreds(shreds, None, false).unwrap();
+            blockstore
+                .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+                .unwrap();
             for i in 0..3 {
                 let s = blockstore.meta(i).unwrap().unwrap();
                 // The last slot will not chain to any other slots
@@ -4942,7 +4991,9 @@ pub mod tests {
             }
 
             // Write the shreds for every other slot
-            blockstore.insert_shreds(slots, None, false).unwrap();
+            blockstore
+                .insert_shreds(Shreds::new_from_vec(slots), None, false)
+                .unwrap();
 
             // Check metadata
             for i in 0..num_slots {
@@ -4969,7 +5020,7 @@ pub mod tests {
 
             // Write the shreds for the other half of the slots that we didn't insert earlier
             blockstore
-                .insert_shreds(missing_slots, None, false)
+                .insert_shreds(Shreds::new_from_vec(missing_slots), None, false)
                 .unwrap();
 
             for i in 0..num_slots {
@@ -5019,7 +5070,7 @@ pub mod tests {
                     missing_shreds.push(shred0);
                 }
                 blockstore
-                    .insert_shreds(shreds_for_slot, None, false)
+                    .insert_shreds(Shreds::new_from_vec(shreds_for_slot), None, false)
                     .unwrap();
             }
 
@@ -5054,7 +5105,9 @@ pub mod tests {
             for slot_index in 0..num_slots {
                 if slot_index % 3 == 0 {
                     let shred = missing_shreds.remove(0);
-                    blockstore.insert_shreds(vec![shred], None, false).unwrap();
+                    blockstore
+                        .insert_shreds(Shreds::new_from_shred(shred), None, false)
+                        .unwrap();
 
                     for i in 0..num_slots {
                         let s = blockstore.meta(i as u64).unwrap().unwrap();
@@ -5235,7 +5288,7 @@ pub mod tests {
             // so slot 1 is the orphan
             let shreds_for_slot = shreds.drain((shreds_per_slot * 2)..).collect_vec();
             blockstore
-                .insert_shreds(shreds_for_slot, None, false)
+                .insert_shreds(Shreds::new_from_vec(shreds_for_slot), None, false)
                 .unwrap();
             let meta = blockstore
                 .meta(1)
@@ -5251,7 +5304,7 @@ pub mod tests {
             // orphan, and slot 1 is no longer the orphan.
             let shreds_for_slot = shreds.drain(shreds_per_slot..).collect_vec();
             blockstore
-                .insert_shreds(shreds_for_slot, None, false)
+                .insert_shreds(Shreds::new_from_vec(shreds_for_slot), None, false)
                 .unwrap();
             let meta = blockstore
                 .meta(1)
@@ -5272,15 +5325,21 @@ pub mod tests {
             // nothing should change
             let (shred4, _) = make_slot_entries(4, 0, 1);
             let (shred5, _) = make_slot_entries(5, 1, 1);
-            blockstore.insert_shreds(shred4, None, false).unwrap();
-            blockstore.insert_shreds(shred5, None, false).unwrap();
+            blockstore
+                .insert_shreds(Shreds::new_from_vec(shred4), None, false)
+                .unwrap();
+            blockstore
+                .insert_shreds(Shreds::new_from_vec(shred5), None, false)
+                .unwrap();
             assert_eq!(
                 blockstore.orphans_iterator(0).unwrap().collect::<Vec<_>>(),
                 vec![0]
             );
 
             // Write zeroth slot, no more orphans
-            blockstore.insert_shreds(shreds, None, false).unwrap();
+            blockstore
+                .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+                .unwrap();
             for i in 0..3 {
                 let meta = blockstore
                     .meta(i)
@@ -5326,11 +5385,15 @@ pub mod tests {
             let num_shreds = shreds.len();
             // Write shreds to the database
             if should_bulk_write {
-                blockstore.insert_shreds(shreds, None, false).unwrap();
+                blockstore
+                    .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+                    .unwrap();
             } else {
                 for _ in 0..num_shreds {
                     let shred = shreds.remove(0);
-                    blockstore.insert_shreds(vec![shred], None, false).unwrap();
+                    blockstore
+                        .insert_shreds(Shreds::new_from_shred(shred), None, false)
+                        .unwrap();
                 }
             }
 
@@ -5374,7 +5437,9 @@ pub mod tests {
             s.set_index(i as u32 * gap as u32);
             s.set_slot(slot);
         }
-        blockstore.insert_shreds(shreds, None, false).unwrap();
+        blockstore
+            .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+            .unwrap();
 
         // Index of the first shred is 0
         // Index of the second shred is "gap"
@@ -5468,7 +5533,9 @@ pub mod tests {
                 )
             })
             .collect();
-        blockstore.insert_shreds(shreds, None, false).unwrap();
+        blockstore
+            .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+            .unwrap();
 
         let empty: Vec<u64> = vec![];
         assert_eq!(
@@ -5523,7 +5590,9 @@ pub mod tests {
         shreds[1].set_index(OTHER as u32);
 
         // Insert one shred at index = first_index
-        blockstore.insert_shreds(shreds, None, false).unwrap();
+        blockstore
+            .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+            .unwrap();
 
         const STARTS: u64 = OTHER * 2;
         const END: u64 = OTHER * 3;
@@ -5557,7 +5626,9 @@ pub mod tests {
         let shreds = entries_to_test_shreds(entries, slot, 0, true, 0);
         let num_shreds = shreds.len();
 
-        blockstore.insert_shreds(shreds, None, false).unwrap();
+        blockstore
+            .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+            .unwrap();
 
         let empty: Vec<u64> = vec![];
         for i in 0..num_shreds as u64 {
@@ -5584,7 +5655,7 @@ pub mod tests {
 
             // Insert the first 5 shreds, we don't have a "is_last" shred yet
             blockstore
-                .insert_shreds(shreds[0..5].to_vec(), None, false)
+                .insert_shreds(Shreds::new_from_vec(shreds[0..5].to_vec()), None, false)
                 .unwrap();
 
             let slot_meta = blockstore.meta(0).unwrap().unwrap();
@@ -5636,7 +5707,7 @@ pub mod tests {
             // Trying to insert another "is_last" shred with index < the received index should fail
             // skip over shred 7
             blockstore
-                .insert_shreds(shreds[8..9].to_vec(), None, false)
+                .insert_shreds(Shreds::new_from_vec(shreds[8..9].to_vec()), None, false)
                 .unwrap();
             let slot_meta = blockstore.meta(0).unwrap().unwrap();
             assert_eq!(slot_meta.received, 9);
@@ -5660,7 +5731,9 @@ pub mod tests {
 
             // Insert all pending shreds
             let mut shred8 = shreds[8].clone();
-            blockstore.insert_shreds(shreds, None, false).unwrap();
+            blockstore
+                .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+                .unwrap();
             let slot_meta = blockstore.meta(0).unwrap().unwrap();
 
             // Trying to insert a shred with index > the "is_last" shred should fail
@@ -5690,7 +5763,7 @@ pub mod tests {
             let index_cf = blockstore.db.column::<cf::Index>();
 
             blockstore
-                .insert_shreds(shreds[0..5].to_vec(), None, false)
+                .insert_shreds(Shreds::new_from_vec(shreds[0..5].to_vec()), None, false)
                 .unwrap();
             // Insert a shred less than `slot_meta.consumed`, check that
             // it already exists
@@ -5705,7 +5778,7 @@ pub mod tests {
 
             // Insert a shred, check that it already exists
             blockstore
-                .insert_shreds(shreds[6..7].to_vec(), None, false)
+                .insert_shreds(Shreds::new_from_vec(shreds[6..7].to_vec()), None, false)
                 .unwrap();
             let slot_meta = blockstore.meta(0).unwrap().unwrap();
             let index = index_cf.get(0).unwrap().unwrap();
@@ -5788,7 +5861,7 @@ pub mod tests {
 
             // Insertion should succeed
             blockstore
-                .insert_shreds(vec![coding_shred.clone()], None, false)
+                .insert_shreds(Shreds::new_from_shred(coding_shred.clone()), None, false)
                 .unwrap();
 
             // Trying to insert the same shred again should pass since this doesn't check for
@@ -5892,7 +5965,7 @@ pub mod tests {
 
                 // Insertion should succeed
                 blockstore
-                    .insert_shreds(vec![coding_shred], None, false)
+                    .insert_shreds(Shreds::new_from_shred(coding_shred), None, false)
                     .unwrap();
             }
 
@@ -5919,7 +5992,9 @@ pub mod tests {
         let blockstore_path = get_tmp_ledger_path!();
         let blockstore = Blockstore::open(&blockstore_path).unwrap();
 
-        blockstore.insert_shreds(shreds, None, false).unwrap();
+        blockstore
+            .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+            .unwrap();
         let slot_meta = blockstore.meta(0).unwrap().unwrap();
 
         assert_eq!(slot_meta.consumed, num_shreds);
@@ -5928,7 +6003,9 @@ pub mod tests {
         assert!(slot_meta.is_full());
 
         let (shreds, _) = make_slot_entries(0, 0, 22);
-        blockstore.insert_shreds(shreds, None, false).unwrap();
+        blockstore
+            .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+            .unwrap();
         let slot_meta = blockstore.meta(0).unwrap().unwrap();
 
         assert_eq!(slot_meta.consumed, num_shreds);
@@ -5952,7 +6029,9 @@ pub mod tests {
         let all_shreds = make_chaining_slot_entries(&slots, shreds_per_slot);
         let slot_8_shreds = all_shreds[2].0.clone();
         for (slot_shreds, _) in all_shreds {
-            blockstore.insert_shreds(slot_shreds, None, false).unwrap();
+            blockstore
+                .insert_shreds(Shreds::new_from_vec(slot_shreds), None, false)
+                .unwrap();
         }
 
         // Slot doesnt exist, iterator should be empty
@@ -6096,7 +6175,7 @@ pub mod tests {
             let shreds = entries_to_test_shreds(entries, slot, 0, false, 0);
             let next_shred_index = shreds.len();
             blockstore
-                .insert_shreds(shreds, None, false)
+                .insert_shreds(Shreds::new_from_vec(shreds), None, false)
                 .expect("Expected successful write of shreds");
             assert_eq!(
                 blockstore.get_slot_entries(slot, 0).unwrap().len() as u64,
@@ -6119,7 +6198,7 @@ pub mod tests {
             // With the corruption, nothing should be returned, even though an
             // earlier data block was valid
             blockstore
-                .insert_shreds(shreds, None, false)
+                .insert_shreds(Shreds::new_from_vec(shreds), None, false)
                 .expect("Expected successful write of shreds");
             assert!(blockstore.get_slot_entries(slot, 0).is_err());
         }
@@ -6137,7 +6216,7 @@ pub mod tests {
 
             // Insert the first 5 shreds, we don't have a "is_last" shred yet
             blockstore
-                .insert_shreds(shreds0[0..5].to_vec(), None, false)
+                .insert_shreds(Shreds::new_from_vec(shreds0[0..5].to_vec()), None, false)
                 .unwrap();
 
             // Insert a repetitive shred for slot 's', should get ignored, but also
@@ -6147,10 +6226,14 @@ pub mod tests {
             let (mut shreds3, _) = make_slot_entries(3, 0, 200);
             shreds2.push(shreds0[1].clone());
             shreds3.insert(0, shreds0[1].clone());
-            blockstore.insert_shreds(shreds2, None, false).unwrap();
+            blockstore
+                .insert_shreds(Shreds::new_from_vec(shreds2), None, false)
+                .unwrap();
             let slot_meta = blockstore.meta(0).unwrap().unwrap();
             assert_eq!(slot_meta.next_slots, vec![2]);
-            blockstore.insert_shreds(shreds3, None, false).unwrap();
+            blockstore
+                .insert_shreds(Shreds::new_from_vec(shreds3), None, false)
+                .unwrap();
             let slot_meta = blockstore.meta(0).unwrap().unwrap();
             assert_eq!(slot_meta.next_slots, vec![2, 3]);
         }
@@ -6169,13 +6252,13 @@ pub mod tests {
 
             // Insert will fail, slot < root
             blockstore
-                .insert_shreds(shreds1[..].to_vec(), None, false)
+                .insert_shreds(Shreds::new_from_vec(shreds1[..].to_vec()), None, false)
                 .unwrap();
             assert!(blockstore.get_data_shred(1, 0).unwrap().is_none());
 
             // Insert through trusted path will succeed
             blockstore
-                .insert_shreds(shreds1[..].to_vec(), None, true)
+                .insert_shreds(Shreds::new_from_vec(shreds1[..].to_vec()), None, true)
                 .unwrap();
             assert!(blockstore.get_data_shred(1, 0).unwrap().is_some());
         }
@@ -6191,9 +6274,15 @@ pub mod tests {
         let unrooted_shreds = entries_to_test_shreds(entries.clone(), slot + 2, slot + 1, true, 0);
         let ledger_path = get_tmp_ledger_path!();
         let ledger = Blockstore::open(&ledger_path).unwrap();
-        ledger.insert_shreds(shreds, None, false).unwrap();
-        ledger.insert_shreds(more_shreds, None, false).unwrap();
-        ledger.insert_shreds(unrooted_shreds, None, false).unwrap();
+        ledger
+            .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+            .unwrap();
+        ledger
+            .insert_shreds(Shreds::new_from_vec(more_shreds), None, false)
+            .unwrap();
+        ledger
+            .insert_shreds(Shreds::new_from_vec(unrooted_shreds), None, false)
+            .unwrap();
         ledger
             .set_roots(vec![slot - 1, slot, slot + 1].iter())
             .unwrap();
@@ -7078,7 +7167,9 @@ pub mod tests {
         let shreds = entries_to_test_shreds(entries.clone(), slot, slot - 1, true, 0);
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Blockstore::open(&ledger_path).unwrap();
-        blockstore.insert_shreds(shreds, None, false).unwrap();
+        blockstore
+            .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+            .unwrap();
         blockstore.set_roots(vec![slot - 1, slot].iter()).unwrap();
 
         let expected_transactions: Vec<TransactionWithStatusMeta> = entries
@@ -7182,7 +7273,9 @@ pub mod tests {
         let shreds = entries_to_test_shreds(entries.clone(), slot, slot - 1, true, 0);
         let ledger_path = get_tmp_ledger_path!();
         let blockstore = Blockstore::open(&ledger_path).unwrap();
-        blockstore.insert_shreds(shreds, None, false).unwrap();
+        blockstore
+            .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+            .unwrap();
 
         let expected_transactions: Vec<TransactionWithStatusMeta> = entries
             .iter()
@@ -7545,7 +7638,9 @@ pub mod tests {
                     address0, address1, address0, address1,
                 ]);
                 let shreds = entries_to_test_shreds(entries.clone(), slot, slot - 1, true, 0);
-                blockstore.insert_shreds(shreds, None, false).unwrap();
+                blockstore
+                    .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+                    .unwrap();
 
                 for (i, entry) in entries.into_iter().enumerate() {
                     if slot == 4 && i == 2 {
@@ -7576,7 +7671,9 @@ pub mod tests {
                     address0, address1, address0, address1,
                 ]);
                 let shreds = entries_to_test_shreds(entries.clone(), slot, 8, true, 0);
-                blockstore.insert_shreds(shreds, None, false).unwrap();
+                blockstore
+                    .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+                    .unwrap();
 
                 for entry in entries.into_iter() {
                     for tx in entry.transactions {
@@ -8045,7 +8142,9 @@ pub mod tests {
             for i in 0..10 {
                 let slot = i;
                 let (shreds, _) = make_slot_entries(slot, 0, 1);
-                blockstore.insert_shreds(shreds, None, false).unwrap();
+                blockstore
+                    .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+                    .unwrap();
             }
             assert_eq!(blockstore.lowest_slot(), 1);
             blockstore.run_purge(0, 5, PurgeType::PrimaryIndex).unwrap();
@@ -8063,7 +8162,11 @@ pub mod tests {
         {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
             blockstore
-                .insert_shreds(coding_shreds, Some(&leader_schedule_cache), false)
+                .insert_shreds(
+                    Shreds::new_from_vec(coding_shreds),
+                    Some(&leader_schedule_cache),
+                    false,
+                )
                 .unwrap();
             let shred_bufs: Vec<_> = data_shreds
                 .iter()
@@ -8104,14 +8207,22 @@ pub mod tests {
                 .chain(coding_shreds.iter().cloned())
                 .collect();
             blockstore
-                .insert_shreds(all_shreds, Some(&leader_schedule_cache), false)
+                .insert_shreds(
+                    Shreds::new_from_vec(all_shreds),
+                    Some(&leader_schedule_cache),
+                    false,
+                )
                 .unwrap();
             verify_index_integrity(&blockstore, slot);
             blockstore.purge_and_compact_slots(0, slot);
 
             // Test inserting just the codes, enough for recovery
             blockstore
-                .insert_shreds(coding_shreds.clone(), Some(&leader_schedule_cache), false)
+                .insert_shreds(
+                    Shreds::new_from_vec(coding_shreds.clone()),
+                    Some(&leader_schedule_cache),
+                    false,
+                )
                 .unwrap();
             verify_index_integrity(&blockstore, slot);
             blockstore.purge_and_compact_slots(0, slot);
@@ -8119,7 +8230,7 @@ pub mod tests {
             // Test inserting some codes, but not enough for recovery
             blockstore
                 .insert_shreds(
-                    coding_shreds[..coding_shreds.len() - 1].to_vec(),
+                    Shreds::new_from_vec(coding_shreds[..coding_shreds.len() - 1].to_vec()),
                     Some(&leader_schedule_cache),
                     false,
                 )
@@ -8134,7 +8245,11 @@ pub mod tests {
                 .chain(coding_shreds[..coding_shreds.len() - 1].iter().cloned())
                 .collect();
             blockstore
-                .insert_shreds(shreds, Some(&leader_schedule_cache), false)
+                .insert_shreds(
+                    Shreds::new_from_vec(shreds),
+                    Some(&leader_schedule_cache),
+                    false,
+                )
                 .unwrap();
             verify_index_integrity(&blockstore, slot);
             blockstore.purge_and_compact_slots(0, slot);
@@ -8146,7 +8261,11 @@ pub mod tests {
                 .chain(coding_shreds[..coding_shreds.len() / 2 - 1].iter().cloned())
                 .collect();
             blockstore
-                .insert_shreds(shreds, Some(&leader_schedule_cache), false)
+                .insert_shreds(
+                    Shreds::new_from_vec(shreds),
+                    Some(&leader_schedule_cache),
+                    false,
+                )
                 .unwrap();
             verify_index_integrity(&blockstore, slot);
             blockstore.purge_and_compact_slots(0, slot);
@@ -8163,10 +8282,18 @@ pub mod tests {
                 .chain(coding_shreds[coding_shreds.len() / 2 - 1..].iter().cloned())
                 .collect();
             blockstore
-                .insert_shreds(shreds1, Some(&leader_schedule_cache), false)
+                .insert_shreds(
+                    Shreds::new_from_vec(shreds1),
+                    Some(&leader_schedule_cache),
+                    false,
+                )
                 .unwrap();
             blockstore
-                .insert_shreds(shreds2, Some(&leader_schedule_cache), false)
+                .insert_shreds(
+                    Shreds::new_from_vec(shreds2),
+                    Some(&leader_schedule_cache),
+                    false,
+                )
                 .unwrap();
             verify_index_integrity(&blockstore, slot);
             blockstore.purge_and_compact_slots(0, slot);
@@ -8188,10 +8315,18 @@ pub mod tests {
                 )
                 .collect();
             blockstore
-                .insert_shreds(shreds1, Some(&leader_schedule_cache), false)
+                .insert_shreds(
+                    Shreds::new_from_vec(shreds1),
+                    Some(&leader_schedule_cache),
+                    false,
+                )
                 .unwrap();
             blockstore
-                .insert_shreds(shreds2, Some(&leader_schedule_cache), false)
+                .insert_shreds(
+                    Shreds::new_from_vec(shreds2),
+                    Some(&leader_schedule_cache),
+                    false,
+                )
                 .unwrap();
             verify_index_integrity(&blockstore, slot);
             blockstore.purge_and_compact_slots(0, slot);
@@ -8213,10 +8348,18 @@ pub mod tests {
                 )
                 .collect();
             blockstore
-                .insert_shreds(shreds1, Some(&leader_schedule_cache), false)
+                .insert_shreds(
+                    Shreds::new_from_vec(shreds1),
+                    Some(&leader_schedule_cache),
+                    false,
+                )
                 .unwrap();
             blockstore
-                .insert_shreds(shreds2, Some(&leader_schedule_cache), false)
+                .insert_shreds(
+                    Shreds::new_from_vec(shreds2),
+                    Some(&leader_schedule_cache),
+                    false,
+                )
                 .unwrap();
             verify_index_integrity(&blockstore, slot);
             blockstore.purge_and_compact_slots(0, slot);
@@ -8299,7 +8442,7 @@ pub mod tests {
         {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
             blockstore
-                .insert_shreds(vec![shred.clone()], None, false)
+                .insert_shreds(Shreds::new_from_shred(shred.clone()), None, false)
                 .unwrap();
 
             // No duplicate shreds exist yet
@@ -8355,7 +8498,9 @@ pub mod tests {
                 .into_iter()
                 .flat_map(|x| x.0)
                 .collect();
-            blockstore.insert_shreds(shreds, None, false).unwrap();
+            blockstore
+                .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+                .unwrap();
             // Should only be one shred in slot 9
             assert!(blockstore
                 .get_data_shred(unconfirmed_slot, 0)
@@ -8571,7 +8716,9 @@ pub mod tests {
         // Remove the data complete flag from the last shred
         shreds[0].unset_data_complete();
 
-        ledger.insert_shreds(shreds, None, false).unwrap();
+        ledger
+            .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+            .unwrap();
 
         // Check that the `data_complete` flag was unset in the stored shred, but the
         // `last_in_slot` flag is set.
@@ -8619,10 +8766,18 @@ pub mod tests {
             info!("coding2 {:?}", shred);
         }
         ledger
-            .insert_shreds(shreds[..shreds.len() - 2].to_vec(), None, false)
+            .insert_shreds(
+                Shreds::new_from_vec(shreds[..shreds.len() - 2].to_vec()),
+                None,
+                false,
+            )
             .unwrap();
         ledger
-            .insert_shreds(vec![coding1[0].clone(), coding2[1].clone()], None, false)
+            .insert_shreds(
+                Shreds::new_from_vec(vec![coding1[0].clone(), coding2[1].clone()]),
+                None,
+                false,
+            )
             .unwrap();
         assert!(ledger.has_duplicate_shreds_in_slot(slot));
     }
@@ -8639,7 +8794,7 @@ pub mod tests {
             coding_shreds[1].coding_header.num_coding_shreds = u16::MAX;
             blockstore
                 .insert_shreds(
-                    vec![coding_shreds[1].clone()],
+                    Shreds::new_from_shred(coding_shreds[1].clone()),
                     Some(&leader_schedule_cache),
                     false,
                 )
@@ -8673,7 +8828,7 @@ pub mod tests {
             // times
             for _ in 0..10 {
                 blockstore
-                    .insert_shreds(original_shreds.clone(), None, false)
+                    .insert_shreds(Shreds::new_from_vec(original_shreds.clone()), None, false)
                     .unwrap();
                 let meta = blockstore.meta(0).unwrap().unwrap();
                 assert!(!blockstore.is_dead(0));
@@ -8688,7 +8843,7 @@ pub mod tests {
             let duplicate_shreds = entries_to_test_shreds(original_entries.clone(), 0, 0, true, 0);
             let num_shreds = duplicate_shreds.len() as u64;
             blockstore
-                .insert_shreds(duplicate_shreds, None, false)
+                .insert_shreds(Shreds::new_from_vec(duplicate_shreds), None, false)
                 .unwrap();
 
             assert_eq!(blockstore.get_slot_entries(0, 0).unwrap(), original_entries);
@@ -8717,7 +8872,9 @@ pub mod tests {
         let blockstore_path = get_tmp_ledger_path!();
         {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
-            blockstore.insert_shreds(shreds, None, false).unwrap();
+            blockstore
+                .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+                .unwrap();
 
             assert!(blockstore.get_duplicate_slot(slot).is_some());
         }
@@ -8742,7 +8899,7 @@ pub mod tests {
             |blockstore: &Blockstore, shreds: Vec<Shred>| -> (SlotMeta, Index) {
                 let slot = shreds[0].slot();
                 blockstore
-                    .insert_shreds(shreds.clone(), None, false)
+                    .insert_shreds(Shreds::new_from_vec(shreds.clone()), None, false)
                     .unwrap();
                 let meta = blockstore.meta(slot).unwrap().unwrap();
                 assert_eq!(meta.consumed, shreds.len() as u64);
@@ -8775,7 +8932,7 @@ pub mod tests {
                 shreds[..=smaller_last_shred_index].to_vec(),
             );
             blockstore
-                .insert_shreds(shreds.clone(), None, false)
+                .insert_shreds(Shreds::new_from_vec(shreds.clone()), None, false)
                 .unwrap();
             assert!(blockstore.get_duplicate_slot(slot).is_some());
             assert!(!blockstore.is_dead(slot));
@@ -8811,7 +8968,11 @@ pub mod tests {
                 )
                 .is_some());
             blockstore
-                .insert_shreds(vec![even_smaller_last_shred_duplicate], None, false)
+                .insert_shreds(
+                    Shreds::new_from_shred(even_smaller_last_shred_duplicate),
+                    None,
+                    false,
+                )
                 .unwrap();
             assert!(!blockstore.is_dead(slot));
             for i in 0..num_shreds {
@@ -8835,7 +8996,7 @@ pub mod tests {
             let mut shreds = setup_test_shreds(slot);
             shreds.reverse();
             blockstore
-                .insert_shreds(shreds.clone(), None, false)
+                .insert_shreds(Shreds::new_from_vec(shreds.clone()), None, false)
                 .unwrap();
             assert!(blockstore.is_dead(slot));
             // All the shreds other than the two last index shreds because those two
@@ -8870,7 +9031,9 @@ pub mod tests {
             let mut shreds = setup_test_shreds(slot);
             shreds.reverse();
             for shred in shreds.clone() {
-                blockstore.insert_shreds(vec![shred], None, false).unwrap();
+                blockstore
+                    .insert_shreds(Shreds::new_from_shred(shred), None, false)
+                    .unwrap();
             }
             assert!(blockstore.is_dead(slot));
             // All the shreds will be inserted since dead slots can still be inserted into.
@@ -8958,7 +9121,9 @@ pub mod tests {
                         // Grab this lock to block `get_slot_entries` before it fetches completed datasets
                         // and then mark the slot as dead, but full, by inserting carefully crafted shreds.
                         let _lowest_cleanup_slot = blockstore.lowest_cleanup_slot.write().unwrap();
-                        blockstore.insert_shreds(shreds, None, false).unwrap();
+                        blockstore
+                            .insert_shreds(Shreds::new_from_vec(shreds), None, false)
+                            .unwrap();
                         assert!(blockstore.get_duplicate_slot(slot).is_some());
                         assert!(blockstore.is_dead(slot));
                         assert!(blockstore.meta(slot).unwrap().unwrap().is_full());

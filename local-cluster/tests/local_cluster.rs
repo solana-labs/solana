@@ -34,6 +34,7 @@ use {
         blockstore_db::AccessType,
         leader_schedule::FixedSchedule,
         leader_schedule::LeaderSchedule,
+        shred::Shreds,
     },
     solana_local_cluster::{
         cluster::{Cluster, ClusterValidatorInfo},
@@ -2617,7 +2618,8 @@ fn copy_blocks(end_slot: Slot, source: &Blockstore, dest: &Blockstore) {
         assert!(source_meta.is_full());
 
         let shreds = source.get_data_shreds_for_slot(slot, 0).unwrap();
-        dest.insert_shreds(shreds, None, false).unwrap();
+        dest.insert_shreds(Shreds::new_from_vec(shreds), None, false)
+            .unwrap();
 
         let dest_meta = dest.meta(slot).unwrap().unwrap();
         assert!(dest_meta.is_full());
