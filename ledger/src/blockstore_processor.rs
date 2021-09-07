@@ -1188,7 +1188,10 @@ fn load_frozen_forks(
 
                 if let Some(snapshot_config) = snapshot_config {
                     let block_height = new_root_bank.block_height();
-                    if block_height % snapshot_config.full_snapshot_archive_interval_slots == 0 {
+                    if snapshot_utils::should_take_full_snapshot(
+                        block_height,
+                        snapshot_config.full_snapshot_archive_interval_slots,
+                    ) {
                         *last_full_snapshot_slot = Some(*root);
                         new_root_bank.clean_accounts(true, true, *last_full_snapshot_slot);
                         snapshot_utils::snapshot_bank(

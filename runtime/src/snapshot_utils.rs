@@ -1795,6 +1795,22 @@ pub fn package_and_archive_incremental_snapshot(
     ))
 }
 
+pub fn should_take_full_snapshot(
+    block_height: Slot,
+    full_snapshot_archive_interval_slots: Slot,
+) -> bool {
+    block_height % full_snapshot_archive_interval_slots == 0
+}
+
+pub fn should_take_incremental_snapshot(
+    block_height: Slot,
+    incremental_snapshot_archive_interval_slots: Slot,
+    last_full_snapshot_slot: Option<Slot>,
+) -> bool {
+    block_height % incremental_snapshot_archive_interval_slots == 0
+        && last_full_snapshot_slot.is_some()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

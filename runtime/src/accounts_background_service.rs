@@ -172,19 +172,18 @@ impl SnapshotRequestHandler {
                 }
 
                 let block_height = snapshot_root_bank.block_height();
-                let snapshot_type = if block_height
-                    % self.snapshot_config.full_snapshot_archive_interval_slots
-                    == 0
-                {
+                let snapshot_type = if snapshot_utils::should_take_full_snapshot(
+                    block_height,
+                    self.snapshot_config.full_snapshot_archive_interval_slots,
+                ) {
                     *last_full_snapshot_slot = Some(snapshot_root_bank.slot());
                     Some(SnapshotType::FullSnapshot)
-                } else if block_height
-                    % self
-                        .snapshot_config
-                        .incremental_snapshot_archive_interval_slots
-                    == 0
-                    && last_full_snapshot_slot.is_some()
-                {
+                } else if snapshot_utils::should_take_incremental_snapshot(
+                    block_height,
+                    self.snapshot_config
+                        .incremental_snapshot_archive_interval_slots,
+                    *last_full_snapshot_slot,
+                ) {
                     Some(SnapshotType::IncrementalSnapshot(
                         last_full_snapshot_slot.unwrap(),
                     ))

@@ -722,7 +722,8 @@ mod tests {
 
             // Since AccountsBackgroundService isn't running, manually make a full snapshot archive
             // at the right interval
-            if slot % FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS == 0 {
+            if snapshot_utils::should_take_full_snapshot(slot, FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS)
+            {
                 make_full_snapshot_archive(&bank, &snapshot_test_config.snapshot_config).unwrap();
             }
             // Similarly, make an incremental snapshot archive at the right interval, but only if
@@ -730,9 +731,11 @@ mod tests {
             // taken at this slot.
             //
             // Then, after making an incremental snapshot, restore the bank and verify it is correct
-            else if slot % INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS == 0
-                && last_full_snapshot_slot.is_some()
-                && slot != last_full_snapshot_slot.unwrap()
+            else if snapshot_utils::should_take_incremental_snapshot(
+                slot,
+                INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
+                last_full_snapshot_slot,
+            ) && slot != last_full_snapshot_slot.unwrap()
             {
                 make_incremental_snapshot_archive(
                     &bank,
