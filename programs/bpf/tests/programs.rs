@@ -1517,6 +1517,49 @@ fn test_program_bpf_test_use_latest_executor() {
         .is_ok());
 }
 
+#[cfg(feature = "bpf_rust")]
+#[test]
+fn test_program_bpf_ed25519_sig_verify() {
+    use solana_sdk::ed25519_program;
+
+    solana_logger::setup();
+
+    let GenesisConfigInfo {
+        genesis_config,
+        mint_keypair,
+        ..
+    } = create_genesis_config(50);
+    let mut bank = Bank::new_for_tests(&genesis_config);
+    let (name, id, entrypoint) = solana_bpf_loader_program!();
+    bank.add_builtin(&name, id, entrypoint);
+    let bank_client = BankClient::new(bank);
+    let program_id = load_bpf_program(
+        &bank_client,
+        &bpf_loader::id(),
+        &mint_keypair,
+        "solana_bpf_rust_ed25519_verify",
+    );
+
+    let mut metas = Vec::new();
+
+    metas.push(AccountMeta {
+        pubkey: ed25519_program::id(),
+        is_signer: false,
+        is_writable: false,
+    });
+
+    let instruction = Instruction::new_with_bytes(program_id, &[0], metas.clone());
+
+    let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
+    assert!(result.is_ok());
+
+    let instruction = Instruction::new_with_bytes(program_id, &[1], metas);
+
+    assert!(bank_client
+        .send_and_confirm_instruction(&mint_keypair, instruction)
+        .is_err());
+}
+
 #[ignore] // Invoking BPF loaders from CPI not allowed
 #[cfg(feature = "bpf_rust")]
 #[test]

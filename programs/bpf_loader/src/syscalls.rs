@@ -18,12 +18,15 @@ use solana_sdk::{
     blake3, bpf_loader, bpf_loader_deprecated,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     clock::Clock,
+    ed25519_instruction::verify_signatures,
+    ed25519_program,
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     epoch_schedule::EpochSchedule,
     feature_set::{
-        blake3_syscall_enabled, close_upgradeable_program_accounts, demote_program_write_locks,
-        disable_fees_sysvar, enforce_aligned_host_addrs, libsecp256k1_0_5_upgrade_enabled,
-        mem_overlap_fix, secp256k1_recover_syscall_enabled,
+        blake3_syscall_enabled, close_upgradeable_program_accounts, cpi_verify_precompiles,
+        demote_program_write_locks, disable_fees_sysvar, ed25519_program_enabled,
+        enforce_aligned_host_addrs, libsecp256k1_0_5_upgrade_enabled,
+        libsecp256k1_fail_on_bad_count, mem_overlap_fix, secp256k1_recover_syscall_enabled,
     },
     hash::{Hasher, HASH_BYTES},
     ic_msg,
@@ -34,6 +37,8 @@ use solana_sdk::{
     process_instruction::{self, stable_log, ComputeMeter, InvokeContext, Logger},
     pubkey::{Pubkey, PubkeyError, MAX_SEEDS},
     rent::Rent,
+    secp256k1_instruction::verify_eth_addresses,
+    secp256k1_program,
     secp256k1_recover::{
         Secp256k1RecoverError, SECP256K1_PUBLIC_KEY_LENGTH, SECP256K1_SIGNATURE_LENGTH,
     },
@@ -81,6 +86,8 @@ pub enum SyscallError {
     TooManyAccounts,
     #[error("Overlapping copy")]
     CopyOverlapping,
+    #[error("Signature could not be verified")]
+    SignatureNotVerified,
 }
 impl From<SyscallError> for EbpfError<BpfError> {
     fn from(error: SyscallError) -> Self {
@@ -2383,6 +2390,24 @@ fn call<'a>(
         let mut executables = vec![(callee_program_id, program_account)];
         if let Some(executable) = programdata_executable {
             executables.push(executable);
+        }
+
+        // Check precompiles
+        if invoke_context.is_feature_active(&cpi_verify_precompiles::id()) {
+            if secp256k1_program::check_id(&callee_program_id) {
+                let e = verify_eth_addresses(
+                    &instruction.data,
+                    &[&instruction.data],
+                    invoke_context.is_feature_active(&libsecp256k1_0_5_upgrade_enabled::id()),
+                    invoke_context.is_feature_active(&libsecp256k1_fail_on_bad_count::id()),
+                );
+                e.map_err(|_| SyscallError::SignatureNotVerified)?;
+            } else if ed25519_program::check_id(&callee_program_id)
+                && invoke_context.is_feature_active(&ed25519_program_enabled::id())
+            {
+                let e = verify_signatures(&instruction.data, &[&instruction.data]);
+                e.map_err(|_| SyscallError::SignatureNotVerified)?;
+            }
         }
 
         // Record the instruction

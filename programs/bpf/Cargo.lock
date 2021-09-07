@@ -2576,6 +2576,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-bpf-rust-ed25519-verify"
+version = "1.8.0"
+dependencies = [
+ "solana-program 1.8.0",
+]
+
+[[package]]
 name = "solana-bpf-rust-error-handling"
 version = "1.8.0"
 dependencies = [
@@ -3112,6 +3119,7 @@ dependencies = [
  "borsh-derive",
  "bs58 0.4.0",
  "bv",
+ "bytemuck",
  "curve25519-dalek 3.2.0",
  "hex",
  "itertools 0.10.1",

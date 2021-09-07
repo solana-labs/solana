@@ -199,6 +199,10 @@ pub mod ed25519_program_enabled {
     solana_sdk::declare_id!("E1TvTNipX8TKNHrhRC8SMuAwQmGY58TZ4drdztP3Gxwc");
 }
 
+pub mod cpi_verify_precompiles {
+    solana_sdk::declare_id!("6kzVUvYp8RzApVWP8ao6cZBa3dwZrRaV3ujESrzxwbK2");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -244,6 +248,7 @@ lazy_static! {
         (stake_program_advance_activating_credits_observed::id(), "Enable advancing credits observed for activation epoch #19309"),
         (demote_program_write_locks::id(), "demote program write locks to readonly #19593"),
         (ed25519_program_enabled::id(), "enable builtin ed25519 signature verify program"),
+        (cpi_verify_precompiles::id(), "precompiles are verified during cpi")
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
