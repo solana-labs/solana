@@ -45,7 +45,7 @@ fn test_vote_authorize_and_withdraw() {
         seed: None,
         identity_account: 0,
         authorized_voter: None,
-        authorized_withdrawer: Some(config.signers[0].pubkey()),
+        authorized_withdrawer: config.signers[0].pubkey(),
         commission: 0,
         memo: None,
     };

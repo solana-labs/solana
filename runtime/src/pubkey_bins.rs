@@ -11,7 +11,7 @@ impl PubkeyBinCalculator16 {
         std::mem::size_of::<T>() * 8
     }
 
-    fn log_2(x: u32) -> u32 {
+    pub fn log_2(x: u32) -> u32 {
         assert!(x > 0);
         Self::num_bits::<u32>() as u32 - x.leading_zeros() - 1
     }
@@ -31,6 +31,15 @@ impl PubkeyBinCalculator16 {
     pub fn bin_from_pubkey(&self, pubkey: &Pubkey) -> usize {
         let as_ref = pubkey.as_ref();
         ((as_ref[0] as usize * 256 + as_ref[1] as usize) as usize) >> self.shift_bits
+    }
+
+    pub fn lowest_pubkey_from_bin(&self, mut bin: usize, bins: usize) -> Pubkey {
+        assert!(bin < bins);
+        bin <<= self.shift_bits;
+        let mut pubkey = Pubkey::new(&[0; 32]);
+        pubkey.as_mut()[0] = (bin / 256) as u8;
+        pubkey.as_mut()[1] = (bin & 0xff) as u8;
+        pubkey
     }
 }
 
@@ -53,6 +62,12 @@ pub mod tests {
             let bins = 2u32.pow(i);
             let calc = PubkeyBinCalculator16::new(bins as usize);
             assert_eq!(calc.shift_bits, 16 - i, "i: {}", i);
+            for bin in 0..bins {
+                assert_eq!(
+                    bin as usize,
+                    calc.bin_from_pubkey(&calc.lowest_pubkey_from_bin(bin as usize, bins as usize))
+                );
+            }
         }
     }
 

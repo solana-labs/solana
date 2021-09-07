@@ -126,14 +126,16 @@ export function SolanaClusterStatsProvider({ children }: Props) {
         if (cluster !== Cluster.Custom) {
           reportError(error, { url });
         }
-        dispatchPerformanceInfo({
-          type: PerformanceInfoActionType.SetError,
-          data: error.toString(),
-        });
-        dispatchDashboardInfo({
-          type: DashboardInfoActionType.SetError,
-          data: error.toString(),
-        });
+        if (error instanceof Error) {
+          dispatchPerformanceInfo({
+            type: PerformanceInfoActionType.SetError,
+            data: error.toString(),
+          });
+          dispatchDashboardInfo({
+            type: DashboardInfoActionType.SetError,
+            data: error.toString(),
+          });
+        }
         setActive(false);
       }
     };
@@ -149,10 +151,12 @@ export function SolanaClusterStatsProvider({ children }: Props) {
         if (cluster !== Cluster.Custom) {
           reportError(error, { url });
         }
-        dispatchPerformanceInfo({
-          type: PerformanceInfoActionType.SetError,
-          data: error.toString(),
-        });
+        if (error instanceof Error) {
+          dispatchPerformanceInfo({
+            type: PerformanceInfoActionType.SetError,
+            data: error.toString(),
+          });
+        }
         setActive(false);
       }
     };
@@ -169,10 +173,12 @@ export function SolanaClusterStatsProvider({ children }: Props) {
         if (cluster !== Cluster.Custom) {
           reportError(error, { url });
         }
-        dispatchDashboardInfo({
-          type: DashboardInfoActionType.SetError,
-          data: error.toString(),
-        });
+        if (error instanceof Error) {
+          dispatchDashboardInfo({
+            type: DashboardInfoActionType.SetError,
+            data: error.toString(),
+          });
+        }
         setActive(false);
       }
     };

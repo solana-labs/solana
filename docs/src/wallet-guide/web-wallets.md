@@ -36,3 +36,7 @@ addresses for sending and receiving SOL and SPL Tokens through its
 browser extension and web wallet interface.
 
 _Note: The MathWallet iOS and Android app do not yet support SOL and SPL Tokens_
+
+## BitKeep
+[BitKeep](https://bitkeep.com) is an digital currency wallet and can send and receive SOL/SPL tokens.
+BitKeep also support Solana DApps with BitKeep Browser and BitKeep Chrome.

@@ -4,6 +4,7 @@ use solana_sdk::{
     account::{AccountSharedData, ReadableAccount, WritableAccount},
     account_utils::StateMut,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
+    feature_set::demote_program_write_locks,
     ic_logger_msg, ic_msg,
     instruction::{CompiledInstruction, Instruction, InstructionError},
     keyed_account::{keyed_account_at_index, KeyedAccount},
@@ -347,6 +348,7 @@ impl InstructionProcessor {
         instruction: &'a CompiledInstruction,
         executable_accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
         accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        demote_program_write_locks: bool,
     ) -> Vec<(bool, bool, &'a Pubkey, &'a RefCell<AccountSharedData>)> {
         executable_accounts
             .iter()
@@ -355,7 +357,7 @@ impl InstructionProcessor {
                 let index = *index as usize;
                 (
                     message.is_signer(index),
-                    message.is_writable(index),
+                    message.is_writable(index, demote_program_write_locks),
                     &accounts[index].0,
                     &accounts[index].1 as &RefCell<AccountSharedData>,
                 )
@@ -600,6 +602,8 @@ impl InstructionProcessor {
 
         {
             let invoke_context = invoke_context.borrow();
+            let demote_program_write_locks =
+                invoke_context.is_feature_active(&demote_program_write_locks::id());
             let keyed_accounts = invoke_context.get_keyed_accounts()?;
             for (src_keyed_account_index, ((_key, account), dst_keyed_account_index)) in accounts
                 .iter()
@@ -608,7 +612,9 @@ impl InstructionProcessor {
             {
                 let dst_keyed_account = &keyed_accounts[dst_keyed_account_index];
                 let src_keyed_account = account.borrow();
-                if message.is_writable(src_keyed_account_index) && !src_keyed_account.executable() {
+                if message.is_writable(src_keyed_account_index, demote_program_write_locks)
+                    && !src_keyed_account.executable()
+                {
                     if dst_keyed_account.data_len()? != src_keyed_account.data().len()
                         && dst_keyed_account.data_len()? != 0
                     {
@@ -652,8 +658,15 @@ impl InstructionProcessor {
             invoke_context.verify_and_update(instruction, accounts, caller_write_privileges)?;
 
             // Construct keyed accounts
-            let keyed_accounts =
-                Self::create_keyed_accounts(message, instruction, executable_accounts, accounts);
+            let demote_program_write_locks =
+                invoke_context.is_feature_active(&demote_program_write_locks::id());
+            let keyed_accounts = Self::create_keyed_accounts(
+                message,
+                instruction,
+                executable_accounts,
+                accounts,
+                demote_program_write_locks,
+            );
 
             // Invoke callee
             invoke_context.push(program_id, &keyed_accounts)?;
@@ -671,7 +684,7 @@ impl InstructionProcessor {
             if result.is_ok() {
                 // Verify the called program has not misbehaved
                 let write_privileges: Vec<bool> = (0..message.account_keys.len())
-                    .map(|i| message.is_writable(i))
+                    .map(|i| message.is_writable(i, demote_program_write_locks))
                     .collect();
                 result = invoke_context.verify_and_update(instruction, accounts, &write_privileges);
             }

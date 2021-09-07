@@ -61,6 +61,8 @@ const CODE_SHRED_CF: &str = "code_shred";
 const TRANSACTION_STATUS_CF: &str = "transaction_status";
 /// Column family for Address Signatures
 const ADDRESS_SIGNATURES_CF: &str = "address_signatures";
+/// Column family for TransactionMemos
+const TRANSACTION_MEMOS_CF: &str = "transaction_memos";
 /// Column family for the Transaction Status Index.
 /// This column family is used for tracking the active primary index for columns that for
 /// query performance reasons should not be indexed by Slot.
@@ -163,6 +165,10 @@ pub mod columns {
     #[derive(Debug)]
     /// The address signatures column
     pub struct AddressSignatures;
+
+    #[derive(Debug)]
+    // The transaction memos column
+    pub struct TransactionMemos;
 
     #[derive(Debug)]
     /// The transaction status index column
@@ -333,6 +339,10 @@ impl Rocks {
             AddressSignatures::NAME,
             get_cf_options::<AddressSignatures>(&access_type, &oldest_slot),
         );
+        let transaction_memos_cf_descriptor = ColumnFamilyDescriptor::new(
+            TransactionMemos::NAME,
+            get_cf_options::<TransactionMemos>(&access_type, &oldest_slot),
+        );
         let transaction_status_index_cf_descriptor = ColumnFamilyDescriptor::new(
             TransactionStatusIndex::NAME,
             get_cf_options::<TransactionStatusIndex>(&access_type, &oldest_slot),
@@ -373,6 +383,7 @@ impl Rocks {
             (ShredCode::NAME, shred_code_cf_descriptor),
             (TransactionStatus::NAME, transaction_status_cf_descriptor),
             (AddressSignatures::NAME, address_signatures_cf_descriptor),
+            (TransactionMemos::NAME, transaction_memos_cf_descriptor),
             (
                 TransactionStatusIndex::NAME,
                 transaction_status_index_cf_descriptor,
@@ -495,6 +506,7 @@ impl Rocks {
             ShredCode::NAME,
             TransactionStatus::NAME,
             AddressSignatures::NAME,
+            TransactionMemos::NAME,
             TransactionStatusIndex::NAME,
             Rewards::NAME,
             Blocktime::NAME,
@@ -593,6 +605,10 @@ pub trait TypedColumn: Column {
 
 impl TypedColumn for columns::AddressSignatures {
     type Type = blockstore_meta::AddressSignatureMeta;
+}
+
+impl TypedColumn for columns::TransactionMemos {
+    type Type = String;
 }
 
 impl TypedColumn for columns::TransactionStatusIndex {
@@ -707,6 +723,37 @@ impl Column for columns::AddressSignatures {
 
 impl ColumnName for columns::AddressSignatures {
     const NAME: &'static str = ADDRESS_SIGNATURES_CF;
+}
+
+impl Column for columns::TransactionMemos {
+    type Index = Signature;
+
+    fn key(signature: Signature) -> Vec<u8> {
+        let mut key = vec![0; 64]; // size_of Signature
+        key[0..64].clone_from_slice(&signature.as_ref()[0..64]);
+        key
+    }
+
+    fn index(key: &[u8]) -> Signature {
+        Signature::new(&key[0..64])
+    }
+
+    fn primary_index(_index: Self::Index) -> u64 {
+        unimplemented!()
+    }
+
+    fn slot(_index: Self::Index) -> Slot {
+        unimplemented!()
+    }
+
+    #[allow(clippy::wrong_self_convention)]
+    fn as_index(_index: u64) -> Self::Index {
+        Signature::default()
+    }
+}
+
+impl ColumnName for columns::TransactionMemos {
+    const NAME: &'static str = TRANSACTION_MEMOS_CF;
 }
 
 impl Column for columns::TransactionStatusIndex {
@@ -1374,6 +1421,7 @@ fn excludes_from_compaction(cf_name: &str) -> bool {
     let no_compaction_cfs: HashSet<&'static str> = vec![
         columns::TransactionStatusIndex::NAME,
         columns::ProgramCosts::NAME,
+        columns::TransactionMemos::NAME,
     ]
     .into_iter()
     .collect();
@@ -1441,6 +1489,7 @@ pub mod tests {
             columns::TransactionStatusIndex::NAME
         ));
         assert!(excludes_from_compaction(columns::ProgramCosts::NAME));
+        assert!(excludes_from_compaction(columns::TransactionMemos::NAME));
         assert!(!excludes_from_compaction("something else"));
     }
 }

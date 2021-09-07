@@ -34,6 +34,7 @@ use solana_runtime::{
     snapshot_config::SnapshotConfig,
     snapshot_utils::{
         self, ArchiveFormat, SnapshotVersion, DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+        DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
     },
 };
 use solana_sdk::{
@@ -718,7 +719,9 @@ fn load_bank_forks(
             bank_snapshots_dir,
             archive_format: ArchiveFormat::TarBzip2,
             snapshot_version: SnapshotVersion::default(),
-            maximum_snapshots_to_retain: DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+            maximum_full_snapshot_archives_to_retain: DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+            maximum_incremental_snapshot_archives_to_retain:
+                DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
         })
     };
     let account_paths = if let Some(account_paths) = arg_matches.value_of("account_paths") {
@@ -789,7 +792,10 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
             .for_each(|transaction| {
                 num_programs += transaction.message().instructions().len();
 
-                let tx_cost = cost_model.calculate_cost(&transaction);
+                let tx_cost = cost_model.calculate_cost(
+                    &transaction,
+                    true, // demote_program_write_locks
+                );
                 if cost_tracker.try_add(tx_cost).is_err() {
                     println!(
                         "Slot: {}, CostModel rejected transaction {:?}, stats {:?}!",
@@ -2014,8 +2020,10 @@ fn main() {
                         })
                     });
 
-            let maximum_snapshots_to_retain =
+            let maximum_full_snapshot_archives_to_retain =
                 value_t_or_exit!(arg_matches, "maximum_snapshots_to_retain", usize);
+            let maximum_incremental_snapshot_archives_to_retain =
+                snapshot_utils::DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN;
             let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
             let blockstore = open_blockstore(
                 &ledger_path,
@@ -2231,7 +2239,8 @@ fn main() {
                         Some(snapshot_version),
                         output_directory,
                         ArchiveFormat::TarZstd,
-                        maximum_snapshots_to_retain,
+                        maximum_full_snapshot_archives_to_retain,
+                        maximum_incremental_snapshot_archives_to_retain,
                     )
                     .unwrap_or_else(|err| {
                         eprintln!("Unable to create snapshot: {}", err);

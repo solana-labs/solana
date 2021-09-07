@@ -15,6 +15,8 @@ fn make_instructions() -> Vec<Instruction> {
     vec![inst; 4]
 }
 
+const DEMOTE_PROGRAM_WRITE_LOCKS: bool = true;
+
 #[bench]
 fn bench_bincode_instruction_serialize(b: &mut Bencher) {
     let instructions = make_instructions();
@@ -30,7 +32,7 @@ fn bench_manual_instruction_serialize(b: &mut Bencher) {
         SanitizedMessage::try_from(Message::new(&instructions, Some(&Pubkey::new_unique())))
             .unwrap();
     b.iter(|| {
-        test::black_box(message.serialize_instructions());
+        test::black_box(message.serialize_instructions(DEMOTE_PROGRAM_WRITE_LOCKS));
     });
 }
 
@@ -49,7 +51,7 @@ fn bench_manual_instruction_deserialize(b: &mut Bencher) {
     let message =
         SanitizedMessage::try_from(Message::new(&instructions, Some(&Pubkey::new_unique())))
             .unwrap();
-    let serialized = message.serialize_instructions();
+    let serialized = message.serialize_instructions(DEMOTE_PROGRAM_WRITE_LOCKS);
     b.iter(|| {
         for i in 0..instructions.len() {
             test::black_box(instructions::load_instruction_at(i, &serialized).unwrap());
@@ -63,7 +65,7 @@ fn bench_manual_instruction_deserialize_single(b: &mut Bencher) {
     let message =
         SanitizedMessage::try_from(Message::new(&instructions, Some(&Pubkey::new_unique())))
             .unwrap();
-    let serialized = message.serialize_instructions();
+    let serialized = message.serialize_instructions(DEMOTE_PROGRAM_WRITE_LOCKS);
     b.iter(|| {
         test::black_box(instructions::load_instruction_at(3, &serialized).unwrap());
     });

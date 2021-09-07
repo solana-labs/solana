@@ -53,6 +53,7 @@ use {
         snapshot_config::SnapshotConfig,
         snapshot_utils::{
             self, ArchiveFormat, SnapshotVersion, DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+            DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
         },
     },
     solana_sdk::{
@@ -278,14 +279,17 @@ fn wait_for_restart_window(
                     }
                 };
 
-                let full_snapshot_slot =
-                    snapshot_slot_info.map(|snapshot_slot_info| snapshot_slot_info.full);
+                let snapshot_slot = snapshot_slot_info.map(|snapshot_slot_info| {
+                    snapshot_slot_info
+                        .incremental
+                        .unwrap_or(snapshot_slot_info.full)
+                });
                 match in_leader_schedule_hole {
                     Ok(_) => {
                         if restart_snapshot == None {
-                            restart_snapshot = full_snapshot_slot;
+                            restart_snapshot = snapshot_slot;
                         }
-                        if restart_snapshot == full_snapshot_slot && !monitoring_another_validator {
+                        if restart_snapshot == snapshot_slot && !monitoring_another_validator {
                             "Waiting for a new snapshot".to_string()
                         } else if delinquent_stake_percentage >= min_delinquency_percentage {
                             style("Delinquency too high").red().to_string()
@@ -316,9 +320,17 @@ fn wait_for_restart_window(
                 "".to_string()
             } else {
                 format!(
-                    "| Full Snapshot Slot: {}",
+                    "| Full Snapshot Slot: {} | Incremental Snapshot Slot: {}",
                     snapshot_slot_info
+                        .as_ref()
                         .map(|snapshot_slot_info| snapshot_slot_info.full.to_string())
+                        .unwrap_or_else(|| '-'.to_string()),
+                    snapshot_slot_info
+                        .as_ref()
+                        .map(|snapshot_slot_info| snapshot_slot_info
+                            .incremental
+                            .map(|incremental| incremental.to_string()))
+                        .flatten()
                         .unwrap_or_else(|| '-'.to_string()),
                 )
             },
@@ -913,19 +925,20 @@ fn rpc_bootstrap(
                                 gossip.take().unwrap();
                             cluster_info.save_contact_info();
                             gossip_exit_flag.store(true, Ordering::Relaxed);
-                            let maximum_snapshots_to_retain = if let Some(snapshot_config) =
+                            let (maximum_full_snapshot_archives_to_retain, maximum_incremental_snapshot_archives_to_retain) = if let Some(snapshot_config) =
                                 validator_config.snapshot_config.as_ref()
                             {
-                                snapshot_config.maximum_snapshots_to_retain
+                                (snapshot_config.maximum_full_snapshot_archives_to_retain, snapshot_config.maximum_incremental_snapshot_archives_to_retain)
                             } else {
-                                DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN
+                                (DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN, DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN)
                             };
                             let ret = download_snapshot(
                                 &rpc_contact_info.rpc,
                                 snapshot_archives_dir,
                                 snapshot_hash,
                                 use_progress_bar,
-                                maximum_snapshots_to_retain,
+                                maximum_full_snapshot_archives_to_retain,
+                                maximum_incremental_snapshot_archives_to_retain,
                                 &mut Some(Box::new(|download_progress: &DownloadProgressRecord| {
                                     debug!("Download progress: {:?}", download_progress);
 
@@ -2627,7 +2640,7 @@ pub fn main() {
 
     let snapshot_interval_slots = value_t_or_exit!(matches, "snapshot_interval_slots", u64);
     let maximum_local_snapshot_age = value_t_or_exit!(matches, "maximum_local_snapshot_age", u64);
-    let maximum_snapshots_to_retain =
+    let maximum_full_snapshot_archives_to_retain =
         value_t_or_exit!(matches, "maximum_snapshots_to_retain", usize);
     let minimal_snapshot_download_speed =
         value_t_or_exit!(matches, "minimal_snapshot_download_speed", f32);
@@ -2679,7 +2692,9 @@ pub fn main() {
         snapshot_archives_dir: snapshot_archives_dir.clone(),
         archive_format,
         snapshot_version,
-        maximum_snapshots_to_retain,
+        maximum_full_snapshot_archives_to_retain,
+        maximum_incremental_snapshot_archives_to_retain:
+            DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
     });
 
     validator_config.accounts_hash_interval_slots =

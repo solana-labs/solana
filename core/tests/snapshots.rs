@@ -71,6 +71,7 @@ mod tests {
         },
         snapshot_utils::{
             self, ArchiveFormat, SnapshotVersion, DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+            DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
         },
         status_cache::MAX_CACHE_ENTRIES,
     };
@@ -147,7 +148,10 @@ mod tests {
                 bank_snapshots_dir: bank_snapshots_dir.path().to_path_buf(),
                 archive_format: ArchiveFormat::TarBzip2,
                 snapshot_version,
-                maximum_snapshots_to_retain: DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+                maximum_full_snapshot_archives_to_retain:
+                    DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+                maximum_incremental_snapshot_archives_to_retain:
+                    DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
             };
             bank_forks.set_snapshot_config(Some(snapshot_config.clone()));
             SnapshotTestConfig {
@@ -295,7 +299,8 @@ mod tests {
         let snapshot_package = SnapshotPackage::from(accounts_package);
         snapshot_utils::archive_snapshot_package(
             &snapshot_package,
-            DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+            snapshot_config.maximum_full_snapshot_archives_to_retain,
+            snapshot_config.maximum_incremental_snapshot_archives_to_retain,
         )
         .unwrap();
 
@@ -383,7 +388,7 @@ mod tests {
         let saved_slot = 4;
         let mut saved_archive_path = None;
 
-        for forks in 0..snapshot_utils::MAX_BANK_SNAPSHOTS + 2 {
+        for forks in 0..snapshot_utils::MAX_BANK_SNAPSHOTS_TO_RETAIN + 2 {
             let bank = Bank::new_from_parent(
                 &bank_forks[forks as u64],
                 &Pubkey::default(),
@@ -479,7 +484,7 @@ mod tests {
         assert!(bank_snapshots
             .into_iter()
             .map(|path| path.slot)
-            .eq(3..=snapshot_utils::MAX_BANK_SNAPSHOTS as u64 + 2));
+            .eq(3..=snapshot_utils::MAX_BANK_SNAPSHOTS_TO_RETAIN as u64 + 2));
 
         // Create a SnapshotPackagerService to create tarballs from all the pending
         // SnapshotPackage's on the channel. By the time this service starts, we have already
@@ -501,7 +506,7 @@ mod tests {
             None,
             &exit,
             &cluster_info,
-            DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+            snapshot_config.clone(),
         );
 
         let _package_receiver = std::thread::Builder::new()
@@ -771,7 +776,8 @@ mod tests {
             bank.get_snapshot_storages(None),
             snapshot_config.archive_format,
             snapshot_config.snapshot_version,
-            snapshot_config.maximum_snapshots_to_retain,
+            snapshot_config.maximum_full_snapshot_archives_to_retain,
+            snapshot_config.maximum_incremental_snapshot_archives_to_retain,
         )?;
 
         Ok(())
@@ -807,7 +813,8 @@ mod tests {
             storages,
             snapshot_config.archive_format,
             snapshot_config.snapshot_version,
-            snapshot_config.maximum_snapshots_to_retain,
+            snapshot_config.maximum_full_snapshot_archives_to_retain,
+            snapshot_config.maximum_incremental_snapshot_archives_to_retain,
         )?;
 
         Ok(())
@@ -922,9 +929,7 @@ mod tests {
             None,
             &exit,
             &cluster_info,
-            snapshot_test_config
-                .snapshot_config
-                .maximum_snapshots_to_retain,
+            snapshot_test_config.snapshot_config.clone(),
         );
 
         let accounts_hash_verifier = AccountsHashVerifier::new(

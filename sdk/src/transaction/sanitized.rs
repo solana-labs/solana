@@ -2,6 +2,7 @@
 
 use {
     crate::{
+        ed25519_instruction::verify_signatures,
         hash::Hash,
         message::{v0, MappedAddresses, MappedMessage, SanitizedMessage, VersionedMessage},
         nonce::NONCED_TX_MARKER_IX_INDEX,
@@ -11,10 +12,12 @@ use {
         secp256k1_instruction::verify_eth_addresses,
         secp256k1_program,
         signature::Signature,
+        solana_sdk::feature_set,
         transaction::{Result, Transaction, TransactionError, VersionedTransaction},
     },
     solana_program::{system_instruction::SystemInstruction, system_program},
     std::convert::TryFrom,
+    std::sync::Arc,
 };
 
 /// Sanitized transaction and the hash of its message
@@ -125,7 +128,7 @@ impl SanitizedTransaction {
     }
 
     /// Return the list of accounts that must be locked during processing this transaction.
-    pub fn get_account_locks(&self) -> TransactionAccountLocks {
+    pub fn get_account_locks(&self, demote_program_write_locks: bool) -> TransactionAccountLocks {
         let message = &self.message;
         let num_readonly_accounts = message.num_readonly_accounts();
         let num_writable_accounts = message
@@ -138,7 +141,7 @@ impl SanitizedTransaction {
         };
 
         for (i, key) in message.account_keys_iter().enumerate() {
-            if message.is_writable(i) {
+            if message.is_writable(i, demote_program_write_locks) {
                 account_locks.writable.push(key);
             } else {
                 account_locks.readonly.push(key);
@@ -203,11 +206,7 @@ impl SanitizedTransaction {
     }
 
     /// Verify the encoded secp256k1 signatures in this transaction
-    pub fn verify_precompiles(
-        &self,
-        libsecp256k1_0_5_upgrade_enabled: bool,
-        libsecp256k1_fail_on_bad_count: bool,
-    ) -> Result<()> {
+    pub fn verify_precompiles(&self, feature_set: &Arc<feature_set::FeatureSet>) -> Result<()> {
         for (program_id, instruction) in self.message.program_instructions_iter() {
             if secp256k1_program::check_id(program_id) {
                 let instruction_datas: Vec<_> = self
@@ -220,9 +219,21 @@ impl SanitizedTransaction {
                 let e = verify_eth_addresses(
                     data,
                     &instruction_datas,
-                    libsecp256k1_0_5_upgrade_enabled,
-                    libsecp256k1_fail_on_bad_count,
+                    feature_set.is_active(&feature_set::libsecp256k1_0_5_upgrade_enabled::id()),
+                    feature_set.is_active(&feature_set::libsecp256k1_fail_on_bad_count::id()),
                 );
+                e.map_err(|_| TransactionError::InvalidAccountIndex)?;
+            } else if crate::ed25519_program::check_id(program_id)
+                && feature_set.is_active(&feature_set::ed25519_program_enabled::id())
+            {
+                let instruction_datas: Vec<_> = self
+                    .message()
+                    .instructions()
+                    .iter()
+                    .map(|instruction| instruction.data.as_ref())
+                    .collect();
+                let data = &instruction.data;
+                let e = verify_signatures(data, &instruction_datas);
                 e.map_err(|_| TransactionError::InvalidAccountIndex)?;
             }
         }

@@ -20,7 +20,7 @@ let message = Message::new(vec![
 client.send_and_confirm_message(&[&alice_keypair, &bob_keypair], &message);
 ```
 
-A client may to instead allow the `acme` program to conveniently invoke `token`
+A client may instead allow the `acme` program to conveniently invoke `token`
 instructions on the client's behalf:
 
 ```rust,ignore
@@ -59,7 +59,7 @@ field.
 Note that `invoke` requires the caller to pass all the accounts required by the
 instruction being invoked. This means that both the executable account (the
 ones that matches the instruction's program id) and the accounts passed to the
-instruction procesor.
+instruction processor.
 
 Before invoking `pay()`, the runtime must ensure that `acme` didn't modify any
 accounts owned by `token`. It does this by applying the runtime's policy to the

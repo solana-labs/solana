@@ -114,8 +114,16 @@ pub struct AccountMapEntryInner<T> {
 }
 
 impl<T> AccountMapEntryInner<T> {
-    pub fn ref_count(&self) -> u64 {
+    pub fn ref_count(&self) -> RefCount {
         self.ref_count.load(Ordering::Relaxed)
+    }
+
+    pub fn add_un_ref(&self, add: bool) {
+        if add {
+            self.ref_count.fetch_add(1, Ordering::Relaxed);
+        } else {
+            self.ref_count.fetch_sub(1, Ordering::Relaxed);
+        }
     }
 }
 
@@ -153,19 +161,15 @@ impl<T: IsCached> ReadAccountMapEntry<T> {
     }
 
     pub fn ref_count(&self) -> RefCount {
-        self.borrow_owned_entry().ref_count.load(Ordering::Relaxed)
+        self.borrow_owned_entry().ref_count()
     }
 
     pub fn unref(&self) {
-        self.borrow_owned_entry()
-            .ref_count
-            .fetch_sub(1, Ordering::Relaxed);
+        self.borrow_owned_entry().add_un_ref(false);
     }
 
     pub fn addref(&self) {
-        self.borrow_owned_entry()
-            .ref_count
-            .fetch_add(1, Ordering::Relaxed);
+        self.borrow_owned_entry().add_un_ref(true);
     }
 }
 
@@ -186,7 +190,7 @@ impl<T: IsCached> WriteAccountMapEntry<T> {
         .build()
     }
 
-    pub fn slot_list(&mut self) -> &SlotList<T> {
+    pub fn slot_list(&self) -> &SlotList<T> {
         &*self.borrow_slot_list_guard()
     }
 
@@ -195,10 +199,6 @@ impl<T: IsCached> WriteAccountMapEntry<T> {
         user: impl for<'this> FnOnce(&mut RwLockWriteGuard<'this, SlotList<T>>) -> RT,
     ) -> RT {
         self.with_slot_list_guard_mut(user)
-    }
-
-    pub fn ref_count(&self) -> &AtomicU64 {
-        &self.borrow_owned_entry().ref_count
     }
 
     // create an entry that is equivalent to this process:
@@ -211,10 +211,6 @@ impl<T: IsCached> WriteAccountMapEntry<T> {
             ref_count: AtomicU64::new(ref_count),
             slot_list: RwLock::new(vec![(slot, account_info)]),
         })
-    }
-
-    fn addref(item: &AtomicU64) {
-        item.fetch_add(1, Ordering::Relaxed);
     }
 
     pub fn upsert<'a>(
@@ -278,7 +274,7 @@ impl<T: IsCached> WriteAccountMapEntry<T> {
             previous_slot_entry_was_cached,
         );
         if addref {
-            Self::addref(&current.ref_count);
+            current.add_un_ref(true);
         }
     }
 
@@ -329,7 +325,7 @@ impl<T: IsCached> WriteAccountMapEntry<T> {
         });
         if addref {
             // If it's the first non-cache insert, also bump the stored ref count
-            self.ref_count().fetch_add(1, Ordering::Relaxed);
+            self.borrow_owned_entry().add_un_ref(true);
         }
     }
 }
@@ -623,7 +619,7 @@ pub struct AccountsIndexRootsStats {
     pub unrooted_cleaned_count: usize,
 }
 
-pub struct AccountsIndexIterator<'a, T> {
+pub struct AccountsIndexIterator<'a, T: IsCached> {
     account_maps: &'a LockMapTypeSlice<T>,
     bin_calculator: &'a PubkeyBinCalculator16,
     start_bound: Bound<Pubkey>,
@@ -632,7 +628,7 @@ pub struct AccountsIndexIterator<'a, T> {
     collect_all_unsorted: bool,
 }
 
-impl<'a, T> AccountsIndexIterator<'a, T> {
+impl<'a, T: IsCached> AccountsIndexIterator<'a, T> {
     fn range<'b, R>(
         map: &'b AccountMapsReadLock<'b, T>,
         range: R,
@@ -696,7 +692,11 @@ impl<'a, T> AccountsIndexIterator<'a, T> {
         (start_bin, bin_range)
     }
 
-    pub fn new<R>(index: &'a AccountsIndex<T>, range: Option<R>, collect_all_unsorted: bool) -> Self
+    pub fn new<R>(
+        index: &'a AccountsIndex<T>,
+        range: Option<&R>,
+        collect_all_unsorted: bool,
+    ) -> Self
     where
         R: RangeBounds<Pubkey>,
     {
@@ -778,7 +778,7 @@ impl ScanSlotTracker {
 }
 
 #[derive(Debug)]
-pub struct AccountsIndex<T> {
+pub struct AccountsIndex<T: IsCached> {
     pub account_maps: LockMapType<T>,
     pub bin_calculator: PubkeyBinCalculator16,
     program_id_index: SecondaryIndex<DashMapSecondaryIndexEntry>,
@@ -830,15 +830,16 @@ impl<T: IsCached> AccountsIndex<T> {
         let bins = config
             .and_then(|config| config.bins)
             .unwrap_or(BINS_DEFAULT);
+        // create bin_calculator early to verify # bins is reasonable
+        let bin_calculator = PubkeyBinCalculator16::new(bins);
         let account_maps = (0..bins)
             .into_iter()
-            .map(|_| RwLock::new(AccountMap::default()))
+            .map(|_bin| RwLock::new(AccountMap::new()))
             .collect::<Vec<_>>();
-        let bin_calculator = PubkeyBinCalculator16::new(bins);
         (account_maps, bin_calculator)
     }
 
-    fn iter<R>(&self, range: Option<R>, collect_all_unsorted: bool) -> AccountsIndexIterator<T>
+    fn iter<R>(&self, range: Option<&R>, collect_all_unsorted: bool) -> AccountsIndexIterator<T>
     where
         R: RangeBounds<Pubkey>,
     {
@@ -1115,7 +1116,7 @@ impl<T: IsCached> AccountsIndex<T> {
         let mut read_lock_elapsed = 0;
         let mut iterator_elapsed = 0;
         let mut iterator_timer = Measure::start("iterator_elapsed");
-        for pubkey_list in self.iter(range, collect_all_unsorted) {
+        for pubkey_list in self.iter(range.as_ref(), collect_all_unsorted) {
             iterator_timer.stop();
             iterator_elapsed += iterator_timer.as_us();
             for (pubkey, list) in pubkey_list {
@@ -1233,18 +1234,30 @@ impl<T: IsCached> AccountsIndex<T> {
         if !dead_keys.is_empty() {
             for key in dead_keys.iter() {
                 let mut w_index = self.get_account_maps_write_lock(key);
-                if let Entry::Occupied(index_entry) = w_index.entry(**key) {
-                    if index_entry.get().slot_list.read().unwrap().is_empty() {
-                        index_entry.remove();
-
-                        // Note it's only safe to remove all the entries for this key
-                        // because we have the lock for this key's entry in the AccountsIndex,
-                        // so no other thread is also updating the index
-                        self.purge_secondary_indexes_by_inner_key(key, account_indexes);
-                    }
+                if self.remove_if_slot_list_empty(key, &mut w_index) {
+                    // Note it's only safe to remove all the entries for this key
+                    // because we have the lock for this key's entry in the AccountsIndex,
+                    // so no other thread is also updating the index
+                    self.purge_secondary_indexes_by_inner_key(key, account_indexes);
                 }
             }
         }
+    }
+
+    // If the slot list for pubkey exists in the index and is empty, remove the index entry for pubkey and return true.
+    // Return false otherwise.
+    fn remove_if_slot_list_empty(
+        &self,
+        pubkey: &Pubkey,
+        lock: &mut AccountMapsWriteLock<T>,
+    ) -> bool {
+        if let Entry::Occupied(index_entry) = lock.entry(*pubkey) {
+            if index_entry.get().slot_list.read().unwrap().is_empty() {
+                index_entry.remove();
+                return true;
+            }
+        }
+        false
     }
 
     /// call func with every pubkey and index visible from a given set of ancestors
@@ -3258,7 +3271,7 @@ pub mod tests {
     #[test]
     fn test_accounts_iter_finished() {
         let (index, _) = setup_accounts_index_keys(0);
-        let mut iter = index.iter(None::<Range<Pubkey>>, COLLECT_ALL_UNSORTED_FALSE);
+        let mut iter = index.iter(None::<&Range<Pubkey>>, COLLECT_ALL_UNSORTED_FALSE);
         assert!(iter.next().is_none());
         let mut gc = vec![];
         index.upsert(
@@ -4108,7 +4121,7 @@ pub mod tests {
         let index = AccountsIndex::<bool>::default_for_tests();
         let iter = AccountsIndexIterator::new(
             &index,
-            None::<RangeInclusive<Pubkey>>,
+            None::<&RangeInclusive<Pubkey>>,
             COLLECT_ALL_UNSORTED_FALSE,
         );
         assert_eq!((0, usize::MAX), iter.bin_start_and_range());
@@ -4118,26 +4131,26 @@ pub mod tests {
 
         let iter = AccountsIndexIterator::new(
             &index,
-            Some(RangeInclusive::new(key_0, key_ff)),
+            Some(&RangeInclusive::new(key_0, key_ff)),
             COLLECT_ALL_UNSORTED_FALSE,
         );
         let bins = index.bins();
         assert_eq!((0, bins), iter.bin_start_and_range());
         let iter = AccountsIndexIterator::new(
             &index,
-            Some(RangeInclusive::new(key_ff, key_0)),
+            Some(&RangeInclusive::new(key_ff, key_0)),
             COLLECT_ALL_UNSORTED_FALSE,
         );
         assert_eq!((bins - 1, 0), iter.bin_start_and_range());
         let iter = AccountsIndexIterator::new(
             &index,
-            Some((Included(key_0), Unbounded)),
+            Some(&(Included(key_0), Unbounded)),
             COLLECT_ALL_UNSORTED_FALSE,
         );
         assert_eq!((0, usize::MAX), iter.bin_start_and_range());
         let iter = AccountsIndexIterator::new(
             &index,
-            Some((Included(key_ff), Unbounded)),
+            Some(&(Included(key_ff), Unbounded)),
             COLLECT_ALL_UNSORTED_FALSE,
         );
         assert_eq!((bins - 1, usize::MAX), iter.bin_start_and_range());
@@ -4155,10 +4168,10 @@ pub mod tests {
     #[test]
     fn test_start_end_bin() {
         let index = AccountsIndex::<bool>::default_for_tests();
-        assert_eq!(index.bins(), BINS_DEFAULT);
+        assert_eq!(index.bins(), BINS_FOR_TESTING);
         let iter = AccountsIndexIterator::new(
             &index,
-            None::<RangeInclusive<Pubkey>>,
+            None::<&RangeInclusive<Pubkey>>,
             COLLECT_ALL_UNSORTED_FALSE,
         );
         assert_eq!(iter.start_bin(), 0); // no range, so 0
@@ -4167,21 +4180,21 @@ pub mod tests {
         let key = Pubkey::new(&[0; 32]);
         let iter = AccountsIndexIterator::new(
             &index,
-            Some(RangeInclusive::new(key, key)),
+            Some(&RangeInclusive::new(key, key)),
             COLLECT_ALL_UNSORTED_FALSE,
         );
         assert_eq!(iter.start_bin(), 0); // start at pubkey 0, so 0
         assert_eq!(iter.end_bin_inclusive(), 0); // end at pubkey 0, so 0
         let iter = AccountsIndexIterator::new(
             &index,
-            Some((Included(key), Excluded(key))),
+            Some(&(Included(key), Excluded(key))),
             COLLECT_ALL_UNSORTED_FALSE,
         );
         assert_eq!(iter.start_bin(), 0); // start at pubkey 0, so 0
         assert_eq!(iter.end_bin_inclusive(), 0); // end at pubkey 0, so 0
         let iter = AccountsIndexIterator::new(
             &index,
-            Some((Excluded(key), Excluded(key))),
+            Some(&(Excluded(key), Excluded(key))),
             COLLECT_ALL_UNSORTED_FALSE,
         );
         assert_eq!(iter.start_bin(), 0); // start at pubkey 0, so 0
@@ -4190,7 +4203,7 @@ pub mod tests {
         let key = Pubkey::new(&[0xff; 32]);
         let iter = AccountsIndexIterator::new(
             &index,
-            Some(RangeInclusive::new(key, key)),
+            Some(&RangeInclusive::new(key, key)),
             COLLECT_ALL_UNSORTED_FALSE,
         );
         let bins = index.bins();
@@ -4198,14 +4211,14 @@ pub mod tests {
         assert_eq!(iter.end_bin_inclusive(), bins - 1);
         let iter = AccountsIndexIterator::new(
             &index,
-            Some((Included(key), Excluded(key))),
+            Some(&(Included(key), Excluded(key))),
             COLLECT_ALL_UNSORTED_FALSE,
         );
         assert_eq!(iter.start_bin(), bins - 1); // start at highest possible pubkey, so bins - 1
         assert_eq!(iter.end_bin_inclusive(), bins - 1);
         let iter = AccountsIndexIterator::new(
             &index,
-            Some((Excluded(key), Excluded(key))),
+            Some(&(Excluded(key), Excluded(key))),
             COLLECT_ALL_UNSORTED_FALSE,
         );
         assert_eq!(iter.start_bin(), bins - 1); // start at highest possible pubkey, so bins - 1

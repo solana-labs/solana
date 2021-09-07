@@ -65,6 +65,48 @@ to the BPF Upgradeable Loader to process the instruction.
 
 [More information about deployment](cli/deploy-a-program.md)
 
+## Ed25519 Program
+
+Verify ed25519 signature program. This program takes an ed25519 signature, public key, and message.
+Multiple signatures can be verified. If any of the signatures fail to verify, an error is returned.
+
+- Program id: `Ed25519SigVerify111111111111111111111111111`
+- Instructions: [new_ed25519_instruction](https://github.com/solana-labs/solana/blob/master/sdk/src/ed25519_instruction.rs#L31)
+
+The ed25519 program processes an instruction. The first `u8` is a count of the number of
+signatures to check, which is followed by a single byte padding. After that, the
+following struct is serialized, one for each signature to check.
+
+```
+struct Ed25519SignatureOffsets {
+    signature_offset: u16,             // offset to ed25519 signature of 64 bytes
+    signature_instruction_index: u16,  // instruction index to find signature
+    public_key_offset: u16,            // offset to public key of 32 bytes
+    public_key_instruction_index: u16, // instruction index to find public key
+    message_data_offset: u16,          // offset to start of message data
+    message_data_size: u16,            // size of message data
+    message_instruction_index: u16,    // index of instruction data to get message data
+}
+```
+
+Pseudo code of the operation:
+
+```
+process_instruction() {
+    for i in 0..count {
+        // i'th index values referenced:
+        instructions = &transaction.message().instructions
+        signature = instructions[ed25519_signature_instruction_index].data[ed25519_signature_offset..ed25519_signature_offset + 64]
+        pubkey = instructions[ed25519_pubkey_instruction_index].data[ed25519_pubkey_offset..ed25519_pubkey_offset + 32]
+        message = instructions[ed25519_message_instruction_index].data[ed25519_message_data_offset..ed25519_message_data_offset + ed25519_message_data_size]
+        if pubkey.verify(signature, message) != Success {
+            return Error
+        }
+    }
+    return Success
+}
+```
+
 ## Secp256k1 Program
 
 Verify secp256k1 public key recovery operations (ecrecover).

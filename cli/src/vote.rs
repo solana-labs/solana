@@ -56,6 +56,15 @@ impl VoteSubCommands for App<'_, '_> {
                         .help("Keypair of validator that will vote with this account"),
                 )
                 .arg(
+                    pubkey!(Arg::with_name("authorized_withdrawer")
+                        .index(3)
+                        .value_name("WITHDRAWER_PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .long("authorized-withdrawer"),
+                        "Public key of the authorized withdrawer")
+                )
+                .arg(
                     Arg::with_name("commission")
                         .long("commission")
                         .value_name("PERCENTAGE")
@@ -70,10 +79,12 @@ impl VoteSubCommands for App<'_, '_> {
                         "Public key of the authorized voter [default: validator identity pubkey]. "),
                 )
                 .arg(
-                    pubkey!(Arg::with_name("authorized_withdrawer")
-                        .long("authorized-withdrawer")
-                        .value_name("WITHDRAWER_PUBKEY"),
-                        "Public key of the authorized withdrawer [default: validator identity pubkey]. "),
+                    Arg::with_name("allow_unsafe_authorized_withdrawer")
+                        .long("allow-unsafe-authorized-withdrawer")
+                        .takes_value(false)
+                        .help("Allow an authorized withdrawer pubkey to be identical to the validator identity \
+                               account pubkey or vote account pubkey, which is normally an unsafe \
+                               configuration and should be avoided."),
                 )
                 .arg(
                     Arg::with_name("seed")
@@ -340,8 +351,27 @@ pub fn parse_create_vote_account(
         signer_of(matches, "identity_account", wallet_manager)?;
     let commission = value_t_or_exit!(matches, "commission", u8);
     let authorized_voter = pubkey_of_signer(matches, "authorized_voter", wallet_manager)?;
-    let authorized_withdrawer = pubkey_of_signer(matches, "authorized_withdrawer", wallet_manager)?;
+    let authorized_withdrawer =
+        pubkey_of_signer(matches, "authorized_withdrawer", wallet_manager)?.unwrap();
+    let allow_unsafe = matches.is_present("allow_unsafe_authorized_withdrawer");
     let memo = matches.value_of(MEMO_ARG.name).map(String::from);
+
+    if !allow_unsafe {
+        if authorized_withdrawer == vote_account_pubkey.unwrap() {
+            return Err(CliError::BadParameter(
+                "Authorized withdrawer pubkey is identical to vote \
+                                               account pubkey, an unsafe configuration"
+                    .to_owned(),
+            ));
+        }
+        if authorized_withdrawer == identity_pubkey.unwrap() {
+            return Err(CliError::BadParameter(
+                "Authorized withdrawer pubkey is identical to identity \
+                                               account pubkey, an unsafe configuration"
+                    .to_owned(),
+            ));
+        }
+    }
 
     let payer_provided = None;
     let signer_info = default_signer.generate_unique_signers(
@@ -531,7 +561,7 @@ pub fn process_create_vote_account(
     seed: &Option<String>,
     identity_account: SignerIndex,
     authorized_voter: &Option<Pubkey>,
-    authorized_withdrawer: &Option<Pubkey>,
+    authorized_withdrawer: Pubkey,
     commission: u8,
     memo: Option<&String>,
 ) -> ProcessResult {
@@ -563,7 +593,7 @@ pub fn process_create_vote_account(
         let vote_init = VoteInit {
             node_pubkey: identity_pubkey,
             authorized_voter: authorized_voter.unwrap_or(identity_pubkey),
-            authorized_withdrawer: authorized_withdrawer.unwrap_or(identity_pubkey),
+            authorized_withdrawer,
             commission,
         };
 
@@ -1025,12 +1055,14 @@ mod tests {
         // Test CreateVoteAccount SubCommand
         let (identity_keypair_file, mut tmp_file) = make_tmp_file();
         let identity_keypair = Keypair::new();
+        let authorized_withdrawer = Keypair::new().pubkey();
         write_keypair(&identity_keypair, tmp_file.as_file_mut()).unwrap();
         let test_create_vote_account = test_commands.clone().get_matches_from(vec![
             "test",
             "create-vote-account",
             &keypair_file,
             &identity_keypair_file,
+            &authorized_withdrawer.to_string(),
             "--commission",
             "10",
         ]);
@@ -1042,7 +1074,7 @@ mod tests {
                     seed: None,
                     identity_account: 2,
                     authorized_voter: None,
-                    authorized_withdrawer: None,
+                    authorized_withdrawer,
                     commission: 10,
                     memo: None,
                 },
@@ -1063,6 +1095,7 @@ mod tests {
             "create-vote-account",
             &keypair_file,
             &identity_keypair_file,
+            &authorized_withdrawer.to_string(),
         ]);
         assert_eq!(
             parse_command(&test_create_vote_account2, &default_signer, &mut None).unwrap(),
@@ -1072,7 +1105,7 @@ mod tests {
                     seed: None,
                     identity_account: 2,
                     authorized_voter: None,
-                    authorized_withdrawer: None,
+                    authorized_withdrawer,
                     commission: 100,
                     memo: None,
                 },
@@ -1095,6 +1128,7 @@ mod tests {
             "create-vote-account",
             &keypair_file,
             &identity_keypair_file,
+            &authorized_withdrawer.to_string(),
             "--authorized-voter",
             &authed.to_string(),
         ]);
@@ -1106,7 +1140,7 @@ mod tests {
                     seed: None,
                     identity_account: 2,
                     authorized_voter: Some(authed),
-                    authorized_withdrawer: None,
+                    authorized_withdrawer,
                     commission: 100,
                     memo: None,
                 },
@@ -1121,14 +1155,14 @@ mod tests {
         let (keypair_file, mut tmp_file) = make_tmp_file();
         let keypair = Keypair::new();
         write_keypair(&keypair, tmp_file.as_file_mut()).unwrap();
-        // test init with an authed withdrawer
+        // succeed even though withdrawer unsafe (because forcefully allowed)
         let test_create_vote_account4 = test_commands.clone().get_matches_from(vec![
             "test",
             "create-vote-account",
             &keypair_file,
             &identity_keypair_file,
-            "--authorized-withdrawer",
-            &authed.to_string(),
+            &identity_keypair_file,
+            "--allow-unsafe-authorized-withdrawer",
         ]);
         assert_eq!(
             parse_command(&test_create_vote_account4, &default_signer, &mut None).unwrap(),
@@ -1138,7 +1172,7 @@ mod tests {
                     seed: None,
                     identity_account: 2,
                     authorized_voter: None,
-                    authorized_withdrawer: Some(authed),
+                    authorized_withdrawer: identity_keypair.pubkey(),
                     commission: 100,
                     memo: None,
                 },

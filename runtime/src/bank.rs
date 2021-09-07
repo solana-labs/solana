@@ -45,7 +45,7 @@ use crate::{
     },
     ancestors::{Ancestors, AncestorsForSerialization},
     blockhash_queue::BlockhashQueue,
-    builtins::{self, ActivationType},
+    builtins::{self, ActivationType, Builtin, Builtins},
     epoch_stakes::{EpochStakes, NodeVoteAccounts},
     inline_spl_token_v2_0,
     instruction_recorder::InstructionRecorder,
@@ -211,33 +211,6 @@ type RentCollectionCycleParams = (
 
 type EpochCount = u64;
 
-#[derive(Clone)]
-pub struct Builtin {
-    pub name: String,
-    pub id: Pubkey,
-    pub process_instruction_with_context: ProcessInstructionWithContext,
-}
-
-impl Builtin {
-    pub fn new(
-        name: &str,
-        id: Pubkey,
-        process_instruction_with_context: ProcessInstructionWithContext,
-    ) -> Self {
-        Self {
-            name: name.to_string(),
-            id,
-            process_instruction_with_context,
-        }
-    }
-}
-
-impl fmt::Debug for Builtin {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Builtin [name={}, id={}]", self.name, self.id)
-    }
-}
-
 /// Copy-on-write holder of CachedExecutors
 #[derive(AbiExample, Debug, Default)]
 struct CowCachedExecutors {
@@ -281,26 +254,6 @@ impl CowCachedExecutors {
         }
         self.executors.write()
     }
-}
-
-#[cfg(RUSTC_WITH_SPECIALIZATION)]
-impl AbiExample for Builtin {
-    fn example() -> Self {
-        Self {
-            name: String::default(),
-            id: Pubkey::default(),
-            process_instruction_with_context: |_, _, _| Ok(()),
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct Builtins {
-    /// Builtin programs that are always available
-    pub genesis_builtins: Vec<Builtin>,
-
-    /// Builtin programs activated dynamically by feature
-    pub feature_builtins: Vec<(Builtin, Pubkey, ActivationType)>,
 }
 
 const MAX_CACHED_EXECUTORS: usize = 100; // 10 MB assuming programs are around 100k
@@ -1987,8 +1940,12 @@ impl Bank {
 
         let old_vote_balance_and_staked = self.stakes.read().unwrap().vote_balance_and_staked();
 
-        let validator_point_value =
-            self.pay_validator_rewards(prev_epoch, validator_rewards, reward_calc_tracer);
+        let validator_point_value = self.pay_validator_rewards(
+            prev_epoch,
+            validator_rewards,
+            reward_calc_tracer,
+            self.stake_program_advance_activating_credits_observed(),
+        );
 
         if !self
             .feature_set
@@ -2125,6 +2082,7 @@ impl Bank {
         rewarded_epoch: Epoch,
         rewards: u64,
         reward_calc_tracer: &mut Option<impl FnMut(&RewardCalculationEvent)>,
+        fix_activating_credits_observed: bool,
     ) -> f64 {
         let stake_history = self.stakes.read().unwrap().history().clone();
 
@@ -2183,6 +2141,7 @@ impl Bank {
                     &point_value,
                     Some(&stake_history),
                     &mut reward_calc_tracer.as_mut(),
+                    fix_activating_credits_observed,
                 );
                 if let Ok((stakers_reward, _voters_reward)) = redeemed {
                     self.store_account(stake_pubkey, stake_account);
@@ -2796,7 +2755,10 @@ impl Bank {
             .into_iter()
             .map(SanitizedTransaction::try_from)
             .collect::<Result<Vec<_>>>()?;
-        let lock_results = self.rc.accounts.lock_accounts(sanitized_txs.iter());
+        let lock_results = self
+            .rc
+            .accounts
+            .lock_accounts(sanitized_txs.iter(), self.demote_program_write_locks());
         Ok(TransactionBatch::new(
             lock_results,
             self,
@@ -2816,7 +2778,10 @@ impl Bank {
                 })
             })
             .collect::<Result<Vec<_>>>()?;
-        let lock_results = self.rc.accounts.lock_accounts(sanitized_txs.iter());
+        let lock_results = self
+            .rc
+            .accounts
+            .lock_accounts(sanitized_txs.iter(), self.demote_program_write_locks());
         Ok(TransactionBatch::new(
             lock_results,
             self,
@@ -2829,7 +2794,10 @@ impl Bank {
         &'a self,
         txs: &'b [SanitizedTransaction],
     ) -> TransactionBatch<'a, 'b> {
-        let lock_results = self.rc.accounts.lock_accounts(txs.iter());
+        let lock_results = self
+            .rc
+            .accounts
+            .lock_accounts(txs.iter(), self.demote_program_write_locks());
         TransactionBatch::new(lock_results, self, Cow::Borrowed(txs))
     }
 
@@ -2904,9 +2872,11 @@ impl Bank {
     pub fn unlock_accounts(&self, batch: &mut TransactionBatch) {
         if batch.needs_unlock {
             batch.needs_unlock = false;
-            self.rc
-                .accounts
-                .unlock_accounts(batch.sanitized_transactions().iter(), batch.lock_results())
+            self.rc.accounts.unlock_accounts(
+                batch.sanitized_transactions().iter(),
+                batch.lock_results(),
+                self.demote_program_write_locks(),
+            )
         }
     }
 
@@ -3665,6 +3635,7 @@ impl Bank {
             &self.last_blockhash_with_fee_calculator(),
             self.rent_for_sysvars(),
             self.merge_nonce_error_into_system_error(),
+            self.demote_program_write_locks(),
         );
         let rent_debits = self.collect_rent(executed, loaded_txs);
 
@@ -4957,7 +4928,7 @@ impl Bank {
         }
 
         if !skip_verification {
-            sanitized_tx.verify_precompiles(self.libsecp256k1_0_5_upgrade_enabled(), true)?;
+            sanitized_tx.verify_precompiles(&self.feature_set)?;
         }
 
         Ok(sanitized_tx)
@@ -5392,16 +5363,6 @@ impl Bank {
             .is_active(&feature_set::verify_tx_signatures_len::id())
     }
 
-    pub fn libsecp256k1_0_5_upgrade_enabled(&self) -> bool {
-        self.feature_set
-            .is_active(&feature_set::libsecp256k1_0_5_upgrade_enabled::id())
-    }
-
-    pub fn libsecp256k1_fail_on_bad_count(&self) -> bool {
-        self.feature_set
-            .is_active(&feature_set::libsecp256k1_fail_on_bad_count::id())
-    }
-
     pub fn merge_nonce_error_into_system_error(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::merge_nonce_error_into_system_error::id())
@@ -5410,6 +5371,16 @@ impl Bank {
     pub fn versioned_tx_message_enabled(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::versioned_tx_message_enabled::id())
+    }
+
+    pub fn stake_program_advance_activating_credits_observed(&self) -> bool {
+        self.feature_set
+            .is_active(&feature_set::stake_program_advance_activating_credits_observed::id())
+    }
+
+    pub fn demote_program_write_locks(&self) -> bool {
+        self.feature_set
+            .is_active(&feature_set::demote_program_write_locks::id())
     }
 
     // Check if the wallclock time from bank creation to now has exceeded the allotted
@@ -12866,6 +12837,7 @@ pub(crate) mod tests {
                 u64,
             ) + std::marker::Send,
     {
+        solana_logger::setup();
         // Set up initial bank
         let mut genesis_config = create_genesis_config_with_leader(
             10,
