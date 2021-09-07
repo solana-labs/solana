@@ -408,8 +408,6 @@ fn retransmit(
                     true, // forward socket
                     socket_addr_space,
                 );
-
-                // TODO calculate times from shreds.timer
             }
             ClusterInfo::retransmit_to(
                 &children,

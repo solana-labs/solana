@@ -14,7 +14,7 @@ use {
     solana_ledger::{
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         leader_schedule_cache::LeaderScheduleCache,
-        shred::Shredder,
+        shred::{Shredder, Shreds},
     },
     solana_measure::measure::Measure,
     solana_runtime::{bank::Bank, bank_forks::BankForks},
@@ -149,7 +149,7 @@ fn bench_retransmitter(bencher: &mut Bencher) {
             shred.set_index(index);
             index += 1;
             index %= 200;
-            let _ = shreds_sender.send(vec![shred.clone()]);
+            let _ = shreds_sender.send(Shreds::new_from_shred(shred.clone()));
         }
         slot += 1;
 

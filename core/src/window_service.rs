@@ -82,8 +82,6 @@ struct ReceiveWindowStats {
     since: Option<Instant>,
     num_packet_batches: usize,    // Packets structures
     num_coalesced_batches: usize, // Packets structures coalesced before this stage
-    elapsed_first_recv_to_start: Duration,
-    elapsed_last_recv_to_start: Duration,
     batch_span_us_hist: histogram::Histogram,
     batch_first_recv_us_hist: histogram::Histogram,
 }
@@ -105,16 +103,6 @@ impl ReceiveWindowStats {
             ("num_repairs", self.num_repairs, i64),
             ("elapsed_micros", self.elapsed.as_micros(), i64),
             (
-                "elapsed_first_recv_to_start_micros",
-                self.elapsed_first_recv_to_start.as_micros(),
-                i64
-            ),
-            (
-                "elapsed_last_recv_to_start_micros",
-                self.elapsed_last_recv_to_start.as_micros(),
-                i64
-            ),
-            (
                 "batch_span_us_50pct",
                 self.batch_span_us_hist.percentile(50.0).unwrap_or(0),
                 i64
@@ -122,11 +110,6 @@ impl ReceiveWindowStats {
             (
                 "batch_span_us_90pct",
                 self.batch_span_us_hist.percentile(90.0).unwrap_or(0),
-                i64
-            ),
-            (
-                "batch_span_us_99pct",
-                self.batch_span_us_hist.percentile(99.0).unwrap_or(0),
                 i64
             ),
             (
@@ -140,8 +123,8 @@ impl ReceiveWindowStats {
                 i64
             ),
             (
-                "batch_span_us_stddev",
-                self.batch_span_us_hist.stddev().unwrap_or(0),
+                "batch_span_us_mean",
+                self.batch_span_us_hist.mean().unwrap_or(0),
                 i64
             ),
             (
@@ -155,11 +138,6 @@ impl ReceiveWindowStats {
                 i64
             ),
             (
-                "batch_first_recv_us_99pct",
-                self.batch_first_recv_us_hist.percentile(99.0).unwrap_or(0),
-                i64
-            ),
-            (
                 "batch_first_recv_us_min",
                 self.batch_first_recv_us_hist.minimum().unwrap_or(0),
                 i64
@@ -170,8 +148,8 @@ impl ReceiveWindowStats {
                 i64
             ),
             (
-                "batch_first_recv_us_stddev",
-                self.batch_first_recv_us_hist.stddev().unwrap_or(0),
+                "batch_first_recv_us_mean",
+                self.batch_first_recv_us_hist.mean().unwrap_or(0),
                 i64
             ),
         );
@@ -369,12 +347,9 @@ where
         .collect();
     prune_shreds_elapsed.stop();
 
-    //let mut insert_shreds = Shreds::default();
-    //insert_shreds.shreds = shreds;
-    // TODO propagate timer from incoming shreds (see above)
     shreds.timer.mark_outgoing_start();
     let (completed_data_sets, inserted_indices) = blockstore.insert_shreds_handle_duplicate(
-        shreds, //insert_shreds,
+        shreds,
         repairs,
         Some(leader_schedule_cache),
         false, // is_trusted
@@ -462,7 +437,6 @@ where
             .collect(),
         timer: packet_timer,
     };
-    // TODO propagate timer from incoming packets
     retransmit_shreds.timer.mark_outgoing_start();
 
     // Exclude repair packets from retransmit.
@@ -489,10 +463,6 @@ where
     stats.elapsed += now.elapsed();
     stats.num_packet_batches += packets.len();
     stats.num_coalesced_batches += coalesced_batches;
-    stats.elapsed_first_recv_to_start +=
-        now - packets.first().unwrap().timer.incoming_start().unwrap();
-    stats.elapsed_last_recv_to_start += now - packets.last().unwrap().timer.incoming_end().unwrap();
-
     let first_time = packets
         .iter()
         .map(|pkts| pkts.timer.incoming_start().unwrap())
