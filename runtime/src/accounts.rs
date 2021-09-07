@@ -281,8 +281,8 @@ impl Accounts {
                             && message.is_writable(i, demote_program_write_locks)
                             && !is_upgradeable_loader_present
                         {
-                            error_counters.invalid_account_index += 1;
-                            return Err(TransactionError::InvalidAccountIndex);
+                            error_counters.invalid_writable_account += 1;
+                            return Err(TransactionError::InvalidWritableAccount);
                         }
 
                         if bpf_loader_upgradeable::check_id(account.owner()) {
@@ -315,8 +315,8 @@ impl Accounts {
                                 if let Ok(UpgradeableLoaderState::ProgramData { .. }) =
                                     account.state()
                                 {
-                                    error_counters.invalid_account_index += 1;
-                                    return Err(TransactionError::InvalidAccountIndex);
+                                    error_counters.invalid_writable_account += 1;
+                                    return Err(TransactionError::InvalidWritableAccount);
                                 }
                             }
                         }
@@ -1744,11 +1744,11 @@ mod tests {
         let tx = Transaction::new(&[&keypair], message.clone(), Hash::default());
         let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
 
-        assert_eq!(error_counters.invalid_account_index, 1);
+        assert_eq!(error_counters.invalid_writable_account, 1);
         assert_eq!(loaded_accounts.len(), 1);
         assert_eq!(
             loaded_accounts[0],
-            (Err(TransactionError::InvalidAccountIndex), None)
+            (Err(TransactionError::InvalidWritableAccount), None)
         );
 
         // Solution 1: include bpf_loader_upgradeable account
@@ -1765,7 +1765,7 @@ mod tests {
         let loaded_accounts =
             load_accounts(tx, &accounts_with_upgradeable_loader, &mut error_counters);
 
-        assert_eq!(error_counters.invalid_account_index, 1);
+        assert_eq!(error_counters.invalid_writable_account, 1);
         assert_eq!(loaded_accounts.len(), 1);
         let result = loaded_accounts[0].0.as_ref().unwrap();
         assert_eq!(result.accounts[..2], accounts_with_upgradeable_loader[..2]);
@@ -1780,7 +1780,7 @@ mod tests {
         let tx = Transaction::new(&[&keypair], message, Hash::default());
         let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
 
-        assert_eq!(error_counters.invalid_account_index, 1);
+        assert_eq!(error_counters.invalid_writable_account, 1);
         assert_eq!(loaded_accounts.len(), 1);
         let result = loaded_accounts[0].0.as_ref().unwrap();
         assert_eq!(result.accounts[..2], accounts[..2]);
@@ -1827,11 +1827,11 @@ mod tests {
         let tx = Transaction::new(&[&keypair], message.clone(), Hash::default());
         let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
 
-        assert_eq!(error_counters.invalid_account_index, 1);
+        assert_eq!(error_counters.invalid_writable_account, 1);
         assert_eq!(loaded_accounts.len(), 1);
         assert_eq!(
             loaded_accounts[0],
-            (Err(TransactionError::InvalidAccountIndex), None)
+            (Err(TransactionError::InvalidWritableAccount), None)
         );
 
         // Solution 1: include bpf_loader_upgradeable account
@@ -1848,7 +1848,7 @@ mod tests {
         let loaded_accounts =
             load_accounts(tx, &accounts_with_upgradeable_loader, &mut error_counters);
 
-        assert_eq!(error_counters.invalid_account_index, 1);
+        assert_eq!(error_counters.invalid_writable_account, 1);
         assert_eq!(loaded_accounts.len(), 1);
         let result = loaded_accounts[0].0.as_ref().unwrap();
         assert_eq!(result.accounts[..2], accounts_with_upgradeable_loader[..2]);
@@ -1863,7 +1863,7 @@ mod tests {
         let tx = Transaction::new(&[&keypair], message, Hash::default());
         let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
 
-        assert_eq!(error_counters.invalid_account_index, 1);
+        assert_eq!(error_counters.invalid_writable_account, 1);
         assert_eq!(loaded_accounts.len(), 1);
         let result = loaded_accounts[0].0.as_ref().unwrap();
         assert_eq!(result.accounts[..2], accounts[..2]);
