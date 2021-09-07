@@ -19,6 +19,7 @@ export function GatewayTokenAccountSection({
   const { cluster } = useCluster();
 
   try {
+    console.log("GT: ", tokenAccount);
     const info = create(tokenAccount.info, GatewayTokenAccountInfo);
     return <GatewayTokenAccountCard account={account} info={info} />;
   } catch (err) {

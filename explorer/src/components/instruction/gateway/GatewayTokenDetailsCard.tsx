@@ -9,7 +9,7 @@ import { UnknownDetailsCard } from "../UnknownDetailsCard";
 import { InstructionCard } from "../InstructionCard";
 import { Address } from "components/common/Address";
 import { reportError } from "utils/sentry";
-import {GatewayInstruction} from "@identity.com/solana-gateway-ts";
+import {GatewayInstruction, GatewayTokenState} from "@identity.com/solana-gateway-ts";
 
 type DetailsProps = {
   ix: TransactionInstruction;
@@ -37,6 +37,14 @@ const codeToTitle = (code: GatewayInstructionType) => {
     case GatewayInstructionType.UpdateExpiry: return "Update Expiry";
     case GatewayInstructionType.CloseGatekeeper: return "Close Gatekeeper";
   }
+}
+
+// Converts a Borsh-deserialised "Enum" (an object with one populated
+// property and the rest undefined) to a string
+const stateToString = (state: GatewayTokenState | undefined) => {
+  if (state?.frozen) return "FROZEN"
+  if (state?.revoked) return "REVOKED"
+  return "ACTIVE"
 }
 
 function parseGatewayInstruction(code: GatewayInstructionType, ix: TransactionInstruction) {
@@ -68,7 +76,7 @@ function parseGatewayInstruction(code: GatewayInstructionType, ix: TransactionIn
         gatewayToken: ix.keys[0].pubkey,
         gatekeeperAuthority: ix.keys[1].pubkey,
         gatekeeperAccount: ix.keys[2].pubkey,
-        state: setState?.state
+        state: stateToString(setState?.state)
       }
   }
 }
