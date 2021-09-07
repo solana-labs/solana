@@ -718,6 +718,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "clear_on_drop"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c9cc5db465b294c3fa986d5bbb0f3017cd850bff6dd6c52f9ccff8b4d21b7b08"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "cloudabi"
 version = "0.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -996,6 +1005,7 @@ dependencies = [
  "byteorder",
  "digest 0.9.0",
  "rand_core 0.5.1",
+ "serde",
  "subtle",
  "zeroize",
 ]
@@ -2446,6 +2456,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "59accc507f1338036a0477ef61afdae33cde60840f4dfe481319ce3ad116ddf9"
 dependencies = [
  "autocfg 1.0.1",
+]
+
+[[package]]
+name = "merlin"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4e261cf0f8b3c42ded9f7d2bb59dea03aa52bc8a1cbc7482f9fc3fd1229d3b42"
+dependencies = [
+ "byteorder",
+ "keccak",
+ "rand_core 0.5.1",
+ "zeroize",
 ]
 
 [[package]]
@@ -4436,6 +4458,7 @@ dependencies = [
  "solana-runtime",
  "solana-sdk",
  "solana_rbpf",
+ "spl-zk-token-sdk",
  "thiserror",
 ]
 
@@ -5603,6 +5626,8 @@ dependencies = [
  "solana-sdk",
  "solana-stake-program",
  "solana-vote-program",
+ "spl-zk-token-proof-program",
+ "spl-zk-token-sdk",
  "symlink",
  "tar",
  "tempfile",
@@ -6077,6 +6102,42 @@ dependencies = [
  "num_enum",
  "solana-program 1.8.2",
  "thiserror",
+]
+
+[[package]]
+name = "spl-zk-token-proof-program"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "getrandom 0.1.14",
+ "num-derive",
+ "num-traits",
+ "solana-sdk",
+ "spl-zk-token-sdk",
+]
+
+[[package]]
+name = "spl-zk-token-sdk"
+version = "0.1.0"
+dependencies = [
+ "arrayref",
+ "bincode",
+ "bytemuck",
+ "byteorder",
+ "clear_on_drop",
+ "curve25519-dalek 3.2.0",
+ "getrandom 0.1.14",
+ "merlin",
+ "num-derive",
+ "num-traits",
+ "rand 0.7.3",
+ "serde",
+ "sha3",
+ "solana-program 1.8.0",
+ "subtle",
+ "thiserror",
+ "time 0.1.43",
+ "zeroize",
 ]
 
 [[package]]

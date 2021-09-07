@@ -77,6 +77,8 @@ members = [
     "test-validator",
     "rpc-test",
     "client-test",
+    "zk-token/proof-program",
+    "zk-token/sdk",
 ]
 
 exclude = [

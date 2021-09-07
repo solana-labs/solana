@@ -171,6 +171,15 @@ fn feature_builtins() -> Vec<(Builtin, Pubkey, ActivationType)> {
             feature_set::prevent_calling_precompiles_as_programs::id(),
             ActivationType::RemoveProgram,
         ),
+        (
+            Builtin::new(
+                "zk_token_proof_program",
+                spl_zk_token_sdk::zk_token_proof_program::id(),
+                with_program_logging!(spl_zk_token_proof_program::process_instruction),
+            ),
+            feature_set::zk_token_sdk_enabled::id(),
+            ActivationType::NewProgram,
+        ),
     ]
 }
 
