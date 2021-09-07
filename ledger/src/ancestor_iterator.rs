@@ -79,8 +79,8 @@ mod tests {
     use std::{collections::HashMap, path::Path};
     use trees::tr;
 
-    fn setup_forks(blockstore_path: &Path) -> Blockstore {
-        let blockstore = Blockstore::open(blockstore_path).unwrap();
+    fn setup_forks(ledger_path: &Path) -> Blockstore {
+        let blockstore = Blockstore::open(ledger_path).unwrap();
         /*
             Build fork structure:
 
@@ -102,8 +102,8 @@ mod tests {
 
     #[test]
     fn test_ancestor_iterator() {
-        let blockstore_path = get_tmp_ledger_path!();
-        let blockstore = setup_forks(&blockstore_path);
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = setup_forks(ledger_path.path());
 
         // Test correctness
         assert!(AncestorIterator::new(0, &blockstore).next().is_none());
@@ -115,14 +115,12 @@ mod tests {
             AncestorIterator::new(3, &blockstore).collect::<Vec<Slot>>(),
             vec![2, 1, 0]
         );
-
-        destroy_test_ledger(&blockstore_path, blockstore);
     }
 
     #[test]
     fn test_ancestor_iterator_inclusive() {
-        let blockstore_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&blockstore_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
         let (shreds, _) = make_slot_entries(0, 0, 42);
         blockstore.insert_shreds(shreds, None, false).unwrap();
@@ -146,14 +144,12 @@ mod tests {
             AncestorIterator::new_inclusive(3, &blockstore).collect::<Vec<Slot>>(),
             vec![] as Vec<Slot>
         );
-
-        destroy_test_ledger(&blockstore_path, blockstore);
     }
 
     #[test]
     fn test_ancestor_iterator_with_hash() {
-        let blockstore_path = get_tmp_ledger_path!();
-        let blockstore = setup_forks(&blockstore_path);
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = setup_forks(ledger_path.path());
 
         // Insert frozen hashes
         let mut slot_to_bank_hash = HashMap::new();
@@ -183,7 +179,5 @@ mod tests {
                 (0, slot_to_bank_hash[&0])
             ]
         );
-
-        destroy_test_ledger(&blockstore_path, blockstore);
     }
 }

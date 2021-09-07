@@ -393,7 +393,9 @@ impl Blockstore {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::{blockstore::tests::make_slot_entries_with_transactions, get_tmp_ledger_path};
+    use crate::{
+        blockstore::tests::make_slot_entries_with_transactions, get_tmp_ledger_path_auto_delete,
+    };
     use bincode::serialize;
     use solana_entry::entry::next_entry_mut;
     use solana_sdk::{
@@ -497,8 +499,8 @@ pub mod tests {
 
     #[test]
     fn test_purge_slots() {
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
         let (shreds, _) = make_many_slot_entries(0, 50, 5);
         blockstore.insert_shreds(shreds, None, false).unwrap();
@@ -519,28 +521,24 @@ pub mod tests {
             .for_each(|(_, _)| {
                 panic!();
             });
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
     fn test_purge_huge() {
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
         let (shreds, _) = make_many_slot_entries(0, 5000, 10);
         blockstore.insert_shreds(shreds, None, false).unwrap();
 
         blockstore.purge_and_compact_slots(0, 4999);
         test_all_empty_or_min(&blockstore, 5000);
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
     fn test_purge_front_of_ledger() {
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
         let max_slot = 10;
         for x in 0..max_slot {
@@ -583,16 +581,13 @@ pub mod tests {
             .unwrap();
         let entry = status_entry_iterator.next().unwrap().0;
         assert_eq!(entry.0, 0);
-
-        drop(status_entry_iterator);
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
     #[allow(clippy::cognitive_complexity)]
     fn test_purge_transaction_status() {
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
         let transaction_status_index_cf = &blockstore.transaction_status_index_cf;
         let slot = 10;
@@ -755,10 +750,6 @@ pub mod tests {
                 frozen: true,
             }
         );
-        drop(status_entry_iterator);
-        drop(address_transactions_iterator);
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     fn clear_and_repopulate_transaction_statuses(
@@ -868,8 +859,8 @@ pub mod tests {
     #[test]
     #[allow(clippy::cognitive_complexity)]
     fn test_purge_transaction_status_exact() {
-        let ledger_path = get_tmp_ledger_path!();
-        let mut blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let mut blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
         let index0_max_slot = 9;
         let index1_max_slot = 19;
@@ -1205,15 +1196,12 @@ pub mod tests {
         );
         let entry = status_entry_iterator.next().unwrap().0;
         assert_eq!(entry.0, 2); // Buffer entry, no index 0 or index 1 entries remaining
-        drop(status_entry_iterator);
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
     fn test_purge_special_columns_exact_no_sigs() {
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
         let slot = 1;
         let mut entries: Vec<Entry> = vec![];
@@ -1231,7 +1219,5 @@ pub mod tests {
         blockstore
             .purge_special_columns_exact(&mut write_batch, slot, slot + 1)
             .unwrap();
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 }

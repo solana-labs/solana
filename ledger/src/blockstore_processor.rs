@@ -1407,11 +1407,8 @@ pub fn fill_blockstore_slot_with_ticks(
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::{
-        blockstore::destroy_test_ledger,
-        genesis_utils::{
-            create_genesis_config, create_genesis_config_with_leader, GenesisConfigInfo,
-        },
+    use crate::genesis_utils::{
+        create_genesis_config, create_genesis_config_with_leader, GenesisConfigInfo,
     };
     use crossbeam_channel::unbounded;
     use matches::assert_matches;
@@ -1457,9 +1454,8 @@ pub mod tests {
         genesis_config.poh_config.hashes_per_tick = Some(hashes_per_tick);
         let ticks_per_slot = genesis_config.ticks_per_slot;
 
-        let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_config);
-        let blockstore =
-            Blockstore::open(&ledger_path).expect("Expected to successfully open database ledger");
+        let (ledger_path, blockhash) = create_new_tmp_ledger_auto_delete!(&genesis_config);
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
         let parent_slot = 0;
         let slot = 1;
@@ -1488,8 +1484,6 @@ pub mod tests {
             },
         );
         assert_eq!(frozen_bank_slots(&bank_forks), vec![0]);
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
@@ -1500,8 +1494,8 @@ pub mod tests {
         let ticks_per_slot = genesis_config.ticks_per_slot;
 
         // Create a new ledger with slot 0 full of ticks
-        let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_config);
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let (ledger_path, blockhash) = create_new_tmp_ledger_auto_delete!(&genesis_config);
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
         // Write slot 1 with one tick missing
         let parent_slot = 0;
@@ -1550,8 +1544,6 @@ pub mod tests {
         assert_eq!(frozen_bank_slots(&bank_forks), vec![0, 2]);
         assert_eq!(bank_forks.working_bank().slot(), 2);
         assert_eq!(bank_forks.root(), 0);
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
@@ -1565,8 +1557,8 @@ pub mod tests {
         } = create_genesis_config(10_000);
         let ticks_per_slot = genesis_config.ticks_per_slot;
 
-        let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_config);
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let (ledger_path, blockhash) = create_new_tmp_ledger_auto_delete!(&genesis_config);
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
         let mut entries = create_ticks(ticks_per_slot, 0, blockhash);
         let trailing_entry = {
@@ -1602,8 +1594,6 @@ pub mod tests {
         };
         let (bank_forks, ..) = test_process_blockstore(&genesis_config, &blockstore, opts);
         assert_eq!(frozen_bank_slots(&bank_forks), vec![0]);
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
@@ -1626,11 +1616,10 @@ pub mod tests {
         */
 
         // Create a new ledger with slot 0 full of ticks
-        let (ledger_path, mut blockhash) = create_new_tmp_ledger!(&genesis_config);
+        let (ledger_path, mut blockhash) = create_new_tmp_ledger_auto_delete!(&genesis_config);
         debug!("ledger_path: {:?}", ledger_path);
 
-        let blockstore =
-            Blockstore::open(&ledger_path).expect("Expected to successfully open database ledger");
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
         // Write slot 1
         // slot 1, points at slot 0.  Missing one tick
@@ -1690,8 +1679,6 @@ pub mod tests {
 
         // slot 1 isn't "full", we stop at slot zero
         assert_eq!(frozen_bank_slots(&bank_forks), vec![0, 3]);
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
@@ -1702,7 +1689,7 @@ pub mod tests {
         let ticks_per_slot = genesis_config.ticks_per_slot;
 
         // Create a new ledger with slot 0 full of ticks
-        let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_config);
+        let (ledger_path, blockhash) = create_new_tmp_ledger_auto_delete!(&genesis_config);
         debug!("ledger_path: {:?}", ledger_path);
         let mut last_entry_hash = blockhash;
 
@@ -1720,8 +1707,7 @@ pub mod tests {
                    slot 4 <-- set_root(true)
 
         */
-        let blockstore =
-            Blockstore::open(&ledger_path).expect("Expected to successfully open database ledger");
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
         // Fork 1, ending at slot 3
         let last_slot1_entry_hash =
@@ -1771,8 +1757,6 @@ pub mod tests {
         verify_fork_infos(&bank_forks);
 
         assert_eq!(bank_forks.root(), 4);
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
@@ -1783,7 +1767,7 @@ pub mod tests {
         let ticks_per_slot = genesis_config.ticks_per_slot;
 
         // Create a new ledger with slot 0 full of ticks
-        let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_config);
+        let (ledger_path, blockhash) = create_new_tmp_ledger_auto_delete!(&genesis_config);
         debug!("ledger_path: {:?}", ledger_path);
         let mut last_entry_hash = blockhash;
 
@@ -1801,8 +1785,7 @@ pub mod tests {
                    slot 4
 
         */
-        let blockstore =
-            Blockstore::open(&ledger_path).expect("Expected to successfully open database ledger");
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
         // Fork 1, ending at slot 3
         let last_slot1_entry_hash =
@@ -1863,8 +1846,6 @@ pub mod tests {
 
         // Ensure bank_forks holds the right banks
         verify_fork_infos(&bank_forks);
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
@@ -1873,7 +1854,7 @@ pub mod tests {
 
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let ticks_per_slot = genesis_config.ticks_per_slot;
-        let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_config);
+        let (ledger_path, blockhash) = create_new_tmp_ledger_auto_delete!(&genesis_config);
         debug!("ledger_path: {:?}", ledger_path);
 
         /*
@@ -1886,7 +1867,7 @@ pub mod tests {
                            \
                         slot 3
         */
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
         let slot1_blockhash =
             fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 1, 0, blockhash);
         fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 2, 1, slot1_blockhash);
@@ -1907,8 +1888,6 @@ pub mod tests {
             &[1, 0]
         );
         verify_fork_infos(&bank_forks);
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
@@ -1917,7 +1896,7 @@ pub mod tests {
 
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let ticks_per_slot = genesis_config.ticks_per_slot;
-        let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_config);
+        let (ledger_path, blockhash) = create_new_tmp_ledger_auto_delete!(&genesis_config);
         debug!("ledger_path: {:?}", ledger_path);
 
         /*
@@ -1930,7 +1909,7 @@ pub mod tests {
                /           \
            slot 4 (dead)   slot 3
         */
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
         let slot1_blockhash =
             fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 1, 0, blockhash);
         let slot2_blockhash =
@@ -1964,8 +1943,6 @@ pub mod tests {
         );
         assert_eq!(bank_forks.working_bank().slot(), 3);
         verify_fork_infos(&bank_forks);
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
@@ -1974,7 +1951,7 @@ pub mod tests {
 
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let ticks_per_slot = genesis_config.ticks_per_slot;
-        let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_config);
+        let (ledger_path, blockhash) = create_new_tmp_ledger_auto_delete!(&genesis_config);
         debug!("ledger_path: {:?}", ledger_path);
 
         /*
@@ -1983,7 +1960,7 @@ pub mod tests {
                 /          \
            slot 1 (dead)  slot 2 (dead)
         */
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
         fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 1, 0, blockhash);
         fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 2, 0, blockhash);
         blockstore.set_dead_slot(1).unwrap();
@@ -1994,8 +1971,6 @@ pub mod tests {
         // Should see only the parent of the dead children
         assert_eq!(frozen_bank_slots(&bank_forks), vec![0]);
         verify_fork_infos(&bank_forks);
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
@@ -2006,11 +1981,10 @@ pub mod tests {
         let ticks_per_slot = genesis_config.ticks_per_slot;
 
         // Create a new ledger with slot 0 full of ticks
-        let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_config);
+        let (ledger_path, blockhash) = create_new_tmp_ledger_auto_delete!(&genesis_config);
         let mut last_entry_hash = blockhash;
 
-        let blockstore =
-            Blockstore::open(&ledger_path).expect("Expected to successfully open database ledger");
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
         // Let `last_slot` be the number of slots in the first two epochs
         let epoch_schedule = get_epoch_schedule(&genesis_config, Vec::new());
@@ -2054,8 +2028,6 @@ pub mod tests {
             .map(|bank| bank.slot())
             .next()
             .is_none());
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
@@ -2133,7 +2105,8 @@ pub mod tests {
             ..
         } = create_genesis_config_with_leader(mint, &leader_pubkey, 50);
         genesis_config.poh_config.hashes_per_tick = Some(hashes_per_tick);
-        let (ledger_path, mut last_entry_hash) = create_new_tmp_ledger!(&genesis_config);
+        let (ledger_path, mut last_entry_hash) =
+            create_new_tmp_ledger_auto_delete!(&genesis_config);
         debug!("ledger_path: {:?}", ledger_path);
 
         let deducted_from_mint = 3;
@@ -2167,8 +2140,7 @@ pub mod tests {
         ));
         let last_blockhash = entries.last().unwrap().hash;
 
-        let blockstore =
-            Blockstore::open(&ledger_path).expect("Expected to successfully open database ledger");
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
         blockstore
             .write_entries(
                 1,
@@ -2200,8 +2172,6 @@ pub mod tests {
         );
         assert_eq!(bank.tick_height(), 2 * genesis_config.ticks_per_slot);
         assert_eq!(bank.last_blockhash(), last_blockhash);
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
@@ -2210,9 +2180,9 @@ pub mod tests {
             mut genesis_config, ..
         } = create_genesis_config(123);
         genesis_config.ticks_per_slot = 1;
-        let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
+        let (ledger_path, _blockhash) = create_new_tmp_ledger_auto_delete!(&genesis_config);
 
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
         let opts = ProcessOptions {
             poh_verify: true,
             accounts_db_test_hash_calculation: true,
@@ -2223,16 +2193,14 @@ pub mod tests {
         assert_eq!(frozen_bank_slots(&bank_forks), vec![0]);
         let bank = bank_forks[0].clone();
         assert_eq!(bank.tick_height(), 1);
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
     fn test_process_ledger_options_override_threads() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(123);
-        let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
+        let (ledger_path, _blockhash) = create_new_tmp_ledger_auto_delete!(&genesis_config);
 
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
         let opts = ProcessOptions {
             override_num_threads: Some(1),
             accounts_db_test_hash_calculation: true,
@@ -2242,16 +2210,14 @@ pub mod tests {
         PAR_THREAD_POOL.with(|pool| {
             assert_eq!(pool.borrow().current_num_threads(), 1);
         });
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
     fn test_process_ledger_options_full_leader_cache() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(123);
-        let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
+        let (ledger_path, _blockhash) = create_new_tmp_ledger_auto_delete!(&genesis_config);
 
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
         let opts = ProcessOptions {
             full_leader_cache: true,
             accounts_db_test_hash_calculation: true,
@@ -2260,8 +2226,6 @@ pub mod tests {
         let (_bank_forks, leader_schedule) =
             test_process_blockstore(&genesis_config, &blockstore, opts);
         assert_eq!(leader_schedule.max_schedules(), std::usize::MAX);
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
@@ -2271,9 +2235,8 @@ pub mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(100);
-        let (ledger_path, last_entry_hash) = create_new_tmp_ledger!(&genesis_config);
-        let blockstore =
-            Blockstore::open(&ledger_path).expect("Expected to successfully open database ledger");
+        let (ledger_path, last_entry_hash) = create_new_tmp_ledger_auto_delete!(&genesis_config);
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
         let blockhash = genesis_config.hash();
         let keypairs = [Keypair::new(), Keypair::new(), Keypair::new()];
 
@@ -2323,8 +2286,6 @@ pub mod tests {
         };
         test_process_blockstore(&genesis_config, &blockstore, opts);
         assert_eq!(*callback_counter.write().unwrap(), 2);
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
@@ -2953,8 +2914,8 @@ pub mod tests {
 
         // Create roots at slots 0, 1
         let forks = tr(0) / tr(1);
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
         blockstore.add_tree(
             forks,
             false,
@@ -2976,8 +2937,6 @@ pub mod tests {
         // Should be able to fetch slot 0 because we specified halting at slot 0, even
         // if there is a greater root at slot 1.
         assert!(bank_forks.get(0).is_some());
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
@@ -2988,8 +2947,8 @@ pub mod tests {
 
         let ticks_per_slot = 1;
         genesis_config.ticks_per_slot = ticks_per_slot;
-        let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_config);
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let (ledger_path, blockhash) = create_new_tmp_ledger_auto_delete!(&genesis_config);
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
         /*
           Build a blockstore in the ledger with the following fork structure:
@@ -3067,8 +3026,6 @@ pub mod tests {
 
         // Check that bank forks has the correct banks
         verify_fork_infos(&bank_forks);
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
@@ -3465,8 +3422,8 @@ pub mod tests {
                 vec![100],
             );
         let ticks_per_slot = genesis_config.ticks_per_slot();
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
         blockstore.add_tree(forks, false, true, ticks_per_slot, genesis_config.hash());
 
         if let Some(blockstore_root) = blockstore_root {
@@ -3568,8 +3525,6 @@ pub mod tests {
         let (bank_forks, ..) = test_process_blockstore(&genesis_config, &blockstore, opts);
 
         assert_eq!(bank_forks.root(), really_expected_root_slot);
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]

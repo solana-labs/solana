@@ -59,7 +59,7 @@ use {
         },
         time::Instant,
     },
-    tempfile::TempDir,
+    tempfile::{Builder, TempDir},
     thiserror::Error,
     trees::{Tree, TreeWalk},
 };
@@ -3809,9 +3809,16 @@ macro_rules! get_tmp_ledger_path_auto_delete {
 }
 
 pub fn get_ledger_path_from_name_auto_delete(name: &str) -> TempDir {
-    let path = get_ledger_path_from_name(name);
+    let mut path = get_ledger_path_from_name(name);
+    // path is a directory so .file_name() returns the last component of the path
+    let last = path.file_name().unwrap().to_str().unwrap().to_string();
+    path.pop();
     fs::create_dir_all(&path).unwrap();
-    TempDir::new_in(path).unwrap()
+    Builder::new()
+        .prefix(&last)
+        .rand_bytes(0)
+        .tempdir_in(path)
+        .unwrap()
 }
 
 pub fn get_ledger_path_from_name(name: &str) -> PathBuf {
@@ -3837,6 +3844,17 @@ pub fn get_ledger_path_from_name(name: &str) -> PathBuf {
 macro_rules! create_new_tmp_ledger {
     ($genesis_config:expr) => {
         $crate::blockstore::create_new_ledger_from_name(
+            $crate::tmp_ledger_name!(),
+            $genesis_config,
+            $crate::blockstore_db::AccessType::PrimaryOnly,
+        )
+    };
+}
+
+#[macro_export]
+macro_rules! create_new_tmp_ledger_auto_delete {
+    ($genesis_config:expr) => {
+        $crate::blockstore::create_new_ledger_from_name_auto_delete(
             $crate::tmp_ledger_name!(),
             $genesis_config,
             $crate::blockstore_db::AccessType::PrimaryOnly,
@@ -3871,9 +3889,23 @@ pub fn create_new_ledger_from_name(
     genesis_config: &GenesisConfig,
     access_type: AccessType,
 ) -> (PathBuf, Hash) {
-    let ledger_path = get_ledger_path_from_name(name);
+    let (ledger_path, blockhash) =
+        create_new_ledger_from_name_auto_delete(name, genesis_config, access_type);
+    (ledger_path.into_path(), blockhash)
+}
+
+// Same as `create_new_ledger()` but use a temporary ledger name based on the provided `name`
+//
+// Note: like `create_new_ledger` the returned ledger will have slot 0 full of ticks (and only
+// ticks)
+pub fn create_new_ledger_from_name_auto_delete(
+    name: &str,
+    genesis_config: &GenesisConfig,
+    access_type: AccessType,
+) -> (TempDir, Hash) {
+    let ledger_path = get_ledger_path_from_name_auto_delete(name);
     let blockhash = create_new_ledger(
-        &ledger_path,
+        ledger_path.path(),
         genesis_config,
         MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
         access_type,
@@ -3946,17 +3978,6 @@ pub fn make_chaining_slot_entries(
     }
 
     slots_shreds_and_entries
-}
-
-// used for tests only
-// Any access to the DB outside of blockstore (ie cf handles) should be dropped prior to calling this
-pub fn destroy_test_ledger(ledger_path: &Path, blockstore: Blockstore) {
-    // Destroying the blockstore without closing it first is undefined behavior; any
-    // active
-    drop(blockstore);
-    Blockstore::destroy(ledger_path).expect("Expected successful blockstore destruction");
-    // Destroy the ledger directory, which may contain files such as genesis.bin
-    fs::remove_dir_all(&ledger_path).expect("Expected successful ledger destruction");
 }
 
 #[cfg(not(unix))]
@@ -4057,15 +4078,13 @@ pub mod tests {
         solana_logger::setup();
         let mint_total = 1_000_000_000_000;
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(mint_total);
-        let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let (ledger_path, _blockhash) = create_new_tmp_ledger_auto_delete!(&genesis_config);
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap(); //FINDME
 
         let ticks = create_ticks(genesis_config.ticks_per_slot, 0, genesis_config.hash());
         let entries = blockstore.get_slot_entries(0, 0).unwrap();
 
         assert_eq!(ticks, entries);
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
@@ -4076,8 +4095,8 @@ pub mod tests {
 
         let (mut shreds, _) = make_slot_entries(0, 0, num_entries);
 
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
 
         // Insert last shred, test we can retrieve it
         let last_shred = shreds.pop().unwrap();
@@ -4094,18 +4113,16 @@ pub mod tests {
         let deserialized_shred = Shred::new_from_serialized_shred(serialized_shred).unwrap();
 
         assert_eq!(last_shred, deserialized_shred);
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
     fn test_write_entries() {
         solana_logger::setup();
-        let ledger_path = get_tmp_ledger_path!();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
 
         let ticks_per_slot = 10;
         let num_slots = 10;
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
         let mut ticks = vec![];
         //let mut shreds_per_slot = 0 as u64;
         let mut shreds_per_slot = vec![];
@@ -4193,14 +4210,12 @@ pub mod tests {
                         &blockstore.get_slot_entries(num_slots + 1, 0).unwrap()[..]
                     );
         */
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
     fn test_put_get_simple() {
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
 
         // Test meta column family
         let meta = SlotMeta::new(0, 1);
@@ -4241,8 +4256,6 @@ pub mod tests {
             .expect("Expected data object to exist");
 
         assert_eq!(result, data);
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
@@ -4252,8 +4265,8 @@ pub mod tests {
         let num_shreds = shreds.len() as u64;
         let shred_bufs: Vec<_> = shreds.iter().map(|shred| shred.payload.clone()).collect();
 
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
         blockstore.insert_shreds(shreds, None, false).unwrap();
 
         let mut buf = [0; 4096];
@@ -4299,8 +4312,6 @@ pub mod tests {
             .unwrap();
         assert_eq!(last_index, 0);
         assert_eq!(bytes6, 0);
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
@@ -4308,8 +4319,8 @@ pub mod tests {
         let slot = 1;
         let (shreds, _) = make_slot_entries(slot, 0, 100);
 
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
         blockstore.insert_shreds(shreds, None, false).unwrap();
 
         let mut buf = [0; 4096];
@@ -4323,8 +4334,6 @@ pub mod tests {
 
         let mut buf = [0; 4096];
         assert!(blockstore.get_data_shreds(slot, 0, 1, &mut buf).is_err());
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
@@ -4336,8 +4345,8 @@ pub mod tests {
         let (mut shreds, entries) = make_slot_entries(0, 0, num_entries);
         let num_shreds = shreds.len() as u64;
 
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
 
         // Insert last shred, we're missing the other shreds, so no consecutive
         // shreds starting from slot 0, index 0 should exist.
@@ -4370,8 +4379,6 @@ pub mod tests {
         assert_eq!(meta.last_index, num_shreds - 1);
         assert!(meta.next_slots.is_empty());
         assert!(meta.is_connected);
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
@@ -4381,8 +4388,8 @@ pub mod tests {
         let (mut shreds, entries) = make_slot_entries(0, 0, num_entries);
         let num_shreds = shreds.len() as u64;
 
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
 
         // Insert shreds in reverse, check for consecutive returned shreds
         for i in (0..num_shreds).rev() {
@@ -4404,22 +4411,20 @@ pub mod tests {
                 assert!(meta.consumed == num_shreds as u64 && meta.received == num_shreds as u64);
             }
         }
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
     fn test_insert_slots() {
-        test_insert_data_shreds_slots("test_insert_data_shreds_slots_single", false);
-        test_insert_data_shreds_slots("test_insert_data_shreds_slots_bulk", true);
+        test_insert_data_shreds_slots(false);
+        test_insert_data_shreds_slots(true);
     }
 
     /*
         #[test]
         pub fn test_iteration_order() {
             let slot = 0;
-            let ledger_path = get_tmp_ledger_path!();
-            let blockstore = Blockstore::open(&ledger_path).unwrap();
+            let ledger_path = get_tmp_ledger_path_auto_delete!();
+            let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
 
             // Write entries
             let num_entries = 8;
@@ -4450,14 +4455,13 @@ pub mod tests {
                 db_iterator.next();
             }
 
-            destroy_test_ledger(&ledger_path, blockstore);
         }
     */
 
     #[test]
     pub fn test_get_slot_entries1() {
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
         let entries = create_ticks(8, 0, Hash::default());
         let shreds = entries_to_test_shreds(entries[0..4].to_vec(), 1, 0, false, 0);
         blockstore
@@ -4476,8 +4480,6 @@ pub mod tests {
             blockstore.get_slot_entries(1, 0).unwrap()[2..4],
             entries[2..4],
         );
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     // This test seems to be unnecessary with introduction of data shreds. There are no
@@ -4485,8 +4487,8 @@ pub mod tests {
     #[test]
     #[ignore]
     pub fn test_get_slot_entries2() {
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
 
         // Write entries
         let num_slots = 5_u64;
@@ -4511,15 +4513,14 @@ pub mod tests {
                 vec![last_entry],
             );
         }
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
     pub fn test_get_slot_entries3() {
         // Test inserting/fetching shreds which contain multiple entries per shred
-        let ledger_path = get_tmp_ledger_path!();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
 
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
         let num_slots = 5_u64;
         let shreds_per_slot = 5_u64;
         let entry_serialized_size =
@@ -4537,13 +4538,12 @@ pub mod tests {
                 .expect("Expected successful write of shreds");
             assert_eq!(blockstore.get_slot_entries(slot, 0).unwrap(), entries);
         }
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
     pub fn test_insert_data_shreds_consecutive() {
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
         // Create enough entries to ensure there are at least two shreds created
         let min_entries = max_ticks_per_n_shreds(1, None) + 1;
         for i in 0..4 {
@@ -4597,15 +4597,13 @@ pub mod tests {
             assert_eq!(meta.parent_slot, parent_slot);
             assert_eq!(meta.last_index, num_shreds - 1);
         }
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
     fn test_data_set_completed_on_insert() {
-        let ledger_path = get_tmp_ledger_path!();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
         let BlockstoreSignals { blockstore, .. } =
-            Blockstore::open_with_signal(&ledger_path, None, true).unwrap();
+            Blockstore::open_with_signal(&ledger_path.path(), None, true).unwrap();
 
         // Create enough entries to fill 2 shreds, only the later one is data complete
         let slot = 0;
@@ -4636,19 +4634,17 @@ pub mod tests {
             .unwrap()
             .0
             .is_empty());
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
     pub fn test_new_shreds_signal() {
         // Initialize blockstore
-        let ledger_path = get_tmp_ledger_path!();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
         let BlockstoreSignals {
             blockstore,
             ledger_signal_receiver: recvr,
             ..
-        } = Blockstore::open_with_signal(&ledger_path, None, true).unwrap();
+        } = Blockstore::open_with_signal(&ledger_path.path(), None, true).unwrap();
         //let blockstore = Arc::new(blockstore);
 
         let entries_per_slot = 50;
@@ -4722,19 +4718,17 @@ pub mod tests {
         blockstore
             .insert_shreds(missing_shreds2, None, false)
             .unwrap();
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
     pub fn test_completed_shreds_signal() {
         // Initialize blockstore
-        let ledger_path = get_tmp_ledger_path!();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
         let BlockstoreSignals {
             blockstore,
             completed_slots_receiver: recvr,
             ..
-        } = Blockstore::open_with_signal(&ledger_path, None, true).unwrap();
+        } = Blockstore::open_with_signal(&ledger_path.path(), None, true).unwrap();
         // let blockstore = Arc::new(blockstore);
 
         let entries_per_slot = 10;
@@ -4750,19 +4744,17 @@ pub mod tests {
         // Insert first shred, slot should now be considered complete
         blockstore.insert_shreds(vec![shred0], None, false).unwrap();
         assert_eq!(recvr.try_recv().unwrap(), vec![0]);
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
     pub fn test_completed_shreds_signal_orphans() {
         // Initialize blockstore
-        let ledger_path = get_tmp_ledger_path!();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
         let BlockstoreSignals {
             blockstore,
             completed_slots_receiver: recvr,
             ..
-        } = Blockstore::open_with_signal(&ledger_path, None, true).unwrap();
+        } = Blockstore::open_with_signal(&ledger_path.path(), None, true).unwrap();
         // let blockstore = Arc::new(blockstore);
 
         let entries_per_slot = 10;
@@ -4798,19 +4790,17 @@ pub mod tests {
             .insert_shreds(vec![orphan_shred0], None, false)
             .unwrap();
         assert_eq!(recvr.try_recv().unwrap(), vec![slots[1]]);
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
     pub fn test_completed_shreds_signal_many() {
         // Initialize blockstore
-        let ledger_path = get_tmp_ledger_path!();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
         let BlockstoreSignals {
             blockstore,
             completed_slots_receiver: recvr,
             ..
-        } = Blockstore::open_with_signal(&ledger_path, None, true).unwrap();
+        } = Blockstore::open_with_signal(&ledger_path.path(), None, true).unwrap();
         // let blockstore = Arc::new(blockstore);
 
         let entries_per_slot = 10;
@@ -4835,14 +4825,12 @@ pub mod tests {
         slots.push(disconnected_slot);
         slots.sort_unstable();
         assert_eq!(result, slots);
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
     pub fn test_handle_chaining_basic() {
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
 
         let entries_per_slot = 5;
         let num_slots = 3;
@@ -4900,13 +4888,12 @@ pub mod tests {
             assert_eq!(s.last_index, shreds_per_slot as u64 - 1);
             assert!(s.is_connected);
         }
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
     pub fn test_handle_chaining_missing_slots() {
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
 
         let num_slots = 30;
         let entries_per_slot = 5;
@@ -4982,15 +4969,13 @@ pub mod tests {
             assert_eq!(s.last_index, shreds_per_slot as u64 - 1);
             assert!(s.is_connected);
         }
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
     #[allow(clippy::cognitive_complexity)]
     pub fn test_forward_chaining_is_connected() {
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
 
         let num_slots = 15;
         // Create enough entries to ensure there are at least two shreds created
@@ -5070,14 +5055,12 @@ pub mod tests {
                 }
             }
         }
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
     /*
         #[test]
         pub fn test_chaining_tree() {
-            let ledger_path = get_tmp_ledger_path!();
-            let blockstore = Blockstore::open(&ledger_path).unwrap();
+            let ledger_path = get_tmp_ledger_path_auto_delete!();
+            let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
 
             let num_tree_levels = 6;
             assert!(num_tree_levels > 1);
@@ -5171,13 +5154,12 @@ pub mod tests {
             // No orphan slots should exist
             assert!(blockstore.orphans_cf.is_empty().unwrap())
 
-            destroy_test_ledger(&ledger_path, blockstore);
         }
     */
     #[test]
     pub fn test_get_slots_since() {
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
 
         // Slot doesn't exist
         assert!(blockstore.get_slots_since(&[0]).unwrap().is_empty());
@@ -5203,14 +5185,12 @@ pub mod tests {
             .into_iter()
             .collect();
         assert_eq!(blockstore.get_slots_since(&[0, 1, 3]).unwrap(), expected);
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
     fn test_orphans() {
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
 
         // Create shreds and entries
         let entries_per_slot = 1;
@@ -5276,13 +5256,11 @@ pub mod tests {
         }
         // Orphans cf is empty
         assert!(blockstore.orphans_cf.is_empty().unwrap());
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
-    fn test_insert_data_shreds_slots(name: &str, should_bulk_write: bool) {
-        let ledger_path = get_ledger_path_from_name(name);
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+    fn test_insert_data_shreds_slots(should_bulk_write: bool) {
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
 
         // Create shreds and entries
         let num_entries = 20_u64;
@@ -5336,15 +5314,13 @@ pub mod tests {
                 assert_eq!(meta.consumed, num_shreds_per_slot);
             }
         }
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
     fn test_find_missing_data_indexes() {
         let slot = 0;
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
 
         // Write entries
         let gap: u64 = 10;
@@ -5425,15 +5401,13 @@ pub mod tests {
                 );
             }
         }
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
     fn test_find_missing_data_indexes_timeout() {
         let slot = 0;
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
 
         // Write entries
         let gap: u64 = 10;
@@ -5464,16 +5438,14 @@ pub mod tests {
             blockstore.find_missing_data_indexes(slot, timestamp() - 400, 0, 50, 9),
             expected
         );
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
     fn test_find_missing_data_indexes_sanity() {
         let slot = 0;
 
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
 
         // Early exit conditions
         let empty: Vec<u64> = vec![];
@@ -5523,15 +5495,13 @@ pub mod tests {
             let expected: Vec<u64> = (start..END).filter(|i| *i != ONE && *i != OTHER).collect();
             assert_eq!(result, expected);
         }
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
     pub fn test_no_missing_shred_indexes() {
         let slot = 0;
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
 
         // Write entries
         let num_entries = 10;
@@ -5550,16 +5520,14 @@ pub mod tests {
                 );
             }
         }
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
     pub fn test_should_insert_data_shred() {
         solana_logger::setup();
         let (mut shreds, _) = make_slot_entries(0, 0, 200);
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
 
         let last_root = RwLock::new(0);
 
@@ -5658,15 +5626,13 @@ pub mod tests {
             None,
             ShredSource::Repaired,
         ));
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
     pub fn test_is_data_shred_present() {
         let (shreds, _) = make_slot_entries(0, 0, 200);
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
         let index_cf = &blockstore.index_cf;
 
         blockstore
@@ -5694,14 +5660,12 @@ pub mod tests {
             &slot_meta,
             index.data()
         ),);
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
     pub fn test_check_cache_coding_shred() {
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
 
         let slot = 1;
         let (shred, coding) = Shredder::new_coding_shred_header(slot, 11, 11, 11, 11, 0);
@@ -5740,14 +5704,12 @@ pub mod tests {
             false,
         ));
         assert_eq!(counter.load(Ordering::Relaxed), 1);
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
     pub fn test_should_insert_coding_shred() {
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
         let last_root = RwLock::new(0);
 
         let slot = 1;
@@ -5881,7 +5843,6 @@ pub mod tests {
                 &last_root
             ));
         }
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
@@ -5889,8 +5850,8 @@ pub mod tests {
         solana_logger::setup();
         let (shreds, _) = make_slot_entries(0, 0, 20);
         let num_shreds = shreds.len() as u64;
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
 
         blockstore.insert_shreds(shreds, None, false).unwrap();
         let slot_meta = blockstore.meta(0).unwrap().unwrap();
@@ -5910,15 +5871,13 @@ pub mod tests {
         assert!(slot_meta.is_full());
 
         assert!(blockstore.has_duplicate_shreds_in_slot(0));
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
     fn test_slot_data_iterator() {
         // Construct the shreds
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
         let shreds_per_slot = 10;
         let slots = vec![2, 4, 8, 12];
         let all_shreds = make_chaining_slot_entries(&slots, shreds_per_slot);
@@ -5939,14 +5898,12 @@ pub mod tests {
             .collect();
         assert_eq!(result.len(), slot_8_shreds.len());
         assert_eq!(result, slot_8_shreds);
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
     fn test_set_roots() {
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
         let chained_slots = vec![0, 2, 4, 7, 12, 15];
         assert_eq!(blockstore.last_root(), 0);
 
@@ -5957,14 +5914,12 @@ pub mod tests {
         for i in chained_slots {
             assert!(blockstore.is_root(i));
         }
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
     fn test_is_skipped() {
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
         let roots = vec![2, 4, 7, 12, 15];
         blockstore.set_roots(roots.iter()).unwrap();
 
@@ -5975,22 +5930,18 @@ pub mod tests {
                 assert!(blockstore.is_skipped(i));
             }
         }
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
     fn test_iter_bounds() {
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
 
         // slot 5 does not exist, iter should be ok and should be a noop
         blockstore
             .slot_meta_iterator(5)
             .unwrap()
             .for_each(|_| panic!());
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
@@ -6055,8 +6006,8 @@ pub mod tests {
 
     #[test]
     fn test_get_slot_entries_with_shred_count_corruption() {
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
         let num_ticks = 8;
         let entries = create_ticks(num_ticks, 0, Hash::default());
         let slot = 1;
@@ -6089,8 +6040,6 @@ pub mod tests {
             .insert_shreds(shreds, None, false)
             .expect("Expected successful write of shreds");
         assert!(blockstore.get_slot_entries(slot, 0).is_err());
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
@@ -6098,8 +6047,8 @@ pub mod tests {
         // This tests correctness of the SlotMeta in various cases in which a shred
         // that gets filtered out by checks
         let (shreds0, _) = make_slot_entries(0, 0, 200);
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
 
         // Insert the first 5 shreds, we don't have a "is_last" shred yet
         blockstore
@@ -6119,14 +6068,12 @@ pub mod tests {
         blockstore.insert_shreds(shreds3, None, false).unwrap();
         let slot_meta = blockstore.meta(0).unwrap().unwrap();
         assert_eq!(slot_meta.next_slots, vec![2, 3]);
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
     fn test_trusted_insert_shreds() {
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
 
         // Make shred for slot 1
         let (shreds1, _) = make_slot_entries(1, 0, 1);
@@ -6145,8 +6092,6 @@ pub mod tests {
             .insert_shreds(shreds1[..].to_vec(), None, true)
             .unwrap();
         assert!(blockstore.get_data_shred(1, 0).unwrap().is_some());
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
@@ -6157,8 +6102,8 @@ pub mod tests {
         let shreds = entries_to_test_shreds(entries.clone(), slot, slot - 1, true, 0);
         let more_shreds = entries_to_test_shreds(entries.clone(), slot + 1, slot, true, 0);
         let unrooted_shreds = entries_to_test_shreds(entries.clone(), slot + 2, slot + 1, true, 0);
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
         blockstore.insert_shreds(shreds, None, false).unwrap();
         blockstore.insert_shreds(more_shreds, None, false).unwrap();
         blockstore
@@ -6342,14 +6287,12 @@ pub mod tests {
 
         let complete_block = blockstore.get_complete_block(slot + 2, true).unwrap();
         assert_eq!(complete_block, expected_complete_block);
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
     fn test_persist_transaction_status() {
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
 
         let transaction_status_cf = &blockstore.transaction_status_cf;
 
@@ -6463,15 +6406,13 @@ pub mod tests {
         assert_eq!(pre_token_balances.unwrap(), pre_token_balances_vec);
         assert_eq!(post_token_balances.unwrap(), post_token_balances_vec);
         assert_eq!(rewards.unwrap(), rewards_vec);
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
     #[allow(clippy::cognitive_complexity)]
     fn test_transaction_status_index() {
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
 
         let transaction_status_index_cf = &blockstore.transaction_status_index_cf;
         let slot0 = 10;
@@ -6670,14 +6611,12 @@ pub mod tests {
             .0;
         assert_eq!(first_address_entry.0, 1);
         assert_eq!(first_address_entry.2, slot1);
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
     fn test_get_transaction_status() {
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
 
         // TransactionStatus column opens initialized with one entry at index 2
         let transaction_status_cf = &blockstore.transaction_status_cf;
@@ -6862,8 +6801,6 @@ pub mod tests {
             .unwrap();
         assert_eq!(status, None);
         assert_eq!(counter, 2);
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     fn do_test_lowest_cleanup_slot_and_special_cfs(
@@ -6872,8 +6809,8 @@ pub mod tests {
     ) {
         solana_logger::setup();
 
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
 
         // TransactionStatus column opens initialized with one entry at index 2
         let transaction_status_cf = &blockstore.transaction_status_cf;
@@ -7004,8 +6941,6 @@ pub mod tests {
             assert_eq!(are_missing, (false, false, false));
         }
         assert_existing_always();
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
@@ -7037,8 +6972,8 @@ pub mod tests {
         let slot = 2;
         let entries = make_slot_entries_with_transactions(5);
         let shreds = entries_to_test_shreds(entries.clone(), slot, slot - 1, true, 0);
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
         blockstore.insert_shreds(shreds, None, false).unwrap();
         blockstore.set_roots(vec![slot - 1, slot].iter()).unwrap();
 
@@ -7134,14 +7069,12 @@ pub mod tests {
                 None,
             );
         }
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
     fn test_get_complete_transaction() {
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
 
         let slot = 2;
         let entries = make_slot_entries_with_transactions(5);
@@ -7233,14 +7166,12 @@ pub mod tests {
             );
             assert_eq!(blockstore.get_rooted_transaction(signature).unwrap(), None,);
         }
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
     fn test_empty_transaction_status() {
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
 
         blockstore.set_roots(std::iter::once(&0)).unwrap();
         assert_eq!(
@@ -7249,14 +7180,12 @@ pub mod tests {
                 .unwrap(),
             None
         );
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
     fn test_get_confirmed_signatures_for_address() {
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
 
         let address0 = solana_sdk::pubkey::new_rand();
         let address1 = solana_sdk::pubkey::new_rand();
@@ -7388,14 +7317,12 @@ pub mod tests {
             assert!(slot >= past_slot);
             past_slot = slot;
         }
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
     fn test_find_address_signatures_for_slot() {
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
 
         let address0 = solana_sdk::pubkey::new_rand();
         let address1 = solana_sdk::pubkey::new_rand();
@@ -7478,14 +7405,12 @@ pub mod tests {
             assert_eq!(*slot, slot3);
             assert_eq!(*signature, Signature::new(&[i as u8 + 9; 64]));
         }
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
     fn test_get_confirmed_signatures_for_address2() {
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
 
         fn make_slot_entries_with_transaction_addresses(addresses: &[Pubkey]) -> Vec<Entry> {
             let mut entries: Vec<Entry> = Vec::new();
@@ -7890,8 +7815,6 @@ pub mod tests {
             )
             .unwrap();
         assert!(results2.len() < results.len());
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
@@ -7913,8 +7836,8 @@ pub mod tests {
 
     #[test]
     fn test_map_transactions_to_statuses() {
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
 
         let transaction_status_cf = &blockstore.transaction_status_cf;
 
@@ -7967,14 +7890,12 @@ pub mod tests {
             assert_eq!(m.meta.as_ref().unwrap().fee, x as u64);
         }
         assert_eq!(map[4].meta, None);
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
     fn test_write_get_perf_samples() {
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
 
         let num_entries: usize = 10;
         let mut perf_samples: Vec<(Slot, PerfSample)> = vec![];
@@ -7999,14 +7920,12 @@ pub mod tests {
                 expected_samples
             );
         }
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
     fn test_lowest_slot() {
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
 
         for i in 0..10 {
             let slot = i;
@@ -8016,14 +7935,12 @@ pub mod tests {
         assert_eq!(blockstore.lowest_slot(), 1);
         blockstore.run_purge(0, 5, PurgeType::PrimaryIndex).unwrap();
         assert_eq!(blockstore.lowest_slot(), 6);
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
     fn test_recovery() {
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
 
         let slot = 1;
         let (data_shreds, coding_shreds, leader_schedule_cache) =
@@ -8049,8 +7966,6 @@ pub mod tests {
         }
 
         verify_index_integrity(&blockstore, slot);
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
@@ -8062,8 +7977,8 @@ pub mod tests {
         assert!(data_shreds.len() > 3);
         assert!(coding_shreds.len() > 3);
 
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
 
         // Test inserting all the shreds
         let all_shreds: Vec<_> = data_shreds
@@ -8188,8 +8103,6 @@ pub mod tests {
             .unwrap();
         verify_index_integrity(&blockstore, slot);
         blockstore.purge_and_compact_slots(0, slot);
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     fn setup_erasure_shreds(
@@ -8263,8 +8176,8 @@ pub mod tests {
         let duplicate_shred = duplicate_shreds[0].clone();
         let non_duplicate_shred = shred.clone();
 
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
 
         blockstore
             .insert_shreds(vec![shred.clone()], None, false)
@@ -8304,14 +8217,12 @@ pub mod tests {
         let duplicate_proof = blockstore.get_duplicate_slot(slot).unwrap();
         assert_eq!(duplicate_proof.shred1, shred.payload);
         assert_eq!(duplicate_proof.shred2, duplicate_shred.payload);
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
     fn test_clear_unconfirmed_slot() {
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
 
         let unconfirmed_slot = 9;
         let unconfirmed_child_slot = 10;
@@ -8349,8 +8260,6 @@ pub mod tests {
             .get_data_shred(unconfirmed_slot, 0)
             .unwrap()
             .is_none());
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
@@ -8415,8 +8324,8 @@ pub mod tests {
 
     #[test]
     fn test_rewards_protobuf_backward_compatability() {
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
 
         let rewards: Rewards = (0..100)
             .map(|i| Reward {
@@ -8450,14 +8359,12 @@ pub mod tests {
                 protobuf_rewards
             );
         }
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
     fn test_transaction_status_protobuf_backward_compatability() {
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
 
         let status = TransactionStatusMeta {
             status: Ok(()),
@@ -8524,14 +8431,12 @@ pub mod tests {
                 protobuf_status
             );
         }
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
     fn test_remove_shred_data_complete_flag() {
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
 
         let (mut shreds, entries) = make_slot_entries(0, 0, 1);
 
@@ -8546,8 +8451,6 @@ pub mod tests {
         assert!(!stored_shred.data_complete());
         assert!(stored_shred.last_in_slot());
         assert_eq!(entries, blockstore.get_any_valid_slot_entries(0, 0));
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     fn make_large_tx_entry(num_txs: usize) -> Entry {
@@ -8573,8 +8476,8 @@ pub mod tests {
         let shreds = entries_to_test_shreds(vec![entry], slot, parent, true, 0);
         assert!(shreds.len() > 1);
 
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
 
         let coding1 = Shredder::generate_coding_shreds(&shreds, false);
         let coding2 = Shredder::generate_coding_shreds(&shreds, true);
@@ -8594,8 +8497,6 @@ pub mod tests {
             .insert_shreds(vec![coding1[0].clone(), coding2[1].clone()], None, false)
             .unwrap();
         assert!(blockstore.has_duplicate_shreds_in_slot(slot));
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
@@ -8605,8 +8506,8 @@ pub mod tests {
         let (_data_shreds, mut coding_shreds, leader_schedule_cache) =
             setup_erasure_shreds(slot, 0, 100);
 
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
 
         coding_shreds[1].coding_header.num_coding_shreds = u16::MAX;
         blockstore
@@ -8620,14 +8521,12 @@ pub mod tests {
         // Check no coding shreds are inserted
         let res = blockstore.get_coding_shreds_for_slot(slot, 0).unwrap();
         assert!(res.is_empty());
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
     pub fn test_insert_data_shreds_same_slot_last_index() {
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
 
         // Create enough entries to ensure there are at least two shreds created
         let num_unique_entries = max_ticks_per_n_shreds(1, None) + 1;
@@ -8669,8 +8568,6 @@ pub mod tests {
         assert_eq!(meta.last_index, num_shreds - 1);
         assert!(blockstore.is_full(0));
         assert!(!blockstore.is_dead(0));
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
@@ -8683,14 +8580,12 @@ pub mod tests {
         // Mark both as last shred
         shreds[0].set_last_in_slot();
         shreds[1].set_last_in_slot();
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
 
         blockstore.insert_shreds(shreds, None, false).unwrap();
 
         assert!(blockstore.get_duplicate_slot(slot).is_some());
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
@@ -8729,8 +8624,8 @@ pub mod tests {
                 (meta, shreds_index)
             };
 
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
 
         let mut slot = 0;
         let shreds = setup_test_shreds(slot);
@@ -8862,8 +8757,6 @@ pub mod tests {
                     .is_none());
             }
         }
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
@@ -8885,9 +8778,9 @@ pub mod tests {
             shreds
         };
 
-        let ledger_path = get_tmp_ledger_path!();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
         {
-            let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
+            let blockstore = Arc::new(Blockstore::open(&ledger_path.path()).unwrap());
             let (slot_sender, slot_receiver) = channel();
             let (shred_sender, shred_receiver) = channel::<Vec<Shred>>();
             let (signal_sender, signal_receiver) = channel();
@@ -8963,14 +8856,12 @@ pub mod tests {
 
             assert!(Arc::strong_count(&blockstore) == 1);
         }
-
-        Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
     }
 
     #[test]
     fn test_read_write_cost_table() {
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
 
         let num_entries: usize = 10;
         let mut cost_table: HashMap<Pubkey, u64> = HashMap::new();
@@ -9035,14 +8926,12 @@ pub mod tests {
         for (read_key, read_cost) in read_back {
             assert_eq!(read_cost, *cost_table.get(&read_key).unwrap());
         }
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
     fn test_delete_old_records_from_cost_table() {
-        let ledger_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(&ledger_path.path()).unwrap();
 
         let num_entries: usize = 10;
         let mut cost_table: HashMap<Pubkey, u64> = HashMap::new();
@@ -9085,7 +8974,5 @@ pub mod tests {
         for (read_key, read_cost) in read_back {
             assert_eq!(read_cost, *cost_table.get(&read_key).unwrap());
         }
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 }

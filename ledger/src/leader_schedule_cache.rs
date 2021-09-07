@@ -250,12 +250,12 @@ impl LeaderScheduleCache {
 mod tests {
     use super::*;
     use crate::{
-        blockstore::{destroy_test_ledger, make_slot_entries},
+        blockstore::make_slot_entries,
         genesis_utils::{
             bootstrap_validator_stake_lamports, create_genesis_config,
             create_genesis_config_with_leader, GenesisConfigInfo,
         },
-        get_tmp_ledger_path,
+        get_tmp_ledger_path_auto_delete,
         staking_utils::tests::setup_vote_and_stake_accounts,
     };
     use solana_runtime::bank::Bank;
@@ -428,10 +428,10 @@ mod tests {
 
         let bank = Bank::new_for_tests(&genesis_config);
         let cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
-        let ledger_path = get_tmp_ledger_path!();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
 
-        let blockstore =
-            Blockstore::open(&ledger_path).expect("Expected to be able to open database ledger");
+        let blockstore = Blockstore::open(ledger_path.path())
+            .expect("Expected to be able to open database ledger");
 
         assert_eq!(
             cache.slot_leader_at(bank.slot(), Some(&bank)).unwrap(),
@@ -493,8 +493,6 @@ mod tests {
             ),
             None
         );
-
-        destroy_test_ledger(&ledger_path, blockstore);
     }
 
     #[test]
