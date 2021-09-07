@@ -21,9 +21,9 @@ use solana_sdk::{
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     epoch_schedule::EpochSchedule,
     feature_set::{
-        blake3_syscall_enabled, close_upgradeable_program_accounts, demote_program_write_locks,
-        disable_fees_sysvar, enforce_aligned_host_addrs, libsecp256k1_0_5_upgrade_enabled,
-        mem_overlap_fix, secp256k1_recover_syscall_enabled,
+        allow_native_ids, blake3_syscall_enabled, close_upgradeable_program_accounts,
+        demote_program_write_locks, disable_fees_sysvar, enforce_aligned_host_addrs,
+        libsecp256k1_0_5_upgrade_enabled, mem_overlap_fix, secp256k1_recover_syscall_enabled,
     },
     hash::{Hasher, HASH_BYTES},
     ic_msg,
@@ -32,7 +32,7 @@ use solana_sdk::{
     keyed_account::KeyedAccount,
     native_loader,
     process_instruction::{self, stable_log, ComputeMeter, InvokeContext, Logger},
-    pubkey::{Pubkey, PubkeyError, MAX_SEEDS},
+    pubkey::{Pubkey, PubkeyError, MAX_SEEDS, MAX_SEED_LEN},
     rent::Rent,
     secp256k1_recover::{
         Secp256k1RecoverError, SECP256K1_PUBLIC_KEY_LENGTH, SECP256K1_SIGNATURE_LENGTH,
@@ -247,22 +247,24 @@ pub fn bind_syscall_context_objects<'a>(
         None,
     )?;
 
+    let allow_native_ids = invoke_context.is_feature_active(&allow_native_ids::id());
     vm.bind_syscall_context_object(
         Box::new(SyscallCreateProgramAddress {
             cost: compute_budget.create_program_address_units,
             compute_meter: invoke_context.get_compute_meter(),
             loader_id,
             enforce_aligned_host_addrs,
+            allow_native_ids,
         }),
         None,
     )?;
-
     vm.bind_syscall_context_object(
         Box::new(SyscallTryFindProgramAddress {
             cost: compute_budget.create_program_address_units,
             compute_meter: invoke_context.get_compute_meter(),
             loader_id,
             enforce_aligned_host_addrs,
+            allow_native_ids,
         }),
         None,
     )?;
@@ -834,12 +836,42 @@ fn translate_program_address_inputs<'a>(
     Ok((seeds, program_id))
 }
 
+fn is_native_id(seeds: &[&[u8]], program_id: &Pubkey) -> bool {
+    use solana_sdk::{config, feature, secp256k1_program, stake, system_program, vote};
+    // Does more than just check native ids in order to emulate the same failure
+    // signature that `compute_program_address` had before the removal of the
+    // check.
+    if seeds.len() > MAX_SEEDS {
+        return true;
+    }
+    for seed in seeds.iter() {
+        if seed.len() > MAX_SEED_LEN {
+            return true;
+        }
+    }
+
+    let native_ids = [
+        bpf_loader::id(),
+        bpf_loader_deprecated::id(),
+        feature::id(),
+        config::program::id(),
+        stake::program::id(),
+        stake::config::id(),
+        vote::program::id(),
+        secp256k1_program::id(),
+        system_program::id(),
+        sysvar::id(),
+    ];
+    native_ids.contains(program_id)
+}
+
 /// Create a program address
 struct SyscallCreateProgramAddress<'a> {
     cost: u64,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     loader_id: &'a Pubkey,
     enforce_aligned_host_addrs: bool,
+    allow_native_ids: bool,
 }
 impl<'a> SyscallObject<BpfError> for SyscallCreateProgramAddress<'a> {
     fn call(
@@ -865,6 +897,12 @@ impl<'a> SyscallObject<BpfError> for SyscallCreateProgramAddress<'a> {
         );
 
         question_mark!(self.compute_meter.consume(self.cost), result);
+
+        if !self.allow_native_ids && is_native_id(&seeds, program_id) {
+            *result = Ok(1);
+            return;
+        }
+
         let new_address = match Pubkey::create_program_address(&seeds, program_id) {
             Ok(address) => address,
             Err(_) => {
@@ -893,6 +931,7 @@ struct SyscallTryFindProgramAddress<'a> {
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     loader_id: &'a Pubkey,
     enforce_aligned_host_addrs: bool,
+    allow_native_ids: bool,
 }
 impl<'a> SyscallObject<BpfError> for SyscallTryFindProgramAddress<'a> {
     fn call(
@@ -924,32 +963,35 @@ impl<'a> SyscallObject<BpfError> for SyscallTryFindProgramAddress<'a> {
                 seeds_with_bump.push(&bump_seed);
 
                 question_mark!(self.compute_meter.consume(self.cost), result);
-                if let Ok(new_address) =
-                    Pubkey::create_program_address(&seeds_with_bump, program_id)
-                {
-                    let bump_seed_ref = question_mark!(
-                        translate_type_mut::<u8>(
-                            memory_mapping,
-                            bump_seed_addr,
-                            self.loader_id,
-                            self.enforce_aligned_host_addrs,
-                        ),
-                        result
-                    );
-                    let address = question_mark!(
-                        translate_slice_mut::<u8>(
-                            memory_mapping,
-                            address_addr,
-                            32,
-                            self.loader_id,
-                            self.enforce_aligned_host_addrs,
-                        ),
-                        result
-                    );
-                    *bump_seed_ref = bump_seed[0];
-                    address.copy_from_slice(new_address.as_ref());
-                    *result = Ok(0);
-                    return;
+
+                if self.allow_native_ids || !is_native_id(&seeds, program_id) {
+                    if let Ok(new_address) =
+                        Pubkey::create_program_address(&seeds_with_bump, program_id)
+                    {
+                        let bump_seed_ref = question_mark!(
+                            translate_type_mut::<u8>(
+                                memory_mapping,
+                                bump_seed_addr,
+                                self.loader_id,
+                                self.enforce_aligned_host_addrs,
+                            ),
+                            result
+                        );
+                        let address = question_mark!(
+                            translate_slice_mut::<u8>(
+                                memory_mapping,
+                                address_addr,
+                                32,
+                                self.loader_id,
+                                self.enforce_aligned_host_addrs,
+                            ),
+                            result
+                        );
+                        *bump_seed_ref = bump_seed[0];
+                        address.copy_from_slice(new_address.as_ref());
+                        *result = Ok(0);
+                        return;
+                    }
                 }
             }
             bump_seed[0] -= 1;
