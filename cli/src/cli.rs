@@ -1566,6 +1566,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::clap_app::get_clap_app;
     use serde_json::{json, Value};
     use solana_client::{
         blockhash_query,
