@@ -636,7 +636,7 @@ impl Validator {
 
         let (snapshot_packager_service, snapshot_config_and_pending_package) =
             if let Some(snapshot_config) = config.snapshot_config.clone() {
-                if is_snapshot_config_invalid(
+                if !is_snapshot_config_valid(
                     snapshot_config.full_snapshot_archive_interval_slots,
                     config.accounts_hash_interval_slots,
                 ) {
@@ -1650,13 +1650,13 @@ fn cleanup_accounts_path(account_path: &std::path::Path) {
     }
 }
 
-pub fn is_snapshot_config_invalid(
+pub fn is_snapshot_config_valid(
     snapshot_interval_slots: u64,
     accounts_hash_interval_slots: u64,
 ) -> bool {
-    snapshot_interval_slots != 0
-        && (snapshot_interval_slots < accounts_hash_interval_slots
-            || snapshot_interval_slots % accounts_hash_interval_slots != 0)
+    snapshot_interval_slots == 0
+        || (snapshot_interval_slots >= accounts_hash_interval_slots
+            && snapshot_interval_slots % accounts_hash_interval_slots == 0)
 }
 
 #[cfg(test)]
@@ -1861,11 +1861,11 @@ mod tests {
 
     #[test]
     fn test_interval_check() {
-        assert!(!is_snapshot_config_invalid(0, 100));
-        assert!(is_snapshot_config_invalid(1, 100));
-        assert!(is_snapshot_config_invalid(230, 100));
-        assert!(!is_snapshot_config_invalid(500, 100));
-        assert!(!is_snapshot_config_invalid(5, 5));
+        assert!(is_snapshot_config_valid(0, 100));
+        assert!(!is_snapshot_config_valid(1, 100));
+        assert!(!is_snapshot_config_valid(230, 100));
+        assert!(is_snapshot_config_valid(500, 100));
+        assert!(is_snapshot_config_valid(5, 5));
     }
 
     #[test]

@@ -23,9 +23,7 @@ use {
         ledger_cleanup_service::{DEFAULT_MAX_LEDGER_SHREDS, DEFAULT_MIN_MAX_LEDGER_SHREDS},
         tower_storage,
         tpu::DEFAULT_TPU_COALESCE_MS,
-        validator::{
-            is_snapshot_config_invalid, Validator, ValidatorConfig, ValidatorStartProgress,
-        },
+        validator::{is_snapshot_config_valid, Validator, ValidatorConfig, ValidatorStartProgress},
     },
     solana_download_utils::{download_snapshot, DownloadProgressRecord},
     solana_genesis_utils::download_then_check_genesis_hash,
@@ -2703,7 +2701,7 @@ pub fn main() {
         eprintln!("Accounts hash interval should not be 0.");
         exit(1);
     }
-    if is_snapshot_config_invalid(
+    if !is_snapshot_config_valid(
         snapshot_interval_slots,
         validator_config.accounts_hash_interval_slots,
     ) {
