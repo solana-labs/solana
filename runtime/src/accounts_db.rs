@@ -118,6 +118,12 @@ const CACHE_VIRTUAL_WRITE_VERSION: StoredMetaWriteVersion = 0;
 const CACHE_VIRTUAL_OFFSET: usize = 0;
 const CACHE_VIRTUAL_STORED_SIZE: usize = 0;
 
+struct FoundStoredAccount<'a> {
+    pub account: StoredAccountMeta<'a>,
+    pub store_id: AppendVecId,
+    pub account_size: usize,
+}
+
 #[cfg(not(test))]
 const ABSURD_CONSECUTIVE_FAILED_ITERATIONS: usize = 100;
 
@@ -2240,15 +2246,55 @@ impl AccountsDb {
         );
     }
 
+    fn load_accounts_index_for_shrink<'a, I>(
+        &'a self,
+        iter: I,
+        alive_accounts: &mut Vec<(&'a Pubkey, &'a FoundStoredAccount<'a>)>,
+        unrefed_pubkeys: &mut Vec<&'a Pubkey>,
+    ) -> usize
+    where
+        I: Iterator<Item = (&'a Pubkey, &'a FoundStoredAccount<'a>)>,
+    {
+        let mut alive_total = 0;
+
+        let mut alive = 0;
+        let mut dead = 0;
+        iter.for_each(|(pubkey, stored_account)| {
+            let lookup = self.accounts_index.get_account_read_entry(pubkey);
+            if let Some(locked_entry) = lookup {
+                let is_alive = locked_entry.slot_list().iter().any(|(_slot, i)| {
+                    i.store_id == stored_account.store_id
+                        && i.offset == stored_account.account.offset
+                });
+                if !is_alive {
+                    // This pubkey was found in the storage, but no longer exists in the index.
+                    // It would have had a ref to the storage from the initial store, but it will
+                    // not exist in the re-written slot. Unref it to keep the index consistent with
+                    // rewriting the storage entries.
+                    unrefed_pubkeys.push(pubkey);
+                    locked_entry.unref();
+                    dead += 1;
+                } else {
+                    alive_accounts.push((pubkey, stored_account));
+                    alive_total += stored_account.account_size;
+                    alive += 1;
+                }
+            }
+        });
+        self.shrink_stats
+            .alive_accounts
+            .fetch_add(alive, Ordering::Relaxed);
+        self.shrink_stats
+            .dead_accounts
+            .fetch_add(dead, Ordering::Relaxed);
+
+        alive_total
+    }
+
     fn do_shrink_slot_stores<'a, I>(&'a self, slot: Slot, stores: I) -> usize
     where
         I: Iterator<Item = &'a Arc<AccountStorageEntry>>,
     {
-        struct FoundStoredAccount<'a> {
-            pub account: StoredAccountMeta<'a>,
-            pub store_id: AppendVecId,
-            pub account_size: usize,
-        }
         debug!("do_shrink_slot_stores: slot: {}", slot);
         let mut stored_accounts: HashMap<Pubkey, FoundStoredAccount> = HashMap::new();
         let mut original_bytes = 0;
@@ -2289,37 +2335,14 @@ impl AccountsDb {
             let chunk_size = 50; // # accounts/thread
             let chunks = len / chunk_size + 1;
             (0..chunks).into_par_iter().for_each(|chunk| {
+                let skip = chunk * chunk_size;
+
                 let mut alive_accounts = Vec::with_capacity(chunk_size);
                 let mut unrefed_pubkeys = Vec::with_capacity(chunk_size);
-                let mut alive_total = 0;
-                let skip = chunk * chunk_size;
-                stored_accounts.iter().skip(skip).take(chunk_size).for_each(
-                    |(pubkey, stored_account)| {
-                        let lookup = self.accounts_index.get_account_read_entry(pubkey);
-                        if let Some(locked_entry) = lookup {
-                            let is_alive = locked_entry.slot_list().iter().any(|(_slot, i)| {
-                                i.store_id == stored_account.store_id
-                                    && i.offset == stored_account.account.offset
-                            });
-                            if !is_alive {
-                                // This pubkey was found in the storage, but no longer exists in the index.
-                                // It would have had a ref to the storage from the initial store, but it will
-                                // not exist in the re-written slot. Unref it to keep the index consistent with
-                                // rewriting the storage entries.
-                                unrefed_pubkeys.push(pubkey);
-                                locked_entry.unref();
-                                self.shrink_stats
-                                    .dead_accounts
-                                    .fetch_add(1, Ordering::Relaxed);
-                            } else {
-                                alive_accounts.push((pubkey, stored_account));
-                                alive_total += stored_account.account_size;
-                                self.shrink_stats
-                                    .alive_accounts
-                                    .fetch_add(1, Ordering::Relaxed);
-                            }
-                        }
-                    },
+                let alive_total = self.load_accounts_index_for_shrink(
+                    stored_accounts.iter().skip(skip).take(chunk_size),
+                    &mut alive_accounts,
+                    &mut unrefed_pubkeys,
                 );
 
                 // collect
