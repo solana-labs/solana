@@ -12,10 +12,13 @@ pub const NUM_RCVMMSGS: usize = 128;
 
 #[derive(Copy, Clone, Debug, Default)]
 pub struct PacketTimer {
+    // timestamp marking when the first packets in the batch were received from the socket
     incoming_start: Option<Instant>,
-    incoming_initial_end: Option<Instant>,
+    // timestamp marking when the final packets in the batch were received from the socket
     incoming_end: Option<Instant>,
+    // timestamp to mark when outgoing packets begin processing
     outgoing_start: Option<Instant>,
+    // count of batch structures which have been coalesced into this structure
     num_coalesced: usize,
 }
 
@@ -28,9 +31,6 @@ impl PacketTimer {
 
     pub fn mark_incoming_end(&mut self) {
         let now = Instant::now();
-        if self.incoming_initial_end == None {
-            self.incoming_initial_end = Some(now);
-        }
         self.incoming_end = Some(now);
     }
 
@@ -41,22 +41,21 @@ impl PacketTimer {
     }
 
     pub fn extend_incoming_from(&mut self, pkt_timer: &PacketTimer) {
-        //debug_assert!(self.incoming_end.unwrap() < newer.incoming_end.unwrap());
         if pkt_timer.incoming_end > self.incoming_end {
             self.incoming_end = pkt_timer.incoming_end;
         }
         self.num_coalesced = self.num_coalesced.saturating_add(1);
     }
 
-    pub fn get_incoming_start(&self) -> Option<Instant> {
+    pub fn incoming_start(&self) -> Option<Instant> {
         self.incoming_start
     }
 
-    pub fn get_incoming_end(&self) -> Option<Instant> {
+    pub fn incoming_end(&self) -> Option<Instant> {
         self.incoming_end
     }
 
-    pub fn get_num_coalesced(&self) -> usize {
+    pub fn num_coalesced(&self) -> usize {
         self.num_coalesced
     }
 }

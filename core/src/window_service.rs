@@ -485,26 +485,22 @@ where
         *stats.addrs.entry(packet.meta.addr()).or_default() += 1;
     }
 
-    let coalesced_batches: usize = packets
-        .iter()
-        .map(|pkts| pkts.timer.get_num_coalesced())
-        .sum();
+    let coalesced_batches: usize = packets.iter().map(|pkts| pkts.timer.num_coalesced()).sum();
     stats.elapsed += now.elapsed();
     stats.num_packet_batches += packets.len();
     stats.num_coalesced_batches += coalesced_batches;
     stats.elapsed_first_recv_to_start +=
-        now - packets.first().unwrap().timer.get_incoming_start().unwrap();
-    stats.elapsed_last_recv_to_start +=
-        now - packets.last().unwrap().timer.get_incoming_end().unwrap();
+        now - packets.first().unwrap().timer.incoming_start().unwrap();
+    stats.elapsed_last_recv_to_start += now - packets.last().unwrap().timer.incoming_end().unwrap();
 
     let first_time = packets
         .iter()
-        .map(|pkts| pkts.timer.get_incoming_start().unwrap())
+        .map(|pkts| pkts.timer.incoming_start().unwrap())
         .min()
         .unwrap();
     let last_time = packets
         .iter()
-        .map(|pkts| pkts.timer.get_incoming_end().unwrap())
+        .map(|pkts| pkts.timer.incoming_end().unwrap())
         .max()
         .unwrap();
     stats

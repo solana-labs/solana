@@ -319,12 +319,11 @@ fn retransmit(
     let mut shreds_vec = vec![shreds_receiver.recv_timeout(RECV_TIMEOUT)?];
     let mut num_shreds = shreds_vec[0].inner_shreds.len();
 
-    let mut lowest_shred_time = shreds_vec[0].timer.get_incoming_start().unwrap();
-    let mut highest_shred_time = shreds_vec[0].timer.get_incoming_end().unwrap();
+    let mut lowest_shred_time = shreds_vec[0].timer.incoming_start().unwrap();
+    let mut highest_shred_time = shreds_vec[0].timer.incoming_end().unwrap();
 
     let mut timer_start = Measure::start("retransmit");
     while let Ok(more_shreds) = shreds_receiver.try_recv() {
-        // TODO coalesce here
         num_shreds += more_shreds.inner_shreds.len();
         shreds_vec.push(more_shreds);
         if num_shreds >= MAX_SHREDS_BATCH_SIZE {
@@ -352,11 +351,11 @@ fn retransmit(
     let mut max_slot = 0;
 
     for shreds in shreds_vec {
-        if shreds.timer.get_incoming_start().unwrap() < lowest_shred_time {
-            lowest_shred_time = shreds.timer.get_incoming_start().unwrap();
+        if shreds.timer.incoming_start().unwrap() < lowest_shred_time {
+            lowest_shred_time = shreds.timer.incoming_start().unwrap();
         }
-        if shreds.timer.get_incoming_end().unwrap() > highest_shred_time {
-            highest_shred_time = shreds.timer.get_incoming_end().unwrap();
+        if shreds.timer.incoming_end().unwrap() > highest_shred_time {
+            highest_shred_time = shreds.timer.incoming_end().unwrap();
         }
 
         for shred in shreds.inner_shreds {
@@ -427,9 +426,7 @@ fn retransmit(
             .lock()
             .unwrap()
             .batch_first_recv_us_hist
-            .increment(
-                (Instant::now() - shreds.timer.get_incoming_start().unwrap()).as_micros() as u64,
-            )
+            .increment((Instant::now() - shreds.timer.incoming_start().unwrap()).as_micros() as u64)
             .unwrap();
     }
 
