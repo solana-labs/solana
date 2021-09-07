@@ -243,6 +243,7 @@ impl Accounts {
             let rent_for_sysvars = feature_set.is_active(&feature_set::rent_for_sysvars::id());
             let demote_program_write_locks =
                 feature_set.is_active(&feature_set::demote_program_write_locks::id());
+            let is_upgradeable_loader_present = is_upgradeable_loader_present(message);
 
             for (i, key) in message.account_keys_iter().enumerate() {
                 let account = if message.is_non_loader_key(i) {
@@ -278,7 +279,7 @@ impl Accounts {
                         if account.executable()
                             && demote_program_write_locks
                             && message.is_writable(i, demote_program_write_locks)
-                            && !is_upgradeable_loader_present(message)
+                            && !is_upgradeable_loader_present
                         {
                             error_counters.invalid_account_index += 1;
                             return Err(TransactionError::InvalidAccountIndex);
@@ -305,15 +306,14 @@ impl Accounts {
                                     error_counters.invalid_program_for_execution += 1;
                                     return Err(TransactionError::InvalidProgramForExecution);
                                 }
-                            }
-
-                            // If a ProgramData account is present, it should only be writable
-                            // if the bpf_loader_upgradeable account is also present
-                            if let Ok(UpgradeableLoaderState::ProgramData { .. }) = account.state()
+                            } else if demote_program_write_locks
+                                && message.is_writable(i, demote_program_write_locks)
+                                && !is_upgradeable_loader_present
                             {
-                                if demote_program_write_locks
-                                    && message.is_writable(i, demote_program_write_locks)
-                                    && !is_upgradeable_loader_present(message)
+                                // If a ProgramData account is present, it should only be writable
+                                // if the bpf_loader_upgradeable account is also present
+                                if let Ok(UpgradeableLoaderState::ProgramData { .. }) =
+                                    account.state()
                                 {
                                     error_counters.invalid_account_index += 1;
                                     return Err(TransactionError::InvalidAccountIndex);
