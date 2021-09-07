@@ -21,6 +21,7 @@ fn create_rewards() -> Rewards {
             lamports: 42 + i,
             post_balance: std::u64::MAX,
             reward_type: Some(RewardType::Fee),
+            commission: None,
         })
         .collect()
 }

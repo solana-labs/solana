@@ -7,7 +7,7 @@ use std::{
 #[macro_use]
 extern crate serial_test;
 
-fn run_cargo_build(extra_args: &[&str]) -> Output {
+fn run_cargo_build(crate_name: &str, extra_args: &[&str]) -> Output {
     let cwd = env::current_dir().expect("Unable to get current working directory");
     let root = cwd
         .parent()
@@ -17,7 +17,7 @@ fn run_cargo_build(extra_args: &[&str]) -> Output {
     let toml = cwd
         .join("tests")
         .join("crates")
-        .join("noop")
+        .join(crate_name)
         .join("Cargo.toml");
     let toml = format!("{}", toml.display());
     let mut args = vec!["--bpf-sdk", "../bpf", "--manifest-path", &toml];
@@ -42,7 +42,7 @@ fn run_cargo_build(extra_args: &[&str]) -> Output {
 #[test]
 #[serial]
 fn test_build() {
-    let output = run_cargo_build(&[]);
+    let output = run_cargo_build("noop", &[]);
     assert!(output.status.success());
 }
 
@@ -55,7 +55,7 @@ fn test_dump() {
         .status()
         .expect("Unable to install rustfilt required for --dump option")
         .success());
-    let output = run_cargo_build(&["--dump"]);
+    let output = run_cargo_build("noop", &["--dump"]);
     assert!(output.status.success());
     let cwd = env::current_dir().expect("Unable to get current working directory");
     let dump = cwd
@@ -71,10 +71,25 @@ fn test_dump() {
 #[test]
 #[serial]
 fn test_out_dir() {
-    let output = run_cargo_build(&["--bpf-out-dir", "tmp_out"]);
+    let output = run_cargo_build("noop", &["--bpf-out-dir", "tmp_out"]);
     assert!(output.status.success());
     let cwd = env::current_dir().expect("Unable to get current working directory");
     let dir = cwd.join("tmp_out");
     assert!(dir.exists());
     fs::remove_dir_all("tmp_out").expect("Failed to remove tmp_out dir");
+}
+
+#[test]
+#[serial]
+fn test_generate_child_script_on_failre() {
+    let output = run_cargo_build("fail", &["--generate-child-script-on-failure"]);
+    assert!(!output.status.success());
+    let cwd = env::current_dir().expect("Unable to get current working directory");
+    let scr = cwd
+        .join("tests")
+        .join("crates")
+        .join("fail")
+        .join("cargo-build-bpf-child-script-cargo.sh");
+    assert!(scr.exists());
+    fs::remove_file(scr).expect("Failed to remove script");
 }

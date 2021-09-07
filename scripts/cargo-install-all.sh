@@ -84,7 +84,6 @@ else
 
   BINS=(
     solana
-    solana-bench-exchange
     solana-bench-tps
     solana-faucet
     solana-gossip

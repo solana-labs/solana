@@ -1,3 +1,23 @@
+//! Collection of all runtime features.
+//!
+//! Steps to add a new feature are outlined below. Note that these steps only cover
+//! the process of getting a feature into the core Solana code.
+//! - For features that are unambiguously good (ie bug fixes), these steps are sufficient.
+//! - For features that should go up for community vote (ie fee structure changes), more
+//!   information on the additional steps to follow can be found at:
+//!   <https://spl.solana.com/feature-proposal#feature-proposal-life-cycle>
+//!
+//! 1. Generate a new keypair with `solana-keygen new --outfile feature.json --no-passphrase`
+//!    - Keypairs should be held by core contributors only. If you're a non-core contirbutor going
+//!      through these steps, the PR process will facilitate a keypair holder being picked. That
+//!      person will generate the keypair, provide pubkey for PR, and ultimately enable the feature.
+//! 2. Add a public module for the feature, specifying keypair pubkey as the id with
+//!    `solana_sdk::declare_id!()` within the module.
+//!    Additionally, add an entry to `FEATURE_NAMES` map.
+//! 3. Add desired logic to check for and switch on feature availability.
+//!
+//! For more information on how features are picked up, see comments for `Feature`.
+
 use lazy_static::lazy_static;
 use solana_sdk::{
     clock::Slot,
@@ -5,18 +25,6 @@ use solana_sdk::{
     pubkey::Pubkey,
 };
 use std::collections::{HashMap, HashSet};
-
-pub mod instructions_sysvar_enabled {
-    solana_sdk::declare_id!("EnvhHCLvg55P7PDtbvR1NwuTuAeodqpusV3MR5QEK8gs");
-}
-
-pub mod secp256k1_program_enabled {
-    solana_sdk::declare_id!("E3PHP7w8kB7np3CTQ1qQ2tW3KCtjRSXBQgW9vM2mWv2Y");
-}
-
-pub mod consistent_recent_blockhashes_sysvar {
-    solana_sdk::declare_id!("3h1BQWPDS5veRsq6mDBWruEpgPxRJkfwGexg5iiQ9mYg");
-}
 
 pub mod deprecate_rewards_sysvar {
     solana_sdk::declare_id!("GaBtBJvmS4Arjj5W1NmFcyvPjsHN38UGYDq2MDwbs9Qu");
@@ -51,20 +59,8 @@ pub mod no_overflow_rent_distribution {
     solana_sdk::declare_id!("4kpdyrcj5jS47CZb2oJGfVxjYbsMm2Kx97gFyZrxxwXz");
 }
 
-pub mod stake_program_v2 {
-    solana_sdk::declare_id!("Gvd9gGJZDHGMNf1b3jkxrfBQSR5etrfTQSBNKCvLSFJN");
-}
-
-pub mod rewrite_stake {
-    solana_sdk::declare_id!("6ap2eGy7wx5JmsWUmQ5sHwEWrFSDUxSti2k5Hbfv5BZG");
-}
-
 pub mod filter_stake_delegation_accounts {
     solana_sdk::declare_id!("GE7fRxmW46K6EmCD9AMZSbnaJ2e3LfqCZzdHi9hmYAgi");
-}
-
-pub mod bpf_loader_upgradeable_program {
-    solana_sdk::declare_id!("FbhK8HN9qvNHvJcoFVHAEUCNkagHvu7DTWzdnLuVQ5u4");
 }
 
 pub mod stake_program_v3 {
@@ -87,44 +83,12 @@ pub mod check_init_vote_data {
     solana_sdk::declare_id!("3ccR6QpxGYsAbWyfevEtBNGfWV4xBffxRj2tD6A9i39F");
 }
 
-pub mod check_program_owner {
-    solana_sdk::declare_id!("5XnbR5Es9YXEARRuP6mdvoxiW3hx5atNNeBmwVd8P3QD");
-}
-
-pub mod require_stake_for_gossip {
-    solana_sdk::declare_id!("6oNzd5Z3M2L1xo4Q5hoox7CR2DuW7m1ETLWH5jHJthwa");
-}
-
-pub mod cpi_data_cost {
-    solana_sdk::declare_id!("Hrg5bXePPGiAVWZfDHbvjqytSeyBDPAGAQ7v6N5i4gCX");
-}
-
-pub mod upgradeable_close_instruction {
-    solana_sdk::declare_id!("FsPaByos3gA9bUEhp3EimQpQPCoSvCEigHod496NmABQ");
-}
-
-pub mod sysvar_via_syscall {
-    solana_sdk::declare_id!("7411E6gFQLDhQkdRjmpXwM1hzHMMoYQUjHicmvGPC1Nf");
-}
-
 pub mod enforce_aligned_host_addrs {
     solana_sdk::declare_id!("6Qob9Z4RwGdf599FDVCqsjuKjR8ZFR3oVs2ByRLWBsua");
 }
 
-pub mod update_data_on_realloc {
-    solana_sdk::declare_id!("BkPcYCrwHXBoTsv9vMhiRF9gteZmDj3Uwisz9CDjoMKp");
-}
-
-pub mod keccak256_syscall_enabled {
-    solana_sdk::declare_id!("7Ua8mFtahVfA3WCY9LoXDAJJdvJRJHckvSSr1dD8FTWc");
-}
-
 pub mod stake_program_v4 {
     solana_sdk::declare_id!("Dc7djyhP9aLfdq2zktpvskeAjpG56msCU1yexpxXiWZb");
-}
-
-pub mod memory_ops_syscalls {
-    solana_sdk::declare_id!("ENQi37wsVhTvFz2gUiZAAbqFEWGN2jwFsqdEDTE8A4MU");
 }
 
 pub mod secp256k1_recover_syscall_enabled {
@@ -167,21 +131,83 @@ pub mod neon_evm_compute_budget {
     solana_sdk::declare_id!("GLrVvDPkQi5PMYUrsYWT9doZhSHr1BVZXqj5DbFps3rS");
 }
 
+pub mod rent_for_sysvars {
+    solana_sdk::declare_id!("BKCPBQQBZqggVnFso5nQ8rQ4RwwogYwjuUt9biBjxwNF");
+}
+
+pub mod libsecp256k1_0_5_upgrade_enabled {
+    solana_sdk::declare_id!("DhsYfRjxfnh2g7HKJYSzT79r74Afa1wbHkAgHndrA1oy");
+}
+
+pub mod tx_wide_compute_cap {
+    solana_sdk::declare_id!("5ekBxc8itEnPv4NzGJtr8BVVQLNMQuLMNQQj7pHoLNZ9");
+}
+
+pub mod spl_token_v2_set_authority_fix {
+    solana_sdk::declare_id!("FToKNBYyiF4ky9s8WsmLBXHCht17Ek7RXaLZGHzzQhJ1");
+}
+
+pub mod stop_verify_mul64_imm_nonzero {
+    solana_sdk::declare_id!("EHFwHg2vhwUb7ifm7BuY9RMbsyt1rS1rUii7yeDJtGnN");
+}
+
+pub mod merge_nonce_error_into_system_error {
+    solana_sdk::declare_id!("21AWDosvp3pBamFW91KB35pNoaoZVTM7ess8nr2nt53B");
+}
+
+pub mod disable_fees_sysvar {
+    solana_sdk::declare_id!("JAN1trEUEtZjgXYzNBYHU9DYd7GnThhXfFP7SzPXkPsG");
+}
+
+pub mod stake_merge_with_unmatched_credits_observed {
+    solana_sdk::declare_id!("meRgp4ArRPhD3KtCY9c5yAf2med7mBLsjKTPeVUHqBL");
+}
+
+pub mod gate_large_block {
+    solana_sdk::declare_id!("2ry7ygxiYURULZCrypHhveanvP5tzZ4toRwVp89oCNSj");
+}
+
+pub mod mem_overlap_fix {
+    solana_sdk::declare_id!("vXDCFK7gphrEmyf5VnKgLmqbdJ4UxD2eZH1qbdouYKF");
+}
+
+pub mod versioned_tx_message_enabled {
+    solana_sdk::declare_id!("3KZZ6Ks1885aGBQ45fwRcPXVBCtzUvxhUTkwKMR41Tca");
+}
+
+pub mod libsecp256k1_fail_on_bad_count {
+    solana_sdk::declare_id!("8aXvSuopd1PUj7UhehfXJRg6619RHp8ZvwTyyJHdUYsj");
+}
+
+pub mod instructions_sysvar_owned_by_sysvar {
+    solana_sdk::declare_id!("H3kBSaKdeiUsyHmeHqjJYNc27jesXZ6zWj3zWkowQbkV");
+}
+
+pub mod close_upgradeable_program_accounts {
+    solana_sdk::declare_id!("EQMtCuSAkMVF9ZdhGuABtgvyXJLtSRF5AQKv1RNsrhj7");
+}
+
+pub mod stake_program_advance_activating_credits_observed {
+    solana_sdk::declare_id!("SAdVFw3RZvzbo6DvySbSdBnHN4gkzSTH9dSxesyKKPj");
+}
+
+pub mod demote_program_write_locks {
+    solana_sdk::declare_id!("3E3jV7v9VcdJL8iYZUMax9DiDno8j7EWUVbhm9RtShj2");
+}
+
+pub mod ed25519_program_enabled {
+    solana_sdk::declare_id!("E1TvTNipX8TKNHrhRC8SMuAwQmGY58TZ4drdztP3Gxwc");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
-        (instructions_sysvar_enabled::id(), "instructions sysvar"),
-        (secp256k1_program_enabled::id(), "secp256k1 program"),
-        (consistent_recent_blockhashes_sysvar::id(), "consistent recentblockhashes sysvar"),
-        (deprecate_rewards_sysvar::id(), "deprecate unused rewards sysvar"),
+            (deprecate_rewards_sysvar::id(), "deprecate unused rewards sysvar"),
         (pico_inflation::id(), "pico inflation"),
         (full_inflation::devnet_and_testnet::id(), "full inflation on devnet and testnet"),
         (spl_token_v2_multisig_fix::id(), "spl-token multisig fix"),
         (no_overflow_rent_distribution::id(), "no overflow rent distribution"),
-        (stake_program_v2::id(), "solana_stake_program v2"),
-        (rewrite_stake::id(), "rewrite stake"),
         (filter_stake_delegation_accounts::id(), "filter stake_delegation_accounts #14062"),
-        (bpf_loader_upgradeable_program::id(), "upgradeable bpf loader"),
         (stake_program_v3::id(), "solana_stake_program v3"),
         (require_custodian_for_locked_stake_authorize::id(), "require custodian to authorize withdrawer change for locked stake"),
         (spl_token_v2_self_transfer_fix::id(), "spl-token self-transfer fix"),
@@ -189,25 +215,35 @@ lazy_static! {
         (full_inflation::mainnet::certusone::vote::id(), "community vote allowing Certus One to enable full inflation"),
         (warp_timestamp_again::id(), "warp timestamp again, adjust bounding to 25% fast 80% slow #15204"),
         (check_init_vote_data::id(), "check initialized Vote data"),
-        (check_program_owner::id(), "limit programs to operating on accounts owned by itself"),
-        (require_stake_for_gossip::id(), "require stakes for propagating crds values through gossip #15561"),
-        (cpi_data_cost::id(), "charge the compute budget for data passed via CPI"),
-        (upgradeable_close_instruction::id(), "close upgradeable buffer accounts"),
-        (sysvar_via_syscall::id(), "provide sysvars via syscalls"),
         (enforce_aligned_host_addrs::id(), "enforce aligned host addresses"),
-        (update_data_on_realloc::id(), "Retain updated data values modified after realloc via CPI"),
-        (keccak256_syscall_enabled::id(), "keccak256 syscall"),
         (stake_program_v4::id(), "solana_stake_program v4"),
-        (memory_ops_syscalls::id(), "add syscalls for memory operations"),
         (secp256k1_recover_syscall_enabled::id(), "secp256k1_recover syscall"),
         (add_missing_program_error_mappings::id(), "add missing program error mappings"),
         (system_transfer_zero_check::id(), "perform all checks for transfers of 0 lamports"),
         (blake3_syscall_enabled::id(), "blake3 syscall"),
         (dedupe_config_program_signers::id(), "dedupe config program signers"),
         (deterministic_shred_seed_enabled::id(), "deterministic shred seed"),
+        (verify_tx_signatures_len::id(), "prohibit extra transaction signatures"),
         (vote_stake_checked_instructions::id(), "vote/state program checked instructions #18345"),
-        (updated_verify_policy::id(), "Update verify policy"),
+        (updated_verify_policy::id(), "update verify policy"),
         (neon_evm_compute_budget::id(), "bump neon_evm's compute budget"),
+        (rent_for_sysvars::id(), "collect rent from accounts owned by sysvars"),
+        (libsecp256k1_0_5_upgrade_enabled::id(), "upgrade libsecp256k1 to v0.5.0"),
+        (tx_wide_compute_cap::id(), "transaction wide compute cap"),
+        (spl_token_v2_set_authority_fix::id(), "spl-token set_authority fix"),
+        (stop_verify_mul64_imm_nonzero::id(), "sets rbpf vm config verify_mul64_imm_nonzero to false"),
+        (merge_nonce_error_into_system_error::id(), "merge NonceError into SystemError"),
+        (disable_fees_sysvar::id(), "disable fees sysvar"),
+        (stake_merge_with_unmatched_credits_observed::id(), "allow merging active stakes with unmatched credits_observed #18985"),
+        (gate_large_block::id(), "validator checks block cost against max limit in realtime, reject if exceeds."),
+        (mem_overlap_fix::id(), "memory overlap fix"),
+        (versioned_tx_message_enabled::id(), "enable versioned transaction message processing"),
+        (libsecp256k1_fail_on_bad_count::id(), "fail libsec256k1_verify if count appears wrong"),
+        (instructions_sysvar_owned_by_sysvar::id(), "fix owner for instructions sysvar"),
+        (close_upgradeable_program_accounts::id(), "enable closing upgradeable program accounts"),
+        (stake_program_advance_activating_credits_observed::id(), "Enable advancing credits observed for activation epoch #19309"),
+        (demote_program_write_locks::id(), "demote program write locks to readonly #19593"),
+        (ed25519_program_enabled::id(), "enable builtin ed25519 signature verify program"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

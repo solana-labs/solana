@@ -8,7 +8,7 @@ pub struct PurgeStats {
 }
 
 impl Blockstore {
-    /// Silently deletes all blockstore column families in the range [from_slot,to_slot]
+    /// Silently deletes all blockstore column families in the range \[from_slot,to_slot\]
     /// Dangerous; Use with care:
     /// Does not check for integrity and does not update slot metas that refer to deleted slots
     /// Modifies multiple column families simultaneously
@@ -57,7 +57,7 @@ impl Blockstore {
     }
 
     /// Ensures that the SlotMeta::next_slots vector for all slots contain no references in the
-    /// [from_slot,to_slot] range
+    /// \[from_slot,to_slot\] range
     ///
     /// Dangerous; Use with care
     pub fn purge_from_next_slots(&self, from_slot: Slot, to_slot: Slot) {
@@ -135,6 +135,10 @@ impl Blockstore {
             .db
             .delete_range_cf::<cf::SlotMeta>(&mut write_batch, from_slot, to_slot)
             .is_ok()
+            & self
+                .db
+                .delete_range_cf::<cf::BankHash>(&mut write_batch, from_slot, to_slot)
+                .is_ok()
             & self
                 .db
                 .delete_range_cf::<cf::Root>(&mut write_batch, from_slot, to_slot)
@@ -265,6 +269,10 @@ impl Blockstore {
                 .compact_range(from_slot, to_slot)
                 .unwrap_or(false)
             && self
+                .bank_hash_cf
+                .compact_range(from_slot, to_slot)
+                .unwrap_or(false)
+            && self
                 .index_cf
                 .compact_range(from_slot, to_slot)
                 .unwrap_or(false)
@@ -328,7 +336,8 @@ impl Blockstore {
                 if let Some(&signature) = transaction.signatures.get(0) {
                     batch.delete::<cf::TransactionStatus>((0, signature, slot))?;
                     batch.delete::<cf::TransactionStatus>((1, signature, slot))?;
-                    for pubkey in transaction.message.account_keys {
+                    // TODO: support purging mapped addresses from versioned transactions
+                    for pubkey in transaction.message.unmapped_keys() {
                         batch.delete::<cf::AddressSignatures>((0, pubkey, slot, signature))?;
                         batch.delete::<cf::AddressSignatures>((1, pubkey, slot, signature))?;
                     }
@@ -384,14 +393,13 @@ impl Blockstore {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::{
-        blockstore::tests::make_slot_entries_with_transactions, entry::next_entry_mut,
-        get_tmp_ledger_path,
-    };
+    use crate::{blockstore::tests::make_slot_entries_with_transactions, get_tmp_ledger_path};
     use bincode::serialize;
+    use solana_entry::entry::next_entry_mut;
     use solana_sdk::{
         hash::{hash, Hash},
         message::Message,
+        transaction::Transaction,
     };
 
     // check that all columns are either empty or start at `min_slot`

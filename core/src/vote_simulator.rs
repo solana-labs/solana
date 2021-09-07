@@ -1,6 +1,8 @@
 use crate::{
     cluster_info_vote_listener::VoteTracker,
-    cluster_slot_state_verifier::{DuplicateSlotsTracker, GossipDuplicateConfirmedSlots},
+    cluster_slot_state_verifier::{
+        DuplicateSlotsTracker, EpochSlotsFrozenSlots, GossipDuplicateConfirmedSlots,
+    },
     cluster_slots::ClusterSlots,
     consensus::Tower,
     fork_choice::SelectVoteAndResetForkResult,
@@ -56,7 +58,12 @@ impl VoteSimulator {
             latest_validator_votes_for_frozen_banks: LatestValidatorVotesForFrozenBanks::default(),
         }
     }
-    pub fn fill_bank_forks(&mut self, forks: Tree<u64>, cluster_votes: &HashMap<Pubkey, Vec<u64>>) {
+    pub fn fill_bank_forks(
+        &mut self,
+        forks: Tree<u64>,
+        cluster_votes: &HashMap<Pubkey, Vec<u64>>,
+        is_frozen: bool,
+    ) {
         let root = *forks.root().data();
         assert!(self.bank_forks.read().unwrap().get(root).is_some());
 
@@ -77,12 +84,12 @@ impl VoteSimulator {
             for (pubkey, vote) in cluster_votes.iter() {
                 if vote.contains(&parent) {
                     let keypairs = self.validator_keypairs.get(pubkey).unwrap();
-                    let last_blockhash = parent_bank.last_blockhash();
+                    let latest_blockhash = parent_bank.last_blockhash();
                     let vote_tx = vote_transaction::new_vote_transaction(
                         // Must vote > root to be processed
                         vec![parent],
                         parent_bank.hash(),
-                        last_blockhash,
+                        latest_blockhash,
                         &keypairs.node_keypair,
                         &keypairs.vote_keypair,
                         &keypairs.vote_keypair,
@@ -104,15 +111,20 @@ impl VoteSimulator {
                         .any(|lockout| lockout.slot == parent));
                 }
             }
-            new_bank.freeze();
-            self.progress
-                .get_fork_stats_mut(new_bank.slot())
-                .expect("All frozen banks must exist in the Progress map")
-                .bank_hash = Some(new_bank.hash());
-            self.heaviest_subtree_fork_choice.add_new_leaf_slot(
-                (new_bank.slot(), new_bank.hash()),
-                Some((new_bank.parent_slot(), new_bank.parent_hash())),
-            );
+            while new_bank.tick_height() < new_bank.max_tick_height() {
+                new_bank.register_tick(&Hash::new_unique());
+            }
+            if !visit.node().has_no_child() || is_frozen {
+                new_bank.freeze();
+                self.progress
+                    .get_fork_stats_mut(new_bank.slot())
+                    .expect("All frozen banks must exist in the Progress map")
+                    .bank_hash = Some(new_bank.hash());
+                self.heaviest_subtree_fork_choice.add_new_leaf_slot(
+                    (new_bank.slot(), new_bank.hash()),
+                    Some((new_bank.parent_slot(), new_bank.parent_hash())),
+                );
+            }
             self.bank_forks.write().unwrap().insert(new_bank);
 
             walk.forward();
@@ -202,6 +214,7 @@ impl VoteSimulator {
             &mut UnfrozenGossipVerifiedVoteHashes::default(),
             &mut true,
             &mut Vec::new(),
+            &mut EpochSlotsFrozenSlots::default(),
         )
     }
 
@@ -218,7 +231,7 @@ impl VoteSimulator {
             .filter_map(|slot| {
                 let mut fork_tip_parent = tr(slot - 1);
                 fork_tip_parent.push_front(tr(slot));
-                self.fill_bank_forks(fork_tip_parent, cluster_votes);
+                self.fill_bank_forks(fork_tip_parent, cluster_votes, true);
                 if votes_to_simulate.contains(&slot) {
                     Some((slot, self.simulate_vote(slot, my_pubkey, tower)))
                 } else {
@@ -261,7 +274,7 @@ impl VoteSimulator {
             let mut fork_tip_parent = tr(start_slot + i - 1);
             // The tip of the fork
             fork_tip_parent.push_front(tr(start_slot + i));
-            self.fill_bank_forks(fork_tip_parent, cluster_votes);
+            self.fill_bank_forks(fork_tip_parent, cluster_votes, true);
             if self
                 .simulate_vote(i + start_slot, my_pubkey, tower)
                 .is_empty()
@@ -324,7 +337,7 @@ pub fn initialize_state(
 ) -> (BankForks, ProgressMap, HeaviestSubtreeForkChoice) {
     let validator_keypairs: Vec<_> = validator_keypairs_map.values().collect();
     let GenesisConfigInfo {
-        genesis_config,
+        mut genesis_config,
         mint_keypair,
         voting_keypair: _,
     } = create_genesis_config_with_vote_accounts(
@@ -333,12 +346,16 @@ pub fn initialize_state(
         vec![stake; validator_keypairs.len()],
     );
 
-    let bank0 = Bank::new(&genesis_config);
+    genesis_config.poh_config.hashes_per_tick = Some(2);
+    let bank0 = Bank::new_for_tests(&genesis_config);
 
     for pubkey in validator_keypairs_map.keys() {
         bank0.transfer(10_000, &mint_keypair, pubkey).unwrap();
     }
 
+    while bank0.tick_height() < bank0.max_tick_height() {
+        bank0.register_tick(&Hash::new_unique());
+    }
     bank0.freeze();
     let mut progress = ProgressMap::default();
     progress.insert(

@@ -18,6 +18,7 @@ use solana_sdk::{
     signature::{Keypair, Signer},
     system_transaction,
 };
+use solana_streamer::socket::SocketAddrSpace;
 use std::{
     net::{IpAddr, SocketAddr},
     sync::{
@@ -34,7 +35,8 @@ fn test_rpc_client() {
     solana_logger::setup();
 
     let alice = Keypair::new();
-    let test_validator = TestValidator::with_no_fees(alice.pubkey(), None);
+    let test_validator =
+        TestValidator::with_no_fees(alice.pubkey(), None, SocketAddrSpace::Unspecified);
 
     let bob_pubkey = solana_sdk::pubkey::new_rand();
 
@@ -51,7 +53,7 @@ fn test_rpc_client() {
 
     let original_alice_balance = client.get_balance(&alice.pubkey()).unwrap();
 
-    let (blockhash, _fee_calculator) = client.get_recent_blockhash().unwrap();
+    let blockhash = client.get_latest_blockhash().unwrap();
 
     let tx = system_transaction::transfer(&alice, &bob_pubkey, sol_to_lamports(20.0), blockhash);
     let signature = client.send_transaction(&tx).unwrap();
@@ -92,7 +94,7 @@ fn test_slot_subscription() {
     );
     let exit = Arc::new(AtomicBool::new(false));
     let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
-    let bank = Bank::new(&genesis_config);
+    let bank = Bank::new_for_tests(&genesis_config);
     let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
     let optimistically_confirmed_bank =
         OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);

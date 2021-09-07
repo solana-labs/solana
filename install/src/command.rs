@@ -218,7 +218,7 @@ fn new_update_manifest(
         .get_account_data(&update_manifest_keypair.pubkey())
         .is_err()
     {
-        let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
+        let recent_blockhash = rpc_client.get_latest_blockhash()?;
 
         let lamports = rpc_client
             .get_minimum_balance_for_rent_exemption(SignedUpdateManifest::max_space() as usize)?;
@@ -244,7 +244,7 @@ fn store_update_manifest(
     update_manifest_keypair: &Keypair,
     update_manifest: &SignedUpdateManifest,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let recent_blockhash = rpc_client.get_latest_blockhash()?;
 
     let signers = [from_keypair, update_manifest_keypair];
     let instruction = config_instruction::store::<SignedUpdateManifest>(

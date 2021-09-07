@@ -1,7 +1,6 @@
 use crate::{
     cli::{CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult},
     spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
-    stake::is_stake_program_v2_enabled,
 };
 use clap::{value_t, value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand};
 use console::{style, Emoji};
@@ -24,11 +23,12 @@ use solana_client::{
     pubsub_client::PubsubClient,
     rpc_client::{GetConfirmedSignaturesForAddress2Config, RpcClient},
     rpc_config::{
-        RpcAccountInfoConfig, RpcBlockConfig, RpcLargestAccountsConfig, RpcLargestAccountsFilter,
-        RpcProgramAccountsConfig, RpcTransactionConfig, RpcTransactionLogsConfig,
-        RpcTransactionLogsFilter,
+        RpcAccountInfoConfig, RpcBlockConfig, RpcGetVoteAccountsConfig, RpcLargestAccountsConfig,
+        RpcLargestAccountsFilter, RpcProgramAccountsConfig, RpcTransactionConfig,
+        RpcTransactionLogsConfig, RpcTransactionLogsFilter,
     },
     rpc_filter,
+    rpc_request::DELINQUENT_VALIDATOR_SLOT_DISTANCE,
     rpc_response::SlotInfo,
 };
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
@@ -141,9 +141,10 @@ impl ClusterQuerySubCommands for App<'_, '_> {
             SubCommand::with_name("cluster-version")
                 .about("Get the version of the cluster entrypoint"),
         )
+        // Deprecated in v1.8.0
         .subcommand(
             SubCommand::with_name("fees")
-            .about("Display current cluster fees")
+            .about("Display current cluster fees (Deprecated in v1.8.0)")
             .arg(
                 Arg::with_name("blockhash")
                     .long("blockhash")
@@ -176,7 +177,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                     .takes_value(true)
                     .value_name("EPOCH")
                     .validator(is_epoch)
-                    .help("Epoch to show leader schedule for. (default: current)")
+                    .help("Epoch to show leader schedule for. [default: current]")
             )
         )
         .subcommand(
@@ -382,6 +383,25 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         ])
                         .default_value("stake")
                         .help("Sort order (does not affect JSON output)"),
+                )
+                .arg(
+                    Arg::with_name("keep_unstaked_delinquents")
+                        .long("keep-unstaked-delinquents")
+                        .takes_value(false)
+                        .help("Don't discard unstaked, delinquent validators")
+                )
+                .arg(
+                    Arg::with_name("delinquent_slot_distance")
+                        .long("delinquent-slot-distance")
+                        .takes_value(true)
+                        .value_name("SLOT_DISTANCE")
+                        .validator(is_slot)
+                        .help(
+                            concatcp!(
+                                "Minimum slot distance from the tip to consider a validator delinquent. [default: ",
+                                DELINQUENT_VALIDATOR_SLOT_DISTANCE,
+                                "]",
+                        ))
                 ),
         )
         .subcommand(
@@ -617,6 +637,8 @@ pub fn parse_show_validators(matches: &ArgMatches<'_>) -> Result<CliCommandInfo,
     let use_lamports_unit = matches.is_present("lamports");
     let number_validators = matches.is_present("number");
     let reverse_sort = matches.is_present("reverse");
+    let keep_unstaked_delinquents = matches.is_present("keep_unstaked_delinquents");
+    let delinquent_slot_distance = value_of(matches, "delinquent_slot_distance");
 
     let sort_order = match value_t_or_exit!(matches, "sort", String).as_str() {
         "delinquent" => CliValidatorsSortOrder::Delinquent,
@@ -637,6 +659,8 @@ pub fn parse_show_validators(matches: &ArgMatches<'_>) -> Result<CliCommandInfo,
             sort_order,
             reverse_sort,
             number_validators,
+            keep_unstaked_delinquents,
+            delinquent_slot_distance,
         },
         signers: vec![],
     })
@@ -926,6 +950,7 @@ pub fn process_fees(
     blockhash: Option<&Hash>,
 ) -> ProcessResult {
     let fees = if let Some(recent_blockhash) = blockhash {
+        #[allow(deprecated)]
         let result = rpc_client.get_fee_calculator_for_blockhash_with_commitment(
             recent_blockhash,
             config.commitment,
@@ -936,18 +961,20 @@ pub fn process_fees(
                 *recent_blockhash,
                 fee_calculator.lamports_per_signature,
                 None,
+                None,
             )
         } else {
             CliFees::none()
         }
     } else {
-        let result = rpc_client.get_recent_blockhash_with_commitment(config.commitment)?;
-        let (recent_blockhash, fee_calculator, last_valid_slot) = result.value;
+        #[allow(deprecated)]
+        let result = rpc_client.get_fees_with_commitment(config.commitment)?;
         CliFees::some(
             result.context.slot,
-            recent_blockhash,
-            fee_calculator.lamports_per_signature,
-            Some(last_valid_slot),
+            result.value.blockhash,
+            result.value.fee_calculator.lamports_per_signature,
+            None,
+            Some(result.value.last_valid_block_height),
         )
     };
     Ok(config.output_format.formatted_string(&fees))
@@ -1349,7 +1376,7 @@ pub fn process_ping(
     let mut confirmed_count = 0;
     let mut confirmation_time: VecDeque<u64> = VecDeque::with_capacity(1024);
 
-    let (mut blockhash, mut fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let mut blockhash = rpc_client.get_latest_blockhash()?;
     let mut blockhash_transaction_count = 0;
     let mut blockhash_acquired = Instant::now();
     if let Some(fixed_blockhash) = fixed_blockhash {
@@ -1368,9 +1395,8 @@ pub fn process_ping(
         let now = Instant::now();
         if fixed_blockhash.is_none() && now.duration_since(blockhash_acquired).as_secs() > 60 {
             // Fetch a new blockhash every minute
-            let (new_blockhash, new_fee_calculator) = rpc_client.get_new_blockhash(&blockhash)?;
+            let new_blockhash = rpc_client.get_new_latest_blockhash(&blockhash)?;
             blockhash = new_blockhash;
-            fee_calculator = new_fee_calculator;
             blockhash_transaction_count = 0;
             blockhash_acquired = Instant::now();
         }
@@ -1389,7 +1415,7 @@ pub fn process_ping(
             rpc_client,
             false,
             SpendAmount::Some(lamports),
-            &fee_calculator,
+            &blockhash,
             &config.signers[0].pubkey(),
             build_message,
             config.commitment,
@@ -1722,8 +1748,6 @@ pub fn process_show_stakes(
     let stake_history = from_account(&stake_history_account).ok_or_else(|| {
         CliError::RpcRequestError("Failed to deserialize stake history".to_string())
     })?;
-    // At v1.6, this check can be removed and simply passed as `true`
-    let stake_program_v2_enabled = is_stake_program_v2_enabled(rpc_client)?;
 
     let mut stake_accounts: Vec<CliKeyedStakeState> = vec![];
     for (stake_pubkey, stake_account) in all_stake_accounts {
@@ -1739,7 +1763,6 @@ pub fn process_show_stakes(
                                 use_lamports_unit,
                                 &stake_history,
                                 &clock,
-                                stake_program_v2_enabled,
                             ),
                         });
                     }
@@ -1758,7 +1781,6 @@ pub fn process_show_stakes(
                                 use_lamports_unit,
                                 &stake_history,
                                 &clock,
-                                stake_program_v2_enabled,
                             ),
                         });
                     }
@@ -1789,11 +1811,17 @@ pub fn process_show_validators(
     validators_sort_order: CliValidatorsSortOrder,
     validators_reverse_sort: bool,
     number_validators: bool,
+    keep_unstaked_delinquents: bool,
+    delinquent_slot_distance: Option<Slot>,
 ) -> ProcessResult {
     let progress_bar = new_spinner_progress_bar();
     progress_bar.set_message("Fetching vote accounts...");
     let epoch_info = rpc_client.get_epoch_info()?;
-    let vote_accounts = rpc_client.get_vote_accounts()?;
+    let vote_accounts = rpc_client.get_vote_accounts_with_config(RpcGetVoteAccountsConfig {
+        keep_unstaked_delinquents: Some(keep_unstaked_delinquents),
+        delinquent_slot_distance,
+        ..RpcGetVoteAccountsConfig::default()
+    })?;
 
     progress_bar.set_message("Fetching block production...");
     let skip_rate: HashMap<_, _> = rpc_client
@@ -2112,7 +2140,7 @@ pub fn process_calculate_rent(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cli::{app, parse_command};
+    use crate::{clap_app::get_clap_app, cli::parse_command};
     use solana_sdk::signature::{write_keypair, Keypair};
     use std::str::FromStr;
     use tempfile::NamedTempFile;
@@ -2124,7 +2152,7 @@ mod tests {
 
     #[test]
     fn test_parse_command() {
-        let test_commands = app("test", "desc", "version");
+        let test_commands = get_clap_app("test", "desc", "version");
         let default_keypair = Keypair::new();
         let (default_keypair_file, mut tmp_file) = make_tmp_file();
         write_keypair(&default_keypair, tmp_file.as_file_mut()).unwrap();

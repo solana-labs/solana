@@ -1,18 +1,9 @@
 use {
     solana_program_test::{processor, ProgramTest},
     solana_sdk::{
-        account_info::AccountInfo,
-        clock::Clock,
-        entrypoint::ProgramResult,
-        epoch_schedule::EpochSchedule,
-        fee_calculator::FeeCalculator,
-        instruction::Instruction,
-        msg,
-        pubkey::Pubkey,
-        rent::Rent,
-        signature::Signer,
-        sysvar::{fees::Fees, Sysvar},
-        transaction::Transaction,
+        account_info::AccountInfo, clock::Clock, entrypoint::ProgramResult,
+        epoch_schedule::EpochSchedule, instruction::Instruction, msg, pubkey::Pubkey, rent::Rent,
+        signature::Signer, sysvar::Sysvar, transaction::Transaction,
     },
 };
 
@@ -29,14 +20,6 @@ fn sysvar_getter_process_instruction(
 
     let epoch_schedule = EpochSchedule::get()?;
     assert_eq!(epoch_schedule, EpochSchedule::default());
-
-    let fees = Fees::get()?;
-    assert_eq!(
-        fees.fee_calculator,
-        FeeCalculator {
-            lamports_per_signature: 5000
-        }
-    );
 
     let rent = Rent::get()?;
     assert_eq!(rent, Rent::default());

@@ -1,35 +1,37 @@
-use crate::{StoredExtendedRewards, StoredTransactionStatusMeta};
-use solana_account_decoder::parse_token::{real_number_string_trimmed, UiTokenAmount};
-use solana_sdk::{
-    hash::Hash,
-    instruction::CompiledInstruction,
-    instruction::InstructionError,
-    message::{Message, MessageHeader},
-    pubkey::Pubkey,
-    signature::Signature,
-    transaction::Transaction,
-    transaction::TransactionError,
-};
-use solana_transaction_status::{
-    ConfirmedBlock, InnerInstructions, Reward, RewardType, TransactionByAddrInfo,
-    TransactionStatusMeta, TransactionTokenBalance, TransactionWithStatusMeta,
-};
-use std::{
-    convert::{TryFrom, TryInto},
-    str::FromStr,
+use {
+    crate::{StoredExtendedRewards, StoredTransactionStatusMeta},
+    solana_account_decoder::parse_token::{real_number_string_trimmed, UiTokenAmount},
+    solana_sdk::{
+        hash::Hash,
+        instruction::CompiledInstruction,
+        instruction::InstructionError,
+        message::{Message, MessageHeader},
+        pubkey::Pubkey,
+        signature::Signature,
+        transaction::Transaction,
+        transaction::TransactionError,
+    },
+    solana_transaction_status::{
+        ConfirmedBlock, InnerInstructions, Reward, RewardType, TransactionByAddrInfo,
+        TransactionStatusMeta, TransactionTokenBalance, TransactionWithStatusMeta,
+    },
+    std::{
+        convert::{TryFrom, TryInto},
+        str::FromStr,
+    },
 };
 
 pub mod generated {
     include!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        concat!("/proto/solana.storage.confirmed_block.rs")
+        env!("OUT_DIR"),
+        "/solana.storage.confirmed_block.rs"
     ));
 }
 
 pub mod tx_by_addr {
     include!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        concat!("/proto/solana.storage.transaction_by_addr.rs")
+        env!("OUT_DIR"),
+        "/solana.storage.transaction_by_addr.rs"
     ));
 }
 
@@ -87,6 +89,7 @@ impl From<Reward> for generated::Reward {
                 Some(RewardType::Staking) => generated::RewardType::Staking,
                 Some(RewardType::Voting) => generated::RewardType::Voting,
             } as i32,
+            commission: reward.commission.map(|c| c.to_string()).unwrap_or_default(),
         }
     }
 }
@@ -105,6 +108,7 @@ impl From<generated::Reward> for Reward {
                 4 => Some(RewardType::Voting),
                 _ => None,
             },
+            commission: reward.commission.parse::<u8>().ok(),
         }
     }
 }
@@ -544,6 +548,8 @@ impl TryFrom<tx_by_addr::TransactionError> for TransactionError {
             14 => TransactionError::SanitizeFailure,
             15 => TransactionError::ClusterMaintenance,
             16 => TransactionError::AccountBorrowOutstanding,
+            17 => TransactionError::WouldExceedMaxBlockCostLimit,
+            18 => TransactionError::UnsupportedVersion,
             _ => return Err("Invalid TransactionError"),
         })
     }
@@ -601,6 +607,12 @@ impl From<TransactionError> for tx_by_addr::TransactionError {
                 }
                 TransactionError::AccountBorrowOutstanding => {
                     tx_by_addr::TransactionErrorType::AccountBorrowOutstandingTx
+                }
+                TransactionError::WouldExceedMaxBlockCostLimit => {
+                    tx_by_addr::TransactionErrorType::WouldExceedMaxBlockCostLimit
+                }
+                TransactionError::UnsupportedVersion => {
+                    tx_by_addr::TransactionErrorType::UnsupportedVersion
                 }
             } as i32,
             instruction_error: match transaction_error {
@@ -839,6 +851,7 @@ mod test {
             lamports: 123,
             post_balance: 321,
             reward_type: None,
+            commission: None,
         };
         let gen_reward: generated::Reward = reward.clone().into();
         assert_eq!(reward, gen_reward.into());
@@ -876,6 +889,14 @@ mod test {
 
     #[test]
     fn test_transaction_error_encode() {
+        let transaction_error = TransactionError::AccountBorrowOutstanding;
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
         let transaction_error = TransactionError::AccountInUse;
         let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
             transaction_error.clone().into();
@@ -900,6 +921,14 @@ mod test {
             tx_by_addr_transaction_error.try_into().unwrap()
         );
 
+        let transaction_error = TransactionError::AlreadyProcessed;
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
         let transaction_error = TransactionError::BlockhashNotFound;
         let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
             transaction_error.clone().into();
@@ -917,14 +946,6 @@ mod test {
         );
 
         let transaction_error = TransactionError::ClusterMaintenance;
-        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
-            transaction_error.clone().into();
-        assert_eq!(
-            transaction_error,
-            tx_by_addr_transaction_error.try_into().unwrap()
-        );
-
-        let transaction_error = TransactionError::AlreadyProcessed;
         let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
             transaction_error.clone().into();
         assert_eq!(
@@ -989,6 +1010,22 @@ mod test {
         );
 
         let transaction_error = TransactionError::SignatureFailure;
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error = TransactionError::WouldExceedMaxBlockCostLimit;
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
+
+        let transaction_error = TransactionError::UnsupportedVersion;
         let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
             transaction_error.clone().into();
         assert_eq!(

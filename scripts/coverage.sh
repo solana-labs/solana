@@ -10,7 +10,7 @@ if ! command -v grcov; then
   exit 1
 fi
 
-if [[ ! "$(grcov --version)" =~ 0.[678].[01] ]]; then
+if [[ ! "$(grcov --version)" =~ 0.[678].[012] ]]; then
   echo Error: Required grcov version not installed
 
   echo "Installed version: $(grcov --version)"
@@ -106,7 +106,6 @@ find target/cov -type f -name '*.gcda' -newer target/cov/before-test ! -newer ta
     --ignore bench-tps\*
     --ignore upload-perf\*
     --ignore bench-streamer\*
-    --ignore bench-exchange\*
     --ignore local-cluster\*
   )
 

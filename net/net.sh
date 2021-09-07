@@ -20,7 +20,6 @@ usage() {
                                      Valid client types are:
                                          idle
                                          bench-tps
-                                         bench-exchange
                                      User can optionally provide extraArgs that are transparently
                                      supplied to the client program as command line parameters.
                                      For example,
@@ -307,9 +306,8 @@ startBootstrapLeader() {
          \"$internalNodesLamports\" \
          $nodeIndex \
          ${#clientIpList[@]} \"$benchTpsExtraArgs\" \
-         ${#clientIpList[@]} \"$benchExchangeExtraArgs\" \
          \"$genesisOptions\" \
-         \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize $maybeWaitForSupermajority\" \
+         \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize $maybeWaitForSupermajority $maybeAllowPrivateAddr $maybeAccountsDbSkipShrink $maybeSkipRequireTower\" \
          \"$gpuMode\" \
          \"$maybeWarpSlot\" \
          \"$waitForNodeInit\" \
@@ -379,9 +377,8 @@ startNode() {
          \"$internalNodesLamports\" \
          $nodeIndex \
          ${#clientIpList[@]} \"$benchTpsExtraArgs\" \
-         ${#clientIpList[@]} \"$benchExchangeExtraArgs\" \
          \"$genesisOptions\" \
-         \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize $maybeWaitForSupermajority\" \
+         \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize $maybeWaitForSupermajority $maybeAllowPrivateAddr $maybeAccountsDbSkipShrink $maybeSkipRequireTower\" \
          \"$gpuMode\" \
          \"$maybeWarpSlot\" \
          \"$waitForNodeInit\" \
@@ -409,7 +406,7 @@ startClient() {
     startCommon "$ipAddress"
     ssh "${sshOptions[@]}" -f "$ipAddress" \
       "./solana/net/remote/remote-client.sh $deployMethod $entrypointIp \
-      $clientToRun \"$RUST_LOG\" \"$benchTpsExtraArgs\" \"$benchExchangeExtraArgs\" $clientIndex"
+      $clientToRun \"$RUST_LOG\" \"$benchTpsExtraArgs\" $clientIndex"
   ) >> "$logFile" 2>&1 || {
     cat "$logFile"
     echo "^^^ +++"
@@ -421,8 +418,6 @@ startClients() {
   for ((i=0; i < "$numClients" && i < "$numClientsRequested"; i++)) do
     if [[ $i -lt "$numBenchTpsClients" ]]; then
       startClient "${clientIpList[$i]}" "solana-bench-tps" "$i"
-    elif [[ $i -lt $((numBenchTpsClients + numBenchExchangeClients)) ]]; then
-      startClient "${clientIpList[$i]}" "solana-bench-exchange" $((i-numBenchTpsClients))
     else
       startClient "${clientIpList[$i]}" "idle"
     fi
@@ -767,9 +762,7 @@ updatePlatforms=
 nodeAddress=
 numIdleClients=0
 numBenchTpsClients=0
-numBenchExchangeClients=0
 benchTpsExtraArgs=
-benchExchangeExtraArgs=
 failOnValidatorBootupFailure=true
 genesisOptions=
 numValidatorsRequested=
@@ -782,6 +775,9 @@ maybeLimitLedgerSize=""
 maybeSkipLedgerVerify=""
 maybeDisableAirdrops=""
 maybeWaitForSupermajority=""
+maybeAllowPrivateAddr=""
+maybeAccountsDbSkipShrink=""
+maybeSkipRequireTower=""
 debugBuild=false
 doBuild=true
 gpuMode=auto
@@ -906,6 +902,17 @@ while [[ -n $1 ]]; do
     elif [[ $1 == --extra-primordial-stakes ]]; then
       extraPrimordialStakes=$2
       shift 2
+    elif [[ $1 = --allow-private-addr ]]; then
+      # May also be added by loadConfigFile if 'gce.sh create' was invoked
+      # without -P.
+      maybeAllowPrivateAddr="$1"
+      shift 1
+    elif [[ $1 = --accounts-db-skip-shrink ]]; then
+      maybeAccountsDbSkipShrink="$1"
+      shift 1
+    elif [[ $1 = --skip-require-tower ]]; then
+      maybeSkipRequireTower="$1"
+      shift 1
     else
       usage "Unknown long option: $1"
     fi
@@ -977,10 +984,6 @@ while getopts "h?T:t:o:f:rc:Fn:i:d" opt "${shortArgs[@]}"; do
           numBenchTpsClients=$numClients
           benchTpsExtraArgs=$extraArgs
         ;;
-        bench-exchange)
-          numBenchExchangeClients=$numClients
-          benchExchangeExtraArgs=$extraArgs
-        ;;
         *)
           echo "Unknown client type: $clientType"
           exit 1
@@ -1013,7 +1016,7 @@ if [[ -n $numValidatorsRequested ]]; then
 fi
 
 numClients=${#clientIpList[@]}
-numClientsRequested=$((numBenchTpsClients + numBenchExchangeClients + numIdleClients))
+numClientsRequested=$((numBenchTpsClients + numIdleClients))
 if [[ "$numClientsRequested" -eq 0 ]]; then
   numBenchTpsClients=$numClients
   numClientsRequested=$numClients

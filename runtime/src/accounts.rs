@@ -3,7 +3,10 @@ use crate::{
         AccountShrinkThreshold, AccountsDb, BankHashInfo, ErrorCounters, LoadHint, LoadedAccount,
         ScanStorageResult,
     },
-    accounts_index::{AccountSecondaryIndexes, IndexKey, ScanResult},
+    accounts_index::{
+        AccountSecondaryIndexes, AccountsIndexConfig, IndexKey, ScanResult,
+        ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS, ACCOUNTS_INDEX_CONFIG_FOR_TESTING,
+    },
     ancestors::Ancestors,
     bank::{
         NonceRollbackFull, NonceRollbackInfo, RentDebits, TransactionCheckResult,
@@ -25,14 +28,15 @@ use solana_sdk::{
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     clock::{BankId, Slot, INITIAL_RENT_EPOCH},
     feature_set::{self, FeatureSet},
-    fee_calculator::{FeeCalculator, FeeConfig},
+    fee_calculator::FeeCalculator,
     genesis_config::ClusterType,
     hash::Hash,
-    message::{Message, MessageProgramIdsCache},
+    message::SanitizedMessage,
     native_loader, nonce,
+    nonce::NONCED_TX_MARKER_IX_INDEX,
     pubkey::Pubkey,
-    transaction::Result,
-    transaction::{Transaction, TransactionError},
+    system_program, sysvar,
+    transaction::{Result, SanitizedTransaction, TransactionError},
 };
 use std::{
     cmp::Reverse,
@@ -86,7 +90,7 @@ impl AccountLocks {
 }
 
 /// This structure handles synchronization for db
-#[derive(Default, Debug, AbiExample)]
+#[derive(Debug, AbiExample)]
 pub struct Accounts {
     /// Single global AccountsDb
     pub accounts_db: Arc<AccountsDb>,
@@ -116,17 +120,44 @@ pub enum AccountAddressFilter {
 }
 
 impl Accounts {
-    pub fn new(
+    pub fn default_for_tests() -> Self {
+        Self {
+            accounts_db: Arc::new(AccountsDb::default_for_tests()),
+            account_locks: Mutex::default(),
+        }
+    }
+
+    pub fn new_with_config_for_tests(
         paths: Vec<PathBuf>,
         cluster_type: &ClusterType,
+        account_indexes: AccountSecondaryIndexes,
+        caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
     ) -> Self {
         Self::new_with_config(
             paths,
             cluster_type,
-            AccountSecondaryIndexes::default(),
-            false,
+            account_indexes,
+            caching_enabled,
             shrink_ratio,
+            Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
+        )
+    }
+
+    pub fn new_with_config_for_benches(
+        paths: Vec<PathBuf>,
+        cluster_type: &ClusterType,
+        account_indexes: AccountSecondaryIndexes,
+        caching_enabled: bool,
+        shrink_ratio: AccountShrinkThreshold,
+    ) -> Self {
+        Self::new_with_config(
+            paths,
+            cluster_type,
+            account_indexes,
+            caching_enabled,
+            shrink_ratio,
+            Some(ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS),
         )
     }
 
@@ -136,6 +167,7 @@ impl Accounts {
         account_indexes: AccountSecondaryIndexes,
         caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
+        accounts_index_config: Option<AccountsIndexConfig>,
     ) -> Self {
         Self {
             accounts_db: Arc::new(AccountsDb::new_with_config(
@@ -144,6 +176,7 @@ impl Accounts {
                 account_indexes,
                 caching_enabled,
                 shrink_ratio,
+                accounts_index_config,
             )),
             account_locks: Mutex::new(AccountLocks::default()),
         }
@@ -165,25 +198,22 @@ impl Accounts {
         }
     }
 
-    /// Return true if the slice has any duplicate elements
-    pub fn has_duplicates<T: PartialEq>(xs: &[T]) -> bool {
-        // Note: This is an O(n^2) algorithm, but requires no heap allocations. The benchmark
-        // `bench_has_duplicates` in benches/message_processor.rs shows that this implementation is
-        // ~50 times faster than using HashSet for very short slices.
-        for i in 1..xs.len() {
-            if xs[i..].contains(&xs[i - 1]) {
-                return true;
-            }
-        }
-        false
-    }
-
-    fn construct_instructions_account(message: &Message) -> AccountSharedData {
-        let mut data = message.serialize_instructions();
+    fn construct_instructions_account(
+        message: &SanitizedMessage,
+        is_owned_by_sysvar: bool,
+        demote_program_write_locks: bool,
+    ) -> AccountSharedData {
+        let mut data = message.serialize_instructions(demote_program_write_locks);
         // add room for current instruction index.
         data.resize(data.len() + 2, 0);
+        let owner = if is_owned_by_sysvar {
+            sysvar::id()
+        } else {
+            system_program::id()
+        };
         AccountSharedData::from(Account {
             data,
+            owner,
             ..Account::default()
         })
     }
@@ -191,7 +221,7 @@ impl Accounts {
     fn load_transaction(
         &self,
         ancestors: &Ancestors,
-        tx: &Transaction,
+        tx: &SanitizedTransaction,
         fee: u64,
         error_counters: &mut ErrorCounters,
         rent_collector: &RentCollector,
@@ -199,38 +229,48 @@ impl Accounts {
     ) -> Result<LoadedTransaction> {
         // Copy all the accounts
         let message = tx.message();
-        if tx.signatures.is_empty() && fee != 0 {
+        // NOTE: this check will never fail because `tx` is sanitized
+        if tx.signatures().is_empty() && fee != 0 {
             Err(TransactionError::MissingSignatureForFee)
         } else {
             // There is no way to predict what program will execute without an error
             // If a fee can pay for execution then the program will be scheduled
             let mut payer_index = None;
             let mut tx_rent: TransactionRent = 0;
-            let mut accounts = Vec::with_capacity(message.account_keys.len());
-            let mut account_deps = Vec::with_capacity(message.account_keys.len());
-            let mut key_check = MessageProgramIdsCache::new(message);
+            let mut accounts = Vec::with_capacity(message.account_keys_len());
+            let mut account_deps = Vec::with_capacity(message.account_keys_len());
             let mut rent_debits = RentDebits::default();
-            for (i, key) in message.account_keys.iter().enumerate() {
-                let account = if key_check.is_non_loader_key(key, i) {
+            let rent_for_sysvars = feature_set.is_active(&feature_set::rent_for_sysvars::id());
+            let demote_program_write_locks =
+                feature_set.is_active(&feature_set::demote_program_write_locks::id());
+
+            for (i, key) in message.account_keys_iter().enumerate() {
+                let account = if message.is_non_loader_key(i) {
                     if payer_index.is_none() {
                         payer_index = Some(i);
                     }
 
-                    if solana_sdk::sysvar::instructions::check_id(key)
-                        && feature_set.is_active(&feature_set::instructions_sysvar_enabled::id())
-                    {
-                        if message.is_writable(i) {
+                    if solana_sdk::sysvar::instructions::check_id(key) {
+                        if message.is_writable(i, demote_program_write_locks) {
                             return Err(TransactionError::InvalidAccountIndex);
                         }
-                        Self::construct_instructions_account(message)
+                        Self::construct_instructions_account(
+                            message,
+                            feature_set
+                                .is_active(&feature_set::instructions_sysvar_owned_by_sysvar::id()),
+                            demote_program_write_locks,
+                        )
                     } else {
                         let (account, rent) = self
                             .accounts_db
                             .load_with_fixed_root(ancestors, key)
                             .map(|(mut account, _)| {
-                                if message.is_writable(i) {
-                                    let rent_due = rent_collector
-                                        .collect_from_existing_account(key, &mut account);
+                                if message.is_writable(i, demote_program_write_locks) {
+                                    let rent_due = rent_collector.collect_from_existing_account(
+                                        key,
+                                        &mut account,
+                                        rent_for_sysvars,
+                                    );
                                     (account, rent_due)
                                 } else {
                                     (account, 0)
@@ -272,7 +312,7 @@ impl Accounts {
                 };
                 accounts.push((*key, account));
             }
-            debug_assert_eq!(accounts.len(), message.account_keys.len());
+            debug_assert_eq!(accounts.len(), message.account_keys_len());
             // Appends the account_deps at the end of the accounts,
             // this way they can be accessed in a uniform way.
             // At places where only the accounts are needed,
@@ -312,19 +352,9 @@ impl Accounts {
 
                         let message = tx.message();
                         let loaders = message
-                            .instructions
-                            .iter()
-                            .map(|ix| {
-                                if message.account_keys.len() <= ix.program_id_index as usize {
-                                    error_counters.account_not_found += 1;
-                                    return Err(TransactionError::AccountNotFound);
-                                }
-                                let program_id = message.account_keys[ix.program_id_index as usize];
-                                self.load_executable_accounts(
-                                    ancestors,
-                                    &program_id,
-                                    error_counters,
-                                )
+                            .program_instructions_iter()
+                            .map(|(program_id, _ix)| {
+                                self.load_executable_accounts(ancestors, program_id, error_counters)
                             })
                             .collect::<Result<TransactionLoaders>>()?;
                         Ok(LoadedTransaction {
@@ -410,33 +440,31 @@ impl Accounts {
         Ok(accounts)
     }
 
-    pub fn load_accounts<'a>(
+    pub fn load_accounts(
         &self,
         ancestors: &Ancestors,
-        txs: impl Iterator<Item = &'a Transaction>,
+        txs: &[SanitizedTransaction],
         lock_results: Vec<TransactionCheckResult>,
         hash_queue: &BlockhashQueue,
         error_counters: &mut ErrorCounters,
         rent_collector: &RentCollector,
         feature_set: &FeatureSet,
     ) -> Vec<TransactionLoadResult> {
-        let fee_config = FeeConfig {
-            secp256k1_program_enabled: feature_set
-                .is_active(&feature_set::secp256k1_program_enabled::id()),
-        };
-        txs.zip(lock_results)
+        txs.iter()
+            .zip(lock_results)
             .map(|etx| match etx {
                 (tx, (Ok(()), nonce_rollback)) => {
                     let fee_calculator = nonce_rollback
                         .as_ref()
                         .map(|nonce_rollback| nonce_rollback.fee_calculator())
                         .unwrap_or_else(|| {
+                            #[allow(deprecated)]
                             hash_queue
-                                .get_fee_calculator(&tx.message().recent_blockhash)
+                                .get_fee_calculator(tx.message().recent_blockhash())
                                 .cloned()
                         });
                     let fee = if let Some(fee_calculator) = fee_calculator {
-                        fee_calculator.calculate_fee_with_config(tx.message(), &fee_config)
+                        tx.message().calculate_fee(&fee_calculator)
                     } else {
                         return (Err(TransactionError::BlockhashNotFound), None);
                     };
@@ -644,6 +672,7 @@ impl Accounts {
                 ancestors,
                 None,
                 can_cached_slot_be_unflushed,
+                None,
             )
             .1
     }
@@ -766,7 +795,7 @@ impl Accounts {
         )
     }
 
-    pub fn load_to_collect_rent_eagerly<R: RangeBounds<Pubkey>>(
+    pub fn load_to_collect_rent_eagerly<R: RangeBounds<Pubkey> + std::fmt::Debug>(
         &self,
         ancestors: &Ancestors,
         range: R,
@@ -775,6 +804,7 @@ impl Accounts {
             "load_to_collect_rent_eagerly_scan_elapsed",
             ancestors,
             range,
+            true,
             |collector: &mut Vec<(Pubkey, AccountSharedData)>, option| {
                 Self::load_while_filtering(collector, option, |_| true)
             },
@@ -857,27 +887,17 @@ impl Accounts {
     /// same time
     #[must_use]
     #[allow(clippy::needless_collect)]
-    pub fn lock_accounts<'a>(&self, txs: impl Iterator<Item = &'a Transaction>) -> Vec<Result<()>> {
-        use solana_sdk::sanitize::Sanitize;
-        let keys: Vec<Result<_>> = txs
-            .map(|tx| {
-                tx.sanitize().map_err(TransactionError::from)?;
-
-                if Self::has_duplicates(&tx.message.account_keys) {
-                    return Err(TransactionError::AccountLoadedTwice);
-                }
-
-                Ok(tx.message().get_account_keys_by_lock_type())
-            })
+    pub fn lock_accounts<'a>(
+        &self,
+        txs: impl Iterator<Item = &'a SanitizedTransaction>,
+        demote_program_write_locks: bool,
+    ) -> Vec<Result<()>> {
+        let keys: Vec<_> = txs
+            .map(|tx| tx.get_account_locks(demote_program_write_locks))
             .collect();
         let mut account_locks = &mut self.account_locks.lock().unwrap();
         keys.into_iter()
-            .map(|result| match result {
-                Ok((writable_keys, readonly_keys)) => {
-                    self.lock_account(&mut account_locks, writable_keys, readonly_keys)
-                }
-                Err(e) => Err(e),
-            })
+            .map(|keys| self.lock_account(&mut account_locks, keys.writable, keys.readonly))
             .collect()
     }
 
@@ -885,8 +905,9 @@ impl Accounts {
     #[allow(clippy::needless_collect)]
     pub fn unlock_accounts<'a>(
         &self,
-        txs: impl Iterator<Item = &'a Transaction>,
+        txs: impl Iterator<Item = &'a SanitizedTransaction>,
         results: &[Result<()>],
+        demote_program_write_locks: bool,
     ) {
         let keys: Vec<_> = txs
             .zip(results)
@@ -894,13 +915,13 @@ impl Accounts {
                 Err(TransactionError::AccountInUse) => None,
                 Err(TransactionError::SanitizeFailure) => None,
                 Err(TransactionError::AccountLoadedTwice) => None,
-                _ => Some(tx.message.get_account_keys_by_lock_type()),
+                _ => Some(tx.get_account_locks(demote_program_write_locks)),
             })
             .collect();
         let mut account_locks = self.account_locks.lock().unwrap();
         debug!("bank unlock accounts");
-        keys.into_iter().for_each(|(writable_keys, readonly_keys)| {
-            self.unlock_account(&mut account_locks, writable_keys, readonly_keys);
+        keys.into_iter().for_each(|keys| {
+            self.unlock_account(&mut account_locks, keys.writable, keys.readonly);
         });
     }
 
@@ -910,12 +931,14 @@ impl Accounts {
     pub fn store_cached<'a>(
         &self,
         slot: Slot,
-        txs: impl Iterator<Item = &'a Transaction>,
+        txs: &'a [SanitizedTransaction],
         res: &'a [TransactionExecutionResult],
         loaded: &'a mut [TransactionLoadResult],
         rent_collector: &RentCollector,
         last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
-        fix_recent_blockhashes_sysvar_delay: bool,
+        rent_for_sysvars: bool,
+        merge_nonce_error_into_system_error: bool,
+        demote_program_write_locks: bool,
     ) {
         let accounts_to_store = self.collect_accounts_to_store(
             txs,
@@ -923,7 +946,9 @@ impl Accounts {
             loaded,
             rent_collector,
             last_blockhash_with_fee_calculator,
-            fix_recent_blockhashes_sysvar_delay,
+            rent_for_sysvars,
+            merge_nonce_error_into_system_error,
+            demote_program_write_locks,
         );
         self.accounts_db.store_cached(slot, &accounts_to_store);
     }
@@ -942,12 +967,14 @@ impl Accounts {
 
     fn collect_accounts_to_store<'a>(
         &self,
-        txs: impl Iterator<Item = &'a Transaction>,
+        txs: &'a [SanitizedTransaction],
         res: &'a [TransactionExecutionResult],
         loaded: &'a mut [TransactionLoadResult],
         rent_collector: &RentCollector,
         last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
-        fix_recent_blockhashes_sysvar_delay: bool,
+        rent_for_sysvars: bool,
+        merge_nonce_error_into_system_error: bool,
+        demote_program_write_locks: bool,
     ) -> Vec<(&'a Pubkey, &'a AccountSharedData)> {
         let mut accounts = Vec::with_capacity(loaded.len());
         for (i, ((raccs, _nonce_rollback), tx)) in loaded.iter_mut().zip(txs).enumerate() {
@@ -960,24 +987,30 @@ impl Accounts {
                     let pubkey = nonce_rollback.nonce_address();
                     let acc = nonce_rollback.nonce_account();
                     let maybe_fee_account = nonce_rollback.fee_account();
-                    Some((pubkey, acc, maybe_fee_account))
+                    Some((pubkey, acc, maybe_fee_account, true))
                 }
-                (Err(TransactionError::InstructionError(_, _)), Some(nonce_rollback)) => {
+                (Err(TransactionError::InstructionError(index, _)), Some(nonce_rollback)) => {
+                    let nonce_marker_ix_failed = if merge_nonce_error_into_system_error {
+                        // Don't advance stored blockhash when the nonce marker ix fails
+                        *index == NONCED_TX_MARKER_IX_INDEX
+                    } else {
+                        false
+                    };
                     let pubkey = nonce_rollback.nonce_address();
                     let acc = nonce_rollback.nonce_account();
                     let maybe_fee_account = nonce_rollback.fee_account();
-                    Some((pubkey, acc, maybe_fee_account))
+                    Some((pubkey, acc, maybe_fee_account, !nonce_marker_ix_failed))
                 }
                 (Ok(_), _nonce_rollback) => None,
                 (Err(_), _nonce_rollback) => continue,
             };
 
-            let message = &tx.message();
+            let message = tx.message();
             let loaded_transaction = raccs.as_mut().unwrap();
             let mut fee_payer_index = None;
-            for (i, (key, account)) in (0..message.account_keys.len())
+            for (i, (key, account)) in (0..message.account_keys_len())
                 .zip(loaded_transaction.accounts.iter_mut())
-                .filter(|(i, (key, _account))| message.is_non_loader_key(key, *i))
+                .filter(|(i, _account)| message.is_non_loader_key(*i))
             {
                 let is_nonce_account = prepare_if_nonce_account(
                     account,
@@ -985,31 +1018,34 @@ impl Accounts {
                     res,
                     maybe_nonce_rollback,
                     last_blockhash_with_fee_calculator,
-                    fix_recent_blockhashes_sysvar_delay,
                 );
                 if fee_payer_index.is_none() {
                     fee_payer_index = Some(i);
                 }
                 let is_fee_payer = Some(i) == fee_payer_index;
-                if message.is_writable(i)
+                if message.is_writable(i, demote_program_write_locks)
                     && (res.is_ok()
                         || (maybe_nonce_rollback.is_some() && (is_nonce_account || is_fee_payer)))
                 {
                     if res.is_err() {
                         match (is_nonce_account, is_fee_payer, maybe_nonce_rollback) {
                             // nonce is fee-payer, state updated in `prepare_if_nonce_account()`
-                            (true, true, Some((_, _, None))) => (),
+                            (true, true, Some((_, _, None, _))) => (),
                             // nonce not fee-payer, state updated in `prepare_if_nonce_account()`
-                            (true, false, Some((_, _, Some(_)))) => (),
+                            (true, false, Some((_, _, Some(_), _))) => (),
                             // not nonce, but fee-payer. rollback to cached state
-                            (false, true, Some((_, _, Some(fee_payer_account)))) => {
+                            (false, true, Some((_, _, Some(fee_payer_account), _))) => {
                                 *account = fee_payer_account.clone();
                             }
                             _ => panic!("unexpected nonce_rollback condition"),
                         }
                     }
                     if account.rent_epoch() == INITIAL_RENT_EPOCH {
-                        let rent = rent_collector.collect_from_created_account(key, account);
+                        let rent = rent_collector.collect_from_created_account(
+                            key,
+                            account,
+                            rent_for_sysvars,
+                        );
                         loaded_transaction.rent += rent;
                         loaded_transaction
                             .rent_debits
@@ -1027,23 +1063,28 @@ pub fn prepare_if_nonce_account(
     account: &mut AccountSharedData,
     account_pubkey: &Pubkey,
     tx_result: &Result<()>,
-    maybe_nonce_rollback: Option<(&Pubkey, &AccountSharedData, Option<&AccountSharedData>)>,
+    maybe_nonce_rollback: Option<(
+        &Pubkey,
+        &AccountSharedData,
+        Option<&AccountSharedData>,
+        bool,
+    )>,
     last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
-    fix_recent_blockhashes_sysvar_delay: bool,
 ) -> bool {
-    if let Some((nonce_key, nonce_acc, _maybe_fee_account)) = maybe_nonce_rollback {
+    if let Some((nonce_key, nonce_acc, _maybe_fee_account, advance_blockhash)) =
+        maybe_nonce_rollback
+    {
         if account_pubkey == nonce_key {
-            let overwrite = if tx_result.is_err() {
+            if tx_result.is_err() {
                 // Nonce TX failed with an InstructionError. Roll back
                 // its account state
                 *account = nonce_acc.clone();
-                true
-            } else {
-                // Retain overwrite on successful transactions until
-                // recent_blockhashes_sysvar_delay fix is activated
-                !fix_recent_blockhashes_sysvar_delay
-            };
-            if overwrite {
+            }
+
+            if advance_blockhash {
+                // Advance the stored blockhash to prevent fee theft by replaying
+                // transactions that have failed with an `InstructionError`
+
                 // Since hash_age_kind is DurableNonce, unwrap is safe here
                 let state = StateMut::<nonce::state::Versions>::state(nonce_acc)
                     .unwrap()
@@ -1104,13 +1145,24 @@ mod tests {
         message::Message,
         nonce, nonce_account,
         rent::Rent,
-        signature::{keypair_from_seed, Keypair, Signer},
+        signature::{keypair_from_seed, signers::Signers, Keypair, Signer},
         system_instruction, system_program,
+        transaction::Transaction,
     };
     use std::{
+        convert::TryFrom,
         sync::atomic::{AtomicBool, AtomicU64, Ordering},
         {thread, time},
     };
+
+    fn new_sanitized_tx<T: Signers>(
+        from_keypairs: &T,
+        message: Message,
+        recent_blockhash: Hash,
+    ) -> SanitizedTransaction {
+        SanitizedTransaction::try_from(Transaction::new(from_keypairs, message, recent_blockhash))
+            .unwrap()
+    }
 
     fn load_accounts_with_fee_and_rent(
         tx: Transaction,
@@ -1121,7 +1173,7 @@ mod tests {
     ) -> Vec<TransactionLoadResult> {
         let mut hash_queue = BlockhashQueue::new(100);
         hash_queue.register_hash(&tx.message().recent_blockhash, fee_calculator);
-        let accounts = Accounts::new_with_config(
+        let accounts = Accounts::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
@@ -1133,9 +1185,10 @@ mod tests {
         }
 
         let ancestors = vec![(0, 0)].into_iter().collect();
+        let sanitized_tx = SanitizedTransaction::try_from(tx).unwrap();
         accounts.load_accounts(
             &ancestors,
-            [tx].iter(),
+            &[sanitized_tx],
             vec![(Ok(()), None)],
             &hash_queue,
             error_counters,
@@ -1161,30 +1214,6 @@ mod tests {
     ) -> Vec<TransactionLoadResult> {
         let fee_calculator = FeeCalculator::default();
         load_accounts_with_fee(tx, ka, &fee_calculator, error_counters)
-    }
-
-    #[test]
-    fn test_load_accounts_no_key() {
-        let accounts: Vec<(Pubkey, AccountSharedData)> = Vec::new();
-        let mut error_counters = ErrorCounters::default();
-
-        let instructions = vec![CompiledInstruction::new(0, &(), vec![0])];
-        let tx = Transaction::new_with_compiled_instructions::<[&Keypair; 0]>(
-            &[],
-            &[],
-            Hash::default(),
-            vec![native_loader::id()],
-            instructions,
-        );
-
-        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
-
-        assert_eq!(error_counters.account_not_found, 1);
-        assert_eq!(loaded_accounts.len(), 1);
-        assert_eq!(
-            loaded_accounts[0],
-            (Err(TransactionError::AccountNotFound), None,)
-        );
     }
 
     #[test]
@@ -1268,7 +1297,9 @@ mod tests {
         );
 
         let fee_calculator = FeeCalculator::new(10);
-        assert_eq!(fee_calculator.calculate_fee(tx.message()), 10);
+        #[allow(deprecated)]
+        let fee = fee_calculator.calculate_fee(tx.message());
+        assert_eq!(fee, 10);
 
         let loaded_accounts =
             load_accounts_with_fee(tx, &accounts, &fee_calculator, &mut error_counters);
@@ -1494,41 +1525,6 @@ mod tests {
     }
 
     #[test]
-    fn test_load_accounts_bad_program_id() {
-        let mut accounts: Vec<(Pubkey, AccountSharedData)> = Vec::new();
-        let mut error_counters = ErrorCounters::default();
-
-        let keypair = Keypair::new();
-        let key0 = keypair.pubkey();
-        let key1 = Pubkey::new(&[5u8; 32]);
-
-        let account = AccountSharedData::new(1, 0, &Pubkey::default());
-        accounts.push((key0, account));
-
-        let mut account = AccountSharedData::new(40, 1, &native_loader::id());
-        account.set_executable(true);
-        accounts.push((key1, account));
-
-        let instructions = vec![CompiledInstruction::new(0, &(), vec![0])];
-        let tx = Transaction::new_with_compiled_instructions(
-            &[&keypair],
-            &[],
-            Hash::default(),
-            vec![key1],
-            instructions,
-        );
-
-        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
-
-        assert_eq!(error_counters.invalid_program_for_execution, 1);
-        assert_eq!(loaded_accounts.len(), 1);
-        assert_eq!(
-            loaded_accounts[0],
-            (Err(TransactionError::InvalidProgramForExecution), None,)
-        );
-    }
-
-    #[test]
     fn test_load_accounts_bad_owner() {
         let mut accounts: Vec<(Pubkey, AccountSharedData)> = Vec::new();
         let mut error_counters = ErrorCounters::default();
@@ -1659,7 +1655,7 @@ mod tests {
 
     #[test]
     fn test_load_by_program_slot() {
-        let accounts = Accounts::new_with_config(
+        let accounts = Accounts::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
@@ -1688,7 +1684,7 @@ mod tests {
 
     #[test]
     fn test_accounts_account_not_found() {
-        let accounts = Accounts::new_with_config(
+        let accounts = Accounts::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
@@ -1712,7 +1708,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_accounts_empty_bank_hash() {
-        let accounts = Accounts::new_with_config(
+        let accounts = Accounts::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
@@ -1734,7 +1730,7 @@ mod tests {
         let account2 = AccountSharedData::new(3, 0, &Pubkey::default());
         let account3 = AccountSharedData::new(4, 0, &Pubkey::default());
 
-        let accounts = Accounts::new_with_config(
+        let accounts = Accounts::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
@@ -1746,6 +1742,8 @@ mod tests {
         accounts.store_slow_uncached(0, &keypair2.pubkey(), &account2);
         accounts.store_slow_uncached(0, &keypair3.pubkey(), &account3);
 
+        let demote_program_write_locks = true;
+
         let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
         let message = Message::new_with_compiled_instructions(
             1,
@@ -1755,8 +1753,8 @@ mod tests {
             Hash::default(),
             instructions,
         );
-        let tx = Transaction::new(&[&keypair0], message, Hash::default());
-        let results0 = accounts.lock_accounts([tx.clone()].iter());
+        let tx = new_sanitized_tx(&[&keypair0], message, Hash::default());
+        let results0 = accounts.lock_accounts([tx.clone()].iter(), demote_program_write_locks);
 
         assert!(results0[0].is_ok());
         assert_eq!(
@@ -1779,7 +1777,7 @@ mod tests {
             Hash::default(),
             instructions,
         );
-        let tx0 = Transaction::new(&[&keypair2], message, Hash::default());
+        let tx0 = new_sanitized_tx(&[&keypair2], message, Hash::default());
         let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
         let message = Message::new_with_compiled_instructions(
             1,
@@ -1789,9 +1787,9 @@ mod tests {
             Hash::default(),
             instructions,
         );
-        let tx1 = Transaction::new(&[&keypair1], message, Hash::default());
+        let tx1 = new_sanitized_tx(&[&keypair1], message, Hash::default());
         let txs = vec![tx0, tx1];
-        let results1 = accounts.lock_accounts(txs.iter());
+        let results1 = accounts.lock_accounts(txs.iter(), demote_program_write_locks);
 
         assert!(results1[0].is_ok()); // Read-only account (keypair1) can be referenced multiple times
         assert!(results1[1].is_err()); // Read-only account (keypair1) cannot also be locked as writable
@@ -1806,8 +1804,8 @@ mod tests {
             2
         );
 
-        accounts.unlock_accounts([tx].iter(), &results0);
-        accounts.unlock_accounts(txs.iter(), &results1);
+        accounts.unlock_accounts([tx].iter(), &results0, demote_program_write_locks);
+        accounts.unlock_accounts(txs.iter(), &results1, demote_program_write_locks);
         let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
         let message = Message::new_with_compiled_instructions(
             1,
@@ -1817,8 +1815,8 @@ mod tests {
             Hash::default(),
             instructions,
         );
-        let tx = Transaction::new(&[&keypair1], message, Hash::default());
-        let results2 = accounts.lock_accounts([tx].iter());
+        let tx = new_sanitized_tx(&[&keypair1], message, Hash::default());
+        let results2 = accounts.lock_accounts([tx].iter(), demote_program_write_locks);
         assert!(results2[0].is_ok()); // Now keypair1 account can be locked as writable
 
         // Check that read-only lock with zero references is deleted
@@ -1844,7 +1842,7 @@ mod tests {
         let account1 = AccountSharedData::new(2, 0, &Pubkey::default());
         let account2 = AccountSharedData::new(3, 0, &Pubkey::default());
 
-        let accounts = Accounts::new_with_config(
+        let accounts = Accounts::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
@@ -1854,6 +1852,8 @@ mod tests {
         accounts.store_slow_uncached(0, &keypair0.pubkey(), &account0);
         accounts.store_slow_uncached(0, &keypair1.pubkey(), &account1);
         accounts.store_slow_uncached(0, &keypair2.pubkey(), &account2);
+
+        let demote_program_write_locks = true;
 
         let accounts_arc = Arc::new(accounts);
 
@@ -1866,7 +1866,7 @@ mod tests {
             Hash::default(),
             instructions,
         );
-        let readonly_tx = Transaction::new(&[&keypair0], readonly_message, Hash::default());
+        let readonly_tx = new_sanitized_tx(&[&keypair0], readonly_message, Hash::default());
 
         let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
         let writable_message = Message::new_with_compiled_instructions(
@@ -1877,7 +1877,7 @@ mod tests {
             Hash::default(),
             instructions,
         );
-        let writable_tx = Transaction::new(&[&keypair1], writable_message, Hash::default());
+        let writable_tx = new_sanitized_tx(&[&keypair1], writable_message, Hash::default());
 
         let counter_clone = counter.clone();
         let accounts_clone = accounts_arc.clone();
@@ -1887,13 +1887,15 @@ mod tests {
             let exit_clone = exit_clone.clone();
             loop {
                 let txs = vec![writable_tx.clone()];
-                let results = accounts_clone.clone().lock_accounts(txs.iter());
+                let results = accounts_clone
+                    .clone()
+                    .lock_accounts(txs.iter(), demote_program_write_locks);
                 for result in results.iter() {
                     if result.is_ok() {
                         counter_clone.clone().fetch_add(1, Ordering::SeqCst);
                     }
                 }
-                accounts_clone.unlock_accounts(txs.iter(), &results);
+                accounts_clone.unlock_accounts(txs.iter(), &results, demote_program_write_locks);
                 if exit_clone.clone().load(Ordering::Relaxed) {
                     break;
                 }
@@ -1902,16 +1904,83 @@ mod tests {
         let counter_clone = counter;
         for _ in 0..5 {
             let txs = vec![readonly_tx.clone()];
-            let results = accounts_arc.clone().lock_accounts(txs.iter());
+            let results = accounts_arc
+                .clone()
+                .lock_accounts(txs.iter(), demote_program_write_locks);
             if results[0].is_ok() {
                 let counter_value = counter_clone.clone().load(Ordering::SeqCst);
                 thread::sleep(time::Duration::from_millis(50));
                 assert_eq!(counter_value, counter_clone.clone().load(Ordering::SeqCst));
             }
-            accounts_arc.unlock_accounts(txs.iter(), &results);
+            accounts_arc.unlock_accounts(txs.iter(), &results, demote_program_write_locks);
             thread::sleep(time::Duration::from_millis(50));
         }
         exit.store(true, Ordering::Relaxed);
+    }
+
+    #[test]
+    fn test_demote_program_write_locks() {
+        let keypair0 = Keypair::new();
+        let keypair1 = Keypair::new();
+        let keypair2 = Keypair::new();
+        let keypair3 = Keypair::new();
+
+        let account0 = AccountSharedData::new(1, 0, &Pubkey::default());
+        let account1 = AccountSharedData::new(2, 0, &Pubkey::default());
+        let account2 = AccountSharedData::new(3, 0, &Pubkey::default());
+        let account3 = AccountSharedData::new(4, 0, &Pubkey::default());
+
+        let accounts = Accounts::new_with_config_for_tests(
+            Vec::new(),
+            &ClusterType::Development,
+            AccountSecondaryIndexes::default(),
+            false,
+            AccountShrinkThreshold::default(),
+        );
+        accounts.store_slow_uncached(0, &keypair0.pubkey(), &account0);
+        accounts.store_slow_uncached(0, &keypair1.pubkey(), &account1);
+        accounts.store_slow_uncached(0, &keypair2.pubkey(), &account2);
+        accounts.store_slow_uncached(0, &keypair3.pubkey(), &account3);
+
+        let demote_program_write_locks = true;
+
+        let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
+        let message = Message::new_with_compiled_instructions(
+            1,
+            0,
+            0, // All accounts marked as writable
+            vec![keypair0.pubkey(), keypair1.pubkey(), native_loader::id()],
+            Hash::default(),
+            instructions,
+        );
+        let tx = new_sanitized_tx(&[&keypair0], message, Hash::default());
+        let results0 = accounts.lock_accounts([tx].iter(), demote_program_write_locks);
+
+        assert!(results0[0].is_ok());
+        // Instruction program-id account demoted to readonly
+        assert_eq!(
+            *accounts
+                .account_locks
+                .lock()
+                .unwrap()
+                .readonly_locks
+                .get(&native_loader::id())
+                .unwrap(),
+            1
+        );
+        // Non-program accounts remain writable
+        assert!(accounts
+            .account_locks
+            .lock()
+            .unwrap()
+            .write_locks
+            .contains(&keypair0.pubkey()));
+        assert!(accounts
+            .account_locks
+            .lock()
+            .unwrap()
+            .write_locks
+            .contains(&keypair1.pubkey()));
     }
 
     #[test]
@@ -1938,7 +2007,7 @@ mod tests {
             (message.account_keys[0], account0),
             (message.account_keys[1], account2.clone()),
         ];
-        let tx0 = Transaction::new(&[&keypair0], message, Hash::default());
+        let tx0 = new_sanitized_tx(&[&keypair0], message, Hash::default());
 
         let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
         let message = Message::new_with_compiled_instructions(
@@ -1953,7 +2022,7 @@ mod tests {
             (message.account_keys[0], account1),
             (message.account_keys[1], account2),
         ];
-        let tx1 = Transaction::new(&[&keypair1], message, Hash::default());
+        let tx1 = new_sanitized_tx(&[&keypair1], message, Hash::default());
 
         let loaders = vec![(Ok(()), None), (Ok(()), None)];
 
@@ -1983,7 +2052,7 @@ mod tests {
 
         let mut loaded = vec![loaded0, loaded1];
 
-        let accounts = Accounts::new_with_config(
+        let accounts = Accounts::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
@@ -1997,14 +2066,16 @@ mod tests {
                 .unwrap()
                 .insert_new_readonly(&pubkey);
         }
-        let txs = &[tx0, tx1];
+        let txs = vec![tx0, tx1];
         let collected_accounts = accounts.collect_accounts_to_store(
-            txs.iter(),
+            &txs,
             &loaders,
             loaded.as_mut_slice(),
             &rent_collector,
             &(Hash::default(), FeeCalculator::default()),
             true,
+            true, // merge_nonce_error_into_system_error
+            true, // demote_program_write_locks
         );
         assert_eq!(collected_accounts.len(), 2);
         assert!(collected_accounts
@@ -2028,15 +2099,9 @@ mod tests {
     }
 
     #[test]
-    fn test_has_duplicates() {
-        assert!(!Accounts::has_duplicates(&[1, 2]));
-        assert!(Accounts::has_duplicates(&[1, 2, 1]));
-    }
-
-    #[test]
     fn huge_clean() {
         solana_logger::setup();
-        let accounts = Accounts::new_with_config(
+        let accounts = Accounts::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
@@ -2059,20 +2124,21 @@ mod tests {
             }
         }
         info!("done..cleaning..");
-        accounts.accounts_db.clean_accounts(None, false);
+        accounts.accounts_db.clean_accounts(None, false, None);
     }
 
     fn load_accounts_no_store(accounts: &Accounts, tx: Transaction) -> Vec<TransactionLoadResult> {
+        let tx = SanitizedTransaction::try_from(tx).unwrap();
         let rent_collector = RentCollector::default();
         let fee_calculator = FeeCalculator::new(10);
         let mut hash_queue = BlockhashQueue::new(100);
-        hash_queue.register_hash(&tx.message().recent_blockhash, &fee_calculator);
+        hash_queue.register_hash(tx.message().recent_blockhash(), &fee_calculator);
 
         let ancestors = vec![(0, 0)].into_iter().collect();
         let mut error_counters = ErrorCounters::default();
         accounts.load_accounts(
             &ancestors,
-            [tx].iter(),
+            &[tx],
             vec![(Ok(()), None)],
             &hash_queue,
             &mut error_counters,
@@ -2084,7 +2150,7 @@ mod tests {
     #[test]
     fn test_instructions() {
         solana_logger::setup();
-        let accounts = Accounts::new_with_config(
+        let accounts = Accounts::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
@@ -2138,18 +2204,23 @@ mod tests {
         account: &mut AccountSharedData,
         account_pubkey: &Pubkey,
         tx_result: &Result<()>,
-        maybe_nonce_rollback: Option<(&Pubkey, &AccountSharedData, Option<&AccountSharedData>)>,
+        maybe_nonce_rollback: Option<(
+            &Pubkey,
+            &AccountSharedData,
+            Option<&AccountSharedData>,
+            bool,
+        )>,
         last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
         expect_account: &AccountSharedData,
     ) -> bool {
         // Verify expect_account's relationship
         match maybe_nonce_rollback {
-            Some((nonce_pubkey, _nonce_account, _maybe_fee_account))
+            Some((nonce_pubkey, _nonce_account, _maybe_fee_account, _))
                 if nonce_pubkey == account_pubkey && tx_result.is_ok() =>
             {
                 assert_eq!(expect_account, account) // Account update occurs in system_instruction_processor
             }
-            Some((nonce_pubkey, nonce_account, _maybe_fee_account))
+            Some((nonce_pubkey, nonce_account, _maybe_fee_account, _))
                 if nonce_pubkey == account_pubkey =>
             {
                 assert_ne!(expect_account, nonce_account)
@@ -2163,7 +2234,6 @@ mod tests {
             tx_result,
             maybe_nonce_rollback,
             last_blockhash_with_fee_calculator,
-            true,
         );
         expect_account == account
     }
@@ -2193,7 +2263,8 @@ mod tests {
             Some((
                 &pre_account_pubkey,
                 &pre_account,
-                maybe_fee_account.as_ref()
+                maybe_fee_account.as_ref(),
+                false,
             )),
             &(last_blockhash, last_fee_calculator),
             &expect_account,
@@ -2244,7 +2315,8 @@ mod tests {
             Some((
                 &pre_account_pubkey,
                 &pre_account,
-                maybe_fee_account.as_ref()
+                maybe_fee_account.as_ref(),
+                true,
             )),
             &(last_blockhash, last_fee_calculator),
             &expect_account,
@@ -2284,7 +2356,8 @@ mod tests {
             Some((
                 &pre_account_pubkey,
                 &pre_account,
-                maybe_fee_account.as_ref()
+                maybe_fee_account.as_ref(),
+                true,
             )),
             &(last_blockhash, last_fee_calculator),
             &expect_account,
@@ -2326,7 +2399,7 @@ mod tests {
             (message.account_keys[3], to_account),
             (message.account_keys[4], recent_blockhashes_sysvar_account),
         ];
-        let tx = Transaction::new(&[&nonce_authority, &from], message, blockhash);
+        let tx = new_sanitized_tx(&[&nonce_authority, &from], message, blockhash);
 
         let nonce_state =
             nonce::state::Versions::new_current(nonce::State::Initialized(nonce::state::Data {
@@ -2366,21 +2439,23 @@ mod tests {
         let mut loaded = vec![loaded];
 
         let next_blockhash = Hash::new_unique();
-        let accounts = Accounts::new_with_config(
+        let accounts = Accounts::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
             false,
             AccountShrinkThreshold::default(),
         );
-        let txs = &[tx];
+        let txs = vec![tx];
         let collected_accounts = accounts.collect_accounts_to_store(
-            txs.iter(),
+            &txs,
             &loaders,
             loaded.as_mut_slice(),
             &rent_collector,
             &(next_blockhash, FeeCalculator::default()),
             true,
+            true, // merge_nonce_error_into_system_error
+            true, // demote_program_write_locks
         );
         assert_eq!(collected_accounts.len(), 2);
         assert_eq!(
@@ -2443,7 +2518,7 @@ mod tests {
             (message.account_keys[3], to_account),
             (message.account_keys[4], recent_blockhashes_sysvar_account),
         ];
-        let tx = Transaction::new(&[&nonce_authority, &from], message, blockhash);
+        let tx = new_sanitized_tx(&[&nonce_authority, &from], message, blockhash);
 
         let nonce_state =
             nonce::state::Versions::new_current(nonce::State::Initialized(nonce::state::Data {
@@ -2482,21 +2557,23 @@ mod tests {
         let mut loaded = vec![loaded];
 
         let next_blockhash = Hash::new_unique();
-        let accounts = Accounts::new_with_config(
+        let accounts = Accounts::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
             false,
             AccountShrinkThreshold::default(),
         );
-        let txs = &[tx];
+        let txs = vec![tx];
         let collected_accounts = accounts.collect_accounts_to_store(
-            txs.iter(),
+            &txs,
             &loaders,
             loaded.as_mut_slice(),
             &rent_collector,
             &(next_blockhash, FeeCalculator::default()),
             true,
+            true, // merge_nonce_error_into_system_error
+            true, // demote_program_write_locks
         );
         assert_eq!(collected_accounts.len(), 1);
         let collected_nonce_account = collected_accounts
@@ -2517,7 +2594,7 @@ mod tests {
 
     #[test]
     fn test_load_largest_accounts() {
-        let accounts = Accounts::new_with_config(
+        let accounts = Accounts::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),

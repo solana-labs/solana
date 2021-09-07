@@ -1,5 +1,5 @@
 use super::*;
-use solana_ledger::entry::Entry;
+use solana_entry::entry::Entry;
 use solana_ledger::shred::Shredder;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::Keypair;
@@ -27,7 +27,7 @@ impl BroadcastRun for BroadcastFakeShredsRun {
         keypair: &Keypair,
         blockstore: &Arc<Blockstore>,
         receiver: &Receiver<WorkingBankEntry>,
-        socket_sender: &Sender<(TransmitShreds, Option<BroadcastShredBatchInfo>)>,
+        socket_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
         blockstore_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
     ) -> Result<()> {
         // 1) Pull entries from banking stage
@@ -84,19 +84,22 @@ impl BroadcastRun for BroadcastFakeShredsRun {
         let data_shreds = Arc::new(data_shreds);
         blockstore_sender.send((data_shreds.clone(), None))?;
 
+        let slot = bank.slot();
+        let batch_info = BroadcastShredBatchInfo {
+            slot,
+            num_expected_batches: None,
+            slot_start_ts: Instant::now(),
+        };
         // 3) Start broadcast step
         //some indicates fake shreds
-        socket_sender.send((
-            (Some(Arc::new(HashMap::new())), Arc::new(fake_data_shreds)),
-            None,
-        ))?;
-        socket_sender.send((
-            (Some(Arc::new(HashMap::new())), Arc::new(fake_coding_shreds)),
-            None,
-        ))?;
+        let batch_info = Some(batch_info);
+        assert!(fake_data_shreds.iter().all(|shred| shred.slot() == slot));
+        assert!(fake_coding_shreds.iter().all(|shred| shred.slot() == slot));
+        socket_sender.send((Arc::new(fake_data_shreds), batch_info.clone()))?;
+        socket_sender.send((Arc::new(fake_coding_shreds), batch_info))?;
         //none indicates real shreds
-        socket_sender.send(((None, data_shreds), None))?;
-        socket_sender.send(((None, Arc::new(coding_shreds)), None))?;
+        socket_sender.send((data_shreds, None))?;
+        socket_sender.send((Arc::new(coding_shreds), None))?;
 
         Ok(())
     }
@@ -107,15 +110,12 @@ impl BroadcastRun for BroadcastFakeShredsRun {
         sock: &UdpSocket,
         _bank_forks: &Arc<RwLock<BankForks>>,
     ) -> Result<()> {
-        for ((stakes, data_shreds), _) in receiver.lock().unwrap().iter() {
+        for (data_shreds, batch_info) in receiver.lock().unwrap().iter() {
+            let fake = batch_info.is_some();
             let peers = cluster_info.tvu_peers();
             peers.iter().enumerate().for_each(|(i, peer)| {
-                if i <= self.partition && stakes.is_some() {
+                if fake == (i <= self.partition) {
                     // Send fake shreds to the first N peers
-                    data_shreds.iter().for_each(|b| {
-                        sock.send_to(&b.payload, &peer.tvu_forwards).unwrap();
-                    });
-                } else if i > self.partition && stakes.is_none() {
                     data_shreds.iter().for_each(|b| {
                         sock.send_to(&b.payload, &peer.tvu_forwards).unwrap();
                     });
@@ -140,14 +140,16 @@ impl BroadcastRun for BroadcastFakeShredsRun {
 mod tests {
     use super::*;
     use solana_gossip::contact_info::ContactInfo;
+    use solana_streamer::socket::SocketAddrSpace;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
     #[test]
     fn test_tvu_peers_ordering() {
-        let cluster = ClusterInfo::new_with_invalid_keypair(ContactInfo::new_localhost(
-            &solana_sdk::pubkey::new_rand(),
-            0,
-        ));
+        let cluster = ClusterInfo::new(
+            ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), 0),
+            Arc::new(Keypair::new()),
+            SocketAddrSpace::Unspecified,
+        );
         cluster.insert_info(ContactInfo::new_with_socketaddr(&SocketAddr::new(
             IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1)),
             8080,

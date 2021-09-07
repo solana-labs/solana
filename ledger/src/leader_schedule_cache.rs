@@ -270,7 +270,7 @@ mod tests {
     #[test]
     fn test_new_cache() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(2);
-        let bank = Bank::new(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
         let cache = LeaderScheduleCache::new_from_bank(&bank);
         assert_eq!(bank.slot(), 0);
         assert_eq!(cache.max_schedules(), MAX_SCHEDULES);
@@ -333,7 +333,7 @@ mod tests {
         let slots_per_epoch = MINIMUM_SLOTS_PER_EPOCH as u64;
         let epoch_schedule = EpochSchedule::custom(slots_per_epoch, slots_per_epoch / 2, true);
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(2);
-        let bank = Arc::new(Bank::new(&genesis_config));
+        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
         let cache = Arc::new(LeaderScheduleCache::new(epoch_schedule, &bank));
 
         let num_threads = 10;
@@ -380,7 +380,7 @@ mod tests {
             false,
         );
 
-        let bank = Bank::new(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
         let cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
 
         assert_eq!(
@@ -426,7 +426,7 @@ mod tests {
                 .genesis_config;
         genesis_config.epoch_schedule.warmup = false;
 
-        let bank = Bank::new(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
         let cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         let ledger_path = get_tmp_ledger_path!();
         {
@@ -508,7 +508,7 @@ mod tests {
         } = create_genesis_config(10_000 * bootstrap_validator_stake_lamports());
         genesis_config.epoch_schedule.warmup = false;
 
-        let bank = Bank::new(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
         let cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
 
         // Create new vote account
@@ -576,7 +576,7 @@ mod tests {
     #[test]
     fn test_schedule_for_unconfirmed_epoch() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(2);
-        let bank = Arc::new(Bank::new(&genesis_config));
+        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
         let cache = LeaderScheduleCache::new_from_bank(&bank);
 
         assert_eq!(*cache.max_epoch.read().unwrap(), 1);
@@ -607,7 +607,7 @@ mod tests {
     #[test]
     fn test_set_max_schedules() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(2);
-        let bank = Arc::new(Bank::new(&genesis_config));
+        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
         let mut cache = LeaderScheduleCache::new_from_bank(&bank);
 
         // Max schedules must be greater than 0

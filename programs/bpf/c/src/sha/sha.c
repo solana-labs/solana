@@ -1,7 +1,11 @@
 /**
  * @brief SHA256 Syscall test
  */
-#include <solana_sdk.h>
+#include <sol/sha.h>
+#include <sol/keccak.h>
+#include <sol/blake3.h>
+#include <sol/string.h>
+#include <sol/assert.h>
 
 extern uint64_t entrypoint(const uint8_t *input) {
 

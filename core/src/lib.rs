@@ -8,6 +8,7 @@
 //!
 
 pub mod accounts_hash_verifier;
+pub mod ancestor_hashes_service;
 pub mod banking_stage;
 pub mod broadcast_stage;
 pub mod cache_block_meta_service;
@@ -22,6 +23,7 @@ pub mod consensus;
 pub mod cost_model;
 pub mod cost_tracker;
 pub mod cost_update_service;
+pub mod duplicate_repair_status;
 pub mod execute_cost_table;
 pub mod fetch_stage;
 pub mod fork_choice;
@@ -51,6 +53,7 @@ pub mod sigverify_shreds;
 pub mod sigverify_stage;
 pub mod snapshot_packager_service;
 pub mod test_validator;
+pub mod tower_storage;
 pub mod tpu;
 pub mod tree_diff;
 pub mod tvu;
@@ -59,6 +62,7 @@ pub mod validator;
 pub mod verified_vote_packets;
 pub mod vote_simulator;
 pub mod vote_stake_tracker;
+pub mod voting_service;
 pub mod window_service;
 
 #[macro_use]

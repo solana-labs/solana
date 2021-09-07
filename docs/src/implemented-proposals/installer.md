@@ -4,7 +4,7 @@ title: Cluster Software Installation and Updates
 
 Currently users are required to build the solana cluster software themselves from the git repository and manually update it, which is error prone and inconvenient.
 
-This document proposes an easy to use software install and updater that can be used to deploy pre-built binaries for supported platforms. Users may elect to use binaries supplied by Solana or any other party they trust. Deployment of updates is managed using an on-chain update manifest program.
+This document proposes an easy to use software install and updater that can be used to deploy pre-built binaries for supported platforms. Users may elect to use binaries supplied by Solana or any other party provider. Deployment of updates is managed using an on-chain update manifest program.
 
 ## Motivating Examples
 

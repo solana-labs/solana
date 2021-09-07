@@ -1,14 +1,16 @@
 use crate::{alloc, BpfError};
 use alloc::Alloc;
+use solana_program_runtime::InstructionProcessor;
 use solana_rbpf::{
     aligned_memory::AlignedMemory,
-    ebpf::MM_HEAP_START,
+    ebpf,
     error::EbpfError,
     memory_region::{AccessType, MemoryMapping},
     question_mark,
     vm::{EbpfVm, SyscallObject, SyscallRegistry},
 };
-use solana_runtime::message_processor::MessageProcessor;
+#[allow(deprecated)]
+use solana_sdk::sysvar::fees::Fees;
 use solana_sdk::{
     account::{Account, AccountSharedData, ReadableAccount},
     account_info::AccountInfo,
@@ -19,9 +21,9 @@ use solana_sdk::{
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     epoch_schedule::EpochSchedule,
     feature_set::{
-        blake3_syscall_enabled, cpi_data_cost, enforce_aligned_host_addrs,
-        keccak256_syscall_enabled, memory_ops_syscalls, secp256k1_recover_syscall_enabled,
-        sysvar_via_syscall, update_data_on_realloc,
+        blake3_syscall_enabled, close_upgradeable_program_accounts, demote_program_write_locks,
+        disable_fees_sysvar, enforce_aligned_host_addrs, libsecp256k1_0_5_upgrade_enabled,
+        mem_overlap_fix, secp256k1_recover_syscall_enabled,
     },
     hash::{Hasher, HASH_BYTES},
     ic_msg,
@@ -35,7 +37,7 @@ use solana_sdk::{
     secp256k1_recover::{
         Secp256k1RecoverError, SECP256K1_PUBLIC_KEY_LENGTH, SECP256K1_SIGNATURE_LENGTH,
     },
-    sysvar::{self, fees::Fees, Sysvar, SysvarId},
+    sysvar::{self, Sysvar, SysvarId},
 };
 use std::{
     alloc::Layout,
@@ -132,10 +134,7 @@ pub fn register_syscalls(
     )?;
 
     syscall_registry.register_syscall_by_name(b"sol_sha256", SyscallSha256::call)?;
-
-    if invoke_context.is_feature_active(&keccak256_syscall_enabled::id()) {
-        syscall_registry.register_syscall_by_name(b"sol_keccak256", SyscallKeccak256::call)?;
-    }
+    syscall_registry.register_syscall_by_name(b"sol_keccak256", SyscallKeccak256::call)?;
 
     if invoke_context.is_feature_active(&secp256k1_recover_syscall_enabled::id()) {
         syscall_registry
@@ -146,25 +145,23 @@ pub fn register_syscalls(
         syscall_registry.register_syscall_by_name(b"sol_blake3", SyscallBlake3::call)?;
     }
 
-    if invoke_context.is_feature_active(&sysvar_via_syscall::id()) {
-        syscall_registry
-            .register_syscall_by_name(b"sol_get_clock_sysvar", SyscallGetClockSysvar::call)?;
-        syscall_registry.register_syscall_by_name(
-            b"sol_get_epoch_schedule_sysvar",
-            SyscallGetEpochScheduleSysvar::call,
-        )?;
+    syscall_registry
+        .register_syscall_by_name(b"sol_get_clock_sysvar", SyscallGetClockSysvar::call)?;
+    syscall_registry.register_syscall_by_name(
+        b"sol_get_epoch_schedule_sysvar",
+        SyscallGetEpochScheduleSysvar::call,
+    )?;
+    if invoke_context.is_feature_active(&disable_fees_sysvar::id()) {
         syscall_registry
             .register_syscall_by_name(b"sol_get_fees_sysvar", SyscallGetFeesSysvar::call)?;
-        syscall_registry
-            .register_syscall_by_name(b"sol_get_rent_sysvar", SyscallGetRentSysvar::call)?;
     }
+    syscall_registry
+        .register_syscall_by_name(b"sol_get_rent_sysvar", SyscallGetRentSysvar::call)?;
 
-    if invoke_context.is_feature_active(&memory_ops_syscalls::id()) {
-        syscall_registry.register_syscall_by_name(b"sol_memcpy_", SyscallMemcpy::call)?;
-        syscall_registry.register_syscall_by_name(b"sol_memmove_", SyscallMemmove::call)?;
-        syscall_registry.register_syscall_by_name(b"sol_memcmp_", SyscallMemcmp::call)?;
-        syscall_registry.register_syscall_by_name(b"sol_memset_", SyscallMemset::call)?;
-    }
+    syscall_registry.register_syscall_by_name(b"sol_memcpy_", SyscallMemcpy::call)?;
+    syscall_registry.register_syscall_by_name(b"sol_memmove_", SyscallMemmove::call)?;
+    syscall_registry.register_syscall_by_name(b"sol_memcmp_", SyscallMemcmp::call)?;
+    syscall_registry.register_syscall_by_name(b"sol_memset_", SyscallMemset::call)?;
 
     // Cross-program invocation syscalls
     syscall_registry
@@ -197,7 +194,7 @@ pub fn bind_syscall_context_objects<'a>(
     invoke_context: &'a mut dyn InvokeContext,
     heap: AlignedMemory,
 ) -> Result<(), EbpfError<BpfError>> {
-    let bpf_compute_budget = invoke_context.get_bpf_compute_budget();
+    let compute_budget = invoke_context.get_compute_budget();
     let enforce_aligned_host_addrs =
         invoke_context.is_feature_active(&enforce_aligned_host_addrs::id());
 
@@ -223,7 +220,7 @@ pub fn bind_syscall_context_objects<'a>(
     )?;
     vm.bind_syscall_context_object(
         Box::new(SyscallLogU64 {
-            cost: bpf_compute_budget.log_64_units,
+            cost: compute_budget.log_64_units,
             compute_meter: invoke_context.get_compute_meter(),
             logger: invoke_context.get_logger(),
         }),
@@ -241,7 +238,7 @@ pub fn bind_syscall_context_objects<'a>(
 
     vm.bind_syscall_context_object(
         Box::new(SyscallLogPubkey {
-            cost: bpf_compute_budget.log_pubkey_units,
+            cost: compute_budget.log_pubkey_units,
             compute_meter: invoke_context.get_compute_meter(),
             logger: invoke_context.get_logger(),
             loader_id,
@@ -252,7 +249,7 @@ pub fn bind_syscall_context_objects<'a>(
 
     vm.bind_syscall_context_object(
         Box::new(SyscallCreateProgramAddress {
-            cost: bpf_compute_budget.create_program_address_units,
+            cost: compute_budget.create_program_address_units,
             compute_meter: invoke_context.get_compute_meter(),
             loader_id,
             enforce_aligned_host_addrs,
@@ -262,7 +259,7 @@ pub fn bind_syscall_context_objects<'a>(
 
     vm.bind_syscall_context_object(
         Box::new(SyscallTryFindProgramAddress {
-            cost: bpf_compute_budget.create_program_address_units,
+            cost: compute_budget.create_program_address_units,
             compute_meter: invoke_context.get_compute_meter(),
             loader_id,
             enforce_aligned_host_addrs,
@@ -272,8 +269,8 @@ pub fn bind_syscall_context_objects<'a>(
 
     vm.bind_syscall_context_object(
         Box::new(SyscallSha256 {
-            sha256_base_cost: bpf_compute_budget.sha256_base_cost,
-            sha256_byte_cost: bpf_compute_budget.sha256_byte_cost,
+            sha256_base_cost: compute_budget.sha256_base_cost,
+            sha256_byte_cost: compute_budget.sha256_byte_cost,
             compute_meter: invoke_context.get_compute_meter(),
             loader_id,
             enforce_aligned_host_addrs,
@@ -281,59 +278,56 @@ pub fn bind_syscall_context_objects<'a>(
         None,
     )?;
 
-    bind_feature_gated_syscall_context_object!(
-        vm,
-        invoke_context.is_feature_active(&keccak256_syscall_enabled::id()),
+    vm.bind_syscall_context_object(
         Box::new(SyscallKeccak256 {
-            base_cost: bpf_compute_budget.sha256_base_cost,
-            byte_cost: bpf_compute_budget.sha256_byte_cost,
+            base_cost: compute_budget.sha256_base_cost,
+            byte_cost: compute_budget.sha256_byte_cost,
             compute_meter: invoke_context.get_compute_meter(),
             loader_id,
         }),
-    );
+        None,
+    )?;
 
-    bind_feature_gated_syscall_context_object!(
-        vm,
-        invoke_context.is_feature_active(&memory_ops_syscalls::id()),
+    vm.bind_syscall_context_object(
         Box::new(SyscallMemcpy {
-            cost: invoke_context.get_bpf_compute_budget().cpi_bytes_per_unit,
+            cost: invoke_context.get_compute_budget().cpi_bytes_per_unit,
             compute_meter: invoke_context.get_compute_meter(),
             loader_id,
+            mem_overlap_fix: invoke_context.is_feature_active(&mem_overlap_fix::id()),
         }),
-    );
-    bind_feature_gated_syscall_context_object!(
-        vm,
-        invoke_context.is_feature_active(&memory_ops_syscalls::id()),
+        None,
+    )?;
+    vm.bind_syscall_context_object(
         Box::new(SyscallMemmove {
-            cost: invoke_context.get_bpf_compute_budget().cpi_bytes_per_unit,
+            cost: invoke_context.get_compute_budget().cpi_bytes_per_unit,
             compute_meter: invoke_context.get_compute_meter(),
             loader_id,
         }),
-    );
-    bind_feature_gated_syscall_context_object!(
-        vm,
-        invoke_context.is_feature_active(&memory_ops_syscalls::id()),
+        None,
+    )?;
+    vm.bind_syscall_context_object(
         Box::new(SyscallMemcmp {
-            cost: invoke_context.get_bpf_compute_budget().cpi_bytes_per_unit,
+            cost: invoke_context.get_compute_budget().cpi_bytes_per_unit,
             compute_meter: invoke_context.get_compute_meter(),
             loader_id,
         }),
-    );
-    bind_feature_gated_syscall_context_object!(
-        vm,
-        invoke_context.is_feature_active(&memory_ops_syscalls::id()),
+        None,
+    )?;
+    vm.bind_syscall_context_object(
         Box::new(SyscallMemset {
-            cost: invoke_context.get_bpf_compute_budget().cpi_bytes_per_unit,
+            cost: invoke_context.get_compute_budget().cpi_bytes_per_unit,
             compute_meter: invoke_context.get_compute_meter(),
             loader_id,
         }),
-    );
+        None,
+    )?;
+
     bind_feature_gated_syscall_context_object!(
         vm,
         invoke_context.is_feature_active(&blake3_syscall_enabled::id()),
         Box::new(SyscallBlake3 {
-            base_cost: bpf_compute_budget.sha256_base_cost,
-            byte_cost: bpf_compute_budget.sha256_byte_cost,
+            base_cost: compute_budget.sha256_base_cost,
+            byte_cost: compute_budget.sha256_byte_cost,
             compute_meter: invoke_context.get_compute_meter(),
             loader_id,
         }),
@@ -343,48 +337,48 @@ pub fn bind_syscall_context_objects<'a>(
         vm,
         invoke_context.is_feature_active(&secp256k1_recover_syscall_enabled::id()),
         Box::new(SyscallSecp256k1Recover {
-            cost: bpf_compute_budget.secp256k1_recover_cost,
+            cost: compute_budget.secp256k1_recover_cost,
             compute_meter: invoke_context.get_compute_meter(),
             loader_id,
+            libsecp256k1_0_5_upgrade_enabled: invoke_context
+                .is_feature_active(&libsecp256k1_0_5_upgrade_enabled::id()),
         }),
     );
 
-    let is_sysvar_via_syscall_active = invoke_context.is_feature_active(&sysvar_via_syscall::id());
+    let is_fee_sysvar_via_syscall_active =
+        !invoke_context.is_feature_active(&disable_fees_sysvar::id());
 
     let invoke_context = Rc::new(RefCell::new(invoke_context));
 
-    bind_feature_gated_syscall_context_object!(
-        vm,
-        is_sysvar_via_syscall_active,
+    vm.bind_syscall_context_object(
         Box::new(SyscallGetClockSysvar {
             invoke_context: invoke_context.clone(),
             loader_id,
         }),
-    );
-    bind_feature_gated_syscall_context_object!(
-        vm,
-        is_sysvar_via_syscall_active,
+        None,
+    )?;
+    vm.bind_syscall_context_object(
         Box::new(SyscallGetEpochScheduleSysvar {
             invoke_context: invoke_context.clone(),
             loader_id,
         }),
-    );
+        None,
+    )?;
     bind_feature_gated_syscall_context_object!(
         vm,
-        is_sysvar_via_syscall_active,
+        is_fee_sysvar_via_syscall_active,
         Box::new(SyscallGetFeesSysvar {
             invoke_context: invoke_context.clone(),
             loader_id,
         }),
     );
-    bind_feature_gated_syscall_context_object!(
-        vm,
-        is_sysvar_via_syscall_active,
+    vm.bind_syscall_context_object(
         Box::new(SyscallGetRentSysvar {
             invoke_context: invoke_context.clone(),
             loader_id,
         }),
-    );
+        None,
+    )?;
 
     // Cross-program invocation syscalls
     vm.bind_syscall_context_object(
@@ -406,7 +400,7 @@ pub fn bind_syscall_context_objects<'a>(
     vm.bind_syscall_context_object(
         Box::new(SyscallAllocFree {
             aligned: *loader_id != bpf_loader_deprecated::id(),
-            allocator: BpfAllocator::new(heap, MM_HEAP_START),
+            allocator: BpfAllocator::new(heap, ebpf::MM_HEAP_START),
         }),
         None,
     )?;
@@ -1041,9 +1035,9 @@ fn get_sysvar<T: std::fmt::Debug + Sysvar + SysvarId>(
         .try_borrow()
         .map_err(|_| SyscallError::InvokeContextBorrowFailed)?;
 
-    invoke_context.get_compute_meter().consume(
-        invoke_context.get_bpf_compute_budget().sysvar_base_cost + size_of::<T>() as u64,
-    )?;
+    invoke_context
+        .get_compute_meter()
+        .consume(invoke_context.get_compute_budget().sysvar_base_cost + size_of::<T>() as u64)?;
     let var = translate_type_mut::<T>(
         memory_mapping,
         var_addr,
@@ -1112,6 +1106,7 @@ struct SyscallGetFeesSysvar<'a> {
     invoke_context: Rc<RefCell<&'a mut dyn InvokeContext>>,
     loader_id: &'a Pubkey,
 }
+#[allow(deprecated)]
 impl<'a> SyscallObject<BpfError> for SyscallGetFeesSysvar<'a> {
     fn call(
         &mut self,
@@ -1217,11 +1212,17 @@ impl<'a> SyscallObject<BpfError> for SyscallKeccak256<'a> {
     }
 }
 
+fn check_overlapping(src_addr: u64, dst_addr: u64, n: u64) -> bool {
+    (src_addr <= dst_addr && src_addr + n > dst_addr)
+        || (dst_addr <= src_addr && dst_addr + n > src_addr)
+}
+
 /// memcpy
 pub struct SyscallMemcpy<'a> {
     cost: u64,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     loader_id: &'a Pubkey,
+    mem_overlap_fix: bool,
 }
 impl<'a> SyscallObject<BpfError> for SyscallMemcpy<'a> {
     fn call(
@@ -1234,8 +1235,11 @@ impl<'a> SyscallObject<BpfError> for SyscallMemcpy<'a> {
         memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
-        // cannot be overlapping
-        if dst_addr + n > src_addr && src_addr > dst_addr {
+        if if self.mem_overlap_fix {
+            check_overlapping(src_addr, dst_addr, n)
+        } else {
+            dst_addr + n > src_addr && src_addr > dst_addr
+        } {
             *result = Err(SyscallError::CopyOverlapping.into());
             return;
         }
@@ -1255,7 +1259,7 @@ impl<'a> SyscallObject<BpfError> for SyscallMemcpy<'a> {
         *result = Ok(0);
     }
 }
-/// memcpy
+/// memmove
 pub struct SyscallMemmove<'a> {
     cost: u64,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
@@ -1366,6 +1370,7 @@ pub struct SyscallSecp256k1Recover<'a> {
     cost: u64,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     loader_id: &'a Pubkey,
+    libsecp256k1_0_5_upgrade_enabled: bool,
 }
 
 impl<'a> SyscallObject<BpfError> for SyscallSecp256k1Recover<'a> {
@@ -1426,7 +1431,13 @@ impl<'a> SyscallObject<BpfError> for SyscallSecp256k1Recover<'a> {
                 return;
             }
         };
-        let signature = match libsecp256k1::Signature::parse_standard_slice(signature) {
+        let sig_parse_result = if self.libsecp256k1_0_5_upgrade_enabled {
+            libsecp256k1::Signature::parse_standard_slice(signature)
+        } else {
+            libsecp256k1::Signature::parse_overflowing_slice(signature)
+        };
+
+        let signature = match sig_parse_result {
             Ok(sig) => sig,
             Err(_) => {
                 *result = Ok(Secp256k1RecoverError::InvalidSignature.into());
@@ -1678,12 +1689,9 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
                     enforce_aligned_host_addrs,
                 )?;
 
-                if invoke_context.is_feature_active(&cpi_data_cost::id()) {
-                    invoke_context.get_compute_meter().consume(
-                        data.len() as u64
-                            / invoke_context.get_bpf_compute_budget().cpi_bytes_per_unit,
-                    )?;
-                }
+                invoke_context.get_compute_meter().consume(
+                    data.len() as u64 / invoke_context.get_compute_budget().cpi_bytes_per_unit,
+                )?;
 
                 let translated = translate(
                     memory_mapping,
@@ -1998,12 +2006,9 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
             )?;
             let vm_data_addr = account_info.data_addr;
 
-            if invoke_context.is_feature_active(&cpi_data_cost::id()) {
-                invoke_context.get_compute_meter().consume(
-                    account_info.data_len
-                        / invoke_context.get_bpf_compute_budget().cpi_bytes_per_unit,
-                )?;
-            }
+            invoke_context.get_compute_meter().consume(
+                account_info.data_len / invoke_context.get_compute_budget().cpi_bytes_per_unit,
+            )?;
 
             let data = translate_slice_mut::<u8>(
                 memory_mapping,
@@ -2204,9 +2209,7 @@ fn check_instruction_size(
     let size = num_accounts
         .saturating_mul(size_of::<AccountMeta>())
         .saturating_add(data_len);
-    let max_size = invoke_context
-        .get_bpf_compute_budget()
-        .max_cpi_instruction_size;
+    let max_size = invoke_context.get_compute_budget().max_cpi_instruction_size;
     if size > max_size {
         return Err(SyscallError::InstructionTooLarge(size, max_size).into());
     }
@@ -2217,11 +2220,7 @@ fn check_account_infos(
     len: usize,
     invoke_context: &Ref<&mut dyn InvokeContext>,
 ) -> Result<(), EbpfError<BpfError>> {
-    if len * size_of::<Pubkey>()
-        > invoke_context
-            .get_bpf_compute_budget()
-            .max_cpi_instruction_size
-    {
+    if len * size_of::<Pubkey>() > invoke_context.get_compute_budget().max_cpi_instruction_size {
         // Cap the number of account_infos a caller can pass to approximate
         // maximum that accounts that could be passed in an instruction
         return Err(SyscallError::TooManyAccounts.into());
@@ -2232,13 +2231,16 @@ fn check_account_infos(
 fn check_authorized_program(
     program_id: &Pubkey,
     instruction_data: &[u8],
+    close_upgradeable_program_accounts: bool,
 ) -> Result<(), EbpfError<BpfError>> {
     if native_loader::check_id(program_id)
         || bpf_loader::check_id(program_id)
         || bpf_loader_deprecated::check_id(program_id)
         || (bpf_loader_upgradeable::check_id(program_id)
             && !(bpf_loader_upgradeable::is_upgrade_instruction(instruction_data)
-                || bpf_loader_upgradeable::is_set_authority_instruction(instruction_data)))
+                || bpf_loader_upgradeable::is_set_authority_instruction(instruction_data)
+                || (close_upgradeable_program_accounts
+                    && bpf_loader_upgradeable::is_close_instruction(instruction_data))))
     {
         return Err(SyscallError::ProgramNotSupported(*program_id).into());
     }
@@ -2291,12 +2293,19 @@ fn call<'a>(
     signers_seeds_len: u64,
     memory_mapping: &MemoryMapping,
 ) -> Result<u64, EbpfError<BpfError>> {
-    let (message, executables, accounts, account_refs, caller_write_privileges) = {
+    let (
+        message,
+        executables,
+        accounts,
+        account_refs,
+        caller_write_privileges,
+        demote_program_write_locks,
+    ) = {
         let invoke_context = syscall.get_context()?;
 
         invoke_context
             .get_compute_meter()
-            .consume(invoke_context.get_bpf_compute_budget().invoke_units)?;
+            .consume(invoke_context.get_compute_budget().invoke_units)?;
 
         let enforce_aligned_host_addrs =
             invoke_context.is_feature_active(&enforce_aligned_host_addrs::id());
@@ -2325,7 +2334,7 @@ fn call<'a>(
             .iter()
             .collect::<Vec<&KeyedAccount>>();
         let (message, callee_program_id, callee_program_id_index) =
-            MessageProcessor::create_message(
+            InstructionProcessor::create_message(
                 &instruction,
                 &keyed_account_refs,
                 &signers,
@@ -2346,7 +2355,11 @@ fn call<'a>(
                 }
             })
             .collect::<Vec<bool>>();
-        check_authorized_program(&callee_program_id, &instruction.data)?;
+        check_authorized_program(
+            &callee_program_id,
+            &instruction.data,
+            invoke_context.is_feature_active(&close_upgradeable_program_accounts::id()),
+        )?;
         let (accounts, account_refs) = syscall.translate_accounts(
             &message.account_keys,
             callee_program_id_index,
@@ -2382,13 +2395,14 @@ fn call<'a>(
             accounts,
             account_refs,
             caller_write_privileges,
+            invoke_context.is_feature_active(&demote_program_write_locks::id()),
         )
     };
 
     // Process instruction
 
     #[allow(clippy::deref_addrof)]
-    match MessageProcessor::process_cross_program_instruction(
+    match InstructionProcessor::process_cross_program_instruction(
         &message,
         &executables,
         &accounts,
@@ -2407,7 +2421,7 @@ fn call<'a>(
         for (i, ((_key, account), account_ref)) in accounts.iter().zip(account_refs).enumerate() {
             let account = account.borrow();
             if let Some(mut account_ref) = account_ref {
-                if message.is_writable(i) && !account.executable() {
+                if message.is_writable(i, demote_program_write_locks) && !account.executable() {
                     *account_ref.lamports = account.lamports();
                     *account_ref.owner = *account.owner();
                     if account_ref.data.len() != account.data().len() {
@@ -2436,22 +2450,13 @@ fn call<'a>(
                             )
                             .into());
                         }
-                        if invoke_context.is_feature_active(&update_data_on_realloc::id()) {
-                            account_ref.data = translate_slice_mut::<u8>(
-                                memory_mapping,
-                                account_ref.vm_data_addr,
-                                account.data().len() as u64,
-                                &bpf_loader_deprecated::id(), // Don't care since it is byte aligned
-                                true,
-                            )?;
-                        } else {
-                            let _ = translate(
-                                memory_mapping,
-                                AccessType::Store,
-                                account_ref.vm_data_addr,
-                                account.data().len() as u64,
-                            )?;
-                        }
+                        account_ref.data = translate_slice_mut::<u8>(
+                            memory_mapping,
+                            account_ref.vm_data_addr,
+                            account.data().len() as u64,
+                            &bpf_loader_deprecated::id(), // Don't care since it is byte aligned
+                            true,
+                        )?;
                         *account_ref.ref_to_len_in_vm = account.data().len() as u64;
                         *account_ref.serialized_len_ptr = account.data().len() as u64;
                     }
@@ -2483,7 +2488,9 @@ mod tests {
     macro_rules! assert_access_violation {
         ($result:expr, $va:expr, $len:expr) => {
             match $result {
-                Err(EbpfError::AccessViolation(_, _, va, len, _)) if $va == va && len == len => (),
+                Err(EbpfError::AccessViolation(_, _, va, len, _)) if $va == va && $len == len => (),
+                Err(EbpfError::StackAccessViolation(_, _, va, len, _))
+                    if $va == va && $len == len => {}
                 _ => panic!(),
             }
         };
@@ -2491,13 +2498,16 @@ mod tests {
 
     #[test]
     fn test_translate() {
-        const START: u64 = 100;
+        const START: u64 = 0x100000000;
         const LENGTH: u64 = 1000;
         let data = vec![0u8; LENGTH as usize];
         let addr = data.as_ptr() as u64;
         let config = Config::default();
         let memory_mapping = MemoryMapping::new::<UserError>(
-            vec![MemoryRegion::new_from_slice(&data, START, 0, false)],
+            vec![
+                MemoryRegion::default(),
+                MemoryRegion::new_from_slice(&data, START, 0, false),
+            ],
             &config,
         )
         .unwrap();
@@ -2537,18 +2547,22 @@ mod tests {
         let addr = &pubkey as *const _ as u64;
         let config = Config::default();
         let memory_mapping = MemoryMapping::new::<UserError>(
-            vec![MemoryRegion {
-                host_addr: addr,
-                vm_addr: 100,
-                len: std::mem::size_of::<Pubkey>() as u64,
-                vm_gap_shift: 63,
-                is_writable: false,
-            }],
+            vec![
+                MemoryRegion::default(),
+                MemoryRegion {
+                    host_addr: addr,
+                    vm_addr: 0x100000000,
+                    len: std::mem::size_of::<Pubkey>() as u64,
+                    vm_gap_shift: 63,
+                    is_writable: false,
+                },
+            ],
             &config,
         )
         .unwrap();
         let translated_pubkey =
-            translate_type::<Pubkey>(&memory_mapping, 100, &bpf_loader::id(), true).unwrap();
+            translate_type::<Pubkey>(&memory_mapping, 0x100000000, &bpf_loader::id(), true)
+                .unwrap();
         assert_eq!(pubkey, *translated_pubkey);
 
         // Instruction
@@ -2559,23 +2573,31 @@ mod tests {
         );
         let addr = &instruction as *const _ as u64;
         let mut memory_mapping = MemoryMapping::new::<UserError>(
-            vec![MemoryRegion {
-                host_addr: addr,
-                vm_addr: 96,
-                len: std::mem::size_of::<Instruction>() as u64,
-                vm_gap_shift: 63,
-                is_writable: false,
-            }],
+            vec![
+                MemoryRegion::default(),
+                MemoryRegion {
+                    host_addr: addr,
+                    vm_addr: 0x100000000,
+                    len: std::mem::size_of::<Instruction>() as u64,
+                    vm_gap_shift: 63,
+                    is_writable: false,
+                },
+            ],
             &config,
         )
         .unwrap();
         let translated_instruction =
-            translate_type::<Instruction>(&memory_mapping, 96, &bpf_loader::id(), true).unwrap();
+            translate_type::<Instruction>(&memory_mapping, 0x100000000, &bpf_loader::id(), true)
+                .unwrap();
         assert_eq!(instruction, *translated_instruction);
-        memory_mapping.resize_region::<BpfError>(0, 1).unwrap();
-        assert!(
-            translate_type::<Instruction>(&memory_mapping, 100, &bpf_loader::id(), true).is_err()
-        );
+        memory_mapping.resize_region::<BpfError>(1, 1).unwrap();
+        assert!(translate_type::<Instruction>(
+            &memory_mapping,
+            0x100000000,
+            &bpf_loader::id(),
+            true
+        )
+        .is_err());
     }
 
     #[test]
@@ -2587,13 +2609,16 @@ mod tests {
         let addr = good_data.as_ptr() as *const _ as u64;
         let config = Config::default();
         let memory_mapping = MemoryMapping::new::<UserError>(
-            vec![MemoryRegion {
-                host_addr: addr,
-                vm_addr: 100,
-                len: good_data.len() as u64,
-                vm_gap_shift: 63,
-                is_writable: false,
-            }],
+            vec![
+                MemoryRegion::default(),
+                MemoryRegion {
+                    host_addr: addr,
+                    vm_addr: 0x100000000,
+                    len: good_data.len() as u64,
+                    vm_gap_shift: 63,
+                    is_writable: false,
+                },
+            ],
             &config,
         )
         .unwrap();
@@ -2612,19 +2637,22 @@ mod tests {
         let mut data = vec![1u8, 2, 3, 4, 5];
         let addr = data.as_ptr() as *const _ as u64;
         let memory_mapping = MemoryMapping::new::<UserError>(
-            vec![MemoryRegion {
-                host_addr: addr,
-                vm_addr: 100,
-                len: data.len() as u64,
-                vm_gap_shift: 63,
-                is_writable: false,
-            }],
+            vec![
+                MemoryRegion::default(),
+                MemoryRegion {
+                    host_addr: addr,
+                    vm_addr: 0x100000000,
+                    len: data.len() as u64,
+                    vm_gap_shift: 63,
+                    is_writable: false,
+                },
+            ],
             &config,
         )
         .unwrap();
         let translated_data = translate_slice::<u8>(
             &memory_mapping,
-            100,
+            0x100000000,
             data.len() as u64,
             &bpf_loader::id(),
             true,
@@ -2644,7 +2672,7 @@ mod tests {
 
         assert!(translate_slice::<u8>(
             &memory_mapping,
-            100 - 1,
+            0x100000000 - 1,
             data.len() as u64,
             &bpf_loader::id(),
             true,
@@ -2655,19 +2683,22 @@ mod tests {
         let mut data = vec![1u64, 2, 3, 4, 5];
         let addr = data.as_ptr() as *const _ as u64;
         let memory_mapping = MemoryMapping::new::<UserError>(
-            vec![MemoryRegion {
-                host_addr: addr,
-                vm_addr: 96,
-                len: (data.len() * size_of::<u64>()) as u64,
-                vm_gap_shift: 63,
-                is_writable: false,
-            }],
+            vec![
+                MemoryRegion::default(),
+                MemoryRegion {
+                    host_addr: addr,
+                    vm_addr: 0x100000000,
+                    len: (data.len() * size_of::<u64>()) as u64,
+                    vm_gap_shift: 63,
+                    is_writable: false,
+                },
+            ],
             &config,
         )
         .unwrap();
         let translated_data = translate_slice::<u64>(
             &memory_mapping,
-            96,
+            0x100000000,
             data.len() as u64,
             &bpf_loader::id(),
             true,
@@ -2676,28 +2707,35 @@ mod tests {
         assert_eq!(data, translated_data);
         data[0] = 10;
         assert_eq!(data, translated_data);
-        assert!(
-            translate_slice::<u64>(&memory_mapping, 96, u64::MAX, &bpf_loader::id(), true,)
-                .is_err()
-        );
+        assert!(translate_slice::<u64>(
+            &memory_mapping,
+            0x100000000,
+            u64::MAX,
+            &bpf_loader::id(),
+            true,
+        )
+        .is_err());
 
         // Pubkeys
         let mut data = vec![solana_sdk::pubkey::new_rand(); 5];
         let addr = data.as_ptr() as *const _ as u64;
         let memory_mapping = MemoryMapping::new::<UserError>(
-            vec![MemoryRegion {
-                host_addr: addr,
-                vm_addr: 100,
-                len: (data.len() * std::mem::size_of::<Pubkey>()) as u64,
-                vm_gap_shift: 63,
-                is_writable: false,
-            }],
+            vec![
+                MemoryRegion::default(),
+                MemoryRegion {
+                    host_addr: addr,
+                    vm_addr: 0x100000000,
+                    len: (data.len() * std::mem::size_of::<Pubkey>()) as u64,
+                    vm_gap_shift: 63,
+                    is_writable: false,
+                },
+            ],
             &config,
         )
         .unwrap();
         let translated_data = translate_slice::<Pubkey>(
             &memory_mapping,
-            100,
+            0x100000000,
             data.len() as u64,
             &bpf_loader::id(),
             true,
@@ -2714,13 +2752,16 @@ mod tests {
         let addr = string.as_ptr() as *const _ as u64;
         let config = Config::default();
         let memory_mapping = MemoryMapping::new::<UserError>(
-            vec![MemoryRegion {
-                host_addr: addr,
-                vm_addr: 100,
-                len: string.len() as u64,
-                vm_gap_shift: 63,
-                is_writable: false,
-            }],
+            vec![
+                MemoryRegion::default(),
+                MemoryRegion {
+                    host_addr: addr,
+                    vm_addr: 0x100000000,
+                    len: string.len() as u64,
+                    vm_gap_shift: 63,
+                    is_writable: false,
+                },
+            ],
             &config,
         )
         .unwrap();
@@ -2728,7 +2769,7 @@ mod tests {
             42,
             translate_string_and_do(
                 &memory_mapping,
-                100,
+                0x100000000,
                 string.len() as u64,
                 &bpf_loader::id(),
                 true,
@@ -2768,13 +2809,16 @@ mod tests {
         let addr = string.as_ptr() as *const _ as u64;
         let config = Config::default();
         let memory_mapping = MemoryMapping::new::<UserError>(
-            vec![MemoryRegion {
-                host_addr: addr,
-                vm_addr: 100,
-                len: string.len() as u64,
-                vm_gap_shift: 63,
-                is_writable: false,
-            }],
+            vec![
+                MemoryRegion::default(),
+                MemoryRegion {
+                    host_addr: addr,
+                    vm_addr: 0x100000000,
+                    len: string.len() as u64,
+                    vm_gap_shift: 63,
+                    is_writable: false,
+                },
+            ],
             &config,
         )
         .unwrap();
@@ -2790,7 +2834,7 @@ mod tests {
         };
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
         syscall_panic.call(
-            100,
+            0x100000000,
             string.len() as u64,
             42,
             84,
@@ -2816,7 +2860,7 @@ mod tests {
         };
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
         syscall_panic.call(
-            100,
+            0x100000000,
             string.len() as u64,
             42,
             84,
@@ -2845,20 +2889,23 @@ mod tests {
         };
         let config = Config::default();
         let memory_mapping = MemoryMapping::new::<UserError>(
-            vec![MemoryRegion {
-                host_addr: addr,
-                vm_addr: 100,
-                len: string.len() as u64,
-                vm_gap_shift: 63,
-                is_writable: false,
-            }],
+            vec![
+                MemoryRegion::default(),
+                MemoryRegion {
+                    host_addr: addr,
+                    vm_addr: 0x100000000,
+                    len: string.len() as u64,
+                    vm_gap_shift: 63,
+                    is_writable: false,
+                },
+            ],
             &config,
         )
         .unwrap();
 
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
         syscall_sol_log.call(
-            100,
+            0x100000000,
             string.len() as u64,
             0,
             0,
@@ -2872,7 +2919,7 @@ mod tests {
 
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
         syscall_sol_log.call(
-            101, // AccessViolation
+            0x100000001, // AccessViolation
             string.len() as u64,
             0,
             0,
@@ -2880,10 +2927,10 @@ mod tests {
             &memory_mapping,
             &mut result,
         );
-        assert_access_violation!(result, 101, string.len() as u64);
+        assert_access_violation!(result, 0x100000001, string.len() as u64);
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
         syscall_sol_log.call(
-            100,
+            0x100000000,
             string.len() as u64 * 2, // AccessViolation
             0,
             0,
@@ -2891,10 +2938,10 @@ mod tests {
             &memory_mapping,
             &mut result,
         );
-        assert_access_violation!(result, 100, string.len() as u64 * 2);
+        assert_access_violation!(result, 0x100000000, string.len() as u64 * 2);
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
         syscall_sol_log.call(
-            100,
+            0x100000000,
             string.len() as u64,
             0,
             0,
@@ -2916,7 +2963,7 @@ mod tests {
         };
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
         syscall_sol_log.call(
-            100,
+            0x100000000,
             string.len() as u64,
             0,
             0,
@@ -2927,7 +2974,7 @@ mod tests {
         result.unwrap();
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
         syscall_sol_log.call(
-            100,
+            0x100000000,
             string.len() as u64,
             0,
             0,
@@ -2987,19 +3034,22 @@ mod tests {
         };
         let config = Config::default();
         let memory_mapping = MemoryMapping::new::<UserError>(
-            vec![MemoryRegion {
-                host_addr: addr,
-                vm_addr: 100,
-                len: 32,
-                vm_gap_shift: 63,
-                is_writable: false,
-            }],
+            vec![
+                MemoryRegion::default(),
+                MemoryRegion {
+                    host_addr: addr,
+                    vm_addr: 0x100000000,
+                    len: 32,
+                    vm_gap_shift: 63,
+                    is_writable: false,
+                },
+            ],
             &config,
         )
         .unwrap();
 
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
-        syscall_sol_pubkey.call(100, 0, 0, 0, 0, &memory_mapping, &mut result);
+        syscall_sol_pubkey.call(0x100000000, 0, 0, 0, 0, &memory_mapping, &mut result);
         result.unwrap();
         assert_eq!(log.borrow().len(), 1);
         assert_eq!(
@@ -3008,7 +3058,7 @@ mod tests {
         );
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
         syscall_sol_pubkey.call(
-            101, // AccessViolation
+            0x100000001, // AccessViolation
             32,
             0,
             0,
@@ -3016,7 +3066,7 @@ mod tests {
             &memory_mapping,
             &mut result,
         );
-        assert_access_violation!(result, 101, 32);
+        assert_access_violation!(result, 0x100000001, 32);
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
         syscall_sol_pubkey.call(100, 32, 0, 0, 0, &memory_mapping, &mut result);
         assert_eq!(
@@ -3034,18 +3084,19 @@ mod tests {
         {
             let heap = AlignedMemory::new_with_size(100, HOST_ALIGN);
             let memory_mapping = MemoryMapping::new::<UserError>(
-                vec![MemoryRegion::new_from_slice(
-                    heap.as_slice(),
-                    MM_HEAP_START,
-                    0,
-                    true,
-                )],
+                vec![
+                    MemoryRegion::default(),
+                    MemoryRegion::new_from_slice(&[], ebpf::MM_PROGRAM_START, 0, false),
+                    MemoryRegion::new_from_slice(&[], ebpf::MM_STACK_START, 4096, true),
+                    MemoryRegion::new_from_slice(heap.as_slice(), ebpf::MM_HEAP_START, 0, true),
+                    MemoryRegion::new_from_slice(&[], ebpf::MM_INPUT_START, 0, true),
+                ],
                 &config,
             )
             .unwrap();
             let mut syscall = SyscallAllocFree {
                 aligned: true,
-                allocator: BpfAllocator::new(heap, MM_HEAP_START),
+                allocator: BpfAllocator::new(heap, ebpf::MM_HEAP_START),
             };
             let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
             syscall.call(100, 0, 0, 0, 0, &memory_mapping, &mut result);
@@ -3061,18 +3112,19 @@ mod tests {
         {
             let heap = AlignedMemory::new_with_size(100, HOST_ALIGN);
             let memory_mapping = MemoryMapping::new::<UserError>(
-                vec![MemoryRegion::new_from_slice(
-                    heap.as_slice(),
-                    MM_HEAP_START,
-                    0,
-                    true,
-                )],
+                vec![
+                    MemoryRegion::default(),
+                    MemoryRegion::new_from_slice(&[], ebpf::MM_PROGRAM_START, 0, false),
+                    MemoryRegion::new_from_slice(&[], ebpf::MM_STACK_START, 4096, true),
+                    MemoryRegion::new_from_slice(heap.as_slice(), ebpf::MM_HEAP_START, 0, true),
+                    MemoryRegion::new_from_slice(&[], ebpf::MM_INPUT_START, 0, true),
+                ],
                 &config,
             )
             .unwrap();
             let mut syscall = SyscallAllocFree {
                 aligned: false,
-                allocator: BpfAllocator::new(heap, MM_HEAP_START),
+                allocator: BpfAllocator::new(heap, ebpf::MM_HEAP_START),
             };
             for _ in 0..100 {
                 let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
@@ -3087,18 +3139,19 @@ mod tests {
         {
             let heap = AlignedMemory::new_with_size(100, HOST_ALIGN);
             let memory_mapping = MemoryMapping::new::<UserError>(
-                vec![MemoryRegion::new_from_slice(
-                    heap.as_slice(),
-                    MM_HEAP_START,
-                    0,
-                    true,
-                )],
+                vec![
+                    MemoryRegion::default(),
+                    MemoryRegion::new_from_slice(&[], ebpf::MM_PROGRAM_START, 0, false),
+                    MemoryRegion::new_from_slice(&[], ebpf::MM_STACK_START, 4096, true),
+                    MemoryRegion::new_from_slice(heap.as_slice(), ebpf::MM_HEAP_START, 0, true),
+                    MemoryRegion::new_from_slice(&[], ebpf::MM_INPUT_START, 0, true),
+                ],
                 &config,
             )
             .unwrap();
             let mut syscall = SyscallAllocFree {
                 aligned: true,
-                allocator: BpfAllocator::new(heap, MM_HEAP_START),
+                allocator: BpfAllocator::new(heap, ebpf::MM_HEAP_START),
             };
             for _ in 0..12 {
                 let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
@@ -3115,18 +3168,19 @@ mod tests {
             let heap = AlignedMemory::new_with_size(100, HOST_ALIGN);
             let config = Config::default();
             let memory_mapping = MemoryMapping::new::<UserError>(
-                vec![MemoryRegion::new_from_slice(
-                    heap.as_slice(),
-                    MM_HEAP_START,
-                    0,
-                    true,
-                )],
+                vec![
+                    MemoryRegion::default(),
+                    MemoryRegion::new_from_slice(&[], ebpf::MM_PROGRAM_START, 0, false),
+                    MemoryRegion::new_from_slice(&[], ebpf::MM_STACK_START, 4096, true),
+                    MemoryRegion::new_from_slice(heap.as_slice(), ebpf::MM_HEAP_START, 0, true),
+                    MemoryRegion::new_from_slice(&[], ebpf::MM_INPUT_START, 0, true),
+                ],
                 &config,
             )
             .unwrap();
             let mut syscall = SyscallAllocFree {
                 aligned: true,
-                allocator: BpfAllocator::new(heap, MM_HEAP_START),
+                allocator: BpfAllocator::new(heap, ebpf::MM_HEAP_START),
             };
             let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
             syscall.call(
@@ -3160,38 +3214,25 @@ mod tests {
             pub len: usize,
         }
         let mock_slice1 = MockSlice {
-            addr: 4096,
+            addr: 0x300000000,
             len: bytes1.len(),
         };
         let mock_slice2 = MockSlice {
-            addr: 8192,
+            addr: 0x400000000,
             len: bytes2.len(),
         };
         let bytes_to_hash = [mock_slice1, mock_slice2];
         let hash_result = [0; HASH_BYTES];
         let ro_len = bytes_to_hash.len() as u64;
-        let ro_va = 96;
-        let rw_va = 192;
+        let ro_va = 0x100000000;
+        let rw_va = 0x200000000;
         let config = Config::default();
         let memory_mapping = MemoryMapping::new::<UserError>(
             vec![
-                MemoryRegion {
-                    host_addr: bytes1.as_ptr() as *const _ as u64,
-                    vm_addr: 4096,
-                    len: bytes1.len() as u64,
-                    vm_gap_shift: 63,
-                    is_writable: false,
-                },
-                MemoryRegion {
-                    host_addr: bytes2.as_ptr() as *const _ as u64,
-                    vm_addr: 8192,
-                    len: bytes2.len() as u64,
-                    vm_gap_shift: 63,
-                    is_writable: false,
-                },
+                MemoryRegion::default(),
                 MemoryRegion {
                     host_addr: bytes_to_hash.as_ptr() as *const _ as u64,
-                    vm_addr: 96,
+                    vm_addr: ro_va,
                     len: 32,
                     vm_gap_shift: 63,
                     is_writable: false,
@@ -3202,6 +3243,20 @@ mod tests {
                     len: HASH_BYTES as u64,
                     vm_gap_shift: 63,
                     is_writable: true,
+                },
+                MemoryRegion {
+                    host_addr: bytes1.as_ptr() as *const _ as u64,
+                    vm_addr: bytes_to_hash[0].addr,
+                    len: bytes1.len() as u64,
+                    vm_gap_shift: 63,
+                    is_writable: false,
+                },
+                MemoryRegion {
+                    host_addr: bytes2.as_ptr() as *const _ as u64,
+                    vm_addr: bytes_to_hash[1].addr,
+                    len: bytes2.len() as u64,
+                    vm_gap_shift: 63,
+                    is_writable: false,
                 },
             ],
             &config,
@@ -3235,7 +3290,7 @@ mod tests {
             &memory_mapping,
             &mut result,
         );
-        assert_access_violation!(result, ro_va - 1, ro_len);
+        assert_access_violation!(result, ro_va - 1, 32);
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
         syscall.call(
             ro_va,
@@ -3246,7 +3301,7 @@ mod tests {
             &memory_mapping,
             &mut result,
         );
-        assert_access_violation!(result, ro_va, ro_len + 1);
+        assert_access_violation!(result, ro_va, 48);
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
         syscall.call(
             ro_va,
@@ -3274,16 +3329,19 @@ mod tests {
         // Test clock sysvar
         {
             let got_clock = Clock::default();
-            let got_clock_va = 2048;
+            let got_clock_va = 0x100000000;
 
             let memory_mapping = MemoryMapping::new::<UserError>(
-                vec![MemoryRegion {
-                    host_addr: &got_clock as *const _ as u64,
-                    vm_addr: got_clock_va,
-                    len: size_of::<Clock>() as u64,
-                    vm_gap_shift: 63,
-                    is_writable: true,
-                }],
+                vec![
+                    MemoryRegion::default(),
+                    MemoryRegion {
+                        host_addr: &got_clock as *const _ as u64,
+                        vm_addr: got_clock_va,
+                        len: size_of::<Clock>() as u64,
+                        vm_gap_shift: 63,
+                        is_writable: true,
+                    },
+                ],
                 &config,
             )
             .unwrap();
@@ -3316,16 +3374,19 @@ mod tests {
         // Test epoch_schedule sysvar
         {
             let got_epochschedule = EpochSchedule::default();
-            let got_epochschedule_va = 2048;
+            let got_epochschedule_va = 0x100000000;
 
             let memory_mapping = MemoryMapping::new::<UserError>(
-                vec![MemoryRegion {
-                    host_addr: &got_epochschedule as *const _ as u64,
-                    vm_addr: got_epochschedule_va,
-                    len: size_of::<EpochSchedule>() as u64,
-                    vm_gap_shift: 63,
-                    is_writable: true,
-                }],
+                vec![
+                    MemoryRegion::default(),
+                    MemoryRegion {
+                        host_addr: &got_epochschedule as *const _ as u64,
+                        vm_addr: got_epochschedule_va,
+                        len: size_of::<EpochSchedule>() as u64,
+                        vm_gap_shift: 63,
+                        is_writable: true,
+                    },
+                ],
                 &config,
             )
             .unwrap();
@@ -3364,18 +3425,22 @@ mod tests {
         }
 
         // Test fees sysvar
+        #[allow(deprecated)]
         {
             let got_fees = Fees::default();
-            let got_fees_va = 2048;
+            let got_fees_va = 0x100000000;
 
             let memory_mapping = MemoryMapping::new::<UserError>(
-                vec![MemoryRegion {
-                    host_addr: &got_fees as *const _ as u64,
-                    vm_addr: got_fees_va,
-                    len: size_of::<Fees>() as u64,
-                    vm_gap_shift: 63,
-                    is_writable: true,
-                }],
+                vec![
+                    MemoryRegion::default(),
+                    MemoryRegion {
+                        host_addr: &got_fees as *const _ as u64,
+                        vm_addr: got_fees_va,
+                        len: size_of::<Fees>() as u64,
+                        vm_gap_shift: 63,
+                        is_writable: true,
+                    },
+                ],
                 &config,
             )
             .unwrap();
@@ -3406,16 +3471,19 @@ mod tests {
         // Test rent sysvar
         {
             let got_rent = Rent::default();
-            let got_rent_va = 2048;
+            let got_rent_va = 0x100000000;
 
             let memory_mapping = MemoryMapping::new::<UserError>(
-                vec![MemoryRegion {
-                    host_addr: &got_rent as *const _ as u64,
-                    vm_addr: got_rent_va,
-                    len: size_of::<Rent>() as u64,
-                    vm_gap_shift: 63,
-                    is_writable: true,
-                }],
+                vec![
+                    MemoryRegion::default(),
+                    MemoryRegion {
+                        host_addr: &got_rent as *const _ as u64,
+                        vm_addr: got_rent_va,
+                        len: size_of::<Rent>() as u64,
+                        vm_gap_shift: 63,
+                        is_writable: true,
+                    },
+                ],
                 &config,
             )
             .unwrap();
@@ -3442,5 +3510,16 @@ mod tests {
             result.unwrap();
             assert_eq!(got_rent, src_rent);
         }
+    }
+
+    #[test]
+    fn test_overlapping() {
+        assert!(!check_overlapping(10, 7, 3));
+        assert!(check_overlapping(10, 8, 3));
+        assert!(check_overlapping(10, 9, 3));
+        assert!(check_overlapping(10, 10, 3));
+        assert!(check_overlapping(10, 11, 3));
+        assert!(check_overlapping(10, 12, 3));
+        assert!(!check_overlapping(10, 13, 3));
     }
 }

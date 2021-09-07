@@ -82,8 +82,7 @@ will be of a different type than one used to simply send and receive tokens.
 
 Follow the wallet's instructions for selecting a validator.  You can get
 information about potentially performant validators from the links below.
-The Solana Labs team and the Solana Foundation do not recommend any particular
-validator.
+The Solana Foundation does not recommend any particular validator.
 
 The Mainnet Beta validators introduce themselves and their services on this
 Solana Forum thread:

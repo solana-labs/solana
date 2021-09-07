@@ -5,7 +5,9 @@ use {
     jsonrpc_ipc_server::{RequestContext, ServerBuilder},
     jsonrpc_server_utils::tokio,
     log::*,
-    solana_core::validator::ValidatorStartProgress,
+    solana_core::{
+        consensus::Tower, tower_storage::TowerStorage, validator::ValidatorStartProgress,
+    },
     solana_gossip::cluster_info::ClusterInfo,
     solana_sdk::{
         exit::Exit,
@@ -28,6 +30,7 @@ pub struct AdminRpcRequestMetadata {
     pub validator_exit: Arc<RwLock<Exit>>,
     pub authorized_voter_keypairs: Arc<RwLock<Vec<Arc<Keypair>>>>,
     pub cluster_info: Arc<RwLock<Option<Arc<ClusterInfo>>>>,
+    pub tower_storage: Arc<dyn TowerStorage>,
 }
 impl Metadata for AdminRpcRequestMetadata {}
 
@@ -137,8 +140,21 @@ impl AdminRpc for AdminRpcImpl {
     fn set_identity(&self, meta: Self::Metadata, keypair_file: String) -> Result<()> {
         debug!("set_identity request received");
 
-        let identity_keypair = read_keypair_file(keypair_file)
-            .map_err(|err| jsonrpc_core::error::Error::invalid_params(format!("{}", err)))?;
+        let identity_keypair = read_keypair_file(&keypair_file).map_err(|err| {
+            jsonrpc_core::error::Error::invalid_params(format!(
+                "Failed to read identity keypair from {}: {}",
+                keypair_file, err
+            ))
+        })?;
+
+        // Ensure a Tower exists for the new identity and exit gracefully.
+        // ReplayStage will be less forgiving if it fails to load the new tower.
+        Tower::restore(meta.tower_storage.as_ref(), &identity_keypair.pubkey()).map_err(|err| {
+            jsonrpc_core::error::Error::invalid_params(format!(
+                "Unable to load tower file for new identity: {}",
+                err
+            ))
+        })?;
 
         if let Some(cluster_info) = meta.cluster_info.read().unwrap().as_ref() {
             solana_metrics::set_host_id(identity_keypair.pubkey().to_string());
@@ -157,10 +173,9 @@ impl AdminRpc for AdminRpcImpl {
 pub fn run(ledger_path: &Path, metadata: AdminRpcRequestMetadata) {
     let admin_rpc_path = ledger_path.join("admin.rpc");
 
-    let event_loop = tokio::runtime::Builder::new()
-        .threaded_scheduler()
-        .enable_all()
+    let event_loop = tokio::runtime::Builder::new_multi_thread()
         .thread_name("sol-adminrpc-el")
+        .enable_all()
         .build()
         .unwrap();
 

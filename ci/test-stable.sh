@@ -21,10 +21,6 @@ export RUST_BACKTRACE=1
 export RUSTFLAGS="-D warnings"
 source scripts/ulimit-n.sh
 
-# Clear the C dependency files, if dependency moves these files are not regenerated
-test -d target/debug/bpf && find target/debug/bpf -name '*.d' -delete
-test -d target/release/bpf && find target/release/bpf -name '*.d' -delete
-
 # Limit compiler jobs to reduce memory usage
 # on machines with 2gb/thread of memory
 NPROC=$(nproc)
@@ -35,24 +31,53 @@ case $testName in
 test-stable)
   _ "$cargo" stable test --jobs "$NPROC" --all --exclude solana-local-cluster ${V:+--verbose} -- --nocapture
   ;;
-test-stable-perf)
+test-stable-bpf)
+  # Clear the C dependency files, if dependency moves these files are not regenerated
+  test -d target/debug/bpf && find target/debug/bpf -name '*.d' -delete
+  test -d target/release/bpf && find target/release/bpf -name '*.d' -delete
+
+  # rustfilt required for dumping BPF assembly listings
+  "$cargo" install rustfilt
+
   # solana-keygen required when building C programs
   _ "$cargo" build --manifest-path=keygen/Cargo.toml
+
   export PATH="$PWD/target/debug":$PATH
+  cargo_build_bpf="$(realpath ./cargo-build-bpf)"
+  cargo_test_bpf="$(realpath ./cargo-test-bpf)"
 
   # BPF solana-sdk legacy compile test
-  ./cargo-build-bpf --manifest-path sdk/Cargo.toml
+  "$cargo_build_bpf" --manifest-path sdk/Cargo.toml
 
-  # BPF Program unit tests
-  "$cargo" test --manifest-path programs/bpf/Cargo.toml
-  cargo-build-bpf --manifest-path programs/bpf/Cargo.toml --bpf-sdk sdk/bpf
-
-  # BPF program system tests
+  # BPF C program system tests
   _ make -C programs/bpf/c tests
   _ "$cargo" stable test \
     --manifest-path programs/bpf/Cargo.toml \
     --no-default-features --features=bpf_c,bpf_rust -- --nocapture
 
+  # BPF Rust program unit tests
+  for bpf_test in programs/bpf/rust/*; do
+    if pushd "$bpf_test"; then
+      "$cargo" test
+      "$cargo_build_bpf" --bpf-sdk ../../../../sdk/bpf --dump
+      "$cargo_test_bpf" --bpf-sdk ../../../../sdk/bpf
+      popd
+    fi
+  done
+
+  # BPF program instruction count assertion
+  bpf_target_path=programs/bpf/target
+  _ "$cargo" stable test \
+    --manifest-path programs/bpf/Cargo.toml \
+    --no-default-features --features=bpf_c,bpf_rust assert_instruction_count \
+    -- --nocapture &> "${bpf_target_path}"/deploy/instuction_counts.txt
+
+  bpf_dump_archive="bpf-dumps.tar.bz2"
+  rm -f "$bpf_dump_archive"
+  tar cjvf "$bpf_dump_archive" "${bpf_target_path}"/{deploy/*.txt,bpfel-unknown-unknown/release/*.so}
+  exit 0
+  ;;
+test-stable-perf)
   if [[ $(uname) = Linux ]]; then
     # Enable persistence mode to keep the CUDA kernel driver loaded, avoiding a
     # lengthy and unexpected delay the first time CUDA is involved when the driver

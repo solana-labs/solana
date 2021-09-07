@@ -5,8 +5,8 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::Signer,
     sysvar::{
-        clock, epoch_schedule, fees, instructions, recent_blockhashes, rent, slot_hashes,
-        slot_history, stake_history,
+        clock, epoch_schedule, instructions, recent_blockhashes, rent, slot_hashes, slot_history,
+        stake_history,
     },
     transaction::Transaction,
 };
@@ -30,8 +30,8 @@ async fn test_sysvars() {
                 AccountMeta::new(Pubkey::new_unique(), false),
                 AccountMeta::new_readonly(clock::id(), false),
                 AccountMeta::new_readonly(epoch_schedule::id(), false),
-                AccountMeta::new_readonly(fees::id(), false),
                 AccountMeta::new_readonly(instructions::id(), false),
+                #[allow(deprecated)]
                 AccountMeta::new_readonly(recent_blockhashes::id(), false),
                 AccountMeta::new_readonly(rent::id(), false),
                 AccountMeta::new_readonly(slot_hashes::id(), false),

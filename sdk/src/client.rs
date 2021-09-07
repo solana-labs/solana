@@ -81,9 +81,14 @@ pub trait SyncClient {
     fn get_minimum_balance_for_rent_exemption(&self, data_len: usize) -> Result<u64>;
 
     /// Get recent blockhash
+    #[deprecated(since = "1.8.0", note = "Please use `get_latest_blockhash` instead")]
     fn get_recent_blockhash(&self) -> Result<(Hash, FeeCalculator)>;
 
     /// Get recent blockhash. Uses explicit commitment configuration.
+    #[deprecated(
+        since = "1.8.0",
+        note = "Please use `get_latest_blockhash_with_commitment` and `get_fee_for_message` instead"
+    )]
     fn get_recent_blockhash_with_commitment(
         &self,
         commitment_config: CommitmentConfig,
@@ -91,9 +96,17 @@ pub trait SyncClient {
 
     /// Get `Some(FeeCalculator)` associated with `blockhash` if it is still in
     /// the BlockhashQueue`, otherwise `None`
+    #[deprecated(
+        since = "1.8.0",
+        note = "Please use `get_fee_for_message` or `is_blockhash_valid` instead"
+    )]
     fn get_fee_calculator_for_blockhash(&self, blockhash: &Hash) -> Result<Option<FeeCalculator>>;
 
     /// Get recent fee rate governor
+    #[deprecated(
+        since = "1.8.0",
+        note = "Please do not use, will no longer be available in the future"
+    )]
     fn get_fee_rate_governor(&self) -> Result<FeeRateGovernor>;
 
     /// Get signature status.
@@ -136,7 +149,29 @@ pub trait SyncClient {
     /// Poll to confirm a transaction.
     fn poll_for_signature(&self, signature: &Signature) -> Result<()>;
 
+    #[deprecated(
+        since = "1.8.0",
+        note = "Please use `get_new_latest_blockhash` instead"
+    )]
     fn get_new_blockhash(&self, blockhash: &Hash) -> Result<(Hash, FeeCalculator)>;
+
+    /// Get last known blockhash
+    fn get_latest_blockhash(&self) -> Result<Hash>;
+
+    /// Get recent blockhash. Uses explicit commitment configuration.
+    fn get_latest_blockhash_with_commitment(
+        &self,
+        commitment_config: CommitmentConfig,
+    ) -> Result<(Hash, u64)>;
+
+    /// Check if the blockhash is valid
+    fn is_blockhash_valid(&self, blockhash: &Hash, commitment: CommitmentConfig) -> Result<bool>;
+
+    /// Calculate the fee for a `Message`
+    fn get_fee_for_message(&self, blockhash: &Hash, message: &Message) -> Result<u64>;
+
+    /// Get a new blockhash after the one specified
+    fn get_new_latest_blockhash(&self, blockhash: &Hash) -> Result<Hash>;
 }
 
 pub trait AsyncClient {

@@ -13,6 +13,7 @@ pub mod bpf_loader_deprecated;
 pub mod bpf_loader_upgradeable;
 pub mod clock;
 pub mod decode_error;
+pub mod ed25519_program;
 pub mod entrypoint;
 pub mod entrypoint_deprecated;
 pub mod epoch_schedule;
@@ -62,6 +63,8 @@ pub mod vote {
     }
 }
 
+/// Same as `declare_id` except report that this id has been deprecated
+pub use solana_sdk_macro::program_declare_deprecated_id as declare_deprecated_id;
 /// Convenience macro to declare a static public key and functions to interact with it
 ///
 /// Input: a single literal base58 string representation of a program's id

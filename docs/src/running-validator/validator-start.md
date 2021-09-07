@@ -89,7 +89,7 @@ sudo sysctl -p /etc/sysctl.d/20-solana-udp-buffers.conf
 ```bash
 sudo bash -c "cat >/etc/sysctl.d/20-solana-mmaps.conf <<EOF
 # Increase memory mapped files limit
-vm.max_map_count = 700000
+vm.max_map_count = 1000000
 EOF"
 ```
 
@@ -100,14 +100,14 @@ sudo sysctl -p /etc/sysctl.d/20-solana-mmaps.conf
 Add
 
 ```
-LimitNOFILE=700000
+LimitNOFILE=1000000
 ```
 
 to the `[Service]` section of your systemd service file, if you use one,
 otherwise add
 
 ```
-DefaultLimitNOFILE=700000
+DefaultLimitNOFILE=1000000
 ```
 
 to the `[Manager]` section of `/etc/systemd/system.conf`.
@@ -119,7 +119,7 @@ sudo systemctl daemon-reload
 ```bash
 sudo bash -c "cat >/etc/security/limits.d/90-solana-nofiles.conf <<EOF
 # Increase process file descriptor count limit
-* - nofile 700000
+* - nofile 1000000
 EOF"
 ```
 
@@ -239,6 +239,23 @@ solana balance --lamports
 
 Read more about the [difference between SOL and lamports here](../introduction.md#what-are-sols).
 
+## Create Authorized Withdrawer Account
+
+If you haven't already done so, create an authorized-withdrawer keypair to be used
+as the ultimate authority over your validator.  This keypair will have the
+authority to withdraw from your vote account, and will have the additional
+authority to change all other aspects of your vote account.  Needless to say,
+this is a very important keypair as anyone who possesses it can make any
+changes to your vote account, including taking ownership of it permanently.
+So it is very important to keep your authorized-withdrawer keypair in a safe
+location.  It does not need to be stored on your validator, and should not be
+stored anywhere from where it could be accessed by unauthorized parties.  To
+create your authorized-withdrawer keypair:
+
+```bash
+solana-keygen new -o ~/authorized-withdrawer-keypair.json
+```
+
 ## Create Vote Account
 
 If you haven’t already done so, create a vote-account keypair and create the
@@ -253,20 +270,22 @@ The following command can be used to create your vote account on the blockchain
 with all the default options:
 
 ```bash
-solana create-vote-account ~/vote-account-keypair.json ~/validator-keypair.json
+solana create-vote-account ~/vote-account-keypair.json ~/validator-keypair.json ~/authorized-withdrawer-keypair.json
 ```
+
+Remember to move your authorized withdrawer keypair into a very secure location after running the above command.
 
 Read more about [creating and managing a vote account](vote-accounts.md).
 
-## Trusted validators
+## Known validators
 
-If you know and trust other validator nodes, you can specify this on the command line with the `--trusted-validator <PUBKEY>`
-argument to `solana-validator`. You can specify multiple ones by repeating the argument `--trusted-validator <PUBKEY1> --trusted-validator <PUBKEY2>`.
-This has two effects, one is when the validator is booting with `--no-untrusted-rpc`, it will only ask that set of
-trusted nodes for downloading genesis and snapshot data. Another is that in combination with the `--halt-on-trusted-validator-hash-mismatch` option,
-it will monitor the merkle root hash of the entire accounts state of other trusted nodes on gossip and if the hashes produce any mismatch,
+If you know and respect other validator operators, you can specify this on the command line with the `--known-validator <PUBKEY>`
+argument to `solana-validator`. You can specify multiple ones by repeating the argument `--known-validator <PUBKEY1> --known-validator <PUBKEY2>`.
+This has two effects, one is when the validator is booting with `--only-known-rpc`, it will only ask that set of
+known nodes for downloading genesis and snapshot data. Another is that in combination with the `--halt-on-known-validator-hash-mismatch` option,
+it will monitor the merkle root hash of the entire accounts state of other known nodes on gossip and if the hashes produce any mismatch,
 the validator will halt the node to prevent the validator from voting or processing potentially incorrect state values. At the moment, the slot that
-the validator publishes the hash on is tied to the snapshot interval. For the feature to be effective, all validators in the trusted
+the validator publishes the hash on is tied to the snapshot interval. For the feature to be effective, all validators in the known
 set should be set to the same snapshot interval value or multiples of the same.
 
 It is highly recommended you use these options to prevent malicious snapshot state download or
@@ -349,7 +368,7 @@ Type=simple
 Restart=always
 RestartSec=1
 User=sol
-LimitNOFILE=700000
+LimitNOFILE=1000000
 LogRateLimitIntervalSec=0
 Environment="PATH=/bin:/usr/bin:/home/sol/.local/share/solana/install/active_release/bin"
 ExecStart=/home/sol/bin/validator.sh
@@ -432,15 +451,6 @@ it.
 Once your validator is operating normally, you can reduce the time it takes to
 restart your validator by adding the `--no-port-check` flag to your
 `solana-validator` command-line.
-
-### Disable snapshot compression to reduce CPU usage
-
-If you are not serving snapshots to other validators, snapshot compression can
-be disabled to reduce CPU load at the expense of slightly more disk usage for
-local snapshot storage.
-
-Add the `--snapshot-compression none` argument to your `solana-validator`
-command-line arguments and restart the validator.
 
 ### Using a ramdisk with spill-over into swap for the accounts database to reduce SSD wear
 

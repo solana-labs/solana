@@ -25,6 +25,7 @@ use solana_sdk::{
     timing::{duration_as_us, timestamp},
     transaction::Transaction,
 };
+use solana_streamer::socket::SocketAddrSpace;
 use std::{
     sync::{atomic::Ordering, mpsc::Receiver, Arc, Mutex, RwLock},
     thread::sleep,
@@ -166,7 +167,7 @@ fn main() {
     let (verified_sender, verified_receiver) = unbounded();
     let (vote_sender, vote_receiver) = unbounded();
     let (replay_vote_sender, _replay_vote_receiver) = unbounded();
-    let bank0 = Bank::new(&genesis_config);
+    let bank0 = Bank::new_for_benches(&genesis_config);
     let mut bank_forks = BankForks::new(bank0);
     let mut bank = bank_forks.working_bank();
 
@@ -200,7 +201,8 @@ fn main() {
         });
         bank.clear_signatures();
         //sanity check, make sure all the transactions can execute in parallel
-        let res = bank.process_transactions(&transactions);
+
+        let res = bank.process_transactions(transactions.iter());
         for r in res {
             assert!(r.is_ok(), "sanity parallel execution error: {:?}", r);
         }
@@ -215,7 +217,11 @@ fn main() {
         );
         let (exit, poh_recorder, poh_service, signal_receiver) =
             create_test_recorder(&bank, &blockstore, None);
-        let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
+        let cluster_info = ClusterInfo::new(
+            Node::new_localhost().info,
+            Arc::new(Keypair::new()),
+            SocketAddrSpace::Unspecified,
+        );
         let cluster_info = Arc::new(cluster_info);
         let banking_stage = BankingStage::new(
             &cluster_info,

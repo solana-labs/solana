@@ -1,10 +1,11 @@
 use solana_sdk::{
     clock::Slot,
     hash::Hash,
+    instruction::CompiledInstruction,
     program_utils::limited_deserialize,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
-    transaction::Transaction,
+    transaction::{SanitizedTransaction, Transaction},
 };
 
 use crate::{
@@ -12,7 +13,37 @@ use crate::{
     vote_state::Vote,
 };
 
-pub fn parse_vote_transaction(tx: &Transaction) -> Option<(Pubkey, Vote, Option<Hash>)> {
+pub type ParsedVote = (Pubkey, Vote, Option<Hash>);
+
+fn parse_vote(vote_ix: &CompiledInstruction, vote_key: &Pubkey) -> Option<ParsedVote> {
+    let vote_instruction = limited_deserialize(&vote_ix.data).ok();
+    vote_instruction.and_then(|vote_instruction| match vote_instruction {
+        VoteInstruction::Vote(vote) => Some((*vote_key, vote, None)),
+        VoteInstruction::VoteSwitch(vote, hash) => Some((*vote_key, vote, Some(hash))),
+        _ => None,
+    })
+}
+
+pub fn parse_sanitized_vote_transaction(tx: &SanitizedTransaction) -> Option<ParsedVote> {
+    // Check first instruction for a vote
+    let message = tx.message();
+    message
+        .program_instructions_iter()
+        .next()
+        .and_then(|(program_id, first_ix)| {
+            if !crate::check_id(program_id) {
+                return None;
+            }
+
+            first_ix.accounts.first().and_then(|first_account| {
+                message
+                    .get_account_key(*first_account as usize)
+                    .and_then(|key| parse_vote(first_ix, key))
+            })
+        })
+}
+
+pub fn parse_vote_transaction(tx: &Transaction) -> Option<ParsedVote> {
     // Check first instruction for a vote
     let message = tx.message();
     message.instructions.get(0).and_then(|first_instruction| {
@@ -31,19 +62,10 @@ pub fn parse_vote_transaction(tx: &Transaction) -> Option<(Pubkey, Vote, Option<
             .accounts
             .first()
             .and_then(|first_account| {
-                tx.message
+                message
                     .account_keys
                     .get(*first_account as usize)
-                    .and_then(|key| {
-                        let vote_instruction = limited_deserialize(&first_instruction.data).ok();
-                        vote_instruction.and_then(|vote_instruction| match vote_instruction {
-                            VoteInstruction::Vote(vote) => Some((*key, vote, None)),
-                            VoteInstruction::VoteSwitch(vote, hash) => {
-                                Some((*key, vote, Some(hash)))
-                            }
-                            _ => None,
-                        })
-                    })
+                    .and_then(|key| parse_vote(first_instruction, key))
             })
     })
 }

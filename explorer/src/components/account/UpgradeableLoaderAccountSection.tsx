@@ -13,6 +13,7 @@ import { Slot } from "components/common/Slot";
 import { addressLabel } from "utils/tx";
 import { useCluster } from "providers/cluster";
 import { ErrorCard } from "components/common/ErrorCard";
+import { UnknownAccountCard } from "components/account/UnknownAccountCard";
 
 export function UpgradeableLoaderAccountSection({
   account,
@@ -51,6 +52,9 @@ export function UpgradeableLoaderAccountSection({
           programBuffer={parsedData.info}
         />
       );
+    }
+    case "uninitialized": {
+      return <UnknownAccountCard account={account} />;
     }
   }
 }

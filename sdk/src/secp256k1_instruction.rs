@@ -102,11 +102,19 @@ pub fn construct_eth_pubkey(
 pub fn verify_eth_addresses(
     data: &[u8],
     instruction_datas: &[&[u8]],
+    libsecp256k1_0_5_upgrade_enabled: bool,
+    libsecp256k1_fail_on_bad_count: bool,
 ) -> Result<(), Secp256k1Error> {
     if data.is_empty() {
         return Err(Secp256k1Error::InvalidInstructionDataSize);
     }
     let count = data[0] as usize;
+    if libsecp256k1_fail_on_bad_count && count == 0 && data.len() > 1 {
+        // count is zero but the instruction data indicates that is probably not
+        // correct, fail the instruction to catch probable invalid secp256k1
+        // instruction construction.
+        return Err(Secp256k1Error::InvalidInstructionDataSize);
+    }
     let expected_data_size = count
         .saturating_mul(SIGNATURE_OFFSETS_SERIALIZED_SIZE)
         .saturating_add(1);
@@ -133,10 +141,18 @@ pub fn verify_eth_addresses(
         if sig_end >= signature_instruction.len() {
             return Err(Secp256k1Error::InvalidSignature);
         }
-        let signature = libsecp256k1::Signature::parse_standard_slice(
-            &signature_instruction[sig_start..sig_end],
-        )
-        .map_err(|_| Secp256k1Error::InvalidSignature)?;
+
+        let sig_parse_result = if libsecp256k1_0_5_upgrade_enabled {
+            libsecp256k1::Signature::parse_standard_slice(
+                &signature_instruction[sig_start..sig_end],
+            )
+        } else {
+            libsecp256k1::Signature::parse_overflowing_slice(
+                &signature_instruction[sig_start..sig_end],
+            )
+        };
+
+        let signature = sig_parse_result.map_err(|_| Secp256k1Error::InvalidSignature)?;
 
         let recovery_id = libsecp256k1::RecoveryId::parse(signature_instruction[sig_end])
             .map_err(|_| Secp256k1Error::InvalidRecoveryId)?;
@@ -206,7 +222,7 @@ pub mod test {
         let writer = std::io::Cursor::new(&mut instruction_data[1..]);
         bincode::serialize_into(writer, &offsets).unwrap();
 
-        verify_eth_addresses(&instruction_data, &[&[0u8; 100]])
+        verify_eth_addresses(&instruction_data, &[&[0u8; 100]], false, true)
     }
 
     #[test]
@@ -221,7 +237,7 @@ pub mod test {
         instruction_data.truncate(instruction_data.len() - 1);
 
         assert_eq!(
-            verify_eth_addresses(&instruction_data, &[&[0u8; 100]]),
+            verify_eth_addresses(&instruction_data, &[&[0u8; 100]], false, true),
             Err(Secp256k1Error::InvalidInstructionDataSize)
         );
 
@@ -335,6 +351,21 @@ pub mod test {
         assert_eq!(
             test_case(1, &offsets),
             Err(Secp256k1Error::InvalidSignature)
+        );
+    }
+
+    #[test]
+    fn test_count_is_zero_but_sig_data_exists() {
+        solana_logger::setup();
+
+        let mut instruction_data = vec![0u8; DATA_START];
+        let offsets = SecpSignatureOffsets::default();
+        instruction_data[0] = 0;
+        let writer = std::io::Cursor::new(&mut instruction_data[1..]);
+        bincode::serialize_into(writer, &offsets).unwrap();
+        assert_eq!(
+            verify_eth_addresses(&instruction_data, &[&[0u8; 100]], false, true),
+            Err(Secp256k1Error::InvalidInstructionDataSize)
         );
     }
 }

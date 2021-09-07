@@ -385,18 +385,7 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
     let runtime = tokio::runtime::Runtime::new().unwrap();
 
     let verbose = matches.is_present("verbose");
-    let output_format = matches
-        .value_of("output_format")
-        .map(|value| match value {
-            "json" => OutputFormat::Json,
-            "json-compact" => OutputFormat::JsonCompact,
-            _ => unreachable!(),
-        })
-        .unwrap_or(if verbose {
-            OutputFormat::DisplayVerbose
-        } else {
-            OutputFormat::Display
-        });
+    let output_format = OutputFormat::from_matches(matches, "output_format", verbose);
 
     let future = match matches.subcommand() {
         ("upload", Some(arg_matches)) => {

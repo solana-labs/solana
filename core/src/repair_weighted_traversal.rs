@@ -1,6 +1,6 @@
 use crate::{
     heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice, repair_service::RepairService,
-    serve_repair::RepairType, tree_diff::TreeDiff,
+    serve_repair::ShredRepairType, tree_diff::TreeDiff,
 };
 use solana_ledger::blockstore::Blockstore;
 use solana_runtime::contains::Contains;
@@ -73,7 +73,7 @@ impl<'a> Iterator for RepairWeightTraversal<'a> {
 pub fn get_best_repair_shreds<'a>(
     tree: &HeaviestSubtreeForkChoice,
     blockstore: &Blockstore,
-    repairs: &mut Vec<RepairType>,
+    repairs: &mut Vec<ShredRepairType>,
     max_new_shreds: usize,
     ignore_slots: &impl Contains<'a, Slot>,
 ) {
@@ -153,7 +153,7 @@ pub mod test {
     #[test]
     fn test_weighted_repair_traversal() {
         let stake = 100;
-        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys(1, stake);
+        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys_for_tests(1, stake);
         let (_, mut heaviest_subtree_fork_choice) = setup_forks();
         let weighted_traversal = RepairWeightTraversal::new(&heaviest_subtree_fork_choice);
         let steps: Vec<_> = weighted_traversal.collect();
@@ -227,7 +227,7 @@ pub mod test {
             repairs,
             [0, 1, 2, 4, 3, 5]
                 .iter()
-                .map(|slot| RepairType::HighestShred(*slot, last_shred))
+                .map(|slot| ShredRepairType::HighestShred(*slot, last_shred))
                 .collect::<Vec<_>>()
         );
 
@@ -254,7 +254,7 @@ pub mod test {
             repairs,
             [0, 1, 2, 4, 6, 7]
                 .iter()
-                .map(|slot| RepairType::HighestShred(*slot, last_shred))
+                .map(|slot| ShredRepairType::HighestShred(*slot, last_shred))
                 .collect::<Vec<_>>()
         );
 
@@ -289,7 +289,7 @@ pub mod test {
             repairs,
             [1, 7, 3, 5]
                 .iter()
-                .map(|slot| RepairType::HighestShred(*slot, last_shred))
+                .map(|slot| ShredRepairType::HighestShred(*slot, last_shred))
                 .collect::<Vec<_>>()
         );
 
@@ -308,7 +308,7 @@ pub mod test {
             repairs,
             [1, 7, 8, 3]
                 .iter()
-                .map(|slot| RepairType::HighestShred(*slot, last_shred))
+                .map(|slot| ShredRepairType::HighestShred(*slot, last_shred))
                 .collect::<Vec<_>>()
         );
     }
@@ -332,7 +332,7 @@ pub mod test {
             repairs,
             [0, 1, 2, 4, 6, 7, 3, 5]
                 .iter()
-                .map(|slot| RepairType::HighestShred(*slot, last_shred))
+                .map(|slot| ShredRepairType::HighestShred(*slot, last_shred))
                 .collect::<Vec<_>>()
         );
     }
@@ -357,7 +357,7 @@ pub mod test {
             repairs,
             [0, 2, 4, 5]
                 .iter()
-                .map(|slot| RepairType::HighestShred(*slot, last_shred))
+                .map(|slot| ShredRepairType::HighestShred(*slot, last_shred))
                 .collect::<Vec<_>>()
         );
 
@@ -377,7 +377,7 @@ pub mod test {
             repairs,
             [0, 4, 6, 7, 5]
                 .iter()
-                .map(|slot| RepairType::HighestShred(*slot, last_shred))
+                .map(|slot| ShredRepairType::HighestShred(*slot, last_shred))
                 .collect::<Vec<_>>()
         );
 
@@ -396,7 +396,7 @@ pub mod test {
             repairs,
             [0, 4, 5]
                 .iter()
-                .map(|slot| RepairType::HighestShred(*slot, last_shred))
+                .map(|slot| ShredRepairType::HighestShred(*slot, last_shred))
                 .collect::<Vec<_>>()
         );
     }

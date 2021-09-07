@@ -82,6 +82,7 @@ For full usage details run:
 solana-keygen new --help
 ```
 
+
 ### Public Key Derivation
 
 Public keys can be derived from a seed phrase and a passphrase if you choose to
@@ -107,10 +108,16 @@ solana-keygen pubkey prompt:// --skip-seed-phrase-validation
 ```
 
 After entering your seed phrase with `solana-keygen pubkey prompt://` the console
-will display a string of base-58 character. This is the base _wallet address_
+will display a string of base-58 character. This is the [derived](#hierarchical-derivation) solana BIP44 _wallet address_
 associated with your seed phrase.
 
 > Copy the derived address to a USB stick for easy usage on networked computers
+
+If needed, you can access the legacy, raw keypair's pubkey by instead passing the `ASK` keyword:
+
+```bash
+solana-keygen pubkey ASK
+```
 
 > A common next step is to [check the balance](#checking-account-balance) of the account associated with a public key
 

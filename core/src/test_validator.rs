@@ -1,5 +1,8 @@
 use {
-    crate::validator::{Validator, ValidatorConfig, ValidatorStartProgress},
+    crate::{
+        tower_storage::TowerStorage,
+        validator::{Validator, ValidatorConfig, ValidatorStartProgress},
+    },
     solana_client::rpc_client::RpcClient,
     solana_gossip::{
         cluster_info::{ClusterInfo, Node},
@@ -13,7 +16,10 @@ use {
         genesis_utils::create_genesis_config_with_leader_ex,
         hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
         snapshot_config::SnapshotConfig,
-        snapshot_utils::{ArchiveFormat, SnapshotVersion, DEFAULT_MAX_SNAPSHOTS_TO_RETAIN},
+        snapshot_utils::{
+            ArchiveFormat, SnapshotVersion, DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+            DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+        },
     },
     solana_sdk::{
         account::{Account, AccountSharedData},
@@ -23,11 +29,14 @@ use {
         exit::Exit,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
         hash::Hash,
+        instruction::{AccountMeta, Instruction},
+        message::Message,
         native_token::sol_to_lamports,
         pubkey::Pubkey,
         rent::Rent,
         signature::{read_keypair_file, write_keypair_file, Keypair, Signer},
     },
+    solana_streamer::socket::SocketAddrSpace,
     std::{
         collections::HashMap,
         fs::remove_dir_all,
@@ -73,6 +82,7 @@ impl Default for TestValidatorNodeConfig {
 pub struct TestValidatorGenesis {
     fee_rate_governor: FeeRateGovernor,
     ledger_path: Option<PathBuf>,
+    tower_storage: Option<Arc<dyn TowerStorage>>,
     pub rent: Rent,
     rpc_config: JsonRpcConfig,
     rpc_ports: Option<(u16, u16)>, // (JsonRpc, JsonRpcPubSub), None == random ports
@@ -91,6 +101,11 @@ pub struct TestValidatorGenesis {
 impl TestValidatorGenesis {
     pub fn ledger_path<P: Into<PathBuf>>(&mut self, ledger_path: P) -> &mut Self {
         self.ledger_path = Some(ledger_path.into());
+        self
+    }
+
+    pub fn tower_storage(&mut self, tower_storage: Arc<dyn TowerStorage>) -> &mut Self {
+        self.tower_storage = Some(tower_storage);
         self
     }
 
@@ -267,8 +282,9 @@ impl TestValidatorGenesis {
     pub fn start_with_mint_address(
         &self,
         mint_address: Pubkey,
+        socket_addr_space: SocketAddrSpace,
     ) -> Result<TestValidator, Box<dyn std::error::Error>> {
-        TestValidator::start(mint_address, self)
+        TestValidator::start(mint_address, self, socket_addr_space)
     }
 
     /// Start a test validator
@@ -278,8 +294,21 @@ impl TestValidatorGenesis {
     ///
     /// This function panics on initialization failure.
     pub fn start(&self) -> (TestValidator, Keypair) {
+        self.start_with_socket_addr_space(SocketAddrSpace::new(/*allow_private_addr=*/ true))
+    }
+
+    /// Start a test validator with the given `SocketAddrSpace`
+    ///
+    /// Returns a new `TestValidator` as well as the keypair for the mint account that will receive tokens
+    /// created at genesis.
+    ///
+    /// This function panics on initialization failure.
+    pub fn start_with_socket_addr_space(
+        &self,
+        socket_addr_space: SocketAddrSpace,
+    ) -> (TestValidator, Keypair) {
         let mint_keypair = Keypair::new();
-        TestValidator::start(mint_keypair.pubkey(), self)
+        TestValidator::start(mint_keypair.pubkey(), self, socket_addr_space)
             .map(|test_validator| (test_validator, mint_keypair))
             .expect("Test validator failed to start")
     }
@@ -301,7 +330,11 @@ impl TestValidator {
     /// Faucet optional.
     ///
     /// This function panics on initialization failure.
-    pub fn with_no_fees(mint_address: Pubkey, faucet_addr: Option<SocketAddr>) -> Self {
+    pub fn with_no_fees(
+        mint_address: Pubkey,
+        faucet_addr: Option<SocketAddr>,
+        socket_addr_space: SocketAddrSpace,
+    ) -> Self {
         TestValidatorGenesis::default()
             .fee_rate_governor(FeeRateGovernor::new(0, 0))
             .rent(Rent {
@@ -310,7 +343,7 @@ impl TestValidator {
                 ..Rent::default()
             })
             .faucet_addr(faucet_addr)
-            .start_with_mint_address(mint_address)
+            .start_with_mint_address(mint_address, socket_addr_space)
             .expect("validator start failed")
     }
 
@@ -322,6 +355,7 @@ impl TestValidator {
         mint_address: Pubkey,
         target_lamports_per_signature: u64,
         faucet_addr: Option<SocketAddr>,
+        socket_addr_space: SocketAddrSpace,
     ) -> Self {
         TestValidatorGenesis::default()
             .fee_rate_governor(FeeRateGovernor::new(target_lamports_per_signature, 0))
@@ -331,7 +365,7 @@ impl TestValidator {
                 ..Rent::default()
             })
             .faucet_addr(faucet_addr)
-            .start_with_mint_address(mint_address)
+            .start_with_mint_address(mint_address, socket_addr_space)
             .expect("validator start failed")
     }
 
@@ -434,6 +468,7 @@ impl TestValidator {
     fn start(
         mint_address: Pubkey,
         config: &TestValidatorGenesis,
+        socket_addr_space: SocketAddrSpace,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let preserve_ledger = config.ledger_path.is_some();
         let ledger_path = TestValidator::initialize_ledger(mint_address, config)?;
@@ -474,7 +509,7 @@ impl TestValidator {
             }
         }
 
-        let validator_config = ValidatorConfig {
+        let mut validator_config = ValidatorConfig {
             rpc_addrs: Some((
                 SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), node.info.rpc.port()),
                 SocketAddr::new(
@@ -487,12 +522,16 @@ impl TestValidator {
             account_paths: vec![ledger_path.join("accounts")],
             poh_verify: false, // Skip PoH verification of ledger on startup for speed
             snapshot_config: Some(SnapshotConfig {
-                snapshot_interval_slots: 100,
-                snapshot_path: ledger_path.join("snapshot"),
-                snapshot_package_output_path: ledger_path.to_path_buf(),
+                full_snapshot_archive_interval_slots: 100,
+                incremental_snapshot_archive_interval_slots: Slot::MAX,
+                bank_snapshots_dir: ledger_path.join("snapshot"),
+                snapshot_archives_dir: ledger_path.to_path_buf(),
                 archive_format: ArchiveFormat::Tar,
                 snapshot_version: SnapshotVersion::default(),
-                maximum_snapshots_to_retain: DEFAULT_MAX_SNAPSHOTS_TO_RETAIN,
+                maximum_full_snapshot_archives_to_retain:
+                    DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+                maximum_incremental_snapshot_archives_to_retain:
+                    DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
             }),
             enforce_ulimit_nofile: false,
             warp_slot: config.warp_slot,
@@ -503,6 +542,9 @@ impl TestValidator {
             no_wait_for_vote_to_start_leader: true,
             ..ValidatorConfig::default()
         };
+        if let Some(ref tower_storage) = config.tower_storage {
+            validator_config.tower_storage = tower_storage.clone();
+        }
 
         let validator = Some(Validator::new(
             node,
@@ -514,11 +556,12 @@ impl TestValidator {
             &validator_config,
             true, // should_check_duplicate_instance
             config.start_progress.clone(),
+            socket_addr_space,
         ));
 
         // Needed to avoid panics in `solana-responder-gossip` in tests that create a number of
         // test validators concurrently...
-        discover_cluster(&gossip, 1)
+        discover_cluster(&gossip, 1, socket_addr_space)
             .map_err(|err| format!("TestValidator startup failed: {:?}", err))?;
 
         // This is a hack to delay until the fees are non-zero for test consistency
@@ -527,25 +570,40 @@ impl TestValidator {
         {
             let rpc_client =
                 RpcClient::new_with_commitment(rpc_url.clone(), CommitmentConfig::processed());
-
-            if let Ok(result) = rpc_client.get_fee_rate_governor() {
-                let fee_rate_governor = result.value;
-                if fee_rate_governor.target_lamports_per_signature > 0 {
-                    loop {
-                        match rpc_client.get_recent_blockhash() {
-                            Ok((_blockhash, fee_calculator)) => {
-                                if fee_calculator.lamports_per_signature != 0 {
-                                    break;
-                                }
-                            }
-                            Err(err) => {
-                                warn!("get_recent_blockhash() failed: {:?}", err);
+            let message = Message::new(
+                &[Instruction::new_with_bytes(
+                    Pubkey::new_unique(),
+                    &[],
+                    vec![AccountMeta::new(Pubkey::new_unique(), true)],
+                )],
+                None,
+            );
+            const MAX_TRIES: u64 = 10;
+            let mut num_tries = 0;
+            loop {
+                num_tries += 1;
+                if num_tries > MAX_TRIES {
+                    break;
+                }
+                println!("Waiting for fees to stabilize {:?}...", num_tries);
+                match rpc_client.get_latest_blockhash() {
+                    Ok(blockhash) => match rpc_client.get_fee_for_message(&blockhash, &message) {
+                        Ok(fee) => {
+                            if fee != 0 {
                                 break;
                             }
                         }
-                        sleep(Duration::from_millis(DEFAULT_MS_PER_SLOT));
+                        Err(err) => {
+                            warn!("get_fee_for_message() failed: {:?}", err);
+                            break;
+                        }
+                    },
+                    Err(err) => {
+                        warn!("get_latest_blockhash() failed: {:?}", err);
+                        break;
                     }
                 }
+                sleep(Duration::from_millis(DEFAULT_MS_PER_SLOT));
             }
         }
 
@@ -591,6 +649,7 @@ impl TestValidator {
     pub fn rpc_client(&self) -> (RpcClient, Hash, FeeCalculator) {
         let rpc_client =
             RpcClient::new_with_commitment(self.rpc_url.clone(), CommitmentConfig::processed());
+        #[allow(deprecated)]
         let (recent_blockhash, fee_calculator) = rpc_client
             .get_recent_blockhash()
             .expect("get_recent_blockhash");

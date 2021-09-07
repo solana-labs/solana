@@ -1,5 +1,5 @@
 use {
-    crate::rpc_request,
+    crate::{rpc_request, rpc_response},
     solana_faucet::faucet::FaucetError,
     solana_sdk::{
         signature::SignerError, transaction::TransactionError, transport::TransportError,
@@ -28,6 +28,24 @@ pub enum ClientErrorKind {
     FaucetError(#[from] FaucetError),
     #[error("Custom: {0}")]
     Custom(String),
+}
+
+impl ClientErrorKind {
+    pub fn get_transaction_error(&self) -> Option<TransactionError> {
+        match self {
+            Self::RpcError(rpc_request::RpcError::RpcResponseError {
+                data:
+                    rpc_request::RpcResponseErrorData::SendTransactionPreflightFailure(
+                        rpc_response::RpcSimulateTransactionResult {
+                            err: Some(tx_err), ..
+                        },
+                    ),
+                ..
+            }) => Some(tx_err.clone()),
+            Self::TransactionError(tx_err) => Some(tx_err.clone()),
+            _ => None,
+        }
+    }
 }
 
 impl From<TransportError> for ClientErrorKind {
@@ -85,6 +103,10 @@ impl ClientError {
 
     pub fn kind(&self) -> &ClientErrorKind {
         &self.kind
+    }
+
+    pub fn get_transaction_error(&self) -> Option<TransactionError> {
+        self.kind.get_transaction_error()
     }
 }
 

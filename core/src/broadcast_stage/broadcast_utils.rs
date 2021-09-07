@@ -1,5 +1,6 @@
 use crate::result::Result;
-use solana_ledger::{entry::Entry, shred::Shred};
+use solana_entry::entry::Entry;
+use solana_ledger::shred::Shred;
 use solana_poh::poh_recorder::WorkingBankEntry;
 use solana_runtime::bank::Bank;
 use solana_sdk::clock::Slot;
@@ -93,7 +94,7 @@ mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(2);
-        let bank0 = Arc::new(Bank::new(&genesis_config));
+        let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
         let tx = system_transaction::transfer(
             &mint_keypair,
             &solana_sdk::pubkey::new_rand(),

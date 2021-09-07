@@ -26,6 +26,7 @@ import {IWSRequestParams} from 'rpc-websockets/dist/lib/client';
 
 import {AgentManager} from './agent-manager';
 import {EpochSchedule} from './epoch-schedule';
+import {SendTransactionError} from './errors';
 import {NonceAccount} from './nonce-account';
 import {PublicKey} from './publickey';
 import {Signer} from './keypair';
@@ -1645,8 +1646,10 @@ export type GetProgramAccountsFilter = MemcmpFilter | DataSizeFilter;
 export type GetProgramAccountsConfig = {
   /** Optional commitment level */
   commitment?: Commitment;
-  /** Optional encoding for account data (default base64) */
-  encoding?: 'base64' | 'jsonParsed';
+  /** Optional encoding for account data (default base64)
+   * To use "jsonParsed" encoding, please refer to `getParsedProgramAccounts` in connection.ts
+   * */
+  encoding?: 'base64';
   /** Optional data slice to limit the returned account data */
   dataSlice?: DataSlice;
   /** Optional array of filters to apply to accounts */
@@ -2404,6 +2407,28 @@ export class Connection {
         'failed to get info about account ' + publicKey.toBase58() + ': ' + e,
       );
     }
+  }
+
+  /**
+   * Fetch all the account info for multiple accounts specified by an array of public keys
+   */
+  async getMultipleAccountsInfo(
+    publicKeys: PublicKey[],
+    commitment?: Commitment,
+  ): Promise<(AccountInfo<Buffer> | null)[]> {
+    const keys = publicKeys.map(key => key.toBase58());
+    const args = this._buildArgs([keys], commitment, 'base64');
+    const unsafeRes = await this._rpcRequest('getMultipleAccounts', args);
+    const res = create(
+      unsafeRes,
+      jsonRpcResultAndContext(array(nullable(AccountInfoResult))),
+    );
+    if ('error' in res) {
+      throw new Error(
+        'failed to get info for accounts ' + keys + ': ' + res.error.message,
+      );
+    }
+    return res.result.value;
   }
 
   /**
@@ -3444,7 +3469,19 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('simulateTransaction', args);
     const res = create(unsafeRes, SimulatedTransactionResponseStruct);
     if ('error' in res) {
-      throw new Error('failed to simulate transaction: ' + res.error.message);
+      let logs;
+      if ('data' in res.error) {
+        logs = res.error.data.logs;
+        if (logs && Array.isArray(logs)) {
+          const traceIndent = '\n    ';
+          const logTrace = traceIndent + logs.join(traceIndent);
+          console.error(res.error.message, logTrace);
+        }
+      }
+      throw new SendTransactionError(
+        'failed to simulate transaction: ' + res.error.message,
+        logs,
+      );
     }
     return res.result;
   }
@@ -3528,15 +3565,19 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('sendTransaction', args);
     const res = create(unsafeRes, SendTransactionRpcResult);
     if ('error' in res) {
+      let logs;
       if ('data' in res.error) {
-        const logs = res.error.data.logs;
+        logs = res.error.data.logs;
         if (logs && Array.isArray(logs)) {
           const traceIndent = '\n    ';
           const logTrace = traceIndent + logs.join(traceIndent);
           console.error(res.error.message, logTrace);
         }
       }
-      throw new Error('failed to send transaction: ' + res.error.message);
+      throw new SendTransactionError(
+        'failed to send transaction: ' + res.error.message,
+        logs,
+      );
     }
     return res.result;
   }

@@ -1,162 +1,158 @@
-use super::broadcast_utils::ReceiveResults;
-use super::*;
-use log::*;
-use solana_ledger::entry::{create_ticks, Entry, EntrySlice};
-use solana_ledger::shred::Shredder;
-use solana_runtime::blockhash_queue::BlockhashQueue;
-use solana_sdk::clock::Slot;
-use solana_sdk::fee_calculator::FeeCalculator;
-use solana_sdk::hash::Hash;
-use solana_sdk::signature::{Keypair, Signer};
-use solana_sdk::transaction::Transaction;
-use std::collections::VecDeque;
-use std::sync::Mutex;
+use {
+    super::*,
+    crate::cluster_nodes::ClusterNodesCache,
+    itertools::Itertools,
+    solana_entry::entry::Entry,
+    solana_ledger::shred::Shredder,
+    solana_runtime::blockhash_queue::BlockhashQueue,
+    solana_sdk::{
+        hash::Hash,
+        signature::{Keypair, Signature, Signer},
+        system_transaction,
+    },
+    std::collections::HashSet,
+};
 
-// Queue which facilitates delivering shreds with a delay
-type DelayedQueue = VecDeque<(Option<Pubkey>, Option<Vec<Shred>>)>;
+pub const MINIMUM_DUPLICATE_SLOT: Slot = 20;
+pub const DUPLICATE_RATE: usize = 10;
+
+#[derive(PartialEq, Clone, Debug)]
+pub struct BroadcastDuplicatesConfig {
+    /// Amount of stake (excluding the leader) to send different version of slots to.
+    /// Note this is sampled from a list of stakes sorted least to greatest.
+    pub stake_partition: u64,
+}
 
 #[derive(Clone)]
 pub(super) struct BroadcastDuplicatesRun {
     config: BroadcastDuplicatesConfig,
     // Local queue for broadcast to track which duplicate blockhashes we've sent
     duplicate_queue: BlockhashQueue,
-    // Shared queue between broadcast and transmit threads
-    delayed_queue: Arc<Mutex<DelayedQueue>>,
     // Buffer for duplicate entries
     duplicate_entries_buffer: Vec<Entry>,
     last_duplicate_entry_hash: Hash,
-    last_broadcast_slot: Slot,
+    current_slot: Slot,
     next_shred_index: u32,
     shred_version: u16,
+    recent_blockhash: Option<Hash>,
+    prev_entry_hash: Option<Hash>,
+    num_slots_broadcasted: usize,
+    cluster_nodes_cache: Arc<ClusterNodesCache<BroadcastStage>>,
+    original_last_data_shreds: Arc<Mutex<HashSet<Signature>>>,
+    partition_last_data_shreds: Arc<Mutex<HashSet<Signature>>>,
 }
 
 impl BroadcastDuplicatesRun {
     pub(super) fn new(shred_version: u16, config: BroadcastDuplicatesConfig) -> Self {
-        let mut delayed_queue = DelayedQueue::new();
-        delayed_queue.resize(config.duplicate_send_delay, (None, None));
+        let cluster_nodes_cache = Arc::new(ClusterNodesCache::<BroadcastStage>::new(
+            CLUSTER_NODES_CACHE_NUM_EPOCH_CAP,
+            CLUSTER_NODES_CACHE_TTL,
+        ));
         Self {
             config,
-            delayed_queue: Arc::new(Mutex::new(delayed_queue)),
             duplicate_queue: BlockhashQueue::default(),
             duplicate_entries_buffer: vec![],
             next_shred_index: u32::MAX,
-            last_broadcast_slot: 0,
             last_duplicate_entry_hash: Hash::default(),
             shred_version,
+            current_slot: 0,
+            recent_blockhash: None,
+            prev_entry_hash: None,
+            num_slots_broadcasted: 0,
+            cluster_nodes_cache,
+            original_last_data_shreds: Arc::<Mutex<HashSet<Signature>>>::default(),
+            partition_last_data_shreds: Arc::<Mutex<HashSet<Signature>>>::default(),
         }
-    }
-
-    fn queue_or_create_duplicate_entries(
-        &mut self,
-        bank: &Arc<Bank>,
-        receive_results: &ReceiveResults,
-    ) -> (Vec<Entry>, u32) {
-        // If the last entry hash is default, grab the last blockhash from the parent bank
-        if self.last_duplicate_entry_hash == Hash::default() {
-            self.last_duplicate_entry_hash = bank.last_blockhash();
-        }
-
-        // Create duplicate entries by..
-        //  1) rearranging real entries so that all transaction entries are moved to
-        //     the front and tick entries are moved to the back.
-        //  2) setting all transaction entries to zero hashes and all tick entries to `hashes_per_tick`.
-        //  3) removing any transactions which reference blockhashes which aren't in the
-        //     duplicate blockhash queue.
-        let (duplicate_entries, next_shred_index) = if bank.slot() > MINIMUM_DUPLICATE_SLOT {
-            let mut tx_entries: Vec<Entry> = receive_results
-                .entries
-                .iter()
-                .filter_map(|entry| {
-                    if entry.is_tick() {
-                        return None;
-                    }
-
-                    let transactions: Vec<Transaction> = entry
-                        .transactions
-                        .iter()
-                        .filter(|tx| {
-                            self.duplicate_queue
-                                .get_hash_age(&tx.message.recent_blockhash)
-                                .is_some()
-                        })
-                        .cloned()
-                        .collect();
-                    if !transactions.is_empty() {
-                        Some(Entry::new_mut(
-                            &mut self.last_duplicate_entry_hash,
-                            &mut 0,
-                            transactions,
-                        ))
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-            let mut tick_entries = create_ticks(
-                receive_results.entries.tick_count(),
-                bank.hashes_per_tick().unwrap_or_default(),
-                self.last_duplicate_entry_hash,
-            );
-            self.duplicate_entries_buffer.append(&mut tx_entries);
-            self.duplicate_entries_buffer.append(&mut tick_entries);
-
-            // Only send out duplicate entries when the block is finished otherwise the
-            // recipient will start repairing for shreds they haven't received yet and
-            // hit duplicate slot issues before we want them to.
-            let entries = if receive_results.last_tick_height == bank.max_tick_height() {
-                self.duplicate_entries_buffer.drain(..).collect()
-            } else {
-                vec![]
-            };
-
-            // Set next shred index to 0 since we are sending the full slot
-            (entries, 0)
-        } else {
-            // Send real entries until we hit min duplicate slot
-            (receive_results.entries.clone(), self.next_shred_index)
-        };
-
-        // Save last duplicate entry hash to avoid invalid entry hash errors
-        if let Some(last_duplicate_entry) = duplicate_entries.last() {
-            self.last_duplicate_entry_hash = last_duplicate_entry.hash;
-        }
-
-        (duplicate_entries, next_shred_index)
     }
 }
-
-/// Duplicate slots should only be sent once all validators have started.
-/// This constant is intended to be used as a buffer so that all validators
-/// are live before sending duplicate slots.
-pub const MINIMUM_DUPLICATE_SLOT: Slot = 20;
 
 impl BroadcastRun for BroadcastDuplicatesRun {
     fn run(
         &mut self,
         keypair: &Keypair,
-        blockstore: &Arc<Blockstore>,
+        _blockstore: &Arc<Blockstore>,
         receiver: &Receiver<WorkingBankEntry>,
-        socket_sender: &Sender<(TransmitShreds, Option<BroadcastShredBatchInfo>)>,
+        socket_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
         blockstore_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
     ) -> Result<()> {
         // 1) Pull entries from banking stage
-        let receive_results = broadcast_utils::recv_slot_entries(receiver)?;
+        let mut receive_results = broadcast_utils::recv_slot_entries(receiver)?;
         let bank = receive_results.bank.clone();
         let last_tick_height = receive_results.last_tick_height;
 
-        if self.next_shred_index == u32::MAX {
-            self.next_shred_index = blockstore
-                .meta(bank.slot())
-                .expect("Database error")
-                .map(|meta| meta.consumed)
-                .unwrap_or(0) as u32
+        if bank.slot() != self.current_slot {
+            self.next_shred_index = 0;
+            self.current_slot = bank.slot();
+            self.prev_entry_hash = None;
+            self.num_slots_broadcasted += 1;
         }
 
-        // We were not the leader, but just became leader again
-        if bank.slot() > self.last_broadcast_slot + 1 {
-            self.last_duplicate_entry_hash = Hash::default();
+        if receive_results.entries.is_empty() {
+            return Ok(());
         }
-        self.last_broadcast_slot = bank.slot();
+
+        // Update the recent blockhash based on transactions in the entries
+        for entry in &receive_results.entries {
+            if !entry.transactions.is_empty() {
+                self.recent_blockhash = Some(*entry.transactions[0].message.recent_blockhash());
+                break;
+            }
+        }
+
+        // 2) Convert entries to shreds + generate coding shreds. Set a garbage PoH on the last entry
+        // in the slot to make verification fail on validators
+        let last_entries = {
+            if last_tick_height == bank.max_tick_height()
+                && bank.slot() > MINIMUM_DUPLICATE_SLOT
+                && self.num_slots_broadcasted % DUPLICATE_RATE == 0
+                && self.recent_blockhash.is_some()
+            {
+                let entry_batch_len = receive_results.entries.len();
+                let prev_entry_hash =
+                    // Try to get second-to-last entry before last tick
+                    if entry_batch_len > 1 {
+                        Some(receive_results.entries[entry_batch_len - 2].hash)
+                    } else {
+                        self.prev_entry_hash
+                    };
+
+                if let Some(prev_entry_hash) = prev_entry_hash {
+                    let original_last_entry = receive_results.entries.pop().unwrap();
+
+                    // Last entry has to be a tick
+                    assert!(original_last_entry.is_tick());
+
+                    // Inject an extra entry before the last tick
+                    let extra_tx = system_transaction::transfer(
+                        keypair,
+                        &Pubkey::new_unique(),
+                        1,
+                        self.recent_blockhash.unwrap(),
+                    );
+                    let new_extra_entry = Entry::new(&prev_entry_hash, 1, vec![extra_tx]);
+
+                    // This will only work with sleepy tick producer where the hashing
+                    // checks in replay are turned off, because we're introducing an extra
+                    // hash for the last tick in the `new_extra_entry`.
+                    let new_last_entry = Entry::new(
+                        &new_extra_entry.hash,
+                        original_last_entry.num_hashes,
+                        vec![],
+                    );
+
+                    Some((original_last_entry, vec![new_extra_entry, new_last_entry]))
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        };
+
+        self.prev_entry_hash = last_entries
+            .as_ref()
+            .map(|(original_last_entry, _)| original_last_entry.hash)
+            .or_else(|| Some(receive_results.entries.last().unwrap().hash));
 
         let shredder = Shredder::new(
             bank.slot(),
@@ -166,165 +162,188 @@ impl BroadcastRun for BroadcastDuplicatesRun {
         )
         .expect("Expected to create a new shredder");
 
-        let (data_shreds, coding_shreds, last_shred_index) = shredder.entries_to_shreds(
+        let (data_shreds, _, _) = shredder.entries_to_shreds(
             keypair,
             &receive_results.entries,
-            last_tick_height == bank.max_tick_height(),
+            last_tick_height == bank.max_tick_height() && last_entries.is_none(),
             self.next_shred_index,
         );
 
-        let (duplicate_entries, next_duplicate_shred_index) =
-            self.queue_or_create_duplicate_entries(&bank, &receive_results);
-        let (duplicate_data_shreds, duplicate_coding_shreds, _) = if !duplicate_entries.is_empty() {
-            shredder.entries_to_shreds(
-                keypair,
-                &duplicate_entries,
-                last_tick_height == bank.max_tick_height(),
-                next_duplicate_shred_index,
-            )
-        } else {
-            (vec![], vec![], 0)
-        };
+        self.next_shred_index += data_shreds.len() as u32;
+        let last_shreds = last_entries.map(|(original_last_entry, duplicate_extra_last_entries)| {
+            let (original_last_data_shred, _, _) =
+                shredder.entries_to_shreds(keypair, &[original_last_entry], true, self.next_shred_index);
 
-        // Manually track the shred index because relying on slot meta consumed is racy
-        if last_tick_height == bank.max_tick_height() {
-            self.next_shred_index = 0;
-            self.duplicate_queue
-                .register_hash(&self.last_duplicate_entry_hash, &FeeCalculator::default());
-        } else {
-            self.next_shred_index = last_shred_index;
-        }
+            let (partition_last_data_shred, _, _) =
+                // Don't mark the last shred as last so that validators won't know that
+                // they've gotten all the shreds, and will continue trying to repair
+                shredder.entries_to_shreds(keypair, &duplicate_extra_last_entries, true, self.next_shred_index);
 
-        // Partition network with duplicate and real shreds based on stake
-        let bank_epoch = bank.get_leader_schedule_epoch(bank.slot());
-        let mut duplicate_recipients = HashMap::new();
-        let mut real_recipients = HashMap::new();
+                let sigs: Vec<_> = partition_last_data_shred.iter().map(|s| (s.signature(), s.index())).collect();
+                info!(
+                    "duplicate signatures for slot {}, sigs: {:?}",
+                    bank.slot(),
+                    sigs,
+                );
 
-        let mut stakes: Vec<(Pubkey, u64)> = bank
-            .epoch_staked_nodes(bank_epoch)
-            .unwrap()
-            .into_iter()
-            .filter(|(pubkey, _)| *pubkey != keypair.pubkey())
-            .collect();
-        stakes.sort_by(|(l_key, l_stake), (r_key, r_stake)| {
-            if r_stake == l_stake {
-                l_key.cmp(r_key)
-            } else {
-                r_stake.cmp(l_stake)
-            }
+            self.next_shred_index += 1;
+            (original_last_data_shred, partition_last_data_shred)
         });
-
-        let highest_staked_node = stakes.first().cloned().map(|x| x.0);
-        let stake_total: u64 = stakes.iter().map(|(_, stake)| *stake).sum();
-        let mut cumulative_stake: u64 = 0;
-        for (pubkey, stake) in stakes.into_iter().rev() {
-            cumulative_stake += stake;
-            if (100 * cumulative_stake / stake_total) as u8 <= self.config.stake_partition {
-                duplicate_recipients.insert(pubkey, stake);
-            } else {
-                real_recipients.insert(pubkey, stake);
-            }
-        }
-
-        if let Some(highest_staked_node) = highest_staked_node {
-            if bank.slot() > MINIMUM_DUPLICATE_SLOT && last_tick_height == bank.max_tick_height() {
-                warn!(
-                    "{} sent duplicate slot {} to nodes: {:?}",
-                    keypair.pubkey(),
-                    bank.slot(),
-                    &duplicate_recipients,
-                );
-                warn!(
-                    "Duplicate shreds for slot {} will be broadcast in {} slot(s)",
-                    bank.slot(),
-                    self.config.duplicate_send_delay
-                );
-
-                let delayed_shreds: Option<Vec<Shred>> = vec![
-                    duplicate_data_shreds.last().cloned(),
-                    data_shreds.last().cloned(),
-                ]
-                .into_iter()
-                .collect();
-                self.delayed_queue
-                    .lock()
-                    .unwrap()
-                    .push_back((Some(highest_staked_node), delayed_shreds));
-            }
-        }
-
-        let duplicate_recipients = Arc::new(duplicate_recipients);
-        let real_recipients = Arc::new(real_recipients);
 
         let data_shreds = Arc::new(data_shreds);
         blockstore_sender.send((data_shreds.clone(), None))?;
 
         // 3) Start broadcast step
-        socket_sender.send((
-            (
-                Some(duplicate_recipients.clone()),
-                Arc::new(duplicate_data_shreds),
-            ),
-            None,
-        ))?;
-        socket_sender.send((
-            (
-                Some(duplicate_recipients),
-                Arc::new(duplicate_coding_shreds),
-            ),
-            None,
-        ))?;
-        socket_sender.send(((Some(real_recipients.clone()), data_shreds), None))?;
-        socket_sender.send(((Some(real_recipients), Arc::new(coding_shreds)), None))?;
+        info!(
+            "{} Sending good shreds for slot {} to network",
+            keypair.pubkey(),
+            data_shreds.first().unwrap().slot()
+        );
+        assert!(data_shreds.iter().all(|shred| shred.slot() == bank.slot()));
+        socket_sender.send((data_shreds, None))?;
 
+        // Special handling of last shred to cause partition
+        if let Some((original_last_data_shred, partition_last_data_shred)) = last_shreds {
+            let pubkey = keypair.pubkey();
+            self.original_last_data_shreds.lock().unwrap().extend(
+                original_last_data_shred.iter().map(|shred| {
+                    assert!(shred.verify(&pubkey));
+                    shred.signature()
+                }),
+            );
+            self.partition_last_data_shreds.lock().unwrap().extend(
+                partition_last_data_shred.iter().map(|shred| {
+                    info!("adding {} to partition set", shred.signature());
+                    assert!(shred.verify(&pubkey));
+                    shred.signature()
+                }),
+            );
+            let original_last_data_shred = Arc::new(original_last_data_shred);
+            let partition_last_data_shred = Arc::new(partition_last_data_shred);
+
+            // Store the original shreds that this node replayed
+            blockstore_sender.send((original_last_data_shred.clone(), None))?;
+
+            assert!(original_last_data_shred
+                .iter()
+                .all(|shred| shred.slot() == bank.slot()));
+            assert!(partition_last_data_shred
+                .iter()
+                .all(|shred| shred.slot() == bank.slot()));
+
+            socket_sender.send((original_last_data_shred, None))?;
+            socket_sender.send((partition_last_data_shred, None))?;
+        }
         Ok(())
     }
+
     fn transmit(
         &mut self,
         receiver: &Arc<Mutex<TransmitReceiver>>,
         cluster_info: &ClusterInfo,
         sock: &UdpSocket,
-        _bank_forks: &Arc<RwLock<BankForks>>,
+        bank_forks: &Arc<RwLock<BankForks>>,
     ) -> Result<()> {
-        // Check the delay queue for shreds that are ready to be sent
-        let (delayed_recipient, delayed_shreds) = {
-            let mut delayed_deque = self.delayed_queue.lock().unwrap();
-            if delayed_deque.len() > self.config.duplicate_send_delay {
-                delayed_deque.pop_front().unwrap()
-            } else {
-                (None, None)
-            }
+        let (shreds, _) = receiver.lock().unwrap().recv()?;
+        if shreds.is_empty() {
+            return Ok(());
+        }
+        let slot = shreds.first().unwrap().slot();
+        assert!(shreds.iter().all(|shred| shred.slot() == slot));
+        let (root_bank, working_bank) = {
+            let bank_forks = bank_forks.read().unwrap();
+            (bank_forks.root_bank(), bank_forks.working_bank())
+        };
+        let self_pubkey = cluster_info.id();
+
+        // Creat cluster partition.
+        let cluster_partition: HashSet<Pubkey> = {
+            let mut cumilative_stake = 0;
+            let epoch = root_bank.get_leader_schedule_epoch(slot);
+            root_bank
+                .epoch_staked_nodes(epoch)
+                .unwrap()
+                .iter()
+                .filter(|(pubkey, _)| **pubkey != self_pubkey)
+                .sorted_by_key(|(pubkey, stake)| (**stake, **pubkey))
+                .take_while(|(_, stake)| {
+                    cumilative_stake += *stake;
+                    cumilative_stake <= self.config.stake_partition
+                })
+                .map(|(pubkey, _)| *pubkey)
+                .collect()
         };
 
-        let ((stakes, shreds), _) = receiver.lock().unwrap().recv()?;
-        let stakes = stakes.unwrap();
-        for peer in cluster_info.tvu_peers() {
-            // Forward shreds to circumvent gossip
-            if stakes.get(&peer.id).is_some() {
-                shreds.iter().for_each(|shred| {
-                    sock.send_to(&shred.payload, &peer.tvu_forwards).unwrap();
-                });
-            }
-
-            // After a delay, broadcast duplicate shreds to a single node
-            if let Some(shreds) = delayed_shreds.as_ref() {
-                if Some(peer.id) == delayed_recipient {
-                    shreds.iter().for_each(|shred| {
-                        sock.send_to(&shred.payload, &peer.tvu).unwrap();
-                    });
+        // Broadcast data
+        let cluster_nodes =
+            self.cluster_nodes_cache
+                .get(slot, &root_bank, &working_bank, cluster_info);
+        let socket_addr_space = cluster_info.socket_addr_space();
+        let packets: Vec<_> = shreds
+            .iter()
+            .filter_map(|shred| {
+                let seed = shred.seed(self_pubkey, &root_bank);
+                let node = cluster_nodes.get_broadcast_peer(seed)?;
+                if !socket_addr_space.check(&node.tvu) {
+                    return None;
                 }
-            }
-        }
+                if self
+                    .original_last_data_shreds
+                    .lock()
+                    .unwrap()
+                    .remove(&shred.signature())
+                {
+                    if cluster_partition.contains(&node.id) {
+                        info!(
+                            "skipping node {} for original shred index {}, slot {}",
+                            node.id,
+                            shred.index(),
+                            shred.slot()
+                        );
+                        return None;
+                    }
+                } else if self
+                    .partition_last_data_shreds
+                    .lock()
+                    .unwrap()
+                    .remove(&shred.signature())
+                {
+                    // If the shred is part of the partition, broadcast it directly to the
+                    // partition node. This is to account for cases when the partition stake
+                    // is small such as in `test_duplicate_shreds_broadcast_leader()`, then
+                    // the partition node is never selected by get_broadcast_peer()
+                    return Some(
+                        cluster_partition
+                            .iter()
+                            .filter_map(|pubkey| {
+                                let tvu = cluster_info
+                                    .lookup_contact_info(pubkey, |contact_info| contact_info.tvu)?;
+                                Some((&shred.payload, tvu))
+                            })
+                            .collect(),
+                    );
+                }
 
+                Some(vec![(&shred.payload, node.tvu)])
+            })
+            .flatten()
+            .collect();
+
+        if let Err(SendPktsError::IoError(ioerr, _)) = batch_send(sock, &packets) {
+            return Err(Error::Io(ioerr));
+        }
         Ok(())
     }
+
     fn record(
         &mut self,
         receiver: &Arc<Mutex<RecordReceiver>>,
         blockstore: &Arc<Blockstore>,
     ) -> Result<()> {
-        let (data_shreds, _) = receiver.lock().unwrap().recv()?;
-        blockstore.insert_shreds(data_shreds.to_vec(), None, true)?;
+        let (all_shreds, _) = receiver.lock().unwrap().recv()?;
+        blockstore
+            .insert_shreds(all_shreds.to_vec(), None, true)
+            .expect("Failed to insert shreds in blockstore");
         Ok(())
     }
 }

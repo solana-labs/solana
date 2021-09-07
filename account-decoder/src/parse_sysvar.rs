@@ -4,6 +4,8 @@ use crate::{
 };
 use bincode::deserialize;
 use bv::BitVec;
+#[allow(deprecated)]
+use solana_sdk::sysvar::{fees::Fees, recent_blockhashes::RecentBlockhashes};
 use solana_sdk::{
     clock::{Clock, Epoch, Slot, UnixTimestamp},
     epoch_schedule::EpochSchedule,
@@ -12,10 +14,11 @@ use solana_sdk::{
     slot_hashes::SlotHashes,
     slot_history::{self, SlotHistory},
     stake_history::{StakeHistory, StakeHistoryEntry},
-    sysvar::{self, fees::Fees, recent_blockhashes::RecentBlockhashes, rewards::Rewards},
+    sysvar::{self, rewards::Rewards},
 };
 
 pub fn parse_sysvar(data: &[u8], pubkey: &Pubkey) -> Result<SysvarAccountType, ParseAccountError> {
+    #[allow(deprecated)]
     let parsed_account = {
         if pubkey == &sysvar::clock::id() {
             deserialize::<Clock>(data)
@@ -91,7 +94,9 @@ pub fn parse_sysvar(data: &[u8], pubkey: &Pubkey) -> Result<SysvarAccountType, P
 pub enum SysvarAccountType {
     Clock(UiClock),
     EpochSchedule(EpochSchedule),
+    #[allow(deprecated)]
     Fees(UiFees),
+    #[allow(deprecated)]
     RecentBlockhashes(Vec<UiRecentBlockhashesEntry>),
     Rent(UiRent),
     Rewards(UiRewards),
@@ -127,6 +132,7 @@ impl From<Clock> for UiClock {
 pub struct UiFees {
     pub fee_calculator: UiFeeCalculator,
 }
+#[allow(deprecated)]
 impl From<Fees> for UiFees {
     fn from(fees: Fees) -> Self {
         Self {
@@ -213,13 +219,14 @@ pub struct UiStakeHistoryEntry {
 #[cfg(test)]
 mod test {
     use super::*;
-    use solana_sdk::{
-        account::create_account_for_test, fee_calculator::FeeCalculator, hash::Hash,
-        sysvar::recent_blockhashes::IterItem,
-    };
+    #[allow(deprecated)]
+    use solana_sdk::sysvar::recent_blockhashes::IterItem;
+    use solana_sdk::{account::create_account_for_test, fee_calculator::FeeCalculator, hash::Hash};
 
     #[test]
     fn test_parse_sysvars() {
+        let hash = Hash::new(&[1; 32]);
+
         let clock_sysvar = create_account_for_test(&Clock::default());
         assert_eq!(
             parse_sysvar(&clock_sysvar.data, &sysvar::clock::id()).unwrap(),
@@ -239,31 +246,33 @@ mod test {
             SysvarAccountType::EpochSchedule(epoch_schedule),
         );
 
-        let fees_sysvar = create_account_for_test(&Fees::default());
-        assert_eq!(
-            parse_sysvar(&fees_sysvar.data, &sysvar::fees::id()).unwrap(),
-            SysvarAccountType::Fees(UiFees::default()),
-        );
+        #[allow(deprecated)]
+        {
+            let fees_sysvar = create_account_for_test(&Fees::default());
+            assert_eq!(
+                parse_sysvar(&fees_sysvar.data, &sysvar::fees::id()).unwrap(),
+                SysvarAccountType::Fees(UiFees::default()),
+            );
 
-        let hash = Hash::new(&[1; 32]);
-        let fee_calculator = FeeCalculator {
-            lamports_per_signature: 10,
-        };
-        let recent_blockhashes: RecentBlockhashes = vec![IterItem(0, &hash, &fee_calculator)]
-            .into_iter()
-            .collect();
-        let recent_blockhashes_sysvar = create_account_for_test(&recent_blockhashes);
-        assert_eq!(
-            parse_sysvar(
-                &recent_blockhashes_sysvar.data,
-                &sysvar::recent_blockhashes::id()
-            )
-            .unwrap(),
-            SysvarAccountType::RecentBlockhashes(vec![UiRecentBlockhashesEntry {
-                blockhash: hash.to_string(),
-                fee_calculator: fee_calculator.into(),
-            }]),
-        );
+            let fee_calculator = FeeCalculator {
+                lamports_per_signature: 10,
+            };
+            let recent_blockhashes: RecentBlockhashes = vec![IterItem(0, &hash, &fee_calculator)]
+                .into_iter()
+                .collect();
+            let recent_blockhashes_sysvar = create_account_for_test(&recent_blockhashes);
+            assert_eq!(
+                parse_sysvar(
+                    &recent_blockhashes_sysvar.data,
+                    &sysvar::recent_blockhashes::id()
+                )
+                .unwrap(),
+                SysvarAccountType::RecentBlockhashes(vec![UiRecentBlockhashesEntry {
+                    blockhash: hash.to_string(),
+                    fee_calculator: fee_calculator.into(),
+                }]),
+            );
+        }
 
         let rent = Rent {
             lamports_per_byte_year: 10,

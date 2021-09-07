@@ -1,13 +1,15 @@
 use crate::{
     bank::{Bank, TransactionResults},
     genesis_utils::{self, GenesisConfigInfo, ValidatorVoteKeypairs},
-    hashed_transaction::HashedTransaction,
     vote_sender_types::ReplayVoteSender,
 };
-use solana_sdk::{pubkey::Pubkey, signature::Signer};
+use solana_sdk::{pubkey::Pubkey, signature::Signer, transaction::SanitizedTransaction};
 use solana_vote_program::vote_transaction;
 
-pub fn setup_bank_and_vote_pubkeys(num_vote_accounts: usize, stake: u64) -> (Bank, Vec<Pubkey>) {
+pub fn setup_bank_and_vote_pubkeys_for_tests(
+    num_vote_accounts: usize,
+    stake: u64,
+) -> (Bank, Vec<Pubkey>) {
     // Create some voters at genesis
     let validator_voting_keypairs: Vec<_> = (0..num_vote_accounts)
         .map(|_| ValidatorVoteKeypairs::new_rand())
@@ -23,12 +25,12 @@ pub fn setup_bank_and_vote_pubkeys(num_vote_accounts: usize, stake: u64) -> (Ban
             &validator_voting_keypairs,
             vec![stake; validator_voting_keypairs.len()],
         );
-    let bank = Bank::new(&genesis_config);
+    let bank = Bank::new_for_tests(&genesis_config);
     (bank, vote_pubkeys)
 }
 
 pub fn find_and_send_votes(
-    hashed_txs: &[HashedTransaction],
+    sanitized_txs: &[SanitizedTransaction],
     tx_results: &TransactionResults,
     vote_sender: Option<&ReplayVoteSender>,
 ) {
@@ -42,8 +44,8 @@ pub fn find_and_send_votes(
             assert!(execution_results[old_account.transaction_result_index]
                 .0
                 .is_ok());
-            let transaction = hashed_txs[old_account.transaction_index].transaction();
-            if let Some(parsed_vote) = vote_transaction::parse_vote_transaction(transaction) {
+            let tx = &sanitized_txs[old_account.transaction_index];
+            if let Some(parsed_vote) = vote_transaction::parse_sanitized_vote_transaction(tx) {
                 if parsed_vote.1.slots.last().is_some() {
                     let _ = vote_sender.send(parsed_vote);
                 }

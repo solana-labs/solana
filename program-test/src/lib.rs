@@ -1,15 +1,19 @@
 //! The solana-program-test provides a BanksClient-based test framework BPF programs
 #![allow(clippy::integer_arithmetic)]
 
+#[allow(deprecated)]
+use solana_sdk::sysvar::fees::Fees;
 use {
     async_trait::async_trait,
     chrono_humanize::{Accuracy, HumanTime, Tense},
     log::*,
     solana_banks_client::start_client,
     solana_banks_server::banks_server::start_local_server,
+    solana_program_runtime::InstructionProcessor,
     solana_runtime::{
-        bank::{Bank, Builtin, ExecuteTimings},
+        bank::{Bank, ExecuteTimings},
         bank_forks::BankForks,
+        builtins::Builtin,
         commitment::BlockCommitmentCache,
         genesis_utils::{create_genesis_config_with_leader_ex, GenesisConfigInfo},
     },
@@ -17,8 +21,10 @@ use {
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
         account_info::AccountInfo,
         clock::{Clock, Slot},
+        compute_budget::ComputeBudget,
         entrypoint::{ProgramResult, SUCCESS},
         epoch_schedule::EpochSchedule,
+        feature_set::demote_program_write_locks,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
         genesis_config::{ClusterType, GenesisConfig},
         hash::Hash,
@@ -26,16 +32,14 @@ use {
         instruction::InstructionError,
         message::Message,
         native_token::sol_to_lamports,
-        process_instruction::{
-            stable_log, BpfComputeBudget, InvokeContext, ProcessInstructionWithContext,
-        },
+        process_instruction::{stable_log, InvokeContext, ProcessInstructionWithContext},
         program_error::{ProgramError, ACCOUNT_BORROW_FAILED, UNSUPPORTED_SYSVAR},
         pubkey::Pubkey,
         rent::Rent,
         signature::{Keypair, Signer},
         sysvar::{
             clock, epoch_schedule,
-            fees::{self, Fees},
+            fees::{self},
             rent, Sysvar,
         },
     },
@@ -212,7 +216,7 @@ fn get_sysvar<T: Default + Sysvar + Sized + serde::de::DeserializeOwned>(
         .try_borrow_mut()
         .map_err(|_| ACCOUNT_BORROW_FAILED)
         .unwrap()
-        .consume(invoke_context.get_bpf_compute_budget().sysvar_base_cost + T::size_of() as u64)
+        .consume(invoke_context.get_compute_budget().sysvar_base_cost + T::size_of() as u64)
         .is_err()
     {
         panic!("Exceeded compute budget");
@@ -258,12 +262,14 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             }
             panic!("Program id {} wasn't found in account_infos", program_id);
         };
+        let demote_program_write_locks =
+            invoke_context.is_feature_active(&demote_program_write_locks::id());
         // TODO don't have the caller's keyed_accounts so can't validate writer or signer escalation or deescalation yet
         let caller_privileges = message
             .account_keys
             .iter()
             .enumerate()
-            .map(|(i, _)| message.is_writable(i))
+            .map(|(i, _)| message.is_writable(i, demote_program_write_locks))
             .collect::<Vec<bool>>();
 
         stable_log::program_invoke(&logger, &program_id, invoke_context.invoke_depth());
@@ -323,7 +329,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
 
         invoke_context.record_instruction(instruction);
 
-        solana_runtime::message_processor::MessageProcessor::process_cross_program_instruction(
+        InstructionProcessor::process_cross_program_instruction(
             &message,
             &executables,
             &accounts,
@@ -334,7 +340,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
 
         // Copy writeable account modifications back into the caller's AccountInfos
         for (i, (pubkey, account)) in accounts.iter().enumerate().take(message.account_keys.len()) {
-            if !message.is_writable(i) {
+            if !message.is_writable(i, demote_program_write_locks) {
                 continue;
             }
             for account_info in account_infos {
@@ -378,6 +384,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
         get_sysvar::<EpochSchedule>(&epoch_schedule::id(), var_addr)
     }
 
+    #[allow(deprecated)]
     fn sol_get_fees_sysvar(&self, var_addr: *mut u8) -> u64 {
         get_sysvar::<Fees>(&fees::id(), var_addr)
     }
@@ -449,12 +456,12 @@ fn setup_fee_calculator(bank: Bank) -> Bank {
     }
     let last_blockhash = bank.last_blockhash();
     // Make sure the new last_blockhash now requires a fee
-    assert_ne!(
-        bank.get_fee_calculator(&last_blockhash)
-            .expect("fee_calculator")
-            .lamports_per_signature,
-        0
-    );
+    #[allow(deprecated)]
+    let lamports_per_signature = bank
+        .get_fee_calculator(&last_blockhash)
+        .expect("fee_calculator")
+        .lamports_per_signature;
+    assert_ne!(lamports_per_signature, 0);
 
     bank
 }
@@ -462,7 +469,7 @@ fn setup_fee_calculator(bank: Bank) -> Bank {
 pub struct ProgramTest {
     accounts: Vec<(Pubkey, AccountSharedData)>,
     builtins: Vec<Builtin>,
-    bpf_compute_max_units: Option<u64>,
+    compute_max_units: Option<u64>,
     prefer_bpf: bool,
     use_bpf_jit: bool,
 }
@@ -492,7 +499,7 @@ impl Default for ProgramTest {
         Self {
             accounts: vec![],
             builtins: vec![],
-            bpf_compute_max_units: None,
+            compute_max_units: None,
             prefer_bpf,
             use_bpf_jit: false,
         }
@@ -522,9 +529,16 @@ impl ProgramTest {
         self.prefer_bpf = prefer_bpf;
     }
 
+    /// Override the default maximum compute units
+    pub fn set_compute_max_units(&mut self, compute_max_units: u64) {
+        self.compute_max_units = Some(compute_max_units);
+    }
+
     /// Override the BPF compute budget
+    #[allow(deprecated)]
+    #[deprecated(since = "1.8.0", note = "please use `set_compute_max_units` instead")]
     pub fn set_bpf_compute_max_units(&mut self, bpf_compute_max_units: u64) {
-        self.bpf_compute_max_units = Some(bpf_compute_max_units);
+        self.compute_max_units = Some(bpf_compute_max_units);
     }
 
     /// Execute the BPF program with JIT if true, interpreted if false
@@ -745,7 +759,7 @@ impl ProgramTest {
         debug!("Payer address: {}", mint_keypair.pubkey());
         debug!("Genesis config: {}", genesis_config);
 
-        let mut bank = Bank::new(&genesis_config);
+        let mut bank = Bank::new_for_tests(&genesis_config);
 
         // Add loaders
         macro_rules! add_builtin {
@@ -783,10 +797,10 @@ impl ProgramTest {
             bank.store_account(address, account);
         }
         bank.set_capitalization();
-        if let Some(max_units) = self.bpf_compute_max_units {
-            bank.set_bpf_compute_budget(Some(BpfComputeBudget {
+        if let Some(max_units) = self.compute_max_units {
+            bank.set_compute_budget(Some(ComputeBudget {
                 max_units,
-                ..BpfComputeBudget::default()
+                ..ComputeBudget::default()
             }));
         }
         let bank = setup_fee_calculator(bank);

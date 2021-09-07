@@ -94,7 +94,7 @@ attempts to use a float operation that is not supported, the runtime will report
 an unresolved symbol error.
 
 Float operations are performed via software libraries, specifically LLVM's float
-builtins. Due to be software emulated they consume more compute units than
+builtins. Due to the software emulated they consume more compute units than
 integer operations. In general, fixed point operations are recommended where
 possible.
 
@@ -108,7 +108,7 @@ To run the test, sync the repo, and run:
 
 Recent results show the float operations take more instructions compared to
 integers equivalents. Fixed point implementations may vary but will also be
-less then the float equivalents:
+less than the float equivalents:
 
 ```
          u64   f32

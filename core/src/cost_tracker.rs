@@ -1,11 +1,11 @@
-//! `cost_tracker` keeps tracking tranasction cost per chained accounts as well as for entire block
+//! `cost_tracker` keeps tracking transaction cost per chained accounts as well as for entire block
 //! It aggregates `cost_model`, which provides service of calculating transaction cost.
 //! The main functions are:
 //! - would_transaction_fit(&tx), immutable function to test if `tx` would fit into current block
 //! - add_transaction_cost(&tx), mutable function to accumulate `tx` cost to tracker.
 //!
-use crate::cost_model::{CostModel, TransactionCost};
-use solana_sdk::{clock::Slot, pubkey::Pubkey, transaction::Transaction};
+use crate::cost_model::{CostModel, CostModelError, TransactionCost};
+use solana_sdk::{clock::Slot, pubkey::Pubkey, transaction::SanitizedTransaction};
 use std::{
     collections::HashMap,
     sync::{Arc, RwLock},
@@ -43,18 +43,26 @@ impl CostTracker {
         }
     }
 
-    pub fn would_transaction_fit(&self, transaction: &Transaction) -> Result<(), &'static str> {
+    pub fn would_transaction_fit(
+        &self,
+        transaction: &SanitizedTransaction,
+        demote_program_write_locks: bool,
+    ) -> Result<(), CostModelError> {
         let mut cost_model = self.cost_model.write().unwrap();
-        let tx_cost = cost_model.calculate_cost(transaction);
+        let tx_cost = cost_model.calculate_cost(transaction, demote_program_write_locks);
         self.would_fit(
             &tx_cost.writable_accounts,
             &(tx_cost.account_access_cost + tx_cost.execution_cost),
         )
     }
 
-    pub fn add_transaction_cost(&mut self, transaction: &Transaction) {
+    pub fn add_transaction_cost(
+        &mut self,
+        transaction: &SanitizedTransaction,
+        demote_program_write_locks: bool,
+    ) {
         let mut cost_model = self.cost_model.write().unwrap();
-        let tx_cost = cost_model.calculate_cost(transaction);
+        let tx_cost = cost_model.calculate_cost(transaction, demote_program_write_locks);
         let cost = tx_cost.account_access_cost + tx_cost.execution_cost;
         for account_key in tx_cost.writable_accounts.iter() {
             *self
@@ -73,7 +81,7 @@ impl CostTracker {
         }
     }
 
-    pub fn try_add(&mut self, transaction_cost: &TransactionCost) -> Result<u64, &'static str> {
+    pub fn try_add(&mut self, transaction_cost: &TransactionCost) -> Result<u64, CostModelError> {
         let cost = transaction_cost.account_access_cost + transaction_cost.execution_cost;
         self.would_fit(&transaction_cost.writable_accounts, &cost)?;
 
@@ -81,15 +89,15 @@ impl CostTracker {
         Ok(self.block_cost)
     }
 
-    fn would_fit(&self, keys: &[Pubkey], cost: &u64) -> Result<(), &'static str> {
+    fn would_fit(&self, keys: &[Pubkey], cost: &u64) -> Result<(), CostModelError> {
         // check against the total package cost
         if self.block_cost + cost > self.block_cost_limit {
-            return Err("would exceed block cost limit");
+            return Err(CostModelError::WouldExceedBlockMaxLimit);
         }
 
         // check if the transaction itself is more costly than the account_cost_limit
         if *cost > self.account_cost_limit {
-            return Err("Transaction is too expansive, exceeds account cost limit");
+            return Err(CostModelError::WouldExceedAccountMaxLimit);
         }
 
         // check each account against account_cost_limit,
@@ -97,7 +105,7 @@ impl CostTracker {
             match self.cost_by_writable_accounts.get(account_key) {
                 Some(chained_cost) => {
                     if chained_cost + cost > self.account_cost_limit {
-                        return Err("would exceed account cost limit");
+                        return Err(CostModelError::WouldExceedAccountMaxLimit);
                     } else {
                         continue;
                     }
@@ -173,7 +181,7 @@ mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(10);
-        let bank = Arc::new(Bank::new_no_wallclock_throttle(&genesis_config));
+        let bank = Arc::new(Bank::new_no_wallclock_throttle_for_tests(&genesis_config));
         let start_hash = bank.last_blockhash();
         (mint_keypair, start_hash)
     }

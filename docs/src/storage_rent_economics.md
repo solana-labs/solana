@@ -8,7 +8,7 @@ Storage rent can be paid via one of two methods:
 
 Method 1: Set it and forget it
 
-With this approach, accounts with two-years worth of rent deposits secured are exempt from network rent charges. By maintaining this minimum-balance, the broader network benefits from reduced liquidity and the account holder can trust that their `Account::data` will be retained for continual access/usage.
+With this approach, accounts with two-years worth of rent deposits secured are exempt from network rent charges. By maintaining this minimum-balance, the broader network benefits from reduced liquidity and the account holder can rest assured that their `Account::data` will be retained for continual access/usage.
 
 Method 2: Pay per byte
 

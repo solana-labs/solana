@@ -272,8 +272,8 @@ mod tests {
             cluster_type: ClusterType::MainnetBeta,
             ..GenesisConfig::default()
         };
-        let mut bank = Arc::new(Bank::new(&genesis_config));
-        let sysvar_and_native_program_delta = 10;
+        let mut bank = Arc::new(Bank::new_for_tests(&genesis_config));
+        let sysvar_and_native_program_delta = 11;
         assert_eq!(
             bank.capitalization(),
             (num_genesis_accounts + num_non_circulating_accounts + num_stake_accounts) * balance

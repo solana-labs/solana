@@ -18,6 +18,7 @@ vote_account=
 no_restart=0
 gossip_entrypoint=
 ledger_dir=
+maybe_allow_private_addr=
 
 usage() {
   if [[ -n $1 ]]; then
@@ -44,6 +45,8 @@ OPTIONS:
 EOF
   exit 1
 }
+
+maybeRequireTower=true
 
 positional_args=()
 while [[ -n $1 ]]; do
@@ -74,6 +77,9 @@ while [[ -n $1 ]]; do
       shift 2
     elif [[ $1 = --authorized-voter ]]; then
       args+=("$1" "$2")
+      shift 2
+    elif [[ $1 = --authorized-withdrawer ]]; then
+      authorized_withdrawer=$2
       shift 2
     elif [[ $1 = --vote-account ]]; then
       vote_account=$2
@@ -140,10 +146,10 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --log ]]; then
       args+=("$1" "$2")
       shift 2
-    elif [[ $1 = --trusted-validator ]]; then
+    elif [[ $1 = --known-validator ]]; then
       args+=("$1" "$2")
       shift 2
-    elif [[ $1 = --halt-on-trusted-validators-accounts-hash-mismatch ]]; then
+    elif [[ $1 = --halt-on-known-validators-accounts-hash-mismatch ]]; then
       args+=("$1")
       shift
     elif [[ $1 = --max-genesis-archive-unpacked-size ]]; then
@@ -155,6 +161,16 @@ while [[ -n $1 ]]; do
     elif [[ $1 == --expected-bank-hash ]]; then
       args+=("$1" "$2")
       shift 2
+    elif [[ $1 == --allow-private-addr ]]; then
+      args+=("$1")
+      maybe_allow_private_addr=$1
+      shift
+    elif [[ $1 == --accounts-db-skip-shrink ]]; then
+      args+=("$1")
+      shift
+    elif [[ $1 == --skip-require-tower ]]; then
+      maybeRequireTower=false
+      shift
     elif [[ $1 = -h ]]; then
       usage "$@"
     else
@@ -190,6 +206,9 @@ if [[ -n $REQUIRE_KEYPAIRS ]]; then
   if [[ -z $vote_account ]]; then
     usage "Error: --vote-account not specified"
   fi
+  if [[ -z $authorized_withdrawer ]]; then
+    usage "Error: --authorized_withdrawer not specified"
+  fi
 fi
 
 if [[ -z "$ledger_dir" ]]; then
@@ -217,6 +236,7 @@ faucet_address="${gossip_entrypoint%:*}":9900
 
 : "${identity:=$ledger_dir/identity.json}"
 : "${vote_account:=$ledger_dir/vote-account.json}"
+: "${authorized_withdrawer:=$ledger_dir/authorized-withdrawer.json}"
 
 default_arg --entrypoint "$gossip_entrypoint"
 if ((airdrops_enabled)); then
@@ -227,7 +247,10 @@ default_arg --identity "$identity"
 default_arg --vote-account "$vote_account"
 default_arg --ledger "$ledger_dir"
 default_arg --log -
-default_arg --require-tower
+
+if [[ $maybeRequireTower = true ]]; then
+  default_arg --require-tower
+fi
 
 if [[ -n $SOLANA_CUDA ]]; then
   program=$solana_validator_cuda
@@ -284,7 +307,7 @@ setup_validator_accounts() {
     fi
 
     echo "Creating validator vote account"
-    wallet create-vote-account "$vote_account" "$identity" || return $?
+    wallet create-vote-account "$vote_account" "$identity" "$authorized_withdrawer" || return $?
   fi
   echo "Validator vote account configured"
 
@@ -294,10 +317,12 @@ setup_validator_accounts() {
   return 0
 }
 
-rpc_url=$($solana_gossip rpc-url --timeout 180 --entrypoint "$gossip_entrypoint")
+# shellcheck disable=SC2086 # Don't want to double quote "$maybe_allow_private_addr"
+rpc_url=$($solana_gossip $maybe_allow_private_addr rpc-url --timeout 180 --entrypoint "$gossip_entrypoint")
 
 [[ -r "$identity" ]] || $solana_keygen new --no-passphrase -so "$identity"
 [[ -r "$vote_account" ]] || $solana_keygen new --no-passphrase -so "$vote_account"
+[[ -r "$authorized_withdrawer" ]] || $solana_keygen new --no-passphrase -so "$authorized_withdrawer"
 
 setup_validator_accounts "$node_sol"
 

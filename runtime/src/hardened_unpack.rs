@@ -9,7 +9,7 @@ use {
         fs::{self, File},
         io::{BufReader, Read},
         path::{
-            Component::{CurDir, Normal},
+            Component::{self, CurDir, Normal},
             Path, PathBuf,
         },
         time::Instant,
@@ -161,9 +161,14 @@ where
         )?;
         total_count = checked_total_count_increment(total_count, limit_count)?;
 
-        // unpack_in does its own sanitization
-        // ref: https://docs.rs/tar/*/tar/struct.Entry.html#method.unpack_in
-        check_unpack_result(entry.unpack_in(unpack_dir)?, path_str)?;
+        let target = sanitize_path(&entry.path()?, unpack_dir)?; // ? handles file system errors
+        if target.is_none() {
+            continue; // skip it
+        }
+        let target = target.unwrap();
+
+        let unpack = entry.unpack(target);
+        check_unpack_result(unpack.map(|_unpack| true)?, path_str)?;
 
         // Sanitize permissions.
         let mode = match entry.header().entry_type() {
@@ -197,6 +202,80 @@ where
         perm.set_readonly(false);
         fs::set_permissions(dst, perm)
     }
+}
+
+// return Err on file system error
+// return Some(path) if path is good
+// return None if we should skip this file
+fn sanitize_path(entry_path: &Path, dst: &Path) -> Result<Option<PathBuf>> {
+    // We cannot call unpack_in because it errors if we try to use 2 account paths.
+    // So, this code is borrowed from unpack_in
+    // ref: https://docs.rs/tar/*/tar/struct.Entry.html#method.unpack_in
+    let mut file_dst = dst.to_path_buf();
+    const SKIP: Result<Option<PathBuf>> = Ok(None);
+    {
+        let path = entry_path;
+        for part in path.components() {
+            match part {
+                // Leading '/' characters, root paths, and '.'
+                // components are just ignored and treated as "empty
+                // components"
+                Component::Prefix(..) | Component::RootDir | Component::CurDir => continue,
+
+                // If any part of the filename is '..', then skip over
+                // unpacking the file to prevent directory traversal
+                // security issues.  See, e.g.: CVE-2001-1267,
+                // CVE-2002-0399, CVE-2005-1918, CVE-2007-4131
+                Component::ParentDir => return SKIP,
+
+                Component::Normal(part) => file_dst.push(part),
+            }
+        }
+    }
+
+    // Skip cases where only slashes or '.' parts were seen, because
+    // this is effectively an empty filename.
+    if *dst == *file_dst {
+        return SKIP;
+    }
+
+    // Skip entries without a parent (i.e. outside of FS root)
+    let parent = match file_dst.parent() {
+        Some(p) => p,
+        None => return SKIP,
+    };
+
+    fs::create_dir_all(parent)?;
+
+    // Here we are different than untar_in. The code for tar::unpack_in internally calling unpack is a little different.
+    // ignore return value here
+    validate_inside_dst(dst, parent)?;
+    let target = parent.join(entry_path.file_name().unwrap());
+
+    Ok(Some(target))
+}
+
+// copied from:
+// https://github.com/alexcrichton/tar-rs/blob/d90a02f582c03dfa0fd11c78d608d0974625ae5d/src/entry.rs#L781
+fn validate_inside_dst(dst: &Path, file_dst: &Path) -> Result<PathBuf> {
+    // Abort if target (canonical) parent is outside of `dst`
+    let canon_parent = file_dst.canonicalize().map_err(|err| {
+        UnpackError::Archive(format!(
+            "{} while canonicalizing {}",
+            err,
+            file_dst.display()
+        ))
+    })?;
+    let canon_target = dst.canonicalize().map_err(|err| {
+        UnpackError::Archive(format!("{} while canonicalizing {}", err, dst.display()))
+    })?;
+    if !canon_parent.starts_with(&canon_target) {
+        return Err(UnpackError::Archive(format!(
+            "trying to unpack outside of destination path: {}",
+            canon_target.display()
+        )));
+    }
+    Ok(canon_target)
 }
 
 /// Map from AppendVec file name to unpacked file system location

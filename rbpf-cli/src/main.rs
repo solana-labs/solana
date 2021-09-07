@@ -19,6 +19,7 @@ use solana_sdk::{
     pubkey::Pubkey,
 };
 use std::{cell::RefCell, fs::File, io::Read, io::Seek, io::SeekFrom, path::Path};
+use time::Instant;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Account {
@@ -113,7 +114,7 @@ native machine code before execting it in the virtual machine.",
                 .takes_value(true)
                 .value_name("VALUE")
                 .possible_values(&["cfg", "disassembler", "interpreter", "jit"])
-                .default_value("interpreter"),
+                .default_value("jit"),
         )
         .arg(
             Arg::new("instruction limit")
@@ -205,8 +206,8 @@ native machine code before execting it in the virtual machine.",
     .unwrap();
 
     if matches.is_present("verify") {
-        let (_, elf_bytes) = executable.get_text_bytes().unwrap();
-        check(elf_bytes).unwrap();
+        let text_bytes = executable.get_text_bytes().1;
+        check(text_bytes, &config).unwrap();
     }
     executable.jit_compile().unwrap();
     let analysis = Analysis::from_executable(executable.as_ref());
@@ -227,11 +228,13 @@ native machine code before execting it in the virtual machine.",
 
     let id = bpf_loader::id();
     let mut vm = create_vm(&id, executable.as_ref(), &mut mem, &mut invoke_context).unwrap();
+    let start_time = Instant::now();
     let result = if matches.value_of("use").unwrap() == "interpreter" {
         vm.execute_program_interpreted(&mut instruction_meter)
     } else {
         vm.execute_program_jit(&mut instruction_meter)
     };
+    let duration = Instant::now() - start_time;
     if logger.log.borrow().len() > 0 {
         println!("Program output:");
         for s in logger.log.borrow_mut().iter() {
@@ -241,6 +244,7 @@ native machine code before execting it in the virtual machine.",
     }
     println!("Result: {:?}", result);
     println!("Instruction Count: {}", vm.get_total_instruction_count());
+    println!("Execution time: {} us", duration.whole_microseconds());
     if matches.is_present("trace") {
         println!("Trace is saved in trace.out");
         let mut file = File::create("trace.out").unwrap();

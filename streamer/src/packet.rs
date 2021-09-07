@@ -1,5 +1,8 @@
 //! The `packet` module defines data structures and methods to pull data from the network.
-use crate::recvmmsg::{recv_mmsg, NUM_RCVMMSGS};
+use crate::{
+    recvmmsg::{recv_mmsg, NUM_RCVMMSGS},
+    socket::SocketAddrSpace,
+};
 pub use solana_perf::packet::{
     limited_deserialize, to_packets_chunked, Packets, PacketsRecycler, NUM_PACKETS,
     PACKETS_PER_BATCH,
@@ -54,10 +57,16 @@ pub fn recv_from(obj: &mut Packets, socket: &UdpSocket, max_wait_ms: u64) -> Res
     Ok(i)
 }
 
-pub fn send_to(obj: &Packets, socket: &UdpSocket) -> Result<()> {
+pub fn send_to(
+    obj: &Packets,
+    socket: &UdpSocket,
+    socket_addr_space: &SocketAddrSpace,
+) -> Result<()> {
     for p in &obj.packets {
-        let a = p.meta.addr();
-        socket.send_to(&p.data[..p.meta.size], &a)?;
+        let addr = p.meta.addr();
+        if socket_addr_space.check(&addr) {
+            socket.send_to(&p.data[..p.meta.size], &addr)?;
+        }
     }
     Ok(())
 }
@@ -94,7 +103,7 @@ mod tests {
             m.meta.set_addr(&addr);
             m.meta.size = PACKET_DATA_SIZE;
         }
-        send_to(&p, &send_socket).unwrap();
+        send_to(&p, &send_socket, &SocketAddrSpace::Unspecified).unwrap();
 
         let recvd = recv_from(&mut p, &recv_socket, 1).unwrap();
 
@@ -147,7 +156,7 @@ mod tests {
                 m.meta.set_addr(&addr);
                 m.meta.size = 1;
             }
-            send_to(&p, &send_socket).unwrap();
+            send_to(&p, &send_socket, &SocketAddrSpace::Unspecified).unwrap();
         }
 
         let recvd = recv_from(&mut p, &recv_socket, 100).unwrap();

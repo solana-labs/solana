@@ -1,13 +1,15 @@
-use serde::{Deserialize, Serialize};
-use solana_account_decoder::{
-    parse_token::{real_number_string_trimmed, UiTokenAmount},
-    StringAmount,
+use {
+    serde::{Deserialize, Serialize},
+    solana_account_decoder::{
+        parse_token::{real_number_string_trimmed, UiTokenAmount},
+        StringAmount,
+    },
+    solana_sdk::{deserialize_utils::default_on_eof, transaction::Result},
+    solana_transaction_status::{
+        InnerInstructions, Reward, RewardType, TransactionStatusMeta, TransactionTokenBalance,
+    },
+    std::str::FromStr,
 };
-use solana_sdk::{deserialize_utils::default_on_eof, transaction::Result};
-use solana_transaction_status::{
-    InnerInstructions, Reward, RewardType, TransactionStatusMeta, TransactionTokenBalance,
-};
-use std::str::FromStr;
 
 pub mod convert;
 
@@ -21,6 +23,8 @@ pub struct StoredExtendedReward {
     post_balance: u64,
     #[serde(deserialize_with = "default_on_eof")]
     reward_type: Option<RewardType>,
+    #[serde(deserialize_with = "default_on_eof")]
+    commission: Option<u8>,
 }
 
 impl From<StoredExtendedReward> for Reward {
@@ -30,12 +34,14 @@ impl From<StoredExtendedReward> for Reward {
             lamports,
             post_balance,
             reward_type,
+            commission,
         } = value;
         Self {
             pubkey,
             lamports,
             post_balance,
             reward_type,
+            commission,
         }
     }
 }
@@ -47,13 +53,14 @@ impl From<Reward> for StoredExtendedReward {
             lamports,
             post_balance,
             reward_type,
-            ..
+            commission,
         } = value;
         Self {
             pubkey,
             lamports,
             post_balance,
             reward_type,
+            commission,
         }
     }
 }

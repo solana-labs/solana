@@ -13,12 +13,12 @@ documentation = "https://docs.rs/solana-genesis"
 base64 = "0.12.3"
 clap = "2.33.1"
 chrono = "0.4"
-serde = "1.0.126"
-serde_json = "1.0.64"
-serde_yaml = "0.8.17"
+serde = "1.0.130"
+serde_json = "1.0.67"
+serde_yaml = "0.8.20"
 solana-clap-utils = { path = "../clap-utils", version = "=1.8.0" }
 solana-cli-config = { path = "../cli-config", version = "=1.8.0" }
-solana-exchange-program = { path = "../programs/exchange", version = "=1.8.0" }
+solana-entry = { path = "../entry", version = "=1.8.0" }
 solana-ledger = { path = "../ledger", version = "=1.8.0" }
 solana-logger = { path = "../logger", version = "=1.8.0" }
 solana-runtime = { path = "../runtime", version = "=1.8.0" }

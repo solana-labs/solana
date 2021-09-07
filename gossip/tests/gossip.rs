@@ -18,6 +18,7 @@ use {
         timing::timestamp,
         transaction::Transaction,
     },
+    solana_streamer::socket::SocketAddrSpace,
     solana_vote_program::{vote_instruction, vote_state::Vote},
     std::{
         net::UdpSocket,
@@ -33,7 +34,11 @@ use {
 fn test_node(exit: &Arc<AtomicBool>) -> (Arc<ClusterInfo>, GossipService, UdpSocket) {
     let keypair = Arc::new(Keypair::new());
     let mut test_node = Node::new_localhost_with_pubkey(&keypair.pubkey());
-    let cluster_info = Arc::new(ClusterInfo::new(test_node.info.clone(), keypair));
+    let cluster_info = Arc::new(ClusterInfo::new(
+        test_node.info.clone(),
+        keypair,
+        SocketAddrSpace::Unspecified,
+    ));
     let gossip_service = GossipService::new(
         &cluster_info,
         None,
@@ -56,7 +61,11 @@ fn test_node_with_bank(
     bank_forks: Arc<RwLock<BankForks>>,
 ) -> (Arc<ClusterInfo>, GossipService, UdpSocket) {
     let mut test_node = Node::new_localhost_with_pubkey(&node_keypair.pubkey());
-    let cluster_info = Arc::new(ClusterInfo::new(test_node.info.clone(), node_keypair));
+    let cluster_info = Arc::new(ClusterInfo::new(
+        test_node.info.clone(),
+        node_keypair,
+        SocketAddrSpace::Unspecified,
+    ));
     let gossip_service = GossipService::new(
         &cluster_info,
         Some(bank_forks),
@@ -209,7 +218,13 @@ pub fn cluster_info_retransmit() {
     p.meta.size = 10;
     let peers = c1.tvu_peers();
     let retransmit_peers: Vec<_> = peers.iter().collect();
-    ClusterInfo::retransmit_to(&retransmit_peers, &p, &tn1, false);
+    ClusterInfo::retransmit_to(
+        &retransmit_peers,
+        &p.data[..p.meta.size],
+        &tn1,
+        false,
+        &SocketAddrSpace::Unspecified,
+    );
     let res: Vec<_> = [tn1, tn2, tn3]
         .into_par_iter()
         .map(|s| {
@@ -252,7 +267,7 @@ pub fn cluster_info_scale() {
         &vote_keypairs,
         vec![100; vote_keypairs.len()],
     );
-    let bank0 = Bank::new(&genesis_config_info.genesis_config);
+    let bank0 = Bank::new_for_tests(&genesis_config_info.genesis_config);
     let bank_forks = Arc::new(RwLock::new(BankForks::new(bank0)));
 
     let nodes: Vec<_> = vote_keypairs
@@ -313,19 +328,18 @@ pub fn cluster_info_scale() {
             let mut num_push_total = 0;
             let mut num_pushes = 0;
             let mut num_pulls = 0;
-            for node in nodes.iter() {
+            for (node, _, _) in nodes.iter() {
                 //if node.0.get_votes(0).1.len() != (num_nodes * num_votes) {
                 let has_tx = node
-                    .0
                     .get_votes(&mut Cursor::default())
                     .1
                     .iter()
                     .filter(|v| v.message.account_keys == tx.message.account_keys)
                     .count();
-                num_old += node.0.gossip.read().unwrap().push.num_old;
-                num_push_total += node.0.gossip.read().unwrap().push.num_total;
-                num_pushes += node.0.gossip.read().unwrap().push.num_pushes;
-                num_pulls += node.0.gossip.read().unwrap().pull.num_pulls;
+                num_old += node.gossip.push.num_old.load(Ordering::Relaxed);
+                num_push_total += node.gossip.push.num_total.load(Ordering::Relaxed);
+                num_pushes += node.gossip.push.num_pushes.load(Ordering::Relaxed);
+                num_pulls += node.gossip.pull.num_pulls.load(Ordering::Relaxed);
                 if has_tx == 0 {
                     not_done += 1;
                 }
@@ -347,11 +361,11 @@ pub fn cluster_info_scale() {
             num_votes, time, success
         );
         sleep(Duration::from_millis(200));
-        for node in nodes.iter() {
-            node.0.gossip.write().unwrap().push.num_old = 0;
-            node.0.gossip.write().unwrap().push.num_total = 0;
-            node.0.gossip.write().unwrap().push.num_pushes = 0;
-            node.0.gossip.write().unwrap().pull.num_pulls = 0;
+        for (node, _, _) in nodes.iter() {
+            node.gossip.push.num_old.store(0, Ordering::Relaxed);
+            node.gossip.push.num_total.store(0, Ordering::Relaxed);
+            node.gossip.push.num_pushes.store(0, Ordering::Relaxed);
+            node.gossip.pull.num_pulls.store(0, Ordering::Relaxed);
         }
     }
 

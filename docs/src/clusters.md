@@ -44,27 +44,32 @@ solana config set --url https://api.devnet.solana.com
 $ solana-validator \
     --identity validator-keypair.json \
     --vote-account vote-account-keypair.json \
-    --trusted-validator dv1LfzJvDF7S1fBKpFgKoKXK5yoSosmkAdfbxBo1GqJ \
-    --no-untrusted-rpc \
+    --known-validator dv1ZAGvdsz5hHLwWXsVnM94hWf1pjbKVau1QVkaMJ92 \
+    --known-validator dv2eQHeP4RFrJZ6UeiZWoc3XTtmtZCUKxxCApCDcRNV \
+    --known-validator dv4ACNkpYPcE3aKmYDqZm9G5EB3J4MRoeE7WNDRBVJB \
+    --known-validator dv3qDFk1DTF36Z62bNvrCXe9sKATA6xvVy6A798xxAS \
+    --only-known-rpc \
     --ledger ledger \
     --rpc-port 8899 \
     --dynamic-port-range 8000-8010 \
     --entrypoint entrypoint.devnet.solana.com:8001 \
+    --entrypoint entrypoint2.devnet.solana.com:8001 \
+    --entrypoint entrypoint3.devnet.solana.com:8001 \
+    --entrypoint entrypoint4.devnet.solana.com:8001 \
+    --entrypoint entrypoint5.devnet.solana.com:8001 \
     --expected-genesis-hash EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG \
     --wal-recovery-mode skip_any_corrupted_record \
     --limit-ledger-size
 ```
 
-The `--trusted-validator`s is operated by Solana
+The [`--known-validator`s](running-validator/validator-start.md#known-validators)
+are operated by Solana Labs
 
 ## Testnet
 
 - Testnet is where we stress test recent release features on a live
   cluster, particularly focused on network performance, stability and validator
   behavior.
-- [Tour de SOL](tour-de-sol.md) initiative runs on Testnet, where we
-  encourage malicious behavior and attacks on the network to help us find and
-  squash bugs or network vulnerabilities.
 - Testnet tokens are **not real**
 - Testnet may be subject to ledger resets.
 - Testnet includes a token faucet for airdrops for application testing
@@ -91,11 +96,11 @@ solana config set --url https://api.testnet.solana.com
 $ solana-validator \
     --identity validator-keypair.json \
     --vote-account vote-account-keypair.json \
-    --trusted-validator 5D1fNXzvv5NjV1ysLjirC4WY92RNsVH18vjmcszZd8on \
-    --trusted-validator 7XSY3MrYnK8vq693Rju17bbPkCN3Z7KvvfvJx4kdrsSY \
-    --trusted-validator Ft5fbkqNa76vnsjYNwjDZUXoTWpP7VYm3mtsaQckQADN \
-    --trusted-validator 9QxCLckBiJc783jnMvXZubK4wH86Eqqvashtrwvcsgkv \
-    --no-untrusted-rpc \
+    --known-validator 5D1fNXzvv5NjV1ysLjirC4WY92RNsVH18vjmcszZd8on \
+    --known-validator 7XSY3MrYnK8vq693Rju17bbPkCN3Z7KvvfvJx4kdrsSY \
+    --known-validator Ft5fbkqNa76vnsjYNwjDZUXoTWpP7VYm3mtsaQckQADN \
+    --known-validator 9QxCLckBiJc783jnMvXZubK4wH86Eqqvashtrwvcsgkv \
+    --only-known-rpc \
     --ledger ledger \
     --rpc-port 8899 \
     --dynamic-port-range 8000-8010 \
@@ -107,17 +112,16 @@ $ solana-validator \
     --limit-ledger-size
 ```
 
-The identity of the `--trusted-validator`s are:
+The identities of the
+[`--known-validator`s](running-validator/validator-start.md#known-validators) are:
 
-- `5D1fNXzvv5NjV1ysLjirC4WY92RNsVH18vjmcszZd8on` - Solana Foundation (testnet.solana.com)
-- `7XSY3MrYnK8vq693Rju17bbPkCN3Z7KvvfvJx4kdrsSY` - Solana Foundation (Break RPC node)
+- `5D1fNXzvv5NjV1ysLjirC4WY92RNsVH18vjmcszZd8on` - Solana Labs (testnet.solana.com)
 - `Ft5fbkqNa76vnsjYNwjDZUXoTWpP7VYm3mtsaQckQADN` - Certus One
 - `9QxCLckBiJc783jnMvXZubK4wH86Eqqvashtrwvcsgkv` - Algo|Stake
 
 ## Mainnet Beta
 
 A permissionless, persistent cluster for early token holders and launch partners.
-Currently, rewards and inflation are disabled.
 
 - Tokens that are issued on Mainnet Beta are **real** SOL
 - If you have paid money to purchase/be issued tokens, such as through our
@@ -146,11 +150,11 @@ solana config set --url https://api.mainnet-beta.solana.com
 $ solana-validator \
     --identity ~/validator-keypair.json \
     --vote-account ~/vote-account-keypair.json \
-    --trusted-validator 7Np41oeYqPefeNQEHSv1UDhYrehxin3NStELsSKCT4K2 \
-    --trusted-validator GdnSyH3YtwcxFvQrVVJMm1JhTS4QVX7MFsX56uJLUfiZ \
-    --trusted-validator DE1bawNcRJB9rVm3buyMVfr8mBEoyyu73NBovf2oXJsJ \
-    --trusted-validator CakcnaRDHka2gXyfbEd2d3xsvkJkqsLw2akB3zsN1D2S \
-    --no-untrusted-rpc \
+    --known-validator 7Np41oeYqPefeNQEHSv1UDhYrehxin3NStELsSKCT4K2 \
+    --known-validator GdnSyH3YtwcxFvQrVVJMm1JhTS4QVX7MFsX56uJLUfiZ \
+    --known-validator DE1bawNcRJB9rVm3buyMVfr8mBEoyyu73NBovf2oXJsJ \
+    --known-validator CakcnaRDHka2gXyfbEd2d3xsvkJkqsLw2akB3zsN1D2S \
+    --only-known-rpc \
     --ledger ledger \
     --rpc-port 8899 \
     --private-rpc \
@@ -165,4 +169,5 @@ $ solana-validator \
     --limit-ledger-size
 ```
 
-All four `--trusted-validator`s are operated by Solana
+All four [`--known-validator`s](running-validator/validator-start.md#known-validators)
+are operated by Solana Labs

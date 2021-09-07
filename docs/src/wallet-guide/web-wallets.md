@@ -4,9 +4,15 @@ title: Web Wallets
 
 ## Phantom
 
-[Phantom](https://phantom.app/download) is a non-custodial, chrome extension,
-Solana crypto wallet reimagined for DeFi & NFTs with a simple, clean and
-beautiful UX. Use invite code DEVDOCS to get access.
+[Phantom](https://phantom.app/) is a friendly non-custodial, browser
+extension, Solana wallet that makes it safe & easy for you to store, send,
+receive, collect, and swap tokens.
+
+- Use Solana dapps
+- Beautiful NFT support
+- Ledger hardware wallet support
+
+Available for Chrome, Brave, Firefox, and Edge
 
 ## SolFlare
 
@@ -30,3 +36,7 @@ addresses for sending and receiving SOL and SPL Tokens through its
 browser extension and web wallet interface.
 
 _Note: The MathWallet iOS and Android app do not yet support SOL and SPL Tokens_
+
+## BitKeep
+[BitKeep](https://bitkeep.com) is an digital currency wallet and can send and receive SOL/SPL tokens.
+BitKeep also support Solana DApps with BitKeep Browser and BitKeep Chrome.

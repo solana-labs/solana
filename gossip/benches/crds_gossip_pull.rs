@@ -12,6 +12,7 @@ use {
         crds_value::CrdsValue,
     },
     solana_sdk::hash,
+    std::sync::RwLock,
     test::Bencher,
 };
 
@@ -45,6 +46,7 @@ fn bench_build_crds_filters(bencher: &mut Bencher) {
         }
     }
     assert_eq!(num_inserts, 90_000);
+    let crds = RwLock::new(crds);
     bencher.iter(|| {
         let filters = crds_gossip_pull.build_crds_filters(&thread_pool, &crds, MAX_BLOOM_SIZE);
         assert_eq!(filters.len(), 128);

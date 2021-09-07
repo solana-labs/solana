@@ -1,7 +1,4 @@
-use crate::{
-    bank::{Builtin, Builtins},
-    system_instruction_processor,
-};
+use crate::system_instruction_processor;
 use solana_sdk::{
     feature_set,
     instruction::InstructionError,
@@ -9,6 +6,10 @@ use solana_sdk::{
     pubkey::Pubkey,
     stake, system_program,
 };
+use std::fmt;
+
+#[cfg(RUSTC_WITH_SPECIALIZATION)]
+use solana_frozen_abi::abi_example::AbiExample;
 
 fn process_instruction_with_program_logging(
     process_instruction: ProcessInstructionWithContext,
@@ -41,6 +42,59 @@ macro_rules! with_program_logging {
     };
 }
 
+#[derive(AbiExample, Debug, Clone)]
+pub enum ActivationType {
+    NewProgram,
+    NewVersion,
+}
+
+#[derive(Clone)]
+pub struct Builtin {
+    pub name: String,
+    pub id: Pubkey,
+    pub process_instruction_with_context: ProcessInstructionWithContext,
+}
+
+impl Builtin {
+    pub fn new(
+        name: &str,
+        id: Pubkey,
+        process_instruction_with_context: ProcessInstructionWithContext,
+    ) -> Self {
+        Self {
+            name: name.to_string(),
+            id,
+            process_instruction_with_context,
+        }
+    }
+}
+
+impl fmt::Debug for Builtin {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Builtin [name={}, id={}]", self.name, self.id)
+    }
+}
+
+#[cfg(RUSTC_WITH_SPECIALIZATION)]
+impl AbiExample for Builtin {
+    fn example() -> Self {
+        Self {
+            name: String::default(),
+            id: Pubkey::default(),
+            process_instruction_with_context: |_, _, _| Ok(()),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Builtins {
+    /// Builtin programs that are always available
+    pub genesis_builtins: Vec<Builtin>,
+
+    /// Builtin programs activated dynamically by feature
+    pub feature_builtins: Vec<(Builtin, Pubkey, ActivationType)>,
+}
+
 /// Builtin programs that are always available
 fn genesis_builtins() -> Vec<Builtin> {
     vec![
@@ -64,13 +118,12 @@ fn genesis_builtins() -> Vec<Builtin> {
             solana_config_program::id(),
             with_program_logging!(solana_config_program::config_processor::process_instruction),
         ),
+        Builtin::new(
+            "secp256k1_program",
+            solana_sdk::secp256k1_program::id(),
+            solana_secp256k1_program::process_instruction,
+        ),
     ]
-}
-
-#[derive(AbiExample, Debug, Clone)]
-pub enum ActivationType {
-    NewProgram,
-    NewVersion,
 }
 
 /// Builtin programs activated dynamically by feature
@@ -82,15 +135,26 @@ pub enum ActivationType {
 /// normal child Bank creation.
 /// https://github.com/solana-labs/solana/blob/84b139cc94b5be7c9e0c18c2ad91743231b85a0d/runtime/src/bank.rs#L1723
 fn feature_builtins() -> Vec<(Builtin, Pubkey, ActivationType)> {
-    vec![(
-        Builtin::new(
-            "secp256k1_program",
-            solana_sdk::secp256k1_program::id(),
-            solana_secp256k1_program::process_instruction,
+    vec![
+        (
+            Builtin::new(
+                "compute_budget_program",
+                solana_sdk::compute_budget::id(),
+                solana_compute_budget_program::process_instruction,
+            ),
+            feature_set::tx_wide_compute_cap::id(),
+            ActivationType::NewProgram,
         ),
-        feature_set::secp256k1_program_enabled::id(),
-        ActivationType::NewProgram,
-    )]
+        (
+            Builtin::new(
+                "ed25519_program",
+                solana_sdk::ed25519_program::id(),
+                solana_ed25519_program::process_instruction,
+            ),
+            feature_set::ed25519_program_enabled::id(),
+            ActivationType::NewProgram,
+        ),
+    ]
 }
 
 pub(crate) fn get() -> Builtins {

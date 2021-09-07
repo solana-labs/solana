@@ -4,10 +4,8 @@ use {
     solana_sdk::pubkey::Pubkey,
     std::{
         collections::HashMap,
-        sync::{
-            atomic::{AtomicU64, Ordering},
-            RwLock,
-        },
+        ops::{Deref, DerefMut},
+        sync::atomic::{AtomicU64, Ordering},
         time::Instant,
     },
 };
@@ -26,6 +24,12 @@ impl Counter {
     fn clear(&self) -> u64 {
         self.0.swap(0, Ordering::Relaxed)
     }
+}
+
+pub(crate) struct TimedGuard<'a, T> {
+    guard: T,
+    timer: Measure,
+    counter: &'a Counter,
 }
 
 pub(crate) struct ScopedTimer<'a> {
@@ -49,6 +53,35 @@ impl Drop for ScopedTimer<'_> {
     fn drop(&mut self) {
         let micros = self.clock.elapsed().as_micros();
         self.metric.fetch_add(micros as u64, Ordering::Relaxed);
+    }
+}
+
+impl<'a, T> TimedGuard<'a, T> {
+    pub(crate) fn new(guard: T, label: &'static str, counter: &'a Counter) -> Self {
+        Self {
+            guard,
+            timer: Measure::start(label),
+            counter,
+        }
+    }
+}
+
+impl<'a, T> Deref for TimedGuard<'a, T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        &self.guard
+    }
+}
+
+impl<'a, T> DerefMut for TimedGuard<'a, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.guard
+    }
+}
+
+impl<'a, T> Drop for TimedGuard<'a, T> {
+    fn drop(&mut self) {
+        self.counter.add_measure(&mut self.timer);
     }
 }
 
@@ -110,7 +143,6 @@ pub(crate) struct GossipStats {
     pub(crate) push_response_count: Counter,
     pub(crate) push_vote_read: Counter,
     pub(crate) repair_peers: Counter,
-    pub(crate) require_stake_for_gossip_unknown_feature_set: Counter,
     pub(crate) require_stake_for_gossip_unknown_stakes: Counter,
     pub(crate) skip_pull_response_shred_version: Counter,
     pub(crate) skip_pull_shred_version: Counter,
@@ -124,16 +156,16 @@ pub(crate) struct GossipStats {
 
 pub(crate) fn submit_gossip_stats(
     stats: &GossipStats,
-    gossip: &RwLock<CrdsGossip>,
+    gossip: &CrdsGossip,
     stakes: &HashMap<Pubkey, u64>,
 ) {
     let (table_size, num_nodes, purged_values_size, failed_inserts_size) = {
-        let gossip = gossip.read().unwrap();
+        let gossip_crds = gossip.crds.read().unwrap();
         (
-            gossip.crds.len(),
-            gossip.crds.num_nodes(),
-            gossip.crds.num_purged(),
-            gossip.pull.failed_inserts.len(),
+            gossip_crds.len(),
+            gossip_crds.num_nodes(),
+            gossip_crds.num_purged(),
+            gossip.pull.failed_inserts_size(),
         )
     };
     let num_nodes_staked = stakes.values().filter(|stake| **stake > 0).count();
@@ -387,11 +419,6 @@ pub(crate) fn submit_gossip_stats(
         (
             "packets_sent_push_messages_count",
             stats.packets_sent_push_messages_count.clear(),
-            i64
-        ),
-        (
-            "require_stake_for_gossip_unknown_feature_set",
-            stats.require_stake_for_gossip_unknown_feature_set.clear(),
             i64
         ),
         (

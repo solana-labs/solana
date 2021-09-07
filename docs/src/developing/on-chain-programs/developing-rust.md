@@ -103,7 +103,7 @@ to send multiple transactions while keeping state for the duration of the test.
 
 For more information the [test in sysvar
 example](https://github.com/solana-labs/solana-program-library/blob/master/examples/rust/sysvar/tests/functional.rs)
-shows how an instruction containing syavar account is sent and processed by the
+shows how an instruction containing sysvar account is sent and processed by the
 program.
 
 ## Program Entrypoint

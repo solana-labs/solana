@@ -74,6 +74,13 @@ const PerformanceContext = React.createContext<PerformanceState | undefined>(
 );
 
 type Props = { children: React.ReactNode };
+
+function getConnection(url: string): Connection | undefined {
+  try {
+    return new Connection(url);
+  } catch (error) {}
+}
+
 export function SolanaClusterStatsProvider({ children }: Props) {
   const { cluster, url } = useCluster();
   const [active, setActive] = React.useState(false);
@@ -89,7 +96,10 @@ export function SolanaClusterStatsProvider({ children }: Props) {
   React.useEffect(() => {
     if (!active || !url) return;
 
-    const connection = new Connection(url);
+    const connection = getConnection(url);
+
+    if (!connection) return;
+
     let lastSlot: number | null = null;
 
     const getPerformanceSamples = async () => {
@@ -116,14 +126,16 @@ export function SolanaClusterStatsProvider({ children }: Props) {
         if (cluster !== Cluster.Custom) {
           reportError(error, { url });
         }
-        dispatchPerformanceInfo({
-          type: PerformanceInfoActionType.SetError,
-          data: error.toString(),
-        });
-        dispatchDashboardInfo({
-          type: DashboardInfoActionType.SetError,
-          data: error.toString(),
-        });
+        if (error instanceof Error) {
+          dispatchPerformanceInfo({
+            type: PerformanceInfoActionType.SetError,
+            data: error.toString(),
+          });
+          dispatchDashboardInfo({
+            type: DashboardInfoActionType.SetError,
+            data: error.toString(),
+          });
+        }
         setActive(false);
       }
     };
@@ -139,10 +151,12 @@ export function SolanaClusterStatsProvider({ children }: Props) {
         if (cluster !== Cluster.Custom) {
           reportError(error, { url });
         }
-        dispatchPerformanceInfo({
-          type: PerformanceInfoActionType.SetError,
-          data: error.toString(),
-        });
+        if (error instanceof Error) {
+          dispatchPerformanceInfo({
+            type: PerformanceInfoActionType.SetError,
+            data: error.toString(),
+          });
+        }
         setActive(false);
       }
     };
@@ -159,10 +173,12 @@ export function SolanaClusterStatsProvider({ children }: Props) {
         if (cluster !== Cluster.Custom) {
           reportError(error, { url });
         }
-        dispatchDashboardInfo({
-          type: DashboardInfoActionType.SetError,
-          data: error.toString(),
-        });
+        if (error instanceof Error) {
+          dispatchDashboardInfo({
+            type: DashboardInfoActionType.SetError,
+            data: error.toString(),
+          });
+        }
         setActive(false);
       }
     };

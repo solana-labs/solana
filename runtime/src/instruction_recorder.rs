@@ -2,7 +2,7 @@ use std::{cell::RefCell, rc::Rc};
 
 use solana_sdk::{
     instruction::{CompiledInstruction, Instruction},
-    message::Message,
+    message::SanitizedMessage,
 };
 
 /// Records and compiles cross-program invoked instructions
@@ -12,11 +12,14 @@ pub struct InstructionRecorder {
 }
 
 impl InstructionRecorder {
-    pub fn compile_instructions(&self, message: &Message) -> Vec<CompiledInstruction> {
+    pub fn compile_instructions(
+        &self,
+        message: &SanitizedMessage,
+    ) -> Option<Vec<CompiledInstruction>> {
         self.inner
             .borrow()
             .iter()
-            .map(|ix| message.compile_instruction(ix))
+            .map(|ix| message.try_compile_instruction(ix))
             .collect()
     }
 

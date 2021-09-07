@@ -8,7 +8,9 @@ use {
     solana_runtime::bank::{
         Bank, InnerInstructionsList, NonceRollbackInfo, TransactionLogMessages,
     },
-    solana_transaction_status::{InnerInstructions, Reward, TransactionStatusMeta},
+    solana_transaction_status::{
+        extract_and_fmt_memos, InnerInstructions, Reward, TransactionStatusMeta,
+    },
     std::{
         sync::{
             atomic::{AtomicBool, AtomicU64, Ordering},
@@ -92,7 +94,7 @@ impl TransactionStatusService {
                     log_messages,
                     rent_debits,
                 ) in izip!(
-                    &transactions,
+                    transactions,
                     statuses,
                     balances.pre_balances,
                     balances.post_balances,
@@ -100,18 +102,19 @@ impl TransactionStatusService {
                     token_balances.post_token_balances,
                     inner_instructions_iter,
                     transaction_logs_iter,
-                    rent_debits.into_iter(),
+                    rent_debits,
                 ) {
-                    if Bank::can_commit(&status) && !transaction.signatures.is_empty() {
+                    if Bank::can_commit(&status) {
                         let fee_calculator = nonce_rollback
                             .map(|nonce_rollback| nonce_rollback.fee_calculator())
                             .unwrap_or_else(|| {
-                                bank.get_fee_calculator(&transaction.message().recent_blockhash)
+                                #[allow(deprecated)]
+                                bank.get_fee_calculator(transaction.message().recent_blockhash())
                             })
                             .expect("FeeCalculator must exist");
-                        let fee = fee_calculator.calculate_fee(transaction.message());
-                        let (writable_keys, readonly_keys) =
-                            transaction.message.get_account_keys_by_lock_type();
+                        let fee = transaction.message().calculate_fee(&fee_calculator);
+                        let tx_account_locks =
+                            transaction.get_account_locks(bank.demote_program_write_locks());
 
                         let inner_instructions = inner_instructions.map(|inner_instructions| {
                             inner_instructions
@@ -136,16 +139,23 @@ impl TransactionStatusService {
                                     lamports: reward_info.lamports,
                                     post_balance: reward_info.post_balance,
                                     reward_type: Some(reward_info.reward_type),
+                                    commission: reward_info.commission,
                                 })
                                 .collect(),
                         );
 
+                        if let Some(memos) = extract_and_fmt_memos(transaction.message()) {
+                            blockstore
+                                .write_transaction_memos(transaction.signature(), memos)
+                                .expect("Expect database write to succeed: TransactionMemos");
+                        }
+
                         blockstore
                             .write_transaction_status(
                                 slot,
-                                transaction.signatures[0],
-                                writable_keys,
-                                readonly_keys,
+                                *transaction.signature(),
+                                tx_account_locks.writable,
+                                tx_account_locks.readonly,
                                 TransactionStatusMeta {
                                     status,
                                     fee,
@@ -158,7 +168,7 @@ impl TransactionStatusService {
                                     rewards,
                                 },
                             )
-                            .expect("Expect database write to succeed");
+                            .expect("Expect database write to succeed: TransactionStatus");
                     }
                 }
             }

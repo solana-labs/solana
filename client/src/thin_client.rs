@@ -246,7 +246,7 @@ impl ThinClient {
                 }
             }
             info!("{} tries failed transfer to {}", x, self.tpu_addr());
-            let (blockhash, _fee_calculator) = self.get_recent_blockhash()?;
+            let blockhash = self.get_latest_blockhash()?;
             transaction.sign(keypairs, blockhash);
         }
         Err(io::Error::new(
@@ -333,7 +333,7 @@ impl SyncClient for ThinClient {
         keypairs: &T,
         message: Message,
     ) -> TransportResult<Signature> {
-        let (blockhash, _fee_calculator) = self.get_recent_blockhash()?;
+        let blockhash = self.get_latest_blockhash()?;
         let mut transaction = Transaction::new(keypairs, message, blockhash);
         let signature = self.send_and_confirm_transaction(keypairs, &mut transaction, 5, 0)?;
         Ok(signature)
@@ -404,6 +404,7 @@ impl SyncClient for ThinClient {
     }
 
     fn get_recent_blockhash(&self) -> TransportResult<(Hash, FeeCalculator)> {
+        #[allow(deprecated)]
         let (blockhash, fee_calculator, _last_valid_slot) =
             self.get_recent_blockhash_with_commitment(CommitmentConfig::default())?;
         Ok((blockhash, fee_calculator))
@@ -415,6 +416,7 @@ impl SyncClient for ThinClient {
     ) -> TransportResult<(Hash, FeeCalculator, Slot)> {
         let index = self.optimizer.experiment();
         let now = Instant::now();
+        #[allow(deprecated)]
         let recent_blockhash =
             self.rpc_clients[index].get_recent_blockhash_with_commitment(commitment_config);
         match recent_blockhash {
@@ -433,12 +435,14 @@ impl SyncClient for ThinClient {
         &self,
         blockhash: &Hash,
     ) -> TransportResult<Option<FeeCalculator>> {
+        #[allow(deprecated)]
         self.rpc_client()
             .get_fee_calculator_for_blockhash(blockhash)
             .map_err(|e| e.into())
     }
 
     fn get_fee_rate_governor(&self) -> TransportResult<FeeRateGovernor> {
+        #[allow(deprecated)]
         self.rpc_client()
             .get_fee_rate_governor()
             .map_err(|e| e.into())
@@ -556,8 +560,55 @@ impl SyncClient for ThinClient {
     }
 
     fn get_new_blockhash(&self, blockhash: &Hash) -> TransportResult<(Hash, FeeCalculator)> {
+        #[allow(deprecated)]
         self.rpc_client()
             .get_new_blockhash(blockhash)
+            .map_err(|e| e.into())
+    }
+
+    fn get_latest_blockhash(&self) -> TransportResult<Hash> {
+        let (blockhash, _) =
+            self.get_latest_blockhash_with_commitment(CommitmentConfig::default())?;
+        Ok(blockhash)
+    }
+
+    fn get_latest_blockhash_with_commitment(
+        &self,
+        commitment_config: CommitmentConfig,
+    ) -> TransportResult<(Hash, u64)> {
+        let index = self.optimizer.experiment();
+        let now = Instant::now();
+        match self.rpc_clients[index].get_latest_blockhash_with_commitment(commitment_config) {
+            Ok((blockhash, last_valid_block_height)) => {
+                self.optimizer.report(index, duration_as_ms(&now.elapsed()));
+                Ok((blockhash, last_valid_block_height))
+            }
+            Err(e) => {
+                self.optimizer.report(index, std::u64::MAX);
+                Err(e.into())
+            }
+        }
+    }
+
+    fn is_blockhash_valid(
+        &self,
+        blockhash: &Hash,
+        commitment_config: CommitmentConfig,
+    ) -> TransportResult<bool> {
+        self.rpc_client()
+            .is_blockhash_valid(blockhash, commitment_config)
+            .map_err(|e| e.into())
+    }
+
+    fn get_fee_for_message(&self, blockhash: &Hash, message: &Message) -> TransportResult<u64> {
+        self.rpc_client()
+            .get_fee_for_message(blockhash, message)
+            .map_err(|e| e.into())
+    }
+
+    fn get_new_latest_blockhash(&self, blockhash: &Hash) -> TransportResult<Hash> {
+        self.rpc_client()
+            .get_new_latest_blockhash(blockhash)
             .map_err(|e| e.into())
     }
 }

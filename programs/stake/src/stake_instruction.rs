@@ -38,11 +38,7 @@ pub fn process_instruction(
     let me = &keyed_account_at_index(keyed_accounts, 0)?;
 
     if me.owner()? != id() {
-        if invoke_context.is_feature_active(&feature_set::check_program_owner::id()) {
-            return Err(InstructionError::InvalidAccountOwner);
-        } else {
-            return Err(InstructionError::IncorrectProgramId);
-        }
+        return Err(InstructionError::InvalidAccountOwner);
     }
 
     match limited_deserialize(data)? {

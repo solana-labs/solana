@@ -1,7 +1,9 @@
+#![cfg(feature = "full")]
+
 use crate::{
     account::{ReadableAccount, WritableAccount},
     account_utils::State as AccountUtilsState,
-    ic_msg,
+    feature_set, ic_msg,
     keyed_account::KeyedAccount,
     nonce_account::create_account,
     process_instruction::InvokeContext,
@@ -10,15 +12,14 @@ use solana_program::{
     instruction::{checked_add, InstructionError},
     nonce::{self, state::Versions, State},
     pubkey::Pubkey,
-    system_instruction::NonceError,
-    sysvar::{recent_blockhashes::RecentBlockhashes, rent::Rent},
+    system_instruction::{nonce_to_instruction_error, NonceError},
+    sysvar::rent::Rent,
 };
 use std::collections::HashSet;
 
 pub trait NonceKeyedAccount {
     fn advance_nonce_account(
         &self,
-        recent_blockhashes: &RecentBlockhashes,
         signers: &HashSet<Pubkey>,
         invoke_context: &dyn InvokeContext,
     ) -> Result<(), InstructionError>;
@@ -26,7 +27,6 @@ pub trait NonceKeyedAccount {
         &self,
         lamports: u64,
         to: &KeyedAccount,
-        recent_blockhashes: &RecentBlockhashes,
         rent: &Rent,
         signers: &HashSet<Pubkey>,
         invoke_context: &dyn InvokeContext,
@@ -34,7 +34,6 @@ pub trait NonceKeyedAccount {
     fn initialize_nonce_account(
         &self,
         nonce_authority: &Pubkey,
-        recent_blockhashes: &RecentBlockhashes,
         rent: &Rent,
         invoke_context: &dyn InvokeContext,
     ) -> Result<(), InstructionError>;
@@ -49,18 +48,11 @@ pub trait NonceKeyedAccount {
 impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
     fn advance_nonce_account(
         &self,
-        recent_blockhashes: &RecentBlockhashes,
         signers: &HashSet<Pubkey>,
         invoke_context: &dyn InvokeContext,
     ) -> Result<(), InstructionError> {
-        if recent_blockhashes.is_empty() {
-            ic_msg!(
-                invoke_context,
-                "Advance nonce account: recent blockhash list is empty",
-            );
-            return Err(NonceError::NoRecentBlockhashes.into());
-        }
-
+        let merge_nonce_error_into_system_error = invoke_context
+            .is_feature_active(&feature_set::merge_nonce_error_into_system_error::id());
         let state = AccountUtilsState::<Versions>::state(self)?.convert_to_current();
         match state {
             State::Initialized(data) => {
@@ -72,18 +64,21 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
                     );
                     return Err(InstructionError::MissingRequiredSignature);
                 }
-                let recent_blockhash = recent_blockhashes[0].blockhash;
+                let recent_blockhash = *invoke_context.get_blockhash();
                 if data.blockhash == recent_blockhash {
                     ic_msg!(
                         invoke_context,
                         "Advance nonce account: nonce can only advance once per slot"
                     );
-                    return Err(NonceError::NotExpired.into());
+                    return Err(nonce_to_instruction_error(
+                        NonceError::NotExpired,
+                        merge_nonce_error_into_system_error,
+                    ));
                 }
 
                 let new_data = nonce::state::Data {
                     blockhash: recent_blockhash,
-                    fee_calculator: recent_blockhashes[0].fee_calculator.clone(),
+                    fee_calculator: invoke_context.get_fee_calculator().clone(),
                     ..data
                 };
                 self.set_state(&Versions::new_current(State::Initialized(new_data)))
@@ -94,7 +89,10 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
                     "Advance nonce account: Account {} state is invalid",
                     self.unsigned_key()
                 );
-                Err(NonceError::BadAccountState.into())
+                Err(nonce_to_instruction_error(
+                    NonceError::BadAccountState,
+                    merge_nonce_error_into_system_error,
+                ))
             }
         }
     }
@@ -103,11 +101,12 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
         &self,
         lamports: u64,
         to: &KeyedAccount,
-        recent_blockhashes: &RecentBlockhashes,
         rent: &Rent,
         signers: &HashSet<Pubkey>,
         invoke_context: &dyn InvokeContext,
     ) -> Result<(), InstructionError> {
+        let merge_nonce_error_into_system_error = invoke_context
+            .is_feature_active(&feature_set::merge_nonce_error_into_system_error::id());
         let signer = match AccountUtilsState::<Versions>::state(self)?.convert_to_current() {
             State::Uninitialized => {
                 if lamports > self.lamports()? {
@@ -123,12 +122,15 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
             }
             State::Initialized(ref data) => {
                 if lamports == self.lamports()? {
-                    if data.blockhash == recent_blockhashes[0].blockhash {
+                    if data.blockhash == *invoke_context.get_blockhash() {
                         ic_msg!(
                             invoke_context,
                             "Withdraw nonce account: nonce can only advance once per slot"
                         );
-                        return Err(NonceError::NotExpired.into());
+                        return Err(nonce_to_instruction_error(
+                            NonceError::NotExpired,
+                            merge_nonce_error_into_system_error,
+                        ));
                     }
                     self.set_state(&Versions::new_current(State::Uninitialized))?;
                 } else {
@@ -176,18 +178,11 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
     fn initialize_nonce_account(
         &self,
         nonce_authority: &Pubkey,
-        recent_blockhashes: &RecentBlockhashes,
         rent: &Rent,
         invoke_context: &dyn InvokeContext,
     ) -> Result<(), InstructionError> {
-        if recent_blockhashes.is_empty() {
-            ic_msg!(
-                invoke_context,
-                "Initialize nonce account: recent blockhash list is empty",
-            );
-            return Err(NonceError::NoRecentBlockhashes.into());
-        }
-
+        let merge_nonce_error_into_system_error = invoke_context
+            .is_feature_active(&feature_set::merge_nonce_error_into_system_error::id());
         match AccountUtilsState::<Versions>::state(self)?.convert_to_current() {
             State::Uninitialized => {
                 let min_balance = rent.minimum_balance(self.data_len()?);
@@ -202,8 +197,8 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
                 }
                 let data = nonce::state::Data {
                     authority: *nonce_authority,
-                    blockhash: recent_blockhashes[0].blockhash,
-                    fee_calculator: recent_blockhashes[0].fee_calculator.clone(),
+                    blockhash: *invoke_context.get_blockhash(),
+                    fee_calculator: invoke_context.get_fee_calculator().clone(),
                 };
                 self.set_state(&Versions::new_current(State::Initialized(data)))
             }
@@ -213,7 +208,10 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
                     "Initialize nonce account: Account {} state is invalid",
                     self.unsigned_key()
                 );
-                Err(NonceError::BadAccountState.into())
+                Err(nonce_to_instruction_error(
+                    NonceError::BadAccountState,
+                    merge_nonce_error_into_system_error,
+                ))
             }
         }
     }
@@ -224,6 +222,8 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
         signers: &HashSet<Pubkey>,
         invoke_context: &dyn InvokeContext,
     ) -> Result<(), InstructionError> {
+        let merge_nonce_error_into_system_error = invoke_context
+            .is_feature_active(&feature_set::merge_nonce_error_into_system_error::id());
         match AccountUtilsState::<Versions>::state(self)?.convert_to_current() {
             State::Initialized(data) => {
                 if !signers.contains(&data.authority) {
@@ -246,7 +246,10 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
                     "Authorize nonce account: Account {} state is invalid",
                     self.unsigned_key()
                 );
-                Err(NonceError::BadAccountState.into())
+                Err(nonce_to_instruction_error(
+                    NonceError::BadAccountState,
+                    merge_nonce_error_into_system_error,
+                ))
             }
         }
     }
@@ -269,14 +272,29 @@ mod test {
     use crate::{
         account::ReadableAccount,
         account_utils::State as AccountUtilsState,
+        fee_calculator::FeeCalculator,
         keyed_account::KeyedAccount,
         nonce::{self, State},
         nonce_account::verify_nonce_account,
         process_instruction::MockInvokeContext,
-        system_instruction::NonceError,
-        sysvar::recent_blockhashes::create_test_recent_blockhashes,
+        system_instruction::SystemError,
     };
-    use solana_program::hash::Hash;
+    use solana_program::hash::{hash, Hash};
+
+    fn create_test_blockhash(seed: usize) -> (Hash, FeeCalculator) {
+        (
+            hash(&bincode::serialize(&seed).unwrap()),
+            FeeCalculator::new((seed as u64).saturating_mul(100)),
+        )
+    }
+
+    fn create_invoke_context_with_blockhash<'a>(seed: usize) -> MockInvokeContext<'a> {
+        let mut invoke_context = MockInvokeContext::new(vec![]);
+        let (blockhash, fee_calculator) = create_test_blockhash(seed);
+        invoke_context.blockhash = blockhash;
+        invoke_context.fee_calculator = fee_calculator;
+        invoke_context
+    }
 
     #[test]
     fn default_is_uninitialized() {
@@ -302,64 +320,51 @@ mod test {
                 .convert_to_current();
             // New is in Uninitialzed state
             assert_eq!(state, State::Uninitialized);
-            let recent_blockhashes = create_test_recent_blockhashes(95);
+            let invoke_context = create_invoke_context_with_blockhash(95);
             let authorized = keyed_account.unsigned_key();
             keyed_account
-                .initialize_nonce_account(
-                    authorized,
-                    &recent_blockhashes,
-                    &rent,
-                    &MockInvokeContext::new(vec![]),
-                )
+                .initialize_nonce_account(authorized, &rent, &invoke_context)
                 .unwrap();
             let state = AccountUtilsState::<Versions>::state(keyed_account)
                 .unwrap()
                 .convert_to_current();
             let data = nonce::state::Data {
-                blockhash: recent_blockhashes[0].blockhash,
-                fee_calculator: recent_blockhashes[0].fee_calculator.clone(),
+                blockhash: *invoke_context.get_blockhash(),
+                fee_calculator: invoke_context.get_fee_calculator().clone(),
                 ..data
             };
             // First nonce instruction drives state from Uninitialized to Initialized
             assert_eq!(state, State::Initialized(data.clone()));
-            let recent_blockhashes = create_test_recent_blockhashes(63);
+            let invoke_context = create_invoke_context_with_blockhash(63);
             keyed_account
-                .advance_nonce_account(
-                    &recent_blockhashes,
-                    &signers,
-                    &MockInvokeContext::new(vec![]),
-                )
+                .advance_nonce_account(&signers, &invoke_context)
                 .unwrap();
             let state = AccountUtilsState::<Versions>::state(keyed_account)
                 .unwrap()
                 .convert_to_current();
             let data = nonce::state::Data {
-                blockhash: recent_blockhashes[0].blockhash,
-                fee_calculator: recent_blockhashes[0].fee_calculator.clone(),
+                blockhash: *invoke_context.get_blockhash(),
+                fee_calculator: invoke_context.get_fee_calculator().clone(),
                 ..data
             };
             // Second nonce instruction consumes and replaces stored nonce
             assert_eq!(state, State::Initialized(data.clone()));
-            let recent_blockhashes = create_test_recent_blockhashes(31);
+            let invoke_context = create_invoke_context_with_blockhash(31);
             keyed_account
-                .advance_nonce_account(
-                    &recent_blockhashes,
-                    &signers,
-                    &MockInvokeContext::new(vec![]),
-                )
+                .advance_nonce_account(&signers, &invoke_context)
                 .unwrap();
             let state = AccountUtilsState::<Versions>::state(keyed_account)
                 .unwrap()
                 .convert_to_current();
             let data = nonce::state::Data {
-                blockhash: recent_blockhashes[0].blockhash,
-                fee_calculator: recent_blockhashes[0].fee_calculator.clone(),
+                blockhash: *invoke_context.get_blockhash(),
+                fee_calculator: invoke_context.get_fee_calculator().clone(),
                 ..data
             };
             // Third nonce instruction for fun and profit
             assert_eq!(state, State::Initialized(data));
             with_test_keyed_account(42, false, |to_keyed| {
-                let recent_blockhashes = create_test_recent_blockhashes(0);
+                let invoke_context = create_invoke_context_with_blockhash(0);
                 let withdraw_lamports = keyed_account.account.borrow().lamports();
                 let expect_nonce_lamports =
                     keyed_account.account.borrow().lamports() - withdraw_lamports;
@@ -368,10 +373,9 @@ mod test {
                     .withdraw_nonce_account(
                         withdraw_lamports,
                         to_keyed,
-                        &recent_blockhashes,
                         &rent,
                         &signers,
-                        &MockInvokeContext::new(vec![]),
+                        &invoke_context,
                     )
                     .unwrap();
                 // Empties Account balance
@@ -398,15 +402,10 @@ mod test {
         };
         let min_lamports = rent.minimum_balance(State::size());
         with_test_keyed_account(min_lamports + 42, true, |nonce_account| {
-            let recent_blockhashes = create_test_recent_blockhashes(31);
+            let invoke_context = create_invoke_context_with_blockhash(31);
             let authority = *nonce_account.unsigned_key();
             nonce_account
-                .initialize_nonce_account(
-                    &authority,
-                    &recent_blockhashes,
-                    &rent,
-                    &MockInvokeContext::new(vec![]),
-                )
+                .initialize_nonce_account(&authority, &rent, &invoke_context)
                 .unwrap();
             let pubkey = *nonce_account.account.borrow().owner();
             let nonce_account = KeyedAccount::new(&pubkey, false, nonce_account.account);
@@ -415,48 +414,15 @@ mod test {
                 .convert_to_current();
             let data = nonce::state::Data {
                 authority,
-                blockhash: recent_blockhashes[0].blockhash,
-                fee_calculator: recent_blockhashes[0].fee_calculator.clone(),
+                blockhash: *invoke_context.get_blockhash(),
+                fee_calculator: invoke_context.get_fee_calculator().clone(),
             };
             assert_eq!(state, State::Initialized(data));
             let signers = HashSet::new();
-            let recent_blockhashes = create_test_recent_blockhashes(0);
-            let result = nonce_account.advance_nonce_account(
-                &recent_blockhashes,
-                &signers,
-                &MockInvokeContext::new(vec![]),
-            );
-            assert_eq!(result, Err(InstructionError::MissingRequiredSignature),);
-        })
-    }
+            let invoke_context = create_invoke_context_with_blockhash(0);
 
-    #[test]
-    fn nonce_inx_with_empty_recent_blockhashes_fail() {
-        let rent = Rent {
-            lamports_per_byte_year: 42,
-            ..Rent::default()
-        };
-        let min_lamports = rent.minimum_balance(State::size());
-        with_test_keyed_account(min_lamports + 42, true, |keyed_account| {
-            let mut signers = HashSet::new();
-            signers.insert(*keyed_account.signer_key().unwrap());
-            let recent_blockhashes = create_test_recent_blockhashes(0);
-            let authorized = *keyed_account.unsigned_key();
-            keyed_account
-                .initialize_nonce_account(
-                    &authorized,
-                    &recent_blockhashes,
-                    &rent,
-                    &MockInvokeContext::new(vec![]),
-                )
-                .unwrap();
-            let recent_blockhashes = vec![].into_iter().collect();
-            let result = keyed_account.advance_nonce_account(
-                &recent_blockhashes,
-                &signers,
-                &MockInvokeContext::new(vec![]),
-            );
-            assert_eq!(result, Err(NonceError::NoRecentBlockhashes.into()));
+            let result = nonce_account.advance_nonce_account(&signers, &invoke_context);
+            assert_eq!(result, Err(InstructionError::MissingRequiredSignature),);
         })
     }
 
@@ -470,22 +436,13 @@ mod test {
         with_test_keyed_account(min_lamports + 42, true, |keyed_account| {
             let mut signers = HashSet::new();
             signers.insert(*keyed_account.signer_key().unwrap());
-            let recent_blockhashes = create_test_recent_blockhashes(63);
+            let invoke_context = create_invoke_context_with_blockhash(63);
             let authorized = *keyed_account.unsigned_key();
             keyed_account
-                .initialize_nonce_account(
-                    &authorized,
-                    &recent_blockhashes,
-                    &rent,
-                    &MockInvokeContext::new(vec![]),
-                )
+                .initialize_nonce_account(&authorized, &rent, &invoke_context)
                 .unwrap();
-            let result = keyed_account.advance_nonce_account(
-                &recent_blockhashes,
-                &signers,
-                &MockInvokeContext::new(vec![]),
-            );
-            assert_eq!(result, Err(NonceError::NotExpired.into()));
+            let result = keyed_account.advance_nonce_account(&signers, &invoke_context);
+            assert_eq!(result, Err(SystemError::NonceBlockhashNotExpired.into()));
         })
     }
 
@@ -499,13 +456,9 @@ mod test {
         with_test_keyed_account(min_lamports + 42, true, |keyed_account| {
             let mut signers = HashSet::new();
             signers.insert(*keyed_account.signer_key().unwrap());
-            let recent_blockhashes = create_test_recent_blockhashes(63);
-            let result = keyed_account.advance_nonce_account(
-                &recent_blockhashes,
-                &signers,
-                &MockInvokeContext::new(vec![]),
-            );
-            assert_eq!(result, Err(NonceError::BadAccountState.into()));
+            let invoke_context = create_invoke_context_with_blockhash(63);
+            let result = keyed_account.advance_nonce_account(&signers, &invoke_context);
+            assert_eq!(result, Err(InstructionError::InvalidAccountData));
         })
     }
 
@@ -520,24 +473,15 @@ mod test {
             with_test_keyed_account(42, true, |nonce_authority| {
                 let mut signers = HashSet::new();
                 signers.insert(*nonce_account.signer_key().unwrap());
-                let recent_blockhashes = create_test_recent_blockhashes(63);
+                let invoke_context = create_invoke_context_with_blockhash(63);
                 let authorized = *nonce_authority.unsigned_key();
                 nonce_account
-                    .initialize_nonce_account(
-                        &authorized,
-                        &recent_blockhashes,
-                        &rent,
-                        &MockInvokeContext::new(vec![]),
-                    )
+                    .initialize_nonce_account(&authorized, &rent, &invoke_context)
                     .unwrap();
                 let mut signers = HashSet::new();
                 signers.insert(*nonce_authority.signer_key().unwrap());
-                let recent_blockhashes = create_test_recent_blockhashes(31);
-                let result = nonce_account.advance_nonce_account(
-                    &recent_blockhashes,
-                    &signers,
-                    &MockInvokeContext::new(vec![]),
-                );
+                let invoke_context = create_invoke_context_with_blockhash(31);
+                let result = nonce_account.advance_nonce_account(&signers, &invoke_context);
                 assert_eq!(result, Ok(()));
             });
         });
@@ -554,21 +498,12 @@ mod test {
             with_test_keyed_account(42, false, |nonce_authority| {
                 let mut signers = HashSet::new();
                 signers.insert(*nonce_account.signer_key().unwrap());
-                let recent_blockhashes = create_test_recent_blockhashes(63);
+                let invoke_context = create_invoke_context_with_blockhash(63);
                 let authorized = *nonce_authority.unsigned_key();
                 nonce_account
-                    .initialize_nonce_account(
-                        &authorized,
-                        &recent_blockhashes,
-                        &rent,
-                        &MockInvokeContext::new(vec![]),
-                    )
+                    .initialize_nonce_account(&authorized, &rent, &invoke_context)
                     .unwrap();
-                let result = nonce_account.advance_nonce_account(
-                    &recent_blockhashes,
-                    &signers,
-                    &MockInvokeContext::new(vec![]),
-                );
+                let result = nonce_account.advance_nonce_account(&signers, &invoke_context);
                 assert_eq!(result, Err(InstructionError::MissingRequiredSignature),);
             });
         });
@@ -589,7 +524,7 @@ mod test {
             with_test_keyed_account(42, false, |to_keyed| {
                 let mut signers = HashSet::new();
                 signers.insert(*nonce_keyed.signer_key().unwrap());
-                let recent_blockhashes = create_test_recent_blockhashes(0);
+                let invoke_context = create_invoke_context_with_blockhash(0);
                 let withdraw_lamports = nonce_keyed.account.borrow().lamports();
                 let expect_nonce_lamports =
                     nonce_keyed.account.borrow().lamports() - withdraw_lamports;
@@ -598,10 +533,9 @@ mod test {
                     .withdraw_nonce_account(
                         withdraw_lamports,
                         to_keyed,
-                        &recent_blockhashes,
                         &rent,
                         &signers,
-                        &MockInvokeContext::new(vec![]),
+                        &invoke_context,
                     )
                     .unwrap();
                 let state = AccountUtilsState::<Versions>::state(nonce_keyed)
@@ -635,15 +569,14 @@ mod test {
             assert_eq!(state, State::Uninitialized);
             with_test_keyed_account(42, false, |to_keyed| {
                 let signers = HashSet::new();
-                let recent_blockhashes = create_test_recent_blockhashes(0);
+                let invoke_context = create_invoke_context_with_blockhash(0);
                 let lamports = nonce_keyed.account.borrow().lamports();
                 let result = nonce_keyed.withdraw_nonce_account(
                     lamports,
                     to_keyed,
-                    &recent_blockhashes,
                     &rent,
                     &signers,
-                    &MockInvokeContext::new(vec![]),
+                    &invoke_context,
                 );
                 assert_eq!(result, Err(InstructionError::MissingRequiredSignature),);
             })
@@ -665,15 +598,14 @@ mod test {
             with_test_keyed_account(42, false, |to_keyed| {
                 let mut signers = HashSet::new();
                 signers.insert(*nonce_keyed.signer_key().unwrap());
-                let recent_blockhashes = create_test_recent_blockhashes(0);
+                let invoke_context = create_invoke_context_with_blockhash(0);
                 let lamports = nonce_keyed.account.borrow().lamports() + 1;
                 let result = nonce_keyed.withdraw_nonce_account(
                     lamports,
                     to_keyed,
-                    &recent_blockhashes,
                     &rent,
                     &signers,
-                    &MockInvokeContext::new(vec![]),
+                    &invoke_context,
                 );
                 assert_eq!(result, Err(InstructionError::InsufficientFunds));
             })
@@ -691,7 +623,7 @@ mod test {
             with_test_keyed_account(42, false, |to_keyed| {
                 let mut signers = HashSet::new();
                 signers.insert(*nonce_keyed.signer_key().unwrap());
-                let recent_blockhashes = create_test_recent_blockhashes(0);
+                let invoke_context = create_invoke_context_with_blockhash(0);
                 let withdraw_lamports = nonce_keyed.account.borrow().lamports() / 2;
                 let nonce_expect_lamports =
                     nonce_keyed.account.borrow().lamports() - withdraw_lamports;
@@ -700,10 +632,9 @@ mod test {
                     .withdraw_nonce_account(
                         withdraw_lamports,
                         to_keyed,
-                        &recent_blockhashes,
                         &rent,
                         &signers,
-                        &MockInvokeContext::new(vec![]),
+                        &invoke_context,
                     )
                     .unwrap();
                 let state = AccountUtilsState::<Versions>::state(nonce_keyed)
@@ -723,10 +654,9 @@ mod test {
                     .withdraw_nonce_account(
                         withdraw_lamports,
                         to_keyed,
-                        &recent_blockhashes,
                         &rent,
                         &signers,
-                        &MockInvokeContext::new(vec![]),
+                        &invoke_context,
                     )
                     .unwrap();
                 let state = AccountUtilsState::<Versions>::state(nonce_keyed)
@@ -752,23 +682,18 @@ mod test {
         with_test_keyed_account(min_lamports + 42, true, |nonce_keyed| {
             let mut signers = HashSet::new();
             signers.insert(*nonce_keyed.signer_key().unwrap());
-            let recent_blockhashes = create_test_recent_blockhashes(31);
+            let invoke_context = create_invoke_context_with_blockhash(31);
             let authority = *nonce_keyed.unsigned_key();
             nonce_keyed
-                .initialize_nonce_account(
-                    &authority,
-                    &recent_blockhashes,
-                    &rent,
-                    &MockInvokeContext::new(vec![]),
-                )
+                .initialize_nonce_account(&authority, &rent, &invoke_context)
                 .unwrap();
             let state = AccountUtilsState::<Versions>::state(nonce_keyed)
                 .unwrap()
                 .convert_to_current();
             let data = nonce::state::Data {
                 authority,
-                blockhash: recent_blockhashes[0].blockhash,
-                fee_calculator: recent_blockhashes[0].fee_calculator.clone(),
+                blockhash: *invoke_context.get_blockhash(),
+                fee_calculator: invoke_context.get_fee_calculator().clone(),
             };
             assert_eq!(state, State::Initialized(data.clone()));
             with_test_keyed_account(42, false, |to_keyed| {
@@ -780,18 +705,17 @@ mod test {
                     .withdraw_nonce_account(
                         withdraw_lamports,
                         to_keyed,
-                        &recent_blockhashes,
                         &rent,
                         &signers,
-                        &MockInvokeContext::new(vec![]),
+                        &invoke_context,
                     )
                     .unwrap();
                 let state = AccountUtilsState::<Versions>::state(nonce_keyed)
                     .unwrap()
                     .convert_to_current();
                 let data = nonce::state::Data {
-                    blockhash: recent_blockhashes[0].blockhash,
-                    fee_calculator: recent_blockhashes[0].fee_calculator.clone(),
+                    blockhash: *invoke_context.get_blockhash(),
+                    fee_calculator: invoke_context.get_fee_calculator().clone(),
                     ..data.clone()
                 };
                 assert_eq!(state, State::Initialized(data));
@@ -800,7 +724,7 @@ mod test {
                     nonce_expect_lamports
                 );
                 assert_eq!(to_keyed.account.borrow().lamports(), to_expect_lamports);
-                let recent_blockhashes = create_test_recent_blockhashes(0);
+                let invoke_context = create_invoke_context_with_blockhash(0);
                 let withdraw_lamports = nonce_keyed.account.borrow().lamports();
                 let nonce_expect_lamports =
                     nonce_keyed.account.borrow().lamports() - withdraw_lamports;
@@ -809,10 +733,9 @@ mod test {
                     .withdraw_nonce_account(
                         withdraw_lamports,
                         to_keyed,
-                        &recent_blockhashes,
                         &rent,
                         &signers,
-                        &MockInvokeContext::new(vec![]),
+                        &invoke_context,
                     )
                     .unwrap();
                 let state = AccountUtilsState::<Versions>::state(nonce_keyed)
@@ -836,15 +759,10 @@ mod test {
         };
         let min_lamports = rent.minimum_balance(State::size());
         with_test_keyed_account(min_lamports + 42, true, |nonce_keyed| {
-            let recent_blockhashes = create_test_recent_blockhashes(0);
+            let invoke_context = create_invoke_context_with_blockhash(0);
             let authorized = *nonce_keyed.unsigned_key();
             nonce_keyed
-                .initialize_nonce_account(
-                    &authorized,
-                    &recent_blockhashes,
-                    &rent,
-                    &MockInvokeContext::new(vec![]),
-                )
+                .initialize_nonce_account(&authorized, &rent, &invoke_context)
                 .unwrap();
             with_test_keyed_account(42, false, |to_keyed| {
                 let mut signers = HashSet::new();
@@ -853,12 +771,11 @@ mod test {
                 let result = nonce_keyed.withdraw_nonce_account(
                     withdraw_lamports,
                     to_keyed,
-                    &recent_blockhashes,
                     &rent,
                     &signers,
-                    &MockInvokeContext::new(vec![]),
+                    &invoke_context,
                 );
-                assert_eq!(result, Err(NonceError::NotExpired.into()));
+                assert_eq!(result, Err(SystemError::NonceBlockhashNotExpired.into()));
             })
         })
     }
@@ -871,28 +788,22 @@ mod test {
         };
         let min_lamports = rent.minimum_balance(State::size());
         with_test_keyed_account(min_lamports + 42, true, |nonce_keyed| {
-            let recent_blockhashes = create_test_recent_blockhashes(95);
+            let invoke_context = create_invoke_context_with_blockhash(95);
             let authorized = *nonce_keyed.unsigned_key();
             nonce_keyed
-                .initialize_nonce_account(
-                    &authorized,
-                    &recent_blockhashes,
-                    &rent,
-                    &MockInvokeContext::new(vec![]),
-                )
+                .initialize_nonce_account(&authorized, &rent, &invoke_context)
                 .unwrap();
             with_test_keyed_account(42, false, |to_keyed| {
-                let recent_blockhashes = create_test_recent_blockhashes(63);
+                let invoke_context = create_invoke_context_with_blockhash(63);
                 let mut signers = HashSet::new();
                 signers.insert(*nonce_keyed.signer_key().unwrap());
                 let withdraw_lamports = nonce_keyed.account.borrow().lamports() + 1;
                 let result = nonce_keyed.withdraw_nonce_account(
                     withdraw_lamports,
                     to_keyed,
-                    &recent_blockhashes,
                     &rent,
                     &signers,
-                    &MockInvokeContext::new(vec![]),
+                    &invoke_context,
                 );
                 assert_eq!(result, Err(InstructionError::InsufficientFunds));
             })
@@ -907,28 +818,22 @@ mod test {
         };
         let min_lamports = rent.minimum_balance(State::size());
         with_test_keyed_account(min_lamports + 42, true, |nonce_keyed| {
-            let recent_blockhashes = create_test_recent_blockhashes(95);
+            let invoke_context = create_invoke_context_with_blockhash(95);
             let authorized = *nonce_keyed.unsigned_key();
             nonce_keyed
-                .initialize_nonce_account(
-                    &authorized,
-                    &recent_blockhashes,
-                    &rent,
-                    &MockInvokeContext::new(vec![]),
-                )
+                .initialize_nonce_account(&authorized, &rent, &invoke_context)
                 .unwrap();
             with_test_keyed_account(42, false, |to_keyed| {
-                let recent_blockhashes = create_test_recent_blockhashes(63);
+                let invoke_context = create_invoke_context_with_blockhash(63);
                 let mut signers = HashSet::new();
                 signers.insert(*nonce_keyed.signer_key().unwrap());
                 let withdraw_lamports = nonce_keyed.account.borrow().lamports() - min_lamports + 1;
                 let result = nonce_keyed.withdraw_nonce_account(
                     withdraw_lamports,
                     to_keyed,
-                    &recent_blockhashes,
                     &rent,
                     &signers,
-                    &MockInvokeContext::new(vec![]),
+                    &invoke_context,
                 );
                 assert_eq!(result, Err(InstructionError::InsufficientFunds));
             })
@@ -943,28 +848,22 @@ mod test {
         };
         let min_lamports = rent.minimum_balance(State::size());
         with_test_keyed_account(min_lamports + 42, true, |nonce_keyed| {
-            let recent_blockhashes = create_test_recent_blockhashes(95);
+            let invoke_context = create_invoke_context_with_blockhash(95);
             let authorized = *nonce_keyed.unsigned_key();
             nonce_keyed
-                .initialize_nonce_account(
-                    &authorized,
-                    &recent_blockhashes,
-                    &rent,
-                    &MockInvokeContext::new(vec![]),
-                )
+                .initialize_nonce_account(&authorized, &rent, &invoke_context)
                 .unwrap();
             with_test_keyed_account(55, false, |to_keyed| {
-                let recent_blockhashes = create_test_recent_blockhashes(63);
+                let invoke_context = create_invoke_context_with_blockhash(63);
                 let mut signers = HashSet::new();
                 signers.insert(*nonce_keyed.signer_key().unwrap());
                 let withdraw_lamports = u64::MAX - 54;
                 let result = nonce_keyed.withdraw_nonce_account(
                     withdraw_lamports,
                     to_keyed,
-                    &recent_blockhashes,
                     &rent,
                     &signers,
-                    &MockInvokeContext::new(vec![]),
+                    &invoke_context,
                 );
                 assert_eq!(result, Err(InstructionError::InsufficientFunds));
             })
@@ -985,46 +884,19 @@ mod test {
             assert_eq!(state, State::Uninitialized);
             let mut signers = HashSet::new();
             signers.insert(*keyed_account.signer_key().unwrap());
-            let recent_blockhashes = create_test_recent_blockhashes(0);
+            let invoke_context = create_invoke_context_with_blockhash(0);
             let authority = *keyed_account.unsigned_key();
-            let result = keyed_account.initialize_nonce_account(
-                &authority,
-                &recent_blockhashes,
-                &rent,
-                &MockInvokeContext::new(vec![]),
-            );
+            let result = keyed_account.initialize_nonce_account(&authority, &rent, &invoke_context);
             let data = nonce::state::Data {
                 authority,
-                blockhash: recent_blockhashes[0].blockhash,
-                fee_calculator: recent_blockhashes[0].fee_calculator.clone(),
+                blockhash: *invoke_context.get_blockhash(),
+                fee_calculator: invoke_context.get_fee_calculator().clone(),
             };
             assert_eq!(result, Ok(()));
             let state = AccountUtilsState::<Versions>::state(keyed_account)
                 .unwrap()
                 .convert_to_current();
             assert_eq!(state, State::Initialized(data));
-        })
-    }
-
-    #[test]
-    fn initialize_inx_empty_recent_blockhashes_fail() {
-        let rent = Rent {
-            lamports_per_byte_year: 42,
-            ..Rent::default()
-        };
-        let min_lamports = rent.minimum_balance(State::size());
-        with_test_keyed_account(min_lamports + 42, true, |keyed_account| {
-            let mut signers = HashSet::new();
-            signers.insert(*keyed_account.signer_key().unwrap());
-            let recent_blockhashes = vec![].into_iter().collect();
-            let authorized = *keyed_account.unsigned_key();
-            let result = keyed_account.initialize_nonce_account(
-                &authorized,
-                &recent_blockhashes,
-                &rent,
-                &MockInvokeContext::new(vec![]),
-            );
-            assert_eq!(result, Err(NonceError::NoRecentBlockhashes.into()));
         })
     }
 
@@ -1036,24 +908,15 @@ mod test {
         };
         let min_lamports = rent.minimum_balance(State::size());
         with_test_keyed_account(min_lamports + 42, true, |keyed_account| {
-            let recent_blockhashes = create_test_recent_blockhashes(31);
+            let invoke_context = create_invoke_context_with_blockhash(31);
             let authorized = *keyed_account.unsigned_key();
             keyed_account
-                .initialize_nonce_account(
-                    &authorized,
-                    &recent_blockhashes,
-                    &rent,
-                    &MockInvokeContext::new(vec![]),
-                )
+                .initialize_nonce_account(&authorized, &rent, &invoke_context)
                 .unwrap();
-            let recent_blockhashes = create_test_recent_blockhashes(0);
-            let result = keyed_account.initialize_nonce_account(
-                &authorized,
-                &recent_blockhashes,
-                &rent,
-                &MockInvokeContext::new(vec![]),
-            );
-            assert_eq!(result, Err(NonceError::BadAccountState.into()));
+            let invoke_context = create_invoke_context_with_blockhash(0);
+            let result =
+                keyed_account.initialize_nonce_account(&authorized, &rent, &invoke_context);
+            assert_eq!(result, Err(InstructionError::InvalidAccountData));
         })
     }
 
@@ -1065,14 +928,10 @@ mod test {
         };
         let min_lamports = rent.minimum_balance(State::size());
         with_test_keyed_account(min_lamports - 42, true, |keyed_account| {
-            let recent_blockhashes = create_test_recent_blockhashes(63);
+            let invoke_context = create_invoke_context_with_blockhash(63);
             let authorized = *keyed_account.unsigned_key();
-            let result = keyed_account.initialize_nonce_account(
-                &authorized,
-                &recent_blockhashes,
-                &rent,
-                &MockInvokeContext::new(vec![]),
-            );
+            let result =
+                keyed_account.initialize_nonce_account(&authorized, &rent, &invoke_context);
             assert_eq!(result, Err(InstructionError::InsufficientFunds));
         })
     }
@@ -1087,26 +946,21 @@ mod test {
         with_test_keyed_account(min_lamports + 42, true, |nonce_account| {
             let mut signers = HashSet::new();
             signers.insert(*nonce_account.signer_key().unwrap());
-            let recent_blockhashes = create_test_recent_blockhashes(31);
+            let invoke_context = create_invoke_context_with_blockhash(31);
             let authorized = *nonce_account.unsigned_key();
             nonce_account
-                .initialize_nonce_account(
-                    &authorized,
-                    &recent_blockhashes,
-                    &rent,
-                    &MockInvokeContext::new(vec![]),
-                )
+                .initialize_nonce_account(&authorized, &rent, &invoke_context)
                 .unwrap();
             let authority = Pubkey::default();
             let data = nonce::state::Data {
                 authority,
-                blockhash: recent_blockhashes[0].blockhash,
-                fee_calculator: recent_blockhashes[0].fee_calculator.clone(),
+                blockhash: *invoke_context.get_blockhash(),
+                fee_calculator: invoke_context.get_fee_calculator().clone(),
             };
             let result = nonce_account.authorize_nonce_account(
                 &Pubkey::default(),
                 &signers,
-                &MockInvokeContext::new(vec![]),
+                &invoke_context,
             );
             assert_eq!(result, Ok(()));
             let state = AccountUtilsState::<Versions>::state(nonce_account)
@@ -1125,13 +979,14 @@ mod test {
         let min_lamports = rent.minimum_balance(State::size());
         with_test_keyed_account(min_lamports + 42, true, |nonce_account| {
             let mut signers = HashSet::new();
+            let invoke_context = MockInvokeContext::new(vec![]);
             signers.insert(*nonce_account.signer_key().unwrap());
             let result = nonce_account.authorize_nonce_account(
                 &Pubkey::default(),
                 &signers,
-                &MockInvokeContext::new(vec![]),
+                &invoke_context,
             );
-            assert_eq!(result, Err(NonceError::BadAccountState.into()));
+            assert_eq!(result, Err(InstructionError::InvalidAccountData));
         })
     }
 
@@ -1145,20 +1000,15 @@ mod test {
         with_test_keyed_account(min_lamports + 42, true, |nonce_account| {
             let mut signers = HashSet::new();
             signers.insert(*nonce_account.signer_key().unwrap());
-            let recent_blockhashes = create_test_recent_blockhashes(31);
+            let invoke_context = create_invoke_context_with_blockhash(31);
             let authorized = &Pubkey::default().clone();
             nonce_account
-                .initialize_nonce_account(
-                    authorized,
-                    &recent_blockhashes,
-                    &rent,
-                    &MockInvokeContext::new(vec![]),
-                )
+                .initialize_nonce_account(authorized, &rent, &invoke_context)
                 .unwrap();
             let result = nonce_account.authorize_nonce_account(
                 &Pubkey::default(),
                 &signers,
-                &MockInvokeContext::new(vec![]),
+                &invoke_context,
             );
             assert_eq!(result, Err(InstructionError::MissingRequiredSignature));
         })
@@ -1172,19 +1022,14 @@ mod test {
             let state: State = nonce_account.state().unwrap();
             // New is in Uninitialzed state
             assert_eq!(state, State::Uninitialized);
-            let recent_blockhashes = create_test_recent_blockhashes(0);
+            let invoke_context = create_invoke_context_with_blockhash(0);
             let authorized = nonce_account.unsigned_key();
             nonce_account
-                .initialize_nonce_account(
-                    authorized,
-                    &recent_blockhashes,
-                    &Rent::free(),
-                    &MockInvokeContext::new(vec![]),
-                )
+                .initialize_nonce_account(authorized, &Rent::free(), &invoke_context)
                 .unwrap();
             assert!(verify_nonce_account(
                 &nonce_account.account.borrow(),
-                &recent_blockhashes[0].blockhash,
+                invoke_context.get_blockhash(),
             ));
         });
     }
@@ -1207,19 +1052,15 @@ mod test {
             let state: State = nonce_account.state().unwrap();
             // New is in Uninitialzed state
             assert_eq!(state, State::Uninitialized);
-            let recent_blockhashes = create_test_recent_blockhashes(0);
+            let invoke_context = create_invoke_context_with_blockhash(0);
             let authorized = nonce_account.unsigned_key();
             nonce_account
-                .initialize_nonce_account(
-                    authorized,
-                    &recent_blockhashes,
-                    &Rent::free(),
-                    &MockInvokeContext::new(vec![]),
-                )
+                .initialize_nonce_account(authorized, &Rent::free(), &invoke_context)
                 .unwrap();
+            let invoke_context = create_invoke_context_with_blockhash(1);
             assert!(!verify_nonce_account(
                 &nonce_account.account.borrow(),
-                &recent_blockhashes[1].blockhash,
+                invoke_context.get_blockhash(),
             ));
         });
     }

@@ -1,21 +1,23 @@
 //! The `rpc_banks_service` module implements the Solana Banks RPC API.
 
-use crate::banks_server::start_tcp_server;
-use futures::{future::FutureExt, pin_mut, prelude::stream::StreamExt, select};
-use solana_runtime::{bank_forks::BankForks, commitment::BlockCommitmentCache};
-use std::{
-    net::SocketAddr,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, RwLock,
+use {
+    crate::banks_server::start_tcp_server,
+    futures::{future::FutureExt, pin_mut, prelude::stream::StreamExt, select},
+    solana_runtime::{bank_forks::BankForks, commitment::BlockCommitmentCache},
+    std::{
+        net::SocketAddr,
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc, RwLock,
+        },
+        thread::{self, Builder, JoinHandle},
     },
-    thread::{self, Builder, JoinHandle},
+    tokio::{
+        runtime::Runtime,
+        time::{self, Duration},
+    },
+    tokio_stream::wrappers::IntervalStream,
 };
-use tokio::{
-    runtime::Runtime,
-    time::{self, Duration},
-};
-use tokio_stream::wrappers::IntervalStream;
 
 pub struct RpcBanksService {
     thread_hdl: JoinHandle<()>,
@@ -106,7 +108,7 @@ mod tests {
 
     #[test]
     fn test_rpc_banks_server_exit() {
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(Bank::default())));
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(Bank::default_for_tests())));
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
         let exit = Arc::new(AtomicBool::new(false));
         let addr = "127.0.0.1:0".parse().unwrap();

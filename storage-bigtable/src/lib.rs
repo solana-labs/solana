@@ -1,23 +1,25 @@
 #![allow(clippy::integer_arithmetic)]
-use log::*;
-use serde::{Deserialize, Serialize};
-use solana_sdk::{
-    clock::{Slot, UnixTimestamp},
-    deserialize_utils::default_on_eof,
-    pubkey::Pubkey,
-    signature::Signature,
-    sysvar::is_sysvar_id,
-    transaction::{Transaction, TransactionError},
+use {
+    log::*,
+    serde::{Deserialize, Serialize},
+    solana_sdk::{
+        clock::{Slot, UnixTimestamp},
+        deserialize_utils::default_on_eof,
+        pubkey::Pubkey,
+        signature::Signature,
+        sysvar::is_sysvar_id,
+        transaction::{Transaction, TransactionError},
+    },
+    solana_storage_proto::convert::{generated, tx_by_addr},
+    solana_transaction_status::{
+        extract_and_fmt_memos, ConfirmedBlock, ConfirmedTransaction,
+        ConfirmedTransactionStatusWithSignature, Reward, TransactionByAddrInfo,
+        TransactionConfirmationStatus, TransactionStatus, TransactionStatusMeta,
+        TransactionWithStatusMeta,
+    },
+    std::{collections::HashMap, convert::TryInto},
+    thiserror::Error,
 };
-use solana_storage_proto::convert::generated;
-use solana_storage_proto::convert::tx_by_addr;
-use solana_transaction_status::{
-    ConfirmedBlock, ConfirmedTransaction, ConfirmedTransactionStatusWithSignature, Reward,
-    TransactionByAddrInfo, TransactionConfirmationStatus, TransactionStatus, TransactionStatusMeta,
-    TransactionWithStatusMeta,
-};
-use std::{collections::HashMap, convert::TryInto};
-use thiserror::Error;
 
 #[macro_use]
 extern crate serde_derive;
@@ -237,6 +239,7 @@ impl From<StoredConfirmedBlockReward> for Reward {
             lamports,
             post_balance: 0,
             reward_type: None,
+            commission: None,
         }
     }
 }
@@ -557,6 +560,7 @@ impl LedgerStorage {
             let err = meta.as_ref().and_then(|meta| meta.status.clone().err());
             let index = index as u32;
             let signature = transaction.signatures[0];
+            let memo = extract_and_fmt_memos(&transaction.message);
 
             for address in &transaction.message.account_keys {
                 if !is_sysvar_id(address) {
@@ -567,7 +571,7 @@ impl LedgerStorage {
                             signature,
                             err: err.clone(),
                             index,
-                            memo: None, // TODO
+                            memo: memo.clone(),
                             block_time: confirmed_block.block_time,
                         });
                 }
@@ -579,7 +583,7 @@ impl LedgerStorage {
                     slot,
                     index,
                     err,
-                    memo: None, // TODO
+                    memo,
                 },
             ));
         }

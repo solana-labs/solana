@@ -26,6 +26,7 @@ struct Config<'a> {
     bpf_sdk: PathBuf,
     dump: bool,
     features: Vec<String>,
+    generate_child_script_on_failure: bool,
     no_default_features: bool,
     offline: bool,
     verbose: bool,
@@ -46,6 +47,7 @@ impl Default for Config<'_> {
             bpf_out_dir: None,
             dump: false,
             features: vec![],
+            generate_child_script_on_failure: false,
             no_default_features: false,
             offline: false,
             verbose: false,
@@ -54,13 +56,13 @@ impl Default for Config<'_> {
     }
 }
 
-fn spawn<I, S>(program: &Path, args: I) -> String
+fn spawn<I, S>(program: &Path, args: I, generate_child_script_on_failure: bool) -> String
 where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
 {
     let args = args.into_iter().collect::<Vec<_>>();
-    print!("Running: {}", program.display());
+    print!("cargo-build-bpf child: {}", program.display());
     for arg in args.iter() {
         print!(" {}", arg.as_ref().to_str().unwrap_or("?"));
     }
@@ -77,6 +79,29 @@ where
 
     let output = child.wait_with_output().expect("failed to wait on child");
     if !output.status.success() {
+        if !generate_child_script_on_failure {
+            exit(1);
+        }
+        eprintln!("cargo-build-bpf exited on command execution failure");
+        let script_name = format!(
+            "cargo-build-bpf-child-script-{}.sh",
+            program.file_name().unwrap().to_str().unwrap(),
+        );
+        let file = File::create(&script_name).unwrap();
+        let mut out = BufWriter::new(file);
+        for (key, value) in env::vars() {
+            writeln!(out, "{}=\"{}\" \\", key, value).unwrap();
+        }
+        write!(out, "{}", program.display()).unwrap();
+        for arg in args.iter() {
+            write!(out, " {}", arg.as_ref().to_str().unwrap_or("?")).unwrap();
+        }
+        writeln!(out).unwrap();
+        out.flush().unwrap();
+        eprintln!(
+            "To rerun the failed command for debugging use {}",
+            script_name,
+        );
         exit(1);
     }
     output
@@ -93,10 +118,10 @@ fn install_if_missing(
     package: &str,
     version: &str,
     url: &str,
-    file: &Path,
+    download_file_name: &str,
 ) -> Result<(), String> {
     // Check whether the package is already in ~/.cache/solana.
-    // Donwload it and place in the proper location if not found.
+    // Download it and place in the proper location if not found.
     let home_dir = PathBuf::from(env::var("HOME").unwrap_or_else(|err| {
         eprintln!("Can't get home directory path: {}", err);
         exit(1);
@@ -106,26 +131,36 @@ fn install_if_missing(
         .join("solana")
         .join(version)
         .join(package);
-    if !target_path.is_dir() {
+
+    if !target_path.is_dir()
+        && !target_path
+            .symlink_metadata()
+            .map(|metadata| metadata.file_type().is_symlink())
+            .unwrap_or(false)
+    {
         if target_path.exists() {
             fs::remove_file(&target_path).map_err(|err| err.to_string())?;
         }
+        fs::create_dir_all(&target_path).map_err(|err| err.to_string())?;
         let mut url = String::from(url);
         url.push('/');
         url.push_str(version);
         url.push('/');
-        url.push_str(file.to_str().unwrap());
-        download_file(url.as_str(), file, true, &mut None)?;
-        fs::create_dir_all(&target_path).map_err(|err| err.to_string())?;
-        let zip = File::open(&file).map_err(|err| err.to_string())?;
+        url.push_str(download_file_name);
+        let download_file_path = target_path.join(download_file_name);
+        if download_file_path.exists() {
+            fs::remove_file(&download_file_path).map_err(|err| err.to_string())?;
+        }
+        download_file(url.as_str(), &download_file_path, true, &mut None)?;
+        let zip = File::open(&download_file_path).map_err(|err| err.to_string())?;
         let tar = BzDecoder::new(BufReader::new(zip));
         let mut archive = Archive::new(tar);
         archive
             .unpack(&target_path)
             .map_err(|err| err.to_string())?;
-        fs::remove_file(file).map_err(|err| err.to_string())?;
+        fs::remove_file(download_file_path).map_err(|err| err.to_string())?;
     }
-    // Make a symbolyc link source_path -> target_path in the
+    // Make a symbolic link source_path -> target_path in the
     // sdk/bpf/dependencies directory if no valid link found.
     let source_base = config.bpf_sdk.join("dependencies");
     if !source_base.exists() {
@@ -276,7 +311,11 @@ fn check_undefined_symbols(config: &Config, program: &Path) {
         .join("llvm-readelf");
     let mut readelf_args = vec!["--dyn-symbols"];
     readelf_args.push(program.to_str().unwrap());
-    let output = spawn(&readelf, &readelf_args);
+    let output = spawn(
+        &readelf,
+        &readelf_args,
+        config.generate_child_script_on_failure,
+    );
     if config.verbose {
         println!("{}", output);
     }
@@ -309,7 +348,11 @@ fn link_bpf_toolchain(config: &Config) {
         .join("rust");
     let rustup = PathBuf::from("rustup");
     let rustup_args = vec!["toolchain", "list", "-v"];
-    let rustup_output = spawn(&rustup, &rustup_args);
+    let rustup_output = spawn(
+        &rustup,
+        &rustup_args,
+        config.generate_child_script_on_failure,
+    );
     if config.verbose {
         println!("{}", rustup_output);
     }
@@ -321,7 +364,11 @@ fn link_bpf_toolchain(config: &Config) {
             let path = it.next();
             if path.unwrap() != toolchain_path.to_str().unwrap() {
                 let rustup_args = vec!["toolchain", "uninstall", "bpf"];
-                let output = spawn(&rustup, &rustup_args);
+                let output = spawn(
+                    &rustup,
+                    &rustup_args,
+                    config.generate_child_script_on_failure,
+                );
                 if config.verbose {
                     println!("{}", output);
                 }
@@ -333,7 +380,11 @@ fn link_bpf_toolchain(config: &Config) {
     }
     if do_link {
         let rustup_args = vec!["toolchain", "link", "bpf", toolchain_path.to_str().unwrap()];
-        let output = spawn(&rustup, &rustup_args);
+        let output = spawn(
+            &rustup,
+            &rustup_args,
+            config.generate_child_script_on_failure,
+        );
         if config.verbose {
             println!("{}", output);
         }
@@ -407,7 +458,7 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
     if legacy_program_feature_present {
         println!("Legacy program feature detected");
     }
-    let bpf_tools_filename = if cfg!(target_os = "macos") {
+    let bpf_tools_download_file_name = if cfg!(target_os = "macos") {
         "solana-bpf-tools-osx.tar.bz2"
     } else {
         "solana-bpf-tools-linux.tar.bz2"
@@ -415,9 +466,9 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
     install_if_missing(
         config,
         "bpf-tools",
-        "v1.13",
+        "v1.15",
         "https://github.com/solana-labs/bpf-tools/releases/download",
-        &PathBuf::from(bpf_tools_filename),
+        bpf_tools_download_file_name,
     )
     .expect("Failed to install bpf-tools");
     link_bpf_toolchain(config);
@@ -433,7 +484,13 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
     env::set_var("OBJDUMP", llvm_bin.join("llvm-objdump"));
     env::set_var("OBJCOPY", llvm_bin.join("llvm-objcopy"));
     let rustflags = match env::var("RUSTFLAGS") {
-        Ok(rf) => rf + &" -C lto=no".to_string(),
+        Ok(rf) => {
+            if rf.contains("-C lto=no") {
+                rf
+            } else {
+                rf + &" -C lto=no".to_string()
+            }
+        }
         _ => "-C lto=no".to_string(),
     };
     if config.verbose {
@@ -469,7 +526,11 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
             cargo_build_args.push(arg);
         }
     }
-    let output = spawn(&cargo_build, &cargo_build_args);
+    let output = spawn(
+        &cargo_build,
+        &cargo_build_args,
+        config.generate_child_script_on_failure,
+    );
     if config.verbose {
         println!("{}", output);
     }
@@ -514,6 +575,7 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
             let output = spawn(
                 &config.bpf_sdk.join("scripts").join("strip.sh"),
                 &[&program_unstripped_so, &program_so],
+                config.generate_child_script_on_failure,
             );
             if config.verbose {
                 println!("{}", output);
@@ -524,6 +586,7 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
             let output = spawn(
                 &config.bpf_sdk.join("scripts").join("dump.sh"),
                 &[&program_unstripped_so, &program_dump],
+                config.generate_child_script_on_failure,
             );
             if config.verbose {
                 println!("{}", output);
@@ -536,6 +599,8 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
         println!();
         println!("To deploy this program:");
         println!("  $ solana program deploy {}", program_so.display());
+        println!("The program address will default to this keypair (override with --program-id):");
+        println!("  {}", program_keypair.display());
     } else if config.dump {
         println!("Note: --dump is only available for crates with a cdylib target");
     }
@@ -604,6 +669,7 @@ fn main() {
         .version(crate_version!())
         .arg(
             Arg::with_name("bpf_out_dir")
+                .env("BPF_OUT_PATH")
                 .long("bpf-out-dir")
                 .value_name("DIRECTORY")
                 .takes_value(true)
@@ -611,6 +677,7 @@ fn main() {
         )
         .arg(
             Arg::with_name("bpf_sdk")
+                .env("BPF_SDK_PATH")
                 .long("bpf-sdk")
                 .value_name("PATH")
                 .takes_value(true)
@@ -636,6 +703,12 @@ fn main() {
                 .takes_value(true)
                 .multiple(true)
                 .help("Space-separated list of features to activate"),
+        )
+        .arg(
+            Arg::with_name("generate_child_script_on_failure")
+                .long("generate-child-script-on-failure")
+                .takes_value(false)
+                .help("Generate a shell script to rerun a failed subcommand"),
         )
         .arg(
             Arg::with_name("manifest_path")
@@ -700,6 +773,7 @@ fn main() {
         features: values_t!(matches, "features", String)
             .ok()
             .unwrap_or_else(Vec::new),
+        generate_child_script_on_failure: matches.is_present("generate_child_script_on_failure"),
         no_default_features: matches.is_present("no_default_features"),
         offline: matches.is_present("offline"),
         verbose: matches.is_present("verbose"),

@@ -1,16 +1,17 @@
 use solana_gossip::cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES};
-use solana_runtime::{snapshot_package::AccountsPackage, snapshot_utils};
+use solana_runtime::{
+    snapshot_archive_info::SnapshotArchiveInfoGetter, snapshot_config::SnapshotConfig,
+    snapshot_package::PendingSnapshotPackage, snapshot_utils,
+};
 use solana_sdk::{clock::Slot, hash::Hash};
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc, Mutex,
+        Arc,
     },
     thread::{self, Builder, JoinHandle},
     time::Duration,
 };
-
-pub type PendingSnapshotPackage = Arc<Mutex<Option<AccountsPackage>>>;
 
 pub struct SnapshotPackagerService {
     t_snapshot_packager: JoinHandle<()>,
@@ -22,7 +23,7 @@ impl SnapshotPackagerService {
         starting_snapshot_hash: Option<(Slot, Hash)>,
         exit: &Arc<AtomicBool>,
         cluster_info: &Arc<ClusterInfo>,
-        maximum_snapshots_to_retain: usize,
+        snapshot_config: SnapshotConfig,
     ) -> Self {
         let exit = exit.clone();
         let cluster_info = cluster_info.clone();
@@ -41,22 +42,27 @@ impl SnapshotPackagerService {
                     }
 
                     let snapshot_package = pending_snapshot_package.lock().unwrap().take();
-                    if let Some(snapshot_package) = snapshot_package {
-                        if let Err(err) = snapshot_utils::archive_snapshot_package(
-                            &snapshot_package,
-                            maximum_snapshots_to_retain,
-                        ) {
-                            warn!("Failed to create snapshot archive: {}", err);
-                        } else {
-                            hashes.push((snapshot_package.slot, snapshot_package.hash));
-                            while hashes.len() > MAX_SNAPSHOT_HASHES {
-                                hashes.remove(0);
-                            }
-                            cluster_info.push_snapshot_hashes(hashes.clone());
-                        }
-                    } else {
+                    if snapshot_package.is_none() {
                         std::thread::sleep(Duration::from_millis(100));
+                        continue;
                     }
+                    let snapshot_package = snapshot_package.unwrap();
+
+                    // Archiving the snapshot package is not allowed to fail.
+                    // AccountsBackgroundService calls `clean_accounts()` with a value for
+                    // last_full_snapshot_slot that requires this archive call to succeed.
+                    snapshot_utils::archive_snapshot_package(
+                        &snapshot_package,
+                        snapshot_config.maximum_full_snapshot_archives_to_retain,
+                        snapshot_config.maximum_incremental_snapshot_archives_to_retain,
+                    )
+                    .expect("failed to archive snapshot package");
+
+                    hashes.push((snapshot_package.slot(), *snapshot_package.hash()));
+                    while hashes.len() > MAX_SNAPSHOT_HASHES {
+                        hashes.remove(0);
+                    }
+                    cluster_info.push_snapshot_hashes(hashes.clone());
                 }
             })
             .unwrap();
@@ -78,7 +84,8 @@ mod tests {
     use solana_runtime::{
         accounts_db::AccountStorageEntry,
         bank::BankSlotDelta,
-        snapshot_package::AccountsPackage,
+        snapshot_archive_info::SnapshotArchiveInfo,
+        snapshot_package::{SnapshotPackage, SnapshotType},
         snapshot_utils::{self, ArchiveFormat, SnapshotVersion, SNAPSHOT_STATUS_CACHE_FILE_NAME},
     };
     use solana_sdk::hash::Hash;
@@ -117,8 +124,8 @@ mod tests {
     fn create_and_verify_snapshot(temp_dir: &Path) {
         let accounts_dir = temp_dir.join("accounts");
         let snapshots_dir = temp_dir.join("snapshots");
-        let snapshot_package_output_path = temp_dir.join("snapshots_output");
-        fs::create_dir_all(&snapshot_package_output_path).unwrap();
+        let snapshot_archives_dir = temp_dir.join("snapshots_output");
+        fs::create_dir_all(&snapshot_archives_dir).unwrap();
 
         fs::create_dir_all(&accounts_dir).unwrap();
         // Create some storage entries
@@ -156,28 +163,35 @@ mod tests {
         }
 
         // Create a packageable snapshot
-        let output_tar_path = snapshot_utils::build_snapshot_archive_path(
-            snapshot_package_output_path,
-            42,
-            &Hash::default(),
-            ArchiveFormat::TarBzip2,
+        let slot = 42;
+        let hash = Hash::default();
+        let archive_format = ArchiveFormat::TarBzip2;
+        let output_tar_path = snapshot_utils::build_full_snapshot_archive_path(
+            snapshot_archives_dir,
+            slot,
+            &hash,
+            archive_format,
         );
-        let snapshot_package = AccountsPackage::new(
-            5,
-            5,
-            vec![],
-            link_snapshots_dir,
-            vec![storage_entries],
-            output_tar_path.clone(),
-            Hash::default(),
-            ArchiveFormat::TarBzip2,
-            SnapshotVersion::default(),
-        );
+        let snapshot_package = SnapshotPackage {
+            snapshot_archive_info: SnapshotArchiveInfo {
+                path: output_tar_path.clone(),
+                slot,
+                hash,
+                archive_format,
+            },
+            block_height: slot,
+            slot_deltas: vec![],
+            snapshot_links: link_snapshots_dir,
+            snapshot_storages: vec![storage_entries],
+            snapshot_version: SnapshotVersion::default(),
+            snapshot_type: SnapshotType::FullSnapshot,
+        };
 
         // Make tarball from packageable snapshot
         snapshot_utils::archive_snapshot_package(
             &snapshot_package,
-            snapshot_utils::DEFAULT_MAX_SNAPSHOTS_TO_RETAIN,
+            snapshot_utils::DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+            snapshot_utils::DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
         )
         .unwrap();
 
@@ -199,7 +213,7 @@ mod tests {
             output_tar_path,
             snapshots_dir,
             accounts_dir,
-            ArchiveFormat::TarBzip2,
+            archive_format,
         );
     }
 }

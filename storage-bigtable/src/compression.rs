@@ -1,5 +1,7 @@
-use enum_iterator::IntoEnumIterator;
-use std::io::{self, BufReader, Read, Write};
+use {
+    enum_iterator::IntoEnumIterator,
+    std::io::{self, BufReader, Read, Write},
+};
 
 #[derive(Debug, Serialize, Deserialize, IntoEnumIterator)]
 pub enum CompressionMethod {

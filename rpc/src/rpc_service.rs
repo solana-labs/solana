@@ -2,11 +2,14 @@
 
 use {
     crate::{
+        cluster_tpu_info::ClusterTpuInfo,
         max_slots::MaxSlots,
         optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
-        rpc::{rpc_deprecated_v1_7::*, rpc_full::*, rpc_minimal::*, rpc_obsolete_v1_7::*, *},
+        rpc::{
+            rpc_accounts::*, rpc_bank::*, rpc_deprecated_v1_7::*, rpc_deprecated_v1_8::*,
+            rpc_full::*, rpc_minimal::*, rpc_obsolete_v1_7::*, *,
+        },
         rpc_health::*,
-        send_transaction_service::{LeaderInfo, SendTransactionService},
     },
     jsonrpc_core::{futures::prelude::*, MetaIoHandler},
     jsonrpc_http_server::{
@@ -23,13 +26,15 @@ use {
     solana_metrics::inc_new_counter_info,
     solana_poh::poh_recorder::PohRecorder,
     solana_runtime::{
-        bank_forks::BankForks, commitment::BlockCommitmentCache, snapshot_config::SnapshotConfig,
+        bank_forks::BankForks, commitment::BlockCommitmentCache,
+        snapshot_archive_info::SnapshotArchiveInfoGetter, snapshot_config::SnapshotConfig,
         snapshot_utils,
     },
     solana_sdk::{
         exit::Exit, genesis_config::DEFAULT_GENESIS_DOWNLOAD_PATH, hash::Hash,
         native_token::lamports_to_sol, pubkey::Pubkey,
     },
+    solana_send_transaction_service::send_transaction_service::SendTransactionService,
     std::{
         collections::HashSet,
         net::SocketAddr,
@@ -38,7 +43,6 @@ use {
         sync::{mpsc::channel, Arc, Mutex, RwLock},
         thread::{self, Builder, JoinHandle},
     },
-    tokio::runtime,
     tokio_util::codec::{BytesCodec, FramedRead},
 };
 
@@ -55,7 +59,8 @@ pub struct JsonRpcService {
 
 struct RpcRequestMiddleware {
     ledger_path: PathBuf,
-    snapshot_archive_path_regex: Regex,
+    full_snapshot_archive_path_regex: Regex,
+    incremental_snapshot_archive_path_regex: Regex,
     snapshot_config: Option<SnapshotConfig>,
     bank_forks: Arc<RwLock<BankForks>>,
     health: Arc<RpcHealth>,
@@ -70,8 +75,12 @@ impl RpcRequestMiddleware {
     ) -> Self {
         Self {
             ledger_path,
-            snapshot_archive_path_regex: Regex::new(
-                r"^/snapshot-\d+-[[:alnum:]]+\.(tar|tar\.bz2|tar\.zst|tar\.gz)$",
+            full_snapshot_archive_path_regex: Regex::new(
+                snapshot_utils::FULL_SNAPSHOT_ARCHIVE_FILENAME_REGEX,
+            )
+            .unwrap(),
+            incremental_snapshot_archive_path_regex: Regex::new(
+                snapshot_utils::INCREMENTAL_SNAPSHOT_ARCHIVE_FILENAME_REGEX,
             )
             .unwrap(),
             snapshot_config,
@@ -104,23 +113,28 @@ impl RpcRequestMiddleware {
     }
 
     fn is_file_get_path(&self, path: &str) -> bool {
-        match path {
-            DEFAULT_GENESIS_DOWNLOAD_PATH => true,
-            _ => {
-                if self.snapshot_config.is_some() {
-                    self.snapshot_archive_path_regex.is_match(path)
-                } else {
-                    false
-                }
-            }
+        if path == DEFAULT_GENESIS_DOWNLOAD_PATH {
+            return true;
         }
+
+        if self.snapshot_config.is_none() {
+            return false;
+        }
+
+        let starting_character = '/';
+        if !path.starts_with(starting_character) {
+            return false;
+        }
+
+        let path = path.trim_start_matches(starting_character);
+
+        self.full_snapshot_archive_path_regex.is_match(path)
+            || self.incremental_snapshot_archive_path_regex.is_match(path)
     }
 
     #[cfg(unix)]
-    async fn open_no_follow(path: impl AsRef<Path>) -> std::io::Result<tokio_02::fs::File> {
-        // Stuck on tokio 0.2 until the jsonrpc crates upgrade
-        use tokio_02::fs::os::unix::OpenOptionsExt;
-        tokio_02::fs::OpenOptions::new()
+    async fn open_no_follow(path: impl AsRef<Path>) -> std::io::Result<tokio::fs::File> {
+        tokio::fs::OpenOptions::new()
             .read(true)
             .write(false)
             .create(false)
@@ -130,10 +144,9 @@ impl RpcRequestMiddleware {
     }
 
     #[cfg(not(unix))]
-    async fn open_no_follow(path: impl AsRef<Path>) -> std::io::Result<tokio_02::fs::File> {
+    async fn open_no_follow(path: impl AsRef<Path>) -> std::io::Result<tokio::fs::File> {
         // TODO: Is there any way to achieve the same on Windows?
-        // Stuck on tokio 0.2 until the jsonrpc crates upgrade
-        tokio_02::fs::File::open(path).await
+        tokio::fs::File::open(path).await
     }
 
     fn process_file_get(&self, path: &str) -> RequestMiddlewareAction {
@@ -149,7 +162,7 @@ impl RpcRequestMiddleware {
                     self.snapshot_config
                         .as_ref()
                         .unwrap()
-                        .snapshot_package_output_path
+                        .snapshot_archives_dir
                         .join(stem)
                 }
             }
@@ -202,14 +215,14 @@ impl RequestMiddleware for RpcRequestMiddleware {
         if let Some(ref snapshot_config) = self.snapshot_config {
             if request.uri().path() == "/snapshot.tar.bz2" {
                 // Convenience redirect to the latest snapshot
-                return if let Some(snapshot_archive_info) =
-                    snapshot_utils::get_highest_snapshot_archive_info(
-                        &snapshot_config.snapshot_package_output_path,
+                return if let Some(full_snapshot_archive_info) =
+                    snapshot_utils::get_highest_full_snapshot_archive_info(
+                        &snapshot_config.snapshot_archives_dir,
                     ) {
                     RpcRequestMiddleware::redirect(&format!(
                         "/{}",
-                        snapshot_archive_info
-                            .path
+                        full_snapshot_archive_info
+                            .path()
                             .file_name()
                             .unwrap_or_else(|| std::ffi::OsStr::new(""))
                             .to_str()
@@ -306,9 +319,17 @@ impl JsonRpcService {
         )));
 
         let tpu_address = cluster_info.my_contact_info().tpu;
+
+        // sadly, some parts of our current rpc implemention block the jsonrpc's
+        // _socket-listening_ event loop for too long, due to (blocking) long IO or intesive CPU,
+        // causing no further processing of incoming requests and ultimatily innocent clients timing-out.
+        // So create a (shared) multi-threaded event_loop for jsonrpc and set its .threads() to 1,
+        // so that we avoid the single-threaded event loops from being created automatically by
+        // jsonrpc for threads when .threads(N > 1) is given.
         let runtime = Arc::new(
-            runtime::Builder::new_multi_thread()
-                .thread_name("rpc-runtime")
+            tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(rpc_threads)
+                .thread_name("sol-rpc-el")
                 .enable_all()
                 .build()
                 .expect("Runtime"),
@@ -364,7 +385,6 @@ impl JsonRpcService {
             health.clone(),
             cluster_info.clone(),
             genesis_hash,
-            runtime,
             bigtable_ledger_storage,
             optimistically_confirmed_bank,
             largest_accounts_cache,
@@ -374,7 +394,7 @@ impl JsonRpcService {
         );
 
         let leader_info =
-            poh_recorder.map(|recorder| LeaderInfo::new(cluster_info.clone(), recorder));
+            poh_recorder.map(|recorder| ClusterTpuInfo::new(cluster_info.clone(), recorder));
         let _send_transaction_service = Arc::new(SendTransactionService::new(
             tpu_address,
             &bank_forks,
@@ -389,23 +409,6 @@ impl JsonRpcService {
 
         let ledger_path = ledger_path.to_path_buf();
 
-        // sadly, some parts of our current rpc implemention block the jsonrpc's
-        // _socket-listening_ event loop for too long, due to (blocking) long IO or intesive CPU,
-        // causing no further processing of incoming requests and ultimatily innocent clients timing-out.
-        // So create a (shared) multi-threaded event_loop for jsonrpc and set its .threads() to 1,
-        // so that we avoid the single-threaded event loops from being created automatically by
-        // jsonrpc for threads when .threads(N > 1) is given.
-        let event_loop = {
-            // Stuck on tokio 0.2 until the jsonrpc crates upgrade
-            tokio_02::runtime::Builder::new()
-                .core_threads(rpc_threads)
-                .threaded_scheduler()
-                .enable_all()
-                .thread_name("sol-rpc-el")
-                .build()
-                .unwrap()
-        };
-
         let (close_handle_sender, close_handle_receiver) = channel();
         let thread_hdl = Builder::new()
             .name("solana-jsonrpc".to_string())
@@ -414,8 +417,11 @@ impl JsonRpcService {
 
                 io.extend_with(rpc_minimal::MinimalImpl.to_delegate());
                 if !minimal_api {
+                    io.extend_with(rpc_bank::BankDataImpl.to_delegate());
+                    io.extend_with(rpc_accounts::AccountsDataImpl.to_delegate());
                     io.extend_with(rpc_full::FullImpl.to_delegate());
                     io.extend_with(rpc_deprecated_v1_7::DeprecatedV1_7Impl.to_delegate());
+                    io.extend_with(rpc_deprecated_v1_8::DeprecatedV1_8Impl.to_delegate());
                 }
                 if obsolete_v1_7_api {
                     io.extend_with(rpc_obsolete_v1_7::ObsoleteV1_7Impl.to_delegate());
@@ -431,7 +437,7 @@ impl JsonRpcService {
                     io,
                     move |_req: &hyper::Request<hyper::Body>| request_processor.clone(),
                 )
-                .event_loop_executor(event_loop.handle().clone())
+                .event_loop_executor(runtime.handle().clone())
                 .threads(1)
                 .cors(DomainsValidation::AllowOnly(vec![
                     AccessControlAllowOrigin::Any,
@@ -488,23 +494,33 @@ mod tests {
     use {
         super::*,
         crate::rpc::create_validator_exit,
-        solana_gossip::crds_value::{CrdsData, CrdsValue, SnapshotHash},
+        solana_gossip::{
+            contact_info::ContactInfo,
+            crds_value::{CrdsData, CrdsValue, SnapshotHash},
+        },
         solana_ledger::{
             genesis_utils::{create_genesis_config, GenesisConfigInfo},
             get_tmp_ledger_path,
         },
         solana_runtime::{
             bank::Bank,
-            snapshot_utils::{ArchiveFormat, SnapshotVersion, DEFAULT_MAX_SNAPSHOTS_TO_RETAIN},
+            snapshot_utils::{
+                ArchiveFormat, SnapshotVersion, DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+                DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+            },
         },
         solana_sdk::{
+            clock::Slot,
             genesis_config::{ClusterType, DEFAULT_GENESIS_ARCHIVE},
             signature::Signer,
+            signer::keypair::Keypair,
         },
+        solana_streamer::socket::SocketAddrSpace,
         std::{
             io::Write,
             net::{IpAddr, Ipv4Addr},
         },
+        tokio::runtime::Runtime,
     };
 
     #[test]
@@ -516,8 +532,12 @@ mod tests {
         } = create_genesis_config(10_000);
         let exit = Arc::new(AtomicBool::new(false));
         let validator_exit = create_validator_exit(&exit);
-        let bank = Bank::new(&genesis_config);
-        let cluster_info = Arc::new(ClusterInfo::default());
+        let bank = Bank::new_for_tests(&genesis_config);
+        let cluster_info = Arc::new(ClusterInfo::new(
+            ContactInfo::default(),
+            Arc::new(Keypair::new()),
+            SocketAddrSpace::Unspecified,
+        ));
         let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
         let rpc_addr = SocketAddr::new(
             ip_addr,
@@ -569,7 +589,7 @@ mod tests {
             mut genesis_config, ..
         } = create_genesis_config(10_000);
         genesis_config.cluster_type = ClusterType::MainnetBeta;
-        let bank = Bank::new(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
         Arc::new(RwLock::new(BankForks::new(bank)))
     }
 
@@ -596,12 +616,16 @@ mod tests {
         let rrm_with_snapshot_config = RpcRequestMiddleware::new(
             PathBuf::from("/"),
             Some(SnapshotConfig {
-                snapshot_interval_slots: 0,
-                snapshot_package_output_path: PathBuf::from("/"),
-                snapshot_path: PathBuf::from("/"),
+                full_snapshot_archive_interval_slots: Slot::MAX,
+                incremental_snapshot_archive_interval_slots: Slot::MAX,
+                snapshot_archives_dir: PathBuf::from("/"),
+                bank_snapshots_dir: PathBuf::from("/"),
                 archive_format: ArchiveFormat::TarBzip2,
                 snapshot_version: SnapshotVersion::default(),
-                maximum_snapshots_to_retain: DEFAULT_MAX_SNAPSHOTS_TO_RETAIN,
+                maximum_full_snapshot_archives_to_retain:
+                    DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+                maximum_incremental_snapshot_archives_to_retain:
+                    DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
             }),
             bank_forks,
             RpcHealth::stub(),
@@ -615,6 +639,10 @@ mod tests {
         assert!(!rrm.is_file_get_path(
             "/snapshot-100-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.bz2"
         ));
+        assert!(!rrm.is_file_get_path(
+            "/incremental-snapshot-100-200-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.bz2"
+        ));
+
         assert!(rrm_with_snapshot_config.is_file_get_path(
             "/snapshot-100-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.bz2"
         ));
@@ -626,11 +654,32 @@ mod tests {
         assert!(rrm_with_snapshot_config
             .is_file_get_path("/snapshot-100-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar"));
 
+        assert!(rrm_with_snapshot_config.is_file_get_path(
+            "/incremental-snapshot-100-200-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.bz2"
+        ));
+        assert!(rrm_with_snapshot_config.is_file_get_path(
+            "/incremental-snapshot-100-200-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.zst"
+        ));
+        assert!(rrm_with_snapshot_config.is_file_get_path(
+            "/incremental-snapshot-100-200-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.gz"
+        ));
+        assert!(rrm_with_snapshot_config.is_file_get_path(
+            "/incremental-snapshot-100-200-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar"
+        ));
+
         assert!(!rrm_with_snapshot_config.is_file_get_path(
             "/snapshot-notaslotnumber-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.bz2"
         ));
+        assert!(!rrm_with_snapshot_config.is_file_get_path(
+            "/incremental-snapshot-notaslotnumber-200-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.bz2"
+        ));
+        assert!(!rrm_with_snapshot_config.is_file_get_path(
+            "/incremental-snapshot-100-notaslotnumber-AvFf9oS8A8U78HdjT9YG2sTTThLHJZmhaMn2g8vkWYnr.tar.bz2"
+        ));
 
         assert!(!rrm_with_snapshot_config.is_file_get_path("../../../test/snapshot-123-xxx.tar"));
+        assert!(!rrm_with_snapshot_config
+            .is_file_get_path("../../../test/incremental-snapshot-123-456-xxx.tar"));
 
         assert!(!rrm.is_file_get_path("/"));
         assert!(!rrm.is_file_get_path(".."));
@@ -639,7 +688,7 @@ mod tests {
 
     #[test]
     fn test_process_file_get() {
-        let mut runtime = tokio_02::runtime::Runtime::new().unwrap();
+        let runtime = Runtime::new().unwrap();
 
         let ledger_path = get_tmp_ledger_path!();
         std::fs::create_dir(&ledger_path).unwrap();
@@ -711,7 +760,11 @@ mod tests {
 
     #[test]
     fn test_health_check_with_trusted_validators() {
-        let cluster_info = Arc::new(ClusterInfo::default());
+        let cluster_info = Arc::new(ClusterInfo::new(
+            ContactInfo::default(),
+            Arc::new(Keypair::new()),
+            SocketAddrSpace::Unspecified,
+        ));
         let health_check_slot_distance = 123;
         let override_health_check = Arc::new(AtomicBool::new(false));
         let trusted_validators = vec![
@@ -745,9 +798,9 @@ mod tests {
         // This node is ahead of the trusted validators
         cluster_info
             .gossip
+            .crds
             .write()
             .unwrap()
-            .crds
             .insert(
                 CrdsValue::new_unsigned(CrdsData::AccountsHashes(SnapshotHash::new(
                     trusted_validators[0],
@@ -765,9 +818,9 @@ mod tests {
         // Node is slightly behind the trusted validators
         cluster_info
             .gossip
+            .crds
             .write()
             .unwrap()
-            .crds
             .insert(
                 CrdsValue::new_unsigned(CrdsData::AccountsHashes(SnapshotHash::new(
                     trusted_validators[1],
@@ -781,9 +834,9 @@ mod tests {
         // Node is far behind the trusted validators
         cluster_info
             .gossip
+            .crds
             .write()
             .unwrap()
-            .crds
             .insert(
                 CrdsValue::new_unsigned(CrdsData::AccountsHashes(SnapshotHash::new(
                     trusted_validators[2],

@@ -21,6 +21,7 @@ pub struct RpcSendTransactionConfig {
     pub skip_preflight: bool,
     pub preflight_commitment: Option<CommitmentLevel>,
     pub encoding: Option<UiTransactionEncoding>,
+    pub max_retries: Option<usize>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -81,6 +82,8 @@ pub struct RpcGetVoteAccountsConfig {
     pub vote_pubkey: Option<String>, // validator vote address, as a base-58 encoded string
     #[serde(flatten)]
     pub commitment: Option<CommitmentConfig>,
+    pub keep_unstaked_delinquents: Option<bool>,
+    pub delinquent_slot_distance: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -112,6 +115,15 @@ pub struct RpcLargestAccountsConfig {
     #[serde(flatten)]
     pub commitment: Option<CommitmentConfig>,
     pub filter: Option<RpcLargestAccountsFilter>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcSupplyConfig {
+    #[serde(flatten)]
+    pub commitment: Option<CommitmentConfig>,
+    #[serde(default)]
+    pub exclude_non_circulating_accounts_list: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]

@@ -8,6 +8,9 @@ use {
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum RpcRequest {
+    Custom {
+        method: &'static str,
+    },
     DeregisterNode,
     GetAccountInfo,
     GetBalance,
@@ -18,7 +21,6 @@ pub enum RpcRequest {
     GetBlocksWithLimit,
     GetBlockTime,
     GetClusterNodes,
-
     #[deprecated(since = "1.7.0", note = "Please use RpcRequest::GetBlock instead")]
     GetConfirmedBlock,
     #[deprecated(since = "1.7.0", note = "Please use RpcRequest::GetBlocks instead")]
@@ -38,11 +40,23 @@ pub enum RpcRequest {
         note = "Please use RpcRequest::GetTransaction instead"
     )]
     GetConfirmedTransaction,
-
     GetEpochInfo,
     GetEpochSchedule,
+    #[deprecated(
+        since = "1.8.0",
+        note = "Please use RpcRequest::GetFeeForMessage instead"
+    )]
     GetFeeCalculatorForBlockhash,
+    GetFeeForMessage,
+    #[deprecated(
+        since = "1.8.0",
+        note = "Please do not use, will no longer be available in the future"
+    )]
     GetFeeRateGovernor,
+    #[deprecated(
+        since = "1.8.0",
+        note = "Please use RpcRequest::GetFeeForMessage instead"
+    )]
     GetFees,
     GetFirstAvailableBlock,
     GetGenesisHash,
@@ -52,14 +66,24 @@ pub enum RpcRequest {
     GetInflationRate,
     GetInflationReward,
     GetLargestAccounts,
+    GetLatestBlockhash,
     GetLeaderSchedule,
     GetMaxRetransmitSlot,
     GetMaxShredInsertSlot,
     GetMinimumBalanceForRentExemption,
     GetMultipleAccounts,
     GetProgramAccounts,
+    #[deprecated(
+        since = "1.8.0",
+        note = "Please use RpcRequest::GetLatestBlockhash instead"
+    )]
     GetRecentBlockhash,
     GetRecentPerformanceSamples,
+    GetHighestSnapshotSlot,
+    #[deprecated(
+        since = "1.8.0",
+        note = "Please use RpcRequest::GetHighestSnapshotSlot instead"
+    )]
     GetSnapshotSlot,
     GetSignaturesForAddress,
     GetSignatureStatuses,
@@ -80,6 +104,7 @@ pub enum RpcRequest {
     GetTransactionCount,
     GetVersion,
     GetVoteAccounts,
+    IsBlockhashValid,
     MinimumLedgerSlot,
     RegisterNode,
     RequestAirdrop,
@@ -92,6 +117,7 @@ pub enum RpcRequest {
 impl fmt::Display for RpcRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let method = match self {
+            RpcRequest::Custom { method } => method,
             RpcRequest::DeregisterNode => "deregisterNode",
             RpcRequest::GetAccountInfo => "getAccountInfo",
             RpcRequest::GetBalance => "getBalance",
@@ -110,6 +136,7 @@ impl fmt::Display for RpcRequest {
             RpcRequest::GetEpochInfo => "getEpochInfo",
             RpcRequest::GetEpochSchedule => "getEpochSchedule",
             RpcRequest::GetFeeCalculatorForBlockhash => "getFeeCalculatorForBlockhash",
+            RpcRequest::GetFeeForMessage => "getFeeForMessage",
             RpcRequest::GetFeeRateGovernor => "getFeeRateGovernor",
             RpcRequest::GetFees => "getFees",
             RpcRequest::GetFirstAvailableBlock => "getFirstAvailableBlock",
@@ -120,6 +147,7 @@ impl fmt::Display for RpcRequest {
             RpcRequest::GetInflationRate => "getInflationRate",
             RpcRequest::GetInflationReward => "getInflationReward",
             RpcRequest::GetLargestAccounts => "getLargestAccounts",
+            RpcRequest::GetLatestBlockhash => "getLatestBlockhash",
             RpcRequest::GetLeaderSchedule => "getLeaderSchedule",
             RpcRequest::GetMaxRetransmitSlot => "getMaxRetransmitSlot",
             RpcRequest::GetMaxShredInsertSlot => "getMaxShredInsertSlot",
@@ -128,6 +156,7 @@ impl fmt::Display for RpcRequest {
             RpcRequest::GetProgramAccounts => "getProgramAccounts",
             RpcRequest::GetRecentBlockhash => "getRecentBlockhash",
             RpcRequest::GetRecentPerformanceSamples => "getRecentPerformanceSamples",
+            RpcRequest::GetHighestSnapshotSlot => "getHighestSnapshotSlot",
             RpcRequest::GetSnapshotSlot => "getSnapshotSlot",
             RpcRequest::GetSignaturesForAddress => "getSignaturesForAddress",
             RpcRequest::GetSignatureStatuses => "getSignatureStatuses",
@@ -148,6 +177,7 @@ impl fmt::Display for RpcRequest {
             RpcRequest::GetTransactionCount => "getTransactionCount",
             RpcRequest::GetVersion => "getVersion",
             RpcRequest::GetVoteAccounts => "getVoteAccounts",
+            RpcRequest::IsBlockhashValid => "isBlockhashValid",
             RpcRequest::MinimumLedgerSlot => "minimumLedgerSlot",
             RpcRequest::RegisterNode => "registerNode",
             RpcRequest::RequestAirdrop => "requestAirdrop",
@@ -257,14 +287,17 @@ mod tests {
         let request = test_request.build_request_json(1, Value::Null);
         assert_eq!(request["method"], "getEpochInfo");
 
+        #[allow(deprecated)]
         let test_request = RpcRequest::GetRecentBlockhash;
         let request = test_request.build_request_json(1, Value::Null);
         assert_eq!(request["method"], "getRecentBlockhash");
 
+        #[allow(deprecated)]
         let test_request = RpcRequest::GetFeeCalculatorForBlockhash;
         let request = test_request.build_request_json(1, json!([addr]));
         assert_eq!(request["method"], "getFeeCalculatorForBlockhash");
 
+        #[allow(deprecated)]
         let test_request = RpcRequest::GetFeeRateGovernor;
         let request = test_request.build_request_json(1, Value::Null);
         assert_eq!(request["method"], "getFeeRateGovernor");
@@ -294,6 +327,7 @@ mod tests {
         let addr = json!("deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhx");
 
         // Test request with CommitmentConfig and no params
+        #[allow(deprecated)]
         let test_request = RpcRequest::GetRecentBlockhash;
         let request = test_request.build_request_json(1, json!([commitment_config]));
         assert_eq!(request["params"], json!([commitment_config.clone()]));

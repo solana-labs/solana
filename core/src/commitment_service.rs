@@ -183,8 +183,8 @@ impl AggregateCommitmentService {
 
         let mut commitment = HashMap::new();
         let mut rooted_stake: Vec<(Slot, u64)> = Vec::new();
-        for (_, (lamports, account)) in bank.vote_accounts().into_iter() {
-            if lamports == 0 {
+        for (lamports, account) in bank.vote_accounts().values() {
+            if *lamports == 0 {
                 continue;
             }
             if let Ok(vote_state) = account.vote_state().as_ref() {
@@ -193,7 +193,7 @@ impl AggregateCommitmentService {
                     &mut rooted_stake,
                     vote_state,
                     ancestors,
-                    lamports,
+                    *lamports,
                 );
             }
         }
@@ -426,7 +426,7 @@ mod tests {
         );
 
         // Create bank
-        let bank = Arc::new(Bank::new(&genesis_config));
+        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
 
         let mut vote_state1 = VoteState::from(&vote_account1).unwrap();
         vote_state1.process_slot_vote_unchecked(3);
@@ -510,7 +510,7 @@ mod tests {
             vec![100; 1],
         );
 
-        let bank0 = Bank::new(&genesis_config);
+        let bank0 = Bank::new_for_tests(&genesis_config);
         let mut bank_forks = BankForks::new(bank0);
 
         // Fill bank_forks with banks with votes landing in the next slot

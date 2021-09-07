@@ -345,18 +345,18 @@ pub fn process_set_validator_info(
     };
 
     // Submit transaction
-    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let latest_blockhash = rpc_client.get_latest_blockhash()?;
     let (message, _) = resolve_spend_tx_and_check_account_balance(
         rpc_client,
         false,
         SpendAmount::Some(lamports),
-        &fee_calculator,
+        &latest_blockhash,
         &config.signers[0].pubkey(),
         build_message,
         config.commitment,
     )?;
     let mut tx = Transaction::new_unsigned(message);
-    tx.try_sign(&signers, recent_blockhash)?;
+    tx.try_sign(&signers, latest_blockhash)?;
     let signature_str = rpc_client.send_and_confirm_transaction_with_spinner(&tx)?;
 
     println!("Success! Validator info published at: {:?}", info_pubkey);
@@ -408,7 +408,7 @@ pub fn process_get_validator_info(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cli::app;
+    use crate::clap_app::get_clap_app;
     use bincode::{serialize, serialized_size};
     use serde_json::json;
 
@@ -432,7 +432,7 @@ mod tests {
 
     #[test]
     fn test_parse_args() {
-        let matches = app("test", "desc", "version").get_matches_from(vec![
+        let matches = get_clap_app("test", "desc", "version").get_matches_from(vec![
             "test",
             "validator-info",
             "publish",

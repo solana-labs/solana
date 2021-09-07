@@ -15,6 +15,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{Keypair, Signer},
 };
+use solana_streamer::socket::SocketAddrSpace;
 use std::{env, fs::File, io::Read, path::PathBuf, str::FromStr};
 
 #[test]
@@ -30,7 +31,8 @@ fn test_cli_program_deploy_non_upgradeable() {
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
-    let test_validator = TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr));
+    let test_validator =
+        TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr), SocketAddrSpace::Unspecified);
 
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
@@ -146,7 +148,8 @@ fn test_cli_program_deploy_no_authority() {
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
-    let test_validator = TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr));
+    let test_validator =
+        TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr), SocketAddrSpace::Unspecified);
 
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
@@ -229,7 +232,8 @@ fn test_cli_program_deploy_with_authority() {
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
-    let test_validator = TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr));
+    let test_validator =
+        TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr), SocketAddrSpace::Unspecified);
 
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
@@ -438,6 +442,8 @@ fn test_cli_program_deploy_with_authority() {
     config.command = CliCommand::Program(ProgramCliCommand::Show {
         account_pubkey: Some(program_pubkey),
         authority_pubkey: keypair.pubkey(),
+        get_programs: false,
+        get_buffers: false,
         all: false,
         use_lamports_unit: false,
     });
@@ -521,7 +527,7 @@ fn test_cli_program_deploy_with_authority() {
     {
         assert_eq!(upgrade_authority_address, None);
     } else {
-        panic!("not a buffer account");
+        panic!("not a ProgramData account");
     }
 
     // Get buffer authority
@@ -529,6 +535,8 @@ fn test_cli_program_deploy_with_authority() {
     config.command = CliCommand::Program(ProgramCliCommand::Show {
         account_pubkey: Some(program_pubkey),
         authority_pubkey: keypair.pubkey(),
+        get_programs: false,
+        get_buffers: false,
         all: false,
         use_lamports_unit: false,
     });
@@ -545,6 +553,88 @@ fn test_cli_program_deploy_with_authority() {
 }
 
 #[test]
+fn test_cli_program_close_program() {
+    solana_logger::setup();
+
+    let mut pathbuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    pathbuf.push("tests");
+    pathbuf.push("fixtures");
+    pathbuf.push("noop");
+    pathbuf.set_extension("so");
+
+    let mint_keypair = Keypair::new();
+    let mint_pubkey = mint_keypair.pubkey();
+    let faucet_addr = run_local_faucet(mint_keypair, None);
+    let test_validator =
+        TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr), SocketAddrSpace::Unspecified);
+
+    let rpc_client =
+        RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
+
+    let mut file = File::open(pathbuf.to_str().unwrap()).unwrap();
+    let mut program_data = Vec::new();
+    file.read_to_end(&mut program_data).unwrap();
+    let max_len = program_data.len();
+    let minimum_balance_for_programdata = rpc_client
+        .get_minimum_balance_for_rent_exemption(
+            UpgradeableLoaderState::programdata_len(max_len).unwrap(),
+        )
+        .unwrap();
+    let minimum_balance_for_program = rpc_client
+        .get_minimum_balance_for_rent_exemption(UpgradeableLoaderState::program_len().unwrap())
+        .unwrap();
+    let upgrade_authority = Keypair::new();
+
+    let mut config = CliConfig::recent_for_tests();
+    let keypair = Keypair::new();
+    config.json_rpc_url = test_validator.rpc_url();
+    config.signers = vec![&keypair];
+    config.command = CliCommand::Airdrop {
+        pubkey: None,
+        lamports: 100 * minimum_balance_for_programdata + minimum_balance_for_program,
+    };
+    process_command(&config).unwrap();
+
+    // Deploy the upgradeable program
+    let program_keypair = Keypair::new();
+    config.signers = vec![&keypair, &upgrade_authority, &program_keypair];
+    config.command = CliCommand::Program(ProgramCliCommand::Deploy {
+        program_location: Some(pathbuf.to_str().unwrap().to_string()),
+        program_signer_index: Some(2),
+        program_pubkey: Some(program_keypair.pubkey()),
+        buffer_signer_index: None,
+        buffer_pubkey: None,
+        allow_excessive_balance: false,
+        upgrade_authority_signer_index: 1,
+        is_final: false,
+        max_len: Some(max_len),
+    });
+    config.output_format = OutputFormat::JsonCompact;
+    process_command(&config).unwrap();
+
+    let (programdata_pubkey, _) = Pubkey::find_program_address(
+        &[program_keypair.pubkey().as_ref()],
+        &bpf_loader_upgradeable::id(),
+    );
+
+    // Close program
+    let close_account = rpc_client.get_account(&programdata_pubkey).unwrap();
+    let programdata_lamports = close_account.lamports;
+    let recipient_pubkey = Pubkey::new_unique();
+    config.signers = vec![&keypair, &upgrade_authority];
+    config.command = CliCommand::Program(ProgramCliCommand::Close {
+        account_pubkey: Some(program_keypair.pubkey()),
+        recipient_pubkey,
+        authority_index: 1,
+        use_lamports_unit: false,
+    });
+    process_command(&config).unwrap();
+    rpc_client.get_account(&programdata_pubkey).unwrap_err();
+    let recipient_account = rpc_client.get_account(&recipient_pubkey).unwrap();
+    assert_eq!(programdata_lamports, recipient_account.lamports);
+}
+
+#[test]
 fn test_cli_program_write_buffer() {
     solana_logger::setup();
 
@@ -557,7 +647,8 @@ fn test_cli_program_write_buffer() {
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
-    let test_validator = TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr));
+    let test_validator =
+        TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr), SocketAddrSpace::Unspecified);
 
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
@@ -661,6 +752,8 @@ fn test_cli_program_write_buffer() {
     config.command = CliCommand::Program(ProgramCliCommand::Show {
         account_pubkey: Some(buffer_keypair.pubkey()),
         authority_pubkey: keypair.pubkey(),
+        get_programs: false,
+        get_buffers: false,
         all: false,
         use_lamports_unit: false,
     });
@@ -754,6 +847,8 @@ fn test_cli_program_write_buffer() {
     config.command = CliCommand::Program(ProgramCliCommand::Show {
         account_pubkey: Some(buffer_pubkey),
         authority_pubkey: keypair.pubkey(),
+        get_programs: false,
+        get_buffers: false,
         all: false,
         use_lamports_unit: false,
     });
@@ -839,7 +934,8 @@ fn test_cli_program_set_buffer_authority() {
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
-    let test_validator = TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr));
+    let test_validator =
+        TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr), SocketAddrSpace::Unspecified);
 
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
@@ -952,7 +1048,8 @@ fn test_cli_program_mismatch_buffer_authority() {
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
-    let test_validator = TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr));
+    let test_validator =
+        TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr), SocketAddrSpace::Unspecified);
 
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
@@ -1041,7 +1138,8 @@ fn test_cli_program_show() {
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
-    let test_validator = TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr));
+    let test_validator =
+        TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr), SocketAddrSpace::Unspecified);
 
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
@@ -1087,6 +1185,8 @@ fn test_cli_program_show() {
     config.command = CliCommand::Program(ProgramCliCommand::Show {
         account_pubkey: Some(buffer_keypair.pubkey()),
         authority_pubkey: keypair.pubkey(),
+        get_programs: false,
+        get_buffers: false,
         all: false,
         use_lamports_unit: false,
     });
@@ -1147,6 +1247,8 @@ fn test_cli_program_show() {
     config.command = CliCommand::Program(ProgramCliCommand::Show {
         account_pubkey: Some(program_keypair.pubkey()),
         authority_pubkey: keypair.pubkey(),
+        get_programs: false,
+        get_buffers: false,
         all: false,
         use_lamports_unit: false,
     });
@@ -1221,7 +1323,8 @@ fn test_cli_program_dump() {
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
-    let test_validator = TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr));
+    let test_validator =
+        TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr), SocketAddrSpace::Unspecified);
 
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());

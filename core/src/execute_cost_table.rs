@@ -78,15 +78,15 @@ impl ExecuteCostTable {
         self.table.get(key)
     }
 
-    pub fn upsert(&mut self, key: &Pubkey, value: &u64) {
+    pub fn upsert(&mut self, key: &Pubkey, value: u64) {
         let need_to_add = self.table.get(key).is_none();
         let current_size = self.get_count();
         if current_size == self.capacity && need_to_add {
             self.prune_to(&((current_size as f64 * PRUNE_RATIO) as usize));
         }
 
-        let program_cost = self.table.entry(*key).or_insert(*value);
-        *program_cost = (*program_cost + *value) / 2;
+        let program_cost = self.table.entry(*key).or_insert(value);
+        *program_cost = (*program_cost + value) / 2;
 
         let (count, timestamp) = self
             .occurrences
@@ -154,9 +154,9 @@ mod tests {
         let key2 = Pubkey::new_unique();
         let key3 = Pubkey::new_unique();
 
-        testee.upsert(&key1, &1);
-        testee.upsert(&key2, &2);
-        testee.upsert(&key3, &3);
+        testee.upsert(&key1, 1);
+        testee.upsert(&key2, 2);
+        testee.upsert(&key3, 3);
 
         testee.prune_to(&(capacity - 1));
 
@@ -176,10 +176,10 @@ mod tests {
         let key2 = Pubkey::new_unique();
         let key3 = Pubkey::new_unique();
 
-        testee.upsert(&key1, &1);
-        testee.upsert(&key1, &1);
-        testee.upsert(&key2, &2);
-        testee.upsert(&key3, &3);
+        testee.upsert(&key1, 1);
+        testee.upsert(&key1, 1);
+        testee.upsert(&key2, 2);
+        testee.upsert(&key3, 3);
 
         testee.prune_to(&(capacity - 1));
 
@@ -204,14 +204,14 @@ mod tests {
         assert!(testee.get_cost(&key1).is_none());
 
         // insert one record
-        testee.upsert(&key1, &cost1);
+        testee.upsert(&key1, cost1);
         assert_eq!(1, testee.get_count());
         assert_eq!(cost1, testee.get_average());
         assert_eq!(cost1, testee.get_mode());
         assert_eq!(&cost1, testee.get_cost(&key1).unwrap());
 
         // insert 2nd record
-        testee.upsert(&key2, &cost2);
+        testee.upsert(&key2, cost2);
         assert_eq!(2, testee.get_count());
         assert_eq!((cost1 + cost2) / 2_u64, testee.get_average());
         assert_eq!(cost2, testee.get_mode());
@@ -219,7 +219,7 @@ mod tests {
         assert_eq!(&cost2, testee.get_cost(&key2).unwrap());
 
         // update 1st record
-        testee.upsert(&key1, &cost2);
+        testee.upsert(&key1, cost2);
         assert_eq!(2, testee.get_count());
         assert_eq!(((cost1 + cost2) / 2 + cost2) / 2, testee.get_average());
         assert_eq!((cost1 + cost2) / 2, testee.get_mode());
@@ -243,18 +243,18 @@ mod tests {
         let cost4: u64 = 130;
 
         // insert one record
-        testee.upsert(&key1, &cost1);
+        testee.upsert(&key1, cost1);
         assert_eq!(1, testee.get_count());
         assert_eq!(&cost1, testee.get_cost(&key1).unwrap());
 
         // insert 2nd record
-        testee.upsert(&key2, &cost2);
+        testee.upsert(&key2, cost2);
         assert_eq!(2, testee.get_count());
         assert_eq!(&cost1, testee.get_cost(&key1).unwrap());
         assert_eq!(&cost2, testee.get_cost(&key2).unwrap());
 
         // insert 3rd record, pushes out the oldest (eg 1st) record
-        testee.upsert(&key3, &cost3);
+        testee.upsert(&key3, cost3);
         assert_eq!(2, testee.get_count());
         assert_eq!((cost2 + cost3) / 2_u64, testee.get_average());
         assert_eq!(cost3, testee.get_mode());
@@ -264,8 +264,8 @@ mod tests {
 
         // update 2nd record, so the 3rd becomes the oldest
         // add 4th record, pushes out 3rd key
-        testee.upsert(&key2, &cost1);
-        testee.upsert(&key4, &cost4);
+        testee.upsert(&key2, cost1);
+        testee.upsert(&key4, cost4);
         assert_eq!(((cost1 + cost2) / 2 + cost4) / 2_u64, testee.get_average());
         assert_eq!((cost1 + cost2) / 2, testee.get_mode());
         assert_eq!(2, testee.get_count());

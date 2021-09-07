@@ -4,7 +4,7 @@ use solana_gossip::cluster_info::ClusterInfo;
 use solana_ledger::blockstore::Blockstore;
 use solana_measure::measure::Measure;
 use solana_runtime::bank_forks::BankForks;
-use solana_sdk::{clock::Slot, pubkey::Pubkey};
+use solana_sdk::clock::Slot;
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -43,8 +43,7 @@ impl ClusterSlotsService {
         cluster_slots_update_receiver: ClusterSlotsUpdateReceiver,
         exit: Arc<AtomicBool>,
     ) -> Self {
-        let id = cluster_info.id();
-        Self::initialize_lowest_slot(id, &blockstore, &cluster_info);
+        Self::initialize_lowest_slot(&blockstore, &cluster_info);
         Self::initialize_epoch_slots(&bank_forks, &cluster_info);
         let t_cluster_slots_service = Builder::new()
             .name("solana-cluster-slots-service".to_string())
@@ -92,11 +91,9 @@ impl ClusterSlotsService {
                     break;
                 }
             };
-            let new_root = bank_forks.read().unwrap().root();
-            let id = cluster_info.id();
             let mut lowest_slot_elapsed = Measure::start("lowest_slot_elapsed");
             let lowest_slot = blockstore.lowest_slot();
-            Self::update_lowest_slot(&id, lowest_slot, &cluster_info);
+            Self::update_lowest_slot(lowest_slot, &cluster_info);
             lowest_slot_elapsed.stop();
             let mut process_cluster_slots_updates_elapsed =
                 Measure::start("process_cluster_slots_updates_elapsed");
@@ -107,7 +104,8 @@ impl ClusterSlotsService {
                     &cluster_info,
                 );
             }
-            cluster_slots.update(new_root, &cluster_info, &bank_forks);
+            let root_bank = bank_forks.read().unwrap().root_bank();
+            cluster_slots.update(&root_bank, &cluster_info);
             process_cluster_slots_updates_elapsed.stop();
 
             cluster_slots_service_timing.update(
@@ -151,16 +149,16 @@ impl ClusterSlotsService {
         }
     }
 
-    fn initialize_lowest_slot(id: Pubkey, blockstore: &Blockstore, cluster_info: &ClusterInfo) {
+    fn initialize_lowest_slot(blockstore: &Blockstore, cluster_info: &ClusterInfo) {
         // Safe to set into gossip because by this time, the leader schedule cache should
         // also be updated with the latest root (done in blockstore_processor) and thus
         // will provide a schedule to window_service for any incoming shreds up to the
         // last_confirmed_epoch.
-        cluster_info.push_lowest_slot(id, blockstore.lowest_slot());
+        cluster_info.push_lowest_slot(blockstore.lowest_slot());
     }
 
-    fn update_lowest_slot(id: &Pubkey, lowest_slot: Slot, cluster_info: &ClusterInfo) {
-        cluster_info.push_lowest_slot(*id, lowest_slot);
+    fn update_lowest_slot(lowest_slot: Slot, cluster_info: &ClusterInfo) {
+        cluster_info.push_lowest_slot(lowest_slot);
     }
 
     fn initialize_epoch_slots(bank_forks: &RwLock<BankForks>, cluster_info: &ClusterInfo) {
@@ -179,21 +177,27 @@ impl ClusterSlotsService {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use solana_gossip::{cluster_info::Node, crds_value::CrdsValueLabel};
+    use {
+        super::*,
+        solana_gossip::{cluster_info::Node, crds_value::LowestSlot},
+        solana_sdk::{pubkey::Pubkey, signature::Keypair},
+        solana_streamer::socket::SocketAddrSpace,
+    };
 
     #[test]
     pub fn test_update_lowest_slot() {
         let pubkey = Pubkey::new_unique();
         let node_info = Node::new_localhost_with_pubkey(&pubkey);
-        let cluster_info = ClusterInfo::new_with_invalid_keypair(node_info.info);
-        ClusterSlotsService::update_lowest_slot(&pubkey, 5, &cluster_info);
+        let cluster_info = ClusterInfo::new(
+            node_info.info,
+            Arc::new(Keypair::new()),
+            SocketAddrSpace::Unspecified,
+        );
+        ClusterSlotsService::update_lowest_slot(5, &cluster_info);
         cluster_info.flush_push_queue();
         let lowest = {
-            let label = CrdsValueLabel::LowestSlot(pubkey);
-            let gossip = cluster_info.gossip.read().unwrap();
-            let entry = gossip.crds.get(&label).unwrap();
-            entry.value.lowest_slot().unwrap().clone()
+            let gossip_crds = cluster_info.gossip.crds.read().unwrap();
+            gossip_crds.get::<&LowestSlot>(pubkey).unwrap().clone()
         };
         assert_eq!(lowest.lowest, 5);
     }

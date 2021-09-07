@@ -122,7 +122,7 @@ https://github.com/solana-labs/solana/blob/b6bfed64cb159ee67bb6bdbaefc7f833bbed3
             // Number of signatures processed in this block
             &signature_count_buf,
             // Last PoH hash in this block
-            self.last_blockhash().as_ref(),
+            self.latest_blockhash().as_ref(),
         ]);
 ```
 

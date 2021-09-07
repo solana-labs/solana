@@ -14,8 +14,10 @@ pub mod account_utils;
 pub mod builtins;
 pub mod client;
 pub mod commitment_config;
+pub mod compute_budget;
 pub mod derivation_path;
 pub mod deserialize_utils;
+pub mod ed25519_instruction;
 pub mod entrypoint;
 pub mod entrypoint_deprecated;
 pub mod entrypoint_native;
@@ -48,6 +50,8 @@ pub mod timing;
 pub mod transaction;
 pub mod transport;
 
+/// Same as `declare_id` except report that this id has been deprecated
+pub use solana_sdk_macro::declare_deprecated_id;
 /// Convenience macro to declare a static public key and functions to interact with it
 ///
 /// Input: a single literal base58 string representation of a program's id

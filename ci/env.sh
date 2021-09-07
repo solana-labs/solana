@@ -78,7 +78,7 @@ else
   export CI_REPO_SLUG=
   export CI_TAG=
   # Don't override ci/run-local.sh
-  if [[ -z $CL_LOCAL_RUN ]]; then
+  if [[ -z $CI_LOCAL_RUN ]]; then
     export CI_OS_NAME=
   fi
 fi

@@ -20,15 +20,13 @@ internalNodesLamports="${11}"
 nodeIndex="${12}"
 numBenchTpsClients="${13}"
 benchTpsExtraArgs="${14}"
-numBenchExchangeClients="${15}"
-benchExchangeExtraArgs="${16}"
-genesisOptions="${17}"
-extraNodeArgs="${18}"
-gpuMode="${19:-auto}"
-maybeWarpSlot="${20}"
-waitForNodeInit="${21}"
-extraPrimordialStakes="${22:=0}"
-tmpfsAccounts="${23:false}"
+genesisOptions="${15}"
+extraNodeArgs="${16}"
+gpuMode="${17:-auto}"
+maybeWarpSlot="${18}"
+waitForNodeInit="${19}"
+extraPrimordialStakes="${20:=0}"
+tmpfsAccounts="${21:false}"
 set +x
 
 missing() {
@@ -194,13 +192,6 @@ EOF
         tail -n +2 -q config/bench-tps"$i".yml >> config/client-accounts.yml
         echo "" >> config/client-accounts.yml
       done
-      for i in $(seq 0 $((numBenchExchangeClients-1))); do
-        # shellcheck disable=SC2086 # Do not want to quote $benchExchangeExtraArgs
-        solana-bench-exchange --batch-size 1000 --fund-amount 20000 \
-          --write-client-keys config/bench-exchange"$i".yml $benchExchangeExtraArgs
-        tail -n +2 -q config/bench-exchange"$i".yml >> config/client-accounts.yml
-        echo "" >> config/client-accounts.yml
-      done
       if [[ -f $externalPrimordialAccountsFile ]]; then
         cat "$externalPrimordialAccountsFile" >> config/validator-balances.yml
       fi
@@ -225,6 +216,12 @@ EOF
       fi
       if [[ -f net/keypairs/bootstrap-validator-identity.json ]]; then
         export BOOTSTRAP_VALIDATOR_IDENTITY_KEYPAIR=net/keypairs/bootstrap-validator-identity.json
+      fi
+      if [[ -f net/keypairs/bootstrap-validator-stake.json ]]; then
+        export BOOTSTRAP_VALIDATOR_STAKE_KEYPAIR=net/keypairs/bootstrap-validator-stake.json
+      fi
+      if [[ -f net/keypairs/bootstrap-validator-vote.json ]]; then
+        export BOOTSTRAP_VALIDATOR_VOTE_KEYPAIR=net/keypairs/bootstrap-validator-vote.json
       fi
       echo "remote-node.sh: Primordial stakes: $extraPrimordialStakes"
       if [[ "$extraPrimordialStakes" -gt 0 ]]; then

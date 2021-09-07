@@ -205,8 +205,7 @@ fn send_and_confirm_message<S: Signers>(
 ) -> Result<Signature, ClientError> {
     let mut transaction = Transaction::new_unsigned(message);
 
-    let (blockhash, _fee_calculator) =
-        client.get_new_blockhash(&transaction.message().recent_blockhash)?;
+    let blockhash = client.get_new_latest_blockhash(&transaction.message().recent_blockhash)?;
     transaction.try_sign(signers, blockhash)?;
 
     if no_wait {

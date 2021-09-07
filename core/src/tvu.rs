@@ -21,7 +21,8 @@ use crate::{
     shred_fetch_stage::ShredFetchStage,
     sigverify_shreds::ShredSigVerifier,
     sigverify_stage::SigVerifyStage,
-    snapshot_packager_service::PendingSnapshotPackage,
+    tower_storage::TowerStorage,
+    voting_service::VotingService,
 };
 use crossbeam_channel::unbounded;
 use solana_gossip::cluster_info::ClusterInfo;
@@ -43,6 +44,7 @@ use solana_runtime::{
     bank_forks::BankForks,
     commitment::BlockCommitmentCache,
     snapshot_config::SnapshotConfig,
+    snapshot_package::PendingSnapshotPackage,
     vote_sender_types::ReplayVoteSender,
 };
 use solana_sdk::{pubkey::Pubkey, signature::Keypair};
@@ -67,6 +69,7 @@ pub struct Tvu {
     accounts_background_service: AccountsBackgroundService,
     accounts_hash_verifier: AccountsHashVerifier,
     cost_update_service: CostUpdateService,
+    voting_service: VotingService,
 }
 
 pub struct Sockets {
@@ -112,6 +115,7 @@ impl Tvu {
         rpc_subscriptions: &Arc<RpcSubscriptions>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         tower: Tower,
+        tower_storage: Arc<dyn TowerStorage>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         exit: &Arc<AtomicBool>,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
@@ -167,15 +171,17 @@ impl Tvu {
         let max_compaction_jitter = tvu_config.rocksdb_max_compaction_jitter;
         let (duplicate_slots_sender, duplicate_slots_receiver) = unbounded();
         let (cluster_slots_update_sender, cluster_slots_update_receiver) = unbounded();
+        let (ancestor_hashes_replay_update_sender, ancestor_hashes_replay_update_receiver) =
+            unbounded();
         let retransmit_stage = RetransmitStage::new(
             bank_forks.clone(),
-            leader_schedule_cache,
+            leader_schedule_cache.clone(),
             blockstore.clone(),
-            cluster_info,
+            cluster_info.clone(),
             Arc::new(retransmit_sockets),
             repair_socket,
             verified_receiver,
-            exit,
+            exit.clone(),
             cluster_slots_update_receiver,
             *bank_forks.read().unwrap().working_bank().epoch_schedule(),
             cfg,
@@ -185,16 +191,17 @@ impl Tvu {
             verified_vote_receiver,
             tvu_config.repair_validators,
             completed_data_sets_sender,
-            max_slots,
+            max_slots.clone(),
             Some(rpc_subscriptions.clone()),
             duplicate_slots_sender,
+            ancestor_hashes_replay_update_receiver,
         );
 
         let (ledger_cleanup_slot_sender, ledger_cleanup_slot_receiver) = channel();
 
         let snapshot_interval_slots = {
             if let Some(config) = bank_forks.read().unwrap().snapshot_config() {
-                config.snapshot_interval_slots
+                config.full_snapshot_archive_interval_slots
             } else {
                 std::u64::MAX
             }
@@ -214,7 +221,7 @@ impl Tvu {
             tvu_config.trusted_validators.clone(),
             tvu_config.halt_on_trusted_validators_accounts_hash_mismatch,
             tvu_config.accounts_hash_fault_injection_slots,
-            snapshot_interval_slots,
+            snapshot_config.clone(),
         );
 
         let (snapshot_request_sender, snapshot_request_handler) = {
@@ -271,7 +278,17 @@ impl Tvu {
             cache_block_meta_sender,
             bank_notification_sender,
             wait_for_vote_to_start_leader: tvu_config.wait_for_vote_to_start_leader,
+            ancestor_hashes_replay_update_sender,
+            tower_storage: tower_storage.clone(),
         };
+
+        let (voting_sender, voting_receiver) = channel();
+        let voting_service = VotingService::new(
+            voting_receiver,
+            cluster_info.clone(),
+            poh_recorder.clone(),
+            tower_storage,
+        );
 
         let (cost_update_sender, cost_update_receiver): (
             Sender<ExecuteTimings>,
@@ -302,6 +319,7 @@ impl Tvu {
             gossip_verified_vote_hash_receiver,
             cluster_slots_update_sender,
             cost_update_sender,
+            voting_sender,
         );
 
         let ledger_cleanup_service = tvu_config.max_ledger_shreds.map(|max_ledger_shreds| {
@@ -322,6 +340,7 @@ impl Tvu {
             tvu_config.accounts_db_caching_enabled,
             tvu_config.test_hash_calculation,
             tvu_config.use_index_hash_calculation,
+            None,
         );
 
         Tvu {
@@ -333,6 +352,7 @@ impl Tvu {
             accounts_background_service,
             accounts_hash_verifier,
             cost_update_service,
+            voting_service,
         }
     }
 
@@ -347,6 +367,7 @@ impl Tvu {
         self.replay_stage.join()?;
         self.accounts_hash_verifier.join()?;
         self.cost_update_service.join()?;
+        self.voting_service.join()?;
         Ok(())
     }
 }
@@ -364,7 +385,8 @@ pub mod tests {
     use solana_poh::poh_recorder::create_test_recorder;
     use solana_rpc::optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank;
     use solana_runtime::bank::Bank;
-    use solana_sdk::signature::Signer;
+    use solana_sdk::signature::{Keypair, Signer};
+    use solana_streamer::socket::SocketAddrSpace;
     use std::sync::atomic::Ordering;
 
     #[ignore]
@@ -379,10 +401,14 @@ pub mod tests {
         let starting_balance = 10_000;
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(starting_balance);
 
-        let bank_forks = BankForks::new(Bank::new(&genesis_config));
+        let bank_forks = BankForks::new(Bank::new_for_tests(&genesis_config));
 
         //start cluster_info1
-        let cluster_info1 = ClusterInfo::new_with_invalid_keypair(target1.info.clone());
+        let cluster_info1 = ClusterInfo::new(
+            target1.info.clone(),
+            Arc::new(Keypair::new()),
+            SocketAddrSpace::Unspecified,
+        );
         cluster_info1.insert_info(leader.info);
         let cref1 = Arc::new(cluster_info1);
 
@@ -407,7 +433,7 @@ pub mod tests {
         let (completed_data_sets_sender, _completed_data_sets_receiver) = unbounded();
         let (_, gossip_confirmed_slots_receiver) = unbounded();
         let bank_forks = Arc::new(RwLock::new(bank_forks));
-        let tower = Tower::new_with_key(&target1_keypair.pubkey());
+        let tower = Tower::default();
         let tvu = Tvu::new(
             &vote_keypair.pubkey(),
             Arc::new(RwLock::new(vec![Arc::new(vote_keypair)])),
@@ -431,6 +457,7 @@ pub mod tests {
             )),
             &poh_recorder,
             tower,
+            Arc::new(crate::tower_storage::FileTowerStorage::default()),
             &leader_schedule_cache,
             &exit,
             block_commitment_cache,

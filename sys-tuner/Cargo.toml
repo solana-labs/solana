@@ -13,7 +13,7 @@ publish = true
 [dependencies]
 clap = "2.33.1"
 log = "0.4.14"
-libc = "0.2.98"
+libc = "0.2.101"
 solana-clap-utils = { path = "../clap-utils", version = "=1.8.0" }
 solana-logger = { path = "../logger", version = "=1.8.0" }
 solana-version = { path = "../version", version = "=1.8.0" }
@@ -22,7 +22,7 @@ solana-version = { path = "../version", version = "=1.8.0" }
 unix_socket2 = "0.5.4"
 users = "0.10.0"
 nix = "0.20.0"
-sysctl = "0.4.1"
+sysctl = "0.4.2"
 
 [lib]
 name = "solana_sys_tuner"

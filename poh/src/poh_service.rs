@@ -4,7 +4,7 @@ use {
     crate::poh_recorder::{PohRecorder, Record},
     crossbeam_channel::Receiver,
     log::*,
-    solana_ledger::poh::Poh,
+    solana_entry::poh::Poh,
     solana_measure::measure::Measure,
     solana_sdk::poh_config::PohConfig,
     std::{
@@ -368,7 +368,9 @@ mod tests {
         solana_measure::measure::Measure,
         solana_perf::test_tx::test_tx,
         solana_runtime::bank::Bank,
-        solana_sdk::{clock, hash::hash, pubkey::Pubkey, timing},
+        solana_sdk::{
+            clock, hash::hash, pubkey::Pubkey, timing, transaction::VersionedTransaction,
+        },
         std::time::Duration,
     };
 
@@ -377,7 +379,7 @@ mod tests {
     fn test_poh_service() {
         solana_logger::setup();
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(2);
-        let bank = Arc::new(Bank::new_no_wallclock_throttle(&genesis_config));
+        let bank = Arc::new(Bank::new_no_wallclock_throttle_for_tests(&genesis_config));
         let prev_hash = bank.last_blockhash();
         let ledger_path = get_tmp_ledger_path!();
         {
@@ -434,7 +436,7 @@ mod tests {
                         let mut total_us = 0;
                         let mut total_times = 0;
                         let h1 = hash(b"hello world!");
-                        let tx = test_tx();
+                        let tx = VersionedTransaction::from(test_tx());
                         loop {
                             // send some data
                             let mut time = Measure::start("record");

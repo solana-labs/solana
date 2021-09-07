@@ -10,13 +10,14 @@ documentation = "https://docs.rs/solana-streamer"
 edition = "2018"
 
 [dependencies]
+itertools = "0.10.1"
 log = "0.4.14"
 solana-metrics = { path = "../metrics", version = "=1.8.0" }
 solana-sdk = { path = "../sdk", version = "=1.8.0" }
 thiserror = "1.0"
 solana-measure = { path = "../measure", version = "=1.8.0" }
 solana-logger = { path = "../logger", version = "=1.8.0" }
-libc = "0.2.98"
+libc = "0.2.101"
 nix = "0.20.0"
 solana-perf = { path = "../perf", version = "=1.8.0" }
 

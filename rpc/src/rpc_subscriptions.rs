@@ -1346,7 +1346,10 @@ pub(crate) mod tests {
             stake, system_instruction, system_program, system_transaction,
             transaction::Transaction,
         },
-        std::{fmt::Debug, sync::mpsc::channel},
+        std::{
+            fmt::Debug,
+            sync::{atomic::Ordering::Relaxed, mpsc::channel},
+        },
         tokio::{
             runtime::Runtime,
             time::{sleep, timeout},
@@ -1381,6 +1384,26 @@ pub(crate) mod tests {
         inner_receiver.recv().expect("recv error")
     }
 
+    fn make_account_result(lamports: u64, subscription: u64, data: &str) -> serde_json::Value {
+        json!({
+           "jsonrpc": "2.0",
+           "method": "accountNotification",
+           "params": {
+               "result": {
+                   "context": { "slot": 1 },
+                   "value": {
+                       "data": data,
+                       "executable": false,
+                       "lamports": lamports,
+                       "owner": "11111111111111111111111111111111",
+                       "rentEpoch": 0,
+                    },
+               },
+               "subscription": subscription,
+           }
+        })
+    }
+
     #[test]
     #[serial]
     fn test_check_account_subscribe() {
@@ -1389,19 +1412,13 @@ pub(crate) mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(100);
-        let bank = Bank::new(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let bank0 = bank_forks.read().unwrap().get(0).unwrap().clone();
         let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
         bank_forks.write().unwrap().insert(bank1);
         let alice = Keypair::new();
-
-        let (create_sub, _id_receiver, create_recv) = Subscriber::new_test("accountNotification");
-        let (close_sub, _id_receiver, close_recv) = Subscriber::new_test("accountNotification");
-
-        let create_sub_id = SubscriptionId::Number(0);
-        let close_sub_id = SubscriptionId::Number(1);
 
         let exit = Arc::new(AtomicBool::new(false));
         let subscriptions = RpcSubscriptions::new(
@@ -1412,25 +1429,8 @@ pub(crate) mod tests {
             ))),
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
         );
-        subscriptions.add_account_subscription(
-            alice.pubkey(),
-            Some(RpcAccountInfoConfig {
-                commitment: Some(CommitmentConfig::processed()),
-                encoding: None,
-                data_slice: None,
-            }),
-            create_sub_id.clone(),
-            create_sub,
-        );
 
-        assert!(subscriptions
-            .subscriptions
-            .account_subscriptions
-            .read()
-            .unwrap()
-            .contains_key(&alice.pubkey()));
-
-        let tx = system_transaction::create_account(
+        let tx0 = system_transaction::create_account(
             &mint_keypair,
             &alice,
             blockhash,
@@ -1438,92 +1438,77 @@ pub(crate) mod tests {
             0,
             &system_program::id(),
         );
-        bank_forks
-            .write()
-            .unwrap()
-            .get(1)
-            .unwrap()
-            .process_transaction(&tx)
-            .unwrap();
-        let commitment_slots = CommitmentSlots {
-            slot: 1,
-            ..CommitmentSlots::default()
-        };
-        subscriptions.notify_subscribers(commitment_slots);
-        let (response, _) = robust_poll_or_panic(create_recv);
-        let expected = json!({
-           "jsonrpc": "2.0",
-           "method": "accountNotification",
-           "params": {
-               "result": {
-                   "context": { "slot": 1 },
-                   "value": {
-                       "data": "",
-                       "executable": false,
-                       "lamports": 1,
-                       "owner": "11111111111111111111111111111111",
-                       "rentEpoch": 0,
-                    },
-               },
-               "subscription": 0,
-           }
-        });
-        assert_eq!(serde_json::to_string(&expected).unwrap(), response);
-        subscriptions.remove_account_subscription(&create_sub_id);
+        let expected0 = make_account_result(1, 0, "");
 
-        subscriptions.add_account_subscription(
-            alice.pubkey(),
-            Some(RpcAccountInfoConfig {
-                commitment: Some(CommitmentConfig::processed()),
-                encoding: None,
-                data_slice: None,
-            }),
-            close_sub_id.clone(),
-            close_sub,
-        );
-
-        let tx = {
+        let tx1 = {
             let instruction =
                 system_instruction::transfer(&alice.pubkey(), &mint_keypair.pubkey(), 1);
             let message = Message::new(&[instruction], Some(&mint_keypair.pubkey()));
             Transaction::new(&[&alice, &mint_keypair], message, blockhash)
         };
+        let expected1 = make_account_result(0, 1, "");
 
-        bank_forks
-            .write()
-            .unwrap()
-            .get(1)
-            .unwrap()
-            .process_transaction(&tx)
-            .unwrap();
-        subscriptions.notify_subscribers(commitment_slots);
-        let (response, _) = robust_poll_or_panic(close_recv);
-        let expected = json!({
-           "jsonrpc": "2.0",
-           "method": "accountNotification",
-           "params": {
-               "result": {
-                   "context": { "slot": 1 },
-                   "value": {
-                       "data": "",
-                       "executable": false,
-                       "lamports": 0,
-                       "owner": "11111111111111111111111111111111",
-                       "rentEpoch": 0,
-                    },
-               },
-               "subscription": 1,
-           }
-        });
-        assert_eq!(serde_json::to_string(&expected).unwrap(), response);
-        subscriptions.remove_account_subscription(&close_sub_id);
+        let tx2 = system_transaction::create_account(
+            &mint_keypair,
+            &alice,
+            blockhash,
+            1,
+            1024,
+            &system_program::id(),
+        );
+        let expected2 = make_account_result(1, 2, "error: data too large for bs58 encoding");
 
-        assert!(!subscriptions
-            .subscriptions
-            .account_subscriptions
-            .read()
-            .unwrap()
-            .contains_key(&alice.pubkey()));
+        let subscribe_cases = vec![
+            (alice.pubkey(), tx0, expected0),
+            (alice.pubkey(), tx1, expected1),
+            (alice.pubkey(), tx2, expected2),
+        ];
+
+        for (i, (pubkey, tx, expected)) in subscribe_cases.iter().enumerate() {
+            let (sub, _id_receiver, recv) = Subscriber::new_test("accountNotification");
+            let sub_id = SubscriptionId::Number(i as u64);
+            subscriptions.add_account_subscription(
+                *pubkey,
+                Some(RpcAccountInfoConfig {
+                    commitment: Some(CommitmentConfig::processed()),
+                    encoding: None,
+                    data_slice: None,
+                }),
+                sub_id.clone(),
+                sub,
+            );
+
+            assert!(subscriptions
+                .subscriptions
+                .account_subscriptions
+                .read()
+                .unwrap()
+                .contains_key(pubkey));
+
+            bank_forks
+                .read()
+                .unwrap()
+                .get(1)
+                .unwrap()
+                .process_transaction(tx)
+                .unwrap();
+            let commitment_slots = CommitmentSlots {
+                slot: 1,
+                ..CommitmentSlots::default()
+            };
+            subscriptions.notify_subscribers(commitment_slots);
+            let (response, _) = robust_poll_or_panic(recv);
+
+            assert_eq!(serde_json::to_string(&expected).unwrap(), response);
+            subscriptions.remove_account_subscription(&sub_id);
+
+            assert!(!subscriptions
+                .subscriptions
+                .account_subscriptions
+                .read()
+                .unwrap()
+                .contains_key(pubkey));
+        }
     }
 
     #[test]
@@ -1534,7 +1519,7 @@ pub(crate) mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(100);
-        let bank = Bank::new(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let alice = Keypair::new();
@@ -1621,13 +1606,466 @@ pub(crate) mod tests {
 
     #[test]
     #[serial]
+    fn test_check_program_subscribe_for_missing_optimistically_confirmed_slot() {
+        // Testing if we can get the pubsub notification if a slot does not
+        // receive OptimisticallyConfirmed but its descendant slot get the confirmed
+        // notification.
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config(100);
+        let bank = Bank::new_for_tests(&genesis_config);
+        bank.lazy_rent_collection.store(true, Relaxed);
+
+        let blockhash = bank.last_blockhash();
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+
+        let bank0 = bank_forks.read().unwrap().get(0).unwrap().clone();
+        let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+        bank_forks.write().unwrap().insert(bank1);
+        let bank1 = bank_forks.read().unwrap().get(1).unwrap().clone();
+
+        // add account for alice and process the transaction at bank1
+        let alice = Keypair::new();
+        let tx = system_transaction::create_account(
+            &mint_keypair,
+            &alice,
+            blockhash,
+            1,
+            16,
+            &stake::program::id(),
+        );
+
+        bank1.process_transaction(&tx).unwrap();
+
+        let bank2 = Bank::new_from_parent(&bank1, &Pubkey::default(), 2);
+        bank_forks.write().unwrap().insert(bank2);
+
+        // add account for bob and process the transaction at bank2
+        let bob = Keypair::new();
+        let tx = system_transaction::create_account(
+            &mint_keypair,
+            &bob,
+            blockhash,
+            2,
+            16,
+            &stake::program::id(),
+        );
+        let bank2 = bank_forks.read().unwrap().get(2).unwrap().clone();
+
+        bank2.process_transaction(&tx).unwrap();
+
+        let bank3 = Bank::new_from_parent(&bank2, &Pubkey::default(), 3);
+        bank_forks.write().unwrap().insert(bank3);
+
+        // add account for joe and process the transaction at bank3
+        let joe = Keypair::new();
+        let tx = system_transaction::create_account(
+            &mint_keypair,
+            &joe,
+            blockhash,
+            3,
+            16,
+            &stake::program::id(),
+        );
+        let bank3 = bank_forks.read().unwrap().get(3).unwrap().clone();
+
+        bank3.process_transaction(&tx).unwrap();
+
+        // now add programSubscribe at the "confirmed" commitment level
+        let (subscriber, _id_receiver, transport_receiver) =
+            Subscriber::new_test("programNotification");
+        let sub_id = SubscriptionId::Number(0);
+        let exit = Arc::new(AtomicBool::new(false));
+        let optimistically_confirmed_bank =
+            OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
+        let mut pending_optimistically_confirmed_banks = HashSet::new();
+
+        let subscriptions = Arc::new(RpcSubscriptions::new(
+            &exit,
+            bank_forks.clone(),
+            Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests_with_slots(
+                1, 1,
+            ))),
+            optimistically_confirmed_bank.clone(),
+        ));
+        subscriptions.add_program_subscription(
+            stake::program::id(),
+            Some(RpcProgramAccountsConfig {
+                account_config: RpcAccountInfoConfig {
+                    commitment: Some(CommitmentConfig::confirmed()),
+                    ..RpcAccountInfoConfig::default()
+                },
+                ..RpcProgramAccountsConfig::default()
+            }),
+            sub_id.clone(),
+            subscriber,
+        );
+
+        assert!(subscriptions
+            .subscriptions
+            .gossip_program_subscriptions
+            .read()
+            .unwrap()
+            .contains_key(&stake::program::id()));
+
+        let mut highest_confirmed_slot: Slot = 0;
+        let mut last_notified_confirmed_slot: Slot = 0;
+        // Optimistically notifying slot 3 without notifying slot 1 and 2, bank3 is unfrozen, we expect
+        // to see transaction for alice and bob to be notified in order.
+        OptimisticallyConfirmedBankTracker::process_notification(
+            BankNotification::OptimisticallyConfirmed(3),
+            &bank_forks,
+            &optimistically_confirmed_bank,
+            &subscriptions,
+            &mut pending_optimistically_confirmed_banks,
+            &mut last_notified_confirmed_slot,
+            &mut highest_confirmed_slot,
+            &None,
+        );
+
+        // a closure to reduce code duplications in building expected responses:
+        let build_expected_resp = |slot: Slot, lamports: u64, pubkey: &str, subscription: i32| {
+            json!({
+               "jsonrpc": "2.0",
+               "method": "programNotification",
+               "params": {
+                   "result": {
+                       "context": { "slot": slot },
+                       "value": {
+                           "account": {
+                              "data": "1111111111111111",
+                              "executable": false,
+                              "lamports": lamports,
+                              "owner": "Stake11111111111111111111111111111111111111",
+                              "rentEpoch": 0,
+                           },
+                           "pubkey": pubkey,
+                        },
+                   },
+                   "subscription": subscription,
+               }
+            })
+        };
+
+        let (response, transport_receiver) = robust_poll_or_panic(transport_receiver);
+        let expected = build_expected_resp(1, 1, &alice.pubkey().to_string(), 0);
+        assert_eq!(serde_json::to_string(&expected).unwrap(), response);
+
+        let (response, transport_receiver) = robust_poll_or_panic(transport_receiver);
+        let expected = build_expected_resp(2, 2, &bob.pubkey().to_string(), 0);
+        assert_eq!(serde_json::to_string(&expected).unwrap(), response);
+
+        bank3.freeze();
+        OptimisticallyConfirmedBankTracker::process_notification(
+            BankNotification::Frozen(bank3),
+            &bank_forks,
+            &optimistically_confirmed_bank,
+            &subscriptions,
+            &mut pending_optimistically_confirmed_banks,
+            &mut last_notified_confirmed_slot,
+            &mut highest_confirmed_slot,
+            &None,
+        );
+
+        let (response, _) = robust_poll_or_panic(transport_receiver);
+        let expected = build_expected_resp(3, 3, &joe.pubkey().to_string(), 0);
+        assert_eq!(serde_json::to_string(&expected).unwrap(), response);
+        subscriptions.remove_program_subscription(&sub_id);
+    }
+
+    #[test]
+    #[serial]
+    #[should_panic]
+    fn test_check_program_subscribe_for_missing_optimistically_confirmed_slot_with_no_banks_no_notifications(
+    ) {
+        // Testing if we can get the pubsub notification if a slot does not
+        // receive OptimisticallyConfirmed but its descendant slot get the confirmed
+        // notification with a bank in the BankForks. We are not expecting to receive any notifications -- should panic.
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config(100);
+        let bank = Bank::new_for_tests(&genesis_config);
+        bank.lazy_rent_collection.store(true, Relaxed);
+
+        let blockhash = bank.last_blockhash();
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+
+        let bank0 = bank_forks.read().unwrap().get(0).unwrap().clone();
+        let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+        bank_forks.write().unwrap().insert(bank1);
+        let bank1 = bank_forks.read().unwrap().get(1).unwrap().clone();
+
+        // add account for alice and process the transaction at bank1
+        let alice = Keypair::new();
+        let tx = system_transaction::create_account(
+            &mint_keypair,
+            &alice,
+            blockhash,
+            1,
+            16,
+            &stake::program::id(),
+        );
+
+        bank1.process_transaction(&tx).unwrap();
+
+        let bank2 = Bank::new_from_parent(&bank1, &Pubkey::default(), 2);
+        bank_forks.write().unwrap().insert(bank2);
+
+        // add account for bob and process the transaction at bank2
+        let bob = Keypair::new();
+        let tx = system_transaction::create_account(
+            &mint_keypair,
+            &bob,
+            blockhash,
+            2,
+            16,
+            &stake::program::id(),
+        );
+        let bank2 = bank_forks.read().unwrap().get(2).unwrap().clone();
+
+        bank2.process_transaction(&tx).unwrap();
+
+        // now add programSubscribe at the "confirmed" commitment level
+        let (subscriber, _id_receiver, transport_receiver) =
+            Subscriber::new_test("programNotification");
+        let sub_id = SubscriptionId::Number(0);
+        let exit = Arc::new(AtomicBool::new(false));
+        let optimistically_confirmed_bank =
+            OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
+        let mut pending_optimistically_confirmed_banks = HashSet::new();
+
+        let subscriptions = Arc::new(RpcSubscriptions::new(
+            &exit,
+            bank_forks.clone(),
+            Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests_with_slots(
+                1, 1,
+            ))),
+            optimistically_confirmed_bank.clone(),
+        ));
+        subscriptions.add_program_subscription(
+            stake::program::id(),
+            Some(RpcProgramAccountsConfig {
+                account_config: RpcAccountInfoConfig {
+                    commitment: Some(CommitmentConfig::confirmed()),
+                    ..RpcAccountInfoConfig::default()
+                },
+                ..RpcProgramAccountsConfig::default()
+            }),
+            sub_id,
+            subscriber,
+        );
+
+        assert!(subscriptions
+            .subscriptions
+            .gossip_program_subscriptions
+            .read()
+            .unwrap()
+            .contains_key(&stake::program::id()));
+
+        let mut highest_confirmed_slot: Slot = 0;
+        let mut last_notified_confirmed_slot: Slot = 0;
+        // Optimistically notifying slot 3 without notifying slot 1 and 2, bank3 is not in the bankforks, we do not
+        // expect to see any RPC notifications.
+        OptimisticallyConfirmedBankTracker::process_notification(
+            BankNotification::OptimisticallyConfirmed(3),
+            &bank_forks,
+            &optimistically_confirmed_bank,
+            &subscriptions,
+            &mut pending_optimistically_confirmed_banks,
+            &mut last_notified_confirmed_slot,
+            &mut highest_confirmed_slot,
+            &None,
+        );
+
+        // The following should panic
+        let (_response, _transport_receiver) = robust_poll_or_panic(transport_receiver);
+    }
+
+    #[test]
+    #[serial]
+    fn test_check_program_subscribe_for_missing_optimistically_confirmed_slot_with_no_banks() {
+        // Testing if we can get the pubsub notification if a slot does not
+        // receive OptimisticallyConfirmed but its descendant slot get the confirmed
+        // notification. It differs from the test_check_program_subscribe_for_missing_optimistically_confirmed_slot
+        // test in that when the descendant get confirmed, the descendant does not have a bank yet.
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config(100);
+        let bank = Bank::new_for_tests(&genesis_config);
+        bank.lazy_rent_collection.store(true, Relaxed);
+
+        let blockhash = bank.last_blockhash();
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+
+        let bank0 = bank_forks.read().unwrap().get(0).unwrap().clone();
+        let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+        bank_forks.write().unwrap().insert(bank1);
+        let bank1 = bank_forks.read().unwrap().get(1).unwrap().clone();
+
+        // add account for alice and process the transaction at bank1
+        let alice = Keypair::new();
+        let tx = system_transaction::create_account(
+            &mint_keypair,
+            &alice,
+            blockhash,
+            1,
+            16,
+            &stake::program::id(),
+        );
+
+        bank1.process_transaction(&tx).unwrap();
+
+        let bank2 = Bank::new_from_parent(&bank1, &Pubkey::default(), 2);
+        bank_forks.write().unwrap().insert(bank2);
+
+        // add account for bob and process the transaction at bank2
+        let bob = Keypair::new();
+        let tx = system_transaction::create_account(
+            &mint_keypair,
+            &bob,
+            blockhash,
+            2,
+            16,
+            &stake::program::id(),
+        );
+        let bank2 = bank_forks.read().unwrap().get(2).unwrap().clone();
+
+        bank2.process_transaction(&tx).unwrap();
+
+        // now add programSubscribe at the "confirmed" commitment level
+        let (subscriber, _id_receiver, transport_receiver) =
+            Subscriber::new_test("programNotification");
+        let sub_id = SubscriptionId::Number(0);
+        let exit = Arc::new(AtomicBool::new(false));
+        let optimistically_confirmed_bank =
+            OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
+        let mut pending_optimistically_confirmed_banks = HashSet::new();
+
+        let subscriptions = Arc::new(RpcSubscriptions::new(
+            &exit,
+            bank_forks.clone(),
+            Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests_with_slots(
+                1, 1,
+            ))),
+            optimistically_confirmed_bank.clone(),
+        ));
+        subscriptions.add_program_subscription(
+            stake::program::id(),
+            Some(RpcProgramAccountsConfig {
+                account_config: RpcAccountInfoConfig {
+                    commitment: Some(CommitmentConfig::confirmed()),
+                    ..RpcAccountInfoConfig::default()
+                },
+                ..RpcProgramAccountsConfig::default()
+            }),
+            sub_id.clone(),
+            subscriber,
+        );
+
+        assert!(subscriptions
+            .subscriptions
+            .gossip_program_subscriptions
+            .read()
+            .unwrap()
+            .contains_key(&stake::program::id()));
+
+        let mut highest_confirmed_slot: Slot = 0;
+        let mut last_notified_confirmed_slot: Slot = 0;
+        // Optimistically notifying slot 3 without notifying slot 1 and 2, bank3 is not in the bankforks, we expect
+        // to see transaction for alice and bob to be notified only when bank3 is added to the fork and
+        // frozen. The notifications should be in the increasing order of the slot.
+        OptimisticallyConfirmedBankTracker::process_notification(
+            BankNotification::OptimisticallyConfirmed(3),
+            &bank_forks,
+            &optimistically_confirmed_bank,
+            &subscriptions,
+            &mut pending_optimistically_confirmed_banks,
+            &mut last_notified_confirmed_slot,
+            &mut highest_confirmed_slot,
+            &None,
+        );
+
+        // a closure to reduce code duplications in building expected responses:
+        let build_expected_resp = |slot: Slot, lamports: u64, pubkey: &str, subscription: i32| {
+            json!({
+               "jsonrpc": "2.0",
+               "method": "programNotification",
+               "params": {
+                   "result": {
+                       "context": { "slot": slot },
+                       "value": {
+                           "account": {
+                              "data": "1111111111111111",
+                              "executable": false,
+                              "lamports": lamports,
+                              "owner": "Stake11111111111111111111111111111111111111",
+                              "rentEpoch": 0,
+                           },
+                           "pubkey": pubkey,
+                        },
+                   },
+                   "subscription": subscription,
+               }
+            })
+        };
+
+        let bank3 = Bank::new_from_parent(&bank2, &Pubkey::default(), 3);
+        bank_forks.write().unwrap().insert(bank3);
+
+        // add account for joe and process the transaction at bank3
+        let joe = Keypair::new();
+        let tx = system_transaction::create_account(
+            &mint_keypair,
+            &joe,
+            blockhash,
+            3,
+            16,
+            &stake::program::id(),
+        );
+        let bank3 = bank_forks.read().unwrap().get(3).unwrap().clone();
+
+        bank3.process_transaction(&tx).unwrap();
+        bank3.freeze();
+        OptimisticallyConfirmedBankTracker::process_notification(
+            BankNotification::Frozen(bank3),
+            &bank_forks,
+            &optimistically_confirmed_bank,
+            &subscriptions,
+            &mut pending_optimistically_confirmed_banks,
+            &mut last_notified_confirmed_slot,
+            &mut highest_confirmed_slot,
+            &None,
+        );
+
+        let (response, transport_receiver) = robust_poll_or_panic(transport_receiver);
+        let expected = build_expected_resp(1, 1, &alice.pubkey().to_string(), 0);
+        assert_eq!(serde_json::to_string(&expected).unwrap(), response);
+
+        let (response, transport_receiver) = robust_poll_or_panic(transport_receiver);
+        let expected = build_expected_resp(2, 2, &bob.pubkey().to_string(), 0);
+        assert_eq!(serde_json::to_string(&expected).unwrap(), response);
+
+        let (response, _) = robust_poll_or_panic(transport_receiver);
+        let expected = build_expected_resp(3, 3, &joe.pubkey().to_string(), 0);
+        assert_eq!(serde_json::to_string(&expected).unwrap(), response);
+        subscriptions.remove_program_subscription(&sub_id);
+    }
+
+    #[test]
+    #[serial]
     fn test_check_signature_subscribe() {
         let GenesisConfigInfo {
             genesis_config,
             mint_keypair,
             ..
         } = create_genesis_config(100);
-        let bank = Bank::new(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
         let blockhash = bank.last_blockhash();
         let mut bank_forks = BankForks::new(bank);
         let alice = Keypair::new();
@@ -1835,7 +2273,7 @@ pub(crate) mod tests {
         let sub_id = SubscriptionId::Number(0);
         let exit = Arc::new(AtomicBool::new(false));
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
-        let bank = Bank::new(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
@@ -1886,7 +2324,7 @@ pub(crate) mod tests {
         let sub_id = SubscriptionId::Number(0);
         let exit = Arc::new(AtomicBool::new(false));
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
-        let bank = Bank::new(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
@@ -1992,7 +2430,7 @@ pub(crate) mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(100);
-        let bank = Bank::new(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let bank0 = bank_forks.read().unwrap().get(0).unwrap().clone();
@@ -2062,21 +2500,30 @@ pub(crate) mod tests {
             .unwrap();
 
         // First, notify the unfrozen bank first to queue pending notification
+        let mut highest_confirmed_slot: Slot = 0;
+        let mut last_notified_confirmed_slot: Slot = 0;
         OptimisticallyConfirmedBankTracker::process_notification(
             BankNotification::OptimisticallyConfirmed(2),
             &bank_forks,
             &optimistically_confirmed_bank,
             &subscriptions,
             &mut pending_optimistically_confirmed_banks,
+            &mut last_notified_confirmed_slot,
+            &mut highest_confirmed_slot,
+            &None,
         );
 
         // Now, notify the frozen bank and ensure its notifications are processed
+        highest_confirmed_slot = 0;
         OptimisticallyConfirmedBankTracker::process_notification(
             BankNotification::OptimisticallyConfirmed(1),
             &bank_forks,
             &optimistically_confirmed_bank,
             &subscriptions,
             &mut pending_optimistically_confirmed_banks,
+            &mut last_notified_confirmed_slot,
+            &mut highest_confirmed_slot,
+            &None,
         );
 
         let (response, _) = robust_poll_or_panic(transport_receiver0);
@@ -2113,12 +2560,17 @@ pub(crate) mod tests {
         );
 
         let bank2 = bank_forks.read().unwrap().get(2).unwrap().clone();
+        bank2.freeze();
+        highest_confirmed_slot = 0;
         OptimisticallyConfirmedBankTracker::process_notification(
             BankNotification::Frozen(bank2),
             &bank_forks,
             &optimistically_confirmed_bank,
             &subscriptions,
             &mut pending_optimistically_confirmed_banks,
+            &mut last_notified_confirmed_slot,
+            &mut highest_confirmed_slot,
+            &None,
         );
         let (response, _) = robust_poll_or_panic(transport_receiver1);
         let expected = json!({
@@ -2197,7 +2649,7 @@ pub(crate) mod tests {
     #[test]
     fn test_total_subscriptions() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(100);
-        let bank = Bank::new(&genesis_config);
+        let bank = Bank::new_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let subscriptions = RpcSubscriptions::default_with_bank_forks(bank_forks);
 

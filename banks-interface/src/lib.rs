@@ -1,13 +1,15 @@
-use serde::{Deserialize, Serialize};
-use solana_sdk::{
-    account::Account,
-    clock::Slot,
-    commitment_config::CommitmentLevel,
-    fee_calculator::FeeCalculator,
-    hash::Hash,
-    pubkey::Pubkey,
-    signature::Signature,
-    transaction::{self, Transaction, TransactionError},
+use {
+    serde::{Deserialize, Serialize},
+    solana_sdk::{
+        account::Account,
+        clock::Slot,
+        commitment_config::CommitmentLevel,
+        fee_calculator::FeeCalculator,
+        hash::Hash,
+        pubkey::Pubkey,
+        signature::Signature,
+        transaction::{self, Transaction, TransactionError},
+    },
 };
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -34,6 +36,7 @@ pub trait Banks {
     async fn get_transaction_status_with_context(signature: Signature)
         -> Option<TransactionStatus>;
     async fn get_slot_with_context(commitment: CommitmentLevel) -> Slot;
+    async fn get_block_height_with_context(commitment: CommitmentLevel) -> u64;
     async fn process_transaction_with_commitment_and_context(
         transaction: Transaction,
         commitment: CommitmentLevel,
