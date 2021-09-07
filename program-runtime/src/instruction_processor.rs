@@ -663,28 +663,6 @@ impl InstructionProcessor {
         }
     }
 
-    /// Record the initial state of the accounts so that they can be compared
-    /// after the instruction is processed
-    pub fn create_pre_accounts(
-        message: &Message,
-        instruction: &CompiledInstruction,
-        accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
-    ) -> Vec<PreAccount> {
-        let mut pre_accounts = Vec::with_capacity(instruction.accounts.len());
-        {
-            let mut work = |_unique_index: usize, account_index: usize| {
-                if account_index < message.account_keys.len() && account_index < accounts.len() {
-                    let account = accounts[account_index].1.borrow();
-                    pre_accounts.push(PreAccount::new(&accounts[account_index].0, &account));
-                    return Ok(());
-                }
-                Err(InstructionError::MissingAccount)
-            };
-            let _ = instruction.visit_each_account(&mut work);
-        }
-        pre_accounts
-    }
-
     /// Verify the results of a cross-program instruction
     #[allow(clippy::too_many_arguments)]
     pub fn verify_and_update(
