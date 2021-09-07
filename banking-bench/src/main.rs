@@ -312,11 +312,10 @@ fn main() {
                 tx_total_us += duration_as_us(&now.elapsed());
 
                 let mut poh_time = Measure::start("poh_time");
-                poh_recorder.lock().unwrap().reset(
-                    bank.last_blockhash(),
-                    bank.slot(),
-                    Some((bank.slot(), bank.slot() + 1)),
-                );
+                poh_recorder
+                    .lock()
+                    .unwrap()
+                    .reset(bank.clone(), Some((bank.slot(), bank.slot() + 1)));
                 poh_time.stop();
 
                 let mut new_bank_time = Measure::start("new_bank");

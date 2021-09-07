@@ -396,15 +396,18 @@ mod tests {
             });
             let exit = Arc::new(AtomicBool::new(false));
 
+            let ticks_per_slot = bank.ticks_per_slot();
+            let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
+            let blockstore = Arc::new(blockstore);
             let (poh_recorder, entry_receiver, record_receiver) = PohRecorder::new(
                 bank.tick_height(),
                 prev_hash,
-                bank.slot(),
+                bank.clone(),
                 Some((4, 4)),
-                bank.ticks_per_slot(),
+                ticks_per_slot,
                 &Pubkey::default(),
-                &Arc::new(blockstore),
-                &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
+                &blockstore,
+                &leader_schedule_cache,
                 &poh_config,
                 exit.clone(),
             );

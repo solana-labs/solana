@@ -1955,7 +1955,7 @@ mod tests {
                 // TODO use record_receiver
                 bank.tick_height(),
                 bank.last_blockhash(),
-                bank.slot(),
+                bank.clone(),
                 None,
                 bank.ticks_per_slot(),
                 &Pubkey::default(),
@@ -2210,7 +2210,7 @@ mod tests {
             let (poh_recorder, entry_receiver, record_receiver) = PohRecorder::new(
                 bank.tick_height(),
                 bank.last_blockhash(),
-                bank.slot(),
+                bank.clone(),
                 Some((4, 4)),
                 bank.ticks_per_slot(),
                 &pubkey,
@@ -2346,7 +2346,7 @@ mod tests {
             let (poh_recorder, _entry_receiver, record_receiver) = PohRecorder::new(
                 bank.tick_height(),
                 bank.last_blockhash(),
-                bank.slot(),
+                bank.clone(),
                 Some((4, 4)),
                 bank.ticks_per_slot(),
                 &pubkey,
@@ -2453,7 +2453,7 @@ mod tests {
             let (poh_recorder, _entry_receiver, record_receiver) = PohRecorder::new(
                 bank.tick_height(),
                 bank.last_blockhash(),
-                bank.slot(),
+                bank.clone(),
                 Some((4, 4)),
                 bank.ticks_per_slot(),
                 &solana_sdk::pubkey::new_rand(),
@@ -2542,7 +2542,7 @@ mod tests {
             let (poh_recorder, _entry_receiver, record_receiver) = PohRecorder::new(
                 bank.tick_height(),
                 bank.last_blockhash(),
-                bank.slot(),
+                bank.clone(),
                 Some((4, 4)),
                 bank.ticks_per_slot(),
                 &pubkey,
@@ -2643,7 +2643,7 @@ mod tests {
         let (poh_recorder, entry_receiver, record_receiver) = PohRecorder::new(
             bank.tick_height(),
             bank.last_blockhash(),
-            bank.slot(),
+            bank.clone(),
             Some((4, 4)),
             bank.ticks_per_slot(),
             &solana_sdk::pubkey::new_rand(),

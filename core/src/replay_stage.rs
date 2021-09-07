@@ -1930,7 +1930,7 @@ impl ReplayStage {
         poh_recorder
             .lock()
             .unwrap()
-            .reset(bank.last_blockhash(), bank.slot(), next_leader_slot);
+            .reset(bank.clone(), next_leader_slot);
 
         let next_leader_msg = if let Some(next_leader_slot) = next_leader_slot {
             format!("My next leader slot is {}", next_leader_slot.0)
@@ -2978,7 +2978,7 @@ pub mod tests {
             PohRecorder::new(
                 working_bank.tick_height(),
                 working_bank.last_blockhash(),
-                working_bank.slot(),
+                working_bank.clone(),
                 None,
                 working_bank.ticks_per_slot(),
                 &Pubkey::default(),
