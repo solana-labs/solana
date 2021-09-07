@@ -1,6 +1,7 @@
 use clap::{crate_description, crate_name, value_t_or_exit, ArgMatches};
 use console::style;
 use solana_clap_utils::{
+    app::SolanaApp,
     input_validators::normalize_to_url_if_moniker,
     keypair::{CliSigners, DefaultSigner},
     DisplayError,
@@ -235,12 +236,10 @@ pub fn parse_args<'a>(
 
 fn main() -> Result<(), Box<dyn error::Error>> {
     solana_logger::setup_with_default("off");
-    let matches = get_clap_app(
-        crate_name!(),
-        crate_description!(),
-        solana_version::version!(),
-    )
-    .get_matches();
+    let version = String::from(solana_version::version!());
+    let mut app = get_clap_app(crate_name!(), crate_description!(), &version).finalize();
+    app.process_common("solana");
+    let matches = app.get_matches();
 
     do_main(&matches).map_err(|err| DisplayError::new_as_boxed(err).into())
 }

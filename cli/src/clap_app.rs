@@ -187,16 +187,4 @@ pub fn get_clap_app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> A
                         ),
                 ),
         )
-        .subcommand(
-            SubCommand::with_name("completion")
-            .about("Generate completion scripts for various shells")
-            .arg(
-                Arg::with_name("shell")
-                .long("shell")
-                .short("s")
-                .takes_value(true)
-                .possible_values(&["bash", "fish", "zsh", "powershell", "elvish"])
-                .default_value("bash")
-            )
-        )
 }

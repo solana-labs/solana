@@ -1,8 +1,8 @@
 use crate::{
-    clap_app::*, cluster_query::*, feature::*, inflation::*, nonce::*, program::*, spend_utils::*,
-    stake::*, validator_info::*, vote::*, wallet::*,
+    cluster_query::*, feature::*, inflation::*, nonce::*, program::*, spend_utils::*, stake::*,
+    validator_info::*, vote::*, wallet::*,
 };
-use clap::{crate_description, crate_name, value_t_or_exit, ArgMatches, Shell};
+use clap::{value_t_or_exit, ArgMatches};
 use log::*;
 use num_traits::FromPrimitive;
 use serde_json::{self, Value};
@@ -30,7 +30,7 @@ use solana_sdk::{
     transaction::{Transaction, TransactionError},
 };
 use solana_vote_program::vote_state::VoteAuthorize;
-use std::{collections::HashMap, error, io::stdout, str::FromStr, sync::Arc, time::Duration};
+use std::{collections::HashMap, error, str::FromStr, sync::Arc, time::Duration};
 use thiserror::Error;
 
 pub const DEFAULT_RPC_TIMEOUT_SECONDS: &str = "30";
@@ -591,26 +591,6 @@ pub fn parse_command(
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, Box<dyn error::Error>> {
     let response = match matches.subcommand() {
-        // Autocompletion Command
-        ("completion", Some(matches)) => {
-            let shell_choice = match matches.value_of("shell") {
-                Some("bash") => Shell::Bash,
-                Some("fish") => Shell::Fish,
-                Some("zsh") => Shell::Zsh,
-                Some("powershell") => Shell::PowerShell,
-                Some("elvish") => Shell::Elvish,
-                // This is safe, since we assign default_value and possible_values
-                // are restricted
-                _ => unreachable!(),
-            };
-            get_clap_app(
-                crate_name!(),
-                crate_description!(),
-                solana_version::version!(),
-            )
-            .gen_completions_to("solana", shell_choice, &mut stdout());
-            std::process::exit(0);
-        }
         // Cluster Query Commands
         ("block", Some(matches)) => parse_get_block(matches),
         ("block-height", Some(matches)) => parse_get_block_height(matches),
