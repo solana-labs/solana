@@ -25,7 +25,7 @@ chrono = { version = "0.4.11", features = ["serde"] }
 crossbeam-channel = "0.5"
 dashmap = { version = "4.0.2", features = ["rayon", "raw-api"] }
 ed25519-dalek = "=1.0.1"
-etcd-client = { version = "0.7.1", features = ["tls"]}
+etcd-client = { version = "0.7.2", features = ["tls"]}
 fs_extra = "1.2.0"
 flate2 = "1.0"
 indexmap = { version = "1.7", features = ["rayon"] }
