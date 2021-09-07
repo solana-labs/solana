@@ -39,7 +39,7 @@ use {
     solana_rpc::{rpc::JsonRpcConfig, rpc_pubsub_service::PubSubConfig},
     solana_runtime::{
         accounts_db::{
-            AccountShrinkThreshold, DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
+            AccountShrinkThreshold, AccountsDbConfig, DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
             DEFAULT_ACCOUNTS_SHRINK_RATIO,
         },
         accounts_index::{
@@ -2444,6 +2444,7 @@ pub fn main() {
     let accounts_index_config = value_t!(matches, "accounts_index_bins", usize)
         .ok()
         .map(|bins| AccountsIndexConfig { bins: Some(bins) });
+    let accounts_db_config = accounts_index_config.map(|x| AccountsDbConfig { index: Some(x) });
 
     let accountsdb_repl_service_config = if matches.is_present("enable_accountsdb_repl") {
         let accountsdb_repl_bind_address = if matches.is_present("accountsdb_repl_bind_address") {
@@ -2563,7 +2564,7 @@ pub fn main() {
         account_indexes,
         accounts_db_caching_enabled: !matches.is_present("no_accounts_db_caching"),
         accounts_db_test_hash_calculation: matches.is_present("accounts_db_test_hash_calculation"),
-        accounts_index_config,
+        accounts_db_config,
         accounts_db_skip_shrink: matches.is_present("accounts_db_skip_shrink"),
         accounts_db_use_index_hash_calculation: matches.is_present("accounts_db_index_hashing"),
         tpu_coalesce_ms,
