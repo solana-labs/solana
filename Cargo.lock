@@ -4293,6 +4293,7 @@ version = "1.8.0"
 dependencies = [
  "bincode",
  "byteorder",
+ "curve25519-dalek 3.2.0",
  "libsecp256k1 0.6.0",
  "log 0.4.14",
  "num-derive",
