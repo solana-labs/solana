@@ -68,10 +68,10 @@
     "borsh": "^0.4.0",
     "bs58": "^4.0.1",
     "buffer": "6.0.1",
+    "cross-fetch": "^3.1.4",
     "crypto-hash": "^1.2.2",
     "jayson": "^3.4.4",
     "js-sha3": "^0.8.0",
-    "node-fetch": "^2.6.1",
     "rpc-websockets": "^7.4.2",
     "secp256k1": "^4.0.2",
     "superstruct": "^0.14.2",
@@ -102,7 +102,6 @@
     "@types/mocha": "^9.0.0",
     "@types/mz": "^2.7.3",
     "@types/node": "^16.0.0",
-    "@types/node-fetch": "^2.5.8",
     "@types/secp256k1": "^4.0.1",
     "@types/sinon": "^10.0.0",
     "@typescript-eslint/eslint-plugin": "^4.14.2",
@@ -139,5 +138,8 @@
     "tslib": "^2.1.0",
     "typedoc": "^0.21.0-beta.2",
     "typescript": "^4.3.2"
+  },
+  "engines": {
+    "node": ">=12.20.0"
   }
 }
