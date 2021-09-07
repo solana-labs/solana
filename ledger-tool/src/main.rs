@@ -1594,10 +1594,7 @@ fn main() {
                     break;
                 }
                 if let Ok(shred_vec) = source.get_data_shreds_for_slot(slot, 0) {
-                    let shreds = Shreds {
-                        inner_shreds: shred_vec,
-                        ..Default::default()
-                    };
+                    let shreds = Shreds::new_from_vec(shred_vec);
                     if target.insert_shreds(shreds, None, true).is_err() {
                         warn!("error inserting shreds for slot {}", slot);
                     }

@@ -1328,11 +1328,7 @@ fn backup_and_clear_blockstore(ledger_path: &Path, start_slot: Slot, shred_versi
             if let Ok(shreds) = blockstore.get_data_shreds_for_slot(slot, 0) {
                 if let Ok(ref backup_blockstore) = backup_blockstore {
                     copied += shreds.len();
-                    let mut insert_shreds = Shreds {
-                        inner_shreds: shreds,
-                        ..Default::default()
-                    };
-                    // TODO mark timer origin
+                    let mut insert_shreds = Shreds::new_from_vec(shreds);
                     insert_shreds.timer.mark_outgoing_start();
                     let _ = backup_blockstore.insert_shreds(insert_shreds, None, true);
                 }

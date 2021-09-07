@@ -477,16 +477,13 @@ impl Blockstore {
                 if !is_slot_complete {
                     entries.pop().unwrap();
                 }
-                let mut shreds = Shreds {
-                    inner_shreds: entries_to_test_shreds(
-                        entries.clone(),
-                        slot,
-                        parent.unwrap_or(slot),
-                        is_slot_complete,
-                        0,
-                    ),
-                    ..Default::default()
-                };
+                let mut shreds = Shreds::new_from_vec(entries_to_test_shreds(
+                    entries.clone(),
+                    slot,
+                    parent.unwrap_or(slot),
+                    is_slot_complete,
+                    0,
+                ));
                 shreds.timer.mark_outgoing_start();
                 self.insert_shreds(shreds, None, false).unwrap();
             }
@@ -1724,11 +1721,7 @@ impl Blockstore {
             all_shreds.append(&mut coding_shreds);
         }
         let num_data = all_shreds.iter().filter(|shred| shred.is_data()).count();
-        let mut shreds = Shreds {
-            inner_shreds: all_shreds,
-            ..Default::default()
-        };
-        // TODO propagate timer from entries
+        let mut shreds = Shreds::new_from_vec(all_shreds);
         shreds.timer.mark_outgoing_start();
         self.insert_shreds(shreds, None, false)?;
         Ok(num_data)
@@ -3713,13 +3706,11 @@ pub fn create_new_ledger(
     let version = solana_sdk::shred_version::version_from_hash(&last_hash);
 
     let shredder = Shredder::new(0, 0, 0, version).unwrap();
-    let mut shreds = Shreds {
-        inner_shreds: shredder
+    let mut shreds = Shreds::new_from_vec(
+        shredder
             .entries_to_shreds(&Keypair::new(), &entries, true, 0)
             .0,
-        ..Default::default()
-    };
-    // TODO mark outgoing processing origin
+    );
     shreds.timer.mark_outgoing_start();
     assert!(shreds.inner_shreds.last().unwrap().last_in_slot());
 

@@ -341,11 +341,7 @@ impl BroadcastRun for BroadcastDuplicatesRun {
         blockstore: &Arc<Blockstore>,
     ) -> Result<()> {
         let (all_shreds, _) = receiver.lock().unwrap().recv()?;
-        let mut shreds = Shreds {
-            inner_shreds: all_shreds.to_vec(),
-            ..Default::default()
-        };
-        // TODO mark timer origin
+        let mut shreds = Shreds::new_from_vec(all_shreds.to_vec());
         shreds.timer.mark_outgoing_start();
         blockstore
             .insert_shreds(shreds, None, true)

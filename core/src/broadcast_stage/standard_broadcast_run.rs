@@ -224,11 +224,7 @@ impl StandardBroadcastRun {
         // Insert the first shred so blockstore stores that the leader started this block
         // This must be done before the blocks are sent out over the wire.
         if !data_shreds.is_empty() && data_shreds[0].index() == 0 {
-            let mut first = Shreds {
-                inner_shreds: vec![data_shreds[0].clone()],
-                ..Default::default()
-            };
-            // TODO mark timer origin
+            let mut first = Shreds::new_from_shred(data_shreds[0].clone());
             first.timer.mark_outgoing_start();
             blockstore
                 .insert_shreds(first, None, true)
@@ -325,11 +321,7 @@ impl StandardBroadcastRun {
         } else {
             shreds.to_vec()
         };
-        let mut insert_shreds = Shreds {
-            inner_shreds: insert_shreds_vec,
-            ..Default::default()
-        };
-        // TODO mark timer origin
+        let mut insert_shreds = Shreds::new_from_vec(insert_shreds_vec);
         insert_shreds.timer.mark_outgoing_start();
 
         blockstore

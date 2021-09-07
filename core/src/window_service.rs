@@ -733,7 +733,7 @@ impl WindowService {
         let mut stats = ReceiveWindowStats {
             batch_span_us_hist: histogram::Histogram::new(),
             batch_first_recv_us_hist: histogram::Histogram::new(),
-            ..Default::default()
+            ..ReceiveWindowStats::default()
         };
 
         Builder::new()

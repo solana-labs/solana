@@ -226,14 +226,14 @@ impl Shreds {
     pub fn new_from_vec(shreds: Vec<Shred>) -> Self {
         Shreds {
             inner_shreds: shreds,
-            ..Default::default()
+            timer: PacketTimer::default(),
         }
     }
 
     pub fn new_from_shred(shred: Shred) -> Self {
         Shreds {
             inner_shreds: vec![shred],
-            ..Default::default()
+            timer: PacketTimer::default(),
         }
     }
 }
