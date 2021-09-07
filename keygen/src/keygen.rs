@@ -5,6 +5,7 @@ use clap::{
     Arg, ArgMatches, SubCommand,
 };
 use solana_clap_utils::{
+    app::SolanaApp,
     input_parsers::STDOUT_OUTFILE_TOKEN,
     input_validators::{is_parsable, is_prompt_signer_source},
     keypair::{
@@ -329,9 +330,10 @@ fn grind_parse_args(
 
 fn main() -> Result<(), Box<dyn error::Error>> {
     let default_num_threads = num_cpus::get().to_string();
-    let matches = App::new(crate_name!())
+    let version = solana_version::version!();
+    let mut app = App::new(crate_name!())
         .about(crate_description!())
-        .version(solana_version::version!())
+        .version(version)
         .setting(AppSettings::SubcommandRequiredElseHelp)
         .arg({
             let arg = Arg::with_name("config_file")
@@ -518,7 +520,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 ),
 
         )
-        .get_matches();
+        .finalize();
+
+    app.process_common("solana-keygen");
+    let matches = app.get_matches();
 
     do_main(&matches).map_err(|err| DisplayError::new_as_boxed(err).into())
 }
