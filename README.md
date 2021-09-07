@@ -57,11 +57,6 @@ $ cd solana
 $ cargo build
 ```
 
-## **4. Run a minimal local cluster.**
-```bash
-$ ./run.sh
-```
-
 # Testing
 
 **Run the test suite:**
