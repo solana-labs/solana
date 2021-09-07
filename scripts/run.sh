@@ -8,7 +8,7 @@
 set -e
 
 # Prefer possible `cargo build` binaries over PATH binaries
-cd "$(dirname "$0")/"
+cd "$(dirname "$0")/.."
 
 profile=debug
 if [[ -n $NDEBUG ]]; then
