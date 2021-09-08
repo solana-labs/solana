@@ -4182,14 +4182,9 @@ version = "1.7.12"
 dependencies = [
  "bincode",
  "byteorder",
-<<<<<<< HEAD
+ "curve25519-dalek 3.0.0",
  "libsecp256k1",
  "log 0.4.11",
-=======
- "curve25519-dalek 3.2.0",
- "libsecp256k1 0.6.0",
- "log 0.4.14",
->>>>>>> 778b2adbe (Check seed length before trying to cal program address (#19699))
  "num-derive",
  "num-traits",
  "rand 0.7.3",
