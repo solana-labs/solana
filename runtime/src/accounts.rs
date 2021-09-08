@@ -225,23 +225,10 @@ impl Accounts {
                         payer_index = Some(i);
                     }
 
-<<<<<<< HEAD
                     if solana_sdk::sysvar::instructions::check_id(key)
                         && feature_set.is_active(&feature_set::instructions_sysvar_enabled::id())
                     {
-                        if message.is_writable(i, demote_program_write_locks) {
-                            return Err(TransactionError::InvalidAccountIndex);
-                        }
                         Self::construct_instructions_account(message, demote_program_write_locks)
-=======
-                    if solana_sdk::sysvar::instructions::check_id(key) {
-                        Self::construct_instructions_account(
-                            message,
-                            feature_set
-                                .is_active(&feature_set::instructions_sysvar_owned_by_sysvar::id()),
-                            demote_program_write_locks,
-                        )
->>>>>>> 38bbb7798 (Return error if Transaction contains writable executable or ProgramData accounts (#19629))
                     } else {
                         let (account, rent) = self
                             .accounts_db
@@ -1139,9 +1126,10 @@ pub fn prepare_if_nonce_account(
     false
 }
 
-fn is_upgradeable_loader_present(message: &SanitizedMessage) -> bool {
+fn is_upgradeable_loader_present(message: &Message) -> bool {
     message
-        .account_keys_iter()
+        .account_keys
+        .iter()
         .any(|&key| key == bpf_loader_upgradeable::id())
 }
 

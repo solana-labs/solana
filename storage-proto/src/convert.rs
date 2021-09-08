@@ -548,12 +548,9 @@ impl TryFrom<tx_by_addr::TransactionError> for TransactionError {
             14 => TransactionError::SanitizeFailure,
             15 => TransactionError::ClusterMaintenance,
             16 => TransactionError::AccountBorrowOutstanding,
-<<<<<<< HEAD
-=======
             17 => TransactionError::WouldExceedMaxBlockCostLimit,
             18 => TransactionError::UnsupportedVersion,
             19 => TransactionError::InvalidWritableAccount,
->>>>>>> 38bbb7798 (Return error if Transaction contains writable executable or ProgramData accounts (#19629))
             _ => return Err("Invalid TransactionError"),
         })
     }
@@ -612,8 +609,6 @@ impl From<TransactionError> for tx_by_addr::TransactionError {
                 TransactionError::AccountBorrowOutstanding => {
                     tx_by_addr::TransactionErrorType::AccountBorrowOutstandingTx
                 }
-<<<<<<< HEAD
-=======
                 TransactionError::WouldExceedMaxBlockCostLimit => {
                     tx_by_addr::TransactionErrorType::WouldExceedMaxBlockCostLimit
                 }
@@ -623,7 +618,6 @@ impl From<TransactionError> for tx_by_addr::TransactionError {
                 TransactionError::InvalidWritableAccount => {
                     tx_by_addr::TransactionErrorType::InvalidWritableAccount
                 }
->>>>>>> 38bbb7798 (Return error if Transaction contains writable executable or ProgramData accounts (#19629))
             } as i32,
             instruction_error: match transaction_error {
                 TransactionError::InstructionError(index, ref instruction_error) => {
