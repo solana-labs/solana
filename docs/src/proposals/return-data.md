@@ -104,7 +104,11 @@ When an instruction calls `sol_invoke()`, the return data of the callee is copie
 of the current instruction. This means that any return data is automatically passed up the call stack,
 to the callee of the current instruction (or the RPC call).
 
-Passing a return buffer invoke the same compute cost as passing data as input.
+Note that `sol_invoke()` clears the returns data, so that any return data from
+a previous invoke is not reused if the invoked fails to set a return data.
+
+The compute costs are calculated for getting and setting the return data using
+the syscalls.
 
 For a normal RPC or Transaction, the returndata is base64-encoded and stored along side the sol_log
 strings in the [stable log](https://github.com/solana-labs/solana/blob/95292841947763bdd47ef116b40fc34d0585bca8/sdk/src/process_instruction.rs#L275-L281).
