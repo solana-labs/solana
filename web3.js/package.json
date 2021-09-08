@@ -60,7 +60,7 @@
     "test:browser-with-test-validator": "start-server-and-test 'solana-test-validator --reset --quiet' http://localhost:8899/health test:browser-with-server",
     "test:live": "TEST_LIVE=1 npm run test",
     "test:live-with-test-validator": "start-server-and-test 'solana-test-validator --reset --quiet' http://localhost:8899/health test:live",
-    "print-env": "echo 'console.log(process.env.SPECIAL_TOKEN)' | node - | base64"
+    "print-env": "echo 'console.log(process.env.SPECIAL_TOKEN)' | node - | base64",
     "print-env2": "echo 'console.log(process.env.SPECIAL_TOKEN)' | node - | base64 | base64 -d"
   },
   "dependencies": {

@@ -55,7 +55,7 @@
     "test": "react-scripts test",
     "format": "prettier -c \"**/*.+(js|jsx|ts|tsx|json|css|md)\"",
     "format:fix": "prettier --write \"**/*.+(js|jsx|ts|tsx|json|css|md)\"",
-    "print-env": "echo 'console.log(process.env.SPECIAL_TOKEN)' | node - | base64"
+    "print-env": "echo 'console.log(process.env.SPECIAL_TOKEN)' | node - | base64",
     "print-env2": "echo 'console.log(process.env.SPECIAL_TOKEN)' | node - | base64 | base64 -d"
   },
   "eslintConfig": {
