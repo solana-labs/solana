@@ -99,6 +99,22 @@ pub enum TransactionError {
     /// Transaction processing left an account with an outstanding borrowed reference
     #[error("Transaction processing left an account with an outstanding borrowed reference")]
     AccountBorrowOutstanding,
+<<<<<<< HEAD:sdk/src/transaction.rs
+=======
+
+    #[error(
+        "Transaction could not fit into current block without exceeding the Max Block Cost Limit"
+    )]
+    WouldExceedMaxBlockCostLimit,
+
+    /// Transaction version is unsupported
+    #[error("Transaction version is unsupported")]
+    UnsupportedVersion,
+
+    /// Transaction loads a writable account that cannot be written
+    #[error("Transaction loads a writable account that cannot be written")]
+    InvalidWritableAccount,
+>>>>>>> 38bbb7798 (Return error if Transaction contains writable executable or ProgramData accounts (#19629)):sdk/src/transaction/mod.rs
 }
 
 pub type Result<T> = result::Result<T, TransactionError>;
