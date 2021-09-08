@@ -15,6 +15,8 @@ pub mod bank_utils;
 pub mod blockhash_queue;
 pub mod bloom;
 pub mod builtins;
+pub mod cache_hash_data;
+pub mod cache_hash_data_stats;
 pub mod commitment;
 pub mod contains;
 pub mod epoch_stakes;
