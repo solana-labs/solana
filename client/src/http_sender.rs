@@ -6,7 +6,7 @@ use {
         rpc_custom_error,
         rpc_request::{RpcError, RpcRequest, RpcResponseErrorData},
         rpc_response::RpcSimulateTransactionResult,
-        rpc_sender::RpcSender,
+        rpc_sender::*,
     },
     log::*,
     reqwest::{
@@ -17,10 +17,10 @@ use {
     std::{
         sync::{
             atomic::{AtomicU64, Ordering},
-            Arc,
+            Arc, RwLock,
         },
         thread::sleep,
-        time::Duration,
+        time::{Duration, Instant},
     },
 };
 
@@ -28,6 +28,7 @@ pub struct HttpSender {
     client: Arc<reqwest::blocking::Client>,
     url: String,
     request_id: AtomicU64,
+    stats: RwLock<RpcTransportStats>,
 }
 
 /// The standard [`RpcSender`] over HTTP.
@@ -59,6 +60,7 @@ impl HttpSender {
             client,
             url,
             request_id: AtomicU64::new(0),
+            stats: RwLock::new(RpcTransportStats::default()),
         }
     }
 }
@@ -69,8 +71,43 @@ struct RpcErrorObject {
     message: String,
 }
 
+struct StatsUpdater<'a> {
+    stats: &'a RwLock<RpcTransportStats>,
+    request_start_time: Instant,
+    rate_limited_time: Duration,
+}
+
+impl<'a> StatsUpdater<'a> {
+    fn new(stats: &'a RwLock<RpcTransportStats>) -> Self {
+        Self {
+            stats,
+            request_start_time: Instant::now(),
+            rate_limited_time: Duration::default(),
+        }
+    }
+
+    fn add_rate_limited_time(&mut self, duration: Duration) {
+        self.rate_limited_time += duration;
+    }
+}
+
+impl<'a> Drop for StatsUpdater<'a> {
+    fn drop(&mut self) {
+        let mut stats = self.stats.write().unwrap();
+        stats.request_count += 1;
+        stats.elapsed_time += Instant::now().duration_since(self.request_start_time);
+        stats.rate_limited_time += self.rate_limited_time;
+    }
+}
+
 impl RpcSender for HttpSender {
+    fn get_transport_stats(&self) -> RpcTransportStats {
+        self.stats.read().unwrap().clone()
+    }
+
     fn send(&self, request: RpcRequest, params: serde_json::Value) -> Result<serde_json::Value> {
+        let mut stats_updater = StatsUpdater::new(&self.stats);
+
         let request_id = self.request_id.fetch_add(1, Ordering::Relaxed);
         let request_json = request.build_request_json(request_id, params).to_string();
 
@@ -114,6 +151,7 @@ impl RpcSender for HttpSender {
                             );
 
                             sleep(duration);
+                            stats_updater.add_rate_limited_time(duration);
                             continue;
                         }
                         return Err(response.error_for_status().unwrap_err().into());
