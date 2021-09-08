@@ -38,11 +38,11 @@ use crate::{
         AccountAddressFilter, Accounts, TransactionAccounts, TransactionLoadResult,
         TransactionLoaders,
     },
-    accounts_db::{AccountShrinkThreshold, ErrorCounters, SnapshotStorages},
-    accounts_index::{
-        AccountSecondaryIndexes, AccountsIndexConfig, IndexKey, ScanResult,
-        ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS, ACCOUNTS_INDEX_CONFIG_FOR_TESTING,
+    accounts_db::{
+        AccountShrinkThreshold, AccountsDbConfig, ErrorCounters, SnapshotStorages,
+        ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
     },
+    accounts_index::{AccountSecondaryIndexes, IndexKey, ScanResult},
     ancestors::{Ancestors, AncestorsForSerialization},
     blockhash_queue::BlockhashQueue,
     builtins::{self, ActivationType, Builtin, Builtins},
@@ -1140,7 +1140,7 @@ impl Bank {
             accounts_db_caching_enabled,
             shrink_ratio,
             debug_do_not_add_builtins,
-            Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
+            Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
         )
     }
 
@@ -1165,7 +1165,7 @@ impl Bank {
             accounts_db_caching_enabled,
             shrink_ratio,
             debug_do_not_add_builtins,
-            Some(ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS),
+            Some(ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS),
         )
     }
 
@@ -1180,7 +1180,7 @@ impl Bank {
         accounts_db_caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
         debug_do_not_add_builtins: bool,
-        accounts_index_config: Option<AccountsIndexConfig>,
+        accounts_db_config: Option<AccountsDbConfig>,
     ) -> Self {
         let accounts = Accounts::new_with_config(
             paths,
@@ -1188,7 +1188,7 @@ impl Bank {
             account_indexes,
             accounts_db_caching_enabled,
             shrink_ratio,
-            accounts_index_config,
+            accounts_db_config,
         );
         let mut bank = Self::default_with_accounts(accounts);
         bank.ancestors = Ancestors::from(vec![bank.slot()]);

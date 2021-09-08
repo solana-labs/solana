@@ -25,7 +25,7 @@ use crate::{
     accounts_index::{
         AccountIndexGetResult, AccountSecondaryIndexes, AccountsIndex, AccountsIndexConfig,
         AccountsIndexRootsStats, IndexKey, IsCached, RefCount, ScanResult, SlotList, SlotSlice,
-        ZeroLamport, ACCOUNTS_INDEX_CONFIG_FOR_TESTING,
+        ZeroLamport, ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS, ACCOUNTS_INDEX_CONFIG_FOR_TESTING,
     },
     ancestors::Ancestors,
     append_vec::{AppendVec, StoredAccountMeta, StoredMeta, StoredMetaWriteVersion},
@@ -117,6 +117,18 @@ const CACHE_VIRTUAL_WRITE_VERSION: StoredMetaWriteVersion = 0;
 // that it doesn't actually map to an entry in an AppendVec.
 const CACHE_VIRTUAL_OFFSET: usize = 0;
 const CACHE_VIRTUAL_STORED_SIZE: usize = 0;
+
+pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
+    index: Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
+};
+pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig {
+    index: Some(ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS),
+};
+
+#[derive(Debug, Default, Clone)]
+pub struct AccountsDbConfig {
+    pub index: Option<AccountsIndexConfig>,
+}
 
 struct FoundStoredAccount<'a> {
     pub account: StoredAccountMeta<'a>,
@@ -1458,7 +1470,7 @@ impl AccountsDb {
             AccountSecondaryIndexes::default(),
             false,
             AccountShrinkThreshold::default(),
-            Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
+            Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
         )
     }
 
@@ -1468,9 +1480,9 @@ impl AccountsDb {
         account_indexes: AccountSecondaryIndexes,
         caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
-        accounts_index_config: Option<AccountsIndexConfig>,
+        accounts_db_config: Option<AccountsDbConfig>,
     ) -> Self {
-        let accounts_index = AccountsIndex::new(accounts_index_config);
+        let accounts_index = AccountsIndex::new(accounts_db_config.and_then(|x| x.index));
         let mut new = if !paths.is_empty() {
             Self {
                 paths,
@@ -6498,7 +6510,7 @@ impl AccountsDb {
             account_indexes,
             caching_enabled,
             shrink_ratio,
-            Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
+            Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
         )
     }
 

@@ -2,9 +2,10 @@ use {
     crate::{
         accounts::Accounts,
         accounts_db::{
-            AccountShrinkThreshold, AccountStorageEntry, AccountsDb, AppendVecId, BankHashInfo,
+            AccountShrinkThreshold, AccountStorageEntry, AccountsDb, AccountsDbConfig, AppendVecId,
+            BankHashInfo,
         },
-        accounts_index::{AccountSecondaryIndexes, AccountsIndexConfig},
+        accounts_index::AccountSecondaryIndexes,
         ancestors::Ancestors,
         append_vec::{AppendVec, StoredMetaWriteVersion},
         bank::{Bank, BankFieldsToDeserialize, BankRc},
@@ -198,7 +199,7 @@ pub(crate) fn bank_from_streams<R>(
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
     verify_index: bool,
-    accounts_index_config: Option<AccountsIndexConfig>,
+    accounts_db_config: Option<AccountsDbConfig>,
 ) -> std::result::Result<Bank, Error>
 where
     R: Read,
@@ -236,7 +237,7 @@ where
                 limit_load_slot_count_from_snapshot,
                 shrink_ratio,
                 verify_index,
-                accounts_index_config,
+                accounts_db_config,
             )?;
             Ok(bank)
         }};
@@ -329,7 +330,7 @@ fn reconstruct_bank_from_fields<E>(
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
     verify_index: bool,
-    accounts_index_config: Option<AccountsIndexConfig>,
+    accounts_db_config: Option<AccountsDbConfig>,
 ) -> Result<Bank, Error>
 where
     E: SerializableStorage + std::marker::Sync,
@@ -344,7 +345,7 @@ where
         limit_load_slot_count_from_snapshot,
         shrink_ratio,
         verify_index,
-        accounts_index_config,
+        accounts_db_config,
     )?;
     accounts_db.freeze_accounts(
         &Ancestors::from(&bank_fields.ancestors),
@@ -396,7 +397,7 @@ fn reconstruct_accountsdb_from_fields<E>(
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
     verify_index: bool,
-    accounts_index_config: Option<AccountsIndexConfig>,
+    accounts_db_config: Option<AccountsDbConfig>,
 ) -> Result<AccountsDb, Error>
 where
     E: SerializableStorage + std::marker::Sync,
@@ -407,7 +408,7 @@ where
         account_secondary_indexes,
         caching_enabled,
         shrink_ratio,
-        accounts_index_config,
+        accounts_db_config,
     );
 
     let AccountsDbFields(

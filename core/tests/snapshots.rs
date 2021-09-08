@@ -59,7 +59,7 @@ mod tests {
         accounts_background_service::{
             AbsRequestHandler, AbsRequestSender, AccountsBackgroundService, SnapshotRequestHandler,
         },
-        accounts_db,
+        accounts_db::{self, ACCOUNTS_DB_CONFIG_FOR_TESTING},
         accounts_index::AccountSecondaryIndexes,
         bank::{Bank, BankSlotDelta},
         bank_forks::BankForks,
@@ -209,7 +209,7 @@ mod tests {
             check_hash_calculation,
             false,
             false,
-            Some(solana_runtime::accounts_index::ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
+            Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
         )
         .unwrap();
 
@@ -844,7 +844,7 @@ mod tests {
             false,
             false,
             false,
-            Some(solana_runtime::accounts_index::ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
+            Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
         )?;
 
         assert_eq!(bank, &deserialized_bank);
@@ -1020,7 +1020,7 @@ mod tests {
             false,
             false,
             false,
-            Some(solana_runtime::accounts_index::ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
+            Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
         )
         .unwrap();
 

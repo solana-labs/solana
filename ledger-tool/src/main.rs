@@ -26,6 +26,7 @@ use solana_ledger::{
     shred::Shred,
 };
 use solana_runtime::{
+    accounts_db::AccountsDbConfig,
     accounts_index::AccountsIndexConfig,
     bank::{Bank, RewardCalculationEvent},
     bank_forks::BankForks,
@@ -1886,6 +1887,9 @@ fn main() {
                 .ok()
                 .map(|bins| AccountsIndexConfig { bins: Some(bins) });
 
+            let accounts_db_config =
+                accounts_index_config.map(|x| AccountsDbConfig { index: Some(x) });
+
             let process_options = ProcessOptions {
                 dev_halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
                 new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
@@ -1898,7 +1902,7 @@ fn main() {
                     usize
                 )
                 .ok(),
-                accounts_index_config,
+                accounts_db_config,
                 verify_index: arg_matches.is_present("verify_accounts_index"),
                 allow_dead_slots: arg_matches.is_present("allow_dead_slots"),
                 accounts_db_test_hash_calculation: arg_matches
