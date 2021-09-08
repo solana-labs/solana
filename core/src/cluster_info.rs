@@ -1778,9 +1778,8 @@ impl ClusterInfo {
         bank_forks: Option<Arc<RwLock<BankForks>>>,
         sender: PacketSender,
         gossip_validators: Option<HashSet<Pubkey>>,
-        exit: &Arc<AtomicBool>,
+        exit: Arc<AtomicBool>,
     ) -> JoinHandle<()> {
-        let exit = exit.clone();
         let thread_pool = ThreadPoolBuilder::new()
             .num_threads(std::cmp::min(get_thread_count(), 8))
             .thread_name(|i| format!("ClusterInfo::gossip-{}", i))
@@ -1963,8 +1962,13 @@ impl ClusterInfo {
             self.stats
                 .pull_requests_count
                 .add_relaxed(requests.len() as u64);
-            let response =
-                self.handle_pull_requests(recycler, requests, stakes, require_stake_for_gossip);
+            let response = self.handle_pull_requests(
+                thread_pool,
+                recycler,
+                requests,
+                stakes,
+                require_stake_for_gossip,
+            );
             if !response.is_empty() {
                 self.stats
                     .packets_sent_pull_responses_count
@@ -2034,6 +2038,7 @@ impl ClusterInfo {
     // and tries to send back to them the values it detects are missing.
     fn handle_pull_requests(
         &self,
+        thread_pool: &ThreadPool,
         recycler: &PacketsRecycler,
         requests: Vec<PullData>,
         stakes: &HashMap<Pubkey, u64>,
@@ -2065,7 +2070,7 @@ impl ClusterInfo {
                 "generate_pull_responses",
                 &self.stats.generate_pull_responses,
             )
-            .generate_pull_responses(&caller_and_filters, output_size_limit, now);
+            .generate_pull_responses(thread_pool, &caller_and_filters, output_size_limit, now);
         if require_stake_for_gossip {
             for resp in &mut pull_responses {
                 retain_staked(resp, stakes);
@@ -2706,6 +2711,9 @@ impl ClusterInfo {
                 match self.run_socket_consume(&receiver, &sender, &thread_pool) {
                     Err(Error::RecvTimeoutError(RecvTimeoutError::Disconnected)) => break,
                     Err(Error::RecvTimeoutError(RecvTimeoutError::Timeout)) => (),
+                    // A send operation can only fail if the receiving end of a
+                    // channel is disconnected.
+                    Err(Error::SendError) => break,
                     Err(err) => error!("gossip consume: {}", err),
                     Ok(()) => (),
                 }
@@ -2721,20 +2729,19 @@ impl ClusterInfo {
         requests_receiver: Receiver<Vec<(/*from:*/ SocketAddr, Protocol)>>,
         response_sender: PacketSender,
         should_check_duplicate_instance: bool,
-        exit: &Arc<AtomicBool>,
+        exit: Arc<AtomicBool>,
     ) -> JoinHandle<()> {
-        let exit = exit.clone();
         let recycler =
             PacketsRecycler::new_without_limit("cluster-info-listen-recycler-shrink-stats");
+        let mut last_print = Instant::now();
+        let thread_pool = ThreadPoolBuilder::new()
+            .num_threads(get_thread_count().min(8))
+            .thread_name(|i| format!("sol-gossip-work-{}", i))
+            .build()
+            .unwrap();
         Builder::new()
             .name("solana-listen".to_string())
             .spawn(move || {
-                let thread_pool = ThreadPoolBuilder::new()
-                    .num_threads(std::cmp::min(get_thread_count(), 8))
-                    .thread_name(|i| format!("sol-gossip-work-{}", i))
-                    .build()
-                    .unwrap();
-                let mut last_print = Instant::now();
                 while !exit.load(Ordering::Relaxed) {
                     if let Err(err) = self.run_listen(
                         &recycler,

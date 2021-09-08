@@ -254,12 +254,13 @@ impl CrdsGossip {
 
     pub fn generate_pull_responses(
         &self,
+        thread_pool: &ThreadPool,
         filters: &[(CrdsValue, CrdsFilter)],
         output_size_limit: usize, // Limit number of crds values returned.
         now: u64,
     ) -> Vec<Vec<CrdsValue>> {
         self.pull
-            .generate_pull_responses(&self.crds, filters, output_size_limit, now)
+            .generate_pull_responses(thread_pool, &self.crds, filters, output_size_limit, now)
     }
 
     pub fn filter_pull_responses(
