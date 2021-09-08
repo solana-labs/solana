@@ -20,7 +20,7 @@ use {
         rpc_config::*,
         rpc_request::{RpcError, RpcRequest, RpcResponseErrorData, TokenAccountsFilter},
         rpc_response::*,
-        rpc_sender::RpcSender,
+        rpc_sender::*,
     },
     bincode::serialize,
     indicatif::{ProgressBar, ProgressStyle},
@@ -3819,6 +3819,10 @@ impl RpcClient {
             .map_err(|err| err.into_with_request(request))?;
         serde_json::from_value(response)
             .map_err(|err| ClientError::new_with_request(err.into(), request))
+    }
+
+    pub fn get_transport_stats(&self) -> RpcTransportStats {
+        self.sender.get_transport_stats()
     }
 }
 
