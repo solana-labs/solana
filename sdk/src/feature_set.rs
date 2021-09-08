@@ -191,6 +191,10 @@ pub mod demote_program_write_locks {
     solana_sdk::declare_id!("3E3jV7v9VcdJL8iYZUMax9DiDno8j7EWUVbhm9RtShj2");
 }
 
+pub mod allow_native_ids {
+    solana_sdk::declare_id!("GVnDbNkECwrzLM7aVBGWpBYo3yH1ACaXB4ottNX8pedZ");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -239,6 +243,7 @@ lazy_static! {
         (close_upgradeable_program_accounts::id(), "enable closing upgradeable program accounts"),
         (stake_program_advance_activating_credits_observed::id(), "Enable advancing credits observed for activation epoch #19309"),
         (demote_program_write_locks::id(), "demote program write locks to readonly #19593"),
+        (allow_native_ids::id(), "allow native program ids in program derived addresses"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
