@@ -4,7 +4,7 @@ set -ex
 solana --version
 
 echo $SPECIAL_TOKEN
-npm run print-var
+npm run print-env
 
 npm run clean
 npm run build

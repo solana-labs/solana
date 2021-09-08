@@ -11,7 +11,7 @@ branches:
 
 script:
   - echo $SPECIAL_TOKEN
-  - npm run print-var
+  - npm run print-env
   - npm run build
   - npm run test
   - npm run format
