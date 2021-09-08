@@ -192,7 +192,7 @@ impl ExecuteTimings {
 }
 
 type BankStatusCache = StatusCache<Result<()>>;
-#[frozen_abi(digest = "GT81Hdwrh73i55ScQvFqmzeHfUL42yxuavZods8VyzGc")]
+#[frozen_abi(digest = "5Br3PNyyX1L7XoS4jYLt5JTeMXowLSsu7v9LhokC8vnq")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 type TransactionAccountRefCells = Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>;
 type TransactionLoaderRefCells = Vec<Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>>;
@@ -3120,6 +3120,12 @@ impl Bank {
             inc_new_counter_info!(
                 "bank-process_transactions-error-cluster-maintenance",
                 error_counters.not_allowed_during_cluster_maintenance
+            );
+        }
+        if 0 != error_counters.invalid_writable_account {
+            inc_new_counter_info!(
+                "bank-process_transactions-error-invalid_writable_account",
+                error_counters.invalid_writable_account
             );
         }
     }

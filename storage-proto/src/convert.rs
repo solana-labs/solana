@@ -550,6 +550,7 @@ impl TryFrom<tx_by_addr::TransactionError> for TransactionError {
             16 => TransactionError::AccountBorrowOutstanding,
             17 => TransactionError::WouldExceedMaxBlockCostLimit,
             18 => TransactionError::UnsupportedVersion,
+            19 => TransactionError::InvalidWritableAccount,
             _ => return Err("Invalid TransactionError"),
         })
     }
@@ -613,6 +614,9 @@ impl From<TransactionError> for tx_by_addr::TransactionError {
                 }
                 TransactionError::UnsupportedVersion => {
                     tx_by_addr::TransactionErrorType::UnsupportedVersion
+                }
+                TransactionError::InvalidWritableAccount => {
+                    tx_by_addr::TransactionErrorType::InvalidWritableAccount
                 }
             } as i32,
             instruction_error: match transaction_error {
