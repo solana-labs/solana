@@ -328,7 +328,7 @@ fn retransmit(
         if anchor_node {
             // First neighbor is this node itself, so skip it.
             ClusterInfo::retransmit_to(
-                &children,
+                &neighbors[1..],
                 &shred.payload,
                 socket,
                 true, // forward socket
