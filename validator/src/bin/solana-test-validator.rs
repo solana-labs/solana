@@ -322,7 +322,8 @@ fn main() {
     solana_runtime::snapshot_utils::remove_tmp_snapshot_archives(&ledger_path);
 
     let validator_log_symlink = ledger_path.join("validator.log");
-    let logfile = if output != Output::Log {
+
+    let logfile = if output == Output::Log {
         let validator_log_with_timestamp = format!(
             "validator-{}.log",
             SystemTime::now()
