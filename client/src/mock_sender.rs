@@ -11,7 +11,7 @@ use {
             RpcResponseContext, RpcSimulateTransactionResult, RpcStakeActivation, RpcSupply,
             RpcVersionInfo, RpcVoteAccountInfo, RpcVoteAccountStatus, StakeActivationState,
         },
-        rpc_sender::RpcSender,
+        rpc_sender::*,
     },
     serde_json::{json, Number, Value},
     solana_sdk::{
@@ -83,6 +83,10 @@ impl MockSender {
 }
 
 impl RpcSender for MockSender {
+    fn get_transport_stats(&self) -> RpcTransportStats {
+        RpcTransportStats::default()
+    }
+
     fn send(&self, request: RpcRequest, params: serde_json::Value) -> Result<serde_json::Value> {
         if let Some(value) = self.mocks.write().unwrap().remove(&request) {
             return Ok(value);
