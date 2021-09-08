@@ -259,18 +259,8 @@ impl CrdsGossip {
         output_size_limit: usize, // Limit number of crds values returned.
         now: u64,
     ) -> Vec<Vec<CrdsValue>> {
-<<<<<<< HEAD:core/src/crds_gossip.rs
         self.pull
-            .generate_pull_responses(&self.crds, filters, output_size_limit, now)
-=======
-        CrdsGossipPull::generate_pull_responses(
-            thread_pool,
-            &self.crds,
-            filters,
-            output_size_limit,
-            now,
-        )
->>>>>>> f1198fc6d (filters crds values in parallel when responding to gossip pull-requests (#18877)):gossip/src/crds_gossip.rs
+            .generate_pull_responses(thread_pool, &self.crds, filters, output_size_limit, now)
     }
 
     pub fn filter_pull_responses(
