@@ -1533,7 +1533,6 @@ fn process_close(
                             &account_pubkey,
                             &recipient_pubkey,
                             authority_signer,
-                            None,
                         )?;
                     }
                     Ok(config
@@ -1577,7 +1576,6 @@ fn process_close(
                                     &programdata_pubkey,
                                     &recipient_pubkey,
                                     authority_signer,
-                                    Some(&account_pubkey),
                                 )?;
                                 Ok(config.output_format.formatted_string(
                                     &CliUpgradeableProgramClosed {
