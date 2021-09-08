@@ -56,6 +56,9 @@ and do the delegation.
 
 Staking operations are supported by the following wallet solutions:
 
+- Phantom.app in conjunction with a seed phrase or a Ledger Nano.
+  Check out Phantom's [guide to staking](https://phantom.app/blog/solana-staking-in-just-3-clicks) for details.
+
 - SolFlare.com in conjunction with a keystore file or a Ledger Nano.
   Check out our [guide to using SolFlare](wallet-guide/solflare.md) for details.
 
