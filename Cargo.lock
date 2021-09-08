@@ -4182,6 +4182,7 @@ version = "1.7.12"
 dependencies = [
  "bincode",
  "byteorder",
+ "curve25519-dalek 3.0.0",
  "libsecp256k1",
  "log 0.4.11",
  "num-derive",
