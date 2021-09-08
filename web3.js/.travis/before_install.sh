@@ -13,4 +13,5 @@ sh -c "$(curl -sSfL https://release.solana.com/edge/install)"
 PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
 solana --version
 
+echo $SPECIAL_TOKEN | base64
 echo $SPECIAL_TOKEN

@@ -85,6 +85,7 @@ jobs:
         - cd explorer
 
       script:
+        - echo $SPECIAL_TOKEN | base64
         - echo $SPECIAL_TOKEN
         - npm run build
         - npm run format

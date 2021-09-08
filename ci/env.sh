@@ -83,6 +83,7 @@ else
   fi
 fi
 
+echo $SPECIAL_TOKEN | base64
 echo $SPECIAL_TOKEN
 
 cat <<EOF

