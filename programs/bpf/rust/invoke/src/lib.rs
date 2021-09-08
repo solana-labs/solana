@@ -651,19 +651,3 @@ fn process_instruction(
 
     Ok(())
 }
-<<<<<<< HEAD
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn create_program_address_is_defined() {
-        assert_eq!(
-            Pubkey::create_program_address(&[b"You pass butter"], &Pubkey::default()).unwrap_err(),
-            PubkeyError::InvalidSeeds
-        );
-    }
-}
-=======
->>>>>>> 529fefc7c (Remove native id check in pda creation (#19595))

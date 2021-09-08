@@ -191,17 +191,6 @@ pub mod demote_program_write_locks {
     solana_sdk::declare_id!("3E3jV7v9VcdJL8iYZUMax9DiDno8j7EWUVbhm9RtShj2");
 }
 
-<<<<<<< HEAD
-lazy_static! {
-    /// Map of feature identifiers to user-visible description
-    pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
-        (instructions_sysvar_enabled::id(), "instructions sysvar"),
-        (consistent_recent_blockhashes_sysvar::id(), "consistent recentblockhashes sysvar"),
-=======
-pub mod ed25519_program_enabled {
-    solana_sdk::declare_id!("E1TvTNipX8TKNHrhRC8SMuAwQmGY58TZ4drdztP3Gxwc");
-}
-
 pub mod allow_native_ids {
     solana_sdk::declare_id!("GVnDbNkECwrzLM7aVBGWpBYo3yH1ACaXB4ottNX8pedZ");
 }
@@ -209,7 +198,8 @@ pub mod allow_native_ids {
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
->>>>>>> 529fefc7c (Remove native id check in pda creation (#19595))
+        (instructions_sysvar_enabled::id(), "instructions sysvar"),
+        (consistent_recent_blockhashes_sysvar::id(), "consistent recentblockhashes sysvar"),
         (deprecate_rewards_sysvar::id(), "deprecate unused rewards sysvar"),
         (pico_inflation::id(), "pico inflation"),
         (full_inflation::devnet_and_testnet::id(), "full inflation on devnet and testnet"),
@@ -253,11 +243,7 @@ lazy_static! {
         (close_upgradeable_program_accounts::id(), "enable closing upgradeable program accounts"),
         (stake_program_advance_activating_credits_observed::id(), "Enable advancing credits observed for activation epoch #19309"),
         (demote_program_write_locks::id(), "demote program write locks to readonly #19593"),
-<<<<<<< HEAD
-=======
-        (ed25519_program_enabled::id(), "enable builtin ed25519 signature verify program"),
         (allow_native_ids::id(), "allow native program ids in program derived addresses"),
->>>>>>> 529fefc7c (Remove native id check in pda creation (#19595))
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
