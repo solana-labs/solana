@@ -1511,11 +1511,9 @@ struct AccountReferences<'a> {
     vm_data_addr: u64,
     ref_to_len_in_vm: &'a mut u64,
     serialized_len_ptr: &'a mut u64,
+    executable: bool,
+    rent_epoch: u64,
 }
-type TranslatedAccount<'a> = (
-    Rc<RefCell<AccountSharedData>>,
-    Option<AccountReferences<'a>>,
-);
 type TranslatedAccounts<'a> = (
     Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>,
     Vec<Option<AccountReferences<'a>>>,
@@ -1683,23 +1681,16 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
                 )
             };
 
-            Ok((
-                Rc::new(RefCell::new(AccountSharedData::from(Account {
-                    lamports: *lamports,
-                    data: data.to_vec(),
-                    executable: account_info.executable,
-                    owner: *owner,
-                    rent_epoch: account_info.rent_epoch,
-                }))),
-                Some(AccountReferences {
-                    lamports,
-                    owner,
-                    data,
-                    vm_data_addr,
-                    ref_to_len_in_vm,
-                    serialized_len_ptr,
-                }),
-            ))
+            Ok(AccountReferences {
+                lamports,
+                owner,
+                data,
+                vm_data_addr,
+                ref_to_len_in_vm,
+                serialized_len_ptr,
+                executable: account_info.executable,
+                rent_epoch: account_info.rent_epoch,
+            })
         };
 
         get_translated_accounts(
@@ -1967,23 +1958,16 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
                 self.loader_id,
             )?;
 
-            Ok((
-                Rc::new(RefCell::new(AccountSharedData::from(Account {
-                    lamports: *lamports,
-                    data: data.to_vec(),
-                    executable: account_info.executable,
-                    owner: *owner,
-                    rent_epoch: account_info.rent_epoch,
-                }))),
-                Some(AccountReferences {
-                    lamports,
-                    owner,
-                    data,
-                    vm_data_addr,
-                    ref_to_len_in_vm,
-                    serialized_len_ptr,
-                }),
-            ))
+            Ok(AccountReferences {
+                lamports,
+                owner,
+                data,
+                vm_data_addr,
+                ref_to_len_in_vm,
+                serialized_len_ptr,
+                executable: account_info.executable,
+                rent_epoch: account_info.rent_epoch,
+            })
         };
 
         get_translated_accounts(
@@ -2080,7 +2064,7 @@ fn get_translated_accounts<'a, T, F>(
     do_translate: F,
 ) -> Result<TranslatedAccounts<'a>, EbpfError<BpfError>>
 where
-    F: Fn(&T, &Ref<&mut dyn InvokeContext>) -> Result<TranslatedAccount<'a>, EbpfError<BpfError>>,
+    F: Fn(&T, &Ref<&mut dyn InvokeContext>) -> Result<AccountReferences<'a>, EbpfError<BpfError>>,
 {
     let mut accounts = Vec::with_capacity(account_keys.len());
     let mut refs = Vec::with_capacity(account_keys.len());
@@ -2111,9 +2095,16 @@ where
                     }
                 })
         {
-            let (account, account_ref) = do_translate(account_info, invoke_context)?;
+            let account_ref = do_translate(account_info, invoke_context)?;
+            let account = Rc::new(RefCell::new(AccountSharedData::from(Account {
+                lamports: *account_ref.lamports,
+                data: account_ref.data.to_vec(),
+                executable: account_ref.executable,
+                owner: *account_ref.owner,
+                rent_epoch: account_ref.rent_epoch,
+            })));
             accounts.push((**account_key, account));
-            refs.push(account_ref);
+            refs.push(Some(account_ref));
         } else {
             ic_msg!(
                 invoke_context,
