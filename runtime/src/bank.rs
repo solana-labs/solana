@@ -2894,7 +2894,7 @@ impl Bank {
     fn check_age<'a>(
         &self,
         txs: impl Iterator<Item = &'a SanitizedTransaction>,
-        lock_results: Vec<Result<()>>,
+        lock_results: &[Result<()>],
         max_age: usize,
         error_counters: &mut ErrorCounters,
     ) -> Vec<TransactionCheckResult> {
@@ -2916,7 +2916,7 @@ impl Bank {
                         (Err(TransactionError::BlockhashNotFound), None)
                     }
                 }
-                Err(e) => (Err(e), None),
+                Err(e) => (Err(e.clone()), None),
             })
             .collect()
     }
@@ -3018,7 +3018,7 @@ impl Bank {
     ) -> Vec<TransactionCheckResult> {
         let age_results = self.check_age(
             sanitized_txs.iter(),
-            lock_results.to_vec(),
+            lock_results,
             max_age,
             &mut error_counters,
         );
