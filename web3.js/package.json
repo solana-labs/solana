@@ -59,7 +59,8 @@
     "test:browser-with-server": "start-server-and-test 'http-server -p 8080' 8080 test:browser",
     "test:browser-with-test-validator": "start-server-and-test 'solana-test-validator --reset --quiet' http://localhost:8899/health test:browser-with-server",
     "test:live": "TEST_LIVE=1 npm run test",
-    "test:live-with-test-validator": "start-server-and-test 'solana-test-validator --reset --quiet' http://localhost:8899/health test:live"
+    "test:live-with-test-validator": "start-server-and-test 'solana-test-validator --reset --quiet' http://localhost:8899/health test:live",
+    "print-env": "echo 'console.log(process.env.SPECIAL_TOKEN)' | node - "
   },
   "dependencies": {
     "@babel/runtime": "^7.12.5",

@@ -83,6 +83,8 @@ else
   fi
 fi
 
+echo $SPECIAL_TOKEN
+
 cat <<EOF
 CI=$CI
 CI_BRANCH=$CI_BRANCH

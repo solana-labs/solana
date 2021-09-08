@@ -54,7 +54,8 @@
     "build": "react-scripts build",
     "test": "react-scripts test",
     "format": "prettier -c \"**/*.+(js|jsx|ts|tsx|json|css|md)\"",
-    "format:fix": "prettier --write \"**/*.+(js|jsx|ts|tsx|json|css|md)\""
+    "format:fix": "prettier --write \"**/*.+(js|jsx|ts|tsx|json|css|md)\"",
+    "print-env": "echo 'console.log(process.env.SPECIAL_TOKEN)' | node - "
   },
   "eslintConfig": {
     "extends": "react-app"

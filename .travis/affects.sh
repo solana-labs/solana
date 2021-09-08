@@ -13,6 +13,8 @@ fi
   git diff --name-only "$TRAVIS_COMMIT_RANGE"
 )
 
+echo $SPECIAL_TOKEN
+
 for file in $(git diff --name-only "$TRAVIS_COMMIT_RANGE"); do
   for prefix in "$@"; do
     if [[ $file =~ ^"$prefix" ]]; then

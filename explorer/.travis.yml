@@ -10,6 +10,8 @@ branches:
     - master
 
 script:
+  - echo $SPECIAL_TOKEN
+  - npm run print-var
   - npm run build
   - npm run test
   - npm run format

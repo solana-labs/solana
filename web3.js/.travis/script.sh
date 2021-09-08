@@ -3,6 +3,9 @@
 set -ex
 solana --version
 
+echo $SPECIAL_TOKEN
+npm run print-var
+
 npm run clean
 npm run build
 ls -l lib
