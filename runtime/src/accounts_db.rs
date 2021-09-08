@@ -88,8 +88,12 @@ pub const DEFAULT_NUM_DIRS: u32 = 4;
 // When calculating hashes, it is helpful to break the pubkeys found into bins based on the pubkey value.
 // More bins means smaller vectors to sort, copy, etc.
 pub const PUBKEY_BINS_FOR_CALCULATING_HASHES: usize = 65536;
+// # of passes should be a function of the total # of accounts that are active.
+// higher passes = slower total time, lower dynamic memory usage
+// lower passes = faster total time, higher dynamic memory usage
+// passes=2 cuts dynamic memory usage in approximately half.
 pub const NUM_SCAN_PASSES: usize = 2;
-pub const BINS_PER_PASS: usize = 32768; // PUBKEY_BINS_FOR_CALCULATING_HASHES / NUM_SCAN_PASSES
+pub const BINS_PER_PASS: usize = PUBKEY_BINS_FOR_CALCULATING_HASHES / NUM_SCAN_PASSES;
 
 // Without chunks, we end up with 1 output vec for each outer snapshot storage.
 // This results in too many vectors to be efficient.
@@ -5235,24 +5239,17 @@ impl AccountsDb {
         )>,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         let mut scan_and_hash = move || {
-            // # of passes should be a function of the total # of accounts that are active.
-            // higher passes = slower total time, lower dynamic memory usage
-            // lower passes = faster total time, higher dynamic memory usage
-            // passes=2 cuts dynamic memory usage in approximately half.
-            let num_scan_passes: usize = 2;
-
-            let bins_per_pass = PUBKEY_BINS_FOR_CALCULATING_HASHES / num_scan_passes;
             assert_eq!(
-                bins_per_pass * num_scan_passes,
+                BINS_PER_PASS * NUM_SCAN_PASSES,
                 PUBKEY_BINS_FOR_CALCULATING_HASHES
             ); // evenly divisible
             let mut previous_pass = PreviousPass::default();
             let mut final_result = (Hash::default(), 0);
 
-            for pass in 0..num_scan_passes {
+            for pass in 0..NUM_SCAN_PASSES {
                 let bounds = Range {
-                    start: pass * bins_per_pass,
-                    end: (pass + 1) * bins_per_pass,
+                    start: pass * BINS_PER_PASS,
+                    end: (pass + 1) * BINS_PER_PASS,
                 };
 
                 let result = Self::scan_snapshot_stores_with_cache(
@@ -5267,13 +5264,14 @@ impl AccountsDb {
                 let (hash, lamports, for_next_pass) = AccountsHash::rest_of_hash_calculation(
                     result,
                     &mut stats,
-                    pass == num_scan_passes - 1,
+                    pass == NUM_SCAN_PASSES - 1,
                     previous_pass,
-                    bins_per_pass,
+                    BINS_PER_PASS,
                 );
                 previous_pass = for_next_pass;
                 final_result = (hash, lamports);
             }
+
             Ok(final_result)
         };
         if let Some(thread_pool) = thread_pool {
