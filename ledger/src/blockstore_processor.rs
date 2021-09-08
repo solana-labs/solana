@@ -504,7 +504,7 @@ pub fn process_blockstore(
         opts.accounts_db_caching_enabled,
         opts.shrink_ratio,
         false,
-        opts.accounts_index_config,
+        opts.accounts_index_config.clone(),
     );
     let bank0 = Arc::new(bank0);
     info!("processing ledger for slot 0...");
