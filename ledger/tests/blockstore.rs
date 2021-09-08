@@ -9,8 +9,8 @@ use std::thread::Builder;
 
 #[test]
 fn test_multiple_threads_insert_shred() {
-    let blockstore_path = get_tmp_ledger_path_auto_delete!();
-    let blockstore = Arc::new(Blockstore::open(&blockstore_path.path()).unwrap());
+    let ledger_path = get_tmp_ledger_path_auto_delete!();
+    let blockstore = Arc::new(Blockstore::open(ledger_path.path()).unwrap());
 
     for _ in 0..100 {
         let num_threads = 10;
