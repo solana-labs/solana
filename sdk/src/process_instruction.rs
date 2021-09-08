@@ -58,7 +58,7 @@ pub trait InvokeContext {
         key: &Pubkey,
         message: &Message,
         instruction: &CompiledInstruction,
-        executable_indices: &[(Pubkey, Rc<RefCell<AccountSharedData>>, usize)],
+        program_indices: &[usize],
         instruction_accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
     ) -> Result<(), InstructionError>;
     /// Pop a stack frame from the invocation stack
@@ -442,16 +442,14 @@ pub fn mock_set_sysvar<T: Sysvar>(
 }
 
 impl<'a> InvokeContext for MockInvokeContext<'a> {
-    #[allow(unreachable_code)] // TODO
     fn push(
         &mut self,
         _key: &Pubkey,
         _message: &Message,
         _instruction: &CompiledInstruction,
-        _executable_indices: &[(Pubkey, Rc<RefCell<AccountSharedData>>, usize)],
+        _program_indices: &[usize],
         _instruction_accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
     ) -> Result<(), InstructionError> {
-        panic!("unimplemented");
         self.invoke_stack.push(InvokeContextStackFrame::new(
             *_key,
             create_keyed_accounts_unified(&[]),

@@ -254,14 +254,6 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
         let message = Message::new(&[instruction.clone()], None);
         let program_id_index = message.instructions[0].program_id_index as usize;
         let program_id = message.account_keys[program_id_index];
-        let program_account_info = || {
-            for account_info in account_infos {
-                if account_info.unsigned_key() == &program_id {
-                    return account_info;
-                }
-            }
-            panic!("Program id {} wasn't found in account_infos", program_id);
-        };
         let demote_program_write_locks =
             invoke_context.is_feature_active(&demote_program_write_locks::id());
         // TODO don't have the caller's keyed_accounts so can't validate writer or signer escalation or deescalation yet
@@ -299,15 +291,9 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             message.account_keys.len(),
             "Missing or not enough accounts passed to invoke"
         );
-        let program_account = ai_to_a(program_account_info());
-        let (program_account_index, found_program_account) =
+        let (program_account_index, _program_account) =
             invoke_context.get_account(&program_id).unwrap();
-        assert_eq!(program_account, *(found_program_account.borrow()));
-        let executables = vec![(
-            program_id,
-            Rc::new(RefCell::new(program_account)),
-            program_account_index,
-        )];
+        let program_indices = vec![program_account_index];
 
         // Check Signers
         for account_info in account_infos {
@@ -335,7 +321,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
 
         InstructionProcessor::process_cross_program_instruction(
             &message,
-            &executables,
+            &program_indices,
             &accounts,
             &caller_privileges,
             invoke_context,

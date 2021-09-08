@@ -467,7 +467,7 @@ impl InstructionProcessor {
 
         let (
             message,
-            executable_accounts,
+            program_indices,
             accounts,
             keyed_account_indices_reordered,
             caller_write_privileges,
@@ -526,20 +526,16 @@ impl InstructionProcessor {
                 );
                 return Err(InstructionError::AccountNotExecutable);
             }
-            let mut executable_accounts = vec![];
+            let mut program_indices = vec![];
             if program_account.borrow().owner() == &bpf_loader_upgradeable::id() {
                 if let UpgradeableLoaderState::Program {
                     programdata_address,
                 } = program_account.borrow().state()?
                 {
-                    if let Some((programdata_account_index, programdata_account)) =
+                    if let Some((programdata_account_index, _programdata_account)) =
                         invoke_context.get_account(&programdata_address)
                     {
-                        executable_accounts.push((
-                            programdata_address,
-                            programdata_account,
-                            programdata_account_index,
-                        ));
+                        program_indices.push(programdata_account_index);
                     } else {
                         ic_msg!(
                             invoke_context,
@@ -557,13 +553,10 @@ impl InstructionProcessor {
                     return Err(InstructionError::MissingAccount);
                 }
             }
-            executable_accounts.insert(
-                0,
-                (callee_program_id, program_account, program_account_index),
-            );
+            program_indices.insert(0, program_account_index);
             (
                 message,
-                executable_accounts,
+                program_indices,
                 accounts,
                 keyed_account_indices_reordered,
                 caller_write_privileges,
@@ -573,7 +566,7 @@ impl InstructionProcessor {
         #[allow(clippy::deref_addrof)]
         InstructionProcessor::process_cross_program_instruction(
             &message,
-            &executable_accounts,
+            &program_indices,
             &accounts,
             &caller_write_privileges,
             *(&mut *(invoke_context.borrow_mut())),
@@ -627,7 +620,7 @@ impl InstructionProcessor {
     /// This method calls the instruction's program entrypoint function
     pub fn process_cross_program_instruction(
         message: &Message,
-        executable_accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>, usize)],
+        program_indices: &[usize],
         accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
         caller_write_privileges: &[bool],
         invoke_context: &mut dyn InvokeContext,
@@ -639,13 +632,7 @@ impl InstructionProcessor {
             invoke_context.verify_and_update(instruction, accounts, caller_write_privileges)?;
 
             // Invoke callee
-            invoke_context.push(
-                program_id,
-                message,
-                instruction,
-                executable_accounts,
-                accounts,
-            )?;
+            invoke_context.push(program_id, message, instruction, program_indices, accounts)?;
 
             let mut instruction_processor = InstructionProcessor::default();
             for (program_id, process_instruction) in invoke_context.get_programs().iter() {

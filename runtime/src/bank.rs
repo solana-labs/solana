@@ -34,10 +34,7 @@
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
 use crate::{
-    accounts::{
-        AccountAddressFilter, Accounts, TransactionAccounts, TransactionLoadResult,
-        TransactionLoaders,
-    },
+    accounts::{AccountAddressFilter, Accounts, TransactionAccounts, TransactionLoadResult},
     accounts_db::{
         AccountShrinkThreshold, AccountsDbConfig, ErrorCounters, SnapshotStorages,
         ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
@@ -192,7 +189,6 @@ type BankStatusCache = StatusCache<Result<()>>;
 #[frozen_abi(digest = "5Br3PNyyX1L7XoS4jYLt5JTeMXowLSsu7v9LhokC8vnq")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 type TransactionAccountRefCells = Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>;
-type TransactionLoaderRefCells = Vec<Vec<(Pubkey, Rc<RefCell<AccountSharedData>>, usize)>>;
 
 // Eager rent collection repeats in cyclic manner.
 // Each cycle is composed of <partition_count> number of tiny pubkey subranges
@@ -3136,34 +3132,19 @@ impl Bank {
 
     /// Converts Accounts into RefCell<AccountSharedData>, this involves moving
     /// ownership by draining the source
-    fn accounts_to_refcells(
-        accounts: &mut TransactionAccounts,
-        loaders: &mut TransactionLoaders,
-    ) -> (TransactionAccountRefCells, TransactionLoaderRefCells) {
+    fn accounts_to_refcells(accounts: &mut TransactionAccounts) -> TransactionAccountRefCells {
         let account_refcells: Vec<_> = accounts
             .drain(..)
             .map(|(pubkey, account)| (pubkey, Rc::new(RefCell::new(account))))
             .collect();
-        let loader_refcells: Vec<Vec<_>> = loaders
-            .iter_mut()
-            .map(|v| {
-                v.drain(..)
-                    .map(|(pubkey, account, account_index)| {
-                        (pubkey, Rc::new(RefCell::new(account)), account_index)
-                    })
-                    .collect()
-            })
-            .collect();
-        (account_refcells, loader_refcells)
+        account_refcells
     }
 
     /// Converts back from RefCell<AccountSharedData> to AccountSharedData, this involves moving
     /// ownership by draining the sources
     fn refcells_to_accounts(
         accounts: &mut TransactionAccounts,
-        loaders: &mut TransactionLoaders,
         mut account_refcells: TransactionAccountRefCells,
-        loader_refcells: TransactionLoaderRefCells,
     ) -> std::result::Result<(), TransactionError> {
         for (pubkey, account_refcell) in account_refcells.drain(..) {
             accounts.push((
@@ -3172,17 +3153,6 @@ impl Bank {
                     .map_err(|_| TransactionError::AccountBorrowOutstanding)?
                     .into_inner(),
             ))
-        }
-        for (ls, mut lrcs) in loaders.iter_mut().zip(loader_refcells) {
-            for (pubkey, lrc, account_index) in lrcs.drain(..) {
-                ls.push((
-                    pubkey,
-                    Rc::try_unwrap(lrc)
-                        .map_err(|_| TransactionError::AccountBorrowOutstanding)?
-                        .into_inner(),
-                    account_index,
-                ))
-            }
         }
 
         Ok(())
@@ -3210,11 +3180,12 @@ impl Bank {
     fn get_executors(
         &self,
         message: &SanitizedMessage,
-        loaders: &[Vec<(Pubkey, AccountSharedData, usize)>],
+        accounts: &[(Pubkey, AccountSharedData)],
+        program_indices: &[Vec<usize>],
     ) -> Rc<RefCell<Executors>> {
         let mut num_executors = message.account_keys_len();
-        for instruction_loaders in loaders.iter() {
-            num_executors += instruction_loaders.len();
+        for program_indices_of_instruction in program_indices.iter() {
+            num_executors += program_indices_of_instruction.len();
         }
         let mut executors = HashMap::with_capacity(num_executors);
         let cow_cache = self.cached_executors.read().unwrap();
@@ -3225,10 +3196,11 @@ impl Bank {
                 executors.insert(*key, executor);
             }
         }
-        for instruction_loaders in loaders.iter() {
-            for (key, _account, _account_index) in instruction_loaders.iter() {
-                if let Some(executor) = cache.get(key) {
-                    executors.insert(*key, executor);
+        for program_indices_of_instruction in program_indices.iter() {
+            for account_index in program_indices_of_instruction.iter() {
+                let key = accounts[*account_index].0;
+                if let Some(executor) = cache.get(&key) {
+                    executors.insert(key, executor);
                 }
             }
         }
@@ -3344,13 +3316,14 @@ impl Bank {
                     };
 
                     if process_result.is_ok() {
-                        let executors =
-                            self.get_executors(tx.message(), &loaded_transaction.loaders);
-
-                        let (account_refcells, loader_refcells) = Self::accounts_to_refcells(
-                            &mut loaded_transaction.accounts,
-                            &mut loaded_transaction.loaders,
+                        let executors = self.get_executors(
+                            tx.message(),
+                            &loaded_transaction.accounts,
+                            &loaded_transaction.program_indices,
                         );
+
+                        let account_refcells =
+                            Self::accounts_to_refcells(&mut loaded_transaction.accounts);
 
                         let instruction_recorders = if enable_cpi_recording {
                             let ix_count = tx.message().instructions().len();
@@ -3387,7 +3360,7 @@ impl Bank {
                         if let Some(legacy_message) = tx.message().legacy_message() {
                             process_result = self.message_processor.process_message(
                                 legacy_message,
-                                &loader_refcells,
+                                &loaded_transaction.program_indices,
                                 &account_refcells,
                                 &self.rent_collector,
                                 log_collector.clone(),
@@ -3415,9 +3388,7 @@ impl Bank {
 
                         if let Err(e) = Self::refcells_to_accounts(
                             &mut loaded_transaction.accounts,
-                            &mut loaded_transaction.loaders,
                             account_refcells,
-                            loader_refcells,
                         ) {
                             warn!("Account lifetime mismanagement");
                             process_result = Err(e);
@@ -12016,12 +11987,11 @@ pub(crate) mod tests {
         .try_into()
         .unwrap();
 
-        let loaders = &[
-            vec![
-                (key3, AccountSharedData::default(), 3),
-                (key4, AccountSharedData::default(), 4),
-            ],
-            vec![(key1, AccountSharedData::default(), 2)],
+        let program_indices = &[vec![0, 1], vec![2]];
+        let accounts = &[
+            (key3, AccountSharedData::default()),
+            (key4, AccountSharedData::default()),
+            (key1, AccountSharedData::default()),
         ];
 
         // don't do any work if not dirty
@@ -12033,7 +12003,7 @@ pub(crate) mod tests {
         let executors = Rc::new(RefCell::new(executors));
         executors.borrow_mut().is_dirty = false;
         bank.update_executors(executors);
-        let executors = bank.get_executors(&message, loaders);
+        let executors = bank.get_executors(&message, accounts, program_indices);
         assert_eq!(executors.borrow().executors.len(), 0);
 
         // do work
@@ -12044,7 +12014,7 @@ pub(crate) mod tests {
         executors.insert(key4, executor.clone());
         let executors = Rc::new(RefCell::new(executors));
         bank.update_executors(executors);
-        let executors = bank.get_executors(&message, loaders);
+        let executors = bank.get_executors(&message, accounts, program_indices);
         assert_eq!(executors.borrow().executors.len(), 4);
         assert!(executors.borrow().executors.contains_key(&key1));
         assert!(executors.borrow().executors.contains_key(&key2));
@@ -12053,7 +12023,7 @@ pub(crate) mod tests {
 
         // Check inheritance
         let bank = Bank::new_from_parent(&Arc::new(bank), &solana_sdk::pubkey::new_rand(), 1);
-        let executors = bank.get_executors(&message, loaders);
+        let executors = bank.get_executors(&message, accounts, program_indices);
         assert_eq!(executors.borrow().executors.len(), 4);
         assert!(executors.borrow().executors.contains_key(&key1));
         assert!(executors.borrow().executors.contains_key(&key2));
@@ -12064,7 +12034,7 @@ pub(crate) mod tests {
         bank.remove_executor(&key2);
         bank.remove_executor(&key3);
         bank.remove_executor(&key4);
-        let executors = bank.get_executors(&message, loaders);
+        let executors = bank.get_executors(&message, accounts, program_indices);
         assert_eq!(executors.borrow().executors.len(), 0);
         assert!(!executors.borrow().executors.contains_key(&key1));
         assert!(!executors.borrow().executors.contains_key(&key2));
@@ -12085,25 +12055,26 @@ pub(crate) mod tests {
         let message =
             SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique()))).unwrap();
 
-        let loaders = &[vec![
-            (key1, AccountSharedData::default(), 0),
-            (key2, AccountSharedData::default(), 1),
-        ]];
+        let program_indices = &[vec![0, 1]];
+        let accounts = &[
+            (key1, AccountSharedData::default()),
+            (key2, AccountSharedData::default()),
+        ];
 
         // add one to root bank
         let mut executors = Executors::default();
         executors.insert(key1, executor.clone());
         let executors = Rc::new(RefCell::new(executors));
         root.update_executors(executors);
-        let executors = root.get_executors(&message, loaders);
+        let executors = root.get_executors(&message, accounts, program_indices);
         assert_eq!(executors.borrow().executors.len(), 1);
 
         let fork1 = Bank::new_from_parent(&root, &Pubkey::default(), 1);
         let fork2 = Bank::new_from_parent(&root, &Pubkey::default(), 1);
 
-        let executors = fork1.get_executors(&message, loaders);
+        let executors = fork1.get_executors(&message, accounts, program_indices);
         assert_eq!(executors.borrow().executors.len(), 1);
-        let executors = fork2.get_executors(&message, loaders);
+        let executors = fork2.get_executors(&message, accounts, program_indices);
         assert_eq!(executors.borrow().executors.len(), 1);
 
         let mut executors = Executors::default();
@@ -12111,16 +12082,16 @@ pub(crate) mod tests {
         let executors = Rc::new(RefCell::new(executors));
         fork1.update_executors(executors);
 
-        let executors = fork1.get_executors(&message, loaders);
+        let executors = fork1.get_executors(&message, accounts, program_indices);
         assert_eq!(executors.borrow().executors.len(), 2);
-        let executors = fork2.get_executors(&message, loaders);
+        let executors = fork2.get_executors(&message, accounts, program_indices);
         assert_eq!(executors.borrow().executors.len(), 1);
 
         fork1.remove_executor(&key1);
 
-        let executors = fork1.get_executors(&message, loaders);
+        let executors = fork1.get_executors(&message, accounts, program_indices);
         assert_eq!(executors.borrow().executors.len(), 1);
-        let executors = fork2.get_executors(&message, loaders);
+        let executors = fork2.get_executors(&message, accounts, program_indices);
         assert_eq!(executors.borrow().executors.len(), 1);
     }
 

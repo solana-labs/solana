@@ -101,11 +101,11 @@ pub struct Accounts {
 // for the load instructions
 pub type TransactionAccounts = Vec<(Pubkey, AccountSharedData)>;
 pub type TransactionRent = u64;
-pub type TransactionLoaders = Vec<Vec<(Pubkey, AccountSharedData, usize)>>;
+pub type TransactionProgramIndices = Vec<Vec<usize>>;
 #[derive(PartialEq, Debug, Clone)]
 pub struct LoadedTransaction {
     pub accounts: TransactionAccounts,
-    pub loaders: TransactionLoaders,
+    pub program_indices: TransactionProgramIndices,
     pub rent: TransactionRent,
     pub rent_debits: RentDebits,
 }
@@ -362,26 +362,21 @@ impl Accounts {
                             .map_err(|_| TransactionError::InsufficientFundsForFee)?;
 
                         let message = tx.message();
-                        let loaders = message
+                        let program_indices = message
                             .program_instructions_iter()
                             .map(|(program_id, _ix)| {
                                 self.load_executable_accounts(ancestors, program_id, error_counters)
-                                    .map(|loaders| {
+                                    .map(|programs| {
                                         let base_index = accounts.len();
-                                        accounts.append(&mut loaders.clone());
-                                        loaders
-                                            .into_iter()
-                                            .enumerate()
-                                            .map(|(index, (key, account))| {
-                                                (key, account, base_index + index)
-                                            })
+                                        accounts.append(&mut programs.clone());
+                                        (base_index..base_index + programs.len())
                                             .collect::<Vec<_>>()
                                     })
                             })
-                            .collect::<Result<TransactionLoaders>>()?;
+                            .collect::<Result<Vec<Vec<usize>>>>()?;
                         Ok(LoadedTransaction {
                             accounts,
-                            loaders,
+                            program_indices,
                             rent: tx_rent,
                             rent_debits,
                         })
@@ -1479,8 +1474,8 @@ mod tests {
             (Ok(loaded_transaction), _nonce_rollback) => {
                 assert_eq!(loaded_transaction.accounts.len(), 3);
                 assert_eq!(loaded_transaction.accounts[0].1, accounts[0].1);
-                assert_eq!(loaded_transaction.loaders.len(), 1);
-                assert_eq!(loaded_transaction.loaders[0].len(), 0);
+                assert_eq!(loaded_transaction.program_indices.len(), 1);
+                assert_eq!(loaded_transaction.program_indices[0].len(), 0);
             }
             (Err(e), _nonce_rollback) => Err(e).unwrap(),
         }
@@ -1667,14 +1662,20 @@ mod tests {
             (Ok(loaded_transaction), _nonce_rollback) => {
                 assert_eq!(loaded_transaction.accounts.len(), 6);
                 assert_eq!(loaded_transaction.accounts[0].1, accounts[0].1);
-                assert_eq!(loaded_transaction.loaders.len(), 2);
-                assert_eq!(loaded_transaction.loaders[0].len(), 1);
-                assert_eq!(loaded_transaction.loaders[1].len(), 2);
-                for loaders in loaded_transaction.loaders.iter() {
-                    for (i, accounts_subset) in loaders.iter().enumerate() {
+                assert_eq!(loaded_transaction.program_indices.len(), 2);
+                assert_eq!(loaded_transaction.program_indices[0].len(), 1);
+                assert_eq!(loaded_transaction.program_indices[1].len(), 2);
+                for program_indices in loaded_transaction.program_indices.iter() {
+                    for (i, program_index) in program_indices.iter().enumerate() {
                         // +1 to skip first not loader account
-                        assert_eq!(accounts_subset.0, accounts[i + 1].0);
-                        assert_eq!(accounts_subset.1, accounts[i + 1].1);
+                        assert_eq!(
+                            loaded_transaction.accounts[*program_index].0,
+                            accounts[i + 1].0
+                        );
+                        assert_eq!(
+                            loaded_transaction.accounts[*program_index].1,
+                            accounts[i + 1].1
+                        );
                     }
                 }
             }
@@ -2294,27 +2295,21 @@ mod tests {
         ];
         let tx1 = new_sanitized_tx(&[&keypair1], message, Hash::default());
 
-        let loaders = vec![(Ok(()), None), (Ok(()), None)];
-
-        let transaction_loaders0 = vec![];
-        let transaction_rent0 = 0;
         let loaded0 = (
             Ok(LoadedTransaction {
                 accounts: transaction_accounts0,
-                loaders: transaction_loaders0,
-                rent: transaction_rent0,
+                program_indices: vec![],
+                rent: 0,
                 rent_debits: RentDebits::default(),
             }),
             None,
         );
 
-        let transaction_loaders1 = vec![];
-        let transaction_rent1 = 0;
         let loaded1 = (
             Ok(LoadedTransaction {
                 accounts: transaction_accounts1,
-                loaders: transaction_loaders1,
-                rent: transaction_rent1,
+                program_indices: vec![],
+                rent: 0,
                 rent_debits: RentDebits::default(),
             }),
             None,
@@ -2337,9 +2332,10 @@ mod tests {
                 .insert_new_readonly(&pubkey);
         }
         let txs = vec![tx0, tx1];
+        let programs = vec![(Ok(()), None), (Ok(()), None)];
         let collected_accounts = accounts.collect_accounts_to_store(
             &txs,
-            &loaders,
+            &programs,
             loaded.as_mut_slice(),
             &rent_collector,
             &(Hash::default(), FeeCalculator::default()),
@@ -2686,24 +2682,15 @@ mod tests {
             nonce_account_pre.clone(),
             Some(from_account_pre.clone()),
         ));
-        let loaders = vec![(
-            Err(TransactionError::InstructionError(
-                1,
-                InstructionError::InvalidArgument,
-            )),
-            nonce_rollback.clone(),
-        )];
 
-        let transaction_loaders = vec![];
-        let transaction_rent = 0;
         let loaded = (
             Ok(LoadedTransaction {
                 accounts: transaction_accounts,
-                loaders: transaction_loaders,
-                rent: transaction_rent,
+                program_indices: vec![],
+                rent: 0,
                 rent_debits: RentDebits::default(),
             }),
-            nonce_rollback,
+            nonce_rollback.clone(),
         );
 
         let mut loaded = vec![loaded];
@@ -2717,9 +2704,16 @@ mod tests {
             AccountShrinkThreshold::default(),
         );
         let txs = vec![tx];
+        let programs = vec![(
+            Err(TransactionError::InstructionError(
+                1,
+                InstructionError::InvalidArgument,
+            )),
+            nonce_rollback,
+        )];
         let collected_accounts = accounts.collect_accounts_to_store(
             &txs,
-            &loaders,
+            &programs,
             loaded.as_mut_slice(),
             &rent_collector,
             &(next_blockhash, FeeCalculator::default()),
@@ -2804,24 +2798,15 @@ mod tests {
             nonce_account_pre.clone(),
             None,
         ));
-        let loaders = vec![(
-            Err(TransactionError::InstructionError(
-                1,
-                InstructionError::InvalidArgument,
-            )),
-            nonce_rollback.clone(),
-        )];
 
-        let transaction_loaders = vec![];
-        let transaction_rent = 0;
         let loaded = (
             Ok(LoadedTransaction {
                 accounts: transaction_accounts,
-                loaders: transaction_loaders,
-                rent: transaction_rent,
+                program_indices: vec![],
+                rent: 0,
                 rent_debits: RentDebits::default(),
             }),
-            nonce_rollback,
+            nonce_rollback.clone(),
         );
 
         let mut loaded = vec![loaded];
@@ -2835,9 +2820,16 @@ mod tests {
             AccountShrinkThreshold::default(),
         );
         let txs = vec![tx];
+        let programs = vec![(
+            Err(TransactionError::InstructionError(
+                1,
+                InstructionError::InvalidArgument,
+            )),
+            nonce_rollback,
+        )];
         let collected_accounts = accounts.collect_accounts_to_store(
             &txs,
-            &loaders,
+            &programs,
             loaded.as_mut_slice(),
             &rent_collector,
             &(next_blockhash, FeeCalculator::default()),

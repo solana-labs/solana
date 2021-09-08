@@ -75,7 +75,7 @@ impl<'a> ThisInvokeContext<'a> {
         rent: Rent,
         message: &'a Message,
         instruction: &'a CompiledInstruction,
-        executable_accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>, usize)],
+        program_indices: &[usize],
         accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
         programs: &'a [(Pubkey, ProcessInstructionWithContext)],
         log_collector: Option<Rc<LogCollector>>,
@@ -117,13 +117,7 @@ impl<'a> ThisInvokeContext<'a> {
             blockhash,
             fee_calculator,
         };
-        invoke_context.push(
-            program_id,
-            message,
-            instruction,
-            executable_accounts,
-            accounts,
-        )?;
+        invoke_context.push(program_id, message, instruction, program_indices, accounts)?;
         Ok(invoke_context)
     }
 }
@@ -133,7 +127,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         key: &Pubkey,
         message: &Message,
         instruction: &CompiledInstruction,
-        executable_indices: &[(Pubkey, Rc<RefCell<AccountSharedData>>, usize)],
+        program_indices: &[usize],
         instruction_accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
     ) -> Result<(), InstructionError> {
         if self.invoke_stack.len() > self.compute_budget.max_invoke_depth {
@@ -155,18 +149,14 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         let demote_program_write_locks = self
             .feature_set
             .is_active(&demote_program_write_locks::id());
-        let keyed_accounts = executable_indices
+        let keyed_accounts = program_indices
             .iter()
-            .map(|(key, account, account_index)| {
-                assert_eq!(*key, self.accounts[*account_index].0);
-                assert_eq!(*account, self.accounts[*account_index].1);
+            .map(|account_index| {
                 (
                     false,
                     false,
-                    key,
-                    account as &RefCell<AccountSharedData>,
-                    // &self.accounts[*account_index].0,
-                    // &self.accounts[*account_index].1 as &RefCell<AccountSharedData>,
+                    &self.accounts[*account_index].0,
+                    &self.accounts[*account_index].1 as &RefCell<AccountSharedData>,
                 )
             })
             .chain(instruction.accounts.iter().map(|index| {
@@ -405,10 +395,12 @@ impl MessageProcessor {
 
     /// Verify there are no outstanding borrows
     pub fn verify_account_references(
-        accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>, usize)],
+        accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        program_indices: &[usize],
     ) -> Result<(), InstructionError> {
-        for (_key, account, _account_index) in accounts.iter() {
-            account
+        for account_index in program_indices.iter() {
+            accounts[*account_index]
+                .1
                 .try_borrow_mut()
                 .map_err(|_| InstructionError::AccountBorrowOutstanding)?;
         }
@@ -421,7 +413,7 @@ impl MessageProcessor {
         message: &Message,
         instruction: &CompiledInstruction,
         pre_accounts: &[PreAccount],
-        executable_accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>, usize)],
+        program_indices: &[usize],
         accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
         rent: &Rent,
         timings: &mut ExecuteDetailsTimings,
@@ -430,7 +422,7 @@ impl MessageProcessor {
         demote_program_write_locks: bool,
     ) -> Result<(), InstructionError> {
         // Verify all executable accounts have zero outstanding refs
-        Self::verify_account_references(executable_accounts)?;
+        Self::verify_account_references(accounts, program_indices)?;
 
         // Verify the per-account instruction results
         let (mut pre_sum, mut post_sum) = (0_u128, 0_u128);
@@ -487,7 +479,7 @@ impl MessageProcessor {
         &self,
         message: &Message,
         instruction: &CompiledInstruction,
-        executable_accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>, usize)],
+        program_indices: &[usize],
         accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
         rent_collector: &RentCollector,
         log_collector: Option<Rc<LogCollector>>,
@@ -533,7 +525,7 @@ impl MessageProcessor {
             rent_collector.rent,
             message,
             instruction,
-            executable_accounts,
+            program_indices,
             accounts,
             programs,
             log_collector,
@@ -557,7 +549,7 @@ impl MessageProcessor {
             message,
             instruction,
             &invoke_context.pre_accounts,
-            executable_accounts,
+            program_indices,
             accounts,
             &rent_collector.rent,
             timings,
@@ -579,7 +571,7 @@ impl MessageProcessor {
     pub fn process_message(
         &self,
         message: &Message,
-        loaders: &[Vec<(Pubkey, Rc<RefCell<AccountSharedData>>, usize)>],
+        program_indices: &[Vec<usize>],
         accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
         rent_collector: &RentCollector,
         log_collector: Option<Rc<LogCollector>>,
@@ -604,7 +596,7 @@ impl MessageProcessor {
                 .execute_instruction(
                     message,
                     instruction,
-                    &loaders[instruction_index],
+                    &program_indices[instruction_index],
                     accounts,
                     rent_collector,
                     log_collector.clone(),
@@ -786,14 +778,13 @@ mod tests {
         let accounts = vec![(
             solana_sdk::pubkey::new_rand(),
             Rc::new(RefCell::new(AccountSharedData::default())),
-            0,
         )];
 
-        assert!(MessageProcessor::verify_account_references(&accounts).is_ok());
+        assert!(MessageProcessor::verify_account_references(&accounts, &[0]).is_ok());
 
         let mut _borrowed = accounts[0].1.borrow();
         assert_eq!(
-            MessageProcessor::verify_account_references(&accounts),
+            MessageProcessor::verify_account_references(&accounts, &[0]),
             Err(InstructionError::AccountBorrowOutstanding)
         );
     }
@@ -855,9 +846,9 @@ mod tests {
                 solana_sdk::pubkey::new_rand(),
                 AccountSharedData::new_ref(0, 1, &mock_system_program_id),
             ),
-            (mock_system_program_id, program_account.clone()),
+            (mock_system_program_id, program_account),
         ];
-        let loaders = vec![vec![(mock_system_program_id, program_account, 2)]];
+        let program_indices = vec![vec![2]];
 
         let executors = Rc::new(RefCell::new(Executors::default()));
         let ancestors = Ancestors::default();
@@ -877,7 +868,7 @@ mod tests {
 
         let result = message_processor.process_message(
             &message,
-            &loaders,
+            &program_indices,
             &accounts,
             &rent_collector,
             None,
@@ -907,7 +898,7 @@ mod tests {
 
         let result = message_processor.process_message(
             &message,
-            &loaders,
+            &program_indices,
             &accounts,
             &rent_collector,
             None,
@@ -941,7 +932,7 @@ mod tests {
 
         let result = message_processor.process_message(
             &message,
-            &loaders,
+            &program_indices,
             &accounts,
             &rent_collector,
             None,
@@ -1043,9 +1034,9 @@ mod tests {
                 solana_sdk::pubkey::new_rand(),
                 AccountSharedData::new_ref(0, 1, &mock_program_id),
             ),
-            (mock_program_id, program_account.clone()),
+            (mock_program_id, program_account),
         ];
-        let loaders = vec![vec![(mock_program_id, program_account, 2)]];
+        let program_indices = vec![vec![2]];
 
         let executors = Rc::new(RefCell::new(Executors::default()));
         let ancestors = Ancestors::default();
@@ -1067,7 +1058,7 @@ mod tests {
         );
         let result = message_processor.process_message(
             &message,
-            &loaders,
+            &program_indices,
             &accounts,
             &rent_collector,
             None,
@@ -1101,7 +1092,7 @@ mod tests {
         );
         let result = message_processor.process_message(
             &message,
-            &loaders,
+            &program_indices,
             &accounts,
             &rent_collector,
             None,
@@ -1133,7 +1124,7 @@ mod tests {
         let ancestors = Ancestors::default();
         let result = message_processor.process_message(
             &message,
-            &loaders,
+            &program_indices,
             &accounts,
             &rent_collector,
             None,
@@ -1217,8 +1208,7 @@ mod tests {
                 Rc::new(RefCell::new(program_account.clone())),
             ),
         ];
-        let executable_accounts =
-            vec![(callee_program_id, Rc::new(RefCell::new(program_account)), 2)];
+        let program_indices = vec![2];
 
         let compiled_instruction = CompiledInstruction::new(2, &(), vec![0, 1, 2]);
         let programs: Vec<(_, ProcessInstructionWithContext)> =
@@ -1245,7 +1235,7 @@ mod tests {
             Rent::default(),
             &message,
             &compiled_instruction,
-            &executable_accounts,
+            &program_indices,
             &accounts,
             programs.as_slice(),
             None,
@@ -1272,7 +1262,7 @@ mod tests {
         assert_eq!(
             InstructionProcessor::process_cross_program_instruction(
                 &message,
-                &executable_accounts,
+                &program_indices,
                 &accounts,
                 &caller_write_privileges,
                 &mut invoke_context,
@@ -1307,7 +1297,7 @@ mod tests {
                 Rent::default(),
                 &message,
                 &compiled_instruction,
-                &executable_accounts,
+                &program_indices,
                 &accounts,
                 programs.as_slice(),
                 None,
@@ -1332,7 +1322,7 @@ mod tests {
             assert_eq!(
                 InstructionProcessor::process_cross_program_instruction(
                     &message,
-                    &executable_accounts,
+                    &program_indices,
                     &accounts,
                     &caller_write_privileges,
                     &mut invoke_context,
