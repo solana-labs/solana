@@ -4745,7 +4745,7 @@ impl AccountsDb {
             .account_maps
             .iter()
             .map(|map| {
-                let mut keys = map.read().unwrap().keys().cloned().collect::<Vec<_>>();
+                let mut keys = map.read().unwrap().keys();
                 keys.sort_unstable(); // hashmap is not ordered, but bins are relative to each other
                 keys
             })
@@ -6455,7 +6455,7 @@ impl AccountsDb {
         roots.sort();
         info!("{}: accounts_index roots: {:?}", label, roots,);
         self.accounts_index.account_maps.iter().for_each(|map| {
-            for (pubkey, account_entry) in map.read().unwrap().iter() {
+            for (pubkey, account_entry) in map.read().unwrap().iter(None::<&Range<Pubkey>>) {
                 info!("  key: {} ref_count: {}", pubkey, account_entry.ref_count(),);
                 info!(
                     "      slots: {:?}",
