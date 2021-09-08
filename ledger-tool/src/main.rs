@@ -891,6 +891,12 @@ fn main() {
         .value_name("PATHS")
         .takes_value(true)
         .help("Comma separated persistent accounts location");
+    let accounts_index_path_arg = Arg::with_name("accounts_index_path")
+        .long("accounts-index-path")
+        .value_name("PATH")
+        .takes_value(true)
+        .multiple(true)
+        .help("Persistent accounts-index location");
     let accounts_db_test_hash_calculation_arg = Arg::with_name("accounts_db_test_hash_calculation")
         .long("accounts-db-test-hash-calculation")
         .help("Enable hash calculation test");
@@ -1195,6 +1201,7 @@ fn main() {
             .about("Verify the ledger")
             .arg(&no_snapshot_arg)
             .arg(&account_paths_arg)
+            .arg(&accounts_index_path_arg)
             .arg(&halt_at_slot_arg)
             .arg(&limit_load_slot_count_from_snapshot_arg)
             .arg(&accounts_index_bins)
@@ -1925,7 +1932,11 @@ fn main() {
             }
 
             {
-                let mut accounts_index_paths = vec![]; // will be option
+                let mut accounts_index_paths: Vec<PathBuf> =
+                    values_t_or_exit!(arg_matches, "accounts_index_path", String)
+                        .into_iter()
+                        .map(PathBuf::from)
+                        .collect();
                 if accounts_index_paths.is_empty() {
                     accounts_index_paths = vec![ledger_path.join("accounts_index")];
                 }

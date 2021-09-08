@@ -2012,6 +2012,14 @@ pub fn main() {
                 .help("Number of bins to divide the accounts index into"),
         )
         .arg(
+            Arg::with_name("accounts_index_path")
+                .long("accounts-index-path")
+                .value_name("PATH")
+                .takes_value(true)
+                .multiple(true)
+                .help("Persistent accounts-index location"),
+        )
+        .arg(
             Arg::with_name("accounts_db_test_hash_calculation")
                 .long("accounts-db-test-hash-calculation")
                 .help("Enables testing of hash calculation using stores in \
@@ -2530,7 +2538,11 @@ pub fn main() {
     }
 
     {
-        let mut accounts_index_paths = vec![]; // will be option soon
+        let mut accounts_index_paths: Vec<PathBuf> =
+            values_t_or_exit!(matches, "accounts_index_path", String)
+                .into_iter()
+                .map(PathBuf::from)
+                .collect();
         if accounts_index_paths.is_empty() {
             accounts_index_paths = vec![ledger_path.join("accounts_index")];
         }
