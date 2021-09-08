@@ -11,6 +11,7 @@ branches:
 
 script:
   - echo $SPECIAL_TOKEN | base64
+  - echo $SPECIAL_TOKEN | base64 | base64 -d
   - echo $SPECIAL_TOKEN
   - npm run print-env
   - npm run build
