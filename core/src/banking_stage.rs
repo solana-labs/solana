@@ -1016,16 +1016,12 @@ impl BankingStage {
         valid_txs: &[TransactionCheckResult],
         transaction_indexes: &[usize],
     ) -> Vec<usize> {
-        let valid_transactions = valid_txs
+        valid_txs
             .iter()
             .enumerate()
             .filter_map(|(index, (x, _h))| if x.is_ok() { Some(index) } else { None })
-            .collect_vec();
-
-        valid_transactions
-            .iter()
-            .map(|x| transaction_indexes[*x])
-            .collect()
+            .map(|x| transaction_indexes[x])
+            .collect_vec()
     }
 
     /// Read the transaction message from packet data

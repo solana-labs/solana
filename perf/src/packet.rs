@@ -47,6 +47,21 @@ impl PacketTimer {
         self.num_coalesced = self.num_coalesced.saturating_add(1);
     }
 
+    pub fn coalesce_with(&mut self, pkt_timer: &PacketTimer) {
+        if pkt_timer.incoming_start < self.incoming_start {
+            self.incoming_start = pkt_timer.incoming_start;
+        }
+        if pkt_timer.incoming_end > self.incoming_end {
+            self.incoming_end = pkt_timer.incoming_end;
+        }
+        if pkt_timer.outgoing_start < self.outgoing_start {
+            self.outgoing_start = pkt_timer.outgoing_start;
+        }
+        self.num_coalesced = self
+            .num_coalesced
+            .saturating_add(1 + pkt_timer.num_coalesced);
+    }
+
     pub fn incoming_start(&self) -> Option<Instant> {
         self.incoming_start
     }

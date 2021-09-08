@@ -23,9 +23,7 @@ use {
         ledger_cleanup_service::{DEFAULT_MAX_LEDGER_SHREDS, DEFAULT_MIN_MAX_LEDGER_SHREDS},
         tower_storage,
         tpu::DEFAULT_TPU_COALESCE_MS,
-        validator::{
-            is_snapshot_config_invalid, Validator, ValidatorConfig, ValidatorStartProgress,
-        },
+        validator::{is_snapshot_config_valid, Validator, ValidatorConfig, ValidatorStartProgress},
     },
     solana_download_utils::{download_snapshot, DownloadProgressRecord},
     solana_genesis_utils::download_then_check_genesis_hash,
@@ -41,7 +39,7 @@ use {
     solana_rpc::{rpc::JsonRpcConfig, rpc_pubsub_service::PubSubConfig},
     solana_runtime::{
         accounts_db::{
-            AccountShrinkThreshold, DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
+            AccountShrinkThreshold, AccountsDbConfig, DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
             DEFAULT_ACCOUNTS_SHRINK_RATIO,
         },
         accounts_index::{
@@ -2446,6 +2444,7 @@ pub fn main() {
     let accounts_index_config = value_t!(matches, "accounts_index_bins", usize)
         .ok()
         .map(|bins| AccountsIndexConfig { bins: Some(bins) });
+    let accounts_db_config = accounts_index_config.map(|x| AccountsDbConfig { index: Some(x) });
 
     let accountsdb_repl_service_config = if matches.is_present("enable_accountsdb_repl") {
         let accountsdb_repl_bind_address = if matches.is_present("accountsdb_repl_bind_address") {
@@ -2565,7 +2564,7 @@ pub fn main() {
         account_indexes,
         accounts_db_caching_enabled: !matches.is_present("no_accounts_db_caching"),
         accounts_db_test_hash_calculation: matches.is_present("accounts_db_test_hash_calculation"),
-        accounts_index_config,
+        accounts_db_config,
         accounts_db_skip_shrink: matches.is_present("accounts_db_skip_shrink"),
         accounts_db_use_index_hash_calculation: matches.is_present("accounts_db_index_hashing"),
         tpu_coalesce_ms,
@@ -2703,7 +2702,7 @@ pub fn main() {
         eprintln!("Accounts hash interval should not be 0.");
         exit(1);
     }
-    if is_snapshot_config_invalid(
+    if !is_snapshot_config_valid(
         snapshot_interval_slots,
         validator_config.accounts_hash_interval_slots,
     ) {

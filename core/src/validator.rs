@@ -62,15 +62,15 @@ use {
         transaction_status_service::TransactionStatusService,
     },
     solana_runtime::{
-        accounts_db::AccountShrinkThreshold,
-        accounts_index::{AccountSecondaryIndexes, AccountsIndexConfig},
+        accounts_db::{AccountShrinkThreshold, AccountsDbConfig},
+        accounts_index::AccountSecondaryIndexes,
         bank::Bank,
         bank_forks::BankForks,
         commitment::BlockCommitmentCache,
         hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_config::SnapshotConfig,
-        snapshot_package::PendingSnapshotPackage,
+        snapshot_package::{AccountsPackageSender, PendingSnapshotPackage},
         snapshot_utils,
     },
     solana_sdk::{
@@ -93,7 +93,7 @@ use {
         path::{Path, PathBuf},
         sync::{
             atomic::{AtomicBool, AtomicU64, Ordering},
-            mpsc::Receiver,
+            mpsc::{channel, Receiver},
             Arc, Mutex, RwLock,
         },
         thread::{sleep, Builder, JoinHandle},
@@ -150,7 +150,7 @@ pub struct ValidatorConfig {
     pub poh_hashes_per_batch: u64,
     pub account_indexes: AccountSecondaryIndexes,
     pub accounts_db_caching_enabled: bool,
-    pub accounts_index_config: Option<AccountsIndexConfig>,
+    pub accounts_db_config: Option<AccountsDbConfig>,
     pub warp_slot: Option<Slot>,
     pub accounts_db_test_hash_calculation: bool,
     pub accounts_db_skip_shrink: bool,
@@ -217,7 +217,7 @@ impl Default for ValidatorConfig {
             validator_exit: Arc::new(RwLock::new(Exit::default())),
             no_wait_for_vote_to_start_leader: true,
             accounts_shrink_ratio: AccountShrinkThreshold::default(),
-            accounts_index_config: None,
+            accounts_db_config: None,
         }
     }
 }
@@ -380,7 +380,7 @@ impl Validator {
                 .register_exit(Box::new(move || exit.store(true, Ordering::Relaxed)));
         }
 
-        let (replay_vote_sender, replay_vote_receiver) = unbounded();
+        let accounts_package_channel = channel();
         let (
             genesis_config,
             bank_forks,
@@ -388,6 +388,7 @@ impl Validator {
             ledger_signal_receiver,
             completed_slots_receiver,
             leader_schedule_cache,
+            last_full_snapshot_slot,
             snapshot_hash,
             TransactionHistoryServices {
                 transaction_status_sender,
@@ -409,6 +410,7 @@ impl Validator {
             config.enforce_ulimit_nofile,
             &start_progress,
             config.no_poh_speed_test,
+            accounts_package_channel.0.clone(),
         );
 
         *start_progress.write().unwrap() = ValidatorStartProgress::StartingServices;
@@ -637,7 +639,7 @@ impl Validator {
 
         let (snapshot_packager_service, snapshot_config_and_pending_package) =
             if let Some(snapshot_config) = config.snapshot_config.clone() {
-                if is_snapshot_config_invalid(
+                if !is_snapshot_config_valid(
                     snapshot_config.full_snapshot_archive_interval_slots,
                     config.accounts_hash_interval_slots,
                 ) {
@@ -708,6 +710,7 @@ impl Validator {
         let rpc_completed_slots_service =
             RpcCompletedSlotsService::spawn(completed_slots_receiver, rpc_subscriptions.clone());
 
+        let (replay_vote_sender, replay_vote_receiver) = unbounded();
         let tvu = Tvu::new(
             vote_account,
             authorized_voter_keypairs,
@@ -778,6 +781,8 @@ impl Validator {
             },
             &max_slots,
             &cost_model,
+            accounts_package_channel,
+            last_full_snapshot_slot,
         );
 
         let tpu = Tpu::new(
@@ -1070,7 +1075,7 @@ fn post_process_restored_tower(
         })
 }
 
-#[allow(clippy::type_complexity)]
+#[allow(clippy::type_complexity, clippy::too_many_arguments)]
 fn new_banks_from_ledger(
     validator_identity: &Pubkey,
     vote_account: &Pubkey,
@@ -1081,6 +1086,7 @@ fn new_banks_from_ledger(
     enforce_ulimit_nofile: bool,
     start_progress: &Arc<RwLock<ValidatorStartProgress>>,
     no_poh_speed_test: bool,
+    accounts_package_sender: AccountsPackageSender,
 ) -> (
     GenesisConfig,
     BankForks,
@@ -1088,6 +1094,7 @@ fn new_banks_from_ledger(
     Receiver<bool>,
     CompletedSlotsReceiver,
     LeaderScheduleCache,
+    Option<Slot>,
     Option<(Slot, Hash)>,
     TransactionHistoryServices,
     Tower,
@@ -1165,7 +1172,7 @@ fn new_banks_from_ledger(
         debug_keys: config.debug_keys.clone(),
         account_indexes: config.account_indexes.clone(),
         accounts_db_caching_enabled: config.accounts_db_caching_enabled,
-        accounts_index_config: config.accounts_index_config,
+        accounts_db_config: config.accounts_db_config.clone(),
         shrink_ratio: config.accounts_shrink_ratio,
         accounts_db_test_hash_calculation: config.accounts_db_test_hash_calculation,
         accounts_db_skip_shrink: config.accounts_db_skip_shrink,
@@ -1183,24 +1190,26 @@ fn new_banks_from_ledger(
             TransactionHistoryServices::default()
         };
 
-    let (mut bank_forks, mut leader_schedule_cache, snapshot_hash) = bank_forks_utils::load(
-        &genesis_config,
-        &blockstore,
-        config.account_paths.clone(),
-        config.account_shrink_paths.clone(),
-        config.snapshot_config.as_ref(),
-        process_options,
-        transaction_history_services
-            .transaction_status_sender
-            .as_ref(),
-        transaction_history_services
-            .cache_block_meta_sender
-            .as_ref(),
-    )
-    .unwrap_or_else(|err| {
-        error!("Failed to load ledger: {:?}", err);
-        abort()
-    });
+    let (mut bank_forks, mut leader_schedule_cache, last_full_snapshot_slot, snapshot_hash) =
+        bank_forks_utils::load(
+            &genesis_config,
+            &blockstore,
+            config.account_paths.clone(),
+            config.account_shrink_paths.clone(),
+            config.snapshot_config.as_ref(),
+            process_options,
+            transaction_history_services
+                .transaction_status_sender
+                .as_ref(),
+            transaction_history_services
+                .cache_block_meta_sender
+                .as_ref(),
+            accounts_package_sender,
+        )
+        .unwrap_or_else(|err| {
+            error!("Failed to load ledger: {:?}", err);
+            abort()
+        });
 
     if let Some(warp_slot) = config.warp_slot {
         let snapshot_config = config.snapshot_config.as_ref().unwrap_or_else(|| {
@@ -1279,6 +1288,7 @@ fn new_banks_from_ledger(
         ledger_signal_receiver,
         completed_slots_receiver,
         leader_schedule_cache,
+        last_full_snapshot_slot,
         snapshot_hash,
         transaction_history_services,
         tower,
@@ -1653,13 +1663,13 @@ fn cleanup_accounts_path(account_path: &std::path::Path) {
     }
 }
 
-pub fn is_snapshot_config_invalid(
+pub fn is_snapshot_config_valid(
     snapshot_interval_slots: u64,
     accounts_hash_interval_slots: u64,
 ) -> bool {
-    snapshot_interval_slots != 0
-        && (snapshot_interval_slots < accounts_hash_interval_slots
-            || snapshot_interval_slots % accounts_hash_interval_slots != 0)
+    snapshot_interval_slots == 0
+        || (snapshot_interval_slots >= accounts_hash_interval_slots
+            && snapshot_interval_slots % accounts_hash_interval_slots == 0)
 }
 
 #[cfg(test)]
@@ -1868,11 +1878,11 @@ mod tests {
 
     #[test]
     fn test_interval_check() {
-        assert!(!is_snapshot_config_invalid(0, 100));
-        assert!(is_snapshot_config_invalid(1, 100));
-        assert!(is_snapshot_config_invalid(230, 100));
-        assert!(!is_snapshot_config_invalid(500, 100));
-        assert!(!is_snapshot_config_invalid(5, 5));
+        assert!(is_snapshot_config_valid(0, 100));
+        assert!(!is_snapshot_config_valid(1, 100));
+        assert!(!is_snapshot_config_valid(230, 100));
+        assert!(is_snapshot_config_valid(500, 100));
+        assert!(is_snapshot_config_valid(5, 5));
     }
 
     #[test]

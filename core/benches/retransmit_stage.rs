@@ -31,7 +31,7 @@ use {
         sync::{
             atomic::{AtomicUsize, Ordering},
             mpsc::channel,
-            Arc, Mutex, RwLock,
+            Arc, RwLock,
         },
         thread::{sleep, Builder},
         time::Duration,
@@ -78,7 +78,6 @@ fn bench_retransmitter(bencher: &mut Bencher) {
     let bank = bank_forks.working_bank();
     let bank_forks = Arc::new(RwLock::new(bank_forks));
     let (shreds_sender, shreds_receiver) = channel();
-    let shreds_receiver = Arc::new(Mutex::new(shreds_receiver));
     const NUM_THREADS: usize = 2;
     let sockets = (0..NUM_THREADS)
         .map(|_| UdpSocket::bind("0.0.0.0:0").unwrap())
@@ -165,7 +164,5 @@ fn bench_retransmitter(bencher: &mut Bencher) {
         total.store(0, Ordering::Relaxed);
     });
 
-    for t in retransmitter_handles {
-        t.join().unwrap();
-    }
+    retransmitter_handles.join().unwrap();
 }

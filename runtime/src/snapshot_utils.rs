@@ -1,7 +1,7 @@
 use {
     crate::{
-        accounts_db::AccountShrinkThreshold,
-        accounts_index::{AccountSecondaryIndexes, AccountsIndexConfig},
+        accounts_db::{AccountShrinkThreshold, AccountsDbConfig},
+        accounts_index::AccountSecondaryIndexes,
         bank::{Bank, BankSlotDelta},
         builtins::Builtins,
         hardened_unpack::{unpack_snapshot, ParallelSelector, UnpackError, UnpackedAppendVecMap},
@@ -732,7 +732,7 @@ pub fn bank_from_snapshot_archives(
     test_hash_calculation: bool,
     accounts_db_skip_shrink: bool,
     verify_index: bool,
-    accounts_index_config: Option<AccountsIndexConfig>,
+    accounts_db_config: Option<AccountsDbConfig>,
 ) -> Result<(Bank, BankFromArchiveTimings)> {
     check_are_snapshots_compatible(
         full_snapshot_archive_info,
@@ -796,7 +796,7 @@ pub fn bank_from_snapshot_archives(
         limit_load_slot_count_from_snapshot,
         shrink_ratio,
         verify_index,
-        accounts_index_config,
+        accounts_db_config,
     )?;
     measure_rebuild.stop();
     info!("{}", measure_rebuild);
@@ -842,8 +842,13 @@ pub fn bank_from_latest_snapshot_archives(
     test_hash_calculation: bool,
     accounts_db_skip_shrink: bool,
     verify_index: bool,
-    accounts_index_config: Option<AccountsIndexConfig>,
-) -> Result<(Bank, BankFromArchiveTimings)> {
+    accounts_db_config: Option<AccountsDbConfig>,
+) -> Result<(
+    Bank,
+    BankFromArchiveTimings,
+    FullSnapshotArchiveInfo,
+    Option<IncrementalSnapshotArchiveInfo>,
+)> {
     let full_snapshot_archive_info = get_highest_full_snapshot_archive_info(&snapshot_archives_dir)
         .ok_or(SnapshotError::NoSnapshotArchives)?;
 
@@ -880,7 +885,7 @@ pub fn bank_from_latest_snapshot_archives(
         test_hash_calculation,
         accounts_db_skip_shrink,
         verify_index,
-        accounts_index_config,
+        accounts_db_config,
     )?;
 
     verify_bank_against_expected_slot_hash(
@@ -895,7 +900,12 @@ pub fn bank_from_latest_snapshot_archives(
         ),
     )?;
 
-    Ok((bank, timings))
+    Ok((
+        bank,
+        timings,
+        full_snapshot_archive_info,
+        incremental_snapshot_archive_info,
+    ))
 }
 
 /// Check to make sure the deserialized bank's slot and hash matches the snapshot archive's slot
@@ -1411,7 +1421,7 @@ fn rebuild_bank_from_snapshots(
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
     verify_index: bool,
-    accounts_index_config: Option<AccountsIndexConfig>,
+    accounts_db_config: Option<AccountsDbConfig>,
 ) -> Result<Bank> {
     let (full_snapshot_version, full_snapshot_root_paths) =
         verify_unpacked_snapshots_dir_and_version(
@@ -1459,7 +1469,7 @@ fn rebuild_bank_from_snapshots(
                     limit_load_slot_count_from_snapshot,
                     shrink_ratio,
                     verify_index,
-                    accounts_index_config,
+                    accounts_db_config,
                 ),
             }?,
         )
@@ -1785,9 +1795,26 @@ pub fn package_and_archive_incremental_snapshot(
     ))
 }
 
+pub fn should_take_full_snapshot(
+    block_height: Slot,
+    full_snapshot_archive_interval_slots: Slot,
+) -> bool {
+    block_height % full_snapshot_archive_interval_slots == 0
+}
+
+pub fn should_take_incremental_snapshot(
+    block_height: Slot,
+    incremental_snapshot_archive_interval_slots: Slot,
+    last_full_snapshot_slot: Option<Slot>,
+) -> bool {
+    block_height % incremental_snapshot_archive_interval_slots == 0
+        && last_full_snapshot_slot.is_some()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING;
     use assert_matches::assert_matches;
     use bincode::{deserialize_from, serialize_into};
     use solana_sdk::{
@@ -2580,7 +2607,7 @@ mod tests {
             false,
             false,
             false,
-            Some(crate::accounts_index::ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
+            Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
         )
         .unwrap();
 
@@ -2671,7 +2698,7 @@ mod tests {
             false,
             false,
             false,
-            Some(crate::accounts_index::ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
+            Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
         )
         .unwrap();
 
@@ -2781,7 +2808,7 @@ mod tests {
             false,
             false,
             false,
-            Some(crate::accounts_index::ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
+            Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
         )
         .unwrap();
 
@@ -2865,7 +2892,7 @@ mod tests {
         )
         .unwrap();
 
-        let (deserialized_bank, _) = bank_from_latest_snapshot_archives(
+        let (deserialized_bank, ..) = bank_from_latest_snapshot_archives(
             &bank_snapshots_dir,
             &snapshot_archives_dir,
             &[accounts_dir.as_ref().to_path_buf()],
@@ -2880,7 +2907,7 @@ mod tests {
             false,
             false,
             false,
-            Some(crate::accounts_index::ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
+            Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
         )
         .unwrap();
 
@@ -3021,7 +3048,7 @@ mod tests {
             false,
             false,
             false,
-            Some(crate::accounts_index::ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
+            Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
         )
         .unwrap();
         assert_eq!(
@@ -3083,7 +3110,7 @@ mod tests {
             false,
             false,
             false,
-            Some(crate::accounts_index::ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
+            Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
         )
         .unwrap();
         assert_eq!(

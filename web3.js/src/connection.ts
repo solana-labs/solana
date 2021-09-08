@@ -1,6 +1,7 @@
 import bs58 from 'bs58';
 import {Buffer} from 'buffer';
-import fetch, {Response} from 'node-fetch';
+import fetch from 'cross-fetch';
+import type {Response} from 'cross-fetch';
 import {
   type as pick,
   number,
