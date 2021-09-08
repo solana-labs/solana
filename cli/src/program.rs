@@ -39,11 +39,7 @@ use solana_sdk::{
     loader_instruction,
     message::Message,
     native_token::Sol,
-<<<<<<< HEAD
-=======
     packet::PACKET_DATA_SIZE,
-    process_instruction::MockInvokeContext,
->>>>>>> 24fd47a32 (Speed up program deploys by writing larger chunks (#19654))
     pubkey::Pubkey,
     signature::{keypair_from_seed, read_keypair_file, Keypair, Signature, Signer},
     signers::Signers,
