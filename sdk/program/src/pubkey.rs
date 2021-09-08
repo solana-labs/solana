@@ -497,6 +497,43 @@ mod tests {
     fn test_create_program_address() {
         let exceeded_seed = &[127; MAX_SEED_LEN + 1];
         let max_seed = &[0; MAX_SEED_LEN];
+        let exceeded_seeds: &[&[u8]] = &[
+            &[1],
+            &[2],
+            &[3],
+            &[4],
+            &[5],
+            &[6],
+            &[7],
+            &[8],
+            &[9],
+            &[10],
+            &[11],
+            &[12],
+            &[13],
+            &[14],
+            &[15],
+            &[16],
+            &[17],
+        ];
+        let max_seeds: &[&[u8]] = &[
+            &[1],
+            &[2],
+            &[3],
+            &[4],
+            &[5],
+            &[6],
+            &[7],
+            &[8],
+            &[9],
+            &[10],
+            &[11],
+            &[12],
+            &[13],
+            &[14],
+            &[15],
+            &[16],
+        ];
         let program_id = Pubkey::from_str("BPFLoaderUpgradeab1e11111111111111111111111").unwrap();
         let public_key = Pubkey::from_str("SeedPubey1111111111111111111111111111111111").unwrap();
 
@@ -509,6 +546,11 @@ mod tests {
             Err(PubkeyError::MaxSeedLengthExceeded)
         );
         assert!(Pubkey::create_program_address(&[max_seed], &program_id).is_ok());
+        assert_eq!(
+            Pubkey::create_program_address(exceeded_seeds, &program_id),
+            Err(PubkeyError::MaxSeedLengthExceeded)
+        );
+        assert!(Pubkey::create_program_address(max_seeds, &program_id).is_ok());
         assert_eq!(
             Pubkey::create_program_address(&[b"", &[1]], &program_id),
             Ok("BwqrghZA2htAcqq8dzP1WDAhTXYTYWj7CHxF5j7TDBAe"

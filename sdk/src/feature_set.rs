@@ -191,8 +191,13 @@ pub mod demote_program_write_locks {
     solana_sdk::declare_id!("3E3jV7v9VcdJL8iYZUMax9DiDno8j7EWUVbhm9RtShj2");
 }
 
+
 pub mod allow_native_ids {
     solana_sdk::declare_id!("GVnDbNkECwrzLM7aVBGWpBYo3yH1ACaXB4ottNX8pedZ");
+}
+
+pub mod check_seed_length {
+    solana_sdk::declare_id!("8HYXgkoKGreAMA3MfJkdjbKNVbfZRQP3jqFpa7iqN4v7");
 }
 
 lazy_static! {
@@ -244,6 +249,7 @@ lazy_static! {
         (stake_program_advance_activating_credits_observed::id(), "Enable advancing credits observed for activation epoch #19309"),
         (demote_program_write_locks::id(), "demote program write locks to readonly #19593"),
         (allow_native_ids::id(), "allow native program ids in program derived addresses"),
+        (check_seed_length::id(), "Check program address seed lengths"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
