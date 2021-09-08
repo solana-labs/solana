@@ -41,6 +41,12 @@ enum TransactionErrorType {
     SANITIZE_FAILURE = 14;
     CLUSTER_MAINTENANCE = 15;
     ACCOUNT_BORROW_OUTSTANDING_TX = 16;
+<<<<<<< HEAD
+=======
+    WOULD_EXCEED_MAX_BLOCK_COST_LIMIT = 17;
+    UNSUPPORTED_VERSION = 18;
+    INVALID_WRITABLE_ACCOUNT = 19;
+>>>>>>> 38bbb7798 (Return error if Transaction contains writable executable or ProgramData accounts (#19629))
 }
 
 message InstructionError {
