@@ -40,6 +40,7 @@ use solana_runtime::{
 };
 use solana_sdk::{
     account::{AccountSharedData, ReadableAccount, WritableAccount},
+    account_utils::StateMut,
     clock::{Epoch, Slot},
     genesis_config::{ClusterType, GenesisConfig},
     hash::Hash,
@@ -1339,6 +1340,16 @@ fn main() {
                     .help("List of accounts to remove while creating the snapshot"),
             )
             .arg(
+                Arg::with_name("vote_accounts_to_destake")
+                    .required(false)
+                    .long("destake-vote-account")
+                    .takes_value(true)
+                    .value_name("PUBKEY")
+                    .validator(is_pubkey)
+                    .multiple(true)
+                    .help("List of validator vote accounts to destake")
+            )
+            .arg(
                 Arg::with_name("remove_stake_accounts")
                     .required(false)
                     .long("remove-stake-accounts")
@@ -1561,6 +1572,7 @@ fn main() {
     let wal_recovery_mode = matches
         .value_of("wal_recovery_mode")
         .map(BlockstoreRecoveryMode::from);
+    let verbose_level = matches.occurrences_of("verbose");
 
     match matches.subcommand() {
         ("bigtable", Some(arg_matches)) => bigtable_process_command(&ledger_path, arg_matches),
@@ -1570,7 +1582,6 @@ fn main() {
             let num_slots = value_t!(arg_matches, "num_slots", Slot).ok();
             let allow_dead_slots = arg_matches.is_present("allow_dead_slots");
             let only_rooted = arg_matches.is_present("only_rooted");
-            let verbose = matches.occurrences_of("verbose");
             output_ledger(
                 open_blockstore(
                     &ledger_path,
@@ -1582,7 +1593,7 @@ fn main() {
                 allow_dead_slots,
                 LedgerOutputMethod::Print,
                 num_slots,
-                verbose,
+                verbose_level,
                 only_rooted,
             );
         }
@@ -2014,6 +2025,11 @@ fn main() {
             let bootstrap_validator_pubkeys = pubkeys_of(arg_matches, "bootstrap_validator");
             let accounts_to_remove =
                 pubkeys_of(arg_matches, "accounts_to_remove").unwrap_or_default();
+            let vote_accounts_to_destake: HashSet<_> =
+                pubkeys_of(arg_matches, "vote_accounts_to_destake")
+                    .unwrap_or_default()
+                    .into_iter()
+                    .collect();
             let snapshot_version =
                 arg_matches
                     .value_of("snapshot_version")
@@ -2076,6 +2092,7 @@ fn main() {
                         || hashes_per_tick.is_some()
                         || remove_stake_accounts
                         || !accounts_to_remove.is_empty()
+                        || !vote_accounts_to_destake.is_empty()
                         || faucet_pubkey.is_some()
                         || bootstrap_validator_pubkeys.is_some();
 
@@ -2116,9 +2133,37 @@ fn main() {
                     }
 
                     for address in accounts_to_remove {
-                        if let Some(mut account) = bank.get_account(&address) {
-                            account.set_lamports(0);
-                            bank.store_account(&address, &account);
+                        let mut account = bank.get_account(&address).unwrap_or_else(|| {
+                            eprintln!(
+                                "Error: Account does not exist, unable to remove it: {}",
+                                address
+                            );
+                            exit(1);
+                        });
+
+                        account.set_lamports(0);
+                        bank.store_account(&address, &account);
+                    }
+
+                    if !vote_accounts_to_destake.is_empty() {
+                        for (address, mut account) in bank
+                            .get_program_accounts(&stake::program::id())
+                            .unwrap()
+                            .into_iter()
+                        {
+                            if let Ok(StakeState::Stake(meta, stake)) = account.state() {
+                                if vote_accounts_to_destake.contains(&stake.delegation.voter_pubkey)
+                                {
+                                    if verbose_level > 0 {
+                                        warn!(
+                                            "Undelegating stake account {} from {}",
+                                            address, stake.delegation.voter_pubkey,
+                                        );
+                                    }
+                                    account.set_state(&StakeState::Initialized(meta)).unwrap();
+                                    bank.store_account(&address, &account);
+                                }
+                            }
                         }
                     }
 
