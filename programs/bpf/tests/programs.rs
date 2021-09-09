@@ -1842,10 +1842,10 @@ fn test_program_bpf_invoke_upgradeable_via_cpi() {
         invoke_and_return,
         &[0],
         vec![
-            AccountMeta::new(program_id, false),
-            AccountMeta::new(program_id, false),
-            AccountMeta::new(clock::id(), false),
-            AccountMeta::new(fees::id(), false),
+            AccountMeta::new_readonly(program_id, false),
+            AccountMeta::new_readonly(program_id, false),
+            AccountMeta::new_readonly(clock::id(), false),
+            AccountMeta::new_readonly(fees::id(), false),
         ],
     );
 
@@ -2022,10 +2022,10 @@ fn test_program_bpf_upgrade_via_cpi() {
         invoke_and_return,
         &[0],
         vec![
-            AccountMeta::new(program_id, false),
-            AccountMeta::new(program_id, false),
-            AccountMeta::new(clock::id(), false),
-            AccountMeta::new(fees::id(), false),
+            AccountMeta::new_readonly(program_id, false),
+            AccountMeta::new_readonly(program_id, false),
+            AccountMeta::new_readonly(clock::id(), false),
+            AccountMeta::new_readonly(fees::id(), false),
         ],
     );
 
