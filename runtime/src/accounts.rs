@@ -214,23 +214,10 @@ impl Accounts {
                         payer_index = Some(i);
                     }
 
-<<<<<<< HEAD
                     if solana_sdk::sysvar::instructions::check_id(key)
                         && feature_set.is_active(&feature_set::instructions_sysvar_enabled::id())
                     {
-                        if message.is_writable(i, demote_program_write_locks) {
-                            return Err(TransactionError::InvalidAccountIndex);
-                        }
                         Self::construct_instructions_account(message, demote_program_write_locks)
-=======
-                    if solana_sdk::sysvar::instructions::check_id(key) {
-                        Self::construct_instructions_account(
-                            message,
-                            feature_set
-                                .is_active(&feature_set::instructions_sysvar_owned_by_sysvar::id()),
-                            demote_program_write_locks,
-                        )
->>>>>>> 38bbb7798 (Return error if Transaction contains writable executable or ProgramData accounts (#19629))
                     } else {
                         let (account, rent) = self
                             .accounts_db
@@ -246,19 +233,7 @@ impl Accounts {
                             })
                             .unwrap_or_default();
 
-<<<<<<< HEAD
-                        if account.executable && bpf_loader_upgradeable::check_id(&account.owner) {
-                            // The upgradeable loader requires the derived ProgramData account
-                            if let Ok(UpgradeableLoaderState::Program {
-                                programdata_address,
-                            }) = account.state()
-                            {
-                                if let Some(account) = self
-                                    .accounts_db
-                                    .load(ancestors, &programdata_address)
-                                    .map(|(account, _)| account)
-=======
-                        if bpf_loader_upgradeable::check_id(account.owner()) {
+                        if bpf_loader_upgradeable::check_id(&account.owner) {
                             if demote_program_write_locks
                                 && message.is_writable(i, demote_program_write_locks)
                                 && !is_upgradeable_loader_present
@@ -267,16 +242,15 @@ impl Accounts {
                                 return Err(TransactionError::InvalidWritableAccount);
                             }
 
-                            if account.executable() {
+                            if account.executable {
                                 // The upgradeable loader requires the derived ProgramData account
                                 if let Ok(UpgradeableLoaderState::Program {
                                     programdata_address,
                                 }) = account.state()
->>>>>>> 38bbb7798 (Return error if Transaction contains writable executable or ProgramData accounts (#19629))
                                 {
                                     if let Some(account) = self
                                         .accounts_db
-                                        .load_with_fixed_root(ancestors, &programdata_address)
+                                        .load(ancestors, &programdata_address)
                                         .map(|(account, _)| account)
                                     {
                                         account_deps.push((programdata_address, account));
@@ -289,7 +263,7 @@ impl Accounts {
                                     return Err(TransactionError::InvalidProgramForExecution);
                                 }
                             }
-                        } else if account.executable()
+                        } else if account.executable
                             && demote_program_write_locks
                             && message.is_writable(i, demote_program_write_locks)
                         {
@@ -1089,9 +1063,10 @@ pub fn prepare_if_nonce_account(
     false
 }
 
-fn is_upgradeable_loader_present(message: &SanitizedMessage) -> bool {
+fn is_upgradeable_loader_present(message: &Message) -> bool {
     message
-        .account_keys_iter()
+        .account_keys
+        .iter()
         .any(|&key| key == bpf_loader_upgradeable::id())
 }
 
@@ -1766,7 +1741,14 @@ mod tests {
         assert_eq!(error_counters.invalid_writable_account, 1);
         assert_eq!(loaded_accounts.len(), 1);
         let result = loaded_accounts[0].0.as_ref().unwrap();
-        assert_eq!(result.accounts[..2], accounts[..2]);
+        assert_eq!(
+            result.accounts[..2],
+            accounts
+                .iter()
+                .map(|(_, account)| account)
+                .cloned()
+                .collect::<Vec<AccountSharedData>>()[..2]
+        );
         assert_eq!(result.loaders[0], vec![accounts[2].clone()]);
     }
 
@@ -1849,7 +1831,14 @@ mod tests {
         assert_eq!(error_counters.invalid_writable_account, 1);
         assert_eq!(loaded_accounts.len(), 1);
         let result = loaded_accounts[0].0.as_ref().unwrap();
-        assert_eq!(result.accounts[..2], accounts[..2]);
+        assert_eq!(
+            result.accounts[..2],
+            accounts
+                .iter()
+                .map(|(_, account)| account)
+                .cloned()
+                .collect::<Vec<AccountSharedData>>()[..2]
+        );
         assert_eq!(result.loaders[0], vec![accounts[5].clone()]);
 
         // Solution 2: mark programdata as readonly
@@ -1861,7 +1850,14 @@ mod tests {
         assert_eq!(error_counters.invalid_writable_account, 1);
         assert_eq!(loaded_accounts.len(), 1);
         let result = loaded_accounts[0].0.as_ref().unwrap();
-        assert_eq!(result.accounts[..2], accounts[..2]);
+        assert_eq!(
+            result.accounts[..2],
+            accounts
+                .iter()
+                .map(|(_, account)| account)
+                .cloned()
+                .collect::<Vec<AccountSharedData>>()[..2]
+        );
         assert_eq!(
             result.loaders[0],
             vec![
@@ -1936,7 +1932,14 @@ mod tests {
         assert_eq!(error_counters.invalid_writable_account, 1);
         assert_eq!(loaded_accounts.len(), 1);
         let result = loaded_accounts[0].0.as_ref().unwrap();
-        assert_eq!(result.accounts[..2], accounts_with_upgradeable_loader[..2]);
+        assert_eq!(
+            result.accounts[..2],
+            accounts_with_upgradeable_loader
+                .iter()
+                .map(|(_, account)| account)
+                .cloned()
+                .collect::<Vec<AccountSharedData>>()[..2]
+        );
         assert_eq!(
             result.loaders[0],
             vec![accounts_with_upgradeable_loader[2].clone()]
@@ -1951,7 +1954,14 @@ mod tests {
         assert_eq!(error_counters.invalid_writable_account, 1);
         assert_eq!(loaded_accounts.len(), 1);
         let result = loaded_accounts[0].0.as_ref().unwrap();
-        assert_eq!(result.accounts[..2], accounts[..2]);
+        assert_eq!(
+            result.accounts[..2],
+            accounts
+                .iter()
+                .map(|(_, account)| account)
+                .cloned()
+                .collect::<Vec<AccountSharedData>>()[..2]
+        );
         assert_eq!(result.loaders[0], vec![accounts[2].clone()]);
     }
 

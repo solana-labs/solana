@@ -144,11 +144,7 @@ impl ExecuteTimings {
 }
 
 type BankStatusCache = StatusCache<Result<()>>;
-<<<<<<< HEAD
-#[frozen_abi(digest = "HhY4tMP5KZU9fw9VLpMMUikfvNVCLksocZBUKjt8ZjYH")]
-=======
 #[frozen_abi(digest = "5Br3PNyyX1L7XoS4jYLt5JTeMXowLSsu7v9LhokC8vnq")]
->>>>>>> 38bbb7798 (Return error if Transaction contains writable executable or ProgramData accounts (#19629))
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 type TransactionAccountRefCells = Vec<Rc<RefCell<AccountSharedData>>>;
 type TransactionAccountDepRefCells = Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>;
