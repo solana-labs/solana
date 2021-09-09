@@ -26,6 +26,7 @@ use solana_ledger::{
     shred::Shred,
 };
 use solana_runtime::{
+    accounts_db::AccountsDbConfig,
     accounts_index::AccountsIndexConfig,
     bank::{Bank, RewardCalculationEvent},
     bank_forks::BankForks,
@@ -64,7 +65,7 @@ use std::{
     path::{Path, PathBuf},
     process::{exit, Command, Stdio},
     str::FromStr,
-    sync::{Arc, RwLock},
+    sync::{mpsc::channel, Arc, RwLock},
 };
 
 mod bigtable;
@@ -713,7 +714,7 @@ fn load_bank_forks(
         let snapshot_archives_dir =
             snapshot_archive_path.unwrap_or_else(|| blockstore.ledger_path().to_path_buf());
         Some(SnapshotConfig {
-            full_snapshot_archive_interval_slots: 0, // Value doesn't matter
+            full_snapshot_archive_interval_slots: Slot::MAX,
             incremental_snapshot_archive_interval_slots: Slot::MAX,
             snapshot_archives_dir,
             bank_snapshots_dir,
@@ -743,6 +744,7 @@ fn load_bank_forks(
         vec![non_primary_accounts_path]
     };
 
+    let (accounts_package_sender, _) = channel();
     bank_forks_utils::load(
         genesis_config,
         blockstore,
@@ -752,6 +754,7 @@ fn load_bank_forks(
         process_options,
         None,
         None,
+        accounts_package_sender,
     )
 }
 
@@ -1658,7 +1661,7 @@ fn main() {
                 process_options,
                 snapshot_archive_path,
             ) {
-                Ok((bank_forks, _leader_schedule_cache, _snapshot_hash)) => {
+                Ok((bank_forks, ..)) => {
                     println!(
                         "{}",
                         compute_shred_version(
@@ -1733,7 +1736,7 @@ fn main() {
                 process_options,
                 snapshot_archive_path,
             ) {
-                Ok((bank_forks, _leader_schedule_cache, _snapshot_hash)) => {
+                Ok((bank_forks, ..)) => {
                     println!("{}", &bank_forks.working_bank().hash());
                 }
                 Err(err) => {
@@ -1884,6 +1887,9 @@ fn main() {
                 .ok()
                 .map(|bins| AccountsIndexConfig { bins: Some(bins) });
 
+            let accounts_db_config =
+                accounts_index_config.map(|x| AccountsDbConfig { index: Some(x) });
+
             let process_options = ProcessOptions {
                 dev_halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
                 new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
@@ -1896,7 +1902,7 @@ fn main() {
                     usize
                 )
                 .ok(),
-                accounts_index_config,
+                accounts_db_config,
                 verify_index: arg_matches.is_present("verify_accounts_index"),
                 allow_dead_slots: arg_matches.is_present("allow_dead_slots"),
                 accounts_db_test_hash_calculation: arg_matches
@@ -1914,7 +1920,7 @@ fn main() {
                 AccessType::TryPrimaryThenSecondary,
                 wal_recovery_mode,
             );
-            let (bank_forks, _, _) = load_bank_forks(
+            let (bank_forks, ..) = load_bank_forks(
                 arg_matches,
                 &open_genesis_config_by(&ledger_path, arg_matches),
                 &blockstore,
@@ -1953,7 +1959,7 @@ fn main() {
                 process_options,
                 snapshot_archive_path,
             ) {
-                Ok((bank_forks, _leader_schedule_cache, _snapshot_hash)) => {
+                Ok((bank_forks, ..)) => {
                     let dot = graph_forks(&bank_forks, arg_matches.is_present("include_all_votes"));
 
                     let extension = Path::new(&output_file).extension();
@@ -2057,7 +2063,7 @@ fn main() {
                 },
                 snapshot_archive_path,
             ) {
-                Ok((bank_forks, _leader_schedule_cache, _snapshot_hash)) => {
+                Ok((bank_forks, ..)) => {
                     let mut bank = bank_forks
                         .get(snapshot_slot)
                         .unwrap_or_else(|| {
@@ -2288,7 +2294,7 @@ fn main() {
                 process_options,
                 snapshot_archive_path,
             ) {
-                Ok((bank_forks, _leader_schedule_cache, _snapshot_hash)) => {
+                Ok((bank_forks, ..)) => {
                     let slot = bank_forks.working_bank().slot();
                     let bank = bank_forks.get(slot).unwrap_or_else(|| {
                         eprintln!("Error: Slot {} is not available", slot);
@@ -2347,7 +2353,7 @@ fn main() {
                 process_options,
                 snapshot_archive_path,
             ) {
-                Ok((bank_forks, _leader_schedule_cache, _snapshot_hash)) => {
+                Ok((bank_forks, ..)) => {
                     let slot = bank_forks.working_bank().slot();
                     let bank = bank_forks.get(slot).unwrap_or_else(|| {
                         eprintln!("Error: Slot {} is not available", slot);

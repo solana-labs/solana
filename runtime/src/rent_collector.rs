@@ -54,7 +54,7 @@ impl RentCollector {
 
     // updates this account's lamports and status and returns
     //  the account rent collected, if any
-    //
+    // This is NOT thread safe at some level. If we try to collect from the same account in parallel, we may collect twice.
     #[must_use = "add to Bank::collected_rent"]
     pub fn collect_from_existing_account(
         &self,
