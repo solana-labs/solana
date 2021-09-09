@@ -61,7 +61,24 @@ pub enum PohRecorderError {
 type Result<T> = std::result::Result<T, PohRecorderError>;
 
 pub type WorkingBankEntry = (Arc<Bank>, (Entry, u64));
-pub type BankStart = (Arc<Bank>, Arc<Instant>);
+
+pub struct BankStart {
+    pub working_bank: Arc<Bank>,
+    pub bank_creation_time: Arc<Instant>,
+}
+
+impl BankStart {
+    fn get_working_bank_if_not_expired(&self) -> Option<&Arc<Bank>> {
+        if Bank::should_bank_still_be_processing_txs(
+            &self.bank_creation_time,
+            self.working_bank.ns_per_slot,
+        ) {
+            Some(&self.working_bank)
+        } else {
+            None
+        }
+    }
+}
 
 pub struct Record {
     pub mixin: Hash,
@@ -143,6 +160,27 @@ impl TransactionRecorder {
                     return result;
                 }
             }
+        }
+    }
+}
+
+pub enum PohRecorderBank {
+    WorkingBank(BankStart),
+    LastResetBank(Arc<Bank>),
+}
+
+impl PohRecorderBank {
+    pub fn bank(&self) -> &Arc<Bank> {
+        match self {
+            PohRecorderBank::WorkingBank(bank_start) => &bank_start.working_bank,
+            PohRecorderBank::LastResetBank(last_reset_bank) => last_reset_bank,
+        }
+    }
+
+    pub fn working_bank_start(&self) -> Option<&BankStart> {
+        match self {
+            PohRecorderBank::WorkingBank(bank_start) => Some(bank_start),
+            PohRecorderBank::LastResetBank(_last_reset_bank) => None,
         }
     }
 }
@@ -245,9 +283,10 @@ impl PohRecorder {
     }
 
     pub fn bank_start(&self) -> Option<BankStart> {
-        self.working_bank
-            .as_ref()
-            .map(|w| (w.bank.clone(), w.start.clone()))
+        self.working_bank.as_ref().map(|w| BankStart {
+            working_bank: w.bank.clone(),
+            bank_creation_time: w.start.clone(),
+        })
     }
 
     pub fn has_bank(&self) -> bool {
@@ -714,16 +753,23 @@ impl PohRecorder {
         )
     }
 
+    pub fn get_poh_recorder_bank(&self) -> PohRecorderBank {
+        let bank_start = self.bank_start();
+        if let Some(bank_start) = bank_start {
+            PohRecorderBank::WorkingBank(bank_start)
+        } else {
+            PohRecorderBank::LastResetBank(self.start_bank.clone())
+        }
+    }
+
     // Filters the return result of PohRecorder::bank_start(), returns the bank
     // if it's still processing transactions
-    pub fn get_bank_still_processing_txs(bank_start: &Option<BankStart>) -> Option<&Arc<Bank>> {
-        bank_start.as_ref().and_then(|(bank, bank_creation_time)| {
-            if Bank::should_bank_still_be_processing_txs(bank_creation_time, bank.ns_per_slot) {
-                Some(bank)
-            } else {
-                None
-            }
-        })
+    pub fn get_working_bank_if_not_expired<'a, 'b>(
+        bank_start: &'b Option<&'a BankStart>,
+    ) -> Option<&'a Arc<Bank>> {
+        bank_start
+            .as_ref()
+            .and_then(|bank_start| bank_start.get_working_bank_if_not_expired())
     }
 
     // Used in tests
