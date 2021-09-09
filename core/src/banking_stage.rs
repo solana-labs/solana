@@ -76,17 +76,31 @@ pub struct BufferedPackets {
     // TODO: can be integrated into `self.packet_indexes`, but
     // requires some more plumbing through all the transaction
     // processing functions
-    weights: HashMap<usize, usize>,
+    weights: HashMap<usize, PacketWeight>,
     is_forwarded: bool,
 }
 
 impl BufferedPackets {
+    pub fn new(
+        packets: Packets,
+        packet_indexes: Vec<usize>,
+        weights: HashMap<usize, PacketWeight>,
+        is_forwarded: bool,
+    ) -> Self {
+        BufferedPackets {
+            packets,
+            packet_indexes,
+            weights,
+            is_forwarded,
+        }
+    }
     fn is_empty(&self) -> bool {
         self.packet_indexes.is_empty()
     }
 }
 
 pub type UnprocessedPackets = VecDeque<BufferedPackets>;
+pub type PacketWeight = u64;
 
 /// Transaction forwarding
 pub const FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET: u64 = 2;
@@ -343,8 +357,8 @@ impl BankingStage {
     // Resulting packets list is sorted from greatest weight to smallest weight
     fn sort_packets_by_weight_for_forwarding<'a>(
         all_packets: impl Iterator<Item = &'a BufferedPackets>,
-    ) -> Vec<(usize, &'a Packet)> {
-        let mut weighted_packets: Vec<(usize, &'a Packet)> = all_packets
+    ) -> Vec<(PacketWeight, &'a Packet)> {
+        let mut weighted_packets: Vec<(PacketWeight, &'a Packet)> = all_packets
             .filter(|p| !p.is_forwarded)
             .flat_map(|p| {
                 p.packet_indexes
@@ -1293,15 +1307,16 @@ impl BankingStage {
                     batch_limit,
                     duplicates,
                     banking_stage_stats,
+                    poh_recorder_bank.bank(),
                 );
                 continue;
             }
 
-            let bank_start = working_bank_start.unwrap();
+            let working_bank_start = working_bank_start.unwrap();
             let (processed, verified_txs_len, unprocessed_indexes) =
                 Self::process_packets_transactions(
-                    &bank_start.working_bank,
-                    &bank_start.bank_creation_time,
+                    &working_bank_start.working_bank,
+                    &working_bank_start.bank_creation_time,
                     recorder,
                     &msgs,
                     packet_indexes,
@@ -1323,6 +1338,7 @@ impl BankingStage {
                 batch_limit,
                 duplicates,
                 banking_stage_stats,
+                &working_bank_start.working_bank,
             );
 
             // If there were retryable transactions, add the unexpired ones to the buffered queue
@@ -1334,7 +1350,7 @@ impl BankingStage {
                 while let Some(msgs) = mms_iter.next() {
                     let packet_indexes = Self::generate_packet_indexes(&msgs.packets);
                     let unprocessed_indexes = Self::filter_unprocessed_packets(
-                        &bank_start.working_bank,
+                        &working_bank_start.working_bank,
                         &msgs,
                         &packet_indexes,
                         &my_pubkey,
@@ -1350,6 +1366,7 @@ impl BankingStage {
                         batch_limit,
                         duplicates,
                         banking_stage_stats,
+                        &working_bank_start.working_bank,
                     );
                 }
                 handle_retryable_packets_time.stop();
@@ -1399,6 +1416,23 @@ impl BankingStage {
         Ok(())
     }
 
+    fn weight_transaction(transaction: &Transaction, bank: &Bank) -> PacketWeight {
+        let fee_payer_key = transaction.message.account_keys[0];
+        let mut weight = bank.epoch_vote_account_stake(&fee_payer_key);
+        if weight == 0 {
+            return 0;
+        }
+
+        if let Some(first_instruction_program_id) = transaction.message().program_id(0) {
+            // Prioritize vote transactions over all other transactions
+            if *first_instruction_program_id == solana_vote_program::id() {
+                weight += bank.total_epoch_stake();
+            }
+        }
+
+        weight
+    }
+
     fn push_unprocessed(
         unprocessed_packets: &mut UnprocessedPackets,
         packets: Packets,
@@ -1409,6 +1443,7 @@ impl BankingStage {
         batch_limit: usize,
         duplicates: &Arc<Mutex<(LruCache<u64, ()>, PacketHasher)>>,
         banking_stage_stats: &BankingStageStats,
+        bank: &Bank,
     ) {
         {
             let mut packet_duplicate_check_time = Measure::start("packet_duplicate_check");
@@ -1437,8 +1472,24 @@ impl BankingStage {
                 }
             }
             *newly_buffered_packets_count += packet_indexes.len();
-            // TODO: set up the weights computation
-            let weights = packet_indexes.iter().map(|index| (*index, 0)).collect();
+            let (transactions, transaction_indexes) = Self::transactions_from_packets(
+                &packets,
+                &packet_indexes,
+                bank.libsecp256k1_0_5_upgrade_enabled(),
+            );
+            let weights = transaction_indexes
+                .iter()
+                .map(|transaction_index| {
+                    (
+                        *transaction_index,
+                        Self::weight_transaction(
+                            &transactions[*transaction_index].transaction(),
+                            bank,
+                        ),
+                    )
+                })
+                .collect();
+
             let buffered_packets = BufferedPackets {
                 packets,
                 packet_indexes,
@@ -2359,7 +2410,7 @@ mod tests {
                 // Heaviest packets are later in the list
                 let weights = packet_indexes
                     .iter()
-                    .map(|offset| (*offset, *offset))
+                    .map(|offset| (*offset, *offset as PacketWeight))
                     .collect();
                 BufferedPackets {
                     packets,
@@ -2654,7 +2705,10 @@ mod tests {
             let all_packets = packets_vec.pop().unwrap();
             let packet_indexes: Vec<usize> =
                 (0..num_conflicting_transactions).into_iter().collect();
-            let weights: HashMap<usize, usize> = packet_indexes.iter().map(|i| (0, *i)).collect();
+            let weights: HashMap<usize, PacketWeight> = packet_indexes
+                .iter()
+                .map(|i| (0, *i as PacketWeight))
+                .collect();
             let mut buffered_packets: UnprocessedPackets = vec![BufferedPackets {
                 packets: all_packets,
                 packet_indexes,
@@ -2731,7 +2785,7 @@ mod tests {
                 assert_eq!(single_packets.packets.len(), 1);
             }
             let packet_indexes = vec![0];
-            let weights: HashMap<usize, usize> =
+            let weights: HashMap<usize, PacketWeight> =
                 packet_indexes.iter().map(|offset| (*offset, 1)).collect();
             let mut buffered_packets: UnprocessedPackets = packets_vec
                 .clone()
@@ -2900,6 +2954,7 @@ mod tests {
         let banking_stage_stats = BankingStageStats::default();
         // Because the set of unprocessed `packet_indexes` is empty, the
         // packets are not added to the unprocessed queue
+        let default_bank = &Bank::default();
         BankingStage::push_unprocessed(
             &mut unprocessed_packets,
             new_packets.clone(),
@@ -2910,6 +2965,7 @@ mod tests {
             batch_limit,
             &duplicates,
             &banking_stage_stats,
+            &default_bank,
         );
         assert_eq!(unprocessed_packets.len(), 1);
         assert_eq!(dropped_packet_batches_count, 0);
@@ -2929,6 +2985,7 @@ mod tests {
             batch_limit,
             &duplicates,
             &banking_stage_stats,
+            &default_bank,
         );
         assert_eq!(unprocessed_packets.len(), 2);
         assert_eq!(dropped_packet_batches_count, 0);
@@ -2953,6 +3010,7 @@ mod tests {
             batch_limit,
             &duplicates,
             &banking_stage_stats,
+            &default_bank,
         );
         assert_eq!(unprocessed_packets.len(), 2);
         assert_eq!(
@@ -2974,6 +3032,7 @@ mod tests {
             3,
             &duplicates,
             &banking_stage_stats,
+            &default_bank,
         );
         assert_eq!(unprocessed_packets.len(), 2);
         assert_eq!(

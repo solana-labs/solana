@@ -7,7 +7,9 @@ use crossbeam_channel::unbounded;
 use log::*;
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
-use solana_core::banking_stage::{create_test_recorder, BankingStage, BankingStageStats};
+use solana_core::banking_stage::{
+    create_test_recorder, BankingStage, BankingStageStats, BufferedPackets,
+};
 use solana_core::cluster_info::ClusterInfo;
 use solana_core::cluster_info::Node;
 use solana_core::poh_recorder::WorkingBankEntry;
@@ -71,11 +73,14 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
         let tx = test_tx();
         let len = 4096;
         let chunk_size = 1024;
-        let batches = to_packets_chunked(&vec![tx; len], chunk_size);
-        let mut packets = VecDeque::new();
-        for batch in batches {
-            let batch_len = batch.packets.len();
-            packets.push_back((batch, vec![0usize; batch_len], false));
+        let packet_batches = to_packets_chunked(&vec![tx; len], chunk_size);
+        let mut all_buffered_packets = VecDeque::new();
+        for packets in packet_batches {
+            let batch_len = packets.packets.len();
+            let packet_indexes: Vec<usize> = (0..batch_len).into_iter().collect();
+            let weights = packet_indexes.iter().map(|offset| (*offset, 0)).collect();
+            let buffered_packets = BufferedPackets::new(packets, packet_indexes, weights, false);
+            all_buffered_packets.push_back(buffered_packets);
         }
         let (s, _r) = unbounded();
         // This tests the performance of buffering packets.
@@ -85,7 +90,7 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
                 &my_pubkey,
                 std::u128::MAX,
                 &poh_recorder,
-                &mut packets,
+                &mut all_buffered_packets,
                 None,
                 &s,
                 None::<Box<dyn Fn()>>,
