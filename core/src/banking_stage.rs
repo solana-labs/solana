@@ -5,7 +5,7 @@ use crate::{
     cluster_info::ClusterInfo,
     data_budget::DataBudget,
     packet_hasher::PacketHasher,
-    poh_recorder::{PohRecorder, PohRecorderError, TransactionRecorder, WorkingBankEntry},
+    poh_recorder::{BankStart, PohRecorder, PohRecorderError, TransactionRecorder, WorkingBankEntry},
     poh_service::{self, PohService},
 };
 use crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError};
@@ -406,10 +406,14 @@ impl BankingStage {
                 )
             } else {
                 let bank_start = poh_recorder.lock().unwrap().bank_start();
-                if let Some((bank, bank_creation_time)) = bank_start {
+                if let Some(BankStart {
+                    working_bank,
+                    bank_creation_time,
+                }) = bank_start
+                {
                     let (processed, verified_txs_len, new_unprocessed_indexes) =
                         Self::process_packets_transactions(
-                            &bank,
+                            &working_bank,
                             &bank_creation_time,
                             &recorder,
                             &msgs,
@@ -425,7 +429,7 @@ impl BankingStage {
                         )
                     {
                         reached_end_of_slot =
-                            Some((poh_recorder.lock().unwrap().next_slot_leader(), bank));
+                            Some((poh_recorder.lock().unwrap().next_slot_leader(), working_bank));
                     }
                     new_tx_count += processed;
                     // Out of the buffered packets just retried, collect any still unprocessed
@@ -530,9 +534,10 @@ impl BankingStage {
         ) = {
             let poh = poh_recorder.lock().unwrap();
             bank_start = poh.bank_start();
+            let active_working_bank = PohRecorder::get_working_bank_if_not_expired(&bank_start.as_ref());
             (
                 poh.leader_after_n_slots(FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET),
-                PohRecorder::get_bank_still_processing_txs(&bank_start),
+                active_working_bank,
                 poh.would_be_leader(HOLD_TRANSACTIONS_SLOT_OFFSET * DEFAULT_TICKS_PER_SLOT),
                 poh.would_be_leader(
                     (FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET - 1) * DEFAULT_TICKS_PER_SLOT,
@@ -1243,8 +1248,9 @@ impl BankingStage {
         let mut newly_buffered_packets_count = 0;
         while let Some(msgs) = mms_iter.next() {
             let packet_indexes = Self::generate_packet_indexes(&msgs.packets);
-            let bank_start = poh.lock().unwrap().bank_start();
-            if PohRecorder::get_bank_still_processing_txs(&bank_start).is_none() {
+            let poh_recorder_bank = poh.lock().unwrap().get_poh_recorder_bank();
+            let working_bank_start = poh_recorder_bank.working_bank_start();
+            if PohRecorder::get_working_bank_if_not_expired(&working_bank_start).is_none() {
                 Self::push_unprocessed(
                     buffered_packets,
                     msgs,
@@ -1258,12 +1264,12 @@ impl BankingStage {
                 );
                 continue;
             }
-            let (bank, bank_creation_time) = bank_start.unwrap();
 
+            let bank_start = working_bank_start.unwrap();
             let (processed, verified_txs_len, unprocessed_indexes) =
                 Self::process_packets_transactions(
-                    &bank,
-                    &bank_creation_time,
+                    &bank_start.working_bank,
+                    &bank_start.bank_creation_time,
                     recorder,
                     &msgs,
                     packet_indexes,
@@ -1296,7 +1302,7 @@ impl BankingStage {
                 while let Some(msgs) = mms_iter.next() {
                     let packet_indexes = Self::generate_packet_indexes(&msgs.packets);
                     let unprocessed_indexes = Self::filter_unprocessed_packets(
-                        &bank,
+                        &bank_start.working_bank,
                         &msgs,
                         &packet_indexes,
                         &my_pubkey,
