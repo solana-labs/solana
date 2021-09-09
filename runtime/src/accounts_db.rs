@@ -129,6 +129,8 @@ pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS),
 };
 
+pub type BinnedHashData = Vec<Vec<CalculateHashIntermediate>>;
+
 #[derive(Debug, Default, Clone)]
 pub struct AccountsDbConfig {
     pub index: Option<AccountsIndexConfig>,
@@ -5128,7 +5130,7 @@ impl AccountsDb {
             &Ancestors,
             &AccountInfoAccountsIndex,
         )>,
-    ) -> Result<Vec<Vec<Vec<CalculateHashIntermediate>>>, BankHashVerificationError> {
+    ) -> Result<Vec<BinnedHashData>, BankHashVerificationError> {
         let bin_calculator = PubkeyBinCalculator16::new(bins);
         assert!(bin_range.start < bins && bin_range.end <= bins && bin_range.start < bin_range.end);
         let mut time = Measure::start("scan all accounts");
@@ -5137,12 +5139,10 @@ impl AccountsDb {
         let range = bin_range.end - bin_range.start;
         let sort_time = AtomicU64::new(0);
 
-        let result: Vec<Vec<Vec<CalculateHashIntermediate>>> = Self::scan_account_storage_no_bank(
+        let result: Vec<BinnedHashData> = Self::scan_account_storage_no_bank(
             accounts_cache_and_ancestors,
             storage,
-            |loaded_account: LoadedAccount,
-             accum: &mut Vec<Vec<CalculateHashIntermediate>>,
-             slot: Slot| {
+            |loaded_account: LoadedAccount, accum: &mut BinnedHashData, slot: Slot| {
                 let pubkey = loaded_account.pubkey();
                 let mut pubkey_to_bin_index = bin_calculator.bin_from_pubkey(pubkey);
                 if !bin_range.contains(&pubkey_to_bin_index) {
@@ -5203,9 +5203,7 @@ impl AccountsDb {
         Ok(result)
     }
 
-    fn sort_slot_storage_scan(
-        accum: Vec<Vec<CalculateHashIntermediate>>,
-    ) -> (Vec<Vec<CalculateHashIntermediate>>, u64) {
+    fn sort_slot_storage_scan(accum: BinnedHashData) -> (BinnedHashData, u64) {
         let time = AtomicU64::new(0);
         (
             accum
@@ -6736,7 +6734,7 @@ pub mod tests {
             bins: usize,
             bin_range: &Range<usize>,
             check_hash: bool,
-        ) -> Result<Vec<Vec<Vec<CalculateHashIntermediate>>>, BankHashVerificationError> {
+        ) -> Result<Vec<BinnedHashData>, BankHashVerificationError> {
             Self::scan_snapshot_stores_with_cache(storage, stats, bins, bin_range, check_hash, None)
         }
     }
