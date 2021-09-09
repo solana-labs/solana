@@ -93,19 +93,37 @@ certainly work for the CPI case, but this would not work RPC or Transaction case
 
 ## Proposed Solution
 
-The callee can set the return data using a new system call `sol_set_return_data(u8 *buf, u64 length)`.
+The callee can set the return data using a new system call `sol_set_return_data(buf: *const u8, length: u64)`.
 There is a limit of 1024 bytes for the returndata. This function can be called multiple times, and
 will simply overwrite what was written in the last call.
 
-The return data can be retrieved with `sol_get_return_data(u8 mut *buf, u64 length) -> u64`. This function
-returns the length of the return data.
+The return data can be retrieved with `sol_get_return_data(buf: *mut u8, length: u64, program_id: *mut u8) -> u64`. This function copies the return buffer, and the program_id that set the return data, and
+returns the length of the return data, or `u64::MAX` if no return data is set.
 
 When an instruction calls `sol_invoke()`, the return data of the callee is copied into the return data
 of the current instruction. This means that any return data is automatically passed up the call stack,
 to the callee of the current instruction (or the RPC call).
 
-Note that `sol_invoke()` clears the returns data, so that any return data from
-a previous invoke is not reused if the invoked fails to set a return data.
+Note that `sol_invoke()` clears the returns data before invoking the callee, so that any return data from
+a previous invoke is not reused if the invoked fails to set a return data. For example:
+
+ - A invokes B
+ - Before entry to B, return data is cleared.0
+ - B sets some return data and returns
+ - A invokes C
+ - Before entry to C, return data is cleared.
+ - C does not set return data and returns
+ - A checks return data and finds it empty
+
+Another scenario to consider:
+
+ - A invokes B
+ - B invokes C
+ - C sets return data and returns
+ - B does not touch return data and returns
+ - A gets return data from C
+ - A does not touch return data
+ - Return data from transaction is what C set.
 
 The compute costs are calculated for getting and setting the return data using
 the syscalls.
