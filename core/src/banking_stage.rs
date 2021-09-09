@@ -66,17 +66,31 @@ pub struct BufferedPackets {
     // TODO: can be integrated into `self.packet_indexes`, but
     // requires some more plumbing through all the transaction
     // processing functions
-    weights: HashMap<usize, usize>,
+    weights: HashMap<usize, PacketWeight>,
     is_forwarded: bool,
 }
 
 impl BufferedPackets {
+    pub fn new(
+        packets: Packets,
+        packet_indexes: Vec<usize>,
+        weights: HashMap<usize, PacketWeight>,
+        is_forwarded: bool,
+    ) -> Self {
+        BufferedPackets {
+            packets,
+            packet_indexes,
+            weights,
+            is_forwarded,
+        }
+    }
     fn is_empty(&self) -> bool {
         self.packet_indexes.is_empty()
     }
 }
 
 pub type UnprocessedPackets = VecDeque<BufferedPackets>;
+pub type PacketWeight = u64;
 
 /// Transaction forwarding
 pub const FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET: u64 = 2;
@@ -367,8 +381,8 @@ impl BankingStage {
     // Resulting packets list is sorted from greatest weight to smallest weight
     fn sort_packets_by_weight_for_forwarding<'a>(
         all_packets: impl Iterator<Item = &'a BufferedPackets>,
-    ) -> Vec<(usize, &'a Packet)> {
-        let mut weighted_packets: Vec<(usize, &'a Packet)> = all_packets
+    ) -> Vec<(PacketWeight, &'a Packet)> {
+        let mut weighted_packets: Vec<(PacketWeight, &'a Packet)> = all_packets
             .filter(|p| !p.is_forwarded)
             .flat_map(|p| {
                 p.packet_indexes
@@ -465,7 +479,6 @@ impl BankingStage {
                     original_unprocessed_indexes,
                     my_pubkey,
                     *next_leader,
-                    cost_tracker,
                     banking_stage_stats,
                 );
                 Self::update_buffered_packets_with_new_unprocessed(
@@ -1116,7 +1129,7 @@ impl BankingStage {
         msgs: &Packets,
         transaction_indexes: &[usize],
         feature_set: &Arc<feature_set::FeatureSet>,
-        cost_tracker: &Arc<RwLock<CostTracker>>,
+        cost_tracker: Option<Arc<RwLock<CostTracker>>>,
         banking_stage_stats: &BankingStageStats,
         demote_program_write_locks: bool,
         votes_only: bool,
@@ -1146,28 +1159,35 @@ impl BankingStage {
             Ordering::Relaxed,
         );
 
-        let mut cost_tracker_check_time = Measure::start("cost_tracker_check_time");
-        let (filtered_transactions, filter_transaction_packet_indexes) = {
-            let cost_tracker_readonly = cost_tracker.read().unwrap();
-            verified_transactions_with_packet_indexes
-                .into_iter()
-                .filter_map(|(tx, tx_index)| {
-                    let result = cost_tracker_readonly
-                        .would_transaction_fit(&tx, demote_program_write_locks);
-                    if result.is_err() {
-                        debug!("transaction {:?} would exceed limit: {:?}", tx, result);
-                        retryable_transaction_packet_indexes.push(tx_index);
-                        return None;
-                    }
-                    Some((tx, tx_index))
-                })
-                .unzip()
-        };
-        cost_tracker_check_time.stop();
-
-        banking_stage_stats
-            .cost_tracker_check_elapsed
-            .fetch_add(cost_tracker_check_time.as_us(), Ordering::Relaxed);
+        let (filtered_transactions, filter_transaction_packet_indexes) =
+            if let Some(cost_tracker) = cost_tracker {
+                let mut cost_tracker_check_time = Measure::start("cost_tracker_check_time");
+                let filtered_transactions_with_indexes = {
+                    let cost_tracker_readonly = cost_tracker.read().unwrap();
+                    verified_transactions_with_packet_indexes
+                        .into_iter()
+                        .filter_map(|(tx, tx_index)| {
+                            let result = cost_tracker_readonly
+                                .would_transaction_fit(&tx, demote_program_write_locks);
+                            if result.is_err() {
+                                debug!("transaction {:?} would exceed limit: {:?}", tx, result);
+                                retryable_transaction_packet_indexes.push(tx_index);
+                                return None;
+                            }
+                            Some((tx, tx_index))
+                        })
+                        .unzip()
+                };
+                cost_tracker_check_time.stop();
+                banking_stage_stats
+                    .cost_tracker_check_elapsed
+                    .fetch_add(cost_tracker_check_time.as_us(), Ordering::Relaxed);
+                filtered_transactions_with_indexes
+            } else {
+                verified_transactions_with_packet_indexes
+                    .into_iter()
+                    .unzip()
+            };
 
         (
             filtered_transactions,
@@ -1233,7 +1253,7 @@ impl BankingStage {
                 msgs,
                 &packet_indexes,
                 &bank.feature_set,
-                cost_tracker,
+                Some(Arc::clone(cost_tracker)),
                 banking_stage_stats,
                 bank.demote_program_write_locks(),
                 bank.vote_only_bank(),
@@ -1321,7 +1341,6 @@ impl BankingStage {
         transaction_indexes: &[usize],
         my_pubkey: &Pubkey,
         next_leader: Option<Pubkey>,
-        cost_tracker: &Arc<RwLock<CostTracker>>,
         banking_stage_stats: &BankingStageStats,
     ) -> Vec<usize> {
         // Check if we are the next leader. If so, let's not filter the packets
@@ -1335,12 +1354,12 @@ impl BankingStage {
 
         let mut unprocessed_packet_conversion_time =
             Measure::start("unprocessed_packet_conversion");
-        let (transactions, transaction_to_packet_indexes, retry_packet_indexes) =
+        let (transactions, transaction_to_packet_indexes, _retry_packet_indexes) =
             Self::transactions_from_packets(
                 msgs,
                 transaction_indexes,
                 &bank.feature_set,
-                cost_tracker,
+                None,
                 banking_stage_stats,
                 bank.demote_program_write_locks(),
                 bank.vote_only_bank(),
@@ -1350,14 +1369,12 @@ impl BankingStage {
         let tx_count = transaction_to_packet_indexes.len();
 
         let unprocessed_tx_indexes = (0..transactions.len()).collect_vec();
-        let mut filtered_unprocessed_packet_indexes = Self::filter_pending_packets_from_pending_txs(
+        let filtered_unprocessed_packet_indexes = Self::filter_pending_packets_from_pending_txs(
             bank,
             &transactions,
             &transaction_to_packet_indexes,
             &unprocessed_tx_indexes,
         );
-
-        filtered_unprocessed_packet_indexes.extend(retry_packet_indexes);
 
         inc_new_counter_info!(
             "banking_stage-dropped_tx_before_forwarding",
@@ -1442,6 +1459,7 @@ impl BankingStage {
                     batch_limit,
                     duplicates,
                     banking_stage_stats,
+                    poh_recorder_bank.bank(),
                 );
                 continue;
             }
@@ -1483,6 +1501,7 @@ impl BankingStage {
                 batch_limit,
                 duplicates,
                 banking_stage_stats,
+                working_bank,
             );
 
             // If there were retryable transactions, add the unexpired ones to the buffered queue
@@ -1499,7 +1518,6 @@ impl BankingStage {
                         &packet_indexes,
                         my_pubkey,
                         next_leader,
-                        cost_tracker,
                         banking_stage_stats,
                     );
                     Self::push_unprocessed(
@@ -1512,6 +1530,7 @@ impl BankingStage {
                         batch_limit,
                         duplicates,
                         banking_stage_stats,
+                        working_bank,
                     );
                 }
                 handle_retryable_packets_time.stop();
@@ -1571,6 +1590,7 @@ impl BankingStage {
         batch_limit: usize,
         duplicates: &Arc<Mutex<(LruCache<u64, ()>, PacketHasher)>>,
         banking_stage_stats: &BankingStageStats,
+        _bank: &Bank,
     ) {
         {
             let mut packet_duplicate_check_time = Measure::start("packet_duplicate_check");
@@ -2505,7 +2525,7 @@ mod tests {
                 // Heaviest packets are later in the list
                 let weights = packet_indexes
                     .iter()
-                    .map(|offset| (*offset, *offset))
+                    .map(|offset| (*offset, *offset as PacketWeight))
                     .collect();
                 BufferedPackets {
                     packets,
@@ -2805,7 +2825,10 @@ mod tests {
             let all_packets = packets_vec.pop().unwrap();
             let packet_indexes: Vec<usize> =
                 (0..num_conflicting_transactions).into_iter().collect();
-            let weights: HashMap<usize, usize> = packet_indexes.iter().map(|i| (0, *i)).collect();
+            let weights: HashMap<usize, PacketWeight> = packet_indexes
+                .iter()
+                .map(|i| (0, *i as PacketWeight))
+                .collect();
             let mut buffered_packets: UnprocessedPackets = vec![BufferedPackets {
                 packets: all_packets,
                 packet_indexes,
@@ -2888,7 +2911,7 @@ mod tests {
                 assert_eq!(single_packets.packets.len(), 1);
             }
             let packet_indexes = vec![0];
-            let weights: HashMap<usize, usize> =
+            let weights: HashMap<usize, PacketWeight> =
                 packet_indexes.iter().map(|offset| (*offset, 1)).collect();
             let mut buffered_packets: UnprocessedPackets = packets_vec
                 .clone()
@@ -3060,6 +3083,7 @@ mod tests {
         let banking_stage_stats = BankingStageStats::default();
         // Because the set of unprocessed `packet_indexes` is empty, the
         // packets are not added to the unprocessed queue
+        let default_bank = &Bank::default_for_tests();
         BankingStage::push_unprocessed(
             &mut unprocessed_packets,
             new_packets.clone(),
@@ -3070,6 +3094,7 @@ mod tests {
             batch_limit,
             &duplicates,
             &banking_stage_stats,
+            &default_bank,
         );
         assert_eq!(unprocessed_packets.len(), 1);
         assert_eq!(dropped_packet_batches_count, 0);
@@ -3089,6 +3114,7 @@ mod tests {
             batch_limit,
             &duplicates,
             &banking_stage_stats,
+            &default_bank,
         );
         assert_eq!(unprocessed_packets.len(), 2);
         assert_eq!(dropped_packet_batches_count, 0);
@@ -3113,6 +3139,7 @@ mod tests {
             batch_limit,
             &duplicates,
             &banking_stage_stats,
+            &default_bank,
         );
         assert_eq!(unprocessed_packets.len(), 2);
         assert_eq!(
@@ -3134,6 +3161,7 @@ mod tests {
             3,
             &duplicates,
             &banking_stage_stats,
+            &default_bank,
         );
         assert_eq!(unprocessed_packets.len(), 2);
         assert_eq!(
@@ -3191,7 +3219,7 @@ mod tests {
                 &msgs,
                 &packet_indexes,
                 &feature_set,
-                &cost_tracker,
+                Some(cost_tracker.clone()),
                 &banking_stage_stats,
                 false,
                 true,
@@ -3204,7 +3232,7 @@ mod tests {
                 &msgs,
                 &packet_indexes,
                 &feature_set,
-                &cost_tracker,
+                Some(cost_tracker.clone()),
                 &banking_stage_stats,
                 false,
                 false,
