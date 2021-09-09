@@ -5,7 +5,9 @@ use crate::{
 };
 use bincode::serialize;
 use log::*;
-use solana_sdk::{clock::Slot, pubkey::Pubkey, transaction::Transaction};
+use solana_sdk::{
+    clock::Slot, commitment_config::CommitmentConfig, pubkey::Pubkey, transaction::Transaction,
+};
 use std::{
     collections::{HashMap, HashSet, VecDeque},
     net::{SocketAddr, UdpSocket},
@@ -151,7 +153,12 @@ impl LeaderTpuCache {
                 }
             } else {
                 // Overran the local leader schedule cache
-                warn!("Leader not known for slot {}", leader_slot);
+                warn!(
+                    "Leader not known for slot {}; cache holds slots [{},{}]",
+                    leader_slot,
+                    self.first_slot,
+                    self.last_slot()
+                );
             }
         }
         leader_sockets
@@ -249,7 +256,7 @@ struct LeaderTpuService {
 
 impl LeaderTpuService {
     fn new(rpc_client: Arc<RpcClient>, websocket_url: &str, exit: Arc<AtomicBool>) -> Result<Self> {
-        let start_slot = rpc_client.get_max_shred_insert_slot()?;
+        let start_slot = rpc_client.get_slot_with_commitment(CommitmentConfig::processed())?;
 
         let recent_slots = RecentLeaderSlots::new(start_slot);
         let leader_tpu_cache = Arc::new(RwLock::new(LeaderTpuCache::new(&rpc_client, start_slot)?));
@@ -268,7 +275,6 @@ impl LeaderTpuService {
                         SlotUpdate::FirstShredReceived { slot, .. } => slot,
                         _ => return,
                     };
-
                     recent_slots.record_slot(current_slot);
                 },
             )?)

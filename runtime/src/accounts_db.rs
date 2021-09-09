@@ -88,8 +88,12 @@ pub const DEFAULT_NUM_DIRS: u32 = 4;
 // When calculating hashes, it is helpful to break the pubkeys found into bins based on the pubkey value.
 // More bins means smaller vectors to sort, copy, etc.
 pub const PUBKEY_BINS_FOR_CALCULATING_HASHES: usize = 65536;
+// # of passes should be a function of the total # of accounts that are active.
+// higher passes = slower total time, lower dynamic memory usage
+// lower passes = faster total time, higher dynamic memory usage
+// passes=2 cuts dynamic memory usage in approximately half.
 pub const NUM_SCAN_PASSES: usize = 2;
-pub const BINS_PER_PASS: usize = 32768; // PUBKEY_BINS_FOR_CALCULATING_HASHES / NUM_SCAN_PASSES
+pub const BINS_PER_PASS: usize = PUBKEY_BINS_FOR_CALCULATING_HASHES / NUM_SCAN_PASSES;
 
 // Without chunks, we end up with 1 output vec for each outer snapshot storage.
 // This results in too many vectors to be efficient.
@@ -124,6 +128,8 @@ pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
 pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS),
 };
+
+pub type BinnedHashData = Vec<Vec<CalculateHashIntermediate>>;
 
 #[derive(Debug, Default, Clone)]
 pub struct AccountsDbConfig {
@@ -193,6 +199,7 @@ pub struct ErrorCounters {
     pub invalid_account_index: usize,
     pub invalid_program_for_execution: usize,
     pub not_allowed_during_cluster_maintenance: usize,
+    pub invalid_writable_account: usize,
 }
 
 #[derive(Default, Debug)]
@@ -5123,7 +5130,7 @@ impl AccountsDb {
             &Ancestors,
             &AccountInfoAccountsIndex,
         )>,
-    ) -> Result<Vec<Vec<Vec<CalculateHashIntermediate>>>, BankHashVerificationError> {
+    ) -> Result<Vec<BinnedHashData>, BankHashVerificationError> {
         let bin_calculator = PubkeyBinCalculator16::new(bins);
         assert!(bin_range.start < bins && bin_range.end <= bins && bin_range.start < bin_range.end);
         let mut time = Measure::start("scan all accounts");
@@ -5132,12 +5139,10 @@ impl AccountsDb {
         let range = bin_range.end - bin_range.start;
         let sort_time = AtomicU64::new(0);
 
-        let result: Vec<Vec<Vec<CalculateHashIntermediate>>> = Self::scan_account_storage_no_bank(
+        let result: Vec<BinnedHashData> = Self::scan_account_storage_no_bank(
             accounts_cache_and_ancestors,
             storage,
-            |loaded_account: LoadedAccount,
-             accum: &mut Vec<Vec<CalculateHashIntermediate>>,
-             slot: Slot| {
+            |loaded_account: LoadedAccount, accum: &mut BinnedHashData, slot: Slot| {
                 let pubkey = loaded_account.pubkey();
                 let mut pubkey_to_bin_index = bin_calculator.bin_from_pubkey(pubkey);
                 if !bin_range.contains(&pubkey_to_bin_index) {
@@ -5198,9 +5203,7 @@ impl AccountsDb {
         Ok(result)
     }
 
-    fn sort_slot_storage_scan(
-        accum: Vec<Vec<CalculateHashIntermediate>>,
-    ) -> (Vec<Vec<CalculateHashIntermediate>>, u64) {
+    fn sort_slot_storage_scan(accum: BinnedHashData) -> (BinnedHashData, u64) {
         let time = AtomicU64::new(0);
         (
             accum
@@ -5234,24 +5237,17 @@ impl AccountsDb {
         )>,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         let mut scan_and_hash = move || {
-            // # of passes should be a function of the total # of accounts that are active.
-            // higher passes = slower total time, lower dynamic memory usage
-            // lower passes = faster total time, higher dynamic memory usage
-            // passes=2 cuts dynamic memory usage in approximately half.
-            let num_scan_passes: usize = 2;
-
-            let bins_per_pass = PUBKEY_BINS_FOR_CALCULATING_HASHES / num_scan_passes;
             assert_eq!(
-                bins_per_pass * num_scan_passes,
+                BINS_PER_PASS * NUM_SCAN_PASSES,
                 PUBKEY_BINS_FOR_CALCULATING_HASHES
             ); // evenly divisible
             let mut previous_pass = PreviousPass::default();
             let mut final_result = (Hash::default(), 0);
 
-            for pass in 0..num_scan_passes {
+            for pass in 0..NUM_SCAN_PASSES {
                 let bounds = Range {
-                    start: pass * bins_per_pass,
-                    end: (pass + 1) * bins_per_pass,
+                    start: pass * BINS_PER_PASS,
+                    end: (pass + 1) * BINS_PER_PASS,
                 };
 
                 let result = Self::scan_snapshot_stores_with_cache(
@@ -5266,13 +5262,14 @@ impl AccountsDb {
                 let (hash, lamports, for_next_pass) = AccountsHash::rest_of_hash_calculation(
                     result,
                     &mut stats,
-                    pass == num_scan_passes - 1,
+                    pass == NUM_SCAN_PASSES - 1,
                     previous_pass,
-                    bins_per_pass,
+                    BINS_PER_PASS,
                 );
                 previous_pass = for_next_pass;
                 final_result = (hash, lamports);
             }
+
             Ok(final_result)
         };
         if let Some(thread_pool) = thread_pool {
@@ -6737,7 +6734,7 @@ pub mod tests {
             bins: usize,
             bin_range: &Range<usize>,
             check_hash: bool,
-        ) -> Result<Vec<Vec<Vec<CalculateHashIntermediate>>>, BankHashVerificationError> {
+        ) -> Result<Vec<BinnedHashData>, BankHashVerificationError> {
             Self::scan_snapshot_stores_with_cache(storage, stats, bins, bin_range, check_hash, None)
         }
     }

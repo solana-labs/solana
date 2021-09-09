@@ -65,10 +65,7 @@ use crate::{
 use byteorder::{ByteOrder, LittleEndian};
 use itertools::Itertools;
 use log::*;
-use rayon::{
-    iter::{IntoParallelIterator, ParallelIterator},
-    ThreadPool,
-};
+use rayon::ThreadPool;
 use solana_measure::measure::Measure;
 use solana_metrics::{datapoint_debug, inc_new_counter_debug, inc_new_counter_info};
 use solana_program_runtime::{ExecuteDetailsTimings, Executors};
@@ -192,7 +189,7 @@ impl ExecuteTimings {
 }
 
 type BankStatusCache = StatusCache<Result<()>>;
-#[frozen_abi(digest = "GT81Hdwrh73i55ScQvFqmzeHfUL42yxuavZods8VyzGc")]
+#[frozen_abi(digest = "5Br3PNyyX1L7XoS4jYLt5JTeMXowLSsu7v9LhokC8vnq")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 type TransactionAccountRefCells = Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>;
 type TransactionLoaderRefCells = Vec<Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>>;
@@ -3122,6 +3119,12 @@ impl Bank {
                 error_counters.not_allowed_during_cluster_maintenance
             );
         }
+        if 0 != error_counters.invalid_writable_account {
+            inc_new_counter_info!(
+                "bank-process_transactions-error-invalid_writable_account",
+                error_counters.invalid_writable_account
+            );
+        }
     }
 
     /// Converts Accounts into RefCell<AccountSharedData>, this involves moving
@@ -3861,14 +3864,18 @@ impl Bank {
         }
 
         let mut measure = Measure::start("collect_rent_eagerly-ms");
-        self.rc.accounts.accounts_db.thread_pool.install(|| {
-            self.rent_collection_partitions()
-                .into_par_iter()
-                .for_each(|partition| {
-                    self.collect_rent_in_partition(partition);
-                });
-        });
+        let partitions = self.rent_collection_partitions();
+        let count = partitions.len();
+        let account_count: usize = partitions
+            .into_iter()
+            .map(|partition| self.collect_rent_in_partition(partition))
+            .sum();
         measure.stop();
+        datapoint_info!(
+            "collect_rent_eagerly",
+            ("accounts", account_count, i64),
+            ("partitions", count, i64)
+        );
         inc_new_counter_info!("collect_rent_eagerly-ms", measure.as_ms() as usize);
     }
 
@@ -3905,7 +3912,7 @@ impl Bank {
         }
     }
 
-    fn collect_rent_in_partition(&self, partition: Partition) {
+    fn collect_rent_in_partition(&self, partition: Partition) -> usize {
         let subrange = Self::pubkey_range_from_partition(partition);
 
         let accounts = self
@@ -3935,8 +3942,7 @@ impl Bank {
         }
         self.collected_rent.fetch_add(total_rent, Relaxed);
         self.rewards.write().unwrap().append(&mut rent_debits.0);
-
-        datapoint_info!("collect_rent_eagerly", ("accounts", account_count, i64));
+        account_count
     }
 
     // Mostly, the pair (start_index & end_index) is equivalent to this range:
