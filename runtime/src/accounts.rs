@@ -244,7 +244,10 @@ impl Accounts {
             let is_upgradeable_loader_present = is_upgradeable_loader_present(message);
 
             for (i, key) in message.account_keys_iter().enumerate() {
-                let account = if message.is_non_loader_key(i) {
+                let account = if !message.is_non_loader_key(i) {
+                    // Fill in an empty account for the program slots.
+                    AccountSharedData::default()
+                } else {
                     if payer_index.is_none() {
                         payer_index = Some(i);
                     }
@@ -289,12 +292,12 @@ impl Accounts {
                                     programdata_address,
                                 }) = account.state()
                                 {
-                                    if let Some(account) = self
+                                    if let Some((programdata_account, _)) = self
                                         .accounts_db
                                         .load_with_fixed_root(ancestors, &programdata_address)
-                                        .map(|(account, _)| account)
                                     {
-                                        account_deps.push((programdata_address, account));
+                                        account_deps
+                                            .push((programdata_address, programdata_account));
                                     } else {
                                         error_counters.account_not_found += 1;
                                         return Err(TransactionError::ProgramAccountNotFound);
@@ -317,9 +320,6 @@ impl Accounts {
 
                         account
                     }
-                } else {
-                    // Fill in an empty account for the program slots.
-                    AccountSharedData::default()
                 };
                 accounts.push((*key, account));
             }
@@ -338,50 +338,46 @@ impl Accounts {
                 let payer_account = &mut accounts[payer_index].1;
                 if payer_account.lamports() == 0 {
                     error_counters.account_not_found += 1;
-                    Err(TransactionError::AccountNotFound)
-                } else {
-                    let min_balance =
-                        match get_system_account_kind(payer_account).ok_or_else(|| {
-                            error_counters.invalid_account_for_fee += 1;
-                            TransactionError::InvalidAccountForFee
-                        })? {
-                            SystemAccountKind::System => 0,
-                            SystemAccountKind::Nonce => {
-                                // Should we ever allow a fees charge to zero a nonce account's
-                                // balance. The state MUST be set to uninitialized in that case
-                                rent_collector.rent.minimum_balance(nonce::State::size())
-                            }
-                        };
-
-                    if payer_account.lamports() < fee + min_balance {
-                        error_counters.insufficient_funds += 1;
-                        Err(TransactionError::InsufficientFundsForFee)
-                    } else {
-                        payer_account
-                            .checked_sub_lamports(fee)
-                            .map_err(|_| TransactionError::InsufficientFundsForFee)?;
-
-                        let message = tx.message();
-                        let program_indices = message
-                            .program_instructions_iter()
-                            .map(|(program_id, _ix)| {
-                                self.load_executable_accounts(ancestors, program_id, error_counters)
-                                    .map(|programs| {
-                                        let base_index = accounts.len();
-                                        accounts.append(&mut programs.clone());
-                                        (base_index..base_index + programs.len())
-                                            .collect::<Vec<_>>()
-                                    })
-                            })
-                            .collect::<Result<Vec<Vec<usize>>>>()?;
-                        Ok(LoadedTransaction {
-                            accounts,
-                            program_indices,
-                            rent: tx_rent,
-                            rent_debits,
-                        })
-                    }
+                    return Err(TransactionError::AccountNotFound);
                 }
+                let min_balance = match get_system_account_kind(payer_account).ok_or_else(|| {
+                    error_counters.invalid_account_for_fee += 1;
+                    TransactionError::InvalidAccountForFee
+                })? {
+                    SystemAccountKind::System => 0,
+                    SystemAccountKind::Nonce => {
+                        // Should we ever allow a fees charge to zero a nonce account's
+                        // balance. The state MUST be set to uninitialized in that case
+                        rent_collector.rent.minimum_balance(nonce::State::size())
+                    }
+                };
+
+                if payer_account.lamports() < fee + min_balance {
+                    error_counters.insufficient_funds += 1;
+                    return Err(TransactionError::InsufficientFundsForFee);
+                }
+                payer_account
+                    .checked_sub_lamports(fee)
+                    .map_err(|_| TransactionError::InsufficientFundsForFee)?;
+
+                let program_indices = message
+                    .instructions()
+                    .iter()
+                    .map(|instruction| {
+                        self.load_executable_accounts(
+                            ancestors,
+                            &mut accounts,
+                            instruction.program_id_index as usize,
+                            error_counters,
+                        )
+                    })
+                    .collect::<Result<Vec<Vec<usize>>>>()?;
+                Ok(LoadedTransaction {
+                    accounts,
+                    program_indices,
+                    rent: tx_rent,
+                    rent_debits,
+                })
             } else {
                 error_counters.account_not_found += 1;
                 Err(TransactionError::AccountNotFound)
@@ -392,35 +388,35 @@ impl Accounts {
     fn load_executable_accounts(
         &self,
         ancestors: &Ancestors,
-        program_id: &Pubkey,
+        accounts: &mut Vec<(Pubkey, AccountSharedData)>,
+        mut program_account_index: usize,
         error_counters: &mut ErrorCounters,
-    ) -> Result<Vec<(Pubkey, AccountSharedData)>> {
-        let mut accounts = Vec::new();
+    ) -> Result<Vec<usize>> {
+        let mut account_indices = Vec::new();
+        let mut program_id = accounts[program_account_index].0;
         let mut depth = 0;
-        let mut program_id = *program_id;
-        loop {
-            if native_loader::check_id(&program_id) {
-                // At the root of the chain, ready to dispatch
-                break;
-            }
-
+        while !native_loader::check_id(&program_id) {
             if depth >= 5 {
                 error_counters.call_chain_too_deep += 1;
                 return Err(TransactionError::CallChainTooDeep);
             }
             depth += 1;
 
-            let program = match self
+            program_account_index = match self
                 .accounts_db
                 .load_with_fixed_root(ancestors, &program_id)
-                .map(|(account, _)| account)
             {
-                Some(program) => program,
+                Some((program_account, _)) => {
+                    let account_index = accounts.len();
+                    accounts.push((program_id, program_account));
+                    account_index
+                }
                 None => {
                     error_counters.account_not_found += 1;
                     return Err(TransactionError::ProgramAccountNotFound);
                 }
             };
+            let program = &accounts[program_account_index].1;
             if !program.executable() {
                 error_counters.invalid_program_for_execution += 1;
                 return Err(TransactionError::InvalidProgramForExecution);
@@ -435,26 +431,31 @@ impl Accounts {
                     programdata_address,
                 }) = program.state()
                 {
-                    if let Some(program) = self
+                    let programdata_account_index = match self
                         .accounts_db
                         .load_with_fixed_root(ancestors, &programdata_address)
-                        .map(|(account, _)| account)
                     {
-                        accounts.insert(0, (programdata_address, program));
-                    } else {
-                        error_counters.account_not_found += 1;
-                        return Err(TransactionError::ProgramAccountNotFound);
-                    }
+                        Some((programdata_account, _)) => {
+                            let account_index = accounts.len();
+                            accounts.push((programdata_address, programdata_account));
+                            account_index
+                        }
+                        None => {
+                            error_counters.account_not_found += 1;
+                            return Err(TransactionError::ProgramAccountNotFound);
+                        }
+                    };
+                    account_indices.insert(0, programdata_account_index);
                 } else {
                     error_counters.invalid_program_for_execution += 1;
                     return Err(TransactionError::InvalidProgramForExecution);
                 }
             }
 
-            accounts.insert(0, (program_id, program));
+            account_indices.insert(0, program_account_index);
             program_id = program_owner;
         }
-        Ok(accounts)
+        Ok(account_indices)
     }
 
     pub fn load_accounts(
@@ -1765,7 +1766,7 @@ mod tests {
         assert_eq!(loaded_accounts.len(), 1);
         let result = loaded_accounts[0].0.as_ref().unwrap();
         assert_eq!(result.accounts[..2], accounts[..2]);
-        assert_eq!(result.loaders[0], vec![accounts[2].clone()]);
+        assert_eq!(result.accounts[result.program_indices[0][0]], accounts[2]);
     }
 
     #[test]
@@ -1848,7 +1849,7 @@ mod tests {
         assert_eq!(loaded_accounts.len(), 1);
         let result = loaded_accounts[0].0.as_ref().unwrap();
         assert_eq!(result.accounts[..2], accounts[..2]);
-        assert_eq!(result.loaders[0], vec![accounts[5].clone()]);
+        assert_eq!(result.accounts[result.program_indices[0][0]], accounts[5]);
 
         // Solution 2: mark programdata as readonly
         message.account_keys = vec![key0, key1, key2]; // revert key change
@@ -1860,14 +1861,9 @@ mod tests {
         assert_eq!(loaded_accounts.len(), 1);
         let result = loaded_accounts[0].0.as_ref().unwrap();
         assert_eq!(result.accounts[..2], accounts[..2]);
-        assert_eq!(
-            result.loaders[0],
-            vec![
-                accounts[5].clone(),
-                accounts[3].clone(),
-                accounts[4].clone()
-            ]
-        );
+        assert_eq!(result.accounts[result.program_indices[0][0]], accounts[5]);
+        assert_eq!(result.accounts[result.program_indices[0][1]], accounts[3]);
+        assert_eq!(result.accounts[result.program_indices[0][2]], accounts[4]);
     }
 
     #[test]
@@ -1936,8 +1932,8 @@ mod tests {
         let result = loaded_accounts[0].0.as_ref().unwrap();
         assert_eq!(result.accounts[..2], accounts_with_upgradeable_loader[..2]);
         assert_eq!(
-            result.loaders[0],
-            vec![accounts_with_upgradeable_loader[2].clone()]
+            result.accounts[result.program_indices[0][0]],
+            accounts_with_upgradeable_loader[2]
         );
 
         // Solution 2: mark programdata as readonly
@@ -1950,7 +1946,7 @@ mod tests {
         assert_eq!(loaded_accounts.len(), 1);
         let result = loaded_accounts[0].0.as_ref().unwrap();
         assert_eq!(result.accounts[..2], accounts[..2]);
-        assert_eq!(result.loaders[0], vec![accounts[2].clone()]);
+        assert_eq!(result.accounts[result.program_indices[0][0]], accounts[2]);
     }
 
     #[test]
@@ -1965,11 +1961,17 @@ mod tests {
         let mut error_counters = ErrorCounters::default();
         let ancestors = vec![(0, 0)].into_iter().collect();
 
+        let keypair = Keypair::new();
+        let mut account = AccountSharedData::new(1, 0, &Pubkey::default());
+        account.set_executable(true);
+        accounts.store_slow_uncached(0, &keypair.pubkey(), &account);
+
         assert_eq!(
             accounts.load_executable_accounts(
                 &ancestors,
-                &solana_sdk::pubkey::new_rand(),
-                &mut error_counters
+                &mut vec![(keypair.pubkey(), account)],
+                0,
+                &mut error_counters,
             ),
             Err(TransactionError::ProgramAccountNotFound)
         );
