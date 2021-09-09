@@ -2964,6 +2964,18 @@ export class Connection {
   }
 
   /**
+   * Fetch the genesis hash
+   */
+  async getGenesisHash(): Promise<string> {
+    const unsafeRes = await this._rpcRequest('getGenesisHash', []);
+    const res = create(unsafeRes, jsonRpcResult(string()));
+    if ('error' in res) {
+      throw new Error('failed to get genesis hash: ' + res.error.message);
+    }
+    return res.result;
+  }
+
+  /**
    * Fetch a processed block from the cluster.
    */
   async getBlock(

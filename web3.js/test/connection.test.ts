@@ -2668,6 +2668,17 @@ describe('Connection', () => {
     expect(version['solana-core']).to.be.ok;
   });
 
+  it('getGenesisHash', async () => {
+    await mockRpcResponse({
+      method: 'getGenesisHash',
+      params: [],
+      value: 'GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC',
+    });
+
+    const genesisHash = await connection.getGenesisHash();
+    expect(genesisHash).not.to.be.empty;
+  });
+
   it('request airdrop', async () => {
     const account = Keypair.generate();
 
