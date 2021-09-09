@@ -25,7 +25,7 @@ use {
         tpu::DEFAULT_TPU_COALESCE_MS,
         validator::{is_snapshot_config_valid, Validator, ValidatorConfig, ValidatorStartProgress},
     },
-    solana_download_utils::{download_snapshot, DownloadProgressRecord},
+    solana_download_utils::{download_snapshot_archive, DownloadProgressRecord},
     solana_genesis_utils::download_then_check_genesis_hash,
     solana_gossip::{
         cluster_info::{ClusterInfo, Node, VALIDATOR_PORT_RANGE},
@@ -49,6 +49,7 @@ use {
         hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_config::SnapshotConfig,
+        snapshot_package::SnapshotType,
         snapshot_utils::{
             self, ArchiveFormat, SnapshotVersion, DEFAULT_FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
             DEFAULT_INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
@@ -932,13 +933,14 @@ fn rpc_bootstrap(
                             } else {
                                 (DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN, DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN)
                             };
-                            let ret = download_snapshot(
+                            let ret = download_snapshot_archive(
                                 &rpc_contact_info.rpc,
                                 snapshot_archives_dir,
                                 snapshot_hash,
-                                use_progress_bar,
+                                SnapshotType::FullSnapshot,
                                 maximum_full_snapshot_archives_to_retain,
                                 maximum_incremental_snapshot_archives_to_retain,
+                                use_progress_bar,
                                 &mut Some(Box::new(|download_progress: &DownloadProgressRecord| {
                                     debug!("Download progress: {:?}", download_progress);
 
