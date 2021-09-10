@@ -1,7 +1,7 @@
 use crate::accounts_index::{AccountMapEntry, IsCached};
 use solana_sdk::pubkey::Pubkey;
 use std::collections::{
-    hash_map::{Entry, Iter, Keys},
+    hash_map::{Entry, Keys},
     HashMap,
 };
 use std::fmt::Debug;
@@ -26,8 +26,8 @@ impl<V: IsCached> InMemAccountsIndex<V> {
         self.map.entry(pubkey)
     }
 
-    pub fn iter(&self) -> Iter<K, AccountMapEntry<V>> {
-        self.map.iter()
+    pub fn items(&self) -> Vec<(K, AccountMapEntry<V>)> {
+        self.map.iter().map(|(k, v)| (*k, v.clone())).collect()
     }
 
     pub fn keys(&self) -> Keys<K, AccountMapEntry<V>> {
