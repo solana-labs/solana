@@ -255,7 +255,7 @@ mod tests {
             bootstrap_validator_stake_lamports, create_genesis_config,
             create_genesis_config_with_leader, GenesisConfigInfo,
         },
-        get_tmp_ledger_path,
+        get_tmp_ledger_path_auto_delete,
         staking_utils::tests::setup_vote_and_stake_accounts,
     };
     use solana_runtime::bank::Bank;
@@ -428,75 +428,71 @@ mod tests {
 
         let bank = Bank::new_for_tests(&genesis_config);
         let cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
-        let ledger_path = get_tmp_ledger_path!();
-        {
-            let blockstore = Arc::new(
-                Blockstore::open(&ledger_path)
-                    .expect("Expected to be able to open database ledger"),
-            );
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
 
-            assert_eq!(
-                cache.slot_leader_at(bank.slot(), Some(&bank)).unwrap(),
-                pubkey
-            );
-            // Check that the next leader slot after 0 is slot 1
-            assert_eq!(
-                cache
-                    .next_leader_slot(&pubkey, 0, &bank, Some(&blockstore), std::u64::MAX)
-                    .unwrap()
-                    .0,
-                1
-            );
+        let blockstore = Blockstore::open(ledger_path.path())
+            .expect("Expected to be able to open database ledger");
 
-            // Write a shred into slot 2 that chains to slot 1,
-            // but slot 1 is empty so should not be skipped
-            let (shreds, _) = make_slot_entries(2, 1, 1);
-            blockstore.insert_shreds(shreds, None, false).unwrap();
-            assert_eq!(
-                cache
-                    .next_leader_slot(&pubkey, 0, &bank, Some(&blockstore), std::u64::MAX)
-                    .unwrap()
-                    .0,
-                1
-            );
+        assert_eq!(
+            cache.slot_leader_at(bank.slot(), Some(&bank)).unwrap(),
+            pubkey
+        );
+        // Check that the next leader slot after 0 is slot 1
+        assert_eq!(
+            cache
+                .next_leader_slot(&pubkey, 0, &bank, Some(&blockstore), std::u64::MAX)
+                .unwrap()
+                .0,
+            1
+        );
 
-            // Write a shred into slot 1
-            let (shreds, _) = make_slot_entries(1, 0, 1);
+        // Write a shred into slot 2 that chains to slot 1,
+        // but slot 1 is empty so should not be skipped
+        let (shreds, _) = make_slot_entries(2, 1, 1);
+        blockstore.insert_shreds(shreds, None, false).unwrap();
+        assert_eq!(
+            cache
+                .next_leader_slot(&pubkey, 0, &bank, Some(&blockstore), std::u64::MAX)
+                .unwrap()
+                .0,
+            1
+        );
 
-            // Check that slot 1 and 2 are skipped
-            blockstore.insert_shreds(shreds, None, false).unwrap();
-            assert_eq!(
-                cache
-                    .next_leader_slot(&pubkey, 0, &bank, Some(&blockstore), std::u64::MAX)
-                    .unwrap()
-                    .0,
-                3
-            );
+        // Write a shred into slot 1
+        let (shreds, _) = make_slot_entries(1, 0, 1);
 
-            // Integrity checks
-            assert_eq!(
-                cache.next_leader_slot(
-                    &pubkey,
-                    2 * genesis_config.epoch_schedule.slots_per_epoch - 1, // no schedule generated for epoch 2
-                    &bank,
-                    Some(&blockstore),
-                    std::u64::MAX
-                ),
-                None
-            );
+        // Check that slot 1 and 2 are skipped
+        blockstore.insert_shreds(shreds, None, false).unwrap();
+        assert_eq!(
+            cache
+                .next_leader_slot(&pubkey, 0, &bank, Some(&blockstore), std::u64::MAX)
+                .unwrap()
+                .0,
+            3
+        );
 
-            assert_eq!(
-                cache.next_leader_slot(
-                    &solana_sdk::pubkey::new_rand(), // not in leader_schedule
-                    0,
-                    &bank,
-                    Some(&blockstore),
-                    std::u64::MAX
-                ),
-                None
-            );
-        }
-        Blockstore::destroy(&ledger_path).unwrap();
+        // Integrity checks
+        assert_eq!(
+            cache.next_leader_slot(
+                &pubkey,
+                2 * genesis_config.epoch_schedule.slots_per_epoch - 1, // no schedule generated for epoch 2
+                &bank,
+                Some(&blockstore),
+                std::u64::MAX
+            ),
+            None
+        );
+
+        assert_eq!(
+            cache.next_leader_slot(
+                &solana_sdk::pubkey::new_rand(), // not in leader_schedule
+                0,
+                &bank,
+                Some(&blockstore),
+                std::u64::MAX
+            ),
+            None
+        );
     }
 
     #[test]
