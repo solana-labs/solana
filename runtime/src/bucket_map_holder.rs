@@ -11,6 +11,7 @@ use std::fmt::Debug;
 use std::ops::{Bound, RangeBounds, RangeInclusive};
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use log::*;
 use std::sync::{RwLock, RwLockWriteGuard};
 pub type K = Pubkey;
 
@@ -531,6 +532,11 @@ impl<V: IsCached> BucketMapHolder<V> {
             {
                 break;
             }
+            info!(
+                "waiting for accounts index flush. Active flush threads: {}, active flushes: {}",
+                self.stats.active_flush_threads.load(Ordering::Relaxed),
+                self.flushes_active.load(Ordering::Relaxed)
+            );
         }
     }
     pub fn set_startup(&self, startup: bool) {
