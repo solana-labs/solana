@@ -96,7 +96,7 @@ If less than 80% of the stake join the restart after a reasonable amount of
 time, it will be necessary to retry the restart attempt with the stake from the
 non-responsive validators removed.
 
-The community should identity and come to social consensus on the set of
+The community should identify and come to social consensus on the set of
 non-responsive validators. Then all participating validators return to Step 4
 and create a new snapshot with additional `--destake-vote-account <PUBKEY>`
 arguments for each of the non-responsive validator's vote account address
