@@ -334,7 +334,7 @@ impl<V: IsCached> BucketMapHolder<V> {
                 let timeout = self.wait.wait_timeout(Duration::from_millis(200));
                 Self::update_time_stat(&self.stats.flushing_idle_us, m);
 
-                if primary_thread && timeout && startup {
+                if primary_thread && timeout && self.startup.load(Ordering::Relaxed) {
                     self.primary_thread_idle.store(true, Ordering::Relaxed);
                 }
 
@@ -504,6 +504,7 @@ impl<V: IsCached> BucketMapHolder<V> {
         let wait = WaitableCondvar::default();
         let binner = PubkeyBinCalculator16::new(bins);
         let max_pubkey = Pubkey::new(&[0xff; 32]);
+        let primary_thread_idle = AtomicBool::default();
 
         let primary_thread = AtomicBool::default();
         let count_aged = AtomicUsize::default();
@@ -523,6 +524,7 @@ impl<V: IsCached> BucketMapHolder<V> {
         assert_eq!(bins, bucket_map.num_buckets());
 
         Self {
+            primary_thread_idle,
             count_aged,
             primary_thread,
             max_pubkey,
