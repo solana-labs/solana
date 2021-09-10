@@ -3,6 +3,7 @@ use crate::accounts_index::{IsCached, RefCount, SlotList, WriteAccountMapEntry};
 use crate::bucket_map_holder_stats::BucketMapHolderStats;
 use crate::in_mem_accounts_index::{SlotT, V2};
 use crate::pubkey_bins::PubkeyBinCalculator16;
+use log::*;
 use solana_bucket_map::bucket_map::{BucketMap, BucketMapKeyValue};
 use solana_measure::measure::Measure;
 use solana_sdk::{pubkey::Pubkey, timing::AtomicInterval};
@@ -11,7 +12,6 @@ use std::fmt::Debug;
 use std::ops::{Bound, RangeBounds, RangeInclusive};
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use log::*;
 use std::sync::{RwLock, RwLockWriteGuard};
 pub type K = Pubkey;
 
@@ -315,6 +315,16 @@ impl<V: IsCached> BucketMapHolder<V> {
             self.maybe_report_stats();
             self.maybe_age(self.startup.load(Ordering::Relaxed));
             if !found_one && !awakened {
+                if self.check_throughput(!primary_thread) {
+                    // put this to sleep, unless we are responsible for aging
+                    assert!(awake);
+                    awake = false;
+                    self.stats
+                        .active_flush_threads
+                        .fetch_sub(1, Ordering::Relaxed);
+                    continue;
+                }
+
                 let m = Measure::start("idle");
                 let timeout = self.wait.wait_timeout(Duration::from_millis(200));
                 Self::update_time_stat(&self.stats.flushing_idle_us, m);
