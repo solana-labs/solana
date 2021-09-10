@@ -427,7 +427,7 @@ impl IndexEntry {
 }
 
 // this should be <= 1 << DEFAULT_CAPACITY or we end up searching the same items over and over - probably not a big deal since it is so small anyway
-const MAX_SEARCH: u64 = 10;
+const MAX_SEARCH: u64 = 32;
 
 impl<T: Clone + Copy> Bucket<T> {
     fn new(drives: Arc<Vec<PathBuf>>, stats: Arc<BucketMapStats>) -> Self {
