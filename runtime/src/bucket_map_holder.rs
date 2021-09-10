@@ -330,7 +330,7 @@ impl<V: IsCached> BucketMapHolder<V> {
                 let timeout = self.wait.wait_timeout(Duration::from_millis(200));
                 Self::update_time_stat(&self.stats.flushing_idle_us, m);
 
-                if timeout {
+                if timeout && !startup {
                     self.check_startup_complete.notify_all();
                     continue; // otherwise, loop and check for aging and likely wait again
                 }
