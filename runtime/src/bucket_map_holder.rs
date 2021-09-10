@@ -116,6 +116,7 @@ pub struct BucketMapHolder<V: IsCached> {
 
     // keep track of progress and whether we need more flushers or less
     pub bins_scanned_this_period: AtomicUsize,
+    primary_thread_idle: AtomicBool,
     pub desired_threads: AtomicUsize,
     pub bins_scanned_period_start: AtomicInterval,
     pub per_bin: Vec<PerBin<V>>,
@@ -333,6 +334,10 @@ impl<V: IsCached> BucketMapHolder<V> {
                 let timeout = self.wait.wait_timeout(Duration::from_millis(200));
                 Self::update_time_stat(&self.stats.flushing_idle_us, m);
 
+                if primary_thread && timeout && startup {
+                    self.primary_thread_idle.store(true, Ordering::Relaxed);
+                }
+
                 if timeout && !self.startup.load(Ordering::Relaxed) {
                     self.check_startup_complete.notify_all();
                     continue; // otherwise, loop and check for aging and likely wait again
@@ -404,6 +409,7 @@ impl<V: IsCached> BucketMapHolder<V> {
             .bins_scanned_period_start
             .elapsed(THROUGHPUT_POLL_MS, true)
         {
+            let primary_thread_was_idle = self.primary_thread_idle.swap(false, Ordering::Relaxed);
             let bins_scanned = self.bins_scanned_this_period.swap(0, Ordering::Relaxed);
             let one_thousand_seconds = 1_000;
             let ms_per_s = 1_000;
@@ -417,7 +423,7 @@ impl<V: IsCached> BucketMapHolder<V> {
                 self.get_desired_threads()
             );
             self.stats.throughput.store(ratio as u64, Ordering::Relaxed);
-            if can_put_thread_to_sleep && ratio > FULL_FLUSHES_PER_1000_S {
+            if can_put_thread_to_sleep && (ratio > FULL_FLUSHES_PER_1000_S || primary_thread_was_idle) {
                 // decrease
                 let threads = self.get_desired_threads();
                 if threads > 1 && self.set_desired_threads(false, threads) {
