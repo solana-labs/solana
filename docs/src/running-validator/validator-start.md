@@ -407,11 +407,11 @@ to be reverted and the issue reproduced before help can be provided.
 The validator log file, as specified by `--log ~/solana-validator.log`, can get
 very large over time and it's recommended that log rotation be configured.
 
-If the log file is deleted or moved while the validator is running, 
+If the log file is deleted or moved while the validator is running,
 it will not continue to log to the file. Using the `copytruncate` parameter will
 copy the log contents to a new location, then truncate the existing file, allowing
 the process to keep it's file handle. The `compress` parameter will archive the old log
-file to save space. Using tools such as `xzgrep` allow for the searching 
+file to save space. Using tools such as `xzgrep` allow for the searching
 of the compressed files via regex.
 
 #### Using logrotate
