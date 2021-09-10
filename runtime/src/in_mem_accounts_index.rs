@@ -58,9 +58,7 @@ impl<V: IsCached> InMemAccountsIndex<V> {
     }
 
     // create bg thread pool for flushing accounts index to disk
-    pub fn create_bg_flusher(&self) -> AccountsIndexBackground {
-        let num_threads = std::cmp::max(2, num_cpus::get() / 8);
-        let worker_threads = num_threads;
+    pub fn create_bg_flusher(&self, threads: usize) -> AccountsIndexBackground {
         let bucket_map_ = self.disk.clone();
         let exit = Arc::new(AtomicBool::new(false));
         let exit_ = exit.clone();
@@ -68,7 +66,7 @@ impl<V: IsCached> InMemAccountsIndex<V> {
             Builder::new()
                 .name("solana-index-flusher".to_string())
                 .spawn(move || {
-                    (0..worker_threads).into_par_iter().for_each(|_| {
+                    (0..threads).into_par_iter().for_each(|_| {
                         bucket_map_.bg_flusher(exit_.clone());
                     });
                 })

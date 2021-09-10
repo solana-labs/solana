@@ -35,9 +35,11 @@ pub const BINS_FOR_TESTING: usize = 2;
 pub const BINS_FOR_BENCHMARKS: usize = 2;
 pub const ACCOUNTS_INDEX_CONFIG_FOR_TESTING: AccountsIndexConfig = AccountsIndexConfig {
     bins: Some(BINS_FOR_TESTING),
+    threads: Some(2),
 };
 pub const ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS: AccountsIndexConfig = AccountsIndexConfig {
     bins: Some(BINS_FOR_BENCHMARKS),
+    threads: Some(2),
 };
 pub type ScanResult<T> = Result<T, ScanError>;
 pub type SlotList<T> = Vec<(Slot, T)>;
@@ -87,6 +89,7 @@ pub struct AccountSecondaryIndexesIncludeExclude {
 #[derive(Debug, Default, Clone)]
 pub struct AccountsIndexConfig {
     pub bins: Option<usize>,
+    pub threads: Option<usize>,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -896,8 +899,13 @@ impl<T: IsCached> AccountsIndex<T> {
         Option<AccountsIndexBackground>,
     ) {
         let bins = config
+            .as_ref()
             .and_then(|config| config.bins)
             .unwrap_or(BINS_DEFAULT);
+        let threads = config
+            .and_then(|config| config.threads)
+            .unwrap_or(std::cmp::max(2, num_cpus::get() / 8));
+
         // create bin_calculator early to verify # bins is reasonable
         let bin_calculator = PubkeyBinCalculator16::new(bins);
         let bucket_map = InMemAccountsIndex::new_bucket_map(bins);
@@ -907,7 +915,7 @@ impl<T: IsCached> AccountsIndex<T> {
             .collect::<Vec<_>>();
         let accounts_index_bg = account_maps
             .first()
-            .map(|map| map.read().unwrap().create_bg_flusher());
+            .map(|map| map.read().unwrap().create_bg_flusher(threads));
         (account_maps, bin_calculator, accounts_index_bg)
     }
 
