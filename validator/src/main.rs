@@ -2726,18 +2726,16 @@ pub fn main() {
                 })
             });
 
-    let snapshot_interval_slots =
-        value_t_or_exit!(matches, "incremental_snapshot_interval_slots", u64);
-    let is_incremental_snapshot_enabled = matches.is_present("incremental_snapshots");
     let (full_snapshot_archive_interval_slots, incremental_snapshot_archive_interval_slots) =
-        if snapshot_interval_slots > 0 {
-            if is_incremental_snapshot_enabled {
+        let incremental_snapshot_interval_slots = value_t_or_exit!(matches, "incremental_snapshot_interval_slots", u64);      
+        if incremental_snapshot_interval_slots > 0 {
+            if matches.is_present("incremental_snapshots") {
                 (
                     value_t_or_exit!(matches, "full_snapshot_interval_slots", u64),
-                    value_t_or_exit!(matches, "incremental_snapshot_interval_slots", u64),
+                    incremental_snapshot_interval_slots,
                 )
             } else {
-                (snapshot_interval_slots, Slot::MAX)
+                (incremental_snapshot_interval_slots, Slot::MAX)
             }
         } else {
             (Slot::MAX, Slot::MAX)
