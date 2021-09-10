@@ -968,12 +968,11 @@ pub fn process_withdraw_from_vote_account(
     log_instruction_custom_error::<VoteError>(result, config)
 }
 
-pub process_close_vote_account(
+pub fn process_close_vote_account(
     rpc_client: &RpcClient,
     config: &CliConfig,
     vote_account_pubkey: &Pubkey,
     withdraw_authority: SignerIndex,
-    withdraw_amount: SpendAmount,
     destination_account_pubkey: &Pubkey,
     memo: Option<&String>,
 ) -> ProcessResult {

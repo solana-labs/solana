@@ -308,6 +308,12 @@ pub enum CliCommand {
         withdraw_amount: SpendAmount,
         memo: Option<String>,
     },
+    CloseVoteAccount {
+        vote_account_pubkey: Pubkey,
+        destination_account_pubkey: Pubkey,
+        withdraw_authority: SignerIndex,
+        memo: Option<String>,
+    },
     VoteAuthorize {
         vote_account_pubkey: Pubkey,
         new_authorized_pubkey: Pubkey,
