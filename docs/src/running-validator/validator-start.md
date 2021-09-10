@@ -379,9 +379,7 @@ WantedBy=multi-user.target
 
 Now create `/home/sol/bin/validator.sh` to include the desired
 `solana-validator` command-line. Ensure that the 'exec' command is used to
-start the validator process (i.e. "exec solana-validator ...").  This is
-important because without it, logrotate will end up killing the validator
-every time the logs are rotated.
+start the validator process (i.e. "exec solana-validator ...").
 
 Ensure that running `/home/sol/bin/validator.sh` manually starts
 the validator as expected. Don't forget to mark it executable with `chmod +x /home/sol/bin/validator.sh`
@@ -409,13 +407,12 @@ to be reverted and the issue reproduced before help can be provided.
 The validator log file, as specified by `--log ~/solana-validator.log`, can get
 very large over time and it's recommended that log rotation be configured.
 
-The validator will re-open its when it receives the `USR1` signal, which is the
-basic primitive that enables log rotation.
-
-If the validator is being started by a wrapper shell script, it is important to
-launch the process with `exec` (`exec solana-validator ...`) when using logrotate.
-This will prevent the `USR1` signal from being sent to the script's process
-instead of the validator's, which will kill them both.
+If the log file is deleted or moved while the validator is running, 
+it will not continue to log to the file. Using the `copytruncate` parameter will
+copy the log contents to a new location, then truncate the existing file, allowing
+the process to keep it's file handle. The `compress` parameter will archive the old log
+file to save space. Using tools such as `xzgrep` allow for the searching 
+of the compressed files via regex.
 
 #### Using logrotate
 
@@ -428,23 +425,16 @@ running as a systemd service called `sol.service` and writes a log file at
 
 cat > logrotate.sol <<EOF
 /home/sol/solana-validator.log {
+  copytruncate
+  compress
   rotate 7
   daily
   missingok
-  postrotate
-    systemctl kill -s USR1 sol.service
-  endscript
 }
 EOF
 sudo cp logrotate.sol /etc/logrotate.d/sol
 systemctl restart logrotate.service
 ```
-
-As mentioned earlier, be sure that if you use logrotate, any script you create
-which starts the solana validator process uses "exec" to do so (example: "exec
-solana-validator ..."); otherwise, when logrotate sends its signal to the
-validator, the enclosing script will die and take the validator process with
-it.
 
 ### Disable port checks to speed up restarts
 
