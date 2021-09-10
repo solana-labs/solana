@@ -60,7 +60,7 @@ impl<V: IsCached> InMemAccountsIndex<V> {
     // create bg thread pool for flushing accounts index to disk
     pub fn create_bg_flusher(&self, mut threads: usize) -> AccountsIndexBackground {
         let bucket_map_ = self.disk.clone();
-        threads = std::min(threads, self.disk.bins()); // doesn't make sense to have more threads than bins
+        threads = std::cmp::min(threads, self.disk.bins()); // doesn't make sense to have more threads than bins
         let exit = Arc::new(AtomicBool::new(false));
         let exit_ = exit.clone();
         let handle = Some(
