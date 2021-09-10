@@ -30,21 +30,13 @@ impl PacketTimer {
     }
 
     pub fn mark_incoming_end(&mut self) {
-        let now = Instant::now();
-        self.incoming_end = Some(now);
+        self.incoming_end = Some(Instant::now());
     }
 
     pub fn mark_outgoing_start(&mut self) {
         if self.outgoing_start == None {
             self.outgoing_start = Some(Instant::now());
         }
-    }
-
-    pub fn extend_incoming_from(&mut self, pkt_timer: &PacketTimer) {
-        if pkt_timer.incoming_end > self.incoming_end {
-            self.incoming_end = pkt_timer.incoming_end;
-        }
-        self.num_coalesced = self.num_coalesced.saturating_add(1);
     }
 
     pub fn coalesce_with(&mut self, pkt_timer: &PacketTimer) {
@@ -59,7 +51,8 @@ impl PacketTimer {
         }
         self.num_coalesced = self
             .num_coalesced
-            .saturating_add(1 + pkt_timer.num_coalesced);
+            .saturating_add(1)
+            .saturating_add(pkt_timer.num_coalesced);
     }
 
     pub fn incoming_start(&self) -> Option<Instant> {

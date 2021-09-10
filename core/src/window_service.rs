@@ -328,7 +328,7 @@ where
     let timer = Duration::from_millis(200);
     let (mut shreds, mut repair_infos) = shred_receiver.recv_timeout(timer)?;
     while let Ok((more_shreds, more_repair_infos)) = shred_receiver.try_recv() {
-        shreds.timer.extend_incoming_from(&more_shreds.timer);
+        shreds.timer.coalesce_with(&more_shreds.timer);
         shreds.inner_shreds.extend(more_shreds.inner_shreds);
         repair_infos.extend(more_repair_infos);
     }
@@ -390,7 +390,7 @@ where
     let mut packet_timer = packets[0].timer;
     packets.extend(verified_receiver.try_iter().flatten());
     for pkts in &packets {
-        packet_timer.extend_incoming_from(&pkts.timer);
+        packet_timer.coalesce_with(&pkts.timer);
     }
     let now = Instant::now();
     let last_root = blockstore.last_root();

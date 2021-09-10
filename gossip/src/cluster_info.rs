@@ -2416,7 +2416,7 @@ impl ClusterInfo {
         let packets: Vec<_> = first_batch.packets.into();
         let mut packets = VecDeque::from(packets);
         for payload in receiver.try_iter() {
-            packet_timer.extend_incoming_from(&payload.timer);
+            packet_timer.coalesce_with(&payload.timer);
             packets.extend(payload.packets.iter().cloned());
             let excess_count = packets.len().saturating_sub(MAX_GOSSIP_TRAFFIC);
             if excess_count > 0 {
@@ -2462,7 +2462,7 @@ impl ClusterInfo {
         let (packets, mut packet_timer) = receiver.recv_timeout(RECV_TIMEOUT)?;
         let mut packets = VecDeque::from(packets);
         for (payload, latest_timer) in receiver.try_iter() {
-            packet_timer.extend_incoming_from(&latest_timer);
+            packet_timer.coalesce_with(&latest_timer);
             packets.extend(payload);
             let excess_count = packets.len().saturating_sub(MAX_GOSSIP_TRAFFIC);
             if excess_count > 0 {

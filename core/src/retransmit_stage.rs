@@ -54,6 +54,7 @@ struct RetransmitStats {
     num_shreds: usize,
     num_shreds_skipped: AtomicUsize,
     total_batches: usize,
+    num_coalesced_batches: usize,
     total_time: u64,
     epoch_fetch: u64,
     epoch_cache_update: u64,
@@ -94,6 +95,7 @@ impl RetransmitStats {
             ("epoch_fetch", stats.epoch_fetch, i64),
             ("epoch_cache_update", stats.epoch_cache_update, i64),
             ("total_batches", stats.total_batches, i64),
+            ("num_coalesced_batches", stats.num_coalesced_batches, i64),
             ("num_shreds", stats.num_shreds, i64),
             (
                 "num_shreds_skipped",
@@ -256,6 +258,7 @@ fn retransmit(
         stats.total_batches += 1;
     }
     stats.num_shreds += shreds.inner_shreds.len();
+    stats.num_coalesced_batches += shreds.timer.num_coalesced();
     let shreds_incoming_start_time = shreds.timer.incoming_start().unwrap();
     let shreds_incoming_end_time = shreds.timer.incoming_end().unwrap();
 
@@ -624,10 +627,11 @@ mod tests {
         );
 
         let shred = Shred::new_from_data(0, 0, 0, None, true, true, 0, 0x20, 0);
+        let mut shreds = Shreds::new_from_shred(shred);
+        shreds.timer.mark_incoming_start();
+        shreds.timer.mark_incoming_end();
         // it should send this over the sockets.
-        retransmit_sender
-            .send(Shreds::new_from_shred(shred))
-            .unwrap();
+        retransmit_sender.send(shreds).unwrap();
         let mut packets = Packets::new(vec![]);
         solana_streamer::packet::recv_from(&mut packets, &me_retransmit, 1).unwrap();
         assert_eq!(packets.packets.len(), 1);
