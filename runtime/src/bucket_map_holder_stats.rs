@@ -117,6 +117,12 @@ impl BucketMapHolderStats {
                 }
                 dist
             } else {
+                min = 0;
+                max = 0;
+                sum = 0;
+                sumd = 0;
+                mind = 0;
+                maxd = 0;
                 BucketMapDistribution::default()
             }
         } else {
