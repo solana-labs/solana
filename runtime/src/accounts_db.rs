@@ -213,6 +213,7 @@ struct GenerateIndexTimings {
     pub storage_size_accounts_map_us: u64,
     pub storage_size_storages_us: u64,
     pub storage_size_accounts_map_flatten_us: u64,
+    pub flush_time_us: u64,
 }
 
 #[derive(Default, Debug, PartialEq)]
@@ -230,6 +231,7 @@ impl GenerateIndexTimings {
             ("total_us", self.index_time, i64),
             ("scan_stores_us", self.scan_time, i64),
             ("insertion_time_us", self.insertion_time_us, i64),
+            ("flush_time_us", self.flush_time_us, i64),
             ("min_bin_size", self.min_bin_size as i64, i64),
             ("max_bin_size", self.max_bin_size as i64, i64),
             (
@@ -1261,6 +1263,7 @@ struct ShrinkStats {
     skipped_shrink: AtomicU64,
     dead_accounts: AtomicU64,
     alive_accounts: AtomicU64,
+    accounts_loaded: AtomicU64,
 }
 
 impl ShrinkStats {
@@ -1357,6 +1360,11 @@ impl ShrinkStats {
                 (
                     "dead_accounts",
                     self.dead_accounts.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "accounts_loaded",
+                    self.accounts_loaded.swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
             );
@@ -2350,6 +2358,10 @@ impl AccountsDb {
         let len = stored_accounts.len();
         let alive_accounts_collect = Mutex::new(Vec::with_capacity(len));
         let unrefed_pubkeys_collect = Mutex::new(Vec::with_capacity(len));
+        self.shrink_stats
+            .accounts_loaded
+            .fetch_add(len as u64, Ordering::Relaxed);
+
         self.thread_pool.install(|| {
             let chunk_size = 50; // # accounts/thread
             let chunks = len / chunk_size + 1;
@@ -4751,7 +4763,7 @@ impl AccountsDb {
             .account_maps
             .iter()
             .map(|map| {
-                let mut keys = map.read().unwrap().keys().cloned().collect::<Vec<_>>();
+                let mut keys = map.read().unwrap().keys();
                 keys.sort_unstable(); // hashmap is not ordered, but bins are relative to each other
                 keys
             })
@@ -6236,8 +6248,23 @@ impl AccountsDb {
         insert_us
     }
 
+    fn set_startup(&self, startup: bool) {
+        let lock = self
+            .accounts_index
+            .account_maps
+            .first()
+            .unwrap()
+            .read()
+            .unwrap();
+        if !startup {
+            lock.wait_for_flush_idle();
+        }
+        lock.set_startup(startup);
+    }
+
     #[allow(clippy::needless_collect)]
     pub fn generate_index(&self, limit_load_slot_count_from_snapshot: Option<usize>, verify: bool) {
+        self.set_startup(true);
         let mut slots = self.storage.all_slots();
         #[allow(clippy::stable_sort_primitive)]
         slots.sort();
@@ -6252,7 +6279,7 @@ impl AccountsDb {
             let storage_info = StorageSizeAndCountMap::default();
             let total_processed_slots_across_all_threads = AtomicU64::new(0);
             let outer_slots_len = slots.len();
-            let chunk_size = (outer_slots_len / 7) + 1; // approximately 400k slots in a snapshot
+            let chunk_size = (outer_slots_len / 16) + 1; // approximately 400k slots in a snapshot
             let mut index_time = Measure::start("index");
             let insertion_time_us = AtomicU64::new(0);
             let storage_info_timings = Mutex::new(GenerateIndexTimings::default());
@@ -6328,7 +6355,7 @@ impl AccountsDb {
                 .account_maps
                 .iter()
                 .map(|map_bin| {
-                    let len = map_bin.read().unwrap().len();
+                    let len = map_bin.read().unwrap().len_expensive();
                     min_bin_size = std::cmp::min(min_bin_size, len);
                     max_bin_size = std::cmp::max(max_bin_size, len);
                     len
@@ -6351,6 +6378,11 @@ impl AccountsDb {
             };
 
             if pass == 0 {
+                let mut m = Measure::start("flush_time");
+                self.set_startup(false);
+                m.stop();
+                timings.flush_time_us += m.as_us();
+
                 // Need to add these last, otherwise older updates will be cleaned
                 for slot in &slots {
                     self.accounts_index.add_root(*slot, false);
@@ -6451,7 +6483,7 @@ impl AccountsDb {
         roots.sort();
         info!("{}: accounts_index roots: {:?}", label, roots,);
         self.accounts_index.account_maps.iter().for_each(|map| {
-            for (pubkey, account_entry) in map.read().unwrap().iter() {
+            for (pubkey, account_entry) in map.read().unwrap().iter(None::<&Range<Pubkey>>) {
                 info!("  key: {} ref_count: {}", pubkey, account_entry.ref_count(),);
                 info!(
                     "      slots: {:?}",

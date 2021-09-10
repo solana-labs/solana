@@ -11,7 +11,7 @@ fn test_race_register_tick_freeze() {
     let p = solana_sdk::pubkey::new_rand();
     let hash = hash(p.as_ref());
 
-    for _ in 0..1000 {
+    for _ in 0..10 {
         let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
         let bank0_ = bank0.clone();
         let freeze_thread = Builder::new()

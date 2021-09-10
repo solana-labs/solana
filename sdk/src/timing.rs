@@ -70,15 +70,25 @@ impl AtomicInterval {
         self.should_update_ext(interval_time, true)
     }
 
-    pub fn should_update_ext(&self, interval_time: u64, skip_first: bool) -> bool {
+    pub fn elapsed(&self, interval_time: u64, skip_first: bool) -> Option<u64> {
         let now = timestamp();
         let last = self.last_update.load(Ordering::Relaxed);
-        now.saturating_sub(last) > interval_time
-            && self
+        let elapsed = now.saturating_sub(last);
+        if elapsed > interval_time
+            && (self
                 .last_update
-                .compare_exchange(last, now, Ordering::Relaxed, Ordering::Relaxed)
-                == Ok(last)
+                .compare_exchange(last, now, Ordering::Acquire, Ordering::Relaxed)
+                == Ok(last))
             && !(skip_first && last == 0)
+        {
+            Some(elapsed)
+        } else {
+            None
+        }
+    }
+
+    pub fn should_update_ext(&self, interval_time: u64, skip_first: bool) -> bool {
+        self.elapsed(interval_time, skip_first).is_some()
     }
 }
 
