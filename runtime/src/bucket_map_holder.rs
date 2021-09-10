@@ -421,6 +421,7 @@ impl<V: IsCached> BucketMapHolder<V> {
                 // decrease
                 let threads = self.get_desired_threads();
                 if threads > 1 && self.set_desired_threads(false, threads) {
+                    error!("put thread to sleep");
                     return true; // put this thread to sleep
                 }
             } else if ratio < FULL_FLUSHES_PER_1000_S {
@@ -439,7 +440,7 @@ impl<V: IsCached> BucketMapHolder<V> {
     }
 
     fn set_desired_threads(&self, increment: bool, expected_threads: usize) -> bool {
-        //error!("change threads: increment: {}, previous: {}", increment, expected_threads);
+        error!("change threads: increment: {}, previous: {}", increment, expected_threads);
         if increment {
             let new = expected_threads + 1;
             self.desired_threads
