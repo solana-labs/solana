@@ -4281,6 +4281,7 @@ pub mod tests {
         AccountsIndex::<bool>::new(Some(AccountsIndexConfig {
             bins: Some(3),
             threads: None,
+            max_search: None,
         }));
     }
 }
