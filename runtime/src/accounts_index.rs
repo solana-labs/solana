@@ -1587,48 +1587,47 @@ impl<T: IsCached> AccountsIndex<T> {
             .into_iter()
             .map(|pubkey_bin| (pubkey_bin, Vec::with_capacity(expected_items_per_bin)))
             .collect::<Vec<_>>();
-        items.for_each(|(pubkey, account_info)| {
-            let bin = self.bin_calculator.bin_from_pubkey(&pubkey);
-            // this value is equivalent to what update() below would have created if we inserted a new item
-            let is_zero_lamport = account_info.is_zero_lamport();
-            let info = WriteAccountMapEntry::new_entry_after_update(slot, account_info);
-            binned[bin].1.push((pubkey, info, is_zero_lamport));
-        });
+        let mut dirty_pubkeys = items
+            .filter_map(|(pubkey, account_info)| {
+                let bin = self.bin_calculator.bin_from_pubkey(&pubkey);
+                // this value is equivalent to what update() below would have created if we inserted a new item
+                let is_zero_lamport = account_info.is_zero_lamport();
+                let result = if is_zero_lamport { Some(pubkey) } else { None };
+
+                let info = WriteAccountMapEntry::new_entry_after_update(slot, account_info);
+                binned[bin].1.push((pubkey, info));
+                result
+            })
+            .collect::<Vec<_>>();
         binned.retain(|x| !x.1.is_empty());
 
         let insertion_time = AtomicU64::new(0);
 
-        let dirty_pubkeys = binned
-            .into_iter()
-            .map(|(pubkey_bin, items)| {
-                let mut _reclaims = SlotList::new();
+        binned.into_iter().for_each(|(pubkey_bin, items)| {
+            let mut _reclaims = SlotList::new();
 
-                // big enough so not likely to re-allocate, small enough to not over-allocate by too much
-                // this assumes 10% of keys are duplicates. This vector will be flattened below.
-                let mut dirty_pubkeys = Vec::with_capacity(items.len() / 10);
-                let mut w_account_maps = self.account_maps[pubkey_bin].write().unwrap();
-                let mut insert_time = Measure::start("insert_into_primary_index");
-                items
-                    .into_iter()
-                    .for_each(|(pubkey, new_item, is_zero_lamport)| {
-                        let already_exists = self.insert_new_entry_if_missing_with_lock(
-                            pubkey,
-                            &mut w_account_maps,
-                            new_item,
-                        );
-                        if let Some((mut w_account_entry, account_info, pubkey)) = already_exists {
-                            w_account_entry.update(slot, account_info, &mut _reclaims);
-                            dirty_pubkeys.push(pubkey);
-                        } else if is_zero_lamport {
-                            dirty_pubkeys.push(pubkey);
-                        }
-                    });
-                insert_time.stop();
-                insertion_time.fetch_add(insert_time.as_us(), Ordering::Relaxed);
-                dirty_pubkeys
-            })
-            .flatten()
-            .collect::<Vec<_>>();
+            // big enough so not likely to re-allocate, small enough to not over-allocate by too much
+            // this assumes 10% of keys are duplicates. This vector will be flattened below.
+            let mut w_account_maps = self.account_maps[pubkey_bin].write().unwrap();
+            let mut insert_time = Measure::start("insert_into_primary_index");
+            items.into_iter().for_each(|(pubkey, new_item)| {
+                let already_exists = self.insert_new_entry_if_missing_with_lock(
+                    pubkey,
+                    &mut w_account_maps,
+                    new_item,
+                );
+                if let Some((mut w_account_entry, account_info, pubkey)) = already_exists {
+                    let is_zero_lamport = account_info.is_zero_lamport();
+                    w_account_entry.update(slot, account_info, &mut _reclaims);
+                    if !is_zero_lamport {
+                        // zero lamports were already added to dirty_pubkeys above
+                        dirty_pubkeys.push(pubkey);
+                    }
+                }
+            });
+            insert_time.stop();
+            insertion_time.fetch_add(insert_time.as_us(), Ordering::Relaxed);
+        });
 
         (dirty_pubkeys, insertion_time.load(Ordering::Relaxed))
     }
