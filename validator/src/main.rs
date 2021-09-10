@@ -2443,7 +2443,7 @@ pub fn main() {
 
     let accounts_index_config = value_t!(matches, "accounts_index_bins", usize)
         .ok()
-        .map(|bins| AccountsIndexConfig { bins: Some(bins) });
+        .map(|bins| AccountsIndexConfig { bins: Some(bins), threads: None });
 
     let accounts_db_config = Some(AccountsDbConfig {
         index: accounts_index_config,
