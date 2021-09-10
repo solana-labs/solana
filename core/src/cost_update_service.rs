@@ -41,7 +41,7 @@ impl CostUpdateServiceTiming {
         let elapsed_ms = now - self.last_print;
         if elapsed_ms > 1000 {
             datapoint_info!(
-                "replay-service-timing-stats",
+                "cost-update-service-stats",
                 ("total_elapsed_us", elapsed_ms * 1000, i64),
                 (
                     "update_cost_model_count",
@@ -101,7 +101,8 @@ impl CostUpdateService {
         cost_update_receiver: CostUpdateReceiver,
     ) {
         let mut cost_update_service_timing = CostUpdateServiceTiming::default();
-        let mut dirty = false;
+        let mut dirty: bool;
+        let mut update_count: u64;
         let wait_timer = Duration::from_millis(100);
 
         loop {
@@ -109,7 +110,8 @@ impl CostUpdateService {
                 break;
             }
 
-            let mut update_count = 0_u64;
+            dirty = false;
+            update_count = 0_u64;
             let mut update_cost_model_time = Measure::start("update_cost_model_time");
             for cost_update in cost_update_receiver.try_iter() {
                 dirty |= Self::update_cost_model(&cost_model, &cost_update);
