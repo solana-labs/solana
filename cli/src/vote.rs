@@ -981,25 +981,11 @@ pub process_close_vote_account(
     let withdraw_authority = config.signers[withdraw_authority];
 
     let current_balance = rpc_client.get_balance(vote_account_pubkey)?;
-    let minimum_balance = rpc_client.get_minimum_balance_for_rent_exemption(VoteState::size_of())?;
-
-    let lamports = match withdraw_amount {
-        SpendAmount::All => current_balance,
-        SpendAmount::Some(withdraw_amount) => {
-            if current_balance.saturating_sub(withdraw_amount) < minimum_balance {
-                return Err(CliError::BadParameter(format!(
-                    "Withdraw amount too large. The vote account balance must be at least {} SOL to remain rent exempt", lamports_to_sol(minimum_balance)
-                ))
-                .into());
-            }
-            withdraw_amount
-        }
-    };
 
     let ixs = vec![withdraw(
         vote_account_pubkey,
         &withdraw_authority.pubkey(),
-        lamports,
+        current_balance,
         destination_account_pubkey,
     )]
     .with_memo(memo);
@@ -1407,6 +1393,54 @@ mod tests {
                     destination_account_pubkey: pubkey,
                     withdraw_authority: 1,
                     withdraw_amount: SpendAmount::Some(42_000_000_000),
+                    memo: None,
+                },
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    read_keypair_file(&withdraw_authority_file).unwrap().into()
+                ],
+            }
+        );
+
+        // Test CloseVoteAccount subcommand
+        let test_close_vote_account = test_commands.clone().get_matches_from(vec![
+            "test",
+            "close-vote-account",
+            &keypair_file,
+            &pubkey_string,
+        ]);
+        assert_eq!(
+            parse_command(&test_close_vote_account, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::CloseVoteAccount {
+                    vote_account_pubkey: read_keypair_file(&keypair_file).unwrap().pubkey(),
+                    destination_account_pubkey: pubkey,
+                    withdraw_authority: 0,
+                    memo: None,
+                },
+                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+            }
+        );
+
+        // Test CloseVoteAccount subcommand with authority
+        let withdraw_authority = Keypair::new();
+        let (withdraw_authority_file, mut tmp_file) = make_tmp_file();
+        write_keypair(&withdraw_authority, tmp_file.as_file_mut()).unwrap();
+        let test_close_vote_account = test_commands.clone().get_matches_from(vec![
+            "test",
+            "close-vote-account",
+            &keypair_file,
+            &pubkey_string,
+            "--authorized-withdrawer",
+            &withdraw_authority_file,
+        ]);
+        assert_eq!(
+            parse_command(&test_close_vote_account, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::CloseVoteAccount {
+                    vote_account_pubkey: read_keypair_file(&keypair_file).unwrap().pubkey(),
+                    destination_account_pubkey: pubkey,
+                    withdraw_authority: 1,
                     memo: None,
                 },
                 signers: vec![

@@ -147,8 +147,22 @@ fn test_vote_authorize_and_withdraw() {
         memo: None,
     };
     process_command(&config).unwrap();
-    check_recent_balance(expected_balance - 100, &rpc_client, &vote_account_pubkey);
+    let expected_balance = expected_balance - 100;
+    check_recent_balance(expected_balance, &rpc_client, &vote_account_pubkey);
     check_recent_balance(100, &rpc_client, &destination_account);
+
+    // Close vote account
+    let destination_account = solana_sdk::pubkey::new_rand(); // Send withdrawal to new account to make balance check easy
+    config.signers = vec![&default_signer, &withdraw_authority];
+    config.command = CliCommand::CloseVoteAccount {
+        vote_account_pubkey,
+        withdraw_authority: 1,
+        destination_account_pubkey: destination_account,
+        memo: None,
+    };
+    process_command(&config).unwrap();
+    check_recent_balance(0, &rpc_client, &vote_account_pubkey);
+    check_recent_balance(expected_balance, &rpc_client, &destination_account);
 
     // Re-assign validator identity
     let new_identity_keypair = Keypair::new();
