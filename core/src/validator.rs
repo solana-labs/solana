@@ -640,6 +640,7 @@ impl Validator {
             if let Some(snapshot_config) = config.snapshot_config.clone() {
                 if !is_snapshot_config_valid(
                     snapshot_config.full_snapshot_archive_interval_slots,
+                    snapshot_config.incremental_snapshot_archive_interval_slots,
                     config.accounts_hash_interval_slots,
                 ) {
                     error!("Snapshot config is invalid");
@@ -1661,12 +1662,26 @@ fn cleanup_accounts_path(account_path: &std::path::Path) {
 }
 
 pub fn is_snapshot_config_valid(
-    snapshot_interval_slots: u64,
-    accounts_hash_interval_slots: u64,
+    full_snapshot_interval_slots: Slot,
+    incremental_snapshot_interval_slots: Slot,
+    accounts_hash_interval_slots: Slot,
 ) -> bool {
-    snapshot_interval_slots == 0
-        || (snapshot_interval_slots >= accounts_hash_interval_slots
-            && snapshot_interval_slots % accounts_hash_interval_slots == 0)
+    // if full snapshot interval is MAX, that means snapshots are turned off, so yes, valid
+    if full_snapshot_interval_slots == Slot::MAX {
+        return true;
+    }
+
+    let is_incremental_config_valid = if incremental_snapshot_interval_slots == Slot::MAX {
+        true
+    } else {
+        incremental_snapshot_interval_slots >= accounts_hash_interval_slots
+            && incremental_snapshot_interval_slots % accounts_hash_interval_slots == 0
+            && full_snapshot_interval_slots > incremental_snapshot_interval_slots
+    };
+
+    full_snapshot_interval_slots >= accounts_hash_interval_slots
+        && full_snapshot_interval_slots % accounts_hash_interval_slots == 0
+        && is_incremental_config_valid
 }
 
 #[cfg(test)]
@@ -1871,11 +1886,40 @@ mod tests {
 
     #[test]
     fn test_interval_check() {
-        assert!(is_snapshot_config_valid(0, 100));
-        assert!(!is_snapshot_config_valid(1, 100));
-        assert!(!is_snapshot_config_valid(230, 100));
-        assert!(is_snapshot_config_valid(500, 100));
-        assert!(is_snapshot_config_valid(5, 5));
+        assert!(is_snapshot_config_valid(300, 200, 100));
+
+        let default_accounts_hash_interval =
+            snapshot_utils::DEFAULT_INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS;
+        assert!(is_snapshot_config_valid(
+            snapshot_utils::DEFAULT_FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
+            snapshot_utils::DEFAULT_INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
+            default_accounts_hash_interval,
+        ));
+
+        assert!(is_snapshot_config_valid(
+            Slot::MAX,
+            snapshot_utils::DEFAULT_INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
+            default_accounts_hash_interval
+        ));
+        assert!(is_snapshot_config_valid(
+            snapshot_utils::DEFAULT_FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
+            Slot::MAX,
+            default_accounts_hash_interval
+        ));
+        assert!(is_snapshot_config_valid(
+            snapshot_utils::DEFAULT_INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
+            Slot::MAX,
+            default_accounts_hash_interval
+        ));
+
+        assert!(!is_snapshot_config_valid(0, 100, 100));
+        assert!(!is_snapshot_config_valid(100, 0, 100));
+        assert!(!is_snapshot_config_valid(42, 100, 100));
+        assert!(!is_snapshot_config_valid(100, 42, 100));
+        assert!(!is_snapshot_config_valid(100, 100, 100));
+        assert!(!is_snapshot_config_valid(100, 200, 100));
+        assert!(!is_snapshot_config_valid(444, 200, 100));
+        assert!(!is_snapshot_config_valid(400, 222, 100));
     }
 
     #[test]
