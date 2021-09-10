@@ -82,8 +82,8 @@ mod tests {
 
     #[test]
     fn test_rooted_slot_iterator() {
-        let blockstore_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&blockstore_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
         blockstore.set_roots(std::iter::once(&0)).unwrap();
         let ticks_per_slot = 5;
         /*
@@ -150,15 +150,12 @@ mod tests {
             .collect();
         let expected = vec![0, 1, 2, 3];
         assert_eq!(result, expected);
-
-        drop(blockstore);
-        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 
     #[test]
     fn test_skipping_rooted_slot_iterator() {
-        let blockstore_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&blockstore_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
         let ticks_per_slot = 5;
         /*
             Build a blockstore in the ledger with the following fork structure:
@@ -229,8 +226,5 @@ mod tests {
             (11, true),
         ];
         assert_eq!(result, expected);
-
-        drop(blockstore);
-        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 }
