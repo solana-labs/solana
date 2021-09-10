@@ -2751,6 +2751,8 @@ pub fn main() {
         snapshot_version,
         maximum_full_snapshot_archives_to_retain,
         maximum_incremental_snapshot_archives_to_retain,
+        accounts_hash_use_index: validator_config.accounts_db_use_index_hash_calculation,
+        accounts_hash_debug_verify: validator_config.accounts_db_test_hash_calculation,
     });
 
     validator_config.accounts_hash_interval_slots =

@@ -1192,8 +1192,14 @@ fn load_frozen_forks(
                         block_height,
                         snapshot_config.full_snapshot_archive_interval_slots,
                     ) {
+                        info!("Taking snapshot of new root bank that has crossed the full snapshot interval! slot: {}", *root);
                         *last_full_snapshot_slot = Some(*root);
                         new_root_bank.clean_accounts(true, true, *last_full_snapshot_slot);
+                        new_root_bank.update_accounts_hash_with_index_option(
+                            snapshot_config.accounts_hash_use_index,
+                            snapshot_config.accounts_hash_debug_verify,
+                            Some(new_root_bank.epoch_schedule().slots_per_epoch),
+                        );
                         snapshot_utils::snapshot_bank(
                             new_root_bank,
                             new_root_bank.src.slot_deltas(&new_root_bank.src.roots()),
