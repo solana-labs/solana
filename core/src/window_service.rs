@@ -82,7 +82,12 @@ struct ReceiveWindowStats {
     since: Option<Instant>,
     num_packet_batches: usize,    // Packets structures
     num_coalesced_batches: usize, // Packets structures coalesced before this stage
+    // Measure the time span from when the first packet in the batch was
+    // received from the wire to when the last packet in the batch was received
+    // from the wire.
     batch_span_us_hist: histogram::Histogram,
+    // Measure the time from when the first packet in the batch was received
+    // from the wire to when this stage received the batch of packets.
     batch_first_recv_us_hist: histogram::Histogram,
 }
 

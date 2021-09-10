@@ -61,7 +61,13 @@ struct RetransmitStats {
     retransmit_total: AtomicU64,
     compute_turbine_peers_total: AtomicU64,
     unknown_shred_slot_leader: AtomicUsize,
+    // Measure the time span from when the first originating packet in the
+    // batch was received from the wire to when the last originating packet in
+    // the batch was received from the wire. This provides info on
+    // cumulative latency created by batching in the pipeline.
     batch_span_us_hist: histogram::Histogram,
+    // Measure the time from when the first packet in the batch was received
+    // from the wire to the time that all packets in the batch have been sent.
     batch_first_recv_us_hist: histogram::Histogram,
 }
 
