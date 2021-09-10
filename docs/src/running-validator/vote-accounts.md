@@ -210,3 +210,9 @@ migration.
 ### Vote Account Authorized Withdrawer
 
 No special handling is required. Use the `solana vote-authorize-withdrawer` command as needed.
+
+## Close a Vote Account
+
+A vote account can be closed with the
+[close-vote-account](../cli/usage.md#solana-close-vote-account) command.
+Closing a vote account requires supplying a recipient address to withdraw all remaining SOL funds.

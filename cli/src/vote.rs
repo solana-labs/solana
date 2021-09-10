@@ -335,7 +335,36 @@ impl VoteSubCommands for App<'_, '_> {
                         .validator(is_valid_signer)
                         .help("Authorized withdrawer [default: cli config keypair]"),
                 )
-                .arg(memo_arg())
+                .arg(memo_arg()
+            )
+        )
+        .subcommand(
+            SubCommand::with_name("close-vote-account")
+                .about("Close a vote account and withdraw all funds remaining.")
+                .arg(
+                    pubkey!(Arg::with_name("vote_account_pubkey")
+                        .index(1)
+                        .value_name("VOTE_ACCOUNT_ADDRESS")
+                        .required(true),
+                        "Vote account to be closed. "),
+                )
+                .arg(
+                    pubkey!(Arg::with_name("destination_account_pubkey")
+                        .index(2)
+                        .value_name("RECIPIENT_ADDRESS")
+                        .required(true),
+                        "The recipient of all withdrawn SOL. "),
+                )
+                .arg(
+                    Arg::with_name("authorized_withdrawer")
+                        .long("authorized-withdrawer")
+                        .value_name("AUTHORIZED_KEYPAIR")
+                        .takes_value(true)
+                        .validator(is_valid_signer)
+                        .help("Authorized withdrawer [default: cli config keypair]"),
+                )
+                .arg(memo_arg()
+            )
         )
     }
 }
@@ -548,6 +577,38 @@ pub fn parse_withdraw_from_vote_account(
             destination_account_pubkey,
             withdraw_authority: signer_info.index_of(withdraw_authority_pubkey).unwrap(),
             withdraw_amount,
+            memo,
+        },
+        signers: signer_info.signers,
+    })
+}
+
+pub fn parse_close_vote_account(
+    matches: &ArgMatches<'_>,
+    default_signer: &DefaultSigner,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+) -> Result<CliCommandInfo, CliError> {
+    let vote_account_pubkey =
+        pubkey_of_signer(matches, "vote_account_pubkey", wallet_manager)?.unwrap();
+    let destination_account_pubkey =
+        pubkey_of_signer(matches, "destination_account_pubkey", wallet_manager)?.unwrap();
+
+    let (withdraw_authority, withdraw_authority_pubkey) =
+        signer_of(matches, "authorized_withdrawer", wallet_manager)?;
+
+    let payer_provided = None;
+    let signer_info = default_signer.generate_unique_signers(
+        vec![payer_provided, withdraw_authority],
+        matches,
+        wallet_manager,
+    )?;
+    let memo = matches.value_of(MEMO_ARG.name).map(String::from);
+
+    Ok(CliCommandInfo {
+        command: CliCommand::CloseVoteAccount {
+            vote_account_pubkey,
+            destination_account_pubkey,
+            withdraw_authority: signer_info.index_of(withdraw_authority_pubkey).unwrap(),
             memo,
         },
         signers: signer_info.signers,
@@ -874,6 +935,56 @@ pub fn process_withdraw_from_vote_account(
 
     let lamports = match withdraw_amount {
         SpendAmount::All => current_balance.saturating_sub(minimum_balance),
+        SpendAmount::Some(withdraw_amount) => {
+            if current_balance.saturating_sub(withdraw_amount) < minimum_balance {
+                return Err(CliError::BadParameter(format!(
+                    "Withdraw amount too large. The vote account balance must be at least {} SOL to remain rent exempt", lamports_to_sol(minimum_balance)
+                ))
+                .into());
+            }
+            withdraw_amount
+        }
+    };
+
+    let ixs = vec![withdraw(
+        vote_account_pubkey,
+        &withdraw_authority.pubkey(),
+        lamports,
+        destination_account_pubkey,
+    )]
+    .with_memo(memo);
+
+    let message = Message::new(&ixs, Some(&config.signers[0].pubkey()));
+    let mut transaction = Transaction::new_unsigned(message);
+    transaction.try_sign(&config.signers, latest_blockhash)?;
+    check_account_for_fee_with_commitment(
+        rpc_client,
+        &config.signers[0].pubkey(),
+        &latest_blockhash,
+        &transaction.message,
+        config.commitment,
+    )?;
+    let result = rpc_client.send_and_confirm_transaction_with_spinner(&transaction);
+    log_instruction_custom_error::<VoteError>(result, config)
+}
+
+pub process_close_vote_account(
+    rpc_client: &RpcClient,
+    config: &CliConfig,
+    vote_account_pubkey: &Pubkey,
+    withdraw_authority: SignerIndex,
+    withdraw_amount: SpendAmount,
+    destination_account_pubkey: &Pubkey,
+    memo: Option<&String>,
+) -> ProcessResult {
+    let latest_blockhash = rpc_client.get_latest_blockhash()?;
+    let withdraw_authority = config.signers[withdraw_authority];
+
+    let current_balance = rpc_client.get_balance(vote_account_pubkey)?;
+    let minimum_balance = rpc_client.get_minimum_balance_for_rent_exemption(VoteState::size_of())?;
+
+    let lamports = match withdraw_amount {
+        SpendAmount::All => current_balance,
         SpendAmount::Some(withdraw_amount) => {
             if current_balance.saturating_sub(withdraw_amount) < minimum_balance {
                 return Err(CliError::BadParameter(format!(

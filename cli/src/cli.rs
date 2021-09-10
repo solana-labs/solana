@@ -809,6 +809,9 @@ pub fn parse_command(
         ("vote-account", Some(matches)) => parse_vote_get_account_command(matches, wallet_manager),
         ("withdraw-from-vote-account", Some(matches)) => {
             parse_withdraw_from_vote_account(matches, default_signer, wallet_manager)
+        },
+        ("close-vote-account", Some(matches)) => {
+            parse_close_vote_account(matches, default_signer, wallet_manager)
         }
         // Wallet Commands
         ("account", Some(matches)) => parse_account(matches, wallet_manager),
@@ -1406,6 +1409,19 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             vote_account_pubkey,
             *withdraw_authority,
             *withdraw_amount,
+            destination_account_pubkey,
+            memo.as_ref(),
+        ),
+        CliCommand::CloseVoteAccount {
+            vote_account_pubkey,
+            withdraw_authority,
+            destination_account_pubkey,
+            memo,
+        } => process_close_vote_account(
+            &rpc_client,
+            config,
+            vote_account_pubkey,
+            *withdraw_authority,
             destination_account_pubkey,
             memo.as_ref(),
         ),
