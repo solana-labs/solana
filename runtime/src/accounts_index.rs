@@ -47,7 +47,7 @@ pub type AccountMap<V> = InMemAccountsIndex<V>;
 
 type AccountMapEntry<T> = Arc<AccountMapEntryInner<T>>;
 
-pub trait IsCached: 'static + Clone + Debug + PartialEq + ZeroLamport + Copy {
+pub trait IsCached: 'static + Clone + Debug + PartialEq + ZeroLamport + Copy + Default {
     fn is_cached(&self) -> bool;
 }
 
@@ -108,13 +108,13 @@ impl AccountSecondaryIndexes {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct AccountMapEntryInner<T> {
     ref_count: AtomicU64,
     pub slot_list: RwLock<SlotList<T>>,
 }
 
-impl<T> AccountMapEntryInner<T> {
+impl<T: IsCached> AccountMapEntryInner<T> {
     pub fn ref_count(&self) -> RefCount {
         self.ref_count.load(Ordering::Relaxed)
     }
