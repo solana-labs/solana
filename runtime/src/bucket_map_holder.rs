@@ -314,7 +314,10 @@ impl<V: IsCached> BucketMapHolder<V> {
 
             self.maybe_report_stats();
             self.maybe_age(self.startup.load(Ordering::Relaxed));
-            error!("primary: {}, found one: {}, awakened: {}", primary_thread, found_one, awakened);
+            error!(
+                "primary: {}, found one: {}, awakened: {}",
+                primary_thread, found_one, awakened
+            );
             if !found_one && !awakened {
                 if self.check_throughput(!primary_thread) {
                     // put this to sleep, unless we are responsible for aging
@@ -406,7 +409,13 @@ impl<V: IsCached> BucketMapHolder<V> {
             let ms_per_s = 1_000;
             let elapsed_per_1000_s_factor = one_thousand_seconds * ms_per_s / (elapsed_ms as usize);
             let ratio = bins_scanned * elapsed_per_1000_s_factor / self.bins;
-            error!("throughput: bins scanned: {}, elapsed: {}ms, {}", bins_scanned, elapsed_ms, ratio);
+            error!(
+                "throughput: bins scanned: {}, elapsed: {}ms, {}, desired threads: {}",
+                bins_scanned,
+                elapsed_ms,
+                ratio,
+                self.get_desired_threads()
+            );
             self.stats.throughput.store(ratio as u64, Ordering::Relaxed);
             if can_put_thread_to_sleep && ratio > FULL_FLUSHES_PER_1000_S {
                 // decrease
@@ -432,23 +441,20 @@ impl<V: IsCached> BucketMapHolder<V> {
     fn set_desired_threads(&self, increment: bool, expected_threads: usize) -> bool {
         //error!("change threads: increment: {}, previous: {}", increment, expected_threads);
         if increment {
-            if expected_threads == self.desired_threads.fetch_add(1, Ordering::Relaxed) {
-                self.thread_pool_wait.notify_all();
-                true
+            let new = expected_threads + 1;
+            self.desired_threads
+                .compare_exchange(expected_threads, new, Ordering::Acquire, Ordering::Relaxed)
+                .unwrap();
+            false
+        } else {
+            if expected_threads > 1 {
+                let new = expected_threads - 1;
+                self.desired_threads
+                    .compare_exchange(expected_threads, new, Ordering::Acquire, Ordering::Relaxed)
+                    .is_ok()
             } else {
-                self.desired_threads.fetch_sub(1, Ordering::Relaxed);
-                //error!("accidentally incremented too much");
                 false
             }
-        } else if expected_threads == self.desired_threads.fetch_sub(1, Ordering::Relaxed) {
-            if expected_threads == 1 {
-                //panic!("nope");
-            }
-            true
-        } else {
-            self.desired_threads.fetch_add(1, Ordering::Relaxed);
-            //error!("accidentally decremented too much");
-            false
         }
     }
 
