@@ -314,6 +314,7 @@ impl<V: IsCached> BucketMapHolder<V> {
 
             self.maybe_report_stats();
             self.maybe_age(self.startup.load(Ordering::Relaxed));
+            error!("primary: {}, found one: {}", primary_thread, found_one);
             if !found_one && !awakened {
                 if self.check_throughput(!primary_thread) {
                     // put this to sleep, unless we are responsible for aging
