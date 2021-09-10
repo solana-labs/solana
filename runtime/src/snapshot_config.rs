@@ -1,5 +1,4 @@
-use crate::snapshot_utils::ArchiveFormat;
-use crate::snapshot_utils::SnapshotVersion;
+use crate::snapshot_utils::{self, ArchiveFormat, SnapshotVersion};
 use solana_sdk::clock::Slot;
 use std::path::PathBuf;
 
@@ -30,4 +29,23 @@ pub struct SnapshotConfig {
     /// Maximum number of incremental snapshot archives to retain
     /// NOTE: Incremental snapshots will only be kept for the latest full snapshot
     pub maximum_incremental_snapshot_archives_to_retain: usize,
+}
+
+impl Default for SnapshotConfig {
+    fn default() -> Self {
+        Self {
+            full_snapshot_archive_interval_slots:
+                snapshot_utils::DEFAULT_FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
+            incremental_snapshot_archive_interval_slots:
+                snapshot_utils::DEFAULT_INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
+            snapshot_archives_dir: PathBuf::default(),
+            bank_snapshots_dir: PathBuf::default(),
+            archive_format: ArchiveFormat::TarBzip2,
+            snapshot_version: SnapshotVersion::default(),
+            maximum_full_snapshot_archives_to_retain:
+                snapshot_utils::DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+            maximum_incremental_snapshot_archives_to_retain:
+                snapshot_utils::DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+        }
+    }
 }

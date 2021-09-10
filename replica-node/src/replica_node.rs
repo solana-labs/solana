@@ -21,12 +21,9 @@ use {
         rpc_subscriptions::RpcSubscriptions,
     },
     solana_runtime::{
-        accounts_index::AccountSecondaryIndexes,
-        bank_forks::BankForks,
-        commitment::BlockCommitmentCache,
-        hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
-        snapshot_config::SnapshotConfig,
-        snapshot_utils::{self, ArchiveFormat},
+        accounts_index::AccountSecondaryIndexes, bank_forks::BankForks,
+        commitment::BlockCommitmentCache, hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
+        snapshot_config::SnapshotConfig, snapshot_utils,
     },
     solana_sdk::{clock::Slot, exit::Exit, genesis_config::GenesisConfig, hash::Hash},
     solana_streamer::socket::SocketAddrSpace,
@@ -263,16 +260,11 @@ impl ReplicaNode {
         .unwrap();
 
         let snapshot_config = SnapshotConfig {
-            full_snapshot_archive_interval_slots: std::u64::MAX,
-            incremental_snapshot_archive_interval_slots: std::u64::MAX,
+            full_snapshot_archive_interval_slots: Slot::MAX,
+            incremental_snapshot_archive_interval_slots: Slot::MAX,
             snapshot_archives_dir: replica_config.snapshot_archives_dir.clone(),
             bank_snapshots_dir: replica_config.bank_snapshots_dir.clone(),
-            archive_format: ArchiveFormat::TarBzip2,
-            snapshot_version: snapshot_utils::SnapshotVersion::default(),
-            maximum_full_snapshot_archives_to_retain:
-                snapshot_utils::DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
-            maximum_incremental_snapshot_archives_to_retain:
-                snapshot_utils::DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+            ..SnapshotConfig::default()
         };
 
         let bank_info =

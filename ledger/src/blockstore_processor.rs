@@ -1467,9 +1467,8 @@ pub mod tests {
     use matches::assert_matches;
     use rand::{thread_rng, Rng};
     use solana_entry::entry::{create_ticks, next_entry, next_entry_mut};
-    use solana_runtime::{
-        genesis_utils::{self, create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs},
-        snapshot_utils::{ArchiveFormat, SnapshotVersion},
+    use solana_runtime::genesis_utils::{
+        self, create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs,
     };
     use solana_sdk::{
         account::{AccountSharedData, WritableAccount},
@@ -3167,13 +3166,8 @@ pub mod tests {
         let bank_snapshots_tempdir = TempDir::new().unwrap();
         let snapshot_config = SnapshotConfig {
             full_snapshot_archive_interval_slots: FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
-            incremental_snapshot_archive_interval_slots: Slot::MAX, // value does not matter
-            snapshot_archives_dir: PathBuf::default(),              // value does not matter
             bank_snapshots_dir: bank_snapshots_tempdir.path().to_path_buf(),
-            archive_format: ArchiveFormat::TarZstd, // value does not matter
-            snapshot_version: SnapshotVersion::default(), // value does not matter
-            maximum_full_snapshot_archives_to_retain: usize::MAX, // value does not matter
-            maximum_incremental_snapshot_archives_to_retain: usize::MAX, // value does not matter
+            ..SnapshotConfig::default()
         };
 
         let (accounts_package_sender, accounts_package_receiver) = channel();
