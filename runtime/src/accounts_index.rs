@@ -171,6 +171,10 @@ impl<T: IsCached> ReadAccountMapEntry<T> {
     pub fn addref(&self) {
         self.borrow_owned_entry().add_un_ref(true);
     }
+
+    fn get(lock: &AccountMapsReadLock<'_, T>, pubkey: &Pubkey) -> Option<AccountMapEntry<T>> {
+        lock.get(pubkey).cloned()
+    }
 }
 
 #[self_referencing]
@@ -1189,18 +1193,17 @@ impl<T: IsCached> AccountsIndex<T> {
         pubkey: &Pubkey,
         lock: &AccountMapsReadLock<'_, T>,
     ) -> Option<ReadAccountMapEntry<T>> {
-        lock.get(pubkey)
-            .cloned()
-            .map(ReadAccountMapEntry::from_account_map_entry)
+        ReadAccountMapEntry::get(lock, pubkey).map(ReadAccountMapEntry::from_account_map_entry)
     }
 
     fn get_account_write_entry(&self, pubkey: &Pubkey) -> Option<WriteAccountMapEntry<T>> {
-        self.account_maps[self.bin_calculator.bin_from_pubkey(pubkey)]
-            .read()
-            .unwrap()
-            .get(pubkey)
-            .cloned()
-            .map(WriteAccountMapEntry::from_account_map_entry)
+        ReadAccountMapEntry::get(
+            &self.account_maps[self.bin_calculator.bin_from_pubkey(pubkey)]
+                .read()
+                .unwrap(),
+            pubkey,
+        )
+        .map(WriteAccountMapEntry::from_account_map_entry)
     }
 
     // return None if item was created new
@@ -1456,9 +1459,7 @@ impl<T: IsCached> AccountsIndex<T> {
         let read_lock = self.account_maps[self.bin_calculator.bin_from_pubkey(pubkey)]
             .read()
             .unwrap();
-        let account = read_lock
-            .get(pubkey)
-            .cloned()
+        let account = ReadAccountMapEntry::get(&read_lock, pubkey)
             .map(ReadAccountMapEntry::from_account_map_entry);
 
         match account {
