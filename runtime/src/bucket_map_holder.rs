@@ -520,10 +520,9 @@ impl<V: IsCached> BucketMapHolder<V> {
     }
     pub fn wait_for_flush_idle(&self) {
         loop {
-            if !self
-                .check_startup_complete
-                .wait_timeout(Duration::from_millis(100))
-                && self.stats.active_flush_threads.load(Ordering::Relaxed) == 1
+            self.check_startup_complete
+                .wait_timeout(Duration::from_millis(100));
+            if self.stats.active_flush_threads.load(Ordering::Relaxed) == 1
                 && self.flushes_active.load(Ordering::Relaxed) == 0
                 && !self
                     .per_bin
