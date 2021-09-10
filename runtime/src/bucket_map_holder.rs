@@ -446,15 +446,13 @@ impl<V: IsCached> BucketMapHolder<V> {
                 .compare_exchange(expected_threads, new, Ordering::Acquire, Ordering::Relaxed)
                 .unwrap();
             false
+        } else if expected_threads > 1 {
+            let new = expected_threads - 1;
+            self.desired_threads
+                .compare_exchange(expected_threads, new, Ordering::Acquire, Ordering::Relaxed)
+                .is_ok()
         } else {
-            if expected_threads > 1 {
-                let new = expected_threads - 1;
-                self.desired_threads
-                    .compare_exchange(expected_threads, new, Ordering::Acquire, Ordering::Relaxed)
-                    .is_ok()
-            } else {
-                false
-            }
+            false
         }
     }
 

@@ -11,6 +11,7 @@ use std::sync::{
     atomic::{AtomicU64, Ordering},
     Mutex,
 };
+use crate::bucket_map::MaxSearch;
 
 #[derive(Debug, Default)]
 pub struct BucketStats {
@@ -81,6 +82,7 @@ pub struct DataBucket {
     pub bytes: u64,
     pub used: AtomicU64,
     pub stats: Arc<BucketStats>,
+    pub max_search: MaxSearch,
 }
 
 #[derive(Debug)]
@@ -101,6 +103,7 @@ impl DataBucket {
         num_elems: u64,
         elem_size: u64,
         capacity: u8,
+        max_search: MaxSearch,
         mut stats: Arc<BucketStats>,
     ) -> Self {
         let cell_size = elem_size * num_elems + std::mem::size_of::<Header>() as u64;
@@ -114,16 +117,29 @@ impl DataBucket {
             capacity,
             stats,
             bytes: 1 << capacity,
+            max_search,
         }
+    }
+
+    pub fn max_search(&self) -> u64 {
+        self.max_search as u64
     }
 
     pub fn new(
         drives: Arc<Vec<PathBuf>>,
         num_elems: u64,
         elem_size: u64,
+        max_search: MaxSearch,
         stats: Arc<BucketStats>,
     ) -> Self {
-        Self::new_with_capacity(drives, num_elems, elem_size, DEFAULT_CAPACITY, stats)
+        Self::new_with_capacity(
+            drives,
+            num_elems,
+            elem_size,
+            DEFAULT_CAPACITY,
+            max_search,
+            stats,
+        )
     }
 
     pub fn uid(&self, ix: u64) -> u64 {

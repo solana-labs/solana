@@ -4,7 +4,7 @@ use crate::bucket_map_holder::{BucketMapHolder, K};
 
 use crate::pubkey_bins::PubkeyBinCalculator16;
 use rayon::prelude::*;
-use solana_bucket_map::bucket_map::BucketMap;
+use solana_bucket_map::bucket_map::{BucketMap, MaxSearch};
 use solana_sdk::clock::Slot;
 use solana_sdk::pubkey::Pubkey;
 use std::fmt::Debug;
@@ -48,13 +48,22 @@ impl<V: IsCached> InMemAccountsIndex<V> {
 
     pub fn new_for_testing() -> Self {
         let bins = ACCOUNTS_INDEX_CONFIG_FOR_TESTING.bins.unwrap();
-        let map = Self::new_bucket_map(bins);
+        let map = Self::new_bucket_map(bins, None);
         Self::new(&map, 0)
     }
 
-    pub fn new_bucket_map(bins: usize) -> Arc<BucketMapHolder<V>> {
+    pub fn new_bucket_map(bins: usize, max_search: Option<usize>) -> Arc<BucketMapHolder<V>> {
         let buckets = PubkeyBinCalculator16::log_2(bins as u32) as u8;
-        Arc::new(BucketMapHolder::new(BucketMap::new_buckets(buckets)))
+        // this should be <= 1 << DEFAULT_CAPACITY or we end up searching the same items over and over - probably not a big deal since it is so small anyway
+        const MAX_SEARCH: MaxSearch = 32;
+
+        use std::convert::TryInto;
+        let max_search: MaxSearch = max_search
+            .map(|x| x.try_into().unwrap())
+            .unwrap_or(MAX_SEARCH);
+        Arc::new(BucketMapHolder::new(BucketMap::new_buckets(
+            buckets, max_search,
+        )))
     }
 
     // create bg thread pool for flushing accounts index to disk

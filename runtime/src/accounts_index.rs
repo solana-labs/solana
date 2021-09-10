@@ -36,10 +36,12 @@ pub const BINS_FOR_BENCHMARKS: usize = 2;
 pub const ACCOUNTS_INDEX_CONFIG_FOR_TESTING: AccountsIndexConfig = AccountsIndexConfig {
     bins: Some(BINS_FOR_TESTING),
     threads: Some(2),
+    max_search: None,
 };
 pub const ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS: AccountsIndexConfig = AccountsIndexConfig {
     bins: Some(BINS_FOR_BENCHMARKS),
     threads: Some(2),
+    max_search: None,
 };
 pub type ScanResult<T> = Result<T, ScanError>;
 pub type SlotList<T> = Vec<(Slot, T)>;
@@ -90,6 +92,7 @@ pub struct AccountSecondaryIndexesIncludeExclude {
 pub struct AccountsIndexConfig {
     pub bins: Option<usize>,
     pub threads: Option<usize>,
+    pub max_search: Option<usize>,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -903,12 +906,14 @@ impl<T: IsCached> AccountsIndex<T> {
             .and_then(|config| config.bins)
             .unwrap_or(BINS_DEFAULT);
         let threads = config
+            .as_ref()
             .and_then(|config| config.threads)
-            .unwrap_or(std::cmp::max(2, num_cpus::get() / 8));
+            .unwrap_or_else(|| std::cmp::max(2, num_cpus::get() / 8));
+        let max_search = config.as_ref().and_then(|config| config.max_search);
 
         // create bin_calculator early to verify # bins is reasonable
         let bin_calculator = PubkeyBinCalculator16::new(bins);
-        let bucket_map = InMemAccountsIndex::new_bucket_map(bins);
+        let bucket_map = InMemAccountsIndex::new_bucket_map(bins, max_search);
         let account_maps = (0..bins)
             .into_iter()
             .map(|bin| RwLock::new(AccountMap::new(&bucket_map, bin)))

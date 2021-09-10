@@ -17,6 +17,8 @@ use std::{
     fs,
     sync::atomic::{AtomicUsize, Ordering},
 };
+pub type MaxSearch = u8;
+
 type RefCount = u64;
 
 pub struct BucketMapKeyValue<T> {
@@ -29,6 +31,7 @@ pub struct BucketMap<T: Clone + Copy + std::fmt::Debug> {
     buckets: Vec<RwLock<Option<Bucket<T>>>>,
     drives: Arc<Vec<PathBuf>>,
     bits: u8,
+    max_search: MaxSearch,
     pub stats: Arc<BucketMapStats>,
 }
 
@@ -61,7 +64,7 @@ pub struct BucketMapDistribution {
 }
 
 impl<T: Clone + Copy + std::fmt::Debug> BucketMap<T> {
-    pub fn new(num_buckets_pow2: u8, drives: Arc<Vec<PathBuf>>) -> Self {
+    pub fn new(num_buckets_pow2: u8, drives: Arc<Vec<PathBuf>>, max_search: MaxSearch) -> Self {
         let count = 1 << num_buckets_pow2;
         let mut buckets = Vec::with_capacity(count);
         buckets.resize_with(count, || RwLock::new(None));
@@ -71,6 +74,7 @@ impl<T: Clone + Copy + std::fmt::Debug> BucketMap<T> {
             drives,
             bits: num_buckets_pow2,
             stats,
+            max_search,
         }
     }
 
@@ -173,8 +177,8 @@ impl<T: Clone + Copy + std::fmt::Debug> BucketMap<T> {
         assert!(!paths.is_empty());
         Arc::new(paths)
     }
-    pub fn new_buckets(num_buckets_pow2: u8) -> Self {
-        Self::new(num_buckets_pow2, Self::new_random_folders())
+    pub fn new_buckets(num_buckets_pow2: u8, max_search: MaxSearch) -> Self {
+        Self::new(num_buckets_pow2, Self::new_random_folders(), max_search)
     }
 
     pub fn set_expected_capacity(&self, ix: usize, count: usize) {
@@ -266,7 +270,11 @@ impl<T: Clone + Copy + std::fmt::Debug> BucketMap<T> {
             }
             let mut bucket = self.buckets[ix].write().unwrap();
             if bucket.is_none() {
-                *bucket = Some(Bucket::new(self.drives.clone(), self.stats.clone()));
+                *bucket = Some(Bucket::new(
+                    self.drives.clone(),
+                    self.max_search,
+                    self.stats.clone(),
+                ));
             }
             let bucket = bucket.as_mut().unwrap();
             for key in per_bucket {
@@ -307,7 +315,11 @@ impl<T: Clone + Copy + std::fmt::Debug> BucketMap<T> {
         let ix = self.bucket_ix(key);
         let mut bucket = self.buckets[ix].write().unwrap();
         if bucket.is_none() {
-            *bucket = Some(Bucket::new(self.drives.clone(), self.stats.clone()));
+            *bucket = Some(Bucket::new(
+                self.drives.clone(),
+                self.max_search,
+                self.stats.clone(),
+            ));
         }
         let bucket = bucket.as_mut().unwrap();
         let current = bucket.read_value(key);
@@ -426,15 +438,13 @@ impl IndexEntry {
     }
 }
 
-// this should be <= 1 << DEFAULT_CAPACITY or we end up searching the same items over and over - probably not a big deal since it is so small anyway
-const MAX_SEARCH: u64 = 32;
-
 impl<T: Clone + Copy> Bucket<T> {
-    fn new(drives: Arc<Vec<PathBuf>>, stats: Arc<BucketMapStats>) -> Self {
+    fn new(drives: Arc<Vec<PathBuf>>, max_search: MaxSearch, stats: Arc<BucketMapStats>) -> Self {
         let index = DataBucket::new(
             drives.clone(),
             1,
             std::mem::size_of::<IndexEntry>() as u64,
+            max_search,
             stats.index.clone(),
         );
         Self {
@@ -518,7 +528,7 @@ impl<T: Clone + Copy> Bucket<T> {
         random: u64,
     ) -> Option<(&'a mut IndexEntry, u64)> {
         let ix = Self::bucket_index_ix(index, key, random);
-        for i in ix..ix + MAX_SEARCH {
+        for i in ix..ix + index.max_search() {
             let ii = i % index.num_cells();
             if index.uid(ii) == 0 {
                 continue;
@@ -537,7 +547,7 @@ impl<T: Clone + Copy> Bucket<T> {
         random: u64,
     ) -> Option<(&'a IndexEntry, u64)> {
         let ix = Self::bucket_index_ix(index, key, random);
-        for i in ix..ix + MAX_SEARCH {
+        for i in ix..ix + index.max_search() {
             let ii = i % index.num_cells();
             if index.uid(ii) == 0 {
                 continue;
@@ -558,7 +568,7 @@ impl<T: Clone + Copy> Bucket<T> {
         ref_count: u64,
     ) -> Result<u64, BucketMapError> {
         let ix = Self::bucket_index_ix(index, key, random);
-        for i in ix..ix + MAX_SEARCH {
+        for i in ix..ix + index.max_search() {
             let ii = i as u64 % index.num_cells();
             if index.uid(ii) != 0 {
                 continue;
@@ -652,7 +662,7 @@ impl<T: Clone + Copy> Bucket<T> {
             let cap_power = best_bucket.capacity;
             let cap = best_bucket.num_cells();
             let pos = thread_rng().gen_range(0, cap);
-            for i in pos..pos + MAX_SEARCH as u64 {
+            for i in pos..pos + self.index.max_search() {
                 let ix = i % cap;
                 if best_bucket.uid(ix) == 0 {
                     let elem_loc = elem.data_loc(current_bucket);
@@ -712,6 +722,7 @@ impl<T: Clone + Copy> Bucket<T> {
                     1,
                     std::mem::size_of::<IndexEntry>() as u64,
                     self.index.capacity + i, // * 2,
+                    self.index.max_search,
                     self.stats.index.clone(),
                 );
                 let random = thread_rng().gen();
@@ -766,6 +777,7 @@ impl<T: Clone + Copy> Bucket<T> {
                     self.drives.clone(),
                     1 << i,
                     std::mem::size_of::<T>() as u64,
+                    self.index.max_search,
                     self.stats.data.clone(),
                 ))
             }
