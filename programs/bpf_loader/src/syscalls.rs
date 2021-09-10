@@ -2229,14 +2229,15 @@ where
     let mut accounts = Vec::with_capacity(account_keys.len());
     let mut refs = Vec::with_capacity(account_keys.len());
     for (i, ref account_key) in account_keys.iter().enumerate() {
-        let account = invoke_context.get_account(account_key).ok_or_else(|| {
-            ic_msg!(
-                invoke_context,
-                "Instruction references an unknown account {}",
-                account_key
-            );
-            SyscallError::InstructionError(InstructionError::MissingAccount)
-        })?;
+        let (_account_index, account) =
+            invoke_context.get_account(account_key).ok_or_else(|| {
+                ic_msg!(
+                    invoke_context,
+                    "Instruction references an unknown account {}",
+                    account_key
+                );
+                SyscallError::InstructionError(InstructionError::MissingAccount)
+            })?;
 
         if i == program_account_index || account.borrow().executable() {
             // Use the known account
@@ -2321,14 +2322,16 @@ fn get_upgradeable_executable(
     callee_program_id: &Pubkey,
     program_account: &Rc<RefCell<AccountSharedData>>,
     invoke_context: &Ref<&mut dyn InvokeContext>,
-) -> Result<Option<(Pubkey, Rc<RefCell<AccountSharedData>>)>, EbpfError<BpfError>> {
+) -> Result<Option<usize>, EbpfError<BpfError>> {
     if program_account.borrow().owner() == &bpf_loader_upgradeable::id() {
         match program_account.borrow().state() {
             Ok(UpgradeableLoaderState::Program {
                 programdata_address,
             }) => {
-                if let Some(account) = invoke_context.get_account(&programdata_address) {
-                    Ok(Some((programdata_address, account)))
+                if let Some((programdata_account_index, _programdata_account)) =
+                    invoke_context.get_account(&programdata_address)
+                {
+                    Ok(Some(programdata_account_index))
                 } else {
                     ic_msg!(
                         invoke_context,
@@ -2364,7 +2367,7 @@ fn call<'a>(
 ) -> Result<u64, EbpfError<BpfError>> {
     let (
         message,
-        executables,
+        program_indices,
         accounts,
         account_refs,
         caller_write_privileges,
@@ -2442,16 +2445,21 @@ fn call<'a>(
         let program_account = accounts
             .get(callee_program_id_index)
             .ok_or_else(|| {
-                ic_msg!(invoke_context, "Unknown program {}", callee_program_id,);
+                ic_msg!(invoke_context, "Unknown program {}", callee_program_id);
                 SyscallError::InstructionError(InstructionError::MissingAccount)
             })?
             .1
             .clone();
-        let programdata_executable =
-            get_upgradeable_executable(&callee_program_id, &program_account, &invoke_context)?;
-        let mut executables = vec![(callee_program_id, program_account)];
-        if let Some(executable) = programdata_executable {
-            executables.push(executable);
+        let (program_account_index, _program_account) =
+            invoke_context.get_account(&callee_program_id).ok_or(
+                SyscallError::InstructionError(InstructionError::MissingAccount),
+            )?;
+
+        let mut program_indices = vec![program_account_index];
+        if let Some(programdata_account_index) =
+            get_upgradeable_executable(&callee_program_id, &program_account, &invoke_context)?
+        {
+            program_indices.push(programdata_account_index);
         }
 
         // Record the instruction
@@ -2460,7 +2468,7 @@ fn call<'a>(
 
         (
             message,
-            executables,
+            program_indices,
             accounts,
             account_refs,
             caller_write_privileges,
@@ -2473,7 +2481,7 @@ fn call<'a>(
     #[allow(clippy::deref_addrof)]
     match InstructionProcessor::process_cross_program_instruction(
         &message,
-        &executables,
+        &program_indices,
         &accounts,
         &caller_write_privileges,
         *(&mut *(syscall.get_context_mut()?)),

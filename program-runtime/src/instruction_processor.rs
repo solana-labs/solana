@@ -342,29 +342,6 @@ impl InstructionProcessor {
         }
     }
 
-    /// Create the KeyedAccounts that will be passed to the program
-    pub fn create_keyed_accounts<'a>(
-        message: &'a Message,
-        instruction: &'a CompiledInstruction,
-        executable_accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
-        accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
-        demote_program_write_locks: bool,
-    ) -> Vec<(bool, bool, &'a Pubkey, &'a RefCell<AccountSharedData>)> {
-        executable_accounts
-            .iter()
-            .map(|(key, account)| (false, false, key, account as &RefCell<AccountSharedData>))
-            .chain(instruction.accounts.iter().map(|index| {
-                let index = *index as usize;
-                (
-                    message.is_signer(index),
-                    message.is_writable(index, demote_program_write_locks),
-                    &accounts[index].0,
-                    &accounts[index].1 as &RefCell<AccountSharedData>,
-                )
-            }))
-            .collect::<Vec<_>>()
-    }
-
     /// Process an instruction
     /// This method calls the instruction's program entrypoint method
     pub fn process_instruction(
@@ -490,7 +467,7 @@ impl InstructionProcessor {
 
         let (
             message,
-            executable_accounts,
+            program_indices,
             accounts,
             keyed_account_indices_reordered,
             caller_write_privileges,
@@ -535,13 +512,12 @@ impl InstructionProcessor {
 
             invoke_context.record_instruction(&instruction);
 
-            let program_account =
-                invoke_context
-                    .get_account(&callee_program_id)
-                    .ok_or_else(|| {
-                        ic_msg!(invoke_context, "Unknown program {}", callee_program_id);
-                        InstructionError::MissingAccount
-                    })?;
+            let (program_account_index, program_account) = invoke_context
+                .get_account(&callee_program_id)
+                .ok_or_else(|| {
+                    ic_msg!(invoke_context, "Unknown program {}", callee_program_id);
+                    InstructionError::MissingAccount
+                })?;
             if !program_account.borrow().executable() {
                 ic_msg!(
                     invoke_context,
@@ -550,13 +526,16 @@ impl InstructionProcessor {
                 );
                 return Err(InstructionError::AccountNotExecutable);
             }
-            let programdata = if program_account.borrow().owner() == &bpf_loader_upgradeable::id() {
+            let mut program_indices = vec![];
+            if program_account.borrow().owner() == &bpf_loader_upgradeable::id() {
                 if let UpgradeableLoaderState::Program {
                     programdata_address,
                 } = program_account.borrow().state()?
                 {
-                    if let Some(account) = invoke_context.get_account(&programdata_address) {
-                        Some((programdata_address, account))
+                    if let Some((programdata_account_index, _programdata_account)) =
+                        invoke_context.get_account(&programdata_address)
+                    {
+                        program_indices.push(programdata_account_index);
                     } else {
                         ic_msg!(
                             invoke_context,
@@ -573,16 +552,11 @@ impl InstructionProcessor {
                     );
                     return Err(InstructionError::MissingAccount);
                 }
-            } else {
-                None
-            };
-            let mut executable_accounts = vec![(callee_program_id, program_account)];
-            if let Some(programdata) = programdata {
-                executable_accounts.push(programdata);
             }
+            program_indices.insert(0, program_account_index);
             (
                 message,
-                executable_accounts,
+                program_indices,
                 accounts,
                 keyed_account_indices_reordered,
                 caller_write_privileges,
@@ -592,7 +566,7 @@ impl InstructionProcessor {
         #[allow(clippy::deref_addrof)]
         InstructionProcessor::process_cross_program_instruction(
             &message,
-            &executable_accounts,
+            &program_indices,
             &accounts,
             &caller_write_privileges,
             *(&mut *(invoke_context.borrow_mut())),
@@ -646,7 +620,7 @@ impl InstructionProcessor {
     /// This method calls the instruction's program entrypoint function
     pub fn process_cross_program_instruction(
         message: &Message,
-        executable_accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        program_indices: &[usize],
         accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
         caller_write_privileges: &[bool],
         invoke_context: &mut dyn InvokeContext,
@@ -657,19 +631,8 @@ impl InstructionProcessor {
             // Verify the calling program hasn't misbehaved
             invoke_context.verify_and_update(instruction, accounts, caller_write_privileges)?;
 
-            // Construct keyed accounts
-            let demote_program_write_locks =
-                invoke_context.is_feature_active(&demote_program_write_locks::id());
-            let keyed_accounts = Self::create_keyed_accounts(
-                message,
-                instruction,
-                executable_accounts,
-                accounts,
-                demote_program_write_locks,
-            );
-
             // Invoke callee
-            invoke_context.push(program_id, &keyed_accounts)?;
+            invoke_context.push(program_id, message, instruction, program_indices, accounts)?;
 
             let mut instruction_processor = InstructionProcessor::default();
             for (program_id, process_instruction) in invoke_context.get_programs().iter() {
@@ -683,6 +646,8 @@ impl InstructionProcessor {
             );
             if result.is_ok() {
                 // Verify the called program has not misbehaved
+                let demote_program_write_locks =
+                    invoke_context.is_feature_active(&demote_program_write_locks::id());
                 let write_privileges: Vec<bool> = (0..message.account_keys.len())
                     .map(|i| message.is_writable(i, demote_program_write_locks))
                     .collect();
@@ -696,28 +661,6 @@ impl InstructionProcessor {
             // This function is always called with a valid instruction, if that changes return an error
             Err(InstructionError::GenericError)
         }
-    }
-
-    /// Record the initial state of the accounts so that they can be compared
-    /// after the instruction is processed
-    pub fn create_pre_accounts(
-        message: &Message,
-        instruction: &CompiledInstruction,
-        accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
-    ) -> Vec<PreAccount> {
-        let mut pre_accounts = Vec::with_capacity(instruction.accounts.len());
-        {
-            let mut work = |_unique_index: usize, account_index: usize| {
-                if account_index < message.account_keys.len() && account_index < accounts.len() {
-                    let account = accounts[account_index].1.borrow();
-                    pre_accounts.push(PreAccount::new(&accounts[account_index].0, &account));
-                    return Ok(());
-                }
-                Err(InstructionError::MissingAccount)
-            };
-            let _ = instruction.visit_each_account(&mut work);
-        }
-        pre_accounts
     }
 
     /// Verify the results of a cross-program instruction
