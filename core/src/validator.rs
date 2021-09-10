@@ -101,7 +101,7 @@ use {
 };
 
 const MAX_COMPLETED_DATA_SETS_IN_CHANNEL: usize = 100_000;
-const WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT: u64 = 90;
+const WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT: u64 = 80;
 
 pub struct ValidatorConfig {
     pub dev_halt_at_slot: Option<Slot>,
