@@ -246,9 +246,10 @@ impl<T: IsCached> WriteAccountMapEntry<T> {
         reclaims: &mut SlotList<T>,
         previous_slot_entry_was_cached: bool,
     ) -> bool {
+        // (possibly) non-ideal clone of arc here
         if let Some(current) = r_account_maps.get(pubkey) {
             Self::lock_and_update_slot_list(
-                current,
+                &current,
                 new_value,
                 reclaims,
                 previous_slot_entry_was_cached,
@@ -1191,7 +1192,6 @@ impl<T: IsCached> AccountsIndex<T> {
         lock: &AccountMapsReadLock<'_, T>,
     ) -> Option<ReadAccountMapEntry<T>> {
         lock.get(pubkey)
-            .cloned()
             .map(ReadAccountMapEntry::from_account_map_entry)
     }
 
@@ -1200,7 +1200,6 @@ impl<T: IsCached> AccountsIndex<T> {
             .read()
             .unwrap()
             .get(pubkey)
-            .cloned()
             .map(WriteAccountMapEntry::from_account_map_entry)
     }
 
@@ -1459,7 +1458,6 @@ impl<T: IsCached> AccountsIndex<T> {
             .unwrap();
         let account = read_lock
             .get(pubkey)
-            .cloned()
             .map(ReadAccountMapEntry::from_account_map_entry);
 
         match account {
