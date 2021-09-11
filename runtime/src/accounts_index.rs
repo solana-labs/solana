@@ -45,7 +45,7 @@ pub type SlotSlice<'s, T> = &'s [(Slot, T)];
 pub type RefCount = u64;
 pub type AccountMap<V> = InMemAccountsIndex<V>;
 
-type AccountMapEntry<T> = Arc<AccountMapEntryInner<T>>;
+pub(crate) type AccountMapEntry<T> = Arc<AccountMapEntryInner<T>>;
 
 pub trait IsCached: 'static + Clone + Debug + PartialEq + ZeroLamport + Copy + Default {
     fn is_cached(&self) -> bool;
@@ -756,7 +756,7 @@ pub trait ZeroLamport {
     fn is_zero_lamport(&self) -> bool;
 }
 
-type MapType<T> = AccountMap<AccountMapEntry<T>>;
+type MapType<T> = AccountMap<T>;
 type LockMapType<T> = Vec<RwLock<MapType<T>>>;
 type LockMapTypeSlice<T> = [RwLock<MapType<T>>];
 type AccountMapsWriteLock<'a, T> = RwLockWriteGuard<'a, MapType<T>>;
