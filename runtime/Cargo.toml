@@ -58,7 +58,6 @@ name = "solana_runtime"
 
 [dev-dependencies]
 assert_matches = "1.5.0"
-solana-noop-program = { path = "../programs/noop", version = "=1.8.0" }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
