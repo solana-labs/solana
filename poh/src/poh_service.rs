@@ -357,7 +357,6 @@ impl PohService {
 mod tests {
     use {
         super::*,
-        crate::poh_recorder::WorkingBank,
         rand::{thread_rng, Rng},
         solana_ledger::{
             blockstore::Blockstore,
@@ -412,14 +411,8 @@ mod tests {
                 exit.clone(),
             );
             let poh_recorder = Arc::new(Mutex::new(poh_recorder));
-            let start = Arc::new(Instant::now());
-            let working_bank = WorkingBank {
-                bank: bank.clone(),
-                start,
-                min_tick_height: bank.tick_height(),
-                max_tick_height: std::u64::MAX,
-            };
             let ticks_per_slot = bank.ticks_per_slot();
+            let bank_slot = bank.slot();
 
             // specify RUN_TIME to run in a benchmark-like mode
             // to calibrate batch size
@@ -444,7 +437,7 @@ mod tests {
                             // send some data
                             let mut time = Measure::start("record");
                             let _ = poh_recorder.lock().unwrap().record(
-                                bank.slot(),
+                                bank_slot,
                                 h1,
                                 vec![tx.clone()],
                             );
@@ -481,7 +474,7 @@ mod tests {
                 hashes_per_batch,
                 record_receiver,
             );
-            poh_recorder.lock().unwrap().set_working_bank(working_bank);
+            poh_recorder.lock().unwrap().set_bank(&bank);
 
             // get some events
             let mut hashes = 0;

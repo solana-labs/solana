@@ -5401,6 +5401,20 @@ impl Bank {
         self.feature_set = Arc::new(feature_set);
     }
 
+    pub fn fill_bank_with_ticks(&self) {
+        let parent_distance = if self.slot() == 0 {
+            1
+        } else {
+            self.slot() - self.parent_slot()
+        };
+        for _ in 0..parent_distance {
+            let last_blockhash = self.last_blockhash();
+            while self.last_blockhash() == last_blockhash {
+                self.register_tick(&Hash::new_unique())
+            }
+        }
+    }
+
     // This is called from snapshot restore AND for each epoch boundary
     // The entire code path herein must be idempotent
     fn apply_feature_activations(
