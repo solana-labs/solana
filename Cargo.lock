@@ -1203,7 +1203,7 @@ dependencies = [
  "rand 0.7.3",
  "serde",
  "serde_bytes",
- "sha2 0.9.6",
+ "sha2 0.9.8",
  "zeroize",
 ]
 
@@ -1217,7 +1217,7 @@ dependencies = [
  "ed25519-dalek",
  "failure",
  "hmac 0.9.0",
- "sha2 0.9.6",
+ "sha2 0.9.8",
 ]
 
 [[package]]
@@ -2316,7 +2316,7 @@ dependencies = [
  "libsecp256k1-gen-genmult",
  "rand 0.7.3",
  "serde",
- "sha2 0.9.6",
+ "sha2 0.9.8",
  "typenum",
 ]
 
@@ -2335,7 +2335,7 @@ dependencies = [
  "libsecp256k1-gen-genmult",
  "rand 0.7.3",
  "serde",
- "sha2 0.9.6",
+ "sha2 0.9.8",
  "typenum",
 ]
 
@@ -3996,9 +3996,9 @@ dependencies = [
 
 [[package]]
 name = "sha2"
-version = "0.9.6"
+version = "0.9.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9204c41a1597a8c5af23c82d1c921cb01ec0a4c59e07a9c7306062829a3903f3"
+checksum = "b69f9a4c9740d74c5baa3fd2e547f9525fa8088a8a958e0ca2409a514e33f5fa"
 dependencies = [
  "block-buffer 0.9.0",
  "cfg-if 1.0.0",
@@ -4649,7 +4649,7 @@ dependencies = [
  "rustc_version 0.2.3",
  "serde",
  "serde_derive",
- "sha2 0.9.6",
+ "sha2 0.9.8",
  "solana-frozen-abi-macro 1.7.6",
  "solana-logger 1.7.6",
  "thiserror",
@@ -4667,7 +4667,7 @@ dependencies = [
  "rustc_version 0.4.0",
  "serde",
  "serde_derive",
- "sha2 0.9.6",
+ "sha2 0.9.8",
  "solana-frozen-abi-macro 1.8.0",
  "solana-logger 1.8.0",
  "thiserror",
@@ -4844,7 +4844,7 @@ dependencies = [
  "rustc_version 0.4.0",
  "serde",
  "serde_bytes",
- "sha2 0.9.6",
+ "sha2 0.9.8",
  "solana-account-decoder",
  "solana-bpf-loader-program",
  "solana-entry",
@@ -5152,7 +5152,7 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_derive",
- "sha2 0.9.6",
+ "sha2 0.9.8",
  "sha3",
  "solana-frozen-abi 1.7.6",
  "solana-frozen-abi-macro 1.7.6",
@@ -5188,7 +5188,7 @@ dependencies = [
  "serde_bytes",
  "serde_derive",
  "serde_json",
- "sha2 0.9.6",
+ "sha2 0.9.8",
  "sha3",
  "solana-frozen-abi 1.8.0",
  "solana-frozen-abi-macro 1.8.0",
@@ -5452,7 +5452,7 @@ dependencies = [
  "serde_bytes",
  "serde_derive",
  "serde_json",
- "sha2 0.9.6",
+ "sha2 0.9.8",
  "sha3",
  "solana-crate-features",
  "solana-frozen-abi 1.8.0",
@@ -6225,7 +6225,7 @@ dependencies = [
  "pbkdf2 0.4.0",
  "rand 0.7.3",
  "rustc-hash",
- "sha2 0.9.6",
+ "sha2 0.9.8",
  "thiserror",
  "unicode-normalization",
  "zeroize",
