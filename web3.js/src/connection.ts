@@ -441,15 +441,42 @@ const VersionResult = pick({
   'feature-set': optional(number()),
 });
 
+export type SimulatedTransactionAccountInfo = {
+  /** `true` if this account's data contains a loaded program */
+  executable: boolean;
+  /** Identifier of the program that owns the account */
+  owner: string;
+  /** Number of lamports assigned to the account */
+  lamports: number;
+  /** Optional data assigned to the account */
+  data: string[];
+  /** Optional rent epoch info for account */
+  rentEpoch?: number;
+};
+
 export type SimulatedTransactionResponse = {
   err: TransactionError | string | null;
   logs: Array<string> | null;
+  accounts?: SimulatedTransactionAccountInfo[];
+  unitsConsumed?: number;
 };
 
 const SimulatedTransactionResponseStruct = jsonRpcResultAndContext(
   pick({
     err: nullable(union([pick({}), string()])),
     logs: nullable(array(string())),
+    accounts: optional(
+      array(
+        pick({
+          executable: boolean(),
+          owner: string(),
+          lamports: number(),
+          data: array(string()),
+          rentEpoch: optional(number()),
+        }),
+      ),
+    ),
+    unitsConsumed: optional(number()),
   }),
 );
 
@@ -1681,6 +1708,8 @@ export type AccountInfo<T> = {
   lamports: number;
   /** Optional data assigned to the account */
   data: T;
+  /** Optional rent epoch infor for account */
+  rentEpoch?: number;
 };
 
 /**
