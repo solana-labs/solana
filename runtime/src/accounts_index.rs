@@ -640,9 +640,9 @@ impl<'a, T: IsCached> AccountsIndexIterator<'a, T> {
         R: RangeBounds<Pubkey>,
     {
         let mut result = Vec::with_capacity(map.len());
-        for (k, v) in map.iter() {
-            if range.contains(k) {
-                result.push((*k, v.clone()));
+        for (k, v) in map.items() {
+            if range.contains(&k) {
+                result.push((k, v));
             }
         }
         if !collect_all_unsorted {
