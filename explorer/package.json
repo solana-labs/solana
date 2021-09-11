@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
-    "@blockworks-foundation/mango-client": "^3.0.16",
+    "@blockworks-foundation/mango-client": "^3.0.17",
     "@bonfida/bot": "^0.5.3",
     "@metamask/jazzicon": "^2.0.0",
     "@project-serum/serum": "^0.13.59",
@@ -20,7 +20,7 @@
     "@types/chart.js": "^2.9.34",
     "@types/classnames": "^2.3.1",
     "@types/jest": "^27.0.1",
-    "@types/node": "^16.9.0",
+    "@types/node": "^16.9.1",
     "@types/react": "^17.0.20",
     "@types/react-dom": "^17.0.9",
     "@types/react-router-dom": "^5.1.8",
@@ -47,7 +47,7 @@
     "react-scripts": "^4.0.3",
     "react-select": "^4.3.1",
     "superstruct": "^0.15.2",
-    "typescript": "^4.4.2"
+    "typescript": "^4.4.3"
   },
   "scripts": {
     "start": "react-scripts start",
