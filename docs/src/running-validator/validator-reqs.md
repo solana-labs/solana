@@ -19,7 +19,7 @@ transaction for each block the validator agrees with, which can cost up to
   - AVX2 instruction support (to use official release binaries, self-compile
     otherwise)
   - Support for AVX512f and/or SHA-NI instructions is helpful
-  - The AMD Threadripper Zen3 series is popular with the validator community
+  - The AMD Zen3 series is popular with the validator community
 - RAM
   - 128GB, or more
   - Motherboard with 256GB capacity suggested
