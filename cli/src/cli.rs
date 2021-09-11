@@ -815,7 +815,7 @@ pub fn parse_command(
         ("vote-account", Some(matches)) => parse_vote_get_account_command(matches, wallet_manager),
         ("withdraw-from-vote-account", Some(matches)) => {
             parse_withdraw_from_vote_account(matches, default_signer, wallet_manager)
-        },
+        }
         ("close-vote-account", Some(matches)) => {
             parse_close_vote_account(matches, default_signer, wallet_manager)
         }
