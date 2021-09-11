@@ -985,10 +985,10 @@ pub fn process_close_vote_account(
             ..RpcGetVoteAccountsConfig::default()
         }
     )?;
-    if let Some(vote_account) = 
+    if let Some(vote_account) =
             vote_account_status.current.into_iter().chain(vote_account_status.delinquent.into_iter()).next() {
         if vote_account.activated_stake != 0 {
-            return Err(format!("Cannot close a vote account with active stake: {}", vote_account_pubkey).into());   
+            return Err(format!("Cannot close a vote account with active stake: {}", vote_account_pubkey).into());
         }
     } else {
         return Err(format!("Vote account does not exist: {}", vote_account_pubkey).into());
