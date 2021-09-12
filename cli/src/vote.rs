@@ -15,10 +15,7 @@ use solana_clap_utils::{
     memo::{memo_arg, MEMO_ARG},
 };
 use solana_cli_output::{CliEpochVotingHistory, CliLockout, CliVoteAccount};
-use solana_client::{
-    rpc_client::RpcClient,
-    rpc_config::RpcGetVoteAccountsConfig,
-};
+use solana_client::{rpc_client::RpcClient, rpc_config::RpcGetVoteAccountsConfig};
 use solana_remote_wallet::remote_wallet::RemoteWalletManager;
 use solana_sdk::{
     account::Account, commitment_config::CommitmentConfig, message::Message,
@@ -343,7 +340,7 @@ impl VoteSubCommands for App<'_, '_> {
         )
         .subcommand(
             SubCommand::with_name("close-vote-account")
-                .about("Close a vote account and withdraw all funds remaining.")
+                .about("Close a vote account and withdraw all funds remaining")
                 .arg(
                     pubkey!(Arg::with_name("vote_account_pubkey")
                         .index(1)
@@ -979,16 +976,24 @@ pub fn process_close_vote_account(
     destination_account_pubkey: &Pubkey,
     memo: Option<&String>,
 ) -> ProcessResult {
-    let vote_account_status = rpc_client.get_vote_accounts_with_config(
-        RpcGetVoteAccountsConfig {
+    let vote_account_status =
+        rpc_client.get_vote_accounts_with_config(RpcGetVoteAccountsConfig {
             vote_pubkey: Some(vote_account_pubkey.to_string()),
             ..RpcGetVoteAccountsConfig::default()
-        }
-    )?;
-    if let Some(vote_account) =
-            vote_account_status.current.into_iter().chain(vote_account_status.delinquent.into_iter()).next() {
+        })?;
+
+    if let Some(vote_account) = vote_account_status
+        .current
+        .into_iter()
+        .chain(vote_account_status.delinquent.into_iter())
+        .next()
+    {
         if vote_account.activated_stake != 0 {
-            return Err(format!("Cannot close a vote account with active stake: {}", vote_account_pubkey).into());
+            return Err(format!(
+                "Cannot close a vote account with active stake: {}",
+                vote_account_pubkey
+            )
+            .into());
         }
     } else {
         return Err(format!("Vote account does not exist: {}", vote_account_pubkey).into());
