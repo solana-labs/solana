@@ -995,8 +995,6 @@ pub fn process_close_vote_account(
             )
             .into());
         }
-    } else {
-        return Err(format!("Vote account does not exist: {}", vote_account_pubkey).into());
     }
 
     let latest_blockhash = rpc_client.get_latest_blockhash()?;
