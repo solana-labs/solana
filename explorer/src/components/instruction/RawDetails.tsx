@@ -1,9 +1,9 @@
 import React from "react";
 import { TransactionInstruction } from "@solana/web3.js";
 import { Address } from "components/common/Address";
+import { HexData } from "components/common/HexData";
 
 export function RawDetails({ ix }: { ix: TransactionInstruction }) {
-  const data = ix.data.toString("hex");
   return (
     <>
       {ix.keys.map(({ pubkey, isSigner, isWritable }, keyIndex) => (
@@ -28,7 +28,7 @@ export function RawDetails({ ix }: { ix: TransactionInstruction }) {
           Instruction Data <span className="text-muted">(Hex)</span>
         </td>
         <td className="text-lg-right">
-          <pre className="d-inline-block text-left mb-0 data-wrap">{data}</pre>
+          <HexData raw={ix.data} />
         </td>
       </tr>
     </>
