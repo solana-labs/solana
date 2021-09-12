@@ -1203,29 +1203,6 @@ impl<T: IsCached> AccountsIndex<T> {
             .map(WriteAccountMapEntry::from_account_map_entry)
     }
 
-    // return None if item was created new
-    // if entry for pubkey already existed, return Some(entry). Caller needs to call entry.update.
-    fn insert_new_entry_if_missing_with_lock(
-        &self,
-        pubkey: Pubkey,
-        w_account_maps: &mut AccountMapsWriteLock<T>,
-        new_entry: AccountMapEntry<T>,
-    ) -> Option<(WriteAccountMapEntry<T>, T, Pubkey)> {
-        let account_entry = w_account_maps.entry(pubkey);
-        match account_entry {
-            Entry::Occupied(account_entry) => Some((
-                WriteAccountMapEntry::from_account_map_entry(account_entry.get().clone()),
-                // extract the new account_info from the unused 'new_entry'
-                new_entry.slot_list.write().unwrap().remove(0).1,
-                *account_entry.key(),
-            )),
-            Entry::Vacant(account_entry) => {
-                account_entry.insert(new_entry);
-                None
-            }
-        }
-    }
-
     pub fn handle_dead_keys(
         &self,
         dead_keys: &[&Pubkey],
@@ -1593,11 +1570,8 @@ impl<T: IsCached> AccountsIndex<T> {
             let mut w_account_maps = self.account_maps[pubkey_bin].write().unwrap();
             let mut insert_time = Measure::start("insert_into_primary_index");
             items.into_iter().for_each(|(pubkey, new_item)| {
-                let already_exists = self.insert_new_entry_if_missing_with_lock(
-                    pubkey,
-                    &mut w_account_maps,
-                    new_item,
-                );
+                let already_exists =
+                    w_account_maps.insert_new_entry_if_missing_with_lock(pubkey, new_item);
                 if let Some((mut w_account_entry, account_info, pubkey)) = already_exists {
                     let is_zero_lamport = account_info.is_zero_lamport();
                     w_account_entry.update(slot, account_info, &mut _reclaims);

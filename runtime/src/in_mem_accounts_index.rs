@@ -1,4 +1,4 @@
-use crate::accounts_index::{AccountMapEntry, IsCached};
+use crate::accounts_index::{AccountMapEntry, IsCached, WriteAccountMapEntry};
 use solana_sdk::pubkey::Pubkey;
 use std::collections::{
     hash_map::{Entry, Keys},
@@ -60,5 +60,27 @@ impl<T: IsCached> InMemAccountsIndex<T> {
 
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+
+    // return None if item was created new
+    // if entry for pubkey already existed, return Some(entry). Caller needs to call entry.update.
+    pub fn insert_new_entry_if_missing_with_lock(
+        &mut self,
+        pubkey: Pubkey,
+        new_entry: AccountMapEntry<T>,
+    ) -> Option<(WriteAccountMapEntry<T>, T, Pubkey)> {
+        let account_entry = self.map.entry(pubkey);
+        match account_entry {
+            Entry::Occupied(account_entry) => Some((
+                WriteAccountMapEntry::from_account_map_entry(account_entry.get().clone()),
+                // extract the new account_info from the unused 'new_entry'
+                new_entry.slot_list.write().unwrap().remove(0).1,
+                *account_entry.key(),
+            )),
+            Entry::Vacant(account_entry) => {
+                account_entry.insert(new_entry);
+                None
+            }
+        }
     }
 }
