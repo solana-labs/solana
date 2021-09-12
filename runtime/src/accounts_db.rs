@@ -1261,6 +1261,7 @@ struct ShrinkStats {
     skipped_shrink: AtomicU64,
     dead_accounts: AtomicU64,
     alive_accounts: AtomicU64,
+    accounts_loaded: AtomicU64,
 }
 
 impl ShrinkStats {
@@ -1357,6 +1358,11 @@ impl ShrinkStats {
                 (
                     "dead_accounts",
                     self.dead_accounts.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "accounts_loaded",
+                    self.accounts_loaded.swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
             );
@@ -2350,6 +2356,10 @@ impl AccountsDb {
         let len = stored_accounts.len();
         let alive_accounts_collect = Mutex::new(Vec::with_capacity(len));
         let unrefed_pubkeys_collect = Mutex::new(Vec::with_capacity(len));
+        self.shrink_stats
+            .accounts_loaded
+            .fetch_add(len as u64, Ordering::Relaxed);
+
         self.thread_pool.install(|| {
             let chunk_size = 50; // # accounts/thread
             let chunks = len / chunk_size + 1;
@@ -6451,7 +6461,7 @@ impl AccountsDb {
         roots.sort();
         info!("{}: accounts_index roots: {:?}", label, roots,);
         self.accounts_index.account_maps.iter().for_each(|map| {
-            for (pubkey, account_entry) in map.read().unwrap().iter() {
+            for (pubkey, account_entry) in map.read().unwrap().items() {
                 info!("  key: {} ref_count: {}", pubkey, account_entry.ref_count(),);
                 info!(
                     "      slots: {:?}",

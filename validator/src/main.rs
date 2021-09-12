@@ -50,7 +50,9 @@ use {
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_config::SnapshotConfig,
         snapshot_utils::{
-            self, ArchiveFormat, SnapshotVersion, DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+            self, ArchiveFormat, SnapshotVersion, DEFAULT_FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
+            DEFAULT_INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
+            DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
             DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
         },
     },
@@ -1072,7 +1074,14 @@ pub fn main() {
         .to_string();
     let default_rpc_threads = num_cpus::get().to_string();
     let default_accountsdb_repl_threads = num_cpus::get().to_string();
-    let default_max_snapshot_to_retain = &DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN.to_string();
+    let default_maximum_full_snapshot_archives_to_retain =
+        &DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN.to_string();
+    let default_maximum_incremental_snapshot_archives_to_retain =
+        &DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN.to_string();
+    let default_full_snapshot_archive_interval_slots =
+        &DEFAULT_FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS.to_string();
+    let default_incremental_snapshot_archive_interval_slots =
+        &DEFAULT_INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS.to_string();
     let default_min_snapshot_download_speed = &DEFAULT_MIN_SNAPSHOT_DOWNLOAD_SPEED.to_string();
     let default_max_snapshot_download_abort = &MAX_SNAPSHOT_DOWNLOAD_ABORT.to_string();
     let default_accounts_shrink_optimize_total_space =
@@ -1415,21 +1424,48 @@ pub fn main() {
                        download from other validators"),
         )
         .arg(
-            Arg::with_name("snapshot_interval_slots")
-                .long("snapshot-interval-slots")
-                .value_name("SNAPSHOT_INTERVAL_SLOTS")
+            Arg::with_name("incremental_snapshots")
+                .long("incremental-snapshots")
+                .takes_value(false)
+                .long_help("Enable incremental snapshots by setting this flag. \
+                   When enabled, --snapshot-interval-slots will set the \
+                   incremental snapshot interval. To set the full snapshot \
+                   interval, use --full-snapshot-interval-slots.")
+         )
+        .arg(
+            Arg::with_name("incremental_snapshot_interval_slots")
+                .long("incremental-snapshot-interval-slots")
+                .alias("snapshot-interval-slots")
+                .value_name("NUMBER")
                 .takes_value(true)
-                .default_value("100")
+                .default_value(default_incremental_snapshot_archive_interval_slots)
                 .help("Number of slots between generating snapshots, \
                       0 to disable snapshots"),
         )
         .arg(
-            Arg::with_name("maximum_snapshots_to_retain")
-                .long("maximum-snapshots-to-retain")
-                .value_name("MAXIMUM_SNAPSHOTS_TO_RETAIN")
+            Arg::with_name("full_snapshot_interval_slots")
+                .long("full-snapshot-interval-slots")
+                .value_name("NUMBER")
                 .takes_value(true)
-                .default_value(default_max_snapshot_to_retain)
-                .help("The maximum number of snapshots to hold on to when purging older snapshots.")
+                .default_value(default_full_snapshot_archive_interval_slots)
+                .help("Number of slots between generating full snapshots")
+        )
+        .arg(
+            Arg::with_name("maximum_full_snapshots_to_retain")
+                .long("maximum-full-snapshots-to-retain")
+                .alias("maximum-snapshots-to-retain")
+                .value_name("NUMBER")
+                .takes_value(true)
+                .default_value(default_maximum_full_snapshot_archives_to_retain)
+                .help("The maximum number of full snapshot archives to hold on to when purging older snapshots.")
+        )
+        .arg(
+            Arg::with_name("maximum_incremental_snapshots_to_retain")
+                .long("maximum-incremental-snapshots-to-retain")
+                .value_name("NUMBER")
+                .takes_value(true)
+                .default_value(default_maximum_incremental_snapshot_archives_to_retain)
+                .help("The maximum number of incremental snapshot archives to hold on to when purging older snapshots.")
         )
         .arg(
             Arg::with_name("minimal_snapshot_download_speed")
@@ -1464,12 +1500,20 @@ pub fn main() {
                 .help("Skip the check for PoH speed."),
         )
         .arg(
-            Arg::with_name("accounts_hash_interval_slots")
-                .long("accounts-hash-slots")
-                .value_name("ACCOUNTS_HASH_INTERVAL_SLOTS")
+            Arg::with_name("accounts-hash-interval-slots")
+                .long("accounts-hash-interval-slots")
+                .value_name("NUMBER")
                 .takes_value(true)
                 .default_value("100")
-                .help("Number of slots between generating accounts hash."),
+                .help("Number of slots between generating accounts hash.")
+                .validator(|val| {
+                    if val.eq("0") {
+                        Err(String::from("Accounts hash interval cannot be zero"))
+                    }
+                    else {
+                        Ok(())
+                    }
+                }),
         )
         .arg(
             Arg::with_name("snapshot_version")
@@ -2637,10 +2681,11 @@ pub fn main() {
             .collect()
     });
 
-    let snapshot_interval_slots = value_t_or_exit!(matches, "snapshot_interval_slots", u64);
     let maximum_local_snapshot_age = value_t_or_exit!(matches, "maximum_local_snapshot_age", u64);
     let maximum_full_snapshot_archives_to_retain =
-        value_t_or_exit!(matches, "maximum_snapshots_to_retain", usize);
+        value_t_or_exit!(matches, "maximum_full_snapshots_to_retain", usize);
+    let maximum_incremental_snapshot_archives_to_retain =
+        value_t_or_exit!(matches, "maximum_incremental_snapshots_to_retain", usize);
     let minimal_snapshot_download_speed =
         value_t_or_exit!(matches, "minimal_snapshot_download_speed", f32);
     let maximum_snapshot_download_abort =
@@ -2680,36 +2725,53 @@ pub fn main() {
                     exit(1)
                 })
             });
-    validator_config.snapshot_config = Some(SnapshotConfig {
-        full_snapshot_archive_interval_slots: if snapshot_interval_slots > 0 {
-            snapshot_interval_slots
+
+    let incremental_snapshot_interval_slots =
+        value_t_or_exit!(matches, "incremental_snapshot_interval_slots", u64);
+    let (full_snapshot_archive_interval_slots, incremental_snapshot_archive_interval_slots) =
+        if incremental_snapshot_interval_slots > 0 {
+            if matches.is_present("incremental_snapshots") {
+                (
+                    value_t_or_exit!(matches, "full_snapshot_interval_slots", u64),
+                    incremental_snapshot_interval_slots,
+                )
+            } else {
+                (incremental_snapshot_interval_slots, Slot::MAX)
+            }
         } else {
-            std::u64::MAX
-        },
-        incremental_snapshot_archive_interval_slots: Slot::MAX,
+            (Slot::MAX, Slot::MAX)
+        };
+
+    validator_config.snapshot_config = Some(SnapshotConfig {
+        full_snapshot_archive_interval_slots,
+        incremental_snapshot_archive_interval_slots,
         bank_snapshots_dir,
         snapshot_archives_dir: snapshot_archives_dir.clone(),
         archive_format,
         snapshot_version,
         maximum_full_snapshot_archives_to_retain,
-        maximum_incremental_snapshot_archives_to_retain:
-            DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+        maximum_incremental_snapshot_archives_to_retain,
     });
 
     validator_config.accounts_hash_interval_slots =
-        value_t_or_exit!(matches, "accounts_hash_interval_slots", u64);
-    if validator_config.accounts_hash_interval_slots == 0 {
-        eprintln!("Accounts hash interval should not be 0.");
-        exit(1);
-    }
+        value_t_or_exit!(matches, "accounts-hash-interval-slots", u64);
     if !is_snapshot_config_valid(
-        snapshot_interval_slots,
+        full_snapshot_archive_interval_slots,
+        incremental_snapshot_archive_interval_slots,
         validator_config.accounts_hash_interval_slots,
     ) {
-        eprintln!("Invalid snapshot interval provided ({}), must be a multiple of accounts_hash_interval_slots ({})",
-            snapshot_interval_slots,
-            validator_config.accounts_hash_interval_slots,
-        );
+        eprintln!("Invalid snapshot configuration provided: snapshot intervals are incompatible. \
+            \n\t- full snapshot interval MUST be a multiple of accounts hash interval (if enabled) \
+            \n\t- incremental snapshot interval MUST be a multiple of accounts hash interval (if enabled) \
+            \n\t- full snapshot interval MUST be larger than incremental snapshot interval (if enabled) \
+            \nSnapshot configuration values: \
+            \n\tfull snapshot interval: {} \
+            \n\tincremental snapshot interval: {} \
+            \n\taccounts hash interval: {}",
+            if full_snapshot_archive_interval_slots == Slot::MAX { "disabled".to_string() } else { full_snapshot_archive_interval_slots.to_string() },
+            if incremental_snapshot_archive_interval_slots == Slot::MAX { "disabled".to_string() } else { incremental_snapshot_archive_interval_slots.to_string() },
+            validator_config.accounts_hash_interval_slots);
+
         exit(1);
     }
 
@@ -2856,7 +2918,7 @@ pub fn main() {
     solana_metrics::set_panic_hook("validator");
 
     solana_entry::entry::init_poh();
-    solana_runtime::snapshot_utils::remove_tmp_snapshot_archives(&snapshot_archives_dir);
+    snapshot_utils::remove_tmp_snapshot_archives(&snapshot_archives_dir);
 
     let identity_keypair = Arc::new(identity_keypair);
 

@@ -1,6 +1,7 @@
 use crate::{
     ancestors::Ancestors,
     contains::Contains,
+    in_mem_accounts_index::InMemAccountsIndex,
     inline_spl_token_v2_0::{self, SPL_TOKEN_ACCOUNT_MINT_OFFSET, SPL_TOKEN_ACCOUNT_OWNER_OFFSET},
     pubkey_bins::PubkeyBinCalculator16,
     secondary_index::*,
@@ -14,7 +15,7 @@ use solana_sdk::{
     pubkey::{Pubkey, PUBKEY_BYTES},
 };
 use std::{
-    collections::{btree_map::BTreeMap, hash_map::Entry, HashMap, HashSet},
+    collections::{btree_map::BTreeMap, hash_map::Entry, HashSet},
     fmt::Debug,
     ops::{
         Bound,
@@ -42,11 +43,11 @@ pub type ScanResult<T> = Result<T, ScanError>;
 pub type SlotList<T> = Vec<(Slot, T)>;
 pub type SlotSlice<'s, T> = &'s [(Slot, T)];
 pub type RefCount = u64;
-pub type AccountMap<V> = HashMap<Pubkey, V>;
+pub type AccountMap<V> = InMemAccountsIndex<V>;
 
-type AccountMapEntry<T> = Arc<AccountMapEntryInner<T>>;
+pub(crate) type AccountMapEntry<T> = Arc<AccountMapEntryInner<T>>;
 
-pub trait IsCached: 'static + Clone + Debug + PartialEq + ZeroLamport + Copy {
+pub trait IsCached: 'static + Clone + Debug + PartialEq + ZeroLamport + Copy + Default {
     fn is_cached(&self) -> bool;
 }
 
@@ -107,13 +108,13 @@ impl AccountSecondaryIndexes {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct AccountMapEntryInner<T> {
     ref_count: AtomicU64,
     pub slot_list: RwLock<SlotList<T>>,
 }
 
-impl<T> AccountMapEntryInner<T> {
+impl<T: IsCached> AccountMapEntryInner<T> {
     pub fn ref_count(&self) -> RefCount {
         self.ref_count.load(Ordering::Relaxed)
     }
@@ -245,9 +246,10 @@ impl<T: IsCached> WriteAccountMapEntry<T> {
         reclaims: &mut SlotList<T>,
         previous_slot_entry_was_cached: bool,
     ) -> bool {
+        // (possibly) non-ideal clone of arc here
         if let Some(current) = r_account_maps.get(pubkey) {
             Self::lock_and_update_slot_list(
-                current,
+                &current,
                 new_value,
                 reclaims,
                 previous_slot_entry_was_cached,
@@ -629,22 +631,22 @@ pub struct AccountsIndexIterator<'a, T: IsCached> {
 }
 
 impl<'a, T: IsCached> AccountsIndexIterator<'a, T> {
-    fn range<'b, R>(
-        map: &'b AccountMapsReadLock<'b, T>,
+    fn range<R>(
+        map: &AccountMapsReadLock<T>,
         range: R,
         collect_all_unsorted: bool,
-    ) -> Vec<(&'b Pubkey, &'b AccountMapEntry<T>)>
+    ) -> Vec<(Pubkey, AccountMapEntry<T>)>
     where
         R: RangeBounds<Pubkey>,
     {
         let mut result = Vec::with_capacity(map.len());
-        for (k, v) in map.iter() {
-            if range.contains(k) {
+        for (k, v) in map.items() {
+            if range.contains(&k) {
                 result.push((k, v));
             }
         }
         if !collect_all_unsorted {
-            result.sort_unstable_by(|a, b| a.0.cmp(b.0));
+            result.sort_unstable_by(|a, b| a.0.cmp(&b.0));
         }
         result
     }
@@ -734,7 +736,7 @@ impl<'a, T: IsCached> Iterator for AccountsIndexIterator<'a, T> {
                 if chunk.len() >= ITER_BATCH_SIZE && !self.collect_all_unsorted {
                     break 'outer;
                 }
-                let item = (*pubkey, account_map_entry.clone());
+                let item = (pubkey, account_map_entry);
                 chunk.push(item);
             }
         }
@@ -755,7 +757,7 @@ pub trait ZeroLamport {
     fn is_zero_lamport(&self) -> bool;
 }
 
-type MapType<T> = AccountMap<AccountMapEntry<T>>;
+type MapType<T> = AccountMap<T>;
 type LockMapType<T> = Vec<RwLock<MapType<T>>>;
 type LockMapTypeSlice<T> = [RwLock<MapType<T>>];
 type AccountMapsWriteLock<'a, T> = RwLockWriteGuard<'a, MapType<T>>;
@@ -1190,7 +1192,6 @@ impl<T: IsCached> AccountsIndex<T> {
         lock: &AccountMapsReadLock<'_, T>,
     ) -> Option<ReadAccountMapEntry<T>> {
         lock.get(pubkey)
-            .cloned()
             .map(ReadAccountMapEntry::from_account_map_entry)
     }
 
@@ -1199,7 +1200,6 @@ impl<T: IsCached> AccountsIndex<T> {
             .read()
             .unwrap()
             .get(pubkey)
-            .cloned()
             .map(WriteAccountMapEntry::from_account_map_entry)
     }
 
@@ -1458,7 +1458,6 @@ impl<T: IsCached> AccountsIndex<T> {
             .unwrap();
         let account = read_lock
             .get(pubkey)
-            .cloned()
             .map(ReadAccountMapEntry::from_account_map_entry);
 
         match account {
@@ -1586,48 +1585,47 @@ impl<T: IsCached> AccountsIndex<T> {
             .into_iter()
             .map(|pubkey_bin| (pubkey_bin, Vec::with_capacity(expected_items_per_bin)))
             .collect::<Vec<_>>();
-        items.for_each(|(pubkey, account_info)| {
-            let bin = self.bin_calculator.bin_from_pubkey(&pubkey);
-            // this value is equivalent to what update() below would have created if we inserted a new item
-            let is_zero_lamport = account_info.is_zero_lamport();
-            let info = WriteAccountMapEntry::new_entry_after_update(slot, account_info);
-            binned[bin].1.push((pubkey, info, is_zero_lamport));
-        });
+        let mut dirty_pubkeys = items
+            .filter_map(|(pubkey, account_info)| {
+                let bin = self.bin_calculator.bin_from_pubkey(&pubkey);
+                // this value is equivalent to what update() below would have created if we inserted a new item
+                let is_zero_lamport = account_info.is_zero_lamport();
+                let result = if is_zero_lamport { Some(pubkey) } else { None };
+
+                let info = WriteAccountMapEntry::new_entry_after_update(slot, account_info);
+                binned[bin].1.push((pubkey, info));
+                result
+            })
+            .collect::<Vec<_>>();
         binned.retain(|x| !x.1.is_empty());
 
         let insertion_time = AtomicU64::new(0);
 
-        let dirty_pubkeys = binned
-            .into_iter()
-            .map(|(pubkey_bin, items)| {
-                let mut _reclaims = SlotList::new();
+        binned.into_iter().for_each(|(pubkey_bin, items)| {
+            let mut _reclaims = SlotList::new();
 
-                // big enough so not likely to re-allocate, small enough to not over-allocate by too much
-                // this assumes 10% of keys are duplicates. This vector will be flattened below.
-                let mut dirty_pubkeys = Vec::with_capacity(items.len() / 10);
-                let mut w_account_maps = self.account_maps[pubkey_bin].write().unwrap();
-                let mut insert_time = Measure::start("insert_into_primary_index");
-                items
-                    .into_iter()
-                    .for_each(|(pubkey, new_item, is_zero_lamport)| {
-                        let already_exists = self.insert_new_entry_if_missing_with_lock(
-                            pubkey,
-                            &mut w_account_maps,
-                            new_item,
-                        );
-                        if let Some((mut w_account_entry, account_info, pubkey)) = already_exists {
-                            w_account_entry.update(slot, account_info, &mut _reclaims);
-                            dirty_pubkeys.push(pubkey);
-                        } else if is_zero_lamport {
-                            dirty_pubkeys.push(pubkey);
-                        }
-                    });
-                insert_time.stop();
-                insertion_time.fetch_add(insert_time.as_us(), Ordering::Relaxed);
-                dirty_pubkeys
-            })
-            .flatten()
-            .collect::<Vec<_>>();
+            // big enough so not likely to re-allocate, small enough to not over-allocate by too much
+            // this assumes 10% of keys are duplicates. This vector will be flattened below.
+            let mut w_account_maps = self.account_maps[pubkey_bin].write().unwrap();
+            let mut insert_time = Measure::start("insert_into_primary_index");
+            items.into_iter().for_each(|(pubkey, new_item)| {
+                let already_exists = self.insert_new_entry_if_missing_with_lock(
+                    pubkey,
+                    &mut w_account_maps,
+                    new_item,
+                );
+                if let Some((mut w_account_entry, account_info, pubkey)) = already_exists {
+                    let is_zero_lamport = account_info.is_zero_lamport();
+                    w_account_entry.update(slot, account_info, &mut _reclaims);
+                    if !is_zero_lamport {
+                        // zero lamports were already added to dirty_pubkeys above
+                        dirty_pubkeys.push(pubkey);
+                    }
+                }
+            });
+            insert_time.stop();
+            insertion_time.fetch_add(insert_time.as_us(), Ordering::Relaxed);
+        });
 
         (dirty_pubkeys, insertion_time.load(Ordering::Relaxed))
     }
