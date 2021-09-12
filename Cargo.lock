@@ -4144,6 +4144,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-accountsdb-plugin-intf"
+version = "1.8.0"
+dependencies = [
+ "log 0.4.14",
+ "solana-logger 1.8.0",
+ "solana-metrics",
+ "solana-sdk",
+]
+
+[[package]]
 name = "solana-banking-bench"
 version = "1.8.0"
 dependencies = [
