@@ -55,6 +55,7 @@ export enum PROGRAM_NAMES {
   MANGO_2 = "Mango Program v2",
   MANGO_3 = "Mango Program v3",
   MARINADE = "Marinade Staking Program",
+  MERCURIAL = "Mercurial Stable Swap Program",
   METAPLEX = "Metaplex Program",
   NFT_AUCTION = "NFT Auction Program",
   NFT_CANDY_MACHINE = "NFT Candy Machine Program",
@@ -77,7 +78,6 @@ export enum PROGRAM_NAMES {
   STEP_SWAP = "Step Finance Swap Program",
   SWITCHBOARD = "Switchboard Oracle Program",
   WORMHOLE = "Wormhole",
-  MERCURIAL = "Mercurial Stable Swap Program",
 }
 
 const ALL_CLUSTERS = [
@@ -122,6 +122,7 @@ export const PROGRAM_DEPLOYMENTS = {
   [PROGRAM_NAMES.MANGO_2]: MAINNET_ONLY,
   [PROGRAM_NAMES.MANGO_3]: MAINNET_ONLY,
   [PROGRAM_NAMES.MARINADE]: MAINNET_ONLY,
+  [PROGRAM_NAMES.MERCURIAL]: [Cluster.Devnet, Cluster.MainnetBeta] as Cluster[],
   [PROGRAM_NAMES.METAPLEX]: LIVE_CLUSTERS,
   [PROGRAM_NAMES.NFT_AUCTION]: LIVE_CLUSTERS,
   [PROGRAM_NAMES.NFT_CANDY_MACHINE]: LIVE_CLUSTERS,
@@ -150,7 +151,6 @@ export const PROGRAM_DEPLOYMENTS = {
   [PROGRAM_NAMES.STEP_SWAP]: MAINNET_ONLY,
   [PROGRAM_NAMES.SWITCHBOARD]: MAINNET_ONLY,
   [PROGRAM_NAMES.WORMHOLE]: MAINNET_ONLY,
-  [PROGRAM_NAMES.MERCURIAL]: [Cluster.Devnet, Cluster.MainnetBeta] as Cluster[],
 } as const;
 
 export const PROGRAM_NAME_BY_ID = {
@@ -185,6 +185,7 @@ export const PROGRAM_NAME_BY_ID = {
   "5fNfvyp5czQVX77yoACa3JJVEhdRaWjPuazuWgjhTqEH": PROGRAM_NAMES.MANGO_2,
   mv3ekLzLbnVPNxjSKvqBpU3ZeZXPQdEC3bp5MDEBG68: PROGRAM_NAMES.MANGO_3,
   MarBmsSgKXdrN1egZf5sqe1TMai9K1rChYNDJgjq7aD: PROGRAM_NAMES.MARINADE,
+  MERLuDFBMmsHnsBPZw2sDQZHvXFMwp8EdjudcU2HKky: PROGRAM_NAMES.MERCURIAL,
   p1exdMJcjVao65QdewkaZRUnU6VPSXhus9n2GzWfh98: PROGRAM_NAMES.METAPLEX,
   auctxRXPeJoc4817jDhf4HbjnhEcr1cCXenosMhK5R8: PROGRAM_NAMES.NFT_AUCTION,
   cndyAnrLdpjq1Ssp1z8xxDsB8dxe7u4HL5Nxi2K5WXZ: PROGRAM_NAMES.NFT_CANDY_MACHINE,
@@ -207,7 +208,6 @@ export const PROGRAM_NAME_BY_ID = {
   "22Y43yTVxuUkoRKdm9thyRhQ3SdgQS7c7kB6UNCiaczD": PROGRAM_NAMES.STEP_SWAP,
   DtmE9D2CSB4L5D6A15mraeEjrGMm6auWVzgaD8hK2tZM: PROGRAM_NAMES.SWITCHBOARD,
   WormT3McKhFJ2RkiGpdw9GKvNCrB2aB54gb2uV9MfQC: PROGRAM_NAMES.WORMHOLE,
-  MERLuDFBMmsHnsBPZw2sDQZHvXFMwp8EdjudcU2HKky: PROGRAM_NAMES.MERCURIAL,
 } as const;
 
 export type LoaderName = typeof LOADER_IDS[keyof typeof LOADER_IDS];
