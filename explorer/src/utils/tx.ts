@@ -150,10 +150,7 @@ export const PROGRAM_DEPLOYMENTS = {
   [PROGRAM_NAMES.STEP_SWAP]: MAINNET_ONLY,
   [PROGRAM_NAMES.SWITCHBOARD]: MAINNET_ONLY,
   [PROGRAM_NAMES.WORMHOLE]: MAINNET_ONLY,
-  [PROGRAM_NAMES.MERCURIAL]: [
-    Cluster.Devnet,
-    Cluster.MainnetBeta,
-  ] as Cluster[],
+  [PROGRAM_NAMES.MERCURIAL]: [Cluster.Devnet, Cluster.MainnetBeta] as Cluster[],
 } as const;
 
 export const PROGRAM_NAME_BY_ID = {
