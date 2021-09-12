@@ -42,6 +42,18 @@ impl<T: IsCached> InMemAccountsIndex<T> {
         self.map.remove(key);
     }
 
+    // If the slot list for pubkey exists in the index and is empty, remove the index entry for pubkey and return true.
+    // Return false otherwise.
+    pub fn remove_if_slot_list_empty(&mut self, pubkey: Pubkey) -> bool {
+        if let Entry::Occupied(index_entry) = self.map.entry(pubkey) {
+            if index_entry.get().slot_list.read().unwrap().is_empty() {
+                index_entry.remove();
+                return true;
+            }
+        }
+        false
+    }
+
     pub fn len(&self) -> usize {
         self.map.len()
     }
