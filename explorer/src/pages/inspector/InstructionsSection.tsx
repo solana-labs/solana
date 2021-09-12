@@ -5,6 +5,7 @@ import { TableCardBody } from "components/common/TableCardBody";
 import { AddressWithContext, programValidator } from "./AddressWithContext";
 import { useCluster } from "providers/cluster";
 import { programLabel } from "utils/tx";
+import { HexData } from "components/common/HexData";
 
 export function InstructionsSection({ message }: { message: Message }) {
   return (
@@ -29,19 +30,6 @@ function InstructionCard({
   const { cluster } = useCluster();
   const programId = message.accountKeys[ix.programIdIndex];
   const programName = programLabel(programId.toBase58(), cluster) || "Unknown";
-
-  let data: string = "No data";
-  if (ix.data) {
-    data = "";
-
-    const chunks = [];
-    const hexString = bs58.decode(ix.data).toString("hex");
-    for (let i = 0; i < hexString.length; i += 2) {
-      chunks.push(hexString.slice(i, i + 2));
-    }
-
-    data = chunks.join(" ");
-  }
 
   return (
     <div className="card" id={`instruction-index-${index + 1}`} key={index}>
@@ -104,9 +92,7 @@ function InstructionCard({
               Instruction Data <span className="text-muted">(Hex)</span>
             </td>
             <td className="text-lg-right">
-              <pre className="d-inline-block text-left mb-0 data-wrap">
-                {data}
-              </pre>
+              <HexData raw={bs58.decode(ix.data)} />
             </td>
           </tr>
         </TableCardBody>
