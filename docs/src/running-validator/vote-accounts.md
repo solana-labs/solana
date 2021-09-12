@@ -215,4 +215,5 @@ No special handling is required. Use the `solana vote-authorize-withdrawer` comm
 
 A vote account can be closed with the
 [close-vote-account](../cli/usage.md#solana-close-vote-account) command.
-Closing a vote account requires supplying a recipient address to withdraw all remaining SOL funds.
+Closing a vote account withdraws all remaining SOL funds to a supplied recipient address.
+It is not possible to close a vote account with active stake.
