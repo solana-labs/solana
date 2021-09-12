@@ -1,9 +1,11 @@
-use crate::accounts_index::{AccountMapEntry, IsCached, WriteAccountMapEntry};
+use crate::accounts_index::{
+    AccountMapEntry, AccountMapEntryInner, IsCached, SlotList, WriteAccountMapEntry,
+};
 use crate::accounts_index_storage::AccountsIndexStorage;
 use crate::bucket_map_holder::BucketMapHolder;
 use crate::bucket_map_holder_stats::BucketMapHolderStats;
 use solana_measure::measure::Measure;
-use solana_sdk::pubkey::Pubkey;
+use solana_sdk::{clock::Slot, pubkey::Pubkey};
 use std::collections::{
     hash_map::{Entry, Keys},
     HashMap,
@@ -88,6 +90,85 @@ impl<T: IsCached> InMemAccountsIndex<T> {
             }
         }
         false
+    }
+    pub fn upsert(
+        &mut self,
+        pubkey: &Pubkey,
+        new_value: AccountMapEntry<T>,
+        reclaims: &mut SlotList<T>,
+        previous_slot_entry_was_cached: bool,
+    ) {
+        match self.map.entry(*pubkey) {
+            Entry::Occupied(mut occupied) => {
+                let current = occupied.get_mut();
+                Self::lock_and_update_slot_list(
+                    current,
+                    &new_value,
+                    reclaims,
+                    previous_slot_entry_was_cached,
+                );
+            }
+            Entry::Vacant(vacant) => {
+                vacant.insert(new_value);
+            }
+        }
+    }
+
+    pub fn lock_and_update_slot_list(
+        current: &Arc<AccountMapEntryInner<T>>,
+        new_value: &AccountMapEntry<T>,
+        reclaims: &mut SlotList<T>,
+        previous_slot_entry_was_cached: bool,
+    ) {
+        let mut slot_list = current.slot_list.write().unwrap();
+        let (slot, new_entry) = new_value.slot_list.write().unwrap().remove(0);
+        let addref = Self::update_slot_list(
+            &mut slot_list,
+            slot,
+            new_entry,
+            reclaims,
+            previous_slot_entry_was_cached,
+        );
+        if addref {
+            current.add_un_ref(true);
+        }
+    }
+
+    // modifies slot_list
+    // returns true if caller should addref
+    pub fn update_slot_list(
+        list: &mut SlotList<T>,
+        slot: Slot,
+        account_info: T,
+        reclaims: &mut SlotList<T>,
+        previous_slot_entry_was_cached: bool,
+    ) -> bool {
+        let mut addref = !account_info.is_cached();
+
+        // find other dirty entries from the same slot
+        for list_index in 0..list.len() {
+            let (s, previous_update_value) = &list[list_index];
+            if *s == slot {
+                let previous_was_cached = previous_update_value.is_cached();
+                addref = addref && previous_was_cached;
+
+                let mut new_item = (slot, account_info);
+                std::mem::swap(&mut new_item, &mut list[list_index]);
+                if previous_slot_entry_was_cached {
+                    assert!(previous_was_cached);
+                } else {
+                    reclaims.push(new_item);
+                }
+                list[(list_index + 1)..]
+                    .iter()
+                    .for_each(|item| assert!(item.0 != slot));
+                return addref;
+            }
+        }
+
+        // if we make it here, we did not find the slot in the list
+        list.push((slot, account_info));
+        addref
     }
 
     pub fn len(&self) -> usize {

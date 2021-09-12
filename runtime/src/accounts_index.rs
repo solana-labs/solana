@@ -16,7 +16,7 @@ use solana_sdk::{
     pubkey::{Pubkey, PUBKEY_BYTES},
 };
 use std::{
-    collections::{btree_map::BTreeMap, hash_map::Entry, HashSet},
+    collections::{btree_map::BTreeMap, HashSet},
     fmt::Debug,
     ops::{
         Bound,
@@ -215,29 +215,6 @@ impl<T: IsCached> WriteAccountMapEntry<T> {
         })
     }
 
-    pub fn upsert<'a>(
-        mut w_account_maps: AccountMapsWriteLock<'a, T>,
-        pubkey: &Pubkey,
-        new_value: AccountMapEntry<T>,
-        reclaims: &mut SlotList<T>,
-        previous_slot_entry_was_cached: bool,
-    ) {
-        match w_account_maps.entry(*pubkey) {
-            Entry::Occupied(mut occupied) => {
-                let current = occupied.get_mut();
-                Self::lock_and_update_slot_list(
-                    current,
-                    &new_value,
-                    reclaims,
-                    previous_slot_entry_was_cached,
-                );
-            }
-            Entry::Vacant(vacant) => {
-                vacant.insert(new_value);
-            }
-        }
-    }
-
     // returns true if upsert was successful. new_value is modified in this case. new_value contains a RwLock
     // otherwise, new_value has not been modified and the pubkey has to be added to the maps with a write lock. call upsert_new
     pub fn update_key_if_exists<'a>(
@@ -249,7 +226,7 @@ impl<T: IsCached> WriteAccountMapEntry<T> {
     ) -> bool {
         // (possibly) non-ideal clone of arc here
         if let Some(current) = r_account_maps.get(pubkey) {
-            Self::lock_and_update_slot_list(
+            InMemAccountsIndex::lock_and_update_slot_list(
                 &current,
                 new_value,
                 reclaims,
@@ -261,70 +238,14 @@ impl<T: IsCached> WriteAccountMapEntry<T> {
         }
     }
 
-    fn lock_and_update_slot_list(
-        current: &Arc<AccountMapEntryInner<T>>,
-        new_value: &AccountMapEntry<T>,
-        reclaims: &mut SlotList<T>,
-        previous_slot_entry_was_cached: bool,
-    ) {
-        let mut slot_list = current.slot_list.write().unwrap();
-        let (slot, new_entry) = new_value.slot_list.write().unwrap().remove(0);
-        let addref = Self::update_slot_list(
-            &mut slot_list,
-            slot,
-            new_entry,
-            reclaims,
-            previous_slot_entry_was_cached,
-        );
-        if addref {
-            current.add_un_ref(true);
-        }
-    }
-
-    // modifies slot_list
-    // returns true if caller should addref
-    pub fn update_slot_list(
-        list: &mut SlotList<T>,
-        slot: Slot,
-        account_info: T,
-        reclaims: &mut SlotList<T>,
-        previous_slot_entry_was_cached: bool,
-    ) -> bool {
-        let mut addref = !account_info.is_cached();
-
-        // find other dirty entries from the same slot
-        for list_index in 0..list.len() {
-            let (s, previous_update_value) = &list[list_index];
-            if *s == slot {
-                let previous_was_cached = previous_update_value.is_cached();
-                addref = addref && previous_was_cached;
-
-                let mut new_item = (slot, account_info);
-                std::mem::swap(&mut new_item, &mut list[list_index]);
-                if previous_slot_entry_was_cached {
-                    assert!(previous_was_cached);
-                } else {
-                    reclaims.push(new_item);
-                }
-                list[(list_index + 1)..]
-                    .iter()
-                    .for_each(|item| assert!(item.0 != slot));
-                return addref;
-            }
-        }
-
-        // if we make it here, we did not find the slot in the list
-        list.push((slot, account_info));
-        addref
-    }
-
     // Try to update an item in the slot list the given `slot` If an item for the slot
     // already exists in the list, remove the older item, add it to `reclaims`, and insert
     // the new item.
     pub fn update(&mut self, slot: Slot, account_info: T, reclaims: &mut SlotList<T>) {
         let mut addref = !account_info.is_cached();
         self.slot_list_mut(|list| {
-            addref = Self::update_slot_list(list, slot, account_info, reclaims, false);
+            addref =
+                InMemAccountsIndex::update_slot_list(list, slot, account_info, reclaims, false);
         });
         if addref {
             // If it's the first non-cache insert, also bump the stored ref count
@@ -1629,14 +1550,8 @@ impl<T: IsCached> AccountsIndex<T> {
             reclaims,
             previous_slot_entry_was_cached,
         ) {
-            let w_account_maps = map.write().unwrap();
-            WriteAccountMapEntry::upsert(
-                w_account_maps,
-                pubkey,
-                new_item,
-                reclaims,
-                previous_slot_entry_was_cached,
-            );
+            let mut w_account_maps = map.write().unwrap();
+            w_account_maps.upsert(pubkey, new_item, reclaims, previous_slot_entry_was_cached);
         }
         self.update_secondary_indexes(pubkey, account_owner, account_data, account_indexes);
     }
@@ -2964,14 +2879,14 @@ pub mod tests {
         );
 
         assert_eq!(0, account_maps_len_expensive(&index));
-        let w_account_maps = index.get_account_maps_write_lock(&key.pubkey());
-        WriteAccountMapEntry::upsert(
-            w_account_maps,
+        let mut w_account_maps = index.get_account_maps_write_lock(&key.pubkey());
+        w_account_maps.upsert(
             &key.pubkey(),
             new_entry,
             &mut SlotList::default(),
             UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
+        drop(w_account_maps);
         assert_eq!(1, account_maps_len_expensive(&index));
 
         let mut ancestors = Ancestors::default();
