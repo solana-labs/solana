@@ -36,21 +36,6 @@ impl<T: IsCached> InMemAccountsIndex<T> {
     pub fn new_bucket_map_holder() -> Arc<BucketMapHolder> {
         Arc::new(BucketMapHolder::new())
     }
-
-    pub fn entry(&mut self, pubkey: Pubkey) -> Entry<K, AccountMapEntry<T>> {
-        let m = Measure::start("entry");
-        let result = self.map.entry(pubkey);
-        let stats = &self.storage.stats;
-        let (count, time) = if matches!(result, Entry::Occupied(_)) {
-            (&stats.gets_from_mem, &stats.get_mem_us)
-        } else {
-            (&stats.gets_missing, &stats.get_missing_us)
-        };
-        Self::update_time_stat(time, m);
-        Self::update_stat(count, 1);
-        result
-    }
-
     pub fn items<R>(&self, range: &Option<&R>) -> Vec<(K, AccountMapEntry<T>)>
     where
         R: RangeBounds<Pubkey> + std::fmt::Debug,
