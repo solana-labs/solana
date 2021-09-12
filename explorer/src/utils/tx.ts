@@ -134,8 +134,14 @@ export const PROGRAM_DEPLOYMENTS = {
   [PROGRAM_NAMES.RAYDIUM_LP_1]: MAINNET_ONLY,
   [PROGRAM_NAMES.RAYDIUM_LP_2]: MAINNET_ONLY,
   [PROGRAM_NAMES.RAYDIUM_STAKING]: MAINNET_ONLY,
-  [PROGRAM_NAMES.SABER_ROUTER]: [Cluster.Devnet, Cluster.MainnetBeta] as Cluster[],
-  [PROGRAM_NAMES.SABER_SWAP]: [Cluster.Devnet, Cluster.MainnetBeta] as Cluster[],
+  [PROGRAM_NAMES.SABER_ROUTER]: [
+    Cluster.Devnet,
+    Cluster.MainnetBeta,
+  ] as Cluster[],
+  [PROGRAM_NAMES.SABER_SWAP]: [
+    Cluster.Devnet,
+    Cluster.MainnetBeta,
+  ] as Cluster[],
   [PROGRAM_NAMES.SERUM_1]: MAINNET_ONLY,
   [PROGRAM_NAMES.SERUM_2]: MAINNET_ONLY,
   [PROGRAM_NAMES.SERUM_3]: MAINNET_ONLY,
