@@ -1710,11 +1710,7 @@ impl<T: IsCached> AccountsIndex<T> {
         // remove() below.
         if is_slot_list_empty {
             let mut w_maps = self.get_account_maps_write_lock(pubkey);
-            if let Some(x) = w_maps.get(pubkey) {
-                if x.slot_list.read().unwrap().is_empty() {
-                    w_maps.remove(pubkey);
-                }
-            }
+            w_maps.remove_if_slot_list_empty(*pubkey);
         }
     }
 
