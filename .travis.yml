@@ -68,26 +68,6 @@ jobs:
     #  before_install:
     #    - sudo apt-get install libssl-dev libudev-dev
 
-    # explorer pull request
-    - name: "explorer"
-      if: type = pull_request AND branch = master
-
-      language: node_js
-      node_js:
-        - "lts/*"
-
-      cache:
-        directories:
-          - ~/.npm
-
-      before_install:
-        - .travis/affects.sh explorer/ .travis || travis_terminate 0
-        - cd explorer
-
-      script:
-        - npm run build
-        - npm run format
-
     # web3.js pull request
     - name: "web3.js"
       if: type = pull_request AND branch = master
