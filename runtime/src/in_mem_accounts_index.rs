@@ -10,31 +10,31 @@ type K = Pubkey;
 
 // one instance of this represents one bin of the accounts index.
 #[derive(Debug, Default)]
-pub struct InMemAccountsIndex<V: IsCached> {
+pub struct InMemAccountsIndex<T: IsCached> {
     // backing store
-    map: HashMap<Pubkey, AccountMapEntry<V>>,
+    map: HashMap<Pubkey, AccountMapEntry<T>>,
 }
 
-impl<V: IsCached> InMemAccountsIndex<V> {
+impl<T: IsCached> InMemAccountsIndex<T> {
     pub fn new() -> Self {
         Self {
             map: HashMap::new(),
         }
     }
 
-    pub fn entry(&mut self, pubkey: Pubkey) -> Entry<K, AccountMapEntry<V>> {
+    pub fn entry(&mut self, pubkey: Pubkey) -> Entry<K, AccountMapEntry<T>> {
         self.map.entry(pubkey)
     }
 
-    pub fn items(&self) -> Vec<(K, AccountMapEntry<V>)> {
+    pub fn items(&self) -> Vec<(K, AccountMapEntry<T>)> {
         self.map.iter().map(|(k, v)| (*k, v.clone())).collect()
     }
 
-    pub fn keys(&self) -> Keys<K, AccountMapEntry<V>> {
+    pub fn keys(&self) -> Keys<K, AccountMapEntry<T>> {
         self.map.keys()
     }
 
-    pub fn get(&self, key: &K) -> Option<AccountMapEntry<V>> {
+    pub fn get(&self, key: &K) -> Option<AccountMapEntry<T>> {
         self.map.get(key).cloned()
     }
 
