@@ -77,6 +77,7 @@ export enum PROGRAM_NAMES {
   STEP_SWAP = "Step Finance Swap Program",
   SWITCHBOARD = "Switchboard Oracle Program",
   WORMHOLE = "Wormhole",
+  MERCURIAL = "Mercurial Stable Swap Program",
 }
 
 const ALL_CLUSTERS = [
@@ -149,6 +150,10 @@ export const PROGRAM_DEPLOYMENTS = {
   [PROGRAM_NAMES.STEP_SWAP]: MAINNET_ONLY,
   [PROGRAM_NAMES.SWITCHBOARD]: MAINNET_ONLY,
   [PROGRAM_NAMES.WORMHOLE]: MAINNET_ONLY,
+  [PROGRAM_NAMES.MERCURIAL]: [
+    Cluster.Devnet,
+    Cluster.MainnetBeta,
+  ] as Cluster[],
 } as const;
 
 export const PROGRAM_NAME_BY_ID = {
@@ -205,6 +210,7 @@ export const PROGRAM_NAME_BY_ID = {
   "22Y43yTVxuUkoRKdm9thyRhQ3SdgQS7c7kB6UNCiaczD": PROGRAM_NAMES.STEP_SWAP,
   DtmE9D2CSB4L5D6A15mraeEjrGMm6auWVzgaD8hK2tZM: PROGRAM_NAMES.SWITCHBOARD,
   WormT3McKhFJ2RkiGpdw9GKvNCrB2aB54gb2uV9MfQC: PROGRAM_NAMES.WORMHOLE,
+  MERLuDFBMmsHnsBPZw2sDQZHvXFMwp8EdjudcU2HKky: PROGRAM_NAMES.MERCURIAL,
 } as const;
 
 export type LoaderName = typeof LOADER_IDS[keyof typeof LOADER_IDS];
