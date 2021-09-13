@@ -6,6 +6,7 @@ use {
     std::error::Error,
 };
 
+#[derive(Default)]
 pub struct AccountsDbPluginManager {
     plugins: Vec<Box<dyn AccountsDbPlugin>>,
     libs: Vec<Library>,
@@ -19,6 +20,10 @@ impl AccountsDbPluginManager {
         }
     }
 
+    /// # Safety
+    ///
+    /// This function load the dynamically linked library specified in the path. The library
+    /// must do necessary initializations.
     pub unsafe fn load_plugin(
         &mut self,
         libpath: &str,

@@ -1,7 +1,9 @@
+use std::io;
 /// The interface for AccountsDb plugins. A plugin must implement
 /// the AccountsDbPlugin trait to work with the Solana Validator.
 /// In addition the dynamic libraray must export a "C" function _create_plugin which
 /// creates the implementation of the plugin.
+use thiserror::Error;
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct ReplicaAccountMeta {
@@ -19,23 +21,20 @@ pub struct ReplicaAccountInfo {
     pub data: Vec<u8>,
 }
 
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum AccountsDbPluginError {
-    AccountsUpdateError{ msg: String},
+    #[error("Error with opening config file.")]
+    ConfigFileOpenError(#[from] io::Error),
+
+    #[error("Error with opening config file.")]
+    ConfigFileReadError { msg: String },
+
+    #[error("Error with connecting to the backend data store.")]
+    DataStoreConnectionError { msg: String },
+
+    #[error("Error with updating account.")]
+    AccountsUpdateError { msg: String },
 }
-
-
-impl std::error::Error for AccountsDbPluginError {
-}
-
-impl std::fmt::Display for AccountsDbPluginError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match *self {
-            AccountsDbPluginError::AccountsUpdateError { ref msg } => write!(f, "{}", msg),
-        }
-    }
-}
-
 
 pub type Result<T> = std::result::Result<T, AccountsDbPluginError>;
 
@@ -47,7 +46,9 @@ pub trait AccountsDbPlugin {
     /// The _config_file points to the file name contains the name of the
     /// of the config file. The framework does not stipulate the format of the
     /// file -- it is totoally up to the plugin implementation.
-    fn on_load(&mut self, _config_file: &str) -> Result<()> {Ok(())}
+    fn on_load(&mut self, _config_file: &str) -> Result<()> {
+        Ok(())
+    }
 
     /// The callback called right before a plugin is unloaded by the system
     /// Used for doing cleanup before being unloaded.

@@ -11,6 +11,7 @@ documentation = "https://docs.rs/solana-validator"
 
 [dependencies]
 log = "0.4.11"
+thiserror = "1.0.29"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
