@@ -32,6 +32,7 @@ use solana_sdk::{
     account::from_account,
     account_utils::StateMut,
     clock::{Clock, UnixTimestamp, SECONDS_PER_DAY},
+    commitment_config::CommitmentConfig,
     epoch_schedule::EpochSchedule,
     message::Message,
     pubkey::Pubkey,
@@ -1353,6 +1354,15 @@ pub fn process_stake_authorize(
 ) -> ProcessResult {
     let mut ixs = Vec::new();
     let custodian = custodian.map(|index| config.signers[index]);
+    let current_stake_account = if !sign_only {
+        Some(get_stake_account_state(
+            rpc_client,
+            stake_account_pubkey,
+            config.commitment,
+        )?)
+    } else {
+        None
+    };
     for StakeAuthorizationIndexed {
         authorization_type,
         new_authority_pubkey,
@@ -1365,6 +1375,29 @@ pub fn process_stake_authorize(
             (new_authority_pubkey, "new_authorized_pubkey".to_string()),
         )?;
         let authority = config.signers[*authority];
+        if let Some(current_stake_account) = current_stake_account {
+            let authorized = match current_stake_account {
+                StakeState::Stake(Meta { authorized, .. }, ..) => Some(authorized),
+                StakeState::Initialized(Meta { authorized, .. }) => Some(authorized),
+                _ => None,
+            };
+            if let Some(authorized) = authorized {
+                match authorization_type {
+                    StakeAuthorize::Staker => {
+                        check_stake_current_authority(&authorized.staker, &authority.pubkey())?;
+                    }
+                    StakeAuthorize::Withdrawer => {
+                        check_stake_current_authority(&authorized.withdrawer, &authority.pubkey())?;
+                    }
+                }
+            } else {
+                return Err(CliError::RpcRequestError(format!(
+                    "{:?} is not an Initialized or Delegated stake account",
+                    stake_account_pubkey,
+                ))
+                .into());
+            }
+        }
         if new_authority_signer.is_some() {
             ixs.push(stake_instruction::authorize_checked(
                 stake_account_pubkey, // stake account to update
@@ -2031,6 +2064,47 @@ pub fn build_stake_state(
                 ..CliStakeState::default()
             }
         }
+    }
+}
+
+fn get_stake_account_state(
+    rpc_client: &RpcClient,
+    stake_account_pubkey: &Pubkey,
+    commitment_config: CommitmentConfig,
+) -> Result<StakeState, Box<dyn std::error::Error>> {
+    let stake_account = rpc_client
+        .get_account_with_commitment(stake_account_pubkey, commitment_config)?
+        .value
+        .ok_or_else(|| {
+            CliError::RpcRequestError(format!("{:?} account does not exist", stake_account_pubkey))
+        })?;
+    if stake_account.owner != stake::program::id() {
+        return Err(CliError::RpcRequestError(format!(
+            "{:?} is not a stake account",
+            stake_account_pubkey,
+        ))
+        .into());
+    }
+    stake_account.state().map_err(|err| {
+        CliError::RpcRequestError(format!(
+            "Account data could not be deserialized to stake state: {}",
+            err
+        ))
+        .into()
+    })
+}
+
+fn check_stake_current_authority(
+    stake_account_current_authority: &Pubkey,
+    provided_current_authority: &Pubkey,
+) -> Result<(), CliError> {
+    if stake_account_current_authority != provided_current_authority {
+        Err(CliError::RpcRequestError(format!(
+            "Invalid current authority provided: {:?}, expected {:?}",
+            provided_current_authority, stake_account_current_authority
+        )))
+    } else {
+        Ok(())
     }
 }
 
