@@ -1925,6 +1925,26 @@ pub fn process_stake_set_lockup(
     let nonce_authority = config.signers[nonce_authority];
     let fee_payer = config.signers[fee_payer];
 
+    if !sign_only {
+        let state = get_stake_account_state(rpc_client, stake_account_pubkey, config.commitment)?;
+        let lockup = match state {
+            StakeState::Stake(Meta { lockup, .. }, ..) => Some(lockup),
+            StakeState::Initialized(Meta { lockup, .. }) => Some(lockup),
+            _ => None,
+        };
+        if let Some(lockup) = lockup {
+            if lockup.custodian != Pubkey::default() {
+                check_stake_current_authority(&lockup.custodian, &custodian.pubkey())?;
+            }
+        } else {
+            return Err(CliError::RpcRequestError(format!(
+                "{:?} is not an Initialized or Delegated stake account",
+                stake_account_pubkey,
+            ))
+            .into());
+        }
+    }
+
     let message = if let Some(nonce_account) = &nonce_account {
         Message::new_with_nonce(
             ixs,
