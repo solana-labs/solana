@@ -90,11 +90,13 @@ impl<T: IsCached> InMemAccountsIndex<T> {
         if let Entry::Occupied(index_entry) = self.entry(pubkey) {
             if index_entry.get().slot_list.read().unwrap().is_empty() {
                 index_entry.remove();
+                self.storage.stats.deletes.fetch_add(1, Ordering::Relaxed);
                 return true;
             }
         }
         false
     }
+
     pub fn upsert(
         &mut self,
         pubkey: &Pubkey,
@@ -111,9 +113,11 @@ impl<T: IsCached> InMemAccountsIndex<T> {
                     reclaims,
                     previous_slot_entry_was_cached,
                 );
+                Self::update_stat(&self.storage.stats.updates_in_mem, 1);
             }
             Entry::Vacant(vacant) => {
                 vacant.insert(new_value);
+                Self::update_stat(&self.storage.stats.inserts, 1);
             }
         }
     }
@@ -212,19 +216,30 @@ impl<T: IsCached> InMemAccountsIndex<T> {
         pubkey: Pubkey,
         new_entry: AccountMapEntry<T>,
     ) -> Option<(WriteAccountMapEntry<T>, T, Pubkey)> {
-        let account_entry = self.entry(pubkey);
-        match account_entry {
-            Entry::Occupied(account_entry) => Some((
-                WriteAccountMapEntry::from_account_map_entry(account_entry.get().clone()),
-                // extract the new account_info from the unused 'new_entry'
-                new_entry.slot_list.write().unwrap().remove(0).1,
-                *account_entry.key(),
-            )),
+        let result = match self.entry(pubkey) {
+            Entry::Occupied(account_entry) => {
+                Some((
+                    WriteAccountMapEntry::from_account_map_entry(account_entry.get().clone()),
+                    // extract the new account_info from the unused 'new_entry'
+                    new_entry.slot_list.write().unwrap().remove(0).1,
+                    *account_entry.key(),
+                ))
+            }
             Entry::Vacant(account_entry) => {
                 account_entry.insert(new_entry);
                 None
             }
-        }
+        };
+        let stats = self.stats();
+        Self::update_stat(
+            if result.is_none() {
+                &stats.inserts
+            } else {
+                &stats.updates_in_mem
+            },
+            1,
+        );
+        result
     }
 
     fn stats(&self) -> &BucketMapHolderStats {

@@ -11,9 +11,11 @@ pub struct BucketMapHolderStats {
     pub entries_from_mem: AtomicU64,
     pub entry_missing_us: AtomicU64,
     pub entries_missing: AtomicU64,
+    pub updates_in_mem: AtomicU64,
     pub items: AtomicU64,
     pub keys: AtomicU64,
     pub deletes: AtomicU64,
+    pub inserts: AtomicU64,
 }
 
 impl BucketMapHolderStats {
@@ -60,6 +62,12 @@ impl BucketMapHolderStats {
                 self.entry_missing_us.swap(0, Ordering::Relaxed) / 1000,
                 i64
             ),
+            (
+                "updates_in_mem",
+                self.updates_in_mem.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            ("inserts", self.inserts.swap(0, Ordering::Relaxed), i64),
             ("deletes", self.deletes.swap(0, Ordering::Relaxed), i64),
             ("items", self.items.swap(0, Ordering::Relaxed), i64),
             ("keys", self.keys.swap(0, Ordering::Relaxed), i64),
