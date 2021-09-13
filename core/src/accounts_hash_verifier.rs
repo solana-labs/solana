@@ -338,12 +338,7 @@ mod tests {
         let snapshot_config = SnapshotConfig {
             full_snapshot_archive_interval_slots,
             incremental_snapshot_archive_interval_slots: Slot::MAX,
-            snapshot_archives_dir: PathBuf::default(),
-            bank_snapshots_dir: PathBuf::default(),
-            archive_format: ArchiveFormat::Tar,
-            snapshot_version: SnapshotVersion::default(),
-            maximum_full_snapshot_archives_to_retain: usize::MAX,
-            maximum_incremental_snapshot_archives_to_retain: usize::MAX,
+            ..SnapshotConfig::default()
         };
         for i in 0..MAX_SNAPSHOT_HASHES + 1 {
             let accounts_package = AccountsPackage {

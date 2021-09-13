@@ -21,9 +21,10 @@ use solana_sdk::{
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     epoch_schedule::EpochSchedule,
     feature_set::{
-        blake3_syscall_enabled, close_upgradeable_program_accounts, demote_program_write_locks,
-        disable_fees_sysvar, enforce_aligned_host_addrs, libsecp256k1_0_5_upgrade_enabled,
-        mem_overlap_fix, secp256k1_recover_syscall_enabled,
+        allow_native_ids, blake3_syscall_enabled, check_seed_length,
+        close_upgradeable_program_accounts, demote_program_write_locks, disable_fees_sysvar,
+        enforce_aligned_host_addrs, libsecp256k1_0_5_upgrade_enabled, mem_overlap_fix,
+        return_data_syscall_enabled, secp256k1_recover_syscall_enabled,
     },
     hash::{Hasher, HASH_BYTES},
     ic_msg,
@@ -32,7 +33,8 @@ use solana_sdk::{
     keyed_account::KeyedAccount,
     native_loader,
     process_instruction::{self, stable_log, ComputeMeter, InvokeContext, Logger},
-    pubkey::{Pubkey, PubkeyError, MAX_SEEDS},
+    program::MAX_RETURN_DATA,
+    pubkey::{Pubkey, PubkeyError, MAX_SEEDS, MAX_SEED_LEN},
     rent::Rent,
     secp256k1_recover::{
         Secp256k1RecoverError, SECP256K1_PUBLIC_KEY_LENGTH, SECP256K1_SIGNATURE_LENGTH,
@@ -42,6 +44,7 @@ use solana_sdk::{
 use std::{
     alloc::Layout,
     cell::{Ref, RefCell, RefMut},
+    cmp::min,
     mem::{align_of, size_of},
     rc::Rc,
     slice::from_raw_parts_mut,
@@ -61,9 +64,9 @@ pub enum SyscallError {
     Abort,
     #[error("BPF program Panicked in {0} at {1}:{2}")]
     Panic(String, u64, u64),
-    #[error("cannot borrow invoke context")]
+    #[error("Cannot borrow invoke context")]
     InvokeContextBorrowFailed,
-    #[error("malformed signer seed: {0}: {1:?}")]
+    #[error("Malformed signer seed: {0}: {1:?}")]
     MalformedSignerSeed(Utf8Error, Vec<u8>),
     #[error("Could not create program address with signer seeds: {0}")]
     BadSeeds(PubkeyError),
@@ -81,6 +84,8 @@ pub enum SyscallError {
     TooManyAccounts,
     #[error("Overlapping copy")]
     CopyOverlapping,
+    #[error("Return data too large ({0} > {1})")]
+    ReturnDataTooLarge(u64, u64),
 }
 impl From<SyscallError> for EbpfError<BpfError> {
     fn from(error: SyscallError) -> Self {
@@ -172,6 +177,14 @@ pub fn register_syscalls(
     // Memory allocator
     syscall_registry.register_syscall_by_name(b"sol_alloc_free_", SyscallAllocFree::call)?;
 
+    // Return data
+    if invoke_context.is_feature_active(&return_data_syscall_enabled::id()) {
+        syscall_registry
+            .register_syscall_by_name(b"sol_set_return_data", SyscallSetReturnData::call)?;
+        syscall_registry
+            .register_syscall_by_name(b"sol_get_return_data", SyscallGetReturnData::call)?;
+    }
+
     Ok(syscall_registry)
 }
 
@@ -247,22 +260,27 @@ pub fn bind_syscall_context_objects<'a>(
         None,
     )?;
 
+    let allow_native_ids = invoke_context.is_feature_active(&allow_native_ids::id());
+    let check_seed_length = invoke_context.is_feature_active(&check_seed_length::id());
     vm.bind_syscall_context_object(
         Box::new(SyscallCreateProgramAddress {
             cost: compute_budget.create_program_address_units,
             compute_meter: invoke_context.get_compute_meter(),
             loader_id,
             enforce_aligned_host_addrs,
+            allow_native_ids,
+            check_seed_length,
         }),
         None,
     )?;
-
     vm.bind_syscall_context_object(
         Box::new(SyscallTryFindProgramAddress {
             cost: compute_budget.create_program_address_units,
             compute_meter: invoke_context.get_compute_meter(),
             loader_id,
             enforce_aligned_host_addrs,
+            allow_native_ids,
+            check_seed_length,
         }),
         None,
     )?;
@@ -347,6 +365,8 @@ pub fn bind_syscall_context_objects<'a>(
 
     let is_fee_sysvar_via_syscall_active =
         !invoke_context.is_feature_active(&disable_fees_sysvar::id());
+    let is_return_data_syscall_active =
+        invoke_context.is_feature_active(&return_data_syscall_enabled::id());
 
     let invoke_context = Rc::new(RefCell::new(invoke_context));
 
@@ -379,6 +399,25 @@ pub fn bind_syscall_context_objects<'a>(
         }),
         None,
     )?;
+
+    // Return data
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        is_return_data_syscall_active,
+        Box::new(SyscallSetReturnData {
+            invoke_context: invoke_context.clone(),
+            loader_id,
+        }),
+    );
+
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        is_return_data_syscall_active,
+        Box::new(SyscallGetReturnData {
+            invoke_context: invoke_context.clone(),
+            loader_id,
+        }),
+    );
 
     // Cross-program invocation syscalls
     vm.bind_syscall_context_object(
@@ -795,13 +834,14 @@ impl SyscallObject<BpfError> for SyscallAllocFree {
     }
 }
 
-fn translate_program_address_inputs<'a>(
+fn translate_and_check_program_address_inputs<'a>(
     seeds_addr: u64,
     seeds_len: u64,
     program_id_addr: u64,
     memory_mapping: &MemoryMapping,
     loader_id: &Pubkey,
     enforce_aligned_host_addrs: bool,
+    check_seed_length: bool,
 ) -> Result<(Vec<&'a [u8]>, &'a Pubkey), EbpfError<BpfError>> {
     let untranslated_seeds = translate_slice::<&[&u8]>(
         memory_mapping,
@@ -816,6 +856,9 @@ fn translate_program_address_inputs<'a>(
     let seeds = untranslated_seeds
         .iter()
         .map(|untranslated_seed| {
+            if check_seed_length && untranslated_seed.len() > MAX_SEED_LEN {
+                return Err(SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded).into());
+            }
             translate_slice::<u8>(
                 memory_mapping,
                 untranslated_seed.as_ptr() as *const _ as u64,
@@ -834,12 +877,43 @@ fn translate_program_address_inputs<'a>(
     Ok((seeds, program_id))
 }
 
+fn is_native_id(seeds: &[&[u8]], program_id: &Pubkey) -> bool {
+    use solana_sdk::{config, feature, secp256k1_program, stake, system_program, vote};
+    // Does more than just check native ids in order to emulate the same failure
+    // signature that `compute_program_address` had before the removal of the
+    // check.
+    if seeds.len() > MAX_SEEDS {
+        return true;
+    }
+    for seed in seeds.iter() {
+        if seed.len() > MAX_SEED_LEN {
+            return true;
+        }
+    }
+
+    let native_ids = [
+        bpf_loader::id(),
+        bpf_loader_deprecated::id(),
+        feature::id(),
+        config::program::id(),
+        stake::program::id(),
+        stake::config::id(),
+        vote::program::id(),
+        secp256k1_program::id(),
+        system_program::id(),
+        sysvar::id(),
+    ];
+    native_ids.contains(program_id)
+}
+
 /// Create a program address
 struct SyscallCreateProgramAddress<'a> {
     cost: u64,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     loader_id: &'a Pubkey,
     enforce_aligned_host_addrs: bool,
+    allow_native_ids: bool,
+    check_seed_length: bool,
 }
 impl<'a> SyscallObject<BpfError> for SyscallCreateProgramAddress<'a> {
     fn call(
@@ -852,19 +926,32 @@ impl<'a> SyscallObject<BpfError> for SyscallCreateProgramAddress<'a> {
         memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
+        if self.check_seed_length {
+            question_mark!(self.compute_meter.consume(self.cost), result);
+        }
+
         let (seeds, program_id) = question_mark!(
-            translate_program_address_inputs(
+            translate_and_check_program_address_inputs(
                 seeds_addr,
                 seeds_len,
                 program_id_addr,
                 memory_mapping,
                 self.loader_id,
                 self.enforce_aligned_host_addrs,
+                self.check_seed_length,
             ),
             result
         );
 
-        question_mark!(self.compute_meter.consume(self.cost), result);
+        if !self.check_seed_length {
+            question_mark!(self.compute_meter.consume(self.cost), result);
+        }
+
+        if !self.allow_native_ids && is_native_id(&seeds, program_id) {
+            *result = Ok(1);
+            return;
+        }
+
         let new_address = match Pubkey::create_program_address(&seeds, program_id) {
             Ok(address) => address,
             Err(_) => {
@@ -893,6 +980,8 @@ struct SyscallTryFindProgramAddress<'a> {
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     loader_id: &'a Pubkey,
     enforce_aligned_host_addrs: bool,
+    allow_native_ids: bool,
+    check_seed_length: bool,
 }
 impl<'a> SyscallObject<BpfError> for SyscallTryFindProgramAddress<'a> {
     fn call(
@@ -905,14 +994,19 @@ impl<'a> SyscallObject<BpfError> for SyscallTryFindProgramAddress<'a> {
         memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
+        if self.check_seed_length {
+            question_mark!(self.compute_meter.consume(self.cost), result);
+        }
+
         let (seeds, program_id) = question_mark!(
-            translate_program_address_inputs(
+            translate_and_check_program_address_inputs(
                 seeds_addr,
                 seeds_len,
                 program_id_addr,
                 memory_mapping,
                 self.loader_id,
                 self.enforce_aligned_host_addrs,
+                self.check_seed_length,
             ),
             result
         );
@@ -923,36 +1017,44 @@ impl<'a> SyscallObject<BpfError> for SyscallTryFindProgramAddress<'a> {
                 let mut seeds_with_bump = seeds.to_vec();
                 seeds_with_bump.push(&bump_seed);
 
-                question_mark!(self.compute_meter.consume(self.cost), result);
-                if let Ok(new_address) =
-                    Pubkey::create_program_address(&seeds_with_bump, program_id)
-                {
-                    let bump_seed_ref = question_mark!(
-                        translate_type_mut::<u8>(
-                            memory_mapping,
-                            bump_seed_addr,
-                            self.loader_id,
-                            self.enforce_aligned_host_addrs,
-                        ),
-                        result
-                    );
-                    let address = question_mark!(
-                        translate_slice_mut::<u8>(
-                            memory_mapping,
-                            address_addr,
-                            32,
-                            self.loader_id,
-                            self.enforce_aligned_host_addrs,
-                        ),
-                        result
-                    );
-                    *bump_seed_ref = bump_seed[0];
-                    address.copy_from_slice(new_address.as_ref());
-                    *result = Ok(0);
-                    return;
+                if !self.check_seed_length {
+                    question_mark!(self.compute_meter.consume(self.cost), result);
+                }
+
+                if self.allow_native_ids || !is_native_id(&seeds, program_id) {
+                    if let Ok(new_address) =
+                        Pubkey::create_program_address(&seeds_with_bump, program_id)
+                    {
+                        let bump_seed_ref = question_mark!(
+                            translate_type_mut::<u8>(
+                                memory_mapping,
+                                bump_seed_addr,
+                                self.loader_id,
+                                self.enforce_aligned_host_addrs,
+                            ),
+                            result
+                        );
+                        let address = question_mark!(
+                            translate_slice_mut::<u8>(
+                                memory_mapping,
+                                address_addr,
+                                32,
+                                self.loader_id,
+                                self.enforce_aligned_host_addrs,
+                            ),
+                            result
+                        );
+                        *bump_seed_ref = bump_seed[0];
+                        address.copy_from_slice(new_address.as_ref());
+                        *result = Ok(0);
+                        return;
+                    }
                 }
             }
             bump_seed[0] -= 1;
+            if self.check_seed_length {
+                question_mark!(self.compute_meter.consume(self.cost), result);
+            }
         }
         *result = Ok(1);
     }
@@ -2160,14 +2262,15 @@ where
     let mut accounts = Vec::with_capacity(account_keys.len());
     let mut refs = Vec::with_capacity(account_keys.len());
     for (i, ref account_key) in account_keys.iter().enumerate() {
-        let account = invoke_context.get_account(account_key).ok_or_else(|| {
-            ic_msg!(
-                invoke_context,
-                "Instruction references an unknown account {}",
-                account_key
-            );
-            SyscallError::InstructionError(InstructionError::MissingAccount)
-        })?;
+        let (_account_index, account) =
+            invoke_context.get_account(account_key).ok_or_else(|| {
+                ic_msg!(
+                    invoke_context,
+                    "Instruction references an unknown account {}",
+                    account_key
+                );
+                SyscallError::InstructionError(InstructionError::MissingAccount)
+            })?;
 
         if i == program_account_index || account.borrow().executable() {
             // Use the known account
@@ -2252,14 +2355,16 @@ fn get_upgradeable_executable(
     callee_program_id: &Pubkey,
     program_account: &Rc<RefCell<AccountSharedData>>,
     invoke_context: &Ref<&mut dyn InvokeContext>,
-) -> Result<Option<(Pubkey, Rc<RefCell<AccountSharedData>>)>, EbpfError<BpfError>> {
+) -> Result<Option<usize>, EbpfError<BpfError>> {
     if program_account.borrow().owner() == &bpf_loader_upgradeable::id() {
         match program_account.borrow().state() {
             Ok(UpgradeableLoaderState::Program {
                 programdata_address,
             }) => {
-                if let Some(account) = invoke_context.get_account(&programdata_address) {
-                    Ok(Some((programdata_address, account)))
+                if let Some((programdata_account_index, _programdata_account)) =
+                    invoke_context.get_account(&programdata_address)
+                {
+                    Ok(Some(programdata_account_index))
                 } else {
                     ic_msg!(
                         invoke_context,
@@ -2295,7 +2400,7 @@ fn call<'a>(
 ) -> Result<u64, EbpfError<BpfError>> {
     let (
         message,
-        executables,
+        program_indices,
         accounts,
         account_refs,
         caller_write_privileges,
@@ -2373,16 +2478,21 @@ fn call<'a>(
         let program_account = accounts
             .get(callee_program_id_index)
             .ok_or_else(|| {
-                ic_msg!(invoke_context, "Unknown program {}", callee_program_id,);
+                ic_msg!(invoke_context, "Unknown program {}", callee_program_id);
                 SyscallError::InstructionError(InstructionError::MissingAccount)
             })?
             .1
             .clone();
-        let programdata_executable =
-            get_upgradeable_executable(&callee_program_id, &program_account, &invoke_context)?;
-        let mut executables = vec![(callee_program_id, program_account)];
-        if let Some(executable) = programdata_executable {
-            executables.push(executable);
+        let (program_account_index, _program_account) =
+            invoke_context.get_account(&callee_program_id).ok_or(
+                SyscallError::InstructionError(InstructionError::MissingAccount),
+            )?;
+
+        let mut program_indices = vec![program_account_index];
+        if let Some(programdata_account_index) =
+            get_upgradeable_executable(&callee_program_id, &program_account, &invoke_context)?
+        {
+            program_indices.push(programdata_account_index);
         }
 
         // Record the instruction
@@ -2391,7 +2501,7 @@ fn call<'a>(
 
         (
             message,
-            executables,
+            program_indices,
             accounts,
             account_refs,
             caller_write_privileges,
@@ -2404,7 +2514,7 @@ fn call<'a>(
     #[allow(clippy::deref_addrof)]
     match InstructionProcessor::process_cross_program_instruction(
         &message,
-        &executables,
+        &program_indices,
         &accounts,
         &caller_write_privileges,
         *(&mut *(syscall.get_context_mut()?)),
@@ -2471,6 +2581,142 @@ fn call<'a>(
     Ok(SUCCESS)
 }
 
+// Return data handling
+pub struct SyscallSetReturnData<'a> {
+    invoke_context: Rc<RefCell<&'a mut dyn InvokeContext>>,
+    loader_id: &'a Pubkey,
+}
+impl<'a> SyscallObject<BpfError> for SyscallSetReturnData<'a> {
+    fn call(
+        &mut self,
+        addr: u64,
+        len: u64,
+        _arg3: u64,
+        _arg4: u64,
+        _arg5: u64,
+        memory_mapping: &MemoryMapping,
+        result: &mut Result<u64, EbpfError<BpfError>>,
+    ) {
+        let mut invoke_context = question_mark!(
+            self.invoke_context
+                .try_borrow_mut()
+                .map_err(|_| SyscallError::InvokeContextBorrowFailed),
+            result
+        );
+
+        let budget = invoke_context.get_compute_budget();
+
+        question_mark!(
+            invoke_context
+                .get_compute_meter()
+                .consume(len / budget.cpi_bytes_per_unit + budget.syscall_base_cost),
+            result
+        );
+
+        if len > MAX_RETURN_DATA as u64 {
+            *result = Err(SyscallError::ReturnDataTooLarge(len, MAX_RETURN_DATA as u64).into());
+            return;
+        }
+
+        if len == 0 {
+            invoke_context.set_return_data(None);
+        } else {
+            let return_data = question_mark!(
+                translate_slice::<u8>(memory_mapping, addr, len, self.loader_id, true),
+                result
+            );
+
+            let program_id = *question_mark!(
+                invoke_context
+                    .get_caller()
+                    .map_err(SyscallError::InstructionError),
+                result
+            );
+
+            invoke_context.set_return_data(Some((program_id, return_data.to_vec())));
+        }
+
+        *result = Ok(0);
+    }
+}
+
+pub struct SyscallGetReturnData<'a> {
+    invoke_context: Rc<RefCell<&'a mut dyn InvokeContext>>,
+    loader_id: &'a Pubkey,
+}
+impl<'a> SyscallObject<BpfError> for SyscallGetReturnData<'a> {
+    fn call(
+        &mut self,
+        return_data_addr: u64,
+        len: u64,
+        program_id_addr: u64,
+        _arg4: u64,
+        _arg5: u64,
+        memory_mapping: &MemoryMapping,
+        result: &mut Result<u64, EbpfError<BpfError>>,
+    ) {
+        let invoke_context = question_mark!(
+            self.invoke_context
+                .try_borrow()
+                .map_err(|_| SyscallError::InvokeContextBorrowFailed),
+            result
+        );
+
+        let budget = invoke_context.get_compute_budget();
+
+        question_mark!(
+            invoke_context
+                .get_compute_meter()
+                .consume(budget.syscall_base_cost),
+            result
+        );
+
+        if let Some((program_id, return_data)) = invoke_context.get_return_data() {
+            if len != 0 {
+                let length = min(return_data.len() as u64, len);
+
+                question_mark!(
+                    invoke_context
+                        .get_compute_meter()
+                        .consume((length + size_of::<Pubkey>() as u64) / budget.cpi_bytes_per_unit),
+                    result
+                );
+
+                let return_data_result = question_mark!(
+                    translate_slice_mut::<u8>(
+                        memory_mapping,
+                        return_data_addr,
+                        length,
+                        self.loader_id,
+                        true,
+                    ),
+                    result
+                );
+
+                return_data_result.copy_from_slice(&return_data[..length as usize]);
+
+                let program_id_result = question_mark!(
+                    translate_slice_mut::<Pubkey>(
+                        memory_mapping,
+                        program_id_addr,
+                        1,
+                        self.loader_id,
+                        true,
+                    ),
+                    result
+                );
+
+                program_id_result[0] = *program_id;
+            }
+
+            // Return the actual length, rather the length returned
+            *result = Ok(return_data.len() as u64);
+        } else {
+            *result = Ok(0);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2494,6 +2740,12 @@ mod tests {
                 _ => panic!(),
             }
         };
+    }
+
+    #[allow(dead_code)]
+    struct MockSlice {
+        pub vm_addr: u64,
+        pub len: usize,
     }
 
     #[test]
@@ -3208,17 +3460,12 @@ mod tests {
         let bytes1 = "Gaggablaghblagh!";
         let bytes2 = "flurbos";
 
-        #[allow(dead_code)]
-        struct MockSlice {
-            pub addr: u64,
-            pub len: usize,
-        }
         let mock_slice1 = MockSlice {
-            addr: 0x300000000,
+            vm_addr: 0x300000000,
             len: bytes1.len(),
         };
         let mock_slice2 = MockSlice {
-            addr: 0x400000000,
+            vm_addr: 0x400000000,
             len: bytes2.len(),
         };
         let bytes_to_hash = [mock_slice1, mock_slice2];
@@ -3246,14 +3493,14 @@ mod tests {
                 },
                 MemoryRegion {
                     host_addr: bytes1.as_ptr() as *const _ as u64,
-                    vm_addr: bytes_to_hash[0].addr,
+                    vm_addr: bytes_to_hash[0].vm_addr,
                     len: bytes1.len() as u64,
                     vm_gap_shift: 63,
                     is_writable: false,
                 },
                 MemoryRegion {
                     host_addr: bytes2.as_ptr() as *const _ as u64,
-                    vm_addr: bytes_to_hash[1].addr,
+                    vm_addr: bytes_to_hash[1].vm_addr,
                     len: bytes2.len() as u64,
                     vm_gap_shift: 63,
                     is_writable: false,
@@ -3521,5 +3768,273 @@ mod tests {
         assert!(check_overlapping(10, 11, 3));
         assert!(check_overlapping(10, 12, 3));
         assert!(!check_overlapping(10, 13, 3));
+    }
+
+    fn call_program_address_common(
+        seeds: &[&[u8]],
+        program_id: &Pubkey,
+        syscall: &mut dyn SyscallObject<BpfError>,
+    ) -> Result<(Pubkey, u8), EbpfError<BpfError>> {
+        const SEEDS_VA: u64 = 0x100000000;
+        const PROGRAM_ID_VA: u64 = 0x200000000;
+        const ADDRESS_VA: u64 = 0x300000000;
+        const BUMP_SEED_VA: u64 = 0x400000000;
+        const SEED_VA: u64 = 0x500000000;
+
+        let config = Config::default();
+        let address = Pubkey::default();
+        let bump_seed = 0;
+        let mut mock_slices = Vec::with_capacity(seeds.len());
+        let mut regions = vec![
+            MemoryRegion::default(),
+            MemoryRegion {
+                host_addr: mock_slices.as_ptr() as u64,
+                vm_addr: SEEDS_VA,
+                len: (seeds.len() * size_of::<MockSlice>()) as u64,
+                vm_gap_shift: 63,
+                is_writable: false,
+            },
+            MemoryRegion {
+                host_addr: program_id.as_ref().as_ptr() as u64,
+                vm_addr: PROGRAM_ID_VA,
+                len: 32,
+                vm_gap_shift: 63,
+                is_writable: false,
+            },
+            MemoryRegion {
+                host_addr: address.as_ref().as_ptr() as u64,
+                vm_addr: ADDRESS_VA,
+                len: 32,
+                vm_gap_shift: 63,
+                is_writable: true,
+            },
+            MemoryRegion {
+                host_addr: &bump_seed as *const u8 as u64,
+                vm_addr: BUMP_SEED_VA,
+                len: 32,
+                vm_gap_shift: 63,
+                is_writable: true,
+            },
+        ];
+
+        for (i, seed) in seeds.iter().enumerate() {
+            let vm_addr = SEED_VA + (i as u64 * 0x100000000);
+            let mock_slice = MockSlice {
+                vm_addr,
+                len: seed.len(),
+            };
+            mock_slices.push(mock_slice);
+            regions.push(MemoryRegion {
+                host_addr: seed.as_ptr() as u64,
+                vm_addr,
+                len: seed.len() as u64,
+                vm_gap_shift: 63,
+                is_writable: false,
+            });
+        }
+        let memory_mapping = MemoryMapping::new::<UserError>(regions, &config).unwrap();
+
+        let mut result = Ok(0);
+        syscall.call(
+            SEEDS_VA,
+            seeds.len() as u64,
+            PROGRAM_ID_VA,
+            ADDRESS_VA,
+            BUMP_SEED_VA,
+            &memory_mapping,
+            &mut result,
+        );
+        let _ = result?;
+        Ok((address, bump_seed))
+    }
+
+    fn create_program_address(
+        seeds: &[&[u8]],
+        program_id: &Pubkey,
+        remaining: u64,
+    ) -> Result<Pubkey, EbpfError<BpfError>> {
+        let compute_meter: Rc<RefCell<dyn ComputeMeter>> =
+            Rc::new(RefCell::new(MockComputeMeter { remaining }));
+        let mut syscall = SyscallCreateProgramAddress {
+            cost: 1,
+            compute_meter: compute_meter.clone(),
+            loader_id: &bpf_loader::id(),
+            enforce_aligned_host_addrs: true,
+            allow_native_ids: true,
+            check_seed_length: true,
+        };
+        let (address, _) = call_program_address_common(seeds, program_id, &mut syscall)?;
+        Ok(address)
+    }
+
+    fn try_find_program_address(
+        seeds: &[&[u8]],
+        program_id: &Pubkey,
+        remaining: u64,
+    ) -> Result<(Pubkey, u8), EbpfError<BpfError>> {
+        let compute_meter: Rc<RefCell<dyn ComputeMeter>> =
+            Rc::new(RefCell::new(MockComputeMeter { remaining }));
+        let mut syscall = SyscallTryFindProgramAddress {
+            cost: 1,
+            compute_meter: compute_meter.clone(),
+            loader_id: &bpf_loader::id(),
+            enforce_aligned_host_addrs: true,
+            allow_native_ids: true,
+            check_seed_length: true,
+        };
+        call_program_address_common(seeds, program_id, &mut syscall)
+    }
+
+    #[test]
+    fn test_create_program_address() {
+        // These tests duplicate the direct tests in solana_program::pubkey
+
+        let program_id = Pubkey::from_str("BPFLoaderUpgradeab1e11111111111111111111111").unwrap();
+
+        let exceeded_seed = &[127; MAX_SEED_LEN + 1];
+        let result = create_program_address(&[exceeded_seed], &program_id, 1);
+        assert_eq!(
+            result,
+            Err(SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded).into())
+        );
+        assert_eq!(
+            create_program_address(&[b"short_seed", exceeded_seed], &program_id, 1),
+            Err(SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded).into())
+        );
+        let max_seed = &[0; MAX_SEED_LEN];
+        assert!(create_program_address(&[max_seed], &program_id, 1).is_ok());
+        let exceeded_seeds: &[&[u8]] = &[
+            &[1],
+            &[2],
+            &[3],
+            &[4],
+            &[5],
+            &[6],
+            &[7],
+            &[8],
+            &[9],
+            &[10],
+            &[11],
+            &[12],
+            &[13],
+            &[14],
+            &[15],
+            &[16],
+        ];
+        assert!(create_program_address(exceeded_seeds, &program_id, 1).is_ok());
+        let max_seeds: &[&[u8]] = &[
+            &[1],
+            &[2],
+            &[3],
+            &[4],
+            &[5],
+            &[6],
+            &[7],
+            &[8],
+            &[9],
+            &[10],
+            &[11],
+            &[12],
+            &[13],
+            &[14],
+            &[15],
+            &[16],
+            &[17],
+        ];
+        assert_eq!(
+            create_program_address(max_seeds, &program_id, 1),
+            Err(SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded).into())
+        );
+        assert_eq!(
+            create_program_address(&[b"", &[1]], &program_id, 0),
+            Err(
+                SyscallError::InstructionError(InstructionError::ComputationalBudgetExceeded)
+                    .into()
+            )
+        );
+        assert_eq!(
+            create_program_address(&[b"", &[1]], &program_id, 1),
+            Ok("BwqrghZA2htAcqq8dzP1WDAhTXYTYWj7CHxF5j7TDBAe"
+                .parse()
+                .unwrap())
+        );
+        assert_eq!(
+            create_program_address(&["☉".as_ref(), &[0]], &program_id, 1),
+            Ok("13yWmRpaTR4r5nAktwLqMpRNr28tnVUZw26rTvPSSB19"
+                .parse()
+                .unwrap())
+        );
+        assert_eq!(
+            create_program_address(&[b"Talking", b"Squirrels"], &program_id, 1),
+            Ok("2fnQrngrQT4SeLcdToJAD96phoEjNL2man2kfRLCASVk"
+                .parse()
+                .unwrap())
+        );
+        let public_key = Pubkey::from_str("SeedPubey1111111111111111111111111111111111").unwrap();
+        assert_eq!(
+            create_program_address(&[public_key.as_ref(), &[1]], &program_id, 1),
+            Ok("976ymqVnfE32QFe6NfGDctSvVa36LWnvYxhU6G2232YL"
+                .parse()
+                .unwrap())
+        );
+        assert_ne!(
+            create_program_address(&[b"Talking", b"Squirrels"], &program_id, 1).unwrap(),
+            create_program_address(&[b"Talking"], &program_id, 1).unwrap(),
+        );
+    }
+
+    #[test]
+    fn test_find_program_address() {
+        for _ in 0..1_000 {
+            let program_id = Pubkey::new_unique();
+            let (address, bump_seed) =
+                try_find_program_address(&[b"Lil'", b"Bits"], &program_id, 100).unwrap();
+            assert_eq!(
+                address,
+                create_program_address(&[b"Lil'", b"Bits", &[bump_seed]], &program_id, 1).unwrap()
+            );
+        }
+
+        let program_id = Pubkey::from_str("BPFLoaderUpgradeab1e11111111111111111111111").unwrap();
+        let max_tries = 256; // one per seed
+        let seeds: &[&[u8]] = &[b""];
+        let (_, bump_seed) = try_find_program_address(seeds, &program_id, max_tries).unwrap();
+        let remaining = 256 - bump_seed as u64;
+        let _ = try_find_program_address(seeds, &program_id, remaining).unwrap();
+        assert_eq!(
+            try_find_program_address(seeds, &program_id, remaining - 1),
+            Err(
+                SyscallError::InstructionError(InstructionError::ComputationalBudgetExceeded)
+                    .into()
+            )
+        );
+        let exceeded_seed = &[127; MAX_SEED_LEN + 1];
+        assert_eq!(
+            try_find_program_address(&[exceeded_seed], &program_id, max_tries - 1),
+            Err(SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded).into())
+        );
+        let exceeded_seeds: &[&[u8]] = &[
+            &[1],
+            &[2],
+            &[3],
+            &[4],
+            &[5],
+            &[6],
+            &[7],
+            &[8],
+            &[9],
+            &[10],
+            &[11],
+            &[12],
+            &[13],
+            &[14],
+            &[15],
+            &[16],
+            &[17],
+        ];
+        assert_eq!(
+            try_find_program_address(exceeded_seeds, &program_id, max_tries - 1),
+            Err(SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded).into())
+        );
     }
 }

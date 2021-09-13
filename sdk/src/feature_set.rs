@@ -199,10 +199,22 @@ pub mod ed25519_program_enabled {
     solana_sdk::declare_id!("E1TvTNipX8TKNHrhRC8SMuAwQmGY58TZ4drdztP3Gxwc");
 }
 
+pub mod allow_native_ids {
+    solana_sdk::declare_id!("GVnDbNkECwrzLM7aVBGWpBYo3yH1ACaXB4ottNX8pedZ");
+}
+
+pub mod check_seed_length {
+    solana_sdk::declare_id!("8HYXgkoKGreAMA3MfJkdjbKNVbfZRQP3jqFpa7iqN4v7");
+}
+
+pub mod return_data_syscall_enabled {
+    solana_sdk::declare_id!("BJVXq6NdLC7jCDGjfqJv7M1XHD4Y13VrpDqRF2U7UBcC");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
-            (deprecate_rewards_sysvar::id(), "deprecate unused rewards sysvar"),
+        (deprecate_rewards_sysvar::id(), "deprecate unused rewards sysvar"),
         (pico_inflation::id(), "pico inflation"),
         (full_inflation::devnet_and_testnet::id(), "full inflation on devnet and testnet"),
         (spl_token_v2_multisig_fix::id(), "spl-token multisig fix"),
@@ -244,6 +256,9 @@ lazy_static! {
         (stake_program_advance_activating_credits_observed::id(), "Enable advancing credits observed for activation epoch #19309"),
         (demote_program_write_locks::id(), "demote program write locks to readonly #19593"),
         (ed25519_program_enabled::id(), "enable builtin ed25519 signature verify program"),
+        (allow_native_ids::id(), "allow native program ids in program derived addresses"),
+        (check_seed_length::id(), "Check program address seed lengths"),
+        (return_data_syscall_enabled::id(), "enable sol_{set,get}_return_data syscall")
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

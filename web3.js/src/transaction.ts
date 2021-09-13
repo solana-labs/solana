@@ -106,7 +106,7 @@ export type SignaturePubkeyPair = {
  * List of Transaction object fields that may be initialized at construction
  *
  */
-type TransactionCtorFields = {
+export type TransactionCtorFields = {
   /** A recent blockhash */
   recentBlockhash?: Blockhash | null;
   /** Optional nonce information used for offline nonce'd transactions */
@@ -120,7 +120,7 @@ type TransactionCtorFields = {
 /**
  * Nonce information to be used to build an offline Transaction.
  */
-type NonceInformation = {
+export type NonceInformation = {
   /** The current blockhash stored in the nonce */
   nonce: Blockhash;
   /** AdvanceNonceAccount Instruction */

@@ -20,13 +20,13 @@ if [[ ! -f "$basedir"/commitlint.config.js ]]; then
   exit 1
 fi
 
-if [[ -z $TRAVIS_COMMIT_RANGE ]]; then
-  echo "Error: TRAVIS_COMMIT_RANGE not defined"
+if [[ -z $COMMIT_RANGE ]]; then
+  echo "Error: COMMIT_RANGE not defined"
   exit 1
 fi
 
 cd "$basedir"
-echo "Checking commits in TRAVIS_COMMIT_RANGE: $TRAVIS_COMMIT_RANGE"
+echo "Checking commits in COMMIT_RANGE: $COMMIT_RANGE"
 while IFS= read -r line; do
   echo "$line" | npx commitlint
-done < <(git log "$TRAVIS_COMMIT_RANGE" --format=%s -- .)
+done < <(git log "$COMMIT_RANGE" --format=%s -- .)

@@ -14,22 +14,19 @@ bs58 = "0.4.0"
 bytecount = "0.6.2"
 clap = "2.33.1"
 csv = "1.1.6"
-futures = "0.3.17"
-futures-util = "0.3.17"
 histogram = "*"
 itertools = "0.10.1"
 log = { version = "0.4.14" }
 regex = "1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.67"
-serde_yaml = "0.8.20"
+serde_yaml = "0.8.21"
 solana-clap-utils = { path = "../clap-utils", version = "=1.8.0" }
 solana-cli-output = { path = "../cli-output", version = "=1.8.0" }
 solana-core = { path = "../core", version = "=1.8.0" }
 solana-entry = { path = "../entry", version = "=1.8.0" }
 solana-ledger = { path = "../ledger", version = "=1.8.0" }
 solana-logger = { path = "../logger", version = "=1.8.0" }
-solana-measure = { path = "../measure", version = "=1.8.0" }
 solana-runtime = { path = "../runtime", version = "=1.8.0" }
 solana-sdk = { path = "../sdk", version = "=1.8.0" }
 solana-stake-program = { path = "../programs/stake", version = "=1.8.0" }
@@ -37,7 +34,6 @@ solana-storage-bigtable = { path = "../storage-bigtable", version = "=1.8.0" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.8.0" }
 solana-version = { path = "../version", version = "=1.8.0" }
 solana-vote-program = { path = "../programs/vote", version = "=1.8.0" }
-tempfile = "3.2.0"
 tokio = { version = "1", features = ["full"] }
 
 [dev-dependencies]

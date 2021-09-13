@@ -10,7 +10,7 @@ use solana_program::{
     entrypoint,
     entrypoint::{ProgramResult, MAX_PERMITTED_DATA_INCREASE},
     msg,
-    program::{invoke, invoke_signed},
+    program::{get_return_data, invoke, invoke_signed, set_return_data},
     program_error::ProgramError,
     pubkey::{Pubkey, PubkeyError},
     system_instruction,
@@ -263,10 +263,9 @@ fn process_instruction(
                     )?,
                     accounts[DERIVED_KEY1_INDEX].key
                 );
-                let not_native_program_id = Pubkey::new_from_array([6u8; 32]);
-                assert!(!not_native_program_id.is_native_program_id());
+                let new_program_id = Pubkey::new_from_array([6u8; 32]);
                 assert_eq!(
-                    Pubkey::create_program_address(&[b"You pass butter"], &not_native_program_id)
+                    Pubkey::create_program_address(&[b"You pass butter"], &new_program_id)
                         .unwrap_err(),
                     PubkeyError::InvalidSeeds
                 );
@@ -278,10 +277,9 @@ fn process_instruction(
                     Pubkey::try_find_program_address(&[b"You pass butter"], program_id).unwrap();
                 assert_eq!(&address, accounts[DERIVED_KEY1_INDEX].key);
                 assert_eq!(bump_seed, bump_seed1);
-                let not_native_program_id = Pubkey::new_from_array([6u8; 32]);
-                assert!(!not_native_program_id.is_native_program_id());
+                let new_program_id = Pubkey::new_from_array([6u8; 32]);
                 assert_eq!(
-                    Pubkey::create_program_address(&[b"You pass butter"], &not_native_program_id)
+                    Pubkey::create_program_address(&[b"You pass butter"], &new_program_id)
                         .unwrap_err(),
                     PubkeyError::InvalidSeeds
                 );
@@ -395,6 +393,27 @@ fn process_instruction(
                 for i in 1..20 {
                     assert_eq!(data[i], i as u8);
                 }
+            }
+
+            msg!("Test return data via invoked");
+            {
+                // this should be cleared on entry, the invoked tests for this
+                set_return_data(b"x");
+
+                let instruction = create_instruction(
+                    *accounts[INVOKED_PROGRAM_INDEX].key,
+                    &[(accounts[ARGUMENT_INDEX].key, false, true)],
+                    vec![SET_RETURN_DATA],
+                );
+                let _ = invoke(&instruction, accounts);
+
+                assert_eq!(
+                    get_return_data(),
+                    Some((
+                        *accounts[INVOKED_PROGRAM_INDEX].key,
+                        b"Set by invoked".to_vec()
+                    ))
+                );
             }
         }
         TEST_PRIVILEGE_ESCALATION_SIGNER => {
@@ -652,17 +671,4 @@ fn process_instruction(
     }
 
     Ok(())
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn create_program_address_is_defined() {
-        assert_eq!(
-            Pubkey::create_program_address(&[b"You pass butter"], &Pubkey::default()).unwrap_err(),
-            PubkeyError::IllegalOwner
-        );
-    }
 }

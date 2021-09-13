@@ -14,12 +14,7 @@ use {
     solana_rpc::rpc::JsonRpcConfig,
     solana_runtime::{
         genesis_utils::create_genesis_config_with_leader_ex,
-        hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
-        snapshot_config::SnapshotConfig,
-        snapshot_utils::{
-            ArchiveFormat, SnapshotVersion, DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
-            DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
-        },
+        hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE, snapshot_config::SnapshotConfig,
     },
     solana_sdk::{
         account::{Account, AccountSharedData},
@@ -526,12 +521,7 @@ impl TestValidator {
                 incremental_snapshot_archive_interval_slots: Slot::MAX,
                 bank_snapshots_dir: ledger_path.join("snapshot"),
                 snapshot_archives_dir: ledger_path.to_path_buf(),
-                archive_format: ArchiveFormat::Tar,
-                snapshot_version: SnapshotVersion::default(),
-                maximum_full_snapshot_archives_to_retain:
-                    DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
-                maximum_incremental_snapshot_archives_to_retain:
-                    DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+                ..SnapshotConfig::default()
             }),
             enforce_ulimit_nofile: false,
             warp_slot: config.warp_slot,

@@ -119,6 +119,10 @@ pub enum TransactionError {
     /// Transaction version is unsupported
     #[error("Transaction version is unsupported")]
     UnsupportedVersion,
+
+    /// Transaction loads a writable account that cannot be written
+    #[error("Transaction loads a writable account that cannot be written")]
+    InvalidWritableAccount,
 }
 
 pub type Result<T> = result::Result<T, TransactionError>;

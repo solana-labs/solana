@@ -1,0 +1,34 @@
+name: Explorer
+
+on:
+  push:
+    branches: [ master ]
+    paths:
+      - "explorer/**"
+  pull_request:
+    branches: [ master ]
+    paths:
+      - "explorer/**"
+
+jobs:
+  check-explorer:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: explorer
+
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v2
+        with:
+          # "node" (v16) is not supported by node-sass yet
+          # https://github.com/sass/node-sass/pull/3090
+          node-version: '14'
+          cache: 'npm'
+          cache-dependency-path: explorer/package-lock.json
+      - run: npm i -g npm@7
+      - run: npm ci
+      - run: npm run format
+      - run: npm run build
+      - run: npm run test

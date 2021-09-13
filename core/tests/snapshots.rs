@@ -59,7 +59,7 @@ mod tests {
         accounts_background_service::{
             AbsRequestHandler, AbsRequestSender, AccountsBackgroundService, SnapshotRequestHandler,
         },
-        accounts_db,
+        accounts_db::{self, ACCOUNTS_DB_CONFIG_FOR_TESTING},
         accounts_index::AccountSecondaryIndexes,
         bank::{Bank, BankSlotDelta},
         bank_forks::BankForks,
@@ -69,10 +69,7 @@ mod tests {
         snapshot_package::{
             AccountsPackage, PendingSnapshotPackage, SnapshotPackage, SnapshotType,
         },
-        snapshot_utils::{
-            self, ArchiveFormat, SnapshotVersion, DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
-            DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
-        },
+        snapshot_utils::{self, ArchiveFormat, SnapshotVersion},
         status_cache::MAX_CACHE_ENTRIES,
     };
     use solana_sdk::{
@@ -146,12 +143,8 @@ mod tests {
                 incremental_snapshot_archive_interval_slots,
                 snapshot_archives_dir: snapshot_archives_dir.path().to_path_buf(),
                 bank_snapshots_dir: bank_snapshots_dir.path().to_path_buf(),
-                archive_format: ArchiveFormat::TarBzip2,
                 snapshot_version,
-                maximum_full_snapshot_archives_to_retain:
-                    DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
-                maximum_incremental_snapshot_archives_to_retain:
-                    DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+                ..SnapshotConfig::default()
             };
             bank_forks.set_snapshot_config(Some(snapshot_config.clone()));
             SnapshotTestConfig {
@@ -209,7 +202,7 @@ mod tests {
             check_hash_calculation,
             false,
             false,
-            Some(solana_runtime::accounts_index::ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
+            Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
         )
         .unwrap();
 
@@ -722,7 +715,8 @@ mod tests {
 
             // Since AccountsBackgroundService isn't running, manually make a full snapshot archive
             // at the right interval
-            if slot % FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS == 0 {
+            if snapshot_utils::should_take_full_snapshot(slot, FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS)
+            {
                 make_full_snapshot_archive(&bank, &snapshot_test_config.snapshot_config).unwrap();
             }
             // Similarly, make an incremental snapshot archive at the right interval, but only if
@@ -730,9 +724,11 @@ mod tests {
             // taken at this slot.
             //
             // Then, after making an incremental snapshot, restore the bank and verify it is correct
-            else if slot % INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS == 0
-                && last_full_snapshot_slot.is_some()
-                && slot != last_full_snapshot_slot.unwrap()
+            else if snapshot_utils::should_take_incremental_snapshot(
+                slot,
+                INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
+                last_full_snapshot_slot,
+            ) && slot != last_full_snapshot_slot.unwrap()
             {
                 make_incremental_snapshot_archive(
                     &bank,
@@ -826,7 +822,7 @@ mod tests {
         accounts_dir: PathBuf,
         genesis_config: &GenesisConfig,
     ) -> snapshot_utils::Result<()> {
-        let (deserialized_bank, _) = snapshot_utils::bank_from_latest_snapshot_archives(
+        let (deserialized_bank, ..) = snapshot_utils::bank_from_latest_snapshot_archives(
             &snapshot_config.bank_snapshots_dir,
             &snapshot_config.snapshot_archives_dir,
             &[accounts_dir],
@@ -841,7 +837,7 @@ mod tests {
             false,
             false,
             false,
-            Some(solana_runtime::accounts_index::ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
+            Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
         )?;
 
         assert_eq!(bank, &deserialized_bank);
@@ -1002,7 +998,7 @@ mod tests {
         std::thread::sleep(Duration::from_secs(5));
         info!("Awake! Rebuilding bank from latest snapshot archives...");
 
-        let (deserialized_bank, _) = snapshot_utils::bank_from_latest_snapshot_archives(
+        let (deserialized_bank, ..) = snapshot_utils::bank_from_latest_snapshot_archives(
             &snapshot_test_config.snapshot_config.bank_snapshots_dir,
             &snapshot_test_config.snapshot_config.snapshot_archives_dir,
             &[snapshot_test_config.accounts_dir.as_ref().to_path_buf()],
@@ -1017,7 +1013,7 @@ mod tests {
             false,
             false,
             false,
-            Some(solana_runtime::accounts_index::ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
+            Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
         )
         .unwrap();
 

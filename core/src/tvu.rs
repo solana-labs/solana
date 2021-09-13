@@ -44,10 +44,10 @@ use solana_runtime::{
     bank_forks::BankForks,
     commitment::BlockCommitmentCache,
     snapshot_config::SnapshotConfig,
-    snapshot_package::PendingSnapshotPackage,
+    snapshot_package::{AccountsPackageReceiver, AccountsPackageSender, PendingSnapshotPackage},
     vote_sender_types::ReplayVoteSender,
 };
-use solana_sdk::{pubkey::Pubkey, signature::Keypair};
+use solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Keypair};
 use std::{
     boxed::Box,
     collections::HashSet,
@@ -135,6 +135,8 @@ impl Tvu {
         tvu_config: TvuConfig,
         max_slots: &Arc<MaxSlots>,
         cost_model: &Arc<RwLock<CostModel>>,
+        accounts_package_channel: (AccountsPackageSender, AccountsPackageReceiver),
+        last_full_snapshot_slot: Option<Slot>,
     ) -> Self {
         let Sockets {
             repair: repair_socket,
@@ -212,9 +214,9 @@ impl Tvu {
                 (Some(snapshot_config), Some(pending_snapshot_package))
             })
             .unwrap_or((None, None));
-        let (accounts_hash_sender, accounts_hash_receiver) = channel();
+        let (accounts_package_sender, accounts_package_receiver) = accounts_package_channel;
         let accounts_hash_verifier = AccountsHashVerifier::new(
-            accounts_hash_receiver,
+            accounts_package_receiver,
             pending_snapshot_package,
             exit,
             cluster_info,
@@ -224,20 +226,19 @@ impl Tvu {
             snapshot_config.clone(),
         );
 
-        let (snapshot_request_sender, snapshot_request_handler) = {
-            snapshot_config
-                .map(|snapshot_config| {
-                    let (snapshot_request_sender, snapshot_request_receiver) = unbounded();
-                    (
-                        Some(snapshot_request_sender),
-                        Some(SnapshotRequestHandler {
-                            snapshot_config,
-                            snapshot_request_receiver,
-                            accounts_package_sender: accounts_hash_sender,
-                        }),
-                    )
-                })
-                .unwrap_or((None, None))
+        let (snapshot_request_sender, snapshot_request_handler) = match snapshot_config {
+            None => (None, None),
+            Some(snapshot_config) => {
+                let (snapshot_request_sender, snapshot_request_receiver) = unbounded();
+                (
+                    Some(snapshot_request_sender),
+                    Some(SnapshotRequestHandler {
+                        snapshot_config,
+                        snapshot_request_receiver,
+                        accounts_package_sender,
+                    }),
+                )
+            }
         };
 
         let (pruned_banks_sender, pruned_banks_receiver) = unbounded();
@@ -340,7 +341,7 @@ impl Tvu {
             tvu_config.accounts_db_caching_enabled,
             tvu_config.test_hash_calculation,
             tvu_config.use_index_hash_calculation,
-            None,
+            last_full_snapshot_slot,
         );
 
         Tvu {
@@ -434,6 +435,7 @@ pub mod tests {
         let (_, gossip_confirmed_slots_receiver) = unbounded();
         let bank_forks = Arc::new(RwLock::new(bank_forks));
         let tower = Tower::default();
+        let accounts_package_channel = channel();
         let tvu = Tvu::new(
             &vote_keypair.pubkey(),
             Arc::new(RwLock::new(vec![Arc::new(vote_keypair)])),
@@ -477,6 +479,8 @@ pub mod tests {
             TvuConfig::default(),
             &Arc::new(MaxSlots::default()),
             &Arc::new(RwLock::new(CostModel::default())),
+            accounts_package_channel,
+            None,
         );
         exit.store(true, Ordering::Relaxed);
         tvu.join().unwrap();

@@ -15,10 +15,8 @@ byteorder = "1.4.3"
 chrono = { version = "0.4.11", features = ["serde"] }
 chrono-humanize = "0.2.1"
 crossbeam-channel = "0.5"
-ed25519-dalek = "1.0.1"
 fs_extra = "1.2.0"
 futures = "0.3.17"
-futures-util = "0.3.17"
 itertools = "0.10.1"
 lazy_static = "1.4.0"
 libc = "0.2.101"
@@ -30,7 +28,7 @@ rand_chacha = "0.2.2"
 rayon = "1.5.1"
 serde = "1.0.130"
 serde_bytes = "0.11.5"
-sha2 = "0.9.6"
+sha2 = "0.9.8"
 solana-bpf-loader-program = { path = "../programs/bpf_loader", version = "=1.8.0" }
 solana-entry = { path = "../entry", version = "=1.8.0" }
 solana-frozen-abi = { path = "../frozen-abi", version = "=1.8.0" }
@@ -38,7 +36,6 @@ solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "=1.8.0" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.8.0" }
 solana-logger = { path = "../logger", version = "=1.8.0" }
 solana-measure = { path = "../measure", version = "=1.8.0" }
-solana-merkle-tree = { path = "../merkle-tree", version = "=1.8.0" }
 solana-metrics = { path = "../metrics", version = "=1.8.0" }
 solana-perf = { path = "../perf", version = "=1.8.0" }
 solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.8.0" }

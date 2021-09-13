@@ -38,6 +38,7 @@ deploy:
     on:
       branch: master
       node_js: "lts/*"
+
   - provider: script
     skip_cleanup: true
     script:
@@ -45,6 +46,7 @@ deploy:
     on:
       branch: master
       node_js: "lts/*"
+
   - provider: releases
     skip-cleanup: true
     file:

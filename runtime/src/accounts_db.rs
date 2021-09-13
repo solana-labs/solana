@@ -25,7 +25,7 @@ use crate::{
     accounts_index::{
         AccountIndexGetResult, AccountSecondaryIndexes, AccountsIndex, AccountsIndexConfig,
         AccountsIndexRootsStats, IndexKey, IsCached, RefCount, ScanResult, SlotList, SlotSlice,
-        ZeroLamport, ACCOUNTS_INDEX_CONFIG_FOR_TESTING,
+        ZeroLamport, ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS, ACCOUNTS_INDEX_CONFIG_FOR_TESTING,
     },
     ancestors::Ancestors,
     append_vec::{AppendVec, StoredAccountMeta, StoredMeta, StoredMetaWriteVersion},
@@ -88,8 +88,12 @@ pub const DEFAULT_NUM_DIRS: u32 = 4;
 // When calculating hashes, it is helpful to break the pubkeys found into bins based on the pubkey value.
 // More bins means smaller vectors to sort, copy, etc.
 pub const PUBKEY_BINS_FOR_CALCULATING_HASHES: usize = 65536;
+// # of passes should be a function of the total # of accounts that are active.
+// higher passes = slower total time, lower dynamic memory usage
+// lower passes = faster total time, higher dynamic memory usage
+// passes=2 cuts dynamic memory usage in approximately half.
 pub const NUM_SCAN_PASSES: usize = 2;
-pub const BINS_PER_PASS: usize = 32768; // PUBKEY_BINS_FOR_CALCULATING_HASHES / NUM_SCAN_PASSES
+pub const BINS_PER_PASS: usize = PUBKEY_BINS_FOR_CALCULATING_HASHES / NUM_SCAN_PASSES;
 
 // Without chunks, we end up with 1 output vec for each outer snapshot storage.
 // This results in too many vectors to be efficient.
@@ -117,6 +121,26 @@ const CACHE_VIRTUAL_WRITE_VERSION: StoredMetaWriteVersion = 0;
 // that it doesn't actually map to an entry in an AppendVec.
 const CACHE_VIRTUAL_OFFSET: usize = 0;
 const CACHE_VIRTUAL_STORED_SIZE: usize = 0;
+
+pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
+    index: Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
+};
+pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig {
+    index: Some(ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS),
+};
+
+pub type BinnedHashData = Vec<Vec<CalculateHashIntermediate>>;
+
+#[derive(Debug, Default, Clone)]
+pub struct AccountsDbConfig {
+    pub index: Option<AccountsIndexConfig>,
+}
+
+struct FoundStoredAccount<'a> {
+    pub account: StoredAccountMeta<'a>,
+    pub store_id: AppendVecId,
+    pub account_size: usize,
+}
 
 #[cfg(not(test))]
 const ABSURD_CONSECUTIVE_FAILED_ITERATIONS: usize = 100;
@@ -175,6 +199,7 @@ pub struct ErrorCounters {
     pub invalid_account_index: usize,
     pub invalid_program_for_execution: usize,
     pub not_allowed_during_cluster_maintenance: usize,
+    pub invalid_writable_account: usize,
 }
 
 #[derive(Default, Debug)]
@@ -1236,6 +1261,7 @@ struct ShrinkStats {
     skipped_shrink: AtomicU64,
     dead_accounts: AtomicU64,
     alive_accounts: AtomicU64,
+    accounts_loaded: AtomicU64,
 }
 
 impl ShrinkStats {
@@ -1332,6 +1358,11 @@ impl ShrinkStats {
                 (
                     "dead_accounts",
                     self.dead_accounts.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "accounts_loaded",
+                    self.accounts_loaded.swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
             );
@@ -1452,7 +1483,7 @@ impl AccountsDb {
             AccountSecondaryIndexes::default(),
             false,
             AccountShrinkThreshold::default(),
-            Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
+            Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
         )
     }
 
@@ -1462,9 +1493,9 @@ impl AccountsDb {
         account_indexes: AccountSecondaryIndexes,
         caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
-        accounts_index_config: Option<AccountsIndexConfig>,
+        accounts_db_config: Option<AccountsDbConfig>,
     ) -> Self {
-        let accounts_index = AccountsIndex::new(accounts_index_config);
+        let accounts_index = AccountsIndex::new(accounts_db_config.and_then(|x| x.index));
         let mut new = if !paths.is_empty() {
             Self {
                 paths,
@@ -1978,6 +2009,12 @@ impl AccountsDb {
                 } else {
                     let mut key_set = HashSet::new();
                     key_set.insert(*key);
+                    assert!(
+                        !account_info.is_cached(),
+                        "The Accounts Cache must be flushed first for this account info. pubkey: {}, slot: {}",
+                        *key,
+                        *slot
+                    );
                     let count = self
                         .storage
                         .slot_store_count(*slot, account_info.store_id)
@@ -2240,15 +2277,55 @@ impl AccountsDb {
         );
     }
 
+    fn load_accounts_index_for_shrink<'a, I>(
+        &'a self,
+        iter: I,
+        alive_accounts: &mut Vec<(&'a Pubkey, &'a FoundStoredAccount<'a>)>,
+        unrefed_pubkeys: &mut Vec<&'a Pubkey>,
+    ) -> usize
+    where
+        I: Iterator<Item = (&'a Pubkey, &'a FoundStoredAccount<'a>)>,
+    {
+        let mut alive_total = 0;
+
+        let mut alive = 0;
+        let mut dead = 0;
+        iter.for_each(|(pubkey, stored_account)| {
+            let lookup = self.accounts_index.get_account_read_entry(pubkey);
+            if let Some(locked_entry) = lookup {
+                let is_alive = locked_entry.slot_list().iter().any(|(_slot, i)| {
+                    i.store_id == stored_account.store_id
+                        && i.offset == stored_account.account.offset
+                });
+                if !is_alive {
+                    // This pubkey was found in the storage, but no longer exists in the index.
+                    // It would have had a ref to the storage from the initial store, but it will
+                    // not exist in the re-written slot. Unref it to keep the index consistent with
+                    // rewriting the storage entries.
+                    unrefed_pubkeys.push(pubkey);
+                    locked_entry.unref();
+                    dead += 1;
+                } else {
+                    alive_accounts.push((pubkey, stored_account));
+                    alive_total += stored_account.account_size;
+                    alive += 1;
+                }
+            }
+        });
+        self.shrink_stats
+            .alive_accounts
+            .fetch_add(alive, Ordering::Relaxed);
+        self.shrink_stats
+            .dead_accounts
+            .fetch_add(dead, Ordering::Relaxed);
+
+        alive_total
+    }
+
     fn do_shrink_slot_stores<'a, I>(&'a self, slot: Slot, stores: I) -> usize
     where
         I: Iterator<Item = &'a Arc<AccountStorageEntry>>,
     {
-        struct FoundStoredAccount<'a> {
-            pub account: StoredAccountMeta<'a>,
-            pub store_id: AppendVecId,
-            pub account_size: usize,
-        }
         debug!("do_shrink_slot_stores: slot: {}", slot);
         let mut stored_accounts: HashMap<Pubkey, FoundStoredAccount> = HashMap::new();
         let mut original_bytes = 0;
@@ -2285,41 +2362,22 @@ impl AccountsDb {
         let len = stored_accounts.len();
         let alive_accounts_collect = Mutex::new(Vec::with_capacity(len));
         let unrefed_pubkeys_collect = Mutex::new(Vec::with_capacity(len));
+        self.shrink_stats
+            .accounts_loaded
+            .fetch_add(len as u64, Ordering::Relaxed);
+
         self.thread_pool.install(|| {
             let chunk_size = 50; // # accounts/thread
             let chunks = len / chunk_size + 1;
             (0..chunks).into_par_iter().for_each(|chunk| {
+                let skip = chunk * chunk_size;
+
                 let mut alive_accounts = Vec::with_capacity(chunk_size);
                 let mut unrefed_pubkeys = Vec::with_capacity(chunk_size);
-                let mut alive_total = 0;
-                let skip = chunk * chunk_size;
-                stored_accounts.iter().skip(skip).take(chunk_size).for_each(
-                    |(pubkey, stored_account)| {
-                        let lookup = self.accounts_index.get_account_read_entry(pubkey);
-                        if let Some(locked_entry) = lookup {
-                            let is_alive = locked_entry.slot_list().iter().any(|(_slot, i)| {
-                                i.store_id == stored_account.store_id
-                                    && i.offset == stored_account.account.offset
-                            });
-                            if !is_alive {
-                                // This pubkey was found in the storage, but no longer exists in the index.
-                                // It would have had a ref to the storage from the initial store, but it will
-                                // not exist in the re-written slot. Unref it to keep the index consistent with
-                                // rewriting the storage entries.
-                                unrefed_pubkeys.push(pubkey);
-                                locked_entry.unref();
-                                self.shrink_stats
-                                    .dead_accounts
-                                    .fetch_add(1, Ordering::Relaxed);
-                            } else {
-                                alive_accounts.push((pubkey, stored_account));
-                                alive_total += stored_account.account_size;
-                                self.shrink_stats
-                                    .alive_accounts
-                                    .fetch_add(1, Ordering::Relaxed);
-                            }
-                        }
-                    },
+                let alive_total = self.load_accounts_index_for_shrink(
+                    stored_accounts.iter().skip(skip).take(chunk_size),
+                    &mut alive_accounts,
+                    &mut unrefed_pubkeys,
                 );
 
                 // collect
@@ -5088,7 +5146,7 @@ impl AccountsDb {
             &Ancestors,
             &AccountInfoAccountsIndex,
         )>,
-    ) -> Result<Vec<Vec<Vec<CalculateHashIntermediate>>>, BankHashVerificationError> {
+    ) -> Result<Vec<BinnedHashData>, BankHashVerificationError> {
         let bin_calculator = PubkeyBinCalculator16::new(bins);
         assert!(bin_range.start < bins && bin_range.end <= bins && bin_range.start < bin_range.end);
         let mut time = Measure::start("scan all accounts");
@@ -5097,12 +5155,10 @@ impl AccountsDb {
         let range = bin_range.end - bin_range.start;
         let sort_time = AtomicU64::new(0);
 
-        let result: Vec<Vec<Vec<CalculateHashIntermediate>>> = Self::scan_account_storage_no_bank(
+        let result: Vec<BinnedHashData> = Self::scan_account_storage_no_bank(
             accounts_cache_and_ancestors,
             storage,
-            |loaded_account: LoadedAccount,
-             accum: &mut Vec<Vec<CalculateHashIntermediate>>,
-             slot: Slot| {
+            |loaded_account: LoadedAccount, accum: &mut BinnedHashData, slot: Slot| {
                 let pubkey = loaded_account.pubkey();
                 let mut pubkey_to_bin_index = bin_calculator.bin_from_pubkey(pubkey);
                 if !bin_range.contains(&pubkey_to_bin_index) {
@@ -5163,9 +5219,7 @@ impl AccountsDb {
         Ok(result)
     }
 
-    fn sort_slot_storage_scan(
-        accum: Vec<Vec<CalculateHashIntermediate>>,
-    ) -> (Vec<Vec<CalculateHashIntermediate>>, u64) {
+    fn sort_slot_storage_scan(accum: BinnedHashData) -> (BinnedHashData, u64) {
         let time = AtomicU64::new(0);
         (
             accum
@@ -5199,24 +5253,17 @@ impl AccountsDb {
         )>,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         let mut scan_and_hash = move || {
-            // # of passes should be a function of the total # of accounts that are active.
-            // higher passes = slower total time, lower dynamic memory usage
-            // lower passes = faster total time, higher dynamic memory usage
-            // passes=2 cuts dynamic memory usage in approximately half.
-            let num_scan_passes: usize = 2;
-
-            let bins_per_pass = PUBKEY_BINS_FOR_CALCULATING_HASHES / num_scan_passes;
             assert_eq!(
-                bins_per_pass * num_scan_passes,
+                BINS_PER_PASS * NUM_SCAN_PASSES,
                 PUBKEY_BINS_FOR_CALCULATING_HASHES
             ); // evenly divisible
             let mut previous_pass = PreviousPass::default();
             let mut final_result = (Hash::default(), 0);
 
-            for pass in 0..num_scan_passes {
+            for pass in 0..NUM_SCAN_PASSES {
                 let bounds = Range {
-                    start: pass * bins_per_pass,
-                    end: (pass + 1) * bins_per_pass,
+                    start: pass * BINS_PER_PASS,
+                    end: (pass + 1) * BINS_PER_PASS,
                 };
 
                 let result = Self::scan_snapshot_stores_with_cache(
@@ -5231,13 +5278,14 @@ impl AccountsDb {
                 let (hash, lamports, for_next_pass) = AccountsHash::rest_of_hash_calculation(
                     result,
                     &mut stats,
-                    pass == num_scan_passes - 1,
+                    pass == NUM_SCAN_PASSES - 1,
                     previous_pass,
-                    bins_per_pass,
+                    BINS_PER_PASS,
                 );
                 previous_pass = for_next_pass;
                 final_result = (hash, lamports);
             }
+
             Ok(final_result)
         };
         if let Some(thread_pool) = thread_pool {
@@ -6419,7 +6467,9 @@ impl AccountsDb {
         roots.sort();
         info!("{}: accounts_index roots: {:?}", label, roots,);
         self.accounts_index.account_maps.iter().for_each(|map| {
-            for (pubkey, account_entry) in map.read().unwrap().iter() {
+            for (pubkey, account_entry) in
+                map.read().unwrap().items(&None::<&std::ops::Range<Pubkey>>)
+            {
                 info!("  key: {} ref_count: {}", pubkey, account_entry.ref_count(),);
                 info!(
                     "      slots: {:?}",
@@ -6475,7 +6525,7 @@ impl AccountsDb {
             account_indexes,
             caching_enabled,
             shrink_ratio,
-            Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
+            Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
         )
     }
 
@@ -6702,7 +6752,7 @@ pub mod tests {
             bins: usize,
             bin_range: &Range<usize>,
             check_hash: bool,
-        ) -> Result<Vec<Vec<Vec<CalculateHashIntermediate>>>, BankHashVerificationError> {
+        ) -> Result<Vec<BinnedHashData>, BankHashVerificationError> {
             Self::scan_snapshot_stores_with_cache(storage, stats, bins, bin_range, check_hash, None)
         }
     }

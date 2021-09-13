@@ -8,7 +8,7 @@ use solana_program::{
     bpf_loader, entrypoint,
     entrypoint::{ProgramResult, MAX_PERMITTED_DATA_INCREASE},
     msg,
-    program::{invoke, invoke_signed},
+    program::{get_return_data, invoke, invoke_signed, set_return_data},
     program_error::ProgramError,
     pubkey::Pubkey,
     system_instruction,
@@ -26,6 +26,8 @@ fn process_instruction(
     if instruction_data.is_empty() {
         return Ok(());
     }
+
+    assert_eq!(get_return_data(), None);
 
     match instruction_data[0] {
         VERIFY_TRANSLATIONS => {
@@ -285,6 +287,11 @@ fn process_instruction(
                     data[i] = i as u8;
                 }
             }
+        }
+        SET_RETURN_DATA => {
+            msg!("Set return data");
+
+            set_return_data(b"Set by invoked");
         }
         _ => panic!(),
     }

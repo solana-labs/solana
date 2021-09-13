@@ -1,6 +1,7 @@
 import bs58 from 'bs58';
 import {Buffer} from 'buffer';
-import fetch, {Response} from 'node-fetch';
+import fetch from 'cross-fetch';
+import type {Response} from 'cross-fetch';
 import {
   type as pick,
   number,
@@ -2958,6 +2959,18 @@ export class Connection {
     const res = create(unsafeRes, jsonRpcResult(VersionResult));
     if ('error' in res) {
       throw new Error('failed to get version: ' + res.error.message);
+    }
+    return res.result;
+  }
+
+  /**
+   * Fetch the genesis hash
+   */
+  async getGenesisHash(): Promise<string> {
+    const unsafeRes = await this._rpcRequest('getGenesisHash', []);
+    const res = create(unsafeRes, jsonRpcResult(string()));
+    if ('error' in res) {
+      throw new Error('failed to get genesis hash: ' + res.error.message);
     }
     return res.result;
   }
