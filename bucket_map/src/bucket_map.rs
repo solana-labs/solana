@@ -17,6 +17,7 @@ use std::{
     fs,
     sync::atomic::{AtomicUsize, Ordering},
 };
+use tempfile::TempDir;
 pub type MaxSearch = u8;
 
 type RefCount = u64;
@@ -33,6 +34,7 @@ pub struct BucketMap<T: Clone + Copy + std::fmt::Debug> {
     bits: u8,
     max_search: MaxSearch,
     pub stats: Arc<BucketMapStats>,
+    pub temp_dir: Option<TempDir>,
 }
 
 impl<T: Clone + Copy + std::fmt::Debug> Drop for BucketMap<T> {
@@ -64,17 +66,23 @@ pub struct BucketMapDistribution {
 }
 
 impl<T: Clone + Copy + std::fmt::Debug> BucketMap<T> {
-    pub fn new(num_buckets_pow2: u8, drives: Arc<Vec<PathBuf>>, max_search: MaxSearch) -> Self {
+    pub fn new(num_buckets_pow2: u8, drives: Option<Arc<Vec<PathBuf>>>, max_search: MaxSearch) -> Self {
         let count = 1 << num_buckets_pow2;
         let mut buckets = Vec::with_capacity(count);
         buckets.resize_with(count, || RwLock::new(None));
         let stats = Arc::new(BucketMapStats::default());
+        let mut temp_dir = None;
+        let drives = drives.unwrap_or_else(|| {
+            temp_dir = Some(TempDir::new().unwrap());
+            Arc::new(vec![temp_dir.as_ref().unwrap().path().to_path_buf()])
+        });
         Self {
             buckets,
             drives,
             bits: num_buckets_pow2,
             stats,
             max_search,
+            temp_dir,
         }
     }
 
@@ -178,8 +186,9 @@ impl<T: Clone + Copy + std::fmt::Debug> BucketMap<T> {
         assert!(!paths.is_empty());
         Arc::new(paths)
     }
-    pub fn new_buckets(num_buckets_pow2: u8, max_search: MaxSearch) -> Self {
-        Self::new(num_buckets_pow2, Self::new_random_folders(), max_search)
+    pub fn new_buckets(num_buckets_pow2: u8, max_search: MaxSearch, drives: Option<Vec<PathBuf>>) -> Self {
+        let drives = drives.map(|drives| Arc::new(drives));
+        Self::new(num_buckets_pow2, drives, max_search)
     }
 
     pub fn set_expected_capacity(&self, ix: usize, count: usize) {

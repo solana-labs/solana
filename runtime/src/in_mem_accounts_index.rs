@@ -68,8 +68,9 @@ impl<V: IsCached> InMemAccountsIndex<V> {
         let max_search: MaxSearch = max_search
             .map(|x| x.try_into().unwrap())
             .unwrap_or(MAX_SEARCH);
+        let drives = None;//Some() vec![Path::new("accounts_index_buckets")]
         Arc::new(BucketMapHolder::new(
-            BucketMap::new_buckets(buckets, max_search),
+            BucketMap::new_buckets(buckets, max_search, drives),
             threads,
         ))
     }

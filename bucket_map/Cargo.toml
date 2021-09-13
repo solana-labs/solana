@@ -19,8 +19,6 @@ log = { version = "0.4.11" }
 solana-measure = { path = "../measure", version = "=1.8.0" }
 rand = "0.7.0"
 fs_extra = "1.2.0"
-
-[dev-dependencies]
 tempfile = "3.2.0"
 
 [lib]
