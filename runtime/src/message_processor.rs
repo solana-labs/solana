@@ -1212,10 +1212,7 @@ mod tests {
                 solana_sdk::pubkey::new_rand(),
                 Rc::new(RefCell::new(not_owned_account)),
             ),
-            (
-                callee_program_id,
-                Rc::new(RefCell::new(program_account.clone())),
-            ),
+            (callee_program_id, Rc::new(RefCell::new(program_account))),
         ];
         let program_indices = vec![2];
 
