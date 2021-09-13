@@ -1889,7 +1889,7 @@ fn main() {
 
             let accounts_db_config = Some(AccountsDbConfig {
                 index: accounts_index_config,
-                ledger_path: Some(ledger_path.clone()),
+                accounts_hash_cache_path: Some(ledger_path.clone()),
             });
 
             let process_options = ProcessOptions {

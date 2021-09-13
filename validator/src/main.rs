@@ -2447,7 +2447,7 @@ pub fn main() {
 
     let accounts_db_config = Some(AccountsDbConfig {
         index: accounts_index_config,
-        ledger_path: Some(ledger_path.clone()),
+        accounts_hash_cache_path: Some(ledger_path.clone()),
     });
 
     let accountsdb_repl_service_config = if matches.is_present("enable_accountsdb_repl") {

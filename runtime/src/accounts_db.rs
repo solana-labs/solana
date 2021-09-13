@@ -126,11 +126,11 @@ const CACHE_VIRTUAL_STORED_SIZE: usize = 0;
 
 pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
-    ledger_path: None,
+    accounts_hash_cache_path: None,
 };
 pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS),
-    ledger_path: None,
+    accounts_hash_cache_path: None,
 };
 
 pub type BinnedHashData = Vec<Vec<CalculateHashIntermediate>>;
@@ -138,7 +138,7 @@ pub type BinnedHashData = Vec<Vec<CalculateHashIntermediate>>;
 #[derive(Debug, Default, Clone)]
 pub struct AccountsDbConfig {
     pub index: Option<AccountsIndexConfig>,
-    pub ledger_path: Option<PathBuf>,
+    pub accounts_hash_cache_path: Option<PathBuf>,
 }
 
 struct FoundStoredAccount<'a> {
@@ -961,11 +961,11 @@ pub struct AccountsDb {
     /// Set of storage paths to pick from
     pub(crate) paths: Vec<PathBuf>,
 
-    ledger_path: PathBuf,
+    accounts_hash_cache_path: PathBuf,
 
     // used by tests
     // holds this until we are dropped
-    temp_ledger_path: Option<TempDir>,
+    temp_accounts_hash_cache_path: Option<TempDir>,
 
     pub shrink_paths: RwLock<Option<Vec<PathBuf>>>,
 
@@ -1433,15 +1433,19 @@ impl AccountsDb {
 
     fn default_with_accounts_index(
         accounts_index: AccountInfoAccountsIndex,
-        ledger_path: Option<PathBuf>,
+        accounts_hash_cache_path: Option<PathBuf>,
     ) -> Self {
         let num_threads = get_thread_count();
         const MAX_READ_ONLY_CACHE_DATA_SIZE: usize = 200_000_000;
 
-        let mut temp_ledger_path = None;
-        let ledger_path = ledger_path.unwrap_or_else(|| {
-            temp_ledger_path = Some(TempDir::new().unwrap());
-            temp_ledger_path.as_ref().unwrap().path().to_path_buf()
+        let mut temp_accounts_hash_cache_path = None;
+        let accounts_hash_cache_path = accounts_hash_cache_path.unwrap_or_else(|| {
+            temp_accounts_hash_cache_path = Some(TempDir::new().unwrap());
+            temp_accounts_hash_cache_path
+                .as_ref()
+                .unwrap()
+                .path()
+                .to_path_buf()
         });
 
         let mut bank_hashes = HashMap::new();
@@ -1459,8 +1463,8 @@ impl AccountsDb {
             shrink_candidate_slots: Mutex::new(HashMap::new()),
             write_version: AtomicU64::new(0),
             paths: vec![],
-            ledger_path,
-            temp_ledger_path,
+            accounts_hash_cache_path,
+            temp_accounts_hash_cache_path,
             shrink_paths: RwLock::new(None),
             temp_paths: None,
             file_size: DEFAULT_FILE_SIZE,
@@ -1513,9 +1517,9 @@ impl AccountsDb {
     ) -> Self {
         let accounts_index =
             AccountsIndex::new(accounts_db_config.as_ref().and_then(|x| x.index.clone()));
-        let ledger_path = accounts_db_config
+        let accounts_hash_cache_path = accounts_db_config
             .as_ref()
-            .and_then(|x| x.ledger_path.clone());
+            .and_then(|x| x.accounts_hash_cache_path.clone());
         let mut new = if !paths.is_empty() {
             Self {
                 paths,
@@ -1524,7 +1528,7 @@ impl AccountsDb {
                 account_indexes,
                 caching_enabled,
                 shrink_ratio,
-                ..Self::default_with_accounts_index(accounts_index, ledger_path)
+                ..Self::default_with_accounts_index(accounts_index, accounts_hash_cache_path)
             }
         } else {
             // Create a temporary set of accounts directories, used primarily
@@ -1537,7 +1541,7 @@ impl AccountsDb {
                 account_indexes,
                 caching_enabled,
                 shrink_ratio,
-                ..Self::default_with_accounts_index(accounts_index, ledger_path)
+                ..Self::default_with_accounts_index(accounts_index, accounts_hash_cache_path)
             }
         };
 
@@ -5170,7 +5174,7 @@ impl AccountsDb {
             };
 
             Self::calculate_accounts_hash_without_index(
-                &self.ledger_path,
+                &self.accounts_hash_cache_path,
                 &storages,
                 Some(&self.thread_pool_clean),
                 timings,
@@ -5358,7 +5362,7 @@ impl AccountsDb {
     // modeled after get_accounts_delta_hash
     // intended to be faster than calculate_accounts_hash
     pub fn calculate_accounts_hash_without_index(
-        ledger_path: &Path,
+        accounts_hash_cache_path: &Path,
         storages: &SortedStorages,
         thread_pool: Option<&ThreadPool>,
         mut stats: HashStats,
@@ -5377,7 +5381,7 @@ impl AccountsDb {
             let mut previous_pass = PreviousPass::default();
             let mut final_result = (Hash::default(), 0);
 
-            let cache_hash_data = CacheHashData::new(&ledger_path);
+            let cache_hash_data = CacheHashData::new(&accounts_hash_cache_path);
 
             for pass in 0..NUM_SCAN_PASSES {
                 let bounds = Range {
@@ -6872,9 +6876,9 @@ pub mod tests {
             check_hash: bool,
         ) -> Result<Vec<BinnedHashData>, BankHashVerificationError> {
             let temp_dir = TempDir::new().unwrap();
-            let ledger_path = temp_dir.path();
+            let accounts_hash_cache_path = temp_dir.path();
             Self::scan_snapshot_stores_with_cache(
-                &CacheHashData::new(&ledger_path),
+                &CacheHashData::new(&accounts_hash_cache_path),
                 storage,
                 stats,
                 bins,
@@ -7297,9 +7301,9 @@ pub mod tests {
 
         let calls = AtomicU64::new(0);
         let temp_dir = TempDir::new().unwrap();
-        let ledger_path = temp_dir.path();
+        let accounts_hash_cache_path = temp_dir.path();
         let result = AccountsDb::scan_account_storage_no_bank(
-            &CacheHashData::new(&ledger_path),
+            &CacheHashData::new(&accounts_hash_cache_path),
             None,
             &get_storage_refs(&storages),
             |loaded_account: LoadedAccount, accum: &mut BinnedHashData, slot: Slot| {
