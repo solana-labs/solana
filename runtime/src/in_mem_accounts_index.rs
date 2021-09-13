@@ -14,7 +14,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use std::fmt::Debug;
-
+use std::ops::RangeBounds;
 type K = Pubkey;
 
 // one instance of this represents one bin of the accounts index.
@@ -51,9 +51,18 @@ impl<T: IsCached> InMemAccountsIndex<T> {
         result
     }
 
-    pub fn items(&self) -> Vec<(K, AccountMapEntry<T>)> {
+    pub fn items<R>(&self, range: &Option<&R>) -> Vec<(K, AccountMapEntry<T>)>
+    where
+        R: RangeBounds<Pubkey> + std::fmt::Debug,
+    {
         Self::update_stat(&self.stats().items, 1);
-        self.map.iter().map(|(k, v)| (*k, v.clone())).collect()
+        let mut result = Vec::with_capacity(self.map.len());
+        self.map.iter().for_each(|(k, v)| {
+            if range.map(|range| range.contains(k)).unwrap_or(true) {
+                result.push((*k, v.clone()));
+            }
+        });
+        result
     }
 
     pub fn keys(&self) -> Keys<K, AccountMapEntry<T>> {

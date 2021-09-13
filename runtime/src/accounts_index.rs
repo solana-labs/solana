@@ -559,14 +559,9 @@ impl<'a, T: IsCached> AccountsIndexIterator<'a, T> {
         collect_all_unsorted: bool,
     ) -> Vec<(Pubkey, AccountMapEntry<T>)>
     where
-        R: RangeBounds<Pubkey>,
+        R: RangeBounds<Pubkey> + std::fmt::Debug,
     {
-        let mut result = Vec::with_capacity(map.len());
-        for (k, v) in map.items() {
-            if range.contains(&k) {
-                result.push((k, v));
-            }
-        }
+        let mut result = map.items(&Some(&range));
         if !collect_all_unsorted {
             result.sort_unstable_by(|a, b| a.0.cmp(&b.0));
         }
