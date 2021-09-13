@@ -56,9 +56,9 @@ impl<V: IsCached> InMemAccountsIndex<V> {
         max_search: Option<usize>,
         threads: Option<usize>,
     ) -> Arc<BucketMapHolder<V>> {
-        let threads = threads.unwrap_or_else(|| std::cmp::max(2, num_cpus::get() / 16));
-
+        let threads = threads.unwrap_or_else(|| std::cmp::max(2, num_cpus::get() / 4));
         let threads = std::cmp::min(threads, bins); // doesn't make sense to have more threads than bins
+        error!("bucket map flusher threads: {}", threads);
 
         let buckets = PubkeyBinCalculator16::log_2(bins as u32) as u8;
         // this should be <= 1 << DEFAULT_CAPACITY or we end up searching the same items over and over - probably not a big deal since it is so small anyway
