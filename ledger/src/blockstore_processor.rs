@@ -1193,6 +1193,7 @@ fn load_frozen_forks(
                         snapshot_config.full_snapshot_archive_interval_slots,
                     ) {
                         *last_full_snapshot_slot = Some(*root);
+                        new_root_bank.force_flush_accounts_cache();
                         new_root_bank.clean_accounts(true, true, *last_full_snapshot_slot);
                         snapshot_utils::snapshot_bank(
                             new_root_bank,
