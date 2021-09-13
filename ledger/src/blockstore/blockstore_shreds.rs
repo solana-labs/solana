@@ -605,84 +605,83 @@ impl Blockstore {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::{get_tmp_ledger_path, shred::max_ticks_per_n_shreds};
+    use crate::{get_tmp_ledger_path_auto_delete, shred::max_ticks_per_n_shreds};
 
     #[test]
     fn test_get_data_shred_from_cache() {
         solana_logger::setup();
-        let ledger_path = get_tmp_ledger_path!();
-        let ledger = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
         // Create a bunch of shreds and insert them
         let num_entries = max_ticks_per_n_shreds(50, None);
         let (shreds, _) = make_slot_entries(0, 0, num_entries);
-        ledger.insert_shreds(shreds.clone(), None, false).unwrap();
+        blockstore
+            .insert_shreds(shreds.clone(), None, false)
+            .unwrap();
 
         // Ensure that all shreds inserted into cache can be retrieved
         for shred in shreds.iter() {
             assert_eq!(
                 shred.payload,
-                ledger
+                blockstore
                     .get_data_shred_from_cache(shred.slot(), shred.index().into())
                     .unwrap()
                     .unwrap()
             );
         }
         // Try retrieving a shred that wasn't inserted
-        assert!(ledger.get_data_shred_from_cache(1, 0).unwrap().is_none());
-
-        // Destroying database without closing it first is undefined behavior
-        drop(ledger);
-        Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
+        assert!(blockstore
+            .get_data_shred_from_cache(1, 0)
+            .unwrap()
+            .is_none());
     }
 
     #[test]
     fn test_flush_data_shreds_for_full_slot_to_fs() {
         solana_logger::setup();
-        let ledger_path = get_tmp_ledger_path!();
-        let ledger = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
         // Create a bunch of shreds and insert them
         let num_entries = max_ticks_per_n_shreds(100, None);
         let (shreds, _) = make_slot_entries(0, 0, num_entries);
-        ledger.insert_shreds(shreds.clone(), None, false).unwrap();
+        blockstore
+            .insert_shreds(shreds.clone(), None, false)
+            .unwrap();
 
         // Just inserted shreds in cache only, not yet on disk
         for shred in shreds.iter() {
-            assert!(ledger
+            assert!(blockstore
                 .get_data_shred_from_fs(shred.slot(), shred.index().into())
                 .unwrap()
                 .is_none());
         }
 
         // Flush the slot from cache to disk
-        ledger.flush_data_shreds_for_slot_to_fs(0).unwrap();
+        blockstore.flush_data_shreds_for_slot_to_fs(0).unwrap();
 
         // Confirm shreds can be read back from fs, but not from cache
         for shred in shreds.iter() {
             assert_eq!(
                 shred.payload,
-                ledger
+                blockstore
                     .get_data_shred_from_fs(shred.slot(), shred.index().into())
                     .unwrap()
                     .unwrap()
             );
-            assert!(ledger
+            assert!(blockstore
                 .get_data_shred_from_cache(shred.slot(), shred.index().into())
                 .unwrap()
                 .is_none());
         }
-
-        // Destroying database without closing it first is undefined behavior
-        drop(ledger);
-        Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
     }
 
     #[test]
     fn test_flush_data_shreds_for_partial_slot_to_fs() {
         solana_logger::setup();
-        let ledger_path = get_tmp_ledger_path!();
-        let ledger = Blockstore::open(&ledger_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
         // Create a bunch of shreds
         let num_entries = max_ticks_per_n_shreds(10, None);
@@ -701,14 +700,16 @@ pub mod tests {
         }
 
         // Insert and flush shreds1 - this will be a straightforward flush
-        ledger.insert_shreds(shreds1.clone(), None, false).unwrap();
-        ledger.flush_data_shreds_for_slot_to_fs(0).unwrap();
+        blockstore
+            .insert_shreds(shreds1.clone(), None, false)
+            .unwrap();
+        blockstore.flush_data_shreds_for_slot_to_fs(0).unwrap();
 
         // Confirm shreds can be read back from fs
         for shred in shreds1.iter() {
             assert_eq!(
                 shred.payload,
-                ledger
+                blockstore
                     .get_data_shred_from_fs(shred.slot(), shred.index().into())
                     .unwrap()
                     .unwrap()
@@ -716,22 +717,20 @@ pub mod tests {
         }
 
         // Insert and flush shreds2 - this will perform merge of cache and already flushed shreds
-        ledger.insert_shreds(shreds2.clone(), None, false).unwrap();
-        ledger.flush_data_shreds_for_slot_to_fs(0).unwrap();
+        blockstore
+            .insert_shreds(shreds2.clone(), None, false)
+            .unwrap();
+        blockstore.flush_data_shreds_for_slot_to_fs(0).unwrap();
 
         // Confirm all shreds can be read back from fs
         for shred in shreds.iter() {
             assert_eq!(
                 shred.payload,
-                ledger
+                blockstore
                     .get_data_shred_from_fs(shred.slot(), shred.index().into())
                     .unwrap()
                     .unwrap()
             );
         }
-
-        // Destroying database without closing it first is undefined behavior
-        drop(ledger);
-        Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
     }
 }

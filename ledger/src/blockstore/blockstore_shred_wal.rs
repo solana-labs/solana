@@ -282,7 +282,7 @@ impl ShredWAL {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::get_tmp_ledger_path;
+    use crate::get_tmp_ledger_path_auto_delete;
 
     fn test_flatten_recovered_shreds(
         recovered_shreds: RecoveredShreds,
@@ -312,8 +312,8 @@ pub mod tests {
         let shreds_per_slot = shreds.len() / num_slots as usize;
 
         // Construct ShredWAL with log files sized to fit one slot
-        let ledger_path = get_tmp_ledger_path!();
-        let mut shred_wal = ShredWAL::new(&ledger_path, shreds_per_slot).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let mut shred_wal = ShredWAL::new(ledger_path.path(), shreds_per_slot).unwrap();
 
         // Insert the shreds, one slot per write
         for _ in 0..num_slots {
@@ -337,9 +337,6 @@ pub mod tests {
                     .unwrap()
             );
         }
-
-        drop(shred_wal);
-        fs::remove_dir_all(&ledger_path).unwrap();
     }
 
     #[test]
@@ -358,8 +355,8 @@ pub mod tests {
         let shreds_per_slot = shreds.len() / num_slots as usize;
 
         // Construct ShredWAL with log files sized to fit one slot
-        let ledger_path = get_tmp_ledger_path!();
-        let mut shred_wal = ShredWAL::new(&ledger_path, 4 * shreds_per_slot).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let mut shred_wal = ShredWAL::new(ledger_path.path(), 4 * shreds_per_slot).unwrap();
 
         // Insert half the shreds, two slots per write
         // (num_slots / 4) / (2 * shreds_per_slot) = 1/2 slots
@@ -404,9 +401,6 @@ pub mod tests {
                 }
             }
         }
-
-        drop(shred_wal);
-        fs::remove_dir_all(&ledger_path).unwrap();
     }
 
     #[test]

@@ -3915,22 +3915,22 @@ pub mod tests {
     }
 
     #[test]
-    fn test_double_destroy_ledger() {
-        let ledger_path = get_tmp_ledger_path!();
-        let ledger = Blockstore::open(&ledger_path).unwrap();
+    fn test_double_destroy_blockstore() {
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
         // Create some entries; just want some data to be inserted
         let num_entries = max_ticks_per_n_shreds(1, None);
         assert!(num_entries > 0);
 
         let (shreds, _) = make_slot_entries(0, 0, num_entries);
-        ledger.insert_shreds(shreds, None, false).unwrap();
+        blockstore.insert_shreds(shreds, None, false).unwrap();
 
         // Destroying database without closing it first is undefined behavior
-        drop(ledger);
+        drop(blockstore);
         // Destroy twice to ensure that destruction on non-existent blockstore is graceful
-        Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
-        Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
+        Blockstore::destroy(ledger_path.path()).expect("Expected successful database destruction");
+        Blockstore::destroy(ledger_path.path()).expect("Expected successful database destruction");
     }
 
     #[test]
@@ -3951,7 +3951,7 @@ pub mod tests {
             .insert_shreds(vec![last_shred.clone()], None, false)
             .unwrap();
 
-        let serialized_shred = ledger
+        let serialized_shred = blockstore
             .get_data_shred(0, last_shred.index() as u64)
             .unwrap()
             .unwrap();
@@ -4088,23 +4088,6 @@ pub mod tests {
             .expect("Expected erasure object to exist");
 
         assert_eq!(result, erasure);
-
-        // Test data column family
-        let data = vec![2u8; 16];
-        let data_key = (0, 0);
-        blockstore.data_shred_cf.put_bytes(data_key, &data).unwrap();
-
-        let result = blockstore
-            .data_shred_cf
-            .get_bytes(data_key)
-            .unwrap()
-            .expect("Expected data object to exist");
-
-        assert_eq!(result, data);
-
-        // Destroying database without closing it first is undefined behavior
-        drop(ledger);
-        Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
     }
 
     #[test]
