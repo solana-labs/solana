@@ -504,7 +504,7 @@ impl Validator {
             PohRecorder::new_with_clear_signal(
                 bank.tick_height(),
                 bank.last_blockhash(),
-                bank.slot(),
+                bank.clone(),
                 leader_schedule_cache.next_leader_slot(
                     &id,
                     bank.slot(),
