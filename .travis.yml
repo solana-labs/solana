@@ -67,30 +67,6 @@ jobs:
     #  before_install:
     #    - sudo apt-get install libssl-dev libudev-dev
 
-    # web3.js pull request
-    - name: "web3.js"
-      if: type = pull_request AND branch = master
-
-      language: node_js
-      node_js:
-        - "lts/*"
-
-      services:
-        - docker
-
-      cache:
-        directories:
-          - ~/.npm
-
-      before_install:
-        - .travis/affects.sh web3.js/ .travis || travis_terminate 0
-        - cd web3.js/
-        - source .travis/before_install.sh
-
-      script:
-        - ../.travis/commitlint.sh
-        - source .travis/script.sh
-
     # docs pull request
     - name: "docs"
       if: type IN (push, pull_request) OR tag IS present
