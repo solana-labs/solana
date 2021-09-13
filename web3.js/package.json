@@ -43,7 +43,7 @@
     "clean": "rimraf ./coverage ./lib",
     "codecov": "set -ex; npm run test:cover; cat ./coverage/lcov.info | codecov",
     "dev": "cross-env NODE_ENV=development rollup -c",
-    "doc": "set -ex; typedoc",
+    "doc": "set -ex; typedoc --treatWarningsAsErrors",
     "flow:check": "flow check-contents < module.flow.js",
     "flow:gen": "flowgen lib/index.d.ts -o module.flow.js",
     "type:gen": "./scripts/typegen.sh",
