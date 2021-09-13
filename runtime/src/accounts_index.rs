@@ -31,8 +31,8 @@ use thiserror::Error;
 
 pub const ITER_BATCH_SIZE: usize = 1000;
 pub const BINS_DEFAULT: usize = 8192;
-pub const BINS_FOR_TESTING: usize = 2;
-pub const BINS_FOR_BENCHMARKS: usize = 2;
+pub const BINS_FOR_TESTING: usize = 16;
+pub const BINS_FOR_BENCHMARKS: usize = 16;
 pub const ACCOUNTS_INDEX_CONFIG_FOR_TESTING: AccountsIndexConfig = AccountsIndexConfig {
     bins: Some(BINS_FOR_TESTING),
     threads: Some(2),
@@ -188,6 +188,10 @@ impl<T: IsCached> AccountMapEntryInner<T> {
 
     pub fn set_dirty(&self, value: bool) {
         self.meta.dirty.store(value, Ordering::Relaxed);
+    }
+
+    pub fn swap_dirty(&self, value: bool) -> bool {
+        self.meta.dirty.swap(value, Ordering::Relaxed)
     }
 
     pub fn set_insert(&self, value: bool) {
@@ -907,20 +911,19 @@ impl<T: IsCached> AccountsIndex<T> {
             .unwrap_or(BINS_DEFAULT);
         let threads = config
             .as_ref()
-            .and_then(|config| config.threads)
-            .unwrap_or_else(|| std::cmp::max(2, num_cpus::get() / 8));
+            .and_then(|config| config.threads);
         let max_search = config.as_ref().and_then(|config| config.max_search);
 
         // create bin_calculator early to verify # bins is reasonable
         let bin_calculator = PubkeyBinCalculator16::new(bins);
-        let bucket_map = InMemAccountsIndex::new_bucket_map(bins, max_search);
+        let bucket_map = InMemAccountsIndex::new_bucket_map(bins, max_search, threads);
         let account_maps = (0..bins)
             .into_iter()
             .map(|bin| RwLock::new(AccountMap::new(&bucket_map, bin)))
             .collect::<Vec<_>>();
         let accounts_index_bg = account_maps
             .first()
-            .map(|map| map.read().unwrap().create_bg_flusher(threads));
+            .map(|map| map.read().unwrap().create_bg_flusher());
         (account_maps, bin_calculator, accounts_index_bg)
     }
 

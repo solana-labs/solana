@@ -95,8 +95,8 @@ impl BucketMapHolderStats {
         for d in &cts {
             let d = *d;
             ct += d;
-            min_cache = std::cmp::min(min, d);
-            max_cache = std::cmp::max(max, d);
+            min_cache = std::cmp::min(min_cache, d);
+            max_cache = std::cmp::max(max_cache, d);
         }
 
         let dist = if !in_mem_only {

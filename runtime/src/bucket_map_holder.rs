@@ -26,7 +26,6 @@ pub type Age = u8;
 // how many times should we be able to iterate the entire cache and complete a flush in 1000s
 // 1000 = 1 iteration/second
 const FULL_FLUSHES_PER_1000_S: usize = 1000;
-const MAX_THREADS: usize = 8;
 const THROUGHPUT_POLL_MS: u64 = 200;
 
 use std::hash::{BuildHasherDefault, Hasher};
@@ -122,6 +121,7 @@ pub struct BucketMapHolder<V: IsCached> {
     pub per_bin: Vec<PerBin<V>>,
     primary_thread: AtomicBool,
     count_aged: AtomicUsize,
+    pub num_threads: usize,
 }
 
 impl<V: IsCached> BucketMapHolder<V> {
@@ -315,7 +315,7 @@ impl<V: IsCached> BucketMapHolder<V> {
 
             self.maybe_report_stats();
             self.maybe_age(self.startup.load(Ordering::Relaxed));
-            error!(
+            info!(
                 "primary: {}, found one: {}, awakened: {}",
                 primary_thread, found_one, awakened
             );
@@ -415,15 +415,21 @@ impl<V: IsCached> BucketMapHolder<V> {
             let ms_per_s = 1_000;
             let elapsed_per_1000_s_factor = one_thousand_seconds * ms_per_s / (elapsed_ms as usize);
             let ratio = bins_scanned * elapsed_per_1000_s_factor / self.bins;
-            error!(
-                "throughput: bins scanned: {}, elapsed: {}ms, {}, desired threads: {}",
+            info!(
+                "throughput: bins scanned: {}, elapsed: {}ms, {}, desired threads: {}, primary thread idle: {}, can put to sleep: {}, active thrads: {}",
                 bins_scanned,
                 elapsed_ms,
                 ratio,
-                self.get_desired_threads()
+                self.get_desired_threads(),
+                primary_thread_was_idle,
+                can_put_thread_to_sleep,
+                self.stats
+                        .active_flush_threads.load(Ordering::Relaxed),
             );
             self.stats.throughput.store(ratio as u64, Ordering::Relaxed);
-            if can_put_thread_to_sleep && (ratio > FULL_FLUSHES_PER_1000_S || primary_thread_was_idle) {
+            if can_put_thread_to_sleep
+                && (ratio > FULL_FLUSHES_PER_1000_S || primary_thread_was_idle)
+            {
                 // decrease
                 let threads = self.get_desired_threads();
                 if threads > 1 && self.set_desired_threads(false, threads) {
@@ -433,7 +439,7 @@ impl<V: IsCached> BucketMapHolder<V> {
             } else if ratio < FULL_FLUSHES_PER_1000_S {
                 // increase
                 let threads = self.get_desired_threads();
-                if threads < MAX_THREADS {
+                if threads < self.num_threads {
                     self.set_desired_threads(true, threads);
                 }
             }
@@ -446,7 +452,10 @@ impl<V: IsCached> BucketMapHolder<V> {
     }
 
     fn set_desired_threads(&self, increment: bool, expected_threads: usize) -> bool {
-        error!("change threads: increment: {}, previous: {}", increment, expected_threads);
+        error!(
+            "change threads: increment: {}, previous: {}",
+            increment, expected_threads
+        );
         if increment {
             let new = expected_threads + 1;
             self.desired_threads
@@ -494,7 +503,7 @@ impl<V: IsCached> BucketMapHolder<V> {
         }
     }
 
-    pub fn new(bucket_map: BucketMapWithEntryType<V>) -> Self {
+    pub fn new(bucket_map: BucketMapWithEntryType<V>, num_threads: usize) -> Self {
         let in_mem_only = false;
         let current_age = AtomicU8::new(0);
         let startup = AtomicBool::new(false);
@@ -546,6 +555,7 @@ impl<V: IsCached> BucketMapHolder<V> {
             desired_threads: AtomicUsize::new(1),
             check_startup_complete,
             flushes_active,
+            num_threads,
         }
     }
     pub fn wait_for_flush_idle(&self) {
@@ -596,12 +606,14 @@ impl<V: IsCached> BucketMapHolder<V> {
         lookup_from_disk: bool,
         next_age: Age,
     ) -> u64 {
+        // v used to be marked as dirty. dirty was cleared to allow a parallel actor to mark us dirty after we checked.
         if Arc::strong_count(v) > 1 {
             self.stats
                 .strong_count_no_flush_dirty
                 .fetch_add(1, Ordering::Relaxed);
-            // we have to have a write lock above to know that no client can get the value after this point until we're done flushing
-            // only work on dirty things when there are no outstanding refs to the value
+            v.set_dirty(true); // we did not update the disk, so this item is still dirty. Mark it dirty so flush can try again next cycle.
+            // we have to have a write lock above and check our strong count to know that nobody else can get the value after this point until we're done flushing.
+            // To simplify, only work on dirty things when there are no outstanding refs to the value.
             return 0;
         }
 
@@ -624,7 +636,7 @@ impl<V: IsCached> BucketMapHolder<V> {
                         );
                     } else {
                         // else, we didn't know if there was anything on disk, but there was nothing, so cache is already up to date and what happened before was an insert
-                        self.insert_delete(ix, true);
+                        self.insert_or_delete(ix, true);
                     }
                 }
                 // write what is in our cache - it has been merged if necessary
@@ -670,7 +682,9 @@ impl<V: IsCached> BucketMapHolder<V> {
         let mut delete_keys = Vec::with_capacity(len);
         let mut keeps = 0;
         for (k, v) in read_lock.iter() {
-            let dirty = v.dirty();
+            // we set the item back to not dirty here.
+            // That means the dirty signal has been received by the flusher. We have to make sure we flush this thing or restore the dirty signal.
+            let dirty = v.swap_dirty(false);
             if dirty && v.insert() {
                 insert += 1;
             }
@@ -711,7 +725,7 @@ impl<V: IsCached> BucketMapHolder<V> {
             }
 
             if flush {
-                if v.must_do_lookup_from_disk() {
+                if v.must_do_lookup_from_disk() || v.confirmed_not_on_disk() {
                     upserts.push(*k);
                 } else {
                     updates.push(*k);
@@ -743,16 +757,16 @@ impl<V: IsCached> BucketMapHolder<V> {
                 let wc = wc.as_mut().unwrap();
                 if let HashMapEntry::Occupied(occupied) = wc.entry(k) {
                     let v = occupied.get();
-                    if v.dirty() {
-                        if !v.must_do_lookup_from_disk() {
-                            updates.push(k);
-                            continue;
-                        }
 
-                        upsert_count += self.flush_upsert_or_update(ix, &k, v, true, next_age);
-                        if startup {
-                            occupied.remove(); // if we're at startup, then we want to get things out of the cache as soon as possible
-                        }
+                    // if we don't have to insert this pubkey, then we don't need a write lock, so move this entry to the read lock update section
+                    if !(v.must_do_lookup_from_disk() || v.confirmed_not_on_disk()) {
+                        updates.push(k);
+                        continue;
+                    }
+
+                    upsert_count += self.flush_upsert_or_update(ix, &k, v, true, next_age);
+                    if startup {
+                        occupied.remove(); // if we're at startup, then we want to get things out of the cache as soon as possible
                     }
                 }
             }
@@ -1128,7 +1142,7 @@ impl<V: IsCached> BucketMapHolder<V> {
                         .update_cache_us
                         .fetch_add(m1.as_ns(), Ordering::Relaxed);
                 } else {
-                    self.insert_delete(ix, true);
+                    self.insert_or_delete(ix, true);
 
                     // not on disk, not in cache, so add to cache
                     self.stats.inserts.fetch_add(1, Ordering::Relaxed);
@@ -1300,7 +1314,7 @@ impl<V: IsCached> BucketMapHolder<V> {
                 Self::update_cache_from_disk(&disk_v, item_in_cache);
             } else {
                 // else, we didn't know if there was anything on disk, but there was nothing, so cache is already up to date and what happened before was an insert
-                self.insert_delete(ix, true);
+                self.insert_or_delete(ix, true);
             }
             // else, we now know the cache entry was the only info that exists for this account, so we have all we need already
             item_in_cache.set_must_do_lookup_from_disk(false);
@@ -1535,7 +1549,7 @@ impl<V: IsCached> BucketMapHolder<V> {
         }
     }
 
-    fn insert_delete(&self, ix: usize, insert: bool) {
+    fn insert_or_delete(&self, ix: usize, insert: bool) {
         if insert {
             self.per_bin[ix].count.fetch_add(1, Ordering::Relaxed);
         } else {
@@ -1544,7 +1558,7 @@ impl<V: IsCached> BucketMapHolder<V> {
     }
 
     pub fn delete_key(&self, ix: usize, key: &Pubkey) {
-        self.insert_delete(ix, false); // it is possible this item does not exist on disk or in the cache. If so, we would mis-count here. delete_key on disk could return a bool.
+        self.insert_or_delete(ix, false); // it is possible this item does not exist on disk or in the cache. If so, we would mis-count here. delete_key on disk could return a bool.
                                        // in the future, we could update the cache and delete from disk later when we flush
         self.stats.deletes.fetch_add(1, Ordering::Relaxed);
         {

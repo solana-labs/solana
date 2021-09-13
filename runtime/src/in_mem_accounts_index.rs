@@ -3,7 +3,6 @@ use crate::accounts_index::{IsCached, SlotList, ACCOUNTS_INDEX_CONFIG_FOR_TESTIN
 use crate::bucket_map_holder::{BucketMapHolder, K};
 
 use crate::pubkey_bins::PubkeyBinCalculator16;
-use rayon::prelude::*;
 use solana_bucket_map::bucket_map::{BucketMap, MaxSearch};
 use solana_sdk::clock::Slot;
 use solana_sdk::pubkey::Pubkey;
@@ -48,11 +47,19 @@ impl<V: IsCached> InMemAccountsIndex<V> {
 
     pub fn new_for_testing() -> Self {
         let bins = ACCOUNTS_INDEX_CONFIG_FOR_TESTING.bins.unwrap();
-        let map = Self::new_bucket_map(bins, None);
+        let map = Self::new_bucket_map(bins, None, None);
         Self::new(&map, 0)
     }
 
-    pub fn new_bucket_map(bins: usize, max_search: Option<usize>) -> Arc<BucketMapHolder<V>> {
+    pub fn new_bucket_map(
+        bins: usize,
+        max_search: Option<usize>,
+        threads: Option<usize>,
+    ) -> Arc<BucketMapHolder<V>> {
+        let threads = threads.unwrap_or_else(|| std::cmp::max(2, num_cpus::get() / 16));
+
+        let threads = std::cmp::min(threads, bins); // doesn't make sense to have more threads than bins
+
         let buckets = PubkeyBinCalculator16::log_2(bins as u32) as u8;
         // this should be <= 1 << DEFAULT_CAPACITY or we end up searching the same items over and over - probably not a big deal since it is so small anyway
         const MAX_SEARCH: MaxSearch = 32;
@@ -61,23 +68,37 @@ impl<V: IsCached> InMemAccountsIndex<V> {
         let max_search: MaxSearch = max_search
             .map(|x| x.try_into().unwrap())
             .unwrap_or(MAX_SEARCH);
-        Arc::new(BucketMapHolder::new(BucketMap::new_buckets(
-            buckets, max_search,
-        )))
+        Arc::new(BucketMapHolder::new(
+            BucketMap::new_buckets(buckets, max_search),
+            threads,
+        ))
     }
 
     // create bg thread pool for flushing accounts index to disk
-    pub fn create_bg_flusher(&self, mut threads: usize) -> AccountsIndexBackground {
+    pub fn create_bg_flusher(&self) -> AccountsIndexBackground {
         let bucket_map_ = self.disk.clone();
-        threads = std::cmp::min(threads, self.disk.bins); // doesn't make sense to have more threads than bins
+        let threads = self.disk.num_threads;
         let exit = Arc::new(AtomicBool::new(false));
         let exit_ = exit.clone();
         let handle = Some(
             Builder::new()
                 .name("solana-index-flusher".to_string())
                 .spawn(move || {
-                    (0..threads).into_par_iter().for_each(|_| {
-                        bucket_map_.bg_flusher(exit_.clone());
+                    let joins = (0..threads)
+                        .into_iter()
+                        .map(|_| {
+                            let bucket_map_ = bucket_map_.clone();
+                            let exit_ = exit_.clone();
+                            Builder::new()
+                                .name("solana-index-flusher".to_string())
+                                .spawn(move || {
+                                    bucket_map_.bg_flusher(exit_.clone());
+                                })
+                                .unwrap()
+                        })
+                        .collect::<Vec<_>>();
+                    joins.into_iter().for_each(|join| {
+                        join.join().unwrap();
                     });
                 })
                 .unwrap(),
