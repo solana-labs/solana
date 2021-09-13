@@ -166,7 +166,7 @@ impl<T: Clone + Copy + std::fmt::Debug> BucketMap<T> {
 
     pub fn new_random_folders() -> Arc<Vec<PathBuf>> {
         let tmpdir2 = PathBuf::from("accounts_index_buckets");
-        fs::remove_dir_all(tmpdir2.clone()).unwrap();
+        let _ = fs::remove_dir_all(tmpdir2.clone());
         let random = PathBuf::from(format!("folder{}", thread_rng().gen::<usize>()));
         let tmpdir2 = tmpdir2.join(random);
 
