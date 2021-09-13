@@ -37,14 +37,14 @@ impl<T: IsCached> InMemAccountsIndex<T> {
         Arc::new(BucketMapHolder::new())
     }
 
-    pub fn entry(&mut self, pubkey: Pubkey) -> Entry<K, AccountMapEntry<T>> {
+    fn entry(&mut self, pubkey: Pubkey) -> Entry<K, AccountMapEntry<T>> {
         let m = Measure::start("entry");
         let result = self.map.entry(pubkey);
         let stats = &self.storage.stats;
         let (count, time) = if matches!(result, Entry::Occupied(_)) {
-            (&stats.gets_from_mem, &stats.get_mem_us)
+            (&stats.entries_from_mem, &stats.entry_mem_us)
         } else {
-            (&stats.gets_missing, &stats.get_missing_us)
+            (&stats.entries_missing, &stats.entry_missing_us)
         };
         Self::update_time_stat(time, m);
         Self::update_stat(count, 1);
@@ -87,7 +87,7 @@ impl<T: IsCached> InMemAccountsIndex<T> {
     // If the slot list for pubkey exists in the index and is empty, remove the index entry for pubkey and return true.
     // Return false otherwise.
     pub fn remove_if_slot_list_empty(&mut self, pubkey: Pubkey) -> bool {
-        if let Entry::Occupied(index_entry) = self.map.entry(pubkey) {
+        if let Entry::Occupied(index_entry) = self.entry(pubkey) {
             if index_entry.get().slot_list.read().unwrap().is_empty() {
                 index_entry.remove();
                 return true;
@@ -102,7 +102,7 @@ impl<T: IsCached> InMemAccountsIndex<T> {
         reclaims: &mut SlotList<T>,
         previous_slot_entry_was_cached: bool,
     ) {
-        match self.map.entry(*pubkey) {
+        match self.entry(*pubkey) {
             Entry::Occupied(mut occupied) => {
                 let current = occupied.get_mut();
                 Self::lock_and_update_slot_list(
@@ -212,7 +212,7 @@ impl<T: IsCached> InMemAccountsIndex<T> {
         pubkey: Pubkey,
         new_entry: AccountMapEntry<T>,
     ) -> Option<(WriteAccountMapEntry<T>, T, Pubkey)> {
-        let account_entry = self.map.entry(pubkey);
+        let account_entry = self.entry(pubkey);
         match account_entry {
             Entry::Occupied(account_entry) => Some((
                 WriteAccountMapEntry::from_account_map_entry(account_entry.get().clone()),
