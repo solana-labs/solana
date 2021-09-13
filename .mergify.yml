@@ -18,24 +18,32 @@ pull_request_rules:
           - "@solana-labs/community-pr-subscribers"
   - name: automatic merge (squash) on CI success
     conditions:
-      - status-success=buildkite/solana
-      - status-success=Travis CI - Pull Request
-      - status-success=check-explorer
-      - status-success=ci-gate
-      - label=automerge
-      - author≠@dont-squash-my-commits
+      - and:
+        - status-success=buildkite/solana
+        - status-success=Travis CI - Pull Request
+        - status-success=ci-gate
+        - label=automerge
+        - author≠@dont-squash-my-commits
+        - or:
+          # only require explorer checks if explorer files changed
+          - status-success=check-explorer
+          - -files~=^explorer/
     actions:
       merge:
         method: squash
   # Join the dont-squash-my-commits group if you won't like your commits squashed
   - name: automatic merge (rebase) on CI success
     conditions:
-      - status-success=buildkite/solana
-      - status-success=Travis CI - Pull Request
-      - status-success=check-explorer
-      - status-success=ci-gate
-      - label=automerge
-      - author=@dont-squash-my-commits
+      - and:
+        - status-success=buildkite/solana
+        - status-success=Travis CI - Pull Request
+        - status-success=ci-gate
+        - label=automerge
+        - author=@dont-squash-my-commits
+        - or:
+          # only require explorer checks if explorer files changed
+          - status-success=check-explorer
+          - -files~=^explorer/
     actions:
       merge:
         method: rebase
