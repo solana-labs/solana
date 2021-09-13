@@ -23,7 +23,6 @@ jobs:
         depth: false
       script:
         - .travis/export-github-repo.sh web3.js/ solana-web3.js
-        - .travis/export-github-repo.sh explorer/ explorer
 
     - &release-artifacts
       if: type IN (api, cron) OR tag IS present
