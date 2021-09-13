@@ -31,8 +31,8 @@ use thiserror::Error;
 
 pub const ITER_BATCH_SIZE: usize = 1000;
 pub const BINS_DEFAULT: usize = 8192;
-pub const BINS_FOR_TESTING: usize = 16;
-pub const BINS_FOR_BENCHMARKS: usize = 16;
+pub const BINS_FOR_TESTING: usize = 2;
+pub const BINS_FOR_BENCHMARKS: usize = 2;
 pub const ACCOUNTS_INDEX_CONFIG_FOR_TESTING: AccountsIndexConfig = AccountsIndexConfig {
     bins: Some(BINS_FOR_TESTING),
     threads: Some(2),
