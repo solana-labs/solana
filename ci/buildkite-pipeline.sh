@@ -262,7 +262,7 @@ pull_or_push_steps() {
     all_test_steps
   fi
 
-  # web3.js, explorer and docs changes run on Travis...
+  # web3.js, explorer and docs changes run on Travis or Github actions...
 }
 
 
