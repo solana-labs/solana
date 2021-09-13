@@ -452,10 +452,6 @@ impl<V: IsCached> BucketMapHolder<V> {
     }
 
     fn set_desired_threads(&self, increment: bool, expected_threads: usize) -> bool {
-        error!(
-            "change threads: increment: {}, previous: {}",
-            increment, expected_threads
-        );
         if increment {
             let new = expected_threads + 1;
             self.desired_threads
