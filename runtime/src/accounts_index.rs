@@ -215,29 +215,6 @@ impl<T: IsCached> WriteAccountMapEntry<T> {
         })
     }
 
-    // returns true if upsert was successful. new_value is modified in this case. new_value contains a RwLock
-    // otherwise, new_value has not been modified and the pubkey has to be added to the maps with a write lock. call upsert_new
-    pub fn update_key_if_exists<'a>(
-        r_account_maps: AccountMapsReadLock<'a, T>,
-        pubkey: &Pubkey,
-        new_value: &AccountMapEntry<T>,
-        reclaims: &mut SlotList<T>,
-        previous_slot_entry_was_cached: bool,
-    ) -> bool {
-        // (possibly) non-ideal clone of arc here
-        if let Some(current) = r_account_maps.get(pubkey) {
-            InMemAccountsIndex::lock_and_update_slot_list(
-                &current,
-                new_value,
-                reclaims,
-                previous_slot_entry_was_cached,
-            );
-            true
-        } else {
-            false
-        }
-    }
-
     // Try to update an item in the slot list the given `slot` If an item for the slot
     // already exists in the list, remove the older item, add it to `reclaims`, and insert
     // the new item.
@@ -1538,13 +1515,13 @@ impl<T: IsCached> AccountsIndex<T> {
         let map = &self.account_maps[self.bin_calculator.bin_from_pubkey(pubkey)];
 
         let r_account_maps = map.read().unwrap();
-        if !WriteAccountMapEntry::update_key_if_exists(
-            r_account_maps,
+        if !r_account_maps.update_key_if_exists(
             pubkey,
             &new_item,
             reclaims,
             previous_slot_entry_was_cached,
         ) {
+            drop(r_account_maps);
             let mut w_account_maps = map.write().unwrap();
             w_account_maps.upsert(pubkey, new_item, reclaims, previous_slot_entry_was_cached);
         }
@@ -2861,13 +2838,13 @@ pub mod tests {
 
         // will fail because key doesn't exist
         let r_account_maps = index.get_account_maps_read_lock(&key.pubkey());
-        assert!(!WriteAccountMapEntry::update_key_if_exists(
-            r_account_maps,
+        assert!(!r_account_maps.update_key_if_exists(
             &key.pubkey(),
             &new_entry,
             &mut SlotList::default(),
             UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         ));
+        drop(r_account_maps);
         assert_eq!(
             (slot, account_info),
             new_entry.slot_list.read().as_ref().unwrap()[0]

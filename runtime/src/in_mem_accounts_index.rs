@@ -175,6 +175,28 @@ impl<T: IsCached> InMemAccountsIndex<T> {
         addref
     }
 
+    // returns true if upsert was successful. new_value is modified in this case. new_value contains a RwLock
+    // otherwise, new_value has not been modified and the pubkey has to be added to the maps with a write lock. call upsert_new
+    pub fn update_key_if_exists(
+        &self,
+        pubkey: &Pubkey,
+        new_value: &AccountMapEntry<T>,
+        reclaims: &mut SlotList<T>,
+        previous_slot_entry_was_cached: bool,
+    ) -> bool {
+        if let Some(current) = self.map.get(pubkey) {
+            Self::lock_and_update_slot_list(
+                current,
+                new_value,
+                reclaims,
+                previous_slot_entry_was_cached,
+            );
+            true
+        } else {
+            false
+        }
+    }
+
     pub fn len(&self) -> usize {
         self.map.len()
     }
