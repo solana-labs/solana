@@ -1384,10 +1384,10 @@ pub fn process_stake_authorize(
             if let Some(authorized) = authorized {
                 match authorization_type {
                     StakeAuthorize::Staker => {
-                        check_stake_current_authority(&authorized.staker, &authority.pubkey())?;
+                        check_current_authority(&authorized.staker, &authority.pubkey())?;
                     }
                     StakeAuthorize::Withdrawer => {
-                        check_stake_current_authority(&authorized.withdrawer, &authority.pubkey())?;
+                        check_current_authority(&authorized.withdrawer, &authority.pubkey())?;
                     }
                 }
             } else {
@@ -1934,7 +1934,7 @@ pub fn process_stake_set_lockup(
         };
         if let Some(lockup) = lockup {
             if lockup.custodian != Pubkey::default() {
-                check_stake_current_authority(&lockup.custodian, &custodian.pubkey())?;
+                check_current_authority(&lockup.custodian, &custodian.pubkey())?;
             }
         } else {
             return Err(CliError::RpcRequestError(format!(
@@ -2114,14 +2114,14 @@ fn get_stake_account_state(
     })
 }
 
-fn check_stake_current_authority(
-    stake_account_current_authority: &Pubkey,
+pub(crate) fn check_current_authority(
+    account_current_authority: &Pubkey,
     provided_current_authority: &Pubkey,
 ) -> Result<(), CliError> {
-    if stake_account_current_authority != provided_current_authority {
+    if account_current_authority != provided_current_authority {
         Err(CliError::RpcRequestError(format!(
             "Invalid current authority provided: {:?}, expected {:?}",
-            provided_current_authority, stake_account_current_authority
+            provided_current_authority, account_current_authority
         )))
     } else {
         Ok(())
