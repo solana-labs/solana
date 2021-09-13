@@ -1194,8 +1194,8 @@ fn load_frozen_forks(
                     ) {
                         info!("Taking snapshot of new root bank that has crossed the full snapshot interval! slot: {}", *root);
                         *last_full_snapshot_slot = Some(*root);
-                        new_root_bank.force_flush_accounts_cache();
-                        new_root_bank.clean_accounts(true, true, *last_full_snapshot_slot);
+                        new_root_bank.exhaustively_free_unused_resource(*last_full_snapshot_slot);
+                        last_free = Instant::now();
                         new_root_bank.update_accounts_hash_with_index_option(
                             snapshot_config.accounts_hash_use_index,
                             snapshot_config.accounts_hash_debug_verify,
