@@ -7,6 +7,7 @@ use solana_bucket_map::bucket_map::{BucketMap, MaxSearch};
 use solana_sdk::clock::Slot;
 use solana_sdk::pubkey::Pubkey;
 use std::fmt::Debug;
+use log::*;
 use std::ops::{Range, RangeBounds};
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
