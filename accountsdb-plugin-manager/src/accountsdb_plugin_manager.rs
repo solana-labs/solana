@@ -19,13 +19,17 @@ impl AccountsDbPluginManager {
         }
     }
 
-    pub unsafe fn load_plugin(&mut self, libpath: &str) -> Result<(), Box<dyn Error>> {
+    pub unsafe fn load_plugin(
+        &mut self,
+        libpath: &str,
+        config_file: &str,
+    ) -> Result<(), Box<dyn Error>> {
         type PluginConstructor = unsafe fn() -> *mut dyn AccountsDbPlugin;
         let lib = Library::new(libpath)?;
         let constructor: Symbol<PluginConstructor> = lib.get(b"_create_plugin")?;
         let plugin_raw = constructor();
         let plugin = Box::from_raw(plugin_raw);
-        plugin.on_load();
+        plugin.on_load(config_file);
         self.plugins.push(plugin);
         self.libs.push(lib);
         Ok(())

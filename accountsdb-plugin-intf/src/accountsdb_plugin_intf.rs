@@ -31,7 +31,10 @@ pub trait AccountsDbPlugin {
 
     /// The callback called when a plugin is loaded by the system
     /// Used for doing whatever initialization by the plugin
-    fn on_load(&self) {}
+    /// The _config_file points to the file name contains the name of the
+    /// of the config file. The framework does not stipulate the format of the
+    /// file -- it is totoally up to the plugin implementation.
+    fn on_load(&self, _config_file: &str) {}
 
     /// The callback called right before a plugin is unloaded by the system
     /// Used for doing cleanup before being unloaded.
