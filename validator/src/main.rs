@@ -2446,6 +2446,7 @@ pub fn main() {
         .map(|bins| AccountsIndexConfig {
             bins: Some(bins),
             threads: None,
+            ..AccountsIndexConfig::default()
         });
 
     let accounts_db_config = Some(AccountsDbConfig {
