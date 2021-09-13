@@ -84,11 +84,6 @@ impl<T: IsCached> InMemAccountsIndex<T> {
         result
     }
 
-    pub fn remove(&mut self, key: &K) {
-        Self::update_stat(&self.stats().deletes, 1);
-        self.map.remove(key);
-    }
-
     // If the slot list for pubkey exists in the index and is empty, remove the index entry for pubkey and return true.
     // Return false otherwise.
     pub fn remove_if_slot_list_empty(&mut self, pubkey: Pubkey) -> bool {
