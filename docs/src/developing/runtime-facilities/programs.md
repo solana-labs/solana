@@ -71,7 +71,7 @@ Verify ed25519 signature program. This program takes an ed25519 signature, publi
 Multiple signatures can be verified. If any of the signatures fail to verify, an error is returned.
 
 - Program id: `Ed25519SigVerify111111111111111111111111111`
-- Instructions: [new_ed25519_instruction](https://github.com/solana-labs/solana/blob/master/sdk/src/ed25519_instruction.rs#L31)
+- Instructions: [new_ed25519_instruction](https://github.com/solana-labs/solana/blob/master/sdk/src/ed25519_instruction.rs#L45)
 
 The ed25519 program processes an instruction. The first `u8` is a count of the number of
 signatures to check, which is followed by a single byte padding. After that, the
@@ -96,9 +96,12 @@ process_instruction() {
     for i in 0..count {
         // i'th index values referenced:
         instructions = &transaction.message().instructions
-        signature = instructions[ed25519_signature_instruction_index].data[ed25519_signature_offset..ed25519_signature_offset + 64]
-        pubkey = instructions[ed25519_pubkey_instruction_index].data[ed25519_pubkey_offset..ed25519_pubkey_offset + 32]
-        message = instructions[ed25519_message_instruction_index].data[ed25519_message_data_offset..ed25519_message_data_offset + ed25519_message_data_size]
+        instruction_index = ed25519_signature_instruction_index != u16::MAX ? ed25519_signature_instruction_index : current_instruction;
+        signature = instructions[instruction_index].data[ed25519_signature_offset..ed25519_signature_offset + 64]
+        instruction_index = ed25519_pubkey_instruction_index != u16::MAX ? ed25519_pubkey_instruction_index : current_instruction;
+        pubkey = instructions[instruction_index].data[ed25519_pubkey_offset..ed25519_pubkey_offset + 32]
+        instruction_index = ed25519_message_instruction_index != u16::MAX ? ed25519_message_instruction_index : current_instruction;
+        message = instructions[instruction_index].data[ed25519_message_data_offset..ed25519_message_data_offset + ed25519_message_data_size]
         if pubkey.verify(signature, message) != Success {
             return Error
         }
