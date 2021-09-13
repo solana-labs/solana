@@ -5211,12 +5211,11 @@ impl Bank {
                         });
                     }
                 } else if AddressMapCache::is_address_map(account) {
-                    if let Err(err) = self
+                    // Ignore any invalid address maps that shouldn't be
+                    // recorded in pending changes.
+                    let _ = self
                         .pending_address_map_changes
-                        .record(pubkey, account.data())
-                    {
-                        warn!("Failed to cache invalid address map: {:?}", err);
-                    }
+                        .record(pubkey, account.data());
                 }
             }
         }
