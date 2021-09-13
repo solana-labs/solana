@@ -2009,6 +2009,12 @@ impl AccountsDb {
                 } else {
                     let mut key_set = HashSet::new();
                     key_set.insert(*key);
+                    assert!(
+                        !account_info.is_cached(),
+                        "The Accounts Cache must be flushed first for this account info. pubkey: {}, slot: {}",
+                        *key,
+                        *slot
+                    );
                     let count = self
                         .storage
                         .slot_store_count(*slot, account_info.store_id)
@@ -6461,7 +6467,9 @@ impl AccountsDb {
         roots.sort();
         info!("{}: accounts_index roots: {:?}", label, roots,);
         self.accounts_index.account_maps.iter().for_each(|map| {
-            for (pubkey, account_entry) in map.read().unwrap().iter() {
+            for (pubkey, account_entry) in
+                map.read().unwrap().items(&None::<&std::ops::Range<Pubkey>>)
+            {
                 info!("  key: {} ref_count: {}", pubkey, account_entry.ref_count(),);
                 info!(
                     "      slots: {:?}",

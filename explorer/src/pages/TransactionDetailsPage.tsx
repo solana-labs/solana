@@ -362,6 +362,7 @@ function AccountsCard({
 
     return (
       <tr key={key}>
+        <td>{index + 1}</td>
         <td>
           <Address pubkey={pubkey} link />
         </td>
@@ -375,8 +376,8 @@ function AccountsCard({
           {index === 0 && (
             <span className="badge badge-soft-info mr-1">Fee Payer</span>
           )}
-          {!account.writable && (
-            <span className="badge badge-soft-info mr-1">Readonly</span>
+          {account.writable && (
+            <span className="badge badge-soft-info mr-1">Writable</span>
           )}
           {account.signer && (
             <span className="badge badge-soft-info mr-1">Signer</span>
@@ -392,12 +393,13 @@ function AccountsCard({
   return (
     <div className="card">
       <div className="card-header">
-        <h3 className="card-header-title">Account Inputs</h3>
+        <h3 className="card-header-title">Account Input(s)</h3>
       </div>
       <div className="table-responsive mb-0">
         <table className="table table-sm table-nowrap card-table">
           <thead>
             <tr>
+              <th className="text-muted">#</th>
               <th className="text-muted">Address</th>
               <th className="text-muted">Change (SOL)</th>
               <th className="text-muted">Post Balance (SOL)</th>
