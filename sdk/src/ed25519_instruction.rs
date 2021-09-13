@@ -48,12 +48,12 @@ pub fn new_ed25519_instruction(keypair: &ed25519_dalek::Keypair, message: &[u8])
 
     let offsets = Ed25519SignatureOffsets {
         signature_offset: signature_offset as u16,
-        signature_instruction_index: 0,
+        signature_instruction_index: u16::MAX,
         public_key_offset: public_key_offset as u16,
-        public_key_instruction_index: 0,
+        public_key_instruction_index: u16::MAX,
         message_data_offset: message_data_offset as u16,
         message_data_size: message.len() as u16,
-        message_instruction_index: 0,
+        message_instruction_index: u16::MAX,
     };
 
     instruction_data.extend_from_slice(bytes_of(&offsets));
@@ -106,23 +106,20 @@ pub fn verify(
             .map_err(|_| PrecompileError::InvalidDataOffsets)?;
 
         // Parse out signature
-        let signature_index = offsets.signature_instruction_index as usize;
-        if signature_index >= instruction_datas.len() {
-            return Err(PrecompileError::InvalidDataOffsets);
-        }
-        let signature_instruction = instruction_datas[signature_index];
-        let sig_start = offsets.signature_offset as usize;
-        let sig_end = sig_start.saturating_add(SIGNATURE_SERIALIZED_SIZE);
-        if sig_end >= signature_instruction.len() {
-            return Err(PrecompileError::InvalidDataOffsets);
-        }
+        let signature = get_data_slice(
+            data,
+            instruction_datas,
+            offsets.signature_instruction_index,
+            offsets.signature_offset,
+            SIGNATURE_SERIALIZED_SIZE,
+        )?;
 
-        let signature =
-            ed25519_dalek::Signature::from_bytes(&signature_instruction[sig_start..sig_end])
-                .map_err(|_| PrecompileError::InvalidSignature)?;
+        let signature = ed25519_dalek::Signature::from_bytes(signature)
+            .map_err(|_| PrecompileError::InvalidSignature)?;
 
         // Parse out pubkey
         let pubkey = get_data_slice(
+            data,
             instruction_datas,
             offsets.public_key_instruction_index,
             offsets.public_key_offset,
@@ -134,6 +131,7 @@ pub fn verify(
 
         // Parse out message
         let message = get_data_slice(
+            data,
             instruction_datas,
             offsets.message_instruction_index,
             offsets.message_data_offset,
@@ -148,23 +146,29 @@ pub fn verify(
 }
 
 fn get_data_slice<'a>(
+    data: &'a [u8],
     instruction_datas: &'a [&[u8]],
     instruction_index: u16,
     offset_start: u16,
     size: usize,
 ) -> Result<&'a [u8], PrecompileError> {
-    let signature_index = instruction_index as usize;
-    if signature_index >= instruction_datas.len() {
-        return Err(PrecompileError::InvalidDataOffsets);
-    }
-    let signature_instruction = &instruction_datas[signature_index];
+    let instruction = if instruction_index == u16::MAX {
+        data
+    } else {
+        let signature_index = instruction_index as usize;
+        if signature_index >= instruction_datas.len() {
+            return Err(PrecompileError::InvalidDataOffsets);
+        }
+        &instruction_datas[signature_index]
+    };
+
     let start = offset_start as usize;
     let end = start.saturating_add(size);
-    if end > signature_instruction.len() {
+    if end > instruction.len() {
         return Err(PrecompileError::InvalidDataOffsets);
     }
 
-    Ok(&instruction_datas[signature_index][start..end])
+    Ok(&instruction[start..end])
 }
 
 #[cfg(test)]
