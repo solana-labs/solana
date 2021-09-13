@@ -28,8 +28,8 @@ impl AccountsDbPluginManager {
         let lib = Library::new(libpath)?;
         let constructor: Symbol<PluginConstructor> = lib.get(b"_create_plugin")?;
         let plugin_raw = constructor();
-        let plugin = Box::from_raw(plugin_raw);
-        plugin.on_load(config_file);
+        let mut plugin = Box::from_raw(plugin_raw);
+        plugin.on_load(config_file)?;
         self.plugins.push(plugin);
         self.libs.push(lib);
         Ok(())
@@ -38,7 +38,7 @@ impl AccountsDbPluginManager {
     /// Unload all plugins and loaded plugin libraries, making sure to fire
     /// their `on_plugin_unload()` methods so they can do any necessary cleanup.
     pub fn unload(&mut self) {
-        for plugin in self.plugins.drain(..) {
+        for mut plugin in self.plugins.drain(..) {
             info!("Unloading plugin for {:?}", plugin.name());
             plugin.on_unload();
         }
