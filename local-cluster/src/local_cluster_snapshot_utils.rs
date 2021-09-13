@@ -12,14 +12,10 @@ use std::{path::Path, thread::sleep, time::Duration};
 impl LocalCluster {
     /// Return the next full snapshot archive info after the cluster's last processed slot
     pub fn wait_for_next_full_snapshot(
-        cluster: &LocalCluster,
+        &self,
         snapshot_archives_dir: impl AsRef<Path>,
     ) -> FullSnapshotArchiveInfo {
-        match Self::wait_for_next_snapshot(
-            cluster,
-            snapshot_archives_dir,
-            NextSnapshotType::FullSnapshot,
-        ) {
+        match self.wait_for_next_snapshot(snapshot_archives_dir, NextSnapshotType::FullSnapshot) {
             NextSnapshotResult::FullSnapshot(full_snapshot_archive_info) => {
                 full_snapshot_archive_info
             }
@@ -30,11 +26,10 @@ impl LocalCluster {
     /// Return the next incremental snapshot archive info (and associated full snapshot archive info)
     /// after the cluster's last processed slot
     pub fn wait_for_next_incremental_snapshot(
-        cluster: &LocalCluster,
+        &self,
         snapshot_archives_dir: impl AsRef<Path>,
     ) -> (IncrementalSnapshotArchiveInfo, FullSnapshotArchiveInfo) {
-        match Self::wait_for_next_snapshot(
-            cluster,
+        match self.wait_for_next_snapshot(
             snapshot_archives_dir,
             NextSnapshotType::IncrementalAndFullSnapshot,
         ) {
@@ -51,13 +46,13 @@ impl LocalCluster {
 
     /// Return the next snapshot archive infos after the cluster's last processed slot
     pub fn wait_for_next_snapshot(
-        cluster: &LocalCluster,
+        &self,
         snapshot_archives_dir: impl AsRef<Path>,
         next_snapshot_type: NextSnapshotType,
     ) -> NextSnapshotResult {
         // Get slot after which this was generated
-        let client = cluster
-            .get_validator_client(&cluster.entry_point_info.id)
+        let client = self
+            .get_validator_client(&self.entry_point_info.id)
             .unwrap();
         let last_slot = client
             .get_slot_with_commitment(CommitmentConfig::processed())
