@@ -1,9 +1,8 @@
 /// The interface for AccountsDb plugins. A plugin must implement
 /// the AccountsDbPlugin trait to work with the Solana Validator.
-
-use {
-    solana_sdk::pubkey::Pubkey,
-};
+/// In addition the dynamic libraray must export a "C" function _create_plugin which
+/// creates the implementation of the plugin.
+use solana_sdk::pubkey::Pubkey;
 
 #[derive(Clone, PartialEq)]
 pub struct ReplicaAccountMeta {

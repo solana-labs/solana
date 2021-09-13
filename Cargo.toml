@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "accountsdb-plugin-intf",
+    "accountsdb-plugin-manager",
     "accounts-cluster-bench",
     "bench-streamer",
     "bench-tps",
