@@ -1,7 +1,7 @@
 import bs58 from 'bs58';
 import {Buffer} from 'buffer';
 import fetch from 'cross-fetch';
-import type {Response} from 'cross-fetch';
+import { parseChunked } from '@discoveryjs/json-ext';
 import {
   type as pick,
   number,
@@ -779,19 +779,32 @@ function createRpcClient(
         waitTime *= 2;
       }
 
-      const text = await res.text();
-      if (res.ok) {
-        callback(null, text);
-      } else {
-        callback(new Error(`${res.status} ${res.statusText}: ${text}`));
+      const json = await parseChunked(async function* load() {
+        const buffer = await res.arrayBuffer();
+        yield buffer;
+      });
+
+      if (!json) {
+        throw new Error(`${res.status} ${res.statusText}: empty response`);
       }
+      if (!res.ok) {
+        throw new Error(`${res.status} ${res.statusText}`);
+      }
+      callback(null, json);
     } catch (err) {
       callback(err);
     } finally {
       agentManager && agentManager.requestEnd();
     }
   }, {});
-
+  // patch clientBrowser because we move to client ready object
+  (clientBrowser as any)._parseResponse = function (err: Error, responseObject: any, callback: (err?: Error, data?: any) => void) {
+    if(err) {
+      callback(err);
+      return;
+    }
+    return callback(undefined, responseObject);
+  }
   return clientBrowser;
 }
 
