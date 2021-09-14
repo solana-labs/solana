@@ -2221,7 +2221,7 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
     cluster.add_validator(
         &final_validator_snapshot_test_config.validator_config,
         stake,
-        final_validator_identity.clone(),
+        final_validator_identity,
         None,
         SocketAddrSpace::Unspecified,
     );
