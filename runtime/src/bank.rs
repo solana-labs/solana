@@ -6085,10 +6085,7 @@ pub(crate) mod tests {
 
         assert_eq!(
             bank.process_transaction(&tx),
-            Err(TransactionError::InstructionError(
-                0,
-                InstructionError::ExecutableLamportChange
-            ))
+            Err(TransactionError::InvalidWritableAccount)
         );
         assert_eq!(bank.get_balance(&account_pubkey), account_balance);
     }
