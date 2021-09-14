@@ -21,7 +21,7 @@ impl DataBudget {
             }
             match self.bytes.compare_exchange_weak(
                 budget,
-                budget - size,
+                budget.saturating_sub(size),
                 Ordering::AcqRel,
                 Ordering::Acquire,
             ) {
@@ -37,7 +37,7 @@ impl DataBudget {
         let now = solana_sdk::timing::timestamp();
         let mut last_timestamp = self.last_timestamp_ms.load(Ordering::Acquire);
         loop {
-            if now < last_timestamp + duration_millis {
+            if now < last_timestamp.saturating_add(duration_millis) {
                 return false;
             }
             match self.last_timestamp_ms.compare_exchange_weak(
