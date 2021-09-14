@@ -1615,19 +1615,19 @@ fn get_stake_percent_in_gossip(bank: &Bank, cluster_info: &ClusterInfo, log: boo
 
     if log {
         info!(
-            "{}% of active stake visible in gossip",
-            online_stake * 100 / total_activated_stake
+            "{:.3}% of active stake visible in gossip",
+            online_stake as f64 * 100. / total_activated_stake as f64
         );
 
         if !wrong_shred_nodes.is_empty() {
             info!(
-                "{}% of active stake has the wrong shred version in gossip",
-                wrong_shred_stake * 100 / total_activated_stake,
+                "{:.3}% of active stake has the wrong shred version in gossip",
+                wrong_shred_stake as f64 * 100. / total_activated_stake as f64
             );
             for (stake, identity) in wrong_shred_nodes {
                 info!(
-                    "    {}% - {}",
-                    stake * 100 / total_activated_stake,
+                    "    {:.3}% - {}",
+                    stake as f64 * 100. / total_activated_stake as f64,
                     identity
                 );
             }
@@ -1635,13 +1635,13 @@ fn get_stake_percent_in_gossip(bank: &Bank, cluster_info: &ClusterInfo, log: boo
 
         if !offline_nodes.is_empty() {
             info!(
-                "{}% of active stake is not visible in gossip",
-                offline_stake * 100 / total_activated_stake
+                "{:.3}% of active stake is not visible in gossip",
+                offline_stake as f64 * 100. / total_activated_stake as f64
             );
             for (stake, identity) in offline_nodes {
                 info!(
-                    "    {}% - {}",
-                    stake * 100 / total_activated_stake,
+                    "    {:.3}% - {}",
+                    stake as f64 * 100. / total_activated_stake as f64,
                     identity
                 );
             }
