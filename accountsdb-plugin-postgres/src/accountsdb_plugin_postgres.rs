@@ -53,7 +53,7 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
                     Err(err) => {
                         return Err(AccountsDbPluginError::DataStoreConnectionError {
                             msg: format!(
-                                "The config file is not in the JSON format expected: {:?}",
+                                "Error in connecting to the PostgreSQL database: {:?}",
                                 err
                             ),
                         });
@@ -74,8 +74,42 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
         info!("Unloading plugin: {:?}", self.name());
     }
 
-    fn update_account(&self, account: ReplicaAccountInfo, slot: u64) -> Result<()> {
+    fn update_account(&mut self, account: ReplicaAccountInfo, slot: u64) -> Result<()> {
         info!("Updating account {:?} at slot {:?}", account, slot);
+
+        match &mut self.client {
+            None => {
+                return Err(AccountsDbPluginError::DataStoreConnectionError {
+                    msg: "There is no connection to the PostgreSQL database.".to_string(),
+                });
+            }
+            Some(client) => {
+                let slot = slot as i64; // postgres only support i64
+                let lamports = account.account_meta.lamports as i64;
+                let result = client.execute(
+                    "INSERT INTO account (pubkey, slot, owner, lamports) VALUES ($1 $2 $3 $4) \
+                    ON CONFLICT (pubkey) DO UPDATE SET slot=$2, owner=$3, lamports=$4",
+                    &[
+                        &account.account_meta.pubkey,
+                        &slot,
+                        &account.account_meta.owner,
+                        &lamports,
+                    ],
+                );
+
+                match result {
+                    Err(err) => {
+                        return Err(AccountsDbPluginError::AccountsUpdateError {
+                            msg: format!("Failed to persist the update of account to the PostgreSQL database. Error: {:?}", err)
+                        });
+                    }
+                    Ok(rows) => {
+                        assert_eq!(1, rows, "Expected one rows to be updated a time");
+                    }
+                }
+            }
+        }
+
         Ok(())
     }
 }

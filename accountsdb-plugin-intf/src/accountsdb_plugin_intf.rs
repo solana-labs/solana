@@ -55,5 +55,5 @@ pub trait AccountsDbPlugin {
     fn on_unload(&mut self) {}
 
     /// Called when an account is updated at a slot.
-    fn update_account(&self, account: ReplicaAccountInfo, slot: u64) -> Result<()>;
+    fn update_account(&mut self, account: ReplicaAccountInfo, slot: u64) -> Result<()>;
 }
