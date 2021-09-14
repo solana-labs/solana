@@ -35,6 +35,7 @@ use solana_runtime::{
     snapshot_config::SnapshotConfig,
     snapshot_utils::{
         self, ArchiveFormat, SnapshotVersion, DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+        DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
     },
 };
 use solana_sdk::{
@@ -938,13 +939,30 @@ fn main() {
         .default_value(SnapshotVersion::default().into())
         .help("Output snapshot version");
 
-    let default_max_snapshot_to_retain = &DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN.to_string();
-    let maximum_snapshots_to_retain_arg = Arg::with_name("maximum_snapshots_to_retain")
-        .long("maximum-snapshots-to-retain")
-        .value_name("NUMBER")
-        .takes_value(true)
-        .default_value(default_max_snapshot_to_retain)
-        .help("Maximum number of snapshots to hold on to during snapshot purge");
+    let default_max_full_snapshot_archives_to_retain =
+        &DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN.to_string();
+    let maximum_full_snapshot_archives_to_retain = Arg::with_name(
+        "maximum_full_snapshots_to_retain",
+    )
+    .long("maximum-full-snapshots-to-retain")
+    .alias("maximum-snapshots-to-retain")
+    .value_name("NUMBER")
+    .takes_value(true)
+    .default_value(default_max_full_snapshot_archives_to_retain)
+    .help(
+        "The maximum number of full snapshot archives to hold on to when purging older snapshots.",
+    );
+
+    let default_max_incremental_snapshot_archives_to_retain =
+        &DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN.to_string();
+    let maximum_incremental_snapshot_archives_to_retain = Arg::with_name(
+        "maximum_incremental_snapshots_to_retain",
+    )
+    .long("maximum-incremental-snapshots-to-retain")
+    .value_name("NUMBER")
+    .takes_value(true)
+    .default_value(default_max_incremental_snapshot_archives_to_retain)
+    .help("The maximum number of incremental snapshot archives to hold on to when purging older snapshots.");
 
     let rent = Rent::default();
     let default_bootstrap_validator_lamports = &sol_to_lamports(500.0)
@@ -1221,7 +1239,8 @@ fn main() {
             .arg(&hard_forks_arg)
             .arg(&max_genesis_archive_unpacked_size_arg)
             .arg(&snapshot_version_arg)
-            .arg(&maximum_snapshots_to_retain_arg)
+            .arg(&maximum_full_snapshot_archives_to_retain)
+            .arg(&maximum_incremental_snapshot_archives_to_retain)
             .arg(
                 Arg::with_name("snapshot_slot")
                     .index(1)
@@ -2038,9 +2057,12 @@ fn main() {
                     });
 
             let maximum_full_snapshot_archives_to_retain =
-                value_t_or_exit!(arg_matches, "maximum_snapshots_to_retain", usize);
-            let maximum_incremental_snapshot_archives_to_retain =
-                snapshot_utils::DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN;
+                value_t_or_exit!(arg_matches, "maximum_full_snapshots_to_retain", usize);
+            let maximum_incremental_snapshot_archives_to_retain = value_t_or_exit!(
+                arg_matches,
+                "maximum_incremental_snapshots_to_retain",
+                usize
+            );
             let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
             let blockstore = open_blockstore(
                 &ledger_path,
