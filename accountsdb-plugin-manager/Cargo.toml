@@ -10,6 +10,7 @@ homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-validator"
 
 [dependencies]
+crossbeam-channel = "0.5"
 libloading = "0.7.0"
 log = "0.4.11"
 solana-logger = { path = "../logger", version = "=1.8.0" }

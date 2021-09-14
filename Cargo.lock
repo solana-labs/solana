@@ -4249,6 +4249,7 @@ dependencies = [
 name = "solana-accountsdb-plugin-manager"
 version = "1.8.0"
 dependencies = [
+ "crossbeam-channel",
  "libloading",
  "log 0.4.14",
  "solana-accountsdb-plugin-intf",
