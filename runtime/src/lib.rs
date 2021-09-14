@@ -18,6 +18,8 @@ pub mod bloom;
 pub mod bucket_map_holder;
 pub mod bucket_map_holder_stats;
 pub mod builtins;
+pub mod cache_hash_data;
+pub mod cache_hash_data_stats;
 pub mod commitment;
 pub mod contains;
 pub mod epoch_stakes;

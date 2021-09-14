@@ -1559,7 +1559,7 @@ mod tests {
     };
     use solana_perf::packet::to_packets_chunked;
     use solana_poh::{
-        poh_recorder::{create_test_recorder, Record, WorkingBank, WorkingBankEntry},
+        poh_recorder::{create_test_recorder, Record, WorkingBankEntry},
         poh_service::PohService,
     };
     use solana_rpc::transaction_status_service::TransactionStatusService;
@@ -1941,13 +1941,6 @@ mod tests {
             ..
         } = create_genesis_config(10_000);
         let bank = Arc::new(Bank::new_no_wallclock_throttle_for_tests(&genesis_config));
-        let start = Arc::new(Instant::now());
-        let working_bank = WorkingBank {
-            bank: bank.clone(),
-            start,
-            min_tick_height: bank.tick_height(),
-            max_tick_height: std::u64::MAX,
-        };
         let ledger_path = get_tmp_ledger_path!();
         {
             let blockstore = Blockstore::open(&ledger_path)
@@ -1956,7 +1949,7 @@ mod tests {
                 // TODO use record_receiver
                 bank.tick_height(),
                 bank.last_blockhash(),
-                bank.slot(),
+                bank.clone(),
                 None,
                 bank.ticks_per_slot(),
                 &Pubkey::default(),
@@ -1970,7 +1963,7 @@ mod tests {
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
-            poh_recorder.lock().unwrap().set_working_bank(working_bank);
+            poh_recorder.lock().unwrap().set_bank(&bank);
             let pubkey = solana_sdk::pubkey::new_rand();
             let keypair2 = Keypair::new();
             let pubkey2 = solana_sdk::pubkey::new_rand();
@@ -2012,8 +2005,9 @@ mod tests {
             // Once bank is set to a new bank (setting bank.slot() + 1 in record_transactions),
             // record_transactions should throw MaxHeightReached and return the set of retryable
             // txs
+            let next_slot = bank.slot() + 1;
             let (res, retryable) =
-                BankingStage::record_transactions(bank.slot() + 1, &txs, &results, &recorder);
+                BankingStage::record_transactions(next_slot, &txs, &results, &recorder);
             assert_matches!(res, Err(PohRecorderError::MaxHeightReached));
             // The first result was an error so it's filtered out. The second result was Ok(),
             // so it should be marked as retryable
@@ -2197,13 +2191,6 @@ mod tests {
                     .unwrap(),
             ];
 
-        let start = Arc::new(Instant::now());
-        let working_bank = WorkingBank {
-            bank: bank.clone(),
-            start,
-            min_tick_height: bank.tick_height(),
-            max_tick_height: bank.tick_height() + 1,
-        };
         let ledger_path = get_tmp_ledger_path!();
         {
             let blockstore = Blockstore::open(&ledger_path)
@@ -2211,7 +2198,7 @@ mod tests {
             let (poh_recorder, entry_receiver, record_receiver) = PohRecorder::new(
                 bank.tick_height(),
                 bank.last_blockhash(),
-                bank.slot(),
+                bank.clone(),
                 Some((4, 4)),
                 bank.ticks_per_slot(),
                 &pubkey,
@@ -2225,7 +2212,7 @@ mod tests {
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
-            poh_recorder.lock().unwrap().set_working_bank(working_bank);
+            poh_recorder.lock().unwrap().set_bank(&bank);
             let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
 
             BankingStage::process_and_record_transactions(
@@ -2238,7 +2225,11 @@ mod tests {
             )
             .0
             .unwrap();
-            poh_recorder.lock().unwrap().tick();
+
+            // Tick up to max tick height
+            while poh_recorder.lock().unwrap().tick_height() != bank.max_tick_height() {
+                poh_recorder.lock().unwrap().tick();
+            }
 
             let mut done = false;
             // read entries until I find mine, might be ticks...
@@ -2333,13 +2324,6 @@ mod tests {
                 .unwrap(),
         ];
 
-        let start = Arc::new(Instant::now());
-        let working_bank = WorkingBank {
-            bank: bank.clone(),
-            start,
-            min_tick_height: bank.tick_height(),
-            max_tick_height: bank.tick_height() + 1,
-        };
         let ledger_path = get_tmp_ledger_path!();
         {
             let blockstore = Blockstore::open(&ledger_path)
@@ -2347,7 +2331,7 @@ mod tests {
             let (poh_recorder, _entry_receiver, record_receiver) = PohRecorder::new(
                 bank.tick_height(),
                 bank.last_blockhash(),
-                bank.slot(),
+                bank.clone(),
                 Some((4, 4)),
                 bank.ticks_per_slot(),
                 &pubkey,
@@ -2359,7 +2343,7 @@ mod tests {
             let recorder = poh_recorder.recorder();
             let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
-            poh_recorder.lock().unwrap().set_working_bank(working_bank);
+            poh_recorder.lock().unwrap().set_bank(&bank);
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
@@ -2454,7 +2438,7 @@ mod tests {
             let (poh_recorder, _entry_receiver, record_receiver) = PohRecorder::new(
                 bank.tick_height(),
                 bank.last_blockhash(),
-                bank.slot(),
+                bank.clone(),
                 Some((4, 4)),
                 bank.ticks_per_slot(),
                 &solana_sdk::pubkey::new_rand(),
@@ -2528,13 +2512,6 @@ mod tests {
         ];
         bank.transfer(4, &mint_keypair, &keypair1.pubkey()).unwrap();
 
-        let start = Arc::new(Instant::now());
-        let working_bank = WorkingBank {
-            bank: bank.clone(),
-            start,
-            min_tick_height: bank.tick_height(),
-            max_tick_height: bank.tick_height() + 1,
-        };
         let ledger_path = get_tmp_ledger_path!();
         {
             let blockstore = Blockstore::open(&ledger_path)
@@ -2543,7 +2520,7 @@ mod tests {
             let (poh_recorder, _entry_receiver, record_receiver) = PohRecorder::new(
                 bank.tick_height(),
                 bank.last_blockhash(),
-                bank.slot(),
+                bank.clone(),
                 Some((4, 4)),
                 bank.ticks_per_slot(),
                 &pubkey,
@@ -2557,7 +2534,7 @@ mod tests {
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
-            poh_recorder.lock().unwrap().set_working_bank(working_bank);
+            poh_recorder.lock().unwrap().set_bank(&bank);
 
             let shreds = entries_to_test_shreds(entries, bank.slot(), 0, true, 0);
             blockstore
@@ -2646,7 +2623,7 @@ mod tests {
         let (poh_recorder, entry_receiver, record_receiver) = PohRecorder::new(
             bank.tick_height(),
             bank.last_blockhash(),
-            bank.slot(),
+            bank.clone(),
             Some((4, 4)),
             bank.ticks_per_slot(),
             &solana_sdk::pubkey::new_rand(),

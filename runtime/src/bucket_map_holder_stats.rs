@@ -16,12 +16,55 @@ pub struct BucketMapHolderStats {
     pub keys: AtomicU64,
     pub deletes: AtomicU64,
     pub inserts: AtomicU64,
+    pub count_in_mem: AtomicU64,
+    pub per_bucket_count: Vec<AtomicU64>,
 }
 
 impl BucketMapHolderStats {
+    pub fn new(bins: usize) -> BucketMapHolderStats {
+        BucketMapHolderStats {
+            per_bucket_count: (0..bins)
+                .into_iter()
+                .map(|_| AtomicU64::default())
+                .collect(),
+            ..BucketMapHolderStats::default()
+        }
+    }
+
+    pub fn insert_or_delete(&self, insert: bool, bin: usize) {
+        let per_bucket = self.per_bucket_count.get(bin);
+        if insert {
+            self.inserts.fetch_add(1, Ordering::Relaxed);
+            self.count_in_mem.fetch_add(1, Ordering::Relaxed);
+            per_bucket.map(|count| count.fetch_add(1, Ordering::Relaxed));
+        } else {
+            self.deletes.fetch_add(1, Ordering::Relaxed);
+            self.count_in_mem.fetch_sub(1, Ordering::Relaxed);
+            per_bucket.map(|count| count.fetch_sub(1, Ordering::Relaxed));
+        }
+    }
+
     pub fn report_stats(&self) {
+        let mut ct = 0;
+        let mut min = usize::MAX;
+        let mut max = 0;
+        for d in &self.per_bucket_count {
+            let d = d.load(Ordering::Relaxed) as usize;
+            ct += d;
+            min = std::cmp::min(min, d);
+            max = std::cmp::max(max, d);
+        }
+
         datapoint_info!(
             "accounts_index",
+            (
+                "count_in_mem",
+                self.count_in_mem.load(Ordering::Relaxed),
+                i64
+            ),
+            ("min_in_bin", min, i64),
+            ("max_in_bin", max, i64),
+            ("count_from_bins", ct, i64),
             (
                 "gets_from_mem",
                 self.gets_from_mem.swap(0, Ordering::Relaxed),
