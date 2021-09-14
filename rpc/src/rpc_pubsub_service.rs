@@ -149,6 +149,17 @@ impl BroadcastHandler {
         {
             count_final(entry.get().params());
 
+            let time_since_created = notification.created_at.elapsed();
+
+            datapoint_info!(
+                "pubsub_notifications",
+                (
+                    "created_to_queue_time",
+                    time_since_created.as_micros() as i64,
+                    i64
+                ),
+            );
+
             if notification.is_final {
                 entry.remove();
             }

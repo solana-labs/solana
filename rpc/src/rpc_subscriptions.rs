@@ -48,6 +48,7 @@ use {
         },
         thread::{Builder, JoinHandle},
         time::Duration,
+        time::Instant,
     },
     tokio::sync::broadcast,
 };
@@ -167,6 +168,7 @@ pub struct RpcNotification {
     pub subscription_id: SubscriptionId,
     pub is_final: bool,
     pub json: Weak<String>,
+    pub created_at: Instant,
 }
 
 struct RecentItems {
@@ -257,6 +259,7 @@ impl RpcNotifier {
             subscription_id: subscription.id(),
             json: Arc::downgrade(&buf_arc),
             is_final,
+            created_at: Instant::now(),
         };
         // There is an unlikely case where this can fail: if the last subscription is closed
         // just as the notifier generates a notification for it.
