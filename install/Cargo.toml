@@ -37,7 +37,7 @@ url = "2.2.2"
 
 [target."cfg(windows)".dependencies]
 winapi = "0.3.8"
-winreg = "0.9"
+winreg = "0.10"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
