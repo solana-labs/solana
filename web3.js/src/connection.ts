@@ -781,7 +781,15 @@ function createRpcClient(
 
       const json = await parseChunked(async function* load() {
         const buffer = await res.arrayBuffer();
-        yield buffer;
+        const step = 1e8; // 100mb
+        let start = 0;
+        let end = step;
+        while (start < buffer.byteLength) {
+          const chunk = buffer.slice(start, end);
+          yield chunk;
+          start = end;
+          end = start + step;
+        }
       });
 
       if (!json) {
@@ -791,7 +799,7 @@ function createRpcClient(
         throw new Error(`${res.status} ${res.statusText}`);
       }
       callback(null, json);
-    } catch (err) {
+    } catch (err: any) {
       callback(err);
     } finally {
       agentManager && agentManager.requestEnd();

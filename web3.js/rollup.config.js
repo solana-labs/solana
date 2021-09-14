@@ -142,6 +142,7 @@ function generateConfig(configType, format) {
           sourcemap: true,
         },
       ];
+      config.plugins.push(json());
       break;
     default:
       throw new Error(`Unknown configType: ${configType}`);
