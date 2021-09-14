@@ -191,6 +191,7 @@ pub fn test_connection(
     let rpc_impl = RpcSolPubSubImpl::new(
         PubSubConfig {
             enable_vote_subscription: true,
+            queue_capacity_items: 100,
             ..PubSubConfig::default()
         },
         subscriptions.control().clone(),
