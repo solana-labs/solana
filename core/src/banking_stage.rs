@@ -1087,6 +1087,18 @@ impl BankingStage {
         Self::filter_valid_transaction_indexes(&results, transaction_to_packet_indexes)
     }
 
+    // Function puts vote transactions on top of the vector
+    fn prioritize_vote_transactions(
+        transactions: Vec<Transaction>,
+        indexes: Vec<usize>,
+    ) -> (Vec<Transaction>, Vec<usize>) {
+        let mut transaction_indexes: Vec<(Transaction, usize)> =
+            transactions.into_iter().zip(indexes).collect();
+        transaction_indexes
+            .sort_by_key(|(tx, _index)| vote_transaction::parse_vote_transaction(tx).is_none());
+        transaction_indexes.into_iter().unzip()
+    }
+
     fn process_packets_transactions(
         bank: &Arc<Bank>,
         bank_creation_time: &Instant,
@@ -1105,6 +1117,7 @@ impl BankingStage {
             bank.vote_only_bank(),
         );
         packet_conversion_time.stop();
+
 
         debug!(
             "bank: {} filtered transactions {}",
