@@ -9,8 +9,8 @@ use solana_sdk::{
     account_utils::StateMut,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     feature_set::{
-        demote_program_write_locks, instructions_sysvar_enabled, neon_evm_compute_budget,
-        updated_verify_policy, FeatureSet,
+        demote_program_write_locks, fix_write_privs, instructions_sysvar_enabled,
+        neon_evm_compute_budget, updated_verify_policy, FeatureSet,
     },
     ic_logger_msg, ic_msg,
     instruction::{CompiledInstruction, Instruction, InstructionError},
@@ -762,38 +762,64 @@ impl MessageProcessor {
         ) = {
             let invoke_context = invoke_context.borrow();
 
-            // Translate and verify caller's data
-            let keyed_accounts = invoke_context.get_keyed_accounts()?;
-            let keyed_accounts = keyed_account_indices
+            let caller_keyed_accounts = invoke_context.get_keyed_accounts()?;
+            let callee_keyed_accounts = keyed_account_indices
                 .iter()
-                .map(|index| keyed_account_at_index(keyed_accounts, *index))
+                .map(|index| keyed_account_at_index(caller_keyed_accounts, *index))
                 .collect::<Result<Vec<&KeyedAccount>, InstructionError>>()?;
-            let (message, callee_program_id, _) =
-                Self::create_message(&instruction, &keyed_accounts, signers, &invoke_context)?;
-            let keyed_accounts = invoke_context.get_keyed_accounts()?;
-            let mut caller_write_privileges = keyed_account_indices
-                .iter()
-                .map(|index| keyed_accounts[*index].is_writable())
-                .collect::<Vec<bool>>();
-            caller_write_privileges.insert(0, false);
-            let mut accounts = vec![];
-            let mut keyed_account_indices_reordered = vec![];
-            let keyed_accounts = invoke_context.get_keyed_accounts()?;
-            'root: for account_key in message.account_keys.iter() {
-                for keyed_account_index in keyed_account_indices {
-                    let keyed_account = &keyed_accounts[*keyed_account_index];
-                    if account_key == keyed_account.unsigned_key() {
-                        accounts.push((*account_key, Rc::new(keyed_account.account.clone())));
-                        keyed_account_indices_reordered.push(*keyed_account_index);
-                        continue 'root;
+            let (message, callee_program_id, _) = Self::create_message(
+                &instruction,
+                &callee_keyed_accounts,
+                signers,
+                &invoke_context,
+            )?;
+            let mut keyed_account_indices_reordered =
+                Vec::with_capacity(message.account_keys.len());
+            let mut accounts = Vec::with_capacity(message.account_keys.len());
+            let mut caller_write_privileges = Vec::with_capacity(message.account_keys.len());
+
+            // Translate and verify caller's data
+            if invoke_context.is_feature_active(&fix_write_privs::id()) {
+                'root: for account_key in message.account_keys.iter() {
+                    for keyed_account_index in keyed_account_indices {
+                        let keyed_account = &caller_keyed_accounts[*keyed_account_index];
+                        if account_key == keyed_account.unsigned_key() {
+                            accounts.push((*account_key, Rc::new(keyed_account.account.clone())));
+                            caller_write_privileges.push(keyed_account.is_writable());
+                            keyed_account_indices_reordered.push(*keyed_account_index);
+                            continue 'root;
+                        }
                     }
+                    ic_msg!(
+                        invoke_context,
+                        "Instruction references an unknown account {}",
+                        account_key
+                    );
+                    return Err(InstructionError::MissingAccount);
                 }
-                ic_msg!(
-                    invoke_context,
-                    "Instruction references an unknown account {}",
-                    account_key
-                );
-                return Err(InstructionError::MissingAccount);
+            } else {
+                let keyed_accounts = invoke_context.get_keyed_accounts()?;
+                for index in keyed_account_indices.iter() {
+                    caller_write_privileges.push(keyed_accounts[*index].is_writable());
+                }
+                caller_write_privileges.insert(0, false);
+                let keyed_accounts = invoke_context.get_keyed_accounts()?;
+                'root2: for account_key in message.account_keys.iter() {
+                    for keyed_account_index in keyed_account_indices {
+                        let keyed_account = &keyed_accounts[*keyed_account_index];
+                        if account_key == keyed_account.unsigned_key() {
+                            accounts.push((*account_key, Rc::new(keyed_account.account.clone())));
+                            keyed_account_indices_reordered.push(*keyed_account_index);
+                            continue 'root2;
+                        }
+                    }
+                    ic_msg!(
+                        invoke_context,
+                        "Instruction references an unknown account {}",
+                        account_key
+                    );
+                    return Err(InstructionError::MissingAccount);
+                }
             }
 
             // Process instruction
@@ -2218,7 +2244,6 @@ mod tests {
         let caller_program_id = solana_sdk::pubkey::new_rand();
         let callee_program_id = solana_sdk::pubkey::new_rand();
 
-<<<<<<< HEAD
         let mut program_account = AccountSharedData::new(1, 0, &native_loader::id());
         program_account.set_executable(true);
         let executable_accounts = vec![(
@@ -2226,13 +2251,9 @@ mod tests {
             Rc::new(RefCell::new(program_account.clone())),
         )];
 
-=======
->>>>>>> 00d7981f6 (Fix native invoke writable privileges (#19750))
         let owned_account = AccountSharedData::new(42, 1, &callee_program_id);
         let not_owned_account = AccountSharedData::new(84, 1, &solana_sdk::pubkey::new_rand());
         let readonly_account = AccountSharedData::new(168, 1, &caller_program_id);
-        let mut program_account = AccountSharedData::new(1, 0, &native_loader::id());
-        program_account.set_executable(true);
 
         #[allow(unused_mut)]
         let accounts = vec![
@@ -2244,18 +2265,12 @@ mod tests {
                 solana_sdk::pubkey::new_rand(),
                 Rc::new(RefCell::new(not_owned_account)),
             ),
-<<<<<<< HEAD
-            (callee_program_id, Rc::new(RefCell::new(program_account))),
-        ];
-=======
             (
                 solana_sdk::pubkey::new_rand(),
                 Rc::new(RefCell::new(readonly_account)),
             ),
             (callee_program_id, Rc::new(RefCell::new(program_account))),
         ];
-        let program_indices = vec![3];
->>>>>>> 00d7981f6 (Fix native invoke writable privileges (#19750))
 
         let programs: Vec<(_, ProcessInstructionWithContext)> =
             vec![(callee_program_id, mock_process_instruction)];
@@ -2281,13 +2296,8 @@ mod tests {
             &caller_program_id,
             Rent::default(),
             &message,
-<<<<<<< HEAD
-            &compiled_instruction,
-            &executable_accounts,
-=======
             &caller_instruction,
-            &program_indices,
->>>>>>> 00d7981f6 (Fix native invoke writable privileges (#19750))
+            &executable_accounts,
             &accounts,
             programs.as_slice(),
             None,
@@ -2322,9 +2332,9 @@ mod tests {
         // readonly account modified by the invoker
         accounts[2].1.borrow_mut().data_as_mut_slice()[0] = 1;
         assert_eq!(
-            InstructionProcessor::process_cross_program_instruction(
+            MessageProcessor::process_cross_program_instruction(
                 &message,
-                &program_indices,
+                &executable_accounts,
                 &accounts,
                 &caller_write_privileges,
                 &mut invoke_context,
@@ -2356,13 +2366,8 @@ mod tests {
                 &caller_program_id,
                 Rent::default(),
                 &message,
-<<<<<<< HEAD
-                &compiled_instruction,
-                &executable_accounts,
-=======
                 &caller_instruction,
-                &program_indices,
->>>>>>> 00d7981f6 (Fix native invoke writable privileges (#19750))
+                &executable_accounts,
                 &accounts,
                 programs.as_slice(),
                 None,
@@ -2394,7 +2399,6 @@ mod tests {
     }
 
     #[test]
-<<<<<<< HEAD
     fn test_debug() {
         let mut message_processor = MessageProcessor::default();
         #[allow(clippy::unnecessary_wraps)]
@@ -2418,7 +2422,9 @@ mod tests {
         message_processor.add_loader(program_id, mock_ix_processor);
 
         assert!(!format!("{:?}", message_processor).is_empty());
-=======
+    }
+
+    #[test]
     fn test_native_invoke() {
         #[derive(Debug, Serialize, Deserialize)]
         enum MockInstruction {
@@ -2464,11 +2470,16 @@ mod tests {
         let caller_program_id = solana_sdk::pubkey::new_rand();
         let callee_program_id = solana_sdk::pubkey::new_rand();
 
+        let mut program_account = AccountSharedData::new(1, 0, &native_loader::id());
+        program_account.set_executable(true);
+        let executable_accounts = vec![(
+            callee_program_id,
+            Rc::new(RefCell::new(program_account.clone())),
+        )];
+
         let owned_account = AccountSharedData::new(42, 1, &callee_program_id);
         let not_owned_account = AccountSharedData::new(84, 1, &solana_sdk::pubkey::new_rand());
         let readonly_account = AccountSharedData::new(168, 1, &caller_program_id);
-        let mut program_account = AccountSharedData::new(1, 0, &native_loader::id());
-        program_account.set_executable(true);
 
         #[allow(unused_mut)]
         let accounts = vec![
@@ -2486,7 +2497,6 @@ mod tests {
             ),
             (callee_program_id, Rc::new(RefCell::new(program_account))),
         ];
-        let program_indices = vec![3];
         let programs: Vec<(_, ProcessInstructionWithContext)> =
             vec![(callee_program_id, mock_process_instruction)];
         let metas = vec![
@@ -2503,35 +2513,28 @@ mod tests {
         );
         let message = Message::new(&[callee_instruction.clone()], None);
 
-        let feature_set = FeatureSet::all_enabled();
         let ancestors = Ancestors::default();
-        let blockhash = Hash::default();
-        let fee_calculator = FeeCalculator::default();
         let mut invoke_context = ThisInvokeContext::new(
             &caller_program_id,
             Rent::default(),
             &message,
             &caller_instruction,
-            &program_indices,
+            &executable_accounts,
             &accounts,
             programs.as_slice(),
             None,
-            ComputeBudget::default(),
-            Rc::new(RefCell::new(MockComputeMeter::default())),
+            BpfComputeBudget::default(),
             Rc::new(RefCell::new(Executors::default())),
             None,
-            Arc::new(feature_set),
-            Arc::new(Accounts::default_for_tests()),
+            Arc::new(FeatureSet::all_enabled()),
+            Arc::new(Accounts::default()),
             &ancestors,
-            &blockhash,
-            &fee_calculator,
-        )
-        .unwrap();
+        );
 
         // not owned account modified by the invoker
         accounts[0].1.borrow_mut().data_as_mut_slice()[0] = 1;
         assert_eq!(
-            InstructionProcessor::native_invoke(
+            MessageProcessor::native_invoke(
                 &mut invoke_context,
                 callee_instruction.clone(),
                 &[0, 1, 2, 3],
@@ -2544,7 +2547,7 @@ mod tests {
         // readonly account modified by the invoker
         accounts[2].1.borrow_mut().data_as_mut_slice()[0] = 1;
         assert_eq!(
-            InstructionProcessor::native_invoke(
+            MessageProcessor::native_invoke(
                 &mut invoke_context,
                 callee_instruction,
                 &[0, 1, 2, 3],
@@ -2577,31 +2580,25 @@ mod tests {
             let message = Message::new(&[callee_instruction.clone()], None);
 
             let ancestors = Ancestors::default();
-            let blockhash = Hash::default();
-            let fee_calculator = FeeCalculator::default();
             let mut invoke_context = ThisInvokeContext::new(
                 &caller_program_id,
                 Rent::default(),
                 &message,
                 &caller_instruction,
-                &program_indices,
+                &executable_accounts,
                 &accounts,
                 programs.as_slice(),
                 None,
-                ComputeBudget::default(),
-                Rc::new(RefCell::new(MockComputeMeter::default())),
+                BpfComputeBudget::default(),
                 Rc::new(RefCell::new(Executors::default())),
                 None,
                 Arc::new(FeatureSet::all_enabled()),
-                Arc::new(Accounts::default_for_tests()),
+                Arc::new(Accounts::default()),
                 &ancestors,
-                &blockhash,
-                &fee_calculator,
-            )
-            .unwrap();
+            );
 
             assert_eq!(
-                InstructionProcessor::native_invoke(
+                MessageProcessor::native_invoke(
                     &mut invoke_context,
                     callee_instruction,
                     &[0, 1, 2, 3],
@@ -2610,6 +2607,5 @@ mod tests {
                 case.1
             );
         }
->>>>>>> 00d7981f6 (Fix native invoke writable privileges (#19750))
     }
 }
