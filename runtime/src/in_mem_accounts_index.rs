@@ -36,20 +36,6 @@ impl<T: IsCached> InMemAccountsIndex<T> {
         Arc::new(BucketMapHolder::new())
     }
 
-    fn entry(&mut self, pubkey: Pubkey) -> Entry<K, AccountMapEntry<T>> {
-        let m = Measure::start("entry");
-        let result = self.map.entry(pubkey);
-        let stats = &self.storage.stats;
-        let (count, time) = if matches!(result, Entry::Occupied(_)) {
-            (&stats.entries_from_mem, &stats.entry_mem_us)
-        } else {
-            (&stats.entries_missing, &stats.entry_missing_us)
-        };
-        Self::update_time_stat(time, m);
-        Self::update_stat(count, 1);
-        result
-    }
-
     pub fn items<R>(&self, range: &Option<&R>) -> Vec<(K, AccountMapEntry<T>)>
     where
         R: RangeBounds<Pubkey> + std::fmt::Debug,
@@ -86,7 +72,18 @@ impl<T: IsCached> InMemAccountsIndex<T> {
     // If the slot list for pubkey exists in the index and is empty, remove the index entry for pubkey and return true.
     // Return false otherwise.
     pub fn remove_if_slot_list_empty(&mut self, pubkey: Pubkey) -> bool {
-        if let Entry::Occupied(index_entry) = self.entry(pubkey) {
+        let m = Measure::start("entry");
+        let entry = self.map.entry(pubkey);
+        let stats = &self.storage.stats;
+        let (count, time) = if matches!(entry, Entry::Occupied(_)) {
+            (&stats.entries_from_mem, &stats.entry_mem_us)
+        } else {
+            (&stats.entries_missing, &stats.entry_missing_us)
+        };
+        Self::update_time_stat(time, m);
+        Self::update_stat(count, 1);
+
+        if let Entry::Occupied(index_entry) = entry {
             if index_entry.get().slot_list.read().unwrap().is_empty() {
                 index_entry.remove();
                 self.stats().insert_or_delete(false, self.bin);
@@ -103,7 +100,17 @@ impl<T: IsCached> InMemAccountsIndex<T> {
         reclaims: &mut SlotList<T>,
         previous_slot_entry_was_cached: bool,
     ) {
-        match self.entry(*pubkey) {
+        let m = Measure::start("entry");
+        let entry = self.map.entry(*pubkey);
+        let stats = &self.storage.stats;
+        let (count, time) = if matches!(entry, Entry::Occupied(_)) {
+            (&stats.entries_from_mem, &stats.entry_mem_us)
+        } else {
+            (&stats.entries_missing, &stats.entry_missing_us)
+        };
+        Self::update_time_stat(time, m);
+        Self::update_stat(count, 1);
+        match entry {
             Entry::Occupied(mut occupied) => {
                 let current = occupied.get_mut();
                 Self::lock_and_update_slot_list(
@@ -215,7 +222,17 @@ impl<T: IsCached> InMemAccountsIndex<T> {
         pubkey: Pubkey,
         new_entry: AccountMapEntry<T>,
     ) -> Option<(WriteAccountMapEntry<T>, T, Pubkey)> {
-        let result = match self.entry(pubkey) {
+        let m = Measure::start("entry");
+        let entry = self.map.entry(pubkey);
+        let stats = &self.storage.stats;
+        let (count, time) = if matches!(entry, Entry::Occupied(_)) {
+            (&stats.entries_from_mem, &stats.entry_mem_us)
+        } else {
+            (&stats.entries_missing, &stats.entry_missing_us)
+        };
+        Self::update_time_stat(time, m);
+        Self::update_stat(count, 1);
+        let result = match entry {
             Entry::Occupied(account_entry) => {
                 Some((
                     WriteAccountMapEntry::from_account_map_entry(account_entry.get().clone()),
