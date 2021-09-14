@@ -1,5 +1,5 @@
 use {
-    crate::rpc_subscriptions::{NotificationEntry, RpcNotification},
+    crate::rpc_subscriptions::{NotificationEntry, RpcNotification, TimestampedNotificationEntry},
     dashmap::{mapref::entry::Entry as DashEntry, DashMap},
     solana_account_decoder::{UiAccountEncoding, UiDataSliceConfig},
     solana_client::rpc_filter::RpcFilterType,
@@ -164,7 +164,7 @@ struct SubscriptionControlInner {
     subscriptions: DashMap<SubscriptionParams, Weak<SubscriptionTokenInner>>,
     next_id: AtomicU64,
     max_active_subscriptions: usize,
-    sender: crossbeam_channel::Sender<NotificationEntry>,
+    sender: crossbeam_channel::Sender<TimestampedNotificationEntry>,
     broadcast_sender: broadcast::Sender<RpcNotification>,
     counter: TokenCounter,
 }
@@ -172,7 +172,7 @@ struct SubscriptionControlInner {
 impl SubscriptionControl {
     pub fn new(
         max_active_subscriptions: usize,
-        sender: crossbeam_channel::Sender<NotificationEntry>,
+        sender: crossbeam_channel::Sender<TimestampedNotificationEntry>,
         broadcast_sender: broadcast::Sender<RpcNotification>,
     ) -> Self {
         Self(Arc::new(SubscriptionControlInner {
@@ -220,7 +220,7 @@ impl SubscriptionControl {
                 let _ = self
                     .0
                     .sender
-                    .send(NotificationEntry::Subscribed(token.0.params.clone(), id));
+                    .send(NotificationEntry::Subscribed(token.0.params.clone(), id).into());
                 entry.insert(Arc::downgrade(&token.0));
                 datapoint_info!(
                     "rpc-subscription",
@@ -506,10 +506,10 @@ impl Drop for SubscriptionTokenInner {
                 warn!("Subscriptions inconsistency (missing entry in by_params)");
             }
             DashEntry::Occupied(entry) => {
-                let _ = self.control.sender.send(NotificationEntry::Unsubscribed(
-                    self.params.clone(),
-                    self.id,
-                ));
+                let _ = self
+                    .control
+                    .sender
+                    .send(NotificationEntry::Unsubscribed(self.params.clone(), self.id).into());
                 entry.remove();
                 datapoint_info!(
                     "rpc-subscription",

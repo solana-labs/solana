@@ -72,6 +72,21 @@ fn get_transaction_logs(
     }
     logs
 }
+#[derive(Debug)]
+pub struct TimestampedNotificationEntry {
+    pub entry: NotificationEntry,
+    pub queued_at: Instant,
+}
+
+impl From<NotificationEntry> for TimestampedNotificationEntry {
+    fn from(entry: NotificationEntry) -> Self {
+        TimestampedNotificationEntry {
+            entry,
+            queued_at: Instant::now(),
+        }
+    }
+}
+
 pub enum NotificationEntry {
     Slot(SlotInfo),
     SlotUpdate(SlotUpdate),
@@ -416,8 +431,7 @@ fn initial_last_notified_slot(
 }
 
 pub struct RpcSubscriptions {
-    notification_sender: Sender<NotificationEntry>,
-
+    notification_sender: Sender<TimestampedNotificationEntry>,
     t_cleanup: Option<JoinHandle<()>>,
 
     exit: Arc<AtomicBool>,
@@ -575,7 +589,7 @@ impl RpcSubscriptions {
     }
 
     fn enqueue_notification(&self, notification_entry: NotificationEntry) {
-        match self.notification_sender.send(notification_entry) {
+        match self.notification_sender.send(notification_entry.into()) {
             Ok(()) => (),
             Err(SendError(notification)) => {
                 warn!(
@@ -589,7 +603,7 @@ impl RpcSubscriptions {
     fn process_notifications(
         exit: Arc<AtomicBool>,
         notifier: RpcNotifier,
-        notification_receiver: Receiver<NotificationEntry>,
+        notification_receiver: Receiver<TimestampedNotificationEntry>,
         mut subscriptions: SubscriptionsTracker,
         bank_forks: Arc<RwLock<BankForks>>,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
@@ -601,7 +615,8 @@ impl RpcSubscriptions {
             }
             match notification_receiver.recv_timeout(Duration::from_millis(RECEIVE_DELAY_MILLIS)) {
                 Ok(notification_entry) => {
-                    match notification_entry {
+                    let TimestampedNotificationEntry { entry, queued_at } = notification_entry;
+                    match entry {
                         NotificationEntry::Subscribed(params, id) => {
                             subscriptions.subscribe(params.clone(), id, || {
                                 initial_last_notified_slot(
@@ -714,6 +729,14 @@ impl RpcSubscriptions {
                             }
                         }
                     }
+                    datapoint_info!(
+                        "pubsub_notification_entries",
+                        (
+                            "notification_entry_processing_time",
+                            queued_at.elapsed().as_micros() as i64,
+                            i64
+                        )
+                    );
                 }
                 Err(RecvTimeoutError::Timeout) => {
                     // not a problem - try reading again

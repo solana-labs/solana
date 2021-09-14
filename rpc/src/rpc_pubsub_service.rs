@@ -59,6 +59,7 @@ impl PubSubConfig {
             max_active_subscriptions: MAX_ACTIVE_SUBSCRIPTIONS,
             queue_capacity_items: DEFAULT_TEST_QUEUE_CAPACITY_ITEMS,
             queue_capacity_bytes: DEFAULT_QUEUE_CAPACITY_BYTES,
+            worker_threads: DEFAULT_WORKER_THREADS,
         }
     }
 }
