@@ -1,5 +1,5 @@
 use crate::accounts_index::{
-    AccountMapEntry, AccountMapEntryInner, IsCached, SlotList, WriteAccountMapEntry,
+    AccountMapEntry, AccountMapEntryInner, IndexValue, SlotList, WriteAccountMapEntry,
 };
 use crate::accounts_index_storage::AccountsIndexStorage;
 use crate::bucket_map_holder::BucketMapHolder;
@@ -16,14 +16,14 @@ type K = Pubkey;
 
 // one instance of this represents one bin of the accounts index.
 #[derive(Debug)]
-pub struct InMemAccountsIndex<T: IsCached> {
+pub struct InMemAccountsIndex<T: IndexValue> {
     // backing store
     map: HashMap<Pubkey, AccountMapEntry<T>>,
     storage: Arc<BucketMapHolder<T>>,
     bin: usize,
 }
 
-impl<T: IsCached> InMemAccountsIndex<T> {
+impl<T: IndexValue> InMemAccountsIndex<T> {
     pub fn new(storage: &AccountsIndexStorage<T>, bin: usize) -> Self {
         Self {
             map: HashMap::new(),

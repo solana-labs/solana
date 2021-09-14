@@ -54,6 +54,11 @@ pub trait IsCached:
     fn is_cached(&self) -> bool;
 }
 
+pub trait IndexValue:
+    'static + IsCached + Clone + Debug + PartialEq + ZeroLamport + Copy + Default + Sync + Send
+{
+}
+
 #[derive(Error, Debug, PartialEq)]
 pub enum ScanError {
     #[error("Node detected it replayed bad version of slot {slot:?} with id {bank_id:?}, thus the scan on said slot was aborted")]
@@ -117,7 +122,7 @@ pub struct AccountMapEntryInner<T> {
     pub slot_list: RwLock<SlotList<T>>,
 }
 
-impl<T: IsCached> AccountMapEntryInner<T> {
+impl<T: IndexValue> AccountMapEntryInner<T> {
     pub fn ref_count(&self) -> RefCount {
         self.ref_count.load(Ordering::Relaxed)
     }
@@ -131,27 +136,27 @@ impl<T: IsCached> AccountMapEntryInner<T> {
     }
 }
 
-pub enum AccountIndexGetResult<'a, T: IsCached> {
+pub enum AccountIndexGetResult<'a, T: IndexValue> {
     Found(ReadAccountMapEntry<T>, usize),
     NotFoundOnFork,
     Missing(AccountMapsReadLock<'a, T>),
 }
 
 #[self_referencing]
-pub struct ReadAccountMapEntry<T: IsCached> {
+pub struct ReadAccountMapEntry<T: IndexValue> {
     owned_entry: AccountMapEntry<T>,
     #[borrows(owned_entry)]
     #[covariant]
     slot_list_guard: RwLockReadGuard<'this, SlotList<T>>,
 }
 
-impl<T: IsCached> Debug for ReadAccountMapEntry<T> {
+impl<T: IndexValue> Debug for ReadAccountMapEntry<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{:?}", self.borrow_owned_entry())
     }
 }
 
-impl<T: IsCached> ReadAccountMapEntry<T> {
+impl<T: IndexValue> ReadAccountMapEntry<T> {
     pub fn from_account_map_entry(account_map_entry: AccountMapEntry<T>) -> Self {
         ReadAccountMapEntryBuilder {
             owned_entry: account_map_entry,
@@ -178,14 +183,14 @@ impl<T: IsCached> ReadAccountMapEntry<T> {
 }
 
 #[self_referencing]
-pub struct WriteAccountMapEntry<T: IsCached> {
+pub struct WriteAccountMapEntry<T: IndexValue> {
     owned_entry: AccountMapEntry<T>,
     #[borrows(owned_entry)]
     #[covariant]
     slot_list_guard: RwLockWriteGuard<'this, SlotList<T>>,
 }
 
-impl<T: IsCached> WriteAccountMapEntry<T> {
+impl<T: IndexValue> WriteAccountMapEntry<T> {
     pub fn from_account_map_entry(account_map_entry: AccountMapEntry<T>) -> Self {
         WriteAccountMapEntryBuilder {
             owned_entry: account_map_entry,
@@ -522,7 +527,7 @@ pub struct AccountsIndexRootsStats {
     pub unrooted_cleaned_count: usize,
 }
 
-pub struct AccountsIndexIterator<'a, T: IsCached> {
+pub struct AccountsIndexIterator<'a, T: IndexValue> {
     account_maps: &'a LockMapTypeSlice<T>,
     bin_calculator: &'a PubkeyBinCalculator16,
     start_bound: Bound<Pubkey>,
@@ -531,7 +536,7 @@ pub struct AccountsIndexIterator<'a, T: IsCached> {
     collect_all_unsorted: bool,
 }
 
-impl<'a, T: IsCached> AccountsIndexIterator<'a, T> {
+impl<'a, T: IndexValue> AccountsIndexIterator<'a, T> {
     fn range<R>(
         map: &AccountMapsReadLock<T>,
         range: R,
@@ -615,7 +620,7 @@ impl<'a, T: IsCached> AccountsIndexIterator<'a, T> {
     }
 }
 
-impl<'a, T: IsCached> Iterator for AccountsIndexIterator<'a, T> {
+impl<'a, T: IndexValue> Iterator for AccountsIndexIterator<'a, T> {
     type Item = Vec<(Pubkey, AccountMapEntry<T>)>;
     fn next(&mut self) -> Option<Self::Item> {
         if self.is_finished {
@@ -676,7 +681,7 @@ impl ScanSlotTracker {
 }
 
 #[derive(Debug)]
-pub struct AccountsIndex<T: IsCached> {
+pub struct AccountsIndex<T: IndexValue> {
     pub account_maps: LockMapType<T>,
     pub bin_calculator: PubkeyBinCalculator16,
     program_id_index: SecondaryIndex<DashMapSecondaryIndexEntry>,
@@ -699,7 +704,7 @@ pub struct AccountsIndex<T: IsCached> {
     storage: AccountsIndexStorage<T>,
 }
 
-impl<T: IsCached> AccountsIndex<T> {
+impl<T: IndexValue> AccountsIndex<T> {
     pub fn default_for_tests() -> Self {
         Self::new(Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING))
     }
@@ -1824,7 +1829,7 @@ pub mod tests {
         }
     }
 
-    impl<'a, T: IsCached> AccountIndexGetResult<'a, T> {
+    impl<'a, T: IndexValue> AccountIndexGetResult<'a, T> {
         pub fn unwrap(self) -> (ReadAccountMapEntry<T>, usize) {
             match self {
                 AccountIndexGetResult::Found(lock, size) => (lock, size),
@@ -2614,6 +2619,7 @@ pub mod tests {
 
     type AccountInfoTest = f64;
 
+    impl IndexValue for AccountInfoTest {}
     impl IsCached for AccountInfoTest {
         fn is_cached(&self) -> bool {
             true
@@ -2734,7 +2740,7 @@ pub mod tests {
         }
     }
 
-    fn test_new_entry_code_paths_helper<T: IsCached>(
+    fn test_new_entry_code_paths_helper<T: IndexValue>(
         account_infos: [T; 2],
         is_cached: bool,
         upsert: bool,
@@ -3416,7 +3422,7 @@ pub mod tests {
         assert!(found_key);
     }
 
-    fn account_maps_len_expensive<T: IsCached>(index: &AccountsIndex<T>) -> usize {
+    fn account_maps_len_expensive<T: IndexValue>(index: &AccountsIndex<T>) -> usize {
         index
             .account_maps
             .iter()
@@ -3944,6 +3950,8 @@ pub mod tests {
         );
     }
 
+    impl IndexValue for bool {}
+    impl IndexValue for u64 {}
     impl IsCached for bool {
         fn is_cached(&self) -> bool {
             false
