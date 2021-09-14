@@ -23,13 +23,15 @@ pub struct InMemAccountsIndex<T: IsCached> {
     // backing store
     map: HashMap<Pubkey, AccountMapEntry<T>>,
     storage: Arc<BucketMapHolder>,
+    bin: usize,
 }
 
 impl<T: IsCached> InMemAccountsIndex<T> {
-    pub fn new(storage: &AccountsIndexStorage) -> Self {
+    pub fn new(storage: &AccountsIndexStorage, bin: usize) -> Self {
         Self {
             map: HashMap::new(),
             storage: storage.storage().clone(),
+            bin,
         }
     }
 
@@ -90,7 +92,7 @@ impl<T: IsCached> InMemAccountsIndex<T> {
         if let Entry::Occupied(index_entry) = self.entry(pubkey) {
             if index_entry.get().slot_list.read().unwrap().is_empty() {
                 index_entry.remove();
-                self.storage.stats.deletes.fetch_add(1, Ordering::Relaxed);
+                self.stats().insert_or_delete(false, self.bin);
                 return true;
             }
         }
@@ -113,11 +115,11 @@ impl<T: IsCached> InMemAccountsIndex<T> {
                     reclaims,
                     previous_slot_entry_was_cached,
                 );
-                Self::update_stat(&self.storage.stats.updates_in_mem, 1);
+                Self::update_stat(&self.stats().updates_in_mem, 1);
             }
             Entry::Vacant(vacant) => {
                 vacant.insert(new_value);
-                Self::update_stat(&self.storage.stats.inserts, 1);
+                self.stats().insert_or_delete(true, self.bin);
             }
         }
     }
@@ -231,14 +233,11 @@ impl<T: IsCached> InMemAccountsIndex<T> {
             }
         };
         let stats = self.stats();
-        Self::update_stat(
-            if result.is_none() {
-                &stats.inserts
-            } else {
-                &stats.updates_in_mem
-            },
-            1,
-        );
+        if result.is_none() {
+            stats.insert_or_delete(true, self.bin);
+        } else {
+            Self::update_stat(&stats.updates_in_mem, 1);
+        }
         result
     }
 
