@@ -1133,6 +1133,7 @@ impl BankingStage {
                 .saturating_sub(max_tx_fwd_delay)
                 .saturating_sub(FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET as usize),
             &mut error_counters,
+            true,
         );
 
         Self::filter_valid_transaction_indexes(&results, transaction_to_packet_indexes)

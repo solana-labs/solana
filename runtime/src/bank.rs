@@ -3015,6 +3015,7 @@ impl Bank {
         lock_results: &[Result<()>],
         max_age: usize,
         mut error_counters: &mut ErrorCounters,
+        reject_non_vote_txs: bool,
     ) -> Vec<TransactionCheckResult> {
         let age_results = self.check_age(
             sanitized_txs.iter(),
@@ -3024,7 +3025,7 @@ impl Bank {
         );
         let cache_results =
             self.check_status_cache(sanitized_txs, age_results, &mut error_counters);
-        if self.upgrade_epoch() {
+        if reject_non_vote_txs || self.upgrade_epoch() {
             // Reject all non-vote transactions
             self.filter_by_vote_transactions(
                 sanitized_txs.iter(),
@@ -3272,6 +3273,7 @@ impl Bank {
             batch.lock_results(),
             max_age,
             &mut error_counters,
+            false,
         );
         check_time.stop();
 
