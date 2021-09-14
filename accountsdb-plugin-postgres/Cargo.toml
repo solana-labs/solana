@@ -9,6 +9,9 @@ license = "Apache-2.0"
 homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-validator"
 
+[lib]
+crate-type = ["cdylib", "rlib"]
+
 [dependencies]
 libloading = "0.7.0"
 log = "0.4.11"
