@@ -1,8 +1,10 @@
-use crate::accounts_index::IndexValue;
+use crate::accounts_index::{AccountMapEntry, IndexValue};
 use crate::bucket_map_holder_stats::BucketMapHolderStats;
 use crate::waitable_condvar::WaitableCondvar;
+use solana_sdk::pubkey::Pubkey;
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 // will eventually hold the bucket map
@@ -14,10 +16,9 @@ pub struct BucketMapHolder<T: IndexValue> {
 
 #[derive(Default)]
 pub struct CachedBucket<T: IndexValue> {
-    // soon, this will hold the hashmap itself: pub map: RwLock<HashMap<Pubkey, AccountMapEntry<T>>>,
     _bin: usize,
     _stats: Arc<BucketMapHolderStats>,
-    _phantom: std::marker::PhantomData<T>,
+    pub map: RwLock<HashMap<Pubkey, AccountMapEntry<T>>>,
 }
 
 impl<T: IndexValue> CachedBucket<T> {

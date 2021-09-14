@@ -17,10 +17,9 @@ type K = Pubkey;
 // one instance of this represents one bin of the accounts index.
 pub struct InMemAccountsIndex<T: IndexValue> {
     // backing store
-    map_internal: RwLock<HashMap<Pubkey, AccountMapEntry<T>>>,
     storage: Arc<BucketMapHolder<T>>,
     bin: usize,
-    _bucket: Arc<CachedBucket<T>>,
+    bucket: Arc<CachedBucket<T>>,
 }
 
 impl<T: IndexValue> Debug for InMemAccountsIndex<T> {
@@ -32,15 +31,14 @@ impl<T: IndexValue> Debug for InMemAccountsIndex<T> {
 impl<T: IndexValue> InMemAccountsIndex<T> {
     pub fn new(storage: &AccountsIndexStorage<T>, bin: usize) -> Self {
         Self {
-            map_internal: RwLock::default(),
             storage: storage.storage().clone(),
             bin,
-            _bucket: storage.storage().buckets[bin].clone(),
+            bucket: storage.storage().buckets[bin].clone(),
         }
     }
 
     fn map(&self) -> &RwLock<HashMap<Pubkey, AccountMapEntry<T>>> {
-        &self.map_internal
+        &self.bucket.map
     }
 
     pub fn new_bucket_map_holder(bins: usize) -> Arc<BucketMapHolder<T>> {
