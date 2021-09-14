@@ -1,112 +1,41 @@
 //! The `validator` module hosts all the validator microservices.
 
-<<<<<<< HEAD
-use crate::{
-    broadcast_stage::BroadcastStageType,
-    cache_block_meta_service::{CacheBlockMetaSender, CacheBlockMetaService},
-    cluster_info::{
-        ClusterInfo, Node, DEFAULT_CONTACT_DEBUG_INTERVAL_MILLIS,
-        DEFAULT_CONTACT_SAVE_INTERVAL_MILLIS,
-    },
-    cluster_info_vote_listener::VoteTracker,
-    completed_data_sets_service::CompletedDataSetsService,
-    consensus::{reconcile_blockstore_roots_with_tower, Tower},
-    contact_info::ContactInfo,
-    gossip_service::GossipService,
-    max_slots::MaxSlots,
-    optimistically_confirmed_bank_tracker::{
-        OptimisticallyConfirmedBank, OptimisticallyConfirmedBankTracker,
-    },
-    poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
-    poh_service::{self, PohService},
-    rewards_recorder_service::{RewardsRecorderSender, RewardsRecorderService},
-    rpc::JsonRpcConfig,
-    rpc_pubsub_service::{PubSubConfig, PubSubService},
-    rpc_service::JsonRpcService,
-    rpc_subscriptions::RpcSubscriptions,
-    sample_performance_service::SamplePerformanceService,
-    serve_repair::ServeRepair,
-    serve_repair_service::ServeRepairService,
-    sigverify,
-    snapshot_packager_service::{PendingSnapshotPackage, SnapshotPackagerService},
-    tpu::{Tpu, DEFAULT_TPU_COALESCE_MS},
-    transaction_status_service::TransactionStatusService,
-    tvu::{Sockets, Tvu, TvuConfig},
-};
-use crossbeam_channel::{bounded, unbounded};
-use rand::{thread_rng, Rng};
-use solana_ledger::{
-    bank_forks_utils,
-    blockstore::{Blockstore, BlockstoreSignals, CompletedSlotsReceiver, PurgeType},
-    blockstore_db::BlockstoreRecoveryMode,
-    blockstore_processor::{self, TransactionStatusSender},
-    leader_schedule::FixedSchedule,
-    leader_schedule_cache::LeaderScheduleCache,
-    poh::compute_hash_time_ns,
-};
-use solana_measure::measure::Measure;
-use solana_metrics::datapoint_info;
-use solana_runtime::{
-    accounts_index::AccountSecondaryIndexes,
-    bank::Bank,
-    bank_forks::{BankForks, SnapshotConfig},
-    commitment::BlockCommitmentCache,
-    hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
-};
-use solana_sdk::{
-    clock::Slot,
-    epoch_schedule::MAX_LEADER_SCHEDULE_EPOCH_OFFSET,
-    genesis_config::GenesisConfig,
-    hash::Hash,
-    pubkey::Pubkey,
-    shred_version::compute_shred_version,
-    signature::{Keypair, Signer},
-    timing::timestamp,
-};
-use solana_vote_program::vote_state::VoteState;
-use std::time::Instant;
-use std::{
-    collections::HashSet,
-    fmt,
-    net::SocketAddr,
-    ops::Deref,
-    path::{Path, PathBuf},
-    sync::atomic::{AtomicBool, AtomicU64, Ordering},
-    sync::mpsc::Receiver,
-    sync::{Arc, Mutex, RwLock},
-    thread::{sleep, Builder},
-    time::Duration,
-=======
 use {
     crate::{
         broadcast_stage::BroadcastStageType,
         cache_block_meta_service::{CacheBlockMetaSender, CacheBlockMetaService},
+        cluster_info::{
+            ClusterInfo, Node, DEFAULT_CONTACT_DEBUG_INTERVAL_MILLIS,
+            DEFAULT_CONTACT_SAVE_INTERVAL_MILLIS,
+        },
         cluster_info_vote_listener::VoteTracker,
         completed_data_sets_service::CompletedDataSetsService,
         consensus::{reconcile_blockstore_roots_with_tower, Tower},
-        cost_model::CostModel,
+        contact_info::ContactInfo,
+        crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS,
+        gossip_service::GossipService,
+        max_slots::MaxSlots,
+        optimistically_confirmed_bank_tracker::{
+            OptimisticallyConfirmedBank, OptimisticallyConfirmedBankTracker,
+        },
+        poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
+        poh_service::{self, PohService},
         rewards_recorder_service::{RewardsRecorderSender, RewardsRecorderService},
+        rpc::JsonRpcConfig,
+        rpc_pubsub_service::{PubSubConfig, PubSubService},
+        rpc_service::JsonRpcService,
+        rpc_subscriptions::RpcSubscriptions,
         sample_performance_service::SamplePerformanceService,
         serve_repair::ServeRepair,
         serve_repair_service::ServeRepairService,
         sigverify,
         snapshot_packager_service::{PendingSnapshotPackage, SnapshotPackagerService},
-        tower_storage::TowerStorage,
         tpu::{Tpu, DEFAULT_TPU_COALESCE_MS},
+        transaction_status_service::TransactionStatusService,
         tvu::{Sockets, Tvu, TvuConfig},
     },
     crossbeam_channel::{bounded, unbounded},
     rand::{thread_rng, Rng},
-    solana_entry::poh::compute_hash_time_ns,
-    solana_gossip::{
-        cluster_info::{
-            ClusterInfo, Node, DEFAULT_CONTACT_DEBUG_INTERVAL_MILLIS,
-            DEFAULT_CONTACT_SAVE_INTERVAL_MILLIS,
-        },
-        contact_info::ContactInfo,
-        crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS,
-        gossip_service::GossipService,
-    },
     solana_ledger::{
         bank_forks_utils,
         blockstore::{Blockstore, BlockstoreSignals, CompletedSlotsReceiver, PurgeType},
@@ -114,40 +43,20 @@ use {
         blockstore_processor::{self, TransactionStatusSender},
         leader_schedule::FixedSchedule,
         leader_schedule_cache::LeaderScheduleCache,
+        poh::compute_hash_time_ns,
     },
     solana_measure::measure::Measure,
     solana_metrics::datapoint_info,
-    solana_poh::{
-        poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
-        poh_service::{self, PohService},
-    },
-    solana_rpc::{
-        max_slots::MaxSlots,
-        optimistically_confirmed_bank_tracker::{
-            OptimisticallyConfirmedBank, OptimisticallyConfirmedBankTracker,
-        },
-        rpc::JsonRpcConfig,
-        rpc_completed_slots_service::RpcCompletedSlotsService,
-        rpc_pubsub_service::{PubSubConfig, PubSubService},
-        rpc_service::JsonRpcService,
-        rpc_subscriptions::RpcSubscriptions,
-        transaction_status_service::TransactionStatusService,
-    },
     solana_runtime::{
-        accounts_db::AccountShrinkThreshold,
         accounts_index::AccountSecondaryIndexes,
         bank::Bank,
-        bank_forks::BankForks,
+        bank_forks::{BankForks, SnapshotConfig},
         commitment::BlockCommitmentCache,
         hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
-        snapshot_archive_info::SnapshotArchiveInfoGetter,
-        snapshot_config::SnapshotConfig,
-        snapshot_utils,
     },
     solana_sdk::{
         clock::Slot,
         epoch_schedule::MAX_LEADER_SCHEDULE_EPOCH_OFFSET,
-        exit::Exit,
         genesis_config::GenesisConfig,
         hash::Hash,
         pubkey::Pubkey,
@@ -155,10 +64,11 @@ use {
         signature::{Keypair, Signer},
         timing::timestamp,
     },
-    solana_streamer::socket::SocketAddrSpace,
     solana_vote_program::vote_state::VoteState,
+    std::time::Instant,
     std::{
         collections::{HashMap, HashSet},
+        fmt,
         net::SocketAddr,
         ops::Deref,
         path::{Path, PathBuf},
@@ -167,10 +77,9 @@ use {
             mpsc::Receiver,
             Arc, Mutex, RwLock,
         },
-        thread::{sleep, Builder, JoinHandle},
-        time::{Duration, Instant},
+        thread::{sleep, Builder},
+        time::Duration,
     },
->>>>>>> 7a789e076 (filters for recent contact-infos when checking for live stake (#19204))
 };
 
 const MAX_COMPLETED_DATA_SETS_IN_CHANNEL: usize = 100_000;
