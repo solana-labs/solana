@@ -124,12 +124,17 @@ impl ReplaySlotStats {
             .iter()
             .collect();
         per_pubkey_timings.sort_by(|a, b| b.1.accumulated_us.cmp(&a.1.accumulated_us));
-        let total_us: u64 = per_pubkey_timings.iter().map(|a| a.1.accumulated_us).sum();
-        let total_units: u64 = per_pubkey_timings
-            .iter()
-            .map(|a| a.1.accumulated_units)
-            .sum();
-        let total_count: u32 = per_pubkey_timings.iter().map(|a| a.1.count).sum();
+        let (total_us, total_units, total_count) =
+            per_pubkey_timings
+                .iter()
+                .fold((0, 0, 0), |(sum_us, sum_units, sum_count), a| {
+                    (
+                        sum_us + a.1.accumulated_us,
+                        sum_units + a.1.accumulated_units,
+                        sum_count + a.1.count,
+                    )
+                });
+
         for (pubkey, time) in per_pubkey_timings.iter().take(5) {
             datapoint_info!(
                 "per_program_timings",
