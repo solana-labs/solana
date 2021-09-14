@@ -2,7 +2,7 @@ use {
     crate::accountsdb_repl_service::AccountsDbReplService,
     crossbeam_channel::unbounded,
     log::*,
-    solana_download_utils::download_snapshot,
+    solana_download_utils::download_snapshot_archive,
     solana_genesis_utils::download_then_check_genesis_hash,
     solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
     solana_ledger::{
@@ -23,7 +23,7 @@ use {
     solana_runtime::{
         accounts_index::AccountSecondaryIndexes, bank_forks::BankForks,
         commitment::BlockCommitmentCache, hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
-        snapshot_config::SnapshotConfig, snapshot_utils,
+        snapshot_config::SnapshotConfig, snapshot_package::SnapshotType, snapshot_utils,
     },
     solana_sdk::{clock::Slot, exit::Exit, genesis_config::GenesisConfig, hash::Hash},
     solana_streamer::socket::SocketAddrSpace,
@@ -86,13 +86,14 @@ fn initialize_from_snapshot(
         replica_config.snapshot_archives_dir
     );
 
-    download_snapshot(
+    download_snapshot_archive(
         &replica_config.rpc_peer_addr,
         &replica_config.snapshot_archives_dir,
         replica_config.snapshot_info,
-        false,
+        SnapshotType::FullSnapshot,
         snapshot_config.maximum_full_snapshot_archives_to_retain,
         snapshot_config.maximum_incremental_snapshot_archives_to_retain,
+        false,
         &mut None,
     )
     .unwrap();

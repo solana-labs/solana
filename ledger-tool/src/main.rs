@@ -1893,8 +1893,10 @@ fn main() {
                 .ok()
                 .map(|bins| AccountsIndexConfig { bins: Some(bins) });
 
-            let accounts_db_config =
-                accounts_index_config.map(|x| AccountsDbConfig { index: Some(x) });
+            let accounts_db_config = Some(AccountsDbConfig {
+                index: accounts_index_config,
+                accounts_hash_cache_path: Some(ledger_path.clone()),
+            });
 
             let process_options = ProcessOptions {
                 dev_halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),

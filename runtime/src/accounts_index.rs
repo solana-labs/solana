@@ -734,7 +734,7 @@ impl<T: IsCached> AccountsIndex<T> {
         let storage = AccountsIndexStorage::new();
         let account_maps = (0..bins)
             .into_iter()
-            .map(|_bin| RwLock::new(AccountMap::new(&storage)))
+            .map(|bin| RwLock::new(AccountMap::new(&storage, bin)))
             .collect::<Vec<_>>();
         (account_maps, bin_calculator, storage)
     }

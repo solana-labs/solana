@@ -105,7 +105,7 @@ mod test {
             let (poh_recorder, _entry_receiver, _record_receiver) = PohRecorder::new(
                 0,
                 bank.last_blockhash(),
-                0,
+                bank.clone(),
                 Some((2, 2)),
                 bank.ticks_per_slot(),
                 &Pubkey::default(),
