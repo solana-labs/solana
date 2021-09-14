@@ -47,6 +47,7 @@ pub trait SigVerifier {
 #[derive(Default, Clone)]
 pub struct DisabledSigVerifier {}
 
+#[derive(Default)]
 struct SigVerifierStats {
     recv_batches_us_hist: histogram::Histogram, // time to call recv_batch
     verify_batches_pp_us_hist: histogram::Histogram, // per-packet time to call verify_batch
@@ -54,19 +55,6 @@ struct SigVerifierStats {
     packets_hist: histogram::Histogram,         // number of packets per verify call
     total_batches: usize,
     total_packets: usize,
-}
-
-impl Default for SigVerifierStats {
-    fn default() -> Self {
-        SigVerifierStats {
-            recv_batches_us_hist: histogram::Histogram::new(),
-            verify_batches_pp_us_hist: histogram::Histogram::new(),
-            batches_hist: histogram::Histogram::new(),
-            packets_hist: histogram::Histogram::new(),
-            total_batches: 0,
-            total_packets: 0,
-        }
-    }
 }
 
 impl SigVerifierStats {
