@@ -199,6 +199,17 @@ pub mod check_seed_length {
     solana_sdk::declare_id!("8HYXgkoKGreAMA3MfJkdjbKNVbfZRQP3jqFpa7iqN4v7");
 }
 
+<<<<<<< HEAD
+=======
+pub mod return_data_syscall_enabled {
+    solana_sdk::declare_id!("BJVXq6NdLC7jCDGjfqJv7M1XHD4Y13VrpDqRF2U7UBcC");
+}
+
+pub mod fix_write_privs {
+    solana_sdk::declare_id!("7Tr5C1tdcCeBVD8jxtHYnvjL1DGdFboYBHCJkEFdenBb");
+}
+
+>>>>>>> 00d7981f6 (Fix native invoke writable privileges (#19750))
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -249,6 +260,11 @@ lazy_static! {
         (demote_program_write_locks::id(), "demote program write locks to readonly #19593"),
         (allow_native_ids::id(), "allow native program ids in program derived addresses"),
         (check_seed_length::id(), "Check program address seed lengths"),
+<<<<<<< HEAD
+=======
+        (return_data_syscall_enabled::id(), "enable sol_{set,get}_return_data syscall"),
+        (fix_write_privs::id(), "fix native invoke write privileges"),
+>>>>>>> 00d7981f6 (Fix native invoke writable privileges (#19750))
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
