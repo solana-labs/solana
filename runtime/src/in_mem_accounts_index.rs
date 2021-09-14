@@ -49,15 +49,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     where
         R: RangeBounds<Pubkey> + std::fmt::Debug,
     {
-        Self::update_stat(&self.stats().items, 1);
-        let map = self.map().read().unwrap();
-        let mut result = Vec::with_capacity(map.len());
-        map.iter().for_each(|(k, v)| {
-            if range.map(|range| range.contains(k)).unwrap_or(true) {
-                result.push((*k, v.clone()));
-            }
-        });
-        result
+        self.bucket.items(range)
     }
 
     pub fn keys(&self) -> Vec<Pubkey> {
