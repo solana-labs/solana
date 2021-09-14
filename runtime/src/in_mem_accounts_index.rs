@@ -76,7 +76,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         let m = Measure::start("entry");
         let mut map = self.map.write().unwrap();
         let entry = map.entry(pubkey);
-        let stats = &self.storage.stats;
+        let stats = &self.stats();
         let (count, time) = if matches!(entry, Entry::Occupied(_)) {
             (&stats.entries_from_mem, &stats.entry_mem_us)
         } else {
@@ -105,7 +105,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         let m = Measure::start("entry");
         let mut map = self.map.write().unwrap();
         let entry = map.entry(*pubkey);
-        let stats = &self.storage.stats;
+        let stats = &self.stats();
         let (count, time) = if matches!(entry, Entry::Occupied(_)) {
             (&stats.entries_from_mem, &stats.entry_mem_us)
         } else {
@@ -228,7 +228,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         let m = Measure::start("entry");
         let mut map = self.map.write().unwrap();
         let entry = map.entry(pubkey);
-        let stats = &self.storage.stats;
+        let stats = &self.stats();
         let (count, time) = if matches!(entry, Entry::Occupied(_)) {
             (&stats.entries_from_mem, &stats.entry_mem_us)
         } else {
