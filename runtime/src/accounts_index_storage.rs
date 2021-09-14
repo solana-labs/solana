@@ -1,3 +1,4 @@
+use crate::accounts_index::IsCached;
 use crate::bucket_map_holder::BucketMapHolder;
 use crate::waitable_condvar::WaitableCondvar;
 use std::{
@@ -14,17 +15,17 @@ use std::{
 //  and it will stop all the background threads and join them.
 
 #[derive(Debug, Default)]
-pub struct AccountsIndexStorage {
+pub struct AccountsIndexStorage<T: IsCached> {
     // for managing the bg threads
     exit: Arc<AtomicBool>,
     wait: Arc<WaitableCondvar>,
     handle: Option<JoinHandle<()>>,
 
     // eventually the backing storage
-    storage: Arc<BucketMapHolder>,
+    storage: Arc<BucketMapHolder<T>>,
 }
 
-impl Drop for AccountsIndexStorage {
+impl<T: IsCached> Drop for AccountsIndexStorage<T> {
     fn drop(&mut self) {
         self.exit.store(true, Ordering::Relaxed);
         self.wait.notify_all();
@@ -34,8 +35,8 @@ impl Drop for AccountsIndexStorage {
     }
 }
 
-impl AccountsIndexStorage {
-    pub fn new() -> AccountsIndexStorage {
+impl<T: IsCached> AccountsIndexStorage<T> {
+    pub fn new() -> AccountsIndexStorage<T> {
         let storage = Arc::new(BucketMapHolder::new());
         let storage_ = storage.clone();
         let exit = Arc::new(AtomicBool::default());
@@ -59,7 +60,7 @@ impl AccountsIndexStorage {
         }
     }
 
-    pub fn storage(&self) -> &Arc<BucketMapHolder> {
+    pub fn storage(&self) -> &Arc<BucketMapHolder<T>> {
         &self.storage
     }
 }

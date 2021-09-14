@@ -20,6 +20,7 @@ use solana_runtime::{
 use solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey};
 use std::collections::{HashMap, HashSet};
 use std::{
+    path::{Path, PathBuf},
     sync::{
         atomic::{AtomicBool, Ordering},
         mpsc::RecvTimeoutError,
@@ -43,6 +44,7 @@ impl AccountsHashVerifier {
         halt_on_trusted_validators_accounts_hash_mismatch: bool,
         fault_injection_rate_slots: u64,
         snapshot_config: Option<SnapshotConfig>,
+        ledger_path: PathBuf,
     ) -> Self {
         let exit = exit.clone();
         let cluster_info = cluster_info.clone();
@@ -74,6 +76,7 @@ impl AccountsHashVerifier {
                                 fault_injection_rate_slots,
                                 snapshot_config.as_ref(),
                                 thread_pool.as_ref(),
+                                &ledger_path,
                             );
                         }
                         Err(RecvTimeoutError::Disconnected) => break,
@@ -99,8 +102,9 @@ impl AccountsHashVerifier {
         fault_injection_rate_slots: u64,
         snapshot_config: Option<&SnapshotConfig>,
         thread_pool: Option<&ThreadPool>,
+        ledger_path: &Path,
     ) {
-        Self::verify_accounts_package_hash(&accounts_package, thread_pool);
+        Self::verify_accounts_package_hash(&accounts_package, thread_pool, ledger_path);
 
         Self::push_accounts_hashes_to_cluster(
             &accounts_package,
@@ -118,11 +122,13 @@ impl AccountsHashVerifier {
     fn verify_accounts_package_hash(
         accounts_package: &AccountsPackage,
         thread_pool: Option<&ThreadPool>,
+        ledger_path: &Path,
     ) {
         let mut measure_hash = Measure::start("hash");
         if let Some(expected_hash) = accounts_package.hash_for_testing {
             let sorted_storages = SortedStorages::new(&accounts_package.snapshot_storages);
             let (hash, lamports) = AccountsDb::calculate_accounts_hash_without_index(
+                ledger_path,
                 &sorted_storages,
                 thread_pool,
                 HashStats::default(),
@@ -357,6 +363,8 @@ mod tests {
                 snapshot_type: None,
             };
 
+            let ledger_path = TempDir::new().unwrap();
+
             AccountsHashVerifier::process_accounts_package(
                 accounts_package,
                 &cluster_info,
@@ -368,6 +376,7 @@ mod tests {
                 0,
                 Some(&snapshot_config),
                 None,
+                ledger_path.path(),
             );
 
             // sleep for 1ms to create a newer timestmap for gossip entry

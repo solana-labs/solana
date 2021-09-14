@@ -2339,6 +2339,7 @@ impl Bank {
     // Should not be called outside of startup, will race with
     // concurrent cleaning logic in AccountsBackgroundService
     pub fn exhaustively_free_unused_resource(&self, last_full_snapshot_slot: Option<Slot>) {
+        const IS_STARTUP: bool = true; // this is only called at startup, and we want to use more threads
         let mut flush = Measure::start("flush");
         // Flush all the rooted accounts. Must be called after `squash()`,
         // so that AccountsDb knows what the roots are.
@@ -2350,11 +2351,10 @@ impl Bank {
         // accounts that were included in the bank delta hash when the bank was frozen,
         // and if we clean them here, any newly created snapshot's hash for this bank
         // may not match the frozen hash.
-        self.clean_accounts(true, false, last_full_snapshot_slot);
+        self.clean_accounts(true, IS_STARTUP, last_full_snapshot_slot);
         clean.stop();
 
         let mut shrink = Measure::start("shrink");
-        const IS_STARTUP: bool = true; // this is only called at startup, and we want to use more threads
         self.shrink_all_slots(IS_STARTUP, last_full_snapshot_slot);
         shrink.stop();
 
@@ -5399,6 +5399,20 @@ impl Bank {
         feature_set.inactive.remove(id);
         feature_set.active.insert(*id, 0);
         self.feature_set = Arc::new(feature_set);
+    }
+
+    pub fn fill_bank_with_ticks(&self) {
+        let parent_distance = if self.slot() == 0 {
+            1
+        } else {
+            self.slot() - self.parent_slot()
+        };
+        for _ in 0..parent_distance {
+            let last_blockhash = self.last_blockhash();
+            while self.last_blockhash() == last_blockhash {
+                self.register_tick(&Hash::new_unique())
+            }
+        }
     }
 
     // This is called from snapshot restore AND for each epoch boundary

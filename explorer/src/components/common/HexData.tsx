@@ -13,20 +13,34 @@ export function HexData({ raw }: { raw: Buffer }) {
     chunks.push(hexString.slice(i, i + 2));
   }
 
-  const spans: ReactNode[] = [];
-  for (let i = 0; i < chunks.length; i += 4) {
-    const color = i % 8 === 0 ? "text-white" : "text-gray-500";
+  const SPAN_SIZE = 4;
+  const ROW_SIZE = 4 * SPAN_SIZE;
+
+  const divs: ReactNode[] = [];
+  let spans: ReactNode[] = [];
+  for (let i = 0; i < chunks.length; i += SPAN_SIZE) {
+    const color = i % (2 * SPAN_SIZE) === 0 ? "text-white" : "text-gray-500";
     spans.push(
       <span key={i} className={color}>
-        {chunks.slice(i, i + 4).join(" ")}&emsp;
+        {chunks.slice(i, i + SPAN_SIZE).join(" ")}&emsp;
       </span>
     );
+
+    if (
+      i % ROW_SIZE === ROW_SIZE - SPAN_SIZE ||
+      i >= chunks.length - SPAN_SIZE
+    ) {
+      divs.push(<div key={i / ROW_SIZE}>{spans}</div>);
+
+      // clear spans
+      spans = [];
+    }
   }
 
   function Content() {
     return (
       <Copyable text={hexString}>
-        <pre className="d-inline-block text-left mb-0 data-wrap">{spans}</pre>
+        <pre className="d-inline-block text-left mb-0">{divs}</pre>
       </Copyable>
     );
   }
