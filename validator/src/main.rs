@@ -2488,7 +2488,11 @@ pub fn main() {
     let accounts_index_config = value_t!(matches, "accounts_index_bins", usize)
         .ok()
         .map(|bins| AccountsIndexConfig { bins: Some(bins) });
-    let accounts_db_config = accounts_index_config.map(|x| AccountsDbConfig { index: Some(x) });
+
+    let accounts_db_config = Some(AccountsDbConfig {
+        index: accounts_index_config,
+        accounts_hash_cache_path: Some(ledger_path.clone()),
+    });
 
     let accountsdb_repl_service_config = if matches.is_present("enable_accountsdb_repl") {
         let accountsdb_repl_bind_address = if matches.is_present("accountsdb_repl_bind_address") {
