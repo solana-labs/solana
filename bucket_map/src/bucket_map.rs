@@ -40,7 +40,7 @@ impl BucketMapConfig {
 pub struct BucketMap<T: Clone + Copy + Debug> {
     buckets: Vec<RwLock<Option<Bucket<T>>>>,
     drives: Arc<Vec<PathBuf>>,
-    bits: u8,
+    num_buckets_pow2: u8,
     max_search: MaxSearch,
     pub stats: Arc<BucketMapStats>,
     pub temp_dir: Option<TempDir>,
@@ -88,7 +88,7 @@ impl<T: Clone + Copy + Debug> BucketMap<T> {
         Self {
             buckets,
             drives,
-            bits: config.num_buckets_pow2,
+            num_buckets_pow2: config.num_buckets_pow2,
             stats,
             max_search,
             temp_dir,
@@ -166,9 +166,9 @@ impl<T: Clone + Copy + Debug> BucketMap<T> {
     }
 
     pub fn bucket_ix(&self, key: &Pubkey) -> usize {
-        if self.bits > 0 {
+        if self.num_buckets_pow2 > 0 {
             let location = read_be_u64(key.as_ref());
-            (location >> (64 - self.bits)) as usize
+            (location >> (64 - self.num_buckets_pow2)) as usize
         } else {
             0
         }
