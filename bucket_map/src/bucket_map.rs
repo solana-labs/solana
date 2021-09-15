@@ -11,9 +11,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::RwLock;
 use tempfile::TempDir;
-pub type MaxSearch = u8;
 
-type RefCount = u64;
+pub type MaxSearch = u8;
+pub type RefCount = u64;
 
 pub struct BucketMapKeyValue<T> {
     pub pubkey: Pubkey,

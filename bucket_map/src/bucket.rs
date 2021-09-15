@@ -1,4 +1,4 @@
-use crate::bucket_map::{BucketMapError, BucketMapKeyValue};
+use crate::bucket_map::{BucketMapError, BucketMapKeyValue, MaxSearch, RefCount};
 use crate::data_bucket::{BucketMapStats, DataBucket};
 use crate::index_entry::IndexEntry;
 use rand::thread_rng;
@@ -12,9 +12,6 @@ use std::ops::RangeBounds;
 use std::path::PathBuf;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
-pub type MaxSearch = u8;
-
-type RefCount = u64;
 
 // >= 2 instances of this per 'bucket' in the bucket map. 1 for index, >= 1 for data
 pub struct Bucket<T> {

@@ -1,11 +1,10 @@
 use crate::bucket::Bucket;
-use crate::data_bucket::{ DataBucket};
+use crate::bucket_map::RefCount;
+use crate::data_bucket::DataBucket;
 use solana_sdk::pubkey::Pubkey;
 use std::collections::hash_map::DefaultHasher;
 use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
-
-type RefCount = u64;
 
 type NumSlots = u64;
 
@@ -62,4 +61,3 @@ impl IndexEntry {
         s.finish().max(1u64)
     }
 }
-
