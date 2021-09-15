@@ -168,7 +168,7 @@ impl<T: Clone + Copy + Debug> BucketMap<T> {
     pub fn bucket_ix(&self, key: &Pubkey) -> usize {
         if self.num_buckets_pow2 > 0 {
             let location = read_be_u64(key.as_ref());
-            (location >> (64 - self.num_buckets_pow2)) as usize
+            (location >> (u64::BITS - self.num_buckets_pow2 as u32)) as usize
         } else {
             0
         }
