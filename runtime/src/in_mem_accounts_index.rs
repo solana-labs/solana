@@ -15,12 +15,17 @@ use std::ops::RangeBounds;
 type K = Pubkey;
 
 // one instance of this represents one bin of the accounts index.
-#[derive(Debug)]
 pub struct InMemAccountsIndex<T: IndexValue> {
     // backing store
     map_internal: RwLock<HashMap<Pubkey, AccountMapEntry<T>>>,
     storage: Arc<BucketMapHolder<T>>,
     bin: usize,
+}
+
+impl<T: IndexValue> Debug for InMemAccountsIndex<T> {
+    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Ok(())
+    }
 }
 
 impl<T: IndexValue> InMemAccountsIndex<T> {
