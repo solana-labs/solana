@@ -41,10 +41,6 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         &self.map_internal
     }
 
-    pub fn new_bucket_map_holder() -> Arc<BucketMapHolder<T>> {
-        Arc::new(BucketMapHolder::new())
-    }
-
     pub fn items<R>(&self, range: &Option<&R>) -> Vec<(K, AccountMapEntry<T>)>
     where
         R: RangeBounds<Pubkey> + std::fmt::Debug,

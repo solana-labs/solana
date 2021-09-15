@@ -742,7 +742,7 @@ impl<T: IndexValue> AccountsIndex<T> {
             .unwrap_or(BINS_DEFAULT);
         // create bin_calculator early to verify # bins is reasonable
         let bin_calculator = PubkeyBinCalculator16::new(bins);
-        let storage = AccountsIndexStorage::new();
+        let storage = AccountsIndexStorage::new(bins);
         let account_maps = (0..bins)
             .into_iter()
             .map(|bin| RwLock::new(Arc::new(InMemAccountsIndex::new(&storage, bin))))

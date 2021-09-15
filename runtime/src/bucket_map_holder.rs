@@ -7,7 +7,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 // will eventually hold the bucket map
-#[derive(Default)]
 pub struct BucketMapHolder<T: IndexValue> {
     pub stats: BucketMapHolderStats,
     _phantom: std::marker::PhantomData<T>,
@@ -20,8 +19,11 @@ impl<T: IndexValue> Debug for BucketMapHolder<T> {
 }
 
 impl<T: IndexValue> BucketMapHolder<T> {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(_bins: usize) -> Self {
+        Self {
+            stats: BucketMapHolderStats::default(),
+            _phantom: std::marker::PhantomData::<T>::default(),
+        }
     }
 
     // intended to execute in a bg thread

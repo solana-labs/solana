@@ -14,8 +14,6 @@ use std::{
 // Also manages the lifetime of the background processing threads.
 //  When this instance is dropped, it will drop the bucket map and cleanup
 //  and it will stop all the background threads and join them.
-
-#[derive(Default)]
 pub struct AccountsIndexStorage<T: IndexValue> {
     // for managing the bg threads
     exit: Arc<AtomicBool>,
@@ -43,8 +41,8 @@ impl<T: IndexValue> Drop for AccountsIndexStorage<T> {
 }
 
 impl<T: IndexValue> AccountsIndexStorage<T> {
-    pub fn new() -> AccountsIndexStorage<T> {
-        let storage = Arc::new(BucketMapHolder::new());
+    pub fn new(bins: usize) -> AccountsIndexStorage<T> {
+        let storage = Arc::new(BucketMapHolder::new(bins));
         let storage_ = storage.clone();
         let exit = Arc::new(AtomicBool::default());
         let exit_ = exit.clone();
