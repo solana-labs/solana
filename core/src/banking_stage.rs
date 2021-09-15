@@ -1065,6 +1065,7 @@ impl BankingStage {
         cost_tracker: &Arc<RwLock<CostTracker>>,
         banking_stage_stats: &BankingStageStats,
         demote_program_write_locks: bool,
+        votes_only: bool,
     ) -> (Vec<SanitizedTransaction>, Vec<usize>, Vec<usize>) {
         let mut retryable_transaction_packet_indexes: Vec<usize> = vec![];
 
@@ -1079,6 +1080,9 @@ impl BankingStage {
                     Err(TransactionError::UnsupportedVersion)
                 })
                 .ok()?;
+                if votes_only && !solana_runtime::bank::is_simple_vote_transaction(&tx) {
+                    return None;
+                }
                 tx.verify_precompiles(feature_set).ok()?;
                 Some((tx, *tx_index))
             })
@@ -1178,6 +1182,7 @@ impl BankingStage {
                 cost_tracker,
                 banking_stage_stats,
                 bank.demote_program_write_locks(),
+                bank.vote_only_bank(),
             );
         packet_conversion_time.stop();
         inc_new_counter_info!("banking_stage-packet_conversion", 1);
@@ -1284,6 +1289,7 @@ impl BankingStage {
                 cost_tracker,
                 banking_stage_stats,
                 bank.demote_program_write_locks(),
+                bank.vote_only_bank(),
             );
         unprocessed_packet_conversion_time.stop();
 
@@ -2962,5 +2968,59 @@ mod tests {
             BankingStage::packet_message(&packet).unwrap().to_vec(),
             transaction.message_data()
         );
+    }
+
+    #[test]
+    fn test_transactions_from_packets() {
+        use solana_sdk::feature_set::FeatureSet;
+        use solana_vote_program::vote_state::Vote;
+        solana_logger::setup();
+        let mut vote_packet = Packet::default();
+        let vote_instruction = solana_vote_program::vote_instruction::vote(
+            &Pubkey::new_unique(),
+            &Pubkey::new_unique(),
+            Vote::default(),
+        );
+        let vote_transaction =
+            Transaction::new_with_payer(&[vote_instruction], Some(&Pubkey::new_unique()));
+        Packet::populate_packet(&mut vote_packet, None, &vote_transaction).unwrap();
+        let mut non_vote = Packet::default();
+        let tx = system_transaction::transfer(
+            &Keypair::new(),
+            &Pubkey::new_unique(),
+            2,
+            Hash::default(),
+        );
+        Packet::populate_packet(&mut non_vote, None, &tx).unwrap();
+        let msgs = Packets::new(vec![non_vote, vote_packet]);
+        let packet_indexes = [0, 1];
+        let feature_set = Arc::new(FeatureSet::default());
+        let cost_model = Arc::new(RwLock::new(CostModel::default()));
+        let cost_tracker = Arc::new(RwLock::new(CostTracker::new(cost_model)));
+        let banking_stage_stats = BankingStageStats::default();
+        let (transactions, _transaction_to_packet_indexes, _retryable_packet_indexes) =
+            BankingStage::transactions_from_packets(
+                &msgs,
+                &packet_indexes,
+                &feature_set,
+                &cost_tracker,
+                &banking_stage_stats,
+                false,
+                true,
+            );
+        assert_eq!(transactions.len(), 1);
+        assert!(!transactions[0].signatures().is_empty());
+
+        let (transactions, _transaction_to_packet_indexes, _retryable_packet_indexes) =
+            BankingStage::transactions_from_packets(
+                &msgs,
+                &packet_indexes,
+                &feature_set,
+                &cost_tracker,
+                &banking_stage_stats,
+                false,
+                false,
+            );
+        assert_eq!(transactions.len(), 2);
     }
 }
