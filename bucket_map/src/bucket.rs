@@ -13,7 +13,7 @@ use std::path::PathBuf;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-// >= 2 instances of this per 'bucket' in the bucket map. 1 for index, >= 1 for data
+// >= 2 instances of DataBucket per 'bucket' in the bucket map. 1 for index, >= 1 for data
 pub struct Bucket<T> {
     drives: Arc<Vec<PathBuf>>,
     //index
