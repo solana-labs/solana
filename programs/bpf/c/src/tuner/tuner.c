@@ -16,14 +16,22 @@ extern uint64_t entrypoint(const uint8_t *input) {
   if (!sol_deserialize(input, &params, SOL_ARRAY_SIZE(ka))) {
     return ERROR_INVALID_ARGUMENT;
   }
-  uint8_t *val = (uint8_t *)ka[0].data;
   size_t current = 1;
-  for (uint64_t i = 0; i < UINT64_MAX; i++) {
+  uint64_t iterations = params.data[0] * 18;
+  size_t rand = params.data[1];
+  size_t account_index = rand % params.ka_num;
+  uint8_t *val = (uint8_t *)ka[account_index].data;
+  uint64_t memory_size = ka[account_index].data_len;
 
-    // Uncomment for raw compute
+  for (uint64_t i = 0; i < iterations; i++) {
+
+    // Uncomment for raw compute // 142 iterations ~= 200k
     {
-      *val ^= val[current % 10000001] + 13181312;
-      current *= 12345678;
+      /*if (i % 20 == 0) { // 83 iterations with this
+        sol_log_64(memory_size, current, i, iterations, 0);
+      }*/
+      *val ^= val[current % memory_size];
+      current = current * 76510171 + 47123;
     }
 
     // // Uncomment for SHA256 syscall
@@ -42,5 +50,5 @@ extern uint64_t entrypoint(const uint8_t *input) {
     //   sol_log_pubkey(&pubkey);
     // }
   }
-  return *val;
+  return 0;
 }
