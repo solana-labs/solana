@@ -795,7 +795,7 @@ mod tests {
         let message = Message::new(&ixs, Some(&from.pubkey()));
         let tx = Transaction::new(&[&from, &stake_account], message, blockhash);
         process_transaction_and_notify(&bank_forks, &tx, &rpc_subscriptions, 1).unwrap();
-        sleep(Duration::from_millis(200));
+        sleep(Duration::from_millis(400));
 
         // Test signature confirmation notification #1
         let account = bank_forks
@@ -900,7 +900,7 @@ mod tests {
         let message = Message::new(&ixs, Some(&alice.pubkey()));
         let tx = Transaction::new(&[&alice, &nonce_account], message, blockhash);
         process_transaction_and_notify(&bank_forks, &tx, &rpc_subscriptions, 1).unwrap();
-        sleep(Duration::from_millis(200));
+        sleep(Duration::from_millis(400));
 
         // Test signature confirmation notification #1
         let account = bank_forks

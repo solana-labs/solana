@@ -27,6 +27,7 @@ use {
 
 pub const MAX_ACTIVE_SUBSCRIPTIONS: usize = 1_000_000;
 pub const DEFAULT_QUEUE_CAPACITY_ITEMS: usize = 10_000_000;
+pub const DEFAULT_TEST_QUEUE_CAPACITY_ITEMS: usize = 100;
 pub const DEFAULT_QUEUE_CAPACITY_BYTES: usize = 256 * 1024 * 1024;
 
 #[derive(Debug, Clone)]
@@ -39,10 +40,17 @@ pub struct PubSubConfig {
 
 impl Default for PubSubConfig {
     fn default() -> Self {
+        let queue_capacity_items = if cfg!(test) {
+            // A lower default for tests to make them run faster.
+            DEFAULT_TEST_QUEUE_CAPACITY_ITEMS
+        } else {
+            DEFAULT_QUEUE_CAPACITY_ITEMS
+        };
+
         Self {
             enable_vote_subscription: false,
             max_active_subscriptions: MAX_ACTIVE_SUBSCRIPTIONS,
-            queue_capacity_items: DEFAULT_QUEUE_CAPACITY_ITEMS,
+            queue_capacity_items,
             queue_capacity_bytes: DEFAULT_QUEUE_CAPACITY_BYTES,
         }
     }
@@ -160,7 +168,7 @@ impl TestBroadcastReceiver {
         use std::time::{Duration, Instant};
         use tokio::sync::broadcast::error::TryRecvError;
 
-        let timeout = Duration::from_millis(100);
+        let timeout = Duration::from_millis(500);
         let started = Instant::now();
 
         loop {
