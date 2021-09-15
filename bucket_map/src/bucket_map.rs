@@ -23,15 +23,15 @@ pub struct BucketMapKeyValue<T> {
 
 #[derive(Debug, Default)]
 pub struct BucketMapConfig {
-    pub num_buckets_pow2: u8,
+    pub num_buckets: usize,
     pub drives: Option<Vec<PathBuf>>,
     pub max_search: Option<MaxSearch>,
 }
 
 impl BucketMapConfig {
-    pub fn from_buckets(num_buckets_pow2: u8) -> BucketMapConfig {
+    pub fn new(num_buckets: usize) -> BucketMapConfig {
         BucketMapConfig {
-            num_buckets_pow2,
+            num_buckets,
             ..BucketMapConfig::default()
         }
     }
@@ -67,28 +67,34 @@ pub enum BucketMapError {
 }
 
 impl<T: Clone + Copy + Debug> BucketMap<T> {
-    pub fn new(mut config: BucketMapConfig) -> Self {
-        let count = 1 << config.num_buckets_pow2;
-        let mut buckets = Vec::with_capacity(count);
-        buckets.resize_with(count, || RwLock::new(None));
+    pub fn new(config: BucketMapConfig) -> Self {
+        assert_ne!(config.num_buckets, 0, "Number of buckets must be non-zero");
+        assert!(
+            config.num_buckets.is_power_of_two(),
+            "Number of buckets must be a power of two"
+        );
+        let mut buckets = Vec::with_capacity(config.num_buckets);
+        buckets.resize_with(config.num_buckets, || RwLock::new(None));
         let stats = Arc::new(BucketMapStats::default());
-        let mut temp_dir = None;
         // this should be <= 1 << DEFAULT_CAPACITY or we end up searching the same items over and over - probably not a big deal since it is so small anyway
         const MAX_SEARCH: MaxSearch = 32;
+        let max_search = config.max_search.unwrap_or(MAX_SEARCH);
 
-        let max_search = config.max_search.take().unwrap_or(MAX_SEARCH);
-        if let Some(drives) = config.drives.as_ref() {
-            Self::erase_previous_drives(drives);
-        }
-        let drives = config.drives.take().unwrap_or_else(|| {
+        let mut temp_dir = None;
+        let drives = config.drives.unwrap_or_else(|| {
             temp_dir = Some(TempDir::new().unwrap());
             vec![temp_dir.as_ref().unwrap().path().to_path_buf()]
         });
+        Self::erase_previous_drives(&drives);
         let drives = Arc::new(drives);
+
+        // A simple log2 function that is correct if x is a power of two
+        let log2 = |x: usize| usize::BITS - x.leading_zeros() - 1;
+
         Self {
             buckets,
             drives,
-            num_buckets_pow2: config.num_buckets_pow2,
+            num_buckets_pow2: log2(config.num_buckets) as u8,
             stats,
             max_search,
             temp_dir,
@@ -198,17 +204,11 @@ mod tests {
     use rand::thread_rng;
     use rand::Rng;
     use std::collections::HashMap;
-    fn get_config(num_buckets_pow2: u8) -> BucketMapConfig {
-        BucketMapConfig {
-            num_buckets_pow2,
-            ..BucketMapConfig::default()
-        }
-    }
 
     #[test]
     fn bucket_map_test_insert() {
         let key = Pubkey::new_unique();
-        let config = get_config(1);
+        let config = BucketMapConfig::new(1 << 1);
         let index = BucketMap::new(config);
         index.update(&key, |_| Some((vec![0], 0)));
         assert_eq!(index.read_value(&key), Some((vec![0], 0)));
@@ -217,7 +217,7 @@ mod tests {
     #[test]
     fn bucket_map_test_update() {
         let key = Pubkey::new_unique();
-        let config = get_config(1);
+        let config = BucketMapConfig::new(1 << 1);
         let index = BucketMap::new(config);
         index.update(&key, |_| Some((vec![0], 0)));
         assert_eq!(index.read_value(&key), Some((vec![0], 0)));
@@ -229,7 +229,7 @@ mod tests {
     fn bucket_map_test_update_to_0_len() {
         solana_logger::setup();
         let key = Pubkey::new_unique();
-        let config = get_config(1);
+        let config = BucketMapConfig::new(1 << 1);
         let index = BucketMap::new(config);
         index.update(&key, |_| Some((vec![0], 1)));
         assert_eq!(index.read_value(&key), Some((vec![0], 1)));
@@ -246,7 +246,7 @@ mod tests {
 
     #[test]
     fn bucket_map_test_delete() {
-        let config = get_config(1);
+        let config = BucketMapConfig::new(1 << 1);
         let index = BucketMap::new(config);
         for i in 0..10 {
             let key = Pubkey::new_unique();
@@ -266,7 +266,7 @@ mod tests {
 
     #[test]
     fn bucket_map_test_delete_2() {
-        let config = get_config(2);
+        let config = BucketMapConfig::new(1 << 2);
         let index = BucketMap::new(config);
         for i in 0..100 {
             let key = Pubkey::new_unique();
@@ -286,7 +286,7 @@ mod tests {
 
     #[test]
     fn bucket_map_test_n_drives() {
-        let config = get_config(2);
+        let config = BucketMapConfig::new(1 << 2);
         let index = BucketMap::new(config);
         for i in 0..100 {
             let key = Pubkey::new_unique();
@@ -296,7 +296,7 @@ mod tests {
     }
     #[test]
     fn bucket_map_test_grow_read() {
-        let config = get_config(2);
+        let config = BucketMapConfig::new(1 << 2);
         let index = BucketMap::new(config);
         let keys: Vec<Pubkey> = (0..100).into_iter().map(|_| Pubkey::new_unique()).collect();
         for k in 0..keys.len() {
@@ -315,7 +315,7 @@ mod tests {
 
     #[test]
     fn bucket_map_test_n_delete() {
-        let config = get_config(2);
+        let config = BucketMapConfig::new(1 << 2);
         let index = BucketMap::new(config);
         let keys: Vec<Pubkey> = (0..20).into_iter().map(|_| Pubkey::new_unique()).collect();
         for key in keys.iter() {
@@ -346,7 +346,7 @@ mod tests {
         let maps = (0..2)
             .into_iter()
             .map(|num_buckets_pow2| {
-                let config = BucketMapConfig::from_buckets(num_buckets_pow2);
+                let config = BucketMapConfig::new(1 << num_buckets_pow2);
                 BucketMap::new(config)
             })
             .collect::<Vec<_>>();

@@ -21,7 +21,7 @@ fn bucket_map_bench_hashmap_baseline(bencher: &mut Bencher) {
 
 #[bench]
 fn bucket_map_bench_insert_1(bencher: &mut Bencher) {
-    let index = BucketMap::new(BucketMapConfig::from_buckets(1));
+    let index = BucketMap::new(BucketMapConfig::new(1 << 1));
     bencher.iter(|| {
         let key = Pubkey::new_unique();
         index.update(&key, |_| Some((vec![(0, IndexValue::default())], 0)));
@@ -53,7 +53,7 @@ fn bucket_map_bench_insert_16x32_baseline(bencher: &mut Bencher) {
 
 #[bench]
 fn bucket_map_bench_insert_16x32(bencher: &mut Bencher) {
-    let index = BucketMap::new(BucketMapConfig::from_buckets(4));
+    let index = BucketMap::new(BucketMapConfig::new(1 << 4));
     (0..16).into_iter().into_par_iter().for_each(|_| {
         let key = Pubkey::new_unique();
         index.update(&key, |_| Some((vec![(0, IndexValue::default())], 0)));
