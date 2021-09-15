@@ -2,7 +2,7 @@ use crate::accounts_index::{
     AccountMapEntry, AccountMapEntryInner, IndexValue, SlotList, WriteAccountMapEntry,
 };
 use crate::accounts_index_storage::AccountsIndexStorage;
-use crate::bucket_map_holder::BucketMapHolder;
+use crate::bucket_map_holder::{BucketMapHolder, CachedBucket};
 use crate::bucket_map_holder_stats::BucketMapHolderStats;
 use solana_measure::measure::Measure;
 use solana_sdk::{clock::Slot, pubkey::Pubkey};
@@ -15,12 +15,18 @@ use std::ops::RangeBounds;
 type K = Pubkey;
 
 // one instance of this represents one bin of the accounts index.
-#[derive(Debug)]
 pub struct InMemAccountsIndex<T: IndexValue> {
     // backing store
     map_internal: RwLock<HashMap<Pubkey, AccountMapEntry<T>>>,
     storage: Arc<BucketMapHolder<T>>,
     bin: usize,
+    _bucket: Arc<CachedBucket<T>>,
+}
+
+impl<T: IndexValue> Debug for InMemAccountsIndex<T> {
+    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Ok(())
+    }
 }
 
 impl<T: IndexValue> InMemAccountsIndex<T> {
@@ -29,6 +35,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             map_internal: RwLock::default(),
             storage: storage.storage().clone(),
             bin,
+            _bucket: storage.storage().buckets[bin].clone(),
         }
     }
 
@@ -36,8 +43,8 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         &self.map_internal
     }
 
-    pub fn new_bucket_map_holder() -> Arc<BucketMapHolder<T>> {
-        Arc::new(BucketMapHolder::new())
+    pub fn new_bucket_map_holder(bins: usize) -> Arc<BucketMapHolder<T>> {
+        Arc::new(BucketMapHolder::new(bins))
     }
 
     pub fn items<R>(&self, range: &Option<&R>) -> Vec<(K, AccountMapEntry<T>)>
