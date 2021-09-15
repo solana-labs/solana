@@ -978,12 +978,18 @@ impl BankingStage {
         msgs: &Packets,
         transaction_indexes: &[usize],
         libsecp256k1_0_5_upgrade_enabled: bool,
+        votes_only: bool,
     ) -> (Vec<HashedTransaction<'static>>, Vec<usize>) {
         transaction_indexes
             .iter()
             .filter_map(|tx_index| {
                 let p = &msgs.packets[*tx_index];
                 let tx: Transaction = limited_deserialize(&p.data[0..p.meta.size]).ok()?;
+
+                if votes_only && !solana_runtime::bank::is_simple_vote_transaction(&tx) {
+                    return None;
+                }
+
                 tx.verify_precompiles(libsecp256k1_0_5_upgrade_enabled)
                     .ok()?;
                 let message_bytes = Self::packet_message(p)?;
@@ -1050,6 +1056,7 @@ impl BankingStage {
             msgs,
             &packet_indexes,
             bank.libsecp256k1_0_5_upgrade_enabled(),
+            bank.vote_only_bank(),
         );
         packet_conversion_time.stop();
 
@@ -1121,6 +1128,7 @@ impl BankingStage {
             msgs,
             &transaction_indexes,
             bank.libsecp256k1_0_5_upgrade_enabled(),
+            bank.vote_only_bank(),
         );
 
         let tx_count = transaction_to_packet_indexes.len();
@@ -2785,5 +2793,38 @@ mod tests {
             BankingStage::packet_message(&packet).unwrap().to_vec(),
             transaction.message_data()
         );
+    }
+
+    #[test]
+    fn test_transactions_from_packets() {
+        use solana_vote_program::vote_state::Vote;
+        solana_logger::setup();
+        let mut vote_packet = Packet::default();
+        let vote_instruction = solana_vote_program::vote_instruction::vote(
+            &Pubkey::new_unique(),
+            &Pubkey::new_unique(),
+            Vote::default(),
+        );
+        let vote_transaction =
+            Transaction::new_with_payer(&[vote_instruction], Some(&Pubkey::new_unique()));
+        Packet::populate_packet(&mut vote_packet, None, &vote_transaction).unwrap();
+        let mut non_vote = Packet::default();
+        let tx = system_transaction::transfer(
+            &Keypair::new(),
+            &Pubkey::new_unique(),
+            2,
+            Hash::default(),
+        );
+        Packet::populate_packet(&mut non_vote, None, &tx).unwrap();
+        let msgs = Packets::new(vec![non_vote, vote_packet]);
+        let packet_indexes = [0, 1];
+        let (transactions, _transaction_to_packet_indexes) =
+            BankingStage::transactions_from_packets(&msgs, &packet_indexes, false, true);
+        assert_eq!(transactions.len(), 1);
+        assert!(!transactions[0].transaction().signatures.is_empty());
+
+        let (transactions, _transaction_to_packet_indexes) =
+            BankingStage::transactions_from_packets(&msgs, &packet_indexes, false, false);
+        assert_eq!(transactions.len(), 2);
     }
 }
