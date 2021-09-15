@@ -44,8 +44,6 @@ import type {FeeCalculator} from './fee-calculator';
 import type {TransactionSignature} from './transaction';
 import type {CompiledInstruction} from './message';
 
-const DEFAULT_SIGNATURE = bs58.encode(Buffer.alloc(64).fill(0));
-
 const PublicKeyFromString = coerce(
   instance(PublicKey),
   string(),
