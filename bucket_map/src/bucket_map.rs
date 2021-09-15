@@ -118,15 +118,13 @@ impl<T: Clone + Copy + Debug> BucketMap<T> {
     pub fn num_buckets(&self) -> usize {
         self.buckets.len()
     }
-    pub fn keys(&self, ix: usize) -> Option<Vec<Pubkey>> {
-        Some(self.buckets[ix].read().unwrap().as_ref()?.keys())
-    }
+
     pub fn bucket_len(&self, ix: usize) -> u64 {
         self.buckets[ix]
             .read()
             .unwrap()
             .as_ref()
-            .map(|entry| entry.bucket_len())
+            .map(|bucket| bucket.bucket_len())
             .unwrap_or_default()
     }
 
@@ -137,10 +135,17 @@ impl<T: Clone + Copy + Debug> BucketMap<T> {
         Some(self.buckets[ix].read().unwrap().as_ref()?.range(range))
     }
 
+    /// Get the Pubkeys for bucket `ix`
+    pub fn keys(&self, ix: usize) -> Option<Vec<Pubkey>> {
+        Some(self.buckets[ix].read().unwrap().as_ref()?.keys())
+    }
+
+    /// Get the values for bucket `ix`
     pub fn values(&self, ix: usize) -> Option<Vec<Vec<T>>> {
         Some(self.buckets[ix].read().unwrap().as_ref()?.values())
     }
 
+    /// Get the values for Pubkey `key`
     pub fn read_value(&self, key: &Pubkey) -> Option<(Vec<T>, RefCount)> {
         let ix = self.bucket_ix(key);
         self.buckets[ix]
@@ -154,6 +159,7 @@ impl<T: Clone + Copy + Debug> BucketMap<T> {
             })
     }
 
+    /// Delete the Pubkey `key`
     pub fn delete_key(&self, key: &Pubkey) {
         let ix = self.bucket_ix(key);
         if let Some(bucket) = self.buckets[ix].write().unwrap().as_mut() {
@@ -161,6 +167,7 @@ impl<T: Clone + Copy + Debug> BucketMap<T> {
         }
     }
 
+    /// Update Pubkey `key`'s value with function `updatefn`
     pub fn update<F>(&self, key: &Pubkey, updatefn: F)
     where
         F: Fn(Option<(&[T], RefCount)>) -> Option<(Vec<T>, RefCount)>,
@@ -178,6 +185,7 @@ impl<T: Clone + Copy + Debug> BucketMap<T> {
         bucket.update(key, updatefn)
     }
 
+    /// Get the bucket index for Pubkey `key`
     pub fn bucket_ix(&self, key: &Pubkey) -> usize {
         if self.max_buckets_pow2 > 0 {
             let location = read_be_u64(key.as_ref());
@@ -187,12 +195,14 @@ impl<T: Clone + Copy + Debug> BucketMap<T> {
         }
     }
 
+    /// Increment the refcount for Pubkey `key`
     pub fn addref(&self, key: &Pubkey) -> Option<RefCount> {
         let ix = self.bucket_ix(key);
         let mut bucket = self.buckets[ix].write().unwrap();
         bucket.as_mut()?.addref(key)
     }
 
+    /// Decrement the refcount for Pubkey `key`
     pub fn unref(&self, key: &Pubkey) -> Option<RefCount> {
         let ix = self.bucket_ix(key);
         let mut bucket = self.buckets[ix].write().unwrap();
@@ -200,6 +210,7 @@ impl<T: Clone + Copy + Debug> BucketMap<T> {
     }
 }
 
+/// Look at the first 8 bytes of the input and reinterpret them as a u64
 fn read_be_u64(input: &[u8]) -> u64 {
     assert!(input.len() >= std::mem::size_of::<u64>());
     u64::from_be_bytes(input[0..std::mem::size_of::<u64>()].try_into().unwrap())
