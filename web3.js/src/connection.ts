@@ -3516,9 +3516,7 @@ export class Connection {
       const addresses = (
         Array.isArray(includeAccounts)
           ? includeAccounts
-          : message.accountKeys.filter(
-            (_, index) => !message.isProgramId(index),
-          )
+          : message.nonProgramIds()
       ).map(key => key.toBase58());
 
       config['accounts'] = {

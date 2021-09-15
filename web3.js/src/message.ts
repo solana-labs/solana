@@ -106,6 +106,10 @@ export class Message {
     return [...this.indexToProgramIds.values()];
   }
 
+  nonProgramIds(): PublicKey[] {
+    return this.accountKeys.filter((_, index) => !this.isProgramId(index));
+  }
+
   serialize(): Buffer {
     const numKeys = this.accountKeys.length;
 
