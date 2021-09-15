@@ -81,7 +81,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
     // If the slot list for pubkey exists in the index and is empty, remove the index entry for pubkey and return true.
     // Return false otherwise.
-    pub fn remove_if_slot_list_empty(&mut self, pubkey: Pubkey) -> bool {
+    pub fn remove_if_slot_list_empty(&self, pubkey: Pubkey) -> bool {
         let m = Measure::start("entry");
         let mut map = self.map().write().unwrap();
         let entry = map.entry(pubkey);
@@ -105,7 +105,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     }
 
     pub fn upsert(
-        &mut self,
+        &self,
         pubkey: &Pubkey,
         new_value: AccountMapEntry<T>,
         reclaims: &mut SlotList<T>,
@@ -230,7 +230,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     // return None if item was created new
     // if entry for pubkey already existed, return Some(entry). Caller needs to call entry.update.
     pub fn insert_new_entry_if_missing_with_lock(
-        &mut self,
+        &self,
         pubkey: Pubkey,
         new_entry: AccountMapEntry<T>,
     ) -> Option<(WriteAccountMapEntry<T>, T, Pubkey)> {

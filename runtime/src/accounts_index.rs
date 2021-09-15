@@ -44,7 +44,7 @@ pub type ScanResult<T> = Result<T, ScanError>;
 pub type SlotList<T> = Vec<(Slot, T)>;
 pub type SlotSlice<'s, T> = &'s [(Slot, T)];
 pub type RefCount = u64;
-pub type AccountMap<V> = InMemAccountsIndex<V>;
+pub type AccountMap<V> = Arc<InMemAccountsIndex<V>>;
 
 pub(crate) type AccountMapEntry<T> = Arc<AccountMapEntryInner<T>>;
 
@@ -745,7 +745,7 @@ impl<T: IndexValue> AccountsIndex<T> {
         let storage = AccountsIndexStorage::new();
         let account_maps = (0..bins)
             .into_iter()
-            .map(|bin| RwLock::new(AccountMap::new(&storage, bin)))
+            .map(|bin| RwLock::new(Arc::new(InMemAccountsIndex::new(&storage, bin))))
             .collect::<Vec<_>>();
         (account_maps, bin_calculator, storage)
     }
@@ -1119,7 +1119,7 @@ impl<T: IndexValue> AccountsIndex<T> {
     ) {
         if !dead_keys.is_empty() {
             for key in dead_keys.iter() {
-                let mut w_index = self.get_account_maps_write_lock(key);
+                let w_index = self.get_account_maps_write_lock(key);
                 if w_index.remove_if_slot_list_empty(**key) {
                     // Note it's only safe to remove all the entries for this key
                     // because we have the lock for this key's entry in the AccountsIndex,
@@ -1476,7 +1476,7 @@ impl<T: IndexValue> AccountsIndex<T> {
 
             // big enough so not likely to re-allocate, small enough to not over-allocate by too much
             // this assumes 10% of keys are duplicates. This vector will be flattened below.
-            let mut w_account_maps = self.account_maps[pubkey_bin].write().unwrap();
+            let w_account_maps = self.account_maps[pubkey_bin].write().unwrap();
             let mut insert_time = Measure::start("insert_into_primary_index");
             items.into_iter().for_each(|(pubkey, new_item)| {
                 let already_exists =
@@ -1533,7 +1533,7 @@ impl<T: IndexValue> AccountsIndex<T> {
             previous_slot_entry_was_cached,
         ) {
             drop(r_account_maps);
-            let mut w_account_maps = map.write().unwrap();
+            let w_account_maps = map.write().unwrap();
             w_account_maps.upsert(pubkey, new_item, reclaims, previous_slot_entry_was_cached);
         }
         self.update_secondary_indexes(pubkey, account_owner, account_data, account_indexes);
@@ -1612,7 +1612,7 @@ impl<T: IndexValue> AccountsIndex<T> {
         // locked and inserted the pubkey inbetween when `is_slot_list_empty=true` and the call to
         // remove() below.
         if is_slot_list_empty {
-            let mut w_maps = self.get_account_maps_write_lock(pubkey);
+            let w_maps = self.get_account_maps_write_lock(pubkey);
             w_maps.remove_if_slot_list_empty(*pubkey);
         }
     }
@@ -2863,7 +2863,7 @@ pub mod tests {
         );
 
         assert_eq!(0, account_maps_len_expensive(&index));
-        let mut w_account_maps = index.get_account_maps_write_lock(&key.pubkey());
+        let w_account_maps = index.get_account_maps_write_lock(&key.pubkey());
         w_account_maps.upsert(
             &key.pubkey(),
             new_entry,
