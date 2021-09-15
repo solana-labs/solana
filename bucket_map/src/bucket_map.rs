@@ -364,8 +364,8 @@ mod tests {
         solana_logger::setup();
         let maps = (0..2)
             .into_iter()
-            .map(|num_buckets_pow2| {
-                let config = BucketMapConfig::new(1 << num_buckets_pow2);
+            .map(|max_buckets_pow2| {
+                let config = BucketMapConfig::new(1 << max_buckets_pow2);
                 BucketMap::new(config)
             })
             .collect::<Vec<_>>();
