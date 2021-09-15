@@ -80,12 +80,14 @@ impl<T: Clone + Copy + Debug> BucketMap<T> {
         const MAX_SEARCH: MaxSearch = 32;
         let max_search = config.max_search.unwrap_or(MAX_SEARCH);
 
+        if let Some(drives) = config.drives.as_ref() {
+            Self::erase_previous_drives(drives);
+        }
         let mut temp_dir = None;
         let drives = config.drives.unwrap_or_else(|| {
             temp_dir = Some(TempDir::new().unwrap());
             vec![temp_dir.as_ref().unwrap().path().to_path_buf()]
         });
-        Self::erase_previous_drives(&drives);
         let drives = Arc::new(drives);
 
         // A simple log2 function that is correct if x is a power of two
