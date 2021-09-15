@@ -1472,6 +1472,10 @@ fn wait_for_supermajority(
         let gossip_stake_percent = get_stake_percent_in_gossip(bank, cluster_info, i % 10 == 0);
 
         if gossip_stake_percent >= WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT {
+            info!(
+                "Supermajority reached, {}% active stake detected, starting up now.",
+                gossip_stake_percent,
+            );
             break;
         }
         // The normal RPC health checks don't apply as the node is waiting, so feign health to
