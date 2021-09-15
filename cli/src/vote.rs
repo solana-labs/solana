@@ -670,9 +670,7 @@ pub fn process_vote_authorize(
         (&authorized.pubkey(), "authorized_account".to_string()),
         (new_authorized_pubkey, "new_authorized_pubkey".to_string()),
     )?;
-<<<<<<< HEAD
-    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
-=======
+
     let (_, vote_state) = get_vote_account(rpc_client, vote_account_pubkey, config.commitment)?;
     match vote_authorize {
         VoteAuthorize::Voter => {
@@ -692,8 +690,7 @@ pub fn process_vote_authorize(
         }
     }
 
-    let latest_blockhash = rpc_client.get_latest_blockhash()?;
->>>>>>> 15144fc92 (Cli: check current authorities before attempting to change them (#19853))
+    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
     let vote_ix = if new_authorized_signer.is_some() {
         vote_instruction::authorize_checked(
             vote_account_pubkey,   // vote account to update
