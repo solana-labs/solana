@@ -48,7 +48,7 @@ pub struct BucketMapStats {
 24  16,777,216
 */
 // bytes = 2^DEFAULT_CAPACITY
-const DEFAULT_CAPACITY: u8 = 5;
+const DEFAULT_CAPACITY_POW2: u8 = 5;
 
 #[repr(C)]
 struct Header {
@@ -137,7 +137,7 @@ impl DataBucket {
             drives,
             num_elems,
             elem_size,
-            DEFAULT_CAPACITY,
+            DEFAULT_CAPACITY_POW2,
             max_search,
             stats,
         )
