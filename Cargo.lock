@@ -4560,6 +4560,7 @@ dependencies = [
  "solana-clap-utils",
  "solana-faucet",
  "solana-logger 1.9.0",
+ "solana-measure",
  "solana-net-utils",
  "solana-sdk",
  "solana-transaction-status",
