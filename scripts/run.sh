@@ -8,7 +8,13 @@
 set -e
 
 # Prefer possible `cargo build` binaries over PATH binaries
-cd "$(dirname "$0")/.."
+script_dir="$(readlink -f "$(dirname "$0")")"
+if [[ "$script_dir" =~ /scripts$ ]]; then
+  cd "$script_dir/.."
+else
+  cd "$script_dir"
+fi
+
 
 profile=debug
 if [[ -n $NDEBUG ]]; then
