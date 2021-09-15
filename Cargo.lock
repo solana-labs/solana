@@ -5755,12 +5755,39 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-transaction-dos"
+version = "1.9.0"
+dependencies = [
+ "bincode",
+ "clap 2.33.3",
+ "log 0.4.14",
+ "rand 0.7.3",
+ "rayon",
+ "solana-clap-utils",
+ "solana-cli",
+ "solana-client",
+ "solana-core",
+ "solana-faucet",
+ "solana-gossip",
+ "solana-local-cluster",
+ "solana-logger 1.9.0",
+ "solana-measure",
+ "solana-net-utils",
+ "solana-runtime",
+ "solana-sdk",
+ "solana-streamer",
+ "solana-transaction-executor",
+ "solana-transaction-status",
+ "solana-version",
+]
+
+[[package]]
 name = "solana-transaction-executor"
-version = "1.8.0"
+version = "1.9.0"
 dependencies = [
  "log 0.4.14",
  "solana-client",
- "solana-logger 1.8.0",
+ "solana-logger 1.9.0",
  "solana-measure",
  "solana-sdk",
 ]
