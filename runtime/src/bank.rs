@@ -5150,7 +5150,7 @@ pub fn goto_end_of_slot(bank: &mut Bank) {
     }
 }
 
-fn is_simple_vote_transaction(transaction: &Transaction) -> bool {
+pub fn is_simple_vote_transaction(transaction: &Transaction) -> bool {
     if transaction.message.instructions.len() == 1 {
         let instruction = &transaction.message.instructions[0];
         let program_pubkey =

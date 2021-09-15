@@ -1,6 +1,6 @@
-//! The `banking_stage` processes Transaction messages. It is intended to be used
 //! to contruct a software pipeline. The stage uses all available CPU cores and
 //! can do its processing in parallel with signature verification on the GPU.
+extern crate array_tool;
 use crate::{
     cluster_info::ClusterInfo,
     data_budget::DataBudget,
@@ -8,6 +8,7 @@ use crate::{
     poh_recorder::{PohRecorder, PohRecorderError, TransactionRecorder, WorkingBankEntry},
     poh_service::{self, PohService},
 };
+use array_tool::vec::Intersect;
 use crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError};
 use itertools::Itertools;
 use lru::LruCache;
@@ -28,6 +29,7 @@ use solana_runtime::{
     bank::{
         Bank, ExecuteTimings, TransactionBalancesSet, TransactionCheckResult,
         TransactionExecutionResult,
+        is_simple_vote_transaction,
     },
     bank_utils,
     hashed_transaction::HashedTransaction,
@@ -50,7 +52,6 @@ use solana_sdk::{
 use solana_transaction_status::token_balances::{
     collect_token_balances, TransactionTokenBalancesSet,
 };
-use solana_vote_program::vote_transaction;
 use std::{
     borrow::Cow,
     cmp,
@@ -91,9 +92,13 @@ pub struct BankingStageStats {
     last_report: AtomicU64,
     id: u32,
     process_packets_count: AtomicUsize,
+    vote_tx_count: AtomicUsize,
+    skip_process_packets_vote_count: AtomicUsize,
+    unprocessed_vote_tx_count: AtomicUsize,
     new_tx_count: AtomicUsize,
     dropped_packet_batches_count: AtomicUsize,
     dropped_packets_count: AtomicUsize,
+    vote_only_bank_dropped_tx_count: AtomicUsize,
     newly_buffered_packets_count: AtomicUsize,
     current_buffered_packets_count: AtomicUsize,
     current_buffered_packet_batches_count: AtomicUsize,
@@ -141,6 +146,22 @@ impl BankingStageStats {
                     i64
                 ),
                 (
+                    "vote_tx_count",
+                    self.vote_tx_count.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "skip_process_packets_vote_count",
+                    self.skip_process_packets_vote_count
+                        .swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "unprocessed_vote_tx_count",
+                    self.unprocessed_vote_tx_count.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
                     "new_tx_count",
                     self.new_tx_count.swap(0, Ordering::Relaxed) as i64,
                     i64
@@ -153,6 +174,12 @@ impl BankingStageStats {
                 (
                     "dropped_packets_count",
                     self.dropped_packets_count.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "vote_only_bank_dropped_tx_count",
+                    self.vote_only_bank_dropped_tx_count
+                        .swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
                 (
@@ -373,6 +400,58 @@ impl BankingStage {
         has_more_unprocessed_transactions
     }
 
+    fn process_buffered_packets_vote(
+        buffered_packets: &mut UnprocessedPackets,
+
+        vote_tx_count: &mut usize,
+        skip_process_packets_vote_count: &mut usize,
+        unprocessed_vote_tx_count: &mut usize,
+        poh: &Arc<Mutex<PohRecorder>>,
+        recorder: &TransactionRecorder,
+        transaction_status_sender: Option<TransactionStatusSender>,
+        gossip_vote_sender: &ReplayVoteSender,
+        banking_stage_stats: &BankingStageStats,
+    ) {
+        let bank_start = poh.lock().unwrap().bank_start();
+        if PohRecorder::get_bank_still_processing_txs(&bank_start).is_none() {
+            // do nothing to the buffered_packets
+            *skip_process_packets_vote_count += 1;
+            return;
+        }
+        let (bank, bank_creation_time) = bank_start.unwrap();
+
+        let package_iter = buffered_packets.iter_mut();
+        for (package, ref mut original_unprocessed_indexes, _forwarded) in package_iter {
+            debug!("original unprocessed index {:?}", original_unprocessed_indexes);
+            let vote_indexes = Self::generate_vote_packet_indexes(&package.packets);
+            let original_unprocessed_vote_indexes = original_unprocessed_indexes.intersect(vote_indexes);
+            let (processed, _verified_txs_len, unprocessed_indexes) =
+                Self::process_packets_transactions(
+                    &bank,
+                    &bank_creation_time,
+                    recorder,
+                    &package,
+                    original_unprocessed_vote_indexes.clone(),
+                    transaction_status_sender.clone(),
+                    gossip_vote_sender,
+                    banking_stage_stats,
+                );
+
+            assert!(processed == original_unprocessed_vote_indexes.len() - unprocessed_indexes.len());
+            *vote_tx_count += processed;
+            *unprocessed_vote_tx_count += unprocessed_indexes.len();
+
+            // remove processed simple vote transactions from buffered packets
+            original_unprocessed_vote_indexes.iter().for_each(|index| {
+                if unprocessed_indexes.iter().all(|i| *i != *index) {
+                    let index = original_unprocessed_indexes.iter().position(|x| *x == *index).unwrap();
+                    original_unprocessed_indexes.remove(index);
+                }
+            });
+            debug!("after processing vote, unprocessed index {:?}", original_unprocessed_indexes);
+        }
+    }    
+
     pub fn consume_buffered_packets(
         my_pubkey: &Pubkey,
         max_tx_ingestion_ns: u128,
@@ -385,12 +464,29 @@ impl BankingStage {
         recorder: &TransactionRecorder,
     ) {
         let mut rebuffered_packets_len = 0;
+        let mut vote_tx_count = 0;
+        let mut skip_process_packets_vote_count = 0;
+        let mut unprocessed_vote_tx_count = 0;
         let mut new_tx_count = 0;
         let buffered_len = buffered_packets.len();
         let mut proc_start = Measure::start("consume_buffered_process");
         let mut reached_end_of_slot = None;
 
+        // iterate through buffered_Packets to process vote first
+        Self::process_buffered_packets_vote(
+            buffered_packets,
+            &mut vote_tx_count,
+            &mut skip_process_packets_vote_count,
+            &mut unprocessed_vote_tx_count, 
+            poh_recorder,
+            recorder,
+            transaction_status_sender.clone(),
+            gossip_vote_sender,
+            banking_stage_stats,
+        );
+
         buffered_packets.retain_mut(|(msgs, ref mut original_unprocessed_indexes, _forwarded)| {
+            debug!("start processing tx, unprocessed index {:?}", original_unprocessed_indexes);
             if let Some((next_leader, bank)) = &reached_end_of_slot {
                 // We've hit the end of this slot, no need to perform more processing,
                 // just filter the remaining packets for the invalid (e.g. too old) ones
@@ -456,10 +552,11 @@ impl BankingStage {
         proc_start.stop();
 
         debug!(
-            "@{:?} done processing buffered batches: {} time: {:?}ms tx count: {} tx/s: {}",
+            "@{:?} done processing buffered batches: {} time: {:?}ms vote count: {} tx count: {} tx/s: {}",
             timestamp(),
             buffered_len,
             proc_start.as_ms(),
+            vote_tx_count,
             new_tx_count,
             (new_tx_count as f32) / (proc_start.as_s())
         );
@@ -470,6 +567,15 @@ impl BankingStage {
         banking_stage_stats
             .rebuffered_packets_count
             .fetch_add(rebuffered_packets_len, Ordering::Relaxed);
+        banking_stage_stats
+            .vote_tx_count
+            .fetch_add(vote_tx_count, Ordering::Relaxed);
+        banking_stage_stats
+            .skip_process_packets_vote_count
+            .fetch_add(skip_process_packets_vote_count, Ordering::Relaxed);
+        banking_stage_stats
+            .unprocessed_vote_tx_count
+            .fetch_add(unprocessed_vote_tx_count, Ordering::Relaxed);
         banking_stage_stats
             .consumed_buffered_packets_count
             .fetch_add(new_tx_count, Ordering::Relaxed);
@@ -1087,18 +1193,6 @@ impl BankingStage {
         Self::filter_valid_transaction_indexes(&results, transaction_to_packet_indexes)
     }
 
-    // Function puts vote transactions on top of the vector
-    fn prioritize_vote_transactions(
-        transactions: Vec<Transaction>,
-        indexes: Vec<usize>,
-    ) -> (Vec<Transaction>, Vec<usize>) {
-        let mut transaction_indexes: Vec<(Transaction, usize)> =
-            transactions.into_iter().zip(indexes).collect();
-        transaction_indexes
-            .sort_by_key(|(tx, _index)| vote_transaction::parse_vote_transaction(tx).is_none());
-        transaction_indexes.into_iter().unzip()
-    }
-
     fn process_packets_transactions(
         bank: &Arc<Bank>,
         bank_creation_time: &Instant,
@@ -1117,7 +1211,6 @@ impl BankingStage {
             bank.vote_only_bank(),
         );
         packet_conversion_time.stop();
-
 
         debug!(
             "bank: {} filtered transactions {}",
@@ -1223,6 +1316,71 @@ impl BankingStage {
             .collect()
     }
 
+    fn generate_vote_packet_indexes(vers: &PinnedVec<Packet>) -> Vec<usize> {
+        vers.iter()
+            .enumerate()
+            .filter_map(|(index, ver)| {
+                if !ver.meta.discard {
+                    let tx: Transaction = limited_deserialize(&ver.data[0..ver.meta.size]).ok()?;
+                    if is_simple_vote_transaction(&tx) {
+                        Some(index)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    fn process_packets_vote(
+        mms: &mut Vec<Packets>,
+        vote_tx_count: &mut usize,
+        skip_process_packets_vote_count: &mut usize,
+        unprocessed_vote_tx_count: &mut usize,
+        poh: &Arc<Mutex<PohRecorder>>,
+        recorder: &TransactionRecorder,
+        transaction_status_sender: Option<TransactionStatusSender>,
+        gossip_vote_sender: &ReplayVoteSender,
+        banking_stage_stats: &BankingStageStats,
+    ) {
+        let mms_iter = mms.iter_mut();
+        for msgs in mms_iter {
+            let bank_start = poh.lock().unwrap().bank_start();
+            if PohRecorder::get_bank_still_processing_txs(&bank_start).is_none() {
+                // do noting here, the main loop will take care of unprocessed packets
+                *skip_process_packets_vote_count += 1;
+                continue;
+            }
+            let (bank, bank_creation_time) = bank_start.unwrap();
+
+            let packet_indexes = Self::generate_vote_packet_indexes(&msgs.packets);
+            let (processed, _verified_txs_len, unprocessed_indexes) =
+                Self::process_packets_transactions(
+                    &bank,
+                    &bank_creation_time,
+                    recorder,
+                    &msgs,
+                    packet_indexes.clone(),
+                    transaction_status_sender.clone(),
+                    gossip_vote_sender,
+                    banking_stage_stats,
+                );
+
+            assert!(processed == packet_indexes.len() - unprocessed_indexes.len());
+            *vote_tx_count += processed;
+            *unprocessed_vote_tx_count += unprocessed_indexes.len();
+
+            // mark off processed vote packets
+            packet_indexes.iter().for_each(|index| {
+                if unprocessed_indexes.iter().all(|i| i != index) {
+                    msgs.packets[*index].meta.discard = true;
+                }
+            });
+        }
+    }
+
     #[allow(clippy::too_many_arguments)]
     /// Process the incoming packets
     pub fn process_packets(
@@ -1241,7 +1399,7 @@ impl BankingStage {
         recorder: &TransactionRecorder,
     ) -> Result<(), RecvTimeoutError> {
         let mut recv_time = Measure::start("process_packets_recv");
-        let mms = verified_receiver.recv_timeout(recv_timeout)?;
+        let mut mms = verified_receiver.recv_timeout(recv_timeout)?;
         recv_time.stop();
 
         let mms_len = mms.len();
@@ -1255,7 +1413,24 @@ impl BankingStage {
         );
         inc_new_counter_debug!("banking_stage-transactions_received", count);
         let mut proc_start = Measure::start("process_packets_transactions_process");
+        let mut vote_tx_count = 0;
+        let mut skip_process_packets_vote_count = 0;
+        let mut unprocessed_vote_tx_count = 0;
         let mut new_tx_count = 0;
+        let mut vote_only_bank_dropped_tx_count = 0;
+
+        // process all votes in the pipeline first
+        Self::process_packets_vote(
+            &mut mms,
+            &mut vote_tx_count,
+            &mut skip_process_packets_vote_count,
+            &mut unprocessed_vote_tx_count,
+            poh,
+            recorder,
+            transaction_status_sender.clone(),
+            gossip_vote_sender,
+            banking_stage_stats,
+        );
 
         let mut mms_iter = mms.into_iter();
         let mut dropped_packets_count = 0;
@@ -1279,6 +1454,13 @@ impl BankingStage {
                 continue;
             }
             let (bank, bank_creation_time) = bank_start.unwrap();
+
+            if bank.vote_only_bank() {
+                // votes should have been processed already, drop all other transactions
+                // when bank is in vote-only state.
+                vote_only_bank_dropped_tx_count += packet_indexes.len();
+                continue;
+            }
 
             let (processed, verified_txs_len, unprocessed_indexes) =
                 Self::process_packets_transactions(
@@ -1343,10 +1525,11 @@ impl BankingStage {
         proc_start.stop();
 
         debug!(
-            "@{:?} done processing transaction batches: {} time: {:?}ms tx count: {} tx/s: {} total count: {} id: {}",
+            "@{:?} done processing transaction batches: {} time: {:?}ms vote count: {} tx count: {} tx/s: {} total count: {} id: {}",
             timestamp(),
             mms_len,
             proc_start.as_ms(),
+            vote_tx_count,
             new_tx_count,
             (new_tx_count as f32) / (proc_start.as_s()),
             count,
@@ -1359,11 +1542,26 @@ impl BankingStage {
             .process_packets_count
             .fetch_add(count, Ordering::Relaxed);
         banking_stage_stats
+            .vote_tx_count
+            .fetch_add(vote_tx_count, Ordering::Relaxed);
+        banking_stage_stats
+            .skip_process_packets_vote_count
+            .fetch_add(skip_process_packets_vote_count, Ordering::Relaxed);
+        banking_stage_stats
+            .unprocessed_vote_tx_count
+            .fetch_add(unprocessed_vote_tx_count, Ordering::Relaxed);
+        banking_stage_stats
             .new_tx_count
             .fetch_add(new_tx_count, Ordering::Relaxed);
         banking_stage_stats
             .dropped_packet_batches_count
             .fetch_add(dropped_packet_batches_count, Ordering::Relaxed);
+        banking_stage_stats
+            .dropped_packets_count
+            .fetch_add(dropped_packets_count, Ordering::Relaxed);
+        banking_stage_stats
+            .vote_only_bank_dropped_tx_count
+            .fetch_add(vote_only_bank_dropped_tx_count, Ordering::Relaxed);
         banking_stage_stats
             .newly_buffered_packets_count
             .fetch_add(newly_buffered_packets_count, Ordering::Relaxed);
