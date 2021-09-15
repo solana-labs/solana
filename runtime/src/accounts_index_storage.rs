@@ -1,6 +1,7 @@
 use crate::accounts_index::IndexValue;
 use crate::bucket_map_holder::BucketMapHolder;
 use crate::waitable_condvar::WaitableCondvar;
+use std::fmt::Debug;
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -14,7 +15,7 @@ use std::{
 //  When this instance is dropped, it will drop the bucket map and cleanup
 //  and it will stop all the background threads and join them.
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct AccountsIndexStorage<T: IndexValue> {
     // for managing the bg threads
     exit: Arc<AtomicBool>,
@@ -23,6 +24,12 @@ pub struct AccountsIndexStorage<T: IndexValue> {
 
     // eventually the backing storage
     storage: Arc<BucketMapHolder<T>>,
+}
+
+impl<T: IndexValue> Debug for AccountsIndexStorage<T> {
+    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Ok(())
+    }
 }
 
 impl<T: IndexValue> Drop for AccountsIndexStorage<T> {
