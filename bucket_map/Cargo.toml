@@ -1,0 +1,29 @@
+[package]
+name = "solana-bucket-map"
+version = "1.8.0"
+description = "solana-bucket-map"
+homepage = "https://solana.com/"
+documentation = "https://docs.rs/solana-bucket-map"
+readme = "../README.md"
+repository = "https://github.com/solana-labs/solana"
+authors = ["Solana Maintainers <maintainers@solana.foundation>"]
+license = "Apache-2.0"
+edition = "2018"
+
+[dependencies]
+rayon = "1.5.0"
+solana-logger = { path = "../logger", version = "=1.8.0" }
+solana-sdk = { path = "../sdk", version = "=1.8.0" }
+memmap2 = "0.2.3"
+log = { version = "0.4.11" }
+solana-measure = { path = "../measure", version = "=1.8.0" }
+rand = "0.7.0"
+fs_extra = "1.2.0"
+tempfile = "3.2.0"
+
+[lib]
+crate-type = ["lib"]
+name = "solana_bucket_map"
+
+[[bench]]
+name = "bucket_map"
