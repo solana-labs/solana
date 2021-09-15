@@ -1,12 +1,11 @@
 use crate::bucket::Bucket;
 use crate::bucket_map::RefCount;
 use crate::data_bucket::DataBucket;
+use solana_sdk::clock::Slot;
 use solana_sdk::pubkey::Pubkey;
 use std::collections::hash_map::DefaultHasher;
 use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
-
-type NumSlots = u64;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -18,11 +17,11 @@ pub struct IndexEntry {
     pub data_location: u64, // smaller? since these are variably sized, this could get tricky. well, actually accountinfo is not variable sized...
     // if the bucket doubled, the index can be recomputed using create_bucket_capacity
     pub create_bucket_capacity: u8, // see data_location
-    pub num_slots: NumSlots, // can this be smaller? epoch size should ~ be the max len. this is the num elements in the slot list
+    pub num_slots: Slot, // can this be smaller? epoch size should ~ be the max len. this is the num elements in the slot list
 }
 
 impl IndexEntry {
-    pub fn data_bucket_from_num_slots(num_slots: NumSlots) -> u64 {
+    pub fn data_bucket_from_num_slots(num_slots: Slot) -> u64 {
         (num_slots as f64).log2().ceil() as u64 // use int log here?
     }
 
