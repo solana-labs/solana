@@ -24,8 +24,9 @@ use crate::{
     accounts_hash::{AccountsHash, CalculateHashIntermediate, HashStats, PreviousPass},
     accounts_index::{
         AccountIndexGetResult, AccountSecondaryIndexes, AccountsIndex, AccountsIndexConfig,
-        AccountsIndexRootsStats, IndexKey, IsCached, RefCount, ScanResult, SlotList, SlotSlice,
-        ZeroLamport, ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS, ACCOUNTS_INDEX_CONFIG_FOR_TESTING,
+        AccountsIndexRootsStats, IndexKey, IndexValue, IsCached, RefCount, ScanResult, SlotList,
+        SlotSlice, ZeroLamport, ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS,
+        ACCOUNTS_INDEX_CONFIG_FOR_TESTING,
     },
     ancestors::Ancestors,
     append_vec::{AppendVec, StoredAccountMeta, StoredMeta, StoredMetaWriteVersion},
@@ -277,6 +278,8 @@ impl IsCached for AccountInfo {
         self.store_id == CACHE_VIRTUAL_STORAGE_ID
     }
 }
+
+impl IndexValue for AccountInfo {}
 
 impl ZeroLamport for AccountInfo {
     fn is_zero_lamport(&self) -> bool {
@@ -4797,7 +4800,7 @@ impl AccountsDb {
             .account_maps
             .iter()
             .map(|map| {
-                let mut keys = map.read().unwrap().keys().cloned().collect::<Vec<_>>();
+                let mut keys = map.read().unwrap().keys();
                 keys.sort_unstable(); // hashmap is not ordered, but bins are relative to each other
                 keys
             })

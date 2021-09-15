@@ -1,3 +1,4 @@
+use crate::accounts_index::IndexValue;
 use crate::bucket_map_holder_stats::BucketMapHolderStats;
 use crate::waitable_condvar::WaitableCondvar;
 use std::fmt::Debug;
@@ -7,15 +8,14 @@ use std::time::Duration;
 
 // will eventually hold the bucket map
 #[derive(Debug, Default)]
-pub struct BucketMapHolder {
+pub struct BucketMapHolder<T: IndexValue> {
     pub stats: BucketMapHolderStats,
+    _phantom: std::marker::PhantomData<T>,
 }
 
-impl BucketMapHolder {
+impl<T: IndexValue> BucketMapHolder<T> {
     pub fn new() -> Self {
-        Self {
-            stats: BucketMapHolderStats::default(),
-        }
+        Self::default()
     }
 
     // intended to execute in a bg thread

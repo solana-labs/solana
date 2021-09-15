@@ -1162,6 +1162,7 @@ mod tests {
             NoopFail,
             ModifyOwned,
             ModifyNotOwned,
+            ModifyReadonly,
         }
 
         fn mock_process_instruction(
@@ -1186,6 +1187,9 @@ mod tests {
                     MockInstruction::ModifyNotOwned => {
                         keyed_accounts[1].try_account_ref_mut()?.data_as_mut_slice()[0] = 1
                     }
+                    MockInstruction::ModifyReadonly => {
+                        keyed_accounts[2].try_account_ref_mut()?.data_as_mut_slice()[0] = 1
+                    }
                 }
             } else {
                 return Err(InstructionError::InvalidInstructionData);
@@ -1196,11 +1200,11 @@ mod tests {
         let caller_program_id = solana_sdk::pubkey::new_rand();
         let callee_program_id = solana_sdk::pubkey::new_rand();
 
-        let mut program_account = AccountSharedData::new(1, 0, &native_loader::id());
-        program_account.set_executable(true);
-
         let owned_account = AccountSharedData::new(42, 1, &callee_program_id);
         let not_owned_account = AccountSharedData::new(84, 1, &solana_sdk::pubkey::new_rand());
+        let readonly_account = AccountSharedData::new(168, 1, &caller_program_id);
+        let mut program_account = AccountSharedData::new(1, 0, &native_loader::id());
+        program_account.set_executable(true);
 
         #[allow(unused_mut)]
         let accounts = vec![
@@ -1213,26 +1217,29 @@ mod tests {
                 Rc::new(RefCell::new(not_owned_account)),
             ),
             (
-                callee_program_id,
-                Rc::new(RefCell::new(program_account.clone())),
+                solana_sdk::pubkey::new_rand(),
+                Rc::new(RefCell::new(readonly_account)),
             ),
+            (callee_program_id, Rc::new(RefCell::new(program_account))),
         ];
-        let program_indices = vec![2];
+        let program_indices = vec![3];
 
-        let compiled_instruction = CompiledInstruction::new(2, &(), vec![0, 1, 2]);
         let programs: Vec<(_, ProcessInstructionWithContext)> =
             vec![(callee_program_id, mock_process_instruction)];
         let metas = vec![
             AccountMeta::new(accounts[0].0, false),
             AccountMeta::new(accounts[1].0, false),
+            AccountMeta::new_readonly(accounts[2].0, false),
         ];
 
-        let instruction = Instruction::new_with_bincode(
+        let caller_instruction = CompiledInstruction::new(2, &(), vec![0, 1, 2, 3]);
+        let callee_instruction = Instruction::new_with_bincode(
             callee_program_id,
             &MockInstruction::NoopSuccess,
             metas.clone(),
         );
-        let message = Message::new(&[instruction], None);
+        let message = Message::new(&[callee_instruction], None);
+
         let feature_set = FeatureSet::all_enabled();
         let demote_program_write_locks = feature_set.is_active(&demote_program_write_locks::id());
 
@@ -1243,7 +1250,7 @@ mod tests {
             &caller_program_id,
             Rent::default(),
             &message,
-            &compiled_instruction,
+            &caller_instruction,
             &program_indices,
             &accounts,
             programs.as_slice(),
@@ -1280,6 +1287,20 @@ mod tests {
         );
         accounts[0].1.borrow_mut().data_as_mut_slice()[0] = 0;
 
+        // readonly account modified by the invoker
+        accounts[2].1.borrow_mut().data_as_mut_slice()[0] = 1;
+        assert_eq!(
+            InstructionProcessor::process_cross_program_instruction(
+                &message,
+                &program_indices,
+                &accounts,
+                &caller_write_privileges,
+                &mut invoke_context,
+            ),
+            Err(InstructionError::ReadonlyDataModified)
+        );
+        accounts[2].1.borrow_mut().data_as_mut_slice()[0] = 0;
+
         let cases = vec![
             (MockInstruction::NoopSuccess, Ok(())),
             (
@@ -1294,9 +1315,9 @@ mod tests {
         ];
 
         for case in cases {
-            let instruction =
+            let callee_instruction =
                 Instruction::new_with_bincode(callee_program_id, &case.0, metas.clone());
-            let message = Message::new(&[instruction], None);
+            let message = Message::new(&[callee_instruction], None);
 
             let ancestors = Ancestors::default();
             let blockhash = Hash::default();
@@ -1305,7 +1326,7 @@ mod tests {
                 &caller_program_id,
                 Rent::default(),
                 &message,
-                &compiled_instruction,
+                &caller_instruction,
                 &program_indices,
                 &accounts,
                 programs.as_slice(),
@@ -1335,6 +1356,200 @@ mod tests {
                     &accounts,
                     &caller_write_privileges,
                     &mut invoke_context,
+                ),
+                case.1
+            );
+        }
+    }
+
+    #[test]
+    fn test_native_invoke() {
+        #[derive(Debug, Serialize, Deserialize)]
+        enum MockInstruction {
+            NoopSuccess,
+            NoopFail,
+            ModifyOwned,
+            ModifyNotOwned,
+            ModifyReadonly,
+        }
+
+        fn mock_process_instruction(
+            program_id: &Pubkey,
+            data: &[u8],
+            invoke_context: &mut dyn InvokeContext,
+        ) -> Result<(), InstructionError> {
+            let keyed_accounts = invoke_context.get_keyed_accounts()?;
+            assert_eq!(*program_id, keyed_accounts[0].owner()?);
+            assert_ne!(
+                keyed_accounts[1].owner()?,
+                *keyed_accounts[0].unsigned_key()
+            );
+
+            if let Ok(instruction) = bincode::deserialize(data) {
+                match instruction {
+                    MockInstruction::NoopSuccess => (),
+                    MockInstruction::NoopFail => return Err(InstructionError::GenericError),
+                    MockInstruction::ModifyOwned => {
+                        keyed_accounts[0].try_account_ref_mut()?.data_as_mut_slice()[0] = 1
+                    }
+                    MockInstruction::ModifyNotOwned => {
+                        keyed_accounts[1].try_account_ref_mut()?.data_as_mut_slice()[0] = 1
+                    }
+                    MockInstruction::ModifyReadonly => {
+                        keyed_accounts[2].try_account_ref_mut()?.data_as_mut_slice()[0] = 1
+                    }
+                }
+            } else {
+                return Err(InstructionError::InvalidInstructionData);
+            }
+            Ok(())
+        }
+
+        let caller_program_id = solana_sdk::pubkey::new_rand();
+        let callee_program_id = solana_sdk::pubkey::new_rand();
+
+        let owned_account = AccountSharedData::new(42, 1, &callee_program_id);
+        let not_owned_account = AccountSharedData::new(84, 1, &solana_sdk::pubkey::new_rand());
+        let readonly_account = AccountSharedData::new(168, 1, &caller_program_id);
+        let mut program_account = AccountSharedData::new(1, 0, &native_loader::id());
+        program_account.set_executable(true);
+
+        #[allow(unused_mut)]
+        let accounts = vec![
+            (
+                solana_sdk::pubkey::new_rand(),
+                Rc::new(RefCell::new(owned_account)),
+            ),
+            (
+                solana_sdk::pubkey::new_rand(),
+                Rc::new(RefCell::new(not_owned_account)),
+            ),
+            (
+                solana_sdk::pubkey::new_rand(),
+                Rc::new(RefCell::new(readonly_account)),
+            ),
+            (callee_program_id, Rc::new(RefCell::new(program_account))),
+        ];
+        let program_indices = vec![3];
+        let programs: Vec<(_, ProcessInstructionWithContext)> =
+            vec![(callee_program_id, mock_process_instruction)];
+        let metas = vec![
+            AccountMeta::new(accounts[0].0, false),
+            AccountMeta::new(accounts[1].0, false),
+            AccountMeta::new_readonly(accounts[2].0, false),
+        ];
+
+        let caller_instruction = CompiledInstruction::new(2, &(), vec![0, 1, 2, 3]);
+        let callee_instruction = Instruction::new_with_bincode(
+            callee_program_id,
+            &MockInstruction::NoopSuccess,
+            metas.clone(),
+        );
+        let message = Message::new(&[callee_instruction.clone()], None);
+
+        let feature_set = FeatureSet::all_enabled();
+        let ancestors = Ancestors::default();
+        let blockhash = Hash::default();
+        let fee_calculator = FeeCalculator::default();
+        let mut invoke_context = ThisInvokeContext::new(
+            &caller_program_id,
+            Rent::default(),
+            &message,
+            &caller_instruction,
+            &program_indices,
+            &accounts,
+            programs.as_slice(),
+            None,
+            ComputeBudget::default(),
+            Rc::new(RefCell::new(MockComputeMeter::default())),
+            Rc::new(RefCell::new(Executors::default())),
+            None,
+            Arc::new(feature_set),
+            Arc::new(Accounts::default_for_tests()),
+            &ancestors,
+            &blockhash,
+            &fee_calculator,
+        )
+        .unwrap();
+
+        // not owned account modified by the invoker
+        accounts[0].1.borrow_mut().data_as_mut_slice()[0] = 1;
+        assert_eq!(
+            InstructionProcessor::native_invoke(
+                &mut invoke_context,
+                callee_instruction.clone(),
+                &[0, 1, 2, 3],
+                &[]
+            ),
+            Err(InstructionError::ExternalAccountDataModified)
+        );
+        accounts[0].1.borrow_mut().data_as_mut_slice()[0] = 0;
+
+        // readonly account modified by the invoker
+        accounts[2].1.borrow_mut().data_as_mut_slice()[0] = 1;
+        assert_eq!(
+            InstructionProcessor::native_invoke(
+                &mut invoke_context,
+                callee_instruction,
+                &[0, 1, 2, 3],
+                &[]
+            ),
+            Err(InstructionError::ReadonlyDataModified)
+        );
+        accounts[2].1.borrow_mut().data_as_mut_slice()[0] = 0;
+
+        // Other test cases
+        let cases = vec![
+            (MockInstruction::NoopSuccess, Ok(())),
+            (
+                MockInstruction::NoopFail,
+                Err(InstructionError::GenericError),
+            ),
+            (MockInstruction::ModifyOwned, Ok(())),
+            (
+                MockInstruction::ModifyNotOwned,
+                Err(InstructionError::ExternalAccountDataModified),
+            ),
+            (
+                MockInstruction::ModifyReadonly,
+                Err(InstructionError::ReadonlyDataModified),
+            ),
+        ];
+        for case in cases {
+            let callee_instruction =
+                Instruction::new_with_bincode(callee_program_id, &case.0, metas.clone());
+            let message = Message::new(&[callee_instruction.clone()], None);
+
+            let ancestors = Ancestors::default();
+            let blockhash = Hash::default();
+            let fee_calculator = FeeCalculator::default();
+            let mut invoke_context = ThisInvokeContext::new(
+                &caller_program_id,
+                Rent::default(),
+                &message,
+                &caller_instruction,
+                &program_indices,
+                &accounts,
+                programs.as_slice(),
+                None,
+                ComputeBudget::default(),
+                Rc::new(RefCell::new(MockComputeMeter::default())),
+                Rc::new(RefCell::new(Executors::default())),
+                None,
+                Arc::new(FeatureSet::all_enabled()),
+                Arc::new(Accounts::default_for_tests()),
+                &ancestors,
+                &blockhash,
+                &fee_calculator,
+            )
+            .unwrap();
+
+            assert_eq!(
+                InstructionProcessor::native_invoke(
+                    &mut invoke_context,
+                    callee_instruction,
+                    &[0, 1, 2, 3],
+                    &[]
                 ),
                 case.1
             );

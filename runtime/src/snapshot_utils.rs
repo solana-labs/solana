@@ -1233,9 +1233,10 @@ pub fn purge_old_snapshot_archives<P>(
     P: AsRef<Path>,
 {
     info!(
-        "Purging old snapshot archives in {}, retaining {} full snapshots",
+        "Purging old snapshot archives in {}, retaining {} full snapshots and {} incremental snapshots",
         snapshot_archives_dir.as_ref().display(),
-        maximum_full_snapshot_archives_to_retain
+        maximum_full_snapshot_archives_to_retain,
+        maximum_incremental_snapshot_archives_to_retain
     );
     let mut snapshot_archives = get_full_snapshot_archives(&snapshot_archives_dir);
     snapshot_archives.sort_unstable();
