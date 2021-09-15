@@ -17,7 +17,7 @@ fn bucket_map_test_mt() {
         .collect();
     assert!(!paths.is_empty());
     let index = BucketMap::new(BucketMapConfig {
-        num_buckets: 1 << 12,
+        max_buckets: 1 << 12,
         drives: Some(paths.clone()),
         ..BucketMapConfig::default()
     });

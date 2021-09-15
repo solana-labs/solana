@@ -23,15 +23,15 @@ pub struct BucketMapKeyValue<T> {
 
 #[derive(Debug, Default)]
 pub struct BucketMapConfig {
-    pub num_buckets: usize,
+    pub max_buckets: usize,
     pub drives: Option<Vec<PathBuf>>,
     pub max_search: Option<MaxSearch>,
 }
 
 impl BucketMapConfig {
-    pub fn new(num_buckets: usize) -> BucketMapConfig {
+    pub fn new(max_buckets: usize) -> BucketMapConfig {
         BucketMapConfig {
-            num_buckets,
+            max_buckets,
             ..BucketMapConfig::default()
         }
     }
@@ -40,7 +40,7 @@ impl BucketMapConfig {
 pub struct BucketMap<T: Clone + Copy + Debug> {
     buckets: Vec<RwLock<Option<Bucket<T>>>>,
     drives: Arc<Vec<PathBuf>>,
-    num_buckets_pow2: u8,
+    max_buckets_pow2: u8,
     max_search: MaxSearch,
     pub stats: Arc<BucketMapStats>,
     pub temp_dir: Option<TempDir>,
@@ -68,13 +68,16 @@ pub enum BucketMapError {
 
 impl<T: Clone + Copy + Debug> BucketMap<T> {
     pub fn new(config: BucketMapConfig) -> Self {
-        assert_ne!(config.num_buckets, 0, "Number of buckets must be non-zero");
-        assert!(
-            config.num_buckets.is_power_of_two(),
-            "Number of buckets must be a power of two"
+        assert_ne!(
+            config.max_buckets, 0,
+            "Max number of buckets must be non-zero"
         );
-        let mut buckets = Vec::with_capacity(config.num_buckets);
-        buckets.resize_with(config.num_buckets, || RwLock::new(None));
+        assert!(
+            config.max_buckets.is_power_of_two(),
+            "Max number of buckets must be a power of two"
+        );
+        let mut buckets = Vec::with_capacity(config.max_buckets);
+        buckets.resize_with(config.max_buckets, || RwLock::new(None));
         let stats = Arc::new(BucketMapStats::default());
         // this should be <= 1 << DEFAULT_CAPACITY or we end up searching the same items over and over - probably not a big deal since it is so small anyway
         const MAX_SEARCH: MaxSearch = 32;
@@ -96,7 +99,7 @@ impl<T: Clone + Copy + Debug> BucketMap<T> {
         Self {
             buckets,
             drives,
-            num_buckets_pow2: log2(config.num_buckets) as u8,
+            max_buckets_pow2: log2(config.max_buckets) as u8,
             stats,
             max_search,
             temp_dir,
@@ -174,9 +177,9 @@ impl<T: Clone + Copy + Debug> BucketMap<T> {
     }
 
     pub fn bucket_ix(&self, key: &Pubkey) -> usize {
-        if self.num_buckets_pow2 > 0 {
+        if self.max_buckets_pow2 > 0 {
             let location = read_be_u64(key.as_ref());
-            (location >> (u64::BITS - self.num_buckets_pow2 as u32)) as usize
+            (location >> (u64::BITS - self.max_buckets_pow2 as u32)) as usize
         } else {
             0
         }
