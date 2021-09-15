@@ -7,12 +7,12 @@ use {
     solana_accountsdb_plugin_intf::accountsdb_plugin_intf::{
         AccountsDbPlugin, AccountsDbPluginError, ReplicaAccountInfo, Result,
     },
-    std::{fs::File, io::Read},
+    std::{fs::File, io::Read, sync::Mutex},
 };
 
 #[derive(Default)]
 pub struct AccountsDbPluginPostgres {
-    client: Option<Client>,
+    client: Option<Mutex<Client>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -59,7 +59,7 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
                         });
                     }
                     Ok(client) => {
-                        self.client = Some(client);
+                        self.client = Some(Mutex::new(client));
                     }
                 }
             }
@@ -86,7 +86,7 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
             Some(client) => {
                 let slot = slot as i64; // postgres only support i64
                 let lamports = account.account_meta.lamports as i64;
-                let result = client.execute(
+                let result = client.lock().unwrap().execute(
                     "INSERT INTO account (pubkey, slot, owner, lamports) VALUES ($1 $2 $3 $4) \
                     ON CONFLICT (pubkey) DO UPDATE SET slot=$2, owner=$3, lamports=$4",
                     &[
