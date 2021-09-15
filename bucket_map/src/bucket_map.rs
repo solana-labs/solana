@@ -29,6 +29,8 @@ pub struct BucketMapConfig {
 }
 
 impl BucketMapConfig {
+    /// Create a new BucketMapConfig
+    /// NOTE: BucketMap requires that max_buckets is a power of two
     pub fn new(max_buckets: usize) -> BucketMapConfig {
         BucketMapConfig {
             max_buckets,
