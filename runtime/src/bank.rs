@@ -912,6 +912,8 @@ pub struct Bank {
     pub drop_callback: RwLock<OptionalDropCallback>,
 
     pub freeze_started: AtomicBool,
+
+    vote_only_bank: bool,
 }
 
 impl Default for BlockhashQueue {
@@ -1012,7 +1014,22 @@ impl Bank {
 
     /// Create a new bank that points to an immutable checkpoint of another bank.
     pub fn new_from_parent(parent: &Arc<Bank>, collector_id: &Pubkey, slot: Slot) -> Self {
-        Self::_new_from_parent(parent, collector_id, slot, &mut null_tracer())
+        Self::_new_from_parent(parent, collector_id, slot, &mut null_tracer(), false)
+    }
+
+    pub fn new_from_parent_with_vote_only(
+        parent: &Arc<Bank>,
+        collector_id: &Pubkey,
+        slot: Slot,
+        vote_only_bank: bool,
+    ) -> Self {
+        Self::_new_from_parent(
+            parent,
+            collector_id,
+            slot,
+            &mut null_tracer(),
+            vote_only_bank,
+        )
     }
 
     pub fn new_from_parent_with_tracer(
@@ -1021,7 +1038,13 @@ impl Bank {
         slot: Slot,
         reward_calc_tracer: impl FnMut(&RewardCalculationEvent),
     ) -> Self {
-        Self::_new_from_parent(parent, collector_id, slot, &mut Some(reward_calc_tracer))
+        Self::_new_from_parent(
+            parent,
+            collector_id,
+            slot,
+            &mut Some(reward_calc_tracer),
+            false,
+        )
     }
 
     fn _new_from_parent(
@@ -1029,6 +1052,7 @@ impl Bank {
         collector_id: &Pubkey,
         slot: Slot,
         reward_calc_tracer: &mut Option<impl FnMut(&RewardCalculationEvent)>,
+        vote_only_bank: bool,
     ) -> Self {
         parent.freeze();
         assert_ne!(slot, parent.slot());
@@ -1074,6 +1098,7 @@ impl Bank {
             fee_calculator: fee_rate_governor.create_fee_calculator(),
             fee_rate_governor,
             capitalization: AtomicU64::new(parent.capitalization()),
+            vote_only_bank,
             inflation: parent.inflation.clone(),
             transaction_count: AtomicU64::new(parent.transaction_count()),
             transaction_error_count: AtomicU64::new(0),
@@ -1168,6 +1193,10 @@ impl Bank {
 
     pub fn set_callback(&self, callback: Option<Box<dyn DropCallback + Send + Sync>>) {
         *self.drop_callback.write().unwrap() = OptionalDropCallback(callback);
+    }
+
+    pub fn vote_only_bank(&self) -> bool {
+        self.vote_only_bank
     }
 
     /// Like `new_from_parent` but additionally:
@@ -1265,6 +1294,7 @@ impl Bank {
             feature_set: new(),
             drop_callback: RwLock::new(OptionalDropCallback(None)),
             freeze_started: AtomicBool::new(fields.hash != Hash::default()),
+            vote_only_bank: false,
         };
         bank.finish_init(genesis_config, additional_builtins);
 
