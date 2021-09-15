@@ -1,6 +1,6 @@
 [package]
 name = "solana-failure-program"
-version = "1.6.25"
+version = "1.6.26"
 description = "Solana failure program"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -10,10 +10,10 @@ documentation = "https://docs.rs/solana-failure-program"
 edition = "2018"
 
 [dependencies]
-solana-sdk = { path = "../../sdk", version = "=1.6.25" }
+solana-sdk = { path = "../../sdk", version = "=1.6.26" }
 
 [dev-dependencies]
-solana-runtime = { path = "../../runtime", version = "=1.6.25" }
+solana-runtime = { path = "../../runtime", version = "=1.6.26" }
 
 [lib]
 crate-type = ["lib", "cdylib"]
