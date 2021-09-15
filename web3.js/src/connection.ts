@@ -3517,8 +3517,8 @@ export class Connection {
         Array.isArray(includeAccounts)
           ? includeAccounts
           : message.accountKeys.filter(
-              (_, index) => !message.isProgramId(index),
-            )
+            (_, index) => !message.isProgramId(index),
+          )
       ).map(key => key.toBase58());
 
       config['accounts'] = {
