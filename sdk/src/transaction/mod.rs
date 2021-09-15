@@ -4,15 +4,14 @@
 
 use {
     crate::{
-        ed25519_instruction::verify_signatures,
         hash::Hash,
         instruction::{CompiledInstruction, Instruction, InstructionError},
         message::{Message, SanitizeMessageError},
         nonce::NONCED_TX_MARKER_IX_INDEX,
+        precompiles::verify_if_precompile,
         program_utils::limited_deserialize,
         pubkey::Pubkey,
         sanitize::{Sanitize, SanitizeError},
-        secp256k1_instruction::verify_eth_addresses,
         short_vec,
         signature::{Signature, SignerError},
         signers::Signers,
@@ -433,6 +432,7 @@ impl Transaction {
             .collect()
     }
 
+    /// Verify the precompiled programs in this transaction
     pub fn verify_precompiles(&self, feature_set: &Arc<feature_set::FeatureSet>) -> Result<()> {
         for instruction in &self.message().instructions {
             // The Transaction may not be sanitized at this point
@@ -440,34 +440,14 @@ impl Transaction {
                 return Err(TransactionError::AccountNotFound);
             }
             let program_id = &self.message().account_keys[instruction.program_id_index as usize];
-            if crate::secp256k1_program::check_id(program_id) {
-                let instruction_datas: Vec<_> = self
-                    .message()
-                    .instructions
-                    .iter()
-                    .map(|instruction| instruction.data.as_ref())
-                    .collect();
-                let data = &instruction.data;
-                let e = verify_eth_addresses(
-                    data,
-                    &instruction_datas,
-                    feature_set.is_active(&feature_set::libsecp256k1_0_5_upgrade_enabled::id()),
-                    feature_set.is_active(&feature_set::libsecp256k1_fail_on_bad_count::id()),
-                );
-                e.map_err(|_| TransactionError::InvalidAccountIndex)?;
-            } else if crate::ed25519_program::check_id(program_id)
-                && feature_set.is_active(&feature_set::ed25519_program_enabled::id())
-            {
-                let instruction_datas: Vec<_> = self
-                    .message()
-                    .instructions
-                    .iter()
-                    .map(|instruction| instruction.data.as_ref())
-                    .collect();
-                let data = &instruction.data;
-                let e = verify_signatures(data, &instruction_datas);
-                e.map_err(|_| TransactionError::InvalidAccountIndex)?;
-            }
+
+            verify_if_precompile(
+                program_id,
+                instruction,
+                &self.message().instructions,
+                feature_set,
+            )
+            .map_err(|_| TransactionError::InvalidAccountIndex)?;
         }
         Ok(())
     }

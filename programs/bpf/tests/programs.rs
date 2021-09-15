@@ -1090,7 +1090,7 @@ fn test_program_bpf_invoke_sanity() {
             result.unwrap_err(),
             TransactionError::InstructionError(0, InstructionError::ProgramFailedToComplete)
         );
-    }
+     }
 }
 
 #[cfg(feature = "bpf_rust")]
