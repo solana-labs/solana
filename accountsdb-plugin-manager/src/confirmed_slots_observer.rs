@@ -1,4 +1,5 @@
 use {
+    crate::{accounts_update_notifier::AccountsUpdateNotifier},
     crossbeam_channel::Receiver,
     solana_sdk::{clock::Slot, commitment_config::CommitmentLevel},
     std::{
@@ -19,7 +20,7 @@ struct EligibleSlotSet {
     slot_set: Arc<RwLock<VecDeque<(Slot, CommitmentLevel)>>>,
 }
 
-pub struct SlotConfirmationObserver {
+pub (crate) struct SlotConfirmationObserver {
     confirmed_bank_receiver_service: Option<JoinHandle<()>>,
     plugin_notify_service: Option<JoinHandle<()>>,
     exit_updated_slot_server: Arc<AtomicBool>,
@@ -27,7 +28,7 @@ pub struct SlotConfirmationObserver {
 
 impl SlotConfirmationObserver {
 
-    pub fn new(confirmed_bank_receiver: Receiver<Slot>) -> Self {
+    pub fn new(confirmed_bank_receiver: Receiver<Slot>, accounts_update_notifier: AccountsUpdateNotifier) -> Self {
         let eligible_slot_set = EligibleSlotSet::default();
         let exit_updated_slot_server = Arc::new(AtomicBool::new(false));
 
@@ -40,6 +41,7 @@ impl SlotConfirmationObserver {
             plugin_notify_service: Some(Self::run_plugin_notify_service(
                 eligible_slot_set,
                 exit_updated_slot_server.clone(),
+                accounts_update_notifier,
             )),
             exit_updated_slot_server,
         }
@@ -77,6 +79,7 @@ impl SlotConfirmationObserver {
     fn run_plugin_notify_service(
         eligible_slot_set: EligibleSlotSet,
         exit: Arc<AtomicBool>,
+        accounts_update_notifier: AccountsUpdateNotifier,
     ) -> JoinHandle<()> {
         Builder::new()
             .name("plugin_notify_service".to_string())
@@ -89,6 +92,7 @@ impl SlotConfirmationObserver {
                         if slot.is_none() {
                             break
                         }
+                        accounts_update_notifier.notify_slot_confirmed(slot.unwrap().0);
                     }
                     drop(slot_set);
                     sleep(Duration::from_millis(200));

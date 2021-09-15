@@ -5,7 +5,7 @@ use std::io;
 /// creates the implementation of the plugin.
 use thiserror::Error;
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Default, Debug)]
 pub struct ReplicaAccountMeta {
     pub pubkey: Vec<u8>,
     pub lamports: u64,
@@ -14,7 +14,9 @@ pub struct ReplicaAccountMeta {
     pub rent_epoch: u64,
 }
 
-#[derive(Clone, PartialEq, Debug)]
+impl Eq for ReplicaAccountInfo {}
+
+#[derive(Clone, Default, PartialEq, Debug)]
 pub struct ReplicaAccountInfo {
     pub account_meta: ReplicaAccountMeta,
     pub hash: Vec<u8>,
@@ -38,7 +40,7 @@ pub enum AccountsDbPluginError {
 
 pub type Result<T> = std::result::Result<T, AccountsDbPluginError>;
 
-pub trait AccountsDbPlugin {
+pub trait AccountsDbPlugin: Send + Sync {
     fn name(&self) -> &'static str;
 
     /// The callback called when a plugin is loaded by the system
@@ -55,5 +57,5 @@ pub trait AccountsDbPlugin {
     fn on_unload(&mut self) {}
 
     /// Called when an account is updated at a slot.
-    fn update_account(&mut self, account: ReplicaAccountInfo, slot: u64) -> Result<()>;
+    fn update_account(&mut self, account: &ReplicaAccountInfo, slot: u64) -> Result<()>;
 }

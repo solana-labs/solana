@@ -74,7 +74,7 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
         info!("Unloading plugin: {:?}", self.name());
     }
 
-    fn update_account(&mut self, account: ReplicaAccountInfo, slot: u64) -> Result<()> {
+    fn update_account(&mut self, account: &ReplicaAccountInfo, slot: u64) -> Result<()> {
         info!("Updating account {:?} at slot {:?}", account, slot);
 
         match &mut self.client {

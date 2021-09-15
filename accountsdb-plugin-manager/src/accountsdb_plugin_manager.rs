@@ -8,7 +8,7 @@ use {
 
 #[derive(Default)]
 pub struct AccountsDbPluginManager {
-    plugins: Vec<Box<dyn AccountsDbPlugin>>,
+    pub plugins: Vec<Box<dyn AccountsDbPlugin>>,
     libs: Vec<Library>,
 }
 
