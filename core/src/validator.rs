@@ -8,7 +8,7 @@ use {
         cache_block_meta_service::{CacheBlockMetaSender, CacheBlockMetaService},
         cluster_info_vote_listener::VoteTracker,
         completed_data_sets_service::CompletedDataSetsService,
-        consensus::{reconcile_blockstore_roots_with_tower, Tower},
+        consensus::{reconcile_blockstore_roots_with_external_source, ExternalRootSource, Tower},
         ledger_metric_report_service::LedgerMetricReportService,
         poh_timing_report_service::PohTimingReportService,
         rewards_recorder_service::{RewardsRecorderSender, RewardsRecorderService},
@@ -512,6 +512,7 @@ impl Validator {
             genesis_config,
             bank_forks,
             blockstore,
+            original_blockstore_root,
             ledger_signal_receiver,
             completed_slots_receiver,
             leader_schedule_cache,
@@ -667,6 +668,7 @@ impl Validator {
             vote_account,
             &start_progress,
             &blockstore,
+            original_blockstore_root,
             &bank_forks,
             &leader_schedule_cache,
             &blockstore_process_options,
@@ -1224,6 +1226,17 @@ fn check_poh_speed(genesis_config: &GenesisConfig, maybe_hash_samples: Option<u6
     }
 }
 
+fn maybe_cluster_restart_with_hard_fork(config: &ValidatorConfig, root_slot: Slot) -> Option<Slot> {
+    // detect cluster restart (hard fork) indirectly via wait_for_supermajority...
+    if let Some(wait_slot_for_supermajority) = config.wait_for_supermajority {
+        if wait_slot_for_supermajority == root_slot {
+            return Some(wait_slot_for_supermajority);
+        }
+    }
+
+    None
+}
+
 fn post_process_restored_tower(
     restored_tower: crate::consensus::Result<Tower>,
     validator_identity: &Pubkey,
@@ -1237,29 +1250,28 @@ fn post_process_restored_tower(
         .and_then(|tower| {
             let root_bank = bank_forks.root_bank();
             let slot_history = root_bank.get_slot_history();
+            // make sure tower isn't corrupted first before the following hard fork check
             let tower = tower.adjust_lockouts_after_replay(root_bank.slot(), &slot_history);
 
-            if let Some(wait_slot_for_supermajority) = config.wait_for_supermajority {
-                if root_bank.slot() == wait_slot_for_supermajority {
-                    // intentionally fail to restore tower; we're supposedly in a new hard fork; past
-                    // out-of-chain vote state doesn't make sense at all
-                    // what if --wait-for-supermajority again if the validator restarted?
-                    let message = format!("Hardfork is detected; discarding tower restoration result: {:?}", tower);
-                    datapoint_error!(
-                        "tower_error",
-                        (
-                            "error",
-                            message,
-                            String
-                        ),
-                    );
-                    error!("{}", message);
+            if let Some(hard_fork_restart_slot) = maybe_cluster_restart_with_hard_fork(config, root_bank.slot()) {
+                // intentionally fail to restore tower; we're supposedly in a new hard fork; past
+                // out-of-chain vote state doesn't make sense at all
+                // what if --wait-for-supermajority again if the validator restarted?
+                let message = format!("Hard fork is detected; discarding tower restoration result: {:?}", tower);
+                datapoint_error!(
+                    "tower_error",
+                    (
+                        "error",
+                        message,
+                        String
+                    ),
+                );
+                error!("{}", message);
 
-                    // unconditionally relax tower requirement so that we can always restore tower
-                    // from root bank.
-                    should_require_tower = false;
-                    return Err(crate::consensus::TowerError::HardFork(wait_slot_for_supermajority));
-                }
+                // unconditionally relax tower requirement so that we can always restore tower
+                // from root bank.
+                should_require_tower = false;
+                return Err(crate::consensus::TowerError::HardFork(hard_fork_restart_slot));
             }
 
             if let Some(warp_slot) = config.warp_slot {
@@ -1326,6 +1338,7 @@ fn load_blockstore(
     GenesisConfig,
     Arc<RwLock<BankForks>>,
     Arc<Blockstore>,
+    Slot,
     Receiver<bool>,
     CompletedSlotsReceiver,
     LeaderScheduleCache,
@@ -1378,6 +1391,9 @@ fn load_blockstore(
     .expect("Failed to open ledger database");
     blockstore.set_no_compaction(config.no_rocksdb_compaction);
     blockstore.shred_timing_point_sender = poh_timing_point_sender;
+    // following boot sequence (esp BankForks) could set root. so stash the original value
+    // of blockstore root away here as soon as possible.
+    let original_blockstore_root = blockstore.last_root();
 
     let blockstore = Arc::new(blockstore);
     let blockstore_root_scan = BlockstoreRootScan::new(config, &blockstore, exit);
@@ -1482,6 +1498,7 @@ fn load_blockstore(
         genesis_config,
         bank_forks,
         blockstore,
+        original_blockstore_root,
         ledger_signal_receiver,
         completed_slots_receiver,
         leader_schedule_cache,
@@ -1521,6 +1538,7 @@ struct ProcessBlockStore<'a> {
     vote_account: &'a Pubkey,
     start_progress: &'a Arc<RwLock<ValidatorStartProgress>>,
     blockstore: &'a Blockstore,
+    original_blockstore_root: Slot,
     bank_forks: &'a Arc<RwLock<BankForks>>,
     leader_schedule_cache: &'a LeaderScheduleCache,
     process_options: &'a blockstore_processor::ProcessOptions,
@@ -1539,6 +1557,7 @@ impl<'a> ProcessBlockStore<'a> {
         vote_account: &'a Pubkey,
         start_progress: &'a Arc<RwLock<ValidatorStartProgress>>,
         blockstore: &'a Blockstore,
+        original_blockstore_root: Slot,
         bank_forks: &'a Arc<RwLock<BankForks>>,
         leader_schedule_cache: &'a LeaderScheduleCache,
         process_options: &'a blockstore_processor::ProcessOptions,
@@ -1553,6 +1572,7 @@ impl<'a> ProcessBlockStore<'a> {
             vote_account,
             start_progress,
             blockstore,
+            original_blockstore_root,
             bank_forks,
             leader_schedule_cache,
             process_options,
@@ -1622,12 +1642,30 @@ impl<'a> ProcessBlockStore<'a> {
             self.tower = Some({
                 let restored_tower = Tower::restore(self.config.tower_storage.as_ref(), self.id);
                 if let Ok(tower) = &restored_tower {
-                    reconcile_blockstore_roots_with_tower(tower, self.blockstore).unwrap_or_else(
-                        |err| {
-                            error!("Failed to reconcile blockstore with tower: {:?}", err);
-                            abort()
-                        },
-                    );
+                    reconcile_blockstore_roots_with_external_source(
+                        ExternalRootSource::Tower(tower.root()),
+                        self.blockstore,
+                        &mut self.original_blockstore_root,
+                    )
+                    .unwrap_or_else(|err| {
+                        error!("Failed to reconcile blockstore with tower: {:?}", err);
+                        abort()
+                    });
+                }
+
+                if let Some(hard_fork_restart_slot) = maybe_cluster_restart_with_hard_fork(
+                    self.config,
+                    self.bank_forks.read().unwrap().root_bank().slot(),
+                ) {
+                    reconcile_blockstore_roots_with_external_source(
+                        ExternalRootSource::HardFork(hard_fork_restart_slot),
+                        self.blockstore,
+                        &mut self.original_blockstore_root,
+                    )
+                    .unwrap_or_else(|err| {
+                        error!("Failed to reconcile blockstore with hard fork: {:?}", err);
+                        abort()
+                    });
                 }
 
                 post_process_restored_tower(
