@@ -4239,6 +4239,7 @@ dependencies = [
  "solana-runtime",
  "solana-sdk",
  "solana-streamer",
+ "solana-transaction-executor",
  "solana-transaction-status",
  "solana-version",
  "spl-token",
@@ -5751,6 +5752,17 @@ dependencies = [
  "spl-token",
  "tempfile",
  "thiserror",
+]
+
+[[package]]
+name = "solana-transaction-executor"
+version = "1.8.0"
+dependencies = [
+ "log 0.4.14",
+ "solana-client",
+ "solana-logger 1.8.0",
+ "solana-measure",
+ "solana-sdk",
 ]
 
 [[package]]
