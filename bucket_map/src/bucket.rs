@@ -33,11 +33,11 @@ impl<T: Clone + Copy> Bucket<T> {
         stats: Arc<BucketMapStats>,
     ) -> Self {
         let index = DataBucket::new(
-            drives.clone(),
+            Arc::clone(&drives),
             1,
             std::mem::size_of::<IndexEntry>() as u64,
             max_search,
-            stats.index.clone(),
+            Arc::clone(&stats.index),
         );
         Self {
             random: thread_rng().gen(),
@@ -296,12 +296,12 @@ impl<T: Clone + Copy> Bucket<T> {
                 //likelyhood of a re-index collision of 2^(max_search)^2
                 //1 in 2^32
                 let index = DataBucket::new_with_capacity(
-                    self.drives.clone(),
+                    Arc::clone(&self.drives),
                     1,
                     std::mem::size_of::<IndexEntry>() as u64,
                     self.index.capacity + i, // * 2,
                     self.index.max_search,
-                    self.stats.index.clone(),
+                    Arc::clone(&self.stats.index),
                 );
                 let random = thread_rng().gen();
                 let mut valid = true;
@@ -352,11 +352,11 @@ impl<T: Clone + Copy> Bucket<T> {
         if self.data.get(sz.0 as usize).is_none() {
             for i in self.data.len() as u64..(sz.0 + 1) {
                 self.data.push(DataBucket::new(
-                    self.drives.clone(),
+                    Arc::clone(&self.drives),
                     1 << i,
                     std::mem::size_of::<T>() as u64,
                     self.index.max_search,
-                    self.stats.data.clone(),
+                    Arc::clone(&self.stats.data),
                 ))
             }
         }

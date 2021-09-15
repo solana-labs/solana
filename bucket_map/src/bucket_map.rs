@@ -162,9 +162,9 @@ impl<T: Clone + Copy + Debug> BucketMap<T> {
         let mut bucket = self.buckets[ix].write().unwrap();
         if bucket.is_none() {
             *bucket = Some(Bucket::new(
-                self.drives.clone(),
+                Arc::clone(&self.drives),
                 self.max_search,
-                self.stats.clone(),
+                Arc::clone(&self.stats),
             ));
         }
         let bucket = bucket.as_mut().unwrap();
