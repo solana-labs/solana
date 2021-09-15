@@ -83,6 +83,10 @@ export class Message {
     );
   }
 
+  isAccountSigner(index: number): boolean {
+    return index < this.header.numRequiredSignatures;
+  }
+
   isAccountWritable(index: number): boolean {
     return (
       index <

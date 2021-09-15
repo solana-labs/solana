@@ -3469,12 +3469,7 @@ export class Connection {
     if (transactionOrMessage instanceof Transaction) {
       transaction = transactionOrMessage;
     } else {
-      transaction = Transaction.populate(
-        transactionOrMessage,
-        new Array(transactionOrMessage.header.numRequiredSignatures).fill(
-          DEFAULT_SIGNATURE,
-        ),
-      );
+      transaction = Transaction.populate(transactionOrMessage);
     }
 
     if (transaction.nonceInfo && signers) {

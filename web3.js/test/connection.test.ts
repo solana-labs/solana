@@ -2848,12 +2848,12 @@ describe('Connection', () => {
         ],
         header: {
           numReadonlySignedAccounts: 1,
-          numReadonlyUnsignedAccounts: 1,
+          numReadonlyUnsignedAccounts: 2,
           numRequiredSignatures: 1,
         },
         instructions: [
           {
-            accounts: [1],
+            accounts: [0, 1],
             data: bs58.encode(Buffer.alloc(5).fill(9)),
             programIdIndex: 2,
           },
