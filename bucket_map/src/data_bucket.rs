@@ -78,8 +78,7 @@ pub struct DataBucket {
     path: PathBuf,
     mmap: MmapMut,
     pub cell_size: u64,
-    //power of 2
-    pub capacity: u8,
+    pub capacity_pow2: u8,
     pub bytes: u64,
     pub used: AtomicU64,
     pub stats: Arc<BucketStats>,
@@ -103,21 +102,21 @@ impl DataBucket {
         drives: Arc<Vec<PathBuf>>,
         num_elems: u64,
         elem_size: u64,
-        capacity: u8,
+        capacity_pow2: u8,
         max_search: MaxSearch,
         mut stats: Arc<BucketStats>,
     ) -> Self {
         let cell_size = elem_size * num_elems + std::mem::size_of::<Header>() as u64;
-        let (mmap, path) = Self::new_map(&drives, cell_size as usize, capacity, &mut stats);
+        let (mmap, path) = Self::new_map(&drives, cell_size as usize, capacity_pow2, &mut stats);
         Self {
             path,
             mmap,
             drives,
             cell_size,
             used: AtomicU64::new(0),
-            capacity,
+            capacity_pow2,
             stats,
-            bytes: 1 << capacity,
+            bytes: 1 << capacity_pow2,
             max_search,
         }
     }
@@ -266,11 +265,11 @@ impl DataBucket {
     fn new_map(
         drives: &[PathBuf],
         cell_size: usize,
-        capacity: u8,
+        capacity_pow2: u8,
         stats: &mut Arc<BucketStats>,
     ) -> (MmapMut, PathBuf) {
         let mut m0 = Measure::start("");
-        let capacity = 1u64 << capacity;
+        let capacity = 1u64 << capacity_pow2;
         let r = thread_rng().gen_range(0, drives.len());
         let drive = &drives[r];
         let pos = format!("{}", thread_rng().gen_range(0, u128::MAX),);
@@ -322,7 +321,7 @@ impl DataBucket {
         let (new_map, new_file) = Self::new_map(
             &self.drives,
             self.cell_size as usize,
-            self.capacity + increment,
+            self.capacity_pow2 + increment,
             &mut self.stats,
         );
         (0..old_cap as usize).into_iter().for_each(|i| {
@@ -339,8 +338,8 @@ impl DataBucket {
         });
         self.mmap = new_map;
         self.path = new_file;
-        self.capacity += increment;
-        self.bytes = 1 << self.capacity;
+        self.capacity_pow2 += increment;
+        self.bytes = 1 << self.capacity_pow2;
         remove_file(old_file).unwrap();
         m.stop();
         let sz = self.bytes;

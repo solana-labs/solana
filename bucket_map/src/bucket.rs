@@ -169,12 +169,12 @@ impl<T: Clone + Copy> Bucket<T> {
             elem.key = *key;
             elem.ref_count = ref_count;
             elem.data_location = 0;
-            elem.create_bucket_capacity = 0;
+            elem.create_bucket_capacity_pow2 = 0;
             elem.num_slots = 0;
             //debug!(                "INDEX ALLOC {:?} {} {} {}",                key, ii, index.capacity, elem_uid            );
             return Ok(ii);
         }
-        Err(BucketMapError::IndexNoSpace(index.capacity))
+        Err(BucketMapError::IndexNoSpace(index.capacity_pow2))
     }
 
     pub fn addref(&mut self, key: &Pubkey) -> Option<RefCount> {
@@ -245,7 +245,7 @@ impl<T: Clone + Copy> Bucket<T> {
         } else {
             //need to move the allocation to a best fit spot
             let best_bucket = &self.data[best_fit_bucket as usize];
-            let cap_power = best_bucket.capacity;
+            let cap_power = best_bucket.capacity_pow2;
             let cap = best_bucket.num_cells();
             let pos = thread_rng().gen_range(0, cap);
             for i in pos..pos + self.index.max_search() {
@@ -257,7 +257,7 @@ impl<T: Clone + Copy> Bucket<T> {
                     }
                     // elem: &mut IndexEntry = self.index.get_mut(elem_ix);
                     elem.data_location = ix;
-                    elem.create_bucket_capacity = best_bucket.capacity;
+                    elem.create_bucket_capacity_pow2 = best_bucket.capacity_pow2;
                     elem.num_slots = data.len() as u64;
                     //debug!(                        "DATA ALLOC {:?} {} {} {}",                        key, elem.data_location, best_bucket.capacity, elem_uid                    );
                     if elem.num_slots > 0 {
@@ -287,7 +287,7 @@ impl<T: Clone + Copy> Bucket<T> {
     }
 
     pub fn grow_index(&mut self, sz: u8) {
-        if self.index.capacity == sz {
+        if self.index.capacity_pow2 == sz {
             let mut m = Measure::start("");
             //debug!("GROW_INDEX: {}", sz);
             let increment = 1;
@@ -299,7 +299,7 @@ impl<T: Clone + Copy> Bucket<T> {
                     Arc::clone(&self.drives),
                     1,
                     std::mem::size_of::<IndexEntry>() as u64,
-                    self.index.capacity + i, // * 2,
+                    self.index.capacity_pow2 + i, // * 2,
                     self.index.max_search,
                     Arc::clone(&self.stats.index),
                 );
@@ -335,7 +335,7 @@ impl<T: Clone + Copy> Bucket<T> {
                 }
             }
             m.stop();
-            let sz = 1 << self.index.capacity;
+            let sz = 1 << self.index.capacity_pow2;
             {
                 let mut max = self.stats.index.max_size.lock().unwrap();
                 *max = std::cmp::max(*max, sz);
@@ -360,7 +360,7 @@ impl<T: Clone + Copy> Bucket<T> {
                 ))
             }
         }
-        if self.data[sz.0 as usize].capacity == sz.1 {
+        if self.data[sz.0 as usize].capacity_pow2 == sz.1 {
             //debug!("GROW_DATA: {} {}", sz.0, sz.1);
             self.data[sz.0 as usize].grow();
         }
