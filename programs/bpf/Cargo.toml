@@ -1,7 +1,7 @@
 [package]
 name = "solana-bpf-programs"
 description = "Blockchain, Rebuilt for Scale"
-version = "1.6.25"
+version = "1.6.26"
 documentation = "https://docs.rs/solana"
 homepage = "https://solana.com/"
 readme = "README.md"
@@ -25,15 +25,15 @@ elf = "0.0.10"
 itertools = "0.10.0"
 miow = "0.2.2"
 net2 = "0.2.37"
-solana-bpf-loader-program = { path = "../bpf_loader", version = "=1.6.25" }
-solana-cli-output = { path = "../../cli-output", version = "=1.6.25" }
-solana-logger = { path = "../../logger", version = "=1.6.25" }
-solana-measure = { path = "../../measure", version = "=1.6.25" }
+solana-bpf-loader-program = { path = "../bpf_loader", version = "=1.6.26" }
+solana-cli-output = { path = "../../cli-output", version = "=1.6.26" }
+solana-logger = { path = "../../logger", version = "=1.6.26" }
+solana-measure = { path = "../../measure", version = "=1.6.26" }
 solana_rbpf = "=0.2.9"
-solana-runtime = { path = "../../runtime", version = "=1.6.25" }
-solana-sdk = { path = "../../sdk", version = "=1.6.25" }
-solana-transaction-status = { path = "../../transaction-status", version = "=1.6.25" }
-solana-account-decoder = { path = "../../account-decoder", version = "=1.6.25" }
+solana-runtime = { path = "../../runtime", version = "=1.6.26" }
+solana-sdk = { path = "../../sdk", version = "=1.6.26" }
+solana-transaction-status = { path = "../../transaction-status", version = "=1.6.26" }
+solana-account-decoder = { path = "../../account-decoder", version = "=1.6.26" }
 
 
 [[bench]]
