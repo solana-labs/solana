@@ -47,7 +47,6 @@ pub struct BucketMapStats {
 23  8,388,608
 24  16,777,216
 */
-// bytes = 2^DEFAULT_CAPACITY
 const DEFAULT_CAPACITY_POW2: u8 = 5;
 
 #[repr(C)]
@@ -79,7 +78,6 @@ pub struct DataBucket {
     mmap: MmapMut,
     pub cell_size: u64,
     pub capacity_pow2: u8,
-    pub bytes: u64,
     pub used: AtomicU64,
     pub stats: Arc<BucketStats>,
     pub max_search: MaxSearch,
@@ -116,7 +114,6 @@ impl DataBucket {
             used: AtomicU64::new(0),
             capacity_pow2,
             stats,
-            bytes: 1 << capacity_pow2,
             max_search,
         }
     }
@@ -339,10 +336,9 @@ impl DataBucket {
         self.mmap = new_map;
         self.path = new_file;
         self.capacity_pow2 += increment;
-        self.bytes = 1 << self.capacity_pow2;
         remove_file(old_file).unwrap();
         m.stop();
-        let sz = self.bytes;
+        let sz = 1 << self.capacity_pow2;
         {
             let mut max = self.stats.max_size.lock().unwrap();
             *max = std::cmp::max(*max, sz);
@@ -351,6 +347,6 @@ impl DataBucket {
         self.stats.resize_us.fetch_add(m.as_us(), Ordering::Relaxed);
     }
     pub fn num_cells(&self) -> u64 {
-        self.bytes
+        1 << self.capacity_pow2
     }
 }
