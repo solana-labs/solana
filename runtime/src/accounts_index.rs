@@ -745,7 +745,7 @@ impl<T: IndexValue> AccountsIndex<T> {
         let storage = AccountsIndexStorage::new(bins);
         let account_maps = (0..bins)
             .into_iter()
-            .map(|bin| RwLock::new(Arc::new(InMemAccountsIndex::new(&storage, bin))))
+            .map(|bin| RwLock::new(Arc::clone(&storage.in_mem[bin])))
             .collect::<Vec<_>>();
         (account_maps, bin_calculator, storage)
     }
