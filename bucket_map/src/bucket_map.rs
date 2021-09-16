@@ -147,11 +147,6 @@ impl<T: Clone + Copy + Debug> BucketMap<T> {
         Some(self.buckets[ix].read().unwrap().as_ref()?.keys())
     }
 
-    /// Get the values for bucket `ix`
-    pub fn values(&self, ix: usize) -> Option<Vec<Vec<T>>> {
-        Some(self.buckets[ix].read().unwrap().as_ref()?.values())
-    }
-
     /// Get the values for Pubkey `key`
     pub fn read_value(&self, key: &Pubkey) -> Option<(Vec<T>, RefCount)> {
         let ix = self.bucket_ix(key);

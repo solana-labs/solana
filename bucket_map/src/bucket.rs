@@ -89,22 +89,6 @@ impl<T: Clone + Copy> Bucket<T> {
         result
     }
 
-    pub fn values(&self) -> Vec<Vec<T>> {
-        let mut rv = vec![];
-        for i in 0..self.index.num_cells() {
-            if self.index.uid(i) == 0 {
-                continue;
-            }
-            let ix: &IndexEntry = self.index.get(i);
-            let val = ix.read_value(self);
-            if val.is_none() {
-                continue;
-            }
-            rv.push(val.unwrap().0.to_vec());
-        }
-        rv
-    }
-
     pub fn find_entry(&self, key: &Pubkey) -> Option<(&IndexEntry, u64)> {
         Self::bucket_find_entry(&self.index, key, self.random)
     }
