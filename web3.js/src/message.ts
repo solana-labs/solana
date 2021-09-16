@@ -65,11 +65,26 @@ export class Message {
   recentBlockhash: Blockhash;
   instructions: CompiledInstruction[];
 
+  private indexToProgramIds: Map<number, PublicKey> = new Map<
+    number,
+    PublicKey
+  >();
+
   constructor(args: MessageArgs) {
     this.header = args.header;
     this.accountKeys = args.accountKeys.map(account => new PublicKey(account));
     this.recentBlockhash = args.recentBlockhash;
     this.instructions = args.instructions;
+    this.instructions.forEach(ix =>
+      this.indexToProgramIds.set(
+        ix.programIdIndex,
+        this.accountKeys[ix.programIdIndex],
+      ),
+    );
+  }
+
+  isAccountSigner(index: number): boolean {
+    return index < this.header.numRequiredSignatures;
   }
 
   isAccountWritable(index: number): boolean {
@@ -81,6 +96,18 @@ export class Message {
         index <
           this.accountKeys.length - this.header.numReadonlyUnsignedAccounts)
     );
+  }
+
+  isProgramId(index: number): boolean {
+    return this.indexToProgramIds.has(index);
+  }
+
+  programIds(): PublicKey[] {
+    return [...this.indexToProgramIds.values()];
+  }
+
+  nonProgramIds(): PublicKey[] {
+    return this.accountKeys.filter((_, index) => !this.isProgramId(index));
   }
 
   serialize(): Buffer {

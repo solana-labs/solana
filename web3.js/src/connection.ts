@@ -439,15 +439,44 @@ const VersionResult = pick({
   'feature-set': optional(number()),
 });
 
+export type SimulatedTransactionAccountInfo = {
+  /** `true` if this account's data contains a loaded program */
+  executable: boolean;
+  /** Identifier of the program that owns the account */
+  owner: string;
+  /** Number of lamports assigned to the account */
+  lamports: number;
+  /** Optional data assigned to the account */
+  data: string[];
+  /** Optional rent epoch info for account */
+  rentEpoch?: number;
+};
+
 export type SimulatedTransactionResponse = {
   err: TransactionError | string | null;
   logs: Array<string> | null;
+  accounts?: SimulatedTransactionAccountInfo[] | null;
+  unitsConsumed?: number;
 };
 
 const SimulatedTransactionResponseStruct = jsonRpcResultAndContext(
   pick({
     err: nullable(union([pick({}), string()])),
     logs: nullable(array(string())),
+    accounts: optional(
+      nullable(
+        array(
+          pick({
+            executable: boolean(),
+            owner: string(),
+            lamports: number(),
+            data: array(string()),
+            rentEpoch: optional(number()),
+          }),
+        ),
+      ),
+    ),
+    unitsConsumed: optional(number()),
   }),
 );
 
@@ -1679,6 +1708,8 @@ export type AccountInfo<T> = {
   lamports: number;
   /** Optional data assigned to the account */
   data: T;
+  /** Optional rent epoch infor for account */
+  rentEpoch?: number;
 };
 
 /**
@@ -3430,9 +3461,17 @@ export class Connection {
    * Simulate a transaction
    */
   async simulateTransaction(
-    transaction: Transaction,
+    transactionOrMessage: Transaction | Message,
     signers?: Array<Signer>,
+    includeAccounts?: boolean | Array<PublicKey>,
   ): Promise<RpcResponseAndContext<SimulatedTransactionResponse>> {
+    let transaction;
+    if (transactionOrMessage instanceof Transaction) {
+      transaction = transactionOrMessage;
+    } else {
+      transaction = Transaction.populate(transactionOrMessage);
+    }
+
     if (transaction.nonceInfo && signers) {
       transaction.sign(...signers);
     } else {
@@ -3466,13 +3505,27 @@ export class Connection {
       }
     }
 
-    const signData = transaction.serializeMessage();
+    const message = transaction._compile();
+    const signData = message.serialize();
     const wireTransaction = transaction._serialize(signData);
     const encodedTransaction = wireTransaction.toString('base64');
     const config: any = {
       encoding: 'base64',
       commitment: this.commitment,
     };
+
+    if (includeAccounts) {
+      const addresses = (
+        Array.isArray(includeAccounts)
+          ? includeAccounts
+          : message.nonProgramIds()
+      ).map(key => key.toBase58());
+
+      config['accounts'] = {
+        encoding: 'base64',
+        addresses,
+      };
+    }
 
     if (signers) {
       config.sigVerify = true;
