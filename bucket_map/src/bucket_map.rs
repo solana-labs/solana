@@ -16,7 +16,7 @@ pub type MaxSearch = u8;
 pub type RefCount = u64;
 
 #[derive(Debug, Default, Clone)]
-pub struct BucketMapKeyValue<T> {
+pub struct BucketItem<T> {
     pub pubkey: Pubkey,
     pub ref_count: RefCount,
     pub slot_list: Vec<T>,
@@ -129,7 +129,7 @@ impl<T: Clone + Copy + Debug> BucketMap<T> {
             .unwrap_or_default()
     }
 
-    pub fn range<R>(&self, ix: usize, range: Option<&R>) -> Option<Vec<BucketMapKeyValue<T>>>
+    pub fn range<R>(&self, ix: usize, range: Option<&R>) -> Option<Vec<BucketItem<T>>>
     where
         R: RangeBounds<Pubkey>,
     {

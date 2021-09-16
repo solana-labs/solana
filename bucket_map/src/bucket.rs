@@ -1,4 +1,4 @@
-use crate::bucket_map::{BucketMapError, BucketMapKeyValue, MaxSearch, RefCount};
+use crate::bucket_map::{BucketItem, BucketMapError, MaxSearch, RefCount};
 use crate::data_bucket::{BucketMapStats, DataBucket};
 use crate::index_entry::IndexEntry;
 use rand::thread_rng;
@@ -65,7 +65,7 @@ impl<T: Clone + Copy> Bucket<T> {
         rv
     }
 
-    pub fn range<R>(&self, range: Option<&R>) -> Vec<BucketMapKeyValue<T>>
+    pub fn range<R>(&self, range: Option<&R>) -> Vec<BucketItem<T>>
     where
         R: RangeBounds<Pubkey>,
     {
@@ -79,7 +79,7 @@ impl<T: Clone + Copy> Bucket<T> {
             let key = ix.key;
             if range.map(|r| r.contains(&key)).unwrap_or(true) {
                 let val = ix.read_value(self);
-                result.push(BucketMapKeyValue {
+                result.push(BucketItem {
                     pubkey: key,
                     ref_count: ix.ref_count(),
                     slot_list: val.map(|(v, _ref_count)| v.to_vec()).unwrap_or_default(),
