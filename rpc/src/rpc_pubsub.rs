@@ -781,6 +781,12 @@ mod tests {
         )
         .unwrap();
 
+        // Make sure the subscription is processed before continuing.
+        let (rpc2, mut receiver2) = rpc_pubsub_service::test_connection(&rpc_subscriptions);
+        rpc2.slot_subscribe().unwrap();
+        rpc_subscriptions.notify_slot(1, 0, 0);
+        receiver2.recv();
+
         let tx = system_transaction::transfer(&alice, &from.pubkey(), 51, blockhash);
         process_transaction_and_notify(&bank_forks, &tx, &rpc_subscriptions, 1).unwrap();
 
@@ -795,7 +801,6 @@ mod tests {
         let message = Message::new(&ixs, Some(&from.pubkey()));
         let tx = Transaction::new(&[&from, &stake_account], message, blockhash);
         process_transaction_and_notify(&bank_forks, &tx, &rpc_subscriptions, 1).unwrap();
-        sleep(Duration::from_millis(400));
 
         // Test signature confirmation notification #1
         let account = bank_forks
@@ -891,6 +896,12 @@ mod tests {
         )
         .unwrap();
 
+        // Make sure the subscription is processed before continuing.
+        let (rpc2, mut receiver2) = rpc_pubsub_service::test_connection(&rpc_subscriptions);
+        rpc2.slot_subscribe().unwrap();
+        rpc_subscriptions.notify_slot(1, 0, 0);
+        receiver2.recv();
+
         let ixs = system_instruction::create_nonce_account(
             &alice.pubkey(),
             &nonce_account.pubkey(),
@@ -900,7 +911,6 @@ mod tests {
         let message = Message::new(&ixs, Some(&alice.pubkey()));
         let tx = Transaction::new(&[&alice, &nonce_account], message, blockhash);
         process_transaction_and_notify(&bank_forks, &tx, &rpc_subscriptions, 1).unwrap();
-        sleep(Duration::from_millis(400));
 
         // Test signature confirmation notification #1
         let account = bank_forks
