@@ -3927,10 +3927,12 @@ impl Bank {
     fn collect_rent_in_partition(&self, partition: Partition) -> usize {
         let subrange = Self::pubkey_range_from_partition(partition);
 
+        self.rc.accounts.hold_range_in_memory(&subrange, true);
+
         let accounts = self
             .rc
             .accounts
-            .load_to_collect_rent_eagerly(&self.ancestors, subrange);
+            .load_to_collect_rent_eagerly(&self.ancestors, subrange.clone());
         let account_count = accounts.len();
 
         // parallelize?
@@ -3954,6 +3956,8 @@ impl Bank {
         }
         self.collected_rent.fetch_add(total_rent, Relaxed);
         self.rewards.write().unwrap().append(&mut rent_debits.0);
+
+        self.rc.accounts.hold_range_in_memory(&subrange, false);
         account_count
     }
 
