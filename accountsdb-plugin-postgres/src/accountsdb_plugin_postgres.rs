@@ -86,7 +86,7 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
             Some(client) => {
                 let slot = slot as i64; // postgres only support i64
                 let lamports = account.account_meta.lamports as i64;
-                let result = client.lock().unwrap().execute(
+                let result = client.get_mut().unwrap().execute(
                     "INSERT INTO account (pubkey, slot, owner, lamports) VALUES ($1 $2 $3 $4) \
                     ON CONFLICT (pubkey) DO UPDATE SET slot=$2, owner=$3, lamports=$4",
                     &[
