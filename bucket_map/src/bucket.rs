@@ -169,7 +169,7 @@ impl<T: Clone + Copy> Bucket<T> {
             elem.key = *key;
             elem.ref_count = ref_count;
             elem.data_location = 0;
-            elem.create_bucket_capacity_pow2 = 0;
+            elem.bucket_capacity_when_created_pow2 = 0;
             elem.num_slots = 0;
             //debug!(                "INDEX ALLOC {:?} {} {} {}",                key, ii, index.capacity, elem_uid            );
             return Ok(ii);
@@ -257,7 +257,7 @@ impl<T: Clone + Copy> Bucket<T> {
                     }
                     // elem: &mut IndexEntry = self.index.get_mut(elem_ix);
                     elem.data_location = ix;
-                    elem.create_bucket_capacity_pow2 = best_bucket.capacity_pow2;
+                    elem.bucket_capacity_when_created_pow2 = best_bucket.capacity_pow2;
                     elem.num_slots = data.len() as u64;
                     //debug!(                        "DATA ALLOC {:?} {} {} {}",                        key, elem.data_location, best_bucket.capacity, elem_uid                    );
                     if elem.num_slots > 0 {

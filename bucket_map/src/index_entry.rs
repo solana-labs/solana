@@ -16,7 +16,7 @@ pub struct IndexEntry {
     pub ref_count: RefCount, // can this be smaller? Do we ever need more than 4B refcounts?
     pub data_location: u64, // smaller? since these are variably sized, this could get tricky. well, actually accountinfo is not variable sized...
     // if the bucket doubled, the index can be recomputed using create_bucket_capacity_pow2
-    pub create_bucket_capacity_pow2: u8, // see data_location
+    pub bucket_capacity_when_created_pow2: u8, // see data_location
     pub num_slots: Slot, // can this be smaller? epoch size should ~ be the max len. this is the num elements in the slot list
 }
 
@@ -36,7 +36,7 @@ impl IndexEntry {
     // This function maps the original data location into an index in the current data bucket.
     // This is coupled with how we resize data buckets.
     pub fn data_loc(&self, bucket: &DataBucket) -> u64 {
-        self.data_location << (bucket.capacity_pow2 - self.create_bucket_capacity_pow2)
+        self.data_location << (bucket.capacity_pow2 - self.bucket_capacity_when_created_pow2)
     }
 
     pub fn read_value<'a, T>(&self, bucket: &'a Bucket<T>) -> Option<(&'a [T], RefCount)> {
