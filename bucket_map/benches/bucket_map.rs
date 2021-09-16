@@ -1,5 +1,23 @@
 #![feature(test)]
 
+macro_rules! DEFINE_NxM_BENCH {
+    ($i:ident, $n:literal, $m:literal) => {
+        mod $i {
+            use super::*;
+
+            #[bench]
+            fn bench_insert_baseline_hashmap(bencher: &mut Bencher) {
+                do_bench_insert_baseline_hashmap(bencher, $n, $m);
+            }
+
+            #[bench]
+            fn bench_insert_bucket_map(bencher: &mut Bencher) {
+                do_bench_insert_bucket_map(bencher, $n, $m);
+            }
+        }
+    };
+}
+
 extern crate test;
 use rayon::prelude::*;
 use solana_bucket_map::bucket_map::{BucketMap, BucketMapConfig};
@@ -10,59 +28,48 @@ use test::Bencher;
 
 type IndexValue = u64;
 
-#[bench]
-fn bucket_map_bench_hashmap_baseline(bencher: &mut Bencher) {
-    let mut index = HashMap::new();
-    bencher.iter(|| {
-        let key = Pubkey::new_unique();
-        index.insert(key, vec![(0, IndexValue::default())]);
-    });
-}
+DEFINE_NxM_BENCH!(dim_01x02, 1, 2);
+DEFINE_NxM_BENCH!(dim_02x04, 2, 4);
+DEFINE_NxM_BENCH!(dim_04x08, 4, 8);
+DEFINE_NxM_BENCH!(dim_08x16, 8, 16);
+DEFINE_NxM_BENCH!(dim_16x32, 16, 32);
+DEFINE_NxM_BENCH!(dim_32x64, 32, 64);
 
-#[bench]
-fn bucket_map_bench_insert_1(bencher: &mut Bencher) {
-    let index = BucketMap::new(BucketMapConfig::new(1 << 1));
-    bencher.iter(|| {
-        let key = Pubkey::new_unique();
-        index.update(&key, |_| Some((vec![(0, IndexValue::default())], 0)));
-    });
-}
-
-#[bench]
-fn bucket_map_bench_insert_16x32_baseline(bencher: &mut Bencher) {
+/// Benchmark insert with Hashmap as baseline for N keys and M updates each
+fn do_bench_insert_baseline_hashmap(bencher: &mut Bencher, n: usize, m: usize) {
     let index = RwLock::new(HashMap::new());
-    (0..16).into_iter().into_par_iter().for_each(|_| {
+    (0..n).into_iter().into_par_iter().for_each(|i| {
         let key = Pubkey::new_unique();
         index
             .write()
             .unwrap()
-            .insert(key, vec![(0, IndexValue::default())]);
+            .insert(key, vec![(i, IndexValue::default())]);
     });
     bencher.iter(|| {
-        (0..16).into_iter().into_par_iter().for_each(|_| {
-            for _ in 0..32 {
+        (0..n).into_iter().into_par_iter().for_each(|_| {
+            for j in 0..m {
                 let key = Pubkey::new_unique();
                 index
                     .write()
                     .unwrap()
-                    .insert(key, vec![(0, IndexValue::default())]);
+                    .insert(key, vec![(j, IndexValue::default())]);
             }
         })
     });
 }
 
-#[bench]
-fn bucket_map_bench_insert_16x32(bencher: &mut Bencher) {
-    let index = BucketMap::new(BucketMapConfig::new(1 << 4));
-    (0..16).into_iter().into_par_iter().for_each(|_| {
+/// Benchmark insert with BucketMap for N keys/buckets and M updates each
+fn do_bench_insert_bucket_map(bencher: &mut Bencher, n: usize, m: usize) {
+    let index = BucketMap::new(BucketMapConfig::new(n));
+    (0..n).into_iter().into_par_iter().for_each(|i| {
         let key = Pubkey::new_unique();
-        index.update(&key, |_| Some((vec![(0, IndexValue::default())], 0)));
+        index.update(&key, |_| Some((vec![(i, IndexValue::default())], 0)));
     });
     bencher.iter(|| {
-        (0..16).into_iter().into_par_iter().for_each(|_| {
-            for _ in 0..32 {
+        (0..n).into_iter().into_par_iter().for_each(|_| {
+            for j in 0..m {
                 let key = Pubkey::new_unique();
-                index.update(&key, |_| Some((vec![(0, IndexValue::default())], 0)));
+                index.update(&key, |_| Some((vec![(j, IndexValue::default())], 0)));
             }
         })
     });
