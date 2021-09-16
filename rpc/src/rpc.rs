@@ -350,13 +350,12 @@ impl JsonRpcRequestProcessor {
         pubkeys: Vec<Pubkey>,
         config: Option<RpcAccountInfoConfig>,
     ) -> Result<RpcResponse<Vec<Option<UiAccount>>>> {
-        let mut accounts: Vec<Option<UiAccount>> = vec![];
-
         let config = config.unwrap_or_default();
         let bank = self.bank(config.commitment);
         let encoding = config.encoding.unwrap_or(UiAccountEncoding::Base64);
         check_slice_and_encoding(&encoding, config.data_slice.is_some())?;
 
+        let mut accounts: Vec<Option<UiAccount>> = Vec::with_capacity(pubkeys.len());
         for pubkey in pubkeys {
             let response_account =
                 get_encoded_account(&bank, &pubkey, encoding, config.data_slice)?;
@@ -399,7 +398,7 @@ impl JsonRpcRequestProcessor {
             if program_id == &spl_token_id_v2_0() && encoding == UiAccountEncoding::JsonParsed {
                 get_parsed_token_accounts(bank.clone(), keyed_accounts.into_iter()).collect()
             } else {
-                let mut encoded_accounts = vec![];
+                let mut encoded_accounts = Vec::with_capacity(keyed_accounts.len());
                 for (pubkey, account) in keyed_accounts {
                     encoded_accounts.push(RpcKeyedAccount {
                         pubkey: pubkey.to_string(),
@@ -2826,7 +2825,7 @@ pub mod rpc_accounts {
                     max_multiple_accounts
                 )));
             }
-            let mut pubkeys: Vec<Pubkey> = vec![];
+            let mut pubkeys: Vec<Pubkey> = Vec::with_capacity(pubkey_strs.len());
             for pubkey_str in pubkey_strs {
                 pubkeys.push(verify_pubkey(&pubkey_str)?);
             }
