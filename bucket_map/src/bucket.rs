@@ -161,6 +161,18 @@ impl<T: Clone + Copy> Bucket<T> {
         Err(BucketMapError::IndexNoSpace(index.capacity_pow2))
     }
 
+    pub fn addref(&mut self, key: &Pubkey) -> Option<RefCount> {
+        let (elem, _) = self.find_entry_mut(key)?;
+        elem.ref_count += 1;
+        Some(elem.ref_count)
+    }
+
+    pub fn unref(&mut self, key: &Pubkey) -> Option<RefCount> {
+        let (elem, _) = self.find_entry_mut(key)?;
+        elem.ref_count -= 1;
+        Some(elem.ref_count)
+    }
+
     fn create_key(&self, key: &Pubkey, ref_count: u64) -> Result<u64, BucketMapError> {
         Self::bucket_create_key(
             &self.index,
