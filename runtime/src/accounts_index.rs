@@ -121,6 +121,14 @@ pub struct AccountMapEntryMeta {
     pub dirty: AtomicBool,
 }
 
+impl AccountMapEntryMeta {
+    pub fn new_dirty() -> Self {
+        AccountMapEntryMeta {
+            dirty: AtomicBool::new(true),
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct AccountMapEntryInner<T> {
     ref_count: AtomicU64,
@@ -236,7 +244,7 @@ impl<T: IndexValue> WriteAccountMapEntry<T> {
         Arc::new(AccountMapEntryInner {
             ref_count: AtomicU64::new(ref_count),
             slot_list: RwLock::new(vec![(slot, account_info)]),
-            ..AccountMapEntryInner::default()
+            meta: AccountMapEntryMeta::new_dirty(),
         })
     }
 
