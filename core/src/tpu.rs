@@ -4,6 +4,7 @@
 use crate::{
     banking_stage::BankingStage,
     broadcast_stage::{BroadcastStage, BroadcastStageType, RetransmitSlotsReceiver},
+    cluster_info_entries_listener::ClusterInfoEntriesListener,
     cluster_info_vote_listener::{
         ClusterInfoVoteListener, GossipDuplicateConfirmedSlotsSender, GossipVerifiedVoteHashSender,
         VerifiedVoteSender, VoteTracker,
@@ -13,6 +14,7 @@ use crate::{
     fetch_stage::FetchStage,
     sigverify::TransactionSigVerifier,
     sigverify_stage::SigVerifyStage,
+    window_service::DuplicateSlotSender,
 };
 use crossbeam_channel::unbounded;
 use solana_gossip::cluster_info::ClusterInfo;
@@ -43,6 +45,7 @@ pub struct Tpu {
     sigverify_stage: SigVerifyStage,
     banking_stage: BankingStage,
     cluster_info_vote_listener: ClusterInfoVoteListener,
+    cluster_info_entries_listener: ClusterInfoEntriesListener,
     broadcast_stage: BroadcastStage,
 }
 
@@ -72,6 +75,7 @@ impl Tpu {
         tpu_coalesce_ms: u64,
         cluster_confirmed_slot_sender: GossipDuplicateConfirmedSlotsSender,
         cost_model: &Arc<RwLock<CostModel>>,
+        duplicate_slot_sender: DuplicateSlotSender,
     ) -> Self {
         let (packet_sender, packet_receiver) = channel();
         let fetch_stage = FetchStage::new_with_sender(
@@ -105,6 +109,13 @@ impl Tpu {
             bank_notification_sender,
             cluster_confirmed_slot_sender,
         );
+        let cluster_info_entries_listener = ClusterInfoEntriesListener::new(
+            exit,
+            cluster_info.clone(),
+            poh_recorder,
+            blockstore.clone(),
+            duplicate_slot_sender,
+        );
 
         let cost_tracker = Arc::new(RwLock::new(CostTracker::new(cost_model.clone())));
         let banking_stage = BankingStage::new(
@@ -133,6 +144,7 @@ impl Tpu {
             sigverify_stage,
             banking_stage,
             cluster_info_vote_listener,
+            cluster_info_entries_listener,
             broadcast_stage,
         }
     }
@@ -142,6 +154,7 @@ impl Tpu {
             self.fetch_stage.join(),
             self.sigverify_stage.join(),
             self.cluster_info_vote_listener.join(),
+            self.cluster_info_entries_listener.join(),
             self.banking_stage.join(),
         ];
         let broadcast_result = self.broadcast_stage.join();

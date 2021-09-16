@@ -23,6 +23,7 @@ use crate::{
     sigverify_stage::SigVerifyStage,
     tower_storage::TowerStorage,
     voting_service::VotingService,
+    window_service::{DuplicateSlotReceiver, DuplicateSlotSender},
 };
 use crossbeam_channel::unbounded;
 use solana_gossip::cluster_info::ClusterInfo;
@@ -137,6 +138,8 @@ impl Tvu {
         cost_model: &Arc<RwLock<CostModel>>,
         accounts_package_channel: (AccountsPackageSender, AccountsPackageReceiver),
         last_full_snapshot_slot: Option<Slot>,
+        duplicate_slot_sender: DuplicateSlotSender,
+        duplicate_slot_receiver: DuplicateSlotReceiver,
     ) -> Self {
         let Sockets {
             repair: repair_socket,
@@ -171,7 +174,6 @@ impl Tvu {
         let (duplicate_slots_reset_sender, duplicate_slots_reset_receiver) = unbounded();
         let compaction_interval = tvu_config.rocksdb_compaction_interval;
         let max_compaction_jitter = tvu_config.rocksdb_max_compaction_jitter;
-        let (duplicate_slots_sender, duplicate_slots_receiver) = unbounded();
         let (cluster_slots_update_sender, cluster_slots_update_receiver) = unbounded();
         let (ancestor_hashes_replay_update_sender, ancestor_hashes_replay_update_receiver) =
             unbounded();
@@ -195,7 +197,7 @@ impl Tvu {
             completed_data_sets_sender,
             max_slots.clone(),
             Some(rpc_subscriptions.clone()),
-            duplicate_slots_sender,
+            duplicate_slot_sender,
             ancestor_hashes_replay_update_receiver,
         );
 
@@ -309,7 +311,7 @@ impl Tvu {
             bank_forks.clone(),
             cluster_info.clone(),
             ledger_signal_receiver,
-            duplicate_slots_receiver,
+            duplicate_slot_receiver,
             poh_recorder.clone(),
             tower,
             vote_tracker,
@@ -437,6 +439,7 @@ pub mod tests {
         let bank_forks = Arc::new(RwLock::new(bank_forks));
         let tower = Tower::default();
         let accounts_package_channel = channel();
+        let (duplicate_slot_sender, duplicate_slot_receiver) = unbounded();
         let tvu = Tvu::new(
             &vote_keypair.pubkey(),
             Arc::new(RwLock::new(vec![Arc::new(vote_keypair)])),
@@ -482,6 +485,8 @@ pub mod tests {
             &Arc::new(RwLock::new(CostModel::default())),
             accounts_package_channel,
             None,
+            duplicate_slot_sender,
+            duplicate_slot_receiver,
         );
         exit.store(true, Ordering::Relaxed);
         tvu.join().unwrap();

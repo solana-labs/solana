@@ -41,7 +41,7 @@ use {
     },
 };
 
-type DuplicateSlotSender = CrossbeamSender<Slot>;
+pub(crate) type DuplicateSlotSender = CrossbeamSender<Slot>;
 pub(crate) type DuplicateSlotReceiver = CrossbeamReceiver<Slot>;
 
 #[derive(Default)]

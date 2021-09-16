@@ -31,11 +31,11 @@ impl<F> LeaderScheduleFn for F where F: FnOnce(Slot) -> Option<Pubkey> {}
 pub struct DuplicateShred {
     pub(crate) from: Pubkey,
     pub(crate) wallclock: u64,
-    pub(crate) slot: Slot,
+    pub slot: Slot,
     shred_index: u32,
     shred_type: ShredType,
     // Serialized DuplicateSlotProof split into chunks.
-    num_chunks: u8,
+    pub num_chunks: u8,
     chunk_index: u8,
     #[serde(with = "serde_bytes")]
     chunk: Vec<u8>,
