@@ -1,7 +1,7 @@
 //! BucketMap is a mostly contention free concurrent map backed by MmapMut
 
 use crate::bucket::Bucket;
-use crate::data_bucket::BucketMapStats;
+use crate::bucket_stats::BucketMapStats;
 use solana_sdk::pubkey::Pubkey;
 use std::convert::TryInto;
 use std::fmt::Debug;

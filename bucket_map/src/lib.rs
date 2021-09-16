@@ -3,5 +3,6 @@
 #![allow(clippy::mut_from_ref)]
 mod bucket;
 pub mod bucket_map;
+mod bucket_stats;
 mod bucket_storage;
 mod index_entry;
