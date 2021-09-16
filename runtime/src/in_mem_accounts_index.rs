@@ -153,6 +153,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         if addref {
             current.add_un_ref(true);
         }
+        new_value.set_dirty(true);
     }
 
     // modifies slot_list
