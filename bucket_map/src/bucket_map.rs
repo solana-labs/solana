@@ -196,20 +196,6 @@ impl<T: Clone + Copy + Debug> BucketMap<T> {
             0
         }
     }
-
-    /// Increment the refcount for Pubkey `key`
-    pub fn addref(&self, key: &Pubkey) -> Option<RefCount> {
-        let ix = self.bucket_ix(key);
-        let mut bucket = self.buckets[ix].write().unwrap();
-        bucket.as_mut()?.addref(key)
-    }
-
-    /// Decrement the refcount for Pubkey `key`
-    pub fn unref(&self, key: &Pubkey) -> Option<RefCount> {
-        let ix = self.bucket_ix(key);
-        let mut bucket = self.buckets[ix].write().unwrap();
-        bucket.as_mut()?.unref(key)
-    }
 }
 
 /// Look at the first 8 bytes of the input and reinterpret them as a u64
