@@ -3,7 +3,7 @@ authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 edition = "2018"
 name = "solana-ledger-tool"
 description = "Blockchain, Rebuilt for Scale"
-version = "1.7.12"
+version = "1.7.13"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
@@ -23,18 +23,18 @@ regex = "1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.56"
 serde_yaml = "0.8.13"
-solana-clap-utils = { path = "../clap-utils", version = "=1.7.12" }
-solana-cli-output = { path = "../cli-output", version = "=1.7.12" }
-solana-ledger = { path = "../ledger", version = "=1.7.12" }
-solana-logger = { path = "../logger", version = "=1.7.12" }
-solana-measure = { path = "../measure", version = "=1.7.12" }
-solana-runtime = { path = "../runtime", version = "=1.7.12" }
-solana-sdk = { path = "../sdk", version = "=1.7.12" }
-solana-stake-program = { path = "../programs/stake", version = "=1.7.12" }
-solana-storage-bigtable = { path = "../storage-bigtable", version = "=1.7.12" }
-solana-transaction-status = { path = "../transaction-status", version = "=1.7.12" }
-solana-version = { path = "../version", version = "=1.7.12" }
-solana-vote-program = { path = "../programs/vote", version = "=1.7.12" }
+solana-clap-utils = { path = "../clap-utils", version = "=1.7.13" }
+solana-cli-output = { path = "../cli-output", version = "=1.7.13" }
+solana-ledger = { path = "../ledger", version = "=1.7.13" }
+solana-logger = { path = "../logger", version = "=1.7.13" }
+solana-measure = { path = "../measure", version = "=1.7.13" }
+solana-runtime = { path = "../runtime", version = "=1.7.13" }
+solana-sdk = { path = "../sdk", version = "=1.7.13" }
+solana-stake-program = { path = "../programs/stake", version = "=1.7.13" }
+solana-storage-bigtable = { path = "../storage-bigtable", version = "=1.7.13" }
+solana-transaction-status = { path = "../transaction-status", version = "=1.7.13" }
+solana-version = { path = "../version", version = "=1.7.13" }
+solana-vote-program = { path = "../programs/vote", version = "=1.7.13" }
 tempfile = "3.1.0"
 tokio = { version = "1", features = ["full"] }
 

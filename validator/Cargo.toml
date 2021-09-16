@@ -3,7 +3,7 @@ authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 edition = "2018"
 name = "solana-validator"
 description = "Blockchain, Rebuilt for Scale"
-version = "1.7.12"
+version = "1.7.13"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
@@ -28,26 +28,26 @@ log = "0.4.11"
 num_cpus = "1.13.0"
 rand = "0.7.0"
 serde = "1.0.112"
-solana-clap-utils = { path = "../clap-utils", version = "=1.7.12" }
-solana-cli-config = { path = "../cli-config", version = "=1.7.12" }
-solana-client = { path = "../client", version = "=1.7.12" }
-solana-core = { path = "../core", version = "=1.7.12" }
-solana-download-utils = { path = "../download-utils", version = "=1.7.12" }
-solana-faucet = { path = "../faucet", version = "=1.7.12" }
-solana-genesis-utils = { path = "../genesis-utils", version = "=1.7.12" }
-solana-gossip = { path = "../gossip", version = "=1.7.12" }
-solana-ledger = { path = "../ledger", version = "=1.7.12" }
-solana-logger = { path = "../logger", version = "=1.7.12" }
-solana-metrics = { path = "../metrics", version = "=1.7.12" }
-solana-net-utils = { path = "../net-utils", version = "=1.7.12" }
-solana-perf = { path = "../perf", version = "=1.7.12" }
-solana-poh = { path = "../poh", version = "=1.7.12" }
-solana-rpc = { path = "../rpc", version = "=1.7.12" }
-solana-runtime = { path = "../runtime", version = "=1.7.12" }
-solana-sdk = { path = "../sdk", version = "=1.7.12" }
-solana-streamer = { path = "../streamer", version = "=1.7.12" }
-solana-version = { path = "../version", version = "=1.7.12" }
-solana-vote-program = { path = "../programs/vote", version = "=1.7.12" }
+solana-clap-utils = { path = "../clap-utils", version = "=1.7.13" }
+solana-cli-config = { path = "../cli-config", version = "=1.7.13" }
+solana-client = { path = "../client", version = "=1.7.13" }
+solana-core = { path = "../core", version = "=1.7.13" }
+solana-download-utils = { path = "../download-utils", version = "=1.7.13" }
+solana-faucet = { path = "../faucet", version = "=1.7.13" }
+solana-genesis-utils = { path = "../genesis-utils", version = "=1.7.13" }
+solana-gossip = { path = "../gossip", version = "=1.7.13" }
+solana-ledger = { path = "../ledger", version = "=1.7.13" }
+solana-logger = { path = "../logger", version = "=1.7.13" }
+solana-metrics = { path = "../metrics", version = "=1.7.13" }
+solana-net-utils = { path = "../net-utils", version = "=1.7.13" }
+solana-perf = { path = "../perf", version = "=1.7.13" }
+solana-poh = { path = "../poh", version = "=1.7.13" }
+solana-rpc = { path = "../rpc", version = "=1.7.13" }
+solana-runtime = { path = "../runtime", version = "=1.7.13" }
+solana-sdk = { path = "../sdk", version = "=1.7.13" }
+solana-streamer = { path = "../streamer", version = "=1.7.13" }
+solana-version = { path = "../version", version = "=1.7.13" }
+solana-vote-program = { path = "../programs/vote", version = "=1.7.13" }
 symlink = "0.1.0"
 
 [target."cfg(unix)".dependencies]
