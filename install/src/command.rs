@@ -436,7 +436,7 @@ fn add_to_path(new_path: &str) -> bool {
 
 #[cfg(unix)]
 fn add_to_path(new_path: &str) -> bool {
-    let shell_export_string = format!(r#"export PATH="{}:$PATH""#, new_path);
+    let shell_export_string = format!("\nexport PATH=\"{}:$PATH\"", new_path);
     let mut modified_rcfiles = false;
 
     // Look for sh, bash, and zsh rc files
