@@ -376,17 +376,19 @@ impl JsonRpcRequestProcessor {
             } else {
                 keyed_accounts
                     .into_iter()
-                    .map(|(pubkey, account)| RpcKeyedAccount {
-                        pubkey: pubkey.to_string(),
-                        account: UiAccount::encode(
-                            &pubkey,
-                            &account,
-                            encoding,
-                            None,
-                            data_slice_config,
-                        ),
+                    .map(|(pubkey, account)| {
+                        Ok(RpcKeyedAccount {
+                            pubkey: pubkey.to_string(),
+                            account: UiAccount::encode(
+                                &pubkey,
+                                &account,
+                                encoding,
+                                None,
+                                data_slice_config,
+                            ),
+                        })
                     })
-                    .collect()
+                    .collect::<Result<Vec<_>>>()?
             };
         Ok(result).map(|result| match with_context {
             true => OptionalContext::Context(new_response(&bank, result)),
