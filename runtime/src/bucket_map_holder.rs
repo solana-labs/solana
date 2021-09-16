@@ -48,7 +48,7 @@ impl<T: IndexValue> BucketMapHolder<T> {
     }
 
     // shims for the moment for disk buckets
-    pub fn keys(&self, ix: usize) -> Option<Vec<Pubkey>> {
+    pub fn keys(&self, _ix: usize) -> Option<Vec<Pubkey>> {
         let map = self.disk.read().unwrap();
         let mut r = vec![];
         for (k, _v) in map.iter() {
@@ -59,7 +59,7 @@ impl<T: IndexValue> BucketMapHolder<T> {
 
     pub fn range<R>(
         &self,
-        ix: usize,
+        _ix: usize,
         range: Option<&R>,
     ) -> Option<Vec<BucketMapKeyValue<(solana_sdk::clock::Slot, T)>>>
     where
