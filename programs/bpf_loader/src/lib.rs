@@ -1724,7 +1724,6 @@ mod tests {
         bank.store_account(&buffer_address, &buffer_account);
         bank.store_account(&program_keypair.pubkey(), &AccountSharedData::default());
         bank.store_account(&programdata_address, &AccountSharedData::default());
-        let before = bank.get_balance(&payer_keypair.pubkey());
         let message = Message::new(
             &bpf_loader_upgradeable::deploy_with_max_program_len(
                 &payer_keypair.pubkey(),
@@ -1743,8 +1742,7 @@ mod tests {
                 message
             )
             .is_ok());
-        let balance = bank.get_balance(&payer_keypair.pubkey());
-        assert_eq!(bank.get_balance(&payer_address), 0);
+        assert_eq!(bank.get_balance(&payer_keypair.pubkey()), 0);
         assert_eq!(bank.get_balance(&buffer_address), 0);
         assert_eq!(None, bank.get_account(&buffer_address));
         let post_program_account = bank.get_account(&program_keypair.pubkey()).unwrap();
