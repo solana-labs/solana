@@ -2521,6 +2521,9 @@ impl ReplayStage {
         subscriptions: &Arc<RpcSubscriptions>,
         vote_only_bank: bool,
     ) -> Bank {
+        if vote_only_bank {
+            inc_new_counter_info!("replay_stage-new_vote_only_bank", 1);
+        }
         subscriptions.notify_slot(slot, parent.slot(), root_slot);
         Bank::new_from_parent_with_vote_only(parent, leader, slot, vote_only_bank)
     }
