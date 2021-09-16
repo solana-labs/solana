@@ -118,9 +118,12 @@ struct LeaderTpuCache {
     first_slot: Slot,
     leaders: Vec<Pubkey>,
     leader_tpu_map: HashMap<Pubkey, SocketAddr>,
+    slots_in_epoch: Slot,
+    last_epoch_info_slot: Slot,
 }
 
 impl LeaderTpuCache {
+<<<<<<< HEAD
     fn new(rpc_client: &RpcClient, first_slot: Slot) -> Self {
         let leaders = Self::fetch_slot_leaders(rpc_client, first_slot).unwrap_or_default();
         let leader_tpu_map = Self::fetch_cluster_tpu_sockets(rpc_client).unwrap_or_default();
@@ -129,6 +132,19 @@ impl LeaderTpuCache {
             leaders,
             leader_tpu_map,
         }
+=======
+    fn new(rpc_client: &RpcClient, first_slot: Slot) -> Result<Self> {
+        let slots_in_epoch = rpc_client.get_epoch_info()?.slots_in_epoch;
+        let leaders = Self::fetch_slot_leaders(rpc_client, first_slot, slots_in_epoch)?;
+        let leader_tpu_map = Self::fetch_cluster_tpu_sockets(rpc_client)?;
+        Ok(Self {
+            first_slot,
+            leaders,
+            leader_tpu_map,
+            slots_in_epoch,
+            last_epoch_info_slot: first_slot,
+        })
+>>>>>>> c8f76b8bd (Fix tpu service fanout (#19944))
     }
 
     // Last slot that has a cached leader pubkey
@@ -174,8 +190,13 @@ impl LeaderTpuCache {
             .collect())
     }
 
-    fn fetch_slot_leaders(rpc_client: &RpcClient, start_slot: Slot) -> Result<Vec<Pubkey>> {
-        Ok(rpc_client.get_slot_leaders(start_slot, 2 * MAX_FANOUT_SLOTS)?)
+    fn fetch_slot_leaders(
+        rpc_client: &RpcClient,
+        start_slot: Slot,
+        slots_in_epoch: Slot,
+    ) -> Result<Vec<Pubkey>> {
+        let fanout = (2 * MAX_FANOUT_SLOTS).min(slots_in_epoch);
+        Ok(rpc_client.get_slot_leaders(start_slot, fanout)?)
     }
 }
 
@@ -331,6 +352,7 @@ impl LeaderTpuService {
                 }
             }
 
+<<<<<<< HEAD
             // Sleep a few slots before checking if leader cache needs to be refreshed again
             std::thread::sleep(Duration::from_millis(sleep_ms));
 
@@ -351,6 +373,43 @@ impl LeaderTpuService {
                 } else {
                     sleep_ms = 100;
                     continue;
+=======
+            let estimated_current_slot = recent_slots.estimated_current_slot();
+            let (last_slot, last_epoch_info_slot, mut slots_in_epoch) = {
+                let leader_tpu_cache = leader_tpu_cache.read().unwrap();
+                (
+                    leader_tpu_cache.last_slot(),
+                    leader_tpu_cache.last_epoch_info_slot,
+                    leader_tpu_cache.slots_in_epoch,
+                )
+            };
+            if estimated_current_slot >= last_epoch_info_slot.saturating_sub(slots_in_epoch) {
+                if let Ok(epoch_info) = rpc_client.get_epoch_info() {
+                    slots_in_epoch = epoch_info.slots_in_epoch;
+                    let mut leader_tpu_cache = leader_tpu_cache.write().unwrap();
+                    leader_tpu_cache.slots_in_epoch = slots_in_epoch;
+                    leader_tpu_cache.last_epoch_info_slot = estimated_current_slot;
+                }
+            }
+            if estimated_current_slot >= last_slot.saturating_sub(MAX_FANOUT_SLOTS) {
+                match LeaderTpuCache::fetch_slot_leaders(
+                    &rpc_client,
+                    estimated_current_slot,
+                    slots_in_epoch,
+                ) {
+                    Ok(slot_leaders) => {
+                        let mut leader_tpu_cache = leader_tpu_cache.write().unwrap();
+                        leader_tpu_cache.first_slot = estimated_current_slot;
+                        leader_tpu_cache.leaders = slot_leaders;
+                    }
+                    Err(err) => {
+                        warn!(
+                            "Failed to fetch slot leaders (current estimated slot: {}): {}",
+                            estimated_current_slot, err
+                        );
+                        sleep_ms = 100;
+                    }
+>>>>>>> c8f76b8bd (Fix tpu service fanout (#19944))
                 }
             }
 
