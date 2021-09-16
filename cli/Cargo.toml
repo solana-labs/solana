@@ -24,7 +24,7 @@ pretty-hex = "0.2.1"
 reqwest = { version = "0.11.4", default-features = false, features = ["blocking", "rustls-tls", "json"] }
 serde = "1.0.130"
 serde_derive = "1.0.103"
-serde_json = "1.0.67"
+serde_json = "1.0.68"
 solana-account-decoder = { path = "../account-decoder", version = "=1.8.0" }
 solana-bpf-loader-program = { path = "../programs/bpf_loader", version = "=1.8.0" }
 solana-clap-utils = { path = "../clap-utils", version = "=1.8.0" }

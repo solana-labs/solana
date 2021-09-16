@@ -66,7 +66,7 @@ jsonrpc-core = "18.0.0"
 jsonrpc-core-client = { version = "18.0.0", features = ["ipc", "ws"] }
 matches = "0.1.9"
 reqwest = { version = "0.11.4", default-features = false, features = ["blocking", "rustls-tls", "json"] }
-serde_json = "1.0.67"
+serde_json = "1.0.68"
 serial_test = "0.5.1"
 solana-program-runtime = { path = "../program-runtime", version = "=1.8.0" }
 solana-stake-program = { path = "../programs/stake", version = "=1.8.0" }
