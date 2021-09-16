@@ -15,6 +15,7 @@ use std::{
     path::Path,
     process::exit,
     result::Result,
+    str::FromStr,
     sync::{atomic::AtomicBool, Arc},
 };
 
@@ -39,6 +40,15 @@ async fn upload(
         Arc::new(AtomicBool::new(false)),
     )
     .await
+}
+
+async fn delete(slots: Vec<Slot>, dry_run: bool) -> Result<(), Box<dyn std::error::Error>> {
+    let read_only = dry_run;
+    let bigtable = solana_storage_bigtable::LedgerStorage::new(read_only, None)
+        .await
+        .map_err(|err| format!("Failed to connect to storage: {:?}", err))?;
+
+    solana_ledger::bigtable_delete::delete_confirmed_blocks(bigtable, slots, dry_run).await
 }
 
 async fn first_available_block() -> Result<(), Box<dyn std::error::Error>> {
@@ -230,7 +240,7 @@ impl BigTableSubCommand for App<'_, '_> {
                             Arg::with_name("starting_slot")
                                 .long("starting-slot")
                                 .validator(is_slot)
-                                .value_name("SLOT")
+                                .value_name("START_SLOT")
                                 .takes_value(true)
                                 .index(1)
                                 .help(
@@ -241,7 +251,7 @@ impl BigTableSubCommand for App<'_, '_> {
                             Arg::with_name("ending_slot")
                                 .long("ending-slot")
                                 .validator(is_slot)
-                                .value_name("SLOT")
+                                .value_name("END_SLOT")
                                 .takes_value(true)
                                 .index(2)
                                 .help("Stop uploading at this slot [default: last available slot]"),
@@ -263,6 +273,31 @@ impl BigTableSubCommand for App<'_, '_> {
                                 ),
                         ),
                 )
+                .subcommand(
+                    SubCommand::with_name("delete")
+                        .about("Delete uploaded ledger information from BigTable")
+                        .arg(
+                                Arg::with_name("slots")
+                                    .long("slots")
+                                    .value_name("SLOTS")
+                                    .takes_value(true)
+                                    .required(true)
+                                    .index(1)
+                                    .help(
+                                        "List of comma separated slots to delete",
+                                    ),
+                                )
+                            .arg(
+                                Arg::with_name("dry_run")
+                                    .long("dry-run")
+                                    .possible_values(&["true", "false"])
+                                    .takes_value(true)
+                                    .default_value("true")
+                                    .help(
+                                        "Enable to show stats about what ledger data will be deleted\
+                                        in a real deletion."),
+                            ),
+                        )
                 .subcommand(
                     SubCommand::with_name("first-available-block")
                         .about("Get the first available block in the storage"),
@@ -403,6 +438,24 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
                 allow_missing_metadata,
                 force_reupload,
             ))
+        }
+        ("delete", Some(arg_matches)) => {
+            let comma_separated_slots = value_t_or_exit!(arg_matches, "slots", String);
+            let slots = comma_separated_slots
+                .split(',')
+                .map(Slot::from_str)
+                .collect::<Result<Vec<Slot>, _>>()
+                .unwrap_or_else(|err| {
+                    eprintln!(
+                        "Error: Invalid --slots <SLOTS> argument: {:?}.\n\n{}",
+                        err,
+                        arg_matches.usage()
+                    );
+                    exit(1);
+                });
+
+            let dry_run = value_t_or_exit!(arg_matches, "dry_run", bool);
+            runtime.block_on(delete(slots, dry_run))
         }
         ("first-available-block", Some(_arg_matches)) => runtime.block_on(first_available_block()),
         ("block", Some(arg_matches)) => {
