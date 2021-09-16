@@ -370,7 +370,6 @@ impl JsonRpcRequestProcessor {
                 self.get_filtered_program_accounts(&bank, program_id, filters)?
             }
         };
-<<<<<<< HEAD:core/src/rpc.rs
         let result =
             if program_id == &spl_token_id_v2_0() && encoding == UiAccountEncoding::JsonParsed {
                 get_parsed_token_accounts(bank.clone(), keyed_accounts.into_iter()).collect()
@@ -389,23 +388,6 @@ impl JsonRpcRequestProcessor {
                     })
                     .collect()
             };
-=======
-        let result = if program_id == &spl_token_id_v2_0()
-            && encoding == UiAccountEncoding::JsonParsed
-        {
-            get_parsed_token_accounts(bank.clone(), keyed_accounts.into_iter()).collect()
-        } else {
-            keyed_accounts
-                .into_iter()
-                .map(|(pubkey, account)| {
-                    Ok(RpcKeyedAccount {
-                        pubkey: pubkey.to_string(),
-                        account: encode_account(&account, &pubkey, encoding, data_slice_config)?,
-                    })
-                })
-                .collect::<Result<Vec<_>>>()?
-        };
->>>>>>> f1bbf1d8b (rpc: performance fix for getProgramAccounts (#19941)):rpc/src/rpc.rs
         Ok(result).map(|result| match with_context {
             true => OptionalContext::Context(new_response(&bank, result)),
             false => OptionalContext::NoContext(result),
