@@ -11,7 +11,7 @@ edition = "2018"
 [dependencies]
 clap = "3.0.0-beta.2"
 serde = "1.0.130"
-serde_json = "1.0.67"
+serde_json = "1.0.68"
 solana-bpf-loader-program = { path = "../programs/bpf_loader", version = "=1.8.0" }
 solana-logger = { path = "../logger", version = "=1.8.0" }
 solana-sdk = { path = "../sdk", version = "=1.8.0" }
