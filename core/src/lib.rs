@@ -55,6 +55,7 @@ pub mod snapshot_packager_service;
 pub mod test_validator;
 pub mod tower_storage;
 pub mod tpu;
+pub mod transaction_priority_stage;
 pub mod tree_diff;
 pub mod tvu;
 pub mod unfrozen_gossip_verified_vote_hashes;
