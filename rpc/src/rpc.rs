@@ -355,12 +355,10 @@ impl JsonRpcRequestProcessor {
         let encoding = config.encoding.unwrap_or(UiAccountEncoding::Base64);
         check_slice_and_encoding(&encoding, config.data_slice.is_some())?;
 
-        let mut accounts: Vec<Option<UiAccount>> = Vec::with_capacity(pubkeys.len());
-        for pubkey in pubkeys {
-            let response_account =
-                get_encoded_account(&bank, &pubkey, encoding, config.data_slice)?;
-            accounts.push(response_account)
-        }
+        let accounts = pubkeys
+            .into_iter()
+            .map(|pubkey| get_encoded_account(&bank, &pubkey, encoding, config.data_slice))
+            .collect::<Result<Vec<_>>>()?;
         Ok(new_response(&bank, accounts))
     }
 
@@ -394,19 +392,21 @@ impl JsonRpcRequestProcessor {
                 self.get_filtered_program_accounts(&bank, program_id, filters)?
             }
         };
-        let result =
-            if program_id == &spl_token_id_v2_0() && encoding == UiAccountEncoding::JsonParsed {
-                get_parsed_token_accounts(bank.clone(), keyed_accounts.into_iter()).collect()
-            } else {
-                let mut encoded_accounts = Vec::with_capacity(keyed_accounts.len());
-                for (pubkey, account) in keyed_accounts {
-                    encoded_accounts.push(RpcKeyedAccount {
+        let result = if program_id == &spl_token_id_v2_0()
+            && encoding == UiAccountEncoding::JsonParsed
+        {
+            get_parsed_token_accounts(bank.clone(), keyed_accounts.into_iter()).collect()
+        } else {
+            keyed_accounts
+                .into_iter()
+                .map(|(pubkey, account)| {
+                    Ok(RpcKeyedAccount {
                         pubkey: pubkey.to_string(),
                         account: encode_account(&account, &pubkey, encoding, data_slice_config)?,
-                    });
-                }
-                encoded_accounts
-            };
+                    })
+                })
+                .collect::<Result<Vec<_>>>()?
+        };
         Ok(result).map(|result| match with_context {
             true => OptionalContext::Context(new_response(&bank, result)),
             false => OptionalContext::NoContext(result),
@@ -2825,10 +2825,10 @@ pub mod rpc_accounts {
                     max_multiple_accounts
                 )));
             }
-            let mut pubkeys: Vec<Pubkey> = Vec::with_capacity(pubkey_strs.len());
-            for pubkey_str in pubkey_strs {
-                pubkeys.push(verify_pubkey(&pubkey_str)?);
-            }
+            let pubkeys = pubkey_strs
+                .into_iter()
+                .map(|pubkey_str| verify_pubkey(&pubkey_str))
+                .collect::<Result<Vec<_>>>()?;
             meta.get_multiple_accounts(pubkeys, config)
         }
 
