@@ -129,11 +129,17 @@ impl<T: Clone + Copy + Debug> BucketMap<T> {
             .unwrap_or_default()
     }
 
-    pub fn range<R>(&self, ix: usize, range: Option<&R>) -> Option<Vec<BucketItem<T>>>
+    pub fn items_in_range<R>(&self, ix: usize, range: Option<&R>) -> Option<Vec<BucketItem<T>>>
     where
         R: RangeBounds<Pubkey>,
     {
-        Some(self.buckets[ix].read().unwrap().as_ref()?.range(range))
+        Some(
+            self.buckets[ix]
+                .read()
+                .unwrap()
+                .as_ref()?
+                .items_in_range(range),
+        )
     }
 
     /// Get the Pubkeys for bucket `ix`
@@ -404,7 +410,7 @@ mod tests {
                     for bin in 0..map.num_buckets() {
                         r.append(
                             &mut map
-                                .range(bin, None::<&std::ops::RangeInclusive<Pubkey>>)
+                                .items_in_range(bin, None::<&std::ops::RangeInclusive<Pubkey>>)
                                 .unwrap_or_default(),
                         );
                     }
