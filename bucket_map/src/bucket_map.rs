@@ -136,8 +136,12 @@ impl<T: Clone + Copy + Debug> BucketMap<T> {
     }
 
     /// Get the Pubkeys for bucket `ix`
-    pub fn keys(&self, ix: usize) -> Option<Vec<Pubkey>> {
-        Some(self.buckets[ix].read().unwrap().as_ref()?.keys())
+    pub fn keys(&self, ix: usize) -> Vec<Pubkey> {
+        self.buckets[ix]
+            .read()
+            .unwrap()
+            .as_ref()
+            .map_or_else(Vec::default, |bucket| bucket.keys())
     }
 
     /// Get the values for Pubkey `key`
