@@ -1228,6 +1228,13 @@ impl ReplayStage {
             );
 
             let root_distance = poh_slot - root_slot;
+            const MAX_ROOT_DISTANCE_FOR_VOTE_ONLY: Slot = 500;
+            let vote_only_bank = if root_distance > MAX_ROOT_DISTANCE_FOR_VOTE_ONLY {
+                datapoint_info!("vote-only-bank", ("slot", poh_slot, i64));
+                true
+            } else {
+                false
+            };
 
             let tpu_bank = Self::new_bank_from_parent_with_notify(
                 &parent,
@@ -1235,7 +1242,7 @@ impl ReplayStage {
                 root_slot,
                 my_pubkey,
                 rpc_subscriptions,
-                root_distance > 500,
+                vote_only_bank,
             );
 
             let tpu_bank = bank_forks.write().unwrap().insert(tpu_bank);
