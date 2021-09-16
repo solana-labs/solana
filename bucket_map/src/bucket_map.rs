@@ -2,6 +2,7 @@
 
 use crate::bucket::Bucket;
 use crate::bucket_stats::BucketMapStats;
+use crate::{MaxSearch, RefCount};
 use solana_sdk::pubkey::Pubkey;
 use std::convert::TryInto;
 use std::fmt::Debug;
@@ -11,9 +12,6 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::RwLock;
 use tempfile::TempDir;
-
-pub type MaxSearch = u8;
-pub type RefCount = u64;
 
 #[derive(Debug, Default, Clone)]
 pub struct BucketItem<T> {

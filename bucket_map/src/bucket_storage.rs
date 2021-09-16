@@ -1,4 +1,4 @@
-use crate::bucket_map::MaxSearch;
+use crate::MaxSearch;
 use crate::bucket_stats::BucketStats;
 use memmap2::MmapMut;
 use rand::{thread_rng, Rng};

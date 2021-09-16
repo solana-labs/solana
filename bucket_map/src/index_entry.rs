@@ -1,6 +1,6 @@
 use crate::bucket::Bucket;
-use crate::bucket_map::RefCount;
 use crate::bucket_storage::BucketStorage;
+use crate::RefCount;
 use solana_sdk::clock::Slot;
 use solana_sdk::pubkey::Pubkey;
 use std::collections::hash_map::DefaultHasher;

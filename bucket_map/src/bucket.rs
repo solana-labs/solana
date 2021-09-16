@@ -1,7 +1,8 @@
-use crate::bucket_map::{BucketItem, BucketMapError, MaxSearch, RefCount};
+use crate::bucket_map::{BucketItem, BucketMapError};
 use crate::bucket_stats::BucketMapStats;
 use crate::bucket_storage::BucketStorage;
 use crate::index_entry::IndexEntry;
+use crate::{MaxSearch, RefCount};
 use rand::thread_rng;
 use rand::Rng;
 use solana_measure::measure::Measure;
