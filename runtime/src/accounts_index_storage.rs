@@ -1,5 +1,6 @@
 use crate::accounts_index::IndexValue;
 use crate::bucket_map_holder::BucketMapHolder;
+use crate::in_mem_accounts_index::InMemAccountsIndex;
 use crate::waitable_condvar::WaitableCondvar;
 use std::fmt::Debug;
 use std::{
@@ -22,6 +23,7 @@ pub struct AccountsIndexStorage<T: IndexValue> {
 
     // eventually the backing storage
     storage: Arc<BucketMapHolder<T>>,
+    pub in_mem: Vec<Arc<InMemAccountsIndex<T>>>,
 }
 
 impl<T: IndexValue> Debug for AccountsIndexStorage<T> {
@@ -43,6 +45,12 @@ impl<T: IndexValue> Drop for AccountsIndexStorage<T> {
 impl<T: IndexValue> AccountsIndexStorage<T> {
     pub fn new(bins: usize) -> AccountsIndexStorage<T> {
         let storage = Arc::new(BucketMapHolder::new(bins));
+
+        let in_mem = (0..bins)
+            .into_iter()
+            .map(|bin| Arc::new(InMemAccountsIndex::new(&storage, bin)))
+            .collect();
+
         let storage_ = storage.clone();
         let exit = Arc::new(AtomicBool::default());
         let exit_ = exit.clone();
@@ -62,6 +70,7 @@ impl<T: IndexValue> AccountsIndexStorage<T> {
             wait,
             handle,
             storage,
+            in_mem,
         }
     }
 
