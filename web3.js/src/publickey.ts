@@ -12,7 +12,10 @@ import {toBuffer} from './util/to-buffer';
  */
 export const MAX_SEED_LENGTH = 32;
 
-type PublicKeyInitData =
+/**
+ * Value to be converted into public key
+ */
+export type PublicKeyInitData =
   | number
   | string
   | Buffer
@@ -20,7 +23,10 @@ type PublicKeyInitData =
   | Array<number>
   | PublicKeyData;
 
-type PublicKeyData = {
+/**
+ * JSON object representation of PublicKey class
+ */
+export type PublicKeyData = {
   /** @internal */
   _bn: BN;
 };

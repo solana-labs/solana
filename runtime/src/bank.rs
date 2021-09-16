@@ -2339,6 +2339,7 @@ impl Bank {
     // Should not be called outside of startup, will race with
     // concurrent cleaning logic in AccountsBackgroundService
     pub fn exhaustively_free_unused_resource(&self, last_full_snapshot_slot: Option<Slot>) {
+        const IS_STARTUP: bool = true; // this is only called at startup, and we want to use more threads
         let mut flush = Measure::start("flush");
         // Flush all the rooted accounts. Must be called after `squash()`,
         // so that AccountsDb knows what the roots are.
@@ -2350,11 +2351,10 @@ impl Bank {
         // accounts that were included in the bank delta hash when the bank was frozen,
         // and if we clean them here, any newly created snapshot's hash for this bank
         // may not match the frozen hash.
-        self.clean_accounts(true, false, last_full_snapshot_slot);
+        self.clean_accounts(true, IS_STARTUP, last_full_snapshot_slot);
         clean.stop();
 
         let mut shrink = Measure::start("shrink");
-        const IS_STARTUP: bool = true; // this is only called at startup, and we want to use more threads
         self.shrink_all_slots(IS_STARTUP, last_full_snapshot_slot);
         shrink.stop();
 
@@ -5401,6 +5401,20 @@ impl Bank {
         self.feature_set = Arc::new(feature_set);
     }
 
+    pub fn fill_bank_with_ticks(&self) {
+        let parent_distance = if self.slot() == 0 {
+            1
+        } else {
+            self.slot() - self.parent_slot()
+        };
+        for _ in 0..parent_distance {
+            let last_blockhash = self.last_blockhash();
+            while self.last_blockhash() == last_blockhash {
+                self.register_tick(&Hash::new_unique())
+            }
+        }
+    }
+
     // This is called from snapshot restore AND for each epoch boundary
     // The entire code path herein must be idempotent
     fn apply_feature_activations(
@@ -5976,16 +5990,16 @@ pub(crate) mod tests {
             cluster_type: ClusterType::MainnetBeta,
             ..GenesisConfig::default()
         }));
-        let sysvar_and_native_proram_delta0 = 11;
+        let sysvar_and_native_program_delta0 = 11;
         assert_eq!(
             bank0.capitalization(),
-            42 * 42 + sysvar_and_native_proram_delta0
+            42 * 42 + sysvar_and_native_program_delta0
         );
         let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
-        let sysvar_and_native_proram_delta1 = 2;
+        let sysvar_and_native_program_delta1 = 2;
         assert_eq!(
             bank1.capitalization(),
-            42 * 42 + sysvar_and_native_proram_delta0 + sysvar_and_native_proram_delta1,
+            42 * 42 + sysvar_and_native_program_delta0 + sysvar_and_native_program_delta1,
         );
     }
 
@@ -6582,10 +6596,10 @@ pub(crate) mod tests {
         let current_capitalization = bank.capitalization.load(Relaxed);
 
         // only slot history is newly created
-        let sysvar_and_native_proram_delta =
+        let sysvar_and_native_program_delta =
             min_rent_excempt_balance_for_sysvars(&bank, &[sysvar::slot_history::id()]);
         assert_eq!(
-            previous_capitalization - (current_capitalization - sysvar_and_native_proram_delta),
+            previous_capitalization - (current_capitalization - sysvar_and_native_program_delta),
             burned_portion
         );
 
@@ -7735,9 +7749,9 @@ pub(crate) mod tests {
         assert_ne!(bank1.capitalization(), bank0.capitalization());
 
         // verify the inflation is represented in validator_points *
-        let sysvar_and_native_proram_delta1 = 2;
+        let sysvar_and_native_program_delta1 = 2;
         let paid_rewards =
-            bank1.capitalization() - bank0.capitalization() - sysvar_and_native_proram_delta1;
+            bank1.capitalization() - bank0.capitalization() - sysvar_and_native_program_delta1;
 
         let rewards = bank1
             .get_account(&sysvar::rewards::id())
@@ -7804,10 +7818,10 @@ pub(crate) mod tests {
         // not being eagerly-collected for exact rewards calculation
         bank.restore_old_behavior_for_fragile_tests();
 
-        let sysvar_and_native_proram_delta = 11;
+        let sysvar_and_native_program_delta = 11;
         assert_eq!(
             bank.capitalization(),
-            42 * 1_000_000_000 + sysvar_and_native_proram_delta
+            42 * 1_000_000_000 + sysvar_and_native_program_delta
         );
         assert!(bank.rewards.read().unwrap().is_empty());
 
@@ -8255,9 +8269,9 @@ pub(crate) mod tests {
         ); // Leader collects fee after the bank is frozen
 
         // verify capitalization
-        let sysvar_and_native_proram_delta = 1;
+        let sysvar_and_native_program_delta = 1;
         assert_eq!(
-            capitalization - expected_fee_burned + sysvar_and_native_proram_delta,
+            capitalization - expected_fee_burned + sysvar_and_native_program_delta,
             bank.capitalization()
         );
 
@@ -11863,9 +11877,9 @@ pub(crate) mod tests {
 
         // assert that everything gets in order....
         assert!(bank1.get_account(&reward_pubkey).is_none());
-        let sysvar_and_native_proram_delta = 1;
+        let sysvar_and_native_program_delta = 1;
         assert_eq!(
-            bank0.capitalization() + 1 + 1_000_000_000 + sysvar_and_native_proram_delta,
+            bank0.capitalization() + 1 + 1_000_000_000 + sysvar_and_native_program_delta,
             bank1.capitalization()
         );
         assert_eq!(bank1.capitalization(), bank1.calculate_capitalization(true));

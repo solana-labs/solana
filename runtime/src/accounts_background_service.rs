@@ -217,6 +217,12 @@ impl SnapshotRequestHandler {
                     }
                 }
                 snapshot_time.stop();
+                info!("Took bank snapshot. snapshot type: {:?}, slot: {}, accounts hash: {}, bank hash: {}",
+                      snapshot_type,
+                      snapshot_root_bank.slot(),
+                      snapshot_root_bank.get_accounts_hash(),
+                      snapshot_root_bank.hash(),
+                  );
 
                 // Cleanup outdated snapshots
                 let mut purge_old_snapshots_time = Measure::start("purge_old_snapshots_time");

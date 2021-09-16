@@ -4,7 +4,7 @@ use solana_sdk::{
     account::{AccountSharedData, ReadableAccount, WritableAccount},
     account_utils::StateMut,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-    feature_set::demote_program_write_locks,
+    feature_set::{demote_program_write_locks, fix_write_privs},
     ic_logger_msg, ic_msg,
     instruction::{CompiledInstruction, Instruction, InstructionError},
     keyed_account::{keyed_account_at_index, KeyedAccount},
@@ -474,38 +474,64 @@ impl InstructionProcessor {
         ) = {
             let invoke_context = invoke_context.borrow();
 
-            // Translate and verify caller's data
-            let keyed_accounts = invoke_context.get_keyed_accounts()?;
-            let keyed_accounts = keyed_account_indices
+            let caller_keyed_accounts = invoke_context.get_keyed_accounts()?;
+            let callee_keyed_accounts = keyed_account_indices
                 .iter()
-                .map(|index| keyed_account_at_index(keyed_accounts, *index))
+                .map(|index| keyed_account_at_index(caller_keyed_accounts, *index))
                 .collect::<Result<Vec<&KeyedAccount>, InstructionError>>()?;
-            let (message, callee_program_id, _) =
-                Self::create_message(&instruction, &keyed_accounts, signers, &invoke_context)?;
-            let keyed_accounts = invoke_context.get_keyed_accounts()?;
-            let mut caller_write_privileges = keyed_account_indices
-                .iter()
-                .map(|index| keyed_accounts[*index].is_writable())
-                .collect::<Vec<bool>>();
-            caller_write_privileges.insert(0, false);
-            let mut accounts = vec![];
-            let mut keyed_account_indices_reordered = vec![];
-            let keyed_accounts = invoke_context.get_keyed_accounts()?;
-            'root: for account_key in message.account_keys.iter() {
-                for keyed_account_index in keyed_account_indices {
-                    let keyed_account = &keyed_accounts[*keyed_account_index];
-                    if account_key == keyed_account.unsigned_key() {
-                        accounts.push((*account_key, Rc::new(keyed_account.account.clone())));
-                        keyed_account_indices_reordered.push(*keyed_account_index);
-                        continue 'root;
+            let (message, callee_program_id, _) = Self::create_message(
+                &instruction,
+                &callee_keyed_accounts,
+                signers,
+                &invoke_context,
+            )?;
+            let mut keyed_account_indices_reordered =
+                Vec::with_capacity(message.account_keys.len());
+            let mut accounts = Vec::with_capacity(message.account_keys.len());
+            let mut caller_write_privileges = Vec::with_capacity(message.account_keys.len());
+
+            // Translate and verify caller's data
+            if invoke_context.is_feature_active(&fix_write_privs::id()) {
+                'root: for account_key in message.account_keys.iter() {
+                    for keyed_account_index in keyed_account_indices {
+                        let keyed_account = &caller_keyed_accounts[*keyed_account_index];
+                        if account_key == keyed_account.unsigned_key() {
+                            accounts.push((*account_key, Rc::new(keyed_account.account.clone())));
+                            caller_write_privileges.push(keyed_account.is_writable());
+                            keyed_account_indices_reordered.push(*keyed_account_index);
+                            continue 'root;
+                        }
                     }
+                    ic_msg!(
+                        invoke_context,
+                        "Instruction references an unknown account {}",
+                        account_key
+                    );
+                    return Err(InstructionError::MissingAccount);
                 }
-                ic_msg!(
-                    invoke_context,
-                    "Instruction references an unknown account {}",
-                    account_key
-                );
-                return Err(InstructionError::MissingAccount);
+            } else {
+                let keyed_accounts = invoke_context.get_keyed_accounts()?;
+                for index in keyed_account_indices.iter() {
+                    caller_write_privileges.push(keyed_accounts[*index].is_writable());
+                }
+                caller_write_privileges.insert(0, false);
+                let keyed_accounts = invoke_context.get_keyed_accounts()?;
+                'root2: for account_key in message.account_keys.iter() {
+                    for keyed_account_index in keyed_account_indices {
+                        let keyed_account = &keyed_accounts[*keyed_account_index];
+                        if account_key == keyed_account.unsigned_key() {
+                            accounts.push((*account_key, Rc::new(keyed_account.account.clone())));
+                            keyed_account_indices_reordered.push(*keyed_account_index);
+                            continue 'root2;
+                        }
+                    }
+                    ic_msg!(
+                        invoke_context,
+                        "Instruction references an unknown account {}",
+                        account_key
+                    );
+                    return Err(InstructionError::MissingAccount);
+                }
             }
 
             // Process instruction

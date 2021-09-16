@@ -1,5 +1,7 @@
+use crate::accounts_index::IndexValue;
 use crate::bucket_map_holder::BucketMapHolder;
 use crate::waitable_condvar::WaitableCondvar;
+use std::fmt::Debug;
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -12,19 +14,23 @@ use std::{
 // Also manages the lifetime of the background processing threads.
 //  When this instance is dropped, it will drop the bucket map and cleanup
 //  and it will stop all the background threads and join them.
-
-#[derive(Debug, Default)]
-pub struct AccountsIndexStorage {
+pub struct AccountsIndexStorage<T: IndexValue> {
     // for managing the bg threads
     exit: Arc<AtomicBool>,
     wait: Arc<WaitableCondvar>,
     handle: Option<JoinHandle<()>>,
 
     // eventually the backing storage
-    storage: Arc<BucketMapHolder>,
+    storage: Arc<BucketMapHolder<T>>,
 }
 
-impl Drop for AccountsIndexStorage {
+impl<T: IndexValue> Debug for AccountsIndexStorage<T> {
+    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Ok(())
+    }
+}
+
+impl<T: IndexValue> Drop for AccountsIndexStorage<T> {
     fn drop(&mut self) {
         self.exit.store(true, Ordering::Relaxed);
         self.wait.notify_all();
@@ -34,9 +40,9 @@ impl Drop for AccountsIndexStorage {
     }
 }
 
-impl AccountsIndexStorage {
-    pub fn new() -> AccountsIndexStorage {
-        let storage = Arc::new(BucketMapHolder::new());
+impl<T: IndexValue> AccountsIndexStorage<T> {
+    pub fn new(bins: usize) -> AccountsIndexStorage<T> {
+        let storage = Arc::new(BucketMapHolder::new(bins));
         let storage_ = storage.clone();
         let exit = Arc::new(AtomicBool::default());
         let exit_ = exit.clone();
@@ -59,7 +65,7 @@ impl AccountsIndexStorage {
         }
     }
 
-    pub fn storage(&self) -> &Arc<BucketMapHolder> {
+    pub fn storage(&self) -> &Arc<BucketMapHolder<T>> {
         &self.storage
     }
 }

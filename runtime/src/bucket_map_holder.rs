@@ -1,3 +1,4 @@
+use crate::accounts_index::IndexValue;
 use crate::bucket_map_holder_stats::BucketMapHolderStats;
 use crate::waitable_condvar::WaitableCondvar;
 use std::fmt::Debug;
@@ -6,15 +7,22 @@ use std::sync::Arc;
 use std::time::Duration;
 
 // will eventually hold the bucket map
-#[derive(Debug, Default)]
-pub struct BucketMapHolder {
+pub struct BucketMapHolder<T: IndexValue> {
     pub stats: BucketMapHolderStats,
+    _phantom: std::marker::PhantomData<T>,
 }
 
-impl BucketMapHolder {
-    pub fn new() -> Self {
+impl<T: IndexValue> Debug for BucketMapHolder<T> {
+    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Ok(())
+    }
+}
+
+impl<T: IndexValue> BucketMapHolder<T> {
+    pub fn new(_bins: usize) -> Self {
         Self {
             stats: BucketMapHolderStats::default(),
+            _phantom: std::marker::PhantomData::<T>::default(),
         }
     }
 

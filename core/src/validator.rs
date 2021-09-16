@@ -504,7 +504,7 @@ impl Validator {
             PohRecorder::new_with_clear_signal(
                 bank.tick_height(),
                 bank.last_blockhash(),
-                bank.slot(),
+                bank.clone(),
                 leader_schedule_cache.next_leader_slot(
                     &id,
                     bank.slot(),
@@ -1472,6 +1472,10 @@ fn wait_for_supermajority(
         let gossip_stake_percent = get_stake_percent_in_gossip(bank, cluster_info, i % 10 == 0);
 
         if gossip_stake_percent >= WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT {
+            info!(
+                "Supermajority reached, {}% active stake detected, starting up now.",
+                gossip_stake_percent,
+            );
             break;
         }
         // The normal RPC health checks don't apply as the node is waiting, so feign health to
@@ -1613,21 +1617,22 @@ fn get_stake_percent_in_gossip(bank: &Bank, cluster_info: &ClusterInfo, log: boo
         }
     }
 
+    let online_stake_percentage = (online_stake as f64 / total_activated_stake as f64) * 100.;
     if log {
         info!(
-            "{}% of active stake visible in gossip",
-            online_stake * 100 / total_activated_stake
+            "{:.3}% of active stake visible in gossip",
+            online_stake_percentage
         );
 
         if !wrong_shred_nodes.is_empty() {
             info!(
-                "{}% of active stake has the wrong shred version in gossip",
-                wrong_shred_stake * 100 / total_activated_stake,
+                "{:.3}% of active stake has the wrong shred version in gossip",
+                (wrong_shred_stake as f64 / total_activated_stake as f64) * 100.,
             );
             for (stake, identity) in wrong_shred_nodes {
                 info!(
-                    "    {}% - {}",
-                    stake * 100 / total_activated_stake,
+                    "    {:.3}% - {}",
+                    (stake as f64 / total_activated_stake as f64) * 100.,
                     identity
                 );
             }
@@ -1635,20 +1640,20 @@ fn get_stake_percent_in_gossip(bank: &Bank, cluster_info: &ClusterInfo, log: boo
 
         if !offline_nodes.is_empty() {
             info!(
-                "{}% of active stake is not visible in gossip",
-                offline_stake * 100 / total_activated_stake
+                "{:.3}% of active stake is not visible in gossip",
+                (offline_stake as f64 / total_activated_stake as f64) * 100.
             );
             for (stake, identity) in offline_nodes {
                 info!(
-                    "    {}% - {}",
-                    stake * 100 / total_activated_stake,
+                    "    {:.3}% - {}",
+                    (stake as f64 / total_activated_stake as f64) * 100.,
                     identity
                 );
             }
         }
     }
 
-    online_stake * 100 / total_activated_stake
+    online_stake_percentage as u64
 }
 
 // Cleanup anything that looks like an accounts append-vec
