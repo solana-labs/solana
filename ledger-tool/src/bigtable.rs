@@ -1,5 +1,7 @@
 /// The `bigtable` subcommand
-use clap::{value_t, value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand};
+use clap::{
+    value_t, value_t_or_exit, values_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand,
+};
 use solana_clap_utils::{
     input_parsers::pubkey_of,
     input_validators::{is_slot, is_valid_pubkey},
@@ -39,6 +41,15 @@ async fn upload(
         Arc::new(AtomicBool::new(false)),
     )
     .await
+}
+
+async fn delete_slots(slots: Vec<Slot>, dry_run: bool) -> Result<(), Box<dyn std::error::Error>> {
+    let read_only = dry_run;
+    let bigtable = solana_storage_bigtable::LedgerStorage::new(read_only, None)
+        .await
+        .map_err(|err| format!("Failed to connect to storage: {:?}", err))?;
+
+    solana_ledger::bigtable_delete::delete_confirmed_blocks(bigtable, slots, dry_run).await
 }
 
 async fn first_available_block() -> Result<(), Box<dyn std::error::Error>> {
@@ -230,7 +241,7 @@ impl BigTableSubCommand for App<'_, '_> {
                             Arg::with_name("starting_slot")
                                 .long("starting-slot")
                                 .validator(is_slot)
-                                .value_name("SLOT")
+                                .value_name("START_SLOT")
                                 .takes_value(true)
                                 .index(1)
                                 .help(
@@ -241,7 +252,7 @@ impl BigTableSubCommand for App<'_, '_> {
                             Arg::with_name("ending_slot")
                                 .long("ending-slot")
                                 .validator(is_slot)
-                                .value_name("SLOT")
+                                .value_name("END_SLOT")
                                 .takes_value(true)
                                 .index(2)
                                 .help("Stop uploading at this slot [default: last available slot]"),
@@ -263,6 +274,28 @@ impl BigTableSubCommand for App<'_, '_> {
                                 ),
                         ),
                 )
+                .subcommand(
+                    SubCommand::with_name("delete-slots")
+                        .about("Delete ledger information from BigTable")
+                        .arg(
+                                Arg::with_name("slots")
+                                    .index(1)
+                                    .value_name("SLOTS")
+                                    .takes_value(true)
+                                    .multiple(true)
+                                    .required(true)
+                                    .help("Slots to delete"),
+                                )
+                            .arg(
+                                Arg::with_name("force")
+                                    .long("force")
+                                    .takes_value(false)
+                                    .help(
+                                        "Deletions are only performed when the force flag is enabled. \
+                                        If force is not enabled, show stats about what ledger data \
+                                        will be deleted in a real deletion. "),
+                            ),
+                        )
                 .subcommand(
                     SubCommand::with_name("first-available-block")
                         .about("Get the first available block in the storage"),
@@ -403,6 +436,11 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
                 allow_missing_metadata,
                 force_reupload,
             ))
+        }
+        ("delete-slots", Some(arg_matches)) => {
+            let slots = values_t_or_exit!(arg_matches, "slots", Slot);
+            let dry_run = !value_t_or_exit!(arg_matches, "force", bool);
+            runtime.block_on(delete_slots(slots, dry_run))
         }
         ("first-available-block", Some(_arg_matches)) => runtime.block_on(first_available_block()),
         ("block", Some(arg_matches)) => {
