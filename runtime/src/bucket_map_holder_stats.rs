@@ -18,6 +18,7 @@ pub struct BucketMapHolderStats {
     pub inserts: AtomicU64,
     pub count_in_mem: AtomicU64,
     pub per_bucket_count: Vec<AtomicU64>,
+    pub get_range_us: AtomicU64,
 }
 
 impl BucketMapHolderStats {
@@ -110,6 +111,12 @@ impl BucketMapHolderStats {
                 self.updates_in_mem.swap(0, Ordering::Relaxed),
                 i64
             ),
+            (
+                "get_range_us",
+                self.get_range_us.swap(0, Ordering::Relaxed),
+                i64
+            ),
+                        
             ("inserts", self.inserts.swap(0, Ordering::Relaxed), i64),
             ("deletes", self.deletes.swap(0, Ordering::Relaxed), i64),
             ("items", self.items.swap(0, Ordering::Relaxed), i64),
