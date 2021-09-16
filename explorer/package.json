@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
-    "@blockworks-foundation/mango-client": "^3.0.17",
+    "@blockworks-foundation/mango-client": "^3.0.18",
     "@bonfida/bot": "^0.5.3",
     "@metamask/jazzicon": "^2.0.0",
     "@project-serum/serum": "^0.13.59",
