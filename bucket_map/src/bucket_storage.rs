@@ -72,7 +72,7 @@ impl Header {
     }
 }
 
-pub struct DataBucket {
+pub struct BucketStorage {
     drives: Arc<Vec<PathBuf>>,
     path: PathBuf,
     mmap: MmapMut,
@@ -84,18 +84,18 @@ pub struct DataBucket {
 }
 
 #[derive(Debug)]
-pub enum DataBucketError {
+pub enum BucketStorageError {
     AlreadyAllocated,
     InvalidFree,
 }
 
-impl Drop for DataBucket {
+impl Drop for BucketStorage {
     fn drop(&mut self) {
         let _ = remove_file(&self.path);
     }
 }
 
-impl DataBucket {
+impl BucketStorage {
     pub fn new_with_capacity(
         drives: Arc<Vec<PathBuf>>,
         num_elems: u64,
@@ -151,14 +151,14 @@ impl DataBucket {
         }
     }
 
-    pub fn allocate(&self, ix: u64, uid: u64) -> Result<(), DataBucketError> {
+    pub fn allocate(&self, ix: u64, uid: u64) -> Result<(), BucketStorageError> {
         if ix >= self.num_cells() {
             panic!("allocate: bad index size");
         }
         if 0 == uid {
             panic!("allocate: bad uid");
         }
-        let mut e = Err(DataBucketError::AlreadyAllocated);
+        let mut e = Err(BucketStorageError::AlreadyAllocated);
         let ix = (ix * self.cell_size) as usize;
         //debug!("ALLOC {} {}", ix, uid);
         let hdr_slice: &[u8] = &self.mmap[ix..ix + std::mem::size_of::<Header>()];
@@ -172,7 +172,7 @@ impl DataBucket {
         e
     }
 
-    pub fn free(&self, ix: u64, uid: u64) -> Result<(), DataBucketError> {
+    pub fn free(&self, ix: u64, uid: u64) -> Result<(), BucketStorageError> {
         if ix >= self.num_cells() {
             panic!("free: bad index size");
         }
@@ -182,7 +182,7 @@ impl DataBucket {
         let ix = (ix * self.cell_size) as usize;
         //debug!("FREE {} {}", ix, uid);
         let hdr_slice: &[u8] = &self.mmap[ix..ix + std::mem::size_of::<Header>()];
-        let mut e = Err(DataBucketError::InvalidFree);
+        let mut e = Err(BucketStorageError::InvalidFree);
         unsafe {
             let hdr = hdr_slice.as_ptr() as *const Header;
             //debug!("FREE uid: {}", hdr.as_ref().unwrap().uid());

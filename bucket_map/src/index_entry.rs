@@ -1,6 +1,6 @@
 use crate::bucket::Bucket;
 use crate::bucket_map::RefCount;
-use crate::data_bucket::DataBucket;
+use crate::bucket_storage::BucketStorage;
 use solana_sdk::clock::Slot;
 use solana_sdk::pubkey::Pubkey;
 use std::collections::hash_map::DefaultHasher;
@@ -14,9 +14,9 @@ use std::hash::{Hash, Hasher};
 pub struct IndexEntry {
     pub key: Pubkey, // can this be smaller if we have reduced the keys into buckets already?
     pub ref_count: RefCount, // can this be smaller? Do we ever need more than 4B refcounts?
-    pub data_location: u64, // smaller? since these are variably sized, this could get tricky. well, actually accountinfo is not variable sized...
+    pub storage_offset: u64, // smaller? since these are variably sized, this could get tricky. well, actually accountinfo is not variable sized...
     // if the bucket doubled, the index can be recomputed using create_bucket_capacity_pow2
-    pub bucket_capacity_when_created_pow2: u8, // see data_location
+    pub storage_capacity_when_created_pow2: u8, // see data_location
     pub num_slots: Slot, // can this be smaller? epoch size should ~ be the max len. this is the num elements in the slot list
 }
 
@@ -33,10 +33,10 @@ impl IndexEntry {
         self.ref_count
     }
 
-    // This function maps the original data location into an index in the current data bucket.
-    // This is coupled with how we resize data buckets.
-    pub fn data_loc(&self, bucket: &DataBucket) -> u64 {
-        self.data_location << (bucket.capacity_pow2 - self.bucket_capacity_when_created_pow2)
+    // This function maps the original data location into an index in the current bucket storage.
+    // This is coupled with how we resize bucket storages.
+    pub fn data_loc(&self, storage: &BucketStorage) -> u64 {
+        self.storage_offset << (storage.capacity_pow2 - self.storage_capacity_when_created_pow2)
     }
 
     pub fn read_value<'a, T>(&self, bucket: &'a Bucket<T>) -> Option<(&'a [T], RefCount)> {
