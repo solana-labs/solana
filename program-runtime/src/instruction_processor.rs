@@ -376,7 +376,7 @@ impl InstructionProcessor {
         instruction: &Instruction,
         signers: &[Pubkey],
         invoke_context: &RefMut<&mut dyn InvokeContext>,
-    ) -> Result<(Message, Vec<bool>, Pubkey), InstructionError> {
+    ) -> Result<(Message, Vec<bool>, Vec<usize>), InstructionError> {
         let message = Message::new(&[instruction.clone()], None);
 
         // Gather keyed_accounts in the order of message.account_keys
@@ -441,34 +441,58 @@ impl InstructionProcessor {
                 return Err(InstructionError::PrivilegeEscalation);
             }
         }
-
-        // validate the caller has access to the program account and that it is executable
-        let program_id = instruction.program_id;
-        match callee_keyed_accounts
-            .iter()
-            .find(|keyed_account| &program_id == keyed_account.unsigned_key())
-        {
-            Some(keyed_account) => {
-                if !keyed_account.executable()? {
-                    ic_msg!(
-                        invoke_context,
-                        "Account {} is not executable",
-                        keyed_account.unsigned_key()
-                    );
-                    return Err(InstructionError::AccountNotExecutable);
-                }
-            }
-            None => {
-                ic_msg!(invoke_context, "Unknown program {}", program_id);
-                return Err(InstructionError::MissingAccount);
-            }
-        }
-
         let caller_write_privileges = callee_keyed_accounts
             .iter()
             .map(|keyed_account| keyed_account.is_writable())
             .collect::<Vec<bool>>();
-        Ok((message, caller_write_privileges, program_id))
+
+        // Find and validate executables / program accounts
+        let callee_program_id = instruction.program_id;
+        let (program_account_index, program_account) = callee_keyed_accounts
+            .iter()
+            .find(|keyed_account| &callee_program_id == keyed_account.unsigned_key())
+            .and_then(|_keyed_account| invoke_context.get_account(&callee_program_id))
+            .ok_or_else(|| {
+                ic_msg!(invoke_context, "Unknown program {}", callee_program_id);
+                InstructionError::MissingAccount
+            })?;
+        if !program_account.borrow().executable() {
+            ic_msg!(
+                invoke_context,
+                "Account {} is not executable",
+                callee_program_id
+            );
+            return Err(InstructionError::AccountNotExecutable);
+        }
+        let mut program_indices = vec![program_account_index];
+        if program_account.borrow().owner() == &bpf_loader_upgradeable::id() {
+            if let UpgradeableLoaderState::Program {
+                programdata_address,
+            } = program_account.borrow().state()?
+            {
+                if let Some((programdata_account_index, _programdata_account)) =
+                    invoke_context.get_account(&programdata_address)
+                {
+                    program_indices.push(programdata_account_index);
+                } else {
+                    ic_msg!(
+                        invoke_context,
+                        "Unknown upgradeable programdata account {}",
+                        programdata_address,
+                    );
+                    return Err(InstructionError::MissingAccount);
+                }
+            } else {
+                ic_msg!(
+                    invoke_context,
+                    "Invalid upgradeable program account {}",
+                    callee_program_id,
+                );
+                return Err(InstructionError::MissingAccount);
+            }
+        }
+
+        Ok((message, caller_write_privileges, program_indices))
     }
 
     /// Entrypoint for a cross-program invocation from a native program
@@ -482,7 +506,7 @@ impl InstructionProcessor {
         let mut invoke_context = invoke_context.borrow_mut();
 
         // Translate and verify caller's data
-        let (message, mut caller_write_privileges, callee_program_id) =
+        let (message, mut caller_write_privileges, program_indices) =
             Self::create_message(&instruction, signers, &invoke_context)?;
         if !invoke_context.is_feature_active(&fix_write_privs::id()) {
             let caller_keyed_accounts = invoke_context.get_keyed_accounts()?;
@@ -506,50 +530,6 @@ impl InstructionProcessor {
             .iter()
             .map(|(_key, account)| account.borrow().data().len())
             .collect::<Vec<_>>();
-
-        // Construct executables
-        let (program_account_index, program_account) = invoke_context
-            .get_account(&callee_program_id)
-            .ok_or_else(|| {
-                ic_msg!(invoke_context, "Unknown program {}", callee_program_id);
-                InstructionError::MissingAccount
-            })?;
-        if !program_account.borrow().executable() {
-            ic_msg!(
-                invoke_context,
-                "Account {} is not executable",
-                callee_program_id
-            );
-            return Err(InstructionError::AccountNotExecutable);
-        }
-        let mut program_indices = vec![];
-        if program_account.borrow().owner() == &bpf_loader_upgradeable::id() {
-            if let UpgradeableLoaderState::Program {
-                programdata_address,
-            } = program_account.borrow().state()?
-            {
-                if let Some((programdata_account_index, _programdata_account)) =
-                    invoke_context.get_account(&programdata_address)
-                {
-                    program_indices.push(programdata_account_index);
-                } else {
-                    ic_msg!(
-                        invoke_context,
-                        "Unknown upgradeable programdata account {}",
-                        programdata_address,
-                    );
-                    return Err(InstructionError::MissingAccount);
-                }
-            } else {
-                ic_msg!(
-                    invoke_context,
-                    "Upgradeable program account state not valid {}",
-                    callee_program_id,
-                );
-                return Err(InstructionError::MissingAccount);
-            }
-        }
-        program_indices.insert(0, program_account_index);
 
         // Record the instruction
         invoke_context.record_instruction(&instruction);
@@ -588,45 +568,46 @@ impl InstructionProcessor {
         caller_write_privileges: &[bool],
         invoke_context: &mut dyn InvokeContext,
     ) -> Result<(), InstructionError> {
-        if let Some(instruction) = message.instructions.get(0) {
-            let program_id = instruction.program_id(&message.account_keys);
+        // This function is always called with a valid instruction, if that changes return an error
+        let instruction = message
+            .instructions
+            .get(0)
+            .ok_or(InstructionError::GenericError)?;
 
-            // Verify the calling program hasn't misbehaved
-            invoke_context.verify_and_update(instruction, accounts, caller_write_privileges)?;
+        let program_id = instruction.program_id(&message.account_keys);
 
-            // clear the return data
-            invoke_context.set_return_data(None);
+        // Verify the calling program hasn't misbehaved
+        invoke_context.verify_and_update(instruction, accounts, caller_write_privileges)?;
 
-            // Invoke callee
-            invoke_context.push(program_id, message, instruction, program_indices, accounts)?;
+        // clear the return data
+        invoke_context.set_return_data(None);
 
-            let mut instruction_processor = InstructionProcessor::default();
-            for (program_id, process_instruction) in invoke_context.get_programs().iter() {
-                instruction_processor.add_program(*program_id, *process_instruction);
-            }
+        // Invoke callee
+        invoke_context.push(program_id, message, instruction, program_indices, accounts)?;
 
-            let mut result = instruction_processor.process_instruction(
-                program_id,
-                &instruction.data,
-                invoke_context,
-            );
-            if result.is_ok() {
-                // Verify the called program has not misbehaved
-                let demote_program_write_locks =
-                    invoke_context.is_feature_active(&demote_program_write_locks::id());
-                let write_privileges: Vec<bool> = (0..message.account_keys.len())
-                    .map(|i| message.is_writable(i, demote_program_write_locks))
-                    .collect();
-                result = invoke_context.verify_and_update(instruction, accounts, &write_privileges);
-            }
-
-            // Restore previous state
-            invoke_context.pop();
-            result
-        } else {
-            // This function is always called with a valid instruction, if that changes return an error
-            Err(InstructionError::GenericError)
+        let mut instruction_processor = InstructionProcessor::default();
+        for (program_id, process_instruction) in invoke_context.get_programs().iter() {
+            instruction_processor.add_program(*program_id, *process_instruction);
         }
+
+        let mut result = instruction_processor.process_instruction(
+            program_id,
+            &instruction.data,
+            invoke_context,
+        );
+        if result.is_ok() {
+            // Verify the called program has not misbehaved
+            let demote_program_write_locks =
+                invoke_context.is_feature_active(&demote_program_write_locks::id());
+            let write_privileges: Vec<bool> = (0..message.account_keys.len())
+                .map(|i| message.is_writable(i, demote_program_write_locks))
+                .collect();
+            result = invoke_context.verify_and_update(instruction, accounts, &write_privileges);
+        }
+
+        // Restore previous state
+        invoke_context.pop();
+        result
     }
 
     /// Verify the results of a cross-program instruction

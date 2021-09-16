@@ -14,9 +14,7 @@ use solana_sdk::sysvar::fees::Fees;
 use solana_sdk::{
     account::{Account, AccountSharedData, ReadableAccount},
     account_info::AccountInfo,
-    account_utils::StateMut,
-    blake3, bpf_loader, bpf_loader_deprecated,
-    bpf_loader_upgradeable::{self, UpgradeableLoaderState},
+    blake3, bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
     clock::Clock,
     entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
     epoch_schedule::EpochSchedule,
@@ -2154,44 +2152,6 @@ fn check_authorized_program(
     Ok(())
 }
 
-#[allow(clippy::type_complexity)]
-fn get_upgradeable_executable(
-    callee_program_id: &Pubkey,
-    program_account: &Rc<RefCell<AccountSharedData>>,
-    invoke_context: &mut dyn InvokeContext,
-) -> Result<Option<usize>, EbpfError<BpfError>> {
-    if program_account.borrow().owner() == &bpf_loader_upgradeable::id() {
-        match program_account.borrow().state() {
-            Ok(UpgradeableLoaderState::Program {
-                programdata_address,
-            }) => {
-                if let Some((programdata_account_index, _programdata_account)) =
-                    invoke_context.get_account(&programdata_address)
-                {
-                    Ok(Some(programdata_account_index))
-                } else {
-                    ic_msg!(
-                        invoke_context,
-                        "Unknown upgradeable programdata account {}",
-                        programdata_address,
-                    );
-                    Err(SyscallError::InstructionError(InstructionError::MissingAccount).into())
-                }
-            }
-            _ => {
-                ic_msg!(
-                    invoke_context,
-                    "Invalid upgradeable program account {}",
-                    callee_program_id,
-                );
-                Err(SyscallError::InstructionError(InstructionError::InvalidAccountData).into())
-            }
-        }
-    } else {
-        Ok(None)
-    }
-}
-
 /// Call process instruction, common to both Rust and C
 fn call<'a>(
     syscall: &mut dyn SyscallInvokeSigned<'a>,
@@ -2219,37 +2179,22 @@ fn call<'a>(
         signers_seeds_len,
         memory_mapping,
     )?;
-    let (message, caller_write_privileges, callee_program_id) =
+    let (message, caller_write_privileges, program_indices) =
         InstructionProcessor::create_message(&instruction, &signers, &invoke_context)
             .map_err(SyscallError::InstructionError)?;
-    let callee_program_id_index = message.instructions[0].program_id_index as usize;
     check_authorized_program(
-        &callee_program_id,
+        &instruction.program_id,
         &instruction.data,
         invoke_context.is_feature_active(&close_upgradeable_program_accounts::id()),
     )?;
     let (accounts, account_refs) = syscall.translate_accounts(
         &message.account_keys,
-        callee_program_id_index,
+        message.instructions[0].program_id_index as usize,
         account_infos_addr,
         account_infos_len,
         memory_mapping,
         *invoke_context,
     )?;
-
-    // Construct executables
-    let (program_account_index, program_account) = invoke_context
-        .get_account(&callee_program_id)
-        .ok_or_else(|| {
-        ic_msg!(invoke_context, "Unknown program {}", callee_program_id);
-        SyscallError::InstructionError(InstructionError::MissingAccount)
-    })?;
-    let mut program_indices = vec![program_account_index];
-    if let Some(programdata_account_index) =
-        get_upgradeable_executable(&callee_program_id, &program_account, *invoke_context)?
-    {
-        program_indices.push(programdata_account_index);
-    }
 
     // Record the instruction
     invoke_context.record_instruction(&instruction);
