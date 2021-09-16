@@ -454,14 +454,14 @@ impl InstructionProcessor {
     pub fn native_invoke(
         invoke_context: &mut dyn InvokeContext,
         instruction: Instruction,
-        keyed_account_indices: &[usize],
+        keyed_account_indices_obsolete: &[usize],
         signers: &[Pubkey],
     ) -> Result<(), InstructionError> {
         let invoke_context = RefCell::new(invoke_context);
         let mut invoke_context = invoke_context.borrow_mut();
 
         let caller_keyed_accounts = invoke_context.get_keyed_accounts()?;
-        let callee_keyed_accounts = keyed_account_indices
+        let callee_keyed_accounts = keyed_account_indices_obsolete
             .iter()
             .map(|index| keyed_account_at_index(caller_keyed_accounts, *index))
             .collect::<Result<Vec<&KeyedAccount>, InstructionError>>()?;
@@ -471,51 +471,43 @@ impl InstructionProcessor {
             signers,
             &invoke_context,
         )?;
-        let mut keyed_account_indices_reordered = Vec::with_capacity(message.account_keys.len());
-        let mut accounts = Vec::with_capacity(message.account_keys.len());
-        let mut caller_write_privileges = Vec::with_capacity(message.account_keys.len());
+        let accounts = message
+            .account_keys
+            .iter()
+            .map(|account_key| {
+                invoke_context
+                    .get_account(account_key)
+                    .ok_or(InstructionError::MissingAccount)
+                    .map(|(_account_index, account)| (*account_key, account))
+            })
+            .collect::<Result<Vec<_>, InstructionError>>()?;
+        let account_sizes = accounts
+            .iter()
+            .map(|(_key, account)| account.borrow().data().len())
+            .collect::<Vec<_>>();
 
         // Translate and verify caller's data
+        let mut caller_write_privileges = Vec::with_capacity(message.account_keys.len());
         if invoke_context.is_feature_active(&fix_write_privs::id()) {
-            'root: for account_key in message.account_keys.iter() {
-                for keyed_account_index in keyed_account_indices {
-                    let keyed_account = &caller_keyed_accounts[*keyed_account_index];
-                    if account_key == keyed_account.unsigned_key() {
-                        accounts.push((*account_key, Rc::new(keyed_account.account.clone())));
-                        caller_write_privileges.push(keyed_account.is_writable());
-                        keyed_account_indices_reordered.push(*keyed_account_index);
-                        continue 'root;
-                    }
-                }
-                ic_msg!(
-                    invoke_context,
-                    "Instruction references an unknown account {}",
-                    account_key
-                );
-                return Err(InstructionError::MissingAccount);
+            for account_key in message.account_keys.iter() {
+                let keyed_account_index = caller_keyed_accounts
+                    .iter()
+                    .position(|keyed_account| keyed_account.unsigned_key() == account_key)
+                    .ok_or_else(|| {
+                        ic_msg!(
+                            invoke_context,
+                            "Instruction references an unknown account {}",
+                            account_key
+                        );
+                        InstructionError::MissingAccount
+                    })?;
+                let keyed_account = &caller_keyed_accounts[keyed_account_index];
+                caller_write_privileges.push(keyed_account.is_writable());
             }
         } else {
-            let keyed_accounts = invoke_context.get_keyed_accounts()?;
-            for index in keyed_account_indices.iter() {
-                caller_write_privileges.push(keyed_accounts[*index].is_writable());
-            }
-            caller_write_privileges.insert(0, false);
-            let keyed_accounts = invoke_context.get_keyed_accounts()?;
-            'root2: for account_key in message.account_keys.iter() {
-                for keyed_account_index in keyed_account_indices {
-                    let keyed_account = &keyed_accounts[*keyed_account_index];
-                    if account_key == keyed_account.unsigned_key() {
-                        accounts.push((*account_key, Rc::new(keyed_account.account.clone())));
-                        keyed_account_indices_reordered.push(*keyed_account_index);
-                        continue 'root2;
-                    }
-                }
-                ic_msg!(
-                    invoke_context,
-                    "Instruction references an unknown account {}",
-                    account_key
-                );
-                return Err(InstructionError::MissingAccount);
+            caller_write_privileges.push(false);
+            for index in keyed_account_indices_obsolete.iter() {
+                caller_write_privileges.push(caller_keyed_accounts[*index].is_writable());
             }
         }
 
@@ -575,40 +567,16 @@ impl InstructionProcessor {
             *invoke_context,
         )?;
 
-        // Copy results back to caller
-        let demote_program_write_locks =
-            invoke_context.is_feature_active(&demote_program_write_locks::id());
-        let keyed_accounts = invoke_context.get_keyed_accounts()?;
-        for (src_keyed_account_index, ((_key, account), dst_keyed_account_index)) in accounts
-            .iter()
-            .zip(keyed_account_indices_reordered)
-            .enumerate()
-        {
-            let dst_keyed_account = &keyed_accounts[dst_keyed_account_index];
-            let src_keyed_account = account.borrow();
-            if message.is_writable(src_keyed_account_index, demote_program_write_locks)
-                && !src_keyed_account.executable()
-            {
-                if dst_keyed_account.data_len()? != src_keyed_account.data().len()
-                    && dst_keyed_account.data_len()? != 0
-                {
-                    // Only support for `CreateAccount` at this time.
-                    // Need a way to limit total realloc size across multiple CPI calls
-                    ic_msg!(
-                        invoke_context,
-                        "Inner instructions do not support realloc, only SystemProgram::CreateAccount",
-                    );
-                    return Err(InstructionError::InvalidRealloc);
-                }
-                dst_keyed_account
-                    .try_account_ref_mut()?
-                    .set_lamports(src_keyed_account.lamports());
-                dst_keyed_account
-                    .try_account_ref_mut()?
-                    .set_owner(*src_keyed_account.owner());
-                dst_keyed_account
-                    .try_account_ref_mut()?
-                    .set_data(src_keyed_account.data().to_vec());
+        // Verify the called program has not misbehaved
+        for ((_key, account), prev_size) in accounts.iter().zip(account_sizes.iter()) {
+            if *prev_size != account.borrow().data().len() && *prev_size != 0 {
+                // Only support for `CreateAccount` at this time.
+                // Need a way to limit total realloc size across multiple CPI calls
+                ic_msg!(
+                    invoke_context,
+                    "Inner instructions do not support realloc, only SystemProgram::CreateAccount",
+                );
+                return Err(InstructionError::InvalidRealloc);
             }
         }
 
