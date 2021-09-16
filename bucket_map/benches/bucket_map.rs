@@ -35,7 +35,7 @@ DEFINE_NxM_BENCH!(dim_08x16, 8, 16);
 DEFINE_NxM_BENCH!(dim_16x32, 16, 32);
 DEFINE_NxM_BENCH!(dim_32x64, 32, 64);
 
-/// Benchmark insert with Hashmap as baseline for N keys and M updates each
+/// Benchmark insert with Hashmap as baseline for N threads inserting M keys each
 fn do_bench_insert_baseline_hashmap(bencher: &mut Bencher, n: usize, m: usize) {
     let index = RwLock::new(HashMap::new());
     (0..n).into_iter().into_par_iter().for_each(|i| {
@@ -58,7 +58,7 @@ fn do_bench_insert_baseline_hashmap(bencher: &mut Bencher, n: usize, m: usize) {
     });
 }
 
-/// Benchmark insert with BucketMap for N keys/buckets and M updates each
+/// Benchmark insert with BucketMap with N buckets for N threads inserting M keys each
 fn do_bench_insert_bucket_map(bencher: &mut Bencher, n: usize, m: usize) {
     let index = BucketMap::new(BucketMapConfig::new(n));
     (0..n).into_iter().into_par_iter().for_each(|i| {
