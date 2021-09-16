@@ -1,5 +1,7 @@
 /// The `bigtable` subcommand
-use clap::{value_t, value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand};
+use clap::{
+    value_t, value_t_or_exit, values_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand,
+};
 use solana_clap_utils::{
     input_parsers::pubkey_of,
     input_validators::{is_slot, is_valid_pubkey},
@@ -15,7 +17,6 @@ use std::{
     path::Path,
     process::exit,
     result::Result,
-    str::FromStr,
     sync::{atomic::AtomicBool, Arc},
 };
 
@@ -42,7 +43,7 @@ async fn upload(
     .await
 }
 
-async fn delete(slots: Vec<Slot>, dry_run: bool) -> Result<(), Box<dyn std::error::Error>> {
+async fn delete_slots(slots: Vec<Slot>, dry_run: bool) -> Result<(), Box<dyn std::error::Error>> {
     let read_only = dry_run;
     let bigtable = solana_storage_bigtable::LedgerStorage::new(read_only, None)
         .await
@@ -274,28 +275,25 @@ impl BigTableSubCommand for App<'_, '_> {
                         ),
                 )
                 .subcommand(
-                    SubCommand::with_name("delete")
-                        .about("Delete uploaded ledger information from BigTable")
+                    SubCommand::with_name("delete-slots")
+                        .about("Delete ledger information from BigTable")
                         .arg(
                                 Arg::with_name("slots")
-                                    .long("slots")
+                                    .index(1)
                                     .value_name("SLOTS")
                                     .takes_value(true)
+                                    .multiple(true)
                                     .required(true)
-                                    .index(1)
-                                    .help(
-                                        "List of comma separated slots to delete",
-                                    ),
+                                    .help("Slots to delete"),
                                 )
                             .arg(
-                                Arg::with_name("dry_run")
-                                    .long("dry-run")
-                                    .possible_values(&["true", "false"])
-                                    .takes_value(true)
-                                    .default_value("true")
+                                Arg::with_name("force")
+                                    .long("force")
+                                    .takes_value(false)
                                     .help(
-                                        "Enable to show stats about what ledger data will be deleted\
-                                        in a real deletion."),
+                                        "Deletions are only performed when the force flag is enabled. \
+                                        If force is not enabled, show stats about what ledger data \
+                                        will be deleted in a real deletion. "),
                             ),
                         )
                 .subcommand(
@@ -439,23 +437,10 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
                 force_reupload,
             ))
         }
-        ("delete", Some(arg_matches)) => {
-            let comma_separated_slots = value_t_or_exit!(arg_matches, "slots", String);
-            let slots = comma_separated_slots
-                .split(',')
-                .map(Slot::from_str)
-                .collect::<Result<Vec<Slot>, _>>()
-                .unwrap_or_else(|err| {
-                    eprintln!(
-                        "Error: Invalid --slots <SLOTS> argument: {:?}.\n\n{}",
-                        err,
-                        arg_matches.usage()
-                    );
-                    exit(1);
-                });
-
-            let dry_run = value_t_or_exit!(arg_matches, "dry_run", bool);
-            runtime.block_on(delete(slots, dry_run))
+        ("delete-slots", Some(arg_matches)) => {
+            let slots = values_t_or_exit!(arg_matches, "slots", Slot);
+            let dry_run = !value_t_or_exit!(arg_matches, "force", bool);
+            runtime.block_on(delete_slots(slots, dry_run))
         }
         ("first-available-block", Some(_arg_matches)) => runtime.block_on(first_available_block()),
         ("block", Some(arg_matches)) => {

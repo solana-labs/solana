@@ -6,6 +6,7 @@ use {
         compression::{compress_best, decompress},
         root_ca_certificate,
     },
+    backoff::{future::retry, ExponentialBackoff},
     log::*,
     std::time::{Duration, Instant},
     thiserror::Error,
@@ -221,7 +222,6 @@ impl BigTableConnection {
     where
         T: serde::ser::Serialize,
     {
-        use backoff::{future::retry, ExponentialBackoff};
         retry(ExponentialBackoff::default(), || async {
             let mut client = self.client();
             Ok(client.put_bincode_cells(table, cells).await?)
@@ -230,7 +230,6 @@ impl BigTableConnection {
     }
 
     pub async fn delete_rows_with_retry(&self, table: &str, row_keys: &[RowKey]) -> Result<()> {
-        use backoff::{future::retry, ExponentialBackoff};
         retry(ExponentialBackoff::default(), || async {
             let mut client = self.client();
             Ok(client.delete_rows(table, row_keys).await?)
@@ -246,7 +245,6 @@ impl BigTableConnection {
     where
         T: serde::de::DeserializeOwned,
     {
-        use backoff::{future::retry, ExponentialBackoff};
         retry(ExponentialBackoff::default(), || async {
             let mut client = self.client();
             Ok(client.get_bincode_cells(table, row_keys).await?)
@@ -262,7 +260,6 @@ impl BigTableConnection {
     where
         T: prost::Message,
     {
-        use backoff::{future::retry, ExponentialBackoff};
         retry(ExponentialBackoff::default(), || async {
             let mut client = self.client();
             Ok(client.put_protobuf_cells(table, cells).await?)

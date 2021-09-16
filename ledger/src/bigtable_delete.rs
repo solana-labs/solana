@@ -1,7 +1,4 @@
-use log::*;
-use solana_measure::measure::Measure;
-use solana_sdk::clock::Slot;
-use std::result::Result;
+use {log::*, solana_measure::measure::Measure, solana_sdk::clock::Slot, std::result::Result};
 
 // Attempt to delete this many blocks in parallel
 const NUM_BLOCKS_TO_DELETE_IN_PARALLEL: usize = 32;
