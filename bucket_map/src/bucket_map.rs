@@ -121,6 +121,7 @@ impl<T: Clone + Copy + Debug> BucketMap<T> {
             .unwrap_or_default()
     }
 
+    /// Get the items for bucket `ix` in `range`
     pub fn items_in_range<R>(&self, ix: usize, range: Option<&R>) -> Option<Vec<BucketItem<T>>>
     where
         R: RangeBounds<Pubkey>,
