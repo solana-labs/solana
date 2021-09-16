@@ -1,6 +1,7 @@
 //! BucketMap is a mostly contention free concurrent map backed by MmapMut
 
 use crate::bucket::Bucket;
+use crate::bucket_item::BucketItem;
 use crate::bucket_stats::BucketMapStats;
 use crate::{MaxSearch, RefCount};
 use solana_sdk::pubkey::Pubkey;
@@ -12,13 +13,6 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::RwLock;
 use tempfile::TempDir;
-
-#[derive(Debug, Default, Clone)]
-pub struct BucketItem<T> {
-    pub pubkey: Pubkey,
-    pub ref_count: RefCount,
-    pub slot_list: Vec<T>,
-}
 
 #[derive(Debug, Default, Clone)]
 pub struct BucketMapConfig {

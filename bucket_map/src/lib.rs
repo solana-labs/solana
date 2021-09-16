@@ -1,4 +1,5 @@
 mod bucket;
+mod bucket_item;
 pub mod bucket_map;
 mod bucket_stats;
 mod bucket_storage;

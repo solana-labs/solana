@@ -1,4 +1,5 @@
-use crate::bucket_map::{BucketItem, BucketMapError};
+use crate::bucket_item::BucketItem;
+use crate::bucket_map::BucketMapError;
 use crate::bucket_stats::BucketMapStats;
 use crate::bucket_storage::BucketStorage;
 use crate::index_entry::IndexEntry;
