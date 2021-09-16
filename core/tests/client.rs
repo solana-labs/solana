@@ -98,7 +98,7 @@ fn test_slot_subscription() {
     let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
     let optimistically_confirmed_bank =
         OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
-    let subscriptions = Arc::new(RpcSubscriptions::new(
+    let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
         &exit,
         bank_forks,
         Arc::new(RwLock::new(BlockCommitmentCache::default())),

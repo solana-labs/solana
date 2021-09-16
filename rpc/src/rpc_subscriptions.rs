@@ -446,6 +446,21 @@ impl RpcSubscriptions {
         )
     }
 
+    pub fn new_for_tests(
+        exit: &Arc<AtomicBool>,
+        bank_forks: Arc<RwLock<BankForks>>,
+        block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
+        optimistically_confirmed_bank: Arc<RwLock<OptimisticallyConfirmedBank>>,
+    ) -> Self {
+        Self::new_with_config(
+            exit,
+            bank_forks,
+            block_commitment_cache,
+            optimistically_confirmed_bank,
+            &PubSubConfig::default_for_tests(),
+        )
+    }
+
     pub fn new_with_config(
         exit: &Arc<AtomicBool>,
         bank_forks: Arc<RwLock<BankForks>>,
@@ -948,7 +963,7 @@ pub(crate) mod tests {
         let alice = Keypair::new();
 
         let exit = Arc::new(AtomicBool::new(false));
-        let subscriptions = Arc::new(RpcSubscriptions::new(
+        let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
             &exit,
             bank_forks.clone(),
             Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests_with_slots(
@@ -1076,7 +1091,7 @@ pub(crate) mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
-        let subscriptions = Arc::new(RpcSubscriptions::new(
+        let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
             &exit,
             bank_forks,
             Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests())),
@@ -1222,7 +1237,7 @@ pub(crate) mod tests {
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
         let mut pending_optimistically_confirmed_banks = HashSet::new();
 
-        let subscriptions = Arc::new(RpcSubscriptions::new(
+        let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
             &exit,
             bank_forks.clone(),
             Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests_with_slots(
@@ -1391,7 +1406,7 @@ pub(crate) mod tests {
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
         let mut pending_optimistically_confirmed_banks = HashSet::new();
 
-        let subscriptions = Arc::new(RpcSubscriptions::new(
+        let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
             &exit,
             bank_forks.clone(),
             Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests_with_slots(
@@ -1501,7 +1516,7 @@ pub(crate) mod tests {
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
         let mut pending_optimistically_confirmed_banks = HashSet::new();
 
-        let subscriptions = Arc::new(RpcSubscriptions::new(
+        let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
             &exit,
             bank_forks.clone(),
             Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests_with_slots(
@@ -1686,7 +1701,7 @@ pub(crate) mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
-        let subscriptions = Arc::new(RpcSubscriptions::new(
+        let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
             &exit,
             bank_forks,
             Arc::new(RwLock::new(block_commitment_cache)),
@@ -1858,7 +1873,7 @@ pub(crate) mod tests {
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
-        let subscriptions = Arc::new(RpcSubscriptions::new(
+        let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
             &exit,
             bank_forks,
             Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests())),
@@ -1902,7 +1917,7 @@ pub(crate) mod tests {
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
-        let subscriptions = Arc::new(RpcSubscriptions::new(
+        let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
             &exit,
             bank_forks,
             Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests())),
@@ -1958,7 +1973,7 @@ pub(crate) mod tests {
         let mut pending_optimistically_confirmed_banks = HashSet::new();
 
         let exit = Arc::new(AtomicBool::new(false));
-        let subscriptions = Arc::new(RpcSubscriptions::new(
+        let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
             &exit,
             bank_forks.clone(),
             Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests_with_slots(

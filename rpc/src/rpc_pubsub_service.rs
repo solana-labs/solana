@@ -40,17 +40,21 @@ pub struct PubSubConfig {
 
 impl Default for PubSubConfig {
     fn default() -> Self {
-        let queue_capacity_items = if cfg!(test) {
-            // A lower default for tests to make them run faster.
-            DEFAULT_TEST_QUEUE_CAPACITY_ITEMS
-        } else {
-            DEFAULT_QUEUE_CAPACITY_ITEMS
-        };
-
         Self {
             enable_vote_subscription: false,
             max_active_subscriptions: MAX_ACTIVE_SUBSCRIPTIONS,
-            queue_capacity_items,
+            queue_capacity_items: DEFAULT_QUEUE_CAPACITY_ITEMS,
+            queue_capacity_bytes: DEFAULT_QUEUE_CAPACITY_BYTES,
+        }
+    }
+}
+
+impl PubSubConfig {
+    pub fn default_for_tests() -> Self {
+        Self {
+            enable_vote_subscription: false,
+            max_active_subscriptions: MAX_ACTIVE_SUBSCRIPTIONS,
+            queue_capacity_items: DEFAULT_TEST_QUEUE_CAPACITY_ITEMS,
             queue_capacity_bytes: DEFAULT_QUEUE_CAPACITY_BYTES,
         }
     }
@@ -364,7 +368,7 @@ mod tests {
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
-        let subscriptions = Arc::new(RpcSubscriptions::new(
+        let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
             &exit,
             bank_forks,
             Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests())),

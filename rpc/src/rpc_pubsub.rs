@@ -579,7 +579,7 @@ mod tests {
         let bank = Bank::new_for_tests(&genesis_config);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
-        let rpc_subscriptions = Arc::new(RpcSubscriptions::new(
+        let rpc_subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
             &Arc::new(AtomicBool::new(false)),
             bank_forks.clone(),
             Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests())),
@@ -758,7 +758,7 @@ mod tests {
         let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
         bank_forks.write().unwrap().insert(bank1);
 
-        let rpc_subscriptions = Arc::new(RpcSubscriptions::new(
+        let rpc_subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
             &Arc::new(AtomicBool::new(false)),
             bank_forks.clone(),
             Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests_with_slots(
@@ -875,7 +875,7 @@ mod tests {
         let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
         bank_forks.write().unwrap().insert(bank1);
 
-        let rpc_subscriptions = Arc::new(RpcSubscriptions::new(
+        let rpc_subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
             &Arc::new(AtomicBool::new(false)),
             bank_forks.clone(),
             Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests_with_slots(
@@ -1008,7 +1008,7 @@ mod tests {
         let bob = Keypair::new();
 
         let exit = Arc::new(AtomicBool::new(false));
-        let rpc_subscriptions = Arc::new(RpcSubscriptions::new(
+        let rpc_subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
             &exit,
             bank_forks.clone(),
             Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests())),
@@ -1060,7 +1060,7 @@ mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests()));
 
-        let subscriptions = Arc::new(RpcSubscriptions::new(
+        let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
             &exit,
             bank_forks.clone(),
             block_commitment_cache,
@@ -1199,7 +1199,7 @@ mod tests {
         // Setup Subscriptions
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
-        let subscriptions = Arc::new(RpcSubscriptions::new(
+        let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
             &exit,
             bank_forks,
             block_commitment_cache,
