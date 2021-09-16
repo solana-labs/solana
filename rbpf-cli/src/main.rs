@@ -170,7 +170,8 @@ native machine code before execting it in the virtual machine.",
             }
             let lid = bpf_loader::id();
             let pid = Pubkey::new(&[0u8; 32]);
-            let mut bytes = serialize_parameters(&lid, &pid, &accounts, &input.insndata).unwrap();
+            let (mut bytes, _account_lenghts) =
+                serialize_parameters(&lid, &pid, &accounts, &input.insndata).unwrap();
             Vec::from(bytes.as_slice_mut())
         }
     };
