@@ -6,6 +6,7 @@ use crate::{
     account_info::AccountInfo, entrypoint::ProgramResult, instruction::Instruction,
     program_error::UNSUPPORTED_SYSVAR, pubkey::Pubkey,
 };
+use itertools::Itertools;
 use std::sync::{Arc, RwLock};
 
 lazy_static::lazy_static! {
@@ -51,7 +52,7 @@ pub trait SyscallStubs: Sync + Send {
     unsafe fn sol_memcpy(&self, dst: *mut u8, src: *const u8, n: usize) {
         // cannot be overlapping
         if dst as usize + n > src as usize && src as usize > dst as usize {
-            panic!("memcpy does not support oveerlapping regions");
+            panic!("memcpy does not support overlapping regions");
         }
         std::ptr::copy_nonoverlapping(src, dst, n as usize);
     }
@@ -84,6 +85,9 @@ pub trait SyscallStubs: Sync + Send {
         None
     }
     fn sol_set_return_data(&mut self, _data: &[u8]) {}
+    fn sol_log_data(&self, fields: &[&[u8]]) {
+        println!("data: {}", fields.iter().map(base64::encode).join(" "));
+    }
 }
 
 struct DefaultSyscallStubs {}
@@ -164,4 +168,8 @@ pub(crate) fn sol_get_return_data() -> Option<(Pubkey, Vec<u8>)> {
 
 pub(crate) fn sol_set_return_data(data: &[u8]) {
     SYSCALL_STUBS.write().unwrap().sol_set_return_data(data)
+}
+
+pub(crate) fn sol_log_data(data: &[&[u8]]) {
+    SYSCALL_STUBS.read().unwrap().sol_log_data(data)
 }

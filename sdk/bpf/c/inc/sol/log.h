@@ -41,6 +41,11 @@ static void sol_log_array(const uint8_t *array, int len) {
 }
 
 /**
+ * Print the base64 representation of some arrays.
+ */
+void sol_log_data(SolBytes *fields, uint64_t fields_len);
+
+/**
  * Prints the program's input parameters
  *
  * @param params Pointer to a SolParameters structure

@@ -211,6 +211,10 @@ pub mod reduce_required_deploy_balance {
     solana_sdk::declare_id!("EBeznQDjcPG8491sFsKZYBi5S5jTVXMpAKNDJMQPS2kq");
 }
 
+pub mod sol_log_data_syscall_enabled {
+    solana_sdk::declare_id!("HYPs7jyJ3KwQFdDpuSzMtVKf1MLJDaZRv3CSWvfUqdFo");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -259,6 +263,7 @@ lazy_static! {
         (return_data_syscall_enabled::id(), "enable sol_{set,get}_return_data syscall"),
         (fix_write_privs::id(), "fix native invoke write privileges"),
         (reduce_required_deploy_balance::id(), "reduce required payer balance for program deploys"),
+        (sol_log_data_syscall_enabled::id(), "enable sol_log_data syscall"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
