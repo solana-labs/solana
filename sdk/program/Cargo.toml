@@ -36,10 +36,12 @@ thiserror = "1.0"
 
 [target.'cfg(not(target_arch = "bpf"))'.dependencies]
 blake3 = "0.3.7"
+base64 = "0.13"
 curve25519-dalek = "2.1.0"
 libsecp256k1 = "0.5.0"
 rand = "0.7.0"
 solana-logger = { path = "../../logger", version = "=1.8.1" }
+itertools =  "0.9.0"
 
 [dev-dependencies]
 static_assertions = "1.1.0"

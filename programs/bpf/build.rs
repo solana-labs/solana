@@ -67,6 +67,7 @@ fn main() {
             "deprecated_loader",
             "dup_accounts",
             "error_handling",
+            "log_data",
             "external_spend",
             "finalize",
             "instruction_introspection",
