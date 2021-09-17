@@ -1,11 +1,19 @@
 //! The `pubsub` module implements a threaded subscription service on client RPC request
 
-<<<<<<< HEAD:core/src/rpc_pubsub.rs
-use crate::rpc_subscriptions::{RpcSubscriptions, RpcVote};
+use crate::{
+    rpc_pubsub_service::PubSubConfig,
+    rpc_subscription_tracker::{
+        AccountSubscriptionParams, LogsSubscriptionKind, LogsSubscriptionParams,
+        ProgramSubscriptionParams, SignatureSubscriptionParams, SubscriptionControl,
+        SubscriptionId, SubscriptionParams, SubscriptionToken,
+    },
+    rpc_subscriptions::RpcVote,
+};
+use dashmap::DashMap;
 use jsonrpc_core::{Error, ErrorCode, Result};
 use jsonrpc_derive::rpc;
-use jsonrpc_pubsub::{typed::Subscriber, Session, SubscriptionId};
-use solana_account_decoder::UiAccount;
+use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId as PubSubSubscriptionId};
+use solana_account_decoder::{UiAccount, UiAccountEncoding};
 use solana_client::{
     rpc_config::{
         RpcAccountInfoConfig, RpcProgramAccountsConfig, RpcSignatureSubscribeConfig,
@@ -16,44 +24,8 @@ use solana_client::{
         SlotUpdate,
     },
 };
-#[cfg(test)]
-use solana_runtime::bank_forks::BankForks;
 use solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature};
-#[cfg(test)]
-use std::sync::RwLock;
-use std::{
-    str::FromStr,
-    sync::{atomic, Arc},
-=======
-use {
-    crate::{
-        rpc_pubsub_service::PubSubConfig,
-        rpc_subscription_tracker::{
-            AccountSubscriptionParams, LogsSubscriptionKind, LogsSubscriptionParams,
-            ProgramSubscriptionParams, SignatureSubscriptionParams, SubscriptionControl,
-            SubscriptionId, SubscriptionParams, SubscriptionToken,
-        },
-        rpc_subscriptions::RpcVote,
-    },
-    dashmap::DashMap,
-    jsonrpc_core::{Error, ErrorCode, Result},
-    jsonrpc_derive::rpc,
-    jsonrpc_pubsub::{typed::Subscriber, SubscriptionId as PubSubSubscriptionId},
-    solana_account_decoder::{UiAccount, UiAccountEncoding},
-    solana_client::{
-        rpc_config::{
-            RpcAccountInfoConfig, RpcProgramAccountsConfig, RpcSignatureSubscribeConfig,
-            RpcTransactionLogsConfig, RpcTransactionLogsFilter,
-        },
-        rpc_response::{
-            Response as RpcResponse, RpcKeyedAccount, RpcLogsResponse, RpcSignatureResult,
-            SlotInfo, SlotUpdate,
-        },
-    },
-    solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature},
-    std::{str::FromStr, sync::Arc},
->>>>>>> 65227f44d (Optimize RPC pubsub for multiple clients with the same subscription (#18943)):rpc/src/rpc_pubsub.rs
-};
+use std::{str::FromStr, sync::Arc};
 
 // We have to keep both of the following traits to not break backwards compatibility.
 // `RpcSolPubSubInternal` is actually used by the current PubSub API implementation.
@@ -527,19 +499,17 @@ impl RpcSolPubSubInternal for RpcSolPubSubImpl {
 
 #[cfg(test)]
 mod tests {
-<<<<<<< HEAD:core/src/rpc_pubsub.rs
-    use super::*;
+    use super::{RpcSolPubSubInternal, *};
     use crate::{
-        cluster_info_vote_listener::{ClusterInfoVoteListener, VoteTracker},
-        optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
-        rpc_subscriptions::tests::robust_poll_or_panic,
+        optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank, rpc_pubsub_service,
+        rpc_subscriptions::RpcSubscriptions,
     };
-    use crossbeam_channel::unbounded;
-    use jsonrpc_core::{futures::channel::mpsc, Response};
-    use jsonrpc_pubsub::{PubSubHandler, Session};
+    use jsonrpc_core::{IoHandler, Response};
     use serial_test::serial;
     use solana_account_decoder::{parse_account_data::parse_account_data, UiAccountEncoding};
-    use solana_client::rpc_response::{ProcessedSignatureResult, ReceivedSignatureResult};
+    use solana_client::rpc_response::{
+        ProcessedSignatureResult, ReceivedSignatureResult, RpcSignatureResult, SlotInfo,
+    };
     use solana_runtime::{
         bank::Bank,
         bank_forks::BankForks,
@@ -547,54 +517,11 @@ mod tests {
         genesis_utils::{
             create_genesis_config, create_genesis_config_with_vote_accounts, GenesisConfigInfo,
             ValidatorVoteKeypairs,
-=======
-    use {
-        super::{RpcSolPubSubInternal, *},
-        crate::{
-            optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank, rpc_pubsub_service,
-            rpc_subscriptions::RpcSubscriptions,
-        },
-        jsonrpc_core::{IoHandler, Response},
-        serial_test::serial,
-        solana_account_decoder::{parse_account_data::parse_account_data, UiAccountEncoding},
-        solana_client::rpc_response::{
-            ProcessedSignatureResult, ReceivedSignatureResult, RpcSignatureResult, SlotInfo,
-        },
-        solana_runtime::{
-            bank::Bank,
-            bank_forks::BankForks,
-            commitment::{BlockCommitmentCache, CommitmentSlots},
-            genesis_utils::{
-                create_genesis_config, create_genesis_config_with_vote_accounts, GenesisConfigInfo,
-                ValidatorVoteKeypairs,
-            },
-        },
-        solana_sdk::{
-            account::ReadableAccount,
-            clock::Slot,
-            commitment_config::CommitmentConfig,
-            hash::Hash,
-            message::Message,
-            pubkey::Pubkey,
-            signature::{Keypair, Signer},
-            stake::{
-                self, instruction as stake_instruction,
-                state::{Authorized, Lockup, StakeAuthorize},
-            },
-            system_instruction, system_program, system_transaction,
-            transaction::{self, Transaction},
-        },
-        solana_stake_program::stake_state,
-        solana_vote_program::vote_state::Vote,
-        std::{
-            sync::{atomic::AtomicBool, RwLock},
-            thread::sleep,
-            time::Duration,
->>>>>>> 65227f44d (Optimize RPC pubsub for multiple clients with the same subscription (#18943)):rpc/src/rpc_pubsub.rs
         },
     };
     use solana_sdk::{
         account::ReadableAccount,
+        clock::Slot,
         commitment_config::CommitmentConfig,
         hash::Hash,
         message::Message,
@@ -607,7 +534,7 @@ mod tests {
         self, stake_instruction,
         stake_state::{Authorized, Lockup, StakeAuthorize, StakeState},
     };
-    use solana_vote_program::vote_transaction;
+    use solana_vote_program::vote_state::Vote;
     use std::{
         sync::{atomic::AtomicBool, RwLock},
         thread::sleep,
@@ -787,11 +714,7 @@ mod tests {
         let _res = io.handle_request_sync(&req);
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"signatureUnsubscribe","params":[0]}"#;
-<<<<<<< HEAD:core/src/rpc_pubsub.rs
-        let res = io.handle_request_sync(&req, session.clone());
-=======
         let res = io.handle_request_sync(req);
->>>>>>> 65227f44d (Optimize RPC pubsub for multiple clients with the same subscription (#18943)):rpc/src/rpc_pubsub.rs
 
         let expected = r#"{"jsonrpc":"2.0","result":true,"id":1}"#;
         let expected: Response = serde_json::from_str(&expected).unwrap();
@@ -801,11 +724,7 @@ mod tests {
 
         // Test bad parameter
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"signatureUnsubscribe","params":[1]}"#;
-<<<<<<< HEAD:core/src/rpc_pubsub.rs
-        let res = io.handle_request_sync(&req, session);
-=======
         let res = io.handle_request_sync(req);
->>>>>>> 65227f44d (Optimize RPC pubsub for multiple clients with the same subscription (#18943)):rpc/src/rpc_pubsub.rs
         let expected = r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"Invalid subscription id."},"id":1}"#;
         let expected: Response = serde_json::from_str(&expected).unwrap();
 
@@ -834,22 +753,6 @@ mod tests {
         let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
         bank_forks.write().unwrap().insert(bank1);
 
-<<<<<<< HEAD:core/src/rpc_pubsub.rs
-        let rpc = RpcSolPubSubImpl {
-            subscriptions: Arc::new(RpcSubscriptions::new(
-                &Arc::new(AtomicBool::new(false)),
-                bank_forks.clone(),
-                Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests_with_slots(
-                    1, 1,
-                ))),
-                OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
-            )),
-            uid: Arc::new(atomic::AtomicUsize::default()),
-            max_active_subscriptions: MAX_ACTIVE_SUBSCRIPTIONS,
-        };
-        let session = create_session();
-        let (subscriber, _id_receiver, receiver) = Subscriber::new_test("accountNotification");
-=======
         let rpc_subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
             &Arc::new(AtomicBool::new(false)),
             bank_forks.clone(),
@@ -861,9 +764,6 @@ mod tests {
 
         let (rpc, mut receiver) = rpc_pubsub_service::test_connection(&rpc_subscriptions);
 
-        let encoding = UiAccountEncoding::Base64;
-
->>>>>>> 65227f44d (Optimize RPC pubsub for multiple clients with the same subscription (#18943)):rpc/src/rpc_pubsub.rs
         rpc.account_subscribe(
             stake_account.pubkey().to_string(),
             Some(RpcAccountInfoConfig {
@@ -1067,11 +967,7 @@ mod tests {
         let _res = io.handle_request_sync(&req);
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"accountUnsubscribe","params":[0]}"#;
-<<<<<<< HEAD:core/src/rpc_pubsub.rs
-        let res = io.handle_request_sync(&req, session.clone());
-=======
         let res = io.handle_request_sync(req);
->>>>>>> 65227f44d (Optimize RPC pubsub for multiple clients with the same subscription (#18943)):rpc/src/rpc_pubsub.rs
 
         let expected = r#"{"jsonrpc":"2.0","result":true,"id":1}"#;
         let expected: Response = serde_json::from_str(&expected).unwrap();
@@ -1081,11 +977,7 @@ mod tests {
 
         // Test bad parameter
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"accountUnsubscribe","params":[1]}"#;
-<<<<<<< HEAD:core/src/rpc_pubsub.rs
-        let res = io.handle_request_sync(&req, session);
-=======
         let res = io.handle_request_sync(req);
->>>>>>> 65227f44d (Optimize RPC pubsub for multiple clients with the same subscription (#18943)):rpc/src/rpc_pubsub.rs
         let expected = r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"Invalid subscription id."},"id":1}"#;
         let expected: Response = serde_json::from_str(&expected).unwrap();
 
@@ -1293,70 +1185,27 @@ mod tests {
         );
         let exit = Arc::new(AtomicBool::new(false));
         let bank = Bank::new(&genesis_config);
-        let bank_forks = BankForks::new(bank);
-        let bank = bank_forks.get(0).unwrap().clone();
-        let bank_forks = Arc::new(RwLock::new(bank_forks));
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
 
         // Setup Subscriptions
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
-<<<<<<< HEAD:core/src/rpc_pubsub.rs
-        let subscriptions = RpcSubscriptions::new_with_vote_subscription(
-=======
         let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
->>>>>>> 65227f44d (Optimize RPC pubsub for multiple clients with the same subscription (#18943)):rpc/src/rpc_pubsub.rs
             &exit,
             bank_forks,
             block_commitment_cache,
             optimistically_confirmed_bank,
-<<<<<<< HEAD:core/src/rpc_pubsub.rs
-            true,
-        );
-        rpc.subscriptions = Arc::new(subscriptions);
-        rpc.vote_subscribe(session, subscriber);
-=======
         ));
         // Setup RPC
         let (rpc, mut receiver) = rpc_pubsub_service::test_connection(&subscriptions);
         rpc.vote_subscribe().unwrap();
->>>>>>> 65227f44d (Optimize RPC pubsub for multiple clients with the same subscription (#18943)):rpc/src/rpc_pubsub.rs
 
-        // Create some voters at genesis
-        let vote_tracker = VoteTracker::new(&bank);
-        let (votes_sender, votes_receiver) = unbounded();
-        let (vote_tracker, validator_voting_keypairs) =
-            (Arc::new(vote_tracker), validator_voting_keypairs);
-
-        let vote_slots = vec![1, 2];
-        validator_voting_keypairs.iter().for_each(|keypairs| {
-            let node_keypair = &keypairs.node_keypair;
-            let vote_keypair = &keypairs.vote_keypair;
-            let vote_tx = vote_transaction::new_vote_transaction(
-                vote_slots.clone(),
-                Hash::default(),
-                Hash::default(),
-                node_keypair,
-                vote_keypair,
-                vote_keypair,
-                None,
-            );
-            votes_sender.send(vec![vote_tx]).unwrap();
-        });
-
-        // Process votes and check they were notified.
-        let (verified_vote_sender, _verified_vote_receiver) = unbounded();
-        let (gossip_verified_vote_hash_sender, _gossip_verified_vote_hash_receiver) = unbounded();
-        let (_replay_votes_sender, replay_votes_receiver) = unbounded();
-        ClusterInfoVoteListener::get_and_process_votes_for_tests(
-            &votes_receiver,
-            &vote_tracker,
-            &bank,
-            &rpc.subscriptions,
-            &gossip_verified_vote_hash_sender,
-            &verified_vote_sender,
-            &replay_votes_receiver,
-        )
-        .unwrap();
+        let vote = Vote {
+            slots: vec![1, 2],
+            hash: Hash::default(),
+            timestamp: None,
+        };
+        subscriptions.notify_vote(&vote);
 
         let response = receiver.recv();
         assert_eq!(

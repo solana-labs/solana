@@ -471,11 +471,7 @@ impl Validator {
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
 
-<<<<<<< HEAD
-        let subscriptions = Arc::new(RpcSubscriptions::new_with_vote_subscription(
-=======
         let rpc_subscriptions = Arc::new(RpcSubscriptions::new_with_config(
->>>>>>> 65227f44d (Optimize RPC pubsub for multiple clients with the same subscription (#18943))
             &exit,
             bank_forks.clone(),
             block_commitment_cache.clone(),
@@ -489,7 +485,7 @@ impl Validator {
         let completed_data_sets_service = CompletedDataSetsService::new(
             completed_data_sets_receiver,
             blockstore.clone(),
-            subscriptions.clone(),
+            rpc_subscriptions.clone(),
             &exit,
             max_slots.clone(),
         );
@@ -569,7 +565,7 @@ impl Validator {
                 } else {
                     let (trigger, pubsub_service) = PubSubService::new(
                         config.pubsub_config.clone(),
-                        &subscriptions,
+                        &rpc_subscriptions,
                         rpc_pubsub_addr,
                     );
                     config
@@ -585,7 +581,7 @@ impl Validator {
                     &exit,
                     bank_forks.clone(),
                     optimistically_confirmed_bank,
-                    subscriptions.clone(),
+                    rpc_subscriptions.clone(),
                 )),
                 Some(bank_notification_sender),
             )
@@ -721,7 +717,7 @@ impl Validator {
             },
             blockstore.clone(),
             ledger_signal_receiver,
-            &subscriptions,
+            &rpc_subscriptions,
             &poh_recorder,
             tower,
             &leader_schedule_cache,
@@ -767,7 +763,7 @@ impl Validator {
             node.sockets.tpu,
             node.sockets.tpu_forwards,
             node.sockets.broadcast,
-            &subscriptions,
+            &rpc_subscriptions,
             transaction_status_sender,
             &blockstore,
             &config.broadcast_stage_type,

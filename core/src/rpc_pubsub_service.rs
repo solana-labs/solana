@@ -1,46 +1,27 @@
 //! The `pubsub` module implements a threaded subscription service on client RPC request
 
-<<<<<<< HEAD:core/src/rpc_pubsub_service.rs
 use crate::{
-    rpc_pubsub::{RpcSolPubSub, RpcSolPubSubImpl, MAX_ACTIVE_SUBSCRIPTIONS},
-    rpc_subscriptions::RpcSubscriptions,
+    rpc_pubsub::{RpcSolPubSubImpl, RpcSolPubSubInternal},
+    rpc_subscription_tracker::{
+        SubscriptionControl, SubscriptionId, SubscriptionParams, SubscriptionToken,
+    },
+    rpc_subscriptions::{RpcNotification, RpcSubscriptions},
 };
-use jsonrpc_pubsub::{PubSubHandler, Session};
-use jsonrpc_ws_server::{RequestContext, ServerBuilder};
+use dashmap::{mapref::entry::Entry, DashMap};
+use jsonrpc_core::IoHandler;
+use soketto::handshake::{server, Server};
+use solana_metrics::TokenCounter;
 use std::{
+    io,
     net::SocketAddr,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-    thread::{self, sleep, Builder, JoinHandle},
-    time::Duration,
-=======
-use {
-    crate::{
-        rpc_pubsub::{RpcSolPubSubImpl, RpcSolPubSubInternal},
-        rpc_subscription_tracker::{
-            SubscriptionControl, SubscriptionId, SubscriptionParams, SubscriptionToken,
-        },
-        rpc_subscriptions::{RpcNotification, RpcSubscriptions},
-    },
-    dashmap::{mapref::entry::Entry, DashMap},
-    jsonrpc_core::IoHandler,
-    soketto::handshake::{server, Server},
-    solana_metrics::TokenCounter,
-    std::{
-        io,
-        net::SocketAddr,
-        str,
-        sync::Arc,
-        thread::{self, Builder, JoinHandle},
-    },
-    stream_cancel::{Trigger, Tripwire},
-    thiserror::Error,
-    tokio::{net::TcpStream, pin, select, sync::broadcast},
-    tokio_util::compat::TokioAsyncReadCompatExt,
->>>>>>> 65227f44d (Optimize RPC pubsub for multiple clients with the same subscription (#18943)):rpc/src/rpc_pubsub_service.rs
+    str,
+    sync::Arc,
+    thread::{self, Builder, JoinHandle},
 };
+use stream_cancel::{Trigger, Tripwire};
+use thiserror::Error;
+use tokio::{net::TcpStream, pin, select, sync::broadcast};
+use tokio_util::compat::TokioAsyncReadCompatExt;
 
 pub const MAX_ACTIVE_SUBSCRIPTIONS: usize = 1_000_000;
 pub const DEFAULT_QUEUE_CAPACITY_ITEMS: usize = 10_000_000;
@@ -361,7 +342,6 @@ async fn listen(
 
 #[cfg(test)]
 mod tests {
-<<<<<<< HEAD:core/src/rpc_pubsub_service.rs
     use super::*;
     use crate::optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank;
     use solana_runtime::{
@@ -372,22 +352,7 @@ mod tests {
     };
     use std::{
         net::{IpAddr, Ipv4Addr},
-        sync::RwLock,
-=======
-    use {
-        super::*,
-        crate::optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
-        solana_runtime::{
-            bank::Bank,
-            bank_forks::BankForks,
-            commitment::BlockCommitmentCache,
-            genesis_utils::{create_genesis_config, GenesisConfigInfo},
-        },
-        std::{
-            net::{IpAddr, Ipv4Addr},
-            sync::{atomic::AtomicBool, RwLock},
-        },
->>>>>>> 65227f44d (Optimize RPC pubsub for multiple clients with the same subscription (#18943)):rpc/src/rpc_pubsub_service.rs
+        sync::{atomic::AtomicBool, RwLock},
     };
 
     #[test]

@@ -1,7 +1,6 @@
 use bincode::serialize;
 use jsonrpc_core::futures::StreamExt;
 use jsonrpc_core_client::transports::ws;
-
 use log::*;
 use reqwest::{self, header::CONTENT_TYPE};
 use serde_json::{json, Value};
@@ -9,20 +8,10 @@ use solana_account_decoder::UiAccount;
 use solana_client::{
     rpc_client::RpcClient,
     rpc_config::{RpcAccountInfoConfig, RpcSignatureSubscribeConfig},
-<<<<<<< HEAD
-    rpc_response::{Response, RpcSignatureResult, SlotUpdate},
-    tpu_client::{TpuClient, TpuClientConfig},
-};
-use solana_core::{rpc_pubsub::gen_client::Client as PubsubClient, test_validator::TestValidator};
-=======
-    rpc_request::RpcError,
     rpc_response::{Response as RpcResponse, RpcSignatureResult, SlotUpdate},
     tpu_client::{TpuClient, TpuClientConfig},
 };
-use solana_core::test_validator::TestValidator;
-use solana_rpc::rpc_pubsub::gen_client::Client as PubsubClient;
-
->>>>>>> 65227f44d (Optimize RPC pubsub for multiple clients with the same subscription (#18943))
+use solana_core::{rpc_pubsub::gen_client::Client as PubsubClient, test_validator::TestValidator};
 use solana_sdk::{
     commitment_config::CommitmentConfig,
     hash::Hash,

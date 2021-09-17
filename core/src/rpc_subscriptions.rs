@@ -1,19 +1,19 @@
 //! The `pubsub` module implements a threaded subscription service on client RPC request
 
-<<<<<<< HEAD:core/src/rpc_subscriptions.rs
 use crate::{
     optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
     rpc::{get_parsed_token_account, get_parsed_token_accounts},
+    rpc_pubsub_service::PubSubConfig,
+    rpc_subscription_tracker::{
+        AccountSubscriptionParams, LogsSubscriptionKind, LogsSubscriptionParams,
+        ProgramSubscriptionParams, SignatureSubscriptionParams, SubscriptionControl,
+        SubscriptionId, SubscriptionInfo, SubscriptionParams, SubscriptionsTracker,
+    },
 };
-use core::hash::Hash;
-use jsonrpc_pubsub::{
-    typed::{Sink, Subscriber},
-    SubscriptionId,
-};
+use crossbeam_channel::{Receiver, RecvTimeoutError, SendError, Sender};
 use serde::Serialize;
 use solana_account_decoder::{parse_token::spl_token_id_v2_0, UiAccount, UiAccountEncoding};
 use solana_client::{
-    rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig, RpcSignatureSubscribeConfig},
     rpc_filter::RpcFilterType,
     rpc_response::{
         ProcessedSignatureResult, ReceivedSignatureResult, Response, RpcKeyedAccount,
@@ -22,16 +22,13 @@ use solana_client::{
 };
 use solana_measure::measure::Measure;
 use solana_runtime::{
-    bank::{
-        Bank, TransactionLogCollectorConfig, TransactionLogCollectorFilter, TransactionLogInfo,
-    },
+    bank::{Bank, TransactionLogInfo},
     bank_forks::BankForks,
     commitment::{BlockCommitmentCache, CommitmentSlots},
 };
 use solana_sdk::{
     account::{AccountSharedData, ReadableAccount},
     clock::{Slot, UnixTimestamp},
-    commitment_config::CommitmentConfig,
     pubkey::Pubkey,
     signature::Signature,
     timing::timestamp,
@@ -39,66 +36,17 @@ use solana_sdk::{
 };
 use solana_vote_program::vote_state::Vote;
 use std::{
-    collections::{HashMap, HashSet},
-    iter,
+    collections::{HashMap, VecDeque},
+    io::Cursor,
+    iter, str,
     sync::{
         atomic::{AtomicBool, Ordering},
-        mpsc::{Receiver, RecvTimeoutError, SendError, Sender},
+        Arc, RwLock, Weak,
     },
-    sync::{Arc, Mutex, RwLock},
     thread::{Builder, JoinHandle},
     time::Duration,
-=======
-use {
-    crate::{
-        optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
-        parsed_token_accounts::{get_parsed_token_account, get_parsed_token_accounts},
-        rpc_pubsub_service::PubSubConfig,
-        rpc_subscription_tracker::{
-            AccountSubscriptionParams, LogsSubscriptionKind, LogsSubscriptionParams,
-            ProgramSubscriptionParams, SignatureSubscriptionParams, SubscriptionControl,
-            SubscriptionId, SubscriptionInfo, SubscriptionParams, SubscriptionsTracker,
-        },
-    },
-    crossbeam_channel::{Receiver, RecvTimeoutError, SendError, Sender},
-    serde::Serialize,
-    solana_account_decoder::{parse_token::spl_token_id_v2_0, UiAccount, UiAccountEncoding},
-    solana_client::{
-        rpc_filter::RpcFilterType,
-        rpc_response::{
-            ProcessedSignatureResult, ReceivedSignatureResult, Response, RpcKeyedAccount,
-            RpcLogsResponse, RpcResponseContext, RpcSignatureResult, SlotInfo, SlotUpdate,
-        },
-    },
-    solana_measure::measure::Measure,
-    solana_runtime::{
-        bank::{Bank, TransactionLogInfo},
-        bank_forks::BankForks,
-        commitment::{BlockCommitmentCache, CommitmentSlots},
-    },
-    solana_sdk::{
-        account::{AccountSharedData, ReadableAccount},
-        clock::{Slot, UnixTimestamp},
-        pubkey::Pubkey,
-        signature::Signature,
-        timing::timestamp,
-        transaction,
-    },
-    solana_vote_program::vote_state::Vote,
-    std::{
-        collections::{HashMap, VecDeque},
-        io::Cursor,
-        iter, str,
-        sync::{
-            atomic::{AtomicBool, Ordering},
-            Arc, RwLock, Weak,
-        },
-        thread::{Builder, JoinHandle},
-        time::Duration,
-    },
-    tokio::sync::broadcast,
->>>>>>> 65227f44d (Optimize RPC pubsub for multiple clients with the same subscription (#18943)):rpc/src/rpc_subscriptions.rs
 };
+use tokio::sync::broadcast;
 
 const RECEIVE_DELAY_MILLIS: u64 = 100;
 
@@ -333,20 +281,13 @@ fn filter_account_result(
     // If last_modified_slot < last_notified_slot this means that we last notified for a fork
     // and should notify that the account state has been reverted.
     let results: Box<dyn Iterator<Item = UiAccount>> = if last_modified_slot != last_notified_slot {
-<<<<<<< HEAD:core/src/rpc_subscriptions.rs
-        let encoding = encoding.unwrap_or(UiAccountEncoding::Binary);
-        if account.owner == spl_token_id_v2_0() && encoding == UiAccountEncoding::JsonParsed {
-            Box::new(iter::once(get_parsed_token_account(bank, pubkey, account)))
-=======
-        if account.owner() == &spl_token_id_v2_0()
-            && params.encoding == UiAccountEncoding::JsonParsed
+        if account.owner == spl_token_id_v2_0() && params.encoding == UiAccountEncoding::JsonParsed
         {
             Box::new(iter::once(get_parsed_token_account(
                 bank,
                 &params.pubkey,
                 account,
             )))
->>>>>>> 65227f44d (Optimize RPC pubsub for multiple clients with the same subscription (#18943)):rpc/src/rpc_subscriptions.rs
         } else {
             Box::new(iter::once(UiAccount::encode(
                 &params.pubkey,
@@ -581,331 +522,8 @@ impl RpcSubscriptions {
         )
     }
 
-<<<<<<< HEAD:core/src/rpc_subscriptions.rs
-    fn check_program(
-        program_id: &Pubkey,
-        bank_forks: &Arc<RwLock<BankForks>>,
-        program_subscriptions: Arc<RpcProgramSubscriptions>,
-        notifier: &RpcNotifier,
-        commitment_slots: &CommitmentSlots,
-    ) -> HashSet<SubscriptionId> {
-        let subscriptions = program_subscriptions.read().unwrap();
-        check_commitment_and_notify(
-            &subscriptions,
-            program_id,
-            bank_forks,
-            commitment_slots,
-            Bank::get_program_accounts_modified_since_parent,
-            filter_program_results,
-            notifier,
-        )
-    }
-
-    fn check_signature(
-        signature: &Signature,
-        bank_forks: &Arc<RwLock<BankForks>>,
-        signature_subscriptions: Arc<RpcSignatureSubscriptions>,
-        notifier: &RpcNotifier,
-        commitment_slots: &CommitmentSlots,
-    ) -> HashSet<SubscriptionId> {
-        let mut subscriptions = signature_subscriptions.write().unwrap();
-        let notified_ids = check_commitment_and_notify(
-            &subscriptions,
-            signature,
-            bank_forks,
-            commitment_slots,
-            Bank::get_signature_status_processed_since_parent,
-            filter_signature_result,
-            notifier,
-        );
-        if let Some(subscription_ids) = subscriptions.get_mut(signature) {
-            subscription_ids.retain(|k, _| !notified_ids.contains(k));
-            if subscription_ids.is_empty() {
-                subscriptions.remove(&signature);
-            }
-        }
-        notified_ids
-    }
-
-    pub fn total(&self) -> usize {
-        self.subscriptions.total()
-    }
-
-    pub fn add_account_subscription(
-        &self,
-        pubkey: Pubkey,
-        config: Option<RpcAccountInfoConfig>,
-        sub_id: SubscriptionId,
-        subscriber: Subscriber<Response<UiAccount>>,
-    ) {
-        let config = config.unwrap_or_default();
-        let commitment = config.commitment.unwrap_or_default();
-
-        let slot = if commitment.is_finalized() {
-            self.block_commitment_cache
-                .read()
-                .unwrap()
-                .highest_confirmed_root()
-        } else if commitment.is_confirmed() {
-            self.optimistically_confirmed_bank
-                .read()
-                .unwrap()
-                .bank
-                .slot()
-        } else {
-            self.block_commitment_cache.read().unwrap().slot()
-        };
-
-        let last_notified_slot = if let Some((_account, slot)) = self
-            .bank_forks
-            .read()
-            .unwrap()
-            .get(slot)
-            .and_then(|bank| bank.get_account_modified_slot(&pubkey))
-        {
-            slot
-        } else {
-            0
-        };
-
-        let mut subscriptions = if commitment.is_confirmed() {
-            self.subscriptions
-                .gossip_account_subscriptions
-                .write()
-                .unwrap()
-        } else {
-            self.subscriptions.account_subscriptions.write().unwrap()
-        };
-
-        add_subscription(
-            &mut subscriptions,
-            pubkey,
-            commitment,
-            sub_id,
-            subscriber,
-            last_notified_slot,
-            config.encoding,
-        );
-    }
-
-    pub fn remove_account_subscription(&self, id: &SubscriptionId) -> bool {
-        let mut subscriptions = self.subscriptions.account_subscriptions.write().unwrap();
-        if remove_subscription(&mut subscriptions, id) {
-            true
-        } else {
-            let mut subscriptions = self
-                .subscriptions
-                .gossip_account_subscriptions
-                .write()
-                .unwrap();
-            remove_subscription(&mut subscriptions, id)
-        }
-    }
-
-    pub fn add_program_subscription(
-        &self,
-        program_id: Pubkey,
-        config: Option<RpcProgramAccountsConfig>,
-        sub_id: SubscriptionId,
-        subscriber: Subscriber<Response<RpcKeyedAccount>>,
-    ) {
-        let config = config.unwrap_or_default();
-        let commitment = config.account_config.commitment.unwrap_or_default();
-
-        let mut subscriptions = if commitment.is_confirmed() {
-            self.subscriptions
-                .gossip_program_subscriptions
-                .write()
-                .unwrap()
-        } else {
-            self.subscriptions.program_subscriptions.write().unwrap()
-        };
-
-        add_subscription(
-            &mut subscriptions,
-            program_id,
-            commitment,
-            sub_id,
-            subscriber,
-            0, // last_notified_slot is not utilized for program subscriptions
-            Some(ProgramConfig {
-                filters: config.filters.unwrap_or_default(),
-                encoding: config.account_config.encoding,
-            }),
-        );
-    }
-
-    pub fn remove_program_subscription(&self, id: &SubscriptionId) -> bool {
-        let mut subscriptions = self.subscriptions.program_subscriptions.write().unwrap();
-        if remove_subscription(&mut subscriptions, id) {
-            true
-        } else {
-            let mut subscriptions = self
-                .subscriptions
-                .gossip_program_subscriptions
-                .write()
-                .unwrap();
-            remove_subscription(&mut subscriptions, id)
-        }
-    }
-
-    pub fn add_logs_subscription(
-        &self,
-        address: Option<Pubkey>,
-        include_votes: bool,
-        commitment: Option<CommitmentConfig>,
-        sub_id: SubscriptionId,
-        subscriber: Subscriber<Response<RpcLogsResponse>>,
-    ) {
-        let commitment = commitment.unwrap_or_default();
-
-        {
-            let mut subscriptions = if commitment.is_confirmed() {
-                self.subscriptions
-                    .gossip_logs_subscriptions
-                    .write()
-                    .unwrap()
-            } else {
-                self.subscriptions.logs_subscriptions.write().unwrap()
-            };
-            add_subscription(
-                &mut subscriptions,
-                (address, include_votes),
-                commitment,
-                sub_id,
-                subscriber,
-                0, // last_notified_slot is not utilized for logs subscriptions
-                None,
-            );
-        }
-        self.update_bank_transaction_log_keys();
-    }
-
-    pub fn remove_logs_subscription(&self, id: &SubscriptionId) -> bool {
-        let mut removed = {
-            let mut subscriptions = self.subscriptions.logs_subscriptions.write().unwrap();
-            remove_subscription(&mut subscriptions, id)
-        };
-
-        if !removed {
-            removed = {
-                let mut subscriptions = self
-                    .subscriptions
-                    .gossip_logs_subscriptions
-                    .write()
-                    .unwrap();
-                remove_subscription(&mut subscriptions, id)
-            };
-        }
-
-        if removed {
-            self.update_bank_transaction_log_keys();
-        }
-        removed
-    }
-
-    fn update_bank_transaction_log_keys(&self) {
-        // Grab a write lock for both `logs_subscriptions` and `gossip_logs_subscriptions`, to
-        // ensure `Bank::transaction_log_collector_config` is updated atomically.
-        let logs_subscriptions = self.subscriptions.logs_subscriptions.write().unwrap();
-        let gossip_logs_subscriptions = self
-            .subscriptions
-            .gossip_logs_subscriptions
-            .write()
-            .unwrap();
-
-        let mut config = TransactionLogCollectorConfig::default();
-
-        let mut all = false;
-        let mut all_with_votes = false;
-        let mut mentioned_address = false;
-        for (address, with_votes) in logs_subscriptions
-            .keys()
-            .chain(gossip_logs_subscriptions.keys())
-        {
-            match address {
-                None => {
-                    if *with_votes {
-                        all_with_votes = true;
-                    } else {
-                        all = true;
-                    }
-                }
-                Some(address) => {
-                    config.mentioned_addresses.insert(*address);
-                    mentioned_address = true;
-                }
-            }
-        }
-        config.filter = if all_with_votes {
-            TransactionLogCollectorFilter::AllWithVotes
-        } else if all {
-            TransactionLogCollectorFilter::All
-        } else if mentioned_address {
-            TransactionLogCollectorFilter::OnlyMentionedAddresses
-        } else {
-            TransactionLogCollectorFilter::None
-        };
-
-        *self
-            .bank_forks
-            .read()
-            .unwrap()
-            .root_bank()
-            .transaction_log_collector_config
-            .write()
-            .unwrap() = config;
-    }
-
-    pub fn add_signature_subscription(
-        &self,
-        signature: Signature,
-        signature_subscribe_config: Option<RpcSignatureSubscribeConfig>,
-        sub_id: SubscriptionId,
-        subscriber: Subscriber<Response<RpcSignatureResult>>,
-    ) {
-        let (commitment, enable_received_notification) = signature_subscribe_config
-            .map(|config| (config.commitment, config.enable_received_notification))
-            .unwrap_or_default();
-
-        let commitment = commitment.unwrap_or_default();
-
-        let mut subscriptions = if commitment.is_confirmed() {
-            self.subscriptions
-                .gossip_signature_subscriptions
-                .write()
-                .unwrap()
-        } else {
-            self.subscriptions.signature_subscriptions.write().unwrap()
-        };
-
-        add_subscription(
-            &mut subscriptions,
-            signature,
-            commitment,
-            sub_id,
-            subscriber,
-            0, // last_notified_slot is not utilized for signature subscriptions
-            enable_received_notification,
-        );
-    }
-
-    pub fn remove_signature_subscription(&self, id: &SubscriptionId) -> bool {
-        let mut subscriptions = self.subscriptions.signature_subscriptions.write().unwrap();
-        if remove_subscription(&mut subscriptions, id) {
-            true
-        } else {
-            let mut subscriptions = self
-                .subscriptions
-                .gossip_signature_subscriptions
-                .write()
-                .unwrap();
-            remove_subscription(&mut subscriptions, id)
-        }
-=======
     pub fn control(&self) -> &SubscriptionControl {
         &self.control
->>>>>>> 65227f44d (Optimize RPC pubsub for multiple clients with the same subscription (#18943)):rpc/src/rpc_subscriptions.rs
     }
 
     /// Notify subscribers of changes to any accounts or new signatures since
@@ -1104,31 +722,6 @@ impl RpcSubscriptions {
         }
     }
 
-<<<<<<< HEAD:core/src/rpc_subscriptions.rs
-    fn process_gossip_notification(
-        slot: Slot,
-        notifier: &RpcNotifier,
-        subscriptions: &Subscriptions,
-        bank_forks: &Arc<RwLock<BankForks>>,
-    ) {
-        let commitment_slots = CommitmentSlots {
-            highest_confirmed_slot: slot,
-            ..CommitmentSlots::default()
-        };
-        RpcSubscriptions::notify_accounts_logs_programs_signatures(
-            &subscriptions.gossip_account_subscriptions,
-            &subscriptions.gossip_logs_subscriptions,
-            &subscriptions.gossip_program_subscriptions,
-            &subscriptions.gossip_signature_subscriptions,
-            bank_forks,
-            &commitment_slots,
-            &notifier,
-            "gossip",
-        );
-    }
-
-=======
->>>>>>> 65227f44d (Optimize RPC pubsub for multiple clients with the same subscription (#18943)):rpc/src/rpc_subscriptions.rs
     fn notify_accounts_logs_programs_signatures(
         subscriptions: &HashMap<SubscriptionId, Arc<SubscriptionInfo>>,
         bank_forks: &Arc<RwLock<BankForks>>,
@@ -1136,81 +729,18 @@ impl RpcSubscriptions {
         notifier: &mut RpcNotifier,
         source: &'static str,
     ) {
-<<<<<<< HEAD:core/src/rpc_subscriptions.rs
-        let mut accounts_time = Measure::start("accounts");
-        let pubkeys: Vec<_> = {
-            let subs = account_subscriptions.read().unwrap();
-            subs.keys().cloned().collect()
-        };
-        let mut num_pubkeys_notified = 0;
-        for pubkey in &pubkeys {
-            num_pubkeys_notified += Self::check_account(
-                pubkey,
-                bank_forks,
-                account_subscriptions.clone(),
-                &notifier,
-                &commitment_slots,
-            )
-            .len();
-        }
-        accounts_time.stop();
-=======
         let mut total_time = Measure::start("notify_accounts_logs_programs_signatures");
         let mut num_accounts_found = 0;
         let mut num_accounts_notified = 0;
->>>>>>> 65227f44d (Optimize RPC pubsub for multiple clients with the same subscription (#18943)):rpc/src/rpc_subscriptions.rs
 
         let mut num_logs_found = 0;
         let mut num_logs_notified = 0;
-<<<<<<< HEAD:core/src/rpc_subscriptions.rs
-        for address in &logs {
-            num_logs_notified += Self::check_logs(
-                address,
-                bank_forks,
-                logs_subscriptions.clone(),
-                &notifier,
-                &commitment_slots,
-            )
-            .len();
-        }
-        logs_time.stop();
-=======
->>>>>>> 65227f44d (Optimize RPC pubsub for multiple clients with the same subscription (#18943)):rpc/src/rpc_subscriptions.rs
 
         let mut num_signatures_found = 0;
         let mut num_signatures_notified = 0;
 
         let mut num_programs_found = 0;
         let mut num_programs_notified = 0;
-<<<<<<< HEAD:core/src/rpc_subscriptions.rs
-        for program_id in &programs {
-            num_programs_notified += Self::check_program(
-                program_id,
-                bank_forks,
-                program_subscriptions.clone(),
-                &notifier,
-                &commitment_slots,
-            )
-            .len();
-        }
-        programs_time.stop();
-
-        let mut signatures_time = Measure::start("signatures");
-        let signatures: Vec<_> = {
-            let subs = signature_subscriptions.read().unwrap();
-            subs.keys().cloned().collect()
-        };
-        let mut num_signatures_notified = 0;
-        for signature in &signatures {
-            num_signatures_notified += Self::check_signature(
-                signature,
-                bank_forks,
-                signature_subscriptions.clone(),
-                &notifier,
-                &commitment_slots,
-            )
-            .len();
-=======
 
         for subscription in subscriptions.values() {
             match subscription.params() {
@@ -1289,7 +819,6 @@ impl RpcSubscriptions {
                 }
                 _ => error!("wrong subscription type in alps map"),
             }
->>>>>>> 65227f44d (Optimize RPC pubsub for multiple clients with the same subscription (#18943)):rpc/src/rpc_subscriptions.rs
         }
 
         total_time.stop();
@@ -1342,43 +871,6 @@ impl RpcSubscriptions {
                 "rpc-subscription-counter-num_signatures_notified",
                 num_signatures_notified
             );
-<<<<<<< HEAD:core/src/rpc_subscriptions.rs
-        }
-    }
-
-    fn process_signatures_received(
-        (received_slot, signatures): &(Slot, Vec<Signature>),
-        signature_subscriptions: &Arc<RpcSignatureSubscriptions>,
-        notifier: &RpcNotifier,
-    ) {
-        for signature in signatures {
-            if let Some(hashmap) = signature_subscriptions.read().unwrap().get(signature) {
-                for (
-                    _,
-                    SubscriptionData {
-                        sink,
-                        config: is_received_notification_enabled,
-                        ..
-                    },
-                ) in hashmap.iter()
-                {
-                    if is_received_notification_enabled.unwrap_or_default() {
-                        notifier.notify(
-                            Response {
-                                context: RpcResponseContext {
-                                    slot: *received_slot,
-                                },
-                                value: RpcSignatureResult::ReceivedSignature(
-                                    ReceivedSignatureResult::ReceivedSignature,
-                                ),
-                            },
-                            &sink,
-                        );
-                    }
-                }
-            }
-=======
->>>>>>> 65227f44d (Optimize RPC pubsub for multiple clients with the same subscription (#18943)):rpc/src/rpc_subscriptions.rs
         }
     }
 
@@ -1403,89 +895,51 @@ impl RpcSubscriptions {
 
 #[cfg(test)]
 pub(crate) mod tests {
-<<<<<<< HEAD:core/src/rpc_subscriptions.rs
     use super::*;
-    use crate::optimistically_confirmed_bank_tracker::{
-        BankNotification, OptimisticallyConfirmedBank, OptimisticallyConfirmedBankTracker,
+    use crate::{
+        optimistically_confirmed_bank_tracker::{
+            BankNotification, OptimisticallyConfirmedBank, OptimisticallyConfirmedBankTracker,
+        },
+        rpc_pubsub::RpcSolPubSubInternal,
+        rpc_pubsub_service,
     };
-    use jsonrpc_core::futures::StreamExt;
-    use jsonrpc_pubsub::typed::Subscriber;
     use serial_test::serial;
+    use solana_client::rpc_config::{
+        RpcAccountInfoConfig, RpcProgramAccountsConfig, RpcSignatureSubscribeConfig,
+        RpcTransactionLogsFilter,
+    };
     use solana_runtime::{
         commitment::BlockCommitment,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
     };
     use solana_sdk::{
+        commitment_config::CommitmentConfig,
         message::Message,
         signature::{Keypair, Signer},
         system_instruction, system_program, system_transaction,
         transaction::Transaction,
     };
-    use std::{
-        fmt::Debug,
-        sync::{atomic::Ordering::Relaxed, mpsc::channel},
-    };
-    use tokio::{
-        runtime::Runtime,
-        time::{sleep, timeout},
-    };
+    use std::{collections::HashSet, sync::atomic::Ordering::Relaxed};
 
-    pub(crate) fn robust_poll_or_panic<T: Debug + Send + 'static>(
-        receiver: jsonrpc_core::futures::channel::mpsc::UnboundedReceiver<T>,
-    ) -> (
-        T,
-        jsonrpc_core::futures::channel::mpsc::UnboundedReceiver<T>,
-    ) {
-        let (inner_sender, inner_receiver) = channel();
-        let rt = Runtime::new().unwrap();
-        rt.spawn(async move {
-            let result = timeout(
-                Duration::from_millis(RECEIVE_DELAY_MILLIS),
-                receiver.into_future(),
-            )
-            .await
-            .unwrap_or_else(|err| panic!("stream error {:?}", err));
-
-            match result {
-                (Some(value), receiver) => {
-                    inner_sender.send((value, receiver)).expect("send error")
-                }
-                (None, _) => panic!("unexpected end of stream"),
-            }
-
-            sleep(Duration::from_millis(RECEIVE_DELAY_MILLIS * 2)).await;
-        });
-        inner_receiver.recv().expect("recv error")
+    fn make_account_result(lamports: u64, subscription: u64, data: &str) -> serde_json::Value {
+        json!({
+           "jsonrpc": "2.0",
+           "method": "accountNotification",
+           "params": {
+               "result": {
+                   "context": { "slot": 1 },
+                   "value": {
+                       "data": data,
+                       "executable": false,
+                       "lamports": lamports,
+                       "owner": "11111111111111111111111111111111",
+                       "rentEpoch": 0,
+                    },
+               },
+               "subscription": subscription,
+           }
+        })
     }
-=======
-    use {
-        super::*,
-        crate::{
-            optimistically_confirmed_bank_tracker::{
-                BankNotification, OptimisticallyConfirmedBank, OptimisticallyConfirmedBankTracker,
-            },
-            rpc_pubsub::RpcSolPubSubInternal,
-            rpc_pubsub_service,
-        },
-        serial_test::serial,
-        solana_client::rpc_config::{
-            RpcAccountInfoConfig, RpcProgramAccountsConfig, RpcSignatureSubscribeConfig,
-            RpcTransactionLogsFilter,
-        },
-        solana_runtime::{
-            commitment::BlockCommitment,
-            genesis_utils::{create_genesis_config, GenesisConfigInfo},
-        },
-        solana_sdk::{
-            commitment_config::CommitmentConfig,
-            message::Message,
-            signature::{Keypair, Signer},
-            stake, system_instruction, system_program, system_transaction,
-            transaction::Transaction,
-        },
-        std::{collections::HashSet, sync::atomic::Ordering::Relaxed},
-    };
->>>>>>> 65227f44d (Optimize RPC pubsub for multiple clients with the same subscription (#18943)):rpc/src/rpc_subscriptions.rs
 
     #[test]
     #[serial]
@@ -1503,12 +957,6 @@ pub(crate) mod tests {
         bank_forks.write().unwrap().insert(bank1);
         let alice = Keypair::new();
 
-        let (create_sub, _id_receiver, create_recv) = Subscriber::new_test("accountNotification");
-        let (close_sub, _id_receiver, close_recv) = Subscriber::new_test("accountNotification");
-
-        let create_sub_id = SubscriptionId::Number(0);
-        let close_sub_id = SubscriptionId::Number(1);
-
         let exit = Arc::new(AtomicBool::new(false));
         let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
             &exit,
@@ -1517,30 +965,9 @@ pub(crate) mod tests {
                 1, 1,
             ))),
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
-<<<<<<< HEAD:core/src/rpc_subscriptions.rs
-        );
-        subscriptions.add_account_subscription(
-            alice.pubkey(),
-            Some(RpcAccountInfoConfig {
-                commitment: Some(CommitmentConfig::processed()),
-                encoding: None,
-                data_slice: None,
-            }),
-            create_sub_id.clone(),
-            create_sub,
-        );
-=======
         ));
->>>>>>> 65227f44d (Optimize RPC pubsub for multiple clients with the same subscription (#18943)):rpc/src/rpc_subscriptions.rs
 
-        assert!(subscriptions
-            .subscriptions
-            .account_subscriptions
-            .read()
-            .unwrap()
-            .contains_key(&alice.pubkey()));
-
-        let tx = system_transaction::create_account(
+        let tx0 = system_transaction::create_account(
             &mint_keypair,
             &alice,
             blockhash,
@@ -1548,94 +975,14 @@ pub(crate) mod tests {
             0,
             &system_program::id(),
         );
-        bank_forks
-            .write()
-            .unwrap()
-            .get(1)
-            .unwrap()
-            .process_transaction(&tx)
-            .unwrap();
-        let commitment_slots = CommitmentSlots {
-            slot: 1,
-            ..CommitmentSlots::default()
-        };
-        subscriptions.notify_subscribers(commitment_slots);
-        let (response, _) = robust_poll_or_panic(create_recv);
-        let expected = json!({
-           "jsonrpc": "2.0",
-           "method": "accountNotification",
-           "params": {
-               "result": {
-                   "context": { "slot": 1 },
-                   "value": {
-                       "data": "",
-                       "executable": false,
-                       "lamports": 1,
-                       "owner": "11111111111111111111111111111111",
-                       "rentEpoch": 0,
-                    },
-               },
-               "subscription": 0,
-           }
-        });
-        assert_eq!(serde_json::to_string(&expected).unwrap(), response);
-        subscriptions.remove_account_subscription(&create_sub_id);
+        let expected0 = make_account_result(1, 0, "");
 
-        subscriptions.add_account_subscription(
-            alice.pubkey(),
-            Some(RpcAccountInfoConfig {
-                commitment: Some(CommitmentConfig::processed()),
-                encoding: None,
-                data_slice: None,
-            }),
-            close_sub_id.clone(),
-            close_sub,
-        );
-
-        let tx = {
+        let tx1 = {
             let instruction =
                 system_instruction::transfer(&alice.pubkey(), &mint_keypair.pubkey(), 1);
             let message = Message::new(&[instruction], Some(&mint_keypair.pubkey()));
             Transaction::new(&[&alice, &mint_keypair], message, blockhash)
         };
-<<<<<<< HEAD:core/src/rpc_subscriptions.rs
-
-        bank_forks
-            .write()
-            .unwrap()
-            .get(1)
-            .unwrap()
-            .process_transaction(&tx)
-            .unwrap();
-        subscriptions.notify_subscribers(commitment_slots);
-        let (response, _) = robust_poll_or_panic(close_recv);
-        let expected = json!({
-           "jsonrpc": "2.0",
-           "method": "accountNotification",
-           "params": {
-               "result": {
-                   "context": { "slot": 1 },
-                   "value": {
-                       "data": "",
-                       "executable": false,
-                       "lamports": 0,
-                       "owner": "11111111111111111111111111111111",
-                       "rentEpoch": 0,
-                    },
-               },
-               "subscription": 1,
-           }
-        });
-        assert_eq!(serde_json::to_string(&expected).unwrap(), response);
-        subscriptions.remove_account_subscription(&close_sub_id);
-
-        assert!(!subscriptions
-            .subscriptions
-            .account_subscriptions
-            .read()
-            .unwrap()
-            .contains_key(&alice.pubkey()));
-=======
         let expected1 = make_account_result(0, 1, "");
 
         let tx2 = system_transaction::create_account(
@@ -1646,7 +993,8 @@ pub(crate) mod tests {
             1024,
             &system_program::id(),
         );
-        let expected2 = make_account_result(1, 2, "error: data too large for bs58 encoding");
+        let expected_data = [0; 1024];
+        let expected2 = make_account_result(1, 2, &bs58::encode(&expected_data).into_string());
 
         let subscribe_cases = vec![
             (alice.pubkey(), tx0, expected0),
@@ -1706,7 +1054,6 @@ pub(crate) mod tests {
                     encoding: UiAccountEncoding::Binary,
                 }));
         }
->>>>>>> 65227f44d (Optimize RPC pubsub for multiple clients with the same subscription (#18943)):rpc/src/rpc_subscriptions.rs
     }
 
     #[test]
@@ -1745,33 +1092,11 @@ pub(crate) mod tests {
             bank_forks,
             Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests())),
             optimistically_confirmed_bank,
-<<<<<<< HEAD:core/src/rpc_subscriptions.rs
-        );
-        subscriptions.add_program_subscription(
-            solana_stake_program::id(),
-            Some(RpcProgramAccountsConfig {
-                account_config: RpcAccountInfoConfig {
-                    commitment: Some(CommitmentConfig::processed()),
-                    ..RpcAccountInfoConfig::default()
-                },
-                ..RpcProgramAccountsConfig::default()
-            }),
-            sub_id.clone(),
-            subscriber,
-        );
-
-        assert!(subscriptions
-            .subscriptions
-            .program_subscriptions
-            .read()
-            .unwrap()
-            .contains_key(&solana_stake_program::id()));
-=======
         ));
         let (rpc, mut receiver) = rpc_pubsub_service::test_connection(&subscriptions);
         let sub_id = rpc
             .program_subscribe(
-                stake::program::id().to_string(),
+                solana_stake_program::id().to_string(),
                 Some(RpcProgramAccountsConfig {
                     account_config: RpcAccountInfoConfig {
                         commitment: Some(CommitmentConfig::processed()),
@@ -1785,14 +1110,13 @@ pub(crate) mod tests {
         subscriptions
             .control
             .assert_subscribed(&SubscriptionParams::Program(ProgramSubscriptionParams {
-                pubkey: stake::program::id(),
+                pubkey: solana_stake_program::id(),
                 filters: Vec::new(),
                 commitment: CommitmentConfig::processed(),
                 data_slice: None,
                 encoding: UiAccountEncoding::Binary,
                 with_context: false,
             }));
->>>>>>> 65227f44d (Optimize RPC pubsub for multiple clients with the same subscription (#18943)):rpc/src/rpc_subscriptions.rs
 
         subscriptions.notify_subscribers(CommitmentSlots::default());
         let response = receiver.recv();
@@ -1821,27 +1145,17 @@ pub(crate) mod tests {
             serde_json::from_str::<serde_json::Value>(&response).unwrap(),
         );
 
-<<<<<<< HEAD:core/src/rpc_subscriptions.rs
-        subscriptions.remove_program_subscription(&sub_id);
-        assert!(!subscriptions
-            .subscriptions
-            .program_subscriptions
-            .read()
-            .unwrap()
-            .contains_key(&solana_stake_program::id()));
-=======
         rpc.program_unsubscribe(sub_id).unwrap();
         subscriptions
             .control
             .assert_unsubscribed(&SubscriptionParams::Program(ProgramSubscriptionParams {
-                pubkey: stake::program::id(),
+                pubkey: solana_stake_program::id(),
                 filters: Vec::new(),
                 commitment: CommitmentConfig::processed(),
                 data_slice: None,
                 encoding: UiAccountEncoding::Binary,
                 with_context: false,
             }));
->>>>>>> 65227f44d (Optimize RPC pubsub for multiple clients with the same subscription (#18943)):rpc/src/rpc_subscriptions.rs
     }
 
     #[test]
@@ -1927,33 +1241,12 @@ pub(crate) mod tests {
             ))),
             optimistically_confirmed_bank.clone(),
         ));
-<<<<<<< HEAD:core/src/rpc_subscriptions.rs
-        subscriptions.add_program_subscription(
-            solana_stake_program::id(),
-            Some(RpcProgramAccountsConfig {
-                account_config: RpcAccountInfoConfig {
-                    commitment: Some(CommitmentConfig::confirmed()),
-                    ..RpcAccountInfoConfig::default()
-                },
-                ..RpcProgramAccountsConfig::default()
-            }),
-            sub_id.clone(),
-            subscriber,
-        );
-
-        assert!(subscriptions
-            .subscriptions
-            .gossip_program_subscriptions
-            .read()
-            .unwrap()
-            .contains_key(&solana_stake_program::id()));
-=======
 
         let (rpc, mut receiver) = rpc_pubsub_service::test_connection(&subscriptions);
 
         let sub_id = rpc
             .program_subscribe(
-                stake::program::id().to_string(),
+                solana_stake_program::id().to_string(),
                 Some(RpcProgramAccountsConfig {
                     account_config: RpcAccountInfoConfig {
                         commitment: Some(CommitmentConfig::confirmed()),
@@ -1967,14 +1260,13 @@ pub(crate) mod tests {
         subscriptions
             .control
             .assert_subscribed(&SubscriptionParams::Program(ProgramSubscriptionParams {
-                pubkey: stake::program::id(),
+                pubkey: solana_stake_program::id(),
                 filters: Vec::new(),
                 encoding: UiAccountEncoding::Binary,
                 data_slice: None,
                 commitment: CommitmentConfig::confirmed(),
                 with_context: false,
             }));
->>>>>>> 65227f44d (Optimize RPC pubsub for multiple clients with the same subscription (#18943)):rpc/src/rpc_subscriptions.rs
 
         let mut highest_confirmed_slot: Slot = 0;
         let mut last_notified_confirmed_slot: Slot = 0;
@@ -2116,14 +1408,9 @@ pub(crate) mod tests {
             ))),
             optimistically_confirmed_bank.clone(),
         ));
-<<<<<<< HEAD:core/src/rpc_subscriptions.rs
-        subscriptions.add_program_subscription(
-            solana_stake_program::id(),
-=======
         let (rpc, mut receiver) = rpc_pubsub_service::test_connection(&subscriptions);
         rpc.program_subscribe(
-            stake::program::id().to_string(),
->>>>>>> 65227f44d (Optimize RPC pubsub for multiple clients with the same subscription (#18943)):rpc/src/rpc_subscriptions.rs
+            solana_stake_program::id().to_string(),
             Some(RpcProgramAccountsConfig {
                 account_config: RpcAccountInfoConfig {
                     commitment: Some(CommitmentConfig::confirmed()),
@@ -2134,25 +1421,16 @@ pub(crate) mod tests {
         )
         .unwrap();
 
-<<<<<<< HEAD:core/src/rpc_subscriptions.rs
-        assert!(subscriptions
-            .subscriptions
-            .gossip_program_subscriptions
-            .read()
-            .unwrap()
-            .contains_key(&solana_stake_program::id()));
-=======
         subscriptions
             .control
             .assert_subscribed(&SubscriptionParams::Program(ProgramSubscriptionParams {
-                pubkey: stake::program::id(),
+                pubkey: solana_stake_program::id(),
                 filters: Vec::new(),
                 encoding: UiAccountEncoding::Binary,
                 data_slice: None,
                 commitment: CommitmentConfig::confirmed(),
                 with_context: false,
             }));
->>>>>>> 65227f44d (Optimize RPC pubsub for multiple clients with the same subscription (#18943)):rpc/src/rpc_subscriptions.rs
 
         let mut highest_confirmed_slot: Slot = 0;
         let mut last_notified_confirmed_slot: Slot = 0;
@@ -2239,31 +1517,10 @@ pub(crate) mod tests {
             ))),
             optimistically_confirmed_bank.clone(),
         ));
-<<<<<<< HEAD:core/src/rpc_subscriptions.rs
-        subscriptions.add_program_subscription(
-            solana_stake_program::id(),
-            Some(RpcProgramAccountsConfig {
-                account_config: RpcAccountInfoConfig {
-                    commitment: Some(CommitmentConfig::confirmed()),
-                    ..RpcAccountInfoConfig::default()
-                },
-                ..RpcProgramAccountsConfig::default()
-            }),
-            sub_id.clone(),
-            subscriber,
-        );
-
-        assert!(subscriptions
-            .subscriptions
-            .gossip_program_subscriptions
-            .read()
-            .unwrap()
-            .contains_key(&solana_stake_program::id()));
-=======
         let (rpc, mut receiver) = rpc_pubsub_service::test_connection(&subscriptions);
         let sub_id = rpc
             .program_subscribe(
-                stake::program::id().to_string(),
+                solana_stake_program::id().to_string(),
                 Some(RpcProgramAccountsConfig {
                     account_config: RpcAccountInfoConfig {
                         commitment: Some(CommitmentConfig::confirmed()),
@@ -2277,14 +1534,13 @@ pub(crate) mod tests {
         subscriptions
             .control
             .assert_subscribed(&SubscriptionParams::Program(ProgramSubscriptionParams {
-                pubkey: stake::program::id(),
+                pubkey: solana_stake_program::id(),
                 filters: Vec::new(),
                 encoding: UiAccountEncoding::Binary,
                 data_slice: None,
                 commitment: CommitmentConfig::confirmed(),
                 with_context: false,
             }));
->>>>>>> 65227f44d (Optimize RPC pubsub for multiple clients with the same subscription (#18943)):rpc/src/rpc_subscriptions.rs
 
         let mut highest_confirmed_slot: Slot = 0;
         let mut last_notified_confirmed_slot: Slot = 0;
@@ -2679,76 +1935,10 @@ pub(crate) mod tests {
             assert_eq!(expected, response);
         }
 
-<<<<<<< HEAD:core/src/rpc_subscriptions.rs
-        subscriptions.remove_root_subscription(&sub_id);
-        assert!(!subscriptions
-            .subscriptions
-            .root_subscriptions
-            .read()
-            .unwrap()
-            .contains_key(&sub_id));
-    }
-
-    #[test]
-    #[serial]
-    fn test_add_and_remove_subscription() {
-        let mut subscriptions: HashMap<u64, HashMap<SubscriptionId, SubscriptionData<(), ()>>> =
-            HashMap::new();
-        let commitment = CommitmentConfig::confirmed();
-
-        let num_keys = 5;
-        for key in 0..num_keys {
-            let (subscriber, _id_receiver, _transport_receiver) =
-                Subscriber::new_test("notification");
-            let sub_id = SubscriptionId::Number(key);
-            add_subscription(
-                &mut subscriptions,
-                key,
-                commitment,
-                sub_id,
-                subscriber,
-                0,
-                None,
-            );
-        }
-
-        // Add another subscription to the "0" key
-        let (subscriber, _id_receiver, _transport_receiver) = Subscriber::new_test("notification");
-        let extra_sub_id = SubscriptionId::Number(num_keys);
-        add_subscription(
-            &mut subscriptions,
-            0,
-            commitment,
-            extra_sub_id.clone(),
-            subscriber,
-            0,
-            None,
-        );
-
-        assert_eq!(subscriptions.len(), num_keys as usize);
-        assert_eq!(subscriptions.get(&0).unwrap().len(), 2);
-        assert_eq!(subscriptions.get(&1).unwrap().len(), 1);
-
-        assert_eq!(
-            remove_subscription(&mut subscriptions, &SubscriptionId::Number(0)),
-            true
-        );
-        assert_eq!(subscriptions.len(), num_keys as usize);
-        assert_eq!(subscriptions.get(&0).unwrap().len(), 1);
-        assert_eq!(
-            remove_subscription(&mut subscriptions, &SubscriptionId::Number(0)),
-            false
-        );
-
-        assert_eq!(remove_subscription(&mut subscriptions, &extra_sub_id), true);
-        assert_eq!(subscriptions.len(), (num_keys - 1) as usize);
-        assert!(subscriptions.get(&0).is_none());
-=======
         rpc.root_unsubscribe(sub_id).unwrap();
         subscriptions
             .control
             .assert_unsubscribed(&SubscriptionParams::Root);
->>>>>>> 65227f44d (Optimize RPC pubsub for multiple clients with the same subscription (#18943)):rpc/src/rpc_subscriptions.rs
     }
 
     #[test]
