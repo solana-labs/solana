@@ -20,6 +20,7 @@ use {
     },
     crossbeam_channel::{bounded, unbounded},
     rand::{thread_rng, Rng},
+    solana_accountsdb_plugin_manager::accountsdb_plugin_service::AccountsDbPluginService,
     solana_entry::poh::compute_hash_time_ns,
     solana_gossip::{
         cluster_info::{
@@ -113,6 +114,7 @@ pub struct ValidatorConfig {
     pub account_shrink_paths: Option<Vec<PathBuf>>,
     pub rpc_config: JsonRpcConfig,
     pub accountsdb_repl_service_config: Option<AccountsDbReplServiceConfig>,
+    pub accountsdb_plugin_config_file: Option<PathBuf>,
     pub rpc_addrs: Option<(SocketAddr, SocketAddr)>, // (JsonRpc, JsonRpcPubSub)
     pub pubsub_config: PubSubConfig,
     pub snapshot_config: Option<SnapshotConfig>,
@@ -173,6 +175,7 @@ impl Default for ValidatorConfig {
             account_shrink_paths: None,
             rpc_config: JsonRpcConfig::default(),
             accountsdb_repl_service_config: None,
+            accountsdb_plugin_config_file: None,
             rpc_addrs: None,
             pubsub_config: PubSubConfig::default(),
             snapshot_config: None,
@@ -279,6 +282,7 @@ pub struct Validator {
     ip_echo_server: Option<solana_net_utils::IpEchoServer>,
     pub cluster_info: Arc<ClusterInfo>,
     accountsdb_repl_service: Option<AccountsDbReplService>,
+    accountsdb_plugin_service: Option<AccountsDbPluginService>,
 }
 
 // in the distant future, get rid of ::new()/exit() and use Result properly...
@@ -532,6 +536,7 @@ impl Validator {
             optimistically_confirmed_bank_tracker,
             bank_notification_sender,
             accountsdb_repl_service,
+            accountsdb_plugin_service,
         ) = if let Some((rpc_addr, rpc_pubsub_addr)) = config.rpc_addrs {
             if ContactInfo::is_valid_address(&node.info.rpc, &socket_addr_space) {
                 assert!(ContactInfo::is_valid_address(
@@ -545,13 +550,33 @@ impl Validator {
                 ));
             }
 
-            let (confirmed_bank_sender, confirmed_bank_receiver) = unbounded();
+            let mut confirmed_bank_senders = Vec::new();
 
             let accountsdb_repl_service = config.accountsdb_repl_service_config.as_ref().map(|accountsdb_repl_service_config| {
+                let (confirmed_bank_sender, confirmed_bank_receiver) = unbounded();
+                confirmed_bank_senders.push(confirmed_bank_sender);
                 accountsdb_repl_server_factory::AccountsDbReplServerFactory::build_accountsdb_repl_server(
-                    accountsdb_repl_service_config.clone(), confirmed_bank_receiver, bank_forks.clone())});
+                    accountsdb_repl_service_config.clone(), confirmed_bank_receiver, bank_forks.clone())
+            });
+
+            let accountsdb_plugin_service = config.accountsdb_plugin_config_file.as_ref().map(
+                |accountsdb_plugin_config_file| {
+                    let (confirmed_bank_sender, confirmed_bank_receiver) = unbounded();
+                    confirmed_bank_senders.push(confirmed_bank_sender);
+                    AccountsDbPluginService::new(
+                        confirmed_bank_receiver,
+                        bank_forks.clone(),
+                        accountsdb_plugin_config_file,
+                    )
+                },
+            );
 
             let (bank_notification_sender, bank_notification_receiver) = unbounded();
+            let confirmed_bank_subscribers = if !confirmed_bank_senders.is_empty() {
+                Some(Arc::new(RwLock::new(confirmed_bank_senders)))
+            } else {
+                None
+            };
             (
                 Some(JsonRpcService::new(
                     rpc_addr,
@@ -596,13 +621,14 @@ impl Validator {
                     bank_forks.clone(),
                     optimistically_confirmed_bank,
                     rpc_subscriptions.clone(),
-                    Some(Arc::new(RwLock::new(vec![confirmed_bank_sender]))),
+                    confirmed_bank_subscribers,
                 )),
                 Some(bank_notification_sender),
                 accountsdb_repl_service,
+                accountsdb_plugin_service,
             )
         } else {
-            (None, None, None, None, None)
+            (None, None, None, None, None, None)
         };
 
         if config.dev_halt_at_slot.is_some() {
@@ -841,6 +867,7 @@ impl Validator {
             validator_exit: config.validator_exit.clone(),
             cluster_info,
             accountsdb_repl_service,
+            accountsdb_plugin_service,
         }
     }
 
@@ -950,6 +977,12 @@ impl Validator {
             accountsdb_repl_service
                 .join()
                 .expect("accountsdb_repl_service");
+        }
+
+        if let Some(accountsdb_plugin_service) = self.accountsdb_plugin_service {
+            accountsdb_plugin_service
+                .join()
+                .expect("accountsdb_plugin_service");
         }
     }
 }

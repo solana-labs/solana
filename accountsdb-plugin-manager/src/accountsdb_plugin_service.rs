@@ -6,9 +6,13 @@ use {
     },
     crossbeam_channel::Receiver,
     log::*,
+    serde_json,
     solana_runtime::bank_forks::BankForks,
     solana_sdk::clock::Slot,
     std::{
+        fs::File,
+        io::Read,
+        path::Path,
         sync::{Arc, RwLock},
         thread,
     },
@@ -23,6 +27,7 @@ impl AccountsDbPluginService {
     pub fn new(
         confirmed_bank_receiver: Receiver<Slot>,
         bank_forks: Arc<RwLock<BankForks>>,
+        accountsdb_plugin_config_file: &Path,
     ) -> Self {
         let plugin_manager = AccountsDbPluginManager::new();
         let plugin_manager = Arc::new(RwLock::new(plugin_manager));
@@ -31,6 +36,23 @@ impl AccountsDbPluginService {
             AccountsUpdateNotifier::new(plugin_manager.clone(), bank_forks);
         let confirmed_slots_observer =
             SlotConfirmationObserver::new(confirmed_bank_receiver, accounts_update_notifier);
+
+        let mut file = File::open(accountsdb_plugin_config_file).unwrap();
+        let mut contents = String::new();
+        file.read_to_string(&mut contents).unwrap();
+
+        let result: serde_json::Value = serde_json::from_str(&contents).unwrap();
+
+        unsafe {
+            plugin_manager
+                .write()
+                .unwrap()
+                .load_plugin(
+                    result["libpath"].as_str().unwrap(),
+                    accountsdb_plugin_config_file.as_os_str().to_str().unwrap(),
+                )
+                .unwrap();
+        }
 
         info!("Started AccountsDbPluginService");
         AccountsDbPluginService {
