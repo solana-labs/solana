@@ -2646,6 +2646,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-bpf-rust-log-data"
+version = "1.8.0"
+dependencies = [
+ "solana-program 1.8.0",
+]
+
+[[package]]
 name = "solana-bpf-rust-many-args"
 version = "1.8.0"
 dependencies = [
@@ -3111,6 +3118,7 @@ dependencies = [
 name = "solana-program"
 version = "1.8.0"
 dependencies = [
+ "base64 0.13.0",
  "bincode",
  "bitflags",
  "blake3 1.0.0",

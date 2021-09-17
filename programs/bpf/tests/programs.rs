@@ -52,8 +52,8 @@ use solana_transaction_status::{
     TransactionStatusMeta, TransactionWithStatusMeta, UiTransactionEncoding,
 };
 use std::{
-    cell::RefCell, collections::HashMap, env, fs::File, io::Read, path::PathBuf, str::FromStr,
-    sync::Arc,
+    cell::RefCell, collections::HashMap, convert::TryInto, env, fs::File, io::Read, path::PathBuf,
+    str::FromStr, sync::Arc,
 };
 
 /// BPF program file extension
@@ -741,6 +741,58 @@ fn test_program_bpf_error_handling() {
 }
 
 #[test]
+#[cfg(any(feature = "bpf_c", feature = "bpf_rust"))]
+fn test_return_data_and_log_data_syscall() {
+    solana_logger::setup();
+
+    let mut programs = Vec::new();
+    #[cfg(feature = "bpf_c")]
+    {
+        programs.extend_from_slice(&[("log_data")]);
+    }
+    #[cfg(feature = "bpf_rust")]
+    {
+        programs.extend_from_slice(&[("solana_bpf_rust_log_data")]);
+    }
+
+    for program in programs.iter() {
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config(50);
+        let mut bank = Bank::new_for_tests(&genesis_config);
+        let (name, id, entrypoint) = solana_bpf_loader_program!();
+        bank.add_builtin(&name, id, entrypoint);
+        let bank = Arc::new(bank);
+        let bank_client = BankClient::new_shared(&bank);
+
+        let program_id = load_bpf_program(&bank_client, &bpf_loader::id(), &mint_keypair, program);
+
+        bank.freeze();
+
+        let account_metas = vec![AccountMeta::new(mint_keypair.pubkey(), true)];
+        let instruction =
+            Instruction::new_with_bytes(program_id, &[1, 2, 3, 0, 4, 5, 6], account_metas);
+
+        let blockhash = bank.last_blockhash();
+        let message = Message::new(&[instruction], Some(&mint_keypair.pubkey()));
+        let transaction = Transaction::new(&[&mint_keypair], message, blockhash);
+
+        let result = bank.simulate_transaction(transaction.try_into().unwrap());
+
+        assert!(result.result.is_ok());
+
+        assert_eq!(result.logs[1], "Program data: AQID BAUG");
+
+        assert_eq!(
+            result.logs[3],
+            format!("Program return: {} CAFE", program_id)
+        );
+    }
+}
+
+#[test]
 fn test_program_bpf_invoke_sanity() {
     solana_logger::setup();
 
@@ -1091,7 +1143,7 @@ fn test_program_bpf_invoke_sanity() {
             result.unwrap_err(),
             TransactionError::InstructionError(0, InstructionError::ProgramFailedToComplete)
         );
-     }
+    }
 }
 
 #[cfg(feature = "bpf_rust")]

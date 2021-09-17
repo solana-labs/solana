@@ -22,7 +22,7 @@ use solana_sdk::{
         allow_native_ids, blake3_syscall_enabled, check_seed_length,
         close_upgradeable_program_accounts, demote_program_write_locks, disable_fees_sysvar,
         libsecp256k1_0_5_upgrade_enabled, mem_overlap_fix, return_data_syscall_enabled,
-        secp256k1_recover_syscall_enabled,
+        secp256k1_recover_syscall_enabled, sol_log_data_syscall_enabled,
     },
     hash::{Hasher, HASH_BYTES},
     ic_msg,
@@ -181,6 +181,11 @@ pub fn register_syscalls(
             .register_syscall_by_name(b"sol_set_return_data", SyscallSetReturnData::call)?;
         syscall_registry
             .register_syscall_by_name(b"sol_get_return_data", SyscallGetReturnData::call)?;
+    }
+
+    // Log data
+    if invoke_context.is_feature_active(&sol_log_data_syscall_enabled::id()) {
+        syscall_registry.register_syscall_by_name(b"sol_log_data", SyscallLogData::call)?;
     }
 
     Ok(syscall_registry)
@@ -357,6 +362,8 @@ pub fn bind_syscall_context_objects<'a>(
         !invoke_context.is_feature_active(&disable_fees_sysvar::id());
     let is_return_data_syscall_active =
         invoke_context.is_feature_active(&return_data_syscall_enabled::id());
+    let is_sol_log_data_syscall_active =
+        invoke_context.is_feature_active(&sol_log_data_syscall_enabled::id());
 
     let invoke_context = Rc::new(RefCell::new(invoke_context));
 
@@ -404,6 +411,16 @@ pub fn bind_syscall_context_objects<'a>(
         vm,
         is_return_data_syscall_active,
         Box::new(SyscallGetReturnData {
+            invoke_context: invoke_context.clone(),
+            loader_id,
+        }),
+    );
+
+    // sol_log_data
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        is_sol_log_data_syscall_active,
+        Box::new(SyscallLogData {
             invoke_context: invoke_context.clone(),
             loader_id,
         }),
@@ -2378,6 +2395,72 @@ impl<'a> SyscallObject<BpfError> for SyscallGetReturnData<'a> {
         } else {
             *result = Ok(0);
         }
+    }
+}
+
+// Log data handling
+pub struct SyscallLogData<'a> {
+    invoke_context: Rc<RefCell<&'a mut dyn InvokeContext>>,
+    loader_id: &'a Pubkey,
+}
+impl<'a> SyscallObject<BpfError> for SyscallLogData<'a> {
+    fn call(
+        &mut self,
+        addr: u64,
+        len: u64,
+        _arg3: u64,
+        _arg4: u64,
+        _arg5: u64,
+        memory_mapping: &MemoryMapping,
+        result: &mut Result<u64, EbpfError<BpfError>>,
+    ) {
+        let invoke_context = question_mark!(
+            self.invoke_context
+                .try_borrow()
+                .map_err(|_| SyscallError::InvokeContextBorrowFailed),
+            result
+        );
+
+        let budget = invoke_context.get_compute_budget();
+
+        question_mark!(
+            invoke_context
+                .get_compute_meter()
+                .consume(budget.syscall_base_cost),
+            result
+        );
+
+        let untranslated_fields = question_mark!(
+            translate_slice::<&[u8]>(memory_mapping, addr, len, self.loader_id),
+            result
+        );
+
+        question_mark!(
+            invoke_context
+                .get_compute_meter()
+                .consume(untranslated_fields.iter().map(|e| e.len() as u64).sum()),
+            result
+        );
+
+        let mut fields = Vec::with_capacity(untranslated_fields.len());
+
+        for untranslated_field in untranslated_fields {
+            fields.push(question_mark!(
+                translate_slice::<u8>(
+                    memory_mapping,
+                    untranslated_field.as_ptr() as *const _ as u64,
+                    untranslated_field.len() as u64,
+                    self.loader_id,
+                ),
+                result
+            ));
+        }
+
+        let logger = invoke_context.get_logger();
+
+        stable_log::program_data(&logger, &fields);
+
+        *result = Ok(0);
     }
 }
 
