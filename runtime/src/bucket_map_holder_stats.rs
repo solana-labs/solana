@@ -1,3 +1,4 @@
+use solana_sdk::timing::AtomicInterval;
 use std::fmt::Debug;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -19,6 +20,7 @@ pub struct BucketMapHolderStats {
     pub count_in_mem: AtomicU64,
     pub per_bucket_count: Vec<AtomicU64>,
     pub get_range_us: AtomicU64,
+    last_time: AtomicInterval,
 }
 
 impl BucketMapHolderStats {
@@ -46,6 +48,11 @@ impl BucketMapHolderStats {
     }
 
     pub fn report_stats(&self) {
+        // account index stats every 10 s
+        if !self.last_time.should_update(10_000) {
+            return;
+        }
+
         let mut ct = 0;
         let mut min = usize::MAX;
         let mut max = 0;
