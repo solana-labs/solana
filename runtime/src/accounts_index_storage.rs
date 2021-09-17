@@ -47,7 +47,7 @@ impl<T: IndexValue> Drop for AccountsIndexStorage<T> {
 
 impl<T: IndexValue> AccountsIndexStorage<T> {
     pub fn new(bins: usize, config: &Option<AccountsIndexConfig>) -> AccountsIndexStorage<T> {
-        let storage = Arc::new(BucketMapHolder::new(bins));
+        let storage = Arc::new(BucketMapHolder::new(bins, config));
 
         let in_mem = (0..bins)
             .into_iter()
