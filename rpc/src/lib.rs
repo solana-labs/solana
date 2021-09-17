@@ -8,6 +8,7 @@ pub mod rpc_health;
 pub mod rpc_pubsub;
 pub mod rpc_pubsub_service;
 pub mod rpc_service;
+pub mod rpc_subscription_tracker;
 pub mod rpc_subscriptions;
 pub mod send_transaction_service;
 pub mod transaction_status_service;

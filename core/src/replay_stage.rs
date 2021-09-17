@@ -2669,7 +2669,7 @@ mod tests {
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
         let exit = Arc::new(AtomicBool::new(false));
-        let rpc_subscriptions = Arc::new(RpcSubscriptions::new(
+        let rpc_subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
             &exit,
             bank_forks.clone(),
             Arc::new(RwLock::new(BlockCommitmentCache::default())),
@@ -3172,8 +3172,12 @@ mod tests {
                 &replay_vote_sender,
                 &VerifyRecyclers::default(),
             );
+<<<<<<< HEAD
 
             let subscriptions = Arc::new(RpcSubscriptions::new(
+=======
+            let rpc_subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
+>>>>>>> 65227f44d (Optimize RPC pubsub for multiple clients with the same subscription (#18943))
                 &exit,
                 bank_forks.clone(),
                 block_commitment_cache,
@@ -3236,7 +3240,11 @@ mod tests {
 
         let exit = Arc::new(AtomicBool::new(false));
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
+<<<<<<< HEAD
         let subscriptions = Arc::new(RpcSubscriptions::new(
+=======
+        let rpc_subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
+>>>>>>> 65227f44d (Optimize RPC pubsub for multiple clients with the same subscription (#18943))
             &exit,
             bank_forks.clone(),
             block_commitment_cache.clone(),
