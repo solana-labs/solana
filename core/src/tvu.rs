@@ -110,7 +110,7 @@ impl Tvu {
         sockets: Sockets,
         blockstore: Arc<Blockstore>,
         ledger_signal_receiver: Receiver<bool>,
-        subscriptions: &Arc<RpcSubscriptions>,
+        rpc_subscriptions: &Arc<RpcSubscriptions>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         tower: Tower,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
@@ -190,7 +190,7 @@ impl Tvu {
             tvu_config.repair_validators,
             completed_data_sets_sender,
             max_slots,
-            Some(subscriptions.clone()),
+            Some(rpc_subscriptions.clone()),
             duplicate_slots_sender,
         );
 
@@ -266,7 +266,7 @@ impl Tvu {
             vote_account: *vote_account,
             authorized_voter_keypairs,
             exit: exit.clone(),
-            subscriptions: subscriptions.clone(),
+            rpc_subscriptions: rpc_subscriptions.clone(),
             leader_schedule_cache: leader_schedule_cache.clone(),
             latest_root_senders: vec![ledger_cleanup_slot_sender],
             accounts_background_request_sender,
