@@ -76,11 +76,12 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
         let chunk_size = 1024;
         let packet_batches = to_packets_chunked(&vec![tx; len], chunk_size);
         let mut all_buffered_packets = VecDeque::new();
-        for packets in packet_batches {
-            let batch_len = packets.packets.len();
+        for packet_batch in packet_batches {
+            let batch_len = packet_batch.packets.len();
             let packet_indexes: Vec<usize> = (0..batch_len).into_iter().collect();
             let weights = packet_indexes.iter().map(|offset| (*offset, 0)).collect();
-            let buffered_packets = BufferedPackets::new(packets, packet_indexes, weights, false);
+            let buffered_packets =
+                BufferedPackets::new(packet_batch, packet_indexes, weights, false);
             all_buffered_packets.push_back(buffered_packets);
         }
         let (s, _r) = unbounded();

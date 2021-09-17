@@ -96,7 +96,7 @@ use solana_sdk::{
     native_loader,
     native_token::sol_to_lamports,
     nonce, nonce_account,
-    packet::PACKET_DATA_SIZE,
+    packet::{Packet, PACKET_DATA_SIZE},
     process_instruction::{ComputeMeter, Executor, ProcessInstructionWithContext},
     program_utils::limited_deserialize,
     pubkey::Pubkey,
@@ -2983,6 +2983,34 @@ impl Bank {
                 (lock_res, nonce_rollback)
             })
             .collect()
+    }
+
+    pub fn weight_packet(&self, packet: &Packet) -> u64 {
+        if !packet.meta.is_simple_vote_tx {
+            return 0;
+        }
+
+        fn vote_address_from_packet(packet: &Packet) -> Option<Pubkey> {
+            let tx: VersionedTransaction =
+                limited_deserialize(&packet.data[0..packet.meta.size]).ok()?;
+            let tx = SanitizedTransaction::try_create(tx, Hash::default(), |_| {
+                Err(TransactionError::UnsupportedVersion)
+            })
+            .ok()?;
+
+            let message = tx.message();
+            let vote_ix = message.instructions().get(0)?;
+            let vote_account_index = vote_ix.accounts.get(0)?;
+            message
+                .get_account_key(*vote_account_index as usize)
+                .cloned()
+        }
+
+        if let Some(vote_address) = vote_address_from_packet(packet) {
+            self.epoch_vote_account_stake(&vote_address)
+        } else {
+            0
+        }
     }
 
     fn filter_by_vote_transactions<'a>(

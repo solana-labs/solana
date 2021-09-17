@@ -379,20 +379,23 @@ impl BankingStage {
 
     // Returns all packets in input iterator minus the ones that were forwarded.
     // Resulting packets list is sorted from greatest weight to smallest weight
-    fn sort_packets_by_weight_for_forwarding<'a>(
+    fn filter_packets_for_forwarding<'a>(
         all_packets: impl Iterator<Item = &'a BufferedPackets>,
-    ) -> Vec<(PacketWeight, &'a Packet)> {
-        let mut weighted_packets: Vec<(PacketWeight, &'a Packet)> = all_packets
+    ) -> impl Iterator<Item = &'a Packet> {
+        let (mut weighted_packets, unweighted_packets): (Vec<_>, Vec<_>) = all_packets
             .filter(|p| !p.is_forwarded)
             .flat_map(|p| {
                 p.packet_indexes
                     .iter()
                     .map(move |i| (p.weights[i], &p.packets.packets[*i]))
             })
-            .collect();
+            .partition(|(weight, _p)| *weight > 0);
 
         weighted_packets.sort_by_key(|(weight, _packet)| Reverse(*weight));
         weighted_packets
+            .into_iter()
+            .chain(unweighted_packets.into_iter())
+            .map(|(_w, p)| p)
     }
 
     fn forward_buffered_packets(
@@ -401,9 +404,7 @@ impl BankingStage {
         unprocessed_packets: &UnprocessedPackets,
         data_budget: &DataBudget,
     ) -> std::io::Result<()> {
-        let packets = Self::sort_packets_by_weight_for_forwarding(unprocessed_packets.iter());
-
-        inc_new_counter_info!("banking_stage-forwarded_packets", packets.len());
+        let filtered_packets = Self::filter_packets_for_forwarding(unprocessed_packets.iter());
         const INTERVAL_MS: u64 = 100;
         const MAX_BYTES_PER_SECOND: usize = 10_000 * 1200;
         const MAX_BYTES_PER_INTERVAL: usize = MAX_BYTES_PER_SECOND * INTERVAL_MS as usize / 1000;
@@ -411,12 +412,16 @@ impl BankingStage {
         data_budget.update(INTERVAL_MS, |bytes| {
             std::cmp::min(bytes + MAX_BYTES_PER_INTERVAL, MAX_BYTES_BUDGET)
         });
-        for (_weight, p) in packets {
+
+        let mut forwarded_packets_count = 0;
+        for p in filtered_packets {
             if data_budget.take(p.meta.size) {
+                forwarded_packets_count += 1;
                 socket.send_to(&p.data[..p.meta.size], &tpu_forwards)?;
             }
         }
 
+        inc_new_counter_info!("banking_stage-forwarded_packets", forwarded_packets_count);
         Ok(())
     }
 
@@ -1140,6 +1145,10 @@ impl BankingStage {
             .iter()
             .filter_map(|tx_index| {
                 let p = &msgs.packets[*tx_index];
+                if votes_only && !p.meta.is_simple_vote_tx {
+                    return None;
+                }
+
                 let tx: VersionedTransaction = limited_deserialize(&p.data[0..p.meta.size]).ok()?;
                 let message_bytes = Self::packet_message(p)?;
                 let message_hash = Message::hash_raw_message(message_bytes);
@@ -1147,9 +1156,6 @@ impl BankingStage {
                     Err(TransactionError::UnsupportedVersion)
                 })
                 .ok()?;
-                if votes_only && !solana_runtime::bank::is_simple_vote_transaction(&tx) {
-                    return None;
-                }
                 tx.verify_precompiles(feature_set).ok()?;
                 Some((tx, *tx_index))
             })
@@ -1580,6 +1586,7 @@ impl BankingStage {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn push_unprocessed(
         unprocessed_packets: &mut UnprocessedPackets,
         packets: Packets,
@@ -1590,7 +1597,7 @@ impl BankingStage {
         batch_limit: usize,
         duplicates: &Arc<Mutex<(LruCache<u64, ()>, PacketHasher)>>,
         banking_stage_stats: &BankingStageStats,
-        _bank: &Bank,
+        bank: &Bank,
     ) {
         {
             let mut packet_duplicate_check_time = Measure::start("packet_duplicate_check");
@@ -1619,8 +1626,11 @@ impl BankingStage {
                 }
             }
             *newly_buffered_packets_count += packet_indexes.len();
-            // TODO: set up the weights computation
-            let weights = packet_indexes.iter().map(|index| (*index, 0)).collect();
+            let weights = packet_indexes
+                .iter()
+                .map(|index| (*index, bank.weight_packet(&packets.packets[*index])))
+                .collect();
+
             let buffered_packets = BufferedPackets {
                 packets,
                 packet_indexes,
@@ -2504,31 +2514,31 @@ mod tests {
 
     #[test]
     // Test only packets marked as valid are forwarded
-    fn test_sort_packets_by_weight_for_forwarding() {
+    fn test_filter_packets_for_forwarding() {
         solana_logger::setup();
 
         let mut all_buffered_packets = (0..16)
             .map(|packets_id| {
                 let num_packets = 32;
-                let packets = Packets::new(
-                    (0..num_packets)
-                        .map(|packet_id| {
-                            let mut p = Packet::default();
-                            p.meta.port = packets_id << 8 | packet_id;
-                            p
-                        })
-                        .collect_vec(),
-                );
+                let mut packets = vec![Packet::default(); 32];
+                let weights = (0..num_packets)
+                    .map(|packet_id| {
+                        let weight = packets_id << 8 | packet_id;
+                        // tag packet with weight by using port in tests
+                        packets[packet_id as usize].meta.port = weight;
+                        weight as PacketWeight
+                    })
+                    .collect_vec();
                 let packet_indexes = (0..num_packets)
                     .filter_map(|x| if x % 2 != 0 { Some(x as usize) } else { None })
                     .collect_vec();
                 // Heaviest packets are later in the list
                 let weights = packet_indexes
                     .iter()
-                    .map(|offset| (*offset, *offset as PacketWeight))
+                    .map(|offset| (*offset, weights[*offset]))
                     .collect();
                 BufferedPackets {
-                    packets,
+                    packets: Packets::new(packets),
                     packet_indexes,
                     weights,
                     is_forwarded: false,
@@ -2538,37 +2548,30 @@ mod tests {
 
         // Check that the packets are sorted smallest weight to largest
         let mut last_weight = 0;
-        for buffered_packet in all_buffered_packets.iter() {
-            let packet_weight = buffered_packet.weights[&buffered_packet.packet_indexes[0]];
-            assert!(packet_weight <= last_weight);
-            last_weight = packet_weight;
+        for buffered_packets in all_buffered_packets.iter() {
+            for packet_index in &buffered_packets.packet_indexes {
+                let packet_weight = buffered_packets.weights[packet_index];
+                assert!(last_weight <= packet_weight);
+                last_weight = packet_weight;
+            }
         }
 
-        let result =
-            BankingStage::sort_packets_by_weight_for_forwarding(all_buffered_packets.iter());
+        let result: Vec<_> =
+            BankingStage::filter_packets_for_forwarding(all_buffered_packets.iter()).collect();
         assert_eq!(result.len(), 256);
 
         // Check that the output is sorted from greatest weight to smallest
         result.windows(2).all(|windows| {
-            let packet1_weight = windows[0].0;
-            let packet2_weight = windows[1].0;
+            let packet1_weight = windows[0].meta.port;
+            let packet2_weight = windows[1].meta.port;
             packet1_weight > packet2_weight
         });
 
-        let _ = result
-            .into_iter()
-            .enumerate()
-            .map(|(index, (_weight, p))| {
-                let packets_id = index / 16;
-                let packet_id = (index % 16) * 2 + 1;
-                assert_eq!(p.meta.port, (packets_id << 8 | packet_id) as u16);
-            })
-            .collect_vec();
-
         all_buffered_packets[0].is_forwarded = true;
-        let result =
-            BankingStage::sort_packets_by_weight_for_forwarding(all_buffered_packets.iter());
-        assert_eq!(result.len(), 240);
+        assert_eq!(
+            BankingStage::filter_packets_for_forwarding(all_buffered_packets.iter()).count(),
+            240
+        );
     }
 
     #[test]
@@ -2937,45 +2940,47 @@ mod tests {
             // loop.
             let interrupted_iteration = 1;
             poh_recorder.lock().unwrap().set_bank(&bank);
-            let poh_recorder_ = poh_recorder.clone();
-            let recorder = poh_recorder_.lock().unwrap().recorder();
-            let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
             // Start up thread to process the banks
-            let t_consume = Builder::new()
-                .name("consume-buffered-packets".to_string())
-                .spawn(move || {
-                    BankingStage::consume_buffered_packets(
-                        &Pubkey::default(),
-                        std::u128::MAX,
-                        &poh_recorder_,
-                        &mut buffered_packets,
-                        None,
-                        &gossip_vote_sender,
-                        test_fn,
-                        &BankingStageStats::default(),
-                        &recorder,
-                        &Arc::new(RwLock::new(CostTracker::new(Arc::new(RwLock::new(
-                            CostModel::default(),
-                        ))))),
-                    );
-
-                    // Check everything is correct. All indexes after `interrupted_iteration`
-                    // should still be unprocessed
-                    assert_eq!(
-                        buffered_packets.len(),
-                        packets_vec[interrupted_iteration + 1..].len()
-                    );
-                    for (buffered_packet, original_packet) in buffered_packets
-                        .iter()
-                        .zip(&packets_vec[interrupted_iteration + 1..])
-                    {
-                        assert_eq!(
-                            buffered_packet.packets.packets[0],
-                            original_packet.packets[0]
+            let t_consume = {
+                let poh_recorder = poh_recorder.clone();
+                let recorder = poh_recorder.lock().unwrap().recorder();
+                let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
+                Builder::new()
+                    .name("consume-buffered-packets".to_string())
+                    .spawn(move || {
+                        BankingStage::consume_buffered_packets(
+                            &Pubkey::default(),
+                            std::u128::MAX,
+                            &poh_recorder,
+                            &mut buffered_packets,
+                            None,
+                            &gossip_vote_sender,
+                            test_fn,
+                            &BankingStageStats::default(),
+                            &recorder,
+                            &Arc::new(RwLock::new(CostTracker::new(Arc::new(RwLock::new(
+                                CostModel::default(),
+                            ))))),
                         );
-                    }
-                })
-                .unwrap();
+
+                        // Check everything is correct. All indexes after `interrupted_iteration`
+                        // should still be unprocessed
+                        assert_eq!(
+                            buffered_packets.len(),
+                            packets_vec[interrupted_iteration + 1..].len()
+                        );
+                        for (buffered_packet, original_packet) in buffered_packets
+                            .iter()
+                            .zip(&packets_vec[interrupted_iteration + 1..])
+                        {
+                            assert_eq!(
+                                buffered_packet.packets.packets[0],
+                                original_packet.packets[0]
+                            );
+                        }
+                    })
+                    .unwrap()
+            };
 
             for i in 0..=interrupted_iteration {
                 finished_packet_receiver.recv().unwrap();
@@ -3094,7 +3099,7 @@ mod tests {
             batch_limit,
             &duplicates,
             &banking_stage_stats,
-            &default_bank,
+            default_bank,
         );
         assert_eq!(unprocessed_packets.len(), 1);
         assert_eq!(dropped_packet_batches_count, 0);
@@ -3114,7 +3119,7 @@ mod tests {
             batch_limit,
             &duplicates,
             &banking_stage_stats,
-            &default_bank,
+            default_bank,
         );
         assert_eq!(unprocessed_packets.len(), 2);
         assert_eq!(dropped_packet_batches_count, 0);
@@ -3139,7 +3144,7 @@ mod tests {
             batch_limit,
             &duplicates,
             &banking_stage_stats,
-            &default_bank,
+            default_bank,
         );
         assert_eq!(unprocessed_packets.len(), 2);
         assert_eq!(
@@ -3161,7 +3166,7 @@ mod tests {
             3,
             &duplicates,
             &banking_stage_stats,
-            &default_bank,
+            default_bank,
         );
         assert_eq!(unprocessed_packets.len(), 2);
         assert_eq!(
@@ -3191,24 +3196,31 @@ mod tests {
         use solana_sdk::feature_set::FeatureSet;
         use solana_vote_program::vote_state::Vote;
         solana_logger::setup();
-        let mut vote_packet = Packet::default();
-        let vote_instruction = solana_vote_program::vote_instruction::vote(
-            &Pubkey::new_unique(),
-            &Pubkey::new_unique(),
-            Vote::default(),
-        );
-        let vote_transaction =
-            Transaction::new_with_payer(&[vote_instruction], Some(&Pubkey::new_unique()));
-        Packet::populate_packet(&mut vote_packet, None, &vote_transaction).unwrap();
-        let mut non_vote = Packet::default();
-        let tx = system_transaction::transfer(
-            &Keypair::new(),
-            &Pubkey::new_unique(),
-            2,
-            Hash::default(),
-        );
-        Packet::populate_packet(&mut non_vote, None, &tx).unwrap();
-        let msgs = Packets::new(vec![non_vote, vote_packet]);
+        let vote_packet = {
+            let mut packet = Packet::default();
+            let vote_instruction = solana_vote_program::vote_instruction::vote(
+                &Pubkey::new_unique(),
+                &Pubkey::new_unique(),
+                Vote::default(),
+            );
+            let vote_transaction =
+                Transaction::new_with_payer(&[vote_instruction], Some(&Pubkey::new_unique()));
+            packet.meta.is_simple_vote_tx = true;
+            Packet::populate_packet(&mut packet, None, &vote_transaction).unwrap();
+            packet
+        };
+        let non_vote_packet = {
+            let mut packet = Packet::default();
+            let tx = system_transaction::transfer(
+                &Keypair::new(),
+                &Pubkey::new_unique(),
+                2,
+                Hash::default(),
+            );
+            Packet::populate_packet(&mut packet, None, &tx).unwrap();
+            packet
+        };
+        let msgs = Packets::new(vec![non_vote_packet, vote_packet]);
         let packet_indexes = [0, 1];
         let feature_set = Arc::new(FeatureSet::default());
         let cost_model = Arc::new(RwLock::new(CostModel::default()));
@@ -3232,7 +3244,7 @@ mod tests {
                 &msgs,
                 &packet_indexes,
                 &feature_set,
-                Some(cost_tracker.clone()),
+                Some(cost_tracker),
                 &banking_stage_stats,
                 false,
                 false,
