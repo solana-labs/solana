@@ -245,7 +245,7 @@ fn run_accounts_bench(
 
     info!("Starting balance(s): {:?}", balances);
 
-    let executor = TransactionExecutor::new(entrypoint_addr);
+    let executor = TransactionExecutor::new(entrypoint_addr, false);
 
     // Create and close messages both require 2 signatures, fake a 2 signature message to calculate fees
     let message = Message::new(
