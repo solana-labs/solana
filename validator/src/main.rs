@@ -2487,12 +2487,13 @@ pub fn main() {
             _ => unreachable!(),
         };
 
-    let accounts_index_config = value_t!(matches, "accounts_index_bins", usize)
-        .ok()
-        .map(|bins| AccountsIndexConfig { bins: Some(bins) });
+    let mut accounts_index_config = AccountsIndexConfig::default();
+    if let Some(bins) = value_t!(matches, "accounts_index_bins", usize).ok() {
+        accounts_index_config.bins = Some(bins);
+    }
 
     let accounts_db_config = Some(AccountsDbConfig {
-        index: accounts_index_config,
+        index: Some(accounts_index_config),
         accounts_hash_cache_path: Some(ledger_path.clone()),
     });
 
