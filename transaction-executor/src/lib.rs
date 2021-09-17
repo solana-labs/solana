@@ -1,6 +1,6 @@
 #![allow(clippy::integer_arithmetic)]
 use log::*;
-use solana_client::rpc_client::RpcClient;
+use solana_client::{rpc_client::RpcClient, rpc_config::RpcSendTransactionConfig};
 use solana_measure::measure::Measure;
 use solana_sdk::{
     commitment_config::CommitmentConfig, signature::Signature, timing::timestamp,
@@ -26,10 +26,11 @@ pub struct TransactionExecutor {
     exit: Arc<AtomicBool>,
     counter: AtomicU64,
     client: RpcClient,
+    skip_preflight: bool,
 }
 
 impl TransactionExecutor {
-    pub fn new(entrypoint_addr: SocketAddr) -> Self {
+    pub fn new(entrypoint_addr: SocketAddr, skip_preflight: bool) -> Self {
         let sigs = Arc::new(RwLock::new(Vec::new()));
         let cleared = Arc::new(RwLock::new(Vec::new()));
         let exit = Arc::new(AtomicBool::new(false));
@@ -43,6 +44,7 @@ impl TransactionExecutor {
             exit,
             counter: AtomicU64::new(0),
             client,
+            skip_preflight,
         }
     }
 
@@ -55,7 +57,11 @@ impl TransactionExecutor {
         let new_sigs = txs.into_iter().filter_map(|tx| {
             let id = self.counter.fetch_add(1, Ordering::Relaxed);
             ids.push(id);
-            match self.client.send_transaction(&tx) {
+            let config = RpcSendTransactionConfig {
+                skip_preflight: self.skip_preflight,
+                ..RpcSendTransactionConfig::default()
+            };
+            match self.client.send_transaction_with_config(&tx, config) {
                 Ok(sig) => {
                     return Some((sig, timestamp(), id));
                 }
