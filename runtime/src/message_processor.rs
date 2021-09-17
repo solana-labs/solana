@@ -10,8 +10,7 @@ use solana_sdk::{
     account::{AccountSharedData, ReadableAccount, WritableAccount},
     compute_budget::ComputeBudget,
     feature_set::{
-        demote_program_write_locks, neon_evm_compute_budget, tx_wide_compute_cap,
-        updated_verify_policy, FeatureSet,
+        demote_program_write_locks, neon_evm_compute_budget, tx_wide_compute_cap, FeatureSet,
     },
     fee_calculator::FeeCalculator,
     hash::Hash,
@@ -232,7 +231,6 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
             write_privileges,
             &mut self.timings,
             logger,
-            self.feature_set.is_active(&updated_verify_policy::id()),
         )
     }
     fn get_caller(&self) -> Result<&Pubkey, InstructionError> {
@@ -427,7 +425,6 @@ impl MessageProcessor {
         rent: &Rent,
         timings: &mut ExecuteDetailsTimings,
         logger: Rc<RefCell<dyn Logger>>,
-        updated_verify_policy: bool,
         demote_program_write_locks: bool,
     ) -> Result<(), InstructionError> {
         // Verify all executable accounts have zero outstanding refs
@@ -454,7 +451,6 @@ impl MessageProcessor {
                         &account,
                         timings,
                         true,
-                        updated_verify_policy,
                     )
                     .map_err(|err| {
                         ic_logger_msg!(
@@ -563,7 +559,6 @@ impl MessageProcessor {
             &rent_collector.rent,
             timings,
             invoke_context.get_logger(),
-            invoke_context.is_feature_active(&updated_verify_policy::id()),
             invoke_context.is_feature_active(&demote_program_write_locks::id()),
         )?;
 
