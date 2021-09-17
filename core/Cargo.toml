@@ -85,12 +85,29 @@ solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.6.27" 
 trees = "0.2.1"
 
 [dev-dependencies]
+<<<<<<< HEAD
 matches = "0.1.6"
 num_cpus = "1.13.0"
 reqwest = { version = "0.11.2", default-features = false, features = ["blocking", "rustls-tls", "json"] }
 serial_test = "0.4.0"
 symlink = "0.1.0"
 systemstat = "0.1.5"
+=======
+jsonrpc-core = "18.0.0"
+jsonrpc-core-client = { version = "18.0.0", features = ["ipc", "ws"] }
+jsonrpc-derive = "18.0.0"
+jsonrpc-pubsub = "18.0.0"
+matches = "0.1.9"
+reqwest = { version = "0.11.4", default-features = false, features = ["blocking", "rustls-tls", "json"] }
+serde_json = "1.0.68"
+serial_test = "0.5.1"
+solana-program-runtime = { path = "../program-runtime", version = "=1.8.0" }
+solana-stake-program = { path = "../programs/stake", version = "=1.8.0" }
+solana-version = { path = "../version", version = "=1.8.0" }
+static_assertions = "1.1.0"
+systemstat = "0.1.8"
+>>>>>>> 65227f44d (Optimize RPC pubsub for multiple clients with the same subscription (#18943))
+
 
 [build-dependencies]
 rustc_version = "0.2"
