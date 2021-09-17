@@ -40,6 +40,7 @@ solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "=1.8.0" }
 solana-logger = { path = "../logger", version = "=1.8.0" }
 solana-measure = { path = "../measure", version = "=1.8.0" }
 solana-metrics = { path = "../metrics", version = "=1.8.0" }
+solana-bucket-map = { path = "../bucket_map", version = "=1.8.0" }
 solana-program-runtime = { path = "../program-runtime", version = "=1.8.0" }
 solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.8.0" }
 solana-sdk = { path = "../sdk", version = "=1.8.0" }

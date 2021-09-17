@@ -854,11 +854,11 @@ dependencies = [
 
 [[package]]
 name = "crc32fast"
-version = "1.2.0"
+version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba125de2af0df55319f41944744ad91c71113bf74a4646efff39afe1f6842db1"
+checksum = "81156fece84ab6a9f2afdb109ce3ae577e42b1228441eded99bd77f627953b1a"
 dependencies = [
- "cfg-if 0.1.10",
+ "cfg-if 1.0.0",
 ]
 
 [[package]]
@@ -2442,6 +2442,15 @@ name = "memmap2"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d9b70ca2a6103ac8b665dc150b142ef0e4e89df640c9e6cf295d189c3caebe5a"
+dependencies = [
+ "libc",
+]
+
+[[package]]
+name = "memmap2"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "723e3ebdcdc5c023db1df315364573789f8857c11b631a2fdfad7c00f5c046b4"
 dependencies = [
  "libc",
 ]
@@ -4309,6 +4318,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-bucket-map"
+version = "1.8.0"
+dependencies = [
+ "fs_extra",
+ "log 0.4.14",
+ "memmap2 0.2.3",
+ "rand 0.7.3",
+ "rayon",
+ "solana-logger 1.8.0",
+ "solana-measure",
+ "solana-sdk",
+ "tempfile",
+]
+
+[[package]]
 name = "solana-cargo-build-bpf"
 version = "1.8.0"
 dependencies = [
@@ -5407,6 +5431,7 @@ dependencies = [
  "rustc_version 0.4.0",
  "serde",
  "serde_derive",
+ "solana-bucket-map",
  "solana-compute-budget-program",
  "solana-config-program",
  "solana-ed25519-program",
