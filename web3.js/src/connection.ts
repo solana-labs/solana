@@ -1721,6 +1721,15 @@ export type KeyedAccountInfo = {
 };
 
 /**
+ * Callback function for subscribe error notifications
+ */
+export type SubscribeErrorCallback = (
+  rpcMethod: string,
+  rpcArgs: IWSRequestParams,
+  error: any,
+) => void;
+
+/**
  * Callback function for account change notifications
  */
 export type AccountChangeCallback = (
@@ -2050,6 +2059,11 @@ export class Connection {
   /** @internal */ _slotUpdateSubscriptionCounter: number = 0;
   /** @internal */ _slotUpdateSubscriptions: {
     [id: number]: SlotUpdateSubscriptionInfo;
+  } = {};
+
+  /** @internal */ _subscribeErrorCallbackCounter: number = 0;
+  /** @internal */ _subscribeErrorCallbacks: {
+    [id: number]: SubscribeErrorCallback;
   } = {};
 
   /**
@@ -3707,12 +3721,23 @@ export class Connection {
           // eslint-disable-next-line require-atomic-updates
           sub.subscriptionId = id;
         }
-      } catch (err) {
+      } catch (error) {
         if (sub.subscriptionId === 'subscribing') {
           // eslint-disable-next-line require-atomic-updates
           sub.subscriptionId = null;
         }
-        console.error(`${rpcMethod} error for argument`, rpcArgs, err.message);
+
+        Object.values(this._subscribeErrorCallbacks).forEach(callback =>
+          callback(rpcMethod, rpcArgs, error),
+        );
+
+        if (this._subscribeErrorCallbackCounter === 0) {
+          console.error(
+            `${rpcMethod} error for argument`,
+            rpcArgs,
+            error.message,
+          );
+        }
       }
     }
   }
@@ -3874,6 +3899,32 @@ export class Connection {
         sub.callback(res.result.value, res.result.context);
         return;
       }
+    }
+  }
+
+  /**
+   * Register a callback to be invoked when there is a subscribe error
+   *
+   *
+   * @param callback Function to invoke when a subscribe error occurs
+   * @returns subscription id
+   */
+  onSubscribeError(callback: SubscribeErrorCallback): number {
+    const id = ++this._slotUpdateSubscriptionCounter;
+    this._subscribeErrorCallbacks[id] = callback;
+    return id;
+  }
+
+  /**
+   * Deregister an subscribe error listener callback
+   *
+   * @param id subscription id to deregister
+   */
+  removeSubscribeErrorListener(id: number): void {
+    if (this._subscribeErrorCallbacks[id]) {
+      delete this._subscribeErrorCallbacks[id];
+    } else {
+      throw new Error(`Unknown subscribe error id: ${id}`);
     }
   }
 
