@@ -458,167 +458,157 @@ impl InstructionProcessor {
         signers: &[Pubkey],
     ) -> Result<(), InstructionError> {
         let invoke_context = RefCell::new(invoke_context);
+        let mut invoke_context = invoke_context.borrow_mut();
 
-        let (message, accounts, keyed_account_indices_reordered) = {
-            let mut invoke_context = invoke_context.borrow_mut();
+        let caller_keyed_accounts = invoke_context.get_keyed_accounts()?;
+        let callee_keyed_accounts = keyed_account_indices
+            .iter()
+            .map(|index| keyed_account_at_index(caller_keyed_accounts, *index))
+            .collect::<Result<Vec<&KeyedAccount>, InstructionError>>()?;
+        let (message, callee_program_id, _) = Self::create_message(
+            &instruction,
+            &callee_keyed_accounts,
+            signers,
+            &invoke_context,
+        )?;
+        let mut keyed_account_indices_reordered = Vec::with_capacity(message.account_keys.len());
+        let mut accounts = Vec::with_capacity(message.account_keys.len());
+        let mut caller_write_privileges = Vec::with_capacity(message.account_keys.len());
 
-            let caller_keyed_accounts = invoke_context.get_keyed_accounts()?;
-            let callee_keyed_accounts = keyed_account_indices
-                .iter()
-                .map(|index| keyed_account_at_index(caller_keyed_accounts, *index))
-                .collect::<Result<Vec<&KeyedAccount>, InstructionError>>()?;
-            let (message, callee_program_id, _) = Self::create_message(
-                &instruction,
-                &callee_keyed_accounts,
-                signers,
-                &invoke_context,
-            )?;
-            let mut keyed_account_indices_reordered =
-                Vec::with_capacity(message.account_keys.len());
-            let mut accounts = Vec::with_capacity(message.account_keys.len());
-            let mut caller_write_privileges = Vec::with_capacity(message.account_keys.len());
-
-            // Translate and verify caller's data
-            if invoke_context.is_feature_active(&fix_write_privs::id()) {
-                'root: for account_key in message.account_keys.iter() {
-                    for keyed_account_index in keyed_account_indices {
-                        let keyed_account = &caller_keyed_accounts[*keyed_account_index];
-                        if account_key == keyed_account.unsigned_key() {
-                            accounts.push((*account_key, Rc::new(keyed_account.account.clone())));
-                            caller_write_privileges.push(keyed_account.is_writable());
-                            keyed_account_indices_reordered.push(*keyed_account_index);
-                            continue 'root;
-                        }
+        // Translate and verify caller's data
+        if invoke_context.is_feature_active(&fix_write_privs::id()) {
+            'root: for account_key in message.account_keys.iter() {
+                for keyed_account_index in keyed_account_indices {
+                    let keyed_account = &caller_keyed_accounts[*keyed_account_index];
+                    if account_key == keyed_account.unsigned_key() {
+                        accounts.push((*account_key, Rc::new(keyed_account.account.clone())));
+                        caller_write_privileges.push(keyed_account.is_writable());
+                        keyed_account_indices_reordered.push(*keyed_account_index);
+                        continue 'root;
                     }
+                }
+                ic_msg!(
+                    invoke_context,
+                    "Instruction references an unknown account {}",
+                    account_key
+                );
+                return Err(InstructionError::MissingAccount);
+            }
+        } else {
+            let keyed_accounts = invoke_context.get_keyed_accounts()?;
+            for index in keyed_account_indices.iter() {
+                caller_write_privileges.push(keyed_accounts[*index].is_writable());
+            }
+            caller_write_privileges.insert(0, false);
+            let keyed_accounts = invoke_context.get_keyed_accounts()?;
+            'root2: for account_key in message.account_keys.iter() {
+                for keyed_account_index in keyed_account_indices {
+                    let keyed_account = &keyed_accounts[*keyed_account_index];
+                    if account_key == keyed_account.unsigned_key() {
+                        accounts.push((*account_key, Rc::new(keyed_account.account.clone())));
+                        keyed_account_indices_reordered.push(*keyed_account_index);
+                        continue 'root2;
+                    }
+                }
+                ic_msg!(
+                    invoke_context,
+                    "Instruction references an unknown account {}",
+                    account_key
+                );
+                return Err(InstructionError::MissingAccount);
+            }
+        }
+
+        // Construct executables
+        let (program_account_index, program_account) = invoke_context
+            .get_account(&callee_program_id)
+            .ok_or_else(|| {
+                ic_msg!(invoke_context, "Unknown program {}", callee_program_id);
+                InstructionError::MissingAccount
+            })?;
+        if !program_account.borrow().executable() {
+            ic_msg!(
+                invoke_context,
+                "Account {} is not executable",
+                callee_program_id
+            );
+            return Err(InstructionError::AccountNotExecutable);
+        }
+        let mut program_indices = vec![];
+        if program_account.borrow().owner() == &bpf_loader_upgradeable::id() {
+            if let UpgradeableLoaderState::Program {
+                programdata_address,
+            } = program_account.borrow().state()?
+            {
+                if let Some((programdata_account_index, _programdata_account)) =
+                    invoke_context.get_account(&programdata_address)
+                {
+                    program_indices.push(programdata_account_index);
+                } else {
                     ic_msg!(
                         invoke_context,
-                        "Instruction references an unknown account {}",
-                        account_key
+                        "Unknown upgradeable programdata account {}",
+                        programdata_address,
                     );
                     return Err(InstructionError::MissingAccount);
                 }
             } else {
-                let keyed_accounts = invoke_context.get_keyed_accounts()?;
-                for index in keyed_account_indices.iter() {
-                    caller_write_privileges.push(keyed_accounts[*index].is_writable());
-                }
-                caller_write_privileges.insert(0, false);
-                let keyed_accounts = invoke_context.get_keyed_accounts()?;
-                'root2: for account_key in message.account_keys.iter() {
-                    for keyed_account_index in keyed_account_indices {
-                        let keyed_account = &keyed_accounts[*keyed_account_index];
-                        if account_key == keyed_account.unsigned_key() {
-                            accounts.push((*account_key, Rc::new(keyed_account.account.clone())));
-                            keyed_account_indices_reordered.push(*keyed_account_index);
-                            continue 'root2;
-                        }
-                    }
-                    ic_msg!(
-                        invoke_context,
-                        "Instruction references an unknown account {}",
-                        account_key
-                    );
-                    return Err(InstructionError::MissingAccount);
-                }
-            }
-
-            // Construct executables
-            let (program_account_index, program_account) = invoke_context
-                .get_account(&callee_program_id)
-                .ok_or_else(|| {
-                    ic_msg!(invoke_context, "Unknown program {}", callee_program_id);
-                    InstructionError::MissingAccount
-                })?;
-            if !program_account.borrow().executable() {
                 ic_msg!(
                     invoke_context,
-                    "Account {} is not executable",
-                    callee_program_id
+                    "Upgradeable program account state not valid {}",
+                    callee_program_id,
                 );
-                return Err(InstructionError::AccountNotExecutable);
+                return Err(InstructionError::MissingAccount);
             }
-            let mut program_indices = vec![];
-            if program_account.borrow().owner() == &bpf_loader_upgradeable::id() {
-                if let UpgradeableLoaderState::Program {
-                    programdata_address,
-                } = program_account.borrow().state()?
-                {
-                    if let Some((programdata_account_index, _programdata_account)) =
-                        invoke_context.get_account(&programdata_address)
-                    {
-                        program_indices.push(programdata_account_index);
-                    } else {
-                        ic_msg!(
-                            invoke_context,
-                            "Unknown upgradeable programdata account {}",
-                            programdata_address,
-                        );
-                        return Err(InstructionError::MissingAccount);
-                    }
-                } else {
-                    ic_msg!(
-                        invoke_context,
-                        "Upgradeable program account state not valid {}",
-                        callee_program_id,
-                    );
-                    return Err(InstructionError::MissingAccount);
-                }
-            }
-            program_indices.insert(0, program_account_index);
+        }
+        program_indices.insert(0, program_account_index);
 
-            // Record the instruction
-            invoke_context.record_instruction(&instruction);
+        // Record the instruction
+        invoke_context.record_instruction(&instruction);
 
-            // Process instruction
-            InstructionProcessor::process_cross_program_instruction(
-                &message,
-                &program_indices,
-                &accounts,
-                &caller_write_privileges,
-                *invoke_context,
-            )?;
-
-            (message, accounts, keyed_account_indices_reordered)
-        };
+        // Process instruction
+        InstructionProcessor::process_cross_program_instruction(
+            &message,
+            &program_indices,
+            &accounts,
+            &caller_write_privileges,
+            *invoke_context,
+        )?;
 
         // Copy results back to caller
-
+        let demote_program_write_locks =
+            invoke_context.is_feature_active(&demote_program_write_locks::id());
+        let keyed_accounts = invoke_context.get_keyed_accounts()?;
+        for (src_keyed_account_index, ((_key, account), dst_keyed_account_index)) in accounts
+            .iter()
+            .zip(keyed_account_indices_reordered)
+            .enumerate()
         {
-            let invoke_context = invoke_context.borrow();
-            let demote_program_write_locks =
-                invoke_context.is_feature_active(&demote_program_write_locks::id());
-            let keyed_accounts = invoke_context.get_keyed_accounts()?;
-            for (src_keyed_account_index, ((_key, account), dst_keyed_account_index)) in accounts
-                .iter()
-                .zip(keyed_account_indices_reordered)
-                .enumerate()
+            let dst_keyed_account = &keyed_accounts[dst_keyed_account_index];
+            let src_keyed_account = account.borrow();
+            if message.is_writable(src_keyed_account_index, demote_program_write_locks)
+                && !src_keyed_account.executable()
             {
-                let dst_keyed_account = &keyed_accounts[dst_keyed_account_index];
-                let src_keyed_account = account.borrow();
-                if message.is_writable(src_keyed_account_index, demote_program_write_locks)
-                    && !src_keyed_account.executable()
+                if dst_keyed_account.data_len()? != src_keyed_account.data().len()
+                    && dst_keyed_account.data_len()? != 0
                 {
-                    if dst_keyed_account.data_len()? != src_keyed_account.data().len()
-                        && dst_keyed_account.data_len()? != 0
-                    {
-                        // Only support for `CreateAccount` at this time.
-                        // Need a way to limit total realloc size across multiple CPI calls
-                        ic_msg!(
-                            invoke_context,
-                            "Inner instructions do not support realloc, only SystemProgram::CreateAccount",
-                        );
-                        return Err(InstructionError::InvalidRealloc);
-                    }
-                    dst_keyed_account
-                        .try_account_ref_mut()?
-                        .set_lamports(src_keyed_account.lamports());
-                    dst_keyed_account
-                        .try_account_ref_mut()?
-                        .set_owner(*src_keyed_account.owner());
-                    dst_keyed_account
-                        .try_account_ref_mut()?
-                        .set_data(src_keyed_account.data().to_vec());
+                    // Only support for `CreateAccount` at this time.
+                    // Need a way to limit total realloc size across multiple CPI calls
+                    ic_msg!(
+                        invoke_context,
+                        "Inner instructions do not support realloc, only SystemProgram::CreateAccount",
+                    );
+                    return Err(InstructionError::InvalidRealloc);
                 }
+                dst_keyed_account
+                    .try_account_ref_mut()?
+                    .set_lamports(src_keyed_account.lamports());
+                dst_keyed_account
+                    .try_account_ref_mut()?
+                    .set_owner(*src_keyed_account.owner());
+                dst_keyed_account
+                    .try_account_ref_mut()?
+                    .set_data(src_keyed_account.data().to_vec());
             }
         }
 
