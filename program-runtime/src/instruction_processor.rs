@@ -15,7 +15,7 @@ use solana_sdk::{
     system_program,
 };
 use std::{
-    cell::{Ref, RefCell},
+    cell::{Ref, RefCell, RefMut},
     collections::HashMap,
     rc::Rc,
     sync::Arc,
@@ -377,7 +377,7 @@ impl InstructionProcessor {
         instruction: &Instruction,
         keyed_accounts: &[&KeyedAccount],
         signers: &[Pubkey],
-        invoke_context: &Ref<&mut dyn InvokeContext>,
+        invoke_context: &RefMut<&mut dyn InvokeContext>,
     ) -> Result<(Message, Pubkey, usize), InstructionError> {
         // Check for privilege escalation
         for account in instruction.accounts.iter() {
@@ -459,14 +459,8 @@ impl InstructionProcessor {
     ) -> Result<(), InstructionError> {
         let invoke_context = RefCell::new(invoke_context);
 
-        let (
-            message,
-            program_indices,
-            accounts,
-            keyed_account_indices_reordered,
-            caller_write_privileges,
-        ) = {
-            let invoke_context = invoke_context.borrow();
+        let (message, accounts, keyed_account_indices_reordered) = {
+            let mut invoke_context = invoke_context.borrow_mut();
 
             let caller_keyed_accounts = invoke_context.get_keyed_accounts()?;
             let callee_keyed_accounts = keyed_account_indices
@@ -528,10 +522,7 @@ impl InstructionProcessor {
                 }
             }
 
-            // Process instruction
-
-            invoke_context.record_instruction(&instruction);
-
+            // Construct executables
             let (program_account_index, program_account) = invoke_context
                 .get_account(&callee_program_id)
                 .ok_or_else(|| {
@@ -574,23 +565,21 @@ impl InstructionProcessor {
                 }
             }
             program_indices.insert(0, program_account_index);
-            (
-                message,
-                program_indices,
-                accounts,
-                keyed_account_indices_reordered,
-                caller_write_privileges,
-            )
-        };
 
-        #[allow(clippy::deref_addrof)]
-        InstructionProcessor::process_cross_program_instruction(
-            &message,
-            &program_indices,
-            &accounts,
-            &caller_write_privileges,
-            *(&mut *(invoke_context.borrow_mut())),
-        )?;
+            // Record the instruction
+            invoke_context.record_instruction(&instruction);
+
+            // Process instruction
+            InstructionProcessor::process_cross_program_instruction(
+                &message,
+                &program_indices,
+                &accounts,
+                &caller_write_privileges,
+                *invoke_context,
+            )?;
+
+            (message, accounts, keyed_account_indices_reordered)
+        };
 
         // Copy results back to caller
 

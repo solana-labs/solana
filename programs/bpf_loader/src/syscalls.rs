@@ -1527,6 +1527,7 @@ trait SyscallInvokeSigned<'a> {
         &self,
         addr: u64,
         memory_mapping: &MemoryMapping,
+        invoke_context: &mut dyn InvokeContext,
     ) -> Result<Instruction, EbpfError<BpfError>>;
     fn translate_accounts(
         &self,
@@ -1535,6 +1536,7 @@ trait SyscallInvokeSigned<'a> {
         account_infos_addr: u64,
         account_infos_len: u64,
         memory_mapping: &MemoryMapping,
+        invoke_context: &mut dyn InvokeContext,
     ) -> Result<TranslatedAccounts<'a>, EbpfError<BpfError>>;
     fn translate_signers(
         &self,
@@ -1565,14 +1567,11 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
         &self,
         addr: u64,
         memory_mapping: &MemoryMapping,
+        invoke_context: &mut dyn InvokeContext,
     ) -> Result<Instruction, EbpfError<BpfError>> {
         let ix = translate_type::<Instruction>(memory_mapping, addr, self.loader_id)?;
 
-        check_instruction_size(
-            ix.accounts.len(),
-            ix.data.len(),
-            &self.invoke_context.borrow(),
-        )?;
+        check_instruction_size(ix.accounts.len(), ix.data.len(), invoke_context)?;
 
         let accounts = translate_slice::<AccountMeta>(
             memory_mapping,
@@ -1602,16 +1601,15 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
         account_infos_addr: u64,
         account_infos_len: u64,
         memory_mapping: &MemoryMapping,
+        invoke_context: &mut dyn InvokeContext,
     ) -> Result<TranslatedAccounts<'a>, EbpfError<BpfError>> {
-        let invoke_context = self.invoke_context.borrow();
-
         let account_infos = translate_slice::<AccountInfo>(
             memory_mapping,
             account_infos_addr,
             account_infos_len,
             self.loader_id,
         )?;
-        check_account_infos(account_infos.len(), &invoke_context)?;
+        check_account_infos(account_infos.len(), invoke_context)?;
         let account_info_keys = account_infos
             .iter()
             .map(|account_info| {
@@ -1623,8 +1621,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
             })
             .collect::<Result<Vec<_>, EbpfError<BpfError>>>()?;
 
-        let translate = |account_info: &AccountInfo,
-                         invoke_context: &Ref<&mut dyn InvokeContext>| {
+        let translate = |account_info: &AccountInfo, invoke_context: &mut dyn InvokeContext| {
             // Translate the account from user space
 
             let lamports = {
@@ -1698,7 +1695,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
             program_account_index,
             &account_info_keys,
             account_infos,
-            &invoke_context,
+            invoke_context,
             translate,
         )
     }
@@ -1845,14 +1842,11 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
         &self,
         addr: u64,
         memory_mapping: &MemoryMapping,
+        invoke_context: &mut dyn InvokeContext,
     ) -> Result<Instruction, EbpfError<BpfError>> {
         let ix_c = translate_type::<SolInstruction>(memory_mapping, addr, self.loader_id)?;
 
-        check_instruction_size(
-            ix_c.accounts_len,
-            ix_c.data_len,
-            &self.invoke_context.borrow(),
-        )?;
+        check_instruction_size(ix_c.accounts_len, ix_c.data_len, invoke_context)?;
         let program_id =
             translate_type::<Pubkey>(memory_mapping, ix_c.program_id_addr, self.loader_id)?;
         let meta_cs = translate_slice::<SolAccountMeta>(
@@ -1895,16 +1889,15 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
         account_infos_addr: u64,
         account_infos_len: u64,
         memory_mapping: &MemoryMapping,
+        invoke_context: &mut dyn InvokeContext,
     ) -> Result<TranslatedAccounts<'a>, EbpfError<BpfError>> {
-        let invoke_context = self.invoke_context.borrow();
-
         let account_infos = translate_slice::<SolAccountInfo>(
             memory_mapping,
             account_infos_addr,
             account_infos_len,
             self.loader_id,
         )?;
-        check_account_infos(account_infos.len(), &invoke_context)?;
+        check_account_infos(account_infos.len(), invoke_context)?;
         let account_info_keys = account_infos
             .iter()
             .map(|account_info| {
@@ -1912,8 +1905,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
             })
             .collect::<Result<Vec<_>, EbpfError<BpfError>>>()?;
 
-        let translate = |account_info: &SolAccountInfo,
-                         invoke_context: &Ref<&mut dyn InvokeContext>| {
+        let translate = |account_info: &SolAccountInfo, invoke_context: &mut dyn InvokeContext| {
             // Translate the account from user space
 
             let lamports = translate_type_mut::<u64>(
@@ -1975,7 +1967,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
             program_account_index,
             &account_info_keys,
             account_infos,
-            &invoke_context,
+            invoke_context,
             translate,
         )
     }
@@ -2060,11 +2052,11 @@ fn get_translated_accounts<'a, T, F>(
     program_account_index: usize,
     account_info_keys: &[&Pubkey],
     account_infos: &[T],
-    invoke_context: &Ref<&mut dyn InvokeContext>,
+    invoke_context: &mut dyn InvokeContext,
     do_translate: F,
 ) -> Result<TranslatedAccounts<'a>, EbpfError<BpfError>>
 where
-    F: Fn(&T, &Ref<&mut dyn InvokeContext>) -> Result<AccountReferences<'a>, EbpfError<BpfError>>,
+    F: Fn(&T, &mut dyn InvokeContext) -> Result<AccountReferences<'a>, EbpfError<BpfError>>,
 {
     let mut accounts = Vec::with_capacity(account_keys.len());
     let mut refs = Vec::with_capacity(account_keys.len());
@@ -2121,7 +2113,7 @@ where
 fn check_instruction_size(
     num_accounts: usize,
     data_len: usize,
-    invoke_context: &Ref<&mut dyn InvokeContext>,
+    invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), EbpfError<BpfError>> {
     let size = num_accounts
         .saturating_mul(size_of::<AccountMeta>())
@@ -2135,7 +2127,7 @@ fn check_instruction_size(
 
 fn check_account_infos(
     len: usize,
-    invoke_context: &Ref<&mut dyn InvokeContext>,
+    invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), EbpfError<BpfError>> {
     if len * size_of::<Pubkey>() > invoke_context.get_compute_budget().max_cpi_instruction_size {
         // Cap the number of account_infos a caller can pass to approximate
@@ -2168,7 +2160,7 @@ fn check_authorized_program(
 fn get_upgradeable_executable(
     callee_program_id: &Pubkey,
     program_account: &Rc<RefCell<AccountSharedData>>,
-    invoke_context: &Ref<&mut dyn InvokeContext>,
+    invoke_context: &mut dyn InvokeContext,
 ) -> Result<Option<usize>, EbpfError<BpfError>> {
     if program_account.borrow().owner() == &bpf_loader_upgradeable::id() {
         match program_account.borrow().state() {
@@ -2212,27 +2204,20 @@ fn call<'a>(
     signers_seeds_len: u64,
     memory_mapping: &MemoryMapping,
 ) -> Result<u64, EbpfError<BpfError>> {
-    let (
-        message,
-        program_indices,
-        accounts,
-        account_refs,
-        caller_write_privileges,
-        demote_program_write_locks,
-    ) = {
-        let invoke_context = syscall.get_context()?;
+    let (message, accounts, account_refs, demote_program_write_locks) = {
+        let mut invoke_context = syscall.get_context_mut()?;
 
         invoke_context
             .get_compute_meter()
             .consume(invoke_context.get_compute_budget().invoke_units)?;
 
+        // Translate and verify caller's data
+
+        let instruction =
+            syscall.translate_instruction(instruction_addr, memory_mapping, *invoke_context)?;
         let caller_program_id = invoke_context
             .get_caller()
             .map_err(SyscallError::InstructionError)?;
-
-        // Translate and verify caller's data
-
-        let instruction = syscall.translate_instruction(instruction_addr, memory_mapping)?;
         let signers = syscall.translate_signers(
             caller_program_id,
             signers_seeds_addr,
@@ -2277,10 +2262,10 @@ fn call<'a>(
             account_infos_addr,
             account_infos_len,
             memory_mapping,
+            *invoke_context,
         )?;
 
         // Construct executables
-
         let program_account = accounts
             .get(callee_program_id_index)
             .ok_or_else(|| {
@@ -2296,40 +2281,35 @@ fn call<'a>(
 
         let mut program_indices = vec![program_account_index];
         if let Some(programdata_account_index) =
-            get_upgradeable_executable(&callee_program_id, &program_account, &invoke_context)?
+            get_upgradeable_executable(&callee_program_id, &program_account, *invoke_context)?
         {
             program_indices.push(programdata_account_index);
         }
 
         // Record the instruction
-
         invoke_context.record_instruction(&instruction);
+
+        // Process instruction
+        match InstructionProcessor::process_cross_program_instruction(
+            &message,
+            &program_indices,
+            &accounts,
+            &caller_write_privileges,
+            *invoke_context,
+        ) {
+            Ok(()) => (),
+            Err(err) => {
+                return Err(SyscallError::InstructionError(err).into());
+            }
+        }
 
         (
             message,
-            program_indices,
             accounts,
             account_refs,
-            caller_write_privileges,
             invoke_context.is_feature_active(&demote_program_write_locks::id()),
         )
     };
-
-    // Process instruction
-
-    #[allow(clippy::deref_addrof)]
-    match InstructionProcessor::process_cross_program_instruction(
-        &message,
-        &program_indices,
-        &accounts,
-        &caller_write_privileges,
-        *(&mut *(syscall.get_context_mut()?)),
-    ) {
-        Ok(()) => (),
-        Err(err) => {
-            return Err(SyscallError::InstructionError(err).into());
-        }
-    }
 
     // Copy results back to caller
     {
