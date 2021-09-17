@@ -408,7 +408,6 @@ impl BankingStage {
             return;
         }
         let (bank, bank_creation_time) = bank_start.unwrap();
-
         let package_iter = buffered_packets.iter_mut();
         for (package, ref mut original_unprocessed_indexes, _forwarded) in package_iter {
             let vote_indexes = Self::generate_vote_packet_indexes(&package.packets);
@@ -425,7 +424,6 @@ impl BankingStage {
                     gossip_vote_sender,
                     banking_stage_stats,
                 );
-
             *vote_tx_count += processed;
             *unprocessed_vote_tx_count += unprocessed_indexes.len();
 
@@ -1701,6 +1699,7 @@ mod tests {
         transaction::TransactionError,
     };
     use solana_transaction_status::TransactionWithStatusMeta;
+    use solana_vote_program::vote_transaction;
     use std::{
         net::SocketAddr,
         path::Path,
@@ -3100,5 +3099,215 @@ mod tests {
             BankingStage::packet_message(&packet).unwrap().to_vec(),
             transaction.message_data()
         );
+    }
+
+    #[test]
+    fn test_generate_vote_packet_indexes() {
+        let keypair = Keypair::new();
+        let hash = Hash::new(&[1; 32]);
+        let transfer_tx = system_transaction::transfer(&keypair, &keypair.pubkey(), 1, hash);
+        let vote_tx = vote_transaction::new_vote_transaction(
+            vec![42],
+            Hash::default(),
+            Hash::default(),
+            &keypair,
+            &keypair,
+            &keypair,
+            None,
+        );
+
+        {
+            let packets = to_packets_chunked(
+                &[
+                    transfer_tx.clone(),
+                    vote_tx.clone(),
+                    vote_tx.clone(),
+                    transfer_tx.clone(),
+                    vote_tx.clone(),
+                ],
+                5,
+            );
+            let expected_vote_indexes = vec![1, 2, 4];
+            assert_eq!(
+                expected_vote_indexes,
+                BankingStage::generate_vote_packet_indexes(&packets[0].packets)
+            );
+        }
+
+        {
+            let packets = to_packets_chunked(
+                &[
+                    vote_tx.clone(),
+                    vote_tx.clone(),
+                    vote_tx.clone(),
+                    transfer_tx,
+                    vote_tx,
+                ],
+                5,
+            );
+            let expected_vote_indexes = vec![0, 1, 2, 4];
+            assert_eq!(
+                expected_vote_indexes,
+                BankingStage::generate_vote_packet_indexes(&packets[0].packets)
+            );
+        }
+    }
+
+    #[test]
+    fn test_process_packets_vote() {
+        let ledger_path = get_tmp_ledger_path!();
+        let (_transactions, bank, poh_recorder, _entry_receiver, _poh_simulator) =
+            setup_conflicting_transactions(&ledger_path);
+        let recorder = poh_recorder.lock().unwrap().recorder();
+        let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
+
+        poh_recorder.lock().unwrap().set_bank(&bank);
+        assert!(poh_recorder.lock().unwrap().has_bank());
+
+        let keypair = Keypair::new();
+        let hash = Hash::new(&[1; 32]);
+        let transfer_tx = system_transaction::transfer(&keypair, &keypair.pubkey(), 1, hash);
+        let vote_tx = vote_transaction::new_vote_transaction(
+            vec![42],
+            Hash::default(),
+            Hash::default(),
+            &keypair,
+            &keypair,
+            &keypair,
+            None,
+        );
+
+        let mut packets = to_packets_chunked(
+            &[
+                // packets #1
+                vote_tx.clone(),
+                transfer_tx.clone(),
+                vote_tx.clone(),
+                // packets #2
+                vote_tx.clone(),
+                vote_tx.clone(),
+                vote_tx,
+                // packets #3
+                transfer_tx,
+            ],
+            3,
+        );
+        assert_eq!(3, packets.len());
+        assert_eq!(3, packets[0].packets.len());
+        assert_eq!(3, packets[1].packets.len());
+        assert_eq!(1, packets[2].packets.len());
+        let mut vote_tx_count = 0;
+        let mut unprocessed_vote_tx_count = 0;
+
+        BankingStage::process_packets_vote(
+            &mut packets,
+            &mut vote_tx_count,
+            &mut unprocessed_vote_tx_count,
+            &poh_recorder,
+            &recorder,
+            None,
+            &gossip_vote_sender,
+            &BankingStageStats::default(),
+        );
+
+        assert_eq!(5, vote_tx_count);
+        assert_eq!(0, unprocessed_vote_tx_count);
+        // packets composition shoudl not change
+        assert_eq!(3, packets.len());
+        assert_eq!(3, packets[0].packets.len());
+        assert_eq!(3, packets[1].packets.len());
+        assert_eq!(1, packets[2].packets.len());
+        assert_eq!(
+            vec![1],
+            BankingStage::generate_packet_indexes(&packets[0].packets)
+        );
+        assert_eq!(
+            0,
+            BankingStage::generate_packet_indexes(&packets[1].packets).len()
+        );
+        assert_eq!(
+            vec![0],
+            BankingStage::generate_packet_indexes(&packets[2].packets)
+        );
+    }
+
+    #[test]
+    fn test_process_buffered_packets_vote() {
+        solana_logger::setup();
+        let ledger_path = get_tmp_ledger_path!();
+        let (_transactions, bank, poh_recorder, _entry_receiver, _poh_simulator) =
+            setup_conflicting_transactions(&ledger_path);
+        let recorder = poh_recorder.lock().unwrap().recorder();
+        let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
+
+        poh_recorder.lock().unwrap().set_bank(&bank);
+        assert!(poh_recorder.lock().unwrap().has_bank());
+
+        let keypair = Keypair::new();
+        let hash = Hash::new(&[1; 32]);
+        let transfer_tx = system_transaction::transfer(&keypair, &keypair.pubkey(), 1, hash);
+        let vote_tx = vote_transaction::new_vote_transaction(
+            vec![42],
+            Hash::default(),
+            Hash::default(),
+            &keypair,
+            &keypair,
+            &keypair,
+            None,
+        );
+
+        let packets = to_packets_chunked(
+            &[
+                // packets #1
+                vote_tx.clone(),
+                transfer_tx.clone(),
+                vote_tx.clone(),
+                // packets #2
+                vote_tx.clone(),
+                vote_tx.clone(),
+                vote_tx,
+                // packets #3
+                transfer_tx,
+            ],
+            3,
+        );
+        let mut buffered_packets: UnprocessedPackets = VecDeque::new();
+        for package in packets {
+            let length = package.packets.len();
+            buffered_packets.push_back((package, (0..length).into_iter().collect(), false));
+        }
+        assert_eq!(3, buffered_packets.len());
+        assert_eq!(3, buffered_packets[0].0.packets.len());
+        assert_eq!(3, buffered_packets[1].0.packets.len());
+        assert_eq!(1, buffered_packets[2].0.packets.len());
+        assert_eq!(vec![0, 1, 2], buffered_packets[0].1);
+        assert_eq!(vec![0, 1, 2], buffered_packets[1].1);
+        assert_eq!(vec![0], buffered_packets[2].1);
+
+        let mut vote_tx_count = 0;
+        let mut unprocessed_vote_tx_count = 0;
+
+        BankingStage::process_buffered_packets_vote(
+            &mut buffered_packets,
+            &mut vote_tx_count,
+            &mut unprocessed_vote_tx_count,
+            &poh_recorder,
+            &recorder,
+            None,
+            &gossip_vote_sender,
+            &BankingStageStats::default(),
+        );
+
+        assert_eq!(5, vote_tx_count);
+        assert_eq!(0, unprocessed_vote_tx_count);
+        // packets composition should not change
+        assert_eq!(3, buffered_packets.len());
+        assert_eq!(3, buffered_packets[0].0.packets.len());
+        assert_eq!(3, buffered_packets[1].0.packets.len());
+        assert_eq!(1, buffered_packets[2].0.packets.len());
+        // but the unprocessed indexes should exclude votes
+        assert_eq!(vec![1], buffered_packets[0].1);
+        assert_eq!(0, buffered_packets[1].1.len());
+        assert_eq!(vec![0], buffered_packets[2].1);
     }
 }
