@@ -16,7 +16,7 @@ use solana_perf::{
     packet::{limited_deserialize, Packet, Packets, PACKETS_PER_BATCH},
     perf_libs,
 };
-use solana_poh::poh_recorder::{PohRecorder, PohRecorderError, TransactionRecorder};
+use solana_poh::poh_recorder::{BankStart, PohRecorder, PohRecorderError, TransactionRecorder};
 use solana_runtime::{
     accounts_db::ErrorCounters,
     bank::{
@@ -433,15 +433,19 @@ impl BankingStage {
                 )
             } else {
                 let bank_start = poh_recorder.lock().unwrap().bank_start();
-                if let Some((bank, bank_creation_time)) = bank_start {
+                if let Some(BankStart {
+                    working_bank,
+                    bank_creation_time,
+                }) = bank_start
+                {
                     Self::reset_cost_tracker_if_new_bank(
                         cost_tracker,
-                        bank.slot(),
+                        working_bank.slot(),
                         banking_stage_stats,
                     );
                     let (processed, verified_txs_len, new_unprocessed_indexes) =
                         Self::process_packets_transactions(
-                            &bank,
+                            &working_bank,
                             &bank_creation_time,
                             recorder,
                             msgs,
@@ -457,8 +461,10 @@ impl BankingStage {
                             max_tx_ingestion_ns,
                         )
                     {
-                        reached_end_of_slot =
-                            Some((poh_recorder.lock().unwrap().next_slot_leader(), bank));
+                        reached_end_of_slot = Some((
+                            poh_recorder.lock().unwrap().next_slot_leader(),
+                            working_bank,
+                        ));
                     }
                     new_tx_count += processed;
                     // Out of the buffered packets just retried, collect any still unprocessed
@@ -563,16 +569,17 @@ impl BankingStage {
         ) = {
             let poh = poh_recorder.lock().unwrap();
             bank_start = poh.bank_start();
-            if let Some((ref bank, _)) = bank_start {
+            if let Some(ref bank_start) = bank_start {
                 Self::reset_cost_tracker_if_new_bank(
                     cost_tracker,
-                    bank.slot(),
+                    bank_start.working_bank.slot(),
                     banking_stage_stats,
                 );
             };
+
             (
                 poh.leader_after_n_slots(FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET),
-                PohRecorder::get_bank_still_processing_txs(&bank_start),
+                PohRecorder::get_working_bank_if_not_expired(&bank_start.as_ref()),
                 poh.would_be_leader(HOLD_TRANSACTIONS_SLOT_OFFSET * DEFAULT_TICKS_PER_SLOT),
                 poh.would_be_leader(
                     (FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET - 1) * DEFAULT_TICKS_PER_SLOT,
@@ -1375,8 +1382,9 @@ impl BankingStage {
         let mut newly_buffered_packets_count = 0;
         while let Some(msgs) = mms_iter.next() {
             let packet_indexes = Self::generate_packet_indexes(&msgs.packets);
-            let bank_start = poh.lock().unwrap().bank_start();
-            if PohRecorder::get_bank_still_processing_txs(&bank_start).is_none() {
+            let poh_recorder_bank = poh.lock().unwrap().get_poh_recorder_bank();
+            let working_bank_start = poh_recorder_bank.working_bank_start();
+            if PohRecorder::get_working_bank_if_not_expired(&working_bank_start).is_none() {
                 Self::push_unprocessed(
                     buffered_packets,
                     msgs,
@@ -1390,13 +1398,22 @@ impl BankingStage {
                 );
                 continue;
             }
-            let (bank, bank_creation_time) = bank_start.unwrap();
-            Self::reset_cost_tracker_if_new_bank(cost_tracker, bank.slot(), banking_stage_stats);
+
+            // Destructure the `BankStart` behind an Arc
+            let BankStart {
+                working_bank,
+                bank_creation_time,
+            } = &*working_bank_start.unwrap();
+            Self::reset_cost_tracker_if_new_bank(
+                cost_tracker,
+                working_bank.slot(),
+                banking_stage_stats,
+            );
 
             let (processed, verified_txs_len, unprocessed_indexes) =
                 Self::process_packets_transactions(
-                    &bank,
-                    &bank_creation_time,
+                    working_bank,
+                    bank_creation_time,
                     recorder,
                     &msgs,
                     packet_indexes,
@@ -1430,7 +1447,7 @@ impl BankingStage {
                 while let Some(msgs) = mms_iter.next() {
                     let packet_indexes = Self::generate_packet_indexes(&msgs.packets);
                     let unprocessed_indexes = Self::filter_unprocessed_packets(
-                        &bank,
+                        working_bank,
                         &msgs,
                         &packet_indexes,
                         my_pubkey,
