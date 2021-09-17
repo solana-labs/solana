@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::io;
 /// The interface for AccountsDb plugins. A plugin must implement
 /// the AccountsDbPlugin trait to work with the Solana Validator.
@@ -40,7 +41,7 @@ pub enum AccountsDbPluginError {
 
 pub type Result<T> = std::result::Result<T, AccountsDbPluginError>;
 
-pub trait AccountsDbPlugin: Send + Sync {
+pub trait AccountsDbPlugin: Any + Send + Sync {
     fn name(&self) -> &'static str;
 
     /// The callback called when a plugin is loaded by the system

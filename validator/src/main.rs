@@ -2584,11 +2584,10 @@ pub fn main() {
             matches
                 .value_of("accountsdb_plugin_config")
                 .unwrap_or_else(|| {
-                    clap::Error::with_description(
-                        "The --enable-accountsdb-plugin <plugin_config_file> argument is required",
-                        clap::ErrorKind::ArgumentNotFound,
-                    )
-                    .exit();
+                    eprintln!(
+                        "The --accountsdb-plugin-config <plugin_config_file> is required when --enable-accountsdb-plugin is set.",
+                    );
+                    exit(1);
                 }),
         ))
     } else {

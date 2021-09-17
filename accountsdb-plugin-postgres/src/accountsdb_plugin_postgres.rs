@@ -119,3 +119,11 @@ impl AccountsDbPluginPostgres {
         AccountsDbPluginPostgres { client: None }
     }
 }
+
+#[no_mangle]
+pub unsafe extern "C" fn _create_plugin() -> *mut dyn AccountsDbPlugin {
+    let plugin = AccountsDbPluginPostgres::new();
+    let plugin: Box<dyn AccountsDbPlugin> = Box::new(plugin);
+    Box::into_raw(plugin)
+}
+
