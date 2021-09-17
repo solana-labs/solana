@@ -452,7 +452,7 @@ pub mod tests {
             },
             blockstore,
             ledger_signal_receiver,
-            &Arc::new(RpcSubscriptions::new(
+            &Arc::new(RpcSubscriptions::new_for_tests(
                 &exit,
                 bank_forks.clone(),
                 block_commitment_cache.clone(),

@@ -64,6 +64,8 @@ trees = "0.4.2"
 [dev-dependencies]
 jsonrpc-core = "18.0.0"
 jsonrpc-core-client = { version = "18.0.0", features = ["ipc", "ws"] }
+jsonrpc-derive = "18.0.0"
+jsonrpc-pubsub = "18.0.0"
 matches = "0.1.9"
 reqwest = { version = "0.11.4", default-features = false, features = ["blocking", "rustls-tls", "json"] }
 serde_json = "1.0.68"
@@ -73,6 +75,7 @@ solana-stake-program = { path = "../programs/stake", version = "=1.8.0" }
 solana-version = { path = "../version", version = "=1.8.0" }
 static_assertions = "1.1.0"
 systemstat = "0.1.8"
+
 
 [build-dependencies]
 rustc_version = "0.4"

@@ -1059,15 +1059,13 @@ pub fn main() {
         &format!("{}-{}", VALIDATOR_PORT_RANGE.0, VALIDATOR_PORT_RANGE.1);
     let default_genesis_archive_unpacked_size = &MAX_GENESIS_ARCHIVE_UNPACKED_SIZE.to_string();
     let default_rpc_max_multiple_accounts = &MAX_MULTIPLE_ACCOUNTS.to_string();
-    let default_rpc_pubsub_max_connections = PubSubConfig::default().max_connections.to_string();
-    let default_rpc_pubsub_max_fragment_size =
-        PubSubConfig::default().max_fragment_size.to_string();
-    let default_rpc_pubsub_max_in_buffer_capacity =
-        PubSubConfig::default().max_in_buffer_capacity.to_string();
-    let default_rpc_pubsub_max_out_buffer_capacity =
-        PubSubConfig::default().max_out_buffer_capacity.to_string();
+
     let default_rpc_pubsub_max_active_subscriptions =
         PubSubConfig::default().max_active_subscriptions.to_string();
+    let default_rpc_pubsub_queue_capacity_items =
+        PubSubConfig::default().queue_capacity_items.to_string();
+    let default_rpc_pubsub_queue_capacity_bytes =
+        PubSubConfig::default().queue_capacity_bytes.to_string();
     let default_rpc_send_transaction_retry_ms = ValidatorConfig::default()
         .send_transaction_retry_ms
         .to_string();
@@ -1737,10 +1735,10 @@ pub fn main() {
                 .value_name("NUMBER")
                 .takes_value(true)
                 .validator(is_parsable::<usize>)
-                .default_value(&default_rpc_pubsub_max_connections)
+                .hidden(true)
                 .help("The maximum number of connections that RPC PubSub will support. \
                        This is a hard limit and no new connections beyond this limit can \
-                       be made until an old connection is dropped."),
+                       be made until an old connection is dropped. (Obsolete)"),
         )
         .arg(
             Arg::with_name("rpc_pubsub_max_fragment_size")
@@ -1748,9 +1746,9 @@ pub fn main() {
                 .value_name("BYTES")
                 .takes_value(true)
                 .validator(is_parsable::<usize>)
-                .default_value(&default_rpc_pubsub_max_fragment_size)
+                .hidden(true)
                 .help("The maximum length in bytes of acceptable incoming frames. Messages longer \
-                       than this will be rejected."),
+                       than this will be rejected. (Obsolete)"),
         )
         .arg(
             Arg::with_name("rpc_pubsub_max_in_buffer_capacity")
@@ -1758,8 +1756,9 @@ pub fn main() {
                 .value_name("BYTES")
                 .takes_value(true)
                 .validator(is_parsable::<usize>)
-                .default_value(&default_rpc_pubsub_max_in_buffer_capacity)
-                .help("The maximum size in bytes to which the incoming websocket buffer can grow."),
+                .hidden(true)
+                .help("The maximum size in bytes to which the incoming websocket buffer can grow. \
+                      (Obsolete)"),
         )
         .arg(
             Arg::with_name("rpc_pubsub_max_out_buffer_capacity")
@@ -1767,8 +1766,9 @@ pub fn main() {
                 .value_name("BYTES")
                 .takes_value(true)
                 .validator(is_parsable::<usize>)
-                .default_value(&default_rpc_pubsub_max_out_buffer_capacity)
-                .help("The maximum size in bytes to which the outgoing websocket buffer can grow."),
+                .hidden(true)
+                .help("The maximum size in bytes to which the outgoing websocket buffer can grow. \
+                       (Obsolete)"),
         )
         .arg(
             Arg::with_name("rpc_pubsub_max_active_subscriptions")
@@ -1778,6 +1778,26 @@ pub fn main() {
                 .validator(is_parsable::<usize>)
                 .default_value(&default_rpc_pubsub_max_active_subscriptions)
                 .help("The maximum number of active subscriptions that RPC PubSub will accept \
+                       across all connections."),
+        )
+        .arg(
+            Arg::with_name("rpc_pubsub_queue_capacity_items")
+                .long("rpc-pubsub-queue-capacity-items")
+                .takes_value(true)
+                .value_name("NUMBER")
+                .validator(is_parsable::<usize>)
+                .default_value(&default_rpc_pubsub_queue_capacity_items)
+                .help("The maximum number of notifications that RPC PubSub will store \
+                       across all connections."),
+        )
+        .arg(
+            Arg::with_name("rpc_pubsub_queue_capacity_bytes")
+                .long("rpc-pubsub-queue-capacity-bytes")
+                .takes_value(true)
+                .value_name("BYTES")
+                .validator(is_parsable::<usize>)
+                .default_value(&default_rpc_pubsub_queue_capacity_bytes)
+                .help("The maximum total size of notifications that RPC PubSub will store \
                        across all connections."),
         )
         .arg(
@@ -2569,21 +2589,19 @@ pub fn main() {
         }),
         pubsub_config: PubSubConfig {
             enable_vote_subscription: matches.is_present("rpc_pubsub_enable_vote_subscription"),
-            max_connections: value_t_or_exit!(matches, "rpc_pubsub_max_connections", usize),
-            max_fragment_size: value_t_or_exit!(matches, "rpc_pubsub_max_fragment_size", usize),
-            max_in_buffer_capacity: value_t_or_exit!(
-                matches,
-                "rpc_pubsub_max_in_buffer_capacity",
-                usize
-            ),
-            max_out_buffer_capacity: value_t_or_exit!(
-                matches,
-                "rpc_pubsub_max_out_buffer_capacity",
-                usize
-            ),
             max_active_subscriptions: value_t_or_exit!(
                 matches,
                 "rpc_pubsub_max_active_subscriptions",
+                usize
+            ),
+            queue_capacity_items: value_t_or_exit!(
+                matches,
+                "rpc_pubsub_queue_capacity_items",
+                usize
+            ),
+            queue_capacity_bytes: value_t_or_exit!(
+                matches,
+                "rpc_pubsub_queue_capacity_bytes",
                 usize
             ),
         },

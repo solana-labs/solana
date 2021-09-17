@@ -49,7 +49,7 @@ pub enum UiAccountData {
     Binary(String, UiAccountEncoding),
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[serde(rename_all = "camelCase")]
 pub enum UiAccountEncoding {
     Binary, // Legacy. Retained for RPC backwards compatibility
@@ -179,7 +179,7 @@ impl Default for UiFeeCalculator {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UiDataSliceConfig {
     pub offset: usize,
