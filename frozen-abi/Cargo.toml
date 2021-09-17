@@ -22,7 +22,7 @@ thiserror = "1.0"
 [target.'cfg(not(target_arch = "bpf"))'.dependencies]
 solana-logger = { path = "../logger", version = "=1.8.0" }
 generic-array = { version = "0.14.4", default-features = false, features = ["serde", "more_lengths"]}
-memmap2 = "0.3.1"
+memmap2 = "0.4.0"
 
 [build-dependencies]
 rustc_version = "0.4"
