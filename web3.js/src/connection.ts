@@ -3727,11 +3727,11 @@ export class Connection {
           sub.subscriptionId = null;
         }
 
-        Object.values(this._subscribeErrorCallbacks).forEach(callback =>
-          callback(rpcMethod, rpcArgs, error),
-        );
-
-        if (this._subscribeErrorCallbackCounter === 0) {
+        if (Object.values(this._subscribeErrorCallbacks).length) {
+          Object.values(this._subscribeErrorCallbacks).forEach(callback =>
+            callback(rpcMethod, rpcArgs, error),
+          );
+        } else {
           console.error(
             `${rpcMethod} error for argument`,
             rpcArgs,

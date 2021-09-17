@@ -37,7 +37,10 @@ export const mockRpcMessage = ({
   ]);
 };
 
-export const stubRpcWebSocket = (connection: Connection) => {
+export const stubRpcWebSocket = (
+  connection: Connection,
+  callCallback?: () => Promise<void>,
+) => {
   const rpcWebSocket = connection._rpcWebSocket;
   const mockClient = new MockClient(rpcWebSocket);
   sandbox.stub(rpcWebSocket, 'connect').callsFake(() => {
@@ -49,6 +52,10 @@ export const stubRpcWebSocket = (connection: Connection) => {
   sandbox
     .stub(rpcWebSocket, 'call')
     .callsFake((method: string, params: any) => {
+      if (callCallback) {
+        return callCallback();
+      }
+
       return mockClient.call(method, params);
     });
 };
