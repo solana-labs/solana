@@ -25,7 +25,7 @@ A front-end application that interacts with a Solana cluster.
 
 ## bank state
 
-The result of interpreting all programs on the ledger at a given [tick height](terminology.md#tick-height). It includes at least the set of all [accounts](terminology.md#account) holding nonzero [native tokens](terminology.md#native-tokens).
+The result of interpreting all programs on the ledger at a given [tick height](terminology.md#tick-height). It includes at least the set of all [accounts](terminology.md#account) holding nonzero [native tokens](terminology.md#native-token).
 
 ## block
 
@@ -103,7 +103,7 @@ A preimage resistant [hash](terminology.md#hash) over the final contents of an e
 - The specified [transactions](terminology.md#transaction) are those included in the entry
 - The entry's position with respect to other entries in [ledger](terminology.md#ledger)
 
-See [proof of history](terminology.md#proof-of-history).
+See [proof of history](terminology.md#proof-of-history-poh).
 
 ## epoch
 
@@ -143,7 +143,7 @@ See [cross-program invocation](terminology.md#cross-program-invocation-cpi).
 
 ## instruction
 
-The smallest contiguous unit of execution logic in a [program](terminology.md#program). An instruction specifies which program it is calling, which accounts it wants to read or modify, and additional data that serves as auxiliary input to the program. A [client](terminology.md#client) can include one or multiple instructions in a [transaction](terminology.md#transaction). An instruction may contain one or more [cross-program invocations](terminology.md#cross-program-invocation).
+The smallest contiguous unit of execution logic in a [program](terminology.md#program). An instruction specifies which program it is calling, which accounts it wants to read or modify, and additional data that serves as auxiliary input to the program. A [client](terminology.md#client) can include one or multiple instructions in a [transaction](terminology.md#transaction). An instruction may contain one or more [cross-program invocations](terminology.md#cross-program-invocation-cpi).
 
 ## keypair
 
@@ -196,7 +196,7 @@ The number of [validators](terminology.md#validator) participating in a [cluster
 
 ## PoH
 
-See [Proof of History](terminology.md#proof-of-history).
+See [Proof of History](terminology.md#proof-of-history-poh).
 
 ## point
 
@@ -220,7 +220,7 @@ The public key of the [account](terminology.md#account) containing a [program](t
 
 ## proof of history (PoH)
 
-A stack of proofs, each which proves that some data existed before the proof was created and that a precise duration of time passed before the previous proof. Like a [VDF](terminology.md#verifiable-delay-function), a Proof of History can be verified in less time than it took to produce.
+A stack of proofs, each which proves that some data existed before the proof was created and that a precise duration of time passed before the previous proof. Like a [VDF](terminology.md#verifiable-delay-function-vdf), a Proof of History can be verified in less time than it took to produce.
 
 ## public key (pubkey)
 
@@ -258,7 +258,7 @@ Whether a slot has been skipped can only be determined when it becomes older tha
 
 The period of time for which each [leader](terminology.md#leader) ingests transactions and produces a [block](terminology.md#block).
 
-Collectively, slots create a logical clock. Slots are ordered sequentially and non-overlapping, comprising roughly equal real-world time as per [PoH](terminology.md#proof-of-history).
+Collectively, slots create a logical clock. Slots are ordered sequentially and non-overlapping, comprising roughly equal real-world time as per [PoH](terminology.md#proof-of-history-poh).
 
 ## smart contract
 
@@ -326,7 +326,7 @@ A full participant in a Solana network [cluster](terminology.md#cluster) that pr
 
 ## VDF
 
-See [verifiable delay function](terminology.md#verifiable-delay-function).
+See [verifiable delay function](terminology.md#verifiable-delay-function-vdf).
 
 ## verifiable delay function (VDF)
 
