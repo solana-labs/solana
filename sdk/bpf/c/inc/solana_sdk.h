@@ -619,6 +619,11 @@ static uint64_t sol_invoke(
   );
 }
 
+/**
+ * Print the base64 representation of some arrays.
+ */
+void sol_log_data(SolBytes *fields, uint64_t fields_len);
+
 /**@}*/
 
 /**

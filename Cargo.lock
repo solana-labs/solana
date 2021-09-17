@@ -5250,6 +5250,7 @@ name = "solana-program"
 version = "1.8.1"
 dependencies = [
  "assert_matches",
+ "base64 0.13.0",
  "bincode",
  "blake3",
  "borsh",
