@@ -1,5 +1,5 @@
-use crate::MaxSearch;
 use crate::bucket_stats::BucketStats;
+use crate::MaxSearch;
 use memmap2::MmapMut;
 use rand::{thread_rng, Rng};
 use solana_measure::measure::Measure;
@@ -8,11 +8,8 @@ use std::io::Seek;
 use std::io::SeekFrom;
 use std::io::Write;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use std::sync::{
-    atomic::{AtomicU64, Ordering},
-};
-
 
 /*
 1	2
