@@ -7,7 +7,6 @@ use solana_sdk::{
     feature_set::{demote_program_write_locks, fix_write_privs},
     ic_logger_msg, ic_msg,
     instruction::{CompiledInstruction, Instruction, InstructionError},
-    keyed_account::{keyed_account_at_index, KeyedAccount},
     message::Message,
     process_instruction::{Executor, InvokeContext, Logger, ProcessInstructionWithContext},
     pubkey::Pubkey,
@@ -375,13 +374,34 @@ impl InstructionProcessor {
 
     pub fn create_message(
         instruction: &Instruction,
-        keyed_accounts: &[&KeyedAccount],
         signers: &[Pubkey],
         invoke_context: &RefMut<&mut dyn InvokeContext>,
-    ) -> Result<(Message, Pubkey, usize), InstructionError> {
+    ) -> Result<(Message, Vec<bool>, Pubkey), InstructionError> {
+        let message = Message::new(&[instruction.clone()], None);
+
+        // Gather keyed_accounts in the order of message.account_keys
+        let caller_keyed_accounts = invoke_context.get_keyed_accounts()?;
+        let callee_keyed_accounts = message
+            .account_keys
+            .iter()
+            .map(|account_key| {
+                caller_keyed_accounts
+                    .iter()
+                    .find(|keyed_account| keyed_account.unsigned_key() == account_key)
+                    .ok_or_else(|| {
+                        ic_msg!(
+                            *invoke_context,
+                            "Instruction references an unknown account {}",
+                            account_key
+                        );
+                        InstructionError::MissingAccount
+                    })
+            })
+            .collect::<Result<Vec<_>, InstructionError>>()?;
+
         // Check for privilege escalation
         for account in instruction.accounts.iter() {
-            let keyed_account = keyed_accounts
+            let keyed_account = callee_keyed_accounts
                 .iter()
                 .find_map(|keyed_account| {
                     if &account.pubkey == keyed_account.unsigned_key() {
@@ -424,7 +444,7 @@ impl InstructionProcessor {
 
         // validate the caller has access to the program account and that it is executable
         let program_id = instruction.program_id;
-        match keyed_accounts
+        match callee_keyed_accounts
             .iter()
             .find(|keyed_account| &program_id == keyed_account.unsigned_key())
         {
@@ -444,10 +464,11 @@ impl InstructionProcessor {
             }
         }
 
-        let message = Message::new(&[instruction.clone()], None);
-        let program_id_index = message.instructions[0].program_id_index as usize;
-
-        Ok((message, program_id, program_id_index))
+        let caller_write_privileges = callee_keyed_accounts
+            .iter()
+            .map(|keyed_account| keyed_account.is_writable())
+            .collect::<Vec<bool>>();
+        Ok((message, caller_write_privileges, program_id))
     }
 
     /// Entrypoint for a cross-program invocation from a native program
@@ -460,17 +481,17 @@ impl InstructionProcessor {
         let invoke_context = RefCell::new(invoke_context);
         let mut invoke_context = invoke_context.borrow_mut();
 
-        let caller_keyed_accounts = invoke_context.get_keyed_accounts()?;
-        let callee_keyed_accounts = keyed_account_indices_obsolete
-            .iter()
-            .map(|index| keyed_account_at_index(caller_keyed_accounts, *index))
-            .collect::<Result<Vec<&KeyedAccount>, InstructionError>>()?;
-        let (message, callee_program_id, _) = Self::create_message(
-            &instruction,
-            &callee_keyed_accounts,
-            signers,
-            &invoke_context,
-        )?;
+        // Translate and verify caller's data
+        let (message, mut caller_write_privileges, callee_program_id) =
+            Self::create_message(&instruction, signers, &invoke_context)?;
+        if !invoke_context.is_feature_active(&fix_write_privs::id()) {
+            let caller_keyed_accounts = invoke_context.get_keyed_accounts()?;
+            caller_write_privileges = Vec::with_capacity(1 + keyed_account_indices_obsolete.len());
+            caller_write_privileges.push(false);
+            for index in keyed_account_indices_obsolete.iter() {
+                caller_write_privileges.push(caller_keyed_accounts[*index].is_writable());
+            }
+        };
         let accounts = message
             .account_keys
             .iter()
@@ -485,31 +506,6 @@ impl InstructionProcessor {
             .iter()
             .map(|(_key, account)| account.borrow().data().len())
             .collect::<Vec<_>>();
-
-        // Translate and verify caller's data
-        let mut caller_write_privileges = Vec::with_capacity(message.account_keys.len());
-        if invoke_context.is_feature_active(&fix_write_privs::id()) {
-            for account_key in message.account_keys.iter() {
-                let keyed_account_index = caller_keyed_accounts
-                    .iter()
-                    .position(|keyed_account| keyed_account.unsigned_key() == account_key)
-                    .ok_or_else(|| {
-                        ic_msg!(
-                            invoke_context,
-                            "Instruction references an unknown account {}",
-                            account_key
-                        );
-                        InstructionError::MissingAccount
-                    })?;
-                let keyed_account = &caller_keyed_accounts[keyed_account_index];
-                caller_write_privileges.push(keyed_account.is_writable());
-            }
-        } else {
-            caller_write_privileges.push(false);
-            for index in keyed_account_indices_obsolete.iter() {
-                caller_write_privileges.push(caller_keyed_accounts[*index].is_writable());
-            }
-        }
 
         // Construct executables
         let (program_account_index, program_account) = invoke_context

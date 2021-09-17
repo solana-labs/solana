@@ -29,9 +29,7 @@ use solana_sdk::{
     hash::{Hasher, HASH_BYTES},
     ic_msg,
     instruction::{AccountMeta, Instruction, InstructionError},
-    keccak,
-    keyed_account::KeyedAccount,
-    native_loader,
+    keccak, native_loader,
     process_instruction::{self, stable_log, ComputeMeter, InvokeContext, Logger},
     program::MAX_RETURN_DATA,
     pubkey::{Pubkey, PubkeyError, MAX_SEEDS, MAX_SEED_LEN},
@@ -2205,13 +2203,11 @@ fn call<'a>(
     memory_mapping: &MemoryMapping,
 ) -> Result<u64, EbpfError<BpfError>> {
     let mut invoke_context = syscall.get_context_mut()?;
-
     invoke_context
         .get_compute_meter()
         .consume(invoke_context.get_compute_budget().invoke_units)?;
 
     // Translate and verify caller's data
-
     let instruction =
         syscall.translate_instruction(instruction_addr, memory_mapping, *invoke_context)?;
     let caller_program_id = invoke_context
@@ -2223,33 +2219,10 @@ fn call<'a>(
         signers_seeds_len,
         memory_mapping,
     )?;
-    let keyed_account_refs = invoke_context
-        .get_keyed_accounts()
-        .map_err(SyscallError::InstructionError)?
-        .iter()
-        .collect::<Vec<&KeyedAccount>>();
-    let (message, callee_program_id, callee_program_id_index) =
-        InstructionProcessor::create_message(
-            &instruction,
-            &keyed_account_refs,
-            &signers,
-            &invoke_context,
-        )
-        .map_err(SyscallError::InstructionError)?;
-    let caller_write_privileges = message
-        .account_keys
-        .iter()
-        .map(|key| {
-            if let Some(keyed_account) = keyed_account_refs
-                .iter()
-                .find(|keyed_account| key == keyed_account.unsigned_key())
-            {
-                keyed_account.is_writable()
-            } else {
-                false
-            }
-        })
-        .collect::<Vec<bool>>();
+    let (message, caller_write_privileges, callee_program_id) =
+        InstructionProcessor::create_message(&instruction, &signers, &invoke_context)
+            .map_err(SyscallError::InstructionError)?;
+    let callee_program_id_index = message.instructions[0].program_id_index as usize;
     check_authorized_program(
         &callee_program_id,
         &instruction.data,
@@ -2265,20 +2238,12 @@ fn call<'a>(
     )?;
 
     // Construct executables
-    let program_account = accounts
-        .get(callee_program_id_index)
-        .ok_or_else(|| {
-            ic_msg!(invoke_context, "Unknown program {}", callee_program_id);
-            SyscallError::InstructionError(InstructionError::MissingAccount)
-        })?
-        .1
-        .clone();
-    let (program_account_index, _program_account) = invoke_context
+    let (program_account_index, program_account) = invoke_context
         .get_account(&callee_program_id)
-        .ok_or(SyscallError::InstructionError(
-            InstructionError::MissingAccount,
-        ))?;
-
+        .ok_or_else(|| {
+        ic_msg!(invoke_context, "Unknown program {}", callee_program_id);
+        SyscallError::InstructionError(InstructionError::MissingAccount)
+    })?;
     let mut program_indices = vec![program_account_index];
     if let Some(programdata_account_index) =
         get_upgradeable_executable(&callee_program_id, &program_account, *invoke_context)?
@@ -2290,18 +2255,14 @@ fn call<'a>(
     invoke_context.record_instruction(&instruction);
 
     // Process instruction
-    match InstructionProcessor::process_cross_program_instruction(
+    InstructionProcessor::process_cross_program_instruction(
         &message,
         &program_indices,
         &accounts,
         &caller_write_privileges,
         *invoke_context,
-    ) {
-        Ok(()) => (),
-        Err(err) => {
-            return Err(SyscallError::InstructionError(err).into());
-        }
-    }
+    )
+    .map_err(SyscallError::InstructionError)?;
 
     // Copy results back to caller
     let demote_program_write_locks =
