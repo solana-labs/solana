@@ -1003,6 +1003,7 @@ mod tests {
         instruction::{AccountMeta, InstructionError},
         keyed_account::KeyedAccount,
         message::Message,
+        native_token::LAMPORTS_PER_SOL,
         process_instruction::{MockComputeMeter, MockInvokeContext},
         pubkey::Pubkey,
         rent::Rent,
@@ -1660,54 +1661,48 @@ mod tests {
         let bank = Arc::new(bank);
         let bank_client = BankClient::new_shared(&bank);
 
-        // Setup initial accounts
+        // Setup keypairs and addresses
         let payer_keypair = Keypair::new();
         let program_keypair = Keypair::new();
+        let buffer_address = Pubkey::new_unique();
         let (programdata_address, _) = Pubkey::find_program_address(
             &[program_keypair.pubkey().as_ref()],
             &bpf_loader_upgradeable::id(),
         );
         let upgrade_authority_keypair = Keypair::new();
 
-        // Payer balance just needs to be high enough to create the (small)
-        // program account and cover fees
-        let min_program_balance = bank
-            .get_minimum_balance_for_rent_exemption(UpgradeableLoaderState::program_len().unwrap());
-        let fee_calculator = genesis_config.fee_rate_governor.create_fee_calculator();
-        let min_payer_balance = min_program_balance + 3 * fee_calculator.lamports_per_signature;
-
-        // Fund payer with required deploy funds
-        let message = Message::new(
-            &[system_instruction::transfer(
-                &mint_keypair.pubkey(),
-                &payer_keypair.pubkey(),
-                min_payer_balance,
-            )],
-            Some(&mint_keypair.pubkey()),
-        );
-        assert!(bank_client
-            .send_and_confirm_message(&[&mint_keypair], message)
-            .is_ok());
-
+        // Load program file
         let mut file = File::open("test_elfs/noop_aligned.so").expect("file open failed");
         let mut elf = Vec::new();
         file.read_to_end(&mut elf).unwrap();
+
+        // Compute rent exempt balances
+        let program_len = elf.len();
+        let min_program_balance = bank
+            .get_minimum_balance_for_rent_exemption(UpgradeableLoaderState::program_len().unwrap());
+        let min_buffer_balance = bank.get_minimum_balance_for_rent_exemption(
+            UpgradeableLoaderState::buffer_len(program_len).unwrap(),
+        );
         let min_programdata_balance = bank.get_minimum_balance_for_rent_exemption(
-            UpgradeableLoaderState::programdata_len(elf.len()).unwrap(),
+            UpgradeableLoaderState::programdata_len(program_len).unwrap(),
         );
-        let buffer_address = Pubkey::new_unique();
-        let mut buffer_account = AccountSharedData::new(
-            min_programdata_balance,
-            UpgradeableLoaderState::buffer_len(elf.len()).unwrap(),
-            &bpf_loader_upgradeable::id(),
-        );
-        buffer_account
-            .set_state(&UpgradeableLoaderState::Buffer {
-                authority_address: Some(upgrade_authority_keypair.pubkey()),
-            })
-            .unwrap();
-        buffer_account.data_as_mut_slice()[UpgradeableLoaderState::buffer_data_offset().unwrap()..]
-            .copy_from_slice(&elf);
+
+        // Setup accounts
+        let buffer_account = {
+            let mut account = AccountSharedData::new(
+                min_buffer_balance,
+                UpgradeableLoaderState::buffer_len(elf.len()).unwrap(),
+                &bpf_loader_upgradeable::id(),
+            );
+            account
+                .set_state(&UpgradeableLoaderState::Buffer {
+                    authority_address: Some(upgrade_authority_keypair.pubkey()),
+                })
+                .unwrap();
+            account.data_as_mut_slice()[UpgradeableLoaderState::buffer_data_offset().unwrap()..]
+                .copy_from_slice(&elf);
+            account
+        };
         let program_account = AccountSharedData::new(
             min_programdata_balance,
             UpgradeableLoaderState::program_len().unwrap(),
@@ -1720,7 +1715,21 @@ mod tests {
         );
 
         // Test successful deploy
-        bank.clear_signatures();
+        let payer_base_balance = LAMPORTS_PER_SOL;
+        let deploy_fees = {
+            let fee_calculator = genesis_config.fee_rate_governor.create_fee_calculator();
+            3 * fee_calculator.lamports_per_signature
+        };
+        let min_payer_balance =
+            min_program_balance + min_programdata_balance - min_buffer_balance + deploy_fees;
+        bank.store_account(
+            &payer_keypair.pubkey(),
+            &AccountSharedData::new(
+                payer_base_balance + min_payer_balance,
+                0,
+                &system_program::id(),
+            ),
+        );
         bank.store_account(&buffer_address, &buffer_account);
         bank.store_account(&program_keypair.pubkey(), &AccountSharedData::default());
         bank.store_account(&programdata_address, &AccountSharedData::default());
@@ -1742,7 +1751,10 @@ mod tests {
                 message
             )
             .is_ok());
-        assert_eq!(bank.get_balance(&payer_keypair.pubkey()), 0);
+        assert_eq!(
+            bank.get_balance(&payer_keypair.pubkey()),
+            payer_base_balance
+        );
         assert_eq!(bank.get_balance(&buffer_address), 0);
         assert_eq!(None, bank.get_account(&buffer_address));
         let post_program_account = bank.get_account(&program_keypair.pubkey()).unwrap();
@@ -2023,11 +2035,12 @@ mod tests {
                 .unwrap()
         );
 
-        // Test Insufficient payer funds
+        // Test Insufficient payer funds (need more funds to cover the
+        // difference between buffer lamports and programdata lamports)
         bank.clear_signatures();
         bank.store_account(
             &mint_keypair.pubkey(),
-            &AccountSharedData::new(min_program_balance, 0, &system_program::id()),
+            &AccountSharedData::new(deploy_fees + min_program_balance, 0, &system_program::id()),
         );
         bank.store_account(&buffer_address, &buffer_account);
         bank.store_account(&program_keypair.pubkey(), &AccountSharedData::default());
