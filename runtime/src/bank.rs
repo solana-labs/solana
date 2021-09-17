@@ -4212,6 +4212,7 @@ impl Bank {
                 pubkey,
                 account,
                 self.check_init_vote_data_enabled(),
+                self.stakes_remove_delegation_if_inactive_enabled(),
             );
         }
     }
@@ -4879,6 +4880,7 @@ impl Bank {
                         pubkey,
                         account,
                         self.check_init_vote_data_enabled(),
+                        self.stakes_remove_delegation_if_inactive_enabled(),
                     ) {
                         // TODO: one of the indices is redundant.
                         overwritten_vote_accounts.push(OverwrittenVoteAccount {
@@ -5126,6 +5128,11 @@ impl Bank {
     pub fn demote_program_write_locks(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::demote_program_write_locks::id())
+    }
+
+    pub fn stakes_remove_delegation_if_inactive_enabled(&self) -> bool {
+        self.feature_set
+            .is_active(&feature_set::stakes_remove_delegation_if_inactive::id())
     }
 
     // Check if the wallclock time from bank creation to now has exceeded the allotted

@@ -207,6 +207,10 @@ pub mod reduce_required_deploy_balance {
     solana_sdk::declare_id!("EBeznQDjcPG8491sFsKZYBi5S5jTVXMpAKNDJMQPS2kq");
 }
 
+pub mod stakes_remove_delegation_if_inactive {
+    solana_sdk::declare_id!("HFpdDDNQjvcXnXKec697HDDsyk6tFoWS2o8fkxuhQZpL");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -259,6 +263,7 @@ lazy_static! {
         (check_seed_length::id(), "Check program address seed lengths"),
         (fix_write_privs::id(), "fix native invoke write privileges"),
         (reduce_required_deploy_balance::id(), "reduce required payer balance for program deploys"),
+        (stakes_remove_delegation_if_inactive::id(), "remove delegations from stakes cache when inactive"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
