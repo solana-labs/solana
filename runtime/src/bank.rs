@@ -2646,6 +2646,25 @@ impl Bank {
             .collect()
     }
 
+    pub fn weight_transaction(&self, transaction: &Transaction) -> u64 {
+        if !is_simple_vote_transaction(transaction) {
+            return 0;
+        }
+
+        if let Some(vote_address) = transaction.message.instructions.get(0).and_then(|ix| {
+            ix.accounts.get(0).and_then(|vote_account_index| {
+                transaction
+                    .message
+                    .account_keys
+                    .get(*vote_account_index as usize)
+            })
+        }) {
+            self.epoch_vote_account_stake(&vote_address)
+        } else {
+            0
+        }
+    }
+
     fn filter_by_vote_transactions<'a>(
         &self,
         txs: impl Iterator<Item = &'a Transaction>,
