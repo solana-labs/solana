@@ -8,7 +8,7 @@ The following terms are used throughout the documentation.
 
 A record in the Solana ledger that either holds data or is an executable program.
 
-Like an account at a traditional bank, a Solana account may hold funds called [lamports](terminology.md#lamport). Like a file in Linux, it is addressable by a [key], often referred to as a (terminology.md#public-key) public key or pubkey.
+Like an account at a traditional bank, a Solana account may hold funds called [lamports](terminology.md#lamport). Like a file in Linux, it is addressable by a [key], often referred to as a [public key](terminology.md#public-key) or pubkey.
 
 The key may be one of:
 an ed25519 public key
@@ -234,7 +234,7 @@ A [block](terminology.md#block) or [slot](terminology.md#slot) that has reached 
 
 The component of a [validator](terminology.md#validator) responsible for [program](terminology.md#program) execution.
 
-##Sealevel
+## Sealevel
 
 Solana's parallel smart contracts run-time.
 
