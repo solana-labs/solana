@@ -648,6 +648,23 @@ impl<'a, T: IndexValue> AccountsIndexIterator<'a, T> {
             collect_all_unsorted,
         }
     }
+
+    pub fn hold_range_in_memory<R>(&self, range: &R, start_holding: bool)
+    where
+        R: RangeBounds<Pubkey> + Debug,
+    {
+        // forward this hold request ONLY to the bins which contain keys in the specified range
+        let (start_bin, bin_range) = self.bin_start_and_range();
+        self.account_maps
+            .iter()
+            .skip(start_bin)
+            .take(bin_range)
+            .for_each(|map| {
+                map.read()
+                    .unwrap()
+                    .hold_range_in_memory(range, start_holding);
+            });
+    }
 }
 
 impl<'a, T: IndexValue> Iterator for AccountsIndexIterator<'a, T> {
@@ -1346,6 +1363,13 @@ impl<T: IndexValue> AccountsIndex<T> {
         rv.map(|index| slice.len() - 1 - index)
     }
 
+    pub fn hold_range_in_memory<R>(&self, range: &R, start_holding: bool)
+    where
+        R: RangeBounds<Pubkey> + Debug,
+    {
+        let iter = self.iter(Some(range), true);
+        iter.hold_range_in_memory(range, start_holding);
+    }
     /// Get an account
     /// The latest account that appears in `ancestors` or `roots` is returned.
     pub(crate) fn get(
