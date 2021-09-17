@@ -5,20 +5,20 @@ steps:
       UPLOAD_RESULTS_TO_SLACK: "true"
       CLOUD_PROVIDER: "gce"
       TESTNET_TAG: "testnet-dev-jbiseda"
-      NUMBER_OF_VALIDATOR_NODES: 5
+      NUMBER_OF_VALIDATOR_NODES: 8
       ENABLE_GPU: "false"
       VALIDATOR_NODE_MACHINE_TYPE: "--machine-type n1-standard-16"
-      NUMBER_OF_CLIENT_NODES: 1
-      CLIENT_OPTIONS: "bench-tps=1=--tx_count 10000 --thread-batch-sleep-ms 250"
+      NUMBER_OF_CLIENT_NODES: 2
+      CLIENT_OPTIONS: "bench-tps=2=--tx_count 200000"
       TESTNET_ZONES: "us-west1-a"
       USE_PUBLIC_IP_ADDRESSES: "true"
       ADDITIONAL_FLAGS: "--dedicated"
-      EXTRA_PRIMORDIAL_STAKES: 4
+      EXTRA_PRIMORDIAL_STAKES: 7
       APPLY_PARTITIONS: "true"
       NETEM_CONFIG_FILE: "system-test/netem-configs/partial-loss"
       PARTITION_ACTIVE_DURATION: 300
       PARTITION_INACTIVE_DURATION: 30
-      PARTITION_ITERATION_COUNT: 10
+      PARTITION_ITERATION_COUNT: 20
       TEST_TYPE: "partition"
     agents:
       - "queue=gce-deploy"
