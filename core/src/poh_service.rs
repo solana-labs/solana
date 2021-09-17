@@ -348,9 +348,7 @@ impl PohService {
 
 #[cfg(test)]
 mod tests {
-<<<<<<< HEAD:core/src/poh_service.rs
     use super::*;
-    use crate::poh_recorder::WorkingBank;
     use rand::{thread_rng, Rng};
     use solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo};
     use solana_ledger::leader_schedule_cache::LeaderScheduleCache;
@@ -363,25 +361,6 @@ mod tests {
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::timing;
     use std::time::Duration;
-=======
-    use {
-        super::*,
-        rand::{thread_rng, Rng},
-        solana_ledger::{
-            blockstore::Blockstore,
-            genesis_utils::{create_genesis_config, GenesisConfigInfo},
-            get_tmp_ledger_path,
-            leader_schedule_cache::LeaderScheduleCache,
-        },
-        solana_measure::measure::Measure,
-        solana_perf::test_tx::test_tx,
-        solana_runtime::bank::Bank,
-        solana_sdk::{
-            clock, hash::hash, pubkey::Pubkey, timing, transaction::VersionedTransaction,
-        },
-        std::time::Duration,
-    };
->>>>>>> 87a7f0092 (Track reset bank in PohRecorder (#19810)):poh/src/poh_service.rs
 
     #[test]
     #[ignore]

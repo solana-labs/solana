@@ -2655,6 +2655,8 @@ pub(crate) mod tests {
             );
 
         let bank0 = Bank::new(&genesis_config);
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank0)));
+        let bank0 = bank_forks.read().unwrap().get(0).unwrap().clone();
 
         // ProgressMap
         let mut progress = ProgressMap::default();
@@ -2686,15 +2688,9 @@ pub(crate) mod tests {
         // PohRecorder
         let poh_recorder = Mutex::new(
             PohRecorder::new(
-<<<<<<< HEAD
                 bank0.tick_height(),
                 bank0.last_blockhash(),
-                bank0.slot(),
-=======
-                working_bank.tick_height(),
-                working_bank.last_blockhash(),
-                working_bank.clone(),
->>>>>>> 87a7f0092 (Track reset bank in PohRecorder (#19810))
+                bank0.clone(),
                 None,
                 bank0.ticks_per_slot(),
                 &Pubkey::default(),
@@ -2705,9 +2701,6 @@ pub(crate) mod tests {
             )
             .0,
         );
-
-        // BankForks
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank0)));
 
         // Tower
         let my_vote_pubkey = my_keypairs.vote_keypair.pubkey();
