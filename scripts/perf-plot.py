@@ -11,7 +11,7 @@ stages_to_counters = {}
 stages_to_time = {}
 
 if len(sys.argv) != 2:
-    print("USAGE: {} <input file>".format(sys.argv[0]))
+    print(f"USAGE: {sys.argv[0]} <input file>")
     sys.exit(1)
 
 with open(sys.argv[1]) as fh:
