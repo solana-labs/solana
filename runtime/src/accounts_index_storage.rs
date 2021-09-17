@@ -1,4 +1,4 @@
-use crate::accounts_index::IndexValue;
+use crate::accounts_index::{AccountsIndexConfig, IndexValue};
 use crate::bucket_map_holder::BucketMapHolder;
 use crate::in_mem_accounts_index::InMemAccountsIndex;
 use crate::waitable_condvar::WaitableCondvar;
@@ -44,7 +44,7 @@ impl<T: IndexValue> Drop for AccountsIndexStorage<T> {
 }
 
 impl<T: IndexValue> AccountsIndexStorage<T> {
-    pub fn new(bins: usize) -> AccountsIndexStorage<T> {
+    pub fn new(bins: usize, _config: &Option<AccountsIndexConfig>) -> AccountsIndexStorage<T> {
         let storage = Arc::new(BucketMapHolder::new(bins));
 
         let in_mem = (0..bins)

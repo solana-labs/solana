@@ -764,11 +764,12 @@ impl<T: IndexValue> AccountsIndex<T> {
         AccountsIndexStorage<T>,
     ) {
         let bins = config
+            .as_ref()
             .and_then(|config| config.bins)
             .unwrap_or(BINS_DEFAULT);
         // create bin_calculator early to verify # bins is reasonable
         let bin_calculator = PubkeyBinCalculator16::new(bins);
-        let storage = AccountsIndexStorage::new(bins);
+        let storage = AccountsIndexStorage::new(bins, &config);
         let account_maps = (0..bins)
             .into_iter()
             .map(|bin| RwLock::new(Arc::clone(&storage.in_mem[bin])))
