@@ -2512,6 +2512,14 @@ pub fn main() {
         accounts_index_config.bins = Some(bins);
     }
 
+    {
+        let mut accounts_index_paths = vec![]; // will be option soon
+        if accounts_index_paths.is_empty() {
+            accounts_index_paths = vec![ledger_path.join("accounts_index")];
+        }
+        accounts_index_config.drives = Some(accounts_index_paths);
+    }
+
     let accounts_db_config = Some(AccountsDbConfig {
         index: Some(accounts_index_config),
         accounts_hash_cache_path: Some(ledger_path.clone()),
