@@ -2580,9 +2580,14 @@ pub fn main() {
     };
 
     let accountsdb_plugin_config_file = if matches.is_present("enable_accountsdb_plugin") {
-        Some(PathBuf::from(
-            matches.value_of("accountsdb_plugin_config").unwrap(),
-        ))
+        Some(PathBuf::from(            
+            matches.value_of("accountsdb_plugin_config").unwrap_or_else(|| 
+                clap::Error::with_description(
+                "The --enable-accountsdb-plugin <plugin_config_file> argument is required",
+                clap::ErrorKind::ArgumentNotFound,
+            )
+            .exit()
+        )))
     } else {
         None
     };
