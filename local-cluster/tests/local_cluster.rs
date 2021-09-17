@@ -2122,6 +2122,44 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
     }
     trace!("Waited {:?}", timer.elapsed());
 
+    // Get the highest full snapshot archive info for the validator, now that it has crossed the
+    // next full snapshot interval.  We are going to use this to look up the same snapshot on the
+    // leader, which we'll then use to compare to the full snapshot the validator will create
+    // during startup.  This ensures the snapshot creation process during startup is correct.
+    //
+    // Putting this all in its own block so its clear we're only intended to keep the leader's info
+    let leader_full_snapshot_archive_info_for_comparison = {
+        let validator_full_snapshot = snapshot_utils::get_highest_full_snapshot_archive_info(
+            validator_snapshot_test_config.snapshot_archives_dir.path(),
+        )
+        .unwrap();
+
+        // Now get the same full snapshot on the LEADER that we just got from the validator
+        let mut leader_full_snapshots = snapshot_utils::get_full_snapshot_archives(
+            leader_snapshot_test_config.snapshot_archives_dir.path(),
+        );
+        leader_full_snapshots.retain(|full_snapshot| {
+            full_snapshot.slot() == validator_full_snapshot.slot()
+                && full_snapshot.hash() == validator_full_snapshot.hash()
+        });
+
+        // NOTE: If this unwrap() ever fails, it may be that the leader's old full snapshot archives
+        // were purged.  If that happens, increase the maximum_full_snapshot_archives_to_retain
+        // in the leader's Snapshotconfig.
+        let leader_full_snapshot = leader_full_snapshots.first().unwrap();
+
+        // And for sanity, the full snapshots from the leader and the validator MUST be the same
+        assert_eq!(
+            (
+                validator_full_snapshot.slot(),
+                validator_full_snapshot.hash()
+            ),
+            (leader_full_snapshot.slot(), leader_full_snapshot.hash())
+        );
+
+        leader_full_snapshot.clone()
+    };
+
     trace!(
         "Delete all the snapshots on the validator and restore the originals from the backup..."
     );
@@ -2134,7 +2172,7 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
     .unwrap();
 
     // Get the highest full snapshot slot *before* restarting, as a comparison
-    let old_validator_highest_full_snapshot_slot =
+    let validator_previous_highest_full_snapshot_slot =
         snapshot_utils::get_highest_full_snapshot_archive_slot(
             validator_snapshot_test_config.snapshot_archives_dir.path(),
         )
@@ -2151,26 +2189,32 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
     // Now, we want to ensure that the validator can make a new incremental snapshot based on the
     // new full snapshot that was created during the restart.
     let timer = Instant::now();
-    loop {
-        if let Some(highest_full_snapshot_slot) =
-            snapshot_utils::get_highest_full_snapshot_archive_slot(
+    let (
+        validator_highest_full_snapshot_archive_info,
+        _validator_highest_incremental_snapshot_archive_info,
+    ) = loop {
+        if let Some(highest_full_snapshot_info) =
+            snapshot_utils::get_highest_full_snapshot_archive_info(
                 validator_snapshot_test_config.snapshot_archives_dir.path(),
             )
         {
-            if highest_full_snapshot_slot > old_validator_highest_full_snapshot_slot {
-                if let Some(highest_incremental_snapshot_slot) =
-                    snapshot_utils::get_highest_incremental_snapshot_archive_slot(
+            if highest_full_snapshot_info.slot() > validator_previous_highest_full_snapshot_slot {
+                if let Some(highest_incremental_snapshot_info) =
+                    snapshot_utils::get_highest_incremental_snapshot_archive_info(
                         validator_snapshot_test_config.snapshot_archives_dir.path(),
-                        highest_full_snapshot_slot,
+                        highest_full_snapshot_info.slot(),
                     )
                 {
                     info!("Success! Made new full and incremental snapshots!");
                     trace!(
                         "Full snapshot slot: {}, incremental snapshot slot: {}",
-                        highest_full_snapshot_slot,
-                        highest_incremental_snapshot_slot
+                        highest_full_snapshot_info.slot(),
+                        highest_incremental_snapshot_info.slot(),
                     );
-                    break;
+                    break (
+                        highest_full_snapshot_info,
+                        highest_incremental_snapshot_info,
+                    );
                 }
             }
         }
@@ -2179,8 +2223,21 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
             "It should not take longer than 5 seconds to cross the next incremental snapshot interval."
         );
         std::thread::yield_now();
-    }
+    };
     trace!("Waited {:?}", timer.elapsed());
+
+    // Check to make sure that the full snapshot the validator created during startup is the same
+    // as the snapshot the leader created.
+    assert_eq!(
+        (
+            validator_highest_full_snapshot_archive_info.slot(),
+            validator_highest_full_snapshot_archive_info.hash()
+        ),
+        (
+            leader_full_snapshot_archive_info_for_comparison.slot(),
+            leader_full_snapshot_archive_info_for_comparison.hash()
+        )
+    );
 
     // And lastly, startup another node with the new snapshots to ensure they work
     let final_validator_snapshot_test_config = SnapshotValidatorConfig::new(
