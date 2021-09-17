@@ -24,7 +24,7 @@ use std::{
         Range, RangeBounds,
     },
     sync::{
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         Arc, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard,
     },
 };
@@ -117,9 +117,23 @@ impl AccountSecondaryIndexes {
 }
 
 #[derive(Debug, Default)]
+pub struct AccountMapEntryMeta {
+    pub dirty: AtomicBool,
+}
+
+impl AccountMapEntryMeta {
+    pub fn new_dirty() -> Self {
+        AccountMapEntryMeta {
+            dirty: AtomicBool::new(true),
+        }
+    }
+}
+
+#[derive(Debug, Default)]
 pub struct AccountMapEntryInner<T> {
     ref_count: AtomicU64,
     pub slot_list: RwLock<SlotList<T>>,
+    pub meta: AccountMapEntryMeta,
 }
 
 impl<T: IndexValue> AccountMapEntryInner<T> {
@@ -133,6 +147,15 @@ impl<T: IndexValue> AccountMapEntryInner<T> {
         } else {
             self.ref_count.fetch_sub(1, Ordering::Relaxed);
         }
+        self.set_dirty(true);
+    }
+
+    pub fn dirty(&self) -> bool {
+        self.meta.dirty.load(Ordering::Relaxed)
+    }
+
+    pub fn set_dirty(&self, value: bool) -> bool {
+        self.meta.dirty.swap(value, Ordering::Relaxed)
     }
 }
 
@@ -207,7 +230,9 @@ impl<T: IndexValue> WriteAccountMapEntry<T> {
         &mut self,
         user: impl for<'this> FnOnce(&mut RwLockWriteGuard<'this, SlotList<T>>) -> RT,
     ) -> RT {
-        self.with_slot_list_guard_mut(user)
+        let result = self.with_slot_list_guard_mut(user);
+        self.borrow_owned_entry().set_dirty(true);
+        result
     }
 
     // create an entry that is equivalent to this process:
@@ -219,6 +244,7 @@ impl<T: IndexValue> WriteAccountMapEntry<T> {
         Arc::new(AccountMapEntryInner {
             ref_count: AtomicU64::new(ref_count),
             slot_list: RwLock::new(vec![(slot, account_info)]),
+            meta: AccountMapEntryMeta::new_dirty(),
         })
     }
 
