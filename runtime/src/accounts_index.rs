@@ -34,11 +34,14 @@ pub const ITER_BATCH_SIZE: usize = 1000;
 pub const BINS_DEFAULT: usize = 8192;
 pub const BINS_FOR_TESTING: usize = BINS_DEFAULT;
 pub const BINS_FOR_BENCHMARKS: usize = BINS_DEFAULT;
+pub const FLUSH_THREADS_TESTING: usize = 1;
 pub const ACCOUNTS_INDEX_CONFIG_FOR_TESTING: AccountsIndexConfig = AccountsIndexConfig {
     bins: Some(BINS_FOR_TESTING),
+    flush_threads: Some(FLUSH_THREADS_TESTING),
 };
 pub const ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS: AccountsIndexConfig = AccountsIndexConfig {
     bins: Some(BINS_FOR_BENCHMARKS),
+    flush_threads: Some(FLUSH_THREADS_TESTING),
 };
 pub type ScanResult<T> = Result<T, ScanError>;
 pub type SlotList<T> = Vec<(Slot, T)>;
@@ -93,6 +96,7 @@ pub struct AccountSecondaryIndexesIncludeExclude {
 #[derive(Debug, Default, Clone)]
 pub struct AccountsIndexConfig {
     pub bins: Option<usize>,
+    pub flush_threads: Option<usize>,
 }
 
 #[derive(Debug, Default, Clone)]

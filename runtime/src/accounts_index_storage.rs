@@ -46,7 +46,7 @@ impl<T: IndexValue> Drop for AccountsIndexStorage<T> {
 }
 
 impl<T: IndexValue> AccountsIndexStorage<T> {
-    pub fn new(bins: usize, _config: &Option<AccountsIndexConfig>) -> AccountsIndexStorage<T> {
+    pub fn new(bins: usize, config: &Option<AccountsIndexConfig>) -> AccountsIndexStorage<T> {
         let storage = Arc::new(BucketMapHolder::new(bins));
 
         let in_mem = (0..bins)
@@ -55,7 +55,11 @@ impl<T: IndexValue> AccountsIndexStorage<T> {
             .collect();
 
         const DEFAULT_THREADS: usize = 1; // soon, this will be a cpu calculation
-        let threads = DEFAULT_THREADS;
+        let threads = config
+            .as_ref()
+            .and_then(|config| config.flush_threads)
+            .unwrap_or(DEFAULT_THREADS);
+
         let exit = Arc::new(AtomicBool::default());
         let wait = Arc::new(WaitableCondvar::default());
         let handles = Some(
