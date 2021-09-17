@@ -25,6 +25,7 @@ pub struct Meta {
     pub seed: [u8; 32],
     pub slot: Slot,
     pub is_tracer_tx: bool,
+    pub is_simple_vote_tx: bool,
 }
 
 #[derive(Clone)]

@@ -27,8 +27,8 @@ use solana_perf::{
 use solana_runtime::{
     accounts_db::ErrorCounters,
     bank::{
-        is_simple_vote_transaction, Bank, ExecuteTimings, TransactionBalancesSet,
-        TransactionCheckResult, TransactionExecutionResult,
+        Bank, ExecuteTimings, TransactionBalancesSet, TransactionCheckResult,
+        TransactionExecutionResult,
     },
     bank_utils,
     hashed_transaction::HashedTransaction,
@@ -51,6 +51,7 @@ use solana_sdk::{
 use solana_transaction_status::token_balances::{
     collect_token_balances, TransactionTokenBalancesSet,
 };
+use solana_vote_program::vote_transaction;
 use std::{
     borrow::Cow,
     cmp,
@@ -96,7 +97,6 @@ pub struct BankingStageStats {
     new_tx_count: AtomicUsize,
     dropped_packet_batches_count: AtomicUsize,
     dropped_packets_count: AtomicUsize,
-    vote_only_bank_dropped_tx_count: AtomicUsize,
     newly_buffered_packets_count: AtomicUsize,
     current_buffered_packets_count: AtomicUsize,
     current_buffered_packet_batches_count: AtomicUsize,
@@ -166,12 +166,6 @@ impl BankingStageStats {
                 (
                     "dropped_packets_count",
                     self.dropped_packets_count.swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
-                    "vote_only_bank_dropped_tx_count",
-                    self.vote_only_bank_dropped_tx_count
-                        .swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
                 (
@@ -523,13 +517,11 @@ impl BankingStage {
                     }
                     has_more_unprocessed_transactions
                 } else {
+                    // with votes being prioritized early, it is now possible packets contain
+                    // zero unprocessed TX (in the case packets was full votes), in that case
+                    // no need to retain that packetys.
                     rebuffered_packets_len += original_unprocessed_indexes.len();
-                    // `original_unprocessed_indexes` must have remaining packets to process
-                    // if not yet processed.
-                    assert!(Self::packet_has_more_unprocessed_transactions(
-                        &original_unprocessed_indexes
-                    ));
-                    true
+                    Self::packet_has_more_unprocessed_transactions(&original_unprocessed_indexes)
                 }
             }
         });
@@ -1303,8 +1295,7 @@ impl BankingStage {
             .enumerate()
             .filter_map(|(index, ver)| {
                 if !ver.meta.discard {
-                    let tx: Transaction = limited_deserialize(&ver.data[0..ver.meta.size]).ok()?;
-                    if is_simple_vote_transaction(&tx) {
+                    if ver.meta.is_simple_vote_tx {
                         Some(index)
                     } else {
                         None
@@ -1395,7 +1386,6 @@ impl BankingStage {
         let mut vote_tx_count = 0;
         let mut unprocessed_vote_tx_count = 0;
         let mut new_tx_count = 0;
-        let mut vote_only_bank_dropped_tx_count = 0;
 
         // process all votes in the pipeline first
         Self::process_packets_vote(
@@ -1431,13 +1421,6 @@ impl BankingStage {
                 continue;
             }
             let (bank, bank_creation_time) = bank_start.unwrap();
-
-            if bank.vote_only_bank() {
-                // votes should have been processed already, drop all other transactions
-                // when bank is in vote-only state.
-                vote_only_bank_dropped_tx_count += packet_indexes.len();
-                continue;
-            }
 
             let (processed, verified_txs_len, unprocessed_indexes) =
                 Self::process_packets_transactions(
@@ -1533,9 +1516,6 @@ impl BankingStage {
         banking_stage_stats
             .dropped_packets_count
             .fetch_add(dropped_packets_count, Ordering::Relaxed);
-        banking_stage_stats
-            .vote_only_bank_dropped_tx_count
-            .fetch_add(vote_only_bank_dropped_tx_count, Ordering::Relaxed);
         banking_stage_stats
             .newly_buffered_packets_count
             .fetch_add(newly_buffered_packets_count, Ordering::Relaxed);
@@ -1699,7 +1679,6 @@ mod tests {
         transaction::TransactionError,
     };
     use solana_transaction_status::TransactionWithStatusMeta;
-    use solana_vote_program::vote_transaction;
     use std::{
         net::SocketAddr,
         path::Path,
@@ -3101,60 +3080,66 @@ mod tests {
         );
     }
 
+    #[cfg(test)]
+    fn make_stub_packets_with_vote(capacity: usize, vote_indexes: &[usize]) -> Packets {
+        let mut packets = Packets::with_capacity(capacity);
+        packets.packets.resize(capacity, Packet::default());
+        for index in vote_indexes.iter() {
+            packets.packets[*index].meta.is_simple_vote_tx = true;
+        }
+        packets
+    }
+
     #[test]
     fn test_generate_vote_packet_indexes() {
-        let keypair = Keypair::new();
-        let hash = Hash::new(&[1; 32]);
-        let transfer_tx = system_transaction::transfer(&keypair, &keypair.pubkey(), 1, hash);
-        let vote_tx = vote_transaction::new_vote_transaction(
-            vec![42],
-            Hash::default(),
-            Hash::default(),
-            &keypair,
-            &keypair,
-            &keypair,
-            None,
-        );
-
+        // no vote in packets
         {
-            let packets = to_packets_chunked(
-                &[
-                    transfer_tx.clone(),
-                    vote_tx.clone(),
-                    vote_tx.clone(),
-                    transfer_tx.clone(),
-                    vote_tx.clone(),
-                ],
-                5,
-            );
-            let expected_vote_indexes = vec![1, 2, 4];
+            let expected_vote_indexes = vec![];
+            let packets = make_stub_packets_with_vote(5, &expected_vote_indexes);
             assert_eq!(
                 expected_vote_indexes,
-                BankingStage::generate_vote_packet_indexes(&packets[0].packets)
+                BankingStage::generate_vote_packet_indexes(&packets.packets)
             );
         }
 
+        // some votes in packets
         {
-            let packets = to_packets_chunked(
-                &[
-                    vote_tx.clone(),
-                    vote_tx.clone(),
-                    vote_tx.clone(),
-                    transfer_tx,
-                    vote_tx,
-                ],
-                5,
-            );
-            let expected_vote_indexes = vec![0, 1, 2, 4];
+            let expected_vote_indexes = vec![0, 1, 4];
+            let packets = make_stub_packets_with_vote(5, &expected_vote_indexes);
             assert_eq!(
                 expected_vote_indexes,
-                BankingStage::generate_vote_packet_indexes(&packets[0].packets)
+                BankingStage::generate_vote_packet_indexes(&packets.packets)
+            );
+        }
+
+        // all votes in packets
+        {
+            let expected_vote_indexes = vec![0, 1, 2, 3, 4];
+            let packets = make_stub_packets_with_vote(5, &expected_vote_indexes);
+            assert_eq!(
+                expected_vote_indexes,
+                BankingStage::generate_vote_packet_indexes(&packets.packets)
             );
         }
     }
 
+    #[cfg(test)]
+    fn make_test_packets(transactions: Vec<Transaction>, vote_indexes: Vec<usize>) -> Packets {
+        let capacity = transactions.len();
+        let mut packets = Packets::with_capacity(capacity);
+        packets.packets.resize(capacity, Packet::default());
+        for (index, tx) in transactions.iter().enumerate() {
+            Packet::populate_packet(&mut packets.packets[index], None, tx).ok();
+        }
+        for index in vote_indexes.iter() {
+            packets.packets[*index].meta.is_simple_vote_tx = true;
+        }
+        packets
+    }
+
     #[test]
     fn test_process_packets_vote() {
+        solana_logger::setup();
         let ledger_path = get_tmp_ledger_path!();
         let (_transactions, bank, poh_recorder, _entry_receiver, _poh_simulator) =
             setup_conflicting_transactions(&ledger_path);
@@ -3177,21 +3162,18 @@ mod tests {
             None,
         );
 
-        let mut packets = to_packets_chunked(
-            &[
-                // packets #1
-                vote_tx.clone(),
-                transfer_tx.clone(),
-                vote_tx.clone(),
-                // packets #2
-                vote_tx.clone(),
-                vote_tx.clone(),
-                vote_tx,
-                // packets #3
-                transfer_tx,
-            ],
-            3,
-        );
+        let mut packets = vec![
+            make_test_packets(
+                vec![vote_tx.clone(), transfer_tx.clone(), vote_tx.clone()],
+                vec![0, 2],
+            ), // some votes
+            make_test_packets(
+                vec![vote_tx.clone(), vote_tx.clone(), vote_tx],
+                vec![0, 1, 2],
+            ), // all votes
+            make_test_packets(vec![transfer_tx], vec![]), // no vote
+        ];
+
         assert_eq!(3, packets.len());
         assert_eq!(3, packets[0].packets.len());
         assert_eq!(3, packets[1].packets.len());
@@ -3212,7 +3194,7 @@ mod tests {
 
         assert_eq!(5, vote_tx_count);
         assert_eq!(0, unprocessed_vote_tx_count);
-        // packets composition shoudl not change
+        // packets composition should not change
         assert_eq!(3, packets.len());
         assert_eq!(3, packets[0].packets.len());
         assert_eq!(3, packets[1].packets.len());
@@ -3256,21 +3238,18 @@ mod tests {
             None,
         );
 
-        let packets = to_packets_chunked(
-            &[
-                // packets #1
-                vote_tx.clone(),
-                transfer_tx.clone(),
-                vote_tx.clone(),
-                // packets #2
-                vote_tx.clone(),
-                vote_tx.clone(),
-                vote_tx,
-                // packets #3
-                transfer_tx,
-            ],
-            3,
-        );
+        let packets = vec![
+            make_test_packets(
+                vec![vote_tx.clone(), transfer_tx.clone(), vote_tx.clone()],
+                vec![0, 2],
+            ), // some votes
+            make_test_packets(
+                vec![vote_tx.clone(), vote_tx.clone(), vote_tx],
+                vec![0, 1, 2],
+            ), // all votes
+            make_test_packets(vec![transfer_tx], vec![]), // no vote
+        ];
+
         let mut buffered_packets: UnprocessedPackets = VecDeque::new();
         for package in packets {
             let length = package.packets.len();

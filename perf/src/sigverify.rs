@@ -11,6 +11,7 @@ use crate::recycler::Recycler;
 use rayon::ThreadPool;
 use solana_metrics::inc_new_counter_debug;
 use solana_rayon_threadlimit::get_thread_count;
+use solana_sdk::hash::Hash;
 use solana_sdk::message::MESSAGE_HEADER_LENGTH;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::short_vec::decode_shortu16_len;
@@ -237,9 +238,12 @@ fn do_get_packet_offsets(
     ))
 }
 
-fn get_packet_offsets(packet: &Packet, current_offset: usize) -> PacketOffsets {
+fn get_packet_offsets(packet: &mut Packet, current_offset: usize) -> PacketOffsets {
     let unsanitized_packet_offsets = do_get_packet_offsets(packet, current_offset);
     if let Ok(offsets) = unsanitized_packet_offsets {
+        if let Some(msg_start_offset) = (offsets.msg_start as usize).checked_sub(current_offset) {
+            check_for_simple_vote_transaction(packet, msg_start_offset).ok();
+        }
         offsets
     } else {
         // force sigverify to fail by returning zeros
@@ -247,7 +251,76 @@ fn get_packet_offsets(packet: &Packet, current_offset: usize) -> PacketOffsets {
     }
 }
 
-pub fn generate_offsets(batches: &[Packets], recycler: &Recycler<TxOffset>) -> TxOffsets {
+fn check_for_simple_vote_transaction(
+    packet: &mut Packet,
+    msg_start_offset: usize,
+) -> Result<(), PacketError> {
+    let message_account_keys_len_offset = msg_start_offset
+        .checked_add(MESSAGE_HEADER_LENGTH)
+        .ok_or(PacketError::InvalidLen)?;
+
+    let (pubkey_len, pubkey_len_size) =
+        decode_shortu16_len(&packet.data[message_account_keys_len_offset..])
+            .map_err(|_| PacketError::InvalidLen)?;
+
+    let pubkey_start = message_account_keys_len_offset
+        .checked_add(pubkey_len_size)
+        .ok_or(PacketError::InvalidLen)?;
+
+    let instructions_len_offset = pubkey_len
+        .checked_mul(size_of::<Pubkey>())
+        .and_then(|v| v.checked_add(pubkey_start))
+        .and_then(|v| v.checked_add(size_of::<Hash>()))
+        .ok_or(PacketError::InvalidLen)?;
+
+    // Packet should have 1 more byte for instructions.len
+    let _ = instructions_len_offset
+        .checked_add(1usize)
+        .filter(|v| *v <= packet.meta.size)
+        .ok_or(PacketError::InvalidLen)?;
+
+    let (instruction_len, instruction_len_size) =
+        decode_shortu16_len(&packet.data[instructions_len_offset..])
+            .map_err(|_| PacketError::InvalidLen)?;
+
+    // skip if has more than 1 instruction
+    if instruction_len != 1 {
+        return Ok(());
+    }
+
+    let instruction_start = instructions_len_offset
+        .checked_add(instruction_len_size)
+        .ok_or(PacketError::InvalidLen)?;
+
+    // Packet should have at least 2 more byte for one instructions_program_id
+    let _ = instruction_start
+        .checked_add(2usize)
+        .filter(|v| *v <= packet.meta.size)
+        .ok_or(PacketError::InvalidLen)?;
+
+    let (instruction_program_id_index, _size) =
+        decode_shortu16_len(&packet.data[instruction_start..])
+            .map_err(|_| PacketError::InvalidLen)?;
+
+    if instruction_program_id_index >= pubkey_len {
+        return Err(PacketError::InvalidPubkeyLen);
+    }
+
+    let instruction_id_start = instruction_program_id_index
+        .checked_mul(size_of::<Pubkey>())
+        .and_then(|v| v.checked_add(pubkey_start))
+        .ok_or(PacketError::InvalidLen)?;
+    let instruction_id_end = instruction_id_start
+        .checked_add(size_of::<Pubkey>())
+        .ok_or(PacketError::InvalidLen)?;
+    if &packet.data[instruction_id_start..instruction_id_end] == solana_vote_program::id().as_ref()
+    {
+        packet.meta.is_simple_vote_tx = true;
+    }
+    Ok(())
+}
+
+pub fn generate_offsets(batches: &mut [Packets], recycler: &Recycler<TxOffset>) -> TxOffsets {
     debug!("allocating..");
     let mut signature_offsets: PinnedVec<_> = recycler.allocate().unwrap();
     signature_offsets.set_pinnable();
@@ -259,9 +332,9 @@ pub fn generate_offsets(batches: &[Packets], recycler: &Recycler<TxOffset>) -> T
     msg_sizes.set_pinnable();
     let mut current_offset: usize = 0;
     let mut v_sig_lens = Vec::new();
-    batches.iter().for_each(|p| {
+    batches.iter_mut().for_each(|p| {
         let mut sig_lens = Vec::new();
-        p.packets.iter().for_each(|packet| {
+        p.packets.iter_mut().for_each(|packet| {
             let packet_offsets = get_packet_offsets(packet, current_offset);
 
             sig_lens.push(packet_offsets.sig_len);
@@ -471,11 +544,11 @@ mod tests {
     use crate::packet::{Packet, Packets};
     use crate::sigverify;
     use crate::sigverify::PacketOffsets;
-    use crate::test_tx::{test_multisig_tx, test_tx};
+    use crate::test_tx::{test_multisig_tx, test_tx, vote_tx};
     use bincode::{deserialize, serialize};
-    use solana_sdk::hash::Hash;
+    use solana_sdk::instruction::CompiledInstruction;
     use solana_sdk::message::{Message, MessageHeader};
-    use solana_sdk::signature::Signature;
+    use solana_sdk::signature::{Keypair, Signature};
     use solana_sdk::transaction::Transaction;
 
     const SIG_OFFSET: usize = 1;
@@ -516,9 +589,9 @@ mod tests {
         let tx = test_tx();
         let tx_bytes = serialize(&tx).unwrap();
         let message_data = tx.message_data();
-        let packet = sigverify::make_packet_from_transaction(tx.clone());
+        let mut packet = sigverify::make_packet_from_transaction(tx.clone());
 
-        let packet_offsets = sigverify::get_packet_offsets(&packet, 0);
+        let packet_offsets = sigverify::get_packet_offsets(&mut packet, 0);
 
         assert_eq!(
             memfind(&tx_bytes, &tx.signatures[0].as_ref()),
@@ -742,8 +815,8 @@ mod tests {
 
     // Just like get_packet_offsets, but not returning redundant information.
     fn get_packet_offsets_from_tx(tx: Transaction, current_offset: u32) -> PacketOffsets {
-        let packet = sigverify::make_packet_from_transaction(tx);
-        let packet_offsets = sigverify::get_packet_offsets(&packet, current_offset as usize);
+        let mut packet = sigverify::make_packet_from_transaction(tx);
+        let packet_offsets = sigverify::get_packet_offsets(&mut packet, current_offset as usize);
         PacketOffsets::new(
             packet_offsets.sig_len,
             packet_offsets.sig_start - current_offset,
@@ -1023,5 +1096,74 @@ mod tests {
             passed_g.load(Ordering::Relaxed),
             failed_g.load(Ordering::Relaxed)
         );
+    }
+
+    #[test]
+    fn test_is_simple_vote_transaction() {
+        solana_logger::setup();
+
+        // tansfer tx is not
+        {
+            let mut tx = test_tx();
+            tx.message.instructions[0].data = vec![1, 2, 3];
+            let mut packet = sigverify::make_packet_from_transaction(tx);
+            let _ = get_packet_offsets(&mut packet, 0);
+            assert!(!packet.meta.is_simple_vote_tx);
+        }
+
+        // single vote tx is
+        {
+            let mut tx = vote_tx();
+            tx.message.instructions[0].data = vec![1, 2, 3];
+            let mut packet = sigverify::make_packet_from_transaction(tx);
+            let _ = get_packet_offsets(&mut packet, 0);
+            assert!(packet.meta.is_simple_vote_tx);
+        }
+
+        // multiple mixed tx is not
+        {
+            let key = Keypair::new();
+            let key1 = Pubkey::new_unique();
+            let key2 = Pubkey::new_unique();
+            let tx = Transaction::new_with_compiled_instructions(
+                &[&key],
+                &[key1, key2],
+                Hash::default(),
+                vec![solana_vote_program::id(), Pubkey::new_unique()],
+                vec![
+                    CompiledInstruction::new(3, &(), vec![0, 1]),
+                    CompiledInstruction::new(4, &(), vec![0, 2]),
+                ],
+            );
+            let mut packet = sigverify::make_packet_from_transaction(tx);
+            let _ = get_packet_offsets(&mut packet, 0);
+            assert!(!packet.meta.is_simple_vote_tx);
+        }
+    }
+
+    #[test]
+    fn test_is_simple_vote_transaction_with_offsets() {
+        let mut current_offset = 0usize;
+        let mut batch = Packets::default();
+        batch
+            .packets
+            .push(sigverify::make_packet_from_transaction(test_tx()));
+        batch
+            .packets
+            .push(sigverify::make_packet_from_transaction(vote_tx()));
+        batch
+            .packets
+            .iter_mut()
+            .enumerate()
+            .for_each(|(index, packet)| {
+                let _ = get_packet_offsets(packet, current_offset);
+                if index == 1 {
+                    assert!(packet.meta.is_simple_vote_tx);
+                } else {
+                    assert!(!packet.meta.is_simple_vote_tx);
+                }
+
+                current_offset = current_offset.saturating_add(size_of::<Packet>());
+            });
     }
 }

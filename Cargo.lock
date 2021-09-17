@@ -5003,6 +5003,7 @@ dependencies = [
  "solana-metrics",
  "solana-rayon-threadlimit",
  "solana-sdk",
+ "solana-vote-program",
 ]
 
 [[package]]
