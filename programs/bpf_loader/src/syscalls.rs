@@ -12,7 +12,7 @@ use solana_rbpf::{
 #[allow(deprecated)]
 use solana_sdk::sysvar::fees::Fees;
 use solana_sdk::{
-    account::{Account, AccountSharedData, ReadableAccount},
+    account::{AccountSharedData, ReadableAccount, WritableAccount},
     account_info::AccountInfo,
     blake3, bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
     clock::Clock,
@@ -27,7 +27,9 @@ use solana_sdk::{
     hash::{Hasher, HASH_BYTES},
     ic_msg,
     instruction::{AccountMeta, Instruction, InstructionError},
-    keccak, native_loader,
+    keccak,
+    message::Message,
+    native_loader,
     process_instruction::{self, stable_log, ComputeMeter, InvokeContext, Logger},
     program::MAX_RETURN_DATA,
     pubkey::{Pubkey, PubkeyError, MAX_SEEDS, MAX_SEED_LEN},
@@ -1527,8 +1529,7 @@ trait SyscallInvokeSigned<'a> {
     ) -> Result<Instruction, EbpfError<BpfError>>;
     fn translate_accounts(
         &self,
-        account_keys: &[Pubkey],
-        program_account_index: usize,
+        message: &Message,
         account_infos_addr: u64,
         account_infos_len: u64,
         memory_mapping: &MemoryMapping,
@@ -1592,8 +1593,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
 
     fn translate_accounts(
         &self,
-        account_keys: &[Pubkey],
-        program_account_index: usize,
+        message: &Message,
         account_infos_addr: u64,
         account_infos_len: u64,
         memory_mapping: &MemoryMapping,
@@ -1687,8 +1687,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
         };
 
         get_translated_accounts(
-            account_keys,
-            program_account_index,
+            message,
             &account_info_keys,
             account_infos,
             invoke_context,
@@ -1880,8 +1879,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
 
     fn translate_accounts(
         &self,
-        account_keys: &[Pubkey],
-        program_account_index: usize,
+        message: &Message,
         account_infos_addr: u64,
         account_infos_len: u64,
         memory_mapping: &MemoryMapping,
@@ -1959,8 +1957,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
         };
 
         get_translated_accounts(
-            account_keys,
-            program_account_index,
+            message,
             &account_info_keys,
             account_infos,
             invoke_context,
@@ -2044,8 +2041,7 @@ impl<'a> SyscallObject<BpfError> for SyscallInvokeSignedC<'a> {
 }
 
 fn get_translated_accounts<'a, T, F>(
-    account_keys: &[Pubkey],
-    program_account_index: usize,
+    message: &Message,
     account_info_keys: &[&Pubkey],
     account_infos: &[T],
     invoke_context: &mut dyn InvokeContext,
@@ -2054,53 +2050,46 @@ fn get_translated_accounts<'a, T, F>(
 where
     F: Fn(&T, &mut dyn InvokeContext) -> Result<AccountReferences<'a>, EbpfError<BpfError>>,
 {
-    let mut accounts = Vec::with_capacity(account_keys.len());
-    let mut refs = Vec::with_capacity(account_keys.len());
-    for (i, ref account_key) in account_keys.iter().enumerate() {
-        let (_account_index, account) =
-            invoke_context.get_account(account_key).ok_or_else(|| {
-                ic_msg!(
-                    invoke_context,
-                    "Instruction references an unknown account {}",
-                    account_key
-                );
-                SyscallError::InstructionError(InstructionError::MissingAccount)
-            })?;
-
-        if i == program_account_index || account.borrow().executable() {
-            // Use the known account
-            accounts.push((**account_key, account));
-            refs.push(None);
-        } else if let Some(account_info) =
-            account_info_keys
-                .iter()
-                .zip(account_infos)
-                .find_map(|(key, account_info)| {
-                    if key == account_key {
-                        Some(account_info)
-                    } else {
-                        None
-                    }
-                })
-        {
-            let account_ref = do_translate(account_info, invoke_context)?;
-            let account = Rc::new(RefCell::new(AccountSharedData::from(Account {
-                lamports: *account_ref.lamports,
-                data: account_ref.data.to_vec(),
-                executable: account_ref.executable,
-                owner: *account_ref.owner,
-                rent_epoch: account_ref.rent_epoch,
-            })));
-            accounts.push((**account_key, account));
-            refs.push(Some(account_ref));
-        } else {
-            ic_msg!(
-                invoke_context,
-                "Instruction references an unknown account {}",
-                account_key
-            );
-            return Err(SyscallError::InstructionError(InstructionError::MissingAccount).into());
+    let demote_program_write_locks =
+        invoke_context.is_feature_active(&demote_program_write_locks::id());
+    let mut accounts = Vec::with_capacity(message.account_keys.len());
+    let mut refs = Vec::with_capacity(message.account_keys.len());
+    for (i, account_key) in message.account_keys.iter().enumerate() {
+        if let Some((_account_index, account)) = invoke_context.get_account(account_key) {
+            if i == message.instructions[0].program_id_index as usize
+                || account.borrow().executable()
+            {
+                // Use the known account
+                accounts.push((*account_key, account));
+                refs.push(None);
+                continue;
+            } else if let Some(account_ref_index) =
+                account_info_keys.iter().position(|key| *key == account_key)
+            {
+                let account_ref = do_translate(&account_infos[account_ref_index], invoke_context)?;
+                {
+                    let mut account = account.borrow_mut();
+                    account.copy_into_owner_from_slice(account_ref.owner.as_ref());
+                    account.set_data_from_slice(account_ref.data);
+                    account.set_lamports(*account_ref.lamports);
+                    account.set_executable(account_ref.executable);
+                    account.set_rent_epoch(account_ref.rent_epoch);
+                }
+                accounts.push((*account_key, account));
+                refs.push(if message.is_writable(i, demote_program_write_locks) {
+                    Some(account_ref)
+                } else {
+                    None
+                });
+                continue;
+            }
         }
+        ic_msg!(
+            invoke_context,
+            "Instruction references an unknown account {}",
+            account_key
+        );
+        return Err(SyscallError::InstructionError(InstructionError::MissingAccount).into());
     }
 
     Ok((accounts, refs))
@@ -2188,8 +2177,7 @@ fn call<'a>(
         invoke_context.is_feature_active(&close_upgradeable_program_accounts::id()),
     )?;
     let (accounts, account_refs) = syscall.translate_accounts(
-        &message.account_keys,
-        message.instructions[0].program_id_index as usize,
+        &message,
         account_infos_addr,
         account_infos_len,
         memory_mapping,
@@ -2210,51 +2198,45 @@ fn call<'a>(
     .map_err(SyscallError::InstructionError)?;
 
     // Copy results back to caller
-    let demote_program_write_locks =
-        invoke_context.is_feature_active(&demote_program_write_locks::id());
-    for (i, ((_key, account), account_ref)) in accounts.iter().zip(account_refs).enumerate() {
+    for ((_key, account), account_ref) in accounts.iter().zip(account_refs) {
         let account = account.borrow();
         if let Some(mut account_ref) = account_ref {
-            if message.is_writable(i, demote_program_write_locks) && !account.executable() {
-                *account_ref.lamports = account.lamports();
-                *account_ref.owner = *account.owner();
-                if account_ref.data.len() != account.data().len() {
-                    if !account_ref.data.is_empty() {
-                        // Only support for `CreateAccount` at this time.
-                        // Need a way to limit total realloc size across multiple CPI calls
-                        ic_msg!(
-                            invoke_context,
-                            "Inner instructions do not support realloc, only SystemProgram::CreateAccount",
-                        );
-                        return Err(SyscallError::InstructionError(
-                            InstructionError::InvalidRealloc,
-                        )
-                        .into());
-                    }
-                    if account.data().len() > account_ref.data.len() + MAX_PERMITTED_DATA_INCREASE {
-                        ic_msg!(
-                            invoke_context,
-                            "SystemProgram::CreateAccount data size limited to {} in inner instructions",
-                            MAX_PERMITTED_DATA_INCREASE
-                        );
-                        return Err(SyscallError::InstructionError(
-                            InstructionError::InvalidRealloc,
-                        )
-                        .into());
-                    }
-                    account_ref.data = translate_slice_mut::<u8>(
-                        memory_mapping,
-                        account_ref.vm_data_addr,
-                        account.data().len() as u64,
-                        &bpf_loader_deprecated::id(), // Don't care since it is byte aligned
-                    )?;
-                    *account_ref.ref_to_len_in_vm = account.data().len() as u64;
-                    *account_ref.serialized_len_ptr = account.data().len() as u64;
+            *account_ref.lamports = account.lamports();
+            *account_ref.owner = *account.owner();
+            if account_ref.data.len() != account.data().len() {
+                if !account_ref.data.is_empty() {
+                    // Only support for `CreateAccount` at this time.
+                    // Need a way to limit total realloc size across multiple CPI calls
+                    ic_msg!(
+                        invoke_context,
+                        "Inner instructions do not support realloc, only SystemProgram::CreateAccount",
+                    );
+                    return Err(
+                        SyscallError::InstructionError(InstructionError::InvalidRealloc).into(),
+                    );
                 }
-                account_ref
-                    .data
-                    .copy_from_slice(&account.data()[0..account_ref.data.len()]);
+                if account.data().len() > account_ref.data.len() + MAX_PERMITTED_DATA_INCREASE {
+                    ic_msg!(
+                        invoke_context,
+                        "SystemProgram::CreateAccount data size limited to {} in inner instructions",
+                        MAX_PERMITTED_DATA_INCREASE
+                    );
+                    return Err(
+                        SyscallError::InstructionError(InstructionError::InvalidRealloc).into(),
+                    );
+                }
+                account_ref.data = translate_slice_mut::<u8>(
+                    memory_mapping,
+                    account_ref.vm_data_addr,
+                    account.data().len() as u64,
+                    &bpf_loader_deprecated::id(), // Don't care since it is byte aligned
+                )?;
+                *account_ref.ref_to_len_in_vm = account.data().len() as u64;
+                *account_ref.serialized_len_ptr = account.data().len() as u64;
             }
+            account_ref
+                .data
+                .copy_from_slice(&account.data()[0..account_ref.data.len()]);
         }
     }
 
