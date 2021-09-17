@@ -76,7 +76,6 @@ solana-version = { path = "../version", version = "=1.8.0" }
 static_assertions = "1.1.0"
 systemstat = "0.1.8"
 
-
 [build-dependencies]
 rustc_version = "0.4"
 
