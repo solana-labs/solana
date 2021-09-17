@@ -50,6 +50,7 @@ use solana_sdk::{
 use solana_transaction_status::token_balances::{
     collect_token_balances, TransactionTokenBalancesSet,
 };
+use solana_vote_program::vote_transaction;
 use std::{
     borrow::Cow,
     cmp,
@@ -1025,12 +1026,16 @@ impl BankingStage {
         msgs: &Packets,
         transaction_indexes: &[usize],
         libsecp256k1_0_5_upgrade_enabled: bool,
+        votes_only: bool,
     ) -> (Vec<HashedTransaction<'static>>, Vec<usize>) {
         transaction_indexes
             .iter()
             .filter_map(|tx_index| {
                 let p = &msgs.packets[*tx_index];
                 let tx: Transaction = limited_deserialize(&p.data[0..p.meta.size]).ok()?;
+                if votes_only && vote_transaction::parse_vote_transaction(&tx).is_none() {
+                    return None;
+                }
                 tx.verify_precompiles(libsecp256k1_0_5_upgrade_enabled)
                     .ok()?;
                 let message_bytes = Self::packet_message(p)?;
@@ -1097,6 +1102,7 @@ impl BankingStage {
             msgs,
             &packet_indexes,
             bank.libsecp256k1_0_5_upgrade_enabled(),
+            bank.vote_only_bank(),
         );
         packet_conversion_time.stop();
 
@@ -1168,6 +1174,7 @@ impl BankingStage {
             msgs,
             &transaction_indexes,
             bank.libsecp256k1_0_5_upgrade_enabled(),
+            false,
         );
 
         let tx_count = transaction_to_packet_indexes.len();

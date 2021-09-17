@@ -1227,12 +1227,15 @@ impl ReplayStage {
                 poh_slot, parent_slot, root_slot
             );
 
+            let root_distance = poh_slot - root_slot;
+
             let tpu_bank = Self::new_bank_from_parent_with_notify(
                 &parent,
                 poh_slot,
                 root_slot,
                 my_pubkey,
                 subscriptions,
+                root_distance > 500,
             );
 
             let tpu_bank = bank_forks.write().unwrap().insert(tpu_bank);
@@ -2489,6 +2492,7 @@ impl ReplayStage {
                     forks.root(),
                     &leader,
                     subscriptions,
+                    false,
                 );
                 let empty: Vec<Pubkey> = vec![];
                 Self::update_fork_propagated_threshold_from_votes(
@@ -2515,9 +2519,10 @@ impl ReplayStage {
         root_slot: u64,
         leader: &Pubkey,
         subscriptions: &Arc<RpcSubscriptions>,
+        vote_only_bank: bool,
     ) -> Bank {
         subscriptions.notify_slot(slot, parent.slot(), root_slot);
-        Bank::new_from_parent(parent, leader, slot)
+        Bank::new_from_parent_with_vote_only(parent, leader, slot, vote_only_bank)
     }
 
     fn record_rewards(bank: &Bank, rewards_recorder_sender: &Option<RewardsRecorderSender>) {
