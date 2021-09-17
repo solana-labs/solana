@@ -365,7 +365,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     }
 
     pub(crate) fn flush(&self) {
-        let flushing = self.flushing_active.swap(true, Ordering::Relaxed);
+        let flushing = self.flushing_active.swap(true, Ordering::Acquire);
         if flushing {
             // already flushing in another thread
             return;
@@ -373,11 +373,15 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
         self.flush_internal();
 
-        self.flushing_active.store(false, Ordering::Relaxed);
+        self.flushing_active.store(false, Ordering::Release);
+    }
+
+    pub fn set_bin_dirty(&self) {
+        self.bin_dirty.store(true, Ordering::Release);
     }
 
     fn flush_internal(&self) {
-        let was_dirty = self.bin_dirty.swap(false, Ordering::Relaxed);
+        let was_dirty = self.bin_dirty.swap(false, Ordering::Acquire);
         if !was_dirty {
             // wasn't dirty, no need to flush
             return;
