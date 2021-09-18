@@ -3034,7 +3034,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 Result:
 ```json
-{"jsonrpc":"2.0","result":{"solana-core": "1.6.26"},"id":1}
+{"jsonrpc":"2.0","result":{"solana-core": "1.6.27"},"id":1}
 ```
 
 ### getVoteAccounts
