@@ -33,13 +33,8 @@ use solana_sdk::{
     clock::Clock,
     entrypoint::{HEAP_LENGTH, SUCCESS},
     feature_set::{
-<<<<<<< HEAD
-        add_missing_program_error_mappings, close_upgradeable_program_accounts,
-        upgradeable_close_instruction,
-=======
         add_missing_program_error_mappings, close_upgradeable_program_accounts, fix_write_privs,
-        stop_verify_mul64_imm_nonzero,
->>>>>>> efd024510 (Reduce payer balance needed to deploy programs (#19645))
+        upgradeable_close_instruction,
     },
     ic_logger_msg, ic_msg,
     instruction::{AccountMeta, InstructionError},
@@ -1006,15 +1001,11 @@ mod tests {
         instruction::{AccountMeta, InstructionError},
         keyed_account::KeyedAccount,
         message::Message,
-<<<<<<< HEAD
+        native_token::LAMPORTS_PER_SOL,
         process_instruction::{
             BpfComputeBudget, InvokeContextStackFrame, MockComputeMeter, MockInvokeContext,
             MockLogger,
         },
-=======
-        native_token::LAMPORTS_PER_SOL,
-        process_instruction::{MockComputeMeter, MockInvokeContext},
->>>>>>> efd024510 (Reduce payer balance needed to deploy programs (#19645))
         pubkey::Pubkey,
         rent::Rent,
         signature::{Keypair, Signer},
