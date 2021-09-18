@@ -88,8 +88,8 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
                 let lamports = account.account_meta.lamports as i64;
                 let rent_epoch = account.account_meta.rent_epoch as i64;
                 let result = client.get_mut().unwrap().execute(
-                    "INSERT INTO account (pubkey, slot, owner, lamports, executable, rent_epoch) VALUES ($1, $2, $3, $4, $5, $6) \
-                    ON CONFLICT (pubkey) DO UPDATE SET slot=$2, owner=$3, lamports=$4, executable=$5, rent_epoch=$6",
+                    "INSERT INTO account (pubkey, slot, owner, lamports, executable, rent_epoch, data, hash) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) \
+                    ON CONFLICT (pubkey) DO UPDATE SET slot=$2, owner=$3, lamports=$4, executable=$5, rent_epoch=$6, data=$7, hash=$8",
                     &[
                         &account.account_meta.pubkey,
                         &slot,
@@ -97,6 +97,8 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
                         &lamports,
                         &account.account_meta.executable,
                         &rent_epoch,
+                        &account.data,
+                        &account.hash,
                     ],
                 );
 
