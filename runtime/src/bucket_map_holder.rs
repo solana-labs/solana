@@ -2,7 +2,7 @@ use crate::accounts_index::{AccountsIndexConfig, IndexValue};
 use crate::bucket_map_holder_stats::BucketMapHolderStats;
 use crate::waitable_condvar::WaitableCondvar;
 use std::fmt::Debug;
-use std::sync::atomic::{AtomicU8, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, AtomicUsize, Ordering};
 use std::sync::Mutex;
 pub type Age = u8;
 
@@ -16,6 +16,12 @@ pub struct BucketMapHolder<T: IndexValue> {
     pub wait_dirty_bucket: WaitableCondvar,
     next_bucket_to_flush: Mutex<usize>,
     bins: usize,
+
+    /// startup is a special time for flush to focus on moving everything to disk as fast and efficiently as possible
+    /// with less thread count limitations. LRU and access patterns are not important. Freeing memory
+    /// and writing to disk in parallel are.
+    /// Note startup is an optimization and is not required for correctness.
+    startup: AtomicBool,
     _phantom: std::marker::PhantomData<T>,
 }
 
@@ -34,6 +40,15 @@ impl<T: IndexValue> BucketMapHolder<T> {
         // since we changed age, there are now 0 buckets that have been flushed at this age
         let previous = self.count_ages_flushed.swap(0, Ordering::Relaxed);
         assert!(previous >= self.bins); // we should not have increased age before previous age was fully flushed
+    }
+
+    /// used by bg processes to determine # active threads and how aggressively to flush
+    pub fn get_startup(&self) -> bool {
+        self.startup.load(Ordering::Relaxed)
+    }
+
+    pub fn set_startup(&self, value: bool) {
+        self.startup.store(value, Ordering::Relaxed)
     }
 
     pub fn current_age(&self) -> Age {
@@ -57,6 +72,7 @@ impl<T: IndexValue> BucketMapHolder<T> {
             wait_dirty_bucket: WaitableCondvar::default(),
             next_bucket_to_flush: Mutex::new(0),
             bins,
+            startup: AtomicBool::default(),
             _phantom: std::marker::PhantomData::<T>::default(),
         }
     }
