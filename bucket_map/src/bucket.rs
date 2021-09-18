@@ -1,7 +1,7 @@
 use crate::bucket_item::BucketItem;
 use crate::bucket_map::BucketMapError;
 use crate::bucket_stats::BucketMapStats;
-use crate::bucket_storage::BucketStorage;
+use crate::bucket_storage::{BucketStorage, UID_UNLOCKED};
 use crate::index_entry::IndexEntry;
 use crate::{MaxSearch, RefCount};
 use rand::thread_rng;
@@ -59,7 +59,7 @@ impl<T: Clone + Copy> Bucket<T> {
     pub fn keys(&self) -> Vec<Pubkey> {
         let mut rv = vec![];
         for i in 0..self.index.num_cells() {
-            if self.index.uid(i) == 0 {
+            if self.index.uid(i) == UID_UNLOCKED {
                 continue;
             }
             let ix: &IndexEntry = self.index.get(i);
@@ -75,7 +75,7 @@ impl<T: Clone + Copy> Bucket<T> {
         let mut result = Vec::with_capacity(self.index.used.load(Ordering::Relaxed) as usize);
         for i in 0..self.index.num_cells() {
             let ii = i % self.index.num_cells();
-            if self.index.uid(ii) == 0 {
+            if self.index.uid(ii) == UID_UNLOCKED {
                 continue;
             }
             let ix: &IndexEntry = self.index.get(ii);
@@ -108,7 +108,7 @@ impl<T: Clone + Copy> Bucket<T> {
         let ix = Self::bucket_index_ix(index, key, random);
         for i in ix..ix + index.max_search() {
             let ii = i % index.num_cells();
-            if index.uid(ii) == 0 {
+            if index.uid(ii) == UID_UNLOCKED {
                 continue;
             }
             let elem: &mut IndexEntry = index.get_mut(ii);
@@ -127,7 +127,7 @@ impl<T: Clone + Copy> Bucket<T> {
         let ix = Self::bucket_index_ix(index, key, random);
         for i in ix..ix + index.max_search() {
             let ii = i % index.num_cells();
-            if index.uid(ii) == 0 {
+            if index.uid(ii) == UID_UNLOCKED {
                 continue;
             }
             let elem: &IndexEntry = index.get(ii);
@@ -148,7 +148,7 @@ impl<T: Clone + Copy> Bucket<T> {
         let ix = Self::bucket_index_ix(index, key, random);
         for i in ix..ix + index.max_search() {
             let ii = i as u64 % index.num_cells();
-            if index.uid(ii) != 0 {
+            if index.uid(ii) != UID_UNLOCKED {
                 continue;
             }
             index.allocate(ii, elem_uid).unwrap();
@@ -237,7 +237,7 @@ impl<T: Clone + Copy> Bucket<T> {
             let pos = thread_rng().gen_range(0, cap);
             for i in pos..pos + self.index.max_search() {
                 let ix = i % cap;
-                if best_bucket.uid(ix) == 0 {
+                if best_bucket.uid(ix) == UID_UNLOCKED {
                     let elem_loc = elem.data_loc(current_bucket);
                     if elem.num_slots > 0 {
                         current_bucket.free(elem_loc, elem_uid);
@@ -294,7 +294,7 @@ impl<T: Clone + Copy> Bucket<T> {
                 let mut valid = true;
                 for ix in 0..self.index.num_cells() {
                     let uid = self.index.uid(ix);
-                    if 0 != uid {
+                    if UID_UNLOCKED != uid {
                         let elem: &IndexEntry = self.index.get(ix);
                         let ref_count = 0; // ??? TODO
                         let new_ix =
