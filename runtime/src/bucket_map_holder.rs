@@ -1,4 +1,4 @@
-use crate::accounts_index::IndexValue;
+use crate::accounts_index::{AccountsIndexConfig, IndexValue};
 use crate::bucket_map_holder_stats::BucketMapHolderStats;
 use crate::waitable_condvar::WaitableCondvar;
 use std::fmt::Debug;
@@ -49,7 +49,7 @@ impl<T: IndexValue> BucketMapHolder<T> {
         self.count_ages_flushed.load(Ordering::Relaxed) >= self.bins
     }
 
-    pub fn new(bins: usize) -> Self {
+    pub fn new(bins: usize, _config: &Option<AccountsIndexConfig>) -> Self {
         Self {
             count_ages_flushed: AtomicUsize::default(),
             age: AtomicU8::default(),
@@ -83,7 +83,7 @@ pub mod tests {
     fn test_next_bucket_to_flush() {
         solana_logger::setup();
         let bins = 4;
-        let test = BucketMapHolder::<u64>::new(bins);
+        let test = BucketMapHolder::<u64>::new(bins, &Some(AccountsIndexConfig::default()));
         let visited = (0..bins)
             .into_iter()
             .map(|_| AtomicUsize::default())
@@ -107,7 +107,7 @@ pub mod tests {
     fn test_age_increment() {
         solana_logger::setup();
         let bins = 4;
-        let test = BucketMapHolder::<u64>::new(bins);
+        let test = BucketMapHolder::<u64>::new(bins, &Some(AccountsIndexConfig::default()));
         for age in 0..513 {
             assert_eq!(test.current_age(), (age % 256) as Age);
 
@@ -125,7 +125,7 @@ pub mod tests {
     fn test_age_broad() {
         solana_logger::setup();
         let bins = 4;
-        let test = BucketMapHolder::<u64>::new(bins);
+        let test = BucketMapHolder::<u64>::new(bins, &Some(AccountsIndexConfig::default()));
         assert_eq!(test.current_age(), 0);
         assert!(!test.all_buckets_flushed_at_current_age());
         // inc all but 1
