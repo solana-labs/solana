@@ -10,6 +10,7 @@ use num_derive::{FromPrimitive, ToPrimitive};
 use serde_derive::{Deserialize, Serialize};
 use solana_metrics::inc_new_counter_info;
 use solana_sdk::{
+    clock::Slot,
     decode_error::DecodeError,
     feature_set,
     hash::Hash,
@@ -44,6 +45,28 @@ pub enum VoteError {
 
     #[error("authorized voter has already been changed this epoch")]
     TooSoonToReauthorize,
+
+    // TODO: figure out how to migrate these new errors
+    #[error("Old state had slot {0}, with confirmation {1}, which should not have been popped off by {2}")]
+    LockoutConflict(Slot, u32, Slot),
+
+    #[error("Proposed state had slot {0}, with confirmation {1}, which should have been popped off by {2}")]
+    NewVoteStateLockoutMismatch(Slot, u32, Slot),
+
+    #[error("Slots are not ordered")]
+    SlotsNotOrdered,
+
+    #[error("Lockouts are not ordered")]
+    LockoutsNotOrdered,
+
+    #[error("Zero confirmations")]
+    ZeroConfirmations,
+
+    #[error("Root rolled back")]
+    RootRollBack,
+
+    #[error("Vote slot {0} was smaller than root {1}")]
+    SlotSmallerThanRoot(Slot, Slot),
 }
 
 impl<E> DecodeError<E> for VoteError {
