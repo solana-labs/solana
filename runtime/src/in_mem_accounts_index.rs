@@ -59,15 +59,19 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
     /// true if this bucket needs to call flush for the current age
     /// we need to scan each bucket once per value of age
-    fn get_should_age(&self) -> bool {
-        let last_age_flushed = self.last_age_flushed.load(Ordering::Relaxed);
-        let age = self.storage.age.load(Ordering::Relaxed);
-        last_age_flushed == age
+    fn get_should_age(&self, age: Age) -> bool {
+        let last_age_flushed = self.last_age_flushed();
+        last_age_flushed != age
     }
 
     /// called after flush scans this bucket at the current age
     fn set_has_aged(&self, age: Age) {
         self.last_age_flushed.store(age, Ordering::Relaxed);
+        self.storage.bucket_flushed_at_current_age();
+    }
+
+    fn last_age_flushed(&self) -> Age {
+        self.last_age_flushed.load(Ordering::Relaxed)
     }
 
     fn map(&self) -> &RwLock<HashMap<Pubkey, AccountMapEntry<T>>> {
@@ -411,8 +415,10 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
     fn flush_internal(&self) {
         let was_dirty = self.bin_dirty.swap(false, Ordering::Acquire);
-        if !was_dirty {
-            // wasn't dirty, no need to flush
+        let current_age = self.storage.current_age();
+        let iterate_for_age = self.get_should_age(current_age);
+        if !was_dirty && !iterate_for_age {
+            // wasn't dirty and no need to age, so no need to flush this bucket
             return;
         }
 
@@ -430,6 +436,11 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 // soon, this will update disk from the in-mem contents
             }
             */
+        }
+        if iterate_for_age {
+            // completed iteration of the buckets at the current age
+            assert_eq!(current_age, self.storage.current_age());
+            self.set_has_aged(current_age);
         }
     }
 
@@ -518,8 +529,22 @@ mod tests {
     fn test_age() {
         solana_logger::setup();
         let test = new_for_test::<u64>();
-        assert!(!test.get_should_age());
+        assert!(test.get_should_age(test.storage.current_age()));
+        assert_eq!(test.storage.count_ages_flushed(), 0);
         test.set_has_aged(0);
-        assert!(test.get_should_age());
+        assert!(!test.get_should_age(test.storage.current_age()));
+        assert_eq!(test.storage.count_ages_flushed(), 1);
+        // simulate rest of buckets aging
+        for _ in 1..BINS_FOR_TESTING {
+            assert!(!test.storage.all_buckets_flushed_at_current_age());
+            test.storage.bucket_flushed_at_current_age();
+        }
+        assert!(test.storage.all_buckets_flushed_at_current_age());
+        // advance age
+        test.storage.increment_age();
+        assert_eq!(test.storage.current_age(), 1);
+        assert!(!test.storage.all_buckets_flushed_at_current_age());
+        assert!(test.get_should_age(test.storage.current_age()));
+        assert_eq!(test.storage.count_ages_flushed(), 0);
     }
 }
