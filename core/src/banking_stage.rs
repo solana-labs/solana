@@ -85,6 +85,9 @@ const MAX_NUM_TRANSACTIONS_PER_BATCH: usize = 128;
 
 const DEFAULT_LRU_SIZE: usize = 200_000;
 
+const MIN_THREADS_VOTES: u32 = 2;
+const MIN_THREADS_BANKING: u32 = 1;
+
 #[derive(Debug, Default)]
 pub struct BankingStageStats {
     last_report: AtomicU64,
@@ -247,6 +250,7 @@ impl BankingStage {
         cluster_info: &Arc<ClusterInfo>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         verified_receiver: CrossbeamReceiver<Vec<Packets>>,
+        tpu_verified_vote_receiver: CrossbeamReceiver<Vec<Packets>>,
         verified_vote_receiver: CrossbeamReceiver<Vec<Packets>>,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: ReplayVoteSender,
@@ -255,6 +259,7 @@ impl BankingStage {
             cluster_info,
             poh_recorder,
             verified_receiver,
+            tpu_verified_vote_receiver,
             verified_vote_receiver,
             Self::num_threads(),
             transaction_status_sender,
@@ -267,6 +272,7 @@ impl BankingStage {
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         verified_receiver: CrossbeamReceiver<Vec<Packets>>,
         verified_vote_receiver: CrossbeamReceiver<Vec<Packets>>,
+        vote_verified_receiver: CrossbeamReceiver<Vec<Packets>>,
         num_threads: u32,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: ReplayVoteSender,
@@ -282,13 +288,17 @@ impl BankingStage {
         )));
         let data_budget = Arc::new(DataBudget::default());
         // Many banks that process transactions in parallel.
+        assert!(num_threads >= MIN_THREADS_VOTES + MIN_THREADS_BANKING);
         let bank_thread_hdls: Vec<JoinHandle<()>> = (0..num_threads)
             .map(|i| {
-                let (verified_receiver, enable_forwarding) = if i < num_threads - 1 {
-                    (verified_receiver.clone(), true)
-                } else {
-                    // Disable forwarding of vote transactions, as votes are gossiped
-                    (verified_vote_receiver.clone(), false)
+                let (verified_receiver, enable_forwarding) = match i.cmp(&(num_threads - 2)) {
+                    std::cmp::Ordering::Less => (verified_receiver.clone(), true),
+                    std::cmp::Ordering::Equal => (vote_verified_receiver.clone(), false),
+                    std::cmp::Ordering::Greater => {
+                        // Disable forwarding of vote transactions
+                        // from gossip. Note - votes can also arrive from tpu
+                        (verified_vote_receiver.clone(), false)
+                    }
                 };
 
                 let poh_recorder = poh_recorder.clone();
@@ -697,8 +707,6 @@ impl BankingStage {
     }
 
     pub fn num_threads() -> u32 {
-        const MIN_THREADS_VOTES: u32 = 1;
-        const MIN_THREADS_BANKING: u32 = 1;
         cmp::max(
             env::var("SOLANA_BANKING_THREADS")
                 .map(|x| x.parse().unwrap_or(NUM_THREADS))
@@ -1525,8 +1533,9 @@ mod tests {
         let genesis_config = create_genesis_config(2).genesis_config;
         let bank = Arc::new(Bank::new_no_wallclock_throttle(&genesis_config));
         let (verified_sender, verified_receiver) = unbounded();
-        let (vote_sender, vote_receiver) = unbounded();
-        let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
+        let (gossip_verified_vote_sender, gossip_verified_vote_receiver) = unbounded();
+        let (tpu_vote_sender, tpu_vote_receiver) = unbounded();
+        let (vote_forward_sender, _vote_forward_receiver) = unbounded();
         let ledger_path = get_tmp_ledger_path!();
         {
             let blockstore = Arc::new(
@@ -1541,12 +1550,14 @@ mod tests {
                 &cluster_info,
                 &poh_recorder,
                 verified_receiver,
-                vote_receiver,
+                tpu_vote_receiver,
+                gossip_verified_vote_receiver,
                 None,
-                gossip_vote_sender,
+                vote_forward_sender,
             );
             drop(verified_sender);
-            drop(vote_sender);
+            drop(gossip_verified_vote_sender);
+            drop(tpu_vote_sender);
             exit.store(true, Ordering::Relaxed);
             banking_stage.join().unwrap();
             poh_service.join().unwrap();
@@ -1565,7 +1576,7 @@ mod tests {
         let bank = Arc::new(Bank::new_no_wallclock_throttle(&genesis_config));
         let start_hash = bank.last_blockhash();
         let (verified_sender, verified_receiver) = unbounded();
-        let (vote_sender, vote_receiver) = unbounded();
+        let (tpu_vote_sender, tpu_vote_receiver) = unbounded();
         let ledger_path = get_tmp_ledger_path!();
         {
             let blockstore = Arc::new(
@@ -1580,19 +1591,22 @@ mod tests {
                 create_test_recorder(&bank, &blockstore, Some(poh_config));
             let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
             let cluster_info = Arc::new(cluster_info);
-            let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
+            let (vote_forward_sender, _vote_forward_receiver) = unbounded();
+            let (verified_gossip_vote_sender, verified_gossip_vote_receiver) = unbounded();
 
             let banking_stage = BankingStage::new(
                 &cluster_info,
                 &poh_recorder,
                 verified_receiver,
-                vote_receiver,
+                tpu_vote_receiver,
+                verified_gossip_vote_receiver,
                 None,
-                gossip_vote_sender,
+                vote_forward_sender,
             );
             trace!("sending bank");
             drop(verified_sender);
-            drop(vote_sender);
+            drop(verified_gossip_sender);
+            drop(tpu_vote_sender);
             exit.store(true, Ordering::Relaxed);
             poh_service.join().unwrap();
             drop(poh_recorder);
@@ -1632,7 +1646,8 @@ mod tests {
         let bank = Arc::new(Bank::new_no_wallclock_throttle(&genesis_config));
         let start_hash = bank.last_blockhash();
         let (verified_sender, verified_receiver) = unbounded();
-        let (vote_sender, vote_receiver) = unbounded();
+        let (tpu_vote_sender, tpu_vote_receiver) = unbounded();
+        let (gossip_verified_vote_sender, gossip_verified_vote_receiver) = unbounded();
         let ledger_path = get_tmp_ledger_path!();
         {
             let blockstore = Arc::new(
@@ -1655,7 +1670,8 @@ mod tests {
                 &cluster_info,
                 &poh_recorder,
                 verified_receiver,
-                vote_receiver,
+                tpu_vote_receiver,
+                gossip_verified_vote_receiver,
                 None,
                 gossip_vote_sender,
             );
@@ -1695,7 +1711,8 @@ mod tests {
                 .unwrap();
 
             drop(verified_sender);
-            drop(vote_sender);
+            drop(tpu_vote_sender);
+            drop(gossip_verified_vote_sender);
             // wait until banking_stage to finish up all packets
             banking_stage.join().unwrap();
 
@@ -1776,6 +1793,7 @@ mod tests {
         verified_sender.send(packets).unwrap();
 
         let (vote_sender, vote_receiver) = unbounded();
+        let (tpu_vote_sender, tpu_vote_receiver) = unbounded();
         let ledger_path = get_tmp_ledger_path!();
         {
             let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
@@ -1802,8 +1820,9 @@ mod tests {
                     &cluster_info,
                     &poh_recorder,
                     verified_receiver,
+                    tpu_vote_receiver,
                     vote_receiver,
-                    2,
+                    3,
                     None,
                     gossip_vote_sender,
                 );
@@ -1818,6 +1837,7 @@ mod tests {
             };
             drop(verified_sender);
             drop(vote_sender);
+            drop(tpu_vote_sender);
 
             // consume the entire entry_receiver, feed it into a new bank
             // check that the balance is what we expect.

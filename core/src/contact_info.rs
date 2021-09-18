@@ -25,7 +25,7 @@ pub struct ContactInfo {
     /// address to forward unprocessed transactions to
     pub tpu_forwards: SocketAddr,
     /// address to which to send bank state requests
-    pub unused: SocketAddr,
+    pub tpu_vote: SocketAddr,
     /// address to which to send JSON-RPC requests
     pub rpc: SocketAddr,
     /// websocket for JSON-RPC push notifications
@@ -73,7 +73,7 @@ impl Default for ContactInfo {
             repair: socketaddr_any!(),
             tpu: socketaddr_any!(),
             tpu_forwards: socketaddr_any!(),
-            unused: socketaddr_any!(),
+            tpu_vote: socketaddr_any!(),
             rpc: socketaddr_any!(),
             rpc_pubsub: socketaddr_any!(),
             serve_repair: socketaddr_any!(),
@@ -93,7 +93,7 @@ impl ContactInfo {
             repair: socketaddr!("127.0.0.1:1237"),
             tpu: socketaddr!("127.0.0.1:1238"),
             tpu_forwards: socketaddr!("127.0.0.1:1239"),
-            unused: socketaddr!("127.0.0.1:1240"),
+            tpu_vote: socketaddr!("127.0.0.1:1240"),
             rpc: socketaddr!("127.0.0.1:1241"),
             rpc_pubsub: socketaddr!("127.0.0.1:1242"),
             serve_repair: socketaddr!("127.0.0.1:1243"),
@@ -123,7 +123,7 @@ impl ContactInfo {
             repair: addr,
             tpu: addr,
             tpu_forwards: addr,
-            unused: addr,
+            tpu_vote: addr,
             rpc: addr,
             rpc_pubsub: addr,
             serve_repair: addr,
@@ -144,6 +144,7 @@ impl ContactInfo {
         let gossip = next_port(&bind_addr, 1);
         let tvu = next_port(&bind_addr, 2);
         let tpu_forwards = next_port(&bind_addr, 3);
+        let tpu_vote = next_port(&bind_addr, 1);
         let tvu_forwards = next_port(&bind_addr, 4);
         let repair = next_port(&bind_addr, 5);
         let rpc = SocketAddr::new(bind_addr.ip(), rpc_port::DEFAULT_RPC_PORT);
@@ -157,7 +158,7 @@ impl ContactInfo {
             repair,
             tpu,
             tpu_forwards,
-            unused: "0.0.0.0:0".parse().unwrap(),
+            tpu_vote,
             rpc,
             rpc_pubsub,
             serve_repair,
@@ -241,7 +242,7 @@ mod tests {
         assert!(ci.rpc.ip().is_unspecified());
         assert!(ci.rpc_pubsub.ip().is_unspecified());
         assert!(ci.tpu.ip().is_unspecified());
-        assert!(ci.unused.ip().is_unspecified());
+        assert!(ci.tpu_vote.ip().is_unspecified());
         assert!(ci.serve_repair.ip().is_unspecified());
     }
     #[test]
@@ -253,7 +254,7 @@ mod tests {
         assert!(ci.rpc.ip().is_multicast());
         assert!(ci.rpc_pubsub.ip().is_multicast());
         assert!(ci.tpu.ip().is_multicast());
-        assert!(ci.unused.ip().is_multicast());
+        assert!(ci.tpu_vote.ip().is_multicast());
         assert!(ci.serve_repair.ip().is_multicast());
     }
     #[test]
@@ -266,7 +267,7 @@ mod tests {
         assert!(ci.rpc.ip().is_unspecified());
         assert!(ci.rpc_pubsub.ip().is_unspecified());
         assert!(ci.tpu.ip().is_unspecified());
-        assert!(ci.unused.ip().is_unspecified());
+        assert!(ci.tpu_vote.ip().is_unspecified());
         assert!(ci.serve_repair.ip().is_unspecified());
     }
     #[test]
@@ -274,12 +275,12 @@ mod tests {
         let addr = socketaddr!("127.0.0.1:10");
         let ci = ContactInfo::new_with_socketaddr(&addr);
         assert_eq!(ci.tpu, addr);
+        assert_eq!(ci.tpu_vote.port(), 11);
         assert_eq!(ci.gossip.port(), 11);
         assert_eq!(ci.tvu.port(), 12);
         assert_eq!(ci.tpu_forwards.port(), 13);
         assert_eq!(ci.rpc.port(), rpc_port::DEFAULT_RPC_PORT);
         assert_eq!(ci.rpc_pubsub.port(), rpc_port::DEFAULT_RPC_PUBSUB_PORT);
-        assert!(ci.unused.ip().is_unspecified());
         assert_eq!(ci.serve_repair.port(), 16);
     }
 

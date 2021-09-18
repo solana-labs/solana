@@ -37,6 +37,7 @@ pub const DEFAULT_TPU_COALESCE_MS: u64 = 5;
 pub struct Tpu {
     fetch_stage: FetchStage,
     sigverify_stage: SigVerifyStage,
+    vote_sigverify_stage: SigVerifyStage,
     banking_stage: BankingStage,
     cluster_info_vote_listener: ClusterInfoVoteListener,
     broadcast_stage: BroadcastStage,
@@ -51,6 +52,7 @@ impl Tpu {
         retransmit_slots_receiver: RetransmitSlotsReceiver,
         transactions_sockets: Vec<UdpSocket>,
         tpu_forwards_sockets: Vec<UdpSocket>,
+        tpu_vote_sockets: Vec<UdpSocket>,
         broadcast_sockets: Vec<UdpSocket>,
         subscriptions: &Arc<RpcSubscriptions>,
         transaction_status_sender: Option<TransactionStatusSender>,
@@ -69,11 +71,14 @@ impl Tpu {
         cluster_confirmed_slot_sender: GossipDuplicateConfirmedSlotsSender,
     ) -> Self {
         let (packet_sender, packet_receiver) = channel();
+        let (vote_packet_sender, vote_packet_receiver) = channel();
         let fetch_stage = FetchStage::new_with_sender(
             transactions_sockets,
             tpu_forwards_sockets,
+            tpu_vote_sockets,
             &exit,
             &packet_sender,
+            &vote_packet_sender,
             &poh_recorder,
             // At 1024 packets per `Packet`, each packet about MTU size ~1k, this is roughly
             // 20GB
@@ -85,6 +90,13 @@ impl Tpu {
         let sigverify_stage = {
             let verifier = TransactionSigVerifier::default();
             SigVerifyStage::new(packet_receiver, verified_sender, verifier)
+        };
+
+        let (vote_verified_sender, vote_verified_receiver) = unbounded();
+
+        let vote_sigverify_stage = {
+            let verifier = TransactionSigVerifier::default();
+            SigVerifyStage::new(vote_packet_receiver, vote_verified_sender, verifier)
         };
 
         let (verified_vote_packets_sender, verified_vote_packets_receiver) = unbounded();
@@ -108,6 +120,7 @@ impl Tpu {
             &cluster_info,
             poh_recorder,
             verified_receiver,
+            vote_verified_receiver,
             verified_vote_packets_receiver,
             transaction_status_sender,
             replay_vote_sender,
@@ -126,6 +139,7 @@ impl Tpu {
         Self {
             fetch_stage,
             sigverify_stage,
+            vote_sigverify_stage,
             banking_stage,
             cluster_info_vote_listener,
             broadcast_stage,
@@ -136,6 +150,7 @@ impl Tpu {
         let results = vec![
             self.fetch_stage.join(),
             self.sigverify_stage.join(),
+            self.vote_sigverify_stage.join(),
             self.cluster_info_vote_listener.join(),
             self.banking_stage.join(),
         ];
