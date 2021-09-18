@@ -20,7 +20,7 @@ impl Eq for ReplicaAccountInfo {}
 #[derive(Clone, Default, PartialEq, Debug)]
 pub struct ReplicaAccountInfo {
     pub account_meta: ReplicaAccountMeta,
-    pub hash: Vec<u8>,
+    pub hash: String,
     pub data: Vec<u8>,
 }
 

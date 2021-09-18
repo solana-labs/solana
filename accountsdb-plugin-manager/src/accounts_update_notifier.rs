@@ -32,7 +32,7 @@ fn accountinfo_from_stored_account_meta(
     let data = stored_account_meta.data.to_vec();
     ReplicaAccountInfo {
         account_meta,
-        hash: stored_account_meta.hash.0.to_vec(),
+        hash: bs58::encode(stored_account_meta.hash.0).into_string(),
         data,
     }
 }
@@ -49,7 +49,7 @@ fn accountinfo_from_cached_account(cached_account: &CachedAccount) -> ReplicaAcc
     let data = account.data.to_vec();
     ReplicaAccountInfo {
         account_meta,
-        hash: cached_account.hash().0.to_vec(),
+        hash: bs58::encode(cached_account.hash().0).into_string(),
         data,
     }
 }
