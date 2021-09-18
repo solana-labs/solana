@@ -375,6 +375,139 @@ impl VoteState {
         Ok(())
     }
 
+    // TODO: `Ensure check_slots_are_valid()` runs on the slots in `new_state`
+    // before this
+    pub fn process_new_vote_state(
+        &mut self,
+        new_state: VecDeque<Lockout>,
+        new_root: Option<Slot>,
+        timestamp: Option<i64>,
+        epoch: Epoch,
+    ) -> Result<(), VoteError> {
+        assert!(!new_state.is_empty());
+
+        // check_slots_are_valid()` ensures we don't process any states
+        // that are older than the current state
+        if !self.votes.is_empty() {
+            assert!(new_state.back().unwrap().slot > self.votes.back().unwrap().slot);
+        }
+
+        match (new_root, self.root_slot) {
+            (Some(new_root), Some(current_root)) => {
+                if new_root < current_root {
+                    return Err(VoteError::RootRollBack);
+                }
+            }
+            (None, Some(_)) => {
+                return Err(VoteError::RootRollBack);
+            }
+            _ => (),
+        }
+
+        let mut previous_vote: Option<&Lockout> = None;
+
+        for vote in &new_state {
+            if vote.confirmation_count == 0 {
+                return Err(VoteError::ZeroConfirmations);
+            } else if let Some(new_root) = new_root {
+                if vote.slot <= new_root {
+                    return Err(VoteError::SlotSmallerThanRoot(vote.slot, new_root));
+                }
+            }
+
+            if let Some(previous_vote) = previous_vote {
+                if previous_vote.slot >= vote.slot {
+                    return Err(VoteError::SlotsNotOrdered);
+                } else if previous_vote.confirmation_count >= vote.confirmation_count {
+                    return Err(VoteError::LockoutsNotOrdered);
+                } else if vote.slot > previous_vote.last_locked_out_slot() {
+                    return Err(VoteError::NewVoteStateLockoutMismatch(
+                        previous_vote.slot,
+                        previous_vote.confirmation_count,
+                        vote.slot,
+                    ));
+                }
+            }
+            previous_vote = Some(vote);
+        }
+
+        // Find the first non-common ancestor between our current state and `new_state`
+        let first_unshared_ancestor_index = self
+            .votes
+            .iter()
+            .enumerate()
+            .zip(new_state.iter())
+            .find(|((i, current_vote), new_vote)| current_vote.slot == new_vote.slot)
+            .map(|((i, _), _)| i + 1)
+            .unwrap_or(0);
+
+        let current_vote_state_index = first_unshared_ancestor_index;
+        let new_vote_state_index = first_unshared_ancestor_index;
+
+        while current_vote_state_index < self.votes.len() && new_vote_state_index < new_state.len()
+        {
+            let current_vote = self.votes[current_vote_state_index];
+            let new_vote = new_state[new_vote_state_index];
+
+            // If the current slot is less than the new proposed slot, then the
+            // new slot must have popped off the old slot, so check that the
+            // lockouts are corrects.
+            if current_vote.slot < new_vote.slot {
+                // TODO: Verify earlier ancestors that are expired are not popped
+                // off if one of the later votes is not expired yet, i.e.
+                //
+                // Example: {1: lockout 8, 9: lockout 2}, vote on 10 will not pop off 1
+                // because 9 is not popped off yet
+                if current_vote.last_locked_out_slot() >= new_vote.slot {
+                    return Err(VoteError::LockoutConflict(
+                        current_vote.slot,
+                        current_vote.confirmation_count,
+                        new_vote.slot,
+                    ));
+                }
+                current_vote_state_index += 1;
+            } else if current_vote.slot == new_vote.slot {
+                // TODO: Write tests for:
+
+                // It might be possible that during the switch from old vote instructions
+                // to new vote instructions, new_state contains votes for slots LESS
+                // than the current state, for instance:
+                //
+                // Current on-chain state: 1, 6
+                // New state: 1, 2 (lockout: 4), 6, 7
+                //
+                // Imagine the validator made two of these votes:
+                // 1) The first vote {1, 2, 3} didn't land in the old state, but didn't
+                // land on chain
+                // 2) A second vote {1, 2, 6} was then submitted, which landed
+                //
+                //
+                // 2 is not popped off in the local tower because 3 doubled the lockout.
+                // However, 3 did not land in the on-chain state, so the vote {1, 2, 6}
+                // will immediately pop off 2.
+                current_vote_state_index += 1;
+                new_vote_state_index += 1;
+            } else {
+                new_vote_state_index += 1;
+            }
+        }
+
+        // `new_vote_state` passed all the checks, finalize the change by rewriting
+        // our state.
+        if self.root_slot != new_root {
+            // TODO to think about: Note, people may be incentivized to set more
+            // roots to get more credits, but I think they can already do this...
+            self.increment_credits(epoch);
+        }
+        if let Some(timestamp) = timestamp {
+            let last_slot = new_state.back().unwrap().slot;
+            self.process_timestamp(last_slot, timestamp);
+        }
+        self.root_slot = new_root;
+        self.votes = new_state;
+        Ok(())
+    }
+
     pub fn process_vote(
         &mut self,
         vote: &Vote,
