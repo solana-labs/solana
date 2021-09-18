@@ -276,8 +276,12 @@ impl Tvu {
         };
 
         let (voting_sender, voting_receiver) = channel();
-        let voting_service =
-            VotingService::new(voting_receiver, cluster_info.clone(), poh_recorder.clone());
+        let voting_service = VotingService::new(
+            voting_receiver,
+            cluster_info.clone(),
+            poh_recorder.clone(),
+            bank_forks.clone(),
+        );
 
         let replay_stage = ReplayStage::new(
             replay_stage_config,
