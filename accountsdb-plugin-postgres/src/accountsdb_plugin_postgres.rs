@@ -48,13 +48,13 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
                 })
             }
             Ok(config) => {
-                let connection_str = format!("host={:?} user={:?}", config.host, config.user);
+                let connection_str = format!("host={} user={}", config.host, config.user);
                 match Client::connect(&connection_str, NoTls) {
                     Err(err) => {
                         return Err(AccountsDbPluginError::DataStoreConnectionError {
                             msg: format!(
-                                "Error in connecting to the PostgreSQL database: {:?}",
-                                err
+                                "Error in connecting to the PostgreSQL database: {:?} host: {:?} user: {:?} config: {:?}",
+                                err, config.host, config.user, connection_str
                             ),
                         });
                     }
@@ -86,14 +86,17 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
             Some(client) => {
                 let slot = slot as i64; // postgres only support i64
                 let lamports = account.account_meta.lamports as i64;
+                let rent_epoch = account.account_meta.rent_epoch as i64;
                 let result = client.get_mut().unwrap().execute(
-                    "INSERT INTO account (pubkey, slot, owner, lamports) VALUES ($1 $2 $3 $4) \
-                    ON CONFLICT (pubkey) DO UPDATE SET slot=$2, owner=$3, lamports=$4",
+                    "INSERT INTO account (pubkey, slot, owner, lamports, executable, rent_epoch) VALUES ($1, $2, $3, $4, $5, $6) \
+                    ON CONFLICT (pubkey) DO UPDATE SET slot=$2, owner=$3, lamports=$4, executable=$5, rent_epoch=$6",
                     &[
                         &account.account_meta.pubkey,
                         &slot,
                         &account.account_meta.owner,
                         &lamports,
+                        &account.account_meta.executable,
+                        &rent_epoch,
                     ],
                 );
 
