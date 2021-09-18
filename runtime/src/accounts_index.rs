@@ -1376,6 +1376,11 @@ impl<T: IndexValue> AccountsIndex<T> {
         let iter = self.iter(Some(range), true);
         iter.hold_range_in_memory(range, start_holding);
     }
+
+    pub fn set_startup(&self, value: bool) {
+        self.storage.storage.set_startup(value);
+    }
+
     /// Get an account
     /// The latest account that appears in `ancestors` or `roots` is returned.
     pub(crate) fn get(

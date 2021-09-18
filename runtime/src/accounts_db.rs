@@ -219,6 +219,7 @@ struct GenerateIndexTimings {
     pub storage_size_accounts_map_us: u64,
     pub storage_size_storages_us: u64,
     pub storage_size_accounts_map_flatten_us: u64,
+    pub index_flush_us: u64,
 }
 
 #[derive(Default, Debug, PartialEq)]
@@ -253,6 +254,7 @@ impl GenerateIndexTimings {
                 self.storage_size_accounts_map_flatten_us as i64,
                 i64
             ),
+            ("index_flush_us", self.index_flush_us as i64, i64),
         );
     }
 }
@@ -6408,6 +6410,9 @@ impl AccountsDb {
         // verify checks that all the expected items are in the accounts index and measures how long it takes to look them all up
         let passes = if verify { 2 } else { 1 };
         for pass in 0..passes {
+            if pass == 0 {
+                self.accounts_index.set_startup(true);
+            }
             let storage_info = StorageSizeAndCountMap::default();
             let total_processed_slots_across_all_threads = AtomicU64::new(0);
             let outer_slots_len = slots.len();
@@ -6496,7 +6501,17 @@ impl AccountsDb {
 
             let storage_info_timings = storage_info_timings.into_inner().unwrap();
 
+            let mut index_flush_us = 0;
+            if pass == 0 {
+                // tell accounts index we are done adding the initial accounts at startup
+                let mut m = Measure::start("accounts_index_idle_us");
+                self.accounts_index.set_startup(false);
+                m.stop();
+                index_flush_us = m.as_us();
+            }
+
             let mut timings = GenerateIndexTimings {
+                index_flush_us,
                 scan_time,
                 index_time: index_time.as_us(),
                 insertion_time_us: insertion_time_us.load(Ordering::Relaxed),
