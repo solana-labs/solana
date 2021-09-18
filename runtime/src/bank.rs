@@ -4881,6 +4881,11 @@ impl Bank {
             .is_active(&feature_set::merge_nonce_error_into_system_error::id())
     }
 
+    pub fn send_to_tpu_vote_port_enabled(&self) -> bool {
+        self.feature_set
+            .is_active(&feature_set::send_to_tpu_vote_port::id())
+    }
+
     // Check if the wallclock time from bank creation to now has exceeded the allotted
     // time for transaction processing
     pub fn should_bank_still_be_processing_txs(

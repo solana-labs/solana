@@ -170,6 +170,11 @@ pub mod demote_program_write_locks {
     solana_sdk::declare_id!("3E3jV7v9VcdJL8iYZUMax9DiDno8j7EWUVbhm9RtShj2");
 }
 
+pub mod send_to_tpu_vote_port {
+    // todo: update
+    solana_sdk::declare_id!("3E3jV7v9VcdJL8iYZUMax9DiDno8j7EWUVbhm9RtShj3");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -211,6 +216,7 @@ lazy_static! {
         (merge_nonce_error_into_system_error::id(), "merge NonceError into SystemError"),
         (spl_token_v2_set_authority_fix::id(), "spl-token set_authority fix"),
         (demote_program_write_locks::id(), "demote program write locks to readonly #19593"),
+        (send_to_tpu_vote_port::id(), "Send votes to the tpu vote port"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

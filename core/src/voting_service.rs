@@ -1,8 +1,9 @@
 use crate::cluster_info::ClusterInfo;
 use crate::poh_recorder::PohRecorder;
+use solana_runtime::bank_forks::BankForks;
 use solana_sdk::{clock::Slot, transaction::Transaction};
 use std::{
-    sync::{mpsc::Receiver, Arc, Mutex},
+    sync::{mpsc::Receiver, Arc, Mutex, RwLock},
     thread::{self, Builder, JoinHandle},
 };
 
@@ -38,12 +39,15 @@ impl VotingService {
         vote_receiver: Receiver<VoteOp>,
         cluster_info: Arc<ClusterInfo>,
         poh_recorder: Arc<Mutex<PohRecorder>>,
+        bank_forks: Arc<RwLock<BankForks>>,
     ) -> Self {
         let thread_hdl = Builder::new()
             .name("sol-vote-service".to_string())
             .spawn(move || {
                 for vote_op in vote_receiver.iter() {
-                    Self::handle_vote(&cluster_info, &poh_recorder, vote_op);
+                    let rooted_bank = bank_forks.read().unwrap().root_bank().clone();
+                    let send_to_tpu_vote_port = rooted_bank.send_to_tpu_vote_port_enabled();
+                    Self::handle_vote(&cluster_info, &poh_recorder, vote_op, send_to_tpu_vote_port);
                 }
             })
             .unwrap();
@@ -54,11 +58,14 @@ impl VotingService {
         cluster_info: &ClusterInfo,
         poh_recorder: &Mutex<PohRecorder>,
         vote_op: VoteOp,
+        send_to_tpu_vote_port: bool,
     ) {
-        let _ = cluster_info.send_vote(
-            vote_op.tx(),
-            crate::banking_stage::next_leader_tpu(cluster_info, poh_recorder),
-        );
+        let target_address = if send_to_tpu_vote_port {
+            crate::banking_stage::next_leader_tpu_vote(cluster_info, poh_recorder)
+        } else {
+            crate::banking_stage::next_leader_tpu(cluster_info, poh_recorder)
+        };
+        let _ = cluster_info.send_vote(vote_op.tx(), target_address);
 
         match vote_op {
             VoteOp::PushVote { tx, tower_slots } => {
