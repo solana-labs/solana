@@ -25,7 +25,7 @@ use std::{
     },
     path::PathBuf,
     sync::{
-        atomic::{AtomicBool, AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering},
         Arc, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard,
     },
 };
@@ -127,12 +127,14 @@ impl AccountSecondaryIndexes {
 #[derive(Debug, Default)]
 pub struct AccountMapEntryMeta {
     pub dirty: AtomicBool,
+    pub age: AtomicU8,
 }
 
 impl AccountMapEntryMeta {
     pub fn new_dirty() -> Self {
         AccountMapEntryMeta {
             dirty: AtomicBool::new(true),
+            age: AtomicU8::default(),
         }
     }
 }
