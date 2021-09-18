@@ -156,6 +156,12 @@ impl BankingStageStats {
                     i64
                 ),
                 (
+                    "consumed_buffered_packets_count",
+                    self.consumed_buffered_packets_count
+                        .swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
                     "consume_buffered_packets_elapsed",
                     self.consume_buffered_packets_elapsed
                         .swap(0, Ordering::Relaxed) as i64,
