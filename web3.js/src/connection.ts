@@ -1725,7 +1725,7 @@ export type KeyedAccountInfo = {
  */
 export type SubscribeErrorCallback = (
   rpcMethod: string,
-  rpcArgs: IWSRequestParams,
+  rpcArgs: any,
   error: any,
 ) => void;
 
