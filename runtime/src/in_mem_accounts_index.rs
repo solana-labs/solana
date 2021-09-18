@@ -7,7 +7,7 @@ use solana_measure::measure::Measure;
 use solana_sdk::{clock::Slot, pubkey::Pubkey};
 use std::collections::{hash_map::Entry, HashMap};
 use std::ops::{Bound, RangeBounds, RangeInclusive};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, RwLock};
 
 use std::fmt::Debug;
@@ -26,6 +26,10 @@ pub struct InMemAccountsIndex<T: IndexValue> {
     pub(crate) cache_ranges_held: CacheRangesHeld,
     // true while ranges are being manipulated. Used to keep an async flush from removing things while a range is being held.
     stop_flush: AtomicU64,
+    // set to true when any entry in this bin is marked dirty
+    bin_dirty: AtomicBool,
+    // set to true while this bin is being actively flushed
+    flushing_active: AtomicBool,
 }
 
 impl<T: IndexValue> Debug for InMemAccountsIndex<T> {
@@ -42,6 +46,8 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             bin,
             cache_ranges_held: CacheRangesHeld::default(),
             stop_flush: AtomicU64::default(),
+            bin_dirty: AtomicBool::default(),
+            flushing_active: AtomicBool::default(),
         }
     }
 
@@ -356,6 +362,46 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
     fn get_stop_flush(&self) -> bool {
         self.stop_flush.load(Ordering::Relaxed) > 0
+    }
+
+    pub(crate) fn flush(&self) {
+        let flushing = self.flushing_active.swap(true, Ordering::Acquire);
+        if flushing {
+            // already flushing in another thread
+            return;
+        }
+
+        self.flush_internal();
+
+        self.flushing_active.store(false, Ordering::Release);
+    }
+
+    pub fn set_bin_dirty(&self) {
+        self.bin_dirty.store(true, Ordering::Release);
+    }
+
+    fn flush_internal(&self) {
+        let was_dirty = self.bin_dirty.swap(false, Ordering::Acquire);
+        if !was_dirty {
+            // wasn't dirty, no need to flush
+            return;
+        }
+
+        let map = self.map().read().unwrap();
+        for (_k, _v) in map.iter() {
+            /*
+            if v.dirty() {
+                // step 1: clear the dirty flag
+                // step 2: perform the update on disk based on the fields in the entry
+                // If a parallel operation dirties the item again - even while this flush is occurring,
+                //  the last thing the writer will do, after updating contents, is set_dirty(true)
+                //  That prevents dropping an item from cache before disk is updated to latest in mem.
+                v.set_dirty(false);
+
+                // soon, this will update disk from the in-mem contents
+            }
+            */
+        }
     }
 
     fn stats(&self) -> &BucketMapHolderStats {

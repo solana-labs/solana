@@ -52,7 +52,7 @@ impl<T: IndexValue> AccountsIndexStorage<T> {
         let in_mem = (0..bins)
             .into_iter()
             .map(|bin| Arc::new(InMemAccountsIndex::new(&storage, bin)))
-            .collect();
+            .collect::<Vec<_>>();
 
         const DEFAULT_THREADS: usize = 1; // soon, this will be a cpu calculation
         let threads = config
@@ -69,11 +69,13 @@ impl<T: IndexValue> AccountsIndexStorage<T> {
                     let storage_ = Arc::clone(&storage);
                     let exit_ = Arc::clone(&exit);
                     let wait_ = Arc::clone(&wait);
+                    let in_mem_ = in_mem.clone();
+
                     // note that rayon use here causes us to exhaust # rayon threads and many tests running in parallel deadlock
                     Builder::new()
                         .name("solana-idx-flusher".to_string())
                         .spawn(move || {
-                            Self::background(storage_, exit_, wait_);
+                            Self::background(storage_, exit_, wait_, in_mem_);
                         })
                         .unwrap()
                 })
@@ -98,6 +100,7 @@ impl<T: IndexValue> AccountsIndexStorage<T> {
         storage: Arc<BucketMapHolder<T>>,
         exit: Arc<AtomicBool>,
         wait: Arc<WaitableCondvar>,
+        in_mem: Vec<Arc<InMemAccountsIndex<T>>>,
     ) {
         loop {
             // this will transition to waits and thread throttling
@@ -105,6 +108,11 @@ impl<T: IndexValue> AccountsIndexStorage<T> {
             if exit.load(Ordering::Relaxed) {
                 break;
             }
+
+            for bucket in &in_mem {
+                bucket.flush();
+            }
+
             storage.stats.report_stats();
         }
     }
