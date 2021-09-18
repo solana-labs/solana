@@ -29,7 +29,10 @@ impl AccountsDbPluginService {
         bank_forks: Arc<RwLock<BankForks>>,
         accountsdb_plugin_config_file: &Path,
     ) -> Self {
-        info!("Starting AccountsDbPluginService from config file: {:?}", accountsdb_plugin_config_file);
+        info!(
+            "Starting AccountsDbPluginService from config file: {:?}",
+            accountsdb_plugin_config_file
+        );
         let plugin_manager = AccountsDbPluginManager::new();
         let plugin_manager = Arc::new(RwLock::new(plugin_manager));
 

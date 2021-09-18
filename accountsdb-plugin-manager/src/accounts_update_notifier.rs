@@ -23,9 +23,9 @@ fn accountinfo_from_stored_account_meta(
     stored_account_meta: &StoredAccountMeta,
 ) -> ReplicaAccountInfo {
     let account_meta = ReplicaAccountMeta {
-        pubkey: stored_account_meta.meta.pubkey.to_bytes().to_vec(),
+        pubkey: bs58::encode(stored_account_meta.meta.pubkey).into_string(),
         lamports: stored_account_meta.account_meta.lamports,
-        owner: stored_account_meta.account_meta.owner.to_bytes().to_vec(),
+        owner: bs58::encode(stored_account_meta.account_meta.owner).into_string(),
         executable: stored_account_meta.account_meta.executable,
         rent_epoch: stored_account_meta.account_meta.rent_epoch,
     };
@@ -40,9 +40,9 @@ fn accountinfo_from_stored_account_meta(
 fn accountinfo_from_cached_account(cached_account: &CachedAccount) -> ReplicaAccountInfo {
     let account = Account::from(cached_account.account.clone());
     let account_meta = ReplicaAccountMeta {
-        pubkey: cached_account.pubkey().to_bytes().to_vec(),
+        pubkey: bs58::encode(cached_account.pubkey()).into_string(),
         lamports: account.lamports,
-        owner: account.owner.to_bytes().to_vec(),
+        owner: bs58::encode(account.owner).into_string(),
         executable: account.executable,
         rent_epoch: account.rent_epoch,
     };

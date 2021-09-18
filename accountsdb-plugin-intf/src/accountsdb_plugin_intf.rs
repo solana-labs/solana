@@ -8,9 +8,9 @@ use thiserror::Error;
 
 #[derive(Clone, PartialEq, Default, Debug)]
 pub struct ReplicaAccountMeta {
-    pub pubkey: Vec<u8>,
+    pub pubkey: String,
     pub lamports: u64,
-    pub owner: Vec<u8>,
+    pub owner: String,
     pub executable: bool,
     pub rent_epoch: u64,
 }
