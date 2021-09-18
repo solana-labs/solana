@@ -888,7 +888,7 @@ impl Executor for BpfExecutor {
 
         let mut serialize_time = Measure::start("serialize");
         let keyed_accounts = invoke_context.get_keyed_accounts()?;
-        let mut parameter_bytes =
+        let (mut parameter_bytes, account_lengths) =
             serialize_parameters(loader_id, program_id, keyed_accounts, instruction_data)?;
         serialize_time.stop();
         let mut create_vm_time = Measure::start("create_vm");
@@ -971,7 +971,12 @@ impl Executor for BpfExecutor {
         }
         let mut deserialize_time = Measure::start("deserialize");
         let keyed_accounts = invoke_context.get_keyed_accounts()?;
-        deserialize_parameters(loader_id, keyed_accounts, parameter_bytes.as_slice())?;
+        deserialize_parameters(
+            loader_id,
+            keyed_accounts,
+            parameter_bytes.as_slice(),
+            &account_lengths,
+        )?;
         deserialize_time.stop();
         invoke_context.update_timing(
             serialize_time.as_us(),
