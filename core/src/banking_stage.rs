@@ -1616,7 +1616,7 @@ mod tests {
             );
             trace!("sending bank");
             drop(verified_sender);
-            drop(verified_gossip_sender);
+            drop(verified_gossip_vote_sender);
             drop(tpu_vote_sender);
             exit.store(true, Ordering::Relaxed);
             poh_service.join().unwrap();
