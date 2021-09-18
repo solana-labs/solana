@@ -19,7 +19,7 @@ fn bench_sigverify(bencher: &mut Bencher) {
     let recycler_out = Recycler::default();
     // verify packets
     bencher.iter(|| {
-        let _ans = sigverify::ed25519_verify(&mut batches, &recycler, &recycler_out);
+        let _ans = sigverify::ed25519_verify(&mut batches, &recycler, &recycler_out, false);
     })
 }
 
