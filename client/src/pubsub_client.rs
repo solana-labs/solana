@@ -22,7 +22,8 @@ use {
             mpsc::{channel, Receiver},
             Arc, RwLock,
         },
-        thread::JoinHandle,
+        thread::{sleep, JoinHandle},
+        time::Duration,
     },
     thiserror::Error,
     tungstenite::{client::AutoStream, connect, Message, WebSocket},
@@ -164,6 +165,40 @@ pub type SignatureSubscription = (
 
 pub struct PubsubClient {}
 
+fn connect_with_retry(
+    url: Url,
+) -> Result<WebSocket<MaybeTlsStream<TcpStream>>, tungstenite::Error> {
+    let mut connection_retries = 5;
+    loop {
+        let result = connect(url.clone()).map(|(socket, _)| socket);
+        if let Err(tungstenite::Error::Http(response)) = &result {
+            if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS && connection_retries > 0
+            {
+                let mut duration = Duration::from_millis(500);
+                if let Some(retry_after) = response.headers().get(reqwest::header::RETRY_AFTER) {
+                    if let Ok(retry_after) = retry_after.to_str() {
+                        if let Ok(retry_after) = retry_after.parse::<u64>() {
+                            if retry_after < 120 {
+                                duration = Duration::from_secs(retry_after);
+                            }
+                        }
+                    }
+                }
+
+                connection_retries -= 1;
+                debug!(
+                    "Too many requests: server responded with {:?}, {} retries left, pausing for {:?}",
+                    response, connection_retries, duration
+                );
+
+                sleep(duration);
+                continue;
+            }
+        }
+        return result;
+    }
+}
+
 impl PubsubClient {
     pub fn logs_subscribe(
         url: &str,
@@ -171,7 +206,7 @@ impl PubsubClient {
         config: RpcTransactionLogsConfig,
     ) -> Result<LogsSubscription, PubsubClientError> {
         let url = Url::parse(url)?;
-        let (socket, _response) = connect(url)?;
+        let socket = connect_with_retry(url)?;
         let (sender, receiver) = channel();
 
         let socket = Arc::new(RwLock::new(socket));
@@ -226,7 +261,7 @@ impl PubsubClient {
 
     pub fn slot_subscribe(url: &str) -> Result<SlotsSubscription, PubsubClientError> {
         let url = Url::parse(url)?;
-        let (socket, _response) = connect(url)?;
+        let socket = connect_with_retry(url)?;
         let (sender, receiver) = channel::<SlotInfo>();
 
         let socket = Arc::new(RwLock::new(socket));
@@ -282,7 +317,7 @@ impl PubsubClient {
         config: Option<RpcSignatureSubscribeConfig>,
     ) -> Result<SignatureSubscription, PubsubClientError> {
         let url = Url::parse(url)?;
-        let (socket, _response) = connect(url)?;
+        let socket = connect_with_retry(url)?;
         let (sender, receiver) = channel();
 
         let socket = Arc::new(RwLock::new(socket));
@@ -348,7 +383,7 @@ impl PubsubClient {
         handler: impl Fn(SlotUpdate) + Send + 'static,
     ) -> Result<PubsubClientSubscription<SlotUpdate>, PubsubClientError> {
         let url = Url::parse(url)?;
-        let (socket, _response) = connect(url)?;
+        let socket = connect_with_retry(url)?;
 
         let socket = Arc::new(RwLock::new(socket));
         let exit = Arc::new(AtomicBool::new(false));
