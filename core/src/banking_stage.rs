@@ -3,6 +3,7 @@
 //! can do its processing in parallel with signature verification on the GPU.
 use crate::{
     cluster_info::ClusterInfo,
+    contact_info::ContactInfo,
     data_budget::DataBudget,
     packet_hasher::PacketHasher,
     poh_recorder::{PohRecorder, PohRecorderError, TransactionRecorder, WorkingBankEntry},
@@ -56,7 +57,7 @@ use std::{
     collections::{HashMap, VecDeque},
     env,
     mem::size_of,
-    net::UdpSocket,
+    net::{SocketAddr, UdpSocket},
     ops::DerefMut,
     sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
     sync::mpsc::Receiver,
@@ -1430,27 +1431,37 @@ pub(crate) fn next_leader_tpu(
     cluster_info: &ClusterInfo,
     poh_recorder: &Mutex<PohRecorder>,
 ) -> Option<std::net::SocketAddr> {
-    if let Some(leader_pubkey) = poh_recorder
-        .lock()
-        .unwrap()
-        .leader_after_n_slots(FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET)
-    {
-        cluster_info.lookup_contact_info(&leader_pubkey, |leader| leader.tpu)
-    } else {
-        None
-    }
+    next_leader_x(cluster_info, poh_recorder, |leader| leader.tpu)
 }
 
 fn next_leader_tpu_forwards(
     cluster_info: &ClusterInfo,
-    poh_recorder: &Arc<Mutex<PohRecorder>>,
+    poh_recorder: &Mutex<PohRecorder>,
 ) -> Option<std::net::SocketAddr> {
+    next_leader_x(cluster_info, poh_recorder, |leader| leader.tpu_forwards)
+}
+
+pub(crate) fn next_leader_tpu_vote(
+    cluster_info: &ClusterInfo,
+    poh_recorder: &Mutex<PohRecorder>,
+) -> Option<std::net::SocketAddr> {
+    next_leader_x(cluster_info, poh_recorder, |leader| leader.tpu_vote)
+}
+
+fn next_leader_x<F>(
+    cluster_info: &ClusterInfo,
+    poh_recorder: &Mutex<PohRecorder>,
+    port_selector: F,
+) -> Option<std::net::SocketAddr>
+where
+    F: FnOnce(&ContactInfo) -> SocketAddr,
+{
     if let Some(leader_pubkey) = poh_recorder
         .lock()
         .unwrap()
         .leader_after_n_slots(FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET)
     {
-        cluster_info.lookup_contact_info(&leader_pubkey, |leader| leader.tpu_forwards)
+        cluster_info.lookup_contact_info(&leader_pubkey, port_selector)
     } else {
         None
     }
