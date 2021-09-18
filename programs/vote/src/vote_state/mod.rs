@@ -301,10 +301,25 @@ impl VoteState {
         vote: &Vote,
         slot_hashes: &[(Slot, Hash)],
     ) -> Result<(), VoteError> {
-        let mut i = 0; // index into the vote's slots
-        let mut j = slot_hashes.len(); // index into the slot_hashes
+        // index into the vote's slots, sarting at the newest
+        // known slot
+        let mut i = 0;
+
+        // index into the slot_hashes, starting at the oldest known
+        // slot hash
+        let mut j = slot_hashes.len();
+
+        // Note:
+        //
+        // 1) `vote.slots` is sorted from oldest/smallest vote to newest/largest
+        // vote, due to the way votes are applied to the vote state (newest vots
+        // pushed to the back), but `slot_hashes` is sorted smallest to largest.
+        //
+        // 2) Conversely, `slot_hashes` is sorted from newest/largest vote to
+        // the oldest/smallest vote
         while i < vote.slots.len() && j > 0 {
-            // find the last slot in the vote
+            // 1) increment `i` to find the smallest slot `s` in `vote.slots`
+            // where `s` >= `last_voted_slot`
             if self
                 .last_voted_slot()
                 .map_or(false, |last_voted_slot| vote.slots[i] <= last_voted_slot)
@@ -312,14 +327,24 @@ impl VoteState {
                 i += 1;
                 continue;
             }
+
+            // 2) Find the hash for this slot `s`.
             if vote.slots[i] != slot_hashes[j - 1].0 {
+                // Decrement `j` to find newer slots
                 j -= 1;
                 continue;
             }
+
+            // 3) Once the hash for `s` is found, bump `s` to the next slot
+            // in `vote.slots` and continue.
             i += 1;
             j -= 1;
         }
+
         if j == slot_hashes.len() {
+            // This means we never made it to steps 2) or 3) above, otherwise
+            // `j` would have been decremented at least once. This means
+            // there are not slots in `vote` greater than `last_voted_slot`
             debug!(
                 "{} dropped vote {:?} too old: {:?} ",
                 self.node_pubkey, vote, slot_hashes
@@ -327,6 +352,8 @@ impl VoteState {
             return Err(VoteError::VoteTooOld);
         }
         if i != vote.slots.len() {
+            // This means there existed some slot for which we couldn't find
+            // a matching slot hash in step 2)
             info!(
                 "{} dropped vote {:?} failed to match slot:  {:?}",
                 self.node_pubkey, vote, slot_hashes,
@@ -335,6 +362,9 @@ impl VoteState {
             return Err(VoteError::SlotsMismatch);
         }
         if slot_hashes[j].1 != vote.hash {
+            // This means the newest vote in the slot has a match that
+            // doesn't match the expected hash for that slot on this
+            // fork
             warn!(
                 "{} dropped vote {:?} failed to match hash {} {}",
                 self.node_pubkey, vote, vote.hash, slot_hashes[j].1
