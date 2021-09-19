@@ -65,6 +65,9 @@ pub enum VoteError {
     #[error("Root rolled back")]
     RootRollBack,
 
+    #[error("Confirmations for slot {0} rolled back from {1} to {2}")]
+    LockoutRollBack(Slot, u32, u32),
+
     #[error("Vote slot {0} was smaller than root {1}")]
     SlotSmallerThanRoot(Slot, Slot),
 }

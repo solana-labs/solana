@@ -406,6 +406,10 @@ impl VoteState {
 
         let mut previous_vote: Option<&Lockout> = None;
 
+        // Check that all the votes in the new proposed state are:
+        // 1) Strictly sorted from oldest to newest vote
+        // 2) The confirmations are strictly decreasing
+        // 3) Not zero confirmation votes
         for vote in &new_state {
             if vote.confirmation_count == 0 {
                 return Err(VoteError::ZeroConfirmations);
@@ -432,18 +436,43 @@ impl VoteState {
         }
 
         // Find the first non-common ancestor between our current state and `new_state`
-        let first_unshared_ancestor_index = self
-            .votes
-            .iter()
-            .enumerate()
-            .zip(new_state.iter())
-            .find(|((i, current_vote), new_vote)| current_vote.slot == new_vote.slot)
-            .map(|((i, _), _)| i + 1)
-            .unwrap_or(0);
+        let mut current_vote_state_index = 0;
+        let mut new_vote_state_index = 0;
 
-        let current_vote_state_index = first_unshared_ancestor_index;
-        let new_vote_state_index = first_unshared_ancestor_index;
+        for current_vote in &self.votes {
+            // Find the first vote in the current vote state for a slot greater
+            // than the new proposed root
+            if let Some(new_root) = new_root {
+                if current_vote.slot <= new_root {
+                    current_vote_state_index += 1;
+                    continue;
+                }
+            }
 
+            let current_vote = self.votes[current_vote_state_index];
+            let new_vote = new_state[new_vote_state_index];
+
+            if current_vote.slot == new_vote.slot {
+                // The new vote state should never have less lockout than
+                // the previous vote state for the same slot
+                if new_vote.confirmation_count < current_vote.confirmation_count {
+                    return Err(VoteError::LockoutRollBack(
+                        current_vote.slot,
+                        current_vote.confirmation_count,
+                        new_vote.confirmation_count,
+                    ));
+                }
+
+                // If the lockouts pass checks, move on to checking the next slots
+                current_vote_state_index += 1;
+                new_vote_state_index += 1;
+            } else {
+                break;
+            }
+        }
+
+        // All the votes in our current vote state that are missing from the new vote state
+        // must have been expired by later votes. Check that the lockouts match this assumption.
         while current_vote_state_index < self.votes.len() && new_vote_state_index < new_state.len()
         {
             let current_vote = self.votes[current_vote_state_index];
