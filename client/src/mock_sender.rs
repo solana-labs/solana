@@ -87,6 +87,32 @@ impl MockSender {
     }
 }
 
+/// Mocks for examples in rpc_client module
+pub fn create_rpc_client_mocks() -> Mocks {
+    let mut mocks = HashMap::new();
+
+    let get_account_request = RpcRequest::GetAccountInfo;
+    let get_account_response = serde_json::to_value(Response {
+        context: RpcResponseContext { slot: 1 },
+        value: {
+            let pubkey = Pubkey::from_str("BgvYtJEfmZYdVKiptmMjxGzv8iQoo4MWjsP3QsTkhhxa").unwrap();
+            let account = Account {
+                lamports: 1_000_000,
+                data: vec![],
+                owner: pubkey,
+                executable: false,
+                rent_epoch: 0,
+            };
+            UiAccount::encode(&pubkey, &account, UiAccountEncoding::Base64, None, None)
+        },
+    })
+    .unwrap();
+
+    mocks.insert(get_account_request, get_account_response);
+
+    mocks
+}
+
 impl RpcSender for MockSender {
     fn get_transport_stats(&self) -> RpcTransportStats {
         RpcTransportStats::default()
@@ -105,23 +131,7 @@ impl RpcSender for MockSender {
         let val = match method.as_str().unwrap() {
             "getAccountInfo" => serde_json::to_value(Response {
                 context: RpcResponseContext { slot: 1 },
-                value: {
-                    let pubkey = Pubkey::from_str("BgvYtJEfmZYdVKiptmMjxGzv8iQoo4MWjsP3QsTkhhxa").unwrap();
-                    let account = Account {
-                        lamports: 1_000_000,
-                        data: vec![],
-                        owner: pubkey,
-                        executable: false,
-                        rent_epoch: 0,
-                    };
-                    UiAccount::encode(
-                        &pubkey,
-                        &account,
-                        UiAccountEncoding::Base64,
-                        None,
-                        None,
-                    )
-                }
+                value: Value::Null,
             })?,
             "getBalance" => serde_json::to_value(Response {
                 context: RpcResponseContext { slot: 1 },

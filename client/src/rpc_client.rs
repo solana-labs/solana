@@ -3339,6 +3339,7 @@ impl RpcClient {
     /// # use solana_client::{
     /// #     rpc_client::RpcClient,
     /// #     client_error::ClientError,
+    /// #     mock_sender,
     /// # };
     /// # use solana_sdk::{
     /// #     signature::Signer,
@@ -3346,7 +3347,8 @@ impl RpcClient {
     /// #     pubkey::Pubkey,
     /// # };
     /// # use std::str::FromStr;
-    /// # let rpc_client = RpcClient::new_mock("succeeds".to_string());
+    /// # let mocks = mock_sender::create_rpc_client_mocks();
+    /// # let rpc_client = RpcClient::new_mock_with_mocks("succeeds".to_string(), mocks);
     /// let alice_pubkey = Pubkey::from_str("BgvYtJEfmZYdVKiptmMjxGzv8iQoo4MWjsP3QsTkhhxa").unwrap();
     /// let account = rpc_client.get_account(&alice_pubkey)?;
     /// # Ok::<(), ClientError>(())
@@ -3377,6 +3379,7 @@ impl RpcClient {
     /// # use solana_client::{
     /// #     rpc_client::RpcClient,
     /// #     client_error::ClientError,
+    /// #     mock_sender,
     /// # };
     /// # use solana_sdk::{
     /// #     signature::Signer,
@@ -3385,7 +3388,8 @@ impl RpcClient {
     /// #     commitment_config::CommitmentConfig,
     /// # };
     /// # use std::str::FromStr;
-    /// # let rpc_client = RpcClient::new_mock("succeeds".to_string());
+    /// # let mocks = mock_sender::create_rpc_client_mocks();
+    /// # let rpc_client = RpcClient::new_mock_with_mocks("succeeds".to_string(), mocks);
     /// let alice_pubkey = Pubkey::from_str("BgvYtJEfmZYdVKiptmMjxGzv8iQoo4MWjsP3QsTkhhxa").unwrap();
     /// let commitment_config = CommitmentConfig::processed();
     /// let account = rpc_client.get_account_with_commitment(
@@ -3646,6 +3650,7 @@ impl RpcClient {
     /// # use solana_client::{
     /// #     rpc_client::RpcClient,
     /// #     client_error::ClientError,
+    /// #     mock_sender,
     /// # };
     /// # use solana_sdk::{
     /// #     signature::Signer,
@@ -3653,7 +3658,8 @@ impl RpcClient {
     /// #     pubkey::Pubkey,
     /// # };
     /// # use std::str::FromStr;
-    /// # let rpc_client = RpcClient::new_mock("succeeds".to_string());
+    /// # let mocks = mock_sender::create_rpc_client_mocks();
+    /// # let rpc_client = RpcClient::new_mock_with_mocks("succeeds".to_string(), mocks);
     /// let alice_pubkey = Pubkey::from_str("BgvYtJEfmZYdVKiptmMjxGzv8iQoo4MWjsP3QsTkhhxa").unwrap();
     /// let account_data = rpc_client.get_account_data(&alice_pubkey)?;
     /// # Ok::<(), ClientError>(())
