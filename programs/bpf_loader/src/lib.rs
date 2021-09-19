@@ -34,11 +34,7 @@ use solana_sdk::{
     entrypoint::{HEAP_LENGTH, SUCCESS},
     feature_set::{
         add_missing_program_error_mappings, close_upgradeable_program_accounts, fix_write_privs,
-<<<<<<< HEAD
-        upgradeable_close_instruction,
-=======
-        reduce_required_deploy_balance, stop_verify_mul64_imm_nonzero,
->>>>>>> ea34eb8a4 (Update feature switch for reduced required deploy balance (#19999))
+        reduce_required_deploy_balance, upgradeable_close_instruction,
     },
     ic_logger_msg, ic_msg,
     instruction::{AccountMeta, InstructionError},
