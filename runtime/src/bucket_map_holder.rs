@@ -48,7 +48,14 @@ impl<T: IndexValue> BucketMapHolder<T> {
     }
 
     pub fn set_startup(&self, value: bool) {
+        if !value {
+            self.wait_for_idle();
+        }
         self.startup.store(value, Ordering::Relaxed)
+    }
+
+    pub(crate) fn wait_for_idle(&self) {
+        assert!(self.get_startup());
     }
 
     pub fn current_age(&self) -> Age {
