@@ -227,7 +227,7 @@ export function NFTHeader({
           <button className="btn btn-dark btn-sm dropdown-toggle creators-dropdown-button-width" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
             Creators
           </button>
-          <div className="dropdown-menu">
+          <div className="dropdown-menu mt-2">
             {getCreatorDropdownItems(metadata.data.creators!)}
           </div>
         </div>

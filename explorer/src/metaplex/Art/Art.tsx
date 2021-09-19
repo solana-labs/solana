@@ -3,7 +3,6 @@ import { Image } from 'antd';
 import { MetadataCategory, MetadataFile } from '../types';
 import { pubkeyToString } from '../utils';
 import { MeshViewer } from './MeshViewer';
-import { ThreeDots } from './MyLoader';
 import { useCachedImage, useExtendedArt } from './useArt';
 import { Stream, StreamPlayerApi } from '@cloudflare/stream-react';
 import { PublicKey } from '@solana/web3.js';
@@ -54,7 +53,6 @@ const CachedImageContent = ({
     preview?: boolean;
     style?: React.CSSProperties;
 }) => {
-    const [loaded, setLoaded] = useState<boolean>(false);
     const { cachedBlob } = useCachedImage(uri || '');
 
     return (
@@ -64,13 +62,8 @@ const CachedImageContent = ({
             wrapperClassName={className}
             loading="lazy"
             wrapperStyle={{ ...style }}
-            onLoad={() => {
-                setLoaded(true);
-            }}
             style={{ width: 150, borderRadius: 12 }}
             height={'auto'}
-            placeholder={<ThreeDots />}
-            {...(loaded ? {} : { width: 150, height: 150 })}
         />
     );
 };
