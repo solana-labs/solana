@@ -67,7 +67,7 @@ const CachedImageContent = ({
             onLoad={() => {
                 setLoaded(true);
             }}
-            style={{ width: 150 }}
+            style={{ width: 150, borderRadius: 12 }}
             height={'auto'}
             placeholder={<ThreeDots />}
             {...(loaded ? {} : { width: 150, height: 150 })}

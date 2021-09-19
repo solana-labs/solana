@@ -25,7 +25,8 @@ import {
   UpgradeableLoaderAccount,
 } from "validators/accounts/upgradeable-program";
 import { RewardsProvider } from "./rewards";
-import { MetadataProvider } from "./metadata";
+import { Metadata } from "metaplex/classes";
+import { getMetadata } from "./utils/metadataHelpers";
 export { useAccountHistory } from "./history";
 
 export type StakeProgramData = {
@@ -43,6 +44,7 @@ export type UpgradeableLoaderAccountData = {
 export type TokenProgramData = {
   program: "spl-token";
   parsed: TokenAccount;
+  metadata?: Metadata;
 };
 
 export type VoteProgramData = {
@@ -109,9 +111,7 @@ export function AccountsProvider({ children }: AccountsProviderProps) {
         <TokensProvider>
           <HistoryProvider>
             <RewardsProvider>
-              <MetadataProvider>
-                <FlaggedAccountsProvider>{children}</FlaggedAccountsProvider>
-              </MetadataProvider>
+              <FlaggedAccountsProvider>{children}</FlaggedAccountsProvider>
             </RewardsProvider>
           </HistoryProvider>
         </TokensProvider>
@@ -229,9 +229,21 @@ async function fetchAccountInfo(
               break;
 
             case "spl-token":
+              const parsed = create(info, TokenAccount);
+              let metadata;
+
+              // Check the PDA for Metadata
+              if (parsed.type === "mint") {
+                const metadataPromise = (await getMetadata(pubkey, cluster, url));
+                if (metadataPromise) {
+                  metadata = metadataPromise;
+                }
+              }
+
               data = {
                 program: result.data.program,
-                parsed: create(info, TokenAccount),
+                parsed,
+                metadata,
               };
               break;
             default:

@@ -35,9 +35,8 @@ import { TransactionHistoryCard } from "components/account/history/TransactionHi
 import { TokenTransfersCard } from "components/account/history/TokenTransfersCard";
 import { TokenInstructionsCard } from "components/account/history/TokenInstructionsCard";
 import { RewardsCard } from "components/account/RewardsCard";
-import { Creator } from "metaplex/classes";
+import { Creator, Metadata } from "metaplex/classes";
 import { ArtContent } from "metaplex/Art/Art";
-import { AccountMetadata, useFetchMetadata, useMetadata } from "providers/accounts/metadata";
 
 const IDENTICON_WIDTH = 64;
 
@@ -112,7 +111,6 @@ const TOKEN_TABS_HIDDEN = [
 type Props = { address: string; tab?: string };
 export function AccountDetailsPage({ address, tab }: Props) {
   const fetchAccount = useFetchAccountInfo();
-  const fetchMetadata = useFetchMetadata();
   const { status } = useCluster();
   const info = useAccountInfo(address);
   let pubkey: PublicKey | undefined;
@@ -121,10 +119,9 @@ export function AccountDetailsPage({ address, tab }: Props) {
     pubkey = new PublicKey(address);
   } catch (err) { }
 
-  // Fetch account and metadata on load
+  // Fetch account on load
   React.useEffect(() => {
     if (!info && status === ClusterStatus.Connected && pubkey) {
-      fetchMetadata(pubkey);
       fetchAccount(pubkey);
     }
   }, [address, status]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -157,15 +154,13 @@ export function AccountHeader({
   const account = info?.data;
   const data = account?.details?.data;
   const isToken = data?.program === "spl-token" && data?.parsed.type === "mint";
-  const metadata = useMetadata(address);
-  const fetchingMetadata = metadata?.status === FetchStatus.Fetching;
-  const isNFT = isToken && metadata?.data?.meta;
+  const isNFT = isToken && data.metadata;
 
   if (isNFT) {
-    return <NFTHeader metadata={metadata} address={address} />
+    return <NFTHeader metadata={data.metadata!} address={address} />
   }
 
-  if (!fetchingMetadata && (tokenDetails || isToken)) {
+  if (tokenDetails || isToken) {
     return (
       <div className="row align-items-end">
         <div className="col-auto">
@@ -208,33 +203,32 @@ export function NFTHeader({
   metadata,
   address,
 }: {
-  metadata: CacheEntry<AccountMetadata>;
+  metadata: Metadata;
   address: string;
 }) {
 
-  const meta = metadata.data?.meta!;
   return (
     <div className="row align-items-begin">
       <div className="col-auto ml-2">
-        <ArtContent metadata={meta} pubkey={address} preview={false} />
+        <ArtContent metadata={metadata} pubkey={address} preview={false} />
       </div>
 
       <div className="col mb-3 ml-n3 ml-md-n2 mt-3">
         <h6 className="header-pretitle">NFT</h6>
         <h2 className="header-title">
-          {meta.data?.name}
+          {metadata.data?.name}
         </h2>
-        <h4 className="header-pretitle mt-1"> {meta.data?.symbol}</h4>
+        <h4 className="header-pretitle mt-1"> {metadata.data?.symbol}</h4>
         <div className="mb-3 mt-2">
-          <span className="badge badge-pill badge-dark mr-2">{`${meta.primarySaleHappened ? "Secondary Market" : "Primary Market"}`}</span>
-          <span className="badge badge-pill badge-dark mr-2">{`${meta.isMutable ? "Mutable" : "Immutable"}`}</span>
+          <span className="badge badge-pill badge-dark mr-2">{`${metadata.primarySaleHappened ? "Secondary Market" : "Primary Market"}`}</span>
+          <span className="badge badge-pill badge-dark mr-2">{`${metadata.isMutable ? "Mutable" : "Immutable"}`}</span>
         </div>
         <div className="btn-group">
           <button className="btn btn-dark btn-sm dropdown-toggle creators-dropdown-button-width" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
             Creators
           </button>
           <div className="dropdown-menu">
-            {getCreatorDropdownItems(meta.data.creators!)}
+            {getCreatorDropdownItems(metadata.data.creators!)}
           </div>
         </div>
       </div>
