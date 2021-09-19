@@ -401,3 +401,18 @@ p.updated-time {
 .identicon-wrapper-small {
   margin-left: .4rem;
 }
+
+.creators-dropdown-button-width {
+  width: 150px;
+}
+
+.creator-dropdown-entry {
+  flex-flow: row wrap;
+}
+
+.creator-dropdown-entry-address { 
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 80%;
+  flex: 0 0 80%;
+} 

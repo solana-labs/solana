@@ -25,6 +25,7 @@ import {
   UpgradeableLoaderAccount,
 } from "validators/accounts/upgradeable-program";
 import { RewardsProvider } from "./rewards";
+import { MetadataProvider } from "./metadata";
 export { useAccountHistory } from "./history";
 
 export type StakeProgramData = {
@@ -108,7 +109,9 @@ export function AccountsProvider({ children }: AccountsProviderProps) {
         <TokensProvider>
           <HistoryProvider>
             <RewardsProvider>
-              <FlaggedAccountsProvider>{children}</FlaggedAccountsProvider>
+              <MetadataProvider>
+                <FlaggedAccountsProvider>{children}</FlaggedAccountsProvider>
+              </MetadataProvider>
             </RewardsProvider>
           </HistoryProvider>
         </TokensProvider>
