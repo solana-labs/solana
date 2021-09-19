@@ -234,7 +234,7 @@ async function fetchAccountInfo(
 
               // Check the PDA for Metadata
               if (parsed.type === "mint") {
-                const metadataPromise = (await getMetadata(pubkey, cluster, url));
+                const metadataPromise = await getMetadata(pubkey, cluster, url);
                 if (metadataPromise) {
                   metadata = metadataPromise;
                 }

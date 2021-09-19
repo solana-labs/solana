@@ -117,7 +117,7 @@ export function AccountDetailsPage({ address, tab }: Props) {
 
   try {
     pubkey = new PublicKey(address);
-  } catch (err) { }
+  } catch (err) {}
 
   // Fetch account on load
   React.useEffect(() => {
@@ -157,7 +157,7 @@ export function AccountHeader({
   const isNFT = isToken && data.metadata;
 
   if (isNFT) {
-    return <NFTHeader metadata={data.metadata!} address={address} />
+    return <NFTHeader metadata={data.metadata!} address={address} />;
   }
 
   if (tokenDetails || isToken) {
@@ -206,7 +206,6 @@ export function NFTHeader({
   metadata: Metadata;
   address: string;
 }) {
-
   return (
     <div className="row align-items-begin">
       <div className="col-auto ml-2">
@@ -215,16 +214,24 @@ export function NFTHeader({
 
       <div className="col mb-3 ml-n3 ml-md-n2 mt-3">
         <h6 className="header-pretitle">NFT</h6>
-        <h2 className="header-title">
-          {metadata.data?.name}
-        </h2>
+        <h2 className="header-title">{metadata.data?.name}</h2>
         <h4 className="header-pretitle mt-1"> {metadata.data?.symbol}</h4>
         <div className="mb-3 mt-2">
-          <span className="badge badge-pill badge-dark mr-2">{`${metadata.primarySaleHappened ? "Secondary Market" : "Primary Market"}`}</span>
-          <span className="badge badge-pill badge-dark mr-2">{`${metadata.isMutable ? "Mutable" : "Immutable"}`}</span>
+          <span className="badge badge-pill badge-dark mr-2">{`${
+            metadata.primarySaleHappened ? "Secondary Market" : "Primary Market"
+          }`}</span>
+          <span className="badge badge-pill badge-dark mr-2">{`${
+            metadata.isMutable ? "Mutable" : "Immutable"
+          }`}</span>
         </div>
         <div className="btn-group">
-          <button className="btn btn-dark btn-sm dropdown-toggle creators-dropdown-button-width" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+          <button
+            className="btn btn-dark btn-sm dropdown-toggle creators-dropdown-button-width"
+            type="button"
+            data-toggle="dropdown"
+            aria-haspopup="true"
+            aria-expanded="false"
+          >
             Creators
           </button>
           <div className="dropdown-menu mt-2">
@@ -232,10 +239,9 @@ export function NFTHeader({
           </div>
         </div>
       </div>
-    </div >
+    </div>
   );
 }
-
 
 function DetailsSections({
   pubkey,
@@ -450,14 +456,12 @@ function getTabs(data?: ProgramData): Tab[] {
 function getCreatorDropdownItems(creators?: Creator[]) {
   const getVerifiedIcon = (isVerified: boolean) => {
     const className = isVerified ? "fe fe-check-circle" : "fe fe-alert-octagon";
-    return < i className={`ml-3 ${className}`} ></i >;
-  }
+    return <i className={`ml-3 ${className}`}></i>;
+  };
 
   const CreatorEntry = (creator: Creator) => {
     return (
-      <div
-        className={"d-flex align-items-center creator-dropdown-entry"}
-      >
+      <div className={"d-flex align-items-center creator-dropdown-entry"}>
         {getVerifiedIcon(creator.verified)}
         <Link
           className="dropdown-item text-monospace creator-dropdown-entry-address"
@@ -468,14 +472,14 @@ function getCreatorDropdownItems(creators?: Creator[]) {
         <div className="mr-3"> {`${creator.share}%`}</div>
       </div>
     );
-  }
+  };
 
   let listOfCreators: JSX.Element[] = [];
 
   if (creators && creators?.length > 0) {
     creators?.forEach((creator) => {
       listOfCreators.push(<CreatorEntry key={creator.address} {...creator} />);
-    })
+    });
   }
 
   return listOfCreators;
