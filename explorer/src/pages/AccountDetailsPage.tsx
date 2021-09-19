@@ -465,7 +465,7 @@ function getCreatorDropdownItems(creators?: Creator[]) {
         {getVerifiedIcon(creator.verified)}
         <Link
           className="dropdown-item text-monospace creator-dropdown-entry-address"
-          to={`/address/${creator.address}`}
+          to={clusterPath(`/address/${creator.address}`)}
         >
           {creator.address}
         </Link>

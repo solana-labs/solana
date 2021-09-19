@@ -34,7 +34,7 @@ const MeshArtContent = ({
         uri={uri}
         className={className}
         preview={false}
-        style={{ width: 150, ...style }}
+        style={style}
       />
     );
   }
@@ -118,6 +118,7 @@ const VideoArtContent = ({
           height={150}
           width={150}
           controls={false}
+          style={{ borderRadius: "12px" }}
           videoDimensions={{
             videoHeight: 150,
             videoWidth: 150,
@@ -134,7 +135,7 @@ const VideoArtContent = ({
         muted={true}
         controls={true}
         controlsList="nodownload"
-        style={style}
+        style={{ borderRadius: "12px", ...style }}
         loop={true}
         poster={uri}
       >
@@ -187,7 +188,7 @@ const HTMLContent = ({
       frameBorder="0"
       src={htmlURL}
       className={className}
-      style={style}
+      style={{ borderRadius: "12px", ...style }}
     ></iframe>
   );
 };
