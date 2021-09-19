@@ -422,7 +422,7 @@ impl VoteState {
             if let Some(previous_vote) = previous_vote {
                 if previous_vote.slot >= vote.slot {
                     return Err(VoteError::SlotsNotOrdered);
-                } else if previous_vote.confirmation_count >= vote.confirmation_count {
+                } else if previous_vote.confirmation_count <= vote.confirmation_count {
                     return Err(VoteError::ConfirmationsNotOrdered);
                 } else if vote.slot > previous_vote.last_locked_out_slot() {
                     return Err(VoteError::NewVoteStateLockoutMismatch);
@@ -490,13 +490,13 @@ impl VoteState {
                 // to new vote instructions, new_state contains votes for slots LESS
                 // than the current state, for instance:
                 //
-                // Current on-chain state: 1, 6
-                // New state: 1, 2 (lockout: 4), 6, 7
+                // Current on-chain state: 1, 5
+                // New state: 1, 2 (lockout: 4), 3, 5, 7
                 //
                 // Imagine the validator made two of these votes:
                 // 1) The first vote {1, 2, 3} didn't land in the old state, but didn't
                 // land on chain
-                // 2) A second vote {1, 2, 6} was then submitted, which landed
+                // 2) A second vote {1, 2, 5} was then submitted, which landed
                 //
                 //
                 // 2 is not popped off in the local tower because 3 doubled the lockout.
@@ -2294,5 +2294,100 @@ mod tests {
         ));
         VoteState::serialize(&account_state, &mut vote_account_data).unwrap();
         assert!(!VoteState::is_uninitialized_no_deser(&vote_account_data));
+    }
+
+    #[test]
+    fn test_process_new_vote_state_root_progress() {
+        let mut vote_state1 = VoteState::default();
+        for i in 0..MAX_LOCKOUT_HISTORY {
+            vote_state1.process_slot_vote_unchecked(i as u64);
+        }
+
+        assert!(vote_state1.root_slot.is_none());
+        let mut vote_state2 = vote_state1.clone();
+
+        // 1) Try to update `vote_state1` with no root,
+        // to `vote_state2`, which has a new root, should succeed.
+        //
+        // 2) Then try to update`vote_state1` with an existing root,
+        // to `vote_state2`, which has a newer root, which
+        // should succeed.
+        for new_vote in MAX_LOCKOUT_HISTORY + 1..=MAX_LOCKOUT_HISTORY + 2 {
+            vote_state2.process_slot_vote_unchecked(new_vote as Slot);
+            assert_ne!(vote_state1.root_slot, vote_state2.root_slot);
+
+            vote_state1
+                .process_new_vote_state(
+                    vote_state2.votes.clone(),
+                    vote_state2.root_slot,
+                    None,
+                    vote_state2.current_epoch(),
+                )
+                .unwrap();
+
+            assert_eq!(vote_state1, vote_state2);
+        }
+    }
+
+    #[test]
+    fn test_process_new_vote_state_same_slot_but_not_common_ancestor() {
+        // It might be possible that during the switch from old vote instructions
+        // to new vote instructions, new_state contains votes for slots LESS
+        // than the current state, for instance:
+        //
+        // Current on-chain state: 1, 5
+        // New state: 1, 2 (lockout: 4), 3, 5, 7
+        //
+        // Imagine the validator made two of these votes:
+        // 1) The first vote {1, 2, 3} didn't land in the old state, but didn't
+        // land on chain
+        // 2) A second vote {1, 2, 5} was then submitted, which landed
+        //
+        //
+        // 2 is not popped off in the local tower because 3 doubled the lockout.
+        // However, 3 did not land in the on-chain state, so the vote {1, 2, 6}
+        // will immediately pop off 2.
+
+        // Construct on-chain vote state
+        let mut vote_state1 = VoteState::default();
+        vote_state1.process_slot_vote_unchecked(1);
+        vote_state1.process_slot_vote_unchecked(2);
+        vote_state1.process_slot_vote_unchecked(5);
+        assert_eq!(
+            vote_state1
+                .votes
+                .iter()
+                .map(|vote| vote.slot)
+                .collect::<Vec<Slot>>(),
+            vec![1, 5]
+        );
+
+        // Construct local tower state
+        let mut vote_state2 = VoteState::default();
+        vote_state2.process_slot_vote_unchecked(1);
+        vote_state2.process_slot_vote_unchecked(2);
+        vote_state2.process_slot_vote_unchecked(3);
+        vote_state2.process_slot_vote_unchecked(5);
+        vote_state2.process_slot_vote_unchecked(7);
+        assert_eq!(
+            vote_state2
+                .votes
+                .iter()
+                .map(|vote| vote.slot)
+                .collect::<Vec<Slot>>(),
+            vec![1, 2, 3, 5, 7]
+        );
+
+        // See that on-chain vote state can update properly
+        vote_state1
+            .process_new_vote_state(
+                vote_state2.votes.clone(),
+                vote_state2.root_slot,
+                None,
+                vote_state2.current_epoch(),
+            )
+            .unwrap();
+
+        assert_eq!(vote_state1, vote_state2);
     }
 }
