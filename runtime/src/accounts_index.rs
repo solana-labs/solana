@@ -168,11 +168,11 @@ impl<T: IndexValue> AccountMapEntryInner<T> {
     }
 
     pub fn dirty(&self) -> bool {
-        self.meta.dirty.load(Ordering::Relaxed)
+        self.meta.dirty.load(Ordering::Acquire)
     }
 
     pub fn set_dirty(&self, value: bool) -> bool {
-        self.meta.dirty.swap(value, Ordering::Relaxed)
+        self.meta.dirty.swap(value, Ordering::Acquire)
     }
 }
 

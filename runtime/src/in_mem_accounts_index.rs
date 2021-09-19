@@ -422,9 +422,10 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             return;
         }
 
+        let disk = self.storage.disk.as_ref().unwrap();
+
         let map = self.map().read().unwrap();
-        for (_k, _v) in map.iter() {
-            /*
+        for (k, v) in map.iter() {
             if v.dirty() {
                 // step 1: clear the dirty flag
                 // step 2: perform the update on disk based on the fields in the entry
@@ -433,9 +434,10 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 //  That prevents dropping an item from cache before disk is updated to latest in mem.
                 v.set_dirty(false);
 
-                // soon, this will update disk from the in-mem contents
+                disk.update(k, |_current| {
+                    Some((v.slot_list.read().unwrap().to_vec(), v.ref_count())) // todo: rework this api to allow us to pass in a ref
+                });
             }
-            */
         }
         if iterate_for_age {
             // completed iteration of the buckets at the current age

@@ -88,12 +88,19 @@ impl<T: IndexValue> BucketMapHolder<T> {
     }
 
     pub fn bucket_flushed_at_current_age(&self) {
-        self.count_ages_flushed.fetch_add(1, Ordering::Acquire);
+        self.count_ages_flushed.fetch_add(1, Ordering::Relaxed);
+        self.maybe_advance_age();
     }
 
     // have all buckets been flushed at the current age?
     pub fn all_buckets_flushed_at_current_age(&self) -> bool {
         self.count_ages_flushed() >= self.bins
+    }
+
+    pub fn maybe_advance_age(&self) {
+        if self.all_buckets_flushed_at_current_age() {
+            self.increment_age();
+        }
     }
 
     pub fn count_ages_flushed(&self) -> usize {
