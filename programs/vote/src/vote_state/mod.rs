@@ -415,7 +415,7 @@ impl VoteState {
                 return Err(VoteError::ZeroConfirmations);
             } else if let Some(new_root) = new_root {
                 if vote.slot <= new_root {
-                    return Err(VoteError::SlotSmallerThanRoot(vote.slot, new_root));
+                    return Err(VoteError::SlotSmallerThanRoot);
                 }
             }
 
@@ -423,13 +423,9 @@ impl VoteState {
                 if previous_vote.slot >= vote.slot {
                     return Err(VoteError::SlotsNotOrdered);
                 } else if previous_vote.confirmation_count >= vote.confirmation_count {
-                    return Err(VoteError::LockoutsNotOrdered);
+                    return Err(VoteError::ConfirmationsNotOrdered);
                 } else if vote.slot > previous_vote.last_locked_out_slot() {
-                    return Err(VoteError::NewVoteStateLockoutMismatch(
-                        previous_vote.slot,
-                        previous_vote.confirmation_count,
-                        vote.slot,
-                    ));
+                    return Err(VoteError::NewVoteStateLockoutMismatch);
                 }
             }
             previous_vote = Some(vote);
@@ -449,18 +445,14 @@ impl VoteState {
                 }
             }
 
-            let current_vote = self.votes[current_vote_state_index];
-            let new_vote = new_state[new_vote_state_index];
+            let current_vote = &self.votes[current_vote_state_index];
+            let new_vote = &new_state[new_vote_state_index];
 
             if current_vote.slot == new_vote.slot {
                 // The new vote state should never have less lockout than
                 // the previous vote state for the same slot
                 if new_vote.confirmation_count < current_vote.confirmation_count {
-                    return Err(VoteError::LockoutRollBack(
-                        current_vote.slot,
-                        current_vote.confirmation_count,
-                        new_vote.confirmation_count,
-                    ));
+                    return Err(VoteError::ConfirmationRollBack);
                 }
 
                 // If the lockouts pass checks, move on to checking the next slots
@@ -475,8 +467,8 @@ impl VoteState {
         // must have been expired by later votes. Check that the lockouts match this assumption.
         while current_vote_state_index < self.votes.len() && new_vote_state_index < new_state.len()
         {
-            let current_vote = self.votes[current_vote_state_index];
-            let new_vote = new_state[new_vote_state_index];
+            let current_vote = &self.votes[current_vote_state_index];
+            let new_vote = &new_state[new_vote_state_index];
 
             // If the current slot is less than the new proposed slot, then the
             // new slot must have popped off the old slot, so check that the
@@ -488,11 +480,7 @@ impl VoteState {
                 // Example: {1: lockout 8, 9: lockout 2}, vote on 10 will not pop off 1
                 // because 9 is not popped off yet
                 if current_vote.last_locked_out_slot() >= new_vote.slot {
-                    return Err(VoteError::LockoutConflict(
-                        current_vote.slot,
-                        current_vote.confirmation_count,
-                        new_vote.slot,
-                    ));
+                    return Err(VoteError::LockoutConflict);
                 }
                 current_vote_state_index += 1;
             } else if current_vote.slot == new_vote.slot {
@@ -530,7 +518,7 @@ impl VoteState {
         }
         if let Some(timestamp) = timestamp {
             let last_slot = new_state.back().unwrap().slot;
-            self.process_timestamp(last_slot, timestamp);
+            self.process_timestamp(last_slot, timestamp)?;
         }
         self.root_slot = new_root;
         self.votes = new_state;

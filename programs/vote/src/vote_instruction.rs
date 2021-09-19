@@ -10,7 +10,6 @@ use num_derive::{FromPrimitive, ToPrimitive};
 use serde_derive::{Deserialize, Serialize};
 use solana_metrics::inc_new_counter_info;
 use solana_sdk::{
-    clock::Slot,
     decode_error::DecodeError,
     feature_set,
     hash::Hash,
@@ -47,17 +46,17 @@ pub enum VoteError {
     TooSoonToReauthorize,
 
     // TODO: figure out how to migrate these new errors
-    #[error("Old state had slot {0}, with confirmation {1}, which should not have been popped off by {2}")]
-    LockoutConflict(Slot, u32, Slot),
+    #[error("Old state had vote which should not have been popped off by vote in new state")]
+    LockoutConflict,
 
-    #[error("Proposed state had slot {0}, with confirmation {1}, which should have been popped off by {2}")]
-    NewVoteStateLockoutMismatch(Slot, u32, Slot),
+    #[error("Proposed state had earlier slot which should have been popped off by later vote")]
+    NewVoteStateLockoutMismatch,
 
-    #[error("Slots are not ordered")]
+    #[error("Vote slots are not ordered")]
     SlotsNotOrdered,
 
-    #[error("Lockouts are not ordered")]
-    LockoutsNotOrdered,
+    #[error("Confirmations are not ordered")]
+    ConfirmationsNotOrdered,
 
     #[error("Zero confirmations")]
     ZeroConfirmations,
@@ -65,11 +64,11 @@ pub enum VoteError {
     #[error("Root rolled back")]
     RootRollBack,
 
-    #[error("Confirmations for slot {0} rolled back from {1} to {2}")]
-    LockoutRollBack(Slot, u32, u32),
+    #[error("Confirmations for same vote were smaller in new proposed state")]
+    ConfirmationRollBack,
 
-    #[error("Vote slot {0} was smaller than root {1}")]
-    SlotSmallerThanRoot(Slot, Slot),
+    #[error("New state contained a vote slot smaller than the root")]
+    SlotSmallerThanRoot,
 }
 
 impl<E> DecodeError<E> for VoteError {
