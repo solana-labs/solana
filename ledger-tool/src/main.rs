@@ -880,6 +880,12 @@ fn main() {
         .validator(is_bin)
         .takes_value(true)
         .help("Number of bins to divide the accounts index into");
+    let accounts_index_limit = Arg::with_name("accounts_index_memory_limit_mb")
+        .long("accounts-index-memory-limit-mb")
+        .value_name("MEGABYTES")
+        .validator(is_parsable::<usize>)
+        .takes_value(true)
+        .help("How much memory the accounts index can consume. If this is exceeded, some account index entries will be stored on disk. If missing, the entire index is stored in memory.");
     let account_paths_arg = Arg::with_name("account_paths")
         .long("accounts")
         .value_name("PATHS")
@@ -1192,6 +1198,7 @@ fn main() {
             .arg(&halt_at_slot_arg)
             .arg(&limit_load_slot_count_from_snapshot_arg)
             .arg(&accounts_index_bins)
+            .arg(&accounts_index_limit)
             .arg(&verify_index_arg)
             .arg(&hard_forks_arg)
             .arg(&no_accounts_db_caching_arg)
@@ -1911,6 +1918,10 @@ fn main() {
             let mut accounts_index_config = AccountsIndexConfig::default();
             if let Some(bins) = value_t!(matches, "accounts_index_bins", usize).ok() {
                 accounts_index_config.bins = Some(bins);
+            }
+
+            if let Some(limit) = value_t!(matches, "accounts_index_memory_limit_mb", usize).ok() {
+                accounts_index_config.index_limit_mb = Some(limit);
             }
 
             {

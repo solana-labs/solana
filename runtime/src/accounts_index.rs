@@ -40,11 +40,13 @@ pub const ACCOUNTS_INDEX_CONFIG_FOR_TESTING: AccountsIndexConfig = AccountsIndex
     bins: Some(BINS_FOR_TESTING),
     flush_threads: Some(FLUSH_THREADS_TESTING),
     drives: None,
+    index_limit_mb: None,
 };
 pub const ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS: AccountsIndexConfig = AccountsIndexConfig {
     bins: Some(BINS_FOR_BENCHMARKS),
     flush_threads: Some(FLUSH_THREADS_TESTING),
     drives: None,
+    index_limit_mb: None,
 };
 pub type ScanResult<T> = Result<T, ScanError>;
 pub type SlotList<T> = Vec<(Slot, T)>;
@@ -101,6 +103,7 @@ pub struct AccountsIndexConfig {
     pub bins: Option<usize>,
     pub flush_threads: Option<usize>,
     pub drives: Option<Vec<PathBuf>>,
+    pub index_limit_mb: Option<usize>,
 }
 
 #[derive(Debug, Default, Clone)]

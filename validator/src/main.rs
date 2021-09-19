@@ -1991,6 +1991,14 @@ pub fn main() {
                       This option is for use during testing."),
         )
         .arg(
+            Arg::with_name("accounts_index_memory_limit_mb")
+                .long("accounts-index-memory-limit-mb")
+                .value_name("MEGABYTES")
+                .validator(is_parsable::<usize>)
+                .takes_value(true)
+                .help("How much memory the accounts index can consume. If this is exceeded, some account index entries will be stored on disk. If missing, the entire index is stored in memory."),
+        )
+        .arg(
             Arg::with_name("accounts_index_bins")
                 .long("accounts-index-bins")
                 .value_name("BINS")
@@ -2510,6 +2518,10 @@ pub fn main() {
     let mut accounts_index_config = AccountsIndexConfig::default();
     if let Some(bins) = value_t!(matches, "accounts_index_bins", usize).ok() {
         accounts_index_config.bins = Some(bins);
+    }
+
+    if let Some(limit) = value_t!(matches, "accounts_index_memory_limit_mb", usize).ok() {
+        accounts_index_config.index_limit_mb = Some(limit);
     }
 
     {
