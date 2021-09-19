@@ -541,9 +541,6 @@ mod tests {
             assert!(!test.storage.all_buckets_flushed_at_current_age());
             test.storage.bucket_flushed_at_current_age();
         }
-        assert!(test.storage.all_buckets_flushed_at_current_age());
-        // advance age
-        test.storage.increment_age();
         assert_eq!(test.storage.current_age(), 1);
         assert!(!test.storage.all_buckets_flushed_at_current_age());
         assert!(test.get_should_age(test.storage.current_age()));

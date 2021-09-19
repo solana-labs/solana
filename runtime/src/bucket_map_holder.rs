@@ -202,8 +202,6 @@ pub mod tests {
                 assert!(!test.all_buckets_flushed_at_current_age());
                 test.bucket_flushed_at_current_age();
             }
-
-            test.increment_age();
         }
     }
 
@@ -232,17 +230,13 @@ pub mod tests {
         solana_logger::setup();
         let bins = 4;
         let test = BucketMapHolder::<u64>::new(bins, &Some(AccountsIndexConfig::default()));
-        assert_eq!(test.current_age(), 0);
-        assert!(!test.all_buckets_flushed_at_current_age());
+        let age = test.current_age();
+        assert_eq!(age, 0);
         // inc all but 1
-        for _ in 1..bins {
-            test.bucket_flushed_at_current_age();
+        for _ in 0..bins {
             assert!(!test.all_buckets_flushed_at_current_age());
+            test.bucket_flushed_at_current_age();
         }
-        test.bucket_flushed_at_current_age();
-        assert!(test.all_buckets_flushed_at_current_age());
-        test.increment_age();
-
         assert_eq!(test.current_age(), 1);
         assert!(!test.all_buckets_flushed_at_current_age());
     }
