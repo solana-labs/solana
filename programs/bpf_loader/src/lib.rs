@@ -34,7 +34,7 @@ use solana_sdk::{
     entrypoint::{HEAP_LENGTH, SUCCESS},
     feature_set::{
         add_missing_program_error_mappings, close_upgradeable_program_accounts, fix_write_privs,
-        upgradeable_close_instruction,
+        reduce_required_deploy_balance, upgradeable_close_instruction,
     },
     ic_logger_msg, ic_msg,
     instruction::{AccountMeta, InstructionError},
@@ -391,7 +391,10 @@ fn process_loader_upgradeable_instruction(
                 return Err(InstructionError::InvalidArgument);
             }
 
-            if invoke_context.is_feature_active(&fix_write_privs::id()) {
+            let predrain_buffer = invoke_context
+                .is_feature_active(&reduce_required_deploy_balance::id())
+                && invoke_context.is_feature_active(&fix_write_privs::id());
+            if predrain_buffer {
                 // Drain the Buffer account to payer before paying for programdata account
                 payer
                     .try_account_ref_mut()?
@@ -449,7 +452,7 @@ fn process_loader_upgradeable_instruction(
             })?;
             program.try_account_ref_mut()?.set_executable(true);
 
-            if !invoke_context.is_feature_active(&fix_write_privs::id()) {
+            if !predrain_buffer {
                 // Drain the Buffer account back to the payer
                 payer
                     .try_account_ref_mut()?
