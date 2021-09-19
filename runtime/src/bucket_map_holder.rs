@@ -20,6 +20,7 @@ pub struct BucketMapHolder<T: IndexValue> {
     // how much mb are we allowed to keep in the in-mem index?
     // Rest goes to disk.
     pub mem_budget_mb: Option<usize>,
+    ages_to_stay_in_cache: Age,
 
     /// startup is a special time for flush to focus on moving everything to disk as fast and efficiently as possible
     /// with less thread count limitations. LRU and access patterns are not important. Freeing memory
@@ -46,6 +47,9 @@ impl<T: IndexValue> BucketMapHolder<T> {
         assert!(previous >= self.bins); // we should not have increased age before previous age was fully flushed
     }
 
+    pub fn future_age_to_flush(&self) -> Age {
+        self.current_age().wrapping_add(self.ages_to_stay_in_cache)
+    }
     /// used by bg processes to determine # active threads and how aggressively to flush
     pub fn get_startup(&self) -> bool {
         self.startup.load(Ordering::Relaxed)
@@ -76,7 +80,13 @@ impl<T: IndexValue> BucketMapHolder<T> {
     }
 
     pub fn new(bins: usize, config: &Option<AccountsIndexConfig>) -> Self {
+        const DEFAULT_AGE_TO_STAY_IN_CACHE: Age = 5;
+        let ages_to_stay_in_cache = config
+            .as_ref()
+            .and_then(|config| config.ages_to_stay_in_cache)
+            .unwrap_or(DEFAULT_AGE_TO_STAY_IN_CACHE);
         Self {
+            ages_to_stay_in_cache,
             count_ages_flushed: AtomicUsize::default(),
             age: AtomicU8::default(),
             stats: BucketMapHolderStats::default(),
