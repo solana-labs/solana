@@ -97,6 +97,7 @@ impl<T: IndexValue> AccountsIndexStorage<T> {
         in_mem: Vec<Arc<InMemAccountsIndex<T>>>,
     ) {
         let bins = in_mem.len();
+        let flush = storage.disk.is_some();
         loop {
             // this will transition to waits and thread throttling
             storage
@@ -108,8 +109,10 @@ impl<T: IndexValue> AccountsIndexStorage<T> {
 
             storage.stats.active_threads.fetch_add(1, Ordering::Relaxed);
             for _ in 0..bins {
-                let index = storage.next_bucket_to_flush();
-                in_mem[index].flush();
+                if flush {
+                    let index = storage.next_bucket_to_flush();
+                    in_mem[index].flush();
+                }
                 storage.stats.report_stats(&storage);
             }
             storage.stats.active_threads.fetch_sub(1, Ordering::Relaxed);
