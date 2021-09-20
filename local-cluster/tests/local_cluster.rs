@@ -1928,19 +1928,6 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
 
     let mut cluster = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
 
-    let leader_snapshot_archives_dir = &leader_snapshot_test_config
-        .validator_config
-        .snapshot_config
-        .as_ref()
-        .unwrap()
-        .snapshot_archives_dir;
-    let validator_snapshot_archives_dir = &validator_snapshot_test_config
-        .validator_config
-        .snapshot_config
-        .as_ref()
-        .unwrap()
-        .snapshot_archives_dir;
-
     debug!("snapshot config:\n\tfull snapshot interval: {}\n\tincremental snapshot interval: {}\n\taccounts hash interval: {}",
            full_snapshot_interval,
            incremental_snapshot_interval,
@@ -1970,7 +1957,10 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
 
     info!("Waiting for leader to create snapshots...");
     let (incremental_snapshot_archive_info, full_snapshot_archive_info) =
-        LocalCluster::wait_for_next_incremental_snapshot(&cluster, leader_snapshot_archives_dir);
+        LocalCluster::wait_for_next_incremental_snapshot(
+            &cluster,
+            leader_snapshot_test_config.snapshot_archives_dir.path(),
+        );
     debug!(
         "Found snapshots:\n\tfull snapshot: {}\n\tincremental snapshot: {}",
         full_snapshot_archive_info.path().display(),
@@ -1985,7 +1975,7 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
     info!("Downloading full snapshot to validator...");
     download_snapshot_archive(
         &cluster.entry_point_info.rpc,
-        validator_snapshot_archives_dir,
+        validator_snapshot_test_config.snapshot_archives_dir.path(),
         (
             full_snapshot_archive_info.slot(),
             *full_snapshot_archive_info.hash(),
@@ -2008,8 +1998,10 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
     )
     .unwrap();
     let downloaded_full_snapshot_archive_info =
-        snapshot_utils::get_highest_full_snapshot_archive_info(validator_snapshot_archives_dir)
-            .unwrap();
+        snapshot_utils::get_highest_full_snapshot_archive_info(
+            validator_snapshot_test_config.snapshot_archives_dir.path(),
+        )
+        .unwrap();
     debug!(
         "Downloaded full snapshot, slot: {}",
         downloaded_full_snapshot_archive_info.slot()
@@ -2018,7 +2010,7 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
     info!("Downloading incremental snapshot to validator...");
     download_snapshot_archive(
         &cluster.entry_point_info.rpc,
-        validator_snapshot_archives_dir,
+        validator_snapshot_test_config.snapshot_archives_dir.path(),
         (
             incremental_snapshot_archive_info.slot(),
             *incremental_snapshot_archive_info.hash(),
@@ -2042,7 +2034,7 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
     .unwrap();
     let downloaded_incremental_snapshot_archive_info =
         snapshot_utils::get_highest_incremental_snapshot_archive_info(
-            validator_snapshot_archives_dir,
+            validator_snapshot_test_config.snapshot_archives_dir.path(),
             full_snapshot_archive_info.slot(),
         )
         .unwrap();
@@ -2074,18 +2066,19 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
     // restart the node and guarantee that the only snapshots present are these initial ones.  So,
     // the easiest way to do that is create a backup now, delete the ones on the node before
     // restart, then copy the backup ones over again.
-    let validator_snapshot_backup_dir = tempfile::tempdir_in(farf_dir()).unwrap();
+    let backup_validator_snapshot_archives_dir = tempfile::tempdir_in(farf_dir()).unwrap();
     trace!(
         "Backing up validator snapshots to dir: {}...",
-        validator_snapshot_backup_dir.path().display()
+        backup_validator_snapshot_archives_dir.path().display()
     );
     let copy_options = CopyOptions {
         content_only: true,
+        depth: 1,
         ..CopyOptions::default()
     };
     fs_extra::dir::copy(
         validator_snapshot_test_config.snapshot_archives_dir.path(),
-        validator_snapshot_backup_dir.path(),
+        backup_validator_snapshot_archives_dir.path(),
         &copy_options,
     )
     .unwrap();
@@ -2115,8 +2108,8 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
             break;
         }
         assert!(
-            timer.elapsed() < Duration::from_secs(20),
-            "It should not take longer than 20 seconds to cross the next full snapshot interval."
+            timer.elapsed() < Duration::from_secs(30),
+            "It should not take longer than 30 seconds to cross the next full snapshot interval."
         );
         std::thread::yield_now();
     }
@@ -2148,7 +2141,7 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
         // in the leader's Snapshotconfig.
         let leader_full_snapshot = leader_full_snapshots.first().unwrap();
 
-        // And for sanity, the full snapshots from the leader and the validator MUST be the same
+        // And for sanity, the full snapshot from the leader and the validator MUST be the same
         assert_eq!(
             (
                 validator_full_snapshot.slot(),
@@ -2165,14 +2158,14 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
     );
     delete_files(validator_snapshot_test_config.snapshot_archives_dir.path());
     fs_extra::dir::copy(
-        validator_snapshot_backup_dir.path(),
+        backup_validator_snapshot_archives_dir.path(),
         validator_snapshot_test_config.snapshot_archives_dir.path(),
         &copy_options,
     )
     .unwrap();
 
     // Get the highest full snapshot slot *before* restarting, as a comparison
-    let validator_previous_highest_full_snapshot_slot =
+    let validator_full_snapshot_slot_at_startup =
         snapshot_utils::get_highest_full_snapshot_archive_slot(
             validator_snapshot_test_config.snapshot_archives_dir.path(),
         )
@@ -2198,7 +2191,7 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
                 validator_snapshot_test_config.snapshot_archives_dir.path(),
             )
         {
-            if highest_full_snapshot_info.slot() > validator_previous_highest_full_snapshot_slot {
+            if highest_full_snapshot_info.slot() > validator_full_snapshot_slot_at_startup {
                 if let Some(highest_incremental_snapshot_info) =
                     snapshot_utils::get_highest_incremental_snapshot_archive_info(
                         validator_snapshot_test_config.snapshot_archives_dir.path(),
@@ -2219,8 +2212,8 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
             }
         }
         assert!(
-            timer.elapsed() < Duration::from_secs(5),
-            "It should not take longer than 5 seconds to cross the next incremental snapshot interval."
+            timer.elapsed() < Duration::from_secs(10),
+            "It should not take longer than 10 seconds to cross the next incremental snapshot interval."
         );
         std::thread::yield_now();
     };
@@ -2228,6 +2221,11 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
 
     // Check to make sure that the full snapshot the validator created during startup is the same
     // as the snapshot the leader created.
+    // NOTE: If the assert fires and the _slots_ don't match (specifically are off by a full
+    // snapshot interval), then that means the loop to get the
+    // `validator_highest_full_snapshot_archive_info` saw the wrong one, and that may've been due
+    // to some weird scheduling/delays on the machine running the test.  Run the test again.  If
+    // this ever fails repeatedly then the test will need to be modified to handle this case.
     assert_eq!(
         (
             validator_highest_full_snapshot_archive_info.slot(),
