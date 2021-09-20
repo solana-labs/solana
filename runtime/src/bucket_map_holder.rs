@@ -16,7 +16,7 @@ pub struct BucketMapHolder<T: IndexValue> {
     pub stats: BucketMapHolderStats,
 
     // used by bg processing to know when any bucket has become dirty
-    pub wait_dirty_bucket: WaitableCondvar,
+    pub wait_dirty_or_aged: WaitableCondvar,
     next_bucket_to_flush: Mutex<usize>,
     bins: usize,
 
@@ -48,6 +48,7 @@ impl<T: IndexValue> BucketMapHolder<T> {
         // since we changed age, there are now 0 buckets that have been flushed at this age
         let previous = self.count_ages_flushed.swap(0, Ordering::Relaxed);
         assert!(previous >= self.bins); // we should not have increased age before previous age was fully flushed
+        self.wait_dirty_or_aged.notify_all(); // notify all because we can age scan in parallel
     }
 
     pub fn future_age_to_flush(&self) -> Age {
@@ -101,7 +102,7 @@ impl<T: IndexValue> BucketMapHolder<T> {
             count_ages_flushed: AtomicUsize::default(),
             age: AtomicU8::default(),
             stats: BucketMapHolderStats::default(),
-            wait_dirty_bucket: WaitableCondvar::default(),
+            wait_dirty_or_aged: WaitableCondvar::default(),
             next_bucket_to_flush: Mutex::new(0),
             bins,
             startup: AtomicBool::default(),

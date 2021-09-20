@@ -397,6 +397,8 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
     pub fn set_bin_dirty(&self) {
         self.bin_dirty.store(true, Ordering::Release);
+        // 1 bin dirty, so only need 1 thread to wake up if many could be waiting
+        self.storage.wait_dirty_or_aged.notify_one();
     }
 
     fn flush_internal(&self) {
