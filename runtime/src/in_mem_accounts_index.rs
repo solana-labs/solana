@@ -602,6 +602,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         }
         Self::update_time_stat(&self.stats().flush_scan_us, m);
 
+        let mut inserted = 0;
         // happens outside of lock on in-mem cache
         // it is possible that the item in the cache is marked as dirty while these updates are happening
         let m = Measure::start("flush_update");
@@ -609,8 +610,11 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             if v.dirty() {
                 continue; // marked dirty after we grabbed it above, so handle this the next time this bucket is flushed
             }
+            inserted += 1;
             disk.insert(&k, (&v.slot_list.read().unwrap(), v.ref_count()));
         }
+        use log::*;
+        error!("inserted: {}", inserted);
         Self::update_time_stat(&self.stats().flush_update_us, m);
 
         let m = Measure::start("flush_remove");
@@ -767,6 +771,7 @@ mod tests {
             assert!(!test.storage.all_buckets_flushed_at_current_age());
             test.storage.bucket_flushed_at_current_age();
         }
+        test.storage.increment_age();
         assert_eq!(test.storage.current_age(), 1);
         assert!(!test.storage.all_buckets_flushed_at_current_age());
         assert!(test.get_should_age(test.storage.current_age()));

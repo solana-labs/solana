@@ -194,8 +194,12 @@ pub mod tests {
             // inc all
             for _ in 0..bins {
                 assert!(!test.all_buckets_flushed_at_current_age());
-                test.bucket_flushed_at_current_age();
+                // cannot call this because based on timing, it may fire: test.bucket_flushed_at_current_age();
             }
+
+            // this would normally happen once time went off and all buckets had been flushed at the previous age
+            test.count_ages_flushed.fetch_add(bins, Ordering::Release);
+            test.increment_age();
         }
     }
 
@@ -231,6 +235,8 @@ pub mod tests {
             assert!(!test.all_buckets_flushed_at_current_age());
             test.bucket_flushed_at_current_age();
         }
+        std::thread::sleep(std::time::Duration::from_millis(AGE_MS));
+        test.maybe_advance_age();
         assert_eq!(test.current_age(), 1);
         assert!(!test.all_buckets_flushed_at_current_age());
     }
