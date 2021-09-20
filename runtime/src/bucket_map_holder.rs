@@ -235,7 +235,7 @@ pub mod tests {
             assert!(!test.all_buckets_flushed_at_current_age());
             test.bucket_flushed_at_current_age();
         }
-        std::thread::sleep(std::time::Duration::from_millis(AGE_MS));
+        std::thread::sleep(std::time::Duration::from_millis(AGE_MS * 2));
         test.maybe_advance_age();
         assert_eq!(test.current_age(), 1);
         assert!(!test.all_buckets_flushed_at_current_age());
