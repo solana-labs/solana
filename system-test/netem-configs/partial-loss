@@ -23,17 +23,17 @@
     {
       "a":2,
       "b":0,
-      "config":"loss 10% delay 15ms 1000ms"
+      "config":"loss 10% delay 15ms 10ms"
     },
     {
       "a":2,
       "b":1,
-      "config":"loss 5% delay 5ms 50ms"
+      "config":"loss 5% delay 5ms 5ms"
     },
     {
       "a":1,
       "b":2,
-      "config":"loss 5% delay 5ms 100ms distribution normal"
+      "config":"loss 5% delay 5ms 10ms distribution normal"
     }
   ]
 }
