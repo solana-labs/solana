@@ -11,7 +11,7 @@ use solana_sdk::{
     compute_budget::ComputeBudget,
     feature_set::{
         demote_program_write_locks, do_support_realloc, neon_evm_compute_budget,
-        tx_wide_compute_cap, FeatureSet,
+        prevent_calling_precompiles_as_programs, tx_wide_compute_cap, FeatureSet,
     },
     fee_calculator::FeeCalculator,
     hash::Hash,
@@ -19,6 +19,7 @@ use solana_sdk::{
     instruction::{CompiledInstruction, Instruction, InstructionError},
     keyed_account::{create_keyed_accounts_unified, KeyedAccount},
     message::Message,
+    precompiles::is_precompile,
     process_instruction::{
         ComputeMeter, Executor, InvokeContext, InvokeContextStackFrame, Logger,
         ProcessInstructionWithContext,
@@ -400,11 +401,16 @@ impl MessageProcessor {
     /// Add a static entrypoint to intercept instructions before the dynamic loader.
     pub fn add_program(
         &mut self,
-        program_id: Pubkey,
+        program_id: &Pubkey,
         process_instruction: ProcessInstructionWithContext,
     ) {
         self.instruction_processor
             .add_program(program_id, process_instruction);
+    }
+
+    /// Remove a program.
+    pub fn remove_program(&mut self, program_id: &Pubkey) {
+        self.instruction_processor.remove_program(program_id);
     }
 
     /// Record the initial state of the accounts so that they can be compared
@@ -531,6 +537,14 @@ impl MessageProcessor {
         blockhash: &Hash,
         fee_calculator: &FeeCalculator,
     ) -> Result<(), InstructionError> {
+        let program_id = instruction.program_id(&message.account_keys);
+        if feature_set.is_active(&prevent_calling_precompiles_as_programs::id())
+            && is_precompile(program_id, |id| feature_set.is_active(id))
+        {
+            // Precompiled programs don't have an instruction processor
+            return Ok(());
+        }
+
         // Fixup the special instructions key if present
         // before the account pre-values are taken care of
         for (pubkey, accont) in accounts.iter().take(message.account_keys.len()) {
@@ -672,6 +686,8 @@ mod tests {
         message::Message,
         native_loader::{self, create_loadable_account_for_test},
         process_instruction::MockComputeMeter,
+        secp256k1_instruction::new_secp256k1_instruction,
+        secp256k1_program,
     };
 
     #[test]
@@ -864,7 +880,7 @@ mod tests {
         let mock_system_program_id = Pubkey::new(&[2u8; 32]);
         let rent_collector = RentCollector::default();
         let mut message_processor = MessageProcessor::default();
-        message_processor.add_program(mock_system_program_id, mock_system_process_instruction);
+        message_processor.add_program(&mock_system_program_id, mock_system_process_instruction);
 
         let program_account = Rc::new(RefCell::new(create_loadable_account_for_test(
             "mock_system_program",
@@ -1052,7 +1068,7 @@ mod tests {
         let mock_program_id = Pubkey::new(&[2u8; 32]);
         let rent_collector = RentCollector::default();
         let mut message_processor = MessageProcessor::default();
-        message_processor.add_program(mock_program_id, mock_system_process_instruction);
+        message_processor.add_program(&mock_program_id, mock_system_process_instruction);
 
         let program_account = Rc::new(RefCell::new(create_loadable_account_for_test(
             "mock_system_program",
@@ -1578,5 +1594,64 @@ mod tests {
                 case.1
             );
         }
+    }
+
+    #[test]
+    fn test_precompile() {
+        let mut message_processor = MessageProcessor::default();
+        let mock_program_id = Pubkey::new_unique();
+        fn mock_process_instruction(
+            _program_id: &Pubkey,
+            _data: &[u8],
+            _invoke_context: &mut dyn InvokeContext,
+        ) -> Result<(), InstructionError> {
+            Err(InstructionError::Custom(0xbabb1e))
+        }
+        message_processor.add_program(&mock_program_id, mock_process_instruction);
+
+        let secp256k1_account = AccountSharedData::new_ref(1, 0, &native_loader::id());
+        secp256k1_account.borrow_mut().set_executable(true);
+        let mock_program_account = AccountSharedData::new_ref(1, 0, &native_loader::id());
+        mock_program_account.borrow_mut().set_executable(true);
+        let accounts = vec![
+            (secp256k1_program::id(), secp256k1_account),
+            (mock_program_id, mock_program_account),
+        ];
+
+        let message = Message::new(
+            &[
+                new_secp256k1_instruction(
+                    &libsecp256k1::SecretKey::random(&mut rand::thread_rng()),
+                    b"hello",
+                ),
+                Instruction::new_with_bytes(mock_program_id, &[], vec![]),
+            ],
+            None,
+        );
+
+        let result = message_processor.process_message(
+            &message,
+            &[vec![0], vec![1]],
+            &accounts,
+            &RentCollector::default(),
+            None,
+            Rc::new(RefCell::new(Executors::default())),
+            None,
+            Arc::new(FeatureSet::all_enabled()),
+            ComputeBudget::new(),
+            Rc::new(RefCell::new(MockComputeMeter::default())),
+            &mut ExecuteDetailsTimings::default(),
+            Arc::new(Accounts::default_for_tests()),
+            &Ancestors::default(),
+            Hash::default(),
+            FeeCalculator::default(),
+        );
+        assert_eq!(
+            result,
+            Err(TransactionError::InstructionError(
+                1,
+                InstructionError::Custom(0xbabb1e)
+            ))
+        );
     }
 }

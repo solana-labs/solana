@@ -10,7 +10,7 @@ fn test_program_native_noop() {
     let (genesis_config, alice_keypair) = create_genesis_config(50);
     let program_id = solana_sdk::pubkey::new_rand();
     let bank = Bank::new_for_tests(&genesis_config);
-    bank.add_native_program("solana_noop_program", &program_id, false);
+    bank.add_builtin_account("solana_noop_program", &program_id, false);
 
     // Call user program
     let instruction = create_invoke_instruction(alice_keypair.pubkey(), program_id, &1u8);

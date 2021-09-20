@@ -1672,7 +1672,7 @@ mod tests {
         bank.feature_set = Arc::new(FeatureSet::all_enabled());
         bank.add_builtin(
             "solana_bpf_loader_upgradeable_program",
-            bpf_loader_upgradeable::id(),
+            &bpf_loader_upgradeable::id(),
             process_instruction,
         );
         let bank = Arc::new(bank);
