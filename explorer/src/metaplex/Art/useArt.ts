@@ -1,7 +1,6 @@
 import { IMetadataExtension, Metadata } from "metaplex/classes";
 import { StringPublicKey } from "metaplex/types";
 import { useEffect, useState } from "react";
-import { useInView } from "react-intersection-observer";
 
 const cachedImages = new Map<string, string>();
 export const useCachedImage = (uri: string) => {
@@ -49,10 +48,9 @@ export const useCachedImage = (uri: string) => {
 
 export const useExtendedArt = (id: StringPublicKey, metadata: Metadata) => {
   const [data, setData] = useState<IMetadataExtension>();
-  const { ref, inView } = useInView();
 
   useEffect(() => {
-    if (inView && id && !data) {
+    if (id && !data) {
       const USE_CDN = false;
       const routeCDN = (uri: string) => {
         let result = uri;
@@ -85,7 +83,6 @@ export const useExtendedArt = (id: StringPublicKey, metadata: Metadata) => {
         };
 
         try {
-          // TODO: BL handle concurrent calls to avoid double query
           fetch(uri)
             .then(async (_) => {
               try {
@@ -108,7 +105,7 @@ export const useExtendedArt = (id: StringPublicKey, metadata: Metadata) => {
         }
       }
     }
-  }, [inView, id, data, setData, metadata.data.uri]);
+  }, [id, data, setData, metadata.data.uri]);
 
-  return { ref, data };
+  return { data };
 };

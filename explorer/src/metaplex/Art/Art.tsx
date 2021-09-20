@@ -223,7 +223,7 @@ export const ArtContent = ({
 }) => {
   const id = pubkeyToString(pubkey);
 
-  const { ref, data } = useExtendedArt(id, metadata);
+  const { data } = useExtendedArt(id, metadata);
 
   if (pubkey && data) {
     uri = data.image;
@@ -287,7 +287,6 @@ export const ArtContent = ({
 
   return (
     <div
-      ref={ref as any}
       style={{
         display: "flex",
         alignItems: "center",
