@@ -110,7 +110,7 @@ impl<T: IndexValue> AccountsIndexStorage<T> {
             for _ in 0..bins {
                 let index = storage.next_bucket_to_flush();
                 in_mem[index].flush();
-                storage.stats.report_stats();
+                storage.stats.report_stats(&storage);
             }
             storage.stats.active_threads.fetch_sub(1, Ordering::Relaxed);
         }
