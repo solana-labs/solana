@@ -1,5 +1,6 @@
 use crate::accounts_index::{
-    AccountMapEntry, AccountMapEntryInner, IndexValue, SlotList, WriteAccountMapEntry,
+    AccountMapEntry, AccountMapEntryInner, AccountMapEntryMeta, IndexValue, RefCount, SlotList,
+    WriteAccountMapEntry,
 };
 use crate::bucket_map_holder::{Age, BucketMapHolder};
 use crate::bucket_map_holder_stats::BucketMapHolderStats;
@@ -100,7 +101,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
     pub fn get(&self, key: &K) -> Option<AccountMapEntry<T>> {
         let m = Measure::start("get");
-        let result = self.map().read().unwrap().get(key).cloned();
+        let result = self.map().read().unwrap().get(key).map(Arc::clone);
         let stats = self.stats();
         let (count, time) = if result.is_some() {
             (&stats.gets_from_mem, &stats.get_mem_us)
@@ -109,7 +110,27 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         };
         Self::update_time_stat(time, m);
         Self::update_stat(count, 1);
-        result
+
+        if result.is_some() {
+            return result;
+        }
+
+        // not in cache, look on disk
+        let entry_disk = self
+            .storage
+            .disk
+            .as_ref()
+            .and_then(|disk| disk.read_value(key));
+        let entry_disk = entry_disk?; // returns None if not in mem, not on disk
+
+        let new_entry = self.disk_to_cache_entry(entry_disk.0, entry_disk.1);
+        let mut map = self.map().write().unwrap();
+        let entry = map.entry(*key);
+        let result = match entry {
+            Entry::Occupied(occupied) => Arc::clone(occupied.get()),
+            Entry::Vacant(vacant) => Arc::clone(vacant.insert(new_entry)),
+        };
+        Some(result)
     }
 
     // If the slot list for pubkey exists in the index and is empty, remove the index entry for pubkey and return true.
@@ -237,6 +258,18 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         // if we make it here, we did not find the slot in the list
         list.push((slot, account_info));
         addref
+    }
+
+    fn disk_to_cache_entry(
+        &self,
+        slot_list: SlotList<T>,
+        ref_count: RefCount,
+    ) -> AccountMapEntry<T> {
+        Arc::new(AccountMapEntryInner {
+            ref_count: AtomicU64::new(ref_count),
+            slot_list: RwLock::new(slot_list),
+            meta: AccountMapEntryMeta::new_dirty(&self.storage),
+        })
     }
 
     // returns true if upsert was successful. new_value is modified in this case. new_value contains a RwLock
@@ -442,8 +475,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     //  That prevents dropping an item from cache before disk is updated to latest in mem.
                     v.set_dirty(false);
 
-                    disk
-                        .insert(k, (&v.slot_list.read().unwrap(), v.ref_count()));
+                    disk.insert(k, (&v.slot_list.read().unwrap(), v.ref_count()));
                 }
 
                 if self.should_remove_from_mem(current_age, v) {
