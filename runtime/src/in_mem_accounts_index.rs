@@ -434,9 +434,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 //  That prevents dropping an item from cache before disk is updated to latest in mem.
                 v.set_dirty(false);
 
-                disk.update(k, |_current| {
-                    Some((v.slot_list.read().unwrap().to_vec(), v.ref_count())) // todo: rework this api to allow us to pass in a ref
-                });
+                disk.insert(k, (&v.slot_list.read().unwrap(), v.ref_count()));
             }
         }
         if iterate_for_age {
