@@ -15,6 +15,9 @@ impl WaitableCondvar {
     pub fn notify_all(&self) {
         self.event.notify_all();
     }
+    pub fn notify_one(&self) {
+        self.event.notify_one();
+    }
     pub fn wait_timeout(&self, timeout: Duration) -> bool {
         let lock = self.mutex.lock().unwrap();
         let res = self.event.wait_timeout(lock, timeout).unwrap();
