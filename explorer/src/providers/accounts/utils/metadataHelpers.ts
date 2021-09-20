@@ -1,6 +1,6 @@
-import { Connection, PublicKey } from "@solana/web3.js";
+import { AccountInfo, Connection, PublicKey } from "@solana/web3.js";
 import { Metadata, METADATA_SCHEMA } from "metaplex/classes";
-import { METADATA_PREFIX, StringPublicKey } from "metaplex/types";
+import { MetadataKey, METADATA_PREFIX, StringPublicKey } from "metaplex/types";
 import { deserializeUnchecked, BinaryReader, BinaryWriter } from "borsh";
 import base58 from "bs58";
 import {
@@ -41,26 +41,53 @@ export async function getMetadata(
   cluster: Cluster,
   url: string
 ) {
-  let metadata;
-
   try {
-    const metadataPromise = await fetchMetadataFromPDA(pubkey, url);
+    const accountInfo = await fetchMetadataFromPDA(pubkey, url);
+    if (accountInfo && accountInfo.data.length > 0) {
+      if (!isMetadataAccount(accountInfo)) return;
 
-    if (metadataPromise && metadataPromise.data.length > 0) {
-      metadata = decodeMetadata(metadataPromise.data);
+      if (isMetadataV1Account(accountInfo)) {
+        const metadata = decodeMetadata(accountInfo.data);
+
+        if (
+          isValidHttpUrl(metadata.data.uri) &&
+          metadata.data.uri.indexOf("arweave") >= 0
+        ) {
+          return metadata;
+        }
+      }
     }
   } catch (error) {
     if (cluster !== Cluster.Custom) {
       reportError(error, { url });
     }
   }
+}
 
-  return metadata;
+export async function hasEdition(
+  pubkey: PublicKey,
+  cluster: Cluster,
+  url: string
+) {
+  try {
+    const accountInfo = await fetchEditionFromPDA(pubkey, url);
+    if (accountInfo && accountInfo.data.length > 0) {
+      if (!isMetadataAccount(accountInfo)) return;
+
+      return (
+        isEditionV1Account(accountInfo) || isMasterEditionAccount(accountInfo)
+      );
+    }
+  } catch (error) {
+    if (cluster !== Cluster.Custom) {
+      reportError(error, { url });
+    }
+  }
 }
 
 async function fetchMetadataFromPDA(pubkey: PublicKey, url: string) {
   const connection = new Connection(url);
-  const metadataKey = await getMetadataKey(pubkey.toBase58());
+  const metadataKey = await generatePDA(pubkey.toBase58());
   const metadataInfo = await connection.getAccountInfo(
     toPublicKey(metadataKey)
   );
@@ -68,18 +95,34 @@ async function fetchMetadataFromPDA(pubkey: PublicKey, url: string) {
   return metadataInfo;
 }
 
-async function getMetadataKey(
-  tokenMint: StringPublicKey
+async function fetchEditionFromPDA(pubkey: PublicKey, url: string) {
+  const connection = new Connection(url);
+  const editionkey = await generatePDA(
+    pubkey.toBase58(),
+    true /* isEditionPDA */
+  );
+  const editionInfo = await connection.getAccountInfo(toPublicKey(editionkey));
+
+  return editionInfo;
+}
+
+async function generatePDA(
+  tokenMint: StringPublicKey,
+  isEditionPDA: boolean = false
 ): Promise<StringPublicKey> {
   const PROGRAM_IDS = programIds();
 
+  const metadataSeeds = [
+    Buffer.from(METADATA_PREFIX),
+    toPublicKey(PROGRAM_IDS.metadata).toBuffer(),
+    toPublicKey(tokenMint).toBuffer(),
+  ];
+
+  const editionSeeds = [...metadataSeeds, Buffer.from("edition")];
+
   return (
     await findProgramAddress(
-      [
-        Buffer.from(METADATA_PREFIX),
-        toPublicKey(PROGRAM_IDS.metadata).toBuffer(),
-        toPublicKey(tokenMint).toBuffer(),
-      ],
+      isEditionPDA ? editionSeeds : metadataSeeds,
       toPublicKey(PROGRAM_IDS.metadata)
     )
   )[0];
@@ -98,6 +141,27 @@ const decodeMetadata = (buffer: Buffer): Metadata => {
   metadata.data.name = metadata.data.name.replace(/\0/g, "");
   return metadata;
 };
+
+const isMetadataAccount = (account: AccountInfo<Buffer>) =>
+  account.owner.toBase58() === METADATA_PROGRAM_ID;
+
+const isMetadataV1Account = (account: AccountInfo<Buffer>) =>
+  account.data[0] === MetadataKey.MetadataV1;
+
+const isEditionV1Account = (account: AccountInfo<Buffer>) =>
+  account.data[0] === MetadataKey.EditionV1;
+
+const isMasterEditionAccount = (account: AccountInfo<Buffer>) =>
+  account.data[0] === MetadataKey.MasterEditionV1 ||
+  account.data[0] === MetadataKey.MasterEditionV2;
+
+export function isValidHttpUrl(text: string) {
+  if (text.startsWith("http:") || text.startsWith("https:")) {
+    return true;
+  }
+
+  return false;
+}
 
 const extendBorsh = () => {
   (BinaryReader.prototype as any).readPubkey = function () {

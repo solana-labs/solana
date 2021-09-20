@@ -26,7 +26,7 @@ import {
 } from "validators/accounts/upgradeable-program";
 import { RewardsProvider } from "./rewards";
 import { Metadata } from "metaplex/classes";
-import { getMetadata } from "./utils/metadataHelpers";
+import { hasEdition, getMetadata } from "./utils/metadataHelpers";
 export { useAccountHistory } from "./history";
 
 export type StakeProgramData = {
@@ -236,10 +236,13 @@ async function fetchAccountInfo(
               if (parsed.type === "mint") {
                 const metadataPromise = await getMetadata(pubkey, cluster, url);
                 if (metadataPromise) {
-                  metadata = metadataPromise;
+                  // We have a valid Metadata account. Try and pull an Edition.
+                  const isNFT = await hasEdition(pubkey, cluster, url);
+                  if (isNFT) {
+                    metadata = metadataPromise;
+                  }
                 }
               }
-
               data = {
                 program: result.data.program,
                 parsed,
