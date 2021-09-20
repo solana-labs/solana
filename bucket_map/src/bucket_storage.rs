@@ -163,10 +163,11 @@ impl BucketStorage {
         unsafe {
             let hdr = hdr_slice.as_ptr() as *const Header;
             //debug!("FREE uid: {}", hdr.as_ref().unwrap().uid());
-            let previous_owner = hdr.as_ref().unwrap().unlock();
-            assert_ne!(
-                previous_owner, 0,
-                "free: unlocked a header that was already unlocked"
+            let previous_uid = hdr.as_ref().unwrap().unlock();
+            assert_eq!(
+                previous_uid, uid,
+                "free: unlocked a header with a differet uid: {}",
+                previous_uid
             );
             self.used.fetch_sub(1, Ordering::Relaxed);
         }
