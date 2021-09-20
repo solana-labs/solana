@@ -118,7 +118,7 @@ pub struct ReplayStageConfig {
     pub vote_account: Pubkey,
     pub authorized_voter_keypairs: Arc<RwLock<Vec<Arc<Keypair>>>>,
     pub exit: Arc<AtomicBool>,
-    pub subscriptions: Arc<RpcSubscriptions>,
+    pub rpc_subscriptions: Arc<RpcSubscriptions>,
     pub leader_schedule_cache: Arc<LeaderScheduleCache>,
     pub latest_root_senders: Vec<Sender<Slot>>,
     pub accounts_background_request_sender: AbsRequestSender,
@@ -317,7 +317,7 @@ impl ReplayStage {
             vote_account,
             authorized_voter_keypairs,
             exit,
-            subscriptions,
+            rpc_subscriptions,
             leader_schedule_cache,
             latest_root_senders,
             accounts_background_request_sender,
@@ -334,7 +334,7 @@ impl ReplayStage {
         let (lockouts_sender, commitment_service) = AggregateCommitmentService::new(
             &exit,
             block_commitment_cache.clone(),
-            subscriptions.clone(),
+            rpc_subscriptions.clone(),
         );
 
         #[allow(clippy::cognitive_complexity)]
@@ -378,7 +378,7 @@ impl ReplayStage {
                         &blockstore,
                         &bank_forks,
                         &leader_schedule_cache,
-                        &subscriptions,
+                        &rpc_subscriptions,
                         &mut progress,
                     );
                     generate_new_bank_forks_time.stop();
@@ -401,7 +401,7 @@ impl ReplayStage {
                         &replay_vote_sender,
                         &bank_notification_sender,
                         &rewards_recorder_sender,
-                        &subscriptions,
+                        &rpc_subscriptions,
                         &mut duplicate_slots_tracker,
                         &gossip_duplicate_confirmed_slots,
                         &mut unfrozen_gossip_verified_vote_hashes,
@@ -592,7 +592,7 @@ impl ReplayStage {
                             &lockouts_sender,
                             &accounts_background_request_sender,
                             &latest_root_senders,
-                            &subscriptions,
+                            &rpc_subscriptions,
                             &block_commitment_cache,
                             &mut heaviest_subtree_fork_choice,
                             &bank_notification_sender,
@@ -684,7 +684,7 @@ impl ReplayStage {
                             &bank_forks,
                             &poh_recorder,
                             &leader_schedule_cache,
-                            &subscriptions,
+                            &rpc_subscriptions,
                             &progress,
                             &retransmit_slots_sender,
                             &mut skipped_slots_info,
@@ -1074,7 +1074,7 @@ impl ReplayStage {
         bank_forks: &Arc<RwLock<BankForks>>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
-        subscriptions: &Arc<RpcSubscriptions>,
+        rpc_subscriptions: &Arc<RpcSubscriptions>,
         progress_map: &ProgressMap,
         retransmit_slots_sender: &RetransmitSlotsSender,
         skipped_slots_info: &mut SkippedSlotsInfo,
@@ -1195,7 +1195,7 @@ impl ReplayStage {
                 poh_slot,
                 root_slot,
                 my_pubkey,
-                subscriptions,
+                rpc_subscriptions,
                 vote_only_bank,
             );
 
@@ -1245,7 +1245,7 @@ impl ReplayStage {
         bank: &Bank,
         root: Slot,
         err: &BlockstoreProcessorError,
-        subscriptions: &Arc<RpcSubscriptions>,
+        rpc_subscriptions: &Arc<RpcSubscriptions>,
         duplicate_slots_tracker: &mut DuplicateSlotsTracker,
         gossip_duplicate_confirmed_slots: &GossipDuplicateConfirmedSlots,
         progress: &mut ProgressMap,
@@ -1279,7 +1279,7 @@ impl ReplayStage {
         blockstore
             .set_dead_slot(slot)
             .expect("Failed to mark slot as dead in blockstore");
-        subscriptions.notify_slot_update(SlotUpdate::Dead {
+        rpc_subscriptions.notify_slot_update(SlotUpdate::Dead {
             slot,
             err: format!("error: {:?}", err),
             timestamp: timestamp(),
@@ -1311,7 +1311,7 @@ impl ReplayStage {
         lockouts_sender: &Sender<CommitmentAggregationData>,
         accounts_background_request_sender: &AbsRequestSender,
         latest_root_senders: &[Sender<Slot>],
-        subscriptions: &Arc<RpcSubscriptions>,
+        rpc_subscriptions: &Arc<RpcSubscriptions>,
         block_commitment_cache: &Arc<RwLock<BlockCommitmentCache>>,
         heaviest_subtree_fork_choice: &mut HeaviestSubtreeForkChoice,
         bank_notification_sender: &Option<BankNotificationSender>,
@@ -1372,7 +1372,7 @@ impl ReplayStage {
                 has_new_vote_been_rooted,
                 vote_signatures,
             );
-            subscriptions.notify_roots(rooted_slots);
+            rpc_subscriptions.notify_roots(rooted_slots);
             if let Some(sender) = bank_notification_sender {
                 sender
                     .send(BankNotification::Root(root_bank))
@@ -1673,7 +1673,7 @@ impl ReplayStage {
         replay_vote_sender: &ReplayVoteSender,
         bank_notification_sender: &Option<BankNotificationSender>,
         rewards_recorder_sender: &Option<RewardsRecorderSender>,
-        subscriptions: &Arc<RpcSubscriptions>,
+        rpc_subscriptions: &Arc<RpcSubscriptions>,
         duplicate_slots_tracker: &mut DuplicateSlotsTracker,
         gossip_duplicate_confirmed_slots: &GossipDuplicateConfirmedSlots,
         unfrozen_gossip_verified_vote_hashes: &mut UnfrozenGossipVerifiedVoteHashes,
@@ -1738,7 +1738,7 @@ impl ReplayStage {
                             &bank,
                             root_slot,
                             &err,
-                            subscriptions,
+                            rpc_subscriptions,
                             duplicate_slots_tracker,
                             gossip_duplicate_confirmed_slots,
                             progress,
@@ -2406,7 +2406,7 @@ impl ReplayStage {
         blockstore: &Blockstore,
         bank_forks: &RwLock<BankForks>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
-        subscriptions: &Arc<RpcSubscriptions>,
+        rpc_subscriptions: &Arc<RpcSubscriptions>,
         progress: &mut ProgressMap,
     ) {
         // Find the next slot that chains to the old slot
@@ -2451,7 +2451,7 @@ impl ReplayStage {
                     child_slot,
                     forks.root(),
                     &leader,
-                    subscriptions,
+                    rpc_subscriptions,
                     false,
                 );
                 let empty: Vec<Pubkey> = vec![];
@@ -2478,10 +2478,10 @@ impl ReplayStage {
         slot: u64,
         root_slot: u64,
         leader: &Pubkey,
-        subscriptions: &Arc<RpcSubscriptions>,
+        rpc_subscriptions: &Arc<RpcSubscriptions>,
         vote_only_bank: bool,
     ) -> Bank {
-        subscriptions.notify_slot(slot, parent.slot(), root_slot);
+        rpc_subscriptions.notify_slot(slot, parent.slot(), root_slot);
         Bank::new_from_parent_with_vote_only(parent, leader, slot, vote_only_bank)
     }
 
@@ -2669,7 +2669,7 @@ mod tests {
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
         let exit = Arc::new(AtomicBool::new(false));
-        let rpc_subscriptions = Arc::new(RpcSubscriptions::new(
+        let rpc_subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
             &exit,
             bank_forks.clone(),
             Arc::new(RwLock::new(BlockCommitmentCache::default())),
@@ -3172,8 +3172,7 @@ mod tests {
                 &replay_vote_sender,
                 &VerifyRecyclers::default(),
             );
-
-            let subscriptions = Arc::new(RpcSubscriptions::new(
+            let rpc_subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
                 &exit,
                 bank_forks.clone(),
                 block_commitment_cache,
@@ -3185,7 +3184,7 @@ mod tests {
                     &bank0,
                     0,
                     err,
-                    &subscriptions,
+                    &rpc_subscriptions,
                     &mut DuplicateSlotsTracker::default(),
                     &GossipDuplicateConfirmedSlots::default(),
                     &mut progress,
@@ -3236,14 +3235,17 @@ mod tests {
 
         let exit = Arc::new(AtomicBool::new(false));
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
-        let subscriptions = Arc::new(RpcSubscriptions::new(
+        let rpc_subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
             &exit,
             bank_forks.clone(),
             block_commitment_cache.clone(),
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
         ));
-        let (lockouts_sender, _) =
-            AggregateCommitmentService::new(&exit, block_commitment_cache.clone(), subscriptions);
+        let (lockouts_sender, _) = AggregateCommitmentService::new(
+            &exit,
+            block_commitment_cache.clone(),
+            rpc_subscriptions,
+        );
 
         assert!(block_commitment_cache
             .read()
