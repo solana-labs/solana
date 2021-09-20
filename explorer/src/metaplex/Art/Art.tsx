@@ -2,45 +2,11 @@ import React, { Ref, useCallback, useEffect, useState } from "react";
 import { Image } from "antd";
 import { MetadataCategory, MetadataFile } from "../types";
 import { pubkeyToString } from "../utils";
-import { MeshViewer } from "./MeshViewer";
 import { useCachedImage, useExtendedArt } from "./useArt";
 import { Stream, StreamPlayerApi } from "@cloudflare/stream-react";
 import { PublicKey } from "@solana/web3.js";
 import { getLast } from "../utils";
 import { Metadata } from "metaplex/classes";
-
-const MeshArtContent = ({
-  uri,
-  animationUrl,
-  className,
-  style,
-  files,
-}: {
-  uri?: string;
-  animationUrl?: string;
-  className?: string;
-  style?: React.CSSProperties;
-  files?: (MetadataFile | string)[];
-}) => {
-  const renderURL =
-    files && files.length > 0 && typeof files[0] === "string"
-      ? files[0]
-      : animationUrl;
-  const { isLoading } = useCachedImage(renderURL || "");
-
-  if (isLoading) {
-    return (
-      <CachedImageContent
-        uri={uri}
-        className={className}
-        preview={false}
-        style={style}
-      />
-    );
-  }
-
-  return <MeshViewer url={renderURL} className={className} style={style} />;
-};
 
 const CachedImageContent = ({
   uri,
@@ -200,7 +166,6 @@ export const ArtContent = ({
   preview,
   style,
   active,
-  allowMeshRender,
   pubkey,
   uri,
   animationURL,
@@ -215,7 +180,6 @@ export const ArtContent = ({
   height?: number;
   ref?: Ref<HTMLDivElement>;
   active?: boolean;
-  allowMeshRender?: boolean;
   pubkey?: PublicKey | string;
   uri?: string;
   animationURL?: string;
@@ -240,23 +204,6 @@ export const ArtContent = ({
   const animationUrlExt = new URLSearchParams(
     getLast(animationURL.split("?"))
   ).get("ext");
-
-  if (
-    allowMeshRender &&
-    (category === "vr" ||
-      animationUrlExt === "glb" ||
-      animationUrlExt === "gltf")
-  ) {
-    return (
-      <MeshArtContent
-        uri={uri}
-        animationUrl={animationURL}
-        className={className}
-        style={style}
-        files={files}
-      />
-    );
-  }
 
   const content =
     category === "video" ? (
