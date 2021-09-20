@@ -1,0 +1,97 @@
+name : minimal 
+
+on:
+  push:
+    branches:  [master]
+  pull_request:
+    branches:  [master]
+
+
+jobs:
+  export_github:
+    runs-on: ubuntu-latest
+    env: 
+       GITHUB_TOKEN: ${{secrets.PAT_AVI}}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          GITHUB_TOKEN: ${{secrets.PAT_AVI}}
+
+#       - name: "Export Github Repositories"
+        if: ${{ github.event_name == 'push' && 'cron'&& github.ref == 'refs/heads/master'}}
+        
+      - name: cmd
+        run : |
+            .travis/export-github-repo.sh web3.js/ solana-web3.js
+            .travis/export-github-repo.sh explorer/ explorer
+            
+  release-artifacts:
+    strategy:
+      fail-fast: false
+      matrix:
+          os : [macos-latest] 
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+      - name: Setup | Rust
+        uses: ATiltedTree/setup-rust@v1
+        with:
+          rust-version: stable
+      - name:  release artifact
+        if : ${{ github.event_name == 'api' && 'cron' || github.ref == 'refs/heads/master'}}
+        run: |
+       
+           source ci/rust-version.sh
+           brew install coreutils
+           export PATH="/usr/local/opt/coreutils/libexec/gnubin:$PATH"
+           greadlink -f .
+           source ci/env.sh
+           rustup set profile default
+           ci/publish-tarball.sh
+      - name: checking out repo
+        uses: actions/checkout@v2
+      - name: Cache modules
+        uses: actions/cache@v1
+        id: yarn-cache
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
+          restore-keys: ${{ runner.os }}-yarn-
+      - name: Config. aws cred
+        if: ${{github.event_name == 'pull_request' && github.ref == 'refs/heads/master'}}
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-2
+      - name: before install
+        run: yarn
+      - name: Build
+        run: |
+             cd explorer
+             npm install
+             npm install -g react-script
+             yarn build
+#       - name: Deploy
+#         run: aws s3 sync ./explorer s3://giitsol.com
+#       - name: Checkout code
+#         uses: actions/checkout@v2
+#       - name: Create Release
+#         id: create_release
+#         uses: actions/create-release@v1
+#         env:
+#           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
+#         with:
+#           tag_name: ${{ github.ref }}
+#           release_name: Release ${{ github.ref }}
+#           body: |
+#             Changes in this Release
+#             - First Change
+#             - Second Change
+#           draft: false
+#           prerelease: false
