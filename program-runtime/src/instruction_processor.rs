@@ -516,6 +516,16 @@ impl InstructionProcessor {
                 caller_write_privileges.push(caller_keyed_accounts[*index].is_writable());
             }
         };
+        let account_indices = message
+            .account_keys
+            .iter()
+            .map(|account_key| {
+                invoke_context
+                    .get_account(account_key)
+                    .ok_or(InstructionError::MissingAccount)
+                    .map(|(account_index, _account)| account_index)
+            })
+            .collect::<Result<Vec<_>, InstructionError>>()?;
         let accounts = message
             .account_keys
             .iter()
@@ -538,6 +548,7 @@ impl InstructionProcessor {
         InstructionProcessor::process_cross_program_instruction(
             &message,
             &program_indices,
+            &account_indices,
             &accounts,
             &caller_write_privileges,
             *invoke_context,
@@ -564,6 +575,7 @@ impl InstructionProcessor {
     pub fn process_cross_program_instruction(
         message: &Message,
         program_indices: &[usize],
+        account_indices: &[usize],
         accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
         caller_write_privileges: &[bool],
         invoke_context: &mut dyn InvokeContext,
@@ -583,7 +595,13 @@ impl InstructionProcessor {
         invoke_context.set_return_data(None);
 
         // Invoke callee
-        invoke_context.push(program_id, message, instruction, program_indices, accounts)?;
+        invoke_context.push(
+            program_id,
+            message,
+            instruction,
+            program_indices,
+            account_indices,
+        )?;
 
         let mut instruction_processor = InstructionProcessor::default();
         for (program_id, process_instruction) in invoke_context.get_programs().iter() {

@@ -59,7 +59,7 @@ pub trait InvokeContext {
         message: &Message,
         instruction: &CompiledInstruction,
         program_indices: &[usize],
-        instruction_accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        account_indices: &[usize],
     ) -> Result<(), InstructionError>;
     /// Pop a stack frame from the invocation stack
     ///
@@ -478,7 +478,7 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
         _message: &Message,
         _instruction: &CompiledInstruction,
         _program_indices: &[usize],
-        _instruction_accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        _account_indices: &[usize],
     ) -> Result<(), InstructionError> {
         self.invoke_stack.push(InvokeContextStackFrame::new(
             *_key,

@@ -119,7 +119,14 @@ impl<'a> ThisInvokeContext<'a> {
             fee_calculator,
             return_data: None,
         };
-        invoke_context.push(program_id, message, instruction, program_indices, accounts)?;
+        let account_indices = (0..accounts.len()).collect::<Vec<usize>>();
+        invoke_context.push(
+            program_id,
+            message,
+            instruction,
+            program_indices,
+            &account_indices,
+        )?;
         Ok(invoke_context)
     }
 }
@@ -130,7 +137,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         message: &Message,
         instruction: &CompiledInstruction,
         program_indices: &[usize],
-        instruction_accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        account_indices: &[usize],
     ) -> Result<(), InstructionError> {
         if self.invoke_stack.len() > self.compute_budget.max_invoke_depth {
             return Err(InstructionError::CallDepth);
@@ -161,44 +168,17 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
                     &self.accounts[*account_index].1 as &RefCell<AccountSharedData>,
                 )
             })
-            .chain(instruction.accounts.iter().map(|index| {
-                let index = *index as usize;
+            .chain(instruction.accounts.iter().map(|index_in_instruction| {
+                let index_in_instruction = *index_in_instruction as usize;
+                let account_index = account_indices[index_in_instruction];
                 (
-                    message.is_signer(index),
-                    message.is_writable(index, demote_program_write_locks),
-                    &instruction_accounts[index].0,
-                    &instruction_accounts[index].1 as &RefCell<AccountSharedData>,
+                    message.is_signer(index_in_instruction),
+                    message.is_writable(index_in_instruction, demote_program_write_locks),
+                    &self.accounts[account_index].0,
+                    &self.accounts[account_index].1 as &RefCell<AccountSharedData>,
                 )
             }))
             .collect::<Vec<_>>();
-
-        // Alias the keys and account references in the provided keyed_accounts
-        // with the ones already existing in self, so that the lifetime 'a matches.
-        fn transmute_lifetime<'a, 'b, T: Sized>(value: &'a T) -> &'b T {
-            unsafe { std::mem::transmute(value) }
-        }
-        let keyed_accounts = keyed_accounts
-            .iter()
-            .map(|(is_signer, is_writable, search_key, account)| {
-                self.accounts
-                    .iter()
-                    .position(|(key, _account)| key == *search_key)
-                    .map(|index| {
-                        // TODO
-                        // Currently we are constructing new accounts on the stack
-                        // before calling MessageProcessor::process_cross_program_instruction
-                        // Ideally we would recycle the existing accounts here.
-                        (
-                            *is_signer,
-                            *is_writable,
-                            &self.accounts[index].0,
-                            // &self.accounts[index] as &RefCell<AccountSharedData>
-                            transmute_lifetime(*account),
-                        )
-                    })
-            })
-            .collect::<Option<Vec<_>>>()
-            .ok_or(InstructionError::InvalidArgument)?;
         self.invoke_stack.push(InvokeContextStackFrame::new(
             *key,
             create_keyed_accounts_unified(keyed_accounts.as_slice()),
@@ -671,6 +651,7 @@ mod tests {
             ));
             metas.push(AccountMeta::new(*program_id, false));
         }
+        let account_indices = (0..accounts.len()).collect::<Vec<usize>>();
 
         let message = Message::new(
             &[Instruction::new_with_bytes(invoke_stack[0], &[0], metas)],
@@ -709,7 +690,7 @@ mod tests {
                     &message,
                     &message.instructions[0],
                     &[],
-                    &accounts,
+                    &account_indices,
                 )
             {
                 break;
@@ -1217,6 +1198,7 @@ mod tests {
             ),
             (callee_program_id, Rc::new(RefCell::new(program_account))),
         ];
+        let account_indices = [0, 1, 2];
         let program_indices = vec![3];
 
         let programs: Vec<(_, ProcessInstructionWithContext)> =
@@ -1274,6 +1256,7 @@ mod tests {
             InstructionProcessor::process_cross_program_instruction(
                 &message,
                 &program_indices,
+                &account_indices,
                 &accounts,
                 &caller_write_privileges,
                 &mut invoke_context,
@@ -1288,6 +1271,7 @@ mod tests {
             InstructionProcessor::process_cross_program_instruction(
                 &message,
                 &program_indices,
+                &account_indices,
                 &accounts,
                 &caller_write_privileges,
                 &mut invoke_context,
@@ -1348,6 +1332,7 @@ mod tests {
                 InstructionProcessor::process_cross_program_instruction(
                     &message,
                     &program_indices,
+                    &account_indices,
                     &accounts,
                     &caller_write_privileges,
                     &mut invoke_context,

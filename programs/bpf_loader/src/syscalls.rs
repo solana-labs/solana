@@ -1513,6 +1513,7 @@ struct AccountReferences<'a> {
     rent_epoch: u64,
 }
 type TranslatedAccounts<'a> = (
+    Vec<usize>,
     Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>,
     Vec<Option<AccountReferences<'a>>>,
 );
@@ -2052,14 +2053,16 @@ where
 {
     let demote_program_write_locks =
         invoke_context.is_feature_active(&demote_program_write_locks::id());
+    let mut account_indices = Vec::with_capacity(message.account_keys.len());
     let mut accounts = Vec::with_capacity(message.account_keys.len());
     let mut refs = Vec::with_capacity(message.account_keys.len());
     for (i, account_key) in message.account_keys.iter().enumerate() {
-        if let Some((_account_index, account)) = invoke_context.get_account(account_key) {
+        if let Some((account_index, account)) = invoke_context.get_account(account_key) {
             if i == message.instructions[0].program_id_index as usize
                 || account.borrow().executable()
             {
                 // Use the known account
+                account_indices.push(account_index);
                 accounts.push((*account_key, account));
                 refs.push(None);
                 continue;
@@ -2075,6 +2078,7 @@ where
                     account.set_executable(account_ref.executable);
                     account.set_rent_epoch(account_ref.rent_epoch);
                 }
+                account_indices.push(account_index);
                 accounts.push((*account_key, account));
                 refs.push(if message.is_writable(i, demote_program_write_locks) {
                     Some(account_ref)
@@ -2092,7 +2096,7 @@ where
         return Err(SyscallError::InstructionError(InstructionError::MissingAccount).into());
     }
 
-    Ok((accounts, refs))
+    Ok((account_indices, accounts, refs))
 }
 
 fn check_instruction_size(
@@ -2176,7 +2180,7 @@ fn call<'a>(
         &instruction.data,
         invoke_context.is_feature_active(&close_upgradeable_program_accounts::id()),
     )?;
-    let (accounts, account_refs) = syscall.translate_accounts(
+    let (account_indices, accounts, account_refs) = syscall.translate_accounts(
         &message,
         account_infos_addr,
         account_infos_len,
@@ -2191,6 +2195,7 @@ fn call<'a>(
     InstructionProcessor::process_cross_program_instruction(
         &message,
         &program_indices,
+        &account_indices,
         &accounts,
         &caller_write_privileges,
         *invoke_context,
