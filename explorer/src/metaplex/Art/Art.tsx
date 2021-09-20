@@ -84,7 +84,7 @@ const VideoArtContent = ({
           height={150}
           width={150}
           controls={false}
-          style={{ borderRadius: "12px" }}
+          style={{ borderRadius: 12 }}
           videoDimensions={{
             videoHeight: 150,
             videoWidth: 150,
@@ -101,7 +101,7 @@ const VideoArtContent = ({
         muted={true}
         controls={true}
         controlsList="nodownload"
-        style={{ borderRadius: "12px", ...style }}
+        style={{ borderRadius: 12, ...style }}
         loop={true}
         poster={uri}
       >
@@ -154,7 +154,7 @@ const HTMLContent = ({
       frameBorder="0"
       src={htmlURL}
       className={className}
-      style={{ borderRadius: "12px", ...style }}
+      style={{ width: 150, borderRadius: 12, ...style }}
     ></iframe>
   );
 };
