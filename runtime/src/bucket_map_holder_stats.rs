@@ -19,6 +19,7 @@ pub struct BucketMapHolderStats {
     pub inserts: AtomicU64,
     pub count_in_mem: AtomicU64,
     pub per_bucket_count: Vec<AtomicU64>,
+    pub active_threads: AtomicU64,
     pub get_range_us: AtomicU64,
     last_time: AtomicInterval,
 }
@@ -125,6 +126,11 @@ impl BucketMapHolderStats {
             ),
             ("inserts", self.inserts.swap(0, Ordering::Relaxed), i64),
             ("deletes", self.deletes.swap(0, Ordering::Relaxed), i64),
+            (
+                "active_threads",
+                self.active_threads.load(Ordering::Relaxed),
+                i64
+            ),
             ("items", self.items.swap(0, Ordering::Relaxed), i64),
             ("keys", self.keys.swap(0, Ordering::Relaxed), i64),
         );

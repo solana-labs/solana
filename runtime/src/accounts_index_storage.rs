@@ -109,11 +109,13 @@ impl<T: IndexValue> AccountsIndexStorage<T> {
                 break;
             }
 
+            storage.stats.active_threads.fetch_add(1, Ordering::Relaxed);
             for bucket in &in_mem {
                 bucket.flush();
             }
 
             storage.stats.report_stats();
+            storage.stats.active_threads.fetch_sub(1, Ordering::Relaxed);
         }
     }
 }
