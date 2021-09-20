@@ -196,6 +196,26 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 Self::update_stat(&self.stats().updates_in_mem, 1);
             }
             Entry::Vacant(vacant) => {
+                // not in cache, look on disk
+                let entry_disk = self
+                    .storage
+                    .disk
+                    .as_ref()
+                    .and_then(|disk| disk.read_value(vacant.key()));
+                let new_value = if let Some(entry_disk) = entry_disk {
+                    // on disk, so merge new_value with what was on disk
+                    let disk_entry = self.disk_to_cache_entry(entry_disk.0, entry_disk.1);
+                    Self::lock_and_update_slot_list(
+                        &disk_entry,
+                        &new_value,
+                        reclaims,
+                        previous_slot_entry_was_cached,
+                    );
+                    disk_entry
+                } else {
+                    // not on disk, so insert new thing
+                    new_value
+                };
                 vacant.insert(new_value);
                 self.stats().insert_or_delete(true, self.bin);
             }
@@ -562,7 +582,12 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     continue;
                 }
 
-                if ranges.iter().any(|range| range.as_ref().map(|range| range.contains(&k)).unwrap_or(true)) {
+                if ranges.iter().any(|range| {
+                    range
+                        .as_ref()
+                        .map(|range| range.contains(&k))
+                        .unwrap_or(true)
+                }) {
                     // this item is held by range, so don't remove
                     completed_scan = false;
                     continue;
