@@ -8,7 +8,7 @@ use solana_account_decoder::UiAccount;
 use solana_client::{
     rpc_client::RpcClient,
     rpc_config::{RpcAccountInfoConfig, RpcSignatureSubscribeConfig},
-    rpc_response::{Response, RpcSignatureResult, SlotUpdate},
+    rpc_response::{Response as RpcResponse, RpcSignatureResult, SlotUpdate},
     tpu_client::{TpuClient, TpuClientConfig},
 };
 use solana_core::{rpc_pubsub::gen_client::Client as PubsubClient, test_validator::TestValidator};
@@ -243,9 +243,9 @@ fn test_rpc_subscriptions() {
     // Track when subscriptions are ready
     let (ready_sender, ready_receiver) = channel::<()>();
     // Track account notifications are received
-    let (account_sender, account_receiver) = channel::<Response<UiAccount>>();
+    let (account_sender, account_receiver) = channel::<RpcResponse<UiAccount>>();
     // Track when status notifications are received
-    let (status_sender, status_receiver) = channel::<(String, Response<RpcSignatureResult>)>();
+    let (status_sender, status_receiver) = channel::<(String, RpcResponse<RpcSignatureResult>)>();
 
     // Create the pub sub runtime
     let rt = Runtime::new().unwrap();
