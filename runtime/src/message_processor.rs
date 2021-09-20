@@ -194,24 +194,63 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
     fn verify_and_update(
         &mut self,
         instruction: &CompiledInstruction,
-        accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        account_indices: &[usize],
         write_privileges: &[bool],
     ) -> Result<(), InstructionError> {
         let stack_frame = self
             .invoke_stack
             .last()
             .ok_or(InstructionError::CallDepth)?;
+        let program_id = &stack_frame.key;
+        let rent = &self.rent;
         let logger = self.get_logger();
-        InstructionProcessor::verify_and_update(
-            instruction,
-            &mut self.pre_accounts,
-            accounts,
-            &stack_frame.key,
-            &self.rent,
-            write_privileges,
-            &mut self.timings,
-            logger,
-        )
+        let accounts = &self.accounts;
+        let pre_accounts = &mut self.pre_accounts;
+        let timings = &mut self.timings;
+
+        // Verify the per-account instruction results
+        let (mut pre_sum, mut post_sum) = (0_u128, 0_u128);
+        let mut work = |_unique_index: usize, index_in_instruction: usize| {
+            if index_in_instruction < write_privileges.len()
+                && index_in_instruction < accounts.len()
+            {
+                let account_index = account_indices[index_in_instruction];
+                let (key, account) = &accounts[account_index];
+                let is_writable = write_privileges[index_in_instruction];
+                // Find the matching PreAccount
+                for pre_account in pre_accounts.iter_mut() {
+                    if key == pre_account.key() {
+                        {
+                            // Verify account has no outstanding references
+                            let _ = account
+                                .try_borrow_mut()
+                                .map_err(|_| InstructionError::AccountBorrowOutstanding)?;
+                        }
+                        let account = account.borrow();
+                        pre_account
+                            .verify(program_id, is_writable, rent, &account, timings, false)
+                            .map_err(|err| {
+                                ic_logger_msg!(logger, "failed to verify account {}: {}", key, err);
+                                err
+                            })?;
+                        pre_sum += u128::from(pre_account.lamports());
+                        post_sum += u128::from(account.lamports());
+                        if is_writable && !pre_account.executable() {
+                            pre_account.update(&account);
+                        }
+                        return Ok(());
+                    }
+                }
+            }
+            Err(InstructionError::MissingAccount)
+        };
+        instruction.visit_each_account(&mut work)?;
+
+        // Verify that the total sum of all the lamports did not change
+        if pre_sum != post_sum {
+            return Err(InstructionError::UnbalancedInstruction);
+        }
+        Ok(())
     }
     fn get_caller(&self) -> Result<&Pubkey, InstructionError> {
         self.invoke_stack
@@ -715,24 +754,19 @@ mod tests {
                 )],
                 None,
             );
+            let write_privileges: Vec<bool> = (0..message.account_keys.len())
+                .map(|i| message.is_writable(i, /*demote_program_write_locks=*/ true))
+                .collect();
 
             // modify account owned by the program
             accounts[owned_index].1.borrow_mut().data_as_mut_slice()[0] =
                 (MAX_DEPTH + owned_index) as u8;
-            let mut these_accounts = accounts[not_owned_index..owned_index + 1].to_vec();
-            these_accounts.push((
-                message.account_keys[2],
-                Rc::new(RefCell::new(AccountSharedData::new(
-                    1,
-                    1,
-                    &solana_sdk::pubkey::Pubkey::default(),
-                ))),
-            ));
-            let write_privileges: Vec<bool> = (0..message.account_keys.len())
-                .map(|i| message.is_writable(i, /*demote_program_write_locks=*/ true))
-                .collect();
             invoke_context
-                .verify_and_update(&message.instructions[0], &these_accounts, &write_privileges)
+                .verify_and_update(
+                    &message.instructions[0],
+                    &account_indices[not_owned_index..owned_index + 1],
+                    &write_privileges,
+                )
                 .unwrap();
             assert_eq!(
                 invoke_context.pre_accounts[owned_index].data()[0],
@@ -746,7 +780,7 @@ mod tests {
             assert_eq!(
                 invoke_context.verify_and_update(
                     &message.instructions[0],
-                    &accounts[not_owned_index..owned_index + 1],
+                    &account_indices[not_owned_index..owned_index + 1],
                     &write_privileges,
                 ),
                 Err(InstructionError::ExternalAccountDataModified)
@@ -1257,7 +1291,6 @@ mod tests {
                 &message,
                 &program_indices,
                 &account_indices,
-                &accounts,
                 &caller_write_privileges,
                 &mut invoke_context,
             ),
@@ -1272,7 +1305,6 @@ mod tests {
                 &message,
                 &program_indices,
                 &account_indices,
-                &accounts,
                 &caller_write_privileges,
                 &mut invoke_context,
             ),
@@ -1333,7 +1365,6 @@ mod tests {
                     &message,
                     &program_indices,
                     &account_indices,
-                    &accounts,
                     &caller_write_privileges,
                     &mut invoke_context,
                 ),

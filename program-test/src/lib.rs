@@ -269,7 +269,6 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
         // Convert AccountInfos into Accounts
         let mut account_indices = Vec::with_capacity(message.account_keys.len());
         let mut accounts = Vec::with_capacity(message.account_keys.len());
-        let mut account_refs = Vec::with_capacity(message.account_keys.len());
         for (i, account_key) in message.account_keys.iter().enumerate() {
             let ((account_index, account), account_info) = invoke_context
                 .get_account(account_key)
@@ -288,13 +287,13 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
                 account.set_executable(account_info.executable);
                 account.set_rent_epoch(account_info.rent_epoch);
             }
-            account_indices.push(account_index);
-            accounts.push((*account_key, account));
-            account_refs.push(if message.is_writable(i, demote_program_write_locks) {
+            let account_info = if message.is_writable(i, demote_program_write_locks) {
                 Some(account_info)
             } else {
                 None
-            });
+            };
+            account_indices.push(account_index);
+            accounts.push((account, account_info));
         }
         let (program_account_index, _program_account) =
             invoke_context.get_account(&program_id).unwrap();
@@ -328,14 +327,13 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             &message,
             &program_indices,
             &account_indices,
-            &accounts,
             &caller_privileges,
             invoke_context,
         )
         .map_err(|err| ProgramError::try_from(err).unwrap_or_else(|err| panic!("{}", err)))?;
 
         // Copy writeable account modifications back into the caller's AccountInfos
-        for ((_account_key, account), account_info) in accounts.iter().zip(account_refs.iter()) {
+        for (account, account_info) in accounts.iter() {
             if let Some(account_info) = account_info {
                 **account_info.try_borrow_mut_lamports().unwrap() = account.borrow().lamports();
                 let mut data = account_info.try_borrow_mut_data()?;
