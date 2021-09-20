@@ -165,30 +165,18 @@ pub type SignatureSubscription = (
 
 pub struct PubsubClient {}
 
-fn connect_with_retry(
-    url: Url,
-) -> Result<WebSocket<MaybeTlsStream<TcpStream>>, tungstenite::Error> {
+fn connect_with_retry(url: Url) -> Result<WebSocket<AutoStream>, tungstenite::Error> {
     let mut connection_retries = 5;
     loop {
         let result = connect(url.clone()).map(|(socket, _)| socket);
-        if let Err(tungstenite::Error::Http(response)) = &result {
-            if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS && connection_retries > 0
-            {
-                let mut duration = Duration::from_millis(500);
-                if let Some(retry_after) = response.headers().get(reqwest::header::RETRY_AFTER) {
-                    if let Ok(retry_after) = retry_after.to_str() {
-                        if let Ok(retry_after) = retry_after.parse::<u64>() {
-                            if retry_after < 120 {
-                                duration = Duration::from_secs(retry_after);
-                            }
-                        }
-                    }
-                }
+        if let Err(tungstenite::Error::Http(status_code)) = &result {
+            if *status_code == reqwest::StatusCode::TOO_MANY_REQUESTS && connection_retries > 0 {
+                let duration = Duration::from_millis(500) * 2u32.pow(5 - connection_retries);
 
                 connection_retries -= 1;
                 debug!(
                     "Too many requests: server responded with {:?}, {} retries left, pausing for {:?}",
-                    response, connection_retries, duration
+                    status_code, connection_retries, duration
                 );
 
                 sleep(duration);
