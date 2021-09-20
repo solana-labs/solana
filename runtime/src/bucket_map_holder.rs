@@ -12,7 +12,6 @@ pub type Age = u8;
 
 const AGE_MS: u64 = SLOT_MS; // match one age per slot time
 
-// will eventually hold the bucket map
 pub struct BucketMapHolder<T: IndexValue> {
     pub disk: Option<BucketMap<SlotT<T>>>,
 
@@ -98,7 +97,8 @@ impl<T: IndexValue> BucketMapHolder<T> {
     }
 
     pub fn maybe_advance_age(&self) {
-        if self.all_buckets_flushed_at_current_age() {
+        // check has_age_interval_elapsed last as calling it modifies state on success
+        if self.all_buckets_flushed_at_current_age() && self.has_age_interval_elapsed() {
             self.increment_age();
         }
     }
