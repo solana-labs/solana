@@ -322,6 +322,19 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         self.len() == 0
     }
 
+    fn insert_returner(
+        existing: AccountMapEntry<T>,
+        pubkey: Pubkey,
+        new_entry: AccountMapEntry<T>,
+    ) -> (WriteAccountMapEntry<T>, T, Pubkey) {
+        (
+            WriteAccountMapEntry::from_account_map_entry(existing),
+            // extract the new account_info from the unused 'new_entry'
+            new_entry.slot_list.write().unwrap().remove(0).1,
+            pubkey,
+        )
+    }
+
     // return None if item was created new
     // if entry for pubkey already existed, return Some(entry). Caller needs to call entry.update.
     pub fn insert_new_entry_if_missing_with_lock(
@@ -341,17 +354,29 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         Self::update_time_stat(time, m);
         Self::update_stat(count, 1);
         let result = match entry {
-            Entry::Occupied(account_entry) => {
-                Some((
-                    WriteAccountMapEntry::from_account_map_entry(account_entry.get().clone()),
-                    // extract the new account_info from the unused 'new_entry'
-                    new_entry.slot_list.write().unwrap().remove(0).1,
-                    *account_entry.key(),
-                ))
-            }
-            Entry::Vacant(account_entry) => {
-                account_entry.insert(new_entry);
-                None
+            Entry::Occupied(occupied) => Some(Self::insert_returner(
+                Arc::clone(occupied.get()),
+                *occupied.key(),
+                new_entry,
+            )),
+            Entry::Vacant(vacant) => {
+                // not in cache, look on disk
+                let entry_disk = self
+                    .storage
+                    .disk
+                    .as_ref()
+                    .and_then(|disk| disk.read_value(vacant.key()));
+                if let Some(entry_disk) = entry_disk {
+                    // on disk, so insert into cache, then return cache value so caller will merge
+                    let disk_entry = self.disk_to_cache_entry(entry_disk.0, entry_disk.1);
+                    let pubkey = *vacant.key();
+                    vacant.insert(disk_entry.clone());
+                    Some(Self::insert_returner(disk_entry, pubkey, new_entry))
+                } else {
+                    // not on disk, so insert new thing and we're done
+                    vacant.insert(new_entry);
+                    None
+                }
             }
         };
         let stats = self.stats();
