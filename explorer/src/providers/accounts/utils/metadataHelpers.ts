@@ -42,7 +42,12 @@ export async function getMetadata(
   url: string
 ) {
   try {
-    const accountInfo = await fetchMetadataFromPDA(pubkey, url);
+    const connection = new Connection(url);
+    const metadataKey = await generatePDA(pubkey.toBase58());
+    const accountInfo = await connection.getAccountInfo(
+      toPublicKey(metadataKey)
+    );
+
     if (accountInfo && accountInfo.data.length > 0) {
       if (!isMetadataAccount(accountInfo)) return;
 
@@ -70,7 +75,15 @@ export async function hasEdition(
   url: string
 ) {
   try {
-    const accountInfo = await fetchEditionFromPDA(pubkey, url);
+    const connection = new Connection(url);
+    const editionkey = await generatePDA(
+      pubkey.toBase58(),
+      true /* addEditionToSeeds */
+    );
+    const accountInfo = await connection.getAccountInfo(
+      toPublicKey(editionkey)
+    );
+
     if (accountInfo && accountInfo.data.length > 0) {
       if (!isMetadataAccount(accountInfo)) return;
 
@@ -85,30 +98,9 @@ export async function hasEdition(
   }
 }
 
-async function fetchMetadataFromPDA(pubkey: PublicKey, url: string) {
-  const connection = new Connection(url);
-  const metadataKey = await generatePDA(pubkey.toBase58());
-  const metadataInfo = await connection.getAccountInfo(
-    toPublicKey(metadataKey)
-  );
-
-  return metadataInfo;
-}
-
-async function fetchEditionFromPDA(pubkey: PublicKey, url: string) {
-  const connection = new Connection(url);
-  const editionkey = await generatePDA(
-    pubkey.toBase58(),
-    true /* isEditionPDA */
-  );
-  const editionInfo = await connection.getAccountInfo(toPublicKey(editionkey));
-
-  return editionInfo;
-}
-
 async function generatePDA(
   tokenMint: StringPublicKey,
-  isEditionPDA: boolean = false
+  addEditionToSeeds: boolean = false
 ): Promise<StringPublicKey> {
   const PROGRAM_IDS = programIds();
 
@@ -122,7 +114,7 @@ async function generatePDA(
 
   return (
     await findProgramAddress(
-      isEditionPDA ? editionSeeds : metadataSeeds,
+      addEditionToSeeds ? editionSeeds : metadataSeeds,
       toPublicKey(PROGRAM_IDS.metadata)
     )
   )[0];
