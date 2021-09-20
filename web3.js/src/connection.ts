@@ -3905,7 +3905,6 @@ export class Connection {
   /**
    * Register a callback to be invoked when there is a subscribe error
    *
-   *
    * @param callback Function to invoke when a subscribe error occurs
    * @returns subscription id
    */

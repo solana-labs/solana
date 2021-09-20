@@ -131,6 +131,34 @@ describe('Connection', () => {
 
       expect(await connection.getVersion()).to.be.not.null;
     });
+
+    it('subscribes and unsubscribes to subscription error notifications', done => {
+      restoreRpcWebSocket(connection);
+      const programAccount = Keypair.generate();
+
+      stubRpcWebSocket(connection, () => {
+        throw new Error('Subscribe error');
+      });
+
+      const subscriptionId = connection.onSubscribeError(
+        (rpcMethod, rpcArgs, error) => {
+          connection.removeSubscribeErrorListener(subscriptionId);
+          expect(rpcMethod).to.equal('accountSubscribe');
+          expect(rpcArgs).lengthOf(2);
+          expect(error.message).to.equal('Subscribe error');
+          expect(Object.values(connection._subscribeErrorCallbacks)).lengthOf(
+            0,
+          );
+          done();
+        },
+      );
+
+      connection.onAccountChange(
+        programAccount.publicKey,
+        () => {},
+        'confirmed',
+      );
+    });
   }
 
   it('get account info - not found', async () => {
@@ -3052,34 +3080,6 @@ describe('Connection', () => {
 
       expect(await connection.getBalance(accountTo.publicKey)).to.eq(
         minimumAmount + 21,
-      );
-    });
-
-    it('subscribes and unsubscribes to subscription error notifications', done => {
-      const connection = new Connection(url);
-      const programAccount = Keypair.generate();
-
-      stubRpcWebSocket(connection, () => {
-        throw new Error('Subscribe error');
-      });
-
-      const subscriptionId = connection.onSubscribeError(
-        (rpcMethod, rpcArgs, error) => {
-          connection.removeSubscribeErrorListener(subscriptionId);
-          expect(rpcMethod).to.equal('accountSubscribe');
-          expect(rpcArgs).lengthOf(2);
-          expect(error.message).to.equal('Subscribe error');
-          expect(Object.values(connection._subscribeErrorCallbacks)).lengthOf(
-            0,
-          );
-          done();
-        },
-      );
-
-      connection.onAccountChange(
-        programAccount.publicKey,
-        () => {},
-        'confirmed',
       );
     });
 
