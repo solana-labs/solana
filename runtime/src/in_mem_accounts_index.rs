@@ -393,7 +393,10 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         if stop {
             self.stop_flush.fetch_add(1, Ordering::Acquire);
         } else {
-            self.stop_flush.fetch_sub(1, Ordering::Release);
+            if 1 == self.stop_flush.fetch_sub(1, Ordering::Release) {
+                // stop_flush went to 0, so this bucket is ready to be aged
+                self.storage.wait_dirty_or_aged.notify_one();
+            }
         }
     }
 
@@ -413,14 +416,31 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         self.start_stop_flush(false);
     }
 
-    fn put_range_in_cache<R>(&self, _range: Option<&R>)
+    fn put_range_in_cache<R>(&self, range: Option<&R>)
     where
         R: RangeBounds<Pubkey>,
     {
         assert!(self.get_stop_flush()); // caller should be controlling the lifetime of how long this needs to be present
         let m = Measure::start("range");
 
-        // load from disk here
+        // load from disk
+        if let Some(disk) = self.storage.disk.as_ref() {
+            if let Some(items) = disk.items_in_range(self.bin, range) {
+                let mut map = self.map().write().unwrap();
+                for item in items {
+                    let entry = map.entry(item.pubkey);
+                    match entry {
+                        Entry::Occupied(_occupied) => {
+                            // do nothing - item already in cache
+                        }
+                        Entry::Vacant(vacant) => {
+                            vacant.insert(self.disk_to_cache_entry(item.slot_list, item.ref_count));
+                        }
+                    }
+                }
+            }
+        }
+
         Self::update_time_stat(&self.stats().get_range_us, m);
     }
 
@@ -429,6 +449,11 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     }
 
     pub(crate) fn flush(&self) {
+        if self.get_stop_flush() {
+            // this bucket cannot be flushed right now
+            return;
+        }
+
         let flushing = self.flushing_active.swap(true, Ordering::Acquire);
         if flushing {
             // already flushing in another thread
@@ -454,7 +479,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     fn flush_internal(&self) {
         let was_dirty = self.bin_dirty.swap(false, Ordering::Acquire);
         let current_age = self.storage.current_age();
-        let iterate_for_age = self.get_should_age(current_age);
+        let mut iterate_for_age = self.get_should_age(current_age);
         if !was_dirty && !iterate_for_age {
             // wasn't dirty and no need to age, so no need to flush this bucket
             return;
@@ -488,6 +513,11 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         {
             let mut map = self.map().write().unwrap();
             for k in removes {
+                if self.get_stop_flush() {
+                    iterate_for_age = false; // did not complete
+                    break;
+                }
+
                 if let Entry::Occupied(occupied) = map.entry(k) {
                     let v = occupied.get();
                     if v.dirty() || !self.should_remove_from_mem(current_age, v) {
