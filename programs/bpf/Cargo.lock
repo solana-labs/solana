@@ -1489,15 +1489,6 @@ dependencies = [
 
 [[package]]
 name = "memmap2"
-version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "723e3ebdcdc5c023db1df315364573789f8857c11b631a2fdfad7c00f5c046b4"
-dependencies = [
- "libc",
-]
-
-[[package]]
-name = "memmap2"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "de5d3112c080d58ce560081baeaab7e1e864ca21795ddbf533d5b1842bb1ecf8"
@@ -2805,7 +2796,7 @@ version = "1.8.0"
 dependencies = [
  "fs_extra",
  "log",
- "memmap2 0.2.3",
+ "memmap2 0.4.0",
  "rand 0.7.3",
  "rayon",
  "solana-logger 1.8.0",
