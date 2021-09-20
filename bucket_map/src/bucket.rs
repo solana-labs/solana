@@ -366,19 +366,10 @@ impl<T: Clone + Copy> Bucket<T> {
         //debug!(            "INDEX_IX: {:?} uid:{} loc: {} cap:{}",            key,            uid,            location,            index.num_cells()        );
     }
 
-    pub fn update<F>(&mut self, key: &Pubkey, updatefn: F)
-    where
-        F: Fn(Option<(&[T], RefCount)>) -> Option<(Vec<T>, RefCount)>,
-    {
-        let current = self.read_value(key);
-        let new = updatefn(current);
-        if new.is_none() {
-            self.delete_key(key);
-            return;
-        }
-        let (new, refct) = new.unwrap();
+    pub fn insert(&mut self, key: &Pubkey, value: (&[T], RefCount)) {
+        let (new, refct) = value;
         loop {
-            let rv = self.try_write(key, &new, refct);
+            let rv = self.try_write(key, new, refct);
             match rv {
                 Err(BucketMapError::DataNoSpace(sz)) => {
                     //debug!("GROWING SPACE {:?}", sz);
@@ -393,5 +384,19 @@ impl<T: Clone + Copy> Bucket<T> {
                 Ok(()) => return,
             }
         }
+    }
+
+    pub fn update<F>(&mut self, key: &Pubkey, updatefn: F)
+    where
+        F: Fn(Option<(&[T], RefCount)>) -> Option<(Vec<T>, RefCount)>,
+    {
+        let current = self.read_value(key);
+        let new = updatefn(current);
+        if new.is_none() {
+            self.delete_key(key);
+            return;
+        }
+        let (new, refct) = new.unwrap();
+        self.insert(key, (&new, refct));
     }
 }
