@@ -96,13 +96,6 @@ impl<T: IndexValue> BucketMapHolder<T> {
         self.count_ages_flushed() >= self.bins
     }
 
-    pub fn maybe_advance_age(&self) {
-        // check has_age_interval_elapsed last as calling it modifies state on success
-        if self.all_buckets_flushed_at_current_age() && self.has_age_interval_elapsed() {
-            self.increment_age();
-        }
-    }
-
     pub fn count_ages_flushed(&self) -> usize {
         self.count_ages_flushed.load(Ordering::Relaxed)
     }
