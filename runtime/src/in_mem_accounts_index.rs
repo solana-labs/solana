@@ -149,10 +149,9 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     }
 
     fn delete_disk_key(&self, pubkey: &Pubkey) {
-        self.storage
-            .disk
-            .as_ref()
-            .map(|disk| disk.delete_key(pubkey));
+        if let Some(disk) = self.storage.disk.as_ref() {
+            disk.delete_key(pubkey)
+        }
     }
 
     fn remove_if_slot_list_empty_entry(&self, entry: Entry<K, AccountMapEntry<T>>) -> bool {
