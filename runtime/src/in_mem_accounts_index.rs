@@ -413,6 +413,11 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         self.storage.wait_dirty_or_aged.notify_one();
     }
 
+    fn should_remove_from_mem(&self, current_age: Age, entry: &AccountMapEntry<T>) -> bool {
+        // this could be tunable dynamically based on memory pressure
+        current_age == entry.age()
+    }
+
     fn flush_internal(&self) {
         let was_dirty = self.bin_dirty.swap(false, Ordering::Acquire);
         let current_age = self.storage.current_age();
@@ -422,21 +427,51 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             return;
         }
 
+        let mut removes = vec![];
         let disk = self.storage.disk.as_ref().unwrap();
 
-        let map = self.map().read().unwrap();
-        for (k, v) in map.iter() {
-            if v.dirty() {
-                // step 1: clear the dirty flag
-                // step 2: perform the update on disk based on the fields in the entry
-                // If a parallel operation dirties the item again - even while this flush is occurring,
-                //  the last thing the writer will do, after updating contents, is set_dirty(true)
-                //  That prevents dropping an item from cache before disk is updated to latest in mem.
-                v.set_dirty(false);
+        // scan and update loop
+        {
+            let map = self.map().read().unwrap();
+            for (k, v) in map.iter() {
+                if v.dirty() {
+                    // step 1: clear the dirty flag
+                    // step 2: perform the update on disk based on the fields in the entry
+                    // If a parallel operation dirties the item again - even while this flush is occurring,
+                    //  the last thing the writer will do, after updating contents, is set_dirty(true)
+                    //  That prevents dropping an item from cache before disk is updated to latest in mem.
+                    v.set_dirty(false);
 
-                disk.insert(k, (&v.slot_list.read().unwrap(), v.ref_count()));
+                    disk
+                        .insert(k, (&v.slot_list.read().unwrap(), v.ref_count()));
+                }
+
+                if self.should_remove_from_mem(current_age, v) {
+                    removes.push(*k);
+                }
             }
         }
+
+        // remove loop (due to age)
+        {
+            let mut map = self.map().write().unwrap();
+            for k in removes {
+                if let Entry::Occupied(occupied) = map.entry(k) {
+                    let v = occupied.get();
+                    if v.dirty() || !self.should_remove_from_mem(current_age, v) {
+                        continue;
+                    }
+
+                    if Arc::strong_count(v) > 1 {
+                        // someone is holding the value arc's ref count and could modify it, so do not remove this from in-mem cache
+                        continue;
+                    }
+
+                    occupied.remove();
+                }
+            }
+        }
+
         if iterate_for_age {
             // completed iteration of the buckets at the current age
             assert_eq!(current_age, self.storage.current_age());
