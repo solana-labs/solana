@@ -516,17 +516,16 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
         // load from disk
         if let Some(disk) = self.storage.disk.as_ref() {
-            if let Some(items) = disk.items_in_range(self.bin, range) {
-                let mut map = self.map().write().unwrap();
-                for item in items {
-                    let entry = map.entry(item.pubkey);
-                    match entry {
-                        Entry::Occupied(_occupied) => {
-                            // do nothing - item already in cache
-                        }
-                        Entry::Vacant(vacant) => {
-                            vacant.insert(self.disk_to_cache_entry(item.slot_list, item.ref_count));
-                        }
+            let items = disk.items_in_range(self.bin, range);
+            let mut map = self.map().write().unwrap();
+            for item in items {
+                let entry = map.entry(item.pubkey);
+                match entry {
+                    Entry::Occupied(_occupied) => {
+                        // do nothing - item already in cache
+                    }
+                    Entry::Vacant(vacant) => {
+                        vacant.insert(self.disk_to_cache_entry(item.slot_list, item.ref_count));
                     }
                 }
             }
