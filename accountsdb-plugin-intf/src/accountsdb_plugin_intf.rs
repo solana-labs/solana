@@ -39,6 +39,12 @@ pub enum AccountsDbPluginError {
     AccountsUpdateError { msg: String },
 }
 
+pub enum SlotStatus {
+    Processed,
+    Rooted,
+    Confirmed,
+}
+
 pub type Result<T> = std::result::Result<T, AccountsDbPluginError>;
 
 pub trait AccountsDbPlugin: Any + Send + Sync {
@@ -59,4 +65,7 @@ pub trait AccountsDbPlugin: Any + Send + Sync {
 
     /// Called when an account is updated at a slot.
     fn update_account(&mut self, account: &ReplicaAccountInfo, slot: u64) -> Result<()>;
+
+    /// Called when a slot status is updated
+    fn update_slot_status(&mut self, slot: u64, status: SlotStatus) -> Result<()>;
 }

@@ -11,9 +11,10 @@ use {
         accounts_cache::CachedAccount, accounts_db::LoadedAccount, append_vec::StoredAccountMeta,
         bank_forks::BankForks,
     },
-    solana_sdk::clock::Slot,
     solana_sdk::{
         account::{Account, ReadableAccount},
+        clock::Slot,
+        hash::Hash,
         pubkey::Pubkey,
     },
     std::{
@@ -98,6 +99,32 @@ fn accountinfo_from_stored_account_meta(
     })
 }
 
+#[allow(dead_code)]
+fn accountinfo_from_readable_account(
+    accounts_selector: &AccountsSelector,
+    pubkey: &Pubkey,
+    hash: &Hash,
+    account: &impl ReadableAccount,
+) -> Option<ReplicaAccountInfo> {
+    if !accounts_selector.is_account_selected(pubkey, account.owner()) {
+        return None;
+    }
+
+    let account_meta = ReplicaAccountMeta {
+        pubkey: bs58::encode(pubkey).into_string(),
+        lamports: account.lamports(),
+        owner: bs58::encode(account.owner()).into_string(),
+        executable: account.executable(),
+        rent_epoch: account.rent_epoch(),
+    };
+    let data = account.data().to_vec();
+    Some(ReplicaAccountInfo {
+        account_meta,
+        hash: bs58::encode(hash).into_string(),
+        data,
+    })
+}
+
 fn accountinfo_from_cached_account(
     accounts_selector: &AccountsSelector,
     cached_account: &CachedAccount,
@@ -136,6 +163,10 @@ impl AccountsUpdateNotifier {
             accounts_selector,
         }
     }
+
+    #[allow(dead_code)]
+    pub fn notify_account_update(self, _slot: Slot, _account: &impl ReadableAccount) {}
+
     pub fn notify_slot_confirmed(&self, slot: Slot) {
         let mut plugin_manager = self.plugin_manager.write().unwrap();
         if plugin_manager.plugins.is_empty() {

@@ -6,7 +6,7 @@ use {
     serde_derive::{Deserialize, Serialize},
     serde_json,
     solana_accountsdb_plugin_intf::accountsdb_plugin_intf::{
-        AccountsDbPlugin, AccountsDbPluginError, ReplicaAccountInfo, Result,
+        AccountsDbPlugin, AccountsDbPluginError, ReplicaAccountInfo, Result, SlotStatus,
     },
     std::{fs::File, io::Read, sync::Mutex},
 };
@@ -120,6 +120,10 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
             }
         }
 
+        Ok(())
+    }
+
+    fn update_slot_status(&mut self, _: u64, _: SlotStatus) -> Result<()> {
         Ok(())
     }
 }
