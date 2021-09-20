@@ -1,13 +1,16 @@
 use crate::accounts_index::{AccountsIndexConfig, IndexValue};
 use crate::bucket_map_holder_stats::BucketMapHolderStats;
+use crate::in_mem_accounts_index::SlotT;
 use crate::waitable_condvar::WaitableCondvar;
+use solana_bucket_map::bucket_map::{BucketMap, BucketMapConfig};
 use std::fmt::Debug;
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicUsize, Ordering};
 use std::sync::Mutex;
 pub type Age = u8;
 
-// will eventually hold the bucket map
 pub struct BucketMapHolder<T: IndexValue> {
+    pub disk: Option<BucketMap<SlotT<T>>>,
+
     pub count_ages_flushed: AtomicUsize,
     pub age: AtomicU8,
     pub stats: BucketMapHolderStats,
@@ -85,7 +88,15 @@ impl<T: IndexValue> BucketMapHolder<T> {
             .as_ref()
             .and_then(|config| config.ages_to_stay_in_cache)
             .unwrap_or(DEFAULT_AGE_TO_STAY_IN_CACHE);
+
+        let mut bucket_config = BucketMapConfig::new(bins);
+        bucket_config.drives = config.as_ref().and_then(|config| config.drives.clone());
+        let mem_budget_mb = config.as_ref().and_then(|config| config.index_limit_mb);
+        // only allocate if mem_budget_mb is Some
+        let disk = mem_budget_mb.map(|_| BucketMap::new(bucket_config));
+
         Self {
+            disk,
             ages_to_stay_in_cache,
             count_ages_flushed: AtomicUsize::default(),
             age: AtomicU8::default(),
@@ -94,7 +105,7 @@ impl<T: IndexValue> BucketMapHolder<T> {
             next_bucket_to_flush: Mutex::new(0),
             bins,
             startup: AtomicBool::default(),
-            mem_budget_mb: config.as_ref().and_then(|config| config.index_limit_mb),
+            mem_budget_mb,
             _phantom: std::marker::PhantomData::<T>::default(),
         }
     }
