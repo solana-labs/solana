@@ -271,8 +271,8 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     }
 
     pub fn lock_and_update_slot_list(
-        current: &Arc<AccountMapEntryInner<T>>,
-        new_value: &AccountMapEntry<T>,
+        current: &AccountMapEntryInner<T>,
+        new_value: &AccountMapEntryInner<T>,
         reclaims: &mut SlotList<T>,
         previous_slot_entry_was_cached: bool,
     ) {
@@ -651,6 +651,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
                 if Arc::strong_count(v) > 1 {
                     // someone is holding the value arc's ref count and could modify it, so do not remove this from in-mem cache
+                    completed_scan = false;
                     continue;
                 }
 

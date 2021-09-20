@@ -148,7 +148,7 @@ impl AccountMapEntryMeta {
 
 #[derive(Debug, Default)]
 pub struct AccountMapEntryInner<T> {
-    pub ref_count: AtomicU64,
+    pub ref_count: AtomicU64, // get rid fo this pub
     pub slot_list: RwLock<SlotList<T>>,
     pub meta: AccountMapEntryMeta,
 }
