@@ -126,6 +126,14 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         if let Entry::Occupied(index_entry) = entry {
             if index_entry.get().slot_list.read().unwrap().is_empty() {
                 index_entry.remove();
+                // note there is a potential race here that has existed.
+                // if someone else holds the arc,
+                //  then they think the item is still in the index and can make modifications.
+                // We have to have a write lock to the map here, which means nobody else can get
+                //  the arc, but someone may already have retreived a clone of it.
+                if let Some(disk) = self.storage.disk.as_ref() {
+                    disk.delete_key(&pubkey)
+                }
                 self.stats().insert_or_delete(false, self.bin);
                 return true;
             }
