@@ -644,6 +644,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         if ranges.iter().any(|range| range.is_none()) {
             return false; // range said to hold 'all', so not completed
         }
+        let mut items_removed = 0;
         let mut map = self.map().write().unwrap();
         for k in removes {
             if self.get_stop_flush() {
@@ -673,9 +674,11 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     continue;
                 }
 
+                items_removed += 1;
                 occupied.remove();
             }
         }
+        Self::update_stat(self.stats.flush_entries_removed_from_mem, value: u64)
         completed_scan
     }
 

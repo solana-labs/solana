@@ -23,6 +23,7 @@ pub struct BucketMapHolderStats {
     pub count_in_mem: AtomicU64,
     pub per_bucket_count: Vec<AtomicU64>,
     pub flush_entries_updated_on_disk: AtomicU64,
+    pub flush_entries_removed_from_mem: AtomicU64,
     pub active_threads: AtomicU64,
     pub get_range_us: AtomicU64,
     last_age: AtomicU8,
@@ -64,20 +65,14 @@ impl BucketMapHolderStats {
     }
 
     fn ms_per_age<T: IndexValue>(&self, storage: &Arc<BucketMapHolder<T>>) -> u64 {
-        use log::*;
         let elapsed_ms = self.get_elapsed_ms_and_reset();
         let mut age_now = storage.current_age();
         let last_age = self.last_age.swap(age_now, Ordering::Relaxed);
-        error!(
-            "elapsed: {}, age: {}, last_age: {}",
-            elapsed_ms, age_now, last_age
-        );
         if last_age > age_now {
             // age may have wrapped
             age_now += u8::MAX;
         }
         let age_delta = age_now.saturating_sub(last_age) as u64;
-        error!("age_now: {}, age_delta: {}", age_now, age_delta);
         if age_delta > 0 {
             elapsed_ms / age_delta
         } else {
@@ -90,9 +85,6 @@ impl BucketMapHolderStats {
         if !self.last_time.should_update(10_000) {
             return;
         }
-
-        use log::*;
-        error!("report_stats: buckets aged: {}, all flushed: {}", storage.count_ages_flushed.load(Ordering::Relaxed), storage.all_buckets_flushed_at_current_age());
 
         let ms_per_age = self.ms_per_age(storage);
 
@@ -194,6 +186,12 @@ impl BucketMapHolderStats {
             (
                 "flush_entries_updated_on_disk",
                 self.flush_entries_updated_on_disk
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "flush_entries_removed_from_mem",
+                self.flush_entries_removed_from_mem
                     .swap(0, Ordering::Relaxed),
                 i64
             ),
