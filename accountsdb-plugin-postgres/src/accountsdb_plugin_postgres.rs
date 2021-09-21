@@ -28,6 +28,14 @@ struct AccountsDbPluginPostgresConfig {
     user: String,
 }
 
+fn get_status_str(status: SlotStatus) -> &'static str {
+    match status {
+        SlotStatus::Confirmed => "confirmed",
+        SlotStatus::Processed => "processed",
+        SlotStatus::Rooted => "rooted",
+    }
+}
+
 impl AccountsDbPlugin for AccountsDbPluginPostgres {
     fn name(&self) -> &'static str {
         "AccountsDbPluginPostgres"
@@ -129,7 +137,67 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
         Ok(())
     }
 
-    fn update_slot_status(&mut self, _: u64, _: SlotStatus) -> Result<()> {
+    fn update_slot_status(
+        &mut self,
+        slot: u64,
+        parent: Option<u64>,
+        status: SlotStatus,
+    ) -> Result<()> {
+        info!("Updating slot {:?} at with status {:?}", slot, status);
+
+        match &mut self.client {
+            None => {
+                return Err(AccountsDbPluginError::DataStoreConnectionError {
+                    msg: "There is no connection to the PostgreSQL database.".to_string(),
+                });
+            }
+            Some(client) => {
+                let slot = slot as i64; // postgres only support i64
+                let parent = parent.map(|parent| parent as i64);
+                let updated_on = Utc::now().naive_utc();
+                let status_str = get_status_str(status);
+
+                let result = match parent {
+                        Some(parent) => {
+                            client.get_mut().unwrap().execute(
+                                "INSERT INTO slot (slot, parent, slot_status, updated_on) \
+                                VALUES ($1, $2, $3, $4) \
+                                ON CONFLICT (pubkey) DO UPDATE SET parent=$2, slot_status=$3, updated_on=$4",
+                                &[
+                                    &slot,
+                                    &parent,
+                                    &status_str,
+                                    &updated_on,
+                                ],
+                            )
+                        }
+                        None => {
+                            client.get_mut().unwrap().execute(
+                                "INSERT INTO slot (slot, slot_status, updated_on) \
+                                VALUES ($1, $2, $3,) \
+                                ON CONFLICT (pubkey) DO UPDATE SET slot_status=$2, updated_on=$3",
+                                &[
+                                    &slot,
+                                    &status_str,
+                                    &updated_on,
+                                ],
+                            )
+                        }
+                };
+
+                match result {
+                    Err(err) => {
+                        return Err(AccountsDbPluginError::AccountsUpdateError {
+                            msg: format!("Failed to persist the update of slot to the PostgreSQL database. Error: {:?}", err)
+                        });
+                    }
+                    Ok(rows) => {
+                        assert_eq!(1, rows, "Expected one rows to be updated a time");
+                    }
+                }
+            }
+        }
+
         Ok(())
     }
 }

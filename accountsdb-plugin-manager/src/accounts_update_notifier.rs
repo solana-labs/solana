@@ -41,16 +41,16 @@ impl AccountsUpdateNotifierIntf for AccountsUpdateNotifierImpl {
         }
     }
 
-    fn notify_slot_confirmed(&self, slot: Slot) {
-        self.notify_slot_status(slot, SlotStatus::Confirmed);
+    fn notify_slot_confirmed(&self, slot: Slot, parent: Option<Slot>) {
+        self.notify_slot_status(slot, parent, SlotStatus::Confirmed);
     }
 
-    fn notify_slot_processed(&self, slot: Slot) {
-        self.notify_slot_status(slot, SlotStatus::Processed);
+    fn notify_slot_processed(&self, slot: Slot, parent: Option<Slot>) {
+        self.notify_slot_status(slot, parent, SlotStatus::Processed);
     }
 
-    fn notify_slot_rooted(&self, slot: Slot) {
-        self.notify_slot_status(slot, SlotStatus::Rooted);
+    fn notify_slot_rooted(&self, slot: Slot, parent: Option<Slot>) {
+        self.notify_slot_status(slot, parent, SlotStatus::Rooted);
     }
 }
 
@@ -163,14 +163,14 @@ impl AccountsUpdateNotifierImpl {
         }
     }
 
-    pub fn notify_slot_status(&self, slot: Slot, slot_status: SlotStatus) {
+    pub fn notify_slot_status(&self, slot: Slot, parent: Option<Slot>, slot_status: SlotStatus) {
         let mut plugin_manager = self.plugin_manager.write().unwrap();
         if plugin_manager.plugins.is_empty() {
             return;
         }
 
         for plugin in plugin_manager.plugins.iter_mut() {
-            match plugin.update_slot_status(slot, slot_status.clone()) {
+            match plugin.update_slot_status(slot, parent, slot_status.clone()) {
                 Err(err) => {
                     error!(
                         "Failed to update slot status at slot {:?}, error: {:?}",

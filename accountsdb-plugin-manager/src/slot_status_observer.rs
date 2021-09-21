@@ -19,7 +19,7 @@ use {
 /// their states.
 #[derive(Default, Clone)]
 struct EligibleSlotSet {
-    slot_set: Arc<RwLock<VecDeque<(Slot, SlotStatus)>>>,
+    slot_set: Arc<RwLock<VecDeque<(Slot, Option<Slot>, SlotStatus)>>>,
 }
 
 #[derive(Debug)]
@@ -79,13 +79,21 @@ impl SlotStatusObserver {
                         let mut slot_set = eligible_slot_set.slot_set.write().unwrap();
                         match slot {
                             BankNotification::OptimisticallyConfirmed(slot) => {
-                                slot_set.push_back((slot, SlotStatus::Confirmed));
+                                slot_set.push_back((slot, None, SlotStatus::Confirmed));
                             }
                             BankNotification::Frozen(bank) => {
-                                slot_set.push_back((bank.slot(), SlotStatus::Processed));
+                                slot_set.push_back((
+                                    bank.slot(),
+                                    Some(bank.parent_slot()),
+                                    SlotStatus::Processed,
+                                ));
                             }
                             BankNotification::Root(bank) => {
-                                slot_set.push_back((bank.slot(), SlotStatus::Rooted));
+                                slot_set.push_back((
+                                    bank.slot(),
+                                    Some(bank.parent_slot()),
+                                    SlotStatus::Rooted,
+                                ));
                             }
                         }
                     }
@@ -112,24 +120,24 @@ impl SlotStatusObserver {
                         }
 
                         let slot_status = slot_status.unwrap();
-                        match slot_status.1 {
+                        match slot_status.2 {
                             SlotStatus::Confirmed => {
                                 accounts_update_notifier
                                     .read()
                                     .unwrap()
-                                    .notify_slot_confirmed(slot_status.0);
+                                    .notify_slot_confirmed(slot_status.0, slot_status.1);
                             }
                             SlotStatus::Processed => {
                                 accounts_update_notifier
                                     .read()
                                     .unwrap()
-                                    .notify_slot_processed(slot_status.0);
+                                    .notify_slot_processed(slot_status.0, slot_status.1);
                             }
                             SlotStatus::Rooted => {
                                 accounts_update_notifier
                                     .read()
                                     .unwrap()
-                                    .notify_slot_rooted(slot_status.0);
+                                    .notify_slot_rooted(slot_status.0, slot_status.1);
                             }
                         }
                     }

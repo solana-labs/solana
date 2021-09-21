@@ -945,9 +945,9 @@ pub trait AccountsUpdateNotifierIntf: std::fmt::Debug {
         hash: Option<&Hash>,
         account: &AccountSharedData,
     );
-    fn notify_slot_confirmed(&self, slot: Slot);
-    fn notify_slot_processed(&self, slot: Slot);
-    fn notify_slot_rooted(&self, slot: Slot);
+    fn notify_slot_confirmed(&self, slot: Slot, parent: Option<Slot>);
+    fn notify_slot_processed(&self, slot: Slot, parent: Option<Slot>);
+    fn notify_slot_rooted(&self, slot: Slot, parent: Option<Slot>);
 }
 
 pub type AccountsUpdateNotifier = Arc<RwLock<dyn AccountsUpdateNotifierIntf + Sync + Send>>;

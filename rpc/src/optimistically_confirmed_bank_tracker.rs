@@ -256,7 +256,10 @@ impl OptimisticallyConfirmedBankTracker {
                         },
                     });
 
-                    Self::notify_slot_status(bank_notification_subscribers, BankNotification::Frozen(bank.clone()));
+                    Self::notify_slot_status(
+                        bank_notification_subscribers,
+                        BankNotification::Frozen(bank.clone()),
+                    );
                 }
 
                 if pending_optimistically_confirmed_banks.remove(&bank.slot()) {
@@ -284,7 +287,10 @@ impl OptimisticallyConfirmedBankTracker {
                 }
             }
             BankNotification::Root(bank) => {
-                Self::notify_slot_status(bank_notification_subscribers, BankNotification::Root(bank.clone()));
+                Self::notify_slot_status(
+                    bank_notification_subscribers,
+                    BankNotification::Root(bank.clone()),
+                );
                 let root_slot = bank.slot();
                 let mut w_optimistically_confirmed_bank =
                     optimistically_confirmed_bank.write().unwrap();

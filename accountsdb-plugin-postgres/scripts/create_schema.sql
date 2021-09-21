@@ -20,7 +20,7 @@ CREATE TABLE account (
 -- The table storing slot information
 CREATE TABLE slot (
     slot BIGINT PRIMARY KEY,
-    parent BIGINT NOT NULL,
+    parent BIGINT,
     status slot_status,
     updated_on TIMESTAMP NOT NULL
 );

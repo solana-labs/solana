@@ -68,5 +68,10 @@ pub trait AccountsDbPlugin: Any + Send + Sync + std::fmt::Debug {
     fn update_account(&mut self, account: &ReplicaAccountInfo, slot: u64) -> Result<()>;
 
     /// Called when a slot status is updated
-    fn update_slot_status(&mut self, slot: u64, status: SlotStatus) -> Result<()>;
+    fn update_slot_status(
+        &mut self,
+        slot: u64,
+        parent: Option<u64>,
+        status: SlotStatus,
+    ) -> Result<()>;
 }
