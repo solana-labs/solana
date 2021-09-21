@@ -138,8 +138,9 @@ pub fn recv_batch(recvr: &PacketReceiver) -> Result<(Vec<Packets>, usize, u64)> 
         len += more.packets.len();
         batch.push(more);
     }
+    let recv_duration = recv_start.elapsed();
     trace!("batch len {}", batch.len());
-    Ok((batch, len, duration_as_ms(&recv_start.elapsed())))
+    Ok((batch, len, recv_duration))
 }
 
 pub fn responder(
