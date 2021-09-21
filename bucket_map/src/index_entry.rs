@@ -1,5 +1,5 @@
 use crate::bucket::Bucket;
-use crate::bucket_storage::BucketStorage;
+use crate::bucket_storage::{BucketStorage, Uid};
 use crate::RefCount;
 use solana_sdk::clock::Slot;
 use solana_sdk::pubkey::Pubkey;
@@ -54,7 +54,7 @@ impl IndexEntry {
         };
         Some((slice, self.ref_count))
     }
-    pub fn key_uid(key: &Pubkey) -> u64 {
+    pub fn key_uid(key: &Pubkey) -> Uid {
         let mut s = DefaultHasher::new();
         key.hash(&mut s);
         s.finish().max(1u64)

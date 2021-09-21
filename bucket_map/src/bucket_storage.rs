@@ -31,25 +31,27 @@ use std::sync::Arc;
 */
 const DEFAULT_CAPACITY_POW2: u8 = 5;
 
+/// A Header UID of 0 indicates that the header is unlocked
+pub(crate) const UID_UNLOCKED: Uid = 0;
+
+pub(crate) type Uid = u64;
+
 #[repr(C)]
 struct Header {
     lock: AtomicU64,
 }
 
-/// A Header UID of 0 indicates that the header is unlocked
-pub(crate) const UID_UNLOCKED: u64 = 0;
-
 impl Header {
-    fn try_lock(&self, uid: u64) -> bool {
+    fn try_lock(&self, uid: Uid) -> bool {
         Ok(UID_UNLOCKED)
             == self
                 .lock
                 .compare_exchange(UID_UNLOCKED, uid, Ordering::Acquire, Ordering::Relaxed)
     }
-    fn unlock(&self) -> u64 {
+    fn unlock(&self) -> Uid {
         self.lock.swap(UID_UNLOCKED, Ordering::Release)
     }
-    fn uid(&self) -> u64 {
+    fn uid(&self) -> Uid {
         self.lock.load(Ordering::Relaxed)
     }
 }
@@ -120,7 +122,7 @@ impl BucketStorage {
         )
     }
 
-    pub fn uid(&self, ix: u64) -> u64 {
+    pub fn uid(&self, ix: u64) -> Uid {
         if ix >= self.num_cells() {
             panic!("bad index size");
         }
@@ -132,7 +134,7 @@ impl BucketStorage {
         }
     }
 
-    pub fn allocate(&self, ix: u64, uid: u64) -> Result<(), BucketStorageError> {
+    pub fn allocate(&self, ix: u64, uid: Uid) -> Result<(), BucketStorageError> {
         if ix >= self.num_cells() {
             panic!("allocate: bad index size");
         }
@@ -153,7 +155,7 @@ impl BucketStorage {
         e
     }
 
-    pub fn free(&self, ix: u64, uid: u64) {
+    pub fn free(&self, ix: u64, uid: Uid) {
         if ix >= self.num_cells() {
             panic!("free: bad index size");
         }

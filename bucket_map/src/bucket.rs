@@ -1,7 +1,7 @@
 use crate::bucket_item::BucketItem;
 use crate::bucket_map::BucketMapError;
 use crate::bucket_stats::BucketMapStats;
-use crate::bucket_storage::{BucketStorage, UID_UNLOCKED};
+use crate::bucket_storage::{BucketStorage, Uid, UID_UNLOCKED};
 use crate::index_entry::IndexEntry;
 use crate::{MaxSearch, RefCount};
 use rand::thread_rng;
@@ -141,7 +141,7 @@ impl<T: Clone + Copy> Bucket<T> {
     fn bucket_create_key(
         index: &BucketStorage,
         key: &Pubkey,
-        elem_uid: u64,
+        elem_uid: Uid,
         random: u64,
         ref_count: u64,
     ) -> Result<u64, BucketMapError> {
