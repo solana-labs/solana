@@ -86,6 +86,9 @@ impl BucketMapHolderStats {
     }
 
     pub fn report_stats<T: IndexValue>(&self, storage: &Arc<BucketMapHolder<T>>) {
+        use log::*;
+        error!("report_stats: buckets aged: {}, all flushed: {}", storage.count_ages_flushed.load(Ordering::Relaxed), storage.all_buckets_flushed_at_current_age());
+
         // account index stats every 10 s
         if !self.last_time.should_update(10_000) {
             return;
