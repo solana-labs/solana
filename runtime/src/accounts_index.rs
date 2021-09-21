@@ -154,6 +154,13 @@ pub struct AccountMapEntryInner<T> {
 }
 
 impl<T: IndexValue> AccountMapEntryInner<T> {
+    pub fn new(slot_list: SlotList<T>, ref_count: RefCount, meta: AccountMapEntryMeta) -> Self {
+        Self {
+            slot_list: RwLock::new(slot_list),
+            ref_count: AtomicU64::new(ref_count),
+            meta,
+        }
+    }
     pub fn ref_count(&self) -> RefCount {
         self.ref_count.load(Ordering::Relaxed)
     }
@@ -270,11 +277,11 @@ impl<T: IndexValue> WriteAccountMapEntry<T> {
         storage: &Arc<BucketMapHolder<T>>,
     ) -> AccountMapEntry<T> {
         let ref_count = if account_info.is_cached() { 0 } else { 1 };
-        Arc::new(AccountMapEntryInner {
-            ref_count: AtomicU64::new(ref_count),
-            slot_list: RwLock::new(vec![(slot, account_info)]),
-            meta: AccountMapEntryMeta::new_dirty(storage),
-        })
+        Arc::new(AccountMapEntryInner::new(
+            vec![(slot, account_info)],
+            ref_count,
+            AccountMapEntryMeta::new_dirty(storage),
+        ))
     }
 
     // Try to update an item in the slot list the given `slot` If an item for the slot
