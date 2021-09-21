@@ -895,7 +895,8 @@ mod tests {
     // Just like get_packet_offsets, but not returning redundant information.
     fn get_packet_offsets_from_tx(tx: Transaction, current_offset: u32) -> PacketOffsets {
         let mut packet = sigverify::make_packet_from_transaction(tx);
-        let packet_offsets = sigverify::get_packet_offsets(&mut packet, current_offset as usize, false);
+        let packet_offsets =
+            sigverify::get_packet_offsets(&mut packet, current_offset as usize, false);
         PacketOffsets::new(
             packet_offsets.sig_len,
             packet_offsets.sig_start - current_offset,

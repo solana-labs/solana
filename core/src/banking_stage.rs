@@ -1040,10 +1040,10 @@ impl BankingStage {
             .iter()
             .filter_map(|tx_index| {
                 let p = &msgs.packets[*tx_index];
-                let tx: Transaction = limited_deserialize(&p.data[0..p.meta.size]).ok()?;
-                if votes_only && !solana_runtime::bank::is_simple_vote_transaction(&tx) {
+                if votes_only && !p.meta.is_simple_vote_tx {
                     return None;
                 }
+                let tx: Transaction = limited_deserialize(&p.data[0..p.meta.size]).ok()?;
                 tx.verify_precompiles(libsecp256k1_0_5_upgrade_enabled)
                     .ok()?;
                 let message_bytes = Self::packet_message(p)?;
@@ -1532,6 +1532,7 @@ mod tests {
         transaction::TransactionError,
     };
     use solana_transaction_status::TransactionWithStatusMeta;
+    use solana_vote_program::vote_transaction;
     use std::{
         net::SocketAddr,
         path::Path,
@@ -2945,36 +2946,123 @@ mod tests {
         );
     }
 
+    #[cfg(test)]
+    fn make_test_packets(
+        transactions: Vec<Transaction>,
+        vote_indexes: Vec<usize>,
+    ) -> (Packets, Vec<usize>) {
+        let capacity = transactions.len();
+        let mut packets = Packets::with_capacity(capacity);
+        let mut packet_indexes = Vec::with_capacity(capacity);
+        packets.packets.resize(capacity, Packet::default());
+        for (index, tx) in transactions.iter().enumerate() {
+            Packet::populate_packet(&mut packets.packets[index], None, tx).ok();
+            packet_indexes.push(index);
+        }
+        for index in vote_indexes.iter() {
+            packets.packets[*index].meta.is_simple_vote_tx = true;
+        }
+        (packets, packet_indexes)
+    }
+
     #[test]
     fn test_transactions_from_packets() {
-        use solana_vote_program::vote_state::Vote;
-        solana_logger::setup();
-        let mut vote_packet = Packet::default();
-        let vote_instruction = solana_vote_program::vote_instruction::vote(
-            &Pubkey::new_unique(),
-            &Pubkey::new_unique(),
-            Vote::default(),
-        );
-        let vote_transaction =
-            Transaction::new_with_payer(&[vote_instruction], Some(&Pubkey::new_unique()));
-        Packet::populate_packet(&mut vote_packet, None, &vote_transaction).unwrap();
-        let mut non_vote = Packet::default();
-        let tx = system_transaction::transfer(
-            &Keypair::new(),
-            &Pubkey::new_unique(),
-            2,
+        let keypair = Keypair::new();
+        let transfer_tx =
+            system_transaction::transfer(&keypair, &keypair.pubkey(), 1, Hash::default());
+        let vote_tx = vote_transaction::new_vote_transaction(
+            vec![42],
             Hash::default(),
+            Hash::default(),
+            &keypair,
+            &keypair,
+            &keypair,
+            None,
         );
-        Packet::populate_packet(&mut non_vote, None, &tx).unwrap();
-        let msgs = Packets::new(vec![non_vote, vote_packet]);
-        let packet_indexes = [0, 1];
-        let (transactions, _transaction_to_packet_indexes) =
-            BankingStage::transactions_from_packets(&msgs, &packet_indexes, false, true);
-        assert_eq!(transactions.len(), 1);
-        assert!(!transactions[0].transaction().signatures.is_empty());
 
-        let (transactions, _transaction_to_packet_indexes) =
-            BankingStage::transactions_from_packets(&msgs, &packet_indexes, false, false);
-        assert_eq!(transactions.len(), 2);
+        // packets with no votes
+        {
+            let vote_indexes = vec![];
+            let (packets, packet_indexes) =
+                make_test_packets(vec![transfer_tx.clone(), transfer_tx.clone()], vote_indexes);
+
+            let mut votes_only = false;
+            let (txs, tx_packet_index) = BankingStage::transactions_from_packets(
+                &packets,
+                &packet_indexes,
+                false,
+                votes_only,
+            );
+            assert_eq!(2, txs.len());
+            assert_eq!(vec![0, 1], tx_packet_index);
+
+            votes_only = true;
+            let (txs, tx_packet_index) = BankingStage::transactions_from_packets(
+                &packets,
+                &packet_indexes,
+                false,
+                votes_only,
+            );
+            assert_eq!(0, txs.len());
+            assert_eq!(0, tx_packet_index.len());
+        }
+
+        // packets with some votes
+        {
+            let vote_indexes = vec![0, 2];
+            let (packets, packet_indexes) = make_test_packets(
+                vec![vote_tx.clone(), transfer_tx, vote_tx.clone()],
+                vote_indexes,
+            );
+
+            let mut votes_only = false;
+            let (txs, tx_packet_index) = BankingStage::transactions_from_packets(
+                &packets,
+                &packet_indexes,
+                false,
+                votes_only,
+            );
+            assert_eq!(3, txs.len());
+            assert_eq!(vec![0, 1, 2], tx_packet_index);
+
+            votes_only = true;
+            let (txs, tx_packet_index) = BankingStage::transactions_from_packets(
+                &packets,
+                &packet_indexes,
+                false,
+                votes_only,
+            );
+            assert_eq!(2, txs.len());
+            assert_eq!(vec![0, 2], tx_packet_index);
+        }
+
+        // packets with all votes
+        {
+            let vote_indexes = vec![0, 1, 2];
+            let (packets, packet_indexes) = make_test_packets(
+                vec![vote_tx.clone(), vote_tx.clone(), vote_tx],
+                vote_indexes,
+            );
+
+            let mut votes_only = false;
+            let (txs, tx_packet_index) = BankingStage::transactions_from_packets(
+                &packets,
+                &packet_indexes,
+                false,
+                votes_only,
+            );
+            assert_eq!(3, txs.len());
+            assert_eq!(vec![0, 1, 2], tx_packet_index);
+
+            votes_only = true;
+            let (txs, tx_packet_index) = BankingStage::transactions_from_packets(
+                &packets,
+                &packet_indexes,
+                false,
+                votes_only,
+            );
+            assert_eq!(3, txs.len());
+            assert_eq!(vec![0, 1, 2], tx_packet_index);
+        }
     }
 }
