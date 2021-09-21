@@ -1,5 +1,9 @@
 <p align="center">
+<<<<<<< HEAD
     <img alt="Solana" src="https://i.imgur.com/OMnvVEz.png" width="250" />
+=======
+    <img alt="Solana" src="https://i.imgur.com/IKyzQ6T.png" width="250" />
+>>>>>>> 8dbed193c (Add new logos to README files and docs (#20049))
 </p>
 
 # Solana Explorer
