@@ -1513,8 +1513,11 @@ struct AccountReferences<'a> {
     rent_epoch: u64,
 }
 type TranslatedAccounts<'a> = (
-    Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>,
-    Vec<Option<AccountReferences<'a>>>,
+    Vec<usize>,
+    Vec<(
+        Rc<RefCell<AccountSharedData>>,
+        Option<AccountReferences<'a>>,
+    )>,
 );
 
 /// Implemented by language specific data structure translators
@@ -2052,16 +2055,16 @@ where
 {
     let demote_program_write_locks =
         invoke_context.is_feature_active(&demote_program_write_locks::id());
+    let mut account_indices = Vec::with_capacity(message.account_keys.len());
     let mut accounts = Vec::with_capacity(message.account_keys.len());
-    let mut refs = Vec::with_capacity(message.account_keys.len());
     for (i, account_key) in message.account_keys.iter().enumerate() {
-        if let Some((_account_index, account)) = invoke_context.get_account(account_key) {
+        if let Some((account_index, account)) = invoke_context.get_account(account_key) {
             if i == message.instructions[0].program_id_index as usize
                 || account.borrow().executable()
             {
                 // Use the known account
-                accounts.push((*account_key, account));
-                refs.push(None);
+                account_indices.push(account_index);
+                accounts.push((account, None));
                 continue;
             } else if let Some(account_ref_index) =
                 account_info_keys.iter().position(|key| *key == account_key)
@@ -2075,12 +2078,13 @@ where
                     account.set_executable(account_ref.executable);
                     account.set_rent_epoch(account_ref.rent_epoch);
                 }
-                accounts.push((*account_key, account));
-                refs.push(if message.is_writable(i, demote_program_write_locks) {
+                let account_ref = if message.is_writable(i, demote_program_write_locks) {
                     Some(account_ref)
                 } else {
                     None
-                });
+                };
+                account_indices.push(account_index);
+                accounts.push((account, account_ref));
                 continue;
             }
         }
@@ -2092,7 +2096,7 @@ where
         return Err(SyscallError::InstructionError(InstructionError::MissingAccount).into());
     }
 
-    Ok((accounts, refs))
+    Ok((account_indices, accounts))
 }
 
 fn check_instruction_size(
@@ -2176,7 +2180,7 @@ fn call<'a>(
         &instruction.data,
         invoke_context.is_feature_active(&close_upgradeable_program_accounts::id()),
     )?;
-    let (accounts, account_refs) = syscall.translate_accounts(
+    let (account_indices, mut accounts) = syscall.translate_accounts(
         &message,
         account_infos_addr,
         account_infos_len,
@@ -2191,16 +2195,16 @@ fn call<'a>(
     InstructionProcessor::process_cross_program_instruction(
         &message,
         &program_indices,
-        &accounts,
+        &account_indices,
         &caller_write_privileges,
         *invoke_context,
     )
     .map_err(SyscallError::InstructionError)?;
 
     // Copy results back to caller
-    for ((_key, account), account_ref) in accounts.iter().zip(account_refs) {
+    for (account, account_ref) in accounts.iter_mut() {
         let account = account.borrow();
-        if let Some(mut account_ref) = account_ref {
+        if let Some(account_ref) = account_ref {
             *account_ref.lamports = account.lamports();
             *account_ref.owner = *account.owner();
             if account_ref.data.len() != account.data().len() {

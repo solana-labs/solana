@@ -5,10 +5,10 @@ use solana_sdk::{
     account_utils::StateMut,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     feature_set::{demote_program_write_locks, fix_write_privs},
-    ic_logger_msg, ic_msg,
-    instruction::{CompiledInstruction, Instruction, InstructionError},
+    ic_msg,
+    instruction::{Instruction, InstructionError},
     message::Message,
-    process_instruction::{Executor, InvokeContext, Logger, ProcessInstructionWithContext},
+    process_instruction::{Executor, InvokeContext, ProcessInstructionWithContext},
     pubkey::Pubkey,
     rent::Rent,
     system_program,
@@ -516,20 +516,16 @@ impl InstructionProcessor {
                 caller_write_privileges.push(caller_keyed_accounts[*index].is_writable());
             }
         };
-        let accounts = message
-            .account_keys
-            .iter()
-            .map(|account_key| {
-                invoke_context
-                    .get_account(account_key)
-                    .ok_or(InstructionError::MissingAccount)
-                    .map(|(_account_index, account)| (*account_key, account))
-            })
-            .collect::<Result<Vec<_>, InstructionError>>()?;
-        let account_sizes = accounts
-            .iter()
-            .map(|(_key, account)| account.borrow().data().len())
-            .collect::<Vec<_>>();
+        let mut account_indices = Vec::with_capacity(message.account_keys.len());
+        let mut accounts = Vec::with_capacity(message.account_keys.len());
+        for account_key in message.account_keys.iter() {
+            let (account_index, account) = invoke_context
+                .get_account(account_key)
+                .ok_or(InstructionError::MissingAccount)?;
+            let account_length = account.borrow().data().len();
+            account_indices.push(account_index);
+            accounts.push((account, account_length));
+        }
 
         // Record the instruction
         invoke_context.record_instruction(&instruction);
@@ -538,13 +534,13 @@ impl InstructionProcessor {
         InstructionProcessor::process_cross_program_instruction(
             &message,
             &program_indices,
-            &accounts,
+            &account_indices,
             &caller_write_privileges,
             *invoke_context,
         )?;
 
         // Verify the called program has not misbehaved
-        for ((_key, account), prev_size) in accounts.iter().zip(account_sizes.iter()) {
+        for (account, prev_size) in accounts.iter() {
             if *prev_size != account.borrow().data().len() && *prev_size != 0 {
                 // Only support for `CreateAccount` at this time.
                 // Need a way to limit total realloc size across multiple CPI calls
@@ -564,7 +560,7 @@ impl InstructionProcessor {
     pub fn process_cross_program_instruction(
         message: &Message,
         program_indices: &[usize],
-        accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        account_indices: &[usize],
         caller_write_privileges: &[bool],
         invoke_context: &mut dyn InvokeContext,
     ) -> Result<(), InstructionError> {
@@ -577,13 +573,19 @@ impl InstructionProcessor {
         let program_id = instruction.program_id(&message.account_keys);
 
         // Verify the calling program hasn't misbehaved
-        invoke_context.verify_and_update(instruction, accounts, caller_write_privileges)?;
+        invoke_context.verify_and_update(instruction, account_indices, caller_write_privileges)?;
 
         // clear the return data
         invoke_context.set_return_data(None);
 
         // Invoke callee
-        invoke_context.push(program_id, message, instruction, program_indices, accounts)?;
+        invoke_context.push(
+            program_id,
+            message,
+            instruction,
+            program_indices,
+            account_indices,
+        )?;
 
         let mut instruction_processor = InstructionProcessor::default();
         for (program_id, process_instruction) in invoke_context.get_programs().iter() {
@@ -602,66 +604,13 @@ impl InstructionProcessor {
             let write_privileges: Vec<bool> = (0..message.account_keys.len())
                 .map(|i| message.is_writable(i, demote_program_write_locks))
                 .collect();
-            result = invoke_context.verify_and_update(instruction, accounts, &write_privileges);
+            result =
+                invoke_context.verify_and_update(instruction, account_indices, &write_privileges);
         }
 
         // Restore previous state
         invoke_context.pop();
         result
-    }
-
-    /// Verify the results of a cross-program instruction
-    #[allow(clippy::too_many_arguments)]
-    pub fn verify_and_update(
-        instruction: &CompiledInstruction,
-        pre_accounts: &mut [PreAccount],
-        accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
-        program_id: &Pubkey,
-        rent: &Rent,
-        write_privileges: &[bool],
-        timings: &mut ExecuteDetailsTimings,
-        logger: Rc<RefCell<dyn Logger>>,
-    ) -> Result<(), InstructionError> {
-        // Verify the per-account instruction results
-        let (mut pre_sum, mut post_sum) = (0_u128, 0_u128);
-        let mut work = |_unique_index: usize, account_index: usize| {
-            if account_index < write_privileges.len() && account_index < accounts.len() {
-                let (key, account) = &accounts[account_index];
-                let is_writable = write_privileges[account_index];
-                // Find the matching PreAccount
-                for pre_account in pre_accounts.iter_mut() {
-                    if key == pre_account.key() {
-                        {
-                            // Verify account has no outstanding references
-                            let _ = account
-                                .try_borrow_mut()
-                                .map_err(|_| InstructionError::AccountBorrowOutstanding)?;
-                        }
-                        let account = account.borrow();
-                        pre_account
-                            .verify(program_id, is_writable, rent, &account, timings, false)
-                            .map_err(|err| {
-                                ic_logger_msg!(logger, "failed to verify account {}: {}", key, err);
-                                err
-                            })?;
-                        pre_sum += u128::from(pre_account.lamports());
-                        post_sum += u128::from(account.lamports());
-                        if is_writable && !pre_account.executable() {
-                            pre_account.update(&account);
-                        }
-                        return Ok(());
-                    }
-                }
-            }
-            Err(InstructionError::MissingAccount)
-        };
-        instruction.visit_each_account(&mut work)?;
-
-        // Verify that the total sum of all the lamports did not change
-        if pre_sum != post_sum {
-            return Err(InstructionError::UnbalancedInstruction);
-        }
-        Ok(())
     }
 }
 
