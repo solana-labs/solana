@@ -61,6 +61,9 @@ pub enum VoteError {
     #[error("Zero confirmations")]
     ZeroConfirmations,
 
+    #[error("Confirmation exceeds limit")]
+    ConfirmationTooLarge,
+
     #[error("Root rolled back")]
     RootRollBack,
 
