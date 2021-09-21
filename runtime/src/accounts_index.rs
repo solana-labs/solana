@@ -174,6 +174,14 @@ impl<T: IndexValue> AccountMapEntryInner<T> {
     pub fn set_dirty(&self, value: bool) -> bool {
         self.meta.dirty.swap(value, Ordering::Relaxed)
     }
+
+    pub fn age(&self) -> Age {
+        self.meta.age.load(Ordering::Relaxed)
+    }
+
+    pub fn set_age(&self, value: Age) {
+        self.meta.age.store(value, Ordering::Relaxed)
+    }
 }
 
 pub enum AccountIndexGetResult<'a, T: IndexValue> {
