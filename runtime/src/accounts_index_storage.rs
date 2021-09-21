@@ -112,6 +112,7 @@ impl<T: IndexValue> AccountsIndexStorage<T> {
                 if flush {
                     let index = storage.next_bucket_to_flush();
                     in_mem[index].flush();
+                    storage.maybe_advance_age();
                 }
                 storage.stats.report_stats(&storage);
             }
