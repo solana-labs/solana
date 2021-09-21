@@ -74,6 +74,10 @@ fn slot_to_blocks_key(slot: Slot) -> String {
     slot_to_key(slot)
 }
 
+fn slot_to_tx_by_addr_key(slot: Slot) -> String {
+    slot_to_key(!slot)
+}
+
 // Reverse of `slot_to_key`
 fn key_to_slot(key: &str) -> Option<Slot> {
     match Slot::from_str_radix(key, 16) {
@@ -496,7 +500,7 @@ impl LedgerStorage {
         let starting_slot_tx_len = bigtable
             .get_protobuf_or_bincode_cell::<Vec<LegacyTransactionByAddrInfo>, tx_by_addr::TransactionByAddr>(
                 "tx-by-addr",
-                format!("{}{}", address_prefix, slot_to_key(!first_slot)),
+                format!("{}{}", address_prefix, slot_to_tx_by_addr_key(first_slot)),
             )
             .await
             .map(|cell_data| {
@@ -512,8 +516,16 @@ impl LedgerStorage {
         let tx_by_addr_data = bigtable
             .get_row_data(
                 "tx-by-addr",
-                Some(format!("{}{}", address_prefix, slot_to_key(!first_slot))),
-                Some(format!("{}{}", address_prefix, slot_to_key(!last_slot))),
+                Some(format!(
+                    "{}{}",
+                    address_prefix,
+                    slot_to_tx_by_addr_key(first_slot),
+                )),
+                Some(format!(
+                    "{}{}",
+                    address_prefix,
+                    slot_to_tx_by_addr_key(last_slot),
+                )),
                 limit as i64 + starting_slot_tx_len as i64,
             )
             .await?;
@@ -623,7 +635,7 @@ impl LedgerStorage {
             .into_iter()
             .map(|(address, transaction_info_by_addr)| {
                 (
-                    format!("{}/{}", address, slot_to_key(!slot)),
+                    format!("{}/{}", address, slot_to_tx_by_addr_key(slot)),
                     tx_by_addr::TransactionByAddr {
                         tx_by_addrs: transaction_info_by_addr
                             .into_iter()
@@ -694,7 +706,7 @@ impl LedgerStorage {
 
         let address_slot_rows: Vec<_> = addresses
             .into_iter()
-            .map(|address| format!("{}/{}", address, slot_to_key(!slot)))
+            .map(|address| format!("{}/{}", address, slot_to_tx_by_addr_key(slot)))
             .collect();
 
         let tx_deletion_rows = if !expected_tx_infos.is_empty() {
