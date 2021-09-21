@@ -439,7 +439,7 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
         }
         ("delete-slots", Some(arg_matches)) => {
             let slots = values_t_or_exit!(arg_matches, "slots", Slot);
-            let dry_run = !value_t_or_exit!(arg_matches, "force", bool);
+            let dry_run = !arg_matches.is_present("force");
             runtime.block_on(delete_slots(slots, dry_run))
         }
         ("first-available-block", Some(_arg_matches)) => runtime.block_on(first_available_block()),
