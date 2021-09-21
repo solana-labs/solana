@@ -1,7 +1,6 @@
 import bs58 from 'bs58';
 import {Buffer} from 'buffer';
 import fetch from 'cross-fetch';
-import type {Response} from 'cross-fetch';
 import {
   type as pick,
   number,
@@ -755,13 +754,21 @@ function createRpcClient(
   if (fetchMiddleware) {
     fetchWithMiddleware = (url: string, options: any) => {
       return new Promise<Response>((resolve, reject) => {
-        fetchMiddleware(url, options, async (url: string, options: any) => {
-          try {
-            resolve(await fetch(url, options));
-          } catch (error) {
-            reject(error);
-          }
-        });
+        fetchMiddleware(
+          url,
+          options,
+          async (url, options) => {
+            try {
+              const response = await fetch(url, options);
+              resolve(response);
+              return response;
+            } catch (error) {
+              reject(error);
+              throw error;
+            }
+          },
+          {resolve, reject, fetch},
+        );
       });
     };
   }
@@ -1956,13 +1963,20 @@ export type ConfirmedSignatureInfo = {
  */
 export type HttpHeaders = {[header: string]: string};
 
+type Fetch = typeof fetch;
+
 /**
  * A callback used to augment the outgoing HTTP request
  */
 export type FetchMiddleware = (
   url: string,
   options: any,
-  fetch: Function,
+  fetch: Fetch,
+  params: {
+    resolve(resp: Response): void;
+    reject(reason?: any): void;
+    fetch: Fetch;
+  },
 ) => void;
 
 /**
