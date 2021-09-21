@@ -4496,6 +4496,7 @@ dependencies = [
  "dashmap",
  "etcd-client",
  "fs_extra",
+ "histogram",
  "itertools 0.10.1",
  "jsonrpc-core",
  "jsonrpc-core-client",
