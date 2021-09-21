@@ -678,7 +678,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 occupied.remove();
             }
         }
-        Self::update_stat(self.stats.flush_entries_removed_from_mem, value: u64)
+        Self::update_stat(self.stats.flush_entries_removed_from_mem, value: u64);
         completed_scan
     }
 
