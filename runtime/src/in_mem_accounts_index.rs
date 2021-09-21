@@ -1,13 +1,13 @@
 use crate::accounts_index::{
     AccountMapEntry, AccountMapEntryInner, IndexValue, SlotList, WriteAccountMapEntry,
 };
-use crate::bucket_map_holder::BucketMapHolder;
+use crate::bucket_map_holder::{Age, BucketMapHolder};
 use crate::bucket_map_holder_stats::BucketMapHolderStats;
 use solana_measure::measure::Measure;
 use solana_sdk::{clock::Slot, pubkey::Pubkey};
 use std::collections::{hash_map::Entry, HashMap};
 use std::ops::{Bound, RangeBounds, RangeInclusive};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
 use std::sync::{Arc, RwLock};
 
 use std::fmt::Debug;
@@ -15,8 +15,11 @@ type K = Pubkey;
 type CacheRangesHeld = RwLock<Vec<Option<RangeInclusive<Pubkey>>>>;
 pub type SlotT<T> = (Slot, T);
 
-// one instance of this represents one bin of the accounts index.
+#[allow(dead_code)] // temporary during staging
+                    // one instance of this represents one bin of the accounts index.
 pub struct InMemAccountsIndex<T: IndexValue> {
+    last_age_flushed: AtomicU8,
+
     // backing store
     map_internal: RwLock<HashMap<Pubkey, AccountMapEntry<T>>>,
     storage: Arc<BucketMapHolder<T>>,
@@ -38,6 +41,7 @@ impl<T: IndexValue> Debug for InMemAccountsIndex<T> {
     }
 }
 
+#[allow(dead_code)] // temporary during staging
 impl<T: IndexValue> InMemAccountsIndex<T> {
     pub fn new(storage: &Arc<BucketMapHolder<T>>, bin: usize) -> Self {
         Self {
@@ -48,7 +52,22 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             stop_flush: AtomicU64::default(),
             bin_dirty: AtomicBool::default(),
             flushing_active: AtomicBool::default(),
+            // initialize this to max, to make it clear we have not flushed at age 0, the starting age
+            last_age_flushed: AtomicU8::new(Age::MAX),
         }
+    }
+
+    /// true if this bucket needs to call flush for the current age
+    /// we need to scan each bucket once per value of age
+    fn get_should_age(&self) -> bool {
+        let last_age_flushed = self.last_age_flushed.load(Ordering::Relaxed);
+        let age = self.storage.age.load(Ordering::Relaxed);
+        last_age_flushed == age
+    }
+
+    /// called after flush scans this bucket at the current age
+    fn set_has_aged(&self, age: Age) {
+        self.last_age_flushed.store(age, Ordering::Relaxed);
     }
 
     fn map(&self) -> &RwLock<HashMap<Pubkey, AccountMapEntry<T>>> {
@@ -107,6 +126,14 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         if let Entry::Occupied(index_entry) = entry {
             if index_entry.get().slot_list.read().unwrap().is_empty() {
                 index_entry.remove();
+                // note there is a potential race here that has existed.
+                // if someone else holds the arc,
+                //  then they think the item is still in the index and can make modifications.
+                // We have to have a write lock to the map here, which means nobody else can get
+                //  the arc, but someone may already have retreived a clone of it.
+                if let Some(disk) = self.storage.disk.as_ref() {
+                    disk.delete_key(&pubkey)
+                }
                 self.stats().insert_or_delete(false, self.bin);
                 return true;
             }
@@ -378,6 +405,8 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
     pub fn set_bin_dirty(&self) {
         self.bin_dirty.store(true, Ordering::Release);
+        // 1 bin dirty, so only need 1 thread to wake up if many could be waiting
+        self.storage.wait_dirty_or_aged.notify_one();
     }
 
     fn flush_internal(&self) {
@@ -483,5 +512,14 @@ mod tests {
             accts.hold_range_in_memory(&ranges[0].clone(), false);
             assert!(accts.cache_ranges_held.read().unwrap().is_empty());
         }
+    }
+
+    #[test]
+    fn test_age() {
+        solana_logger::setup();
+        let test = new_for_test::<u64>();
+        assert!(!test.get_should_age());
+        test.set_has_aged(0);
+        assert!(test.get_should_age());
     }
 }

@@ -122,17 +122,16 @@ impl<T: Clone + Copy + Debug> BucketMap<T> {
     }
 
     /// Get the items for bucket `ix` in `range`
-    pub fn items_in_range<R>(&self, ix: usize, range: Option<&R>) -> Option<Vec<BucketItem<T>>>
+    pub fn items_in_range<R>(&self, ix: usize, range: Option<&R>) -> Vec<BucketItem<T>>
     where
         R: RangeBounds<Pubkey>,
     {
-        Some(
-            self.buckets[ix]
-                .read()
-                .unwrap()
-                .as_ref()?
-                .items_in_range(range),
-        )
+        self.buckets[ix]
+            .read()
+            .unwrap()
+            .as_ref()
+            .map(|bucket| bucket.items_in_range(range))
+            .unwrap_or_default()
     }
 
     /// Get the Pubkeys for bucket `ix`
@@ -164,6 +163,21 @@ impl<T: Clone + Copy + Debug> BucketMap<T> {
         if let Some(bucket) = self.buckets[ix].write().unwrap().as_mut() {
             bucket.delete_key(key);
         }
+    }
+
+    /// Update Pubkey `key`'s value with 'value'
+    pub fn insert(&self, key: &Pubkey, value: (&[T], RefCount)) {
+        let ix = self.bucket_ix(key);
+        let mut bucket = self.buckets[ix].write().unwrap();
+        if bucket.is_none() {
+            *bucket = Some(Bucket::new(
+                Arc::clone(&self.drives),
+                self.max_search,
+                Arc::clone(&self.stats),
+            ));
+        }
+        let bucket = bucket.as_mut().unwrap();
+        bucket.insert(key, value)
     }
 
     /// Update Pubkey `key`'s value with function `updatefn`
@@ -229,6 +243,26 @@ mod tests {
         let index = BucketMap::new(config);
         index.update(&key, |_| Some((vec![0], 0)));
         assert_eq!(index.read_value(&key), Some((vec![0], 0)));
+    }
+
+    #[test]
+    fn bucket_map_test_insert2() {
+        let key = Pubkey::new_unique();
+        let config = BucketMapConfig::new(1 << 1);
+        let index = BucketMap::new(config);
+        index.insert(&key, (&[0], 0));
+        assert_eq!(index.read_value(&key), Some((vec![0], 0)));
+    }
+
+    #[test]
+    fn bucket_map_test_update2() {
+        let key = Pubkey::new_unique();
+        let config = BucketMapConfig::new(1 << 1);
+        let index = BucketMap::new(config);
+        index.insert(&key, (&[0], 0));
+        assert_eq!(index.read_value(&key), Some((vec![0], 0)));
+        index.insert(&key, (&[1], 0));
+        assert_eq!(index.read_value(&key), Some((vec![1], 0)));
     }
 
     #[test]
@@ -401,9 +435,7 @@ mod tests {
                     let mut r = vec![];
                     for bin in 0..map.num_buckets() {
                         r.append(
-                            &mut map
-                                .items_in_range(bin, None::<&std::ops::RangeInclusive<Pubkey>>)
-                                .unwrap_or_default(),
+                            &mut map.items_in_range(bin, None::<&std::ops::RangeInclusive<Pubkey>>),
                         );
                     }
                     r
@@ -439,11 +471,16 @@ mod tests {
                 let k = solana_sdk::pubkey::new_rand();
                 let v = gen_rand_value();
                 hash_map.write().unwrap().insert(k, v.clone());
+                let insert = thread_rng().gen_range(0, 2) == 0;
                 maps.iter().for_each(|map| {
-                    map.update(&k, |current| {
-                        assert!(current.is_none());
-                        Some(v.clone())
-                    })
+                    if insert {
+                        map.insert(&k, (&v.0, v.1))
+                    } else {
+                        map.update(&k, |current| {
+                            assert!(current.is_none());
+                            Some(v.clone())
+                        })
+                    }
                 });
                 return_key(k);
             }
@@ -453,11 +490,16 @@ mod tests {
                     let hm = hash_map.read().unwrap();
                     let (v, rc) = gen_rand_value();
                     let v_old = hm.get(&k);
+                    let insert = thread_rng().gen_range(0, 2) == 0;
                     maps.iter().for_each(|map| {
-                        map.update(&k, |current| {
-                            assert_eq!(current, v_old.map(|(v, rc)| (&v[..], *rc)), "{}", k);
-                            Some((v.clone(), rc))
-                        })
+                        if insert {
+                            map.insert(&k, (&v, rc))
+                        } else {
+                            map.update(&k, |current| {
+                                assert_eq!(current, v_old.map(|(v, rc)| (&v[..], *rc)), "{}", k);
+                                Some((v.clone(), rc))
+                            })
+                        }
                     });
                     drop(hm);
                     hash_map.write().unwrap().insert(k, (v, rc));
