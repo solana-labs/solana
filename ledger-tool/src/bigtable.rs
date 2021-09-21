@@ -43,13 +43,13 @@ async fn upload(
     .await
 }
 
-async fn delete_slots(slots: Vec<Slot>, extract_memo: bool, dry_run: bool) -> Result<(), Box<dyn std::error::Error>> {
+async fn delete_slots(slots: Vec<Slot>, dry_run: bool) -> Result<(), Box<dyn std::error::Error>> {
     let read_only = dry_run;
     let bigtable = solana_storage_bigtable::LedgerStorage::new(read_only, None)
         .await
         .map_err(|err| format!("Failed to connect to storage: {:?}", err))?;
 
-    solana_ledger::bigtable_delete::delete_confirmed_blocks(bigtable, slots, extract_memo, dry_run).await
+    solana_ledger::bigtable_delete::delete_confirmed_blocks(bigtable, slots, dry_run).await
 }
 
 async fn first_available_block() -> Result<(), Box<dyn std::error::Error>> {
@@ -287,13 +287,6 @@ impl BigTableSubCommand for App<'_, '_> {
                                     .help("Slots to delete"),
                                 )
                             .arg(
-                                Arg::with_name("extract_memo")
-                                    .long("extract-memo")
-                                    .takes_value(false)
-                                    .help(
-                                        "Old transaction could have been persisted without memo, needed to adjust unmatched delete skip behavior"),
-                            )
-                            .arg(
                                 Arg::with_name("force")
                                     .long("force")
                                     .takes_value(false)
@@ -446,9 +439,8 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
         }
         ("delete-slots", Some(arg_matches)) => {
             let slots = values_t_or_exit!(arg_matches, "slots", Slot);
-            let extract_memo = arg_matches.is_present("extract_memo");
             let dry_run = !arg_matches.is_present("force");
-            runtime.block_on(delete_slots(slots, extract_memo, dry_run))
+            runtime.block_on(delete_slots(slots, dry_run))
         }
         ("first-available-block", Some(_arg_matches)) => runtime.block_on(first_available_block()),
         ("block", Some(arg_matches)) => {

@@ -269,6 +269,24 @@ struct TransactionInfo {
     memo: Option<String>, // Transaction memo
 }
 
+// Part of a serialized `TransactionInfo` which is stored in the `tx` table
+#[derive(PartialEq, Debug)]
+struct UploadedTransaction {
+    slot: Slot, // The slot that contains the block with this transaction in it
+    index: u32, // Where the transaction is located in the block
+    err: Option<TransactionError>, // None if the transaction executed successfully
+}
+
+impl From<TransactionInfo> for UploadedTransaction {
+    fn from(transaction_info: TransactionInfo) -> Self {
+        Self {
+            slot: transaction_info.slot,
+            index: transaction_info.index,
+            err: transaction_info.err,
+        }
+    }
+}
+
 impl From<TransactionInfo> for TransactionStatus {
     fn from(transaction_info: TransactionInfo) -> Self {
         let TransactionInfo { slot, err, .. } = transaction_info;
@@ -343,7 +361,12 @@ impl LedgerStorage {
     pub async fn get_confirmed_blocks(&self, start_slot: Slot, limit: usize) -> Result<Vec<Slot>> {
         let mut bigtable = self.connection.client();
         let blocks = bigtable
-            .get_row_keys("blocks", Some(slot_to_blocks_key(start_slot)), None, limit as i64)
+            .get_row_keys(
+                "blocks",
+                Some(slot_to_blocks_key(start_slot)),
+                None,
+                limit as i64,
+            )
             .await?;
         Ok(blocks.into_iter().filter_map(|s| key_to_slot(&s)).collect())
     }
@@ -647,16 +670,15 @@ impl LedgerStorage {
     }
 
     // Delete a confirmed block and associated meta data.
-    pub async fn delete_confirmed_block(&self, slot: Slot, extract_memo: bool, dry_run: bool) -> Result<()> {
+    pub async fn delete_confirmed_block(&self, slot: Slot, dry_run: bool) -> Result<()> {
         let mut addresses: HashSet<&Pubkey> = HashSet::new();
-        let mut expected_tx_infos: HashMap<String, TransactionInfo> = HashMap::new();
+        let mut expected_tx_infos: HashMap<String, UploadedTransaction> = HashMap::new();
         let confirmed_block = self.get_confirmed_block(slot).await?;
         for (index, transaction_with_meta) in confirmed_block.transactions.iter().enumerate() {
             let TransactionWithStatusMeta { meta, transaction } = transaction_with_meta;
             let signature = transaction.signatures[0];
             let index = index as u32;
             let err = meta.as_ref().and_then(|meta| meta.status.clone().err());
-            let memo = if extract_memo { extract_and_fmt_memos(&transaction.message) } else { None };
 
             for address in &transaction.message.account_keys {
                 if !is_sysvar_id(address) {
@@ -666,12 +688,7 @@ impl LedgerStorage {
 
             expected_tx_infos.insert(
                 signature.to_string(),
-                TransactionInfo {
-                    slot,
-                    index,
-                    err,
-                    memo,
-                },
+                UploadedTransaction { slot, index, err },
             );
         }
 
@@ -686,12 +703,13 @@ impl LedgerStorage {
                 .map(|(signature, _info)| signature)
                 .cloned()
                 .collect::<Vec<_>>();
-            let fetched_tx_infos = self
-                .connection
-                .get_bincode_cells_with_retry::<TransactionInfo>("tx", &signatures)
-                .await?
-                .into_iter()
-                .collect::<HashMap<_, _>>();
+            let fetched_tx_infos: HashMap<String, std::result::Result<UploadedTransaction, _>> =
+                self.connection
+                    .get_bincode_cells_with_retry::<TransactionInfo>("tx", &signatures)
+                    .await?
+                    .into_iter()
+                    .map(|(signature, tx_info_res)| (signature, tx_info_res.map(Into::into)))
+                    .collect::<HashMap<_, _>>();
 
             let mut deletion_rows = Vec::with_capacity(expected_tx_infos.len());
             for (signature, expected_tx_info) in expected_tx_infos {

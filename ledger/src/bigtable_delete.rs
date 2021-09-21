@@ -6,7 +6,6 @@ const NUM_BLOCKS_TO_DELETE_IN_PARALLEL: usize = 32;
 pub async fn delete_confirmed_blocks(
     bigtable: solana_storage_bigtable::LedgerStorage,
     blocks_to_delete: Vec<Slot>,
-    extract_memo: bool,
     dry_run: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut measure = Measure::start("entire delete");
@@ -24,7 +23,7 @@ pub async fn delete_confirmed_blocks(
 
         let deletion_futures = blocks
             .iter()
-            .map(|block| bigtable.delete_confirmed_block(*block, extract_memo, dry_run));
+            .map(|block| bigtable.delete_confirmed_block(*block, dry_run));
 
         for (block, result) in blocks
             .iter()
