@@ -275,30 +275,34 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
         stable_log::program_invoke(&logger, &program_id, invoke_context.invoke_depth());
 
         // Convert AccountInfos into Accounts
-        fn ai_to_a(ai: &AccountInfo) -> AccountSharedData {
-            AccountSharedData::from(Account {
-                lamports: ai.lamports(),
-                data: ai.try_borrow_data().unwrap().to_vec(),
-                owner: *ai.owner,
-                executable: ai.executable,
-                rent_epoch: ai.rent_epoch,
-            })
-        }
-        let mut accounts = vec![];
-        'outer: for key in &message.account_keys {
-            for account_info in account_infos {
-                if account_info.unsigned_key() == key {
-                    accounts.push((*key, Rc::new(RefCell::new(ai_to_a(account_info)))));
-                    continue 'outer;
-                }
+        let mut account_indices = Vec::with_capacity(message.account_keys.len());
+        let mut accounts = Vec::with_capacity(message.account_keys.len());
+        for (i, account_key) in message.account_keys.iter().enumerate() {
+            let ((account_index, account), account_info) = invoke_context
+                .get_account(account_key)
+                .zip(
+                    account_infos
+                        .iter()
+                        .find(|account_info| account_info.unsigned_key() == account_key),
+                )
+                .ok_or(InstructionError::MissingAccount)
+                .unwrap();
+            {
+                let mut account = account.borrow_mut();
+                account.copy_into_owner_from_slice(account_info.owner.as_ref());
+                account.set_data_from_slice(&account_info.try_borrow_data().unwrap());
+                account.set_lamports(account_info.lamports());
+                account.set_executable(account_info.executable);
+                account.set_rent_epoch(account_info.rent_epoch);
             }
-            panic!("Account {} wasn't found in account_infos", key);
+            let account_info = if message.is_writable(i, demote_program_write_locks) {
+                Some(account_info)
+            } else {
+                None
+            };
+            account_indices.push(account_index);
+            accounts.push((account, account_info));
         }
-        assert_eq!(
-            accounts.len(),
-            message.account_keys.len(),
-            "Missing or not enough accounts passed to invoke"
-        );
         let (program_account_index, _program_account) =
             invoke_context.get_account(&program_id).unwrap();
         let program_indices = vec![program_account_index];
@@ -330,43 +334,37 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
         InstructionProcessor::process_cross_program_instruction(
             &message,
             &program_indices,
-            &accounts,
+            &account_indices,
             &caller_privileges,
             invoke_context,
         )
         .map_err(|err| ProgramError::try_from(err).unwrap_or_else(|err| panic!("{}", err)))?;
 
         // Copy writeable account modifications back into the caller's AccountInfos
-        for (i, (pubkey, account)) in accounts.iter().enumerate().take(message.account_keys.len()) {
-            if !message.is_writable(i, demote_program_write_locks) {
-                continue;
-            }
-            for account_info in account_infos {
-                if account_info.unsigned_key() == pubkey {
-                    **account_info.try_borrow_mut_lamports().unwrap() = account.borrow().lamports();
-
-                    let mut data = account_info.try_borrow_mut_data()?;
-                    let account_borrow = account.borrow();
-                    let new_data = account_borrow.data();
-                    if account_info.owner != account.borrow().owner() {
-                        // TODO Figure out a better way to allow the System Program to set the account owner
-                        #[allow(clippy::transmute_ptr_to_ptr)]
-                        #[allow(mutable_transmutes)]
-                        let account_info_mut =
-                            unsafe { transmute::<&Pubkey, &mut Pubkey>(account_info.owner) };
-                        *account_info_mut = *account.borrow().owner();
-                    }
-                    if data.len() != new_data.len() {
-                        // TODO: Figure out how to allow the System Program to resize the account data
-                        panic!(
-                            "Account data resizing not supported yet: {} -> {}. \
-                            Consider making this test conditional on `#[cfg(feature = \"test-bpf\")]`",
-                            data.len(),
-                            new_data.len()
-                        );
-                    }
-                    data.clone_from_slice(new_data);
+        for (account, account_info) in accounts.iter() {
+            if let Some(account_info) = account_info {
+                **account_info.try_borrow_mut_lamports().unwrap() = account.borrow().lamports();
+                let mut data = account_info.try_borrow_mut_data()?;
+                let account_borrow = account.borrow();
+                let new_data = account_borrow.data();
+                if account_info.owner != account.borrow().owner() {
+                    // TODO Figure out a better way to allow the System Program to set the account owner
+                    #[allow(clippy::transmute_ptr_to_ptr)]
+                    #[allow(mutable_transmutes)]
+                    let account_info_mut =
+                        unsafe { transmute::<&Pubkey, &mut Pubkey>(account_info.owner) };
+                    *account_info_mut = *account.borrow().owner();
                 }
+                if data.len() != new_data.len() {
+                    // TODO: Figure out how to allow the System Program to resize the account data
+                    panic!(
+                        "Account data resizing not supported yet: {} -> {}. \
+                        Consider making this test conditional on `#[cfg(feature = \"test-bpf\")]`",
+                        data.len(),
+                        new_data.len()
+                    );
+                }
+                data.clone_from_slice(new_data);
             }
         }
 
