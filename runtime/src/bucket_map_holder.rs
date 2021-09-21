@@ -129,7 +129,7 @@ impl<T: IndexValue> BucketMapHolder<T> {
             ages_to_stay_in_cache,
             count_ages_flushed: AtomicUsize::default(),
             age: AtomicU8::default(),
-            stats: BucketMapHolderStats::default(),
+            stats: BucketMapHolderStats::new(bins),
             wait_dirty_or_aged: WaitableCondvar::default(),
             next_bucket_to_flush: Mutex::new(0),
             age_timer: AtomicInterval::default(),
