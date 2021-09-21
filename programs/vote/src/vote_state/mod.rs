@@ -384,7 +384,7 @@ impl VoteState {
     // and the confirmations sorted from largest to smallest.
     // 2) Confirmations `c` on any vote slot satisfy `0 < c <= MAX_LOCKOUT_HISTORY`
     // 3) Lockouts are not expired by consecutive votes, i.e. for every consecutive
-    // `v_i`, `v_{i + 1}` satisfy `v_i.last_locked_out_slot() <= v_{i + 1}`.
+    // `v_i`, `v_{i + 1}` satisfy `v_i.last_locked_out_slot() >= v_{i + 1}`.
 
     // We also guarantee that compared to the current vote state, `new_state`
     // introduces no rollback. This means:
