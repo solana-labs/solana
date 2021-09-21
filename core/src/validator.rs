@@ -387,7 +387,7 @@ impl Validator {
 
         let mut confirmed_bank_senders = Vec::new();
 
-        let accountsdb_plugin_service=
+        let accountsdb_plugin_service =
             config
                 .accountsdb_plugin_config_file
                 .as_ref()
@@ -432,7 +432,9 @@ impl Validator {
             &start_progress,
             config.no_poh_speed_test,
             accounts_package_channel.0.clone(),
-            accountsdb_plugin_service.as_ref().map(|plugin_service| plugin_service.get_accounts_update_notifier()),
+            accountsdb_plugin_service
+                .as_ref()
+                .map(|plugin_service| plugin_service.get_accounts_update_notifier()),
         );
 
         *start_progress.write().unwrap() = ValidatorStartProgress::StartingServices;

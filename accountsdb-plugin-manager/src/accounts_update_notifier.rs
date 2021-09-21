@@ -25,9 +25,14 @@ pub(crate) struct AccountsUpdateNotifierImpl {
     accounts_selector: AccountsSelector,
 }
 
-
 impl AccountsUpdateNotifierIntf for AccountsUpdateNotifierImpl {
-    fn notify_account_update(&self, slot: Slot, pubkey: &Pubkey, hash: &Hash, account: &AccountSharedData) {
+    fn notify_account_update(
+        &self,
+        slot: Slot,
+        pubkey: &Pubkey,
+        hash: Option<&Hash>,
+        account: &AccountSharedData,
+    ) {
         match self.accountinfo_from_shared_account_data(pubkey, hash, account) {
             Some(account_info) => {
                 self.notify_plugins_of_account_update(account_info, slot);
@@ -46,7 +51,6 @@ impl AccountsUpdateNotifierIntf for AccountsUpdateNotifierImpl {
 
     fn notify_slot_rooted(&self, slot: Slot) {
         self.notify_slot_status(slot, SlotStatus::Rooted);
-
     }
 }
 
@@ -106,15 +110,19 @@ impl AccountsUpdateNotifierImpl {
         }
     }
 
-    fn accountinfo_from_shared_account_data(&self,
+    fn accountinfo_from_shared_account_data(
+        &self,
         pubkey: &Pubkey,
-        hash: &Hash,
-        account: & AccountSharedData,
+        hash: Option<&Hash>,
+        account: &AccountSharedData,
     ) -> Option<ReplicaAccountInfo> {
-        if !self.accounts_selector.is_account_selected(pubkey, account.owner()) {
+        if !self
+            .accounts_selector
+            .is_account_selected(pubkey, account.owner())
+        {
             return None;
         }
-    
+
         let account_meta = ReplicaAccountMeta {
             pubkey: bs58::encode(pubkey).into_string(),
             lamports: account.lamports(),
@@ -125,7 +133,7 @@ impl AccountsUpdateNotifierImpl {
         let data = account.data().to_vec();
         Some(ReplicaAccountInfo {
             account_meta,
-            hash: bs58::encode(hash).into_string(),
+            hash: hash.map(|hash| bs58::encode(hash).into_string()),
             data,
         })
     }
@@ -170,10 +178,7 @@ impl AccountsUpdateNotifierImpl {
                     )
                 }
                 Ok(_) => {
-                    trace!(
-                        "Successfully updated slot status at slot {:?}",
-                        slot
-                    );
+                    trace!("Successfully updated slot status at slot {:?}", slot);
                 }
             }
         }

@@ -1,6 +1,6 @@
 use {
     crossbeam_channel::Receiver,
-    solana_runtime::{accounts_db::AccountsUpdateNotifier,},
+    solana_runtime::accounts_db::AccountsUpdateNotifier,
     solana_sdk::{clock::Slot, commitment_config::CommitmentLevel},
     std::{
         collections::VecDeque,
@@ -98,7 +98,10 @@ impl SlotConfirmationObserver {
                         if slot.is_none() {
                             break;
                         }
-                        accounts_update_notifier.read().unwrap().notify_slot_confirmed(slot.unwrap().0);
+                        accounts_update_notifier
+                            .read()
+                            .unwrap()
+                            .notify_slot_confirmed(slot.unwrap().0);
                     }
                     drop(slot_set);
                     sleep(Duration::from_millis(200));

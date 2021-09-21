@@ -99,10 +99,14 @@ impl AccountsDbPluginService {
             AccountsSelector::new(&accounts, &owners)
         };
 
-        let accounts_update_notifier =
-            Arc::new(RwLock::new(AccountsUpdateNotifierImpl::new(plugin_manager.clone(), accounts_selector)));
-        let confirmed_slots_observer =
-            SlotConfirmationObserver::new(confirmed_bank_receiver, accounts_update_notifier.clone());
+        let accounts_update_notifier = Arc::new(RwLock::new(AccountsUpdateNotifierImpl::new(
+            plugin_manager.clone(),
+            accounts_selector,
+        )));
+        let confirmed_slots_observer = SlotConfirmationObserver::new(
+            confirmed_bank_receiver,
+            accounts_update_notifier.clone(),
+        );
 
         unsafe {
             plugin_manager

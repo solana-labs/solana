@@ -938,7 +938,13 @@ struct RemoveUnrootedSlotsSynchronization {
 type AccountInfoAccountsIndex = AccountsIndex<AccountInfo>;
 
 pub trait AccountsUpdateNotifierIntf: std::fmt::Debug {
-    fn notify_account_update(&self, slot: Slot, pubkey: &Pubkey, hash: &Hash, account: &AccountSharedData);
+    fn notify_account_update(
+        &self,
+        slot: Slot,
+        pubkey: &Pubkey,
+        hash: Option<&Hash>,
+        account: &AccountSharedData,
+    );
     fn notify_slot_confirmed(&self, slot: Slot);
     fn notify_slot_processed(&self, slot: Slot);
     fn notify_slot_rooted(&self, slot: Slot);
@@ -4221,6 +4227,7 @@ impl AccountsDb {
             {
                 let stored_size = offsets[1] - offsets[0];
                 storage.add_account(stored_size);
+
                 infos.push(AccountInfo {
                     store_id: storage.append_vec_id(),
                     offset: offsets[0],
@@ -4240,6 +4247,21 @@ impl AccountsDb {
         self.stats
             .store_find_store
             .fetch_add(total_storage_find_us, Ordering::Relaxed);
+
+        if let Some(accounts_update_notifier) = &self.accounts_update_notifier {
+            let notifier = &accounts_update_notifier.read().unwrap();
+
+            for i in 0..accounts_and_meta_to_store.len() {
+                let meta = &accounts_and_meta_to_store[i].0;
+                let hash = hashes[i].borrow();
+                let account = accounts_and_meta_to_store[i]
+                    .1
+                    .unwrap()
+                    .to_account_shared_data();
+                notifier.notify_account_update(slot, &meta.pubkey, Some(hash), &account)
+            }
+        }
+
         infos
     }
 
@@ -4626,6 +4648,13 @@ impl AccountsDb {
                     stored_size: CACHE_VIRTUAL_STORED_SIZE,
                     lamports: account.lamports(),
                 };
+
+                if let Some(accounts_update_notifier) = &self.accounts_update_notifier {
+                    accounts_update_notifier
+                        .read()
+                        .unwrap()
+                        .notify_account_update(slot, &meta.pubkey, hash, &account)
+                }
 
                 let cached_account = self.accounts_cache.store(slot, &meta.pubkey, account, hash);
                 // hash this account in the bg

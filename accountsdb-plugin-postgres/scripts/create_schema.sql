@@ -12,7 +12,7 @@ CREATE TABLE account (
     slot BIGINT NOT NULL,
     executable BOOL NOT NULL,
     rent_epoch BIGINT NOT NULL,
-    hash VARCHAR(50) NOT NULL,
+    hash VARCHAR(50),
     data BYTEA,
     updated_on TIMESTAMP NOT NULL
 );
@@ -36,7 +36,7 @@ CREATE TABLE account_audit (
     slot BIGINT NOT NULL,
     executable BOOL NOT NULL,
     rent_epoch BIGINT NOT NULL,
-    hash VARCHAR(50) NOT NULL,
+    hash VARCHAR(50),
     data BYTEA,
     updated_on TIMESTAMP NOT NULL,
     CONSTRAINT slot_pubkey PRIMARY KEY (slot, pubkey)
