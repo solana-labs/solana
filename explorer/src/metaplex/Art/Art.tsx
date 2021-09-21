@@ -8,7 +8,7 @@ import { getLast } from "../utils";
 import { Metadata } from "metaplex/classes";
 import ContentLoader from "react-content-loader";
 
-const ImagePlaceholder = () => (
+const Placeholder = () => (
   <ContentLoader
     viewBox="0 0 212 200"
     height={150}
@@ -33,8 +33,8 @@ const CachedImageContent = ({
   const { cachedBlob } = useCachedImage(uri || "");
 
   return (
-    <div>
-      {!loaded && <ImagePlaceholder />}
+    <>
+      {!loaded && <Placeholder />}
       <img
         className={`rounded mx-auto ${loaded ? "d-block" : "d-none"}`}
         src={cachedBlob}
@@ -51,7 +51,7 @@ const CachedImageContent = ({
           setLoaded(true);
         }}
       />
-    </div>
+    </>
   );
 };
 
@@ -144,39 +144,41 @@ const VideoArtContent = ({
 };
 
 const HTMLContent = ({
-  uri,
   animationUrl,
   className,
   style,
   files,
 }: {
-  uri?: string;
   animationUrl?: string;
   className?: string;
   style?: React.CSSProperties;
   files?: (MetadataFile | string)[];
 }) => {
+  const [loaded, setLoaded] = useState<boolean>(false);
   const htmlURL =
     files && files.length > 0 && typeof files[0] === "string"
       ? files[0]
       : animationUrl;
-  const { isLoading } = useCachedImage(htmlURL || "");
 
-  if (isLoading) {
-    return (
-      <CachedImageContent uri={uri} className={className} preview={false} />
-    );
-  }
   return (
-    <iframe
-      allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
-      title={"html-content"}
-      sandbox="allow-scripts"
-      frameBorder="0"
-      src={htmlURL}
-      className={className}
-      style={{ width: 150, borderRadius: 12, ...style }}
-    ></iframe>
+    <>
+      {!loaded && <Placeholder />}
+      <iframe
+        allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
+        title={"html-content"}
+        sandbox="allow-scripts"
+        frameBorder="0"
+        src={htmlURL}
+        className={`${className} ${loaded ? "d-block" : "d-none"}`}
+        style={{ width: 150, borderRadius: 12, ...style }}
+        onLoad={() => {
+          setLoaded(true);
+        }}
+        onError={() => {
+          setLoaded(true);
+        }}
+      ></iframe>
+    </>
   );
 };
 
@@ -238,7 +240,6 @@ export const ArtContent = ({
       />
     ) : category === "html" || animationUrlExt === "html" ? (
       <HTMLContent
-        uri={uri}
         animationUrl={animationURL}
         className={className}
         style={style}
