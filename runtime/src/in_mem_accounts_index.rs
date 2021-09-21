@@ -264,6 +264,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     new_value
                 };
                 vacant.insert(new_value);
+                assert!(new_value.dirty());
                 self.stats().insert_or_delete(true, self.bin);
             }
         }
@@ -287,7 +288,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         if addref {
             current.add_un_ref(true);
         }
-        new_value.set_dirty(true);
+        current.set_dirty(true);
     }
 
     // modifies slot_list
@@ -417,6 +418,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     // on disk, so insert into cache, then return cache value so caller will merge
                     let disk_entry = self.disk_to_cache_entry(entry_disk.0, entry_disk.1);
                     let pubkey = *vacant.key();
+                    assert!(disk_entry.dirty());
                     vacant.insert(disk_entry.clone());
                     Some(Self::insert_returner(disk_entry, pubkey, new_entry))
                 } else {
