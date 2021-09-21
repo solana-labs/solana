@@ -473,39 +473,43 @@ impl VoteState {
             // If the current slot is less than the new proposed slot, then the
             // new slot must have popped off the old slot, so check that the
             // lockouts are corrects.
-            if current_vote.slot < new_vote.slot {
-                // TODO: Verify earlier ancestors that are expired are not popped
-                // off if one of the later votes is not expired yet, i.e.
-                //
-                // Example: {1: lockout 8, 9: lockout 2}, vote on 10 will not pop off 1
-                // because 9 is not popped off yet
-                if current_vote.last_locked_out_slot() >= new_vote.slot {
-                    return Err(VoteError::LockoutConflict);
+            match current_vote.slot.cmp(&new_vote.slot) {
+                Ordering::Less => {
+                    // TODO: Verify earlier ancestors that are expired are not popped
+                    // off if one of the later votes is not expired yet, i.e.
+                    //
+                    // Example: {1: lockout 8, 9: lockout 2}, vote on 10 will not pop off 1
+                    // because 9 is not popped off yet
+                    if current_vote.last_locked_out_slot() >= new_vote.slot {
+                        return Err(VoteError::LockoutConflict);
+                    }
+                    current_vote_state_index += 1;
                 }
-                current_vote_state_index += 1;
-            } else if current_vote.slot == new_vote.slot {
-                // TODO: Write tests for:
+                Ordering::Equal => {
+                    // TODO: Write tests for:
 
-                // It might be possible that during the switch from old vote instructions
-                // to new vote instructions, new_state contains votes for slots LESS
-                // than the current state, for instance:
-                //
-                // Current on-chain state: 1, 5
-                // New state: 1, 2 (lockout: 4), 3, 5, 7
-                //
-                // Imagine the validator made two of these votes:
-                // 1) The first vote {1, 2, 3} didn't land in the old state, but didn't
-                // land on chain
-                // 2) A second vote {1, 2, 5} was then submitted, which landed
-                //
-                //
-                // 2 is not popped off in the local tower because 3 doubled the lockout.
-                // However, 3 did not land in the on-chain state, so the vote {1, 2, 6}
-                // will immediately pop off 2.
-                current_vote_state_index += 1;
-                new_vote_state_index += 1;
-            } else {
-                new_vote_state_index += 1;
+                    // It might be possible that during the switch from old vote instructions
+                    // to new vote instructions, new_state contains votes for slots LESS
+                    // than the current state, for instance:
+                    //
+                    // Current on-chain state: 1, 5
+                    // New state: 1, 2 (lockout: 4), 3, 5, 7
+                    //
+                    // Imagine the validator made two of these votes:
+                    // 1) The first vote {1, 2, 3} didn't land in the old state, but didn't
+                    // land on chain
+                    // 2) A second vote {1, 2, 5} was then submitted, which landed
+                    //
+                    //
+                    // 2 is not popped off in the local tower because 3 doubled the lockout.
+                    // However, 3 did not land in the on-chain state, so the vote {1, 2, 6}
+                    // will immediately pop off 2.
+                    current_vote_state_index += 1;
+                    new_vote_state_index += 1;
+                }
+                Ordering::Greater => {
+                    new_vote_state_index += 1;
+                }
             }
         }
 
