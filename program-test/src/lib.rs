@@ -106,6 +106,9 @@ pub fn builtin_process_instruction(
 ) -> Result<(), InstructionError> {
     set_invoke_context(invoke_context);
 
+    let logger = invoke_context.get_logger();
+    stable_log::program_invoke(&logger, program_id, invoke_context.invoke_depth());
+
     let keyed_accounts = invoke_context.get_keyed_accounts()?;
 
     // Copy all the accounts into a HashMap to ensure there are no duplicates
@@ -154,7 +157,12 @@ pub fn builtin_process_instruction(
         .collect();
 
     // Execute the program
-    process_instruction(program_id, &account_infos, input).map_err(u64::from)?;
+    process_instruction(program_id, &account_infos, input).map_err(|err| {
+        let err = u64::from(err);
+        stable_log::program_failure(&logger, program_id, &err.into());
+        err
+    })?;
+    stable_log::program_success(&logger, program_id);
 
     // Commit AccountInfo changes back into KeyedAccounts
     for keyed_account in keyed_accounts {
