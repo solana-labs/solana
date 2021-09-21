@@ -3108,6 +3108,26 @@ export class Connection {
   }
 
   /**
+   * Fetch confirmed blocks between two slots
+   */
+  async getBlocks(
+    startSlot: number,
+    endSlot?: number,
+    commitment?: Finality,
+  ): Promise<Array<number>> {
+    const args = this._buildArgsAtLeastConfirmed(
+      endSlot !== undefined ? [startSlot, endSlot] : [startSlot],
+      commitment,
+    );
+    const unsafeRes = await this._rpcRequest('getBlocks', args);
+    const res = create(unsafeRes, jsonRpcResult(array(number())));
+    if ('error' in res) {
+      throw new Error('failed to get blocks: ' + res.error.message);
+    }
+    return res.result;
+  }
+
+  /**
    * Fetch a list of Signatures from the cluster for a confirmed block, excluding rewards
    */
   async getConfirmedBlockSignatures(
