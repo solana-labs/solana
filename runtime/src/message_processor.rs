@@ -212,7 +212,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         let (mut pre_sum, mut post_sum) = (0_u128, 0_u128);
         let mut work = |_unique_index: usize, index_in_instruction: usize| {
             if index_in_instruction < write_privileges.len()
-                && index_in_instruction < accounts.len()
+                && index_in_instruction < account_indices.len()
             {
                 let account_index = account_indices[index_in_instruction];
                 let (key, account) = &accounts[account_index];
