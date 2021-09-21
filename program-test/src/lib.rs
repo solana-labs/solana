@@ -715,6 +715,20 @@ impl ProgramTest {
         }
     }
 
+    /// Add a builtin program to the test environment.
+    ///
+    /// Note that builtin programs are responsible for their own `stable_log` output.
+    pub fn add_builtin_program(
+        &mut self,
+        program_name: &str,
+        program_id: Pubkey,
+        process_instruction: ProcessInstructionWithContext,
+    ) {
+        info!("\"{}\" builtin program", program_name);
+        self.builtins
+            .push(Builtin::new(program_name, program_id, process_instruction));
+    }
+
     fn setup_bank(
         &self,
     ) -> (
