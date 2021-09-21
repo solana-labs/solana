@@ -41,13 +41,10 @@ impl Header {
         Ok(0)
             == self
                 .lock
-                .compare_exchange(0, uid, Ordering::Relaxed, Ordering::Relaxed)
+                .compare_exchange(0, uid, Ordering::Acquire, Ordering::Relaxed)
     }
-    fn unlock(&self, uid: u64) -> bool {
-        Ok(uid)
-            == self
-                .lock
-                .compare_exchange(uid, 0, Ordering::Relaxed, Ordering::Relaxed)
+    fn unlock(&self) -> u64 {
+        self.lock.swap(0, Ordering::Release)
     }
     fn uid(&self) -> u64 {
         self.lock.load(Ordering::Relaxed)
@@ -68,7 +65,6 @@ pub struct BucketStorage {
 #[derive(Debug)]
 pub enum BucketStorageError {
     AlreadyAllocated,
-    InvalidFree,
 }
 
 impl Drop for BucketStorage {
@@ -154,7 +150,7 @@ impl BucketStorage {
         e
     }
 
-    pub fn free(&self, ix: u64, uid: u64) -> Result<(), BucketStorageError> {
+    pub fn free(&self, ix: u64, uid: u64) {
         if ix >= self.num_cells() {
             panic!("free: bad index size");
         }
@@ -164,16 +160,17 @@ impl BucketStorage {
         let ix = (ix * self.cell_size) as usize;
         //debug!("FREE {} {}", ix, uid);
         let hdr_slice: &[u8] = &self.mmap[ix..ix + std::mem::size_of::<Header>()];
-        let mut e = Err(BucketStorageError::InvalidFree);
         unsafe {
             let hdr = hdr_slice.as_ptr() as *const Header;
             //debug!("FREE uid: {}", hdr.as_ref().unwrap().uid());
-            if hdr.as_ref().unwrap().unlock(uid) {
-                self.used.fetch_sub(1, Ordering::Relaxed);
-                e = Ok(());
-            }
-        };
-        e
+            let previous_uid = hdr.as_ref().unwrap().unlock();
+            assert_eq!(
+                previous_uid, uid,
+                "free: unlocked a header with a differet uid: {}",
+                previous_uid
+            );
+            self.used.fetch_sub(1, Ordering::Relaxed);
+        }
     }
 
     pub fn get<T: Sized>(&self, ix: u64) -> &T {
