@@ -27,6 +27,14 @@ pub struct BucketMapHolder<T: IndexValue> {
     next_bucket_to_flush: Mutex<usize>,
     bins: usize,
 
+    // thread throttling
+    throughput_interval: AtomicInterval,
+    count_bucket_scans_complete: AtomicUsize,
+    pub wait_thread_throttling: WaitableCondvar,
+    pub desired_threads: AtomicUsize,
+    pub active_threads: AtomicUsize,
+    threads: usize,
+
     // how much mb are we allowed to keep in the in-mem index?
     // Rest goes to disk.
     pub mem_budget_mb: Option<usize>,
@@ -37,7 +45,6 @@ pub struct BucketMapHolder<T: IndexValue> {
     /// and writing to disk in parallel are.
     /// Note startup is an optimization and is not required for correctness.
     startup: AtomicBool,
-    _phantom: std::marker::PhantomData<T>,
 }
 
 impl<T: IndexValue> Debug for BucketMapHolder<T> {
@@ -93,6 +100,11 @@ impl<T: IndexValue> BucketMapHolder<T> {
         self.maybe_advance_age();
     }
 
+    pub fn bucket_scan_complete(&self) {
+        self.count_bucket_scans_complete
+            .fetch_add(1, Ordering::Acquire);
+    }
+
     // have all buckets been flushed at the current age?
     pub fn all_buckets_flushed_at_current_age(&self) -> bool {
         self.count_ages_flushed() >= self.bins
@@ -112,7 +124,7 @@ impl<T: IndexValue> BucketMapHolder<T> {
         }
     }
 
-    pub fn new(bins: usize, config: &Option<AccountsIndexConfig>) -> Self {
+    pub fn new(bins: usize, config: &Option<AccountsIndexConfig>, threads: usize) -> Self {
         const DEFAULT_AGE_TO_STAY_IN_CACHE: Age = 5;
         let ages_to_stay_in_cache = config
             .as_ref()
@@ -124,11 +136,12 @@ impl<T: IndexValue> BucketMapHolder<T> {
         let mem_budget_mb = config.as_ref().and_then(|config| config.index_limit_mb);
         // only allocate if mem_budget_mb is Some
         let disk = mem_budget_mb.map(|_| BucketMap::new(bucket_config));
-
+        const INITIAL_DESIRED_THREADS: usize = 1;
         Self {
             disk,
             ages_to_stay_in_cache,
             count_ages_flushed: AtomicUsize::default(),
+            count_bucket_scans_complete: AtomicUsize::default(),
             age: AtomicU8::default(),
             stats: BucketMapHolderStats::new(bins),
             wait_dirty_or_aged: WaitableCondvar::default(),
@@ -137,7 +150,100 @@ impl<T: IndexValue> BucketMapHolder<T> {
             bins,
             startup: AtomicBool::default(),
             mem_budget_mb,
-            _phantom: std::marker::PhantomData::<T>::default(),
+            wait_thread_throttling: WaitableCondvar::default(),
+            desired_threads: AtomicUsize::new(INITIAL_DESIRED_THREADS),
+            active_threads: AtomicUsize::default(),
+            throughput_interval: AtomicInterval::default(),
+            threads,
+        }
+    }
+
+    // calculate whether we need to add or reduce # threads
+    pub fn evaluate_thread_throttling(&self) {
+        const MS_PER_S: u64 = 1000;
+        let desired_throughput_bins_per_s = (self.bins as u64) * MS_PER_S / AGE_MS;
+        const THROUGHTPUT_INTERVAL_MS: u64 = 100;
+        if self
+            .throughput_interval
+            .should_update(THROUGHTPUT_INTERVAL_MS)
+        {
+            // time to determine whether to increase or decrease desired threads
+            let elapsed_ms = THROUGHTPUT_INTERVAL_MS; // this is an approximation, real value is >= this
+            let bins_scanned = self.count_bucket_scans_complete.swap(0, Ordering::Relaxed) as u64;
+            let progress = bins_scanned * MS_PER_S / elapsed_ms;
+            let slop = desired_throughput_bins_per_s / 2;
+            if progress < desired_throughput_bins_per_s - slop {
+                // increment desired threads
+                let desired = self.desired_threads.load(Ordering::Relaxed);
+                if desired < self.threads
+                    && self
+                        .desired_threads
+                        .compare_exchange(
+                            desired,
+                            desired + 1,
+                            Ordering::Acquire,
+                            Ordering::Relaxed,
+                        )
+                        .is_ok()
+                {
+                    self.wait_thread_throttling.notify_one();
+                }
+            } else if progress > desired_throughput_bins_per_s + slop {
+                // decrement desired threads
+                let desired = self.desired_threads.load(Ordering::Relaxed);
+                if desired > 1 {
+                    // after updating this, an active thread will figure out it needs to go to sleep
+                    let _ = self.desired_threads.compare_exchange(
+                        desired,
+                        desired - 1,
+                        Ordering::Acquire,
+                        Ordering::Relaxed,
+                    );
+                }
+            }
+        }
+    }
+
+    // return true if this thread should go to sleep by calling throttle_thread
+    pub fn should_throttle_thread(&self) -> bool {
+        let desired = self.desired_threads.load(Ordering::Relaxed);
+        let active = self.active_threads.load(Ordering::Relaxed);
+        if active > desired
+            && self
+                .active_threads
+                .compare_exchange(active, active - 1, Ordering::Acquire, Ordering::Relaxed)
+                .is_ok()
+        {
+            return true; // this thread went to sleep to satisfy 'desired'
+        }
+        false
+    }
+
+    // returns when this thread should become active, otherwise wait
+    pub fn throttle_thread(&self) {
+        loop {
+            let desired = self.desired_threads.load(Ordering::Relaxed);
+            loop {
+                let active = self.active_threads.load(Ordering::Relaxed);
+                if active >= desired {
+                    break;
+                }
+                if self
+                    .active_threads
+                    .compare_exchange(active, active + 1, Ordering::Acquire, Ordering::Relaxed)
+                    .is_ok()
+                {
+                    return; // this thread became active to satisfy 'desired'
+                }
+            }
+
+            // otherwise, this thread should sleep
+            if !self
+                .wait_thread_throttling
+                .wait_timeout(Duration::from_millis(1000))
+            {
+                break; // wait was triggered, so return
+            }
         }
     }
 
@@ -157,9 +263,14 @@ impl<T: IndexValue> BucketMapHolder<T> {
         let bins = in_mem.len();
         let flush = self.disk.is_some();
         loop {
-            // this will transition to waits and thread throttling
-            self.wait_dirty_or_aged
-                .wait_timeout(Duration::from_millis(AGE_MS));
+            if self.should_throttle_thread() {
+                self.stats.active_threads.fetch_sub(1, Ordering::Relaxed);
+                self.throttle_thread();
+                self.stats.active_threads.fetch_add(1, Ordering::Relaxed);
+            } else {
+                self.wait_dirty_or_aged
+                    .wait_timeout(Duration::from_millis(AGE_MS));
+            }
             if exit.load(Ordering::Relaxed) {
                 break;
             }
@@ -169,6 +280,7 @@ impl<T: IndexValue> BucketMapHolder<T> {
                 if flush {
                     let index = self.next_bucket_to_flush();
                     in_mem[index].flush();
+                    self.evaluate_thread_throttling();
                 }
                 self.stats.report_stats(self);
             }
@@ -188,7 +300,7 @@ pub mod tests {
     fn test_next_bucket_to_flush() {
         solana_logger::setup();
         let bins = 4;
-        let test = BucketMapHolder::<u64>::new(bins, &Some(AccountsIndexConfig::default()));
+        let test = BucketMapHolder::<u64>::new(bins, &Some(AccountsIndexConfig::default()), 1);
         let visited = (0..bins)
             .into_iter()
             .map(|_| AtomicUsize::default())
@@ -212,7 +324,7 @@ pub mod tests {
     fn test_age_increment() {
         solana_logger::setup();
         let bins = 4;
-        let test = BucketMapHolder::<u64>::new(bins, &Some(AccountsIndexConfig::default()));
+        let test = BucketMapHolder::<u64>::new(bins, &Some(AccountsIndexConfig::default()), 1);
         for age in 0..513 {
             assert_eq!(test.current_age(), (age % 256) as Age);
 
@@ -232,7 +344,7 @@ pub mod tests {
     fn test_age_time() {
         solana_logger::setup();
         let bins = 1;
-        let test = BucketMapHolder::<u64>::new(bins, &Some(AccountsIndexConfig::default()));
+        let test = BucketMapHolder::<u64>::new(bins, &Some(AccountsIndexConfig::default()), 1);
         let threads = 2;
         let time = AGE_MS * 5 / 2;
         let expected = (time / AGE_MS) as Age;
@@ -252,7 +364,7 @@ pub mod tests {
     fn test_age_broad() {
         solana_logger::setup();
         let bins = 4;
-        let test = BucketMapHolder::<u64>::new(bins, &Some(AccountsIndexConfig::default()));
+        let test = BucketMapHolder::<u64>::new(bins, &Some(AccountsIndexConfig::default()), 1);
         assert_eq!(test.current_age(), 0);
         for _ in 0..bins {
             assert!(!test.all_buckets_flushed_at_current_age());

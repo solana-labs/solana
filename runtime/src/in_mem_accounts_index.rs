@@ -623,6 +623,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             assert_eq!(current_age, self.storage.current_age());
             self.set_has_aged(current_age);
         }
+        self.storage.bucket_scan_complete(); // keep track of this for thread throttling
     }
 
     // remove keys in 'removes' from in-mem cache due to age
@@ -701,6 +702,7 @@ mod tests {
         let holder = Arc::new(BucketMapHolder::new(
             BINS_FOR_TESTING,
             &Some(AccountsIndexConfig::default()),
+            1,
         ));
         let bin = 0;
         InMemAccountsIndex::new(&holder, bin)
