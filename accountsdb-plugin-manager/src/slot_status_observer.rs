@@ -1,10 +1,9 @@
-
 use {
     crossbeam_channel::Receiver,
     solana_accountsdb_plugin_intf::accountsdb_plugin_intf::SlotStatus,
     solana_rpc::optimistically_confirmed_bank_tracker::BankNotification,
     solana_runtime::accounts_db::AccountsUpdateNotifier,
-    solana_sdk::{clock::Slot},
+    solana_sdk::clock::Slot,
     std::{
         collections::VecDeque,
         sync::{
@@ -107,14 +106,32 @@ impl SlotStatusObserver {
                     let mut slot_set = eligible_slot_set.slot_set.write().unwrap();
 
                     loop {
-                        let slot = slot_set.pop_front();
-                        if slot.is_none() {
+                        let slot_status = slot_set.pop_front();
+                        if slot_status.is_none() {
                             break;
                         }
-                        accounts_update_notifier
-                            .read()
-                            .unwrap()
-                            .notify_slot_confirmed(slot.unwrap().0);
+
+                        let slot_status = slot_status.unwrap();
+                        match slot_status.1 {
+                            SlotStatus::Confirmed => {
+                                accounts_update_notifier
+                                    .read()
+                                    .unwrap()
+                                    .notify_slot_confirmed(slot_status.0);
+                            }
+                            SlotStatus::Processed => {
+                                accounts_update_notifier
+                                    .read()
+                                    .unwrap()
+                                    .notify_slot_processed(slot_status.0);
+                            }
+                            SlotStatus::Rooted => {
+                                accounts_update_notifier
+                                    .read()
+                                    .unwrap()
+                                    .notify_slot_rooted(slot_status.0);
+                            }
+                        }
                     }
                     drop(slot_set);
                     sleep(Duration::from_millis(200));

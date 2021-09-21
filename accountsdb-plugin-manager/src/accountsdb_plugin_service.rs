@@ -103,10 +103,8 @@ impl AccountsDbPluginService {
             plugin_manager.clone(),
             accounts_selector,
         )));
-        let confirmed_slots_observer = SlotStatusObserver::new(
-            confirmed_bank_receiver,
-            accounts_update_notifier.clone(),
-        );
+        let confirmed_slots_observer =
+            SlotStatusObserver::new(confirmed_bank_receiver, accounts_update_notifier.clone());
 
         unsafe {
             plugin_manager

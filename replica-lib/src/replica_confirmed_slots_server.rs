@@ -93,7 +93,7 @@ impl ReplicaSlotConfirmationServerImpl {
                             BankNotification::OptimisticallyConfirmed(slot) => {
                                 let mut slot_set = eligible_slot_set.slot_set.write().unwrap();
 
-                                slot_set.push_back((slot.into(), CommitmentLevel::Confirmed));        
+                                slot_set.push_back((slot.into(), CommitmentLevel::Confirmed));
                             }
                             _ => {}
                         }
