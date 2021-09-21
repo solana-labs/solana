@@ -105,7 +105,7 @@ export function TransactionDetailsPage({ signature: raw }: SignatureProps) {
       ) : (
         <SignatureContext.Provider value={signature}>
           <StatusCard signature={signature} autoRefresh={autoRefresh} />
-          <DetailsSection signature={signature} autoRefresh={autoRefresh} />
+          <DetailsSection signature={signature} />
         </SignatureContext.Provider>
       )}
     </div>
@@ -304,12 +304,10 @@ function StatusCard({
   );
 }
 
-function DetailsSection({
-  signature,
-  autoRefresh,
-}: SignatureProps & AutoRefreshProps) {
+function DetailsSection({ signature }: SignatureProps) {
   const details = useTransactionDetails(signature);
   const fetchDetails = useFetchTransactionDetails();
+  const status = useTransactionStatus(signature);
   const transaction = details?.data?.transaction?.transaction;
   const message = transaction?.message;
   const { status: clusterStatus } = useCluster();
@@ -317,12 +315,18 @@ function DetailsSection({
 
   // Fetch details on load
   React.useEffect(() => {
-    if (!details && clusterStatus === ClusterStatus.Connected) {
+    if (
+      !details &&
+      clusterStatus === ClusterStatus.Connected &&
+      status?.status === FetchStatus.Fetched
+    ) {
       fetchDetails(signature);
     }
-  }, [signature, clusterStatus]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [signature, clusterStatus, status]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!details) {
+  if (!status?.data?.info) {
+    return null;
+  } else if (!details) {
     return <LoadingCard />;
   } else if (details.status === FetchStatus.FetchFailed) {
     return <ErrorCard retry={refreshDetails} text="Failed to fetch details" />;
@@ -332,7 +336,7 @@ function DetailsSection({
 
   return (
     <>
-      <AccountsCard signature={signature} autoRefresh={autoRefresh} />
+      <AccountsCard signature={signature} />
       <TokenBalancesCard signature={signature} />
       <InstructionsSection signature={signature} />
       <ProgramLogSection signature={signature} />
@@ -340,7 +344,7 @@ function DetailsSection({
   );
 }
 
-function AccountsCard({ signature }: SignatureProps & AutoRefreshProps) {
+function AccountsCard({ signature }: SignatureProps) {
   const details = useTransactionDetails(signature);
 
   if (!details?.data?.transaction) {
