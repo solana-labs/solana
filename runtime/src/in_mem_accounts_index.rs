@@ -1,5 +1,6 @@
 use crate::accounts_index::{
-    AccountMapEntry, AccountMapEntryInner, IndexValue, SlotList, WriteAccountMapEntry,
+    AccountMapEntry, AccountMapEntryInner, AccountMapEntryMeta, IndexValue, RefCount, SlotList,
+    WriteAccountMapEntry,
 };
 use crate::bucket_map_holder::{Age, BucketMapHolder};
 use crate::bucket_map_holder_stats::BucketMapHolderStats;
@@ -104,9 +105,23 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         keys
     }
 
-    pub fn get(&self, key: &K) -> Option<AccountMapEntry<T>> {
+    fn load_from_disk(&self, pubkey: &Pubkey) -> Option<(SlotList<T>, RefCount)> {
+        self.storage
+            .disk
+            .as_ref()
+            .and_then(|disk| disk.read_value(pubkey))
+    }
+
+    fn load_account_entry_from_disk(&self, pubkey: &Pubkey) -> Option<AccountMapEntry<T>> {
+        let entry_disk = self.load_from_disk(pubkey)?; // returns None if not on disk
+
+        Some(self.disk_to_cache_entry(entry_disk.0, entry_disk.1))
+    }
+
+    // lookup 'pubkey' in index
+    pub fn get(&self, pubkey: &K) -> Option<AccountMapEntry<T>> {
         let m = Measure::start("get");
-        let result = self.map().read().unwrap().get(key).cloned();
+        let result = self.map().read().unwrap().get(pubkey).map(Arc::clone);
         let stats = self.stats();
         let (count, time) = if result.is_some() {
             (&stats.gets_from_mem, &stats.get_mem_us)
@@ -115,7 +130,20 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         };
         Self::update_time_stat(time, m);
         Self::update_stat(count, 1);
-        result
+
+        if result.is_some() {
+            return result;
+        }
+
+        // not in cache, look on disk
+        let new_entry = self.load_account_entry_from_disk(pubkey)?;
+        let mut map = self.map().write().unwrap();
+        let entry = map.entry(*pubkey);
+        let result = match entry {
+            Entry::Occupied(occupied) => Arc::clone(occupied.get()),
+            Entry::Vacant(vacant) => Arc::clone(vacant.insert(new_entry)),
+        };
+        Some(result)
     }
 
     // If the slot list for pubkey exists in the index and is empty, remove the index entry for pubkey and return true.
@@ -243,6 +271,19 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         // if we make it here, we did not find the slot in the list
         list.push((slot, account_info));
         addref
+    }
+
+    // convert from raw data on disk to AccountMapEntry, set to age in future
+    fn disk_to_cache_entry(
+        &self,
+        slot_list: SlotList<T>,
+        ref_count: RefCount,
+    ) -> AccountMapEntry<T> {
+        Arc::new(AccountMapEntryInner::new(
+            slot_list,
+            ref_count,
+            AccountMapEntryMeta::new_dirty(&self.storage),
+        ))
     }
 
     // returns true if upsert was successful. new_value is modified in this case. new_value contains a RwLock
