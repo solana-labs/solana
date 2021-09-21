@@ -20,6 +20,7 @@ pub struct BucketMapHolderStats {
     pub keys: AtomicU64,
     pub deletes: AtomicU64,
     pub inserts: AtomicU64,
+    pub count: AtomicU64,
     pub count_in_mem: AtomicU64,
     pub per_bucket_count: Vec<AtomicU64>,
     pub flush_entries_updated_on_disk: AtomicU64,
@@ -46,13 +47,21 @@ impl BucketMapHolderStats {
     }
 
     pub fn insert_or_delete(&self, insert: bool, bin: usize) {
-        let per_bucket = self.per_bucket_count.get(bin);
         if insert {
             self.inserts.fetch_add(1, Ordering::Relaxed);
+            self.count.fetch_add(1, Ordering::Relaxed);
+        } else {
+            self.deletes.fetch_add(1, Ordering::Relaxed);
+            self.count.fetch_sub(1, Ordering::Relaxed);
+        }
+    }
+
+    pub fn insert_or_delete_mem(&self, insert: bool, bin: usize) {
+        let per_bucket = self.per_bucket_count.get(bin);
+        if insert {
             self.count_in_mem.fetch_add(1, Ordering::Relaxed);
             per_bucket.map(|count| count.fetch_add(1, Ordering::Relaxed));
         } else {
-            self.deletes.fetch_add(1, Ordering::Relaxed);
             self.count_in_mem.fetch_sub(1, Ordering::Relaxed);
             per_bucket.map(|count| count.fetch_sub(1, Ordering::Relaxed));
         }
@@ -103,6 +112,11 @@ impl BucketMapHolderStats {
             (
                 "count_in_mem",
                 self.count_in_mem.load(Ordering::Relaxed),
+                i64
+            ),
+            (
+                "count",
+                self.count.load(Ordering::Relaxed),
                 i64
             ),
             ("min_in_bin", min, i64),

@@ -134,7 +134,10 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         let entry = map.entry(*key);
         let result = match entry {
             Entry::Occupied(occupied) => Arc::clone(occupied.get()),
-            Entry::Vacant(vacant) => Arc::clone(vacant.insert(new_entry)),
+            Entry::Vacant(vacant) => {
+                stats.insert_or_delete_mem(true, self.bin);
+                Arc::clone(vacant.insert(new_entry))
+            }
         };
         Some(result)
     }
@@ -166,6 +169,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     // We have to have a write lock to the map here, which means nobody else can get
                     //  the arc, but someone may already have retreived a clone of it.
                     self.delete_disk_key(occupied.key());
+                    self.stats().insert_or_delete_mem(false, self.bin);
                     occupied.remove();
                 }
                 result
@@ -419,10 +423,12 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     let disk_entry = self.disk_to_cache_entry(entry_disk.0, entry_disk.1);
                     let pubkey = *vacant.key();
                     assert!(disk_entry.dirty());
+                    stats.insert_or_delete_mem(true, self.bin);
                     vacant.insert(disk_entry.clone());
                     Some(Self::insert_returner(disk_entry, pubkey, new_entry))
                 } else {
                     // not on disk, so insert new thing and we're done
+                    stats.insert_or_delete_mem(true, self.bin);
                     vacant.insert(new_entry);
                     None
                 }
@@ -527,6 +533,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     }
                     Entry::Vacant(vacant) => {
                         vacant.insert(self.disk_to_cache_entry(item.slot_list, item.ref_count));
+                        self.stats().insert_or_delete_mem(true, self.bin);
                     }
                 }
             }
@@ -675,6 +682,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 }
 
                 items_removed += 1;
+                self.stats().insert_or_delete_mem(false, self.bin);
                 occupied.remove();
             }
         }
