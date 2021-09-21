@@ -93,9 +93,15 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         result
     }
 
+    // only called in debug code paths
     pub fn keys(&self) -> Vec<Pubkey> {
         Self::update_stat(&self.stats().keys, 1);
-        self.map().read().unwrap().keys().cloned().collect()
+        // easiest implementation is to load evrything from disk into cache and return the keys
+        self.start_stop_flush(true);
+        self.put_range_in_cache(None::<&RangeInclusive<Pubkey>>);
+        let keys = self.map().read().unwrap().keys().cloned().collect();
+        self.start_stop_flush(false);
+        keys
     }
 
     pub fn get(&self, key: &K) -> Option<AccountMapEntry<T>> {
