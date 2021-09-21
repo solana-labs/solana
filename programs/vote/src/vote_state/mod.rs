@@ -603,6 +603,14 @@ impl VoteState {
         let slot_hashes: Vec<_> = vote.slots.iter().rev().map(|x| (*x, vote.hash)).collect();
         let _ignored = self.process_vote(vote, &slot_hashes, self.current_epoch());
     }
+
+    #[cfg(test)]
+    pub fn process_slot_votes_unchecked(&mut self, slots: &[Slot]) {
+        for slot in slots {
+            self.process_slot_vote_unchecked(*slot);
+        }
+    }
+
     pub fn process_slot_vote_unchecked(&mut self, slot: Slot) {
         self.process_vote_unchecked(&Vote::new(vec![slot], Hash::default()));
     }
@@ -2354,9 +2362,7 @@ mod tests {
 
         // Construct on-chain vote state
         let mut vote_state1 = VoteState::default();
-        vote_state1.process_slot_vote_unchecked(1);
-        vote_state1.process_slot_vote_unchecked(2);
-        vote_state1.process_slot_vote_unchecked(5);
+        vote_state1.process_slot_votes_unchecked(&[1, 2, 5]);
         assert_eq!(
             vote_state1
                 .votes
@@ -2368,11 +2374,7 @@ mod tests {
 
         // Construct local tower state
         let mut vote_state2 = VoteState::default();
-        vote_state2.process_slot_vote_unchecked(1);
-        vote_state2.process_slot_vote_unchecked(2);
-        vote_state2.process_slot_vote_unchecked(3);
-        vote_state2.process_slot_vote_unchecked(5);
-        vote_state2.process_slot_vote_unchecked(7);
+        vote_state2.process_slot_votes_unchecked(&[1, 2, 3, 5, 7]);
         assert_eq!(
             vote_state2
                 .votes
@@ -2393,5 +2395,128 @@ mod tests {
             .unwrap();
 
         assert_eq!(vote_state1, vote_state2);
+    }
+
+    #[test]
+    fn test_process_new_vote_state_lockout_violation() {
+        // Construct on-chain vote state
+        let mut vote_state1 = VoteState::default();
+        vote_state1.process_slot_votes_unchecked(&[1, 2, 4, 5]);
+        assert_eq!(
+            vote_state1
+                .votes
+                .iter()
+                .map(|vote| vote.slot)
+                .collect::<Vec<Slot>>(),
+            vec![1, 2, 4, 5]
+        );
+
+        // Construct conflicting tower state. Vote 4 is missing,
+        // but 5 should not have popped off vote 4.
+        let mut vote_state2 = VoteState::default();
+        vote_state2.process_slot_votes_unchecked(&[1, 2, 3, 5, 7]);
+        assert_eq!(
+            vote_state2
+                .votes
+                .iter()
+                .map(|vote| vote.slot)
+                .collect::<Vec<Slot>>(),
+            vec![1, 2, 3, 5, 7]
+        );
+
+        // See that on-chain vote state can update properly
+        assert_eq!(
+            vote_state1.process_new_vote_state(
+                vote_state2.votes.clone(),
+                vote_state2.root_slot,
+                None,
+                vote_state2.current_epoch(),
+            ),
+            Err(VoteError::LockoutConflict)
+        );
+    }
+
+    #[test]
+    fn test_process_new_vote_state_lockout_violation2() {
+        // Construct on-chain vote state
+        let mut vote_state1 = VoteState::default();
+        vote_state1.process_slot_votes_unchecked(&[1, 2, 5, 6, 7]);
+        assert_eq!(
+            vote_state1
+                .votes
+                .iter()
+                .map(|vote| vote.slot)
+                .collect::<Vec<Slot>>(),
+            vec![1, 5, 6, 7]
+        );
+
+        // Construct a new vote state. Violates on-chain state because 8
+        // should not have popped off 7
+        let mut vote_state2 = VoteState::default();
+        vote_state2.process_slot_votes_unchecked(&[1, 2, 3, 5, 6, 8]);
+        assert_eq!(
+            vote_state2
+                .votes
+                .iter()
+                .map(|vote| vote.slot)
+                .collect::<Vec<Slot>>(),
+            vec![1, 2, 3, 5, 6, 8]
+        );
+
+        // Both vote states contain `5`, but `5` is not part of the common prefix
+        // of both vote states. However, the violation should still be detected.
+        assert_eq!(
+            vote_state1.process_new_vote_state(
+                vote_state2.votes.clone(),
+                vote_state2.root_slot,
+                None,
+                vote_state2.current_epoch(),
+            ),
+            Err(VoteError::LockoutConflict)
+        );
+    }
+
+    #[test]
+    fn test_process_new_vote_state_expired_ancestor_not_removed() {
+        // Construct on-chain vote state
+        let mut vote_state1 = VoteState::default();
+        vote_state1.process_slot_votes_unchecked(&[1, 2, 3, 9]);
+        assert_eq!(
+            vote_state1
+                .votes
+                .iter()
+                .map(|vote| vote.slot)
+                .collect::<Vec<Slot>>(),
+            vec![1, 9]
+        );
+
+        // Example: {1: lockout 8, 9: lockout 2}, vote on 10 will not pop off 1
+        // because 9 is not popped off yet
+        let mut vote_state2 = vote_state1.clone();
+        vote_state2.process_slot_vote_unchecked(10);
+
+        // Slot 1 has been expired by 10, but is kept alive by its descendant
+        // 9 which has not been expired yet.
+        assert_eq!(vote_state2.votes[0].slot, 1);
+        assert_eq!(vote_state2.votes[0].last_locked_out_slot(), 9);
+        assert_eq!(
+            vote_state2
+                .votes
+                .iter()
+                .map(|vote| vote.slot)
+                .collect::<Vec<Slot>>(),
+            vec![1, 9, 10]
+        );
+
+        // Should be able to update vote_state1
+        vote_state1
+            .process_new_vote_state(
+                vote_state2.votes.clone(),
+                vote_state2.root_slot,
+                None,
+                vote_state2.current_epoch(),
+            )
+            .unwrap();
+        assert_eq!(vote_state1, vote_state2,);
     }
 }
