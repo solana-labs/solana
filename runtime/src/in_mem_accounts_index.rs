@@ -612,12 +612,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             flush_entries_updated_on_disk += 1;
             disk.insert(&k, (&v.slot_list.read().unwrap(), v.ref_count()));
         }
-        use log::*;
         Self::update_time_stat(&self.stats().flush_update_us, m);
-        error!(
-            "flush_entries_updated_on_disk: {}",
-            flush_entries_updated_on_disk
-        );
         Self::update_stat(
             &self.stats().flush_entries_updated_on_disk,
             flush_entries_updated_on_disk,
