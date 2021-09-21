@@ -24,6 +24,7 @@ solana-budget-program = { path = "../programs/budget", version = "=1.6.27" }
 solana-logger = { path = "../logger", version = "=1.6.27" }
 solana-measure = { path = "../measure", version = "=1.6.27" }
 solana-metrics = { path = "../metrics", version = "=1.6.27" }
+solana-vote-program = { path = "../programs/vote", version = "=1.6.27" }
 curve25519-dalek = { version = "2" }
 
 [lib]
