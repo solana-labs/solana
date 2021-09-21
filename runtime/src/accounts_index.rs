@@ -175,11 +175,11 @@ impl<T: IndexValue> AccountMapEntryInner<T> {
     }
 
     pub fn dirty(&self) -> bool {
-        self.meta.dirty.load(Ordering::Relaxed)
+        self.meta.dirty.load(Ordering::Acquire)
     }
 
-    pub fn set_dirty(&self, value: bool) -> bool {
-        self.meta.dirty.swap(value, Ordering::Relaxed)
+    pub fn set_dirty(&self, value: bool) {
+        self.meta.dirty.store(value, Ordering::Release)
     }
 
     pub fn age(&self) -> Age {
