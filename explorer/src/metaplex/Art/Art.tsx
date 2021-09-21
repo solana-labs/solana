@@ -1,5 +1,4 @@
 import React, { Ref, useCallback, useEffect, useState } from "react";
-import { Image } from "antd";
 import { MetadataCategory, MetadataFile } from "../types";
 import { pubkeyToString } from "../utils";
 import { useCachedImage, useExtendedArt } from "./useArt";
@@ -7,30 +6,52 @@ import { Stream, StreamPlayerApi } from "@cloudflare/stream-react";
 import { PublicKey } from "@solana/web3.js";
 import { getLast } from "../utils";
 import { Metadata } from "metaplex/classes";
+import ContentLoader from "react-content-loader";
+
+const ImagePlaceholder = () => (
+  <ContentLoader
+    viewBox="0 0 212 200"
+    height={150}
+    width={150}
+    backgroundColor="transparent"
+  >
+    <circle cx="86" cy="100" r="8" />
+    <circle cx="106" cy="100" r="8" />
+    <circle cx="126" cy="100" r="8" />
+  </ContentLoader>
+);
 
 const CachedImageContent = ({
   uri,
-  className,
-  preview,
-  style,
 }: {
   uri?: string;
   className?: string;
   preview?: boolean;
   style?: React.CSSProperties;
 }) => {
+  const [loaded, setLoaded] = useState<boolean>(false);
   const { cachedBlob } = useCachedImage(uri || "");
 
   return (
-    <Image
-      src={cachedBlob}
-      preview={preview}
-      wrapperClassName={className}
-      loading="lazy"
-      wrapperStyle={{ ...style }}
-      style={{ width: 150, borderRadius: 12 }}
-      height={"auto"}
-    />
+    <div>
+      {!loaded && <ImagePlaceholder />}
+      <img
+        className={`rounded mx-auto ${loaded ? "d-block" : "d-none"}`}
+        src={cachedBlob}
+        loading="lazy"
+        alt={"nft"}
+        style={{
+          width: 150,
+          height: "auto",
+        }}
+        onLoad={() => {
+          setLoaded(true);
+        }}
+        onError={() => {
+          setLoaded(true);
+        }}
+      />
+    </div>
   );
 };
 
