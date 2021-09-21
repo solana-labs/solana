@@ -1,13 +1,13 @@
 use {
     crate::{
-        accounts_update_notifier::{AccountsSelector, AccountsUpdateNotifier},
+        accounts_update_notifier::{AccountsSelector, AccountsUpdateNotifierImpl},
         accountsdb_plugin_manager::AccountsDbPluginManager,
         confirmed_slots_observer::SlotConfirmationObserver,
     },
     crossbeam_channel::Receiver,
     log::*,
     serde_json,
-    solana_runtime::bank_forks::BankForks,
+    solana_runtime::accounts_db::AccountsUpdateNotifier,
     solana_sdk::clock::Slot,
     std::{
         fs::File,
@@ -22,13 +22,13 @@ use {
 pub struct AccountsDbPluginService {
     confirmed_slots_observer: SlotConfirmationObserver,
     plugin_manager: Arc<RwLock<AccountsDbPluginManager>>,
+    accounts_update_notifier: AccountsUpdateNotifier,
 }
 
 impl AccountsDbPluginService {
     /// Creates and returns the AccountsDbPluginService.
     /// # Arguments
     /// * `confirmed_bank_receiver` - The receiver for confirmed bank notification
-    /// * `bank_forks` - The bank forks.
     /// * `accountsdb_plugin_config_file` - The config file path for the plugin. The
     ///    config file controls what accounts to stream and the plugin responsible
     ///    for transporting the data to external data stores. It is defined in JSON format.
@@ -55,7 +55,6 @@ impl AccountsDbPluginService {
     ///    }
     pub fn new(
         confirmed_bank_receiver: Receiver<Slot>,
-        bank_forks: Arc<RwLock<BankForks>>,
         accountsdb_plugin_config_file: &Path,
     ) -> Self {
         info!(
@@ -101,9 +100,9 @@ impl AccountsDbPluginService {
         };
 
         let accounts_update_notifier =
-            AccountsUpdateNotifier::new(plugin_manager.clone(), bank_forks, accounts_selector);
+            Arc::new(RwLock::new(AccountsUpdateNotifierImpl::new(plugin_manager.clone(), accounts_selector)));
         let confirmed_slots_observer =
-            SlotConfirmationObserver::new(confirmed_bank_receiver, accounts_update_notifier);
+            SlotConfirmationObserver::new(confirmed_bank_receiver, accounts_update_notifier.clone());
 
         unsafe {
             plugin_manager
@@ -120,7 +119,12 @@ impl AccountsDbPluginService {
         AccountsDbPluginService {
             confirmed_slots_observer,
             plugin_manager,
+            accounts_update_notifier,
         }
+    }
+
+    pub fn get_accounts_update_notifier(&self) -> AccountsUpdateNotifier {
+        self.accounts_update_notifier.clone()
     }
 
     pub fn join(mut self) -> thread::Result<()> {

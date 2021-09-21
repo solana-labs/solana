@@ -1,6 +1,6 @@
 use {
     crate::{
-        accounts_db::{AccountShrinkThreshold, AccountsDbConfig},
+        accounts_db::{AccountShrinkThreshold, AccountsDbConfig, AccountsUpdateNotifier},
         accounts_index::AccountSecondaryIndexes,
         bank::{Bank, BankSlotDelta},
         builtins::Builtins,
@@ -734,6 +734,7 @@ pub fn bank_from_snapshot_archives(
     accounts_db_skip_shrink: bool,
     verify_index: bool,
     accounts_db_config: Option<AccountsDbConfig>,
+    accounts_update_notifier: Option<AccountsUpdateNotifier>,
 ) -> Result<(Bank, BankFromArchiveTimings)> {
     check_are_snapshots_compatible(
         full_snapshot_archive_info,
@@ -798,6 +799,7 @@ pub fn bank_from_snapshot_archives(
         shrink_ratio,
         verify_index,
         accounts_db_config,
+        accounts_update_notifier,
     )?;
     measure_rebuild.stop();
     info!("{}", measure_rebuild);
@@ -844,6 +846,7 @@ pub fn bank_from_latest_snapshot_archives(
     accounts_db_skip_shrink: bool,
     verify_index: bool,
     accounts_db_config: Option<AccountsDbConfig>,
+    accounts_update_notifier: Option<AccountsUpdateNotifier>,
 ) -> Result<(
     Bank,
     BankFromArchiveTimings,
@@ -887,6 +890,7 @@ pub fn bank_from_latest_snapshot_archives(
         accounts_db_skip_shrink,
         verify_index,
         accounts_db_config,
+        accounts_update_notifier,
     )?;
 
     verify_bank_against_expected_slot_hash(
@@ -1424,6 +1428,7 @@ fn rebuild_bank_from_snapshots(
     shrink_ratio: AccountShrinkThreshold,
     verify_index: bool,
     accounts_db_config: Option<AccountsDbConfig>,
+    accounts_update_notifier: Option<AccountsUpdateNotifier>,
 ) -> Result<Bank> {
     let (full_snapshot_version, full_snapshot_root_paths) =
         verify_unpacked_snapshots_dir_and_version(
@@ -1472,6 +1477,7 @@ fn rebuild_bank_from_snapshots(
                     shrink_ratio,
                     verify_index,
                     accounts_db_config,
+                    accounts_update_notifier,
                 ),
             }?,
         )

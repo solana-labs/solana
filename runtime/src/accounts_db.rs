@@ -937,6 +937,15 @@ struct RemoveUnrootedSlotsSynchronization {
 
 type AccountInfoAccountsIndex = AccountsIndex<AccountInfo>;
 
+pub trait AccountsUpdateNotifierIntf: std::fmt::Debug {
+    fn notify_account_update(&self, slot: Slot, pubkey: &Pubkey, hash: &Hash, account: &AccountSharedData);
+    fn notify_slot_confirmed(&self, slot: Slot);
+    fn notify_slot_processed(&self, slot: Slot);
+    fn notify_slot_rooted(&self, slot: Slot);
+}
+
+pub type AccountsUpdateNotifier = Arc<RwLock<dyn AccountsUpdateNotifierIntf + Sync + Send>>;
+
 // This structure handles the load/store of the accounts
 #[derive(Debug)]
 pub struct AccountsDb {
@@ -1037,6 +1046,9 @@ pub struct AccountsDb {
     /// Zero-lamport accounts that are *not* purged during clean because they need to stay alive
     /// for incremental snapshot support.
     zero_lamport_accounts_to_purge_after_full_snapshot: DashSet<(Slot, Pubkey)>,
+
+    /// AccountsDbPlugin accounts update notifier
+    accounts_update_notifier: Option<AccountsUpdateNotifier>,
 }
 
 #[derive(Debug, Default)]
@@ -1504,6 +1516,7 @@ impl AccountsDb {
             shrink_ratio: AccountShrinkThreshold::default(),
             dirty_stores: DashMap::default(),
             zero_lamport_accounts_to_purge_after_full_snapshot: DashSet::default(),
+            accounts_update_notifier: None,
         }
     }
 
@@ -1515,6 +1528,7 @@ impl AccountsDb {
             false,
             AccountShrinkThreshold::default(),
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
+            None,
         )
     }
 
@@ -1525,6 +1539,7 @@ impl AccountsDb {
         caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
         accounts_db_config: Option<AccountsDbConfig>,
+        accounts_update_notifier: Option<AccountsUpdateNotifier>,
     ) -> Self {
         let accounts_index =
             AccountsIndex::new(accounts_db_config.as_ref().and_then(|x| x.index.clone()));
@@ -1539,6 +1554,7 @@ impl AccountsDb {
                 account_indexes,
                 caching_enabled,
                 shrink_ratio,
+                accounts_update_notifier,
                 ..Self::default_with_accounts_index(accounts_index, accounts_hash_cache_path)
             }
         } else {

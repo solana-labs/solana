@@ -39,6 +39,7 @@ pub enum AccountsDbPluginError {
     AccountsUpdateError { msg: String },
 }
 
+#[derive(Debug, Clone)]
 pub enum SlotStatus {
     Processed,
     Rooted,
@@ -47,7 +48,7 @@ pub enum SlotStatus {
 
 pub type Result<T> = std::result::Result<T, AccountsDbPluginError>;
 
-pub trait AccountsDbPlugin: Any + Send + Sync {
+pub trait AccountsDbPlugin: Any + Send + Sync + std::fmt::Debug {
     fn name(&self) -> &'static str;
 
     /// The callback called when a plugin is loaded by the system

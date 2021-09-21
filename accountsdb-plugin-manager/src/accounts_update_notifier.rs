@@ -5,14 +5,11 @@ use {
     crate::accountsdb_plugin_manager::AccountsDbPluginManager,
     log::*,
     solana_accountsdb_plugin_intf::accountsdb_plugin_intf::{
-        ReplicaAccountInfo, ReplicaAccountMeta,
+        ReplicaAccountInfo, ReplicaAccountMeta, SlotStatus,
     },
-    solana_runtime::{
-        accounts_cache::CachedAccount, accounts_db::LoadedAccount, append_vec::StoredAccountMeta,
-        bank_forks::BankForks,
-    },
+    solana_runtime::accounts_db::AccountsUpdateNotifierIntf,
     solana_sdk::{
-        account::{Account, ReadableAccount},
+        account::{AccountSharedData, ReadableAccount},
         clock::Slot,
         hash::Hash,
         pubkey::Pubkey,
@@ -22,13 +19,38 @@ use {
         sync::{Arc, RwLock},
     },
 };
-
-pub(crate) struct AccountsUpdateNotifier {
+#[derive(Debug)]
+pub(crate) struct AccountsUpdateNotifierImpl {
     plugin_manager: Arc<RwLock<AccountsDbPluginManager>>,
-    bank_forks: Arc<RwLock<BankForks>>,
     accounts_selector: AccountsSelector,
 }
 
+
+impl AccountsUpdateNotifierIntf for AccountsUpdateNotifierImpl {
+    fn notify_account_update(&self, slot: Slot, pubkey: &Pubkey, hash: &Hash, account: &AccountSharedData) {
+        match self.accountinfo_from_shared_account_data(pubkey, hash, account) {
+            Some(account_info) => {
+                self.notify_plugins_of_account_update(account_info, slot);
+            }
+            None => {}
+        }
+    }
+
+    fn notify_slot_confirmed(&self, slot: Slot) {
+        self.notify_slot_status(slot, SlotStatus::Confirmed);
+    }
+
+    fn notify_slot_processed(&self, slot: Slot) {
+        self.notify_slot_status(slot, SlotStatus::Processed);
+    }
+
+    fn notify_slot_rooted(&self, slot: Slot) {
+        self.notify_slot_status(slot, SlotStatus::Rooted);
+
+    }
+}
+
+#[derive(Debug)]
 pub(crate) struct AccountsSelector {
     pub accounts: HashSet<Pubkey>,
     pub owners: HashSet<Pubkey>,
@@ -73,141 +95,85 @@ impl AccountsSelector {
     }
 }
 
-fn accountinfo_from_stored_account_meta(
-    accounts_selector: &AccountsSelector,
-    stored_account_meta: &StoredAccountMeta,
-) -> Option<ReplicaAccountInfo> {
-    if !accounts_selector.is_account_selected(
-        &stored_account_meta.meta.pubkey,
-        &stored_account_meta.account_meta.owner,
-    ) {
-        return None;
-    }
-
-    let account_meta = ReplicaAccountMeta {
-        pubkey: bs58::encode(stored_account_meta.meta.pubkey).into_string(),
-        lamports: stored_account_meta.account_meta.lamports,
-        owner: bs58::encode(stored_account_meta.account_meta.owner).into_string(),
-        executable: stored_account_meta.account_meta.executable,
-        rent_epoch: stored_account_meta.account_meta.rent_epoch,
-    };
-    let data = stored_account_meta.data.to_vec();
-    Some(ReplicaAccountInfo {
-        account_meta,
-        hash: bs58::encode(stored_account_meta.hash.0).into_string(),
-        data,
-    })
-}
-
-#[allow(dead_code)]
-fn accountinfo_from_readable_account(
-    accounts_selector: &AccountsSelector,
-    pubkey: &Pubkey,
-    hash: &Hash,
-    account: &impl ReadableAccount,
-) -> Option<ReplicaAccountInfo> {
-    if !accounts_selector.is_account_selected(pubkey, account.owner()) {
-        return None;
-    }
-
-    let account_meta = ReplicaAccountMeta {
-        pubkey: bs58::encode(pubkey).into_string(),
-        lamports: account.lamports(),
-        owner: bs58::encode(account.owner()).into_string(),
-        executable: account.executable(),
-        rent_epoch: account.rent_epoch(),
-    };
-    let data = account.data().to_vec();
-    Some(ReplicaAccountInfo {
-        account_meta,
-        hash: bs58::encode(hash).into_string(),
-        data,
-    })
-}
-
-fn accountinfo_from_cached_account(
-    accounts_selector: &AccountsSelector,
-    cached_account: &CachedAccount,
-) -> Option<ReplicaAccountInfo> {
-    if !accounts_selector
-        .is_account_selected(&cached_account.pubkey(), cached_account.account.owner())
-    {
-        return None;
-    }
-
-    let account = Account::from(cached_account.account.clone());
-    let account_meta = ReplicaAccountMeta {
-        pubkey: bs58::encode(cached_account.pubkey()).into_string(),
-        lamports: account.lamports,
-        owner: bs58::encode(account.owner).into_string(),
-        executable: account.executable,
-        rent_epoch: account.rent_epoch,
-    };
-    let data = account.data.to_vec();
-    Some(ReplicaAccountInfo {
-        account_meta,
-        hash: bs58::encode(cached_account.hash().0).into_string(),
-        data,
-    })
-}
-
-impl AccountsUpdateNotifier {
+impl AccountsUpdateNotifierImpl {
     pub fn new(
         plugin_manager: Arc<RwLock<AccountsDbPluginManager>>,
-        bank_forks: Arc<RwLock<BankForks>>,
         accounts_selector: AccountsSelector,
     ) -> Self {
-        AccountsUpdateNotifier {
+        AccountsUpdateNotifierImpl {
             plugin_manager,
-            bank_forks,
             accounts_selector,
         }
     }
 
-    #[allow(dead_code)]
-    pub fn notify_account_update(self, _slot: Slot, _account: &impl ReadableAccount) {}
+    fn accountinfo_from_shared_account_data(&self,
+        pubkey: &Pubkey,
+        hash: &Hash,
+        account: & AccountSharedData,
+    ) -> Option<ReplicaAccountInfo> {
+        if !self.accounts_selector.is_account_selected(pubkey, account.owner()) {
+            return None;
+        }
+    
+        let account_meta = ReplicaAccountMeta {
+            pubkey: bs58::encode(pubkey).into_string(),
+            lamports: account.lamports(),
+            owner: bs58::encode(account.owner()).into_string(),
+            executable: account.executable(),
+            rent_epoch: account.rent_epoch(),
+        };
+        let data = account.data().to_vec();
+        Some(ReplicaAccountInfo {
+            account_meta,
+            hash: bs58::encode(hash).into_string(),
+            data,
+        })
+    }
 
-    pub fn notify_slot_confirmed(&self, slot: Slot) {
+    fn notify_plugins_of_account_update(&self, account: ReplicaAccountInfo, slot: Slot) {
+        let mut plugin_manager = self.plugin_manager.write().unwrap();
+
+        if plugin_manager.plugins.is_empty() {
+            return;
+        }
+        for plugin in plugin_manager.plugins.iter_mut() {
+            match plugin.update_account(&account, slot) {
+                Err(err) => {
+                    error!(
+                        "Failed to update account {:?} at slot {:?}, error: {:?}",
+                        account.account_meta.pubkey, slot, err
+                    )
+                }
+                Ok(_) => {
+                    trace!(
+                        "Successfully updated account {:?} at slot {:?}",
+                        account.account_meta.pubkey,
+                        slot
+                    );
+                }
+            }
+        }
+    }
+
+    pub fn notify_slot_status(&self, slot: Slot, slot_status: SlotStatus) {
         let mut plugin_manager = self.plugin_manager.write().unwrap();
         if plugin_manager.plugins.is_empty() {
             return;
         }
 
-        match self.bank_forks.read().unwrap().get(slot) {
-            None => {
-                info!("The slot is not found {:?}", slot);
-            }
-            Some(bank) => {
-                let accounts = bank.rc.accounts.scan_slot(slot, |account| match account {
-                    LoadedAccount::Stored(stored_account_meta) => {
-                        accountinfo_from_stored_account_meta(
-                            &self.accounts_selector,
-                            &stored_account_meta,
-                        )
-                    }
-                    LoadedAccount::Cached((_pubkey, cached_account)) => {
-                        accountinfo_from_cached_account(&self.accounts_selector, &cached_account)
-                    }
-                });
-
-                for account in accounts {
-                    for plugin in plugin_manager.plugins.iter_mut() {
-                        match plugin.update_account(&account, slot) {
-                            Err(err) => {
-                                error!(
-                                    "Failed to update account {:?} at slot {:?}, error: {:?}",
-                                    account.account_meta.pubkey, slot, err
-                                )
-                            }
-                            Ok(_) => {
-                                trace!(
-                                    "Successfully updated account {:?} at slot {:?}",
-                                    account.account_meta.pubkey,
-                                    slot
-                                );
-                            }
-                        }
-                    }
+        for plugin in plugin_manager.plugins.iter_mut() {
+            match plugin.update_slot_status(slot, slot_status.clone()) {
+                Err(err) => {
+                    error!(
+                        "Failed to update slot status at slot {:?}, error: {:?}",
+                        slot, err
+                    )
+                }
+                Ok(_) => {
+                    trace!(
+                        "Successfully updated slot status at slot {:?}",
+                        slot
+                    );
                 }
             }
         }

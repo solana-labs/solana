@@ -6,7 +6,7 @@ use {
     std::error::Error,
 };
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct AccountsDbPluginManager {
     pub plugins: Vec<Box<dyn AccountsDbPlugin>>,
     libs: Vec<Library>,

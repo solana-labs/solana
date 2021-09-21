@@ -62,7 +62,7 @@ use {
         transaction_status_service::TransactionStatusService,
     },
     solana_runtime::{
-        accounts_db::{AccountShrinkThreshold, AccountsDbConfig},
+        accounts_db::{AccountShrinkThreshold, AccountsDbConfig, AccountsUpdateNotifier},
         accounts_index::AccountSecondaryIndexes,
         bank::Bank,
         bank_forks::BankForks,
@@ -384,6 +384,24 @@ impl Validator {
         }
 
         let accounts_package_channel = channel();
+
+        let mut confirmed_bank_senders = Vec::new();
+
+        let accountsdb_plugin_service=
+            config
+                .accountsdb_plugin_config_file
+                .as_ref()
+                .map(|accountsdb_plugin_config_file| {
+                    let (confirmed_bank_sender, confirmed_bank_receiver) = unbounded();
+                    confirmed_bank_senders.push(confirmed_bank_sender);
+                    AccountsDbPluginService::new(
+                        confirmed_bank_receiver,
+                        accountsdb_plugin_config_file,
+                    )
+                });
+
+        let (replay_vote_sender, replay_vote_receiver) = unbounded();
+
         let (
             genesis_config,
             bank_forks,
@@ -414,6 +432,7 @@ impl Validator {
             &start_progress,
             config.no_poh_speed_test,
             accounts_package_channel.0.clone(),
+            accountsdb_plugin_service.as_ref().map(|plugin_service| plugin_service.get_accounts_update_notifier()),
         );
 
         *start_progress.write().unwrap() = ValidatorStartProgress::StartingServices;
@@ -536,7 +555,6 @@ impl Validator {
             optimistically_confirmed_bank_tracker,
             bank_notification_sender,
             accountsdb_repl_service,
-            accountsdb_plugin_service,
         ) = if let Some((rpc_addr, rpc_pubsub_addr)) = config.rpc_addrs {
             if ContactInfo::is_valid_address(&node.info.rpc, &socket_addr_space) {
                 assert!(ContactInfo::is_valid_address(
@@ -550,26 +568,12 @@ impl Validator {
                 ));
             }
 
-            let mut confirmed_bank_senders = Vec::new();
-
             let accountsdb_repl_service = config.accountsdb_repl_service_config.as_ref().map(|accountsdb_repl_service_config| {
                 let (confirmed_bank_sender, confirmed_bank_receiver) = unbounded();
                 confirmed_bank_senders.push(confirmed_bank_sender);
                 accountsdb_repl_server_factory::AccountsDbReplServerFactory::build_accountsdb_repl_server(
                     accountsdb_repl_service_config.clone(), confirmed_bank_receiver, bank_forks.clone())
             });
-
-            let accountsdb_plugin_service = config.accountsdb_plugin_config_file.as_ref().map(
-                |accountsdb_plugin_config_file| {
-                    let (confirmed_bank_sender, confirmed_bank_receiver) = unbounded();
-                    confirmed_bank_senders.push(confirmed_bank_sender);
-                    AccountsDbPluginService::new(
-                        confirmed_bank_receiver,
-                        bank_forks.clone(),
-                        accountsdb_plugin_config_file,
-                    )
-                },
-            );
 
             let (bank_notification_sender, bank_notification_receiver) = unbounded();
             let confirmed_bank_subscribers = if !confirmed_bank_senders.is_empty() {
@@ -625,10 +629,9 @@ impl Validator {
                 )),
                 Some(bank_notification_sender),
                 accountsdb_repl_service,
-                accountsdb_plugin_service,
             )
         } else {
-            (None, None, None, None, None, None)
+            (None, None, None, None, None)
         };
 
         if config.dev_halt_at_slot.is_some() {
@@ -1126,6 +1129,7 @@ fn new_banks_from_ledger(
     start_progress: &Arc<RwLock<ValidatorStartProgress>>,
     no_poh_speed_test: bool,
     accounts_package_sender: AccountsPackageSender,
+    accounts_update_notifier: Option<AccountsUpdateNotifier>,
 ) -> (
     GenesisConfig,
     BankForks,
@@ -1244,6 +1248,7 @@ fn new_banks_from_ledger(
                 .cache_block_meta_sender
                 .as_ref(),
             accounts_package_sender,
+            accounts_update_notifier,
         )
         .unwrap_or_else(|err| {
             error!("Failed to load ledger: {:?}", err);

@@ -16,6 +16,12 @@ pub struct AccountsDbPluginPostgres {
     client: Option<Mutex<Client>>,
 }
 
+impl std::fmt::Debug for AccountsDbPluginPostgres {
+    fn fmt(&self, _: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Ok(())
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 struct AccountsDbPluginPostgresConfig {
     host: String,

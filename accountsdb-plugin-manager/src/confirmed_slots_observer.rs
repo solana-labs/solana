@@ -1,6 +1,6 @@
 use {
-    crate::accounts_update_notifier::AccountsUpdateNotifier,
     crossbeam_channel::Receiver,
+    solana_runtime::{accounts_db::AccountsUpdateNotifier,},
     solana_sdk::{clock::Slot, commitment_config::CommitmentLevel},
     std::{
         collections::VecDeque,
@@ -20,6 +20,7 @@ struct EligibleSlotSet {
     slot_set: Arc<RwLock<VecDeque<(Slot, CommitmentLevel)>>>,
 }
 
+#[derive(Debug)]
 pub(crate) struct SlotConfirmationObserver {
     confirmed_bank_receiver_service: Option<JoinHandle<()>>,
     plugin_notify_service: Option<JoinHandle<()>>,
@@ -97,7 +98,7 @@ impl SlotConfirmationObserver {
                         if slot.is_none() {
                             break;
                         }
-                        accounts_update_notifier.notify_slot_confirmed(slot.unwrap().0);
+                        accounts_update_notifier.read().unwrap().notify_slot_confirmed(slot.unwrap().0);
                     }
                     drop(slot_set);
                     sleep(Duration::from_millis(200));

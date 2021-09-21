@@ -2,7 +2,7 @@ use {
     crate::{
         accounts::Accounts,
         accounts_db::{
-            AccountShrinkThreshold, AccountStorageEntry, AccountsDb, AccountsDbConfig, AppendVecId,
+            AccountShrinkThreshold, AccountStorageEntry, AccountsDb, AccountsDbConfig, AccountsUpdateNotifier, AppendVecId,
             BankHashInfo,
         },
         accounts_index::AccountSecondaryIndexes,
@@ -204,6 +204,7 @@ pub(crate) fn bank_from_streams<R>(
     shrink_ratio: AccountShrinkThreshold,
     verify_index: bool,
     accounts_db_config: Option<AccountsDbConfig>,
+    accounts_update_notifier: Option<AccountsUpdateNotifier>,
 ) -> std::result::Result<Bank, Error>
 where
     R: Read,
@@ -242,6 +243,7 @@ where
                 shrink_ratio,
                 verify_index,
                 accounts_db_config,
+                accounts_update_notifier,
             )?;
             Ok(bank)
         }};
@@ -335,6 +337,7 @@ fn reconstruct_bank_from_fields<E>(
     shrink_ratio: AccountShrinkThreshold,
     verify_index: bool,
     accounts_db_config: Option<AccountsDbConfig>,
+    accounts_update_notifier: Option<AccountsUpdateNotifier>,
 ) -> Result<Bank, Error>
 where
     E: SerializableStorage + std::marker::Sync,
@@ -350,6 +353,7 @@ where
         shrink_ratio,
         verify_index,
         accounts_db_config,
+        accounts_update_notifier,
     )?;
     accounts_db.freeze_accounts(
         &Ancestors::from(&bank_fields.ancestors),
@@ -404,6 +408,7 @@ fn reconstruct_accountsdb_from_fields<E>(
     shrink_ratio: AccountShrinkThreshold,
     verify_index: bool,
     accounts_db_config: Option<AccountsDbConfig>,
+    accounts_update_notifier: Option<AccountsUpdateNotifier>,
 ) -> Result<AccountsDb, Error>
 where
     E: SerializableStorage + std::marker::Sync,
@@ -415,6 +420,7 @@ where
         caching_enabled,
         shrink_ratio,
         accounts_db_config,
+        accounts_update_notifier,
     );
 
     let AccountsDbFields(
