@@ -52,11 +52,11 @@ impl<T: IndexValue> AccountsIndexStorage<T> {
             .map(|bin| Arc::new(InMemAccountsIndex::new(&storage, bin)))
             .collect::<Vec<_>>();
 
-        const DEFAULT_THREADS: usize = 1; // soon, this will be a cpu calculation
+        let num_threads = std::cmp::max(2, num_cpus::get() / 4);
         let threads = config
             .as_ref()
             .and_then(|config| config.flush_threads)
-            .unwrap_or(DEFAULT_THREADS);
+            .unwrap_or(num_threads);
 
         let exit = Arc::new(AtomicBool::default());
         let handles = Some(
