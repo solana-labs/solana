@@ -213,6 +213,7 @@ impl BucketStorage {
         }
     }
 
+    #[allow(clippy::mut_from_ref)]
     pub fn get_mut<T: Sized>(&self, ix: u64) -> &mut T {
         if ix >= self.num_cells() {
             panic!("bad index size");
@@ -226,6 +227,7 @@ impl BucketStorage {
         }
     }
 
+    #[allow(clippy::mut_from_ref)]
     pub fn get_mut_cell_slice<T: Sized>(&self, ix: u64, len: u64) -> &mut [T] {
         if ix >= self.num_cells() {
             panic!("bad index size");
