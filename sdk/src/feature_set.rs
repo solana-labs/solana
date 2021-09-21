@@ -83,10 +83,6 @@ pub mod check_init_vote_data {
     solana_sdk::declare_id!("3ccR6QpxGYsAbWyfevEtBNGfWV4xBffxRj2tD6A9i39F");
 }
 
-pub mod enforce_aligned_host_addrs {
-    solana_sdk::declare_id!("6Qob9Z4RwGdf599FDVCqsjuKjR8ZFR3oVs2ByRLWBsua");
-}
-
 pub mod stake_program_v4 {
     solana_sdk::declare_id!("Dc7djyhP9aLfdq2zktpvskeAjpG56msCU1yexpxXiWZb");
 }
@@ -121,10 +117,6 @@ pub mod verify_tx_signatures_len {
 
 pub mod vote_stake_checked_instructions {
     solana_sdk::declare_id!("BcWknVcgvonN8sL4HE4XFuEVgfcee5MwxWPAgP6ZV89X");
-}
-
-pub mod updated_verify_policy {
-    solana_sdk::declare_id!("k15tVxtkgsmo7dy6iJ56N5hBCxuQAtqRgYwoTDuwbia");
 }
 
 pub mod neon_evm_compute_budget {
@@ -215,6 +207,10 @@ pub mod fix_write_privs {
     solana_sdk::declare_id!("7Tr5C1tdcCeBVD8jxtHYnvjL1DGdFboYBHCJkEFdenBb");
 }
 
+pub mod reduce_required_deploy_balance {
+    solana_sdk::declare_id!("EBeznQDjcPG8491sFsKZYBi5S5jTVXMpAKNDJMQPS2kq");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -231,7 +227,6 @@ lazy_static! {
         (full_inflation::mainnet::certusone::vote::id(), "community vote allowing Certus One to enable full inflation"),
         (warp_timestamp_again::id(), "warp timestamp again, adjust bounding to 25% fast 80% slow #15204"),
         (check_init_vote_data::id(), "check initialized Vote data"),
-        (enforce_aligned_host_addrs::id(), "enforce aligned host addresses"),
         (stake_program_v4::id(), "solana_stake_program v4"),
         (secp256k1_recover_syscall_enabled::id(), "secp256k1_recover syscall"),
         (add_missing_program_error_mappings::id(), "add missing program error mappings"),
@@ -241,7 +236,6 @@ lazy_static! {
         (deterministic_shred_seed_enabled::id(), "deterministic shred seed"),
         (verify_tx_signatures_len::id(), "prohibit extra transaction signatures"),
         (vote_stake_checked_instructions::id(), "vote/state program checked instructions #18345"),
-        (updated_verify_policy::id(), "update verify policy"),
         (neon_evm_compute_budget::id(), "bump neon_evm's compute budget"),
         (rent_for_sysvars::id(), "collect rent from accounts owned by sysvars"),
         (libsecp256k1_0_5_upgrade_enabled::id(), "upgrade libsecp256k1 to v0.5.0"),
@@ -264,6 +258,7 @@ lazy_static! {
         (check_seed_length::id(), "Check program address seed lengths"),
         (return_data_syscall_enabled::id(), "enable sol_{set,get}_return_data syscall"),
         (fix_write_privs::id(), "fix native invoke write privileges"),
+        (reduce_required_deploy_balance::id(), "reduce required payer balance for program deploys"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

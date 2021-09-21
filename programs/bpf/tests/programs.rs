@@ -198,7 +198,7 @@ fn run_program(
     let mut data = vec![];
     file.read_to_end(&mut data).unwrap();
     let loader_id = bpf_loader::id();
-    let parameter_bytes = serialize_parameters(
+    let (parameter_bytes, account_lengths) = serialize_parameters(
         &bpf_loader::id(),
         program_id,
         &parameter_accounts,
@@ -282,6 +282,7 @@ fn run_program(
             &bpf_loader::id(),
             parameter_accounts,
             parameter_bytes.as_slice(),
+            &account_lengths,
         )
         .unwrap();
     }
@@ -1090,7 +1091,7 @@ fn test_program_bpf_invoke_sanity() {
             result.unwrap_err(),
             TransactionError::InstructionError(0, InstructionError::ProgramFailedToComplete)
         );
-    }
+     }
 }
 
 #[cfg(feature = "bpf_rust")]

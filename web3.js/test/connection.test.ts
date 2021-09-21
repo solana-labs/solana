@@ -17,6 +17,7 @@ import {
   StakeProgram,
   sendAndConfirmTransaction,
   Keypair,
+  Message,
 } from '../src';
 import invariant from '../src/util/assert';
 import {DEFAULT_TICKS_PER_SLOT, NUM_TICKS_PER_SECOND} from '../src/timing';
@@ -2077,6 +2078,54 @@ describe('Connection', () => {
     );
   });
 
+  it('get blocks between two slots', async () => {
+    await mockRpcResponse({
+      method: 'getBlocks',
+      params: [0, 10],
+      value: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+    });
+
+    await mockRpcResponse({
+      method: 'getSlot',
+      params: [],
+      value: 10,
+    });
+
+    const latestSlot = await connection.getSlot();
+    const blocks = await connection.getBlocks(0, latestSlot);
+    expect(blocks).to.have.length(latestSlot);
+    expect(blocks).to.contain(1);
+    expect(blocks).to.contain(latestSlot);
+  });
+
+  it('get blocks from starting slot', async () => {
+    await mockRpcResponse({
+      method: 'getBlocks',
+      params: [0],
+      value: [
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+        21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38,
+        39, 40, 41, 42,
+      ],
+    });
+
+    await mockRpcResponse({
+      method: 'getSlot',
+      params: [],
+      value: 20,
+    });
+
+    while ((await connection.getSlot()) <= 0) {
+      continue;
+    }
+
+    const blocks = await connection.getBlocks(0);
+    const latestSlot = await connection.getSlot();
+    expect(blocks).to.have.lengthOf.greaterThanOrEqual(latestSlot);
+    expect(blocks).to.contain(1);
+    expect(blocks).to.contain(latestSlot);
+  });
+
   it('get confirmed block signatures', async () => {
     await mockRpcResponse({
       method: 'getSlot',
@@ -2818,6 +2867,65 @@ describe('Connection', () => {
   });
 
   if (process.env.TEST_LIVE) {
+    it('simulate transaction with message', async () => {
+      connection._commitment = 'confirmed';
+
+      const account1 = Keypair.generate();
+      const account2 = Keypair.generate();
+
+      await helpers.airdrop({
+        connection,
+        address: account1.publicKey,
+        amount: LAMPORTS_PER_SOL,
+      });
+
+      await helpers.airdrop({
+        connection,
+        address: account2.publicKey,
+        amount: LAMPORTS_PER_SOL,
+      });
+
+      const recentBlockhash = await (
+        await helpers.recentBlockhash({connection})
+      ).blockhash;
+      const message = new Message({
+        accountKeys: [
+          account1.publicKey.toString(),
+          account2.publicKey.toString(),
+          'Memo1UhkJRfHyvLMcVucJwxXeuD728EqVDDwQDxFMNo',
+        ],
+        header: {
+          numReadonlySignedAccounts: 1,
+          numReadonlyUnsignedAccounts: 2,
+          numRequiredSignatures: 1,
+        },
+        instructions: [
+          {
+            accounts: [0, 1],
+            data: bs58.encode(Buffer.alloc(5).fill(9)),
+            programIdIndex: 2,
+          },
+        ],
+        recentBlockhash,
+      });
+
+      const results1 = await connection.simulateTransaction(
+        message,
+        [account1],
+        true,
+      );
+
+      expect(results1.value.accounts).lengthOf(2);
+
+      const results2 = await connection.simulateTransaction(
+        message,
+        [account1],
+        [account1.publicKey],
+      );
+
+      expect(results2.value.accounts).lengthOf(1);
+    }).timeout(10000);
+
     it('transaction', async () => {
       connection._commitment = 'confirmed';
 

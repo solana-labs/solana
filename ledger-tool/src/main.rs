@@ -35,6 +35,7 @@ use solana_runtime::{
     snapshot_config::SnapshotConfig,
     snapshot_utils::{
         self, ArchiveFormat, SnapshotVersion, DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+        DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
     },
 };
 use solana_sdk::{
@@ -879,6 +880,12 @@ fn main() {
         .validator(is_bin)
         .takes_value(true)
         .help("Number of bins to divide the accounts index into");
+    let accounts_index_limit = Arg::with_name("accounts_index_memory_limit_mb")
+        .long("accounts-index-memory-limit-mb")
+        .value_name("MEGABYTES")
+        .validator(is_parsable::<usize>)
+        .takes_value(true)
+        .help("How much memory the accounts index can consume. If this is exceeded, some account index entries will be stored on disk. If missing, the entire index is stored in memory.");
     let account_paths_arg = Arg::with_name("account_paths")
         .long("accounts")
         .value_name("PATHS")
@@ -938,13 +945,30 @@ fn main() {
         .default_value(SnapshotVersion::default().into())
         .help("Output snapshot version");
 
-    let default_max_snapshot_to_retain = &DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN.to_string();
-    let maximum_snapshots_to_retain_arg = Arg::with_name("maximum_snapshots_to_retain")
-        .long("maximum-snapshots-to-retain")
-        .value_name("NUMBER")
-        .takes_value(true)
-        .default_value(default_max_snapshot_to_retain)
-        .help("Maximum number of snapshots to hold on to during snapshot purge");
+    let default_max_full_snapshot_archives_to_retain =
+        &DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN.to_string();
+    let maximum_full_snapshot_archives_to_retain = Arg::with_name(
+        "maximum_full_snapshots_to_retain",
+    )
+    .long("maximum-full-snapshots-to-retain")
+    .alias("maximum-snapshots-to-retain")
+    .value_name("NUMBER")
+    .takes_value(true)
+    .default_value(default_max_full_snapshot_archives_to_retain)
+    .help(
+        "The maximum number of full snapshot archives to hold on to when purging older snapshots.",
+    );
+
+    let default_max_incremental_snapshot_archives_to_retain =
+        &DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN.to_string();
+    let maximum_incremental_snapshot_archives_to_retain = Arg::with_name(
+        "maximum_incremental_snapshots_to_retain",
+    )
+    .long("maximum-incremental-snapshots-to-retain")
+    .value_name("NUMBER")
+    .takes_value(true)
+    .default_value(default_max_incremental_snapshot_archives_to_retain)
+    .help("The maximum number of incremental snapshot archives to hold on to when purging older snapshots.");
 
     let rent = Rent::default();
     let default_bootstrap_validator_lamports = &sol_to_lamports(500.0)
@@ -1174,6 +1198,7 @@ fn main() {
             .arg(&halt_at_slot_arg)
             .arg(&limit_load_slot_count_from_snapshot_arg)
             .arg(&accounts_index_bins)
+            .arg(&accounts_index_limit)
             .arg(&verify_index_arg)
             .arg(&hard_forks_arg)
             .arg(&no_accounts_db_caching_arg)
@@ -1221,7 +1246,8 @@ fn main() {
             .arg(&hard_forks_arg)
             .arg(&max_genesis_archive_unpacked_size_arg)
             .arg(&snapshot_version_arg)
-            .arg(&maximum_snapshots_to_retain_arg)
+            .arg(&maximum_full_snapshot_archives_to_retain)
+            .arg(&maximum_incremental_snapshot_archives_to_retain)
             .arg(
                 Arg::with_name("snapshot_slot")
                     .index(1)
@@ -1890,12 +1916,25 @@ fn main() {
             }
         }
         ("verify", Some(arg_matches)) => {
-            let accounts_index_config = value_t!(arg_matches, "accounts_index_bins", usize)
-                .ok()
-                .map(|bins| AccountsIndexConfig { bins: Some(bins) });
+            let mut accounts_index_config = AccountsIndexConfig::default();
+            if let Some(bins) = value_t!(matches, "accounts_index_bins", usize).ok() {
+                accounts_index_config.bins = Some(bins);
+            }
+
+            if let Some(limit) = value_t!(matches, "accounts_index_memory_limit_mb", usize).ok() {
+                accounts_index_config.index_limit_mb = Some(limit);
+            }
+
+            {
+                let mut accounts_index_paths = vec![]; // will be option
+                if accounts_index_paths.is_empty() {
+                    accounts_index_paths = vec![ledger_path.join("accounts_index")];
+                }
+                accounts_index_config.drives = Some(accounts_index_paths);
+            }
 
             let accounts_db_config = Some(AccountsDbConfig {
-                index: accounts_index_config,
+                index: Some(accounts_index_config),
                 accounts_hash_cache_path: Some(ledger_path.clone()),
             });
 
@@ -2039,9 +2078,12 @@ fn main() {
                     });
 
             let maximum_full_snapshot_archives_to_retain =
-                value_t_or_exit!(arg_matches, "maximum_snapshots_to_retain", usize);
-            let maximum_incremental_snapshot_archives_to_retain =
-                snapshot_utils::DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN;
+                value_t_or_exit!(arg_matches, "maximum_full_snapshots_to_retain", usize);
+            let maximum_incremental_snapshot_archives_to_retain = value_t_or_exit!(
+                arg_matches,
+                "maximum_incremental_snapshots_to_retain",
+                usize
+            );
             let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
             let blockstore = open_blockstore(
                 &ledger_path,

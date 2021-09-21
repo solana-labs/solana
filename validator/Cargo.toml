@@ -50,7 +50,7 @@ solana-vote-program = { path = "../programs/vote", version = "=1.8.0" }
 symlink = "0.1.0"
 
 [target."cfg(unix)".dependencies]
-libc = "0.2.101"
+libc = "0.2.102"
 signal-hook = "0.2.3"
 
 [package.metadata.docs.rs]
