@@ -304,9 +304,11 @@ pub struct FeatureSet {
 }
 impl Default for FeatureSet {
     fn default() -> Self {
+        let mut active = HashMap::new();
+        active.insert(demote_program_write_locks::id(), 0);
         // All features disabled
         Self {
-            active: HashMap::new(),
+            active,
             inactive: FEATURE_NAMES.keys().cloned().collect(),
         }
     }
