@@ -1,11 +1,11 @@
 #![allow(clippy::integer_arithmetic)]
 use clap::{crate_description, crate_name, App, Arg};
+use crossbeam_channel::unbounded;
 use solana_streamer::packet::{Packet, Packets, PacketsRecycler, PACKET_DATA_SIZE};
 use solana_streamer::streamer::{receiver, PacketReceiver};
 use std::cmp::max;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::mpsc::channel;
 use std::sync::Arc;
 use std::thread::sleep;
 use std::thread::{spawn, JoinHandle, Result};
@@ -83,7 +83,7 @@ fn main() -> Result<()> {
         addr = read.local_addr().unwrap();
         port = addr.port();
 
-        let (s_reader, r_reader) = channel();
+        let (s_reader, r_reader) = unbounded();
         read_channels.push(r_reader);
         read_threads.push(receiver(
             Arc::new(read),

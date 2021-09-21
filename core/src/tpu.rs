@@ -28,11 +28,7 @@ use solana_runtime::{
 };
 use std::{
     net::UdpSocket,
-    sync::{
-        atomic::AtomicBool,
-        mpsc::{channel, Receiver},
-        Arc, Mutex, RwLock,
-    },
+    sync::{atomic::AtomicBool, mpsc::Receiver, Arc, Mutex, RwLock},
     thread,
 };
 
@@ -73,7 +69,7 @@ impl Tpu {
         cluster_confirmed_slot_sender: GossipDuplicateConfirmedSlotsSender,
         cost_model: &Arc<RwLock<CostModel>>,
     ) -> Self {
-        let (packet_sender, packet_receiver) = channel();
+        let (packet_sender, packet_receiver) = unbounded();
         let fetch_stage = FetchStage::new_with_sender(
             transactions_sockets,
             tpu_forwards_sockets,

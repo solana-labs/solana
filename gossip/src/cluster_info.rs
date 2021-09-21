@@ -33,6 +33,7 @@ use {
         weighted_shuffle::WeightedShuffle,
     },
     bincode::{serialize, serialized_size},
+    crossbeam_channel::{Receiver, RecvTimeoutError, Sender},
     itertools::Itertools,
     rand::{seq::SliceRandom, thread_rng, CryptoRng, Rng},
     rayon::{prelude::*, ThreadPool, ThreadPoolBuilder},
@@ -83,7 +84,6 @@ use {
         result::Result,
         sync::{
             atomic::{AtomicBool, Ordering},
-            mpsc::{Receiver, RecvTimeoutError, Sender},
             {Arc, Mutex, RwLock, RwLockReadGuard},
         },
         thread::{sleep, Builder, JoinHandle},

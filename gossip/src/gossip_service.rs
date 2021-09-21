@@ -5,6 +5,7 @@ use {
         cluster_info::{ClusterInfo, VALIDATOR_PORT_RANGE},
         contact_info::ContactInfo,
     },
+    crossbeam_channel::unbounded,
     rand::{thread_rng, Rng},
     solana_client::thin_client::{create_client, ThinClient},
     solana_perf::recycler::Recycler,
@@ -20,7 +21,6 @@ use {
         net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, UdpSocket},
         sync::{
             atomic::{AtomicBool, Ordering},
-            mpsc::channel,
             {Arc, RwLock},
         },
         thread::{self, sleep, JoinHandle},
@@ -41,7 +41,7 @@ impl GossipService {
         should_check_duplicate_instance: bool,
         exit: &Arc<AtomicBool>,
     ) -> Self {
-        let (request_sender, request_receiver) = channel();
+        let (request_sender, request_receiver) = unbounded();
         let gossip_socket = Arc::new(gossip_socket);
         trace!(
             "GossipService: id: {}, listening on: {:?}",
@@ -58,7 +58,7 @@ impl GossipService {
             1,
             false,
         );
-        let (consume_sender, listen_receiver) = channel();
+        let (consume_sender, listen_receiver) = unbounded();
         // https://github.com/rust-lang/rust/issues/39364#issuecomment-634545136
         let _consume_sender = consume_sender.clone();
         let t_socket_consume = cluster_info.clone().start_socket_consume_thread(
@@ -66,7 +66,7 @@ impl GossipService {
             consume_sender,
             exit.clone(),
         );
-        let (response_sender, response_receiver) = channel();
+        let (response_sender, response_receiver) = unbounded();
         let t_listen = cluster_info.clone().listen(
             bank_forks.clone(),
             listen_receiver,

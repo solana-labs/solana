@@ -14,14 +14,13 @@ use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, Signer};
 use solana_sdk::system_transaction;
 use solana_sdk::timing::duration_as_ms;
-use std::sync::mpsc::channel;
 use std::time::{Duration, Instant};
 use test::Bencher;
 
 #[bench]
 fn bench_sigverify_stage(bencher: &mut Bencher) {
     solana_logger::setup();
-    let (packet_s, packet_r) = channel();
+    let (packet_s, packet_r) = unbounded();
     let (verified_s, verified_r) = unbounded();
     let verifier = TransactionSigVerifier::default();
     let stage = SigVerifyStage::new(packet_r, verified_s, verifier);

@@ -4250,6 +4250,7 @@ name = "solana-bench-streamer"
 version = "1.8.0"
 dependencies = [
  "clap 2.33.3",
+ "crossbeam-channel",
  "solana-clap-utils",
  "solana-logger 1.8.0",
  "solana-net-utils",
@@ -4759,6 +4760,7 @@ dependencies = [
  "bincode",
  "bv",
  "clap 2.33.3",
+ "crossbeam-channel",
  "flate2",
  "indexmap",
  "itertools 0.10.1",
@@ -5631,6 +5633,7 @@ dependencies = [
 name = "solana-streamer"
 version = "1.8.0"
 dependencies = [
+ "crossbeam-channel",
  "itertools 0.10.1",
  "libc",
  "log 0.4.14",

@@ -7,11 +7,13 @@ use solana_ledger::blockstore;
 pub enum Error {
     Io(std::io::Error),
     Recv(std::sync::mpsc::RecvError),
+    CrossbeamRecv(crossbeam_channel::RecvError),
     CrossbeamRecvTimeout(crossbeam_channel::RecvTimeoutError),
     ReadyTimeout,
     RecvTimeout(std::sync::mpsc::RecvTimeoutError),
     CrossbeamSend,
-    TryCrossbeamSend,
+    TryCrossbeamSendFull,
+    TryCrossbeamSendDisconnected,
     Serialize(std::boxed::Box<bincode::ErrorKind>),
     ClusterInfo(cluster_info::ClusterInfoError),
     Send,
@@ -33,6 +35,11 @@ impl std::error::Error for Error {}
 impl std::convert::From<std::sync::mpsc::RecvError> for Error {
     fn from(e: std::sync::mpsc::RecvError) -> Error {
         Error::Recv(e)
+    }
+}
+impl std::convert::From<crossbeam_channel::RecvError> for Error {
+    fn from(e: crossbeam_channel::RecvError) -> Error {
+        Error::CrossbeamRecv(e)
     }
 }
 impl std::convert::From<crossbeam_channel::RecvTimeoutError> for Error {
@@ -61,8 +68,11 @@ impl<T> std::convert::From<crossbeam_channel::SendError<T>> for Error {
     }
 }
 impl<T> std::convert::From<crossbeam_channel::TrySendError<T>> for Error {
-    fn from(_e: crossbeam_channel::TrySendError<T>) -> Error {
-        Error::TryCrossbeamSend
+    fn from(e: crossbeam_channel::TrySendError<T>) -> Error {
+        match e {
+            crossbeam_channel::TrySendError::Full(_) => Error::TryCrossbeamSendFull,
+            crossbeam_channel::TrySendError::Disconnected(_) => Error::TryCrossbeamSendDisconnected,
+        }
     }
 }
 impl<T> std::convert::From<std::sync::mpsc::SendError<T>> for Error {

@@ -2,6 +2,7 @@
 
 use crate::banking_stage::HOLD_TRANSACTIONS_SLOT_OFFSET;
 use crate::result::{Error, Result};
+use crossbeam_channel::{unbounded, RecvTimeoutError};
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_info};
 use solana_perf::packet::PacketsRecycler;
 use solana_perf::recycler::Recycler;
@@ -10,7 +11,7 @@ use solana_sdk::clock::DEFAULT_TICKS_PER_SLOT;
 use solana_streamer::streamer::{self, PacketReceiver, PacketSender};
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
-use std::sync::mpsc::{channel, RecvTimeoutError};
+use std::sync::mpsc::RecvTimeoutError as MpscRecvTimeoutError;
 use std::sync::{Arc, Mutex};
 use std::thread::{self, Builder, JoinHandle};
 
@@ -27,7 +28,7 @@ impl FetchStage {
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         coalesce_ms: u64,
     ) -> (Self, PacketReceiver) {
-        let (sender, receiver) = channel();
+        let (sender, receiver) = unbounded();
         (
             Self::new_with_sender(
                 sockets,
@@ -117,7 +118,7 @@ impl FetchStage {
             )
         });
 
-        let (forward_sender, forward_receiver) = channel();
+        let (forward_sender, forward_receiver) = unbounded();
         let tpu_forwards_threads = tpu_forwards_sockets.into_iter().map(|socket| {
             streamer::receiver(
                 socket,
@@ -140,9 +141,14 @@ impl FetchStage {
                     Self::handle_forwarded_packets(&forward_receiver, &sender, &poh_recorder)
                 {
                     match e {
-                        Error::RecvTimeout(RecvTimeoutError::Disconnected) => break,
-                        Error::RecvTimeout(RecvTimeoutError::Timeout) => (),
                         Error::Recv(_) => break,
+                        Error::RecvTimeout(MpscRecvTimeoutError::Disconnected) => break,
+                        Error::RecvTimeout(MpscRecvTimeoutError::Timeout) => (),
+                        Error::CrossbeamRecv(_) => break,
+                        Error::CrossbeamRecvTimeout(RecvTimeoutError::Disconnected) => break,
+                        Error::CrossbeamRecvTimeout(RecvTimeoutError::Timeout) => (),
+                        Error::CrossbeamSend => break,
+                        Error::TryCrossbeamSendDisconnected => break,
                         Error::Send => break,
                         _ => error!("{:?}", e),
                     }

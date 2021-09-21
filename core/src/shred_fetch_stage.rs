@@ -1,6 +1,7 @@
 //! The `shred_fetch_stage` pulls shreds from UDP sockets and sends it to a channel.
 
 use crate::packet_hasher::PacketHasher;
+use crossbeam_channel::unbounded;
 use lru::LruCache;
 use solana_ledger::shred::{get_shred_slot_index_type, ShredFetchStats};
 use solana_perf::cuda_runtime::PinnedVec;
@@ -11,7 +12,6 @@ use solana_sdk::clock::{Slot, DEFAULT_MS_PER_SLOT};
 use solana_streamer::streamer::{self, PacketReceiver, PacketSender};
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
-use std::sync::mpsc::channel;
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::thread::{self, Builder, JoinHandle};
@@ -139,7 +139,7 @@ impl ShredFetchStage {
     where
         F: Fn(&mut Packet) + Send + 'static,
     {
-        let (packet_sender, packet_receiver) = channel();
+        let (packet_sender, packet_receiver) = unbounded();
         let streamers = sockets
             .into_iter()
             .map(|s| {

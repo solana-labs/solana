@@ -6,10 +6,10 @@ use crate::{
     recvmmsg::NUM_RCVMMSGS,
     socket::SocketAddrSpace,
 };
+use crossbeam_channel::{Receiver, RecvTimeoutError, SendError, Sender};
 use solana_sdk::timing::timestamp;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{Receiver, RecvTimeoutError, SendError, Sender};
 use std::sync::Arc;
 use std::thread::{Builder, JoinHandle};
 use std::time::{Duration, Instant};
@@ -189,12 +189,12 @@ mod test {
     use super::*;
     use crate::packet::{Packet, Packets, PACKET_DATA_SIZE};
     use crate::streamer::{receiver, responder};
+    use crossbeam_channel::unbounded;
     use solana_perf::recycler::Recycler;
     use std::io;
     use std::io::Write;
     use std::net::UdpSocket;
     use std::sync::atomic::{AtomicBool, Ordering};
-    use std::sync::mpsc::channel;
     use std::sync::Arc;
     use std::time::Duration;
 
@@ -226,7 +226,7 @@ mod test {
         let addr = read.local_addr().unwrap();
         let send = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let exit = Arc::new(AtomicBool::new(false));
-        let (s_reader, r_reader) = channel();
+        let (s_reader, r_reader) = unbounded();
         let t_receiver = receiver(
             Arc::new(read),
             &exit,
@@ -237,7 +237,7 @@ mod test {
             true,
         );
         let t_responder = {
-            let (s_responder, r_responder) = channel();
+            let (s_responder, r_responder) = unbounded();
             let t_responder = responder(
                 "streamer_send_test",
                 Arc::new(send),
