@@ -122,7 +122,8 @@ impl<T: IndexValue> BucketMapHolder<T> {
         bucket_config.drives = config.as_ref().and_then(|config| config.drives.clone());
         let mem_budget_mb = config.as_ref().and_then(|config| config.index_limit_mb);
         // only allocate if mem_budget_mb is Some
-        let disk = mem_budget_mb.map(|_| BucketMap::new(bucket_config));
+        // actually, allocate by default
+        let disk = Some(BucketMap::new(bucket_config));
 
         Self {
             disk,
