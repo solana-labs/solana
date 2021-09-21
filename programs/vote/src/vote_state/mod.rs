@@ -375,8 +375,43 @@ impl VoteState {
         Ok(())
     }
 
-    // TODO: `Ensure check_slots_are_valid()` runs on the slots in `new_state`
-    // before this
+    //`Ensure check_slots_are_valid()` runs on the slots in `new_state`
+    // before `process_new_vote_state()` is called
+
+    // This function should guarantee the following about `new_state`:
+    //
+    // 1) It's well ordered, i.e. the slots are sorted from smallest to largest,
+    // and the confirmations sorted from largest to smallest.
+    // 2) Confirmations `c` on any vote slot satisfy `0 < c <= MAX_LOCKOUT_HISTORY`
+    // 3) Lockouts are not expired by consecutive votes, i.e. for every consecutive
+    // `v_i`, `v_{i + 1}` satisfy `v_i.last_locked_out_slot() <= v_{i + 1}`.
+
+    // We also guarantee that compared to the current vote state, `new_state`
+    // introduces no rollback. This means:
+    //
+    // 1) The last slot in `new_state` is always greater than any slot in the
+    // current vote state.
+    //
+    // 2) From 1), this means that for every vote `s` in the current state:
+    //    a) If there exists an `s'` in `new_state` where `s.slot == s'.slot`, then
+    //    we must gaurantee `s.confirmations <= s'.confirmations`
+    //
+    //    b) If there does not exist any such `s'` in `new_state`, then there exists
+    //    some `t` that is the smallest vote in `new_state` where `t.slot > s.slot`.
+    //    `t` must have expired/popped off s', so it must be guaranteed that
+    //    `s.last_locked_out_slot() < t`.
+
+    // Note these two above checks do not guarantee that the vote state being submitted
+    // is a vote state that could have been created by iteratively building a tower
+    // by processing one vote at a time. For instance, the tower:
+    //
+    // { slot 0, confirmations: 31 }
+    // { slot 1, confirmations: 30 }
+    //
+    // is a legal tower that could be submitted on top of a previously empty tower. However,
+    // there is no way to create this tower from the iterative process, because slot 1 would
+    // have to have at least one other slot on top of it, even if the first 30 votes were all
+    // popped off.
     pub fn process_new_vote_state(
         &mut self,
         new_state: VecDeque<Lockout>,
@@ -413,6 +448,8 @@ impl VoteState {
         for vote in &new_state {
             if vote.confirmation_count == 0 {
                 return Err(VoteError::ZeroConfirmations);
+            } else if vote.confirmation_count > MAX_LOCKOUT_HISTORY as u32 {
+                return Err(VoteError::ConfirmationTooLarge);
             } else if let Some(new_root) = new_root {
                 if vote.slot <= new_root {
                     return Err(VoteError::SlotSmallerThanRoot);
@@ -431,7 +468,8 @@ impl VoteState {
             previous_vote = Some(vote);
         }
 
-        // Find the first non-common ancestor between our current state and `new_state`
+        // Find the first vote in the current vote state for a slot greater
+        // than the new proposed root
         let mut current_vote_state_index = 0;
         let mut new_vote_state_index = 0;
 
@@ -445,22 +483,7 @@ impl VoteState {
                 }
             }
 
-            let current_vote = &self.votes[current_vote_state_index];
-            let new_vote = &new_state[new_vote_state_index];
-
-            if current_vote.slot == new_vote.slot {
-                // The new vote state should never have less lockout than
-                // the previous vote state for the same slot
-                if new_vote.confirmation_count < current_vote.confirmation_count {
-                    return Err(VoteError::ConfirmationRollBack);
-                }
-
-                // If the lockouts pass checks, move on to checking the next slots
-                current_vote_state_index += 1;
-                new_vote_state_index += 1;
-            } else {
-                break;
-            }
+            break;
         }
 
         // All the votes in our current vote state that are missing from the new vote state
@@ -475,35 +498,18 @@ impl VoteState {
             // lockouts are corrects.
             match current_vote.slot.cmp(&new_vote.slot) {
                 Ordering::Less => {
-                    // TODO: Verify earlier ancestors that are expired are not popped
-                    // off if one of the later votes is not expired yet, i.e.
-                    //
-                    // Example: {1: lockout 8, 9: lockout 2}, vote on 10 will not pop off 1
-                    // because 9 is not popped off yet
                     if current_vote.last_locked_out_slot() >= new_vote.slot {
                         return Err(VoteError::LockoutConflict);
                     }
                     current_vote_state_index += 1;
                 }
                 Ordering::Equal => {
-                    // TODO: Write tests for:
+                    // The new vote state should never have less lockout than
+                    // the previous vote state for the same slot
+                    if new_vote.confirmation_count < current_vote.confirmation_count {
+                        return Err(VoteError::ConfirmationRollBack);
+                    }
 
-                    // It might be possible that during the switch from old vote instructions
-                    // to new vote instructions, new_state contains votes for slots LESS
-                    // than the current state, for instance:
-                    //
-                    // Current on-chain state: 1, 5
-                    // New state: 1, 2 (lockout: 4), 3, 5, 7
-                    //
-                    // Imagine the validator made two of these votes:
-                    // 1) The first vote {1, 2, 3} didn't land in the old state, but didn't
-                    // land on chain
-                    // 2) A second vote {1, 2, 5} was then submitted, which landed
-                    //
-                    //
-                    // 2 is not popped off in the local tower because 3 doubled the lockout.
-                    // However, 3 did not land in the on-chain state, so the vote {1, 2, 6}
-                    // will immediately pop off 2.
                     current_vote_state_index += 1;
                     new_vote_state_index += 1;
                 }
@@ -2306,6 +2312,308 @@ mod tests {
         ));
         VoteState::serialize(&account_state, &mut vote_account_data).unwrap();
         assert!(!VoteState::is_uninitialized_no_deser(&vote_account_data));
+    }
+
+    #[test]
+    fn test_process_new_vote_state_root_rollback() {
+        let mut vote_state1 = VoteState::default();
+        for i in 0..MAX_LOCKOUT_HISTORY + 2 {
+            vote_state1.process_slot_vote_unchecked(i as Slot);
+        }
+        assert_eq!(vote_state1.root_slot.unwrap(), 1);
+
+        // Update vote_state2 with a higher slot so that `process_new_vote_state`
+        // doesn't panic.
+        let mut vote_state2 = vote_state1.clone();
+        vote_state2.process_slot_vote_unchecked(MAX_LOCKOUT_HISTORY as Slot + 3);
+
+        // Trying to set a lesser root should error
+        let lesser_root = Some(0);
+
+        assert_eq!(
+            vote_state1.process_new_vote_state(
+                vote_state2.votes.clone(),
+                lesser_root,
+                None,
+                vote_state2.current_epoch(),
+            ),
+            Err(VoteError::RootRollBack)
+        );
+
+        // Trying to set root to None should error
+        let none_root = None;
+        assert_eq!(
+            vote_state1.process_new_vote_state(
+                vote_state2.votes.clone(),
+                none_root,
+                None,
+                vote_state2.current_epoch(),
+            ),
+            Err(VoteError::RootRollBack)
+        );
+    }
+
+    #[test]
+    fn test_process_new_vote_state_zero_confirmations() {
+        let mut vote_state1 = VoteState::default();
+
+        let bad_votes: VecDeque<Lockout> = vec![
+            Lockout {
+                slot: 0,
+                confirmation_count: 0,
+            },
+            Lockout {
+                slot: 1,
+                confirmation_count: 1,
+            },
+        ]
+        .into_iter()
+        .collect();
+        assert_eq!(
+            vote_state1.process_new_vote_state(bad_votes, None, None, vote_state1.current_epoch(),),
+            Err(VoteError::ZeroConfirmations)
+        );
+
+        let bad_votes: VecDeque<Lockout> = vec![
+            Lockout {
+                slot: 0,
+                confirmation_count: 2,
+            },
+            Lockout {
+                slot: 1,
+                confirmation_count: 0,
+            },
+        ]
+        .into_iter()
+        .collect();
+        assert_eq!(
+            vote_state1.process_new_vote_state(bad_votes, None, None, vote_state1.current_epoch(),),
+            Err(VoteError::ZeroConfirmations)
+        );
+    }
+
+    #[test]
+    fn test_process_new_vote_state_confirmations_too_large() {
+        let mut vote_state1 = VoteState::default();
+
+        let good_votes: VecDeque<Lockout> = vec![Lockout {
+            slot: 0,
+            confirmation_count: MAX_LOCKOUT_HISTORY as u32,
+        }]
+        .into_iter()
+        .collect();
+
+        vote_state1
+            .process_new_vote_state(good_votes, None, None, vote_state1.current_epoch())
+            .unwrap();
+
+        let mut vote_state1 = VoteState::default();
+        let bad_votes: VecDeque<Lockout> = vec![Lockout {
+            slot: 0,
+            confirmation_count: MAX_LOCKOUT_HISTORY as u32 + 1,
+        }]
+        .into_iter()
+        .collect();
+        assert_eq!(
+            vote_state1.process_new_vote_state(bad_votes, None, None, vote_state1.current_epoch(),),
+            Err(VoteError::ConfirmationTooLarge)
+        );
+    }
+
+    #[test]
+    fn test_process_new_vote_state_slot_smaller_than_root() {
+        let mut vote_state1 = VoteState::default();
+        let root_slot = 5;
+
+        let bad_votes: VecDeque<Lockout> = vec![
+            Lockout {
+                slot: root_slot,
+                confirmation_count: 2,
+            },
+            Lockout {
+                slot: root_slot + 1,
+                confirmation_count: 1,
+            },
+        ]
+        .into_iter()
+        .collect();
+        assert_eq!(
+            vote_state1.process_new_vote_state(
+                bad_votes,
+                Some(root_slot),
+                None,
+                vote_state1.current_epoch(),
+            ),
+            Err(VoteError::SlotSmallerThanRoot)
+        );
+
+        let bad_votes: VecDeque<Lockout> = vec![
+            Lockout {
+                slot: root_slot - 1,
+                confirmation_count: 2,
+            },
+            Lockout {
+                slot: root_slot + 1,
+                confirmation_count: 1,
+            },
+        ]
+        .into_iter()
+        .collect();
+        assert_eq!(
+            vote_state1.process_new_vote_state(
+                bad_votes,
+                Some(root_slot),
+                None,
+                vote_state1.current_epoch(),
+            ),
+            Err(VoteError::SlotSmallerThanRoot)
+        );
+    }
+
+    #[test]
+    fn test_process_new_vote_state_slots_not_ordered() {
+        let mut vote_state1 = VoteState::default();
+
+        let bad_votes: VecDeque<Lockout> = vec![
+            Lockout {
+                slot: 1,
+                confirmation_count: 2,
+            },
+            Lockout {
+                slot: 0,
+                confirmation_count: 1,
+            },
+        ]
+        .into_iter()
+        .collect();
+        assert_eq!(
+            vote_state1.process_new_vote_state(bad_votes, None, None, vote_state1.current_epoch(),),
+            Err(VoteError::SlotsNotOrdered)
+        );
+
+        let bad_votes: VecDeque<Lockout> = vec![
+            Lockout {
+                slot: 1,
+                confirmation_count: 2,
+            },
+            Lockout {
+                slot: 1,
+                confirmation_count: 1,
+            },
+        ]
+        .into_iter()
+        .collect();
+        assert_eq!(
+            vote_state1.process_new_vote_state(bad_votes, None, None, vote_state1.current_epoch(),),
+            Err(VoteError::SlotsNotOrdered)
+        );
+    }
+
+    #[test]
+    fn test_process_new_vote_state_confirmations_not_ordered() {
+        let mut vote_state1 = VoteState::default();
+
+        let bad_votes: VecDeque<Lockout> = vec![
+            Lockout {
+                slot: 0,
+                confirmation_count: 1,
+            },
+            Lockout {
+                slot: 1,
+                confirmation_count: 2,
+            },
+        ]
+        .into_iter()
+        .collect();
+        assert_eq!(
+            vote_state1.process_new_vote_state(bad_votes, None, None, vote_state1.current_epoch(),),
+            Err(VoteError::ConfirmationsNotOrdered)
+        );
+
+        let bad_votes: VecDeque<Lockout> = vec![
+            Lockout {
+                slot: 0,
+                confirmation_count: 1,
+            },
+            Lockout {
+                slot: 1,
+                confirmation_count: 1,
+            },
+        ]
+        .into_iter()
+        .collect();
+        assert_eq!(
+            vote_state1.process_new_vote_state(bad_votes, None, None, vote_state1.current_epoch(),),
+            Err(VoteError::ConfirmationsNotOrdered)
+        );
+    }
+
+    #[test]
+    fn test_process_new_vote_state_new_vote_state_lockout_mismatch() {
+        let mut vote_state1 = VoteState::default();
+
+        let bad_votes: VecDeque<Lockout> = vec![
+            Lockout {
+                slot: 0,
+                confirmation_count: 2,
+            },
+            Lockout {
+                slot: 7,
+                confirmation_count: 1,
+            },
+        ]
+        .into_iter()
+        .collect();
+
+        // Slot 7 should have expired slot 0
+        assert_eq!(
+            vote_state1.process_new_vote_state(bad_votes, None, None, vote_state1.current_epoch(),),
+            Err(VoteError::NewVoteStateLockoutMismatch)
+        );
+    }
+
+    #[test]
+    fn test_process_new_vote_state_confirmation_rollback() {
+        let mut vote_state1 = VoteState::default();
+        let votes: VecDeque<Lockout> = vec![
+            Lockout {
+                slot: 0,
+                confirmation_count: 4,
+            },
+            Lockout {
+                slot: 1,
+                confirmation_count: 3,
+            },
+        ]
+        .into_iter()
+        .collect();
+        vote_state1
+            .process_new_vote_state(votes, None, None, vote_state1.current_epoch())
+            .unwrap();
+
+        let votes: VecDeque<Lockout> = vec![
+            Lockout {
+                slot: 0,
+                confirmation_count: 4,
+            },
+            Lockout {
+                slot: 1,
+                // Confirmation count lowered illegally
+                confirmation_count: 2,
+            },
+            Lockout {
+                slot: 2,
+                confirmation_count: 1,
+            },
+        ]
+        .into_iter()
+        .collect();
+        // Should error because newer vote state should not have lower confirmation the same slot
+        // 1
+        assert_eq!(
+            vote_state1.process_new_vote_state(votes, None, None, vote_state1.current_epoch(),),
+            Err(VoteError::ConfirmationRollBack)
+        );
     }
 
     #[test]
