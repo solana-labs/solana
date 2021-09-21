@@ -105,7 +105,7 @@ export function TransactionDetailsPage({ signature: raw }: SignatureProps) {
       ) : (
         <SignatureContext.Provider value={signature}>
           <StatusCard signature={signature} autoRefresh={autoRefresh} />
-          <DetailsCard signature={signature} autoRefresh={autoRefresh} />
+          <DetailsSection signature={signature} autoRefresh={autoRefresh} />
         </SignatureContext.Provider>
       )}
     </div>
@@ -304,7 +304,7 @@ function StatusCard({
   );
 }
 
-function DetailsCard({
+function DetailsSection({
   signature,
   autoRefresh,
 }: SignatureProps & AutoRefreshProps) {
