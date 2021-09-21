@@ -4,8 +4,7 @@ pub use solana_gossip::cluster_info::MINIMUM_VALIDATOR_PORT_RANGE_WIDTH;
 use {
     console::style,
     indicatif::{ProgressDrawTarget, ProgressStyle},
-    log::*,
-    std::{borrow::Cow, env, fmt::Display, process::exit, thread::JoinHandle},
+    std::{borrow::Cow, env, fmt::Display, thread::JoinHandle},
 };
 
 pub mod admin_rpc_service;
@@ -36,17 +35,24 @@ pub fn redirect_stderr_to_file(logfile: Option<String>) -> Option<JoinHandle<()>
         env::set_var("RUST_BACKTRACE", "1")
     }
 
+    let filter = "solana=info";
     let logger_thread = match logfile {
-        None => None,
+        None => {
+            solana_logger::setup_with_default(&filter);
+            None
+        }
         Some(logfile) => {
             #[cfg(unix)]
             {
+                use log::info;
+                use std::process::exit;
                 let signals = signal_hook::iterator::Signals::new(&[signal_hook::SIGUSR1])
                     .unwrap_or_else(|err| {
                         eprintln!("Unable to register SIGUSR1 handler: {:?}", err);
                         exit(1);
                     });
 
+                solana_logger::setup_with_default(&filter);
                 redirect_stderr(&logfile);
                 Some(std::thread::spawn(move || {
                     for signal in signals.forever() {
@@ -60,13 +66,13 @@ pub fn redirect_stderr_to_file(logfile: Option<String>) -> Option<JoinHandle<()>
             }
             #[cfg(not(unix))]
             {
-                println!("logging to a file is not supported on this platform");
+                println!("logrotate is not supported on this platform");
+                solana_logger::setup_file_with_default(&logfile, &filter);
                 None
             }
         }
     };
 
-    solana_logger::setup_with_default("solana=info");
     logger_thread
 }
 

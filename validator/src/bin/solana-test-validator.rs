@@ -168,7 +168,7 @@ fn main() {
             Arg::with_name("no_bpf_jit")
                 .long("no-bpf-jit")
                 .takes_value(false)
-                .help("Disable the just-in-time compiler and instead use the interpreter for BPF"),
+                .help("Disable the just-in-time compiler and instead use the interpreter for BPF. Windows always disables JIT."),
         )
         .arg(
             Arg::with_name("slots_per_epoch")
@@ -304,7 +304,14 @@ fn main() {
         });
     }
 
-    let mut ledger_fd_lock = fd_lock::RwLock::new(fs::File::open(&ledger_path).unwrap());
+    let lockfile = ledger_path.join("ledger.lock");
+    let mut ledger_fd_lock = fd_lock::RwLock::new(
+        fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .open(&lockfile)
+            .unwrap(),
+    );
     let _ledger_lock = ledger_fd_lock.try_write().unwrap_or_else(|_| {
         println!(
             "Error: Unable to lock {} directory. Check if another validator is running",
@@ -396,6 +403,9 @@ fn main() {
         IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
         faucet_port,
     ));
+    #[cfg(target_family = "windows")]
+    let bpf_jit = false;
+    #[cfg(not(target_family = "windows"))]
     let bpf_jit = !matches.is_present("no_bpf_jit");
 
     let mut programs = vec![];

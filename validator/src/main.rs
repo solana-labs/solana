@@ -2848,7 +2848,14 @@ pub fn main() {
         })
     });
 
-    let mut ledger_fd_lock = fd_lock::RwLock::new(fs::File::open(&ledger_path).unwrap());
+    let lockfile = ledger_path.join("ledger.lock");
+    let mut ledger_fd_lock = fd_lock::RwLock::new(
+        fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .open(&lockfile)
+            .unwrap(),
+    );
     let _ledger_lock = ledger_fd_lock.try_write().unwrap_or_else(|_| {
         println!(
             "Error: Unable to lock {} directory. Check if another validator is running",
