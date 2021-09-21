@@ -1,5 +1,8 @@
+use crate::accounts_index::{AccountsIndexConfig, IndexValue};
 use crate::bucket_map_holder::BucketMapHolder;
-use crate::waitable_condvar::WaitableCondvar;
+use crate::in_mem_accounts_index::InMemAccountsIndex;
+use std::fmt::Debug;
+use std::time::Duration;
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -12,54 +15,104 @@ use std::{
 // Also manages the lifetime of the background processing threads.
 //  When this instance is dropped, it will drop the bucket map and cleanup
 //  and it will stop all the background threads and join them.
-
-#[derive(Debug, Default)]
-pub struct AccountsIndexStorage {
+pub struct AccountsIndexStorage<T: IndexValue> {
     // for managing the bg threads
     exit: Arc<AtomicBool>,
-    wait: Arc<WaitableCondvar>,
-    handle: Option<JoinHandle<()>>,
+    handles: Option<Vec<JoinHandle<()>>>,
 
     // eventually the backing storage
-    storage: Arc<BucketMapHolder>,
+    pub storage: Arc<BucketMapHolder<T>>,
+    pub in_mem: Vec<Arc<InMemAccountsIndex<T>>>,
 }
 
-impl Drop for AccountsIndexStorage {
+impl<T: IndexValue> Debug for AccountsIndexStorage<T> {
+    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Ok(())
+    }
+}
+
+impl<T: IndexValue> Drop for AccountsIndexStorage<T> {
     fn drop(&mut self) {
         self.exit.store(true, Ordering::Relaxed);
-        self.wait.notify_all();
-        if let Some(x) = self.handle.take() {
-            x.join().unwrap()
+        self.storage.wait_dirty_or_aged.notify_all();
+        if let Some(handles) = self.handles.take() {
+            handles
+                .into_iter()
+                .for_each(|handle| handle.join().unwrap());
         }
     }
 }
 
-impl AccountsIndexStorage {
-    pub fn new() -> AccountsIndexStorage {
-        let storage = Arc::new(BucketMapHolder::new());
-        let storage_ = storage.clone();
+impl<T: IndexValue> AccountsIndexStorage<T> {
+    pub fn new(bins: usize, config: &Option<AccountsIndexConfig>) -> AccountsIndexStorage<T> {
+        let storage = Arc::new(BucketMapHolder::new(bins, config));
+
+        let in_mem = (0..bins)
+            .into_iter()
+            .map(|bin| Arc::new(InMemAccountsIndex::new(&storage, bin)))
+            .collect::<Vec<_>>();
+
+        const DEFAULT_THREADS: usize = 1; // soon, this will be a cpu calculation
+        let threads = config
+            .as_ref()
+            .and_then(|config| config.flush_threads)
+            .unwrap_or(DEFAULT_THREADS);
+
         let exit = Arc::new(AtomicBool::default());
-        let exit_ = exit.clone();
-        let wait = Arc::new(WaitableCondvar::default());
-        let wait_ = wait.clone();
-        let handle = Some(
-            Builder::new()
-                .name("solana-index-flusher".to_string())
-                .spawn(move || {
-                    storage_.background(exit_, wait_);
+        let handles = Some(
+            (0..threads)
+                .into_iter()
+                .map(|_| {
+                    let storage_ = Arc::clone(&storage);
+                    let exit_ = Arc::clone(&exit);
+                    let in_mem_ = in_mem.clone();
+
+                    // note that rayon use here causes us to exhaust # rayon threads and many tests running in parallel deadlock
+                    Builder::new()
+                        .name("solana-idx-flusher".to_string())
+                        .spawn(move || {
+                            Self::background(storage_, exit_, in_mem_);
+                        })
+                        .unwrap()
                 })
-                .unwrap(),
+                .collect(),
         );
 
         Self {
             exit,
-            wait,
-            handle,
+            handles,
             storage,
+            in_mem,
         }
     }
 
-    pub fn storage(&self) -> &Arc<BucketMapHolder> {
+    pub fn storage(&self) -> &Arc<BucketMapHolder<T>> {
         &self.storage
+    }
+
+    // intended to execute in a bg thread
+    pub fn background(
+        storage: Arc<BucketMapHolder<T>>,
+        exit: Arc<AtomicBool>,
+        in_mem: Vec<Arc<InMemAccountsIndex<T>>>,
+    ) {
+        let bins = in_mem.len();
+        loop {
+            // this will transition to waits and thread throttling
+            storage
+                .wait_dirty_or_aged
+                .wait_timeout(Duration::from_millis(10000));
+            if exit.load(Ordering::Relaxed) {
+                break;
+            }
+
+            storage.stats.active_threads.fetch_add(1, Ordering::Relaxed);
+            for _ in 0..bins {
+                let index = storage.next_bucket_to_flush();
+                in_mem[index].flush();
+                storage.stats.report_stats(&storage);
+            }
+            storage.stats.active_threads.fetch_sub(1, Ordering::Relaxed);
+        }
     }
 }

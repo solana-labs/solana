@@ -6,6 +6,7 @@ use crate::{
     },
     memo::WithMemo,
     spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
+    stake::check_current_authority,
 };
 use clap::{value_t_or_exit, App, Arg, ArgMatches, SubCommand};
 use solana_clap_utils::{
@@ -730,6 +731,25 @@ pub fn process_vote_authorize(
         (&authorized.pubkey(), "authorized_account".to_string()),
         (new_authorized_pubkey, "new_authorized_pubkey".to_string()),
     )?;
+    let (_, vote_state) = get_vote_account(rpc_client, vote_account_pubkey, config.commitment)?;
+    match vote_authorize {
+        VoteAuthorize::Voter => {
+            let current_authorized_voter = vote_state
+                .authorized_voters()
+                .last()
+                .ok_or_else(|| {
+                    CliError::RpcRequestError(
+                        "Invalid vote account state; no authorized voters found".to_string(),
+                    )
+                })?
+                .1;
+            check_current_authority(current_authorized_voter, &authorized.pubkey())?
+        }
+        VoteAuthorize::Withdrawer => {
+            check_current_authority(&vote_state.authorized_withdrawer, &authorized.pubkey())?
+        }
+    }
+
     let latest_blockhash = rpc_client.get_latest_blockhash()?;
     let vote_ix = if new_authorized_signer.is_some() {
         vote_instruction::authorize_checked(

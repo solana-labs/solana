@@ -220,7 +220,7 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
 
     // Serialize account data
     let keyed_accounts = invoke_context.get_keyed_accounts().unwrap();
-    let mut serialized = serialize_parameters(
+    let (mut serialized, _account_lengths) = serialize_parameters(
         &bpf_loader::id(),
         &solana_sdk::pubkey::new_rand(),
         keyed_accounts,

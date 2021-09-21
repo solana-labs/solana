@@ -984,6 +984,8 @@ pub struct Bank {
     pub drop_callback: RwLock<OptionalDropCallback>,
 
     pub freeze_started: AtomicBool,
+
+    vote_only_bank: bool,
 }
 
 impl Default for BlockhashQueue {
@@ -1109,6 +1111,7 @@ impl Bank {
             feature_set: Arc::<FeatureSet>::default(),
             drop_callback: RwLock::<OptionalDropCallback>::default(),
             freeze_started: AtomicBool::default(),
+            vote_only_bank: false,
         }
     }
 
@@ -1219,7 +1222,22 @@ impl Bank {
 
     /// Create a new bank that points to an immutable checkpoint of another bank.
     pub fn new_from_parent(parent: &Arc<Bank>, collector_id: &Pubkey, slot: Slot) -> Self {
-        Self::_new_from_parent(parent, collector_id, slot, &mut null_tracer())
+        Self::_new_from_parent(parent, collector_id, slot, &mut null_tracer(), false)
+    }
+
+    pub fn new_from_parent_with_vote_only(
+        parent: &Arc<Bank>,
+        collector_id: &Pubkey,
+        slot: Slot,
+        vote_only_bank: bool,
+    ) -> Self {
+        Self::_new_from_parent(
+            parent,
+            collector_id,
+            slot,
+            &mut null_tracer(),
+            vote_only_bank,
+        )
     }
 
     pub fn new_from_parent_with_tracer(
@@ -1228,7 +1246,13 @@ impl Bank {
         slot: Slot,
         reward_calc_tracer: impl FnMut(&RewardCalculationEvent),
     ) -> Self {
-        Self::_new_from_parent(parent, collector_id, slot, &mut Some(reward_calc_tracer))
+        Self::_new_from_parent(
+            parent,
+            collector_id,
+            slot,
+            &mut Some(reward_calc_tracer),
+            false,
+        )
     }
 
     fn _new_from_parent(
@@ -1236,6 +1260,7 @@ impl Bank {
         collector_id: &Pubkey,
         slot: Slot,
         reward_calc_tracer: &mut Option<impl FnMut(&RewardCalculationEvent)>,
+        vote_only_bank: bool,
     ) -> Self {
         parent.freeze();
         assert_ne!(slot, parent.slot());
@@ -1284,6 +1309,7 @@ impl Bank {
             fee_calculator: fee_rate_governor.create_fee_calculator(),
             fee_rate_governor,
             capitalization: AtomicU64::new(parent.capitalization()),
+            vote_only_bank,
             inflation: parent.inflation.clone(),
             transaction_count: AtomicU64::new(parent.transaction_count()),
             transaction_error_count: AtomicU64::new(0),
@@ -1372,6 +1398,10 @@ impl Bank {
 
     pub fn set_callback(&self, callback: Option<Box<dyn DropCallback + Send + Sync>>) {
         *self.drop_callback.write().unwrap() = OptionalDropCallback(callback);
+    }
+
+    pub fn vote_only_bank(&self) -> bool {
+        self.vote_only_bank
     }
 
     /// Like `new_from_parent` but additionally:
@@ -1469,6 +1499,7 @@ impl Bank {
             feature_set: new(),
             drop_callback: RwLock::new(OptionalDropCallback(None)),
             freeze_started: AtomicBool::new(fields.hash != Hash::default()),
+            vote_only_bank: false,
         };
         bank.finish_init(
             genesis_config,
@@ -3896,10 +3927,12 @@ impl Bank {
     fn collect_rent_in_partition(&self, partition: Partition) -> usize {
         let subrange = Self::pubkey_range_from_partition(partition);
 
+        self.rc.accounts.hold_range_in_memory(&subrange, true);
+
         let accounts = self
             .rc
             .accounts
-            .load_to_collect_rent_eagerly(&self.ancestors, subrange);
+            .load_to_collect_rent_eagerly(&self.ancestors, subrange.clone());
         let account_count = accounts.len();
 
         // parallelize?
@@ -3923,6 +3956,8 @@ impl Bank {
         }
         self.collected_rent.fetch_add(total_rent, Relaxed);
         self.rewards.write().unwrap().append(&mut rent_debits.0);
+
+        self.rc.accounts.hold_range_in_memory(&subrange, false);
         account_count
     }
 
@@ -5698,7 +5733,7 @@ pub fn goto_end_of_slot(bank: &mut Bank) {
     }
 }
 
-fn is_simple_vote_transaction(transaction: &SanitizedTransaction) -> bool {
+pub fn is_simple_vote_transaction(transaction: &SanitizedTransaction) -> bool {
     if transaction.message().instructions().len() == 1 {
         let (program_pubkey, instruction) = transaction
             .message()
@@ -5990,16 +6025,16 @@ pub(crate) mod tests {
             cluster_type: ClusterType::MainnetBeta,
             ..GenesisConfig::default()
         }));
-        let sysvar_and_native_proram_delta0 = 11;
+        let sysvar_and_native_program_delta0 = 11;
         assert_eq!(
             bank0.capitalization(),
-            42 * 42 + sysvar_and_native_proram_delta0
+            42 * 42 + sysvar_and_native_program_delta0
         );
         let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
-        let sysvar_and_native_proram_delta1 = 2;
+        let sysvar_and_native_program_delta1 = 2;
         assert_eq!(
             bank1.capitalization(),
-            42 * 42 + sysvar_and_native_proram_delta0 + sysvar_and_native_proram_delta1,
+            42 * 42 + sysvar_and_native_program_delta0 + sysvar_and_native_program_delta1,
         );
     }
 
@@ -6596,10 +6631,10 @@ pub(crate) mod tests {
         let current_capitalization = bank.capitalization.load(Relaxed);
 
         // only slot history is newly created
-        let sysvar_and_native_proram_delta =
+        let sysvar_and_native_program_delta =
             min_rent_excempt_balance_for_sysvars(&bank, &[sysvar::slot_history::id()]);
         assert_eq!(
-            previous_capitalization - (current_capitalization - sysvar_and_native_proram_delta),
+            previous_capitalization - (current_capitalization - sysvar_and_native_program_delta),
             burned_portion
         );
 
@@ -7749,9 +7784,9 @@ pub(crate) mod tests {
         assert_ne!(bank1.capitalization(), bank0.capitalization());
 
         // verify the inflation is represented in validator_points *
-        let sysvar_and_native_proram_delta1 = 2;
+        let sysvar_and_native_program_delta1 = 2;
         let paid_rewards =
-            bank1.capitalization() - bank0.capitalization() - sysvar_and_native_proram_delta1;
+            bank1.capitalization() - bank0.capitalization() - sysvar_and_native_program_delta1;
 
         let rewards = bank1
             .get_account(&sysvar::rewards::id())
@@ -7818,10 +7853,10 @@ pub(crate) mod tests {
         // not being eagerly-collected for exact rewards calculation
         bank.restore_old_behavior_for_fragile_tests();
 
-        let sysvar_and_native_proram_delta = 11;
+        let sysvar_and_native_program_delta = 11;
         assert_eq!(
             bank.capitalization(),
-            42 * 1_000_000_000 + sysvar_and_native_proram_delta
+            42 * 1_000_000_000 + sysvar_and_native_program_delta
         );
         assert!(bank.rewards.read().unwrap().is_empty());
 
@@ -8269,9 +8304,9 @@ pub(crate) mod tests {
         ); // Leader collects fee after the bank is frozen
 
         // verify capitalization
-        let sysvar_and_native_proram_delta = 1;
+        let sysvar_and_native_program_delta = 1;
         assert_eq!(
-            capitalization - expected_fee_burned + sysvar_and_native_proram_delta,
+            capitalization - expected_fee_burned + sysvar_and_native_program_delta,
             bank.capitalization()
         );
 
@@ -11877,9 +11912,9 @@ pub(crate) mod tests {
 
         // assert that everything gets in order....
         assert!(bank1.get_account(&reward_pubkey).is_none());
-        let sysvar_and_native_proram_delta = 1;
+        let sysvar_and_native_program_delta = 1;
         assert_eq!(
-            bank0.capitalization() + 1 + 1_000_000_000 + sysvar_and_native_proram_delta,
+            bank0.capitalization() + 1 + 1_000_000_000 + sysvar_and_native_program_delta,
             bank1.capitalization()
         );
         assert_eq!(bank1.capitalization(), bank1.calculate_capitalization(true));

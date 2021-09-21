@@ -1530,7 +1530,7 @@ mod tests {
         let vote_tracker = VoteTracker::new(&bank);
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
-        let subscriptions = Arc::new(RpcSubscriptions::new(
+        let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
             &exit,
             bank_forks,
             Arc::new(RwLock::new(BlockCommitmentCache::default())),
@@ -1649,7 +1649,7 @@ mod tests {
         let bank = bank_forks.read().unwrap().get(0).unwrap().clone();
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
-        let subscriptions = Arc::new(RpcSubscriptions::new(
+        let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
             &exit,
             bank_forks,
             Arc::new(RwLock::new(BlockCommitmentCache::default())),
