@@ -4260,6 +4260,7 @@ dependencies = [
  "solana-accountsdb-plugin-intf",
  "solana-logger 1.8.0",
  "solana-metrics",
+ "solana-rpc",
  "solana-runtime",
  "solana-sdk",
 ]

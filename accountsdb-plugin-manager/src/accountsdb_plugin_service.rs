@@ -2,13 +2,13 @@ use {
     crate::{
         accounts_update_notifier::{AccountsSelector, AccountsUpdateNotifierImpl},
         accountsdb_plugin_manager::AccountsDbPluginManager,
-        confirmed_slots_observer::SlotConfirmationObserver,
+        slot_status_observer::SlotStatusObserver,
     },
     crossbeam_channel::Receiver,
     log::*,
     serde_json,
+    solana_rpc::optimistically_confirmed_bank_tracker::BankNotification,
     solana_runtime::accounts_db::AccountsUpdateNotifier,
-    solana_sdk::clock::Slot,
     std::{
         fs::File,
         io::Read,
@@ -20,7 +20,7 @@ use {
 
 /// The service managing the AccountsDb plugin workflow.
 pub struct AccountsDbPluginService {
-    confirmed_slots_observer: SlotConfirmationObserver,
+    confirmed_slots_observer: SlotStatusObserver,
     plugin_manager: Arc<RwLock<AccountsDbPluginManager>>,
     accounts_update_notifier: AccountsUpdateNotifier,
 }
@@ -54,7 +54,7 @@ impl AccountsDbPluginService {
     ///         accounts = \['*'\],
     ///    }
     pub fn new(
-        confirmed_bank_receiver: Receiver<Slot>,
+        confirmed_bank_receiver: Receiver<BankNotification>,
         accountsdb_plugin_config_file: &Path,
     ) -> Self {
         info!(
@@ -103,7 +103,7 @@ impl AccountsDbPluginService {
             plugin_manager.clone(),
             accounts_selector,
         )));
-        let confirmed_slots_observer = SlotConfirmationObserver::new(
+        let confirmed_slots_observer = SlotStatusObserver::new(
             confirmed_bank_receiver,
             accounts_update_notifier.clone(),
         );

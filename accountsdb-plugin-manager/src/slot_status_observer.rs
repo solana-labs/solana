@@ -1,7 +1,10 @@
+
 use {
     crossbeam_channel::Receiver,
+    solana_accountsdb_plugin_intf::accountsdb_plugin_intf::SlotStatus,
+    solana_rpc::optimistically_confirmed_bank_tracker::BankNotification,
     solana_runtime::accounts_db::AccountsUpdateNotifier,
-    solana_sdk::{clock::Slot, commitment_config::CommitmentLevel},
+    solana_sdk::{clock::Slot},
     std::{
         collections::VecDeque,
         sync::{
@@ -17,19 +20,19 @@ use {
 /// their states.
 #[derive(Default, Clone)]
 struct EligibleSlotSet {
-    slot_set: Arc<RwLock<VecDeque<(Slot, CommitmentLevel)>>>,
+    slot_set: Arc<RwLock<VecDeque<(Slot, SlotStatus)>>>,
 }
 
 #[derive(Debug)]
-pub(crate) struct SlotConfirmationObserver {
+pub(crate) struct SlotStatusObserver {
     confirmed_bank_receiver_service: Option<JoinHandle<()>>,
     plugin_notify_service: Option<JoinHandle<()>>,
     exit_updated_slot_server: Arc<AtomicBool>,
 }
 
-impl SlotConfirmationObserver {
+impl SlotStatusObserver {
     pub fn new(
-        confirmed_bank_receiver: Receiver<Slot>,
+        confirmed_bank_receiver: Receiver<BankNotification>,
         accounts_update_notifier: AccountsUpdateNotifier,
     ) -> Self {
         let eligible_slot_set = EligibleSlotSet::default();
@@ -65,7 +68,7 @@ impl SlotConfirmationObserver {
     }
 
     fn run_confirmed_bank_receiver(
-        confirmed_bank_receiver: Receiver<Slot>,
+        confirmed_bank_receiver: Receiver<BankNotification>,
         eligible_slot_set: EligibleSlotSet,
         exit: Arc<AtomicBool>,
     ) -> JoinHandle<()> {
@@ -75,7 +78,17 @@ impl SlotConfirmationObserver {
                 while !exit.load(Ordering::Relaxed) {
                     if let Ok(slot) = confirmed_bank_receiver.recv() {
                         let mut slot_set = eligible_slot_set.slot_set.write().unwrap();
-                        slot_set.push_back((slot, CommitmentLevel::Confirmed));
+                        match slot {
+                            BankNotification::OptimisticallyConfirmed(slot) => {
+                                slot_set.push_back((slot, SlotStatus::Confirmed));
+                            }
+                            BankNotification::Frozen(bank) => {
+                                slot_set.push_back((bank.slot(), SlotStatus::Processed));
+                            }
+                            BankNotification::Root(bank) => {
+                                slot_set.push_back((bank.slot(), SlotStatus::Rooted));
+                            }
+                        }
                     }
                 }
             })
