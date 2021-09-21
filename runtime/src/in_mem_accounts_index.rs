@@ -263,8 +263,8 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     // not on disk, so insert new thing
                     new_value
                 };
-                vacant.insert(new_value);
                 assert!(new_value.dirty());
+                vacant.insert(new_value);
                 self.stats().insert_or_delete(true, self.bin);
             }
         }
