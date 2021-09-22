@@ -4254,12 +4254,9 @@ impl AccountsDb {
             for i in 0..accounts_and_meta_to_store.len() {
                 let meta = &accounts_and_meta_to_store[i].0;
                 let hash = hashes[i].borrow();
-                match accounts_and_meta_to_store[i].1 {
-                    Some(account) => {
-                        let account = account.to_account_shared_data();
-                        notifier.notify_account_update(slot, &meta.pubkey, Some(hash), &account)
-                    }
-                    None => {}
+                if let Some(account) = accounts_and_meta_to_store[i].1 {
+                    let account = account.to_account_shared_data();
+                    notifier.notify_account_update(slot, &meta.pubkey, Some(hash), &account)
                 }
             }
         }

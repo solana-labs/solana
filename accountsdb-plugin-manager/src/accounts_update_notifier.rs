@@ -33,11 +33,8 @@ impl AccountsUpdateNotifierIntf for AccountsUpdateNotifierImpl {
         hash: Option<&Hash>,
         account: &AccountSharedData,
     ) {
-        match self.accountinfo_from_shared_account_data(pubkey, hash, account) {
-            Some(account_info) => {
-                self.notify_plugins_of_account_update(account_info, slot);
-            }
-            None => {}
+        if let Some(account_info) = self.accountinfo_from_shared_account_data(pubkey, hash, account) {
+            self.notify_plugins_of_account_update(account_info, slot);
         }
     }
 

@@ -35,6 +35,9 @@ pub enum AccountsDbPluginError {
     #[error("Error with connecting to the backend data store.")]
     DataStoreConnectionError { msg: String },
 
+    #[error("Error with preparing data store schema.")]
+    DataSchemaError { msg: String },
+
     #[error("Error with updating account.")]
     AccountsUpdateError { msg: String },
 }

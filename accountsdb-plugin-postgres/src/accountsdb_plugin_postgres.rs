@@ -1,3 +1,5 @@
+use postgres::Statement;
+
 /// Main entry for the PostgreSQL plugin
 use {
     chrono::Utc,
@@ -11,9 +13,14 @@ use {
     std::{fs::File, io::Read, sync::Mutex},
 };
 
+struct PostgresSqlClientWrapper {
+    client: Client,
+    update_account_stmt: Statement,
+}
+
 #[derive(Default)]
 pub struct AccountsDbPluginPostgres {
-    client: Option<Mutex<Client>>,
+    client: Option<Mutex<PostgresSqlClientWrapper>>,
 }
 
 impl std::fmt::Debug for AccountsDbPluginPostgres {
@@ -73,8 +80,28 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
                             ),
                         });
                     }
-                    Ok(client) => {
-                        self.client = Some(Mutex::new(client));
+                    Ok(mut client) => {
+                        let result = client.prepare("INSERT INTO account (pubkey, slot, owner, lamports, executable, rent_epoch, data, hash, updated_on) \
+                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) \
+                            ON CONFLICT (pubkey) DO UPDATE SET slot=$2, owner=$3, lamports=$4, executable=$5, rent_epoch=$6, \
+                            data=$7, hash=$8, updated_on=$9");
+
+                        match result {
+                            Err(err) => {
+                                return Err(AccountsDbPluginError::DataSchemaError {
+                                    msg: format!(
+                                        "Error in preparing for the accounts update PostgreSQL database: {:?} host: {:?} user: {:?} config: {:?}",
+                                        err, config.host, config.user, connection_str
+                                    ),
+                                });
+                            }
+                            Ok(update_account_stmt) => {
+                                self.client = Some(Mutex::new(PostgresSqlClientWrapper {
+                                    client,
+                                    update_account_stmt,
+                                }));
+                            }
+                        }
                     }
                 }
             }
@@ -103,11 +130,9 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
                 let lamports = account.account_meta.lamports as i64;
                 let rent_epoch = account.account_meta.rent_epoch as i64;
                 let updated_on = Utc::now().naive_utc();
-                let result = client.get_mut().unwrap().execute(
-                    "INSERT INTO account (pubkey, slot, owner, lamports, executable, rent_epoch, data, hash, updated_on) \
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) \
-                    ON CONFLICT (pubkey) DO UPDATE SET slot=$2, owner=$3, lamports=$4, executable=$5, rent_epoch=$6, \
-                    data=$7, hash=$8, updated_on=$9",
+                let client = client.get_mut().unwrap();
+                let result = client.client.query(
+                    &client.update_account_stmt,
                     &[
                         &account.account_meta.pubkey,
                         &slot,
@@ -128,7 +153,7 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
                         });
                     }
                     Ok(rows) => {
-                        assert_eq!(1, rows, "Expected one rows to be updated a time");
+                        assert_eq!(1, rows.len(), "Expected one rows to be updated a time");
                     }
                 }
             }
@@ -159,7 +184,7 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
 
                 let result = match parent {
                         Some(parent) => {
-                            client.get_mut().unwrap().execute(
+                            client.get_mut().unwrap().client.execute(
                                 "INSERT INTO slot (slot, parent, slot_status, updated_on) \
                                 VALUES ($1, $2, $3, $4) \
                                 ON CONFLICT (pubkey) DO UPDATE SET parent=$2, slot_status=$3, updated_on=$4",
@@ -172,7 +197,7 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
                             )
                         }
                         None => {
-                            client.get_mut().unwrap().execute(
+                            client.get_mut().unwrap().client.execute(
                                 "INSERT INTO slot (slot, slot_status, updated_on) \
                                 VALUES ($1, $2, $3,) \
                                 ON CONFLICT (pubkey) DO UPDATE SET slot_status=$2, updated_on=$3",

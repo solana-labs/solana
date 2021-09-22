@@ -88,15 +88,9 @@ impl ReplicaSlotConfirmationServerImpl {
             .name("confirmed_bank_receiver".to_string())
             .spawn(move || {
                 while !exit.load(Ordering::Relaxed) {
-                    if let Ok(slot) = confirmed_bank_receiver.recv() {
-                        match slot {
-                            BankNotification::OptimisticallyConfirmed(slot) => {
-                                let mut slot_set = eligible_slot_set.slot_set.write().unwrap();
-
-                                slot_set.push_back((slot.into(), CommitmentLevel::Confirmed));
-                            }
-                            _ => {}
-                        }
+                    if let Ok(BankNotification::OptimisticallyConfirmed(slot)) = confirmed_bank_receiver.recv() {
+                        let mut slot_set = eligible_slot_set.slot_set.write().unwrap();
+                        slot_set.push_back((slot, CommitmentLevel::Confirmed));
                     }
                 }
             })
