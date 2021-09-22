@@ -69,7 +69,7 @@ impl AccountsSelector {
     }
 
     pub fn new(accounts: &[String], owners: &[String]) -> Self {
-        println!("Creating AccountsSelector from accounts: {:?}, owners: {:?}", accounts, owners);
+        info!("Creating AccountsSelector from accounts: {:?}, owners: {:?}", accounts, owners);
 
         let select_all_accounts = accounts.iter().any(|key| key == "*");
         if select_all_accounts {
