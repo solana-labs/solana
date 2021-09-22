@@ -312,7 +312,7 @@ impl VoteState {
         // Note:
         //
         // 1) `vote.slots` is sorted from oldest/smallest vote to newest/largest
-        // vote, due to the way votes are applied to the vote state (newest vots
+        // vote, due to the way votes are applied to the vote state (newest votes
         // pushed to the back), but `slot_hashes` is sorted smallest to largest.
         //
         // 2) Conversely, `slot_hashes` is sorted from newest/largest vote to
