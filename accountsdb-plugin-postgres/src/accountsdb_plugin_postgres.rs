@@ -117,7 +117,7 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
     }
 
     fn update_account(&mut self, account: &ReplicaAccountInfo, slot: u64) -> Result<()> {
-        info!("Updating account {:?} at slot {:?}", account, slot);
+        debug!("Updating account {:?} at slot {:?}", account, slot);
 
         match &mut self.client {
             None => {
@@ -152,13 +152,7 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
                             msg: format!("Failed to persist the update of account to the PostgreSQL database. Error: {:?}", err)
                         });
                     }
-                    Ok(rows) => {
-                        if rows.len() != 1 {
-                            return Err(AccountsDbPluginError::AccountsUpdateError {
-                                msg: format!("Failed to persist the update of account to the PostgreSQL database. Expected to save one row only: actual {:?} for key: {:?}", 
-                                rows.len(), &account.account_meta.pubkey)
-                            });
-                        }
+                    Ok(_) => {
                     }
                 }
             }
