@@ -251,7 +251,7 @@ impl BucketStorage {
         capacity_pow2: u8,
         stats: &mut Arc<BucketStats>,
     ) -> (MmapMut, PathBuf) {
-        let mut m0 = Measure::start("");
+        let mut measure_new_file = Measure::start("measure_new_file");
         let capacity = 1u64 << capacity_pow2;
         let r = thread_rng().gen_range(0, drives.len());
         let drive = &drives[r];
@@ -280,16 +280,22 @@ impl BucketStorage {
             .unwrap();
         data.write_all(&[0]).unwrap();
         data.seek(SeekFrom::Start(0)).unwrap();
-        m0.stop();
-        let mut m1 = Measure::start("");
+        measure_new_file.stop();
+        let mut measure_flush = Measure::start("measure_flush");
         data.flush().unwrap(); // can we skip this?
-        m1.stop();
-        let mut m2 = Measure::start("");
+        measure_flush.stop();
+        let mut measure_mmap = Measure::start("measure_mmap");
         let res = (unsafe { MmapMut::map_mut(&data).unwrap() }, file);
-        m2.stop();
-        stats.new_file_us.fetch_add(m0.as_us(), Ordering::Relaxed);
-        stats.flush_file_us.fetch_add(m0.as_us(), Ordering::Relaxed);
-        stats.mmap_us.fetch_add(m0.as_us(), Ordering::Relaxed);
+        measure_mmap.stop();
+        stats
+            .new_file_us
+            .fetch_add(measure_new_file.as_us(), Ordering::Relaxed);
+        stats
+            .flush_file_us
+            .fetch_add(measure_flush.as_us(), Ordering::Relaxed);
+        stats
+            .mmap_us
+            .fetch_add(measure_mmap.as_us(), Ordering::Relaxed);
         res
     }
 

@@ -96,6 +96,8 @@ impl BucketMapHolderStats {
             max = std::cmp::max(max, d);
         }
 
+        let disk = storage.disk.as_ref();
+
         datapoint_info!(
             "accounts_index",
             (
@@ -179,6 +181,88 @@ impl BucketMapHolderStats {
             (
                 "flush_remove_us",
                 self.flush_remove_us.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "disk_index_resizes",
+                disk.map(|disk| disk.stats.index.resizes.swap(0, Ordering::Relaxed))
+                    .unwrap_or_default(),
+                i64
+            ),
+            (
+                "disk_index_max_size",
+                disk.map(|disk| {
+                    let mut lock = disk.stats.index.max_size.lock().unwrap();
+                    let value = *lock;
+                    *lock = 0;
+                    value
+                })
+                .unwrap_or_default(),
+                i64
+            ),
+            (
+                "disk_index_new_file_us",
+                disk.map(|disk| disk.stats.index.new_file_us.swap(0, Ordering::Relaxed))
+                    .unwrap_or_default(),
+                i64
+            ),
+            (
+                "disk_index_resize_us",
+                disk.map(|disk| disk.stats.index.resize_us.swap(0, Ordering::Relaxed))
+                    .unwrap_or_default(),
+                i64
+            ),
+            (
+                "disk_index_flush_file_us",
+                disk.map(|disk| disk.stats.index.flush_file_us.swap(0, Ordering::Relaxed))
+                    .unwrap_or_default(),
+                i64
+            ),
+            (
+                "disk_index_flush_mmap_us",
+                disk.map(|disk| disk.stats.index.mmap_us.swap(0, Ordering::Relaxed))
+                    .unwrap_or_default(),
+                i64
+            ),
+            (
+                "disk_data_resizes",
+                disk.map(|disk| disk.stats.data.resizes.swap(0, Ordering::Relaxed))
+                    .unwrap_or_default(),
+                i64
+            ),
+            (
+                "disk_data_max_size",
+                disk.map(|disk| {
+                    let mut lock = disk.stats.data.max_size.lock().unwrap();
+                    let value = *lock;
+                    *lock = 0;
+                    value
+                })
+                .unwrap_or_default(),
+                i64
+            ),
+            (
+                "disk_data_new_file_us",
+                disk.map(|disk| disk.stats.data.new_file_us.swap(0, Ordering::Relaxed))
+                    .unwrap_or_default(),
+                i64
+            ),
+            (
+                "disk_data_resize_us",
+                disk.map(|disk| disk.stats.data.resize_us.swap(0, Ordering::Relaxed))
+                    .unwrap_or_default(),
+                i64
+            ),
+            (
+                "disk_data_flush_file_us",
+                disk.map(|disk| disk.stats.data.flush_file_us.swap(0, Ordering::Relaxed))
+                    .unwrap_or_default(),
+                i64
+            ),
+            (
+                "disk_data_flush_mmap_us",
+                disk.map(|disk| disk.stats.data.mmap_us.swap(0, Ordering::Relaxed))
+                    .unwrap_or_default(),
                 i64
             ),
             (
