@@ -59,10 +59,8 @@ pub fn recv_from(obj: &mut Packets, socket: &UdpSocket, max_wait_ms: u64) -> Res
 
 pub fn send_to(obj: &Packets, socket: &UdpSocket) -> Result<()> {
     for p in &obj.packets {
-        let addr = p.meta.addr();
-        if is_global(&addr) {
-            socket.send_to(&p.data[..p.meta.size], &addr)?;
-        }
+        let a = p.meta.addr();
+        socket.send_to(&p.data[..p.meta.size], &a)?;
     }
     Ok(())
 }

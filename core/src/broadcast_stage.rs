@@ -387,15 +387,9 @@ pub fn broadcast_shreds(
     let mut shred_select = Measure::start("shred_select");
     let packets: Vec<_> = shreds
         .iter()
-        .filter_map(|shred| {
+        .map(|shred| {
             let broadcast_index = weighted_best(&peers_and_stakes, shred.seed());
-            let node = &peers[broadcast_index];
-
-            if is_global(&node.tvu) {
-                Some((&shred.payload, &node.tvu))
-            } else {
-                None
-            }
+            (&shred.payload, &peers[broadcast_index].tvu)
         })
         .collect();
     shred_select.stop();
