@@ -1,5 +1,5 @@
 use crate::accounts_index::{AccountsIndexConfig, IndexValue};
-use crate::bucket_map_holder::BucketMapHolder;
+use crate::bucket_map_holder::{BucketMapHolder, AGE_MS};
 use crate::in_mem_accounts_index::InMemAccountsIndex;
 use std::fmt::Debug;
 use std::time::Duration;
@@ -99,14 +99,15 @@ impl<T: IndexValue> AccountsIndexStorage<T> {
         let bins = in_mem.len();
         let flush = storage.disk.is_some();
         loop {
-            // this will transition to waits and thread throttling
+            // this will transition to thread throttling
             storage
                 .wait_dirty_or_aged
-                .wait_timeout(Duration::from_millis(10000));
+                .wait_timeout(Duration::from_millis(AGE_MS));
             if exit.load(Ordering::Relaxed) {
                 break;
             }
 
+            storage.maybe_advance_age();
             storage.stats.active_threads.fetch_add(1, Ordering::Relaxed);
             for _ in 0..bins {
                 if flush {

@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicBool, AtomicU8, AtomicUsize, Ordering};
 use std::sync::Mutex;
 pub type Age = u8;
 
-const AGE_MS: u64 = SLOT_MS; // match one age per slot time
+pub const AGE_MS: u64 = SLOT_MS; // match one age per slot time
 
 pub struct BucketMapHolder<T: IndexValue> {
     pub disk: Option<BucketMap<SlotT<T>>>,
