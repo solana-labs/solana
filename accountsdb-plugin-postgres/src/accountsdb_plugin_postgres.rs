@@ -153,7 +153,12 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
                         });
                     }
                     Ok(rows) => {
-                        assert_eq!(1, rows.len(), "Expected one rows to be updated a time");
+                        if rows.len() != 1 {
+                            return Err(AccountsDbPluginError::AccountsUpdateError {
+                                msg: format!("Failed to persist the update of account to the PostgreSQL database. Expected to save one row only: actual {:?} for key: {:?}", 
+                                rows.len(), &account.account_meta.pubkey)
+                            });
+                        }
                     }
                 }
             }
