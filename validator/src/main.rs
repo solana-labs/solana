@@ -59,8 +59,8 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_validator::{
-        admin_rpc_service, dashboard::Dashboard, new_spinner_progress_bar, println_name_value,
-        redirect_stderr_to_file,
+        admin_rpc_service, dashboard::Dashboard, ledger_lockfile, lock_ledger,
+        new_spinner_progress_bar, println_name_value, redirect_stderr_to_file,
     },
     std::{
         collections::{HashSet, VecDeque},
@@ -2517,6 +2517,7 @@ pub fn main() {
         })
     });
 
+<<<<<<< HEAD
     let mut ledger_fd_lock = FdLock::new(fs::File::open(&ledger_path).unwrap());
     let _ledger_lock = ledger_fd_lock.try_lock().unwrap_or_else(|_| {
         println!(
@@ -2525,6 +2526,10 @@ pub fn main() {
         );
         exit(1);
     });
+=======
+    let mut ledger_lock = ledger_lockfile(&ledger_path);
+    let _ledger_write_guard = lock_ledger(&ledger_path, &mut ledger_lock);
+>>>>>>> 567f30aa1 (windows: Make solana-test-validator work (#20099))
 
     let start_progress = Arc::new(RwLock::new(ValidatorStartProgress::default()));
     admin_rpc_service::run(

@@ -24,8 +24,8 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_validator::{
-        admin_rpc_service, dashboard::Dashboard, println_name_value, redirect_stderr_to_file,
-        test_validator::*,
+        admin_rpc_service, dashboard::Dashboard, ledger_lockfile, lock_ledger, println_name_value,
+        redirect_stderr_to_file, test_validator::*,
     },
     std::{
         collections::HashSet,
@@ -168,7 +168,7 @@ fn main() {
             Arg::with_name("no_bpf_jit")
                 .long("no-bpf-jit")
                 .takes_value(false)
-                .help("Disable the just-in-time compiler and instead use the interpreter for BPF"),
+                .help("Disable the just-in-time compiler and instead use the interpreter for BPF. Windows always disables JIT."),
         )
         .arg(
             Arg::with_name("slots_per_epoch")
@@ -304,6 +304,7 @@ fn main() {
         });
     }
 
+<<<<<<< HEAD
     let mut ledger_fd_lock = FdLock::new(fs::File::open(&ledger_path).unwrap());
     let _ledger_lock = ledger_fd_lock.try_lock().unwrap_or_else(|_| {
         println!(
@@ -313,6 +314,10 @@ fn main() {
         exit(1);
     });
 
+=======
+    let mut ledger_lock = ledger_lockfile(&ledger_path);
+    let _ledger_write_guard = lock_ledger(&ledger_path, &mut ledger_lock);
+>>>>>>> 567f30aa1 (windows: Make solana-test-validator work (#20099))
     if reset_ledger {
         remove_directory_contents(&ledger_path).unwrap_or_else(|err| {
             println!("Error: Unable to remove {}: {}", ledger_path.display(), err);
@@ -396,6 +401,10 @@ fn main() {
         IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
         faucet_port,
     ));
+    // JIT not supported on the BPF VM in Windows currently: https://github.com/solana-labs/rbpf/issues/217
+    #[cfg(target_family = "windows")]
+    let bpf_jit = false;
+    #[cfg(not(target_family = "windows"))]
     let bpf_jit = !matches.is_present("no_bpf_jit");
 
     let mut programs = vec![];
