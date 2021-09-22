@@ -158,66 +158,10 @@ pub fn batch_size(batches: &[Packets]) -> usize {
     batches.iter().map(|p| p.packets.len()).sum()
 }
 
-// Return Err if non-vote packet
-fn check_non_vote(packet: &Packet, packet_offsets: &PacketOffsets) -> Result<(), PacketError> {
-    if packet_offsets.sig_len != 1 {
-        return Err(PacketError::InvalidPubkeyLen);
-    }
-
-    let mut reject_pubkey_start = packet_offsets.pubkey_start as usize;
-    let mut vote_index = None;
-    for i in 0..packet_offsets.pubkey_len {
-        let pubkey_end = reject_pubkey_start.saturating_add(size_of::<Pubkey>());
-        if &packet.data[reject_pubkey_start..pubkey_end] == solana_vote_program::id().as_ref() {
-            vote_index = Some(i);
-            break;
-        }
-        reject_pubkey_start = pubkey_end;
-    }
-
-    if vote_index.is_none() {
-        return Err(PacketError::InvalidPubkeyLen);
-    }
-
-    let pubkeys_end = (packet_offsets.pubkey_start as usize)
-        .saturating_add(size_of::<Pubkey>().saturating_mul(packet_offsets.pubkey_len as usize));
-    let hash_end = pubkeys_end.saturating_add(size_of::<Hash>());
-    let num_instructions_offset = hash_end;
-
-    if hash_end.saturating_add(1) >= packet.meta.size {
-        return Err(PacketError::InvalidPubkeyLen);
-    }
-
-    let (instructions_len, instructions_size) =
-        match decode_shortu16_len(&packet.data[num_instructions_offset..]) {
-            Ok((len, size)) => (len, size),
-            Err(_) => {
-                return Err(PacketError::InvalidPubkeyLen);
-            }
-        };
-
-    let instruction0_start = hash_end.saturating_add(instructions_size);
-    if instruction0_start > packet.meta.size {
-        return Err(PacketError::InvalidPubkeyLen);
-    }
-
-    let vote_index = vote_index.unwrap();
-    // First instruction should be the vote key
-    if packet.data[instruction0_start] as u32 != vote_index {
-        return Err(PacketError::InvalidPubkeyLen);
-    }
-
-    if instructions_len != 1 {
-        return Err(PacketError::InvalidPubkeyLen);
-    }
-    Ok(())
-}
-
 // internal function to be unit-tested; should be used only by get_packet_offsets
 fn do_get_packet_offsets(
     packet: &Packet,
     current_offset: usize,
-    reject_non_vote: bool,
 ) -> Result<PacketOffsets, PacketError> {
     // should have at least 1 signature, sig lengths and the message header
     let _ = 1usize
@@ -296,19 +240,13 @@ fn do_get_packet_offsets(
         .checked_add(pubkey_start)
         .ok_or(PacketError::InvalidLen)?;
 
-    let offsets = PacketOffsets::new(
+    Ok(PacketOffsets::new(
         u32::try_from(sig_len_untrusted)?,
         u32::try_from(sig_start)?,
         u32::try_from(msg_start)?,
         u32::try_from(pubkey_start)?,
         u32::try_from(pubkey_len)?,
-    );
-
-    if reject_non_vote {
-        check_non_vote(packet, &offsets)?;
-    }
-
-    Ok(offsets)
+    ))
 }
 
 fn get_packet_offsets(
@@ -316,14 +254,15 @@ fn get_packet_offsets(
     current_offset: usize,
     reject_non_vote: bool,
 ) -> PacketOffsets {
-    let unsanitized_packet_offsets = do_get_packet_offsets(packet, current_offset, reject_non_vote);
+    let unsanitized_packet_offsets = do_get_packet_offsets(packet, current_offset);
     if let Ok(offsets) = unsanitized_packet_offsets {
         check_for_simple_vote_transaction(packet, &offsets, current_offset).ok();
-        offsets
-    } else {
-        // force sigverify to fail by returning zeros
-        PacketOffsets::new(0, 0, 0, 0, 0)
+        if !reject_non_vote || packet.meta.is_simple_vote_tx {
+            return offsets;
+        }
     }
+    // force sigverify to fail by returning zeros
+    PacketOffsets::new(0, 0, 0, 0, 0)
 }
 
 fn check_for_simple_vote_transaction(
@@ -716,7 +655,7 @@ mod tests {
 
         let packet = packet_from_num_sigs(required_num_sigs, actual_num_sigs);
 
-        let unsanitized_packet_offsets = sigverify::do_get_packet_offsets(&packet, 0, false);
+        let unsanitized_packet_offsets = sigverify::do_get_packet_offsets(&packet, 0);
 
         assert_eq!(
             unsanitized_packet_offsets,
@@ -732,7 +671,7 @@ mod tests {
 
         let packet = packet_from_num_sigs(required_num_sigs, actual_num_sigs);
 
-        let unsanitized_packet_offsets = sigverify::do_get_packet_offsets(&packet, 0, false);
+        let unsanitized_packet_offsets = sigverify::do_get_packet_offsets(&packet, 0);
 
         assert_eq!(
             unsanitized_packet_offsets,
@@ -749,7 +688,7 @@ mod tests {
         packet.data[1] = 0xff;
         packet.meta.size = 2;
 
-        let res = sigverify::do_get_packet_offsets(&packet, 0, false);
+        let res = sigverify::do_get_packet_offsets(&packet, 0);
         assert_eq!(res, Err(PacketError::InvalidLen));
     }
 
@@ -764,7 +703,7 @@ mod tests {
         tx.message.header.num_required_signatures = NUM_SIG as u8;
         let mut packet = sigverify::make_packet_from_transaction(tx);
 
-        let res = sigverify::do_get_packet_offsets(&packet, 0, false);
+        let res = sigverify::do_get_packet_offsets(&packet, 0);
         assert_eq!(res, Err(PacketError::InvalidPubkeyLen));
 
         verify_packet(&mut packet, false);
@@ -800,7 +739,7 @@ mod tests {
 
         let mut packet = sigverify::make_packet_from_transaction(tx);
 
-        let res = sigverify::do_get_packet_offsets(&packet, 0, false);
+        let res = sigverify::do_get_packet_offsets(&packet, 0);
         assert_eq!(res, Err(PacketError::InvalidPubkeyLen));
 
         verify_packet(&mut packet, false);
@@ -820,7 +759,7 @@ mod tests {
         // Make the signatures len huge
         packet.data[0] = 0x7f;
 
-        let res = sigverify::do_get_packet_offsets(&packet, 0, false);
+        let res = sigverify::do_get_packet_offsets(&packet, 0);
         assert_eq!(res, Err(PacketError::InvalidSignatureLen));
     }
 
@@ -835,7 +774,7 @@ mod tests {
         packet.data[2] = 0xff;
         packet.data[3] = 0xff;
 
-        let res = sigverify::do_get_packet_offsets(&packet, 0, false);
+        let res = sigverify::do_get_packet_offsets(&packet, 0);
         assert_eq!(res, Err(PacketError::InvalidShortVec));
     }
 
@@ -844,12 +783,12 @@ mod tests {
         let tx = test_tx();
         let mut packet = sigverify::make_packet_from_transaction(tx);
 
-        let res = sigverify::do_get_packet_offsets(&packet, 0, false);
+        let res = sigverify::do_get_packet_offsets(&packet, 0);
 
         // make pubkey len huge
         packet.data[res.unwrap().pubkey_start as usize - 1] = 0x7f;
 
-        let res = sigverify::do_get_packet_offsets(&packet, 0, false);
+        let res = sigverify::do_get_packet_offsets(&packet, 0);
         assert_eq!(res, Err(PacketError::InvalidPubkeyLen));
     }
 
@@ -868,7 +807,7 @@ mod tests {
         let mut tx = Transaction::new_unsigned(message);
         tx.signatures = vec![Signature::default()];
         let packet = sigverify::make_packet_from_transaction(tx);
-        let res = sigverify::do_get_packet_offsets(&packet, 0, false);
+        let res = sigverify::do_get_packet_offsets(&packet, 0);
 
         assert_eq!(res, Err(PacketError::PayerNotWritable));
     }
@@ -1190,7 +1129,7 @@ mod tests {
             let mut tx = test_tx();
             tx.message.instructions[0].data = vec![1, 2, 3];
             let mut packet = sigverify::make_packet_from_transaction(tx);
-            let packet_offsets = do_get_packet_offsets(&packet, 0, false).unwrap();
+            let packet_offsets = do_get_packet_offsets(&packet, 0).unwrap();
             check_for_simple_vote_transaction(&mut packet, &packet_offsets, 0).ok();
             assert!(!packet.meta.is_simple_vote_tx);
         }
@@ -1200,7 +1139,7 @@ mod tests {
             let mut tx = vote_tx();
             tx.message.instructions[0].data = vec![1, 2, 3];
             let mut packet = sigverify::make_packet_from_transaction(tx);
-            let packet_offsets = do_get_packet_offsets(&packet, 0, false).unwrap();
+            let packet_offsets = do_get_packet_offsets(&packet, 0).unwrap();
             check_for_simple_vote_transaction(&mut packet, &packet_offsets, 0).ok();
             assert!(packet.meta.is_simple_vote_tx);
         }
@@ -1221,7 +1160,7 @@ mod tests {
                 ],
             );
             let mut packet = sigverify::make_packet_from_transaction(tx);
-            let packet_offsets = do_get_packet_offsets(&packet, 0, false).unwrap();
+            let packet_offsets = do_get_packet_offsets(&packet, 0).unwrap();
             check_for_simple_vote_transaction(&mut packet, &packet_offsets, 0).ok();
             assert!(!packet.meta.is_simple_vote_tx);
         }
@@ -1244,7 +1183,7 @@ mod tests {
             .iter_mut()
             .enumerate()
             .for_each(|(index, mut packet)| {
-                let packet_offsets = do_get_packet_offsets(&packet, current_offset, false).unwrap();
+                let packet_offsets = do_get_packet_offsets(&packet, current_offset).unwrap();
                 check_for_simple_vote_transaction(&mut packet, &packet_offsets, current_offset)
                     .ok();
                 if index == 1 {
