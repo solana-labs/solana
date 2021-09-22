@@ -279,7 +279,7 @@ $ sha256sum extended.so dump.so
 ### Using an intermediary Buffer account
 
 Instead of deploying directly to the program account, the program can be written
-to an intermediary buffer account. Intermediary accounts can useful for things
+to an intermediary buffer account. Intermediary accounts can be useful for things
 like multi-entity governed programs where the governing members fist verify the
 intermediary buffer contents and then vote to allow an upgrade using it.
 
