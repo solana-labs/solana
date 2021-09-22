@@ -195,7 +195,6 @@ pub(crate) mod tests {
     fn test_create_accounts_selector() {
         AccountsSelector::new(&["9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin".to_string()], &[]);
 
-        AccountsSelector::new(&[], &["\"9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin\"".to_string()]);
-        
+        AccountsSelector::new(&[], &["9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin".to_string()]);
     }
 }

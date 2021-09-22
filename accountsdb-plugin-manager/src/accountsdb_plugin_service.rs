@@ -69,35 +69,7 @@ impl AccountsDbPluginService {
         file.read_to_string(&mut contents).unwrap();
 
         let result: serde_json::Value = serde_json::from_str(&contents).unwrap();
-        let accounts_selector = &result["accounts_selector"];
-
-        let accounts_selector = if accounts_selector.is_null() {
-            AccountsSelector::default()
-        } else {
-            let accounts = &accounts_selector["accounts"];
-            let accounts: Vec<String> = if accounts.is_array() {
-                accounts
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .map(|val| val.as_str().unwrap().to_string())
-                    .collect()
-            } else {
-                Vec::default()
-            };
-            let owners = &accounts_selector["owners"];
-            let owners: Vec<String> = if owners.is_array() {
-                owners
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .map(|val| val.to_string())
-                    .collect()
-            } else {
-                Vec::default()
-            };
-            AccountsSelector::new(&accounts, &owners)
-        };
+        let accounts_selector = Self::create_accounts_selector_from_config(&result);
 
         let accounts_update_notifier = Arc::new(RwLock::new(AccountsUpdateNotifierImpl::new(
             plugin_manager.clone(),
@@ -125,6 +97,39 @@ impl AccountsDbPluginService {
         }
     }
 
+    fn create_accounts_selector_from_config(config: &serde_json::Value) -> AccountsSelector{
+        let accounts_selector = &config["accounts_selector"];
+
+        if accounts_selector.is_null() {
+            AccountsSelector::default()
+        } else {
+            let accounts = &accounts_selector["accounts"];
+            let accounts: Vec<String> = if accounts.is_array() {
+                accounts
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|val| val.as_str().unwrap().to_string())
+                    .collect()
+            } else {
+                Vec::default()
+            };
+            let owners = &accounts_selector["owners"];
+            let owners: Vec<String> = if owners.is_array() {
+                owners
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|val| {
+                        val.as_str().unwrap().to_string()})
+                    .collect()
+            } else {
+                Vec::default()
+            };
+            AccountsSelector::new(&accounts, &owners)
+        }
+    }
+
     pub fn get_accounts_update_notifier(&self) -> AccountsUpdateNotifier {
         self.accounts_update_notifier.clone()
     }
@@ -133,5 +138,23 @@ impl AccountsDbPluginService {
         self.confirmed_slots_observer.join()?;
         self.plugin_manager.write().unwrap().unload();
         Ok(())
+    }
+}
+
+#[cfg(test)]
+pub(crate) mod tests {
+    use {
+        super::*,
+        serde_json,
+    };
+
+    #[test]
+    fn test_accounts_selector_from_config() {
+        let config = "{\"accounts_selector\" : { \
+           \"owners\" : [\"9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin\"] \
+        }}";
+
+        let config: serde_json::Value = serde_json::from_str(config).unwrap();
+        AccountsDbPluginService::create_accounts_selector_from_config(&config);
     }
 }
