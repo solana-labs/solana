@@ -6728,6 +6728,7 @@ impl AccountsDb {
             caching_enabled,
             shrink_ratio,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
+            None,
         )
     }
 

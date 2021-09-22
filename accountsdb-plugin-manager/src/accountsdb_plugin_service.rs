@@ -97,7 +97,7 @@ impl AccountsDbPluginService {
         }
     }
 
-    fn create_accounts_selector_from_config(config: &serde_json::Value) -> AccountsSelector{
+    fn create_accounts_selector_from_config(config: &serde_json::Value) -> AccountsSelector {
         let accounts_selector = &config["accounts_selector"];
 
         if accounts_selector.is_null() {
@@ -120,8 +120,7 @@ impl AccountsDbPluginService {
                     .as_array()
                     .unwrap()
                     .iter()
-                    .map(|val| {
-                        val.as_str().unwrap().to_string()})
+                    .map(|val| val.as_str().unwrap().to_string())
                     .collect()
             } else {
                 Vec::default()
@@ -143,10 +142,7 @@ impl AccountsDbPluginService {
 
 #[cfg(test)]
 pub(crate) mod tests {
-    use {
-        super::*,
-        serde_json,
-    };
+    use {super::*, serde_json};
 
     #[test]
     fn test_accounts_selector_from_config() {

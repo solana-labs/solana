@@ -3,7 +3,6 @@
  */
 -- The table storing accounts
 
-CREATE TYPE slot_status as ENUM ('processed', 'rooted', 'confirmed');
 
 CREATE TABLE account (
     pubkey VARCHAR(50) PRIMARY KEY,
@@ -21,7 +20,7 @@ CREATE TABLE account (
 CREATE TABLE slot (
     slot BIGINT PRIMARY KEY,
     parent BIGINT,
-    status slot_status,
+    status varchar(16) NOT NULL,
     updated_on TIMESTAMP NOT NULL
 );
 

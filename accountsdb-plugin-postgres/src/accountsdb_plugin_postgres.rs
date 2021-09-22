@@ -152,8 +152,7 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
                             msg: format!("Failed to persist the update of account to the PostgreSQL database. Error: {:?}", err)
                         });
                     }
-                    Ok(_) => {
-                    }
+                    Ok(_) => {}
                 }
             }
         }
