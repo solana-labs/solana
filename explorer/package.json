@@ -8,7 +8,7 @@
     "@metamask/jazzicon": "^2.0.0",
     "@project-serum/serum": "^0.13.59",
     "@react-hook/debounce": "^4.0.0",
-    "@sentry/react": "^6.13.1",
+    "@sentry/react": "^6.13.2",
     "@solana/spl-token-registry": "^0.2.247",
     "@solana/web3.js": "^1.29.0",
     "@testing-library/jest-dom": "^5.14.1",
