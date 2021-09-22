@@ -17,8 +17,9 @@ pub const JSON_RPC_SERVER_ERROR_NO_SNAPSHOT: i64 = -32008;
 pub const JSON_RPC_SERVER_ERROR_LONG_TERM_STORAGE_SLOT_SKIPPED: i64 = -32009;
 pub const JSON_RPC_SERVER_ERROR_KEY_EXCLUDED_FROM_SECONDARY_INDEX: i64 = -32010;
 pub const JSON_RPC_SERVER_ERROR_TRANSACTION_HISTORY_NOT_AVAILABLE: i64 = -32011;
-pub const JSON_RPC_SCAN_ERROR: i64 = -32012;
+pub const JSON_RPC_SERVER_ERROR_SCAN_ERROR: i64 = -32012;
 pub const JSON_RPC_SERVER_ERROR_TRANSACTION_SIGNATURE_LEN_MISMATCH: i64 = -32013;
+pub const JSON_RPC_SERVER_ERROR_AIRDROP_ABUSE: i64 = -32014;
 
 #[derive(Error, Debug)]
 pub enum RpcCustomError {
@@ -54,6 +55,8 @@ pub enum RpcCustomError {
     ScanError { message: String },
     #[error("TransactionSignatureLenMismatch")]
     TransactionSignatureLenMismatch,
+    #[error("Destination account balance too large")]
+    AirdropAbuse,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -150,7 +153,7 @@ impl From<RpcCustomError> for Error {
                 data: None,
             },
             RpcCustomError::ScanError { message } => Self {
-                code: ErrorCode::ServerError(JSON_RPC_SCAN_ERROR),
+                code: ErrorCode::ServerError(JSON_RPC_SERVER_ERROR_SCAN_ERROR),
                 message,
                 data: None,
             },
@@ -159,6 +162,13 @@ impl From<RpcCustomError> for Error {
                     JSON_RPC_SERVER_ERROR_TRANSACTION_SIGNATURE_LEN_MISMATCH,
                 ),
                 message: "Transaction signature length mismatch".to_string(),
+                data: None,
+            },
+            RpcCustomError::AirdropAbuse => Self {
+                code: ErrorCode::ServerError(
+                    JSON_RPC_SERVER_ERROR_AIRDROP_ABUSE,
+                ),
+                message: "Destination account balance too large".to_string(),
                 data: None,
             },
         }

@@ -3269,6 +3269,10 @@ pub mod rpc_full {
             let config = config.unwrap_or_default();
             let bank = meta.bank(config.commitment);
 
+            if bank.get_balance(&pubkey) > solana_sdk::native_token::sol_to_lamports(1000.) {
+                return Err(RpcCustomError::AirdropAbuse.into());
+            }
+
             let blockhash = if let Some(blockhash) = config.recent_blockhash {
                 verify_hash(&blockhash)?
             } else {
