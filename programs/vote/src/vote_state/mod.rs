@@ -2827,4 +2827,57 @@ mod tests {
             .unwrap();
         assert_eq!(vote_state1, vote_state2,);
     }
+
+    #[test]
+    fn test_process_new_vote_current_state_contains_bigger_slots() {
+        let mut vote_state1 = VoteState::default();
+        vote_state1.process_slot_votes_unchecked(&[6, 7, 8]);
+        assert_eq!(
+            vote_state1
+                .votes
+                .iter()
+                .map(|vote| vote.slot)
+                .collect::<Vec<Slot>>(),
+            vec![6, 7, 8]
+        );
+
+        // Try to process something with lockout violations
+        let bad_votes: VecDeque<Lockout> = vec![
+            Lockout {
+                slot: 2,
+                confirmation_count: 5,
+            },
+            Lockout {
+                // Slot 14 could not have popped off slot 6 yet
+                slot: 14,
+                confirmation_count: 1,
+            },
+        ]
+        .into_iter()
+        .collect();
+        let root = Some(1);
+
+        assert_eq!(
+            vote_state1.process_new_vote_state(bad_votes, root, None, vote_state1.current_epoch(),),
+            Err(VoteError::LockoutConflict)
+        );
+
+        let good_votes: VecDeque<Lockout> = vec![
+            Lockout {
+                slot: 2,
+                confirmation_count: 5,
+            },
+            Lockout {
+                slot: 15,
+                confirmation_count: 1,
+            },
+        ]
+        .into_iter()
+        .collect();
+
+        vote_state1
+            .process_new_vote_state(good_votes.clone(), root, None, vote_state1.current_epoch())
+            .unwrap();
+        assert_eq!(vote_state1.votes, good_votes);
+    }
 }
