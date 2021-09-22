@@ -562,7 +562,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     fn flush_internal(&self) {
         let was_dirty = self.bin_dirty.swap(false, Ordering::Acquire);
         let current_age = self.storage.current_age();
-        let iterate_for_age = self.get_should_age(current_age);
+        let mut iterate_for_age = self.get_should_age(current_age);
         if !was_dirty && !iterate_for_age {
             // wasn't dirty and no need to age, so no need to flush this bucket
             return;
@@ -612,13 +612,67 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             flush_entries_updated_on_disk,
         );
 
-        // loop that processes 'removes' will go here
+        let m = Measure::start("flush_remove");
+        if !self.flush_remove_from_cache(removes, current_age) {
+            iterate_for_age = false; // did not make it all the way through this bucket, so didn't handle age completely
+        }
+        Self::update_time_stat(&self.stats().flush_remove_us, m);
 
         if iterate_for_age {
             // completed iteration of the buckets at the current age
             assert_eq!(current_age, self.storage.current_age());
             self.set_has_aged(current_age);
         }
+    }
+
+    // remove keys in 'removes' from in-mem cache due to age
+    // return true if the removal was completed
+    fn flush_remove_from_cache(&self, removes: Vec<Pubkey>, current_age: Age) -> bool {
+        let mut completed_scan = true;
+        if removes.is_empty() {
+            return completed_scan; // completed, don't need to get lock or do other work
+        }
+
+        let ranges = self.cache_ranges_held.read().unwrap().clone();
+        if ranges.iter().any(|range| range.is_none()) {
+            return false; // range said to hold 'all', so not completed
+        }
+        let mut map = self.map().write().unwrap();
+        for k in removes {
+            if let Entry::Occupied(occupied) = map.entry(k) {
+                let v = occupied.get();
+                if Arc::strong_count(v) > 1 {
+                    // someone is holding the value arc's ref count and could modify it, so do not remove this from in-mem cache
+                    completed_scan = false;
+                    continue;
+                }
+
+                if v.dirty() || !self.should_remove_from_mem(current_age, v) {
+                    // marked dirty or bumped in age after we looked above
+                    // these will be handled in later passes
+                    continue;
+                }
+
+                if ranges.iter().any(|range| {
+                    range
+                        .as_ref()
+                        .map(|range| range.contains(&k))
+                        .unwrap_or(true) // None means 'full range', so true
+                }) {
+                    // this item is held in mem by range, so don't remove
+                    completed_scan = false;
+                    continue;
+                }
+
+                if self.get_stop_flush() {
+                    return false; // did NOT complete, told to stop
+                }
+
+                // all conditions for removing succeeded, so really remove item from in-mem cache
+                occupied.remove();
+            }
+        }
+        completed_scan
     }
 
     fn stats(&self) -> &BucketMapHolderStats {
