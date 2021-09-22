@@ -1,6 +1,6 @@
 use crate::accounts_index::{
     AccountMapEntry, AccountMapEntryInner, AccountMapEntryMeta, IndexValue, RefCount, SlotList,
-    SlotSlice, WriteAccountMapEntry,
+    SlotSlice,
 };
 use crate::bucket_map_holder::{Age, BucketMapHolder};
 use crate::bucket_map_holder_stats::BucketMapHolderStats;
@@ -239,7 +239,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 let current = occupied.get_mut();
                 Self::lock_and_update_slot_list(
                     current,
-                    &new_value,
+                    new_value.slot_list.write().unwrap().remove(0),
                     reclaims,
                     previous_slot_entry_was_cached,
                 );
@@ -252,7 +252,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     // on disk, so merge new_value with what was on disk
                     Self::lock_and_update_slot_list(
                         &disk_entry,
-                        &new_value,
+                        new_value.slot_list.write().unwrap().remove(0),
                         reclaims,
                         previous_slot_entry_was_cached,
                     );
@@ -268,14 +268,17 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         }
     }
 
+    // Try to update an item in the slot list the given `slot` If an item for the slot
+    // already exists in the list, remove the older item, add it to `reclaims`, and insert
+    // the new item.
     pub fn lock_and_update_slot_list(
-        current: &Arc<AccountMapEntryInner<T>>,
-        new_value: &AccountMapEntry<T>,
+        current: &AccountMapEntryInner<T>,
+        new_value: (Slot, T),
         reclaims: &mut SlotList<T>,
         previous_slot_entry_was_cached: bool,
     ) {
         let mut slot_list = current.slot_list.write().unwrap();
-        let (slot, new_entry) = new_value.slot_list.write().unwrap().remove(0);
+        let (slot, new_entry) = new_value;
         let addref = Self::update_slot_list(
             &mut slot_list,
             slot,
@@ -291,7 +294,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
     // modifies slot_list
     // returns true if caller should addref
-    pub fn update_slot_list(
+    fn update_slot_list(
         list: &mut SlotList<T>,
         slot: Slot,
         account_info: T,
@@ -351,7 +354,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         if let Some(current) = self.map().read().unwrap().get(pubkey) {
             Self::lock_and_update_slot_list(
                 current,
-                new_value,
+                new_value.slot_list.write().unwrap().remove(0),
                 reclaims,
                 previous_slot_entry_was_cached,
             );
@@ -373,9 +376,9 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         existing: &AccountMapEntry<T>,
         pubkey: &Pubkey,
         new_entry: AccountMapEntry<T>,
-    ) -> (WriteAccountMapEntry<T>, T, Pubkey) {
+    ) -> (AccountMapEntry<T>, T, Pubkey) {
         (
-            WriteAccountMapEntry::from_account_map_entry(Arc::clone(existing)),
+            Arc::clone(existing),
             // extract the new account_info from the unused 'new_entry'
             new_entry.slot_list.write().unwrap().remove(0).1,
             *pubkey,
@@ -388,7 +391,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         &self,
         pubkey: Pubkey,
         new_entry: AccountMapEntry<T>,
-    ) -> Option<(WriteAccountMapEntry<T>, T, Pubkey)> {
+    ) -> Option<(AccountMapEntry<T>, T, Pubkey)> {
         let m = Measure::start("entry");
         let mut map = self.map().write().unwrap();
         let entry = map.entry(pubkey);
