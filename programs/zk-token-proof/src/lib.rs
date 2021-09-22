@@ -40,5 +40,9 @@ pub fn process_instruction(
             ic_msg!(invoke_context, "VerifyCloseAccount");
             verify::<CloseAccountData>(input, invoke_context)
         }
+        ProofInstruction::VerifyWithdraw => {
+            ic_msg!(invoke_context, "VerifyWithdraw");
+            verify::<WithdrawData>(input, invoke_context)
+        }
     }
 }
