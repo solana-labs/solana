@@ -297,6 +297,7 @@ impl<T: IndexValue> WriteAccountMapEntry<T> {
             // If it's the first non-cache insert, also bump the stored ref count
             self.borrow_owned_entry().add_un_ref(true);
         }
+        self.borrow_owned_entry().set_dirty(true);
     }
 }
 

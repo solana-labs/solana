@@ -209,6 +209,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 Self::update_stat(&self.stats().updates_in_mem, 1);
             }
             Entry::Vacant(vacant) => {
+                assert!(new_value.dirty());
                 vacant.insert(new_value);
                 self.stats().insert_or_delete(true, self.bin);
             }
@@ -233,7 +234,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         if addref {
             current.add_un_ref(true);
         }
-        new_value.set_dirty(true);
+        current.set_dirty(true);
     }
 
     // modifies slot_list
@@ -344,6 +345,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 ))
             }
             Entry::Vacant(account_entry) => {
+                assert!(new_entry.dirty());
                 account_entry.insert(new_entry);
                 None
             }
