@@ -37,12 +37,12 @@ impl AccountsDbPluginService {
     ///    trait. And the shared library shall export a `C` function `_create_plugin` which
     ///    shall create the implementation of `AccountsDbPlugin` and returns to the caller.
     ///    The `accounts_selector` section allows the user to controls accounts selections.
-    ///    accounts_selector = {
-    ///         accounts = \['pubkey-1', 'pubkey-2', ..., 'pubkey-n'\],
+    ///    "accounts_selector" : {
+    ///         accounts : \["pubkey-1", "pubkey-2", ..., "pubkey-n"\],
     ///    }
     ///    or:
-    ///    accounts_selector = {
-    ///         owners = \['pubkey-1', 'pubkey-2', ..., 'pubkey-m'\]
+    ///    "accounts_selector" = {
+    ///         owners : \["pubkey-1', 'pubkey-2", ..., "pubkey-m"\]
     ///    }
     ///    When accounts and owners are specified, the program only filters only using accounts
     ///    as it is more selective. And owners field is ignored. When only owners is specified,
@@ -50,8 +50,8 @@ impl AccountsDbPluginService {
     ///    The rest of the JSON fields's definition is upto to the concrete plugin implementation
     ///    It is usually used to configure the connection information for the external data store.
     ///    The accounts field support wildcard to select all accounts:
-    ///    accounts_selector = {
-    ///         accounts = \['*'\],
+    ///    "accounts_selector" : {
+    ///         "accounts" : \["*"\],
     ///    }
     pub fn new(
         confirmed_bank_receiver: Receiver<BankNotification>,
@@ -80,7 +80,7 @@ impl AccountsDbPluginService {
                     .as_array()
                     .unwrap()
                     .iter()
-                    .map(|val| val.to_string())
+                    .map(|val| val.as_str().unwrap().to_string())
                     .collect()
             } else {
                 Vec::default()

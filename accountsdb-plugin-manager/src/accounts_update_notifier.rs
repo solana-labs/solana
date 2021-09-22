@@ -69,6 +69,8 @@ impl AccountsSelector {
     }
 
     pub fn new(accounts: &[String], owners: &[String]) -> Self {
+        println!("Creating AccountsSelector from accounts: {:?}, owners: {:?}", accounts, owners);
+
         let select_all_accounts = accounts.iter().any(|key| key == "*");
         if select_all_accounts {
             return AccountsSelector {
@@ -180,5 +182,20 @@ impl AccountsUpdateNotifierImpl {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+pub(crate) mod tests {
+    use {
+        super::*,
+    };
+
+    #[test]
+    fn test_create_accounts_selector() {
+        AccountsSelector::new(&["9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin".to_string()], &[]);
+
+        AccountsSelector::new(&[], &["\"9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin\"".to_string()]);
+        
     }
 }
