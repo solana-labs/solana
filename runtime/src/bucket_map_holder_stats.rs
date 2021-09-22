@@ -24,6 +24,7 @@ pub struct BucketMapHolderStats {
     pub deletes: AtomicU64,
     pub inserts: AtomicU64,
     pub count: AtomicU64,
+    pub bg_waiting_us: AtomicU64,
     pub count_in_mem: AtomicU64,
     pub per_bucket_count: Vec<AtomicU64>,
     pub flush_entries_updated_on_disk: AtomicU64,
@@ -119,6 +120,11 @@ impl BucketMapHolderStats {
                 i64
             ),
             ("count", self.count.load(Ordering::Relaxed), i64),
+            (
+                "bg_waiting_us",
+                self.bg_waiting_us.swap(0, Ordering::Relaxed),
+                i64
+            ),
             ("min_in_bin", min, i64),
             ("max_in_bin", max, i64),
             ("count_from_bins", ct, i64),
