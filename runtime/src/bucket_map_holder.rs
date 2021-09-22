@@ -159,9 +159,14 @@ impl<T: IndexValue> BucketMapHolder<T> {
         let flush = self.disk.is_some();
         loop {
             if self.all_buckets_flushed_at_current_age() {
+                let wait = std::cmp::min(
+                    self.age_timer.remaining_until_next_interval(AGE_MS),
+                    self.stats.remaining_until_next_interval(),
+                );
+
                 let mut m = Measure::start("wait");
                 self.wait_dirty_or_aged
-                    .wait_timeout(Duration::from_millis(AGE_MS));
+                    .wait_timeout(Duration::from_millis(wait));
                 m.stop();
                 self.stats
                     .bg_waiting_us
