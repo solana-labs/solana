@@ -1276,7 +1276,6 @@ mod tests {
         assert_eq!(0, idx.bin_calculator.bin_from_pubkey(&range2.start));
         assert_eq!(0, idx.bin_calculator.bin_from_pubkey(&range2.end));
         accts.hold_range_in_memory(&range, true);
-        error!("{}{}, bins: {}", file!(), line!(), bins);
         idx.account_maps.iter().enumerate().for_each(|(_bin, map)| {
             let map = map.read().unwrap();
             assert_eq!(
@@ -1284,9 +1283,7 @@ mod tests {
                 vec![Some(range.clone())]
             );
         });
-        error!("{}{}", file!(), line!());
         accts.hold_range_in_memory(&range2, true);
-        error!("{}{}", file!(), line!());
         idx.account_maps.iter().enumerate().for_each(|(bin, map)| {
             let map = map.read().unwrap();
             let expected = if bin == 0 {
