@@ -41,7 +41,7 @@ pub const ACCOUNTS_INDEX_CONFIG_FOR_TESTING: AccountsIndexConfig = AccountsIndex
     bins: Some(BINS_FOR_TESTING),
     flush_threads: Some(FLUSH_THREADS_TESTING),
     drives: None,
-    index_limit_mb: None,
+    index_limit_mb: Some(1),
     ages_to_stay_in_cache: None,
 };
 pub const ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS: AccountsIndexConfig = AccountsIndexConfig {
