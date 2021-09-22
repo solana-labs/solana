@@ -362,7 +362,7 @@ fn get_windows_path_var() -> Result<Option<String>, String> {
                 Ok(Some(s))
             } else {
                 println!("the registry key HKEY_CURRENT_USER\\Environment\\PATH does not contain valid Unicode. Not modifying the PATH variable");
-                return Ok(None);
+                Ok(None)
             }
         }
         Err(ref e) if e.kind() == io::ErrorKind::NotFound => Ok(Some(String::new())),
@@ -391,7 +391,7 @@ fn add_to_path(new_path: &str) -> bool {
     if !old_path.contains(&new_path) {
         let mut new_path = new_path.to_string();
         if !old_path.is_empty() {
-            new_path.push_str(";");
+            new_path.push(';');
             new_path.push_str(&old_path);
         }
 
@@ -416,7 +416,7 @@ fn add_to_path(new_path: &str) -> bool {
             SendMessageTimeoutA(
                 HWND_BROADCAST,
                 WM_SETTINGCHANGE,
-                0 as WPARAM,
+                0_usize,
                 "Environment\0".as_ptr() as LPARAM,
                 SMTO_ABORTIFHUNG,
                 5000,
