@@ -246,6 +246,21 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 Self::update_stat(&self.stats().updates_in_mem, 1);
             }
             Entry::Vacant(vacant) => {
+                // not in cache, look on disk
+                let disk_entry = self.load_account_entry_from_disk(vacant.key());
+                let new_value = if let Some(disk_entry) = disk_entry {
+                    // on disk, so merge new_value with what was on disk
+                    Self::lock_and_update_slot_list(
+                        &disk_entry,
+                        &new_value,
+                        reclaims,
+                        previous_slot_entry_was_cached,
+                    );
+                    disk_entry
+                } else {
+                    // not on disk, so insert new thing
+                    new_value
+                };
                 assert!(new_value.dirty());
                 vacant.insert(new_value);
                 self.stats().insert_or_delete(true, self.bin);
@@ -354,6 +369,19 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         self.len() == 0
     }
 
+    fn insert_returner(
+        existing: &AccountMapEntry<T>,
+        pubkey: &Pubkey,
+        new_entry: AccountMapEntry<T>,
+    ) -> (WriteAccountMapEntry<T>, T, Pubkey) {
+        (
+            WriteAccountMapEntry::from_account_map_entry(Arc::clone(existing)),
+            // extract the new account_info from the unused 'new_entry'
+            new_entry.slot_list.write().unwrap().remove(0).1,
+            *pubkey,
+        )
+    }
+
     // return None if item was created new
     // if entry for pubkey already existed, return Some(entry). Caller needs to call entry.update.
     pub fn insert_new_entry_if_missing_with_lock(
@@ -373,18 +401,26 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         Self::update_time_stat(time, m);
         Self::update_stat(count, 1);
         let result = match entry {
-            Entry::Occupied(account_entry) => {
-                Some((
-                    WriteAccountMapEntry::from_account_map_entry(account_entry.get().clone()),
-                    // extract the new account_info from the unused 'new_entry'
-                    new_entry.slot_list.write().unwrap().remove(0).1,
-                    *account_entry.key(),
-                ))
-            }
-            Entry::Vacant(account_entry) => {
-                assert!(new_entry.dirty());
-                account_entry.insert(new_entry);
-                None
+            Entry::Occupied(occupied) => Some(Self::insert_returner(
+                occupied.get(),
+                occupied.key(),
+                new_entry,
+            )),
+            Entry::Vacant(vacant) => {
+                // not in cache, look on disk
+                let disk_entry = self.load_account_entry_from_disk(vacant.key());
+                if let Some(disk_entry) = disk_entry {
+                    // on disk, so insert into cache, then return cache value so caller will merge
+                    let result = Some(Self::insert_returner(&disk_entry, vacant.key(), new_entry));
+                    assert!(disk_entry.dirty());
+                    vacant.insert(disk_entry);
+                    result
+                } else {
+                    // not on disk, so insert new thing and we're done
+                    assert!(new_entry.dirty());
+                    vacant.insert(new_entry);
+                    None // returns None if item was created new
+                }
             }
         };
         let stats = self.stats();
