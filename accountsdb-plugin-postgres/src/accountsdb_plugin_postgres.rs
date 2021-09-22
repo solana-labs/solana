@@ -186,7 +186,7 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
                             client.get_mut().unwrap().client.execute(
                                 "INSERT INTO slot (slot, parent, slot_status, updated_on) \
                                 VALUES ($1, $2, $3, $4) \
-                                ON CONFLICT (pubkey) DO UPDATE SET parent=$2, slot_status=$3, updated_on=$4",
+                                ON CONFLICT (slot) DO UPDATE SET parent=$2, slot_status=$3, updated_on=$4",
                                 &[
                                     &slot,
                                     &parent,
@@ -198,8 +198,8 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
                         None => {
                             client.get_mut().unwrap().client.execute(
                                 "INSERT INTO slot (slot, slot_status, updated_on) \
-                                VALUES ($1, $2, $3,) \
-                                ON CONFLICT (pubkey) DO UPDATE SET slot_status=$2, updated_on=$3",
+                                VALUES ($1, $2, $3) \
+                                ON CONFLICT (slot) DO UPDATE SET slot_status=$2, updated_on=$3",
                                 &[
                                     &slot,
                                     &status_str,
