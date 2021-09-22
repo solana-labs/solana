@@ -466,14 +466,30 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         self.start_stop_flush(false);
     }
 
-    fn put_range_in_cache<R>(&self, _range: Option<&R>)
+    fn put_range_in_cache<R>(&self, range: Option<&R>)
     where
         R: RangeBounds<Pubkey>,
     {
         assert!(self.get_stop_flush()); // caller should be controlling the lifetime of how long this needs to be present
         let m = Measure::start("range");
 
-        // load from disk here
+        // load from disk
+        if let Some(disk) = self.storage.disk.as_ref() {
+            let items = disk.items_in_range(self.bin, range);
+            let mut map = self.map().write().unwrap();
+            for item in items {
+                let entry = map.entry(item.pubkey);
+                match entry {
+                    Entry::Occupied(_occupied) => {
+                        // do nothing - item already in cache
+                    }
+                    Entry::Vacant(vacant) => {
+                        vacant.insert(self.disk_to_cache_entry(item.slot_list, item.ref_count));
+                    }
+                }
+            }
+        }
+
         Self::update_time_stat(&self.stats().get_range_us, m);
     }
 
