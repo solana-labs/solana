@@ -3,7 +3,6 @@ use crate::bucket_map_holder::BucketMapHolder;
 use solana_sdk::timing::{timestamp, AtomicInterval};
 use std::fmt::Debug;
 use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
-use std::sync::Arc;
 
 #[derive(Debug, Default)]
 pub struct BucketMapHolderStats {
@@ -63,7 +62,7 @@ impl BucketMapHolderStats {
         now.saturating_sub(last) // could saturate to 0. That is ok.
     }
 
-    fn ms_per_age<T: IndexValue>(&self, storage: &Arc<BucketMapHolder<T>>) -> u64 {
+    fn ms_per_age<T: IndexValue>(&self, storage: &BucketMapHolder<T>) -> u64 {
         let elapsed_ms = self.get_elapsed_ms_and_reset();
         let mut age_now = storage.current_age();
         let last_age = self.last_age.swap(age_now, Ordering::Relaxed);
@@ -79,7 +78,7 @@ impl BucketMapHolderStats {
         }
     }
 
-    pub fn report_stats<T: IndexValue>(&self, storage: &Arc<BucketMapHolder<T>>) {
+    pub fn report_stats<T: IndexValue>(&self, storage: &BucketMapHolder<T>) {
         // account index stats every 10 s
         if !self.last_time.should_update(10_000) {
             return;
