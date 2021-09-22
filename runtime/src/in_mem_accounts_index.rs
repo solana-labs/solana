@@ -1,6 +1,6 @@
 use crate::accounts_index::{
-    AccountMapEntry, AccountMapEntryInner, AccountMapEntryMeta, IndexValue, RefCount, SlotList,
-    SlotSlice,
+    AccountMapEntry, AccountMapEntryInner, AccountMapEntryMeta, IndexValue,
+    PreAllocatedAccountMapEntry, RefCount, SlotList, SlotSlice,
 };
 use crate::bucket_map_holder::{Age, BucketMapHolder};
 use crate::bucket_map_holder_stats::BucketMapHolderStats;
@@ -219,7 +219,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     pub fn upsert(
         &self,
         pubkey: &Pubkey,
-        new_value: AccountMapEntry<T>,
+        new_value: PreAllocatedAccountMapEntry<T>,
         reclaims: &mut SlotList<T>,
         previous_slot_entry_was_cached: bool,
     ) {
@@ -239,7 +239,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 let current = occupied.get_mut();
                 Self::lock_and_update_slot_list(
                     current,
-                    new_value.slot_list.write().unwrap().remove(0),
+                    new_value.into(),
                     reclaims,
                     previous_slot_entry_was_cached,
                 );
@@ -252,14 +252,14 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     // on disk, so merge new_value with what was on disk
                     Self::lock_and_update_slot_list(
                         &disk_entry,
-                        new_value.slot_list.write().unwrap().remove(0),
+                        new_value.into(),
                         reclaims,
                         previous_slot_entry_was_cached,
                     );
                     disk_entry
                 } else {
                     // not on disk, so insert new thing
-                    new_value
+                    new_value.into()
                 };
                 assert!(new_value.dirty());
                 vacant.insert(new_value);
@@ -347,20 +347,20 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     pub fn update_key_if_exists(
         &self,
         pubkey: &Pubkey,
-        new_value: &AccountMapEntry<T>,
+        new_value: PreAllocatedAccountMapEntry<T>,
         reclaims: &mut SlotList<T>,
         previous_slot_entry_was_cached: bool,
-    ) -> bool {
+    ) -> (bool, Option<PreAllocatedAccountMapEntry<T>>) {
         if let Some(current) = self.map().read().unwrap().get(pubkey) {
             Self::lock_and_update_slot_list(
                 current,
-                new_value.slot_list.write().unwrap().remove(0),
+                new_value.into(),
                 reclaims,
                 previous_slot_entry_was_cached,
             );
-            true
+            (true, None)
         } else {
-            false
+            (false, Some(new_value))
         }
     }
 
@@ -375,12 +375,13 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     fn insert_returner(
         existing: &AccountMapEntry<T>,
         pubkey: &Pubkey,
-        new_entry: AccountMapEntry<T>,
+        new_entry: PreAllocatedAccountMapEntry<T>,
     ) -> (AccountMapEntry<T>, T, Pubkey) {
+        let (_slot, info): (Slot, T) = new_entry.into();
         (
             Arc::clone(existing),
             // extract the new account_info from the unused 'new_entry'
-            new_entry.slot_list.write().unwrap().remove(0).1,
+            info,
             *pubkey,
         )
     }
@@ -390,7 +391,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     pub fn insert_new_entry_if_missing_with_lock(
         &self,
         pubkey: Pubkey,
-        new_entry: AccountMapEntry<T>,
+        new_entry: PreAllocatedAccountMapEntry<T>,
     ) -> Option<(AccountMapEntry<T>, T, Pubkey)> {
         let m = Measure::start("entry");
         let mut map = self.map().write().unwrap();
@@ -420,6 +421,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     result
                 } else {
                     // not on disk, so insert new thing and we're done
+                    let new_entry: AccountMapEntry<T> = new_entry.into();
                     assert!(new_entry.dirty());
                     vacant.insert(new_entry);
                     None // returns None if item was created new
