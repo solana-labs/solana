@@ -141,7 +141,10 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         let entry = map.entry(*pubkey);
         let result = match entry {
             Entry::Occupied(occupied) => Arc::clone(occupied.get()),
-            Entry::Vacant(vacant) => Arc::clone(vacant.insert(new_entry)),
+            Entry::Vacant(vacant) => {
+                stats.insert_or_delete_mem(true, self.bin);
+                Arc::clone(vacant.insert(new_entry))
+            }
         };
         Some(result)
     }
@@ -173,6 +176,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     // We have to have a write lock to the map here, which means nobody else can get
                     //  the arc, but someone may already have retreived a clone of it.
                     self.delete_disk_key(occupied.key());
+                    self.stats().insert_or_delete_mem(false, self.bin);
                     occupied.remove();
                 }
                 result
@@ -263,6 +267,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 };
                 assert!(new_value.dirty());
                 vacant.insert(new_value);
+                self.stats().insert_or_delete_mem(true, self.bin);
                 self.stats().insert_or_delete(true, self.bin);
             }
         }
@@ -412,6 +417,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             Entry::Vacant(vacant) => {
                 // not in cache, look on disk
                 let disk_entry = self.load_account_entry_from_disk(vacant.key());
+                stats.insert_or_delete_mem(true, self.bin);
                 if let Some(disk_entry) = disk_entry {
                     // on disk, so insert into cache, then return cache value so caller will merge
                     let result = Some(Self::insert_returner(&disk_entry, vacant.key(), new_entry));
@@ -524,6 +530,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     }
                     Entry::Vacant(vacant) => {
                         vacant.insert(self.disk_to_cache_entry(item.slot_list, item.ref_count));
+                        self.stats().insert_or_delete_mem(true, self.bin);
                     }
                 }
             }
@@ -669,6 +676,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 }
 
                 // all conditions for removing succeeded, so really remove item from in-mem cache
+                self.stats().insert_or_delete_mem(false, self.bin);
                 occupied.remove();
             }
         }
