@@ -645,7 +645,8 @@ mod tests {
             BINS_FOR_TESTING,
             &Some(AccountsIndexConfig::default()),
         ));
-        InMemAccountsIndex::new(&holder, BINS_FOR_TESTING)
+        let bin = 0;
+        InMemAccountsIndex::new(&holder, bin)
     }
 
     #[test]
