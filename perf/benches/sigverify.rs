@@ -34,6 +34,6 @@ fn bench_get_offsets(bencher: &mut Bencher) {
     let recycler = Recycler::default();
     // verify packets
     bencher.iter(|| {
-        let _ans = sigverify::generate_offsets(&mut batches, &recycler);
+        let _ans = sigverify::generate_offsets(&mut batches, &recycler, false);
     })
 }
