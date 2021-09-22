@@ -1180,6 +1180,15 @@ pub fn main() {
                 .help("Number of seconds before timing out RPC requests backed by BigTable"),
         )
         .arg(
+            Arg::with_name("rpc_pubsub_worker_threads")
+                .long("rpc-pubsub-worker-threads")
+                .takes_value(true)
+                .value_name("NUMBER")
+                .validator(is_parsable::<usize>)
+                .default_value("4")
+                .help("PubSub worker threads"),
+        )
+        .arg(
             Arg::with_name("rpc_pubsub_enable_vote_subscription")
                 .long("rpc-pubsub-enable-vote-subscription")
                 .takes_value(false)
