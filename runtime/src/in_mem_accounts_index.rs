@@ -1,6 +1,6 @@
 use crate::accounts_index::{
     AccountMapEntry, AccountMapEntryInner, AccountMapEntryMeta, IndexValue, RefCount, SlotList,
-    WriteAccountMapEntry,
+    SlotSlice, WriteAccountMapEntry,
 };
 use crate::bucket_map_holder::{Age, BucketMapHolder};
 use crate::bucket_map_holder_stats::BucketMapHolderStats;
@@ -146,6 +146,58 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         Some(result)
     }
 
+    fn remove_if_slot_list_empty_value(&self, slot_list: SlotSlice<T>) -> bool {
+        if slot_list.is_empty() {
+            self.stats().insert_or_delete(false, self.bin);
+            true
+        } else {
+            false
+        }
+    }
+
+    fn delete_disk_key(&self, pubkey: &Pubkey) {
+        if let Some(disk) = self.storage.disk.as_ref() {
+            disk.delete_key(pubkey)
+        }
+    }
+
+    fn remove_if_slot_list_empty_entry(&self, entry: Entry<K, AccountMapEntry<T>>) -> bool {
+        match entry {
+            Entry::Occupied(occupied) => {
+                let result =
+                    self.remove_if_slot_list_empty_value(&occupied.get().slot_list.read().unwrap());
+                if result {
+                    // note there is a potential race here that has existed.
+                    // if someone else holds the arc,
+                    //  then they think the item is still in the index and can make modifications.
+                    // We have to have a write lock to the map here, which means nobody else can get
+                    //  the arc, but someone may already have retreived a clone of it.
+                    self.delete_disk_key(occupied.key());
+                    occupied.remove();
+                }
+                result
+            }
+            Entry::Vacant(vacant) => {
+                // not in cache, look on disk
+                let entry_disk = self.load_from_disk(vacant.key());
+                match entry_disk {
+                    Some(entry_disk) => {
+                        // on disk
+                        if self.remove_if_slot_list_empty_value(&entry_disk.0) {
+                            // not in cache, but on disk, so just delete from disk
+                            self.delete_disk_key(vacant.key());
+                            true
+                        } else {
+                            // could insert into cache here, but not required for correctness and value is unclear
+                            false
+                        }
+                    }
+                    None => false, // not in cache or on disk
+                }
+            }
+        }
+    }
+
     // If the slot list for pubkey exists in the index and is empty, remove the index entry for pubkey and return true.
     // Return false otherwise.
     pub fn remove_if_slot_list_empty(&self, pubkey: Pubkey) -> bool {
@@ -161,22 +213,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         Self::update_time_stat(time, m);
         Self::update_stat(count, 1);
 
-        if let Entry::Occupied(index_entry) = entry {
-            if index_entry.get().slot_list.read().unwrap().is_empty() {
-                index_entry.remove();
-                // note there is a potential race here that has existed.
-                // if someone else holds the arc,
-                //  then they think the item is still in the index and can make modifications.
-                // We have to have a write lock to the map here, which means nobody else can get
-                //  the arc, but someone may already have retreived a clone of it.
-                if let Some(disk) = self.storage.disk.as_ref() {
-                    disk.delete_key(&pubkey)
-                }
-                self.stats().insert_or_delete(false, self.bin);
-                return true;
-            }
-        }
-        false
+        self.remove_if_slot_list_empty_entry(entry)
     }
 
     pub fn upsert(
