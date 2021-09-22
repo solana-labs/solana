@@ -54,10 +54,7 @@ export async function getMetadata(
       if (isMetadataV1Account(accountInfo)) {
         const metadata = decodeMetadata(accountInfo.data);
 
-        if (
-          isValidHttpUrl(metadata.data.uri) &&
-          metadata.data.uri.indexOf("arweave") >= 0
-        ) {
+        if (isValidHttpUrl(metadata.data.uri)) {
           return metadata;
         }
       }
