@@ -7,10 +7,12 @@ use {
     serde::{Deserialize, Serialize},
     solana_measure::measure::Measure,
     std::{
-        collections::BTreeMap,
+        collections::{btree_map, BTreeMap},
         fs,
         io::{BufWriter, Read, Seek, SeekFrom, Write},
+        iter::Peekable,
         ops::Bound::{Included, Unbounded},
+        sync::RwLockReadGuard,
     },
 };
 
@@ -18,7 +20,7 @@ pub(crate) const SHRED_DIRECTORY: &str = "shreds";
 pub(crate) const DATA_SHRED_DIRECTORY: &str = "data";
 
 pub(crate) type ShredCache = BTreeMap<u64, Vec<u8>>;
-type ShredFileIndex = BTreeMap<u32, u32>;
+pub(crate) type ShredFileIndex = BTreeMap<u32, u32>;
 
 /// Store shreds on the filesystem in a slot-per-file manner. The
 /// file format consists of a header, an index, and a data section.
@@ -27,7 +29,7 @@ type ShredFileIndex = BTreeMap<u32, u32>;
 ///   index to offset in the data section
 /// - The data section contained the serialized shreds end to ened
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
-struct ShredFileHeader {
+pub(crate) struct ShredFileHeader {
     pub slot: Slot,
     pub shred_type: ShredType,
     pub num_shreds: u32,
@@ -77,6 +79,169 @@ impl ShredFileHeader {
         // At end of loop, offset would be location of next shred. Since the offset
         // is zero-indexed, this is also the size of all shreds end-to-end
         (index, offset)
+    }
+}
+
+pub(crate) enum SlotShredIteratorMode {
+    CacheOnly,
+    FsOnly,
+    CacheAndFs,
+}
+
+pub(crate) struct SlotIteratorFsData<'a> {
+    file: fs::File,
+    index_iter: Peekable<btree_map::Iter<'a, u32, u32>>,
+}
+
+pub(crate) struct SlotIterator<'a> {
+    _slot: Slot,
+    cache_iter: Option<Peekable<btree_map::Iter<'a, u64, Vec<u8>>>>,
+    file_data: Option<SlotIteratorFsData<'a>>,
+    mode: SlotShredIteratorMode,
+}
+
+impl<'a> SlotIterator<'a> {
+    pub fn setup(
+        cache: &'a Option<Arc<RwLock<ShredCache>>>,
+        path: &Path,
+    ) -> (
+        Option<RwLockReadGuard<'a, ShredCache>>,
+        Option<fs::File>,
+        Option<ShredFileIndex>,
+    ) {
+        let cache_guard = cache.as_ref().map(|cache| cache.read().unwrap());
+
+        let (file, file_index) = match fs::File::open(path) {
+            Ok(mut file) => {
+                // TODO: properly handle below result instead of using .unwrap()
+                let (_header, file_index) =
+                    Blockstore::read_shred_file_metadata(&mut file).unwrap();
+                (Some(file), Some(file_index))
+            }
+            Err(_err) => (None, None),
+        };
+
+        (cache_guard, file, file_index)
+    }
+
+    pub fn new(
+        slot: Slot,
+        _start_index: u64,
+        cache_guard: &'a Option<RwLockReadGuard<ShredCache>>,
+        file: Option<fs::File>,
+        file_index: &'a Option<ShredFileIndex>,
+    ) -> Option<Self> {
+        let cache_iter = if cache_guard.is_some() {
+            Some(cache_guard.as_ref().unwrap().iter().peekable())
+        } else {
+            None
+        };
+
+        let file_data = file.map(|file| SlotIteratorFsData {
+            file,
+            index_iter: file_index.as_ref().unwrap().iter().peekable(),
+        });
+
+        let mode = if cache_iter.is_some() {
+            if file_data.is_some() {
+                SlotShredIteratorMode::CacheAndFs
+            } else {
+                SlotShredIteratorMode::CacheOnly
+            }
+        } else if file_data.is_some() {
+            SlotShredIteratorMode::FsOnly
+        } else {
+            return None;
+        };
+
+        Some(SlotIterator {
+            _slot: slot,
+            cache_iter,
+            file_data,
+            mode,
+        })
+    }
+
+    // This function assumes that caller has already checked that .next() will be Some(...)
+    fn consume_next_cache(&mut self) -> Option<(u64, Vec<u8>)> {
+        let (idx, shred) = self
+            .cache_iter
+            .as_mut()
+            .unwrap()
+            .next()
+            .expect("Shred iterator should have had remaining cache element(s)");
+        Some((*idx, shred.clone()))
+    }
+
+    // This function assumes that caller has already checked that .next() will be Some(...)
+    fn consume_next_fs(&mut self) -> Option<(u64, Vec<u8>)> {
+        let (idx, _) = self
+            .file_data
+            .as_mut()
+            .unwrap()
+            .index_iter
+            .next()
+            .expect("Shred iterator should have had remaining fs element(s)");
+        let mut buffer = vec![0; SHRED_PAYLOAD_SIZE];
+        // TODO: should I toss an error here if the read fails?
+        self.file_data
+            .as_mut()
+            .unwrap()
+            .file
+            .read_exact(&mut buffer)
+            .ok()?;
+        Some((*idx as u64, buffer))
+    }
+}
+
+impl Iterator for SlotIterator<'_> {
+    type Item = (u64, Vec<u8>);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // TODO: handle start_index
+        // TODO: add end_index argument ?
+        match self.mode {
+            SlotShredIteratorMode::CacheOnly => {
+                if self.cache_iter.as_mut().unwrap().peek().is_some() {
+                    return self.consume_next_cache();
+                }
+                None
+            }
+            SlotShredIteratorMode::FsOnly => {
+                if self.file_data.as_mut().unwrap().index_iter.peek().is_some() {
+                    return self.consume_next_fs();
+                }
+                None
+            }
+            SlotShredIteratorMode::CacheAndFs => {
+                let next_cache = self.cache_iter.as_mut().unwrap().peek();
+                let next_fs = self.file_data.as_mut().unwrap().index_iter.peek();
+
+                // At least one of cache or fs is guaranteed to be Some(...); once one is
+                // exhausted, we can update iterator mode to stop repeatedly checking
+                // the spent source.
+                match (next_cache, next_fs) {
+                    (Some(next_cache), Some(next_fs)) => {
+                        if *next_cache.0 < *next_fs.0 as u64 {
+                            self.consume_next_cache()
+                        } else {
+                            self.consume_next_fs()
+                        }
+                    }
+                    (Some(_next_cache), None) => {
+                        self.mode = SlotShredIteratorMode::CacheOnly;
+                        self.consume_next_cache()
+                    }
+                    (None, Some(_next_fs)) => {
+                        self.mode = SlotShredIteratorMode::FsOnly;
+                        self.consume_next_fs()
+                    }
+                    (None, None) => {
+                        panic!("Shred iterator should not get here");
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -132,105 +297,6 @@ impl Blockstore {
         Self::get_shreds_for_slot_from_fs(&path, start_index)
     }
 
-    pub(crate) fn find_missing_data_indexes_cache(
-        &self,
-        first_timestamp: u64,
-        start_index: u64,
-        end_index: u64,
-        max_missing: usize,
-        slot_cache: Arc<RwLock<ShredCache>>,
-    ) -> Vec<u64> {
-        let ticks_since_first_insert =
-            DEFAULT_TICKS_PER_SECOND * (timestamp() - first_timestamp) / 1000;
-
-        let mut missing_indexes = vec![];
-        let mut prev_index = start_index;
-        'outer: for (index, shred) in slot_cache.read().unwrap().iter() {
-            if *index < start_index {
-                continue;
-            }
-            // Get the tick that will be used to figure out the timeout for this hole
-            let reference_tick = u64::from(Shred::reference_tick_from_data(shred));
-            // Break out early if the higher index holes have not timed out yet
-            if ticks_since_first_insert < reference_tick + MAX_TURBINE_DELAY_IN_TICKS {
-                return missing_indexes;
-            }
-            // Insert any newly discovered holes
-            for i in prev_index..cmp::min(*index, end_index) {
-                missing_indexes.push(i);
-                if missing_indexes.len() == max_missing {
-                    break 'outer;
-                }
-            }
-            // Update prev_index before the end-early check as we may use prev_index after
-            prev_index = *index + 1;
-            if *index >= end_index {
-                break;
-            }
-        }
-        // If prev_index < end_index, there could be holes within [start_index, end_index)
-        // but that are greater than any shreds we have in the blockstore
-        if missing_indexes.len() < max_missing && prev_index < end_index {
-            for i in prev_index..end_index {
-                missing_indexes.push(i);
-                if missing_indexes.len() == max_missing {
-                    break;
-                }
-            }
-        }
-        missing_indexes
-    }
-
-    pub(crate) fn find_missing_data_indexes_fs(
-        &self,
-        first_timestamp: u64,
-        start_index: u64,
-        end_index: u64,
-        max_missing: usize,
-        shreds: Vec<Shred>,
-    ) -> Vec<u64> {
-        let ticks_since_first_insert =
-            DEFAULT_TICKS_PER_SECOND * (timestamp() - first_timestamp) / 1000;
-
-        let mut missing_indexes = vec![];
-        let mut prev_index = start_index;
-        'outer: for shred in shreds {
-            let index = u64::from(shred.index());
-            if index < start_index {
-                continue;
-            }
-            // Get the tick that will be used to figure out the timeout for this hole
-            let reference_tick = u64::from(shred.reference_tick());
-            // Break out early if the higher index holes have not timed out yet
-            if ticks_since_first_insert < reference_tick + MAX_TURBINE_DELAY_IN_TICKS {
-                return missing_indexes;
-            }
-            // Insert any newly discovered holes
-            for i in prev_index..cmp::min(index, end_index) {
-                missing_indexes.push(i);
-                if missing_indexes.len() == max_missing {
-                    break 'outer;
-                }
-            }
-            // Update prev_index before the end-early check as we may use prev_index after
-            prev_index = index + 1;
-            if index >= end_index {
-                break;
-            }
-        }
-        // If prev_index < end_index, there could be holes within [start_index, end_index)
-        // but that are greater than any shreds we have in the blockstore
-        if missing_indexes.len() < max_missing && prev_index < end_index {
-            for i in prev_index..end_index {
-                missing_indexes.push(i);
-                if missing_indexes.len() == max_missing {
-                    break;
-                }
-            }
-        }
-        missing_indexes
-    }
-
     pub(crate) fn insert_data_shred_into_cache(&self, slot: Slot, index: u64, shred: &Shred) {
         let data_slot_cache = self.data_slot_cache(slot).unwrap_or_else(|| {
             // Inner map for slot does not exist, let's create it
@@ -248,12 +314,6 @@ impl Blockstore {
             .write()
             .unwrap()
             .insert(index, shred.payload.clone());
-    }
-
-    // Shreds are stored by slot, and assumed to be full when pushed to disk. With these
-    // assumptions, we don't require the shred index for this function.
-    pub(crate) fn is_data_shred_on_fs(&self, slot: Slot) -> bool {
-        Path::new(&self.slot_data_shreds_path(slot)).exists()
     }
 
     // TODO: change this back to pub(crate); possibly need to make wrapper in blockstore_purge instead
@@ -278,14 +338,13 @@ impl Blockstore {
         let path = self.slot_data_shreds_path(slot);
         // We'll write contents to a temporary file first, and then rename
         // to desired file such that the write is "atomic".
-        let tmp_path = format!("{}.tmp", &path);
+        let tmp_path = format!("{}.tmp", path.to_str().unwrap());
         let tmp_path = Path::new(&tmp_path);
         let mut tmp_file = fs::File::create(tmp_path)?;
-        let path = Path::new(&path);
         if path.exists() {
             // There is a file for this slot already, meaning it was previously flushed.
             // We'll have to merge the contents of cache with contents of that file
-            let mut cur_file = fs::File::open(path)?;
+            let mut cur_file = fs::File::open(&path)?;
             let (header, mut index) = Blockstore::read_shred_file_metadata(&mut cur_file)?;
             let mut flushed_shreds = vec![0; header.data_size.try_into().unwrap()];
             cur_file.read_exact(&mut flushed_shreds)?;
@@ -413,7 +472,7 @@ impl Blockstore {
         }
         // Now, the temporary file has been completely written so perform the rename and then drop
         // the slot from the cache. fs::rename() will replace existing file if there is one.
-        fs::rename(tmp_path, path)?;
+        fs::rename(tmp_path, &path)?;
         self.data_shred_cache.remove(&slot);
         self.data_shred_cache_slots.lock().unwrap().remove(&slot);
         flush_timer.stop();
@@ -506,16 +565,12 @@ impl Blockstore {
             .map(|res| res.value().clone())
     }
 
-    fn slot_data_shreds_path(&self, slot: Slot) -> String {
-        Path::new(&self.data_shred_path)
-            .join(slot.to_string())
-            .to_str()
-            .unwrap()
-            .to_string()
+    pub(crate) fn slot_data_shreds_path(&self, slot: Slot) -> PathBuf {
+        self.data_shred_path.join(slot.to_string())
     }
 
     // Convenience wrapper to retrieve a single shred payload from fs
-    fn get_shred_from_fs(slot_path: &str, index: u64) -> Result<Option<Vec<u8>>> {
+    fn get_shred_from_fs(slot_path: &Path, index: u64) -> Result<Option<Vec<u8>>> {
         // Use the same value for start and end index to signify we only want one payload
         let mut payloads =
             Self::get_shred_payloads_for_slot_from_fs(slot_path, index, Some(index))?;
@@ -524,7 +579,7 @@ impl Blockstore {
 
     // Convenience wrapper to retrieve and deserialize shreds from fs
     fn get_shreds_for_slot_from_fs(
-        slot_path: &str,
+        slot_path: &Path,
         start_index: u64,
     ) -> Option<ShredResult<Vec<Shred>>> {
         let payloads =
@@ -537,32 +592,33 @@ impl Blockstore {
         )
     }
 
-    fn read_shred_file_metadata(file: &mut fs::File) -> Result<(ShredFileHeader, ShredFileIndex)> {
+    pub(crate) fn read_shred_file_metadata(
+        file: &mut fs::File,
+    ) -> Result<(ShredFileHeader, ShredFileIndex)> {
         let mut header_buffer = vec![0; SIZE_OF_SHRED_FILE_HEADER];
         file.read_exact(&mut header_buffer)?;
         let header: ShredFileHeader = bincode::deserialize(&header_buffer)?;
 
         let mut index_buffer = vec![0; header.index_size.try_into().unwrap()];
         file.read_exact(&mut index_buffer)?;
-        let index: ShredFileIndex = bincode::deserialize(&index_buffer)?;
+        let file_index: ShredFileIndex = bincode::deserialize(&index_buffer)?;
 
-        Ok((header, index))
+        Ok((header, file_index))
     }
 
     // Retrieve shreds from fs
     // If end_index is Some(), range is inclusive on both ends
     // If end_index is None, range is inclusive on start, unbounded on end
     fn get_shred_payloads_for_slot_from_fs(
-        slot_path: &str,
+        slot_path: &Path,
         start_index: u64,
         end_index: Option<u64>,
     ) -> Result<Vec<Vec<u8>>> {
-        let path = Path::new(slot_path);
-        let mut file = match fs::File::open(path) {
+        let mut file = match fs::File::open(slot_path) {
             Ok(file) => file,
             Err(_err) => return Ok(Vec::new()),
         };
-        let (_header, index) = Blockstore::read_shred_file_metadata(&mut file)?;
+        let (_header, file_index) = Blockstore::read_shred_file_metadata(&mut file)?;
 
         // Establish the bounds for the scan
         let start = Included(start_index as u32);
@@ -577,7 +633,7 @@ impl Blockstore {
         // - If the result is Some(), do a file.seek() to get cursor to correct position.
         // - If the result is None, there is no overlap between the search range and the
         //   shreds actually present in the file.
-        if let Some((&_low_bound, &seek_offset)) = index.range((start, end)).next() {
+        if let Some((&_low_bound, &seek_offset)) = file_index.range((start, end)).next() {
             // Prior to this call, the cursor is after the index / at begginning of data
             // section. The offsets in ShredFileIndex are zero-indexed from this point,
             // so we just seek forward whatever value was in the index.
@@ -586,7 +642,7 @@ impl Blockstore {
             return Ok(buffers);
         }
 
-        for (_index, _offset) in index.range((start, end)) {
+        for (_index, _offset) in file_index.range((start, end)) {
             let mut buffer = vec![0; SHRED_PAYLOAD_SIZE];
             file.read_exact(&mut buffer)?;
             buffers.push(buffer);
@@ -594,8 +650,21 @@ impl Blockstore {
         Ok(buffers)
     }
 
+    pub(crate) fn is_data_shred_on_fs(&self, slot: Slot) -> bool {
+        let path = self.slot_data_shreds_path(slot);
+        let file = fs::File::open(path);
+        return match file {
+            Ok(mut file) => {
+                // TODO: Should below use .unwrap(); file exists so only fails if file screwed up
+                let (_, file_index) = Blockstore::read_shred_file_metadata(&mut file).unwrap();
+                file_index.get(&(slot as u32)).is_some()
+            }
+            Err(_err) => false,
+        };
+    }
+
     // Used for tests only
-    pub fn is_shred_in_cache(&self, slot: Slot, index: u64) -> bool {
+    pub fn is_data_shred_in_cache(&self, slot: Slot, index: u64) -> bool {
         self.get_data_shred_from_cache(slot, index)
             .unwrap()
             .is_some()
@@ -605,7 +674,10 @@ impl Blockstore {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::{get_tmp_ledger_path_auto_delete, shred::max_ticks_per_n_shreds};
+    use {
+        crate::{get_tmp_ledger_path_auto_delete, shred::max_ticks_per_n_shreds},
+        itertools::Itertools,
+    };
 
     #[test]
     fn test_get_data_shred_from_cache() {
@@ -644,7 +716,7 @@ pub mod tests {
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
         // Create a bunch of shreds and insert them
-        let num_entries = max_ticks_per_n_shreds(100, None);
+        let num_entries = max_ticks_per_n_shreds(10, None);
         let (shreds, _) = make_slot_entries(0, 0, num_entries);
         blockstore
             .insert_shreds(shreds.clone(), None, false)
@@ -731,6 +803,94 @@ pub mod tests {
                     .unwrap()
                     .unwrap()
             );
+        }
+    }
+
+    #[test]
+    fn test_slot_shred_iterator() {
+        solana_logger::setup();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
+
+        let num_slots = 3;
+        let entries_per_slot = max_ticks_per_n_shreds(10, None);
+        let (mut shreds, _) = make_many_slot_entries(0, num_slots, entries_per_slot);
+        let shreds_per_slot = shreds.len() / num_slots as usize;
+
+        // Insert all shreds for slot 0 which will remain in the cache
+        let shreds0 = shreds.drain(0..shreds_per_slot).collect_vec();
+        blockstore
+            .insert_shreds(shreds0.clone(), None, false)
+            .unwrap();
+        // Construct an iterator to compare blockstore shreds to inserted shreds
+        {
+            let slot = 0;
+            let cache = blockstore.data_slot_cache(slot);
+            let (cache_guard, file, file_index) =
+                SlotIterator::setup(&cache, &blockstore.slot_data_shreds_path(slot));
+            let shred_iter = SlotIterator::new(slot, 0, &cache_guard, file, &file_index).unwrap();
+            for (original_shred, (_, read_payload)) in shreds0.iter().zip_eq(shred_iter) {
+                assert_eq!(original_shred.payload, read_payload);
+            }
+        }
+
+        // Insert all shreds for slot 1 and flush them to fs
+        let shreds1 = shreds.drain(0..shreds_per_slot).collect_vec();
+        blockstore
+            .insert_shreds(shreds1.clone(), None, false)
+            .unwrap();
+        blockstore.flush_data_shreds_for_slot_to_fs(1).unwrap();
+        // Construct an iterator to compare blockstore shreds to inserted shreds
+        {
+            let slot = 1;
+            let cache = blockstore.data_slot_cache(slot);
+            let (cache_guard, file, file_index) =
+                SlotIterator::setup(&cache, &blockstore.slot_data_shreds_path(slot));
+            let shred_iter = SlotIterator::new(slot, 0, &cache_guard, file, &file_index).unwrap();
+            for (original_shred, (_, read_payload)) in shreds1.iter().zip_eq(shred_iter) {
+                assert_eq!(original_shred.payload, read_payload);
+            }
+        }
+
+        // Insert half of shreds for slot 2 and flush them to fs;
+        // then insert the other half and leave them in cache
+        let shreds2 = shreds.clone();
+        let mut shreds2_even = Vec::new();
+        let mut shreds2_odd = Vec::new();
+        for (i, shred) in shreds.into_iter().enumerate() {
+            if i % 2 == 0 {
+                shreds2_even.push(shred);
+            } else {
+                shreds2_odd.push(shred);
+            }
+        }
+        blockstore
+            .insert_shreds(shreds2_even.clone(), None, false)
+            .unwrap();
+        blockstore.flush_data_shreds_for_slot_to_fs(2).unwrap();
+        blockstore
+            .insert_shreds(shreds2_odd.clone(), None, false)
+            .unwrap();
+        // Construct an iterator to compare blockstore shreds to inserted shreds
+        {
+            let slot = 2;
+            let cache = blockstore.data_slot_cache(slot);
+            let (cache_guard, file, file_index) =
+                SlotIterator::setup(&cache, &blockstore.slot_data_shreds_path(slot));
+            let shred_iter = SlotIterator::new(slot, 0, &cache_guard, file, &file_index).unwrap();
+            for (original_shred, (_, read_payload)) in shreds2.iter().zip_eq(shred_iter) {
+                assert_eq!(original_shred.payload, read_payload);
+            }
+        }
+
+        // Construct an iterator for a non-existent slot
+        {
+            let slot = num_slots + 1;
+            let cache = blockstore.data_slot_cache(slot);
+            let (cache_guard, file, file_index) =
+                SlotIterator::setup(&cache, &blockstore.slot_data_shreds_path(slot));
+            let shred_iter = SlotIterator::new(slot, 0, &cache_guard, file, &file_index);
+            assert!(shred_iter.is_none());
         }
     }
 }

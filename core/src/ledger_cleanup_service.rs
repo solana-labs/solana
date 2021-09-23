@@ -535,10 +535,10 @@ mod tests {
         for shred in shreds.iter() {
             match shred.slot() {
                 0..=39 => {
-                    assert!(!blockstore.is_shred_in_cache(shred.slot(), shred.index().into()));
+                    assert!(!blockstore.is_data_shred_in_cache(shred.slot(), shred.index().into()));
                 }
                 40..=49 => {
-                    assert!(blockstore.is_shred_in_cache(shred.slot(), shred.index().into()));
+                    assert!(blockstore.is_data_shred_in_cache(shred.slot(), shred.index().into()));
                 }
                 _ => {
                     // Only slot 0 - 49 were created / inserted
