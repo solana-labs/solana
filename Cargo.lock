@@ -4249,7 +4249,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-accountsdb-plugin-intf"
+name = "solana-accountsdb-plugin-interface"
 version = "1.8.0"
 dependencies = [
  "log 0.4.14",
@@ -4267,7 +4267,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
- "solana-accountsdb-plugin-intf",
+ "solana-accountsdb-plugin-interface",
  "solana-logger 1.8.0",
  "solana-metrics",
  "solana-rpc",
@@ -4286,7 +4286,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
- "solana-accountsdb-plugin-intf",
+ "solana-accountsdb-plugin-interface",
 ]
 
 [[package]]

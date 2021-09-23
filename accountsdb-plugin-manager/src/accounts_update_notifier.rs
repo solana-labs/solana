@@ -2,7 +2,7 @@
 use {
     crate::accountsdb_plugin_manager::AccountsDbPluginManager,
     log::*,
-    solana_accountsdb_plugin_intf::accountsdb_plugin_intf::{
+    solana_accountsdb_plugin_interface::accountsdb_plugin_interface::{
         ReplicaAccountInfo, ReplicaAccountMeta, SlotStatus,
     },
     solana_runtime::accounts_db::AccountsUpdateNotifierIntf,

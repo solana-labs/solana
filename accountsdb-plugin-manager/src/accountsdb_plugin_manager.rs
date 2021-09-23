@@ -2,7 +2,7 @@
 use {
     libloading::{Library, Symbol},
     log::*,
-    solana_accountsdb_plugin_intf::accountsdb_plugin_intf::AccountsDbPlugin,
+    solana_accountsdb_plugin_interface::accountsdb_plugin_interface::AccountsDbPlugin,
     std::error::Error,
 };
 

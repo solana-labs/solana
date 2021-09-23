@@ -6,7 +6,7 @@ use {
     postgres::{Client, NoTls, Statement},
     serde_derive::{Deserialize, Serialize},
     serde_json,
-    solana_accountsdb_plugin_intf::accountsdb_plugin_intf::{
+    solana_accountsdb_plugin_interface::accountsdb_plugin_interface::{
         AccountsDbPlugin, AccountsDbPluginError, ReplicaAccountInfo, Result, SlotStatus,
     },
     std::{fs::File, io::Read, sync::Mutex},
