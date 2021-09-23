@@ -435,7 +435,8 @@ mod tests {
                     let mut r = vec![];
                     for bin in 0..map.num_buckets() {
                         r.append(
-                            &mut map.items_in_range(bin, &None::<&std::ops::RangeInclusive<Pubkey>>),
+                            &mut map
+                                .items_in_range(bin, &None::<&std::ops::RangeInclusive<Pubkey>>),
                         );
                     }
                     r
