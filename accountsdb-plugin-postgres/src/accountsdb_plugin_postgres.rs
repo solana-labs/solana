@@ -146,13 +146,10 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
                     ],
                 );
 
-                match result {
-                    Err(err) => {
-                        return Err(AccountsDbPluginError::AccountsUpdateError {
-                            msg: format!("Failed to persist the update of account to the PostgreSQL database. Error: {:?}", err)
-                        });
-                    }
-                    Ok(_) => {}
+                if let Err(err) = result {
+                    return Err(AccountsDbPluginError::AccountsUpdateError {
+                        msg: format!("Failed to persist the update of account to the PostgreSQL database. Error: {:?}", err)
+                    });
                 }
             }
         }

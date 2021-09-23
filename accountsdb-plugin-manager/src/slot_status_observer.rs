@@ -15,11 +15,17 @@ use {
     },
 };
 
+struct SlotSetEntry {
+    slot: Slot,
+    parent: Option<Slot>,
+    status: SlotStatus,
+}
+
 /// The structure modelling the slots eligible for replication and
 /// their states.
 #[derive(Default, Clone)]
 struct EligibleSlotSet {
-    slot_set: Arc<RwLock<VecDeque<(Slot, Option<Slot>, SlotStatus)>>>,
+    slot_set: Arc<RwLock<VecDeque<SlotSetEntry>>>,
 }
 
 #[derive(Debug)]
@@ -79,21 +85,27 @@ impl SlotStatusObserver {
                         let mut slot_set = eligible_slot_set.slot_set.write().unwrap();
                         match slot {
                             BankNotification::OptimisticallyConfirmed(slot) => {
-                                slot_set.push_back((slot, None, SlotStatus::Confirmed));
+                                slot_set.push_back(
+                                    SlotSetEntry {
+                                        slot,
+                                        parent: None,
+                                        status: SlotStatus::Confirmed});
                             }
                             BankNotification::Frozen(bank) => {
-                                slot_set.push_back((
-                                    bank.slot(),
-                                    Some(bank.parent_slot()),
-                                    SlotStatus::Processed,
-                                ));
+                                slot_set.push_back(
+                                    SlotSetEntry {
+                                        slot: bank.slot(),
+                                        parent: Some(bank.parent_slot()),
+                                        status: SlotStatus::Processed,
+                                    });
                             }
                             BankNotification::Root(bank) => {
-                                slot_set.push_back((
-                                    bank.slot(),
-                                    Some(bank.parent_slot()),
-                                    SlotStatus::Rooted,
-                                ));
+                                slot_set.push_back(
+                                    SlotSetEntry {
+                                        slot: bank.slot(),
+                                        parent: Some(bank.parent_slot()),
+                                        status: SlotStatus::Rooted,
+                                    });
                             }
                         }
                     }
@@ -120,24 +132,24 @@ impl SlotStatusObserver {
                         }
 
                         let slot_status = slot_status.unwrap();
-                        match slot_status.2 {
+                        match slot_status.status {
                             SlotStatus::Confirmed => {
                                 accounts_update_notifier
                                     .read()
                                     .unwrap()
-                                    .notify_slot_confirmed(slot_status.0, slot_status.1);
+                                    .notify_slot_confirmed(slot_status.slot, slot_status.parent);
                             }
                             SlotStatus::Processed => {
                                 accounts_update_notifier
                                     .read()
                                     .unwrap()
-                                    .notify_slot_processed(slot_status.0, slot_status.1);
+                                    .notify_slot_processed(slot_status.slot, slot_status.parent);
                             }
                             SlotStatus::Rooted => {
                                 accounts_update_notifier
                                     .read()
                                     .unwrap()
-                                    .notify_slot_rooted(slot_status.0, slot_status.1);
+                                    .notify_slot_rooted(slot_status.slot, slot_status.parent);
                             }
                         }
                     }
