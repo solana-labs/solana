@@ -467,12 +467,10 @@ where
                     //    rename the file, since the ID is the "correct" one already.
                     // 2. There is not a file already at the new path.  This means it is safe to
                     //    rename the file to this new path.
-                    //    **DEVELOPER NOTE:** `fs::metadata()` can error for multiple reasons, so
-                    //    we cannot check for `fs::metadata().is_err()` instead of
-                    //    `!fs::metadata().is_ok()` here.  Additionally, keep this check last so
-                    //    that it can short-circuit if possible.
+                    //    **DEVELOPER NOTE:**  Keep this check last so that it can short-circuit if
+                    //    possible.
                     if storage_entry.id() == new_append_vec_id
-                        || !std::fs::metadata(&new_append_vec_path).is_ok()
+                        || std::fs::metadata(&new_append_vec_path).is_err()
                     {
                         break (new_append_vec_id, new_append_vec_path);
                     }
