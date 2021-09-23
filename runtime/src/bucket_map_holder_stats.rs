@@ -3,7 +3,6 @@ use crate::bucket_map_holder::BucketMapHolder;
 use solana_sdk::timing::{timestamp, AtomicInterval};
 use std::fmt::Debug;
 use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
-use std::sync::Arc;
 
 #[derive(Debug, Default)]
 pub struct BucketMapHolderStats {
@@ -22,10 +21,14 @@ pub struct BucketMapHolderStats {
     pub inserts: AtomicU64,
     pub count_in_mem: AtomicU64,
     pub per_bucket_count: Vec<AtomicU64>,
+    pub flush_entries_updated_on_disk: AtomicU64,
     pub active_threads: AtomicU64,
     pub get_range_us: AtomicU64,
     last_age: AtomicU8,
     last_age_time: AtomicU64,
+    pub flush_scan_us: AtomicU64,
+    pub flush_update_us: AtomicU64,
+    pub flush_remove_us: AtomicU64,
     last_time: AtomicInterval,
 }
 
@@ -59,7 +62,7 @@ impl BucketMapHolderStats {
         now.saturating_sub(last) // could saturate to 0. That is ok.
     }
 
-    fn ms_per_age<T: IndexValue>(&self, storage: &Arc<BucketMapHolder<T>>) -> u64 {
+    fn ms_per_age<T: IndexValue>(&self, storage: &BucketMapHolder<T>) -> u64 {
         let elapsed_ms = self.get_elapsed_ms_and_reset();
         let mut age_now = storage.current_age();
         let last_age = self.last_age.swap(age_now, Ordering::Relaxed);
@@ -75,7 +78,7 @@ impl BucketMapHolderStats {
         }
     }
 
-    pub fn report_stats<T: IndexValue>(&self, storage: &Arc<BucketMapHolder<T>>) {
+    pub fn report_stats<T: IndexValue>(&self, storage: &BucketMapHolder<T>) {
         // account index stats every 10 s
         if !self.last_time.should_update(10_000) {
             return;
@@ -92,6 +95,8 @@ impl BucketMapHolderStats {
             min = std::cmp::min(min, d);
             max = std::cmp::max(max, d);
         }
+
+        let disk = storage.disk.as_ref();
 
         datapoint_info!(
             "accounts_index",
@@ -163,6 +168,109 @@ impl BucketMapHolderStats {
             ("items", self.items.swap(0, Ordering::Relaxed), i64),
             ("keys", self.keys.swap(0, Ordering::Relaxed), i64),
             ("ms_per_age", ms_per_age, i64),
+            (
+                "flush_scan_us",
+                self.flush_scan_us.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "flush_update_us",
+                self.flush_update_us.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "flush_remove_us",
+                self.flush_remove_us.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "disk_index_resizes",
+                disk.map(|disk| disk.stats.index.resizes.swap(0, Ordering::Relaxed))
+                    .unwrap_or_default(),
+                i64
+            ),
+            (
+                "disk_index_max_size",
+                disk.map(|disk| {
+                    let mut lock = disk.stats.index.max_size.lock().unwrap();
+                    let value = *lock;
+                    *lock = 0;
+                    value
+                })
+                .unwrap_or_default(),
+                i64
+            ),
+            (
+                "disk_index_new_file_us",
+                disk.map(|disk| disk.stats.index.new_file_us.swap(0, Ordering::Relaxed))
+                    .unwrap_or_default(),
+                i64
+            ),
+            (
+                "disk_index_resize_us",
+                disk.map(|disk| disk.stats.index.resize_us.swap(0, Ordering::Relaxed))
+                    .unwrap_or_default(),
+                i64
+            ),
+            (
+                "disk_index_flush_file_us",
+                disk.map(|disk| disk.stats.index.flush_file_us.swap(0, Ordering::Relaxed))
+                    .unwrap_or_default(),
+                i64
+            ),
+            (
+                "disk_index_flush_mmap_us",
+                disk.map(|disk| disk.stats.index.mmap_us.swap(0, Ordering::Relaxed))
+                    .unwrap_or_default(),
+                i64
+            ),
+            (
+                "disk_data_resizes",
+                disk.map(|disk| disk.stats.data.resizes.swap(0, Ordering::Relaxed))
+                    .unwrap_or_default(),
+                i64
+            ),
+            (
+                "disk_data_max_size",
+                disk.map(|disk| {
+                    let mut lock = disk.stats.data.max_size.lock().unwrap();
+                    let value = *lock;
+                    *lock = 0;
+                    value
+                })
+                .unwrap_or_default(),
+                i64
+            ),
+            (
+                "disk_data_new_file_us",
+                disk.map(|disk| disk.stats.data.new_file_us.swap(0, Ordering::Relaxed))
+                    .unwrap_or_default(),
+                i64
+            ),
+            (
+                "disk_data_resize_us",
+                disk.map(|disk| disk.stats.data.resize_us.swap(0, Ordering::Relaxed))
+                    .unwrap_or_default(),
+                i64
+            ),
+            (
+                "disk_data_flush_file_us",
+                disk.map(|disk| disk.stats.data.flush_file_us.swap(0, Ordering::Relaxed))
+                    .unwrap_or_default(),
+                i64
+            ),
+            (
+                "disk_data_flush_mmap_us",
+                disk.map(|disk| disk.stats.data.mmap_us.swap(0, Ordering::Relaxed))
+                    .unwrap_or_default(),
+                i64
+            ),
+            (
+                "flush_entries_updated_on_disk",
+                self.flush_entries_updated_on_disk
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
         );
     }
 }

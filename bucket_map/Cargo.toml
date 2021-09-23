@@ -14,7 +14,7 @@ edition = "2018"
 rayon = "1.5.0"
 solana-logger = { path = "../logger", version = "=1.8.0" }
 solana-sdk = { path = "../sdk", version = "=1.8.0" }
-memmap2 = "0.4.0"
+memmap2 = "0.5.0"
 log = { version = "0.4.11" }
 solana-measure = { path = "../measure", version = "=1.8.0" }
 rand = "0.7.0"

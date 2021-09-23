@@ -1,5 +1,6 @@
 #![cfg(feature = "full")]
 
+use itertools::Itertools;
 use solana_sdk::{
     account::AccountSharedData,
     compute_budget::ComputeBudget,
@@ -317,20 +318,37 @@ pub mod stable_log {
         ic_logger_msg!(logger, "Program log: {}", message);
     }
 
+    /// Emit a program data.
+    ///
+    /// The general form is:
+    ///
+    /// ```notrust
+    /// "Program data: <binary-data-in-base64>*"
+    /// ```
+    ///
+    /// That is, any program-generated output is guaranteed to be prefixed by "Program data: "
+    pub fn program_data(logger: &Rc<RefCell<dyn Logger>>, data: &[&[u8]]) {
+        ic_logger_msg!(
+            logger,
+            "Program data: {}",
+            data.iter().map(base64::encode).join(" ")
+        );
+    }
+
     /// Log return data as from the program itself. This line will not be present if no return
     /// data was set, or if the return data was set to zero length.
     ///
     /// The general form is:
     ///
     /// ```notrust
-    /// "Program return data: <program-id> <program-generated-data-in-base64>"
+    /// "Program return: <program-id> <program-generated-data-in-base64>"
     /// ```
     ///
-    /// That is, any program-generated output is guaranteed to be prefixed by "Program return data: "
-    pub fn program_return_data(logger: &Rc<RefCell<dyn Logger>>, program_id: &Pubkey, data: &[u8]) {
+    /// That is, any program-generated output is guaranteed to be prefixed by "Program return: "
+    pub fn program_return(logger: &Rc<RefCell<dyn Logger>>, program_id: &Pubkey, data: &[u8]) {
         ic_logger_msg!(
             logger,
-            "Program return data: {} {}",
+            "Program return: {} {}",
             program_id,
             base64::encode(data)
         );

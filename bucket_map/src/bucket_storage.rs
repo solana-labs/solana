@@ -31,25 +31,27 @@ use std::sync::Arc;
 */
 const DEFAULT_CAPACITY_POW2: u8 = 5;
 
+/// A Header UID of 0 indicates that the header is unlocked
+pub(crate) const UID_UNLOCKED: Uid = 0;
+
+pub(crate) type Uid = u64;
+
 #[repr(C)]
 struct Header {
     lock: AtomicU64,
 }
 
-/// A Header UID of 0 indicates that the header is unlocked
-pub(crate) const UID_UNLOCKED: u64 = 0;
-
 impl Header {
-    fn try_lock(&self, uid: u64) -> bool {
+    fn try_lock(&self, uid: Uid) -> bool {
         Ok(UID_UNLOCKED)
             == self
                 .lock
                 .compare_exchange(UID_UNLOCKED, uid, Ordering::Acquire, Ordering::Relaxed)
     }
-    fn unlock(&self) -> u64 {
+    fn unlock(&self) -> Uid {
         self.lock.swap(UID_UNLOCKED, Ordering::Release)
     }
-    fn uid(&self) -> u64 {
+    fn uid(&self) -> Uid {
         self.lock.load(Ordering::Relaxed)
     }
 }
@@ -120,7 +122,7 @@ impl BucketStorage {
         )
     }
 
-    pub fn uid(&self, ix: u64) -> u64 {
+    pub fn uid(&self, ix: u64) -> Uid {
         if ix >= self.num_cells() {
             panic!("bad index size");
         }
@@ -132,7 +134,7 @@ impl BucketStorage {
         }
     }
 
-    pub fn allocate(&self, ix: u64, uid: u64) -> Result<(), BucketStorageError> {
+    pub fn allocate(&self, ix: u64, uid: Uid) -> Result<(), BucketStorageError> {
         if ix >= self.num_cells() {
             panic!("allocate: bad index size");
         }
@@ -153,7 +155,7 @@ impl BucketStorage {
         e
     }
 
-    pub fn free(&self, ix: u64, uid: u64) {
+    pub fn free(&self, ix: u64, uid: Uid) {
         if ix >= self.num_cells() {
             panic!("free: bad index size");
         }
@@ -213,6 +215,7 @@ impl BucketStorage {
         }
     }
 
+    #[allow(clippy::mut_from_ref)]
     pub fn get_mut<T: Sized>(&self, ix: u64) -> &mut T {
         if ix >= self.num_cells() {
             panic!("bad index size");
@@ -226,6 +229,7 @@ impl BucketStorage {
         }
     }
 
+    #[allow(clippy::mut_from_ref)]
     pub fn get_mut_cell_slice<T: Sized>(&self, ix: u64, len: u64) -> &mut [T] {
         if ix >= self.num_cells() {
             panic!("bad index size");
@@ -247,7 +251,7 @@ impl BucketStorage {
         capacity_pow2: u8,
         stats: &mut Arc<BucketStats>,
     ) -> (MmapMut, PathBuf) {
-        let mut m0 = Measure::start("");
+        let mut measure_new_file = Measure::start("measure_new_file");
         let capacity = 1u64 << capacity_pow2;
         let r = thread_rng().gen_range(0, drives.len());
         let drive = &drives[r];
@@ -276,16 +280,22 @@ impl BucketStorage {
             .unwrap();
         data.write_all(&[0]).unwrap();
         data.seek(SeekFrom::Start(0)).unwrap();
-        m0.stop();
-        let mut m1 = Measure::start("");
+        measure_new_file.stop();
+        let mut measure_flush = Measure::start("measure_flush");
         data.flush().unwrap(); // can we skip this?
-        m1.stop();
-        let mut m2 = Measure::start("");
+        measure_flush.stop();
+        let mut measure_mmap = Measure::start("measure_mmap");
         let res = (unsafe { MmapMut::map_mut(&data).unwrap() }, file);
-        m2.stop();
-        stats.new_file_us.fetch_add(m0.as_us(), Ordering::Relaxed);
-        stats.flush_file_us.fetch_add(m0.as_us(), Ordering::Relaxed);
-        stats.mmap_us.fetch_add(m0.as_us(), Ordering::Relaxed);
+        measure_mmap.stop();
+        stats
+            .new_file_us
+            .fetch_add(measure_new_file.as_us(), Ordering::Relaxed);
+        stats
+            .flush_file_us
+            .fetch_add(measure_flush.as_us(), Ordering::Relaxed);
+        stats
+            .mmap_us
+            .fetch_add(measure_mmap.as_us(), Ordering::Relaxed);
         res
     }
 

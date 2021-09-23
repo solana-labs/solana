@@ -3,9 +3,17 @@ pub use solana_core::test_validator;
 pub use solana_gossip::cluster_info::MINIMUM_VALIDATOR_PORT_RANGE_WIDTH;
 use {
     console::style,
+    fd_lock::{RwLock, RwLockWriteGuard},
     indicatif::{ProgressDrawTarget, ProgressStyle},
-    log::*,
-    std::{borrow::Cow, env, fmt::Display, process::exit, thread::JoinHandle},
+    std::{
+        borrow::Cow,
+        env,
+        fmt::Display,
+        fs::{File, OpenOptions},
+        path::Path,
+        process::exit,
+        thread::JoinHandle,
+    },
 };
 
 pub mod admin_rpc_service;
@@ -13,7 +21,7 @@ pub mod dashboard;
 
 #[cfg(unix)]
 fn redirect_stderr(filename: &str) {
-    use std::{fs::OpenOptions, os::unix::io::AsRawFd};
+    use std::os::unix::io::AsRawFd;
     match OpenOptions::new()
         .write(true)
         .create(true)
@@ -36,17 +44,23 @@ pub fn redirect_stderr_to_file(logfile: Option<String>) -> Option<JoinHandle<()>
         env::set_var("RUST_BACKTRACE", "1")
     }
 
-    let logger_thread = match logfile {
-        None => None,
+    let filter = "solana=info";
+    match logfile {
+        None => {
+            solana_logger::setup_with_default(filter);
+            None
+        }
         Some(logfile) => {
             #[cfg(unix)]
             {
+                use log::info;
                 let signals = signal_hook::iterator::Signals::new(&[signal_hook::SIGUSR1])
                     .unwrap_or_else(|err| {
                         eprintln!("Unable to register SIGUSR1 handler: {:?}", err);
                         exit(1);
                     });
 
+                solana_logger::setup_with_default(filter);
                 redirect_stderr(&logfile);
                 Some(std::thread::spawn(move || {
                     for signal in signals.forever() {
@@ -60,14 +74,12 @@ pub fn redirect_stderr_to_file(logfile: Option<String>) -> Option<JoinHandle<()>
             }
             #[cfg(not(unix))]
             {
-                println!("logging to a file is not supported on this platform");
+                println!("logrotate is not supported on this platform");
+                solana_logger::setup_file_with_default(&logfile, filter);
                 None
             }
         }
-    };
-
-    solana_logger::setup_with_default("solana=info");
-    logger_thread
+    }
 }
 
 pub fn port_validator(port: String) -> Result<(), String> {
@@ -132,4 +144,28 @@ impl ProgressBar {
             println!("{}", msg);
         }
     }
+}
+
+pub fn ledger_lockfile(ledger_path: &Path) -> RwLock<File> {
+    let lockfile = ledger_path.join("ledger.lock");
+    fd_lock::RwLock::new(
+        OpenOptions::new()
+            .write(true)
+            .create(true)
+            .open(&lockfile)
+            .unwrap(),
+    )
+}
+
+pub fn lock_ledger<'path, 'lock>(
+    ledger_path: &'path Path,
+    ledger_lockfile: &'lock mut RwLock<File>,
+) -> RwLockWriteGuard<'lock, File> {
+    ledger_lockfile.try_write().unwrap_or_else(|_| {
+        println!(
+            "Error: Unable to lock {} directory. Check if another validator is running",
+            ledger_path.display()
+        );
+        exit(1);
+    })
 }

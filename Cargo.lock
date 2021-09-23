@@ -773,18 +773,18 @@ checksum = "28b9d6de7f49e22cf97ad17fc4036ece69300032f45f78f30b4a4482cdc3f4a6"
 
 [[package]]
 name = "const_format"
-version = "0.2.20"
+version = "0.2.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae592b8ddbf42b388f8211f0fd4d0985768ed7316348277c250dca4513695492"
+checksum = "4556f63e28a78fa5e6f310cfea5647a25636def49a338ab69e33b34a3382057b"
 dependencies = [
  "const_format_proc_macros",
 ]
 
 [[package]]
 name = "const_format_proc_macros"
-version = "0.2.20"
+version = "0.2.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "98b53b21a34874c03f4ee8fe5a5dbd977fbe09cfa43b7e2362d94f33e42d56af"
+checksum = "552782506c398da94466b364973b563887e0ca078bf33a76d4163736165e3594"
 dependencies = [
  "proc-macro2 1.0.24",
  "quote 1.0.9",
@@ -2442,9 +2442,9 @@ dependencies = [
 
 [[package]]
 name = "memmap2"
-version = "0.4.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "de5d3112c080d58ce560081baeaab7e1e864ca21795ddbf533d5b1842bb1ecf8"
+checksum = "4647a11b578fead29cdbb34d4adef8dd3dc35b876c9c6d5240d83f205abfe96e"
 dependencies = [
  "libc",
 ]
@@ -4307,7 +4307,7 @@ version = "1.8.0"
 dependencies = [
  "fs_extra",
  "log 0.4.14",
- "memmap2 0.4.0",
+ "memmap2 0.5.0",
  "rand 0.7.3",
  "rayon",
  "solana-logger 1.8.0",
@@ -4689,7 +4689,7 @@ dependencies = [
  "bv",
  "generic-array 0.14.4",
  "log 0.4.14",
- "memmap2 0.4.0",
+ "memmap2 0.5.0",
  "rustc_version 0.4.0",
  "serde",
  "serde_derive",
@@ -5192,6 +5192,7 @@ name = "solana-program"
 version = "1.8.0"
 dependencies = [
  "assert_matches",
+ "base64 0.13.0",
  "bincode",
  "bitflags",
  "blake3 1.0.0",
@@ -5407,7 +5408,7 @@ dependencies = [
  "itertools 0.10.1",
  "lazy_static",
  "log 0.4.14",
- "memmap2 0.4.0",
+ "memmap2 0.5.0",
  "num_cpus",
  "ouroboros",
  "rand 0.7.3",
@@ -5470,7 +5471,7 @@ dependencies = [
  "lazy_static",
  "libsecp256k1 0.6.0",
  "log 0.4.14",
- "memmap2 0.4.0",
+ "memmap2 0.5.0",
  "num-derive",
  "num-traits",
  "pbkdf2 0.9.0",
@@ -6290,9 +6291,9 @@ checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
 
 [[package]]
 name = "tokio"
-version = "1.11.0"
+version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b4efe6fc2395938c8155973d7be49fe8d03a843726e285e100a8a383cc0154ce"
+checksum = "c2c2416fdedca8443ae44b4527de1ea633af61d8f7169ffa6e72c5b53d24efcc"
 dependencies = [
  "autocfg 1.0.0",
  "bytes 1.0.1",

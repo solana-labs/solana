@@ -1,16 +1,17 @@
 use crate::accounts_index::{AccountsIndexConfig, IndexValue};
 use crate::bucket_map_holder_stats::BucketMapHolderStats;
-use crate::in_mem_accounts_index::SlotT;
+use crate::in_mem_accounts_index::{InMemAccountsIndex, SlotT};
 use crate::waitable_condvar::WaitableCondvar;
 use solana_bucket_map::bucket_map::{BucketMap, BucketMapConfig};
 use solana_sdk::clock::SLOT_MS;
 use solana_sdk::timing::AtomicInterval;
 use std::fmt::Debug;
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicUsize, Ordering};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 pub type Age = u8;
 
-const AGE_MS: u64 = SLOT_MS; // match one age per slot time
+pub const AGE_MS: u64 = SLOT_MS; // match one age per slot time
 
 pub struct BucketMapHolder<T: IndexValue> {
     pub disk: Option<BucketMap<SlotT<T>>>,
@@ -129,7 +130,7 @@ impl<T: IndexValue> BucketMapHolder<T> {
             ages_to_stay_in_cache,
             count_ages_flushed: AtomicUsize::default(),
             age: AtomicU8::default(),
-            stats: BucketMapHolderStats::default(),
+            stats: BucketMapHolderStats::new(bins),
             wait_dirty_or_aged: WaitableCondvar::default(),
             next_bucket_to_flush: Mutex::new(0),
             age_timer: AtomicInterval::default(),
@@ -149,6 +150,30 @@ impl<T: IndexValue> BucketMapHolder<T> {
         let result = *lock;
         *lock = (result + 1) % self.bins;
         result
+    }
+
+    // intended to execute in a bg thread
+    pub fn background(&self, exit: Arc<AtomicBool>, in_mem: Vec<Arc<InMemAccountsIndex<T>>>) {
+        let bins = in_mem.len();
+        let flush = self.disk.is_some();
+        loop {
+            // this will transition to waits and thread throttling
+            self.wait_dirty_or_aged
+                .wait_timeout(Duration::from_millis(AGE_MS));
+            if exit.load(Ordering::Relaxed) {
+                break;
+            }
+
+            self.stats.active_threads.fetch_add(1, Ordering::Relaxed);
+            for _ in 0..bins {
+                if flush {
+                    let index = self.next_bucket_to_flush();
+                    in_mem[index].flush();
+                }
+                self.stats.report_stats(self);
+            }
+            self.stats.active_threads.fetch_sub(1, Ordering::Relaxed);
+        }
     }
 }
 

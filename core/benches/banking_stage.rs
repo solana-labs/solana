@@ -113,7 +113,7 @@ fn make_accounts_txs(txes: usize, mint_keypair: &Keypair, hash: Hash) -> Vec<Tra
         .into_par_iter()
         .map(|_| {
             let mut new = dummy.clone();
-            let sig: Vec<u8> = (0..64).map(|_| thread_rng().gen()).collect();
+            let sig: Vec<_> = (0..64).map(|_| thread_rng().gen::<u8>()).collect();
             new.message.account_keys[0] = pubkey::new_rand();
             new.message.account_keys[1] = pubkey::new_rand();
             new.signatures = vec![Signature::new(&sig[0..64])];

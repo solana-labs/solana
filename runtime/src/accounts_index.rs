@@ -41,7 +41,7 @@ pub const ACCOUNTS_INDEX_CONFIG_FOR_TESTING: AccountsIndexConfig = AccountsIndex
     bins: Some(BINS_FOR_TESTING),
     flush_threads: Some(FLUSH_THREADS_TESTING),
     drives: None,
-    index_limit_mb: None,
+    index_limit_mb: Some(1),
     ages_to_stay_in_cache: None,
 };
 pub const ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS: AccountsIndexConfig = AccountsIndexConfig {
@@ -175,11 +175,11 @@ impl<T: IndexValue> AccountMapEntryInner<T> {
     }
 
     pub fn dirty(&self) -> bool {
-        self.meta.dirty.load(Ordering::Relaxed)
+        self.meta.dirty.load(Ordering::Acquire)
     }
 
-    pub fn set_dirty(&self, value: bool) -> bool {
-        self.meta.dirty.swap(value, Ordering::Relaxed)
+    pub fn set_dirty(&self, value: bool) {
+        self.meta.dirty.store(value, Ordering::Release)
     }
 
     pub fn age(&self) -> Age {
@@ -282,21 +282,6 @@ impl<T: IndexValue> WriteAccountMapEntry<T> {
             ref_count,
             AccountMapEntryMeta::new_dirty(storage),
         ))
-    }
-
-    // Try to update an item in the slot list the given `slot` If an item for the slot
-    // already exists in the list, remove the older item, add it to `reclaims`, and insert
-    // the new item.
-    pub fn update(&mut self, slot: Slot, account_info: T, reclaims: &mut SlotList<T>) {
-        let mut addref = !account_info.is_cached();
-        self.slot_list_mut(|list| {
-            addref =
-                InMemAccountsIndex::update_slot_list(list, slot, account_info, reclaims, false);
-        });
-        if addref {
-            // If it's the first non-cache insert, also bump the stored ref count
-            self.borrow_owned_entry().add_un_ref(true);
-        }
     }
 }
 
@@ -1577,9 +1562,15 @@ impl<T: IndexValue> AccountsIndex<T> {
             items.into_iter().for_each(|(pubkey, new_item)| {
                 let already_exists =
                     w_account_maps.insert_new_entry_if_missing_with_lock(pubkey, new_item);
-                if let Some((mut w_account_entry, account_info, pubkey)) = already_exists {
+                if let Some((account_entry, account_info, pubkey)) = already_exists {
                     let is_zero_lamport = account_info.is_zero_lamport();
-                    w_account_entry.update(slot, account_info, &mut _reclaims);
+                    InMemAccountsIndex::lock_and_update_slot_list(
+                        &account_entry,
+                        (slot, account_info),
+                        &mut _reclaims,
+                        false,
+                    );
+
                     if !is_zero_lamport {
                         // zero lamports were already added to dirty_pubkeys above
                         dirty_pubkeys.push(pubkey);

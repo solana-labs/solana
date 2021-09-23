@@ -1489,9 +1489,9 @@ dependencies = [
 
 [[package]]
 name = "memmap2"
-version = "0.4.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "de5d3112c080d58ce560081baeaab7e1e864ca21795ddbf533d5b1842bb1ecf8"
+checksum = "4647a11b578fead29cdbb34d4adef8dd3dc35b876c9c6d5240d83f205abfe96e"
 dependencies = [
  "libc",
 ]
@@ -2646,6 +2646,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-bpf-rust-log-data"
+version = "1.8.0"
+dependencies = [
+ "solana-program 1.8.0",
+]
+
+[[package]]
 name = "solana-bpf-rust-many-args"
 version = "1.8.0"
 dependencies = [
@@ -2796,7 +2803,7 @@ version = "1.8.0"
 dependencies = [
  "fs_extra",
  "log",
- "memmap2 0.4.0",
+ "memmap2 0.5.0",
  "rand 0.7.3",
  "rayon",
  "solana-logger 1.8.0",
@@ -2981,7 +2988,7 @@ dependencies = [
  "bv",
  "generic-array 0.14.4",
  "log",
- "memmap2 0.4.0",
+ "memmap2 0.5.0",
  "rustc_version 0.4.0",
  "serde",
  "serde_derive",
@@ -3111,6 +3118,7 @@ dependencies = [
 name = "solana-program"
 version = "1.8.0"
 dependencies = [
+ "base64 0.13.0",
  "bincode",
  "bitflags",
  "blake3 1.0.0",
@@ -3226,7 +3234,7 @@ dependencies = [
  "itertools 0.10.1",
  "lazy_static",
  "log",
- "memmap2 0.4.0",
+ "memmap2 0.5.0",
  "num_cpus",
  "ouroboros",
  "rand 0.7.3",
@@ -3280,7 +3288,7 @@ dependencies = [
  "lazy_static",
  "libsecp256k1 0.6.0",
  "log",
- "memmap2 0.4.0",
+ "memmap2 0.5.0",
  "num-derive",
  "num-traits",
  "pbkdf2 0.9.0",
@@ -3705,9 +3713,9 @@ checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
 
 [[package]]
 name = "tokio"
-version = "1.11.0"
+version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b4efe6fc2395938c8155973d7be49fe8d03a843726e285e100a8a383cc0154ce"
+checksum = "c2c2416fdedca8443ae44b4527de1ea633af61d8f7169ffa6e72c5b53d24efcc"
 dependencies = [
  "autocfg",
  "bytes 1.0.1",

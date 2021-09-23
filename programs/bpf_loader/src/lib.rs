@@ -939,7 +939,7 @@ impl Executor for BpfExecutor {
             drop(vm);
             let return_data = invoke_context.get_return_data();
             if let Some((program_id, return_data)) = return_data {
-                stable_log::program_return_data(&logger, program_id, return_data);
+                stable_log::program_return(&logger, program_id, return_data);
             }
             match result {
                 Ok(status) => {

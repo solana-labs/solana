@@ -2,7 +2,6 @@ use crate::accounts_index::{AccountsIndexConfig, IndexValue};
 use crate::bucket_map_holder::BucketMapHolder;
 use crate::in_mem_accounts_index::InMemAccountsIndex;
 use std::fmt::Debug;
-use std::time::Duration;
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -71,7 +70,7 @@ impl<T: IndexValue> AccountsIndexStorage<T> {
                     Builder::new()
                         .name("solana-idx-flusher".to_string())
                         .spawn(move || {
-                            Self::background(storage_, exit_, in_mem_);
+                            storage_.background(exit_, in_mem_);
                         })
                         .unwrap()
                 })
@@ -83,39 +82,6 @@ impl<T: IndexValue> AccountsIndexStorage<T> {
             handles,
             storage,
             in_mem,
-        }
-    }
-
-    pub fn storage(&self) -> &Arc<BucketMapHolder<T>> {
-        &self.storage
-    }
-
-    // intended to execute in a bg thread
-    pub fn background(
-        storage: Arc<BucketMapHolder<T>>,
-        exit: Arc<AtomicBool>,
-        in_mem: Vec<Arc<InMemAccountsIndex<T>>>,
-    ) {
-        let bins = in_mem.len();
-        let flush = storage.disk.is_some();
-        loop {
-            // this will transition to waits and thread throttling
-            storage
-                .wait_dirty_or_aged
-                .wait_timeout(Duration::from_millis(10000));
-            if exit.load(Ordering::Relaxed) {
-                break;
-            }
-
-            storage.stats.active_threads.fetch_add(1, Ordering::Relaxed);
-            for _ in 0..bins {
-                if flush {
-                    let index = storage.next_bucket_to_flush();
-                    in_mem[index].flush();
-                }
-                storage.stats.report_stats(&storage);
-            }
-            storage.stats.active_threads.fetch_sub(1, Ordering::Relaxed);
         }
     }
 }

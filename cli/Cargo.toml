@@ -16,7 +16,7 @@ clap = "2.33.1"
 criterion-stats = "0.3.0"
 ctrlc = { version = "3.1.9", features = ["termination"] }
 console = "0.14.1"
-const_format = "0.2.20"
+const_format = "0.2.21"
 log = "0.4.14"
 humantime = "2.0.1"
 num-traits = "0.2"
