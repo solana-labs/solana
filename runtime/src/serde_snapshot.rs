@@ -2,8 +2,8 @@ use {
     crate::{
         accounts::Accounts,
         accounts_db::{
-            AccountShrinkThreshold, AccountStorageEntry, AccountsDb, AccountsDbConfig, AccountsUpdateNotifier, AppendVecId,
-            BankHashInfo,
+            AccountShrinkThreshold, AccountStorageEntry, AccountsDb, AccountsDbConfig,
+            AccountsUpdateNotifier, AppendVecId, BankHashInfo,
         },
         accounts_index::AccountSecondaryIndexes,
         ancestors::Ancestors,

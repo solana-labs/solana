@@ -38,11 +38,11 @@ impl AccountsDbPluginService {
     ///    shall create the implementation of `AccountsDbPlugin` and returns to the caller.
     ///    The `accounts_selector` section allows the user to controls accounts selections.
     ///    "accounts_selector" : {
-    ///         accounts : \["pubkey-1", "pubkey-2", ..., "pubkey-n"\],
+    ///         "accounts" : \["pubkey-1", "pubkey-2", ..., "pubkey-n"\],
     ///    }
     ///    or:
     ///    "accounts_selector" = {
-    ///         owners : \["pubkey-1', 'pubkey-2", ..., "pubkey-m"\]
+    ///         "owners" : \["pubkey-1', 'pubkey-2", ..., "pubkey-m"\]
     ///    }
     ///    When accounts and owners are specified, the program only filters only using accounts
     ///    as it is more selective. And owners field is ignored. When only owners is specified,
