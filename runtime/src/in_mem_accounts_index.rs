@@ -83,6 +83,8 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     where
         R: RangeBounds<Pubkey> + std::fmt::Debug,
     {
+        self.start_stop_flush(true);
+        self.put_range_in_cache(range); // check range here to see if our items are already held in the cache
         Self::update_stat(&self.stats().items, 1);
         let map = self.map().read().unwrap();
         let mut result = Vec::with_capacity(map.len());
@@ -91,6 +93,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 result.push((*k, v.clone()));
             }
         });
+        self.start_stop_flush(false);
         result
     }
 
