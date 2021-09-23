@@ -4,7 +4,9 @@ extern crate solana_core;
 extern crate test;
 
 use log::*;
+use solana_core::cluster_nodes::ClusterNodes;
 use solana_core::retransmit_stage::retransmitter;
+use solana_core::retransmit_stage::RetransmitStage;
 use solana_entry::entry::Entry;
 use solana_gossip::cluster_info::{ClusterInfo, Node};
 use solana_gossip::contact_info::ContactInfo;
@@ -21,15 +23,13 @@ use solana_sdk::pubkey;
 use solana_sdk::signature::{Keypair, Signer};
 use solana_sdk::system_transaction;
 use solana_sdk::timing::timestamp;
+use std::collections::HashMap;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use solana_core::cluster_nodes::ClusterNodes;
-use solana_core::retransmit_stage::RetransmitStage;
 use std::sync::mpsc::channel;
 use std::sync::Mutex;
 use std::sync::{Arc, RwLock};
 use std::thread::sleep;
-use std::collections::HashMap;
 use std::thread::Builder;
 use std::time::Duration;
 use test::Bencher;
@@ -40,7 +40,10 @@ fn bench_get_retransmit_peers(bencher: &mut Bencher) {
     let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
     const NUM_PEERS: usize = 4000;
     const FANOUT: usize = 200;
-    let stakes: HashMap<_,_> = (0..NUM_PEERS).into_iter().map(|_| (pubkey::new_rand(), 1)).collect();
+    let stakes: HashMap<_, _> = (0..NUM_PEERS)
+        .into_iter()
+        .map(|_| (pubkey::new_rand(), 1))
+        .collect();
     let cluster_nodes = ClusterNodes::<RetransmitStage>::new(&cluster_info, &stakes);
     let stakes_vec: Vec<_> = stakes.keys().into_iter().collect();
     let mut i = 0;
