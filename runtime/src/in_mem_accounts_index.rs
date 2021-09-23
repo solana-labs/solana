@@ -502,9 +502,10 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
     fn start_stop_flush(&self, stop: bool) {
         if stop {
-            self.stop_flush.fetch_add(1, Ordering::Acquire);
-        } else {
-            self.stop_flush.fetch_sub(1, Ordering::Release);
+            self.stop_flush.fetch_add(1, Ordering::Release);
+        } else if 1 == self.stop_flush.fetch_sub(1, Ordering::Release) {
+            // stop_flush went to 0, so this bucket could now be ready to be aged
+            self.storage.wait_dirty_or_aged.notify_one();
         }
     }
 
