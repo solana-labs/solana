@@ -237,6 +237,51 @@ impl<T: IndexValue> ReadAccountMapEntry<T> {
     }
 }
 
+pub struct PreAllocatedAccountMapEntry<T: IndexValue> {
+    entry: AccountMapEntry<T>,
+}
+
+impl<T: IndexValue> From<PreAllocatedAccountMapEntry<T>> for AccountMapEntry<T> {
+    fn from(source: PreAllocatedAccountMapEntry<T>) -> AccountMapEntry<T> {
+        source.entry
+    }
+}
+
+impl<T: IndexValue> From<PreAllocatedAccountMapEntry<T>> for (Slot, T) {
+    fn from(source: PreAllocatedAccountMapEntry<T>) -> (Slot, T) {
+        source.entry.slot_list.write().unwrap().remove(0)
+    }
+}
+
+impl<T: IndexValue> PreAllocatedAccountMapEntry<T> {
+    /// create an entry that is equivalent to this process:
+    /// 1. new empty (refcount=0, slot_list={})
+    /// 2. update(slot, account_info)
+    /// This code is called when the first entry [ie. (slot,account_info)] for a pubkey is inserted into the index.
+    pub fn new(
+        slot: Slot,
+        account_info: T,
+        storage: &Arc<BucketMapHolder<T>>,
+    ) -> PreAllocatedAccountMapEntry<T> {
+        Self::new_internal(slot, account_info, AccountMapEntryMeta::new_dirty(storage))
+    }
+
+    fn new_internal(
+        slot: Slot,
+        account_info: T,
+        meta: AccountMapEntryMeta,
+    ) -> PreAllocatedAccountMapEntry<T> {
+        let ref_count = if account_info.is_cached() { 0 } else { 1 };
+        PreAllocatedAccountMapEntry {
+            entry: Arc::new(AccountMapEntryInner::new(
+                vec![(slot, account_info)],
+                ref_count,
+                meta,
+            )),
+        }
+    }
+}
+
 #[self_referencing]
 pub struct WriteAccountMapEntry<T: IndexValue> {
     owned_entry: AccountMapEntry<T>,
@@ -265,23 +310,6 @@ impl<T: IndexValue> WriteAccountMapEntry<T> {
         let result = self.with_slot_list_guard_mut(user);
         self.borrow_owned_entry().set_dirty(true);
         result
-    }
-
-    // create an entry that is equivalent to this process:
-    // 1. new empty (refcount=0, slot_list={})
-    // 2. update(slot, account_info)
-    // This code is called when the first entry [ie. (slot,account_info)] for a pubkey is inserted into the index.
-    pub fn new_entry_after_update(
-        slot: Slot,
-        account_info: T,
-        storage: &Arc<BucketMapHolder<T>>,
-    ) -> AccountMapEntry<T> {
-        let ref_count = if account_info.is_cached() { 0 } else { 1 };
-        Arc::new(AccountMapEntryInner::new(
-            vec![(slot, account_info)],
-            ref_count,
-            AccountMapEntryMeta::new_dirty(storage),
-        ))
     }
 }
 
@@ -1539,11 +1567,8 @@ impl<T: IndexValue> AccountsIndex<T> {
                 let is_zero_lamport = account_info.is_zero_lamport();
                 let result = if is_zero_lamport { Some(pubkey) } else { None };
 
-                let info = WriteAccountMapEntry::new_entry_after_update(
-                    slot,
-                    account_info,
-                    &self.storage.storage,
-                );
+                let info =
+                    PreAllocatedAccountMapEntry::new(slot, account_info, &self.storage.storage);
                 binned[bin].1.push((pubkey, info));
                 result
             })
@@ -1609,20 +1634,25 @@ impl<T: IndexValue> AccountsIndex<T> {
         //  - The secondary index is never consulted as primary source of truth for gets/stores.
         //  So, what the accounts_index sees alone is sufficient as a source of truth for other non-scan
         //  account operations.
-        let new_item =
-            WriteAccountMapEntry::new_entry_after_update(slot, account_info, &self.storage.storage);
+        let new_item = PreAllocatedAccountMapEntry::new(slot, account_info, &self.storage.storage);
         let map = &self.account_maps[self.bin_calculator.bin_from_pubkey(pubkey)];
 
         let r_account_maps = map.read().unwrap();
-        if !r_account_maps.update_key_if_exists(
+        let (updated, new_item) = r_account_maps.update_key_if_exists(
             pubkey,
-            &new_item,
+            new_item,
             reclaims,
             previous_slot_entry_was_cached,
-        ) {
+        );
+        if !updated {
             drop(r_account_maps);
             let w_account_maps = map.write().unwrap();
-            w_account_maps.upsert(pubkey, new_item, reclaims, previous_slot_entry_was_cached);
+            w_account_maps.upsert(
+                pubkey,
+                new_item.unwrap(),
+                reclaims,
+                previous_slot_entry_was_cached,
+            );
         }
         self.update_secondary_indexes(pubkey, account_owner, account_data, account_indexes);
     }
@@ -1965,6 +1995,18 @@ pub mod tests {
             SPL_TOKEN_ACCOUNT_OWNER_OFFSET + PUBKEY_BYTES,
             spl_token_owner_index_enabled(),
         )
+    }
+
+    impl<T: IndexValue> Clone for PreAllocatedAccountMapEntry<T> {
+        fn clone(&self) -> Self {
+            // clone the AccountMapEntryInner into a new Arc
+            let (slot, info) = self.entry.slot_list.read().unwrap()[0];
+            let meta = AccountMapEntryMeta {
+                dirty: AtomicBool::new(self.entry.dirty()),
+                age: AtomicU8::new(self.entry.age()),
+            };
+            PreAllocatedAccountMapEntry::new_internal(slot, info, meta)
+        }
     }
 
     #[test]
@@ -2790,11 +2832,8 @@ pub mod tests {
         let account_info = AccountInfoTest::default();
         let index = AccountsIndex::default_for_tests();
 
-        let new_entry = WriteAccountMapEntry::new_entry_after_update(
-            slot,
-            account_info,
-            &index.storage.storage,
-        );
+        let new_entry: AccountMapEntry<_> =
+            PreAllocatedAccountMapEntry::new(slot, account_info, &index.storage.storage).into();
         assert_eq!(new_entry.ref_count.load(Ordering::Relaxed), 0);
         assert_eq!(new_entry.slot_list.read().unwrap().capacity(), 1);
         assert_eq!(
@@ -2806,11 +2845,8 @@ pub mod tests {
         let account_info = true;
         let index = AccountsIndex::default_for_tests();
 
-        let new_entry = WriteAccountMapEntry::new_entry_after_update(
-            slot,
-            account_info,
-            &index.storage.storage,
-        );
+        let new_entry: AccountMapEntry<_> =
+            PreAllocatedAccountMapEntry::new(slot, account_info, &index.storage.storage).into();
         assert_eq!(new_entry.ref_count.load(Ordering::Relaxed), 1);
         assert_eq!(new_entry.slot_list.read().unwrap().capacity(), 1);
         assert_eq!(
@@ -2874,11 +2910,9 @@ pub mod tests {
             assert_eq!(entry.ref_count(), if is_cached { 0 } else { 1 });
             let expected = vec![(slot0, account_infos[0])];
             assert_eq!(entry.slot_list().to_vec(), expected);
-            let new_entry = WriteAccountMapEntry::new_entry_after_update(
-                slot0,
-                account_infos[0],
-                &index.storage.storage,
-            );
+            let new_entry: AccountMapEntry<_> =
+                PreAllocatedAccountMapEntry::new(slot0, account_infos[0], &index.storage.storage)
+                    .into();
             assert_eq!(
                 entry.slot_list().to_vec(),
                 new_entry.slot_list.read().unwrap().to_vec(),
@@ -2924,12 +2958,9 @@ pub mod tests {
                 vec![(slot0, account_infos[0]), (slot1, account_infos[1])]
             );
 
-            let new_entry = WriteAccountMapEntry::new_entry_after_update(
-                slot1,
-                account_infos[1],
-                &index.storage.storage,
-            );
-            assert_eq!(entry.slot_list()[1], new_entry.slot_list.read().unwrap()[0],);
+            let new_entry =
+                PreAllocatedAccountMapEntry::new(slot1, account_infos[1], &index.storage.storage);
+            assert_eq!(entry.slot_list()[1], new_entry.into());
         }
     }
 
@@ -2951,26 +2982,24 @@ pub mod tests {
         let slot = 0;
         let account_info = true;
 
-        let new_entry = WriteAccountMapEntry::new_entry_after_update(
-            slot,
-            account_info,
-            &index.storage.storage,
-        );
+        let new_entry =
+            PreAllocatedAccountMapEntry::new(slot, account_info, &index.storage.storage);
         assert_eq!(0, account_maps_len_expensive(&index));
 
         // will fail because key doesn't exist
         let r_account_maps = index.get_account_maps_read_lock(&key.pubkey());
-        assert!(!r_account_maps.update_key_if_exists(
-            &key.pubkey(),
-            &new_entry,
-            &mut SlotList::default(),
-            UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
-        ));
-        drop(r_account_maps);
-        assert_eq!(
-            (slot, account_info),
-            new_entry.slot_list.read().as_ref().unwrap()[0]
+        assert!(
+            !r_account_maps
+                .update_key_if_exists(
+                    &key.pubkey(),
+                    new_entry.clone(),
+                    &mut SlotList::default(),
+                    UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
+                )
+                .0
         );
+        drop(r_account_maps);
+        assert_eq!((slot, account_info), new_entry.clone().into());
 
         assert_eq!(0, account_maps_len_expensive(&index));
         let w_account_maps = index.get_account_maps_write_lock(&key.pubkey());
