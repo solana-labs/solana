@@ -54,40 +54,36 @@ union Value {
 ```
 
 ### Memory Mapping / Regions
-Additional to the mandatory RBPF memory regions (null, program, stack, heap) we would add `2 + number_of_accounts_in_instruction` memory regions to the VM mapping.
+Additional to the mandatory RBPF memory regions (null, program, stack, heap) we would add `3 + NumberOfAccountsInTransaction + InvocationDepthMax` memory regions to the VM mapping.
 
-The idea is to serialize the meta data of all accounts once per transaction, and only serialize a few attributes like `AccountIsSigner` and `AccountIsWritable` which are currently stored in `KeyedAccounts` per instruction. Then these two meta data regions and the `number_of_accounts_in_instruction` account data regions are mapped directly by pointers and not copied anymore. Furthermore, the `PreAccount`s become obsolete as well because the writability of an account can be enforced by the memory mapping.
+The idea is to serialize the meta data of all accounts once per transaction, and only serialize a few attributes like `AccountIsSigner` and `AccountIsWritable` which are currently stored in `KeyedAccounts` per instruction. Then these meta data and account data regions are mapped directly by pointers and not copied anymore. Furthermore, the `PreAccount`s become obsolete as well because the write protection of an account can be enforced by the memory mapping.
 
-#### Read-only meta data region:
-- Transaction context:
+#### Regions and their Attributes:
+- TransactionContext metadata regions:
+  - Read-only and writable attributes are separated into two metadata regions
   - `NumberOfAccountsInTransaction = 0`: `u32`
   - `AccountKey = 1`: `[Pubkey; NumberOfAccountsInTransaction]`
-  - `AccountIsExecutable = 2`: `[bool; NumberOfAccountsInTransaction]`
-  - `AccountOwner = 3`: `[Pubkey; NumberOfAccountsInTransaction]`
-  - `AccountLamports = 4`: `[u64; NumberOfAccountsInTransaction]`
-  - `AccountData = 5`: `[&[u8]; NumberOfAccountsInTransaction]`
-  - `InvocationStackHeight = 6`: `u16`
-  - `InvocationStack = 7`: `[Map; InvocationStackHeight]`
-- Instruction context:
-  - `InstructionData = 8`: `[u8]`
-  - `NumberOfAccountsInInstruction = 9`: `u16`
-  - `InstructionAccountIndices = 10`: `[u32; NumberOfAccountsInInstruction]`
-  - `ProgramAccountIndex = 11`: `u32`
-  - `AccountIsSigner = 12`: `[bool; NumberOfAccountsInInstruction]`
-  - `AccountIsWritable = 13`: `[bool; NumberOfAccountsInInstruction]`
-  - `WritableAttributes = 14`: `Map`
-
-#### Read-write meta data region:
-- Instruction context:
-  - `AccountIsExecutable`,
-  - `AccountOwner`,
-  - `AccountLamports`,
-
-#### Individual account data regions:
-- One mapped memory region for each account in the instruction
-- But virtual and physical addresses stay the same throughout the transaction
-- Read-only or read-write depends on the instruction context
-- Content: `[u8]`
+  - `AccountIsExecutable = 2`: `[bool; NumberOfAccountsInTransaction]` (Writable)
+  - `AccountOwner = 3`: `[Pubkey; NumberOfAccountsInTransaction]` (Writable)
+  - `AccountLamports = 4`: `[u64; NumberOfAccountsInTransaction]` (Writable)
+  - `AccountData = 5`: `[AccountData; NumberOfAccountsInTransaction]`
+  - `ReturnData = 6`: `[u8; program::MAX_RETURN_DATA]` (Writable)
+  - `InvocationDepth = 7`: `u16`
+  - `InvocationDepthMax = 8`: `u16`
+  - `InvocationStack = 9`: `[InstructionContext; InvocationDepthMax]`
+- InstructionContext metadata regions:
+  - Read-only unless last invocation frame (for CPI)
+  - `InstructionData = 10`: `[u8]`
+  - `NumberOfAccountsInInstruction = 11`: `u16`
+  - `NumberOfProgramsInInstruction = 12`: `u16`
+  - `InstructionAccountIndices = 13`: `[u32; NumberOfAccountsInInstruction]`
+  - `AccountIsSigner = 14`: `[bool; NumberOfAccountsInInstruction]`
+  - `AccountIsWritable = 15`: `[bool; NumberOfAccountsInInstruction]`
+- AccountData regions:
+  - One mapped memory region for each account in the instruction
+  - But virtual and physical addresses stay the same throughout the transaction (useful for CPI)
+  - Read-only or read-write depends on the instruction context
+  - Content: `[u8]`
 
 ### Writable Attributes
 Alternative options:
@@ -109,8 +105,11 @@ Alternative options:
 
 ### Syscalls
 
-#### Cross Program Invocation
-TODO
+#### Cross Program Invocation (CPI)
+The runtime automatically allocates an empty invocation frame (mapped as writable) above the currently active one. If a program wants to call another one it simply writes directly into that empty invocation frame and configures it. Then the program only needs a syscall to trigger the execution and that syscall does not need to copy data forth and back between userspace and runtime anymore. It only has to validate the invocation frame, record the instruction and run the called program.
+
+#### Return Data Accessors
+In the old ABI return data was implemented by a setter and a getter syscall for copying data forth and back between userspace and runtime. But now, we can use shared memory in the transaction context instead. So, the two syscalls will be deprecated as there is no need to trigger anything in the runtime.
 
 #### Account Reallocation / Resizing
 TODO
