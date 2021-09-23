@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 /// Module responsible for notifying the plugins of accounts update
 use {
     crate::accountsdb_plugin_manager::AccountsDbPluginManager,
@@ -14,15 +12,11 @@ use {
         hash::Hash,
         pubkey::Pubkey,
     },
-    std::{
-        collections::HashSet,
-        sync::{Arc, RwLock},
-    },
+    std::sync::{Arc, RwLock},
 };
 #[derive(Debug)]
 pub(crate) struct AccountsUpdateNotifierImpl {
     plugin_manager: Arc<RwLock<AccountsDbPluginManager>>,
-    accounts_selector: AccountsSelector,
 }
 
 impl AccountsUpdateNotifierIntf for AccountsUpdateNotifierImpl {
@@ -52,65 +46,9 @@ impl AccountsUpdateNotifierIntf for AccountsUpdateNotifierImpl {
     }
 }
 
-#[derive(Debug)]
-pub(crate) struct AccountsSelector {
-    pub accounts: HashSet<Pubkey>,
-    pub owners: HashSet<Pubkey>,
-    pub select_all_accounts: bool,
-}
-
-impl AccountsSelector {
-    pub fn default() -> Self {
-        AccountsSelector {
-            accounts: HashSet::default(),
-            owners: HashSet::default(),
-            select_all_accounts: true,
-        }
-    }
-
-    pub fn new(accounts: &[String], owners: &[String]) -> Self {
-        info!(
-            "Creating AccountsSelector from accounts: {:?}, owners: {:?}",
-            accounts, owners
-        );
-
-        let select_all_accounts = accounts.iter().any(|key| key == "*");
-        if select_all_accounts {
-            return AccountsSelector {
-                accounts: HashSet::default(),
-                owners: HashSet::default(),
-                select_all_accounts,
-            };
-        }
-        let accounts = accounts
-            .iter()
-            .map(|pubkey| Pubkey::from_str(pubkey).unwrap())
-            .collect();
-        let owners = owners
-            .iter()
-            .map(|pubkey| Pubkey::from_str(pubkey).unwrap())
-            .collect();
-        AccountsSelector {
-            accounts,
-            owners,
-            select_all_accounts,
-        }
-    }
-
-    pub fn is_account_selected(&self, account: &Pubkey, owner: &Pubkey) -> bool {
-        self.select_all_accounts || self.accounts.contains(account) || self.owners.contains(owner)
-    }
-}
-
 impl AccountsUpdateNotifierImpl {
-    pub fn new(
-        plugin_manager: Arc<RwLock<AccountsDbPluginManager>>,
-        accounts_selector: AccountsSelector,
-    ) -> Self {
-        AccountsUpdateNotifierImpl {
-            plugin_manager,
-            accounts_selector,
-        }
+    pub fn new(plugin_manager: Arc<RwLock<AccountsDbPluginManager>>) -> Self {
+        AccountsUpdateNotifierImpl { plugin_manager }
     }
 
     fn accountinfo_from_shared_account_data(
@@ -119,13 +57,6 @@ impl AccountsUpdateNotifierImpl {
         hash: Option<&Hash>,
         account: &AccountSharedData,
     ) -> Option<ReplicaAccountInfo> {
-        if !self
-            .accounts_selector
-            .is_account_selected(pubkey, account.owner())
-        {
-            return None;
-        }
-
         let account_meta = ReplicaAccountMeta {
             pubkey: bs58::encode(pubkey).into_string(),
             lamports: account.lamports(),
@@ -185,23 +116,5 @@ impl AccountsUpdateNotifierImpl {
                 }
             }
         }
-    }
-}
-
-#[cfg(test)]
-pub(crate) mod tests {
-    use super::*;
-
-    #[test]
-    fn test_create_accounts_selector() {
-        AccountsSelector::new(
-            &["9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin".to_string()],
-            &[],
-        );
-
-        AccountsSelector::new(
-            &[],
-            &["9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin".to_string()],
-        );
     }
 }

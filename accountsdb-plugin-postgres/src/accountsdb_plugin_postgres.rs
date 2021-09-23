@@ -1,10 +1,9 @@
-use postgres::Statement;
-
 /// Main entry for the PostgreSQL plugin
 use {
+    crate::accounts_selector::AccountsSelector,
     chrono::Utc,
     log::*,
-    postgres::{Client, NoTls},
+    postgres::{Client, NoTls, Statement},
     serde_derive::{Deserialize, Serialize},
     serde_json,
     solana_accountsdb_plugin_intf::accountsdb_plugin_intf::{
@@ -21,6 +20,7 @@ struct PostgresSqlClientWrapper {
 #[derive(Default)]
 pub struct AccountsDbPluginPostgres {
     client: Option<Mutex<PostgresSqlClientWrapper>>,
+    accounts_selector: Option<AccountsSelector>,
 }
 
 impl std::fmt::Debug for AccountsDbPluginPostgres {
@@ -48,6 +48,36 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
         "AccountsDbPluginPostgres"
     }
 
+    /// Do initialization for the PostgreSQL plugin.
+    /// # Arguments
+    ///  
+    /// Format of the config file:
+    /// The `accounts_selector` section allows the user to controls accounts selections.
+    /// "accounts_selector" : {
+    ///     "accounts" : \["pubkey-1", "pubkey-2", ..., "pubkey-n"\],
+    /// }
+    /// or:
+    /// "accounts_selector" = {
+    ///     "owners" : \["pubkey-1', 'pubkey-2", ..., "pubkey-m"\]
+    /// }
+    /// Accounts either satisyfing the accounts condition or owners condition will be selected.
+    /// When only owners is specified,
+    /// all accounts belonging to the owners will be streamed.
+    /// The accounts field support wildcard to select all accounts:
+    /// "accounts_selector" : {
+    ///     "accounts" : \["*"\],
+    /// }
+    /// "host" specifies the PostgreSQL server.
+    /// "user" specifies the PostgreSQL user.
+    /// # Examples
+    /// {
+    ///    "libpath": "/home/solana/target/release/libsolana_accountsdb_plugin_postgres.so",
+    ///    "host": "host_foo",
+    ///    "user": "solana",
+    ///    "accounts_selector" : {
+    ///       "owners" : ["9oT9R5ZyRovSVnt37QvVoBttGpNqR3J7unkb567NP8k3"]
+    /// }
+
     fn on_load(&mut self, config_file: &str) -> Result<()> {
         info!(
             "Loading plugin {:?} from config_file {:?}",
@@ -57,6 +87,9 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
         let mut file = File::open(config_file)?;
         let mut contents = String::new();
         file.read_to_string(&mut contents)?;
+
+        let result: serde_json::Value = serde_json::from_str(&contents).unwrap();
+        self.accounts_selector = Some(Self::create_accounts_selector_from_config(&result));
 
         let result: serde_json::Result<AccountsDbPluginPostgresConfig> =
             serde_json::from_str(&contents);
@@ -117,6 +150,17 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
     }
 
     fn update_account(&mut self, account: &ReplicaAccountInfo, slot: u64) -> Result<()> {
+        if let Some(accounts_selector) = &self.accounts_selector {
+            if !accounts_selector
+                .is_account_selected(&account.account_meta.pubkey, &account.account_meta.owner)
+            {
+                return Ok(());
+            }
+        }
+        if self.accounts_selector.is_none() {
+            return Ok(());
+        }
+
         debug!("Updating account {:?} at slot {:?}", account, slot);
 
         match &mut self.client {
@@ -223,8 +267,43 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
 }
 
 impl AccountsDbPluginPostgres {
+    fn create_accounts_selector_from_config(config: &serde_json::Value) -> AccountsSelector {
+        let accounts_selector = &config["accounts_selector"];
+
+        if accounts_selector.is_null() {
+            AccountsSelector::default()
+        } else {
+            let accounts = &accounts_selector["accounts"];
+            let accounts: Vec<String> = if accounts.is_array() {
+                accounts
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|val| val.as_str().unwrap().to_string())
+                    .collect()
+            } else {
+                Vec::default()
+            };
+            let owners = &accounts_selector["owners"];
+            let owners: Vec<String> = if owners.is_array() {
+                owners
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|val| val.as_str().unwrap().to_string())
+                    .collect()
+            } else {
+                Vec::default()
+            };
+            AccountsSelector::new(&accounts, &owners)
+        }
+    }
+
     pub fn new() -> Self {
-        AccountsDbPluginPostgres { client: None }
+        AccountsDbPluginPostgres {
+            client: None,
+            accounts_selector: None,
+        }
     }
 }
 
@@ -237,4 +316,19 @@ pub unsafe extern "C" fn _create_plugin() -> *mut dyn AccountsDbPlugin {
     let plugin = AccountsDbPluginPostgres::new();
     let plugin: Box<dyn AccountsDbPlugin> = Box::new(plugin);
     Box::into_raw(plugin)
+}
+
+#[cfg(test)]
+pub(crate) mod tests {
+    use {super::*, serde_json};
+
+    #[test]
+    fn test_accounts_selector_from_config() {
+        let config = "{\"accounts_selector\" : { \
+           \"owners\" : [\"9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin\"] \
+        }}";
+
+        let config: serde_json::Value = serde_json::from_str(config).unwrap();
+        AccountsDbPluginPostgres::create_accounts_selector_from_config(&config);
+    }
 }
