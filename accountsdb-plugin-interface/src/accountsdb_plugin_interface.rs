@@ -1,10 +1,13 @@
-use std::any::Any;
-use std::io;
 /// The interface for AccountsDb plugins. A plugin must implement
 /// the AccountsDbPlugin trait to work with the Solana Validator.
-/// In addition the dynamic libraray must export a "C" function _create_plugin which
+/// In addition, the dynamic libraray must export a "C" function _create_plugin which
 /// creates the implementation of the plugin.
-use thiserror::Error;
+
+use {
+    std::any::Any,
+    std::io,
+    thiserror::Error,
+};
 
 #[derive(Clone, PartialEq, Default, Debug)]
 pub struct ReplicaAccountMeta {
@@ -26,19 +29,19 @@ pub struct ReplicaAccountInfo {
 
 #[derive(Error, Debug)]
 pub enum AccountsDbPluginError {
-    #[error("Error with opening config file.")]
+    #[error("Error opening config file.")]
     ConfigFileOpenError(#[from] io::Error),
 
-    #[error("Error with opening config file.")]
+    #[error("Error reading config file.")]
     ConfigFileReadError { msg: String },
 
-    #[error("Error with connecting to the backend data store.")]
+    #[error("Error connecting to the backend data store.")]
     DataStoreConnectionError { msg: String },
 
-    #[error("Error with preparing data store schema.")]
+    #[error("Error preparing data store schema.")]
     DataSchemaError { msg: String },
 
-    #[error("Error with updating account.")]
+    #[error("Error updating account.")]
     AccountsUpdateError { msg: String },
 }
 
@@ -57,14 +60,15 @@ pub trait AccountsDbPlugin: Any + Send + Sync + std::fmt::Debug {
     /// The callback called when a plugin is loaded by the system
     /// Used for doing whatever initialization by the plugin
     /// The _config_file points to the file name contains the name of the
-    /// of the config file. The framework does not stipulate the format of the
-    /// file -- it is totoally up to the plugin implementation.
+    /// of the config file. The config shall be in JSON format and
+    /// it must has a field named "libpath" pointing to the full path
+    /// name of the shared library implementing this interface.
     fn on_load(&mut self, _config_file: &str) -> Result<()> {
         Ok(())
     }
 
     /// The callback called right before a plugin is unloaded by the system
-    /// Used for doing cleanup before being unloaded.
+    /// Used for doing cleanup before unload.
     fn on_unload(&mut self) {}
 
     /// Called when an account is updated at a slot.
