@@ -588,8 +588,10 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         let was_dirty = self.bin_dirty.swap(false, Ordering::Acquire);
         let current_age = self.storage.current_age();
         let mut iterate_for_age = self.get_should_age(current_age);
-        if !was_dirty && !iterate_for_age {
+        let startup = self.storage.get_startup();
+        if !was_dirty && !iterate_for_age && !startup {
             // wasn't dirty and no need to age, so no need to flush this bucket
+            // but, at startup we want to remove from buckets as fast as possible if any items exist
             return;
         }
 
@@ -613,7 +615,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     updates.push((*k, Arc::clone(v)));
                 }
 
-                if self.should_remove_from_mem(current_age, v) {
+                if startup || self.should_remove_from_mem(current_age, v) {
                     removes.push(*k);
                 }
             }
@@ -638,7 +640,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         );
 
         let m = Measure::start("flush_remove");
-        if !self.flush_remove_from_cache(removes, current_age) {
+        if !self.flush_remove_from_cache(removes, current_age, startup) {
             iterate_for_age = false; // did not make it all the way through this bucket, so didn't handle age completely
         }
         Self::update_time_stat(&self.stats().flush_remove_us, m);
@@ -652,7 +654,12 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
     // remove keys in 'removes' from in-mem cache due to age
     // return true if the removal was completed
-    fn flush_remove_from_cache(&self, removes: Vec<Pubkey>, current_age: Age) -> bool {
+    fn flush_remove_from_cache(
+        &self,
+        removes: Vec<Pubkey>,
+        current_age: Age,
+        startup: bool,
+    ) -> bool {
         let mut completed_scan = true;
         if removes.is_empty() {
             return completed_scan; // completed, don't need to get lock or do other work
@@ -672,9 +679,10 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     continue;
                 }
 
-                if v.dirty() || !self.should_remove_from_mem(current_age, v) {
+                if v.dirty() || (!startup && !self.should_remove_from_mem(current_age, v)) {
                     // marked dirty or bumped in age after we looked above
                     // these will be handled in later passes
+                    // but, at startup, everything is ready to age out if it isn't dirty
                     continue;
                 }
 
