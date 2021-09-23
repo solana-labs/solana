@@ -40,4 +40,3 @@ CREATE TABLE account_audit (
     updated_on TIMESTAMP NOT NULL,
     CONSTRAINT slot_pubkey PRIMARY KEY (slot, pubkey)
 );
-
