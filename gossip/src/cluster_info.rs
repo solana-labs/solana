@@ -1042,7 +1042,7 @@ impl ClusterInfo {
                 "invalid vote index: {}, switch: {}, vote slots: {:?}, tower: {:?}",
                 vote_index,
                 hash.is_some(),
-                vote.slots,
+                vote.slots(),
                 tower
             );
         }

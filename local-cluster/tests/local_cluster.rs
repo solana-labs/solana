@@ -2572,7 +2572,7 @@ fn test_duplicate_shreds_broadcast_leader() {
                                 .map(|(_, vote, _)| vote)
                                 .unwrap();
                             // Filter out empty votes
-                            if !vote.slots.is_empty() {
+                            if !vote.is_empty() {
                                 Some((vote, leader_vote_tx))
                             } else {
                                 None
@@ -2584,14 +2584,16 @@ fn test_duplicate_shreds_broadcast_leader() {
                     .collect();
 
                 parsed_vote_iter.sort_by(|(vote, _), (vote2, _)| {
-                    vote.slots.last().unwrap().cmp(vote2.slots.last().unwrap())
+                    vote.last_voted_slot()
+                        .unwrap()
+                        .cmp(&vote2.last_voted_slot().unwrap())
                 });
 
                 for (parsed_vote, leader_vote_tx) in &parsed_vote_iter {
-                    if let Some(latest_vote_slot) = parsed_vote.slots.last() {
+                    if let Some(latest_vote_slot) = parsed_vote.last_voted_slot() {
                         info!("received vote for {}", latest_vote_slot);
                         // Add to EpochSlots. Mark all slots frozen between slot..=max_vote_slot.
-                        if *latest_vote_slot > max_vote_slot {
+                        if latest_vote_slot > max_vote_slot {
                             let new_epoch_slots: Vec<Slot> =
                                 (max_vote_slot + 1..latest_vote_slot + 1).collect();
                             info!(
@@ -2599,13 +2601,13 @@ fn test_duplicate_shreds_broadcast_leader() {
                                 new_epoch_slots
                             );
                             cluster_info.push_epoch_slots(&new_epoch_slots);
-                            max_vote_slot = *latest_vote_slot;
+                            max_vote_slot = latest_vote_slot;
                         }
 
                         // Only vote on even slots. Note this may violate lockouts if the
                         // validator started voting on a different fork before we could exit
                         // it above.
-                        let vote_hash = parsed_vote.hash;
+                        let vote_hash = parsed_vote.hash();
                         if latest_vote_slot % 2 == 0 {
                             info!(
                                 "Simulating vote from our node on slot {}, hash {}",
@@ -2618,7 +2620,7 @@ fn test_duplicate_shreds_broadcast_leader() {
                             // by this validator so it's fine.
                             let leader_blockstore = open_blockstore(&bad_leader_ledger_path);
                             let mut vote_slots: Vec<Slot> = AncestorIterator::new_inclusive(
-                                *latest_vote_slot,
+                                latest_vote_slot,
                                 &leader_blockstore,
                             )
                             .take(MAX_LOCKOUT_HISTORY)

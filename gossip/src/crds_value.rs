@@ -306,8 +306,8 @@ impl Sanitize for Vote {
 
 impl Vote {
     pub fn new(from: Pubkey, transaction: Transaction, wallclock: u64) -> Self {
-        let slot = parse_vote_transaction(&transaction)
-            .and_then(|(_, vote, _)| vote.slots.last().copied());
+        let slot =
+            parse_vote_transaction(&transaction).and_then(|(_, vote, _)| vote.last_voted_slot());
         Self {
             from,
             transaction,
