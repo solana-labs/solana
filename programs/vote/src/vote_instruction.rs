@@ -3,7 +3,7 @@
 
 use crate::{
     id,
-    vote_state::{self, Vote, VoteAuthorize, VoteInit, VoteState},
+    vote_state::{self, Vote, VoteAuthorize, VoteInit, VoteState, VoteStateUpdate},
 };
 use log::*;
 use num_derive::{FromPrimitive, ToPrimitive};
@@ -154,6 +154,15 @@ pub enum VoteInstruction {
     ///   2. `[SIGNER]` Vote or withdraw authority
     ///   3. `[SIGNER]` New vote or withdraw authority
     AuthorizeChecked(VoteAuthorize),
+
+    /// Update the onchain vote state for the signer.
+    ///
+    /// # Account references
+    ///   0. `[Write]` Vote account to vote with
+    ///   1. `[]` Slot hashes sysvar
+    ///   2. `[]` Clock sysvar
+    ///   3. `[SIGNER]` Vote authority
+    UpdateVoteState(VoteStateUpdate),
 }
 
 fn initialize_account(vote_pubkey: &Pubkey, vote_init: &VoteInit) -> Instruction {
@@ -311,6 +320,25 @@ pub fn vote_switch(
     )
 }
 
+pub fn update_vote_state(
+    vote_pubkey: &Pubkey,
+    authorized_voter_pubkey: &Pubkey,
+    vote_state_update: VoteStateUpdate,
+) -> Instruction {
+    let account_metas = vec![
+        AccountMeta::new(*vote_pubkey, false),
+        AccountMeta::new_readonly(sysvar::slot_hashes::id(), false),
+        AccountMeta::new_readonly(sysvar::clock::id(), false),
+        AccountMeta::new_readonly(*authorized_voter_pubkey, true),
+    ];
+
+    Instruction::new_with_bincode(
+        id(),
+        &VoteInstruction::UpdateVoteState(vote_state_update),
+        account_metas,
+    )
+}
+
 pub fn withdraw(
     vote_pubkey: &Pubkey,
     authorized_withdrawer_pubkey: &Pubkey,
@@ -389,6 +417,16 @@ pub fn process_instruction(
                 &from_keyed_account::<SlotHashes>(keyed_account_at_index(keyed_accounts, 1)?)?,
                 &from_keyed_account::<Clock>(keyed_account_at_index(keyed_accounts, 2)?)?,
                 &vote,
+                &signers,
+            )
+        }
+        VoteInstruction::UpdateVoteState(vote_state_update) => {
+            inc_new_counter_info!("vote-state-native", 1);
+            vote_state::process_vote_state_update(
+                me,
+                &from_keyed_account::<SlotHashes>(keyed_account_at_index(keyed_accounts, 1)?)?,
+                &from_keyed_account::<Clock>(keyed_account_at_index(keyed_accounts, 2)?)?,
+                &vote_state_update,
                 &signers,
             )
         }
@@ -503,6 +541,14 @@ mod tests {
             )),
             Err(InstructionError::InvalidAccountOwner),
         );
+        assert_eq!(
+            process_instruction(&update_vote_state(
+                &invalid_vote_state_pubkey(),
+                &Pubkey::default(),
+                VoteStateUpdate::default(),
+            )),
+            Err(InstructionError::InvalidAccountOwner),
+        );
     }
 
     #[test]
@@ -532,6 +578,14 @@ mod tests {
                 &Pubkey::default(),
                 Vote::default(),
                 Hash::default(),
+            )),
+            Err(InstructionError::InvalidAccountData),
+        );
+        assert_eq!(
+            process_instruction(&update_vote_state(
+                &Pubkey::default(),
+                &Pubkey::default(),
+                VoteStateUpdate::default(),
             )),
             Err(InstructionError::InvalidAccountData),
         );

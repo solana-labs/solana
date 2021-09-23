@@ -65,7 +65,7 @@ impl Vote {
     }
 }
 
-#[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone, AbiExample)]
+#[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Copy, Clone, AbiExample)]
 pub struct Lockout {
     pub slot: Slot,
     pub confirmation_count: u32,
@@ -93,6 +93,48 @@ impl Lockout {
 
     pub fn is_locked_out_at_slot(&self, slot: Slot) -> bool {
         self.last_locked_out_slot() >= slot
+    }
+}
+
+#[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone, AbiExample)]
+pub struct VoteStateUpdate {
+    /// The proposed tower
+    pub lockouts: VecDeque<Lockout>,
+    /// The proposed root
+    pub root: Option<Slot>,
+    /// signature of the bank's state at the last slot
+    pub hash: Hash,
+    /// processing timestamp of last slot
+    pub timestamp: Option<UnixTimestamp>,
+}
+
+impl VoteStateUpdate {
+    pub fn new(lockouts: VecDeque<Lockout>, root: Option<Slot>, hash: Hash) -> Self {
+        Self {
+            lockouts,
+            root,
+            hash,
+            timestamp: None,
+        }
+    }
+
+    pub fn last_voted_slot(&self) -> Option<Slot> {
+        self.lockouts.back().copied().map(|lockout| lockout.slot)
+    }
+
+    pub fn last_voted_slot_hash(&self) -> Option<(Slot, Hash)> {
+        self.lockouts
+            .back()
+            .copied()
+            .map(|lockout| (lockout.slot, self.hash))
+    }
+
+    pub fn get_legacy_vote(&self) -> Vote {
+        Vote {
+            slots: self.lockouts.iter().map(|&lockout| lockout.slot).collect(),
+            hash: self.hash,
+            timestamp: self.timestamp,
+        }
     }
 }
 
@@ -955,6 +997,33 @@ pub fn process_vote<S: std::hash::BuildHasher>(
             .ok_or(VoteError::EmptySlots)
             .and_then(|slot| vote_state.process_timestamp(*slot, timestamp))?;
     }
+    vote_account.set_state(&VoteStateVersions::new_current(vote_state))
+}
+
+pub fn process_vote_state_update<S: std::hash::BuildHasher>(
+    vote_account: &KeyedAccount,
+    slot_hashes: &[SlotHash],
+    clock: &Clock,
+    vote_state_update: &VoteStateUpdate,
+    signers: &HashSet<Pubkey, S>,
+) -> Result<(), InstructionError> {
+    let versioned = State::<VoteStateVersions>::state(vote_account)?;
+
+    if versioned.is_uninitialized() {
+        return Err(InstructionError::UninitializedAccount);
+    }
+
+    let mut vote_state = versioned.convert_to_current();
+    let authorized_voter = vote_state.get_and_update_authorized_voter(clock.epoch)?;
+    verify_authorized_signer(&authorized_voter, signers)?;
+
+    vote_state.check_slots_are_valid(&vote_state_update.get_legacy_vote(), slot_hashes)?;
+    vote_state.process_new_vote_state(
+        vote_state_update.lockouts.clone(),
+        vote_state_update.root,
+        vote_state_update.timestamp,
+        clock.epoch,
+    )?;
     vote_account.set_state(&VoteStateVersions::new_current(vote_state))
 }
 
