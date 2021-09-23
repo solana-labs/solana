@@ -472,7 +472,8 @@ where
                         break (new_append_vec_id, new_append_vec_path);
                     }
 
-                    // A file exists at the new path.  Try again.
+                    // If we made it this far, a file exists at the new path.  Record the collision
+                    // and try again.
                     num_collisions.fetch_add(1, Ordering::Relaxed);
                 };
                 // Only rename the file if the new ID is actually different from the original.
