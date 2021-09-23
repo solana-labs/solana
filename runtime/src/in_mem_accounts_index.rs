@@ -99,7 +99,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         Self::update_stat(&self.stats().keys, 1);
         // easiest implementation is to load evrything from disk into cache and return the keys
         self.start_stop_flush(true);
-        self.put_range_in_cache(None::<&RangeInclusive<Pubkey>>);
+        self.put_range_in_cache(&None::<&RangeInclusive<Pubkey>>);
         let keys = self.map().read().unwrap().keys().cloned().collect();
         self.start_stop_flush(false);
         keys
@@ -519,7 +519,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
         if start_holding {
             // put everything in the cache and it will be held there
-            self.put_range_in_cache(Some(range));
+            self.put_range_in_cache(&Some(range));
         }
         // do this AFTER items have been put in cache - that way anyone who finds this range can know that the items are already in the cache
         self.just_set_hold_range_in_memory(range, start_holding);
@@ -527,7 +527,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         self.start_stop_flush(false);
     }
 
-    fn put_range_in_cache<R>(&self, range: Option<&R>)
+    fn put_range_in_cache<R>(&self, range: &Option<&R>)
     where
         R: RangeBounds<Pubkey>,
     {
