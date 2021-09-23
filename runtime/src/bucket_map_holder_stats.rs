@@ -14,6 +14,10 @@ pub struct BucketMapHolderStats {
     pub entries_from_mem: AtomicU64,
     pub entry_missing_us: AtomicU64,
     pub entries_missing: AtomicU64,
+    pub load_disk_found_count: AtomicU64,
+    pub load_disk_found_us: AtomicU64,
+    pub load_disk_missing_count: AtomicU64,
+    pub load_disk_missing_us: AtomicU64,
     pub updates_in_mem: AtomicU64,
     pub items: AtomicU64,
     pub keys: AtomicU64,
@@ -136,6 +140,26 @@ impl BucketMapHolderStats {
             (
                 "entry_mem_us",
                 self.entry_mem_us.swap(0, Ordering::Relaxed) / 1000,
+                i64
+            ),
+            (
+                "load_disk_found_count",
+                self.load_disk_found_count.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "load_disk_found_us",
+                self.load_disk_found_us.swap(0, Ordering::Relaxed) / 1000,
+                i64
+            ),
+            (
+                "load_disk_missing_count",
+                self.load_disk_missing_count.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "load_disk_missing_us",
+                self.load_disk_missing_us.swap(0, Ordering::Relaxed) / 1000,
                 i64
             ),
             (
