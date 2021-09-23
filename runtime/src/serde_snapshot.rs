@@ -459,17 +459,31 @@ where
                     let new_append_vec_path =
                         append_vec_path.parent().unwrap().join(&new_file_name);
 
-                    // Make sure there's not another AppendVec already at this path.  If there is,
-                    // try again (and update the collision count), otherwise break out of the loop
-                    // with our new ID and path.
-                    let exists = std::fs::metadata(&new_append_vec_path).is_ok();
-                    if exists {
-                        num_collisions.fetch_add(1, Ordering::Relaxed);
-                    } else {
+                    // If the new ID is the same as the original ID, then
+                    // Break out early and do not rename file.
+                    //
+                    // Break out of the loop in the following situations:
+                    // 1. The new ID is the same as the original ID.  This means we do not need to
+                    //    rename the file, since the ID is the "correct" one already.
+                    // 2. There is not a file already at the new path.  This means it is safe to
+                    //    rename the file to this new path.
+                    //    **DEVELOPER NOTE:** `fs::metadata()` can error for multiple reasons, so
+                    //    we cannot check for `fs::metadata().is_err()` instead of
+                    //    `!fs::metadata().is_ok()` here.  Additionally, keep this check last so
+                    //    that it can short-circuit if possible.
+                    if storage_entry.id() == new_append_vec_id
+                        || !std::fs::metadata(&new_append_vec_path).is_ok()
+                    {
                         break (new_append_vec_id, new_append_vec_path);
                     }
+
+                    // A file exists at the new path.  Try again.
+                    num_collisions.fetch_add(1, Ordering::Relaxed);
                 };
-                std::fs::rename(append_vec_path, &new_append_vec_path)?;
+                // Only rename the file if the new ID is actually different from the original.
+                if storage_entry.id() != new_append_vec_id {
+                    std::fs::rename(append_vec_path, &new_append_vec_path)?;
+                }
 
                 reconstruct_single_storage(
                     slot,
