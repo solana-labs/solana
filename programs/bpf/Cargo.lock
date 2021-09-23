@@ -2442,6 +2442,7 @@ dependencies = [
  "solana-program 1.8.0",
  "solana-sdk",
  "tarpc",
+ "thiserror",
  "tokio",
  "tokio-serde",
 ]
