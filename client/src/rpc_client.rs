@@ -80,7 +80,7 @@ impl RpcClientConfig {
 /// querying and transacting with the network from external programs.
 ///
 /// This type builds on the underlying RPC protocol, adding extra features such
-/// as timeout handling, retries, and waiting on transaction commitment levels.
+/// as timeout handling, retries, and waiting on transaction [commitment levels][cl].
 /// Some methods simply pass through to the underlying RPC protocol. Not all RPC
 /// methods are encapsulated by this type, but `RpcClient` does expose a generic
 /// [`send`](RpcClient::send) method for making any [`RpcRequest`].
@@ -1659,7 +1659,9 @@ impl RpcClient {
 
     /// Returns epoch activation information for a stake account.
     ///
-    /// This method uses the configured commitment level.
+    /// This method uses the configured [commitment level].
+    ///
+    /// [cl]: https://docs.solana.com/developing/clients/jsonrpc-api#configuring-state-commitment
     ///
     /// # RPC Reference
     ///
@@ -1745,7 +1747,9 @@ impl RpcClient {
 
     /// Returns information about the current supply.
     ///
-    /// This method uses the configured commitment level.
+    /// This method uses the configured [commitment level][cl].
+    ///
+    /// [cl]: https://docs.solana.com/developing/clients/jsonrpc-api#configuring-state-commitment
     ///
     /// # RPC Reference
     ///
@@ -2213,6 +2217,8 @@ impl RpcClient {
     /// If `end_slot` is not provided, then the end slot is for the latest
     /// block with the given [commitment level][cl].
     ///
+    /// [cl]: https://docs.solana.com/developing/clients/jsonrpc-api#configuring-state-commitment
+    ///
     /// This method may not return blocks for the full range of slots if some
     /// slots do not have corresponding blocks. To simply get a specific number
     /// of sequential blocks, use the [`get_blocks_with_limit_and_commitment`]
@@ -2453,13 +2459,6 @@ impl RpcClient {
     /// This method uses the [`Finalized`] commitment level.
     ///
     /// [`Finalized`]: CommitmentLevel::Finalized.
-    ///
-    /// # Errors
-    ///
-    /// This method returns an error if the given commitment level is below
-    /// [`Confirmed`].
-    ///
-    /// [`Confirmed`]: CommitmentLevel::Confirmed
     ///
     /// # RPC Reference
     ///
@@ -2797,7 +2796,9 @@ impl RpcClient {
 
     /// Returns information about the current epoch.
     ///
-    /// This method uses the configured default commitment level.
+    /// This method uses the configured default [commitment level][cl].
+    ///
+    /// [cl]: https://docs.solana.com/developing/clients/jsonrpc-api#configuring-state-commitment
     ///
     /// # RPC Reference
     ///
@@ -2855,7 +2856,9 @@ impl RpcClient {
 
     /// Returns the leader schedule for an epoch.
     ///
-    /// This method uses the configured default commitment level.
+    /// This method uses the configured default [commitment level][cl].
+    ///
+    /// [cl]: https://docs.solana.com/developing/clients/jsonrpc-api#configuring-state-commitment
     ///
     /// # RPC Reference
     ///
@@ -3100,7 +3103,9 @@ impl RpcClient {
 
     /// Returns the inflation reward for a list of addresses for an epoch.
     ///
-    /// This method uses the configured commitment level.
+    /// This method uses the configured [commitment level][cl].
+    ///
+    /// [cl]: https://docs.solana.com/developing/clients/jsonrpc-api#configuring-state-commitment
     ///
     /// # RPC Reference
     ///
@@ -3705,6 +3710,8 @@ impl RpcClient {
 
     /// Request the balance of the provided account pubkey.
     ///
+    /// This method uses the configured commitment level.
+    ///
     /// # RPC Reference
     ///
     /// This method corresponds directly to the [`getBalance`] RPC method.
@@ -3777,6 +3784,8 @@ impl RpcClient {
     }
 
     /// Returns all accounts owned by the provided program pubkey.
+    ///
+    /// This method uses the configured commitment level.
     ///
     /// # RPC Reference
     ///
