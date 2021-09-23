@@ -180,8 +180,10 @@ impl RpcClient {
     /// The URL is an HTTP URL, usually for port 8899, as in
     /// "http://localhost:8899".
     ///
-    /// The client has a default timeout of 30 seconds, and a default commitment
-    /// level of [`Finalized`](CommitmentLevel::Finalized).
+    /// The client has a default timeout of 30 seconds, and a default [commitment
+    /// level][cl] of [`Finalized`](CommitmentLevel::Finalized).
+    ///
+    /// [cl]: https://docs.solana.com/developing/clients/jsonrpc-api#configuring-state-commitment
     ///
     /// # Examples
     ///
@@ -194,7 +196,9 @@ impl RpcClient {
         Self::new_with_commitment(url, CommitmentConfig::default())
     }
 
-    /// Create an HTTP `RpcClient` with specified commitment level.
+    /// Create an HTTP `RpcClient` with specified [commitment level][cl].
+    ///
+    /// [cl]: https://docs.solana.com/developing/clients/jsonrpc-api#configuring-state-commitment
     ///
     /// The URL is an HTTP URL, usually for port 8899, as in
     /// "http://localhost:8899".
@@ -223,8 +227,10 @@ impl RpcClient {
     /// The URL is an HTTP URL, usually for port 8899, as in
     /// "http://localhost:8899".
     ///
-    /// The client has and a default commitment level of
+    /// The client has and a default [commitment level][cl] of
     /// [`Finalized`](CommitmentLevel::Finalized).
+    ///
+    /// [cl]: https://docs.solana.com/developing/clients/jsonrpc-api#configuring-state-commitment
     ///
     /// # Examples
     ///
@@ -242,7 +248,9 @@ impl RpcClient {
         )
     }
 
-    /// Create an HTTP `RpcClient` with specified timeout and commitment level.
+    /// Create an HTTP `RpcClient` with specified timeout and [commitment level][cl].
+    ///
+    /// [cl]: https://docs.solana.com/developing/clients/jsonrpc-api#configuring-state-commitment
     ///
     /// The URL is an HTTP URL, usually for port 8899, as in
     /// "http://localhost:8899".
@@ -273,7 +281,9 @@ impl RpcClient {
         )
     }
 
-    /// Create an HTTP `RpcClient` with specified timeout and commitment level.
+    /// Create an HTTP `RpcClient` with specified timeout and [commitment level][cl].
+    ///
+    /// [cl]: https://docs.solana.com/developing/clients/jsonrpc-api#configuring-state-commitment
     ///
     /// The URL is an HTTP URL, usually for port 8899, as in
     /// "http://localhost:8899".
@@ -381,8 +391,10 @@ impl RpcClient {
 
     /// Create an HTTP `RpcClient` from a [`SocketAddr`].
     ///
-    /// The client has a default timeout of 30 seconds, and a default commitment
-    /// level of [`Finalized`](CommitmentLevel::Finalized).
+    /// The client has a default timeout of 30 seconds, and a default [commitment
+    /// level][cl] of [`Finalized`](CommitmentLevel::Finalized).
+    ///
+    /// [cl]: https://docs.solana.com/developing/clients/jsonrpc-api#configuring-state-commitment
     ///
     /// # Examples
     ///
@@ -396,7 +408,9 @@ impl RpcClient {
         Self::new(get_rpc_request_str(addr, false))
     }
 
-    /// Create an HTTP `RpcClient` from a [`SocketAddr`] with specified commitment level.
+    /// Create an HTTP `RpcClient` from a [`SocketAddr`] with specified [commitment level][cl].
+    ///
+    /// [cl]: https://docs.solana.com/developing/clients/jsonrpc-api#configuring-state-commitment
     ///
     /// The client has a default timeout of 30 seconds, and a user-specified
     /// [`CommitmentLevel`] via [`CommitmentConfig`].
@@ -423,7 +437,9 @@ impl RpcClient {
 
     /// Create an HTTP `RpcClient` from a [`SocketAddr`] with specified timeout.
     ///
-    /// The client has a default commitment level of [`Finalized`](CommitmentLevel::Finalized).
+    /// The client has a default [commitment level][cl] of [`Finalized`](CommitmentLevel::Finalized).
+    ///
+    /// [cl]: https://docs.solana.com/developing/clients/jsonrpc-api#configuring-state-commitment
     ///
     /// # Examples
     ///
@@ -458,7 +474,9 @@ impl RpcClient {
         }
     }
 
-    /// Get the configured default commitment level.
+    /// Get the configured default [commitment level][cl].
+    ///
+    /// [cl]: https://docs.solana.com/developing/clients/jsonrpc-api#configuring-state-commitment
     ///
     /// The commitment config may be specified during construction, and
     /// determines how thoroughly committed a transaction must be when waiting
@@ -513,8 +531,10 @@ impl RpcClient {
     /// Check the confirmation status of a transaction.
     ///
     /// Returns `true` if the given transaction succeeded and has been committed
-    /// with the configured commitment level, which can be retrieved with
+    /// with the configured [commitment level][cl], which can be retrieved with
     /// the [`commitment`](RpcClient::commitment) method.
+    ///
+    /// [cl]: https://docs.solana.com/developing/clients/jsonrpc-api#configuring-state-commitment
     ///
     /// Note that this method does not wait for a transaction to be confirmed
     /// &mdash; it only checks whether a transaction has been confirmed. To
@@ -569,7 +589,9 @@ impl RpcClient {
     /// Check the confirmation status of a transaction.
     ///
     /// Returns an [`RpcResult`] with value `true` if the given transaction
-    /// succeeded and has been committed with the given commitment level.
+    /// succeeded and has been committed with the given [commitment level][cl].
+    ///
+    /// [cl]: https://docs.solana.com/developing/clients/jsonrpc-api#configuring-state-commitment
     ///
     /// Note that this method does not wait for a transaction to be confirmed
     /// &mdash; it only checks whether a transaction has been confirmed. To
@@ -1073,7 +1095,9 @@ impl RpcClient {
         self.send(RpcRequest::GetSnapshotSlot, Value::Null)
     }
 
-    /// Check if a transaction has been processed with the default commitment level.
+    /// Check if a transaction has been processed with the default [commitment level][cl].
+    ///
+    /// [cl]: https://docs.solana.com/developing/clients/jsonrpc-api#configuring-state-commitment
     ///
     /// If the transaction has been processed with the default commitment level,
     /// then this method returns `Ok` of `Some`. If the transaction has not yet
@@ -1285,7 +1309,9 @@ impl RpcClient {
         )
     }
 
-    /// Check if a transaction has been processed with the given commitment level.
+    /// Check if a transaction has been processed with the given [commitment level][cl].
+    ///
+    /// [cl]: https://docs.solana.com/developing/clients/jsonrpc-api#configuring-state-commitment
     ///
     /// If the transaction has been processed with the given commitment level,
     /// then this method returns `Ok` of `Some`. If the transaction has not yet
@@ -1356,7 +1382,9 @@ impl RpcClient {
             .map(|status_meta| status_meta.status))
     }
 
-    /// Check if a transaction has been processed with the given commitment level.
+    /// Check if a transaction has been processed with the given [commitment level][cl].
+    ///
+    /// [cl]: https://docs.solana.com/developing/clients/jsonrpc-api#configuring-state-commitment
     ///
     /// If the transaction has been processed with the given commitment level,
     /// then this method returns `Ok` of `Some`. If the transaction has not yet
@@ -2170,10 +2198,11 @@ impl RpcClient {
     /// slots do not have corresponding blocks. To simply get a specific number
     /// of sequential blocks, use the [`get_blocks_with_limit`] method.
     ///
-    /// This method uses the [`Finalized`] commitment level.
+    /// This method uses the [`Finalized`] [commitment level][cl].
     ///
     /// [`Finalized`]: CommitmentLevel::Finalized
     /// [`get_blocks_with_limit`]: RpcClient::get_blocks_with_limit.
+    /// [cl]: https://docs.solana.com/developing/clients/jsonrpc-api#configuring-state-commitment
     ///
     /// # Errors
     ///
@@ -2285,9 +2314,10 @@ impl RpcClient {
 
     /// Returns a list of finalized blocks starting at the given slot.
     ///
-    /// This method uses the [`Finalized`] commitment level.
+    /// This method uses the [`Finalized`] [commitment level][cl].
     ///
     /// [`Finalized`]: CommitmentLevel::Finalized.
+    /// [cl]: https://docs.solana.com/developing/clients/jsonrpc-api#configuring-state-commitment
     ///
     /// # Errors
     ///
@@ -2329,9 +2359,10 @@ impl RpcClient {
     ///
     /// This method returns an error if the limit is greater than 500,000 slots.
     ///
-    /// This method returns an error if the given commitment level is below
+    /// This method returns an error if the given [commitment level][cl] is below
     /// [`Confirmed`].
     ///
+    /// [cl]: https://docs.solana.com/developing/clients/jsonrpc-api#configuring-state-commitment
     /// [`Confirmed`]: CommitmentLevel::Confirmed
     ///
     /// # RPC Reference
@@ -2456,9 +2487,10 @@ impl RpcClient {
     ///
     /// Returns up to 1000 signatures, ordered from newest to oldest.
     ///
-    /// This method uses the [`Finalized`] commitment level.
+    /// This method uses the [`Finalized`] [commitment level][cl].
     ///
     /// [`Finalized`]: CommitmentLevel::Finalized.
+    /// [cl]: https://docs.solana.com/developing/clients/jsonrpc-api#configuring-state-commitment
     ///
     /// # RPC Reference
     ///
@@ -2502,9 +2534,10 @@ impl RpcClient {
     ///
     /// # Errors
     ///
-    /// This method returns an error if the given commitment level is below
+    /// This method returns an error if the given [commitment level][cl] is below
     /// [`Confirmed`].
     ///
+    /// [cl]: https://docs.solana.com/developing/clients/jsonrpc-api#configuring-state-commitment
     /// [`Confirmed`]: CommitmentLevel::Confirmed
     ///
     /// # RPC Reference
@@ -2611,9 +2644,10 @@ impl RpcClient {
 
     /// Returns transaction details for a confirmed transaction.
     ///
-    /// This method uses the [`Finalized`] commitment level.
+    /// This method uses the [`Finalized`] [commitment level][cl].
     ///
     /// [`Finalized`]: CommitmentLevel::Finalized
+    /// [cl]: https://docs.solana.com/developing/clients/jsonrpc-api#configuring-state-commitment
     ///
     /// # RPC Reference
     ///
@@ -2666,9 +2700,10 @@ impl RpcClient {
     ///
     /// # Errors
     ///
-    /// This method returns an error if the given commitment level is below
+    /// This method returns an error if the given [commitment level][cl] is below
     /// [`Confirmed`].
     ///
+    /// [cl]: https://docs.solana.com/developing/clients/jsonrpc-api#configuring-state-commitment
     /// [`Confirmed`]: CommitmentLevel::Confirmed
     ///
     /// # RPC Reference
@@ -3052,9 +3087,10 @@ impl RpcClient {
 
     /// Returns the current inflation governor.
     ///
-    /// This method uses the [`Finalized`] commitment level.
+    /// This method uses the [`Finalized`] [commitment level][cl].
     ///
     /// [`Finalized`]: CommitmentLevel::Finalized
+    /// [cl]: https://docs.solana.com/developing/clients/jsonrpc-api#configuring-state-commitment
     ///
     /// # RPC Reference
     ///
@@ -3211,7 +3247,9 @@ impl RpcClient {
     /// Submit a transaction and wait for confirmation.
     ///
     /// Once this function returns successfully, the given transaction is
-    /// guaranteed to be processed with the configured commitment level.
+    /// guaranteed to be processed with the configured [commitment level][cl].
+    ///
+    /// [cl]: https://docs.solana.com/developing/clients/jsonrpc-api#configuring-state-commitment
     ///
     /// After sending the transaction, this method polls in a loop for the
     /// status of the transaction until it has ben confirmed.
@@ -3318,7 +3356,9 @@ impl RpcClient {
 
     /// Returns all information associated with the account of the provided pubkey.
     ///
-    /// This method uses the configured commitment level.
+    /// This method uses the configured [commitment level][cl].
+    ///
+    /// [cl]: https://docs.solana.com/developing/clients/jsonrpc-api#configuring-state-commitment
     ///
     /// To get multiple accounts at once, use the [`get_multiple_accounts`] method.
     ///
@@ -3492,7 +3532,9 @@ impl RpcClient {
 
     /// Returns the account information for a list of pubkeys.
     ///
-    /// This method uses the configured commitment level.
+    /// This method uses the configured [commitment level][cl].
+    ///
+    /// [cl]: https://docs.solana.com/developing/clients/jsonrpc-api#configuring-state-commitment
     ///
     /// # RPC Reference
     ///
@@ -3710,7 +3752,9 @@ impl RpcClient {
 
     /// Request the balance of the provided account pubkey.
     ///
-    /// This method uses the configured commitment level.
+    /// This method uses the configured [commitment level][cl].
+    ///
+    /// [cl]: https://docs.solana.com/developing/clients/jsonrpc-api#configuring-state-commitment
     ///
     /// # RPC Reference
     ///
@@ -3785,7 +3829,9 @@ impl RpcClient {
 
     /// Returns all accounts owned by the provided program pubkey.
     ///
-    /// This method uses the configured commitment level.
+    /// This method uses the configured [commitment level][cl].
+    ///
+    /// [cl]: https://docs.solana.com/developing/clients/jsonrpc-api#configuring-state-commitment
     ///
     /// # RPC Reference
     ///
