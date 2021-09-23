@@ -1,6 +1,5 @@
 use crate::{
     accounts_db::{
-<<<<<<< HEAD
         AccountShrinkThreshold, AccountsDb, AccountsDbConfig, AccountsUpdateNotifier, BankHashInfo, ErrorCounters,
         LoadHint, LoadedAccount, ScanStorageResult, ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS,
         ACCOUNTS_DB_CONFIG_FOR_TESTING,
