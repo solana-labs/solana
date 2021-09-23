@@ -459,9 +459,6 @@ where
                     let new_append_vec_path =
                         append_vec_path.parent().unwrap().join(&new_file_name);
 
-                    // If the new ID is the same as the original ID, then
-                    // Break out early and do not rename file.
-                    //
                     // Break out of the loop in the following situations:
                     // 1. The new ID is the same as the original ID.  This means we do not need to
                     //    rename the file, since the ID is the "correct" one already.
