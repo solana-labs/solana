@@ -47,6 +47,7 @@ fn to_loadresult(
 ///
 /// If a snapshot config is given, and a snapshot is found, it will be loaded.  Otherwise, load
 /// from genesis.
+#[allow(clippy::too_many_arguments)]
 pub fn load(
     genesis_config: &GenesisConfig,
     blockstore: &Blockstore,
