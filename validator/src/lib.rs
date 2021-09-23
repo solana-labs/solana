@@ -3,22 +3,15 @@ pub use solana_core::test_validator;
 pub use solana_gossip::cluster_info::MINIMUM_VALIDATOR_PORT_RANGE_WIDTH;
 use {
     console::style,
-    fd_lock::{RwLock, RwLockWriteGuard},
+    fd_lock::{FdLock, FdLockGuard},
     indicatif::{ProgressDrawTarget, ProgressStyle},
-<<<<<<< HEAD
-    log::*,
-    std::{env, process::exit, thread::JoinHandle},
-=======
     std::{
-        borrow::Cow,
         env,
-        fmt::Display,
         fs::{File, OpenOptions},
         path::Path,
         process::exit,
         thread::JoinHandle,
     },
->>>>>>> 567f30aa1 (windows: Make solana-test-validator work (#20099))
 };
 
 pub mod admin_rpc_service;
@@ -79,8 +72,8 @@ pub fn redirect_stderr_to_file(logfile: Option<String>) -> Option<JoinHandle<()>
             }
             #[cfg(not(unix))]
             {
-                println!("logrotate is not supported on this platform");
-                solana_logger::setup_file_with_default(&logfile, filter);
+                println!("logging to file is not supported on this platform");
+                solana_logger::setup_with_default(filter);
                 None
             }
         }
@@ -151,9 +144,9 @@ impl ProgressBar {
     }
 }
 
-pub fn ledger_lockfile(ledger_path: &Path) -> RwLock<File> {
+pub fn ledger_lockfile(ledger_path: &Path) -> FdLock<File> {
     let lockfile = ledger_path.join("ledger.lock");
-    fd_lock::RwLock::new(
+    FdLock::new(
         OpenOptions::new()
             .write(true)
             .create(true)
@@ -164,9 +157,9 @@ pub fn ledger_lockfile(ledger_path: &Path) -> RwLock<File> {
 
 pub fn lock_ledger<'path, 'lock>(
     ledger_path: &'path Path,
-    ledger_lockfile: &'lock mut RwLock<File>,
-) -> RwLockWriteGuard<'lock, File> {
-    ledger_lockfile.try_write().unwrap_or_else(|_| {
+    ledger_lockfile: &'lock mut FdLock<File>,
+) -> FdLockGuard<'lock, File> {
+    ledger_lockfile.try_lock().unwrap_or_else(|_| {
         println!(
             "Error: Unable to lock {} directory. Check if another validator is running",
             ledger_path.display()

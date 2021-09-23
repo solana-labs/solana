@@ -1,4 +1,4 @@
-#[cfg(target_os = "linux")]
+#[cfg(not(target_family = "windows"))]
 use clap::{crate_description, crate_name, value_t_or_exit, App, Arg};
 use log::*;
 

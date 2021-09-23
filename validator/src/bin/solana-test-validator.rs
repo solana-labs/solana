@@ -1,6 +1,5 @@
 use {
     clap::{value_t, value_t_or_exit, App, Arg},
-    fd_lock::FdLock,
     solana_clap_utils::{
         input_parsers::{pubkey_of, pubkeys_of, value_of},
         input_validators::{
@@ -304,20 +303,8 @@ fn main() {
         });
     }
 
-<<<<<<< HEAD
-    let mut ledger_fd_lock = FdLock::new(fs::File::open(&ledger_path).unwrap());
-    let _ledger_lock = ledger_fd_lock.try_lock().unwrap_or_else(|_| {
-        println!(
-            "Error: Unable to lock {} directory. Check if another validator is running",
-            ledger_path.display()
-        );
-        exit(1);
-    });
-
-=======
     let mut ledger_lock = ledger_lockfile(&ledger_path);
     let _ledger_write_guard = lock_ledger(&ledger_path, &mut ledger_lock);
->>>>>>> 567f30aa1 (windows: Make solana-test-validator work (#20099))
     if reset_ledger {
         remove_directory_contents(&ledger_path).unwrap_or_else(|err| {
             println!("Error: Unable to remove {}: {}", ledger_path.display(), err);
