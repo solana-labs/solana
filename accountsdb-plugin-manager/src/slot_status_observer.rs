@@ -85,27 +85,25 @@ impl SlotStatusObserver {
                         let mut slot_set = eligible_slot_set.slot_set.write().unwrap();
                         match slot {
                             BankNotification::OptimisticallyConfirmed(slot) => {
-                                slot_set.push_back(
-                                    SlotSetEntry {
-                                        slot,
-                                        parent: None,
-                                        status: SlotStatus::Confirmed});
+                                slot_set.push_back(SlotSetEntry {
+                                    slot,
+                                    parent: None,
+                                    status: SlotStatus::Confirmed,
+                                });
                             }
                             BankNotification::Frozen(bank) => {
-                                slot_set.push_back(
-                                    SlotSetEntry {
-                                        slot: bank.slot(),
-                                        parent: Some(bank.parent_slot()),
-                                        status: SlotStatus::Processed,
-                                    });
+                                slot_set.push_back(SlotSetEntry {
+                                    slot: bank.slot(),
+                                    parent: Some(bank.parent_slot()),
+                                    status: SlotStatus::Processed,
+                                });
                             }
                             BankNotification::Root(bank) => {
-                                slot_set.push_back(
-                                    SlotSetEntry {
-                                        slot: bank.slot(),
-                                        parent: Some(bank.parent_slot()),
-                                        status: SlotStatus::Rooted,
-                                    });
+                                slot_set.push_back(SlotSetEntry {
+                                    slot: bank.slot(),
+                                    parent: Some(bank.parent_slot()),
+                                    status: SlotStatus::Rooted,
+                                });
                             }
                         }
                     }
