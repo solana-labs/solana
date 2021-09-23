@@ -142,7 +142,8 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         Self::update_time_stat(time, m);
         Self::update_stat(count, 1);
 
-        if result.is_some() {
+        if let Some(entry) = result.as_ref() {
+            entry.set_age(self.storage.future_age_to_flush());
             return result;
         }
 
@@ -258,6 +259,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     reclaims,
                     previous_slot_entry_was_cached,
                 );
+                current.set_age(self.storage.future_age_to_flush());
                 Self::update_stat(&self.stats().updates_in_mem, 1);
             }
             Entry::Vacant(vacant) => {
@@ -536,11 +538,13 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         if let Some(disk) = self.storage.disk.as_ref() {
             let items = disk.items_in_range(self.bin, range);
             let mut map = self.map().write().unwrap();
+            let future_age = self.storage.future_age_to_flush();
             for item in items {
                 let entry = map.entry(item.pubkey);
                 match entry {
-                    Entry::Occupied(_occupied) => {
-                        // do nothing - item already in cache
+                    Entry::Occupied(occupied) => {
+                        // item already in cache, bump age to future. This helps the current age flush to succeed.
+                        occupied.get().set_age(future_age);
                     }
                     Entry::Vacant(vacant) => {
                         vacant.insert(self.disk_to_cache_entry(item.slot_list, item.ref_count));
