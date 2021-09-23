@@ -400,8 +400,6 @@ impl Validator {
                     )
                 });
 
-        let (replay_vote_sender, replay_vote_receiver) = unbounded();
-
         let (
             genesis_config,
             bank_forks,
