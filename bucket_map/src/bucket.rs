@@ -68,7 +68,7 @@ impl<T: Clone + Copy> Bucket<T> {
         rv
     }
 
-    pub fn items_in_range<R>(&self, range: Option<&R>) -> Vec<BucketItem<T>>
+    pub fn items_in_range<R>(&self, range: &Option<&R>) -> Vec<BucketItem<T>>
     where
         R: RangeBounds<Pubkey>,
     {
