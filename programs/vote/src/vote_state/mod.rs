@@ -394,7 +394,7 @@ impl VoteState {
     //
     // 2) From 1), this means that for every vote `s` in the current state:
     //    a) If there exists an `s'` in `new_state` where `s.slot == s'.slot`, then
-    //    we must gaurantee `s.confirmations <= s'.confirmations`
+    //    we must guarantee `s.confirmations <= s'.confirmations`
     //
     //    b) If there does not exist any such `s'` in `new_state`, then there exists
     //    some `t` that is the smallest vote in `new_state` where `t.slot > s.slot`.
@@ -420,6 +420,9 @@ impl VoteState {
         epoch: Epoch,
     ) -> Result<(), VoteError> {
         assert!(!new_state.is_empty());
+        if new_state.len() > MAX_LOCKOUT_HISTORY {
+            return Err(VoteError::TooManyVotes);
+        }
 
         // check_slots_are_valid()` ensures we don't process any states
         // that are older than the current state
@@ -2312,6 +2315,22 @@ mod tests {
         ));
         VoteState::serialize(&account_state, &mut vote_account_data).unwrap();
         assert!(!VoteState::is_uninitialized_no_deser(&vote_account_data));
+    }
+
+    #[test]
+    fn test_process_new_vote_too_many_votes() {
+        let mut vote_state1 = VoteState::default();
+        let bad_votes: VecDeque<Lockout> = (0..=MAX_LOCKOUT_HISTORY)
+            .map(|slot| Lockout {
+                slot: slot as Slot,
+                confirmation_count: (MAX_LOCKOUT_HISTORY - slot + 1) as u32,
+            })
+            .collect();
+
+        assert_eq!(
+            vote_state1.process_new_vote_state(bad_votes, None, None, vote_state1.current_epoch(),),
+            Err(VoteError::TooManyVotes)
+        );
     }
 
     #[test]

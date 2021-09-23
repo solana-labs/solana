@@ -72,6 +72,9 @@ pub enum VoteError {
 
     #[error("New state contained a vote slot smaller than the root")]
     SlotSmallerThanRoot,
+
+    #[error("New state contained too many votes")]
+    TooManyVotes,
 }
 
 impl<E> DecodeError<E> for VoteError {
