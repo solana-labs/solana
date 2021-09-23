@@ -14,6 +14,7 @@ crossbeam-channel = "0.5"
 futures-util = "0.3"
 log = "0.4.11"
 prost = "0.8.0"
+solana-rpc = { path = "../rpc", version = "=1.8.0" }
 solana-runtime = { path = "../runtime", version = "=1.8.0" }
 solana-sdk = { path = "../sdk", version = "=1.8.0" }
 tokio = { version = "1", features = ["full"] }

@@ -5399,6 +5399,7 @@ dependencies = [
  "futures-util",
  "log 0.4.14",
  "prost",
+ "solana-rpc",
  "solana-runtime",
  "solana-sdk",
  "tokio",
