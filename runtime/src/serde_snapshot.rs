@@ -520,7 +520,7 @@ where
         .fetch_add(snapshot_version, Ordering::Relaxed);
     accounts_db.generate_index(limit_load_slot_count_from_snapshot, verify_index);
 
-    datapoint_debug!(
+    datapoint_info!(
         "reconstruct_accountsdb_from_fields()",
         ("remap-time-us", measure_remap.as_us(), i64),
         (
