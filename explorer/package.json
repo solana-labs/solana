@@ -6,7 +6,7 @@
     "@blockworks-foundation/mango-client": "^3.0.24",
     "@bonfida/bot": "^0.5.3",
     "@metamask/jazzicon": "^2.0.0",
-    "@project-serum/serum": "^0.13.59",
+    "@project-serum/serum": "^0.13.60",
     "@react-hook/debounce": "^4.0.0",
     "@sentry/react": "^6.13.2",
     "@solana/spl-token-registry": "^0.2.247",
