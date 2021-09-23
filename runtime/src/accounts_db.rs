@@ -8669,11 +8669,6 @@ pub mod tests {
             accounts.write_version.load(Ordering::Relaxed)
         );
 
-        assert_eq!(
-            daccounts.next_id.load(Ordering::Relaxed),
-            accounts.next_id.load(Ordering::Relaxed)
-        );
-
         // Get the hash for the latest slot, which should be the only hash in the
         // bank_hashes map on the deserialized AccountsDb
         assert_eq!(daccounts.bank_hashes.read().unwrap().len(), 2);

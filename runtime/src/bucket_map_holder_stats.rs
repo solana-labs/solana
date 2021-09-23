@@ -14,11 +14,17 @@ pub struct BucketMapHolderStats {
     pub entries_from_mem: AtomicU64,
     pub entry_missing_us: AtomicU64,
     pub entries_missing: AtomicU64,
+    pub load_disk_found_count: AtomicU64,
+    pub load_disk_found_us: AtomicU64,
+    pub load_disk_missing_count: AtomicU64,
+    pub load_disk_missing_us: AtomicU64,
     pub updates_in_mem: AtomicU64,
     pub items: AtomicU64,
     pub keys: AtomicU64,
     pub deletes: AtomicU64,
     pub inserts: AtomicU64,
+    pub count: AtomicU64,
+    pub bg_waiting_us: AtomicU64,
     pub count_in_mem: AtomicU64,
     pub per_bucket_count: Vec<AtomicU64>,
     pub flush_entries_updated_on_disk: AtomicU64,
@@ -43,14 +49,22 @@ impl BucketMapHolderStats {
         }
     }
 
-    pub fn insert_or_delete(&self, insert: bool, bin: usize) {
-        let per_bucket = self.per_bucket_count.get(bin);
+    pub fn insert_or_delete(&self, insert: bool, _bin: usize) {
         if insert {
             self.inserts.fetch_add(1, Ordering::Relaxed);
+            self.count.fetch_add(1, Ordering::Relaxed);
+        } else {
+            self.deletes.fetch_add(1, Ordering::Relaxed);
+            self.count.fetch_sub(1, Ordering::Relaxed);
+        }
+    }
+
+    pub fn insert_or_delete_mem(&self, insert: bool, bin: usize) {
+        let per_bucket = self.per_bucket_count.get(bin);
+        if insert {
             self.count_in_mem.fetch_add(1, Ordering::Relaxed);
             per_bucket.map(|count| count.fetch_add(1, Ordering::Relaxed));
         } else {
-            self.deletes.fetch_add(1, Ordering::Relaxed);
             self.count_in_mem.fetch_sub(1, Ordering::Relaxed);
             per_bucket.map(|count| count.fetch_sub(1, Ordering::Relaxed));
         }
@@ -105,6 +119,12 @@ impl BucketMapHolderStats {
                 self.count_in_mem.load(Ordering::Relaxed),
                 i64
             ),
+            ("count", self.count.load(Ordering::Relaxed), i64),
+            (
+                "bg_waiting_us",
+                self.bg_waiting_us.swap(0, Ordering::Relaxed),
+                i64
+            ),
             ("min_in_bin", min, i64),
             ("max_in_bin", max, i64),
             ("count_from_bins", ct, i64),
@@ -136,6 +156,26 @@ impl BucketMapHolderStats {
             (
                 "entry_mem_us",
                 self.entry_mem_us.swap(0, Ordering::Relaxed) / 1000,
+                i64
+            ),
+            (
+                "load_disk_found_count",
+                self.load_disk_found_count.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "load_disk_found_us",
+                self.load_disk_found_us.swap(0, Ordering::Relaxed) / 1000,
+                i64
+            ),
+            (
+                "load_disk_missing_count",
+                self.load_disk_missing_count.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "load_disk_missing_us",
+                self.load_disk_missing_us.swap(0, Ordering::Relaxed) / 1000,
                 i64
             ),
             (

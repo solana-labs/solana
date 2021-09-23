@@ -3,6 +3,7 @@ use crate::bucket_map_holder_stats::BucketMapHolderStats;
 use crate::in_mem_accounts_index::{InMemAccountsIndex, SlotT};
 use crate::waitable_condvar::WaitableCondvar;
 use solana_bucket_map::bucket_map::{BucketMap, BucketMapConfig};
+use solana_measure::measure::Measure;
 use solana_sdk::clock::SLOT_MS;
 use solana_sdk::timing::AtomicInterval;
 use std::fmt::Debug;
@@ -157,9 +158,15 @@ impl<T: IndexValue> BucketMapHolder<T> {
         let bins = in_mem.len();
         let flush = self.disk.is_some();
         loop {
+            let mut m = Measure::start("wait");
             // this will transition to waits and thread throttling
             self.wait_dirty_or_aged
                 .wait_timeout(Duration::from_millis(AGE_MS));
+            m.stop();
+            self.stats
+                .bg_waiting_us
+                .fetch_add(m.as_us(), Ordering::Relaxed);
+
             if exit.load(Ordering::Relaxed) {
                 break;
             }
