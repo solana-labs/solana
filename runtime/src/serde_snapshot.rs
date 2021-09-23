@@ -376,13 +376,13 @@ fn reconstruct_single_storage<E>(
     slot: &Slot,
     append_vec_path: &Path,
     storage_entry: &E,
-    new_append_vec_id: Option<AppendVecId>,
+    remapped_append_vec_id: Option<AppendVecId>,
     new_slot_storage: &mut HashMap<AppendVecId, Arc<AccountStorageEntry>>,
 ) -> Result<(), Error>
 where
     E: SerializableStorage,
 {
-    let append_vec_id = new_append_vec_id.unwrap_or_else(|| storage_entry.id());
+    let append_vec_id = remapped_append_vec_id.unwrap_or_else(|| storage_entry.id());
     let (accounts, num_accounts) =
         AppendVec::new_from_file(append_vec_path, storage_entry.current_len())?;
     let u_storage_entry =
@@ -453,11 +453,11 @@ where
 
                 // Remap the AppendVec ID to handle any duplicate IDs that may previously existed
                 // due to full snapshots and incremental snapshots generated from different nodes
-                let (new_append_vec_id, new_append_vec_path) = loop {
-                    let new_append_vec_id = next_append_vec_id.fetch_add(1, Ordering::Relaxed);
-                    let new_file_name = AppendVec::file_name(*slot, new_append_vec_id);
-                    let new_append_vec_path =
-                        append_vec_path.parent().unwrap().join(&new_file_name);
+                let (remapped_append_vec_id, remapped_append_vec_path) = loop {
+                    let remapped_append_vec_id = next_append_vec_id.fetch_add(1, Ordering::Relaxed);
+                    let remapped_file_name = AppendVec::file_name(*slot, remapped_append_vec_id);
+                    let remapped_append_vec_path =
+                        append_vec_path.parent().unwrap().join(&remapped_file_name);
 
                     // Break out of the loop in the following situations:
                     // 1. The new ID is the same as the original ID.  This means we do not need to
@@ -466,10 +466,10 @@ where
                     //    rename the file to this new path.
                     //    **DEVELOPER NOTE:**  Keep this check last so that it can short-circuit if
                     //    possible.
-                    if storage_entry.id() == new_append_vec_id
-                        || std::fs::metadata(&new_append_vec_path).is_err()
+                    if storage_entry.id() == remapped_append_vec_id
+                        || std::fs::metadata(&remapped_append_vec_path).is_err()
                     {
-                        break (new_append_vec_id, new_append_vec_path);
+                        break (remapped_append_vec_id, remapped_append_vec_path);
                     }
 
                     // If we made it this far, a file exists at the new path.  Record the collision
@@ -477,15 +477,15 @@ where
                     num_collisions.fetch_add(1, Ordering::Relaxed);
                 };
                 // Only rename the file if the new ID is actually different from the original.
-                if storage_entry.id() != new_append_vec_id {
-                    std::fs::rename(append_vec_path, &new_append_vec_path)?;
+                if storage_entry.id() != remapped_append_vec_id {
+                    std::fs::rename(append_vec_path, &remapped_append_vec_path)?;
                 }
 
                 reconstruct_single_storage(
                     slot,
-                    &new_append_vec_path,
+                    &remapped_append_vec_path,
                     storage_entry,
-                    Some(new_append_vec_id),
+                    Some(remapped_append_vec_id),
                     &mut new_slot_storage,
                 )?;
             }
