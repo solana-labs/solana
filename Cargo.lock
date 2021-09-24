@@ -6036,17 +6036,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bcbb6aa301e5d3b0b5ef639c9a9c7e2f1c944f177b460c04dc24c69b1fa2bd99"
 
 [[package]]
-<<<<<<< HEAD
-=======
-name = "thread_local"
-version = "1.1.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8018d24e04c95ac8790716a5987d0fec4f8b27249ffa0f7d33f1369bdfb88cbd"
-dependencies = [
- "once_cell",
-]
-
-[[package]]
 name = "tikv-jemalloc-sys"
 version = "0.4.2+5.2.1-patched.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6068,7 +6057,6 @@ dependencies = [
 ]
 
 [[package]]
->>>>>>> 2cf081d86 (uses tikv_jemallocator::Jemalloc as the global allocator (#20149))
 name = "time"
 version = "0.1.43"
 source = "registry+https://github.com/rust-lang/crates.io-index"
