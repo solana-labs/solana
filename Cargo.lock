@@ -4546,6 +4546,7 @@ dependencies = [
  "solana-gossip",
  "solana-logger 1.8.0",
  "solana-net-utils",
+ "solana-perf",
  "solana-sdk",
  "solana-streamer",
  "solana-version",

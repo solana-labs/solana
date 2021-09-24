@@ -79,6 +79,10 @@ fn run_dos(
             "random" => {
                 data.resize(data_size, 0);
             }
+            "transaction" => {
+                let tx = solana_perf::test_tx::test_tx();
+                data = bincode::serialize(&tx).unwrap();
+            }
             "get_account_info" => {}
             "get_program_accounts" => {}
             &_ => {
@@ -183,6 +187,7 @@ fn main() {
                     "random",
                     "get_account_info",
                     "get_program_accounts",
+                    "transaction",
                 ])
                 .help("Type of data to send"),
         )
