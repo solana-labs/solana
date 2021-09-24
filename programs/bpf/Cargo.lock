@@ -4196,9 +4196,9 @@ dependencies = [
 
 [[package]]
 name = "zeroize_derive"
-version = "1.0.0"
+version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "de251eec69fc7c1bc3923403d18ececb929380e016afe103da75f396704f8ca2"
+checksum = "bdff2024a851a322b08f179173ae2ba620445aef1e838f0c196820eade4ae0c7"
 dependencies = [
  "proc-macro2 1.0.24",
  "quote 1.0.6",
