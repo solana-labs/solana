@@ -581,9 +581,24 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         self.storage.wait_dirty_or_aged.notify_one();
     }
 
-    fn should_remove_from_mem(&self, current_age: Age, entry: &AccountMapEntry<T>) -> bool {
+    fn should_remove_from_mem(
+        &self,
+        current_age: Age,
+        entry: &AccountMapEntry<T>,
+        startup: bool,
+    ) -> bool {
         // this could be tunable dynamically based on memory pressure
-        current_age == entry.age()
+        // we could look at more ages or we could throw out more items we are choosing to keep in the cache
+        {
+            let slot_list = entry.slot_list.read().unwrap();
+            if slot_list.len() != 1 {
+                return false; // keep 0 and > 1 slot lists in mem. They will be cleaned or shrunk soon.
+            }
+            if slot_list.iter().any(|(_, info)| info.is_cached()) {
+                return false; // keep items with slot lists that contained cached items
+            }
+        }
+        !startup && (current_age == entry.age())
     }
 
     fn flush_internal(&self) {
@@ -617,7 +632,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     updates.push((*k, Arc::clone(v)));
                 }
 
-                if startup || self.should_remove_from_mem(current_age, v) {
+                if self.should_remove_from_mem(current_age, v, startup) {
                     removes.push(*k);
                 }
             }
@@ -681,7 +696,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     continue;
                 }
 
-                if v.dirty() || (!startup && !self.should_remove_from_mem(current_age, v)) {
+                if v.dirty() || !self.should_remove_from_mem(current_age, v, startup) {
                     // marked dirty or bumped in age after we looked above
                     // these will be handled in later passes
                     // but, at startup, everything is ready to age out if it isn't dirty
