@@ -22,7 +22,7 @@ impl AccountsDbPluginManager {
 
     /// # Safety
     ///
-    /// This function load the dynamically linked library specified in the path. The library
+    /// This function loads the dynamically linked library specified in the path. The library
     /// must do necessary initializations.
     pub unsafe fn load_plugin(
         &mut self,
