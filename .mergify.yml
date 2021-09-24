@@ -20,10 +20,13 @@ pull_request_rules:
     conditions:
       - and:
         - status-success=buildkite/solana
-        - status-success=Travis CI - Pull Request
         - status-success=ci-gate
         - label=automerge
         - author≠@dont-squash-my-commits
+        - or:
+          # only require travis success if docs files changed
+          - status-success=Travis CI - Pull Request
+          - -files~=^docs/
         - or:
           # only require explorer checks if explorer files changed
           - status-success=check-explorer
