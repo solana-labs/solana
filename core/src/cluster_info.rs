@@ -824,7 +824,7 @@ impl ClusterInfo {
                     }
                     let ip_addr = node.gossip.ip();
                     Some(format!(
-                        "{:15} {:2}| {:5} | {:44} |{:^9}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {}\n",
+                        "{:15} {:2}| {:5} | {:44} |{:^9}| {:5}|  {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {}\n",
                         if ContactInfo::is_valid_address(&node.gossip) {
                             ip_addr.to_string()
                         } else {
@@ -839,6 +839,7 @@ impl ClusterInfo {
                             "-".to_string()
                         },
                         addr_to_string(&ip_addr, &node.gossip),
+                        addr_to_string(&ip_addr, &node.tpu_vote),
                         addr_to_string(&ip_addr, &node.tpu),
                         addr_to_string(&ip_addr, &node.tpu_forwards),
                         addr_to_string(&ip_addr, &node.tvu),
@@ -853,9 +854,9 @@ impl ClusterInfo {
 
         format!(
             "IP Address        |Age(ms)| Node identifier                              \
-             | Version |Gossip| TPU  |TPUfwd| TVU  |TVUfwd|Repair|ServeR|ShredVer\n\
+             | Version |Gossip|TPUvote| TPU  |TPUfwd| TVU  |TVUfwd|Repair|ServeR|ShredVer\n\
              ------------------+-------+----------------------------------------------+---------+\
-             ------+------+------+------+------+------+------+--------\n\
+             ------+------+-------+------+------+------+------+------+--------\n\
              {}\
              Nodes: {}{}{}",
             nodes.join(""),

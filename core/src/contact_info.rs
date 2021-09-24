@@ -144,12 +144,12 @@ impl ContactInfo {
         let gossip = next_port(&bind_addr, 1);
         let tvu = next_port(&bind_addr, 2);
         let tpu_forwards = next_port(&bind_addr, 3);
-        let tpu_vote = next_port(&bind_addr, 1);
         let tvu_forwards = next_port(&bind_addr, 4);
         let repair = next_port(&bind_addr, 5);
         let rpc = SocketAddr::new(bind_addr.ip(), rpc_port::DEFAULT_RPC_PORT);
         let rpc_pubsub = SocketAddr::new(bind_addr.ip(), rpc_port::DEFAULT_RPC_PUBSUB_PORT);
         let serve_repair = next_port(&bind_addr, 6);
+        let tpu_vote = next_port(&bind_addr, 7);
         Self {
             id: *pubkey,
             gossip,
@@ -307,6 +307,7 @@ mod tests {
         assert_eq!(d1.tvu_forwards, socketaddr!("127.0.0.1:1238"));
         assert_eq!(d1.repair, socketaddr!("127.0.0.1:1239"));
         assert_eq!(d1.serve_repair, socketaddr!("127.0.0.1:1240"));
+        assert_eq!(d1.tpu_vote, socketaddr!("127.0.0.1:1241"));
     }
 
     #[test]
