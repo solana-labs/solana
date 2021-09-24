@@ -1789,8 +1789,9 @@ impl JsonRpcRequestProcessor {
         &self,
         bank: &Arc<Bank>,
         program_id: &Pubkey,
-        filters: Vec<RpcFilterType>,
+        mut filters: Vec<RpcFilterType>,
     ) -> RpcCustomResult<Vec<(Pubkey, AccountSharedData)>> {
+        optimize_filters(&mut filters);
         let filter_closure = |account: &AccountSharedData| {
             filters.iter().all(|filter_type| match filter_type {
                 RpcFilterType::DataSize(size) => account.data().len() as u64 == *size,
@@ -1861,6 +1862,7 @@ impl JsonRpcRequestProcessor {
                     index_key: owner_key.to_string(),
                 });
             }
+            optimize_filters(&mut filters);
             Ok(bank
                 .get_filtered_indexed_accounts(&IndexKey::SplTokenOwner(*owner_key), |account| {
                     account.owner() == &spl_token_id_v2_0()
@@ -1909,6 +1911,7 @@ impl JsonRpcRequestProcessor {
                     index_key: mint_key.to_string(),
                 });
             }
+            optimize_filters(&mut filters);
             Ok(bank
                 .get_filtered_indexed_accounts(&IndexKey::SplTokenMint(*mint_key), |account| {
                     account.owner() == &spl_token_id_v2_0()
@@ -1963,6 +1966,23 @@ impl JsonRpcRequestProcessor {
         let fee = bank.get_fee_for_message(blockhash, message);
         Ok(new_response(&bank, fee))
     }
+}
+
+fn optimize_filters(filters: &mut Vec<RpcFilterType>) {
+    filters.iter_mut().for_each(|filter_type| {
+        if let RpcFilterType::Memcmp(compare) = filter_type {
+            use MemcmpEncodedBytes::*;
+            match &compare.bytes {
+                Binary(bytes) | Base58(bytes) => {
+                    compare.bytes = Bytes(bs58::decode(bytes).into_vec().unwrap());
+                }
+                Base64(bytes) => {
+                    compare.bytes = Bytes(base64::decode(bytes).unwrap());
+                }
+                _ => {}
+            }
+        }
+    })
 }
 
 fn verify_transaction(
