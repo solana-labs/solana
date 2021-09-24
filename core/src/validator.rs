@@ -319,6 +319,27 @@ impl Validator {
         warn!("identity: {}", id);
         warn!("vote account: {}", vote_account);
 
+        let mut confirmed_bank_senders = Vec::new();
+
+        let accountsdb_plugin_service =
+            if let Some(accountsdb_plugin_config_file) = &config.accountsdb_plugin_config_file {
+                let (confirmed_bank_sender, confirmed_bank_receiver) = unbounded();
+                confirmed_bank_senders.push(confirmed_bank_sender);
+                let result = AccountsDbPluginService::new(
+                    confirmed_bank_receiver,
+                    accountsdb_plugin_config_file,
+                );
+                match result {
+                    Ok(accountsdb_plugin_service) => Some(accountsdb_plugin_service),
+                    Err(err) => {
+                        error!("Failed to load the AccountsDb plugin: {:?}", err);
+                        abort();
+                    }
+                }
+            } else {
+                None
+            };
+
         if config.voting_disabled {
             warn!("voting disabled");
             authorized_voter_keypairs.write().unwrap().clear();
@@ -384,27 +405,6 @@ impl Validator {
         }
 
         let accounts_package_channel = channel();
-
-        let mut confirmed_bank_senders = Vec::new();
-
-        let accountsdb_plugin_service =
-            if let Some(accountsdb_plugin_config_file) = &config.accountsdb_plugin_config_file {
-                let (confirmed_bank_sender, confirmed_bank_receiver) = unbounded();
-                confirmed_bank_senders.push(confirmed_bank_sender);
-                let result = AccountsDbPluginService::new(
-                    confirmed_bank_receiver,
-                    accountsdb_plugin_config_file,
-                );
-                match result {
-                    Ok(accountsdb_plugin_service) => Some(accountsdb_plugin_service),
-                    Err(err) => {
-                        error!("Failed to load the AccountsDb plugin: {:?}", err);
-                        abort();
-                    }
-                }
-            } else {
-                None
-            };
 
         let (
             genesis_config,
