@@ -252,10 +252,17 @@ pub fn dump_nodes_from_gossip(cluster_info: &ClusterInfo, stakes: &HashMap<Pubke
 
 pub fn get_epoch_staked_map(root_bank: &Bank, working_bank: &Bank, shred_slot: Slot) -> Arc<HashMap<Pubkey, u64>> {
     let epoch = root_bank.get_leader_schedule_epoch(shred_slot);
-    let epoch_staked_nodes = [root_bank, working_bank]
+    let mut epoch_staked_nodes = [root_bank, working_bank]
         .iter()
         .find_map(|bank| bank.epoch_staked_nodes(epoch));
-    epoch_staked_nodes.unwrap()
+    if epoch_staked_nodes.is_none() {
+        if epoch != root_bank.get_leader_schedule_epoch(root_bank.slot()) {
+            epoch_staked_nodes = [root_bank, working_bank]
+                .iter()
+                .find_map(|bank| bank.epoch_staked_nodes(root_bank.slot()));
+        }
+    }
+    epoch_staked_nodes.unwrap_or_default()
 }
 
 impl<T> ClusterNodesCache<T> {
