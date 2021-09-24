@@ -20,7 +20,7 @@ use {
 };
 
 #[derive(Error, Debug)]
-pub enum AccountsdbPluginError {
+pub enum AccountsdbPluginServiceError {
     #[error("Plugin library path is not specified in the config file")]
     LibPathNotSet,
 
@@ -55,7 +55,7 @@ impl AccountsDbPluginService {
     pub fn new(
         confirmed_bank_receiver: Receiver<BankNotification>,
         accountsdb_plugin_config_file: &Path,
-    ) -> Result<Self, AccountsdbPluginError> {
+    ) -> Result<Self, AccountsdbPluginServiceError> {
         info!(
             "Starting AccountsDbPluginService from config file: {:?}",
             accountsdb_plugin_config_file
@@ -77,11 +77,11 @@ impl AccountsDbPluginService {
 
         let libpath = result["libpath"]
             .as_str()
-            .ok_or(AccountsdbPluginError::LibPathNotSet)?;
+            .ok_or(AccountsdbPluginServiceError::LibPathNotSet)?;
         let config_file = accountsdb_plugin_config_file
             .as_os_str()
             .to_str()
-            .ok_or(AccountsdbPluginError::InvalidPluginPath)?;
+            .ok_or(AccountsdbPluginServiceError::InvalidPluginPath)?;
 
         unsafe {
             let result = plugin_manager
@@ -93,7 +93,7 @@ impl AccountsDbPluginService {
                     "Failed to load the plugin library: {:?}, error: {:?}",
                     libpath, err
                 );
-                return Err(AccountsdbPluginError::PluginLoadError(msg));
+                return Err(AccountsdbPluginServiceError::PluginLoadError(msg));
             }
         }
 
