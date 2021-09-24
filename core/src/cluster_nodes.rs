@@ -24,6 +24,7 @@ use {
     },
 };
 
+#[derive(Debug)]
 enum NodeId {
     // TVU node obtained through gossip (staked or not).
     ContactInfo(ContactInfo),
@@ -225,6 +226,38 @@ fn get_nodes(cluster_info: &ClusterInfo, stakes: &HashMap<Pubkey, u64>) -> Vec<N
     .collect()
 }
 
+pub fn dump_nodes_myself(cluster_info: &ClusterInfo, stakes: &HashMap<Pubkey, u64>) {
+    let self_pubkey = cluster_info.id();
+    let stake = stakes.get(&self_pubkey).copied().unwrap_or_default();
+    let node = NodeId::from(cluster_info.my_contact_info());
+    //Node { node, stake }
+    error!("NODE_DUMP myself {:?} / {:?}", node, stake);
+}
+
+pub fn dump_nodes_staked(_cluster_info: &ClusterInfo, stakes: &HashMap<Pubkey, u64>) {
+    let _ = stakes
+        .iter()
+        .map(|(&pubkey, &stake)| {
+            error!("NODE_DUMP staked {:?} / {:?}", pubkey, stake);
+        });
+}
+
+pub fn dump_nodes_from_gossip(cluster_info: &ClusterInfo, stakes: &HashMap<Pubkey, u64>) {
+    let _ = cluster_info.tvu_peers().into_iter().map(|node| {
+        let stake = stakes.get(&node.id).copied().unwrap_or_default();
+        let node = NodeId::from(node);
+        error!("NODE_DUMP from_gossip {:?} / {:?}", node, stake);
+        });
+}
+
+pub fn get_epoch_staked_map(root_bank: &Bank, working_bank: &Bank, shred_slot: Slot) -> Arc<HashMap<Pubkey, u64>> {
+    let epoch = root_bank.get_leader_schedule_epoch(shred_slot);
+    let epoch_staked_nodes = [root_bank, working_bank]
+        .iter()
+        .find_map(|bank| bank.epoch_staked_nodes(epoch));
+    epoch_staked_nodes.unwrap()
+}
+
 impl<T> ClusterNodesCache<T> {
     pub fn new(
         // Capacity of underlying LRU-cache in terms of number of epochs.
@@ -241,6 +274,19 @@ impl<T> ClusterNodesCache<T> {
 }
 
 impl<T: 'static> ClusterNodesCache<T> {
+
+    pub fn dump_retransmit_node_info(
+        cluster_info: &ClusterInfo,
+        root_bank: &Bank,
+        working_bank: &Bank,
+        shred_slot: Slot,
+        ) {
+        let stakes = get_epoch_staked_map(root_bank, working_bank, shred_slot);
+        dump_nodes_myself(cluster_info, &stakes);
+        dump_nodes_staked(cluster_info, &stakes);
+        dump_nodes_from_gossip(cluster_info, &stakes);
+    }
+
     fn get_cache_entry(&self, epoch: Epoch) -> Arc<Mutex<CacheEntry<T>>> {
         let mut cache = self.cache.lock().unwrap();
         match cache.get(&epoch) {

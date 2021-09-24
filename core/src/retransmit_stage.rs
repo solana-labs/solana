@@ -78,12 +78,14 @@ impl RetransmitStats {
         working_bank: &Bank,
         cluster_info: &ClusterInfo,
         cluster_nodes_cache: &ClusterNodesCache<RetransmitStage>,
+        shred_slot: Slot,
     ) {
         const SUBMIT_CADENCE: Duration = Duration::from_secs(2);
         let elapsed = self.since.as_ref().map(Instant::elapsed);
         if elapsed.unwrap_or(Duration::MAX) < SUBMIT_CADENCE {
             return;
         }
+        ClusterNodesCache::<RetransmitStage>::dump_retransmit_node_info(cluster_info, root_bank, working_bank, shred_slot);
         let num_peers = cluster_nodes_cache
             .get(root_bank.slot(), root_bank, working_bank, cluster_info)
             .num_peers();
@@ -356,6 +358,7 @@ fn retransmit(
             .retransmit_total
             .fetch_add(retransmit_time.as_us(), Ordering::Relaxed);
     };
+    let shred_slot = shreds.inner_shreds[0].slot();
     thread_pool.install(|| {
         shreds
             .inner_shreds
@@ -377,7 +380,7 @@ fn retransmit(
         .batch_span_us_hist
         .increment((shreds_incoming_end_time - shreds_incoming_start_time).as_micros() as u64)
         .unwrap();
-    stats.maybe_submit(&root_bank, &working_bank, cluster_info, cluster_nodes_cache);
+    stats.maybe_submit(&root_bank, &working_bank, cluster_info, cluster_nodes_cache, shred_slot);
     Ok(())
 }
 

@@ -143,6 +143,8 @@ thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::
 /// The constants that define if a shred is data or coding
 pub const DATA_SHRED: u8 = 0b1010_0101;
 pub const CODING_SHRED: u8 = 0b0101_1010;
+pub const DATA_SHRED_ES: u8 = 0b1010_0001; // epoch staked node
+pub const CODING_SHRED_ES: u8 = 0b1010_0001; // epoch staked node
 
 pub const MAX_DATA_SHREDS_PER_FEC_BLOCK: u32 = 32;
 
