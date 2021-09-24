@@ -46,5 +46,7 @@ cargo_audit_ignores=(
   # https://github.com/paritytech/jsonrpc/issues/605
   --ignore RUSTSEC-2021-0079
 
+  # zeroize_derive: `#[zeroize(drop)]` doesn't implement `Drop` for `enum`s
+  --ignore RUSTSEC-2021-0115
 )
 scripts/cargo-for-all-lock-files.sh stable audit "${cargo_audit_ignores[@]}"
