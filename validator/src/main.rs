@@ -5,7 +5,6 @@ use {
         AppSettings, Arg, ArgMatches, SubCommand,
     },
     console::style,
-    fd_lock::FdLock,
     log::*,
     rand::{seq::SliceRandom, thread_rng, Rng},
     solana_clap_utils::{
@@ -59,8 +58,8 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_validator::{
-        admin_rpc_service, dashboard::Dashboard, new_spinner_progress_bar, println_name_value,
-        redirect_stderr_to_file,
+        admin_rpc_service, dashboard::Dashboard, ledger_lockfile, lock_ledger,
+        new_spinner_progress_bar, println_name_value, redirect_stderr_to_file,
     },
     std::{
         collections::{HashSet, VecDeque},
@@ -2517,14 +2516,8 @@ pub fn main() {
         })
     });
 
-    let mut ledger_fd_lock = FdLock::new(fs::File::open(&ledger_path).unwrap());
-    let _ledger_lock = ledger_fd_lock.try_lock().unwrap_or_else(|_| {
-        println!(
-            "Error: Unable to lock {} directory. Check if another validator is running",
-            ledger_path.display()
-        );
-        exit(1);
-    });
+    let mut ledger_lock = ledger_lockfile(&ledger_path);
+    let _ledger_write_guard = lock_ledger(&ledger_path, &mut ledger_lock);
 
     let start_progress = Arc::new(RwLock::new(ValidatorStartProgress::default()));
     admin_rpc_service::run(
