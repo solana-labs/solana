@@ -21,6 +21,7 @@ use solana_sdk::{
 use std::boxed::Box;
 use std::cmp::Ordering;
 use std::collections::{HashSet, VecDeque};
+use std::fmt::Debug;
 
 mod vote_state_0_23_5;
 pub mod vote_state_versions;
@@ -35,6 +36,12 @@ pub const MAX_EPOCH_CREDITS_HISTORY: usize = 64;
 
 // Offset of VoteState::prior_voters, for determining initialization status without deserialization
 const DEFAULT_PRIOR_VOTERS_OFFSET: usize = 82;
+
+pub trait VoteTransaction {
+    fn slot(&self, i: usize) -> Slot;
+    fn len(&self) -> usize;
+    fn hash(&self) -> Hash;
+}
 
 #[frozen_abi(digest = "Ch2vVEwos2EjAVqSHCyJjnN2MNX1yrpapZTGhMSCjWUH")]
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone, AbiExample)]
@@ -62,6 +69,20 @@ impl Vote {
 
     pub fn last_voted_slot_hash(&self) -> Option<(Slot, Hash)> {
         self.slots.last().copied().map(|slot| (slot, self.hash))
+    }
+}
+
+impl VoteTransaction for Vote {
+    fn slot(&self, i: usize) -> Slot {
+        self.slots[i]
+    }
+
+    fn len(&self) -> usize {
+        self.slots.len()
+    }
+
+    fn hash(&self) -> Hash {
+        self.hash
     }
 }
 
@@ -128,13 +149,19 @@ impl VoteStateUpdate {
             .copied()
             .map(|lockout| (lockout.slot, self.hash))
     }
+}
 
-    pub fn get_legacy_vote(&self) -> Vote {
-        Vote {
-            slots: self.lockouts.iter().map(|&lockout| lockout.slot).collect(),
-            hash: self.hash,
-            timestamp: self.timestamp,
-        }
+impl VoteTransaction for VoteStateUpdate {
+    fn slot(&self, i: usize) -> Slot {
+        self.lockouts[i].slot
+    }
+
+    fn len(&self) -> usize {
+        self.lockouts.len()
+    }
+
+    fn hash(&self) -> Hash {
+        self.hash
     }
 }
 
@@ -340,7 +367,7 @@ impl VoteState {
 
     fn check_slots_are_valid(
         &self,
-        vote: &Vote,
+        vote: &(impl VoteTransaction + Debug),
         slot_hashes: &[(Slot, Hash)],
     ) -> Result<(), VoteError> {
         // index into the vote's slots, sarting at the newest
@@ -359,19 +386,19 @@ impl VoteState {
         //
         // 2) Conversely, `slot_hashes` is sorted from newest/largest vote to
         // the oldest/smallest vote
-        while i < vote.slots.len() && j > 0 {
+        while i < vote.len() && j > 0 {
             // 1) increment `i` to find the smallest slot `s` in `vote.slots`
             // where `s` >= `last_voted_slot`
             if self
                 .last_voted_slot()
-                .map_or(false, |last_voted_slot| vote.slots[i] <= last_voted_slot)
+                .map_or(false, |last_voted_slot| vote.slot(i) <= last_voted_slot)
             {
                 i += 1;
                 continue;
             }
 
             // 2) Find the hash for this slot `s`.
-            if vote.slots[i] != slot_hashes[j - 1].0 {
+            if vote.slot(i) != slot_hashes[j - 1].0 {
                 // Decrement `j` to find newer slots
                 j -= 1;
                 continue;
@@ -393,7 +420,7 @@ impl VoteState {
             );
             return Err(VoteError::VoteTooOld);
         }
-        if i != vote.slots.len() {
+        if i != vote.len() {
             // This means there existed some slot for which we couldn't find
             // a matching slot hash in step 2)
             info!(
@@ -403,13 +430,16 @@ impl VoteState {
             inc_new_counter_info!("dropped-vote-slot", 1);
             return Err(VoteError::SlotsMismatch);
         }
-        if slot_hashes[j].1 != vote.hash {
+        if slot_hashes[j].1 != vote.hash() {
             // This means the newest vote in the slot has a match that
             // doesn't match the expected hash for that slot on this
             // fork
             warn!(
                 "{} dropped vote {:?} failed to match hash {} {}",
-                self.node_pubkey, vote, vote.hash, slot_hashes[j].1
+                self.node_pubkey,
+                vote,
+                vote.hash(),
+                slot_hashes[j].1
             );
             inc_new_counter_info!("dropped-vote-hash", 1);
             return Err(VoteError::SlotHashMismatch);
@@ -1017,7 +1047,7 @@ pub fn process_vote_state_update<S: std::hash::BuildHasher>(
     let authorized_voter = vote_state.get_and_update_authorized_voter(clock.epoch)?;
     verify_authorized_signer(&authorized_voter, signers)?;
 
-    vote_state.check_slots_are_valid(&vote_state_update.get_legacy_vote(), slot_hashes)?;
+    vote_state.check_slots_are_valid(vote_state_update, slot_hashes)?;
     vote_state.process_new_vote_state(
         vote_state_update.lockouts.clone(),
         vote_state_update.root,
