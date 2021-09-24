@@ -4288,6 +4288,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "solana-accountsdb-plugin-interface",
+ "solana-logger 1.8.0",
 ]
 
 [[package]]

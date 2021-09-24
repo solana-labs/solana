@@ -79,6 +79,7 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
     /// }
 
     fn on_load(&mut self, config_file: &str) -> Result<()> {
+        solana_logger::setup_file_with_default("postgresql_plugin.log", "info");
         info!(
             "Loading plugin {:?} from config_file {:?}",
             self.name(),
