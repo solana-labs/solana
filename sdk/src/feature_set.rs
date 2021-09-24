@@ -175,8 +175,7 @@ pub mod stakes_remove_delegation_if_inactive {
 }
 
 pub mod send_to_tpu_vote_port {
-    // todo: update
-    solana_sdk::declare_id!("3E3jV7v9VcdJL8iYZUMax9DiDno8j7EWUVbhm9RtShj3");
+    solana_sdk::declare_id!("C5fh68nJ7uyKAuYZg2x9sEQ5YrVf3dkW6oojNBSc3Jvo");
 }
 
 lazy_static! {
