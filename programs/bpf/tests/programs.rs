@@ -2781,9 +2781,23 @@ fn test_program_bpf_realloc() {
         .unwrap();
     let data = bank_client.get_account_data(&pubkey).unwrap().unwrap();
     assert_eq!(0, data.len());
+
+    // zero-init
+    bank_client
+        .send_and_confirm_message(
+            &[&mint_keypair, &keypair],
+            Message::new(
+                &[Instruction::new_with_bytes(
+                    program_id,
+                    &[ZERO_INIT],
+                    vec![AccountMeta::new(pubkey, true)],
+                )],
+                Some(&mint_pubkey),
+            ),
+        )
+        .unwrap();
 }
 
-// #[ignore]
 #[cfg(feature = "bpf_rust")]
 #[test]
 fn test_program_bpf_realloc_invoke() {

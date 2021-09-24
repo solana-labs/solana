@@ -13,6 +13,7 @@ pub const REALLOC_AND_ASSIGN_TO_SELF_VIA_SYSTEM_PROGRAM: u8 = 5;
 pub const ASSIGN_TO_SELF_VIA_SYSTEM_PROGRAM_AND_REALLOC: u8 = 6;
 pub const DEALLOC_AND_ASSIGN_TO_CALLER: u8 = 7;
 pub const CHECK: u8 = 8;
+pub const ZERO_INIT: u8 = 9;
 
 pub fn realloc(program_id: &Pubkey, address: &Pubkey, size: usize, bump: &mut u8) -> Instruction {
     let mut instruction_data = vec![REALLOC, *bump];

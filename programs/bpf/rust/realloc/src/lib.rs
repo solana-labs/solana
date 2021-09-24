@@ -25,7 +25,7 @@ fn process_instruction(
             let (bytes, _) = instruction_data[2..].split_at(std::mem::size_of::<usize>());
             let new_len = usize::from_le_bytes(bytes.try_into().unwrap());
             msg!("realloc to {}", new_len);
-            account.realloc(new_len)?;
+            account.realloc(new_len, false)?;
             assert_eq!(new_len, account.data_len());
         }
         REALLOC_EXTEND => {
@@ -33,7 +33,7 @@ fn process_instruction(
             let (bytes, _) = instruction_data[2..].split_at(std::mem::size_of::<usize>());
             let new_len = pre_len + usize::from_le_bytes(bytes.try_into().unwrap());
             msg!("realloc extend by {}", new_len);
-            account.realloc(new_len)?;
+            account.realloc(new_len, false)?;
             assert_eq!(new_len, account.data_len());
         }
         REALLOC_EXTEND_AND_FILL => {
@@ -42,13 +42,13 @@ fn process_instruction(
             let (bytes, _) = instruction_data[4..].split_at(std::mem::size_of::<usize>());
             let new_len = pre_len + usize::from_le_bytes(bytes.try_into().unwrap());
             msg!("realloc extend by {}", new_len);
-            account.realloc(new_len)?;
+            account.realloc(new_len, false)?;
             assert_eq!(new_len, account.data_len());
             account.try_borrow_mut_data()?[pre_len..].fill(fill);
         }
         REALLOC_AND_ASSIGN => {
             msg!("realloc and assign");
-            account.realloc(MAX_PERMITTED_DATA_INCREASE)?;
+            account.realloc(MAX_PERMITTED_DATA_INCREASE, false)?;
             assert_eq!(MAX_PERMITTED_DATA_INCREASE, account.data_len());
             account.assign(&system_program::id());
             assert_eq!(*account.owner, system_program::id());
@@ -56,7 +56,7 @@ fn process_instruction(
         REALLOC_AND_ASSIGN_TO_SELF_VIA_SYSTEM_PROGRAM => {
             msg!("realloc and assign to self via system program");
             let pre_len = account.data_len();
-            account.realloc(pre_len + MAX_PERMITTED_DATA_INCREASE)?;
+            account.realloc(pre_len + MAX_PERMITTED_DATA_INCREASE, false)?;
             assert_eq!(pre_len + MAX_PERMITTED_DATA_INCREASE, account.data_len());
             invoke(
                 &system_instruction::assign(account.key, program_id),
@@ -72,12 +72,12 @@ fn process_instruction(
                 accounts,
             )?;
             assert_eq!(account.owner, program_id);
-            account.realloc(pre_len + MAX_PERMITTED_DATA_INCREASE)?;
+            account.realloc(pre_len + MAX_PERMITTED_DATA_INCREASE, false)?;
             assert_eq!(account.data_len(), pre_len + MAX_PERMITTED_DATA_INCREASE);
         }
         DEALLOC_AND_ASSIGN_TO_CALLER => {
             msg!("dealloc and assign to caller");
-            account.realloc(0)?;
+            account.realloc(0, false)?;
             assert_eq!(account.data_len(), 0);
             account.assign(accounts[1].key);
             assert_eq!(account.owner, accounts[1].key);
@@ -91,6 +91,40 @@ fn process_instruction(
             }
             for x in data[5..].iter() {
                 assert_eq!(2, *x);
+            }
+        }
+        ZERO_INIT => {
+            account.realloc(10, false)?;
+            {
+                let mut data = account.try_borrow_mut_data()?;
+                for i in 0..10 {
+                    assert_eq!(0, data[i]);
+                }
+                data.fill(1);
+                for i in 0..10 {
+                    assert_eq!(1, data[i]);
+                }
+            }
+
+            account.realloc(5, false)?;
+            account.realloc(10, false)?;
+            {
+                let data = account.try_borrow_data()?;
+                for i in 0..10 {
+                    assert_eq!(1, data[i]);
+                }
+            }
+
+            account.realloc(5, false)?;
+            account.realloc(10, true)?;
+            {
+                let data = account.try_borrow_data()?;
+                for i in 0..5 {
+                    assert_eq!(1, data[i]);
+                }
+                for i in 5..10 {
+                    assert_eq!(0, data[i]);
+                }
             }
         }
         _ => panic!(),

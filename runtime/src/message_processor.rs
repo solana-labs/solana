@@ -207,6 +207,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
     ) -> Result<(), InstructionError> {
         let program_id = instruction.program_id(&message.account_keys);
         let demote_program_write_locks = self.is_feature_active(&demote_program_write_locks::id());
+        let do_support_realloc = self.feature_set.is_active(&do_support_realloc::id());
 
         // Verify all executable accounts have zero outstanding refs
         for account_index in program_indices.iter() {
@@ -235,6 +236,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
                     &account,
                     &mut self.timings,
                     true,
+                    do_support_realloc,
                 )
                 .map_err(|err| {
                     ic_logger_msg!(

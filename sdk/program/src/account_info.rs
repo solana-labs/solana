@@ -1,4 +1,6 @@
-use crate::{clock::Epoch, program_error::ProgramError, pubkey::Pubkey};
+use crate::{
+    clock::Epoch, program_error::ProgramError, program_memory::sol_memset, pubkey::Pubkey,
+};
 use std::{
     cell::{Ref, RefCell, RefMut},
     cmp, fmt,
@@ -114,7 +116,21 @@ impl<'a> AccountInfo<'a> {
             .map_err(|_| ProgramError::AccountBorrowFailed)
     }
 
-    pub fn realloc(&self, new_len: usize) -> Result<(), ProgramError> {
+    /// Realloc the account's data and optionally zero-initialize the new
+    /// memory.
+    ///
+    /// Note:  Account data can be increased within a single call by up to
+    /// `solana_program::entrypoint::MAX_PERMITTED_DATA_INCREASE` bytes.
+    ///
+    /// Note: Memory used to grow is already zero-initialized upon program
+    /// entrypoint and re-zeroing it wastes compute units.  If within the same
+    /// call a program reallocs from larger to smaller and back to larger again
+    /// the new space could contain stale data.  Pass `true` for `zero_init` in
+    /// this case, otherwise compute units will be wasted re-zero-initializing.
+    pub fn realloc(&self, new_len: usize, zero_init: bool) -> Result<(), ProgramError> {
+        let orig_len = self.data_len();
+
+        // realloc
         unsafe {
             // First set new length in the serialized data
             let ptr = self.try_borrow_mut_data()?.as_mut_ptr().offset(-8) as *mut u64;
@@ -124,6 +140,16 @@ impl<'a> AccountInfo<'a> {
             let ptr = &mut *(((self.data.as_ptr() as *const u64).offset(1) as u64) as *mut u64);
             *ptr = new_len as u64;
         }
+
+        // zero-init if requested
+        if zero_init && new_len > orig_len {
+            sol_memset(
+                &mut self.try_borrow_mut_data()?[orig_len..],
+                0,
+                new_len.saturating_sub(orig_len),
+            );
+        }
+
         Ok(())
     }
 
