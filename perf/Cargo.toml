@@ -23,6 +23,7 @@ solana-logger = { path = "../logger", version = "=1.7.13" }
 solana-metrics = { path = "../metrics", version = "=1.7.13" }
 solana-sdk = { path = "../sdk", version = "=1.7.13" }
 solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.7.13" }
+solana-vote-program = { path = "../programs/vote", version = "=1.7.13" }
 
 [lib]
 name = "solana_perf"
