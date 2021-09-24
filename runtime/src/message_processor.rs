@@ -46,6 +46,7 @@ impl ComputeMeter for ThisComputeMeter {
     }
 }
 pub struct ThisInvokeContext<'a> {
+    instruction_index: usize,
     invoke_stack: Vec<InvokeContextStackFrame<'a>>,
     rent: Rent,
     pre_accounts: Vec<PreAccount>,
@@ -57,7 +58,7 @@ pub struct ThisInvokeContext<'a> {
     bpf_compute_budget: solana_sdk::process_instruction::BpfComputeBudget,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     executors: Rc<RefCell<Executors>>,
-    instruction_recorder: Option<InstructionRecorder>,
+    instruction_recorders: Option<&'a [InstructionRecorder]>,
     feature_set: Arc<FeatureSet>,
     pub timings: ExecuteDetailsTimings,
     account_db: Arc<Accounts>,
@@ -72,24 +73,20 @@ pub struct ThisInvokeContext<'a> {
 impl<'a> ThisInvokeContext<'a> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        program_id: &Pubkey,
         rent: Rent,
-        message: &'a Message,
-        instruction: &'a CompiledInstruction,
-        program_indices: &[usize],
         accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
         programs: &'a [(Pubkey, ProcessInstructionWithContext)],
         log_collector: Option<Rc<LogCollector>>,
         compute_budget: ComputeBudget,
         compute_meter: Rc<RefCell<dyn ComputeMeter>>,
         executors: Rc<RefCell<Executors>>,
-        instruction_recorder: Option<InstructionRecorder>,
+        instruction_recorders: Option<&'a [InstructionRecorder]>,
         feature_set: Arc<FeatureSet>,
         account_db: Arc<Accounts>,
         ancestors: &'a Ancestors,
         blockhash: &'a Hash,
         fee_calculator: &'a FeeCalculator,
-    ) -> Result<Self, InstructionError> {
+    ) -> Self {
         let compute_meter = if feature_set.is_active(&tx_wide_compute_cap::id()) {
             compute_meter
         } else {
@@ -97,7 +94,8 @@ impl<'a> ThisInvokeContext<'a> {
                 remaining: compute_budget.max_units,
             }))
         };
-        let mut invoke_context = Self {
+        Self {
+            instruction_index: 0,
             invoke_stack: Vec::with_capacity(compute_budget.max_invoke_depth),
             rent,
             pre_accounts: Vec::new(),
@@ -108,7 +106,7 @@ impl<'a> ThisInvokeContext<'a> {
             bpf_compute_budget: compute_budget.into(),
             compute_meter,
             executors,
-            instruction_recorder,
+            instruction_recorders,
             feature_set,
             timings: ExecuteDetailsTimings::default(),
             account_db,
@@ -117,16 +115,7 @@ impl<'a> ThisInvokeContext<'a> {
             blockhash,
             fee_calculator,
             return_data: None,
-        };
-        let account_indices = (0..accounts.len()).collect::<Vec<usize>>();
-        invoke_context.push(
-            program_id,
-            message,
-            instruction,
-            program_indices,
-            &account_indices,
-        )?;
-        Ok(invoke_context)
+        }
     }
 }
 impl<'a> InvokeContext for ThisInvokeContext<'a> {
@@ -136,7 +125,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         message: &Message,
         instruction: &CompiledInstruction,
         program_indices: &[usize],
-        account_indices: &[usize],
+        account_indices: Option<&[usize]>,
     ) -> Result<(), InstructionError> {
         if self.invoke_stack.len() > self.compute_budget.max_invoke_depth {
             return Err(InstructionError::CallDepth);
@@ -154,7 +143,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
                 }
                 Err(InstructionError::MissingAccount)
             };
-            let _ = instruction.visit_each_account(&mut work);
+            instruction.visit_each_account(&mut work)?;
         }
 
         let contains = self.invoke_stack.iter().any(|frame| frame.key == *key);
@@ -184,7 +173,11 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
             })
             .chain(instruction.accounts.iter().map(|index_in_instruction| {
                 let index_in_instruction = *index_in_instruction as usize;
-                let account_index = account_indices[index_in_instruction];
+                let account_index = if let Some(account_indices) = account_indices {
+                    account_indices[index_in_instruction]
+                } else {
+                    index_in_instruction
+                };
                 (
                     message.is_signer(index_in_instruction),
                     message.is_writable(index_in_instruction, demote_program_write_locks),
@@ -306,9 +299,12 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
     fn get_executor(&self, pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
         self.executors.borrow().get(pubkey)
     }
+    fn set_instruction_index(&mut self, instruction_index: usize) {
+        self.instruction_index = instruction_index;
+    }
     fn record_instruction(&self, instruction: &Instruction) {
-        if let Some(recorder) = &self.instruction_recorder {
-            recorder.record_instruction(instruction.clone());
+        if let Some(instruction_recorders) = &self.instruction_recorders {
+            instruction_recorders[self.instruction_index].record_instruction(instruction.clone());
         }
     }
     fn is_feature_active(&self, feature_id: &Pubkey) -> bool {
@@ -511,12 +507,31 @@ impl MessageProcessor {
         blockhash: Hash,
         fee_calculator: FeeCalculator,
     ) -> Result<(), TransactionError> {
-        for (instruction_index, instruction) in message.instructions.iter().enumerate() {
+        let programs = self.instruction_processor.programs();
+        let mut invoke_context = ThisInvokeContext::new(
+            rent_collector.rent,
+            accounts,
+            programs,
+            log_collector,
+            compute_budget,
+            compute_meter,
+            executors,
+            instruction_recorders,
+            feature_set,
+            account_db,
+            ancestors,
+            &blockhash,
+            &fee_calculator,
+        );
+        let compute_meter = invoke_context.get_compute_meter();
+        for (instruction_index, (instruction, program_indices)) in message
+            .instructions
+            .iter()
+            .zip(program_indices.iter())
+            .enumerate()
+        {
             let mut time = Measure::start("execute_instruction");
             let pre_remaining_units = compute_meter.borrow().get_remaining();
-            let instruction_recorder = instruction_recorders
-                .as_ref()
-                .map(|recorders| recorders[instruction_index].clone());
 
             // Fixup the special instructions key if present
             // before the account pre-values are taken care of
@@ -534,7 +549,7 @@ impl MessageProcessor {
             let program_id = instruction.program_id(&message.account_keys);
 
             let mut compute_budget = compute_budget;
-            if feature_set.is_active(&neon_evm_compute_budget::id())
+            if invoke_context.is_feature_active(&neon_evm_compute_budget::id())
                 && *program_id == crate::neon_evm_program::id()
             {
                 // Bump the compute budget for neon_evm
@@ -542,47 +557,31 @@ impl MessageProcessor {
                 compute_budget.heap_size = Some(256 * 1024);
             }
 
-            let programs = self.instruction_processor.programs();
-            let result = ThisInvokeContext::new(
-                program_id,
-                rent_collector.rent,
-                message,
-                instruction,
-                &program_indices[instruction_index],
-                accounts,
-                programs,
-                log_collector.clone(),
-                compute_budget,
-                compute_meter.clone(),
-                executors.clone(),
-                instruction_recorder,
-                feature_set.clone(),
-                account_db.clone(),
-                ancestors,
-                &blockhash,
-                &fee_calculator,
-            )
-            .and_then(|mut invoke_context| {
-                self.instruction_processor.process_instruction(
-                    program_id,
-                    &instruction.data,
-                    &mut invoke_context,
-                )?;
-                Self::verify(
-                    message,
-                    instruction,
-                    &invoke_context.pre_accounts,
-                    &program_indices[instruction_index],
-                    accounts,
-                    &rent_collector.rent,
-                    timings,
-                    invoke_context.get_logger(),
-                    invoke_context.is_feature_active(&demote_program_write_locks::id()),
-                )?;
-                timings.accumulate(&invoke_context.timings);
-                Ok(())
-            })
-            .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err));
+            invoke_context.set_instruction_index(instruction_index);
+            let result = invoke_context
+                .push(program_id, message, instruction, program_indices, None)
+                .and_then(|()| {
+                    self.instruction_processor.process_instruction(
+                        program_id,
+                        &instruction.data,
+                        &mut invoke_context,
+                    )?;
+                    Self::verify(
+                        message,
+                        instruction,
+                        &invoke_context.pre_accounts,
+                        program_indices,
+                        accounts,
+                        &rent_collector.rent,
+                        timings,
+                        invoke_context.get_logger(),
+                        invoke_context.is_feature_active(&demote_program_write_locks::id()),
+                    )?;
+                    invoke_context.pop();
+                    timings.accumulate(&invoke_context.timings);
+                    Ok(())
+                })
+                .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err));
 
             time.stop();
             let post_remaining_units = compute_meter.borrow().get_remaining();
@@ -647,11 +646,7 @@ mod tests {
         let blockhash = Hash::default();
         let fee_calculator = FeeCalculator::default();
         let mut invoke_context = ThisInvokeContext::new(
-            &invoke_stack[0],
             Rent::default(),
-            &message,
-            &message.instructions[0],
-            &[],
             &accounts,
             &[],
             None,
@@ -664,20 +659,13 @@ mod tests {
             &ancestors,
             &blockhash,
             &fee_calculator,
-        )
-        .unwrap();
+        );
 
         // Check call depth increases and has a limit
-        let mut depth_reached = 1;
-        for program_id in invoke_stack.iter().skip(1) {
+        let mut depth_reached = 0;
+        for program_id in invoke_stack.iter() {
             if Err(InstructionError::CallDepth)
-                == invoke_context.push(
-                    program_id,
-                    &message,
-                    &message.instructions[0],
-                    &[],
-                    &account_indices,
-                )
+                == invoke_context.push(program_id, &message, &message.instructions[0], &[], None)
             {
                 break;
             }
@@ -1205,11 +1193,7 @@ mod tests {
         let blockhash = Hash::default();
         let fee_calculator = FeeCalculator::default();
         let mut invoke_context = ThisInvokeContext::new(
-            &caller_program_id,
             Rent::default(),
-            &message,
-            &caller_instruction,
-            &program_indices,
             &accounts,
             programs.as_slice(),
             None,
@@ -1222,8 +1206,16 @@ mod tests {
             &ancestors,
             &blockhash,
             &fee_calculator,
-        )
-        .unwrap();
+        );
+        invoke_context
+            .push(
+                &caller_program_id,
+                &message,
+                &caller_instruction,
+                &program_indices,
+                None,
+            )
+            .unwrap();
 
         // not owned account modified by the caller (before the invoke)
         let caller_write_privileges = message
@@ -1281,11 +1273,7 @@ mod tests {
             let blockhash = Hash::default();
             let fee_calculator = FeeCalculator::default();
             let mut invoke_context = ThisInvokeContext::new(
-                &caller_program_id,
                 Rent::default(),
-                &message,
-                &caller_instruction,
-                &program_indices,
                 &accounts,
                 programs.as_slice(),
                 None,
@@ -1298,8 +1286,16 @@ mod tests {
                 &ancestors,
                 &blockhash,
                 &fee_calculator,
-            )
-            .unwrap();
+            );
+            invoke_context
+                .push(
+                    &caller_program_id,
+                    &message,
+                    &caller_instruction,
+                    &program_indices,
+                    None,
+                )
+                .unwrap();
 
             let caller_write_privileges = message
                 .account_keys
@@ -1410,11 +1406,7 @@ mod tests {
         let blockhash = Hash::default();
         let fee_calculator = FeeCalculator::default();
         let mut invoke_context = ThisInvokeContext::new(
-            &caller_program_id,
             Rent::default(),
-            &message,
-            &caller_instruction,
-            &program_indices,
             &accounts,
             programs.as_slice(),
             None,
@@ -1427,8 +1419,16 @@ mod tests {
             &ancestors,
             &blockhash,
             &fee_calculator,
-        )
-        .unwrap();
+        );
+        invoke_context
+            .push(
+                &caller_program_id,
+                &message,
+                &caller_instruction,
+                &program_indices,
+                None,
+            )
+            .unwrap();
 
         // not owned account modified by the invoker
         accounts[0].1.borrow_mut().data_as_mut_slice()[0] = 1;
@@ -1482,11 +1482,7 @@ mod tests {
             let blockhash = Hash::default();
             let fee_calculator = FeeCalculator::default();
             let mut invoke_context = ThisInvokeContext::new(
-                &caller_program_id,
                 Rent::default(),
-                &message,
-                &caller_instruction,
-                &program_indices,
                 &accounts,
                 programs.as_slice(),
                 None,
@@ -1499,8 +1495,16 @@ mod tests {
                 &ancestors,
                 &blockhash,
                 &fee_calculator,
-            )
-            .unwrap();
+            );
+            invoke_context
+                .push(
+                    &caller_program_id,
+                    &message,
+                    &caller_instruction,
+                    &program_indices,
+                    None,
+                )
+                .unwrap();
 
             assert_eq!(
                 InstructionProcessor::native_invoke(
