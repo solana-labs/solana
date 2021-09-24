@@ -1558,13 +1558,12 @@ impl Blockstore {
         slot: Slot,
         start_index: u64,
     ) -> ShredResult<Vec<Shred>> {
-        if let Some(shreds) = self.get_data_shreds_for_slot_from_cache(slot, start_index) {
-            shreds
-        } else {
-            // No luck in the cache, let's try the filesystem
-            self.get_data_shreds_for_slot_from_fs(slot, start_index)
-                .unwrap_or_else(|| Ok(vec![]))
-        }
+        let cache = self.data_slot_cache(slot);
+        let (cache_guard, file, file_index) =
+            SlotIterator::setup(&cache, &self.slot_data_shreds_path(slot));
+        SlotIterator::new(slot, start_index, &cache_guard, file, &file_index)
+            .map(|data| Shred::new_from_serialized_shred(data.1))
+            .collect()
     }
 
     pub fn get_data_shreds(
@@ -1721,28 +1720,21 @@ impl Blockstore {
         let cache = self.data_slot_cache(slot);
         let (cache_guard, file, file_index) =
             SlotIterator::setup(&cache, &self.slot_data_shreds_path(slot));
-        let shred_iter = match SlotIterator::new(slot, start_index, &cache_guard, file, &file_index)
-        {
-            Some(iter) => iter,
-            None => {
-                return vec![];
-                // TODO: empty list was previous behavior when no data present; should we instead do below?
-                // return (start_index..cmp::min(end_index, start_index + max_missing as u64)).collect::<Vec<_>>();
-            }
-        };
+        let shred_iter = SlotIterator::new(slot, start_index, &cache_guard, file, &file_index);
 
         let ticks_since_first_insert =
             DEFAULT_TICKS_PER_SECOND * (timestamp() - first_timestamp) / 1000;
 
         let mut missing_indexes = vec![];
         let mut prev_index = start_index;
-        'outer: for (index, shred) in shred_iter {
+        for (index, shred) in shred_iter {
+            // Ignore any shreds prior to the search range start
             if index < start_index {
                 continue;
             }
             // Get the tick that will be used to figure out the timeout for this hole
             let reference_tick = u64::from(Shred::reference_tick_from_data(&shred));
-            // Break out early if the higher index holes have not timed out yet
+            // Return early if the higher index holes have not timed out yet
             if ticks_since_first_insert < reference_tick + MAX_TURBINE_DELAY_IN_TICKS {
                 return missing_indexes;
             }
@@ -1750,22 +1742,22 @@ impl Blockstore {
             for i in prev_index..cmp::min(index, end_index) {
                 missing_indexes.push(i);
                 if missing_indexes.len() == max_missing {
-                    break 'outer;
+                    return missing_indexes;
                 }
             }
-            // Update prev_index before the end-early check as we may use prev_index after
+
             prev_index = index + 1;
             if index >= end_index {
-                break;
+                return missing_indexes;
             }
         }
-        // If prev_index < end_index, there could be holes within [start_index, end_index)
-        // but that are greater than any shreds we have in the blockstore
+        // If prev_index < end_index, then there are holes from [prev_index, end_index);
+        // insert as many indexes into missing as are permitted by max_missing
         if missing_indexes.len() < max_missing && prev_index < end_index {
             for i in prev_index..end_index {
                 missing_indexes.push(i);
                 if missing_indexes.len() == max_missing {
-                    break;
+                    return missing_indexes;
                 }
             }
         }
