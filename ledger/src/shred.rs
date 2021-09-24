@@ -75,12 +75,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{Keypair, Signature, Signer},
 };
-<<<<<<< HEAD
 use std::{mem::size_of, ops::Deref, sync::Arc};
-
-=======
-use std::mem::size_of;
->>>>>>> a86ced0ba (generate deterministic seeds for shreds (#17950))
 use thiserror::Error;
 
 #[derive(Default, Clone)]

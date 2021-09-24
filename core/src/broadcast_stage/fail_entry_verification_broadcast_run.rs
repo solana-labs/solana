@@ -146,12 +146,9 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
             &cluster_nodes,
             &Arc::new(AtomicInterval::default()),
             &mut TransmitShredsStats::default(),
-<<<<<<< HEAD
             cluster_info.socket_addr_space(),
-=======
             cluster_info.id(),
             bank_forks,
->>>>>>> a86ced0ba (generate deterministic seeds for shreds (#17950))
         )?;
 
         Ok(())

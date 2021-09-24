@@ -368,12 +368,9 @@ impl StandardBroadcastRun {
             &cluster_nodes,
             &self.last_datapoint_submit,
             &mut transmit_stats,
-<<<<<<< HEAD
             cluster_info.socket_addr_space(),
-=======
             cluster_info.id(),
             bank_forks,
->>>>>>> a86ced0ba (generate deterministic seeds for shreds (#17950))
         )?;
         drop(cluster_nodes);
         transmit_time.stop();
@@ -616,18 +613,13 @@ mod test {
         // Step 1: Make an incomplete transmission for slot 0
         let mut standard_broadcast_run = StandardBroadcastRun::new(leader_keypair.clone(), 0);
         standard_broadcast_run
-<<<<<<< HEAD
-            .test_process_receive_results(&cluster_info, &socket, &blockstore, receive_results)
-=======
             .test_process_receive_results(
-                &leader_keypair,
                 &cluster_info,
                 &socket,
                 &blockstore,
                 receive_results,
                 &bank_forks,
             )
->>>>>>> a86ced0ba (generate deterministic seeds for shreds (#17950))
             .unwrap();
         let unfinished_slot = standard_broadcast_run.unfinished_slot.as_ref().unwrap();
         assert_eq!(unfinished_slot.next_shred_index as u64, num_shreds_per_slot);
@@ -685,18 +677,13 @@ mod test {
             last_tick_height: (ticks1.len() - 1) as u64,
         };
         standard_broadcast_run
-<<<<<<< HEAD
-            .test_process_receive_results(&cluster_info, &socket, &blockstore, receive_results)
-=======
             .test_process_receive_results(
-                &leader_keypair,
                 &cluster_info,
                 &socket,
                 &blockstore,
                 receive_results,
                 &bank_forks,
             )
->>>>>>> a86ced0ba (generate deterministic seeds for shreds (#17950))
             .unwrap();
         let unfinished_slot = standard_broadcast_run.unfinished_slot.as_ref().unwrap();
 
@@ -796,18 +783,13 @@ mod test {
 
         let mut standard_broadcast_run = StandardBroadcastRun::new(leader_keypair, 0);
         standard_broadcast_run
-<<<<<<< HEAD
-            .test_process_receive_results(&cluster_info, &socket, &blockstore, receive_results)
-=======
             .test_process_receive_results(
-                &leader_keypair,
                 &cluster_info,
                 &socket,
                 &blockstore,
                 receive_results,
                 &bank_forks,
             )
->>>>>>> a86ced0ba (generate deterministic seeds for shreds (#17950))
             .unwrap();
         assert!(standard_broadcast_run.unfinished_slot.is_none())
     }

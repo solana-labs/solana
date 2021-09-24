@@ -249,11 +249,8 @@ lazy_static! {
         (add_missing_program_error_mappings::id(), "add missing program error mappings"),
         (system_transfer_zero_check::id(), "perform all checks for transfers of 0 lamports"),
         (dedupe_config_program_signers::id(), "dedupe config program signers"),
-<<<<<<< HEAD
         (verify_tx_signatures_len::id(), "prohibit extra transaction signatures"),
-=======
         (deterministic_shred_seed_enabled::id(), "deterministic shred seed"),
->>>>>>> a86ced0ba (generate deterministic seeds for shreds (#17950))
         (vote_stake_checked_instructions::id(), "vote/state program checked instructions #18345"),
         (updated_verify_policy::id(), "Update verify policy"),
         (neon_evm_compute_budget::id(), "bump neon_evm's compute budget"),

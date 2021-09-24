@@ -19,18 +19,10 @@ use solana_ledger::{blockstore::Blockstore, shred::Shred};
 use solana_measure::measure::Measure;
 use solana_metrics::{inc_new_counter_error, inc_new_counter_info};
 use solana_poh::poh_recorder::WorkingBankEntry;
-<<<<<<< HEAD
-use solana_runtime::bank::Bank;
+use solana_runtime::{bank::Bank, bank_forks::BankForks};
 use solana_sdk::timing::{timestamp, AtomicInterval};
 use solana_sdk::{clock::Slot, pubkey::Pubkey};
 use solana_streamer::{sendmmsg::send_mmsg, socket::SocketAddrSpace};
-=======
-use solana_runtime::{bank::Bank, bank_forks::BankForks};
-use solana_sdk::timing::timestamp;
-use solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Keypair};
-use solana_streamer::sendmmsg::send_mmsg;
-use std::sync::atomic::AtomicU64;
->>>>>>> a86ced0ba (generate deterministic seeds for shreds (#17950))
 use std::{
     collections::HashMap,
     net::UdpSocket,
@@ -97,12 +89,8 @@ impl BroadcastStageType {
                 retransmit_slots_receiver,
                 exit_sender,
                 blockstore,
-<<<<<<< HEAD
-                StandardBroadcastRun::new(keypair, shred_version),
-=======
                 bank_forks,
-                StandardBroadcastRun::new(shred_version),
->>>>>>> a86ced0ba (generate deterministic seeds for shreds (#17950))
+                StandardBroadcastRun::new(keypair, shred_version),
             ),
 
             BroadcastStageType::FailEntryVerification => BroadcastStage::new(
@@ -112,12 +100,8 @@ impl BroadcastStageType {
                 retransmit_slots_receiver,
                 exit_sender,
                 blockstore,
-<<<<<<< HEAD
-                FailEntryVerificationBroadcastRun::new(keypair, shred_version),
-=======
                 bank_forks,
-                FailEntryVerificationBroadcastRun::new(shred_version),
->>>>>>> a86ced0ba (generate deterministic seeds for shreds (#17950))
+                FailEntryVerificationBroadcastRun::new(keypair, shred_version),
             ),
 
             BroadcastStageType::BroadcastFakeShreds => BroadcastStage::new(
@@ -127,12 +111,8 @@ impl BroadcastStageType {
                 retransmit_slots_receiver,
                 exit_sender,
                 blockstore,
-<<<<<<< HEAD
-                BroadcastFakeShredsRun::new(keypair, 0, shred_version),
-=======
                 bank_forks,
-                BroadcastFakeShredsRun::new(0, shred_version),
->>>>>>> a86ced0ba (generate deterministic seeds for shreds (#17950))
+                BroadcastFakeShredsRun::new(keypair, 0, shred_version),
             ),
 
             BroadcastStageType::BroadcastDuplicates(config) => BroadcastStage::new(
@@ -142,12 +122,8 @@ impl BroadcastStageType {
                 retransmit_slots_receiver,
                 exit_sender,
                 blockstore,
-<<<<<<< HEAD
-                BroadcastDuplicatesRun::new(keypair, shred_version, config.clone()),
-=======
                 bank_forks,
-                BroadcastDuplicatesRun::new(shred_version, config.clone()),
->>>>>>> a86ced0ba (generate deterministic seeds for shreds (#17950))
+                BroadcastDuplicatesRun::new(keypair, shred_version, config.clone()),
             ),
         }
     }
@@ -414,12 +390,9 @@ pub fn broadcast_shreds(
     cluster_nodes: &ClusterNodes<BroadcastStage>,
     last_datapoint_submit: &Arc<AtomicInterval>,
     transmit_stats: &mut TransmitShredsStats,
-<<<<<<< HEAD
     socket_addr_space: &SocketAddrSpace,
-=======
     self_pubkey: Pubkey,
     bank_forks: &Arc<RwLock<BankForks>>,
->>>>>>> a86ced0ba (generate deterministic seeds for shreds (#17950))
 ) -> Result<()> {
     let broadcast_len = cluster_nodes.num_peers();
     if broadcast_len == 0 {
@@ -431,18 +404,13 @@ pub fn broadcast_shreds(
     let packets: Vec<_> = shreds
         .iter()
         .filter_map(|shred| {
-<<<<<<< HEAD
-            let node = cluster_nodes.get_broadcast_peer(shred.seed())?;
+            let seed = shred.seed(Some(self_pubkey), &root_bank);
+            let node = cluster_nodes.get_broadcast_peer(seed)?;
             if socket_addr_space.check(&node.tvu) {
                 Some((&shred.payload, &node.tvu))
             } else {
                 None
             }
-=======
-            let seed = shred.seed(Some(self_pubkey), &root_bank);
-            let node = cluster_nodes.get_broadcast_peer(seed)?;
-            Some((&shred.payload, &node.tvu))
->>>>>>> a86ced0ba (generate deterministic seeds for shreds (#17950))
         })
         .collect();
     shred_select.stop();
@@ -650,12 +618,8 @@ pub mod test {
             retransmit_slots_receiver,
             &exit_sender,
             &blockstore,
-<<<<<<< HEAD
-            StandardBroadcastRun::new(leader_keypair, 0),
-=======
             &bank_forks,
-            StandardBroadcastRun::new(0),
->>>>>>> a86ced0ba (generate deterministic seeds for shreds (#17950))
+            StandardBroadcastRun::new(leader_keypair, 0),
         );
 
         MockBroadcastStage {
