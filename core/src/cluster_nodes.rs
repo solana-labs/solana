@@ -32,7 +32,8 @@ enum NodeId {
     Pubkey(Pubkey),
 }
 
-struct Node {
+#[derive(Debug)]
+pub struct Node {
     node: NodeId,
     stake: u64,
 }
@@ -41,7 +42,7 @@ pub struct ClusterNodes<T> {
     pubkey: Pubkey, // The local node itself.
     // All staked nodes + other known tvu-peers + the node itself;
     // sorted by (stake, pubkey) in descending order.
-    nodes: Vec<Node>,
+    pub nodes: Vec<Node>,
     // Weights and indices for sampling peers. weighted_{shuffle,best} expect
     // weights >= 1. For backward compatibility we use max(1, stake) for
     // weights and exclude nodes with no contact-info.

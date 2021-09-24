@@ -256,6 +256,7 @@ fn retransmit(
     max_slots: &MaxSlots,
     first_shreds_received: &Mutex<BTreeSet<Slot>>,
     rpc_subscriptions: Option<&RpcSubscriptions>,
+    dump_ts: &mut Instant,
 ) -> Result<(), RecvTimeoutError> {
     const RECV_TIMEOUT: Duration = Duration::from_secs(1);
     let mut shreds = shreds_receiver.recv_timeout(RECV_TIMEOUT)?;
@@ -322,6 +323,7 @@ fn retransmit(
             };
         let cluster_nodes =
             cluster_nodes_cache.get(shred_slot, &root_bank, &working_bank, cluster_info);
+
         let shred_seed = shred.seed(slot_leader, &root_bank);
         let (neighbors, children) =
             cluster_nodes.get_retransmit_peers(shred_seed, DATA_PLANE_FANOUT, slot_leader);
@@ -360,6 +362,19 @@ fn retransmit(
     };
 
     let shred_slot = if shreds.inner_shreds.is_empty() { 0 } else { shreds.inner_shreds[0].slot() };
+
+    if dump_ts.elapsed().as_secs() > 2 {
+        if shreds.inner_shreds.first().is_some() {
+            let cluster_nodes = cluster_nodes_cache.get(
+                shreds.inner_shreds.first().unwrap().slot(),
+                &root_bank,
+                &working_bank,
+                cluster_info
+            );
+            cluster_nodes.nodes.iter().for_each(|n| error!("CLUSTER_NODE: {:?}", n));
+            *dump_ts = Instant::now();
+        }
+    }
 
     thread_pool.install(|| {
         shreds
@@ -407,6 +422,7 @@ pub fn retransmitter(
         CLUSTER_NODES_CACHE_NUM_EPOCH_CAP,
         CLUSTER_NODES_CACHE_TTL,
     );
+    let mut dump_ts = Instant::now();
     let mut hasher_reset_ts = Instant::now();
     let mut stats = RetransmitStats::default();
     let shreds_received = Mutex::new((LruCache::new(DEFAULT_LRU_SIZE), PacketHasher::default()));
@@ -436,6 +452,7 @@ pub fn retransmitter(
                     &max_slots,
                     &first_shreds_received,
                     rpc_subscriptions.as_deref(),
+                    &mut dump_ts,
                 ) {
                     Ok(()) => (),
                     Err(RecvTimeoutError::Timeout) => (),
