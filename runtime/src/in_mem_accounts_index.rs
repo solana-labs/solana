@@ -132,8 +132,8 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         Some(self.disk_to_cache_entry(entry_disk.0, entry_disk.1))
     }
 
-    // lookup 'pubkey' in index
-    pub fn get(&self, pubkey: &K) -> Option<AccountMapEntry<T>> {
+    /// lookup 'pubkey' by only looking in memory. Does not look on disk.
+    fn get_only_in_mem(&self, pubkey: &K) -> Option<AccountMapEntry<T>> {
         let m = Measure::start("get");
         let result = self.map().read().unwrap().get(pubkey).map(Arc::clone);
         let stats = self.stats();
@@ -147,10 +147,19 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
         if let Some(entry) = result.as_ref() {
             entry.set_age(self.storage.future_age_to_flush());
+        }
+        result
+    }
+
+    // lookup 'pubkey' in index
+    pub fn get(&self, pubkey: &K) -> Option<AccountMapEntry<T>> {
+        let result = self.get_only_in_mem(pubkey);
+        if result.is_some() {
             return result;
         }
 
         // not in cache, look on disk
+        let stats = &self.stats();
         let new_entry = self.load_account_entry_from_disk(pubkey)?;
         let mut map = self.map().write().unwrap();
         let entry = map.entry(*pubkey);
@@ -242,9 +251,20 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         reclaims: &mut SlotList<T>,
         previous_slot_entry_was_cached: bool,
     ) {
+        // try to get it just from memory first using only a read lock
+        if let Some(get) = self.get_only_in_mem(pubkey) {
+            Self::lock_and_update_slot_list(
+                &get,
+                new_value.into(),
+                reclaims,
+                previous_slot_entry_was_cached,
+            );
+            Self::update_stat(&self.stats().updates_in_mem, 1);
+            return;
+        }
+
         let m = Measure::start("entry");
         let mut map = self.map().write().unwrap();
-        // note: an optimization is to use read lock and use get here instead of write lock entry
         let entry = map.entry(*pubkey);
         let stats = &self.stats();
         let (count, time) = if matches!(entry, Entry::Occupied(_)) {
