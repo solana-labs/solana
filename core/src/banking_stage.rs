@@ -77,7 +77,7 @@ const MAX_NUM_TRANSACTIONS_PER_BATCH: usize = 128;
 
 const DEFAULT_LRU_SIZE: usize = 200_000;
 
-const MIN_THREADS_VOTES: u32 = 2;
+const NUM_VOTE_PROCESSING_THREADS: u32 = 2;
 const MIN_THREADS_BANKING: u32 = 1;
 
 #[derive(Debug, Default)]
@@ -223,6 +223,7 @@ pub enum BufferedPacketsDecision {
     Hold,
 }
 
+#[derive(Debug, Clone)]
 pub enum ForwardOption {
     NotForward,
     ForwardTpuVote,
@@ -258,7 +259,7 @@ impl BankingStage {
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         verified_receiver: CrossbeamReceiver<Vec<Packets>>,
         verified_vote_receiver: CrossbeamReceiver<Vec<Packets>>,
-        vote_verified_receiver: CrossbeamReceiver<Vec<Packets>>,
+        tpu_verified_vote_receiver: CrossbeamReceiver<Vec<Packets>>,
         num_threads: u32,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: ReplayVoteSender,
@@ -274,12 +275,17 @@ impl BankingStage {
         )));
         let data_budget = Arc::new(DataBudget::default());
         // Many banks that process transactions in parallel.
-        assert!(num_threads >= MIN_THREADS_VOTES + MIN_THREADS_BANKING);
+        assert!(num_threads >= NUM_VOTE_PROCESSING_THREADS + MIN_THREADS_BANKING);
         let bank_thread_hdls: Vec<JoinHandle<()>> = (0..num_threads)
             .map(|i| {
                 let (verified_receiver, forward_option) = match i.cmp(&(num_threads - 2)) {
-                    std::cmp::Ordering::Less => (verified_receiver.clone(), ForwardOption::ForwardTransaction),
-                    std::cmp::Ordering::Equal => (vote_verified_receiver.clone(), ForwardOption::ForwardTpuVote),
+                    std::cmp::Ordering::Less => {
+                        (verified_receiver.clone(), ForwardOption::ForwardTransaction)
+                    }
+                    std::cmp::Ordering::Equal => (
+                        tpu_verified_vote_receiver.clone(),
+                        ForwardOption::ForwardTpuVote,
+                    ),
                     std::cmp::Ordering::Greater => {
                         // Disable forwarding of vote transactions
                         // from gossip. Note - votes can also arrive from tpu
@@ -594,8 +600,15 @@ impl BankingStage {
         data_budget: &DataBudget,
     ) {
         let addr = match forward_option {
-            ForwardOption::NotForward => {if !hold { buffered_packets.clear(); } return},
-            ForwardOption::ForwardTransaction => next_leader_tpu_forwards(cluster_info, poh_recorder),
+            ForwardOption::NotForward => {
+                if !hold {
+                    buffered_packets.clear();
+                }
+                return;
+            }
+            ForwardOption::ForwardTransaction => {
+                next_leader_tpu_forwards(cluster_info, poh_recorder)
+            }
             ForwardOption::ForwardTpuVote => next_leader_tpu_vote(cluster_info, poh_recorder),
         };
         let addr = match addr {
@@ -694,7 +707,7 @@ impl BankingStage {
             env::var("SOLANA_BANKING_THREADS")
                 .map(|x| x.parse().unwrap_or(NUM_THREADS))
                 .unwrap_or(NUM_THREADS),
-            MIN_THREADS_VOTES + MIN_THREADS_BANKING,
+            NUM_VOTE_PROCESSING_THREADS + MIN_THREADS_BANKING,
         )
     }
 
@@ -2775,7 +2788,7 @@ mod tests {
             let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
             let data_budget = DataBudget::default();
             BankingStage::handle_forwarding(
-                true,
+                &ForwardOption::ForwardTransaction,
                 &cluster_info,
                 &mut unprocessed_packets,
                 &poh_recorder,
