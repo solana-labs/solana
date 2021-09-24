@@ -299,19 +299,17 @@ impl BankingStage {
         assert!(num_threads >= NUM_VOTE_PROCESSING_THREADS + MIN_THREADS_BANKING);
         let bank_thread_hdls: Vec<JoinHandle<()>> = (0..num_threads)
             .map(|i| {
-                let (verified_receiver, forward_option) = match i.cmp(&(num_threads - 2)) {
-                    std::cmp::Ordering::Less => {
-                        (verified_receiver.clone(), ForwardOption::ForwardTransaction)
-                    }
-                    std::cmp::Ordering::Equal => (
-                        tpu_verified_vote_receiver.clone(),
-                        ForwardOption::ForwardTpuVote,
-                    ),
-                    std::cmp::Ordering::Greater => {
+                let (verified_receiver, forward_option) = match i {
+                    0 => {
                         // Disable forwarding of vote transactions
                         // from gossip. Note - votes can also arrive from tpu
                         (verified_vote_receiver.clone(), ForwardOption::NotForward)
                     }
+                    1 => (
+                        tpu_verified_vote_receiver.clone(),
+                        ForwardOption::ForwardTpuVote,
+                    ),
+                    _ => (verified_receiver.clone(), ForwardOption::ForwardTransaction),
                 };
 
                 let poh_recorder = poh_recorder.clone();
