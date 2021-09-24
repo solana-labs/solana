@@ -50,7 +50,7 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
 
     /// Do initialization for the PostgreSQL plugin.
     /// # Arguments
-    ///  
+    ///
     /// Format of the config file:
     /// The `accounts_selector` section allows the user to controls accounts selections.
     /// "accounts_selector" : {
