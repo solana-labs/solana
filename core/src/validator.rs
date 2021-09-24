@@ -388,17 +388,23 @@ impl Validator {
         let mut confirmed_bank_senders = Vec::new();
 
         let accountsdb_plugin_service =
-            config
-                .accountsdb_plugin_config_file
-                .as_ref()
-                .map(|accountsdb_plugin_config_file| {
-                    let (confirmed_bank_sender, confirmed_bank_receiver) = unbounded();
-                    confirmed_bank_senders.push(confirmed_bank_sender);
-                    AccountsDbPluginService::new(
-                        confirmed_bank_receiver,
-                        accountsdb_plugin_config_file,
-                    )
-                });
+            if let Some(accountsdb_plugin_config_file) = &config.accountsdb_plugin_config_file {
+                let (confirmed_bank_sender, confirmed_bank_receiver) = unbounded();
+                confirmed_bank_senders.push(confirmed_bank_sender);
+                let result = AccountsDbPluginService::new(
+                    confirmed_bank_receiver,
+                    accountsdb_plugin_config_file,
+                );
+                match result {
+                    Ok(accountsdb_plugin_service) => Some(accountsdb_plugin_service),
+                    Err(err) => {
+                        error!("Failed to load the AccountsDb plugin: {:?}", err);
+                        abort();
+                    }
+                }
+            } else {
+                None
+            };
 
         let (
             genesis_config,

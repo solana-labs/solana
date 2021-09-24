@@ -16,7 +16,20 @@ use {
         sync::{Arc, RwLock},
         thread,
     },
+    thiserror::Error,
 };
+
+#[derive(Error, Debug)]
+pub enum AccountsdbPluginError {
+    #[error("Plugin library path is not specified in the config file")]
+    LibPathNotSet,
+
+    #[error("Invalid plugin path")]
+    InvalidPluginPath,
+
+    #[error("Cannot load plugin shared library")]
+    PluginLoadError(String),
+}
 
 /// The service managing the AccountsDb plugin workflow.
 pub struct AccountsDbPluginService {
@@ -42,7 +55,7 @@ impl AccountsDbPluginService {
     pub fn new(
         confirmed_bank_receiver: Receiver<BankNotification>,
         accountsdb_plugin_config_file: &Path,
-    ) -> Self {
+    ) -> Result<Self, AccountsdbPluginError> {
         info!(
             "Starting AccountsDbPluginService from config file: {:?}",
             accountsdb_plugin_config_file
@@ -62,23 +75,34 @@ impl AccountsDbPluginService {
         let confirmed_slots_observer =
             SlotStatusObserver::new(confirmed_bank_receiver, accounts_update_notifier.clone());
 
+        let libpath = result["libpath"]
+            .as_str()
+            .ok_or(AccountsdbPluginError::LibPathNotSet)?;
+        let config_file = accountsdb_plugin_config_file
+            .as_os_str()
+            .to_str()
+            .ok_or(AccountsdbPluginError::InvalidPluginPath)?;
+
         unsafe {
-            plugin_manager
+            let result = plugin_manager
                 .write()
                 .unwrap()
-                .load_plugin(
-                    result["libpath"].as_str().unwrap(),
-                    accountsdb_plugin_config_file.as_os_str().to_str().unwrap(),
-                )
-                .unwrap();
+                .load_plugin(libpath, config_file);
+            if let Err(err) = result {
+                let msg = format!(
+                    "Failed to load the plugin library: {:?}, error: {:?}",
+                    libpath, err
+                );
+                return Err(AccountsdbPluginError::PluginLoadError(msg));
+            }
         }
 
         info!("Started AccountsDbPluginService");
-        AccountsDbPluginService {
+        Ok(AccountsDbPluginService {
             confirmed_slots_observer,
             plugin_manager,
             accounts_update_notifier,
-        }
+        })
     }
 
     pub fn get_accounts_update_notifier(&self) -> AccountsUpdateNotifier {

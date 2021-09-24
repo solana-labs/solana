@@ -4273,6 +4273,7 @@ dependencies = [
  "solana-rpc",
  "solana-runtime",
  "solana-sdk",
+ "thiserror",
 ]
 
 [[package]]

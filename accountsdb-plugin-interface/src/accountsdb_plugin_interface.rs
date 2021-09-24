@@ -2,12 +2,7 @@
 /// the AccountsDbPlugin trait to work with the Solana Validator.
 /// In addition, the dynamic libraray must export a "C" function _create_plugin which
 /// creates the implementation of the plugin.
-
-use {
-    std::any::Any,
-    std::io,
-    thiserror::Error,
-};
+use {std::any::Any, std::io, thiserror::Error};
 
 #[derive(Clone, PartialEq, Default, Debug)]
 pub struct ReplicaAccountMeta {
