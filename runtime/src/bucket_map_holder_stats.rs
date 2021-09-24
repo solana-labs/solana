@@ -4,6 +4,9 @@ use solana_sdk::timing::{timestamp, AtomicInterval};
 use std::fmt::Debug;
 use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
 
+// stats logged every 10 s
+const STATS_INTERVAL_MS: u64 = 10_000;
+
 #[derive(Debug, Default)]
 pub struct BucketMapHolderStats {
     pub get_mem_us: AtomicU64,
@@ -92,9 +95,13 @@ impl BucketMapHolderStats {
         }
     }
 
+    pub fn remaining_until_next_interval(&self) -> u64 {
+        self.last_time
+            .remaining_until_next_interval(STATS_INTERVAL_MS)
+    }
+
     pub fn report_stats<T: IndexValue>(&self, storage: &BucketMapHolder<T>) {
-        // account index stats every 10 s
-        if !self.last_time.should_update(10_000) {
+        if !self.last_time.should_update(STATS_INTERVAL_MS) {
             return;
         }
 
