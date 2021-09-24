@@ -80,6 +80,18 @@ impl AtomicInterval {
                 == Ok(last)
             && !(skip_first && last == 0)
     }
+
+    /// return ms elapsed since the last time the time was set
+    pub fn elapsed_ms(&self) -> u64 {
+        let now = timestamp();
+        let last = self.last_update.load(Ordering::Relaxed);
+        now.saturating_sub(last) // wrapping somehow?
+    }
+
+    /// return ms until the interval_time will have elapsed
+    pub fn remaining_until_next_interval(&self, interval_time: u64) -> u64 {
+        interval_time.saturating_sub(self.elapsed_ms())
+    }
 }
 
 #[cfg(test)]
@@ -96,6 +108,11 @@ mod test {
         assert!(i.should_update_ext(1000, false));
 
         std::thread::sleep(Duration::from_millis(10));
+        assert!(i.elapsed_ms() > 9 && i.elapsed_ms() < 1000);
+        assert!(
+            i.remaining_until_next_interval(1000) > 9
+                && i.remaining_until_next_interval(1000) < 991
+        );
         assert!(i.should_update(9));
         assert!(!i.should_update(100));
     }
