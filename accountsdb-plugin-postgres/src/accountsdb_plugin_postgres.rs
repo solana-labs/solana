@@ -177,7 +177,7 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
                 });
             }
             Some(client) => {
-                let slot = slot as i64; // postgres only support i64
+                let slot = slot as i64; // postgres only supports i64
                 let lamports = account.account_meta.lamports as i64;
                 let rent_epoch = account.account_meta.rent_epoch as i64;
                 let updated_on = Utc::now().naive_utc();
