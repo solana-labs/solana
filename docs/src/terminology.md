@@ -8,7 +8,7 @@ The following terms are used throughout the documentation.
 
 A record in the Solana ledger that either holds data or is an executable program.
 
-Like an account at a traditional bank, a Solana account may hold funds called [lamports](terminology.md#lamport). Like a file in Linux, it is addressable by a [key], often referred to as a [public key](terminology.md#public-key) or pubkey.
+Like an account at a traditional bank, a Solana account may hold funds called [lamports](terminology.md#lamport). Like a file in Linux, it is addressable by a [key], often referred to as a [public key](terminology.md#public-key-pubkey) or pubkey.
 
 The key may be one of:
 an ed25519 public key
@@ -147,7 +147,7 @@ The smallest contiguous unit of execution logic in a [program](terminology.md#pr
 
 ## keypair
 
-A [public key](terminology.md#public-key) and corresponding [private key](terminology.md#private-key) for accessing an account.
+A [public key](terminology.md#public-key-pubkey) and corresponding [private key](terminology.md#private-key) for accessing an account.
 
 ## lamport
 
@@ -159,7 +159,7 @@ The role of a [validator](terminology.md#validator) when it is appending [entrie
 
 ## leader schedule
 
-A sequence of [validator](terminology.md#validator) [public keys](terminology.md#public-key) mapped to [slots](terminology.md#slot). The cluster uses the leader schedule to determine which validator is the [leader](terminology.md#leader) at any moment in time.
+A sequence of [validator](terminology.md#validator) [public keys](terminology.md#public-key-pubkey) mapped to [slots](terminology.md#slot). The cluster uses the leader schedule to determine which validator is the [leader](terminology.md#leader) at any moment in time.
 
 ## ledger
 
