@@ -358,7 +358,9 @@ fn retransmit(
             .retransmit_total
             .fetch_add(retransmit_time.as_us(), Ordering::Relaxed);
     };
-    let shred_slot = shreds.inner_shreds[0].slot();
+
+    let shred_slot = if shreds.inner_shreds.is_empty() { 0 } else { shreds.inner_shreds[0].slot() };
+
     thread_pool.install(|| {
         shreds
             .inner_shreds
