@@ -244,6 +244,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     ) {
         let m = Measure::start("entry");
         let mut map = self.map().write().unwrap();
+        // note: an optimization is to use read lock and use get here instead of write lock entry
         let entry = map.entry(*pubkey);
         let stats = &self.stats();
         let (count, time) = if matches!(entry, Entry::Occupied(_)) {
@@ -361,28 +362,6 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             ref_count,
             AccountMapEntryMeta::new_dirty(&self.storage),
         ))
-    }
-
-    // returns true if upsert was successful. new_value is modified in this case. new_value contains a RwLock
-    // otherwise, new_value has not been modified and the pubkey has to be added to the maps with a write lock. call upsert_new
-    pub fn update_key_if_exists(
-        &self,
-        pubkey: &Pubkey,
-        new_value: PreAllocatedAccountMapEntry<T>,
-        reclaims: &mut SlotList<T>,
-        previous_slot_entry_was_cached: bool,
-    ) -> (bool, Option<PreAllocatedAccountMapEntry<T>>) {
-        if let Some(current) = self.map().read().unwrap().get(pubkey) {
-            Self::lock_and_update_slot_list(
-                current,
-                new_value.into(),
-                reclaims,
-                previous_slot_entry_was_cached,
-            );
-            (true, None)
-        } else {
-            (false, Some(new_value))
-        }
     }
 
     pub fn len(&self) -> usize {

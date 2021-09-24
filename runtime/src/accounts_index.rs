@@ -1651,22 +1651,9 @@ impl<T: IndexValue> AccountsIndex<T> {
         let new_item = PreAllocatedAccountMapEntry::new(slot, account_info, &self.storage.storage);
         let map = &self.account_maps[self.bin_calculator.bin_from_pubkey(pubkey)];
 
-        let r_account_maps = map.read().unwrap();
-        let (updated, new_item) = r_account_maps.update_key_if_exists(
-            pubkey,
-            new_item,
-            reclaims,
-            previous_slot_entry_was_cached,
-        );
-        if !updated {
-            drop(r_account_maps);
-            let w_account_maps = map.write().unwrap();
-            w_account_maps.upsert(
-                pubkey,
-                new_item.unwrap(),
-                reclaims,
-                previous_slot_entry_was_cached,
-            );
+        {
+            let r_account_maps = map.read().unwrap();
+            r_account_maps.upsert(pubkey, new_item, reclaims, previous_slot_entry_was_cached);
         }
         self.update_secondary_indexes(pubkey, account_owner, account_data, account_indexes);
     }
@@ -2999,20 +2986,6 @@ pub mod tests {
         let new_entry =
             PreAllocatedAccountMapEntry::new(slot, account_info, &index.storage.storage);
         assert_eq!(0, account_maps_len_expensive(&index));
-
-        // will fail because key doesn't exist
-        let r_account_maps = index.get_account_maps_read_lock(&key.pubkey());
-        assert!(
-            !r_account_maps
-                .update_key_if_exists(
-                    &key.pubkey(),
-                    new_entry.clone(),
-                    &mut SlotList::default(),
-                    UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
-                )
-                .0
-        );
-        drop(r_account_maps);
         assert_eq!((slot, account_info), new_entry.clone().into());
 
         assert_eq!(0, account_maps_len_expensive(&index));
