@@ -52,5 +52,7 @@ cargo_audit_ignores=(
   # https://github.com/alexcrichton/tar-rs/issues/238
   --ignore RUSTSEC-2021-0080
 
+  # zeroize_derive: `#[zeroize(drop)]` doesn't implement `Drop` for `enum`s
+  --ignore RUSTSEC-2021-0115
 )
 scripts/cargo-for-all-lock-files.sh stable audit "${cargo_audit_ignores[@]}"
