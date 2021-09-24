@@ -58,7 +58,7 @@ impl<T: Clone + Copy> Bucket<T> {
 
     pub fn keys(&self) -> Vec<Pubkey> {
         let mut rv = vec![];
-        for i in 0..self.index.num_cells() {
+        for i in 0..self.index.capacity() {
             if self.index.uid(i) == UID_UNLOCKED {
                 continue;
             }
@@ -73,8 +73,8 @@ impl<T: Clone + Copy> Bucket<T> {
         R: RangeBounds<Pubkey>,
     {
         let mut result = Vec::with_capacity(self.index.used.load(Ordering::Relaxed) as usize);
-        for i in 0..self.index.num_cells() {
-            let ii = i % self.index.num_cells();
+        for i in 0..self.index.capacity() {
+            let ii = i % self.index.capacity();
             if self.index.uid(ii) == UID_UNLOCKED {
                 continue;
             }
@@ -107,7 +107,7 @@ impl<T: Clone + Copy> Bucket<T> {
     ) -> Option<(&'a mut IndexEntry, u64)> {
         let ix = Self::bucket_index_ix(index, key, random);
         for i in ix..ix + index.max_search() {
-            let ii = i % index.num_cells();
+            let ii = i % index.capacity();
             if index.uid(ii) == UID_UNLOCKED {
                 continue;
             }
@@ -126,7 +126,7 @@ impl<T: Clone + Copy> Bucket<T> {
     ) -> Option<(&'a IndexEntry, u64)> {
         let ix = Self::bucket_index_ix(index, key, random);
         for i in ix..ix + index.max_search() {
-            let ii = i % index.num_cells();
+            let ii = i % index.capacity();
             if index.uid(ii) == UID_UNLOCKED {
                 continue;
             }
@@ -147,7 +147,7 @@ impl<T: Clone + Copy> Bucket<T> {
     ) -> Result<u64, BucketMapError> {
         let ix = Self::bucket_index_ix(index, key, random);
         for i in ix..ix + index.max_search() {
-            let ii = i as u64 % index.num_cells();
+            let ii = i as u64 % index.capacity();
             if index.uid(ii) != UID_UNLOCKED {
                 continue;
             }
@@ -233,7 +233,7 @@ impl<T: Clone + Copy> Bucket<T> {
             //need to move the allocation to a best fit spot
             let best_bucket = &self.data[best_fit_bucket as usize];
             let cap_power = best_bucket.capacity_pow2;
-            let cap = best_bucket.num_cells();
+            let cap = best_bucket.capacity();
             let pos = thread_rng().gen_range(0, cap);
             for i in pos..pos + self.index.max_search() {
                 let ix = i % cap;
@@ -292,7 +292,7 @@ impl<T: Clone + Copy> Bucket<T> {
                 );
                 let random = thread_rng().gen();
                 let mut valid = true;
-                for ix in 0..self.index.num_cells() {
+                for ix in 0..self.index.capacity() {
                     let uid = self.index.uid(ix);
                     if UID_UNLOCKED != uid {
                         let elem: &IndexEntry = self.index.get(ix);
@@ -362,8 +362,8 @@ impl<T: Clone + Copy> Bucket<T> {
         //location in any bucket on all validators
         random.hash(&mut s);
         let ix = s.finish();
-        ix % index.num_cells()
-        //debug!(            "INDEX_IX: {:?} uid:{} loc: {} cap:{}",            key,            uid,            location,            index.num_cells()        );
+        ix % index.capacity()
+        //debug!(            "INDEX_IX: {:?} uid:{} loc: {} cap:{}",            key,            uid,            location,            index.capacity()        );
     }
 
     pub fn insert(&mut self, key: &Pubkey, value: (&[T], RefCount)) {
