@@ -101,7 +101,7 @@ impl RpcClientConfig {
 /// commitment level is [`Finalized`], meaning the slot is definitely
 /// permanently committed. The default commitment level can be configured by
 /// creating `RpcClient` with an explicit [`CommitmentConfig`], and that default
-/// configured commitment level can be overridden by calling the variaus
+/// configured commitment level can be overridden by calling the various
 /// `_with_commitment` methods, like
 /// [`RpcClient::confirm_transaction_with_commitment`]. In some cases the
 /// configured commitment level is ignored and `Finalized` is used instead, as
@@ -2015,8 +2015,8 @@ impl RpcClient {
     /// format. To return transactions in other encodings, use
     /// [`get_block_with_encoding`].
     ///
-    /// [`get_block_with_encoding`]: RpcClient::get_block_with_encoding [uite]:
-    /// UiTransactionEncoding::Json
+    /// [`get_block_with_encoding`]: RpcClient::get_block_with_encoding
+    /// [uite]: UiTransactionEncoding::Json
     ///
     /// # RPC Reference
     ///
@@ -2154,13 +2154,13 @@ impl RpcClient {
         self.send(RpcRequest::GetConfirmedBlock, json!([slot, config]))
     }
 
-    /// Returns a list of confirmed blocks between two slots.
+    /// Returns a list of finalized blocks between two slots.
     ///
     /// The range is inclusive, with results including the block for both
     /// `start_slot` and `end_slot`.
     ///
     /// If `end_slot` is not provided, then the end slot is for the latest
-    /// confirmed block.
+    /// finalized block.
     ///
     /// This method may not return blocks for the full range of slots if some
     /// slots do not have corresponding blocks. To simply get a specific number
@@ -2211,7 +2211,7 @@ impl RpcClient {
     /// `start_slot` and `end_slot`.
     ///
     /// If `end_slot` is not provided, then the end slot is for the latest
-    /// confirmed block.
+    /// block with the given [commitment level][cl].
     ///
     /// This method may not return blocks for the full range of slots if some
     /// slots do not have corresponding blocks. To simply get a specific number
@@ -2277,7 +2277,7 @@ impl RpcClient {
         self.send(self.maybe_map_request(RpcRequest::GetBlocks)?, json)
     }
 
-    /// Returns a list of confirmed blocks starting at the given slot.
+    /// Returns a list of finalized blocks starting at the given slot.
     ///
     /// This method uses the [`Finalized`] commitment level.
     ///
@@ -3313,7 +3313,7 @@ impl RpcClient {
 
     /// Returns all information associated with the account of the provided pubkey.
     ///
-    /// This method uses the configured default commitment level.
+    /// This method uses the configured commitment level.
     ///
     /// To get multiple accounts at once, use the [`get_multiple_accounts`] method.
     ///
@@ -3487,7 +3487,7 @@ impl RpcClient {
 
     /// Returns the account information for a list of pubkeys.
     ///
-    /// This method uses the configured default commitment level.
+    /// This method uses the configured commitment level.
     ///
     /// # RPC Reference
     ///
@@ -3665,7 +3665,7 @@ impl RpcClient {
         Ok(self.get_account(pubkey)?.data)
     }
 
-    /// Returns minimum balance required to make account rent exempt.
+    /// Returns minimum balance required to make an account with specified data length rent exempt.
     ///
     /// # RPC Reference
     ///
