@@ -158,14 +158,15 @@ impl<T: IndexValue> BucketMapHolder<T> {
         let bins = in_mem.len();
         let flush = self.disk.is_some();
         loop {
-            let mut m = Measure::start("wait");
-            // this will transition to waits and thread throttling
-            self.wait_dirty_or_aged
-                .wait_timeout(Duration::from_millis(AGE_MS));
-            m.stop();
-            self.stats
-                .bg_waiting_us
-                .fetch_add(m.as_us(), Ordering::Relaxed);
+            if self.all_buckets_flushed_at_current_age() {
+                let mut m = Measure::start("wait");
+                self.wait_dirty_or_aged
+                    .wait_timeout(Duration::from_millis(AGE_MS));
+                m.stop();
+                self.stats
+                    .bg_waiting_us
+                    .fetch_add(m.as_us(), Ordering::Relaxed);
+            }
 
             if exit.load(Ordering::Relaxed) {
                 break;
@@ -178,6 +179,9 @@ impl<T: IndexValue> BucketMapHolder<T> {
                     in_mem[index].flush();
                 }
                 self.stats.report_stats(self);
+                if self.all_buckets_flushed_at_current_age() {
+                    break;
+                }
             }
             self.stats.active_threads.fetch_sub(1, Ordering::Relaxed);
         }
