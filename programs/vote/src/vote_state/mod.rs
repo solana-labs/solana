@@ -41,6 +41,10 @@ pub trait VoteTransaction {
     fn slot(&self, i: usize) -> Slot;
     fn len(&self) -> usize;
     fn hash(&self) -> Hash;
+
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
 #[frozen_abi(digest = "Ch2vVEwos2EjAVqSHCyJjnN2MNX1yrpapZTGhMSCjWUH")]
