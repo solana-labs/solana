@@ -79,7 +79,7 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
     /// }
 
     fn on_load(&mut self, config_file: &str) -> Result<()> {
-        solana_logger::setup_file_with_default("postgresql_plugin.log", "info");
+        solana_logger::setup_with_default("info");
         info!(
             "Loading plugin {:?} from config_file {:?}",
             self.name(),
@@ -162,7 +162,13 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
             return Ok(());
         }
 
-        debug!("Updating account {:?} at slot {:?}", account, slot);
+        debug!(
+            "Updating account {:?} {:?} at slot {:?} {:?}",
+            account.account_meta.pubkey,
+            account.account_meta.owner,
+            slot,
+            self.accounts_selector.as_ref().unwrap()
+        );
 
         match &mut self.client {
             None => {
