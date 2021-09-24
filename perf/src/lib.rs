@@ -1,4 +1,5 @@
 pub mod cuda_runtime;
+pub mod data_budget;
 pub mod packet;
 pub mod perf_libs;
 pub mod recycler;
