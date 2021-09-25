@@ -8,12 +8,13 @@ The following terms are used throughout the documentation.
 
 A record in the Solana ledger that either holds data or is an executable program.
 
-Like an account at a traditional bank, a Solana account may hold funds called [lamports](terminology.md#lamport). Like a file in Linux, it is addressable by a [key], often referred to as a [public key](terminology.md#public-key-pubkey) or pubkey.
+Like an account at a traditional bank, a Solana account may hold funds called [lamports](terminology.md#lamport). Like a file in Linux, it is addressable by a key, often referred to as a [public key](terminology.md#public-key-pubkey) or pubkey.
 
 The key may be one of:
-an ed25519 public key
-a program-derived account address (32byte value forced off the ed25519 curve)
-a hash of an ed25519 public key with a 32 character string
+
+* an ed25519 public key
+* a program-derived account address (32byte value forced off the ed25519 curve)
+* a hash of an ed25519 public key with a 32 character string
 
 ## account owner
 
