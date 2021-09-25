@@ -77,5 +77,8 @@ exclude = [
     "programs/bpf",
 ]
 
+# Needed to resolve the manifest for zeroize_derive when building bpf programs
+resolver = "2"
+
 [profile.dev]
 split-debuginfo = "unpacked"
