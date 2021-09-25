@@ -3901,7 +3901,7 @@ dependencies = [
  "anyhow",
  "hmac 0.8.1",
  "once_cell",
- "parking_lot",
+ "parking_lot 0.11.1",
  "pbkdf2 0.4.0",
  "rand 0.7.3",
  "rustc-hash",
