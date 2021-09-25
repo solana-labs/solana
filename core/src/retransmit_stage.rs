@@ -1,57 +1,8 @@
 //! The `retransmit_stage` retransmits shreds between validators
 #![allow(clippy::rc_buffer)]
 
-<<<<<<< HEAD
-use crate::{
-    cluster_info_vote_listener::VerifiedVoteReceiver,
-    cluster_nodes::ClusterNodes,
-    cluster_slots::ClusterSlots,
-    cluster_slots_service::{ClusterSlotsService, ClusterSlotsUpdateReceiver},
-    completed_data_sets_service::CompletedDataSetsSender,
-    repair_service::{DuplicateSlotsResetSender, RepairInfo},
-    result::{Error, Result},
-    window_service::{should_retransmit_and_persist, WindowService},
-};
-use crossbeam_channel::{Receiver, Sender};
-use lru::LruCache;
-use solana_client::rpc_response::SlotUpdate;
-use solana_gossip::cluster_info::{ClusterInfo, DATA_PLANE_FANOUT};
-use solana_ledger::shred::{get_shred_slot_index_type, ShredFetchStats};
-use solana_ledger::{
-    blockstore::{Blockstore, CompletedSlotsReceiver},
-    leader_schedule_cache::LeaderScheduleCache,
-};
-use solana_measure::measure::Measure;
-use solana_metrics::inc_new_counter_error;
-use solana_perf::packet::{Packet, Packets};
-use solana_rpc::{
-    max_slots::MaxSlots, rpc_completed_slots_service::RpcCompletedSlotsService,
-    rpc_subscriptions::RpcSubscriptions,
-};
-use solana_runtime::{bank::Bank, bank_forks::BankForks};
-use solana_sdk::{
-    clock::Slot,
-    epoch_schedule::EpochSchedule,
-    pubkey::Pubkey,
-    timing::{timestamp, AtomicInterval},
-};
-use solana_streamer::streamer::PacketReceiver;
-use std::{
-    collections::hash_set::HashSet,
-    collections::{BTreeMap, BTreeSet, HashMap},
-    net::UdpSocket,
-    ops::{Deref, DerefMut},
-    sync::atomic::{AtomicBool, AtomicU64, Ordering},
-    sync::mpsc::channel,
-    sync::mpsc::RecvTimeoutError,
-    sync::Mutex,
-    sync::{Arc, RwLock},
-    thread::{self, Builder, JoinHandle},
-    time::Duration,
-=======
 use {
     crate::{
-        ancestor_hashes_service::AncestorHashesReplayUpdateReceiver,
         cluster_info_vote_listener::VerifiedVoteReceiver,
         cluster_nodes::ClusterNodes,
         cluster_slots::ClusterSlots,
@@ -68,12 +19,18 @@ use {
     solana_gossip::cluster_info::{ClusterInfo, DATA_PLANE_FANOUT},
     solana_ledger::{
         shred::{get_shred_slot_index_type, ShredFetchStats},
-        {blockstore::Blockstore, leader_schedule_cache::LeaderScheduleCache},
+        {
+            blockstore::{Blockstore, CompletedSlotsReceiver},
+            leader_schedule_cache::LeaderScheduleCache,
+        },
     },
     solana_measure::measure::Measure,
     solana_metrics::inc_new_counter_error,
     solana_perf::packet::{Packet, Packets},
-    solana_rpc::{max_slots::MaxSlots, rpc_subscriptions::RpcSubscriptions},
+    solana_rpc::{
+        max_slots::MaxSlots, rpc_completed_slots_service::RpcCompletedSlotsService,
+        rpc_subscriptions::RpcSubscriptions,
+    },
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{
         clock::{Epoch, Slot},
@@ -97,7 +54,6 @@ use {
         thread::{self, Builder, JoinHandle},
         time::Duration,
     },
->>>>>>> d06dc6c8a (shares cluster-nodes between retransmit threads (#18947))
 };
 
 const MAX_DUPLICATE_COUNT: usize = 2;
@@ -652,13 +608,8 @@ impl RetransmitStage {
             leader_schedule_cache,
             cluster_info.clone(),
             retransmit_receiver,
-<<<<<<< HEAD
-            max_slots,
-            rpc_subscriptions.clone(),
-=======
             Arc::clone(max_slots),
-            rpc_subscriptions,
->>>>>>> d06dc6c8a (shares cluster-nodes between retransmit threads (#18947))
+            rpc_subscriptions.clone(),
         );
 
         let rpc_completed_slots_hdl =
