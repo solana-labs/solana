@@ -47,6 +47,10 @@ The [validator](terminology.md#validator) that produces the genesis (first) [blo
 
 The Solana program that owns and loads (BPF) smart contract programs, allowing the program to interface with the runtime
 
+## CBC block
+
+The smallest encrypted chunk of ledger, an encrypted ledger segment would be made of many CBC blocks. `ledger_segment_size / cbc_block_size` to be exact.
+
 ## client
 
 A computer program that accesses the Solana server network [cluster](terminology.md#cluster).
