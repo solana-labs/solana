@@ -8,12 +8,13 @@ The following terms are used throughout the documentation.
 
 A record in the Solana ledger that either holds data or is an executable program.
 
-Like an account at a traditional bank, a Solana account may hold funds called [lamports](terminology.md#lamport). Like a file in Linux, it is addressable by a [key], often referred to as a [public key](terminology.md#public-key-pubkey) or pubkey.
+Like an account at a traditional bank, a Solana account may hold funds called [lamports](terminology.md#lamport). Like a file in Linux, it is addressable by a key, often referred to as a [public key](terminology.md#public-key-pubkey) or pubkey.
 
 The key may be one of:
-an ed25519 public key
-a program-derived account address (32byte value forced off the ed25519 curve)
-a hash of an ed25519 public key with a 32 character string
+
+* an ed25519 public key
+* a program-derived account address (32byte value forced off the ed25519 curve)
+* a hash of an ed25519 public key with a 32 character string
 
 ## account owner
 
@@ -45,7 +46,7 @@ The [validator](terminology.md#validator) that produces the genesis (first) [blo
 
 ## BPF loader
 
-The Solana program that owns and loads (BPF) smart contract programs, allowing the program to interface with the runtime
+The Solana program that owns and loads [BPF](developing/on-chain-programs/overview#berkeley-packet-filter-bpf) smart contract programs, allowing the program to interface with the runtime.
 
 ## CBC block
 
@@ -164,7 +165,7 @@ A sequence of [validator](terminology.md#validator) [public keys](terminology.md
 ## ledger
 
 A list of [entries](terminology.md#entry) containing [transactions](terminology.md#transaction) signed by [clients](terminology.md#client).
-Conceptually, this can be traced back to the [genesis block](terminology.md#genesis-block), but actual [validators](terminology.md#validator)'s ledger may have only newer [blocks](terminology.md#block) to save storage usage as older ones not needed for validation of future blocks by design.
+Conceptually, this can be traced back to the [genesis block](terminology.md#genesis-block), but an actual [validator](terminology.md#validator)'s ledger may have only newer [blocks](terminology.md#block) to reduce storage, as older ones are not needed for validation of future blocks by design.
 
 ## ledger vote
 
