@@ -1219,10 +1219,9 @@ mod tests {
             .packets
             .iter_mut()
             .enumerate()
-            .for_each(|(index, mut packet)| {
-                let packet_offsets = do_get_packet_offsets(&packet, current_offset).unwrap();
-                check_for_simple_vote_transaction(&mut packet, &packet_offsets, current_offset)
-                    .ok();
+            .for_each(|(index, packet)| {
+                let packet_offsets = do_get_packet_offsets(packet, current_offset).unwrap();
+                check_for_simple_vote_transaction(packet, &packet_offsets, current_offset).ok();
                 if index == 1 {
                     assert!(packet.meta.is_simple_vote_tx);
                 } else {
