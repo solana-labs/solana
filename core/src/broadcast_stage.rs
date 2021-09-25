@@ -19,7 +19,7 @@ use solana_ledger::{blockstore::Blockstore, shred::Shred};
 use solana_measure::measure::Measure;
 use solana_metrics::{inc_new_counter_error, inc_new_counter_info};
 use solana_poh::poh_recorder::WorkingBankEntry;
-use solana_runtime::bank::Bank;
+use solana_runtime::{bank::Bank, bank_forks::BankForks};
 use solana_sdk::timing::{timestamp, AtomicInterval};
 use solana_sdk::{clock::Slot, pubkey::Pubkey};
 use solana_streamer::{sendmmsg::send_mmsg, socket::SocketAddrSpace};
@@ -28,7 +28,7 @@ use std::{
     net::UdpSocket,
     sync::atomic::{AtomicBool, Ordering},
     sync::mpsc::{channel, Receiver, RecvError, RecvTimeoutError, Sender},
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, RwLock},
     thread::{self, Builder, JoinHandle},
     time::{Duration, Instant},
 };
@@ -68,6 +68,7 @@ pub enum BroadcastStageType {
 }
 
 impl BroadcastStageType {
+    #[allow(clippy::too_many_arguments)]
     pub fn new_broadcast_stage(
         &self,
         sock: Vec<UdpSocket>,
@@ -76,6 +77,7 @@ impl BroadcastStageType {
         retransmit_slots_receiver: RetransmitSlotsReceiver,
         exit_sender: &Arc<AtomicBool>,
         blockstore: &Arc<Blockstore>,
+        bank_forks: &Arc<RwLock<BankForks>>,
         shred_version: u16,
     ) -> BroadcastStage {
         let keypair = cluster_info.keypair.clone();
@@ -87,6 +89,7 @@ impl BroadcastStageType {
                 retransmit_slots_receiver,
                 exit_sender,
                 blockstore,
+                bank_forks,
                 StandardBroadcastRun::new(keypair, shred_version),
             ),
 
@@ -97,6 +100,7 @@ impl BroadcastStageType {
                 retransmit_slots_receiver,
                 exit_sender,
                 blockstore,
+                bank_forks,
                 FailEntryVerificationBroadcastRun::new(keypair, shred_version),
             ),
 
@@ -107,6 +111,7 @@ impl BroadcastStageType {
                 retransmit_slots_receiver,
                 exit_sender,
                 blockstore,
+                bank_forks,
                 BroadcastFakeShredsRun::new(keypair, 0, shred_version),
             ),
 
@@ -117,6 +122,7 @@ impl BroadcastStageType {
                 retransmit_slots_receiver,
                 exit_sender,
                 blockstore,
+                bank_forks,
                 BroadcastDuplicatesRun::new(keypair, shred_version, config.clone()),
             ),
         }
@@ -137,6 +143,7 @@ trait BroadcastRun {
         receiver: &Arc<Mutex<TransmitReceiver>>,
         cluster_info: &ClusterInfo,
         sock: &UdpSocket,
+        bank_forks: &Arc<RwLock<BankForks>>,
     ) -> Result<()>;
     fn record(
         &mut self,
@@ -230,6 +237,7 @@ impl BroadcastStage {
         retransmit_slots_receiver: RetransmitSlotsReceiver,
         exit_sender: &Arc<AtomicBool>,
         blockstore: &Arc<Blockstore>,
+        bank_forks: &Arc<RwLock<BankForks>>,
         broadcast_stage_run: impl BroadcastRun + Send + 'static + Clone,
     ) -> Self {
         let btree = blockstore.clone();
@@ -258,10 +266,12 @@ impl BroadcastStage {
             let socket_receiver = socket_receiver.clone();
             let mut bs_transmit = broadcast_stage_run.clone();
             let cluster_info = cluster_info.clone();
+            let bank_forks = bank_forks.clone();
             let t = Builder::new()
                 .name("solana-broadcaster-transmit".to_string())
                 .spawn(move || loop {
-                    let res = bs_transmit.transmit(&socket_receiver, &cluster_info, &sock);
+                    let res =
+                        bs_transmit.transmit(&socket_receiver, &cluster_info, &sock, &bank_forks);
                     let res = Self::handle_error(res, "solana-broadcaster-transmit");
                     if let Some(res) = res {
                         return res;
@@ -381,6 +391,8 @@ pub fn broadcast_shreds(
     last_datapoint_submit: &Arc<AtomicInterval>,
     transmit_stats: &mut TransmitShredsStats,
     socket_addr_space: &SocketAddrSpace,
+    self_pubkey: Pubkey,
+    bank_forks: &Arc<RwLock<BankForks>>,
 ) -> Result<()> {
     let broadcast_len = cluster_nodes.num_peers();
     if broadcast_len == 0 {
@@ -388,10 +400,12 @@ pub fn broadcast_shreds(
         return Ok(());
     }
     let mut shred_select = Measure::start("shred_select");
+    let root_bank = bank_forks.read().unwrap().root_bank();
     let packets: Vec<_> = shreds
         .iter()
         .filter_map(|shred| {
-            let node = cluster_nodes.get_broadcast_peer(shred.seed())?;
+            let seed = shred.seed(Some(self_pubkey), &root_bank);
+            let node = cluster_nodes.get_broadcast_peer(seed)?;
             if socket_addr_space.check(&node.tvu) {
                 Some((&shred.payload, &node.tvu))
             } else {
@@ -591,7 +605,9 @@ pub mod test {
         let exit_sender = Arc::new(AtomicBool::new(false));
 
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
-        let bank = Arc::new(Bank::new(&genesis_config));
+        let bank = Bank::new(&genesis_config);
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank = bank_forks.read().unwrap().root_bank();
 
         let leader_keypair = cluster_info.keypair.clone();
         // Start up the broadcast stage
@@ -602,6 +618,7 @@ pub mod test {
             retransmit_slots_receiver,
             &exit_sender,
             &blockstore,
+            &bank_forks,
             StandardBroadcastRun::new(leader_keypair, 0),
         );
 

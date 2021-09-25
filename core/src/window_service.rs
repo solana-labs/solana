@@ -213,6 +213,8 @@ where
 
 fn recv_window<F>(
     blockstore: &Arc<Blockstore>,
+    leader_schedule_cache: &Arc<LeaderScheduleCache>,
+    bank_forks: &Arc<RwLock<BankForks>>,
     insert_shred_sender: &CrossbeamSender<(Vec<Shred>, Vec<Option<RepairMeta>>)>,
     my_pubkey: &Pubkey,
     verified_receiver: &CrossbeamReceiver<Vec<Packets>>,
@@ -236,6 +238,7 @@ where
     let now = Instant::now();
     inc_new_counter_debug!("streamer-recv_window-recv", total_packets);
 
+    let root_bank = bank_forks.read().unwrap().root_bank();
     let last_root = blockstore.last_root();
     let (shreds, repair_infos): (Vec<_>, Vec<_>) = thread_pool.install(|| {
         packets
@@ -275,8 +278,10 @@ where
                                     }
                                 };
                                 if shred_filter(&shred, last_root) {
+                                    let leader_pubkey = leader_schedule_cache
+                                        .slot_leader_at(shred.slot(), Some(&root_bank));
                                     packet.meta.slot = shred.slot();
-                                    packet.meta.seed = shred.seed();
+                                    packet.meta.seed = shred.seed(leader_pubkey, &root_bank);
                                     Some((shred, repair_info))
                                 } else {
                                     packet.meta.discard = true;
@@ -370,7 +375,7 @@ impl WindowService {
         let outstanding_requests: Arc<RwLock<OutstandingRepairs>> =
             Arc::new(RwLock::new(OutstandingRequests::default()));
 
-        let bank_forks = Some(repair_info.bank_forks.clone());
+        let bank_forks = repair_info.bank_forks.clone();
 
         let repair_service = RepairService::new(
             blockstore.clone(),
@@ -411,7 +416,8 @@ impl WindowService {
             insert_sender,
             verified_receiver,
             shred_filter,
-            bank_forks,
+            leader_schedule_cache,
+            &bank_forks,
             retransmit,
         );
 
@@ -509,6 +515,7 @@ impl WindowService {
             .unwrap()
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn start_recv_window_thread<F>(
         id: Pubkey,
         exit: &Arc<AtomicBool>,
@@ -516,7 +523,8 @@ impl WindowService {
         insert_sender: CrossbeamSender<(Vec<Shred>, Vec<Option<RepairMeta>>)>,
         verified_receiver: CrossbeamReceiver<Vec<Packets>>,
         shred_filter: F,
-        bank_forks: Option<Arc<RwLock<BankForks>>>,
+        leader_schedule_cache: &Arc<LeaderScheduleCache>,
+        bank_forks: &Arc<RwLock<BankForks>>,
         retransmit: PacketSender,
     ) -> JoinHandle<()>
     where
@@ -527,6 +535,9 @@ impl WindowService {
     {
         let exit = exit.clone();
         let blockstore = blockstore.clone();
+        let bank_forks = bank_forks.clone();
+        let bank_forks_opt = Some(bank_forks.clone());
+        let leader_schedule_cache = leader_schedule_cache.clone();
         Builder::new()
             .name("solana-window".to_string())
             .spawn(move || {
@@ -554,6 +565,8 @@ impl WindowService {
                     };
                     if let Err(e) = recv_window(
                         &blockstore,
+                        &leader_schedule_cache,
+                        &bank_forks,
                         &insert_sender,
                         &id,
                         &verified_receiver,
@@ -562,7 +575,7 @@ impl WindowService {
                             shred_filter(
                                 &id,
                                 shred,
-                                bank_forks
+                                bank_forks_opt
                                     .as_ref()
                                     .map(|bank_forks| bank_forks.read().unwrap().working_bank()),
                                 last_root,
