@@ -1841,7 +1841,7 @@ impl ReplayStage {
             .root_bank()
             .feature_set
             .is_active(&feature_set::cost_model::id())
-        { 
+        {
             if !execute_timings.details.per_program_timings.is_empty() {
                 cost_update_sender
                     .send(execute_timings)
