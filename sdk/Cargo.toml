@@ -80,13 +80,8 @@ thiserror = "1.0"
 uriparse = "0.6.3"
 
 [dev-dependencies]
-<<<<<<< HEAD
 curve25519-dalek = "2.1.0"
-tiny-bip39 = "0.7.0"
-=======
-curve25519-dalek = "3.2.0"
 tiny-bip39 = "0.8.1"
->>>>>>> 038d77347 (chore: bump tiny-bip39 from 0.8.0 to 0.8.1 (#20136))
 
 [build-dependencies]
 rustc_version = "0.2"
