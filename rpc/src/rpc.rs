@@ -1973,6 +1973,7 @@ fn optimize_filters(filters: &mut Vec<RpcFilterType>) {
         if let RpcFilterType::Memcmp(compare) = filter_type {
             use MemcmpEncodedBytes::*;
             match &compare.bytes {
+                #[allow(deprecated)]
                 Binary(bytes) | Base58(bytes) => {
                     compare.bytes = Bytes(bs58::decode(bytes).into_vec().unwrap());
                 }
