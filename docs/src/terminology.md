@@ -8,13 +8,12 @@ The following terms are used throughout the documentation.
 
 A record in the Solana ledger that either holds data or is an executable program.
 
-Like an account at a traditional bank, a Solana account may hold funds called [lamports](terminology.md#lamport). Like a file in Linux, it is addressable by a key, often referred to as a [public key](terminology.md#public-key-pubkey) or pubkey.
+Like an account at a traditional bank, a Solana account may hold funds called [lamports](terminology.md#lamport). Like a file in Linux, it is addressable by a [key], often referred to as a [public key](terminology.md#public-key-pubkey) or pubkey.
 
 The key may be one of:
-
-* an ed25519 public key
-* a program-derived account address (32byte value forced off the ed25519 curve)
-* a hash of an ed25519 public key with a 32 character string
+an ed25519 public key
+a program-derived account address (32byte value forced off the ed25519 curve)
+a hash of an ed25519 public key with a 32 character string
 
 ## account owner
 
@@ -46,11 +45,7 @@ The [validator](terminology.md#validator) that produces the genesis (first) [blo
 
 ## BPF loader
 
-The Solana program that owns and loads [BPF](developing/on-chain-programs/overview#berkeley-packet-filter-bpf) smart contract programs, allowing the program to interface with the runtime.
-
-## CBC block
-
-The smallest encrypted chunk of ledger, an encrypted ledger segment would be made of many CBC blocks. `ledger_segment_size / cbc_block_size` to be exact.
+The Solana program that owns and loads (BPF) smart contract programs, allowing the program to interface with the runtime
 
 ## client
 
@@ -70,11 +65,11 @@ A [block](terminology.md#block) that has received a [supermajority](terminology.
 
 ## control plane
 
-A gossip network connecting all [nodes](terminology.md#node) of a [cluster](terminology.md#cluster).
+A [gossip network](validator/gossip.md) connecting all [nodes](terminology.md#node) of a [cluster](terminology.md#cluster).
 
 ## cooldown period
 
-Some number of [epochs](terminology.md#epoch) after [stake](terminology.md#stake) has been deactivated while it progressively becomes available for withdrawal. During this period, the stake is considered to be "deactivating". More info about: [warmup and cooldown](implemented-proposals/staking-rewards.md#stake-warmup-cooldown-withdrawal)
+Some number of [epochs](terminology.md#epoch) after [stake](terminology.md#stake) has been deactivated while it progressively becomes available for withdrawal. During this period, the stake is considered to be "deactivating". For more information, see [warmup and cooldown](implemented-proposals/staking-rewards.md#stake-warmup-cooldown-withdrawal)
 
 ## credit
 
@@ -94,7 +89,7 @@ An off-chain service that acts as a custodian for a user's private key. It typic
 
 ## entry
 
-An entry on the [ledger](terminology.md#ledger) either a [tick](terminology.md#tick) or a [transactions entry](terminology.md#transactions-entry).
+An entry on the [ledger](terminology.md#ledger): either a [tick](terminology.md#tick), or a [transactions entry](terminology.md#transactions-entry).
 
 ## entry id
 
@@ -165,7 +160,7 @@ A sequence of [validator](terminology.md#validator) [public keys](terminology.md
 ## ledger
 
 A list of [entries](terminology.md#entry) containing [transactions](terminology.md#transaction) signed by [clients](terminology.md#client).
-Conceptually, this can be traced back to the [genesis block](terminology.md#genesis-block), but an actual [validator](terminology.md#validator)'s ledger may have only newer [blocks](terminology.md#block) to reduce storage, as older ones are not needed for validation of future blocks by design.
+Conceptually, this can be traced back to the [genesis block](terminology.md#genesis-block), but actual [validators](terminology.md#validator)'s ledger may have only newer [blocks](terminology.md#block) to save storage usage as older ones not needed for validation of future blocks by design.
 
 ## ledger vote
 
@@ -221,7 +216,7 @@ The public key of the [account](terminology.md#account) containing a [program](t
 
 ## proof of history (PoH)
 
-A stack of proofs, each which proves that some data existed before the proof was created and that a precise duration of time passed before the previous proof. Like a [VDF](terminology.md#verifiable-delay-function-vdf), a Proof of History can be verified in less time than it took to produce.
+A stack of proofs, each proving that some data existed before the proof was created and that a precise duration of time passed since the previous proof. Like a [VDF](terminology.md#verifiable-delay-function-vdf), a Proof of History can be verified in less time than it took to produce.
 
 ## public key (pubkey)
 
@@ -245,9 +240,10 @@ A fraction of a [block](terminology.md#block); the smallest unit sent between [v
 
 ## signature
 
-A 64-byte ed25519 signature of R (32-bytes) and S (32-bytes). With the requirement that R is a packed Edwards point not of small order and S is a scalar in the range of 0 <= S < L.
-This requirement ensures no signature malleability. Each transaction must have at least one signature for [fee account](terminology#fee-account).
-Thus, the first signature in transaction can be treated as [transacton id](terminology.md#transaction-id)
+A 64-byte ed25519 signature of R (32-bytes) and S (32-bytes). With the requirement that R is a packed [Edwards](https://en.wikipedia.org/wiki/Edwards_curve) point not of small order and S is a scalar in the range of 0 <= S < L.
+
+This requirement ensures no signature malleability. Each transaction must have at least one signature for [fee account](terminology#fee-account)s.
+Thus, the first signature in transaction can be treated as [transacton id](terminology.md#transaction-id).
 
 ## skipped slot
 
@@ -271,11 +267,11 @@ The [native token](terminology.md#native-token) of a Solana [cluster](terminolog
 
 ## Solana Program Library (SPL)
 
-A library of programs on Solana such as spl-token that facilitates tasks such as creating and using tokens
+A library of programs on Solana (such as `spl-token`) that facilitates tasks such as creating and using tokens.
 
 ## stake
 
-Tokens forfeit to the [cluster](terminology.md#cluster) if malicious [validator](terminology.md#validator) behavior can be proven.
+Tokens forfeited to the [cluster](terminology.md#cluster) if malicious [validator](terminology.md#validator) behavior can be proven.
 
 ## supermajority
 
@@ -323,7 +319,7 @@ A set of [transactions](terminology.md#transaction) that may be executed in para
 
 ## validator
 
-A full participant in a Solana network [cluster](terminology.md#cluster) that produces new [blocks](terminology.md#block).  A validator validates the transactions added to the [ledger](terminology.md#ledger)
+A full participant in a Solana network [cluster](terminology.md#cluster) that produces new [blocks](terminology.md#block).  A validator validates the transactions added to the [ledger](terminology.md#ledger).
 
 ## VDF
 
@@ -331,7 +327,7 @@ See [verifiable delay function](terminology.md#verifiable-delay-function-vdf).
 
 ## verifiable delay function (VDF)
 
-A function that takes a fixed amount of time to execute that produces a proof that it ran, which can then be verified in less time than it took to produce.
+A function that takes a fixed amount of time to execute, and which produces a proof that it ran, which can then be verified in less time than it took to produce.
 
 ## vote
 
@@ -347,4 +343,4 @@ A collection of [keypairs](terminology.md#keypair) that allows users to manage t
 
 ## warmup period
 
-Some number of [epochs](terminology.md#epoch) after [stake](terminology.md#stake) has been delegated while it progressively becomes effective. During this period, the stake is considered to be "activating". More info about: [warmup and cooldown](cluster/stake-delegation-and-rewards.md#stake-warmup-cooldown-withdrawal)
+Some number of [epochs](terminology.md#epoch) after [stake](terminology.md#stake) has been delegated while it progressively becomes effective. During this period, the stake is considered to be "activating". For more information, see [warmup and cooldown](cluster/stake-delegation-and-rewards.md#stake-warmup-cooldown-withdrawal).
