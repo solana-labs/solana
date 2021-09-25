@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use thiserror::Error;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -102,28 +103,29 @@ pub struct Memcmp {
 }
 
 impl Memcmp {
-    pub fn bytes_match(&self, data: &[u8]) -> bool {
+    pub fn bytes(&self) -> Option<Cow<Vec<u8>>> {
         use MemcmpEncodedBytes::*;
-
-        let cmp = |bytes: &[u8]| -> bool {
-            if self.offset > data.len() {
-                return false;
-            }
-            if data[self.offset..].len() < bytes.len() {
-                return false;
-            }
-            data[self.offset..self.offset + bytes.len()] == bytes[..]
-        };
-
         match &self.bytes {
             #[allow(deprecated)]
-            Binary(bytes) | Base58(bytes) => {
-                bs58::decode(bytes).into_vec().ok().map(|vec| cmp(&vec))
-            }
-            Base64(bytes) => base64::decode(bytes).ok().map(|vec| cmp(&vec)),
-            Bytes(bytes) => Some(cmp(bytes)),
+            Binary(bytes) | Base58(bytes) => bs58::decode(bytes).into_vec().ok().map(Cow::Owned),
+            Base64(bytes) => base64::decode(bytes).ok().map(Cow::Owned),
+            Bytes(bytes) => Some(Cow::Borrowed(bytes)),
         }
-        .unwrap_or(false)
+    }
+
+    pub fn bytes_match(&self, data: &[u8]) -> bool {
+        match self.bytes() {
+            Some(bytes) => {
+                if self.offset > data.len() {
+                    return false;
+                }
+                if data[self.offset..].len() < bytes.len() {
+                    return false;
+                }
+                data[self.offset..self.offset + bytes.len()] == bytes[..]
+            }
+            None => false,
+        }
     }
 }
 
