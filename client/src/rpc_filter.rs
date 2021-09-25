@@ -1,3 +1,4 @@
+#![allow(deprecated)]
 use std::borrow::Cow;
 use thiserror::Error;
 
@@ -19,7 +20,6 @@ impl RpcFilterType {
                         use MemcmpEncodedBytes::*;
                         const FILTER_LIMIT: usize = 128;
                         match &compare.bytes {
-                            #[allow(deprecated)]
                             Binary(bytes) | Base58(bytes) if bytes.len() > FILTER_LIMIT => {
                                 Err(RpcFilterError::Base58DataTooLarge)
                             }
@@ -32,13 +32,10 @@ impl RpcFilterType {
                             _ => Ok(()),
                         }?;
                         match &compare.bytes {
-                            #[allow(deprecated)]
-                            Binary(bytes) => {
-                                bs58::decode(&bytes).into_vec().map(|_| ()).map_err(|e| {
-                                    #[allow(deprecated)]
-                                    RpcFilterError::DecodeError(e)
-                                })
-                            }
+                            Binary(bytes) => bs58::decode(&bytes)
+                                .into_vec()
+                                .map(|_| ())
+                                .map_err(RpcFilterError::DecodeError),
                             Base58(bytes) => bs58::decode(&bytes)
                                 .into_vec()
                                 .map(|_| ())
@@ -106,7 +103,6 @@ impl Memcmp {
     pub fn bytes(&self) -> Option<Cow<Vec<u8>>> {
         use MemcmpEncodedBytes::*;
         match &self.bytes {
-            #[allow(deprecated)]
             Binary(bytes) | Base58(bytes) => bs58::decode(bytes).into_vec().ok().map(Cow::Owned),
             Base64(bytes) => base64::decode(bytes).ok().map(Cow::Owned),
             Bytes(bytes) => Some(Cow::Borrowed(bytes)),
