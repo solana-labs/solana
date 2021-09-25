@@ -16,31 +16,34 @@ impl RpcFilterType {
                 match encoding {
                     MemcmpEncoding::Binary => {
                         use MemcmpEncodedBytes::*;
+                        const FILTER_LIMIT: usize = 128;
                         match &compare.bytes {
-                            Binary(bytes) | Base58(bytes) => {
-                                if bytes.len() > 128 {
-                                    Err(RpcFilterError::Base58DataTooLarge)
-                                } else {
-                                    bs58::decode(&bytes)
-                                        .into_vec()
-                                        .map(|_| ())
-                                        .map_err(Into::into)
-                                }
+                            #[allow(deprecated)]
+                            Binary(bytes) | Base58(bytes) if bytes.len() > FILTER_LIMIT => {
+                                Err(RpcFilterError::Base58DataTooLarge)
                             }
-                            Base64(bytes) => {
-                                if bytes.len() > 128 {
-                                    Err(RpcFilterError::Base64DataTooLarge)
-                                } else {
-                                    base64::decode(&bytes).map(|_| ()).map_err(Into::into)
-                                }
+                            Base64(bytes) if bytes.len() > FILTER_LIMIT => {
+                                Err(RpcFilterError::Base64DataTooLarge)
                             }
-                            Bytes(bytes) => {
-                                if bytes.len() > 128 {
-                                    Err(RpcFilterError::BytesDataTooLarge)
-                                } else {
-                                    Ok(())
-                                }
+                            Bytes(bytes) if bytes.len() > FILTER_LIMIT => {
+                                Err(RpcFilterError::BytesDataTooLarge)
                             }
+                            _ => Ok(()),
+                        }?;
+                        match &compare.bytes {
+                            #[allow(deprecated)]
+                            Binary(bytes) => {
+                                bs58::decode(&bytes).into_vec().map(|_| ()).map_err(|e| {
+                                    #[allow(deprecated)]
+                                    RpcFilterError::DecodeError(e)
+                                })
+                            }
+                            Base58(bytes) => bs58::decode(&bytes)
+                                .into_vec()
+                                .map(|_| ())
+                                .map_err(Into::into),
+                            Base64(bytes) => base64::decode(&bytes).map(|_| ()).map_err(Into::into),
+                            Bytes(_) => Ok(()),
                         }
                     }
                 }
@@ -51,8 +54,14 @@ impl RpcFilterType {
 
 #[derive(Error, PartialEq, Debug)]
 pub enum RpcFilterError {
+    #[deprecated(
+        since = "1.8.0",
+        note = "Error for MemcmpEncodedBytes::Binary which is deprecated"
+    )]
     #[error("bs58 decode error")]
-    DecodeError(#[from] bs58::decode::Error),
+    DecodeError(bs58::decode::Error),
+    #[error("base58 decode error")]
+    Base58DecodeError(#[from] bs58::decode::Error),
     #[error("encoded binary (base 58) data should be less than 129 bytes")]
     Base58DataTooLarge,
     #[error("base64 decode error")]
@@ -72,7 +81,10 @@ pub enum MemcmpEncoding {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", untagged)]
 pub enum MemcmpEncodedBytes {
-    /// Binary is deprecated alternative of `Base58` variant
+    #[deprecated(
+        since = "1.8.0",
+        note = "Please use MemcmpEncodedBytes::Base58 instead"
+    )]
     Binary(String),
     Base58(String),
     Base64(String),
@@ -104,6 +116,7 @@ impl Memcmp {
         };
 
         match &self.bytes {
+            #[allow(deprecated)]
             Binary(bytes) | Base58(bytes) => {
                 bs58::decode(bytes).into_vec().ok().map(|vec| cmp(&vec))
             }
