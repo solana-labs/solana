@@ -42,7 +42,7 @@ export function AssignDetailsCard(props: {
       </tr>
 
       <tr>
-        <td>Assigned Owner</td>
+        <td>Assigned Program Id</td>
         <td className="text-lg-right">
           <Address pubkey={info.owner} alignRight link />
         </td>

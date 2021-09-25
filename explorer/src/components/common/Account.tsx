@@ -46,18 +46,3 @@ export function AccountBalanceRow({ account }: AccountProps) {
     </tr>
   );
 }
-
-export function AccountOwnerRow({ account }: AccountProps) {
-  if (account.details) {
-    return (
-      <tr>
-        <td>Owner</td>
-        <td className="text-lg-right">
-          <Address pubkey={account.details.owner} alignRight link />
-        </td>
-      </tr>
-    );
-  }
-
-  return <></>;
-}
