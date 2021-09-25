@@ -120,7 +120,7 @@ solana transfer RECIPIENT_ADDRESS AMOUNT --keypair KEYPAIR_URL_OF_SENDER
 ```
 
 Below is a full example. First, an address is viewed at a certain keypair URL.
-Second, the balance of tht address is checked. Lastly, a transfer transaction
+Second, the balance of that address is checked. Lastly, a transfer transaction
 is entered to send `1` SOL to the recipient address `7cvkjYAkUYs4W8XcXsca7cBrEGFeSUjeZmKoNBvEwyri`.
 When you hit Enter for a transfer command, you will be prompted to approve the
 transaction details on your Ledger device. On the device, use the right and
