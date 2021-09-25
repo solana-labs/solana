@@ -82,7 +82,7 @@ uriparse = "0.6.3"
 
 [dev-dependencies]
 curve25519-dalek = "2.1.0"
-tiny-bip39 = "0.7.0"
+tiny-bip39 = "0.8.1"
 
 [build-dependencies]
 rustc_version = "0.2"
