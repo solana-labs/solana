@@ -46,14 +46,11 @@ cargo_audit_ignores=(
   # https://github.com/paritytech/jsonrpc/issues/605
   --ignore RUSTSEC-2021-0079
 
-<<<<<<< HEAD
   # tar: Links in archive can create arbitrary directories
   #
   # Blocked on `tar` releasing safe upgrade
   # https://github.com/alexcrichton/tar-rs/issues/238
   --ignore RUSTSEC-2021-0080
 
-=======
->>>>>>> 0c62a6fe3 (Resolve zeroize_derive audit warning by bumping version (#20182))
 )
 scripts/cargo-for-all-lock-files.sh stable audit "${cargo_audit_ignores[@]}"
