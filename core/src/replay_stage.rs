@@ -1841,12 +1841,11 @@ impl ReplayStage {
             .root_bank()
             .feature_set
             .is_active(&feature_set::cost_model::id())
+            && !execute_timings.details.per_program_timings.is_empty()
         {
-            if !execute_timings.details.per_program_timings.is_empty() {
-                cost_update_sender
-                    .send(execute_timings)
-                    .unwrap_or_else(|err| warn!("cost_update_sender failed: {:?}", err));
-            }
+            cost_update_sender
+                .send(execute_timings)
+                .unwrap_or_else(|err| warn!("cost_update_sender failed: {:?}", err));
         }
 
         inc_new_counter_info!("replay_stage-replay_transactions", tx_count);

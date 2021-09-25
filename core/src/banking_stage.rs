@@ -1121,6 +1121,7 @@ impl BankingStage {
         cost_tracker: &Arc<RwLock<CostTracker>>,
         banking_stage_stats: &BankingStageStats,
         cost_model_enabled: bool,
+        demote_program_write_locks: bool,
     ) -> (Vec<HashedTransaction<'static>>, Vec<usize>, Vec<usize>) {
         let mut retryable_transaction_packet_indexes: Vec<usize> = vec![];
 
@@ -1153,7 +1154,9 @@ impl BankingStage {
                     // put transaction into retry queue if cost_model_enabled AND it wouldn't fit
                     // into current bank
                     if cost_model_enabled
-                        && cost_tracker_readonly.would_transaction_fit(&tx).is_err()
+                        && cost_tracker_readonly
+                            .would_transaction_fit(&tx, demote_program_write_locks)
+                            .is_err()
                     {
                         debug!("transaction {:?} would exceed limit", tx);
                         retryable_transaction_packet_indexes.push(tx_index);
@@ -1253,6 +1256,7 @@ impl BankingStage {
                 cost_tracker,
                 banking_stage_stats,
                 cost_model_enabled,
+                bank.demote_program_write_locks(),
             );
         packet_conversion_time.stop();
         inc_new_counter_info!("banking_stage-packet_conversion", 1);
@@ -1293,7 +1297,7 @@ impl BankingStage {
                     cost_tracker
                         .write()
                         .unwrap()
-                        .add_transaction_cost(tx.transaction());
+                        .add_transaction_cost(tx.transaction(), bank.demote_program_write_locks());
                 }
             });
         }
@@ -1363,6 +1367,7 @@ impl BankingStage {
                 cost_tracker,
                 banking_stage_stats,
                 cost_model_enabled,
+                bank.demote_program_write_locks(),
             );
         unprocessed_packet_conversion_time.stop();
 

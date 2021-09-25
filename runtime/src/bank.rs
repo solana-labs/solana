@@ -3646,9 +3646,6 @@ impl Bank {
             Vec::with_capacity(hashed_txs.len());
         let mut transaction_log_messages: Vec<Option<Vec<String>>> =
             Vec::with_capacity(hashed_txs.len());
-        let bpf_compute_budget = self
-            .bpf_compute_budget
-            .unwrap_or_else(BpfComputeBudget::new);
 
         let executed: Vec<TransactionExecutionResult> = loaded_txs
             .iter_mut()

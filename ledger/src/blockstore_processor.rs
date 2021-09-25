@@ -186,7 +186,7 @@ fn execute_batch(
         debug!(
             "bank {} executed a batch, number of transactions {}, total execute cu {}, remaining block cost cap {}",
             bank.slot(),
-            batch.sanitized_transactions().len(),
+            batch.hashed_transactions().len(),
             execution_cost_units,
             remaining_block_cost_cap,
         );
@@ -196,11 +196,7 @@ fn execute_batch(
         }
     }
 
-    bank_utils::find_and_send_votes(
-        batch.sanitized_transactions(),
-        &tx_results,
-        replay_vote_sender,
-    );
+    bank_utils::find_and_send_votes(batch.hashed_transactions(), &tx_results, replay_vote_sender);
 
     let TransactionResults {
         fee_collection_results,
