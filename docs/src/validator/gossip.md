@@ -2,7 +2,7 @@
 title: Gossip Service
 ---
 
-The Gossip Service acts as a gateway to nodes in the control plane. Validators use the service to ensure information is available to all other nodes in a cluster. The service broadcasts information using a gossip protocol.
+The Gossip Service acts as a gateway to nodes in the [control plane](terminology.md#control-plane). Validators use the service to ensure information is available to all other nodes in a cluster. The service broadcasts information using a [gossip protocol](https://en.wikipedia.org/wiki/Gossip_protocol).
 
 ## Gossip Overview
 
@@ -10,11 +10,11 @@ Nodes continuously share signed data objects among themselves in order to manage
 
 Every tenth of a second, each node sends a "push" message and/or a "pull" message. Push and pull messages may elicit responses, and push messages may be forwarded on to others in the cluster.
 
-Gossip runs on a well-known UDP/IP port or a port in a well-known range. Once a cluster is bootstrapped, nodes advertise to each other where to find their gossip endpoint \(a socket address\).
+Gossip runs on a well-known UDP/IP port or a port in a well-known range. Once a cluster is bootstrapped, nodes advertise to each other where to find their gossip endpoint (a socket address).
 
 ## Gossip Records
 
-Records shared over gossip are arbitrary, but signed and versioned \(with a timestamp\) as needed to make sense to the node receiving them. If a node receives two records from the same source, it updates its own copy with the record with the most recent timestamp.
+Records shared over gossip are arbitrary, but signed and versioned (with a timestamp) as needed to make sense to the node receiving them. If a node receives two records from the same source, it updates its own copy with the record with the most recent timestamp.
 
 ## Gossip Service Interface
 
@@ -27,13 +27,9 @@ Upon receiving a push message, a node examines the message for:
 1. Duplication: if the message has been seen before, the node drops the message and may respond with `PushMessagePrune` if forwarded from a low staked node
 2. New data: if the message is new to the node
 
-   - Stores the new information with an updated version in its cluster info and
+   - Stores the new information with an updated version in its cluster info and purges any previous older value
 
-     purges any previous older value
-
-   - Stores the message in `pushed_once` \(used for detecting duplicates,
-
-     purged after `PUSH_MSG_TIMEOUT * 5` ms\)
+   - Stores the message in `pushed_once` (used for detecting duplicates, purged after `PUSH_MSG_TIMEOUT * 5` ms)
 
    - Retransmits the messages to its own push peers
 
@@ -55,7 +51,7 @@ A node handles items in a pull response the same way it handles new data in a pu
 
 ## Purging
 
-Nodes retain prior versions of values \(those updated by a pull or push\) and expired values \(those older than `GOSSIP_PULL_CRDS_TIMEOUT_MS`\) in `purged_values` \(things I recently had\). Nodes purge `purged_values` that are older than `5 * GOSSIP_PULL_CRDS_TIMEOUT_MS`.
+Nodes retain prior versions of values (those updated by a pull or push) and expired values (those older than `GOSSIP_PULL_CRDS_TIMEOUT_MS`) in `purged_values` (things I recently had). Nodes purge `purged_values` that are older than `5 * GOSSIP_PULL_CRDS_TIMEOUT_MS`.
 
 ## Eclipse Attacks
 
@@ -70,7 +66,7 @@ This is relevant to our implementation in the following ways.
 
 Weights are calculated based on `time since last picked` and the `natural log` of the `stake weight`.
 
-Taking the `ln` of the stake weight allows giving all nodes a fairer chance of network coverage in a reasonable amount of time. It helps normalize the large possible `stake weight` differences between nodes. This way a node with low `stake weight`, compared to a node with large `stake weight` will only have to wait a few multiples of ln\(`stake`\) seconds before it gets picked.
+Taking the `ln` of the stake weight allows giving all nodes a fairer chance of network coverage in a reasonable amount of time. It helps normalize the large possible `stake weight` differences between nodes. This way a node with low `stake weight`, compared to a node with large `stake weight` will only have to wait a few multiples of ln(`stake`) seconds before it gets picked.
 
 There is no way for an adversary to influence these parameters.
 
