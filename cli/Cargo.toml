@@ -46,14 +46,9 @@ solana-transaction-status = { path = "../transaction-status", version = "=1.7.13
 solana-version = { path = "../version", version = "=1.7.13" }
 solana-vote-program = { path = "../programs/vote", version = "=1.7.13" }
 spl-memo = { version = "=3.0.1", features = ["no-entrypoint"] }
-<<<<<<< HEAD
 thiserror = "1.0.21"
-tiny-bip39 = "0.7.0"
-url = "2.1.1"
-=======
-thiserror = "1.0.29"
 tiny-bip39 = "0.8.1"
->>>>>>> 038d77347 (chore: bump tiny-bip39 from 0.8.0 to 0.8.1 (#20136))
+url = "2.1.1"
 
 [dev-dependencies]
 solana-core = { path = "../core", version = "=1.7.13" }
