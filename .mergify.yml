@@ -33,7 +33,7 @@ pull_request_rules:
           - -files~=^explorer/
         - or:
           # only require web3 checks if web3.js files changed
-          - status-success=check-web3
+          - status-success=all-web3-checks
           - -files~=^web3.js/
     actions:
       merge:
@@ -53,7 +53,7 @@ pull_request_rules:
           - -files~=^explorer/
         - or:
           # only require web3 checks if web3.js files changed
-          - status-success=check-web3
+          - status-success=all-web3-checks
           - -files~=^web3.js/
     actions:
       merge:
