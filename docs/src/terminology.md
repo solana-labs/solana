@@ -46,7 +46,7 @@ The [validator](terminology.md#validator) that produces the genesis (first) [blo
 
 ## BPF loader
 
-The Solana program that owns and loads (BPF) smart contract programs, allowing the program to interface with the runtime
+The Solana program that owns and loads [BPF](developing/on-chain-programs/overview#berkeley-packet-filter-bpf) smart contract programs, allowing the program to interface with the runtime.
 
 ## CBC block
 
