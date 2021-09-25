@@ -49,7 +49,7 @@ The Solana program that owns and loads (BPF) smart contract programs, allowing t
 
 ## CBC block
 
-The smallest encrypted chunk of ledger, an encrypted ledger segment would be made of many CBC blocks. `ledger_segment_size / cbc_block_size` to be exact.
+The smallest encrypted chunk of [ledger](#ledger). An encrypted ledger segment would be made of many CBC blocks, `ledger_segment_size / cbc_block_size` to be exact.
 
 ## client
 
