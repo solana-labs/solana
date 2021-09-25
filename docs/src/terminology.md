@@ -164,7 +164,7 @@ A sequence of [validator](terminology.md#validator) [public keys](terminology.md
 ## ledger
 
 A list of [entries](terminology.md#entry) containing [transactions](terminology.md#transaction) signed by [clients](terminology.md#client).
-Conceptually, this can be traced back to the [genesis block](terminology.md#genesis-block), but actual [validators](terminology.md#validator)'s ledger may have only newer [blocks](terminology.md#block) to save storage usage as older ones not needed for validation of future blocks by design.
+Conceptually, this can be traced back to the [genesis block](terminology.md#genesis-block), but an actual [validator](terminology.md#validator)'s ledger may have only newer [blocks](terminology.md#block) to reduce storage, as older ones are not needed for validation of future blocks by design.
 
 ## ledger vote
 
