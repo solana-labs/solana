@@ -1,48 +1,13 @@
 //! `window_service` handles the data plane incoming shreds, storing them in
 //!   blockstore and retransmitting where required
 //!
-<<<<<<< HEAD
-use crate::{
-    cluster_info_vote_listener::VerifiedVoteReceiver,
-    cluster_slots::ClusterSlots,
-    completed_data_sets_service::CompletedDataSetsSender,
-    repair_response,
-    repair_service::{OutstandingRepairs, RepairInfo, RepairService},
-    result::{Error, Result},
-};
-use crossbeam_channel::{
-    unbounded, Receiver as CrossbeamReceiver, RecvTimeoutError, Sender as CrossbeamSender,
-};
-use rayon::{prelude::*, ThreadPool};
-use solana_gossip::cluster_info::ClusterInfo;
-use solana_ledger::{
-    blockstore::{self, Blockstore, BlockstoreInsertionMetrics, MAX_DATA_SHREDS_PER_SLOT},
-    leader_schedule_cache::LeaderScheduleCache,
-    shred::{Nonce, Shred},
-};
-use solana_measure::measure::Measure;
-use solana_metrics::{inc_new_counter_debug, inc_new_counter_error};
-use solana_perf::packet::{Packet, Packets};
-use solana_rayon_threadlimit::get_thread_count;
-use solana_runtime::{bank::Bank, bank_forks::BankForks};
-use solana_sdk::{clock::Slot, packet::PACKET_DATA_SIZE, pubkey::Pubkey, timing::duration_as_ms};
-use solana_streamer::streamer::PacketSender;
-use std::collections::HashSet;
-use std::{
-    net::{SocketAddr, UdpSocket},
-    ops::Deref,
-    sync::atomic::{AtomicBool, Ordering},
-    sync::{Arc, RwLock},
-    thread::{self, Builder, JoinHandle},
-    time::{Duration, Instant},
-=======
 use {
     crate::{
-        ancestor_hashes_service::AncestorHashesReplayUpdateReceiver,
         cluster_info_vote_listener::VerifiedVoteReceiver,
+        cluster_slots::ClusterSlots,
         completed_data_sets_service::CompletedDataSetsSender,
         repair_response,
-        repair_service::{OutstandingShredRepairs, RepairInfo, RepairService},
+        repair_service::{OutstandingRepairs, RepairInfo, RepairService},
         result::{Error, Result},
     },
     crossbeam_channel::{
@@ -73,7 +38,6 @@ use {
         thread::{self, Builder, JoinHandle},
         time::{Duration, Instant},
     },
->>>>>>> b64eeb772 (removes erroneous uses of &Arc<...> from window-service)
 };
 
 type DuplicateSlotSender = CrossbeamSender<Slot>;
@@ -208,11 +172,7 @@ fn verify_repair(
 fn prune_shreds_invalid_repair(
     shreds: &mut Vec<Shred>,
     repair_infos: &mut Vec<Option<RepairMeta>>,
-<<<<<<< HEAD
-    outstanding_requests: &Arc<RwLock<OutstandingRepairs>>,
-=======
-    outstanding_requests: &RwLock<OutstandingShredRepairs>,
->>>>>>> b64eeb772 (removes erroneous uses of &Arc<...> from window-service)
+    outstanding_requests: &RwLock<OutstandingRepairs>,
 ) {
     assert_eq!(shreds.len(), repair_infos.len());
     let mut i = 0;
@@ -244,11 +204,7 @@ fn run_insert<F>(
     metrics: &mut BlockstoreInsertionMetrics,
     ws_metrics: &mut WindowServiceMetrics,
     completed_data_sets_sender: &CompletedDataSetsSender,
-<<<<<<< HEAD
-    outstanding_requests: &Arc<RwLock<OutstandingRepairs>>,
-=======
-    outstanding_requests: &RwLock<OutstandingShredRepairs>,
->>>>>>> b64eeb772 (removes erroneous uses of &Arc<...> from window-service)
+    outstanding_requests: &RwLock<OutstandingRepairs>,
 ) -> Result<()>
 where
     F: Fn(Shred),
@@ -436,12 +392,7 @@ impl WindowService {
             + std::marker::Send
             + std::marker::Sync,
     {
-<<<<<<< HEAD
-        let outstanding_requests: Arc<RwLock<OutstandingRepairs>> =
-            Arc::new(RwLock::new(OutstandingRequests::default()));
-=======
-        let outstanding_requests = Arc::<RwLock<OutstandingShredRepairs>>::default();
->>>>>>> d57398a95 (removes repeated bank-forks locking in window-service)
+        let outstanding_requests = Arc::<RwLock<OutstandingRepairs>>::default();
 
         let bank_forks = repair_info.bank_forks.clone();
 
@@ -686,28 +637,12 @@ impl WindowService {
 
 #[cfg(test)]
 mod test {
-<<<<<<< HEAD
-    use super::*;
-    use solana_gossip::contact_info::ContactInfo;
-    use solana_ledger::{
-        blockstore::{make_many_slot_entries, Blockstore},
-        entry::{create_ticks, Entry},
-        genesis_utils::create_genesis_config_with_leader,
-        get_tmp_ledger_path,
-        shred::{DataShredHeader, Shredder},
-    };
-    use solana_sdk::{
-        epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
-        hash::Hash,
-        signature::{Keypair, Signer},
-        timing::timestamp,
-=======
     use {
         super::*,
-        solana_entry::entry::{create_ticks, Entry},
         solana_gossip::contact_info::ContactInfo,
         solana_ledger::{
             blockstore::{make_many_slot_entries, Blockstore},
+            entry::{create_ticks, Entry},
             genesis_utils::create_genesis_config_with_leader,
             get_tmp_ledger_path,
             shred::{DataShredHeader, Shredder},
@@ -719,7 +654,6 @@ mod test {
             timing::timestamp,
         },
         solana_streamer::socket::SocketAddrSpace,
->>>>>>> b64eeb772 (removes erroneous uses of &Arc<...> from window-service)
     };
 
     fn local_entries_to_shred(
