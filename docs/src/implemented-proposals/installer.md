@@ -122,7 +122,7 @@ It manages the following files and directories in the user's home directory:
 ### Command-line Interface
 
 ```text
-solana-install 0.16.0
+solana-install 1.7.12
 The solana cluster software installer
 
 USAGE:
@@ -133,10 +133,11 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -c, --config <PATH>    Configuration file to use [default: .../Library/Preferences/solana/install.yml]
+    -c, --config <PATH>    Configuration file to use [default: ~/.config/solana/install/config.yml]
 
 SUBCOMMANDS:
     deploy    deploys a new update
+    gc        Delete older releases from the install cache to reclaim disk space
     help      Prints this message or the help of the given subcommand(s)
     info      displays information about the current installation
     init      initializes a new installation
@@ -149,64 +150,81 @@ solana-install-init
 initializes a new installation
 
 USAGE:
-    solana-install init [OPTIONS]
+    solana-install init [FLAGS] [OPTIONS] --data-dir <PATH> [release]
+
+FLAGS:
+    -h, --help    Prints help information
+        --no-modify-path    Don't configure the PATH environment variable
+
+OPTIONS:
+    -c, --config <PATH>      Configuration file to use [default: ~/.config/solana/install/config.yml]
+    -d, --data_dir <PATH>    Directory to store install data [default: ~/.local/share/solana/install]
+    -u, --url <URL>          JSON RPC URL for the solana cluster [default: http://api.devnet.solana.com]
+    -p, --pubkey <PUBKEY>    Public key of the update manifest
+
+ARGS:
+    <release>    The release version or channel to install
+```
+
+```text
+solana-install-info
+Displays information about the current installation
+
+USAGE:
+    solana-install info [FLAGS] [OPTIONS]
+
+FLAGS:
+        --eval     display information in a format that can be used with `eval`
+    -h, --help     Prints help information
+    -l, --local    only display local information, don't check for updates
+```
+
+```text
+solana-install-deploy 
+Deploys a new update
+
+USAGE:
+    solana-install deploy [OPTIONS] <download_url> <update_manifest_keypair_file> --keypair <PATH>
 
 FLAGS:
     -h, --help    Prints help information
 
 OPTIONS:
-    -d, --data_dir <PATH>    Directory to store install data [default: .../Library/Application Support/solana]
-    -u, --url <URL>          JSON RPC URL for the solana cluster [default: http://api.devnet.solana.com]
-    -p, --pubkey <PUBKEY>    Public key of the update manifest [default: 9XX329sPuskWhH4DQh6k16c87dHKhXLBZTL3Gxmve8Gp]
-```
-
-```text
-solana-install info
-displays information about the current installation
-
-USAGE:
-    solana-install info [FLAGS]
-
-FLAGS:
-    -h, --help     Prints help information
-    -l, --local    only display local information, don't check the cluster for new updates
-```
-
-```text
-solana-install deploy
-deploys a new update
-
-USAGE:
-    solana-install deploy <download_url> <update_manifest_keypair>
-
-FLAGS:
-    -h, --help    Prints help information
+    -c, --config <PATH>     Configuration file to use [default: ~/.config/solana/install/config.yml]
+    -k, --keypair <PATH>    Keypair file of the account that funds the deployment [default: ~/.config/solana/id.json]
+    -u, --url <URL>         JSON RPC URL for the solana cluster [default: http://api.devnet.solana.com]
 
 ARGS:
-    <download_url>               URL to the solana release archive
-    <update_manifest_keypair>    Keypair file for the update manifest (/path/to/keypair.json)
+    <download_url>                    URL to the solana release archive
+    <update_manifest_keypair_file>    Keypair file for the update manifest (/path/to/keypair.json)
 ```
 
 ```text
-solana-install update
-checks for an update, and if available downloads and applies it
+solana-install-update 
+Checks for an update, and if available downloads and applies it
 
 USAGE:
-    solana-install update
+    solana-install update [OPTIONS]
 
 FLAGS:
     -h, --help    Prints help information
+
+OPTIONS:
+    -c, --config <PATH>    Configuration file to use [default: ~/.config/solana/install/config.yml]
 ```
 
 ```text
-solana-install run
+solana-install-run 
 Runs a program while periodically checking and applying software updates
 
 USAGE:
-    solana-install run <program_name> [program_arguments]...
+    solana-install run [OPTIONS] <program_name> [program_arguments]...
 
 FLAGS:
     -h, --help    Prints help information
+
+OPTIONS:
+    -c, --config <PATH>    Configuration file to use [default: ~/.config/solana/install/config.yml]
 
 ARGS:
     <program_name>            program to run
