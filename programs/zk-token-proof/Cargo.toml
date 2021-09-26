@@ -8,14 +8,12 @@ edition = "2018"
 publish = false
 
 [dependencies]
-bytemuck = "1.7.2"
-bytemuck_derive = "1.0.1"
+bytemuck = { version = "1.7.2", features = ["derive"] }
+getrandom = { version = "0.1", features = ["dummy"] }
 num-derive = "0.3"
 num-traits = "0.2"
 solana-sdk = "=1.7.11"
 spl-zk-token-crypto = { path = "../crypto" }
-zeroable = "0.2.0"
-getrandom = { version = "0.1", features = ["dummy"] }
 
 [features]
 test-bpf = []
