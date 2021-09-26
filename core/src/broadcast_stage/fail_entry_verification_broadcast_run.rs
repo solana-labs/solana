@@ -1,9 +1,10 @@
-use super::*;
-use crate::cluster_nodes::ClusterNodes;
-use solana_ledger::shred::Shredder;
-use solana_sdk::hash::Hash;
-use solana_sdk::signature::Keypair;
-use std::{thread::sleep, time::Duration};
+use {
+    super::*,
+    crate::cluster_nodes::ClusterNodesCache,
+    solana_ledger::shred::Shredder,
+    solana_sdk::{hash::Hash, signature::Keypair},
+    std::{thread::sleep, time::Duration},
+};
 
 pub const NUM_BAD_SLOTS: u64 = 10;
 pub const SLOT_TO_RESOLVE: u64 = 32;
@@ -15,16 +16,22 @@ pub(super) struct FailEntryVerificationBroadcastRun {
     good_shreds: Vec<Shred>,
     current_slot: Slot,
     next_shred_index: u32,
+    cluster_nodes_cache: Arc<ClusterNodesCache<BroadcastStage>>,
 }
 
 impl FailEntryVerificationBroadcastRun {
     pub(super) fn new(keypair: Arc<Keypair>, shred_version: u16) -> Self {
+        let cluster_nodes_cache = Arc::new(ClusterNodesCache::<BroadcastStage>::new(
+            CLUSTER_NODES_CACHE_NUM_EPOCH_CAP,
+            CLUSTER_NODES_CACHE_TTL,
+        ));
         Self {
             shred_version,
             keypair,
             good_shreds: vec![],
             current_slot: 0,
             next_shred_index: 0,
+            cluster_nodes_cache,
         }
     }
 }
@@ -101,10 +108,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
         let data_shreds = Arc::new(data_shreds);
         blockstore_sender.send((data_shreds.clone(), None))?;
         // 4) Start broadcast step
-        let bank_epoch = bank.get_leader_schedule_epoch(bank.slot());
-        let stakes = bank.epoch_staked_nodes(bank_epoch);
-        let stakes = stakes.map(Arc::new);
-        socket_sender.send(((stakes.clone(), data_shreds), None))?;
+        socket_sender.send(((bank.slot(), data_shreds), None))?;
         if let Some((good_last_data_shred, bad_last_data_shred)) = last_shreds {
             // Stash away the good shred so we can rewrite them later
             self.good_shreds.extend(good_last_data_shred.clone());
@@ -123,7 +127,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
             // Store the bad shred so we serve bad repairs to validators catching up
             blockstore_sender.send((bad_last_data_shred.clone(), None))?;
             // Send bad shreds to rest of network
-            socket_sender.send(((stakes, bad_last_data_shred), None))?;
+            socket_sender.send(((bank.slot(), bad_last_data_shred), None))?;
         }
         Ok(())
     }
@@ -134,12 +138,15 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
         sock: &UdpSocket,
         bank_forks: &Arc<RwLock<BankForks>>,
     ) -> Result<()> {
-        let ((stakes, shreds), _) = receiver.lock().unwrap().recv()?;
+        let ((slot, shreds), _) = receiver.lock().unwrap().recv()?;
+        let (root_bank, working_bank) = {
+            let bank_forks = bank_forks.read().unwrap();
+            (bank_forks.root_bank(), bank_forks.working_bank())
+        };
         // Broadcast data
-        let cluster_nodes = ClusterNodes::<BroadcastStage>::new(
-            cluster_info,
-            stakes.as_deref().unwrap_or(&HashMap::default()),
-        );
+        let cluster_nodes =
+            self.cluster_nodes_cache
+                .get(slot, &root_bank, &working_bank, cluster_info);
         broadcast_shreds(
             sock,
             &shreds,

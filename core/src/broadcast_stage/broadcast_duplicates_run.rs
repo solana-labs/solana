@@ -1,16 +1,19 @@
-use super::broadcast_utils::ReceiveResults;
-use super::*;
-use log::*;
-use solana_ledger::entry::{create_ticks, Entry, EntrySlice};
-use solana_ledger::shred::Shredder;
-use solana_runtime::blockhash_queue::BlockhashQueue;
-use solana_sdk::clock::Slot;
-use solana_sdk::fee_calculator::FeeCalculator;
-use solana_sdk::hash::Hash;
-use solana_sdk::signature::{Keypair, Signer};
-use solana_sdk::transaction::Transaction;
-use std::collections::VecDeque;
-use std::sync::Mutex;
+use {
+    super::{broadcast_utils::ReceiveResults, *},
+    crate::cluster_nodes::ClusterNodesCache,
+    solana_ledger::{
+        entry::{create_ticks, Entry, EntrySlice},
+        shred::Shredder,
+    },
+    solana_runtime::blockhash_queue::BlockhashQueue,
+    solana_sdk::{
+        fee_calculator::FeeCalculator,
+        hash::Hash,
+        signature::{Keypair, Signer},
+        transaction::Transaction,
+    },
+    std::collections::VecDeque,
+};
 
 // Queue which facilitates delivering shreds with a delay
 type DelayedQueue = VecDeque<(Option<Pubkey>, Option<Vec<Shred>>)>;
@@ -29,6 +32,7 @@ pub(super) struct BroadcastDuplicatesRun {
     next_shred_index: u32,
     shred_version: u16,
     keypair: Arc<Keypair>,
+    cluster_nodes_cache: Arc<ClusterNodesCache<BroadcastStage>>,
 }
 
 impl BroadcastDuplicatesRun {
@@ -37,6 +41,10 @@ impl BroadcastDuplicatesRun {
         shred_version: u16,
         config: BroadcastDuplicatesConfig,
     ) -> Self {
+        let cluster_nodes_cache = Arc::new(ClusterNodesCache::<BroadcastStage>::new(
+            CLUSTER_NODES_CACHE_NUM_EPOCH_CAP,
+            CLUSTER_NODES_CACHE_TTL,
+        ));
         let mut delayed_queue = DelayedQueue::new();
         delayed_queue.resize(config.duplicate_send_delay, (None, None));
         Self {
@@ -49,6 +57,7 @@ impl BroadcastDuplicatesRun {
             last_duplicate_entry_hash: Hash::default(),
             shred_version,
             keypair,
+            cluster_nodes_cache,
         }
     }
 
@@ -257,29 +266,17 @@ impl BroadcastRun for BroadcastDuplicatesRun {
             }
         }
 
-        let duplicate_recipients = Arc::new(duplicate_recipients);
-        let real_recipients = Arc::new(real_recipients);
+        let _duplicate_recipients = Arc::new(duplicate_recipients);
+        let _real_recipients = Arc::new(real_recipients);
 
         let data_shreds = Arc::new(data_shreds);
         blockstore_sender.send((data_shreds.clone(), None))?;
 
         // 3) Start broadcast step
-        socket_sender.send((
-            (
-                Some(duplicate_recipients.clone()),
-                Arc::new(duplicate_data_shreds),
-            ),
-            None,
-        ))?;
-        socket_sender.send((
-            (
-                Some(duplicate_recipients),
-                Arc::new(duplicate_coding_shreds),
-            ),
-            None,
-        ))?;
-        socket_sender.send(((Some(real_recipients.clone()), data_shreds), None))?;
-        socket_sender.send(((Some(real_recipients), Arc::new(coding_shreds)), None))?;
+        socket_sender.send(((bank.slot(), Arc::new(duplicate_data_shreds)), None))?;
+        socket_sender.send(((bank.slot(), Arc::new(duplicate_coding_shreds)), None))?;
+        socket_sender.send(((bank.slot(), data_shreds), None))?;
+        socket_sender.send(((bank.slot(), Arc::new(coding_shreds)), None))?;
 
         Ok(())
     }
@@ -288,7 +285,7 @@ impl BroadcastRun for BroadcastDuplicatesRun {
         receiver: &Arc<Mutex<TransmitReceiver>>,
         cluster_info: &ClusterInfo,
         sock: &UdpSocket,
-        _bank_forks: &Arc<RwLock<BankForks>>,
+        bank_forks: &Arc<RwLock<BankForks>>,
     ) -> Result<()> {
         // Check the delay queue for shreds that are ready to be sent
         let (delayed_recipient, delayed_shreds) = {
@@ -300,8 +297,10 @@ impl BroadcastRun for BroadcastDuplicatesRun {
             }
         };
 
-        let ((stakes, shreds), _) = receiver.lock().unwrap().recv()?;
-        let stakes = stakes.unwrap();
+        let ((slot, shreds), _) = receiver.lock().unwrap().recv()?;
+        let root_bank = bank_forks.read().unwrap().root_bank();
+        let epoch = root_bank.get_leader_schedule_epoch(slot);
+        let stakes = root_bank.epoch_staked_nodes(epoch).unwrap_or_default();
         let socket_addr_space = cluster_info.socket_addr_space();
         for peer in cluster_info.tvu_peers() {
             // Forward shreds to circumvent gossip
