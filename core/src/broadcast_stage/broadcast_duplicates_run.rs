@@ -1,31 +1,19 @@
-<<<<<<< HEAD
-use super::broadcast_utils::ReceiveResults;
-use super::*;
-use log::*;
-use solana_ledger::entry::{create_ticks, Entry, EntrySlice};
-use solana_ledger::shred::Shredder;
-use solana_runtime::blockhash_queue::BlockhashQueue;
-use solana_sdk::clock::Slot;
-use solana_sdk::fee_calculator::FeeCalculator;
-use solana_sdk::hash::Hash;
-use solana_sdk::signature::{Keypair, Signer};
-use solana_sdk::transaction::Transaction;
-use std::collections::VecDeque;
-use std::sync::Mutex;
-=======
 use {
-    super::*,
+    super::{broadcast_utils::ReceiveResults, *},
     crate::cluster_nodes::ClusterNodesCache,
-    solana_entry::entry::Entry,
-    solana_ledger::shred::Shredder,
+    solana_ledger::{
+        entry::{create_ticks, Entry, EntrySlice},
+        shred::Shredder,
+    },
     solana_runtime::blockhash_queue::BlockhashQueue,
     solana_sdk::{
+        fee_calculator::FeeCalculator,
         hash::Hash,
         signature::{Keypair, Signer},
-        system_transaction,
+        transaction::Transaction,
     },
+    std::collections::VecDeque,
 };
->>>>>>> aa32738dd (uses cluster-nodes cache in broadcast-stage)
 
 // Queue which facilitates delivering shreds with a delay
 type DelayedQueue = VecDeque<(Option<Pubkey>, Option<Vec<Shred>>)>;
@@ -43,8 +31,8 @@ pub(super) struct BroadcastDuplicatesRun {
     last_broadcast_slot: Slot,
     next_shred_index: u32,
     shred_version: u16,
-<<<<<<< HEAD
     keypair: Arc<Keypair>,
+    cluster_nodes_cache: Arc<ClusterNodesCache<BroadcastStage>>,
 }
 
 impl BroadcastDuplicatesRun {
@@ -53,22 +41,12 @@ impl BroadcastDuplicatesRun {
         shred_version: u16,
         config: BroadcastDuplicatesConfig,
     ) -> Self {
-        let mut delayed_queue = DelayedQueue::new();
-        delayed_queue.resize(config.duplicate_send_delay, (None, None));
-=======
-    recent_blockhash: Option<Hash>,
-    prev_entry_hash: Option<Hash>,
-    num_slots_broadcasted: usize,
-    cluster_nodes_cache: Arc<ClusterNodesCache<BroadcastStage>>,
-}
-
-impl BroadcastDuplicatesRun {
-    pub(super) fn new(shred_version: u16, config: BroadcastDuplicatesConfig) -> Self {
         let cluster_nodes_cache = Arc::new(ClusterNodesCache::<BroadcastStage>::new(
             CLUSTER_NODES_CACHE_NUM_EPOCH_CAP,
             CLUSTER_NODES_CACHE_TTL,
         ));
->>>>>>> aa32738dd (uses cluster-nodes cache in broadcast-stage)
+        let mut delayed_queue = DelayedQueue::new();
+        delayed_queue.resize(config.duplicate_send_delay, (None, None));
         Self {
             config,
             delayed_queue: Arc::new(Mutex::new(delayed_queue)),
@@ -78,11 +56,10 @@ impl BroadcastDuplicatesRun {
             last_broadcast_slot: 0,
             last_duplicate_entry_hash: Hash::default(),
             shred_version,
-<<<<<<< HEAD
             keypair,
+            cluster_nodes_cache,
         }
     }
-<<<<<<< HEAD
 
     fn queue_or_create_duplicate_entries(
         &mut self,
@@ -157,19 +134,10 @@ impl BroadcastDuplicatesRun {
         // Save last duplicate entry hash to avoid invalid entry hash errors
         if let Some(last_duplicate_entry) = duplicate_entries.last() {
             self.last_duplicate_entry_hash = last_duplicate_entry.hash;
-=======
-            current_slot: 0,
-            recent_blockhash: None,
-            prev_entry_hash: None,
-            num_slots_broadcasted: 0,
-            cluster_nodes_cache,
->>>>>>> aa32738dd (uses cluster-nodes cache in broadcast-stage)
         }
 
         (duplicate_entries, next_shred_index)
     }
-=======
->>>>>>> 44b11154c (sends slots (instead of stakes) through broadcast flow)
 }
 
 /// Duplicate slots should only be sent once all validators have started.
@@ -298,62 +266,18 @@ impl BroadcastRun for BroadcastDuplicatesRun {
             }
         }
 
-        let duplicate_recipients = Arc::new(duplicate_recipients);
-        let real_recipients = Arc::new(real_recipients);
+        let _duplicate_recipients = Arc::new(duplicate_recipients);
+        let _real_recipients = Arc::new(real_recipients);
 
         let data_shreds = Arc::new(data_shreds);
         blockstore_sender.send((data_shreds.clone(), None))?;
 
         // 3) Start broadcast step
-<<<<<<< HEAD
-        socket_sender.send((
-            (
-                Some(duplicate_recipients.clone()),
-                Arc::new(duplicate_data_shreds),
-            ),
-            None,
-        ))?;
-        socket_sender.send((
-            (
-                Some(duplicate_recipients),
-                Arc::new(duplicate_coding_shreds),
-            ),
-            None,
-        ))?;
-        socket_sender.send(((Some(real_recipients.clone()), data_shreds), None))?;
-        socket_sender.send(((Some(real_recipients), Arc::new(coding_shreds)), None))?;
+        socket_sender.send(((bank.slot(), Arc::new(duplicate_data_shreds)), None))?;
+        socket_sender.send(((bank.slot(), Arc::new(duplicate_coding_shreds)), None))?;
+        socket_sender.send(((bank.slot(), data_shreds), None))?;
+        socket_sender.send(((bank.slot(), Arc::new(coding_shreds)), None))?;
 
-=======
-        let transmit_shreds = (bank.slot(), data_shreds.clone());
-        info!(
-            "{} Sending good shreds for slot {} to network",
-            keypair.pubkey(),
-            data_shreds.first().unwrap().slot()
-        );
-        socket_sender.send((transmit_shreds, None))?;
-
-        // Special handling of last shred to cause partition
-        if let Some((original_last_data_shred, partition_last_data_shred)) = last_shreds {
-            let original_last_data_shred = Arc::new(original_last_data_shred);
-            let partition_last_data_shred = Arc::new(partition_last_data_shred);
-
-            // Store the original shreds that this node replayed
-            blockstore_sender.send((original_last_data_shred.clone(), None))?;
-
-            // TODO: Previously, on the last shred, the code here was using
-            // stakes to partition the network with duplicate and real shreds
-            // at self.config.stake_partition of cumulative stake. This is no
-            // longer possible here as stakes are computed elsewhere further
-            // down the stream. Figure out how to replicate old behaviour to
-            // preserve test coverage.
-            // https://github.com/solana-labs/solana/blob/cde146155/core/src/broadcast_stage/broadcast_duplicates_run.rs#L65-L116
-            let original_transmit_shreds = (bank.slot(), original_last_data_shred);
-            let partition_transmit_shreds = (bank.slot(), partition_last_data_shred);
-
-            socket_sender.send((original_transmit_shreds, None))?;
-            socket_sender.send((partition_transmit_shreds, None))?;
-        }
->>>>>>> 44b11154c (sends slots (instead of stakes) through broadcast flow)
         Ok(())
     }
     fn transmit(
@@ -361,9 +285,8 @@ impl BroadcastRun for BroadcastDuplicatesRun {
         receiver: &Arc<Mutex<TransmitReceiver>>,
         cluster_info: &ClusterInfo,
         sock: &UdpSocket,
-        _bank_forks: &Arc<RwLock<BankForks>>,
+        bank_forks: &Arc<RwLock<BankForks>>,
     ) -> Result<()> {
-<<<<<<< HEAD
         // Check the delay queue for shreds that are ready to be sent
         let (delayed_recipient, delayed_shreds) = {
             let mut delayed_deque = self.delayed_queue.lock().unwrap();
@@ -374,8 +297,10 @@ impl BroadcastRun for BroadcastDuplicatesRun {
             }
         };
 
-        let ((stakes, shreds), _) = receiver.lock().unwrap().recv()?;
-        let stakes = stakes.unwrap();
+        let ((slot, shreds), _) = receiver.lock().unwrap().recv()?;
+        let root_bank = bank_forks.read().unwrap().root_bank();
+        let epoch = root_bank.get_leader_schedule_epoch(slot);
+        let stakes = root_bank.epoch_staked_nodes(epoch).unwrap_or_default();
         let socket_addr_space = cluster_info.socket_addr_space();
         for peer in cluster_info.tvu_peers() {
             // Forward shreds to circumvent gossip
@@ -398,27 +323,6 @@ impl BroadcastRun for BroadcastDuplicatesRun {
                 }
             }
         }
-=======
-        let ((slot, shreds), _) = receiver.lock().unwrap().recv()?;
-        let (root_bank, working_bank) = {
-            let bank_forks = bank_forks.read().unwrap();
-            (bank_forks.root_bank(), bank_forks.working_bank())
-        };
-        // Broadcast data
-        let cluster_nodes =
-            self.cluster_nodes_cache
-                .get(slot, &root_bank, &working_bank, cluster_info);
-        broadcast_shreds(
-            sock,
-            &shreds,
-            &cluster_nodes,
-            &Arc::new(AtomicInterval::default()),
-            &mut TransmitShredsStats::default(),
-            cluster_info.id(),
-            bank_forks,
-            cluster_info.socket_addr_space(),
-        )?;
->>>>>>> 44b11154c (sends slots (instead of stakes) through broadcast flow)
 
         Ok(())
     }

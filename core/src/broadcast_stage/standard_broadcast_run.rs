@@ -8,34 +8,19 @@ use {
     crate::{
         broadcast_stage::broadcast_utils::UnfinishedSlotInfo, cluster_nodes::ClusterNodesCache,
     },
-    solana_entry::entry::Entry,
-    solana_ledger::shred::{
-        ProcessShredsStats, Shred, Shredder, MAX_DATA_SHREDS_PER_FEC_BLOCK,
-        SHRED_TICK_REFERENCE_MASK,
+    solana_ledger::{
+        entry::Entry,
+        shred::{
+            ProcessShredsStats, Shred, Shredder, MAX_DATA_SHREDS_PER_FEC_BLOCK,
+            SHRED_TICK_REFERENCE_MASK,
+        },
     },
     solana_sdk::{
         signature::Keypair,
         timing::{duration_as_us, AtomicInterval},
     },
-    std::{sync::RwLock, time::Duration},
+    std::{ops::Deref, sync::RwLock, time::Duration},
 };
-<<<<<<< HEAD
-use crate::{broadcast_stage::broadcast_utils::UnfinishedSlotInfo, cluster_nodes::ClusterNodes};
-use solana_ledger::{
-    entry::Entry,
-    shred::{
-        ProcessShredsStats, Shred, Shredder, MAX_DATA_SHREDS_PER_FEC_BLOCK,
-        SHRED_TICK_REFERENCE_MASK,
-    },
-};
-use solana_sdk::{
-    pubkey::Pubkey,
-    signature::Keypair,
-    timing::{duration_as_us, AtomicInterval},
-};
-use std::{collections::HashMap, ops::Deref, sync::RwLock, time::Duration};
-=======
->>>>>>> 44b11154c (sends slots (instead of stakes) through broadcast flow)
 
 #[derive(Clone)]
 pub struct StandardBroadcastRun {
@@ -54,15 +39,11 @@ pub struct StandardBroadcastRun {
 }
 
 impl StandardBroadcastRun {
-<<<<<<< HEAD
     pub(super) fn new(keypair: Arc<Keypair>, shred_version: u16) -> Self {
-=======
-    pub(super) fn new(shred_version: u16) -> Self {
         let cluster_nodes_cache = Arc::new(ClusterNodesCache::<BroadcastStage>::new(
             CLUSTER_NODES_CACHE_NUM_EPOCH_CAP,
             CLUSTER_NODES_CACHE_TTL,
         ));
->>>>>>> aa32738dd (uses cluster-nodes cache in broadcast-stage)
         Self {
             process_shreds_stats: ProcessShredsStats::default(),
             transmit_shreds_stats: Arc::default(),

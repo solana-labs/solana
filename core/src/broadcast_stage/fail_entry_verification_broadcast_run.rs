@@ -20,15 +20,11 @@ pub(super) struct FailEntryVerificationBroadcastRun {
 }
 
 impl FailEntryVerificationBroadcastRun {
-<<<<<<< HEAD
     pub(super) fn new(keypair: Arc<Keypair>, shred_version: u16) -> Self {
-=======
-    pub(super) fn new(shred_version: u16) -> Self {
         let cluster_nodes_cache = Arc::new(ClusterNodesCache::<BroadcastStage>::new(
             CLUSTER_NODES_CACHE_NUM_EPOCH_CAP,
             CLUSTER_NODES_CACHE_TTL,
         ));
->>>>>>> aa32738dd (uses cluster-nodes cache in broadcast-stage)
         Self {
             shred_version,
             keypair,
