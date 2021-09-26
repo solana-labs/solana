@@ -30,11 +30,11 @@ the base58 encoding of your public key, such as
 ## Keypair conventions
 
 Many commands using the CLI tools require a value for a `<KEYPAIR>`. The value
-you should use for the keypair depend on what type of
+you should use for the keypair depends on what type of
 [command line wallet you created](../wallet-guide/cli.md).
 
-For example, the way to display any wallet's address
-(also known as the keypair's pubkey), the CLI help document shows:
+For example, the CLI help shows that the way to display any wallet's address
+(also known as the keypair's pubkey), is:
 
 ```bash
 solana-keygen pubkey <KEYPAIR>
