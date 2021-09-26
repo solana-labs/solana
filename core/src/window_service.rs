@@ -270,62 +270,7 @@ where
     let (shreds, repair_infos): (Vec<_>, Vec<_>) = thread_pool.install(|| {
         packets
             .par_iter_mut()
-<<<<<<< HEAD
-            .flat_map(|packets| {
-                packets
-                    .packets
-                    .iter_mut()
-                    .filter_map(|packet| {
-                        if packet.meta.discard {
-                            inc_new_counter_debug!(
-                                "streamer-recv_window-invalid_or_unnecessary_packet",
-                                1
-                            );
-                            None
-                        } else {
-                            // shred fetch stage should be sending packets
-                            // with sufficiently large buffers. Needed to ensure
-                            // call to `new_from_serialized_shred` is safe.
-                            assert_eq!(packet.data.len(), PACKET_DATA_SIZE);
-                            let serialized_shred = packet.data.to_vec();
-                            if let Ok(shred) = Shred::new_from_serialized_shred(serialized_shred) {
-                                let repair_info = {
-                                    if packet.meta.repair {
-                                        if let Some(nonce) = repair_response::nonce(&packet.data) {
-                                            let repair_info = RepairMeta {
-                                                _from_addr: packet.meta.addr(),
-                                                nonce,
-                                            };
-                                            Some(repair_info)
-                                        } else {
-                                            // If can't parse the nonce, dump the packet
-                                            return None;
-                                        }
-                                    } else {
-                                        None
-                                    }
-                                };
-                                if shred_filter(&shred, last_root) {
-                                    let leader_pubkey = leader_schedule_cache
-                                        .slot_leader_at(shred.slot(), Some(&root_bank));
-                                    packet.meta.slot = shred.slot();
-                                    packet.meta.seed = shred.seed(leader_pubkey, &root_bank);
-                                    Some((shred, repair_info))
-                                } else {
-                                    packet.meta.discard = true;
-                                    None
-                                }
-                            } else {
-                                packet.meta.discard = true;
-                                None
-                            }
-                        }
-                    })
-                    .collect::<Vec<_>>()
-            })
-=======
             .flat_map_iter(|packet| packet.packets.iter_mut().filter_map(handle_packet))
->>>>>>> 7d56fa836 (sends packets in batches from sigverify-stage (#18446))
             .unzip()
     });
 
