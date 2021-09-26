@@ -1061,6 +1061,38 @@ impl RpcClient {
         self.send(RpcRequest::GetSnapshotSlot, Value::Null)
     }
 
+    /// Returns the snapshot information for the given snapshot slot and hash
+    ///
+    /// # RPC Reference
+    ///
+    /// This method corresponds directly to the [`getSnapshotInfo`] RPC method.
+    ///
+    /// [`getSnapshotInfo`]: https://docs.solana.com/developing/clients/jsonrpc-api#getsnapshotinfo
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use solana_client::{
+    /// #     rpc_client::RpcClient,
+    /// #     client_error::ClientError,
+    /// # };
+    /// # use solana_sdk::clock::Slot;
+    /// # use solana_sdk::hash::Hash;
+    /// # let rpc_client = RpcClient::new_mock("succeeds".to_string());
+    /// # let snapshot_slot_hash = (Slot::default(), Hash::default());
+    /// let snapshot_info = rpc_client.get_snapshot_info(snapshot_slot_hash)?;
+    /// # Ok::<(), ClientError>(())
+    /// ```
+    pub fn get_snapshot_info(
+        &self,
+        snapshot_slot_hash: (Slot, Hash),
+    ) -> ClientResult<RpcSnapshotInfo> {
+        self.send(
+            RpcRequest::GetSnapshotInfo,
+            json!([(snapshot_slot_hash.0, snapshot_slot_hash.1.to_string())]),
+        )
+    }
+
     /// Check if a transaction has been processed with the default commitment level.
     ///
     /// If the transaction has been processed with the default commitment level,

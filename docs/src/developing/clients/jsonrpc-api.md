@@ -53,6 +53,7 @@ gives a convenient interface for the RPC methods.
 - [getSlot](jsonrpc-api.md#getslot)
 - [getSlotLeader](jsonrpc-api.md#getslotleader)
 - [getSlotLeaders](jsonrpc-api.md#getslotleaders)
+- [getSnapshotInfo](jsonrpc-api.md#getsnapshotinfo)
 - [getStakeActivation](jsonrpc-api.md#getstakeactivation)
 - [getSupply](jsonrpc-api.md#getsupply)
 - [getTokenAccountBalance](jsonrpc-api.md#gettokenaccountbalance)
@@ -2440,6 +2441,96 @@ The first leader returned is the leader for slot #100:
     "DWvDTSh3qfn88UoQTEKRV2JnLt5jtJAVoiCo3ivtMwXP",
     "DWvDTSh3qfn88UoQTEKRV2JnLt5jtJAVoiCo3ivtMwXP"
   ],
+  "id": 1
+}
+```
+
+### getSnapshotInfo
+
+**NEW: This method is only available in solana-core v1.8 or newer.**
+
+Returns the snapshot information for the given snapshot slot and hash.
+
+If the node has a snapshot with the given slot and hash, it will return the
+associated information about it.  For full snapshots, this is the slot and has.
+For incremental snapshots, this is the slot and hash _plus_ the slot and hash
+for its associated full snapshot.
+
+#### Parameters:
+
+- `<object>`
+  - `slot: <u64>` - The slot for the snapshot being queried
+  - `hash: <string>` - A base-58 encoded hash for the snapshot being queried
+
+#### Results:
+
+Result when the node has a full snapshot for this slot and hash:
+- `<object>`
+  - `fullSnapshot: <object>` - This object indicates the result is for a full snapshot
+    - `slot: <u64>` - The slot of the snapshot
+    - `hash: <string>` - The base-58 encoded hash of the snapshot
+
+Result when the node has an incremental snapshot for this slot and hash:
+- `<object>`
+  - `incrementalSnapshot: <object>` - This object indicates the result is for an incremental snapshot
+    - `full: <object>` - The information for the associated full snapshot
+      - `slot: <u64>` - The slot of the full snapshot
+      - `hash: <string>` - The base-58 encoded hash of the full snapshot
+    - `incremental: <object>` - The information for the incremental snapshot
+      - `slot: <u64>` - The slot of the incremental snapshot
+      - `hash: <string>` - The base-58 encoded hash of the incremental snapshot
+
+#### Example:
+
+Request:
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0","id":1,"method":"getSnapshotInfo","params":[{"slot":123,"hash":"CiDwVBFgWV9E5MvXWoLgnEgn2hK7rJikbvfWavzAQz3"}]}
+'
+```
+
+Result when the node has a full snapshot for this slot and hash:
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "fullSnapshot": {
+      "slot": 123,
+      "hash": "CiDwVBFgWV9E5MvXWoLgnEgn2hK7rJikbvfWavzAQz3"
+    }
+  },
+  "id": 1
+}
+```
+
+Result when the node has an incremental snapshot for this slot and hash:
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "incrementalSnapshot": {
+      "full": {
+        "slot": 8000,
+        "hash": "4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM"
+      },
+      "incremental": {
+        "slot": 8200,
+        "hash": "8opHzTAnfzRpPEx21XtnrVTX28YQuCpAjcn1PczScKh"
+      }
+    }
+  },
+  "id": 1
+}
+```
+
+Result when the node does not have a snapshot for this slot and hash:
+```json
+{
+  "jsonrpc": "2.0",
+  "error": {
+    "code": -32008,
+    "message": "No snapshot"
+  },
   "id": 1
 }
 ```

@@ -85,6 +85,7 @@ pub enum RpcRequest {
         note = "Please use RpcRequest::GetHighestSnapshotSlot instead"
     )]
     GetSnapshotSlot,
+    GetSnapshotInfo,
     GetSignaturesForAddress,
     GetSignatureStatuses,
     GetSlot,
@@ -158,6 +159,7 @@ impl fmt::Display for RpcRequest {
             RpcRequest::GetRecentPerformanceSamples => "getRecentPerformanceSamples",
             RpcRequest::GetHighestSnapshotSlot => "getHighestSnapshotSlot",
             RpcRequest::GetSnapshotSlot => "getSnapshotSlot",
+            RpcRequest::GetSnapshotInfo => "getSnapshotInfo",
             RpcRequest::GetSignaturesForAddress => "getSignaturesForAddress",
             RpcRequest::GetSignatureStatuses => "getSignatureStatuses",
             RpcRequest::GetSlot => "getSlot",

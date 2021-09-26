@@ -2,23 +2,15 @@
 
 use {
     crate::{
-        client_error::Result,
-        rpc_config::RpcBlockProductionConfig,
-        rpc_request::RpcRequest,
-        rpc_response::{
-            Response, RpcAccountBalance, RpcBlockProduction, RpcBlockProductionRange, RpcBlockhash,
-            RpcConfirmedTransactionStatusWithSignature, RpcContactInfo, RpcFees, RpcPerfSample,
-            RpcResponseContext, RpcSimulateTransactionResult, RpcSnapshotSlotInfo,
-            RpcStakeActivation, RpcSupply, RpcVersionInfo, RpcVoteAccountInfo,
-            RpcVoteAccountStatus, StakeActivationState,
-        },
-        rpc_sender::*,
+        client_error::Result, rpc_config::RpcBlockProductionConfig, rpc_request::RpcRequest,
+        rpc_response::*, rpc_sender::*,
     },
     serde_json::{json, Number, Value},
     solana_sdk::{
         clock::{Slot, UnixTimestamp},
         epoch_info::EpochInfo,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
+        hash::Hash,
         instruction::InstructionError,
         message::MessageHeader,
         signature::Signature,
@@ -231,6 +223,18 @@ impl RpcSender for MockSender {
                 full: 100,
                 incremental: Some(110),
             }),
+            "getSnapshotInfo" => {
+                json!(RpcSnapshotInfo::IncrementalSnapshot {
+                    full: SnapshotInfo {
+                        slot: 8_000,
+                        hash: Hash::new_unique().to_string(),
+                    },
+                    incremental: SnapshotInfo {
+                        slot: 8_200,
+                        hash: Hash::new_unique().to_string(),
+                    },
+                })
+            },
             "getBlockHeight" => Value::Number(Number::from(1234)),
             "getSlotLeaders" => json!([PUBKEY]),
             "getBlockProduction" => {

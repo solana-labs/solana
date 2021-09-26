@@ -45,6 +45,7 @@ use {
         commitment::{BlockCommitmentArray, BlockCommitmentCache, CommitmentSlots},
         inline_spl_token_v2_0::{SPL_TOKEN_ACCOUNT_MINT_OFFSET, SPL_TOKEN_ACCOUNT_OWNER_OFFSET},
         non_circulating_supply::calculate_non_circulating_supply,
+        snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_config::SnapshotConfig,
         snapshot_utils,
     },
@@ -2275,6 +2276,13 @@ pub mod rpc_minimal {
         #[rpc(meta, name = "getHighestSnapshotSlot")]
         fn get_highest_snapshot_slot(&self, meta: Self::Metadata) -> Result<RpcSnapshotSlotInfo>;
 
+        #[rpc(meta, name = "getSnapshotInfo")]
+        fn get_snapshot_info(
+            &self,
+            meta: Self::Metadata,
+            snapshot_slot_hash: (Slot, String),
+        ) -> Result<RpcSnapshotInfo>;
+
         #[rpc(meta, name = "getTransactionCount")]
         fn get_transaction_count(
             &self,
@@ -2394,6 +2402,88 @@ pub mod rpc_minimal {
                 full: full_snapshot_slot,
                 incremental: incremental_snapshot_slot,
             })
+        }
+
+        fn get_snapshot_info(
+            &self,
+            meta: Self::Metadata,
+            snapshot_slot_hash: (Slot, String),
+        ) -> Result<RpcSnapshotInfo> {
+            debug!("get_snapshot_info rpc request received");
+
+            if meta.snapshot_config.is_none() {
+                return Err(RpcCustomError::NoSnapshot.into());
+            }
+
+            let snapshot_slot_hash = (
+                snapshot_slot_hash.0,
+                Hash::from_str(&snapshot_slot_hash.1).map_err(|_| {
+                    Error::invalid_params("Invalid hash; must be a base-58 encoded string")
+                })?,
+            );
+
+            let snapshot_archives_dir = meta
+                .snapshot_config
+                .map(|snapshot_config| snapshot_config.snapshot_archives_dir)
+                .unwrap();
+
+            let incremental_snapshot_archives =
+                snapshot_utils::get_incremental_snapshot_archives(&snapshot_archives_dir);
+            let incremental_snapshot_archive =
+                incremental_snapshot_archives
+                    .iter()
+                    .find(|snapshot_archive| {
+                        snapshot_archive.slot() == snapshot_slot_hash.0
+                            && snapshot_archive.hash() == &snapshot_slot_hash.1
+                    });
+
+            // If the snapshot_slot_hash passed in matched an incremental snapshot (above), then
+            // find its matching full snapshot.  Otherwise, see if the snapshot_slot_hash matches a
+            // full snapshot.
+            //
+            // NOTE: Since IncrementalSnapshotArchiveInfo doesn't contain the full snapshot's hash
+            // (just the slot), we need two different calls to `.find()` to determine a match.
+
+            let full_snapshot_archives =
+                snapshot_utils::get_full_snapshot_archives(&snapshot_archives_dir);
+            let full_snapshot_archive = match incremental_snapshot_archive {
+                Some(incremental_snapshot_archive) => {
+                    full_snapshot_archives.iter().find(|full_snapshot_archive| {
+                        full_snapshot_archive.slot() == incremental_snapshot_archive.base_slot()
+                    })
+                }
+                None => full_snapshot_archives.iter().find(|snapshot_archive| {
+                    snapshot_archive.slot() == snapshot_slot_hash.0
+                        && snapshot_archive.hash() == &snapshot_slot_hash.1
+                }),
+            };
+
+            // NOTE: If somehow an incremental snapshot was found but *not* its matching full
+            // snapshot, then something is wrong with the node (maybe someone deleted the full
+            // snapshot from the filesystem?), so just return a NoSnapshot error because this
+            // incremental snapshot is unusable on its own.
+
+            match full_snapshot_archive {
+                None => Err(RpcCustomError::NoSnapshot.into()),
+                Some(full_snapshot_archive) => match incremental_snapshot_archive {
+                    None => Ok(RpcSnapshotInfo::FullSnapshot(SnapshotInfo {
+                        slot: full_snapshot_archive.slot(),
+                        hash: full_snapshot_archive.hash().to_string(),
+                    })),
+                    Some(incremental_snapshot_archive) => {
+                        Ok(RpcSnapshotInfo::IncrementalSnapshot {
+                            full: SnapshotInfo {
+                                slot: full_snapshot_archive.slot(),
+                                hash: full_snapshot_archive.hash().to_string(),
+                            },
+                            incremental: SnapshotInfo {
+                                slot: incremental_snapshot_archive.slot(),
+                                hash: incremental_snapshot_archive.hash().to_string(),
+                            },
+                        })
+                    }
+                },
+            }
         }
 
         fn get_transaction_count(

@@ -437,7 +437,25 @@ impl From<ConfirmedTransactionStatusWithSignature> for RpcConfirmedTransactionSt
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct RpcSnapshotSlotInfo {
     pub full: Slot,
     pub incremental: Option<Slot>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum RpcSnapshotInfo {
+    FullSnapshot(SnapshotInfo),
+    IncrementalSnapshot {
+        full: SnapshotInfo,
+        incremental: SnapshotInfo,
+    },
+}
+
+#[derive(Serialize, Deserialize, Default, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SnapshotInfo {
+    pub slot: Slot,
+    pub hash: String,
 }
