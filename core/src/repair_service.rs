@@ -280,23 +280,6 @@ impl RepairService {
                 )
             };
 
-<<<<<<< HEAD
-            let mut send_repairs_elapsed = Measure::start("send_repairs_elapsed");
-            let mut outstanding_requests = outstanding_requests.write().unwrap();
-            repairs.into_iter().for_each(|repair_request| {
-                if let Ok((to, req)) = serve_repair.repair_request(
-                    cluster_slots,
-                    repair_request,
-                    &mut peers_cache,
-                    &mut repair_stats,
-                    &repair_info.repair_validators,
-                    &mut outstanding_requests,
-                ) {
-                    repair_socket.send_to(&req, to).unwrap_or_else(|e| {
-                        info!("{} repair req send_to({}) error {:?}", id, to, e);
-                        0
-                    });
-=======
             let mut build_repairs_batch_elapsed = Measure::start("build_repairs_batch_elapsed");
             let batch: Vec<(Vec<u8>, SocketAddr)> = {
                 let mut outstanding_requests = outstanding_requests.write().unwrap();
@@ -305,7 +288,7 @@ impl RepairService {
                     .filter_map(|repair_request| {
                         let (to, req) = serve_repair
                             .repair_request(
-                                &repair_info.cluster_slots,
+                                cluster_slots,
                                 *repair_request,
                                 &mut peers_cache,
                                 &mut repair_stats,
@@ -332,7 +315,6 @@ impl RepairService {
                         batch.len(),
                         err
                     );
->>>>>>> 9255ae334 (drop outstanding_requests lock before sending repair requests (#18893))
                 }
             }
             batch_send_repairs_elapsed.stop();
