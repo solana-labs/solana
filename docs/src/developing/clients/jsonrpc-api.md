@@ -2452,7 +2452,7 @@ The first leader returned is the leader for slot #100:
 Returns the snapshot information for the given snapshot slot and hash.
 
 If the node has a snapshot with the given slot and hash, it will return the
-associated information about it.  For full snapshots, this is the slot and has.
+associated information about it.  For full snapshots, this is the slot and hash.
 For incremental snapshots, this is the slot and hash _plus_ the slot and hash
 for its associated full snapshot.
 
