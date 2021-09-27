@@ -3223,8 +3223,6 @@ impl RpcClient {
         self.send(RpcRequest::MinimumLedgerSlot, Value::Null)
     }
 
-<<<<<<< HEAD
-=======
     /// Submit a transaction and wait for confirmation.
     ///
     /// Once this function returns successfully, the given transaction is
@@ -3280,12 +3278,11 @@ impl RpcClient {
     /// # let alice = Keypair::new();
     /// # let bob = Keypair::new();
     /// # let lamports = 50;
-    /// # let latest_blockhash = rpc_client.get_latest_blockhash()?;
-    /// let tx = system_transaction::transfer(&alice, &bob.pubkey(), lamports, latest_blockhash);
+    /// # let recent_blockhash = rpc_client.get_recent_blockhash()?.0;
+    /// let tx = system_transaction::transfer(&alice, &bob.pubkey(), lamports, recent_blockhash);
     /// let signature = rpc_client.send_and_confirm_transaction(&tx)?;
     /// # Ok::<(), ClientError>(())
     /// ```
->>>>>>> 082d5dc5b (Add more docs for RpcClient (#19771))
     pub fn send_and_confirm_transaction(
         &self,
         transaction: &Transaction,
@@ -3297,14 +3294,9 @@ impl RpcClient {
             let signature = self.send_transaction(transaction)?;
 
             let recent_blockhash = if uses_durable_nonce(transaction).is_some() {
-<<<<<<< HEAD
                 let (recent_blockhash, ..) = self
                     .get_recent_blockhash_with_commitment(CommitmentConfig::processed())?
                     .value;
-=======
-                let (recent_blockhash, ..) =
-                    self.get_latest_blockhash_with_commitment(CommitmentConfig::processed())?;
->>>>>>> 082d5dc5b (Add more docs for RpcClient (#19771))
                 recent_blockhash
             } else {
                 transaction.message.recent_blockhash
@@ -3315,7 +3307,6 @@ impl RpcClient {
                     Some(Ok(_)) => return Ok(signature),
                     Some(Err(e)) => return Err(e.into()),
                     None => {
-<<<<<<< HEAD
                         let fee_calculator = self
                             .get_fee_calculator_for_blockhash_with_commitment(
                                 &recent_blockhash,
@@ -3323,11 +3314,6 @@ impl RpcClient {
                             )?
                             .value;
                         if fee_calculator.is_none() {
-=======
-                        if !self
-                            .is_blockhash_valid(&recent_blockhash, CommitmentConfig::processed())?
-                        {
->>>>>>> 082d5dc5b (Add more docs for RpcClient (#19771))
                             // Block hash is not found by some reason
                             break 'sending;
                         } else if cfg!(not(test))

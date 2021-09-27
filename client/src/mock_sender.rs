@@ -6,19 +6,12 @@ use {
         rpc_config::RpcBlockProductionConfig,
         rpc_request::RpcRequest,
         rpc_response::{
-<<<<<<< HEAD
             Response, RpcAccountBalance, RpcBlockProduction, RpcBlockProductionRange,
-            RpcConfirmedTransactionStatusWithSignature, RpcContactInfo, RpcFees, RpcPerfSample,
-            RpcResponseContext, RpcSimulateTransactionResult, RpcStakeActivation, RpcSupply,
-            RpcVersionInfo, RpcVoteAccountInfo, RpcVoteAccountStatus, StakeActivationState,
-=======
-            Response, RpcAccountBalance, RpcBlockProduction, RpcBlockProductionRange, RpcBlockhash,
             RpcConfirmedTransactionStatusWithSignature, RpcContactInfo, RpcFees, RpcIdentity,
             RpcInflationGovernor, RpcInflationRate, RpcInflationReward, RpcKeyedAccount,
-            RpcPerfSample, RpcResponseContext, RpcSimulateTransactionResult, RpcSnapshotSlotInfo,
-            RpcStakeActivation, RpcSupply, RpcVersionInfo, RpcVoteAccountInfo,
-            RpcVoteAccountStatus, StakeActivationState,
->>>>>>> 082d5dc5b (Add more docs for RpcClient (#19771))
+            RpcPerfSample, RpcResponseContext, RpcSimulateTransactionResult, RpcStakeActivation,
+            RpcSupply, RpcVersionInfo, RpcVoteAccountInfo, RpcVoteAccountStatus,
+            StakeActivationState,
         },
         rpc_sender::*,
     },
