@@ -44,11 +44,11 @@ impl<T: IndexValue> Drop for AccountsIndexStorage<T> {
 
 impl<T: IndexValue> AccountsIndexStorage<T> {
     pub fn new(bins: usize, config: &Option<AccountsIndexConfig>) -> AccountsIndexStorage<T> {
-        const DEFAULT_THREADS: usize = 1; // soon, this will be a cpu calculation
+        let num_threads = std::cmp::max(2, num_cpus::get() / 4);
         let threads = config
             .as_ref()
             .and_then(|config| config.flush_threads)
-            .unwrap_or(DEFAULT_THREADS);
+            .unwrap_or(num_threads);
 
         let storage = Arc::new(BucketMapHolder::new(bins, config, threads));
 
