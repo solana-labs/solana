@@ -54,13 +54,13 @@ impl AccountsUpdateNotifierImpl {
 
     fn accountinfo_from_shared_account_data<'a>(
         &self,
-        pubkey: &Pubkey,
+        pubkey: &'a Pubkey,
         account: &'a AccountSharedData,
     ) -> Option<ReplicaAccountInfo<'a>> {
         let account_meta = ReplicaAccountMeta {
-            pubkey: bs58::encode(pubkey).into_string(),
+            pubkey: pubkey.as_ref(),
             lamports: account.lamports(),
-            owner: bs58::encode(account.owner()).into_string(),
+            owner: account.owner().as_ref(),
             executable: account.executable(),
             rent_epoch: account.rent_epoch(),
         };
@@ -73,14 +73,14 @@ impl AccountsUpdateNotifierImpl {
         stored_account_meta: &'a StoredAccountMeta,
     ) -> Option<ReplicaAccountInfo<'a>> {
         let account_meta = ReplicaAccountMeta {
-            pubkey: bs58::encode(stored_account_meta.meta.pubkey).into_string(),
+            pubkey: stored_account_meta.meta.pubkey.as_ref(),
             lamports: stored_account_meta.account_meta.lamports,
-            owner: bs58::encode(stored_account_meta.account_meta.owner).into_string(),
+            owner: stored_account_meta.account_meta.owner.as_ref(),
             executable: stored_account_meta.account_meta.executable,
             rent_epoch: stored_account_meta.account_meta.rent_epoch,
         };
         //let data = stored_account_meta.data.to_vec();
-        Some(ReplicaAccountInfo { account_meta, data: &stored_account_meta.data })
+        Some(ReplicaAccountInfo { account_meta, data: stored_account_meta.data })
     }
 
     fn notify_plugins_of_account_update(&self, account: ReplicaAccountInfo, slot: Slot) {

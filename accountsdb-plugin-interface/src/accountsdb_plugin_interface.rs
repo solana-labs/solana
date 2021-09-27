@@ -5,10 +5,10 @@
 use {std::any::Any, std::io, thiserror::Error};
 
 #[derive(Clone, PartialEq, Default, Debug)]
-pub struct ReplicaAccountMeta {
-    pub pubkey: String,
+pub struct ReplicaAccountMeta<'a> {
+    pub pubkey: &'a [u8],
     pub lamports: u64,
-    pub owner: String,
+    pub owner: &'a [u8],
     pub executable: bool,
     pub rent_epoch: u64,
 }
@@ -16,8 +16,8 @@ pub struct ReplicaAccountMeta {
 impl Eq for ReplicaAccountInfo<'_> {}
 
 #[derive(Clone, PartialEq, Debug)]
-pub struct ReplicaAccountInfo<'a>  {
-    pub account_meta: ReplicaAccountMeta,
+pub struct   ReplicaAccountInfo<'a>  {
+    pub account_meta: ReplicaAccountMeta<'a>,
     pub data: &'a [u8],
 }
 

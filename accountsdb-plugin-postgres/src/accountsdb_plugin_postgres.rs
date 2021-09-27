@@ -145,7 +145,7 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
     fn update_account(&mut self, account: &ReplicaAccountInfo, slot: u64) -> Result<()> {
         if let Some(accounts_selector) = &self.accounts_selector {
             if !accounts_selector
-                .is_account_selected(&account.account_meta.pubkey, &account.account_meta.owner)
+                .is_account_selected(account.account_meta.pubkey, account.account_meta.owner)
             {
                 return Ok(());
             }

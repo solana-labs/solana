@@ -2,8 +2,8 @@ use {log::*, std::collections::HashSet};
 
 #[derive(Debug)]
 pub(crate) struct AccountsSelector {
-    pub accounts: HashSet<String>,
-    pub owners: HashSet<String>,
+    pub accounts: HashSet<Vec<u8>>,
+    pub owners: HashSet<Vec<u8>>,
     pub select_all_accounts: bool,
 }
 
@@ -30,8 +30,8 @@ impl AccountsSelector {
                 select_all_accounts,
             };
         }
-        let accounts = accounts.iter().cloned().collect();
-        let owners = owners.iter().cloned().collect();
+        let accounts = accounts.iter().map(|key| bs58::decode(key).into_vec().unwrap()).collect();
+        let owners = owners.iter().map(|key| bs58::decode(key).into_vec().unwrap()).collect();
         AccountsSelector {
             accounts,
             owners,
@@ -39,7 +39,7 @@ impl AccountsSelector {
         }
     }
 
-    pub fn is_account_selected(&self, account: &str, owner: &str) -> bool {
+    pub fn is_account_selected(&self, account: &[u8], owner: &[u8]) -> bool {
         self.select_all_accounts || self.accounts.contains(account) || self.owners.contains(owner)
     }
 }
