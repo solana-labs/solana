@@ -49,12 +49,15 @@ impl CrdsGossip {
         from: &Pubkey,
         values: Vec<CrdsValue>,
         now: u64,
-    ) -> HashSet<Pubkey> {
-        self.push
-            .process_push_message(&self.crds, from, values, now)
-            .into_iter()
-            .filter_map(Result::ok)
-            .collect()
+    ) -> (usize, HashSet<Pubkey>) {
+        let results = self
+            .push
+            .process_push_message(&self.crds, from, values, now);
+        let success_count = results.len();
+        (
+            success_count,
+            results.into_iter().filter_map(Result::ok).collect(),
+        )
     }
 
     /// Remove redundant paths in the network.
