@@ -49,4 +49,4 @@ CREATE FUNCTION audit_account_update() RETURNS trigger AS $audit_account_update$
 $audit_account_update$ LANGUAGE plpgsql;
 
 CREATE TRIGGER account_update_trigger AFTER UPDATE OR DELETE ON account
-    FOR EACH ROW EXECUTE FUNCTION audit_account_update();
+    FOR EACH ROW EXECUTE PROCEDURE audit_account_update();
