@@ -11,7 +11,7 @@ use solana_sdk::{
     compute_budget::ComputeBudget,
     feature_set::{
         demote_program_write_locks, do_support_realloc, neon_evm_compute_budget,
-        tx_wide_compute_cap, FeatureSet,
+        restore_write_lock_when_upgradeable, tx_wide_compute_cap, FeatureSet,
     },
     fee_calculator::FeeCalculator,
     hash::Hash,
@@ -159,9 +159,12 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         }
 
         // Create the KeyedAccounts that will be passed to the program
-        let demote_program_write_locks = self
+        let demote_program_write_lock_features = self
             .feature_set
-            .is_active(&demote_program_write_locks::id());
+            .is_active(&demote_program_write_locks::id())
+            && self
+                .feature_set
+                .is_active(&restore_write_lock_when_upgradeable::id());
         let keyed_accounts = program_indices
             .iter()
             .map(|account_index| {
@@ -181,7 +184,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
                 };
                 (
                     message.is_signer(index_in_instruction),
-                    message.is_writable(index_in_instruction, demote_program_write_locks),
+                    message.is_writable(index_in_instruction, demote_program_write_lock_features),
                     &self.accounts[account_index].0,
                     &self.accounts[account_index].1 as &RefCell<AccountSharedData>,
                 )
@@ -206,7 +209,9 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         program_indices: &[usize],
     ) -> Result<(), InstructionError> {
         let program_id = instruction.program_id(&message.account_keys);
-        let demote_program_write_locks = self.is_feature_active(&demote_program_write_locks::id());
+        let demote_program_write_lock_features = self
+            .is_feature_active(&demote_program_write_locks::id())
+            && self.is_feature_active(&restore_write_lock_when_upgradeable::id());
         let do_support_realloc = self.feature_set.is_active(&do_support_realloc::id());
 
         // Verify all executable accounts have zero outstanding refs
@@ -231,7 +236,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
             self.pre_accounts[unique_index]
                 .verify(
                     program_id,
-                    message.is_writable(account_index, demote_program_write_locks),
+                    message.is_writable(account_index, demote_program_write_lock_features),
                     &self.rent,
                     &account,
                     &mut self.timings,
@@ -702,7 +707,7 @@ mod tests {
                 None,
             );
             let write_privileges: Vec<bool> = (0..message.account_keys.len())
-                .map(|i| message.is_writable(i, /*demote_program_write_locks=*/ true))
+                .map(|i| message.is_writable(i, /*demote_program_write_lock_features=*/ true))
                 .collect();
 
             // modify account owned by the program
@@ -1199,7 +1204,9 @@ mod tests {
         let message = Message::new(&[callee_instruction], None);
 
         let feature_set = FeatureSet::all_enabled();
-        let demote_program_write_locks = feature_set.is_active(&demote_program_write_locks::id());
+        let demote_program_write_lock_features = feature_set
+            .is_active(&demote_program_write_locks::id())
+            && feature_set.is_active(&restore_write_lock_when_upgradeable::id());
 
         let ancestors = Ancestors::default();
         let blockhash = Hash::default();
@@ -1234,7 +1241,7 @@ mod tests {
             .account_keys
             .iter()
             .enumerate()
-            .map(|(i, _)| message.is_writable(i, demote_program_write_locks))
+            .map(|(i, _)| message.is_writable(i, demote_program_write_lock_features))
             .collect::<Vec<bool>>();
         accounts[0].1.borrow_mut().data_as_mut_slice()[0] = 1;
         assert_eq!(
@@ -1313,7 +1320,7 @@ mod tests {
                 .account_keys
                 .iter()
                 .enumerate()
-                .map(|(i, _)| message.is_writable(i, demote_program_write_locks))
+                .map(|(i, _)| message.is_writable(i, demote_program_write_lock_features))
                 .collect::<Vec<bool>>();
             assert_eq!(
                 InstructionProcessor::process_cross_program_instruction(

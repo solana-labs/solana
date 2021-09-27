@@ -4,7 +4,10 @@ use solana_sdk::{
     account::{AccountSharedData, ReadableAccount, WritableAccount},
     account_utils::StateMut,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-    feature_set::{demote_program_write_locks, do_support_realloc, fix_write_privs},
+    feature_set::{
+        demote_program_write_locks, do_support_realloc, fix_write_privs,
+        restore_write_lock_when_upgradeable,
+    },
     ic_msg,
     instruction::{Instruction, InstructionError},
     message::Message,
@@ -618,10 +621,11 @@ impl InstructionProcessor {
         );
         if result.is_ok() {
             // Verify the called program has not misbehaved
-            let demote_program_write_locks =
-                invoke_context.is_feature_active(&demote_program_write_locks::id());
+            let demote_program_write_lock_features = invoke_context
+                .is_feature_active(&demote_program_write_locks::id())
+                && invoke_context.is_feature_active(&restore_write_lock_when_upgradeable::id());
             let write_privileges: Vec<bool> = (0..message.account_keys.len())
-                .map(|i| message.is_writable(i, demote_program_write_locks))
+                .map(|i| message.is_writable(i, demote_program_write_lock_features))
                 .collect();
             result =
                 invoke_context.verify_and_update(instruction, account_indices, &write_privileges);

@@ -353,7 +353,10 @@ impl Message {
         self.program_position(i).is_some()
     }
 
-    pub fn is_writable(&self, i: usize, demote_program_write_locks: bool) -> bool {
+    pub fn is_writable(&self, i: usize, demote_program_write_lock_features: bool) -> bool {
+        let demote_program_id = demote_program_write_lock_features
+            && self.is_key_called_as_program(i)
+            && !self.is_upgradeable_loader_present();
         (i < (self.header.num_required_signatures - self.header.num_readonly_signed_accounts)
             as usize
             || (i >= self.header.num_required_signatures as usize
@@ -363,7 +366,7 @@ impl Message {
                 let key = self.account_keys[i];
                 sysvar::is_sysvar_id(&key) || BUILTIN_PROGRAMS_KEYS.contains(&key)
             }
-            && !(demote_program_write_locks && self.is_key_called_as_program(i))
+            && !demote_program_id
     }
 
     pub fn is_signer(&self, i: usize) -> bool {
@@ -375,7 +378,7 @@ impl Message {
         let mut writable_keys = vec![];
         let mut readonly_keys = vec![];
         for (i, key) in self.account_keys.iter().enumerate() {
-            if self.is_writable(i, /*demote_program_write_locks=*/ true) {
+            if self.is_writable(i, /*demote_program_write_lock_features=*/ true) {
                 writable_keys.push(key);
             } else {
                 readonly_keys.push(key);
@@ -413,8 +416,10 @@ impl Message {
             for account_index in &instruction.accounts {
                 let account_index = *account_index as usize;
                 let is_signer = self.is_signer(account_index);
-                let is_writable =
-                    self.is_writable(account_index, /*demote_program_write_locks=*/ true);
+                let is_writable = self.is_writable(
+                    account_index,
+                    /*demote_program_write_lock_features=*/ true,
+                );
                 let mut meta_byte = 0;
                 if is_signer {
                     meta_byte |= 1 << Self::IS_SIGNER_BIT;
@@ -875,13 +880,13 @@ mod tests {
             recent_blockhash: Hash::default(),
             instructions: vec![],
         };
-        let demote_program_write_locks = true;
-        assert!(message.is_writable(0, demote_program_write_locks));
-        assert!(!message.is_writable(1, demote_program_write_locks));
-        assert!(!message.is_writable(2, demote_program_write_locks));
-        assert!(message.is_writable(3, demote_program_write_locks));
-        assert!(message.is_writable(4, demote_program_write_locks));
-        assert!(!message.is_writable(5, demote_program_write_locks));
+        let demote_program_write_lock_features = true;
+        assert!(message.is_writable(0, demote_program_write_lock_features));
+        assert!(!message.is_writable(1, demote_program_write_lock_features));
+        assert!(!message.is_writable(2, demote_program_write_lock_features));
+        assert!(message.is_writable(3, demote_program_write_lock_features));
+        assert!(message.is_writable(4, demote_program_write_lock_features));
+        assert!(!message.is_writable(5, demote_program_write_lock_features));
     }
 
     #[test]
