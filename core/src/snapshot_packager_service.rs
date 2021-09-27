@@ -1,7 +1,9 @@
 use solana_gossip::cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES};
 use solana_runtime::{
-    snapshot_archive_info::SnapshotArchiveInfoGetter, snapshot_config::SnapshotConfig,
-    snapshot_package::PendingSnapshotPackage, snapshot_utils,
+    snapshot_archive_info::SnapshotArchiveInfoGetter,
+    snapshot_config::SnapshotConfig,
+    snapshot_package::{PendingSnapshotPackage, SnapshotType},
+    snapshot_utils,
 };
 use solana_sdk::{clock::Slot, hash::Hash};
 use std::{
@@ -58,11 +60,15 @@ impl SnapshotPackagerService {
                     )
                     .expect("failed to archive snapshot package");
 
-                    hashes.push((snapshot_package.slot(), *snapshot_package.hash()));
-                    while hashes.len() > MAX_SNAPSHOT_HASHES {
-                        hashes.remove(0);
+                    // NOTE: For backwards compatibility with version <=1.7, only _full_ snapshots
+                    // can have their hashes pushed out to the cluster.
+                    if snapshot_package.snapshot_type == SnapshotType::FullSnapshot {
+                        hashes.push((snapshot_package.slot(), *snapshot_package.hash()));
+                        while hashes.len() > MAX_SNAPSHOT_HASHES {
+                            hashes.remove(0);
+                        }
+                        cluster_info.push_snapshot_hashes(hashes.clone());
                     }
-                    cluster_info.push_snapshot_hashes(hashes.clone());
                 }
             })
             .unwrap();
