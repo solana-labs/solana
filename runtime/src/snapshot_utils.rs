@@ -1594,15 +1594,8 @@ pub fn snapshot_bank(
     hash_for_testing: Option<Hash>,
     snapshot_type: Option<SnapshotType>,
 ) -> Result<()> {
-    let snapshot_storages = snapshot_type.map_or_else(SnapshotStorages::default, |snapshot_type| {
-        let incremental_snapshot_base_slot = match snapshot_type {
-            SnapshotType::IncrementalSnapshot(incremental_snapshot_base_slot) => {
-                Some(incremental_snapshot_base_slot)
-            }
-            _ => None,
-        };
-        root_bank.get_snapshot_storages(incremental_snapshot_base_slot)
-    });
+    let snapshot_storages = get_snapshot_storages(root_bank, snapshot_type);
+
     let mut add_snapshot_time = Measure::start("add-snapshot-ms");
     let bank_snapshot_info = add_bank_snapshot(
         &bank_snapshots_dir,
@@ -1630,6 +1623,48 @@ pub fn snapshot_bank(
     accounts_package_sender.send(accounts_package)?;
 
     Ok(())
+}
+
+/// Get the snapshot storages for this bank and snapshot_type
+fn get_snapshot_storages(bank: &Bank, snapshot_type: Option<SnapshotType>) -> SnapshotStorages {
+    let mut measure_snapshot_storages = Measure::start("snapshot-storages");
+    let snapshot_storages = snapshot_type.map_or_else(SnapshotStorages::default, |snapshot_type| {
+        let incremental_snapshot_base_slot = match snapshot_type {
+            SnapshotType::IncrementalSnapshot(incremental_snapshot_base_slot) => {
+                Some(incremental_snapshot_base_slot)
+            }
+            _ => None,
+        };
+        bank.get_snapshot_storages(incremental_snapshot_base_slot)
+    });
+    measure_snapshot_storages.stop();
+
+    if let Some(snapshot_type) = snapshot_type {
+        let snapshot_storages_count_name;
+        let snapshot_storages_time_name;
+        match snapshot_type {
+            SnapshotType::FullSnapshot => {
+                snapshot_storages_count_name = "full-snapshot-storages-count";
+                snapshot_storages_time_name = "full-snapshot-storages-time-ms";
+            }
+            SnapshotType::IncrementalSnapshot(_) => {
+                snapshot_storages_count_name = "incremental-snapshot-storages-count";
+                snapshot_storages_time_name = "incremental-snapshot-storages-time-ms";
+            }
+        }
+        let snapshot_storages_count = snapshot_storages.iter().map(Vec::len).sum::<usize>();
+        datapoint_info!(
+            "get_snapshot_storages",
+            (snapshot_storages_count_name, snapshot_storages_count, i64),
+            (
+                snapshot_storages_time_name,
+                measure_snapshot_storages.as_ms(),
+                i64
+            ),
+        );
+    }
+
+    snapshot_storages
 }
 
 /// Convenience function to create a full snapshot archive out of any Bank, regardless of state.
