@@ -1,62 +1,6 @@
 //! The `blockstore` module provides functions for parallel verification of the
 //! Proof of History ledger as well as iterative read, append write, and random
 //! access read to a persistent file-based ledger.
-<<<<<<< HEAD
-use crate::{
-    ancestor_iterator::AncestorIterator,
-    blockstore_db::{
-        columns as cf, AccessType, BlockstoreRecoveryMode, Column, Database, IteratorDirection,
-        IteratorMode, LedgerColumn, Result, WriteBatch,
-    },
-    blockstore_meta::*,
-    entry::{create_ticks, Entry},
-    erasure::ErasureConfig,
-    leader_schedule_cache::LeaderScheduleCache,
-    next_slots_iterator::NextSlotsIterator,
-    shred::{Result as ShredResult, Shred, Shredder, MAX_DATA_SHREDS_PER_FEC_BLOCK},
-};
-pub use crate::{blockstore_db::BlockstoreError, blockstore_meta::SlotMeta};
-use bincode::deserialize;
-use log::*;
-use rayon::{
-    iter::{IntoParallelRefIterator, ParallelIterator},
-    ThreadPool,
-};
-use rocksdb::DBRawIterator;
-use solana_measure::measure::Measure;
-use solana_metrics::{datapoint_debug, datapoint_error};
-use solana_rayon_threadlimit::get_thread_count;
-use solana_runtime::hardened_unpack::{unpack_genesis_archive, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE};
-use solana_sdk::{
-    clock::{Slot, UnixTimestamp, DEFAULT_TICKS_PER_SECOND, MS_PER_TICK},
-    genesis_config::{GenesisConfig, DEFAULT_GENESIS_ARCHIVE, DEFAULT_GENESIS_FILE},
-    hash::Hash,
-    pubkey::Pubkey,
-    sanitize::Sanitize,
-    signature::{Keypair, Signature, Signer},
-    timing::timestamp,
-    transaction::Transaction,
-};
-use solana_storage_proto::{StoredExtendedRewards, StoredTransactionStatusMeta};
-use solana_transaction_status::{
-    ConfirmedBlock, ConfirmedTransaction, ConfirmedTransactionStatusWithSignature, Rewards,
-    TransactionStatusMeta, TransactionWithStatusMeta,
-};
-use std::{
-    borrow::Cow,
-    cell::RefCell,
-    cmp,
-    collections::{BTreeMap, HashMap, HashSet},
-    convert::TryInto,
-    fs,
-    io::{Error as IoError, ErrorKind},
-    path::{Path, PathBuf},
-    rc::Rc,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        mpsc::{sync_channel, Receiver, SyncSender, TrySendError},
-        Arc, Mutex, RwLock, RwLockWriteGuard,
-=======
 pub use crate::{blockstore_db::BlockstoreError, blockstore_meta::SlotMeta};
 use {
     crate::{
@@ -66,6 +10,7 @@ use {
             IteratorMode, LedgerColumn, Result, WriteBatch,
         },
         blockstore_meta::*,
+        entry::{create_ticks, Entry},
         erasure::ErasureConfig,
         leader_schedule_cache::LeaderScheduleCache,
         next_slots_iterator::NextSlotsIterator,
@@ -78,7 +23,6 @@ use {
         ThreadPool,
     },
     rocksdb::DBRawIterator,
-    solana_entry::entry::{create_ticks, Entry},
     solana_measure::measure::Measure,
     solana_metrics::{datapoint_debug, datapoint_error},
     solana_rayon_threadlimit::get_thread_count,
@@ -92,7 +36,6 @@ use {
         signature::{Keypair, Signature, Signer},
         timing::timestamp,
         transaction::Transaction,
->>>>>>> 3c71670bd (returns completed-data-set-info from insert_data_shred)
     },
     solana_storage_proto::{StoredExtendedRewards, StoredTransactionStatusMeta},
     solana_transaction_status::{
@@ -116,15 +59,9 @@ use {
         },
         time::Instant,
     },
-    tempfile::TempDir,
     thiserror::Error,
     trees::{Tree, TreeWalk},
 };
-<<<<<<< HEAD
-use thiserror::Error;
-use trees::{Tree, TreeWalk};
-=======
->>>>>>> 3c71670bd (returns completed-data-set-info from insert_data_shred)
 
 pub mod blockstore_purge;
 
@@ -1001,7 +938,7 @@ impl Blockstore {
         metrics.shred_recovery_elapsed += start.as_us();
 
         metrics.num_inserted += just_inserted_coding_shreds.len() as u64;
-        for shred in just_inserted_coding_shreds.into_values() {
+        for (_, shred) in just_inserted_coding_shreds.into_iter() {
             self.check_insert_coding_shred(
                 shred,
                 &mut index_working_set,

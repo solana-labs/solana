@@ -178,12 +178,8 @@ impl Tvu {
             Arc::new(retransmit_sockets),
             repair_socket,
             verified_receiver,
-<<<<<<< HEAD
-            &exit,
-            completed_slots_receiver,
-=======
             exit.clone(),
->>>>>>> 6e413331b (removes erroneous uses of Arc<...> from retransmit stage)
+            completed_slots_receiver,
             cluster_slots_update_receiver,
             *bank_forks.read().unwrap().working_bank().epoch_schedule(),
             cfg,

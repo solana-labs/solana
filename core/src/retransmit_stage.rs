@@ -18,8 +18,7 @@ use {
     solana_client::rpc_response::SlotUpdate,
     solana_gossip::cluster_info::{ClusterInfo, DATA_PLANE_FANOUT},
     solana_ledger::{
-<<<<<<< HEAD
-        shred::{get_shred_slot_index_type, ShredFetchStats},
+        shred::Shred,
         {
             blockstore::{Blockstore, CompletedSlotsReceiver},
             leader_schedule_cache::LeaderScheduleCache,
@@ -27,20 +26,11 @@ use {
     },
     solana_measure::measure::Measure,
     solana_metrics::inc_new_counter_error,
-    solana_perf::packet::{Packet, Packets},
+    solana_perf::packet::Packets,
     solana_rpc::{
         max_slots::MaxSlots, rpc_completed_slots_service::RpcCompletedSlotsService,
         rpc_subscriptions::RpcSubscriptions,
     },
-=======
-        shred::Shred,
-        {blockstore::Blockstore, leader_schedule_cache::LeaderScheduleCache},
-    },
-    solana_measure::measure::Measure,
-    solana_metrics::inc_new_counter_error,
-    solana_perf::packet::Packets,
-    solana_rpc::{max_slots::MaxSlots, rpc_subscriptions::RpcSubscriptions},
->>>>>>> 3efccbffa (sends shreds (instead of packets) to retransmit stage)
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{
         clock::Slot,
@@ -80,12 +70,6 @@ struct RetransmitStats {
     total_time: AtomicU64,
     epoch_fetch: AtomicU64,
     epoch_cache_update: AtomicU64,
-<<<<<<< HEAD
-    repair_total: AtomicU64,
-    discard_total: AtomicU64,
-    duplicate_retransmit: AtomicU64,
-=======
->>>>>>> bf437b033 (removes packet-count metrics from retransmit stage)
     retransmit_total: AtomicU64,
     last_ts: AtomicInterval,
     compute_turbine_peers_total: AtomicU64,
@@ -98,12 +82,6 @@ fn update_retransmit_stats(
     num_shreds: usize,
     num_shreds_skipped: usize,
     retransmit_total: u64,
-<<<<<<< HEAD
-    discard_total: u64,
-    repair_total: u64,
-    duplicate_retransmit: u64,
-=======
->>>>>>> bf437b033 (removes packet-count metrics from retransmit stage)
     compute_turbine_peers_total: u64,
     peers_len: usize,
     epoch_fetch: u64,
@@ -120,18 +98,6 @@ fn update_retransmit_stats(
         .retransmit_total
         .fetch_add(retransmit_total, Ordering::Relaxed);
     stats
-<<<<<<< HEAD
-        .repair_total
-        .fetch_add(repair_total, Ordering::Relaxed);
-    stats
-        .discard_total
-        .fetch_add(discard_total, Ordering::Relaxed);
-    stats
-        .duplicate_retransmit
-        .fetch_add(duplicate_retransmit, Ordering::Relaxed);
-    stats
-=======
->>>>>>> bf437b033 (removes packet-count metrics from retransmit stage)
         .compute_turbine_peers_total
         .fetch_add(compute_turbine_peers_total, Ordering::Relaxed);
     stats.total_batches.fetch_add(1, Ordering::Relaxed);
@@ -183,24 +149,6 @@ fn update_retransmit_stats(
                 stats.compute_turbine_peers_total.swap(0, Ordering::Relaxed) as i64,
                 i64
             ),
-<<<<<<< HEAD
-            (
-                "repair_total",
-                stats.repair_total.swap(0, Ordering::Relaxed) as i64,
-                i64
-            ),
-            (
-                "discard_total",
-                stats.discard_total.swap(0, Ordering::Relaxed) as i64,
-                i64
-            ),
-            (
-                "duplicate_retransmit",
-                stats.duplicate_retransmit.swap(0, Ordering::Relaxed) as i64,
-                i64
-            ),
-=======
->>>>>>> bf437b033 (removes packet-count metrics from retransmit stage)
         );
     }
 }
@@ -321,12 +269,6 @@ fn retransmit(
     let num_shreds = shreds.len();
     let my_id = cluster_info.id();
     let socket_addr_space = cluster_info.socket_addr_space();
-<<<<<<< HEAD
-    let mut discard_total = 0;
-    let mut repair_total = 0;
-    let mut duplicate_retransmit = 0;
-=======
->>>>>>> bf437b033 (removes packet-count metrics from retransmit stage)
     let mut retransmit_total = 0;
     let mut num_shreds_skipped = 0;
     let mut compute_turbine_peers_total = 0;
@@ -336,22 +278,7 @@ fn retransmit(
             num_shreds_skipped += 1;
             continue;
         }
-<<<<<<< HEAD
-        if packet.meta.repair {
-            total_packets -= 1;
-            continue;
-        }
-        let shred_slot = match check_if_already_received(packet, shreds_received) {
-            Some(slot) => slot,
-            None => {
-                total_packets -= 1;
-                duplicate_retransmit += 1;
-                continue;
-            }
-        };
-=======
         let shred_slot = shred.slot();
->>>>>>> 3efccbffa (sends shreds (instead of packets) to retransmit stage)
         max_slot = max_slot.max(shred_slot);
 
         if let Some(rpc_subscriptions) = rpc_subscriptions {
@@ -417,12 +344,6 @@ fn retransmit(
         num_shreds,
         num_shreds_skipped,
         retransmit_total,
-<<<<<<< HEAD
-        discard_total,
-        repair_total,
-        duplicate_retransmit,
-=======
->>>>>>> bf437b033 (removes packet-count metrics from retransmit stage)
         compute_turbine_peers_total,
         cluster_nodes.num_peers(),
         epoch_fetch.as_us(),
@@ -528,12 +449,8 @@ impl RetransmitStage {
         retransmit_sockets: Arc<Vec<UdpSocket>>,
         repair_socket: Arc<UdpSocket>,
         verified_receiver: Receiver<Vec<Packets>>,
-<<<<<<< HEAD
-        exit: &Arc<AtomicBool>,
-        rpc_completed_slots_receiver: CompletedSlotsReceiver,
-=======
         exit: Arc<AtomicBool>,
->>>>>>> 6e413331b (removes erroneous uses of Arc<...> from retransmit stage)
+        rpc_completed_slots_receiver: CompletedSlotsReceiver,
         cluster_slots_update_receiver: ClusterSlotsUpdateReceiver,
         epoch_schedule: EpochSchedule,
         cfg: Option<Arc<AtomicBool>>,
@@ -558,13 +475,8 @@ impl RetransmitStage {
             leader_schedule_cache.clone(),
             cluster_info.clone(),
             retransmit_receiver,
-<<<<<<< HEAD
-            Arc::clone(max_slots),
-            rpc_subscriptions.clone(),
-=======
             max_slots,
-            rpc_subscriptions,
->>>>>>> 6e413331b (removes erroneous uses of Arc<...> from retransmit stage)
+            rpc_subscriptions.clone(),
         );
 
         let rpc_completed_slots_hdl =
@@ -584,15 +496,10 @@ impl RetransmitStage {
             epoch_schedule,
             duplicate_slots_reset_sender,
             repair_validators,
-<<<<<<< HEAD
-=======
-            cluster_info,
-            cluster_slots,
->>>>>>> 6e413331b (removes erroneous uses of Arc<...> from retransmit stage)
         };
         let window_service = WindowService::new(
             blockstore,
-            cluster_info.clone(),
+            cluster_info,
             verified_receiver,
             retransmit_sender,
             repair_socket,
@@ -704,12 +611,8 @@ mod tests {
         let cluster_info = Arc::new(cluster_info);
 
         let (retransmit_sender, retransmit_receiver) = channel();
-<<<<<<< HEAD
-        let t_retransmit = retransmitter(
-=======
         let _retransmit_sender = retransmit_sender.clone();
         let _t_retransmit = retransmitter(
->>>>>>> 7a8807b8b (retransmits shreds recovered from erasure codes)
             retransmit_socket,
             bank_forks,
             leader_schedule_cache,
@@ -718,7 +621,6 @@ mod tests {
             Arc::default(), // MaxSlots
             None,
         );
-        let _thread_hdls = vec![t_retransmit];
 
         let shred = Shred::new_from_data(0, 0, 0, None, true, true, 0, 0x20, 0);
         // it should send this over the sockets.

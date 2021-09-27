@@ -88,7 +88,7 @@ impl ReceiveWindowStats {
         const MAX_NUM_ADDRS: usize = 5;
         const SUBMIT_CADENCE: Duration = Duration::from_secs(2);
         let elapsed = self.since.as_ref().map(Instant::elapsed);
-        if elapsed.unwrap_or(Duration::MAX) < SUBMIT_CADENCE {
+        if elapsed.map(|e| e < SUBMIT_CADENCE).unwrap_or_default() {
             return;
         }
         datapoint_info!(
@@ -257,12 +257,8 @@ fn run_insert<F>(
     metrics: &mut BlockstoreInsertionMetrics,
     ws_metrics: &mut WindowServiceMetrics,
     completed_data_sets_sender: &CompletedDataSetsSender,
-<<<<<<< HEAD
-    outstanding_requests: &RwLock<OutstandingRepairs>,
-=======
     retransmit_sender: &Sender<Vec<Shred>>,
-    outstanding_requests: &RwLock<OutstandingShredRepairs>,
->>>>>>> 7a8807b8b (retransmits shreds recovered from erasure codes)
+    outstanding_requests: &RwLock<OutstandingRepairs>,
 ) -> Result<()>
 where
     F: Fn(Shred),
@@ -532,12 +528,8 @@ impl WindowService {
         insert_receiver: CrossbeamReceiver<(Vec<Shred>, Vec<Option<RepairMeta>>)>,
         check_duplicate_sender: CrossbeamSender<Shred>,
         completed_data_sets_sender: CompletedDataSetsSender,
-<<<<<<< HEAD
-        outstanding_requests: Arc<RwLock<OutstandingRepairs>>,
-=======
         retransmit_sender: Sender<Vec<Shred>>,
-        outstanding_requests: Arc<RwLock<OutstandingShredRepairs>>,
->>>>>>> 7a8807b8b (retransmits shreds recovered from erasure codes)
+        outstanding_requests: Arc<RwLock<OutstandingRepairs>>,
     ) -> JoinHandle<()> {
         let mut handle_timeout = || {};
         let handle_error = || {
