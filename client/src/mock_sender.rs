@@ -7,20 +7,24 @@ use {
         rpc_request::RpcRequest,
         rpc_response::{
             Response, RpcAccountBalance, RpcBlockProduction, RpcBlockProductionRange, RpcBlockhash,
-            RpcConfirmedTransactionStatusWithSignature, RpcContactInfo, RpcFees, RpcPerfSample,
-            RpcResponseContext, RpcSimulateTransactionResult, RpcSnapshotSlotInfo,
+            RpcConfirmedTransactionStatusWithSignature, RpcContactInfo, RpcFees, RpcIdentity,
+            RpcInflationGovernor, RpcInflationRate, RpcInflationReward, RpcKeyedAccount,
+            RpcPerfSample, RpcResponseContext, RpcSimulateTransactionResult, RpcSnapshotSlotInfo,
             RpcStakeActivation, RpcSupply, RpcVersionInfo, RpcVoteAccountInfo,
             RpcVoteAccountStatus, StakeActivationState,
         },
         rpc_sender::*,
     },
     serde_json::{json, Number, Value},
+    solana_account_decoder::{UiAccount, UiAccountEncoding},
     solana_sdk::{
+        account::Account,
         clock::{Slot, UnixTimestamp},
         epoch_info::EpochInfo,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
         instruction::InstructionError,
         message::MessageHeader,
+        pubkey::Pubkey,
         signature::Signature,
         sysvar::epoch_schedule::EpochSchedule,
         transaction::{self, Transaction, TransactionError},
@@ -32,7 +36,7 @@ use {
         UiTransactionEncoding, UiTransactionStatusMeta,
     },
     solana_version::Version,
-    std::{collections::HashMap, net::SocketAddr, sync::RwLock},
+    std::{collections::HashMap, net::SocketAddr, str::FromStr, sync::RwLock},
 };
 
 pub const PUBKEY: &str = "7RoSF9fUmdphVCpabEoefH81WwrW7orsWonXWqTXkKV8";
@@ -398,6 +402,60 @@ impl RpcSender for MockSender {
                 num_slots: 123,
                 sample_period_secs: 60,
             }])?,
+            "getIdentity" => serde_json::to_value(RpcIdentity {
+                identity: PUBKEY.to_string(),
+            })?,
+            "getInflationGovernor" => serde_json::to_value(
+                RpcInflationGovernor {
+                    initial: 0.08,
+                    terminal: 0.015,
+                    taper: 0.15,
+                    foundation: 0.05,
+                    foundation_term: 7.0,
+                })?,
+            "getInflationRate" => serde_json::to_value(
+                RpcInflationRate {
+                    total: 0.08,
+                    validator: 0.076,
+                    foundation: 0.004,
+                    epoch: 0,
+                })?,
+            "getInflationReward" => serde_json::to_value(vec![
+                Some(RpcInflationReward {
+                    epoch: 2,
+                    effective_slot: 224,
+                    amount: 2500,
+                    post_balance: 499999442500,
+                    commission: None,
+                })])?,
+            "minimumLedgerSlot" => json![123],
+            "getMaxRetransmitSlot" => json![123],
+            "getMultipleAccounts" => serde_json::to_value(Response {
+                context: RpcResponseContext { slot: 1 },
+                value: vec![Value::Null, Value::Null]
+            })?,
+            "getProgramAccounts" => {
+                let pubkey = Pubkey::from_str(&PUBKEY.to_string()).unwrap();
+                let account = Account {
+                    lamports: 1_000_000,
+                    data: vec![],
+                    owner: pubkey,
+                    executable: false,
+                    rent_epoch: 0,
+                };
+                serde_json::to_value(vec![
+                    RpcKeyedAccount {
+                        pubkey: PUBKEY.to_string(),
+                        account: UiAccount::encode(
+                            &pubkey,
+                            &account,
+                            UiAccountEncoding::Base64,
+                            None,
+                            None,
+                        )
+                    }
+                ])?
+            },
             _ => Value::Null,
         };
         Ok(val)
