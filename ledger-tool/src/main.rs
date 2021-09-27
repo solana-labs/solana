@@ -896,7 +896,11 @@ fn main() {
         .value_name("PATH")
         .takes_value(true)
         .multiple(true)
-        .help("Persistent accounts-index location");
+        .help(
+            "Persistent accounts-index location. \
+             May be specified multiple times. \
+             [default: [ledger]/accounts_index]",
+        );
     let accounts_db_test_hash_calculation_arg = Arg::with_name("accounts_db_test_hash_calculation")
         .long("accounts-db-test-hash-calculation")
         .help("Enable hash calculation test");
@@ -1933,10 +1937,14 @@ fn main() {
 
             {
                 let mut accounts_index_paths: Vec<PathBuf> =
-                    values_t_or_exit!(arg_matches, "accounts_index_path", String)
-                        .into_iter()
-                        .map(PathBuf::from)
-                        .collect();
+                    if arg_matches.is_present("accounts_index_path") {
+                        values_t_or_exit!(arg_matches, "accounts_index_path", String)
+                            .into_iter()
+                            .map(PathBuf::from)
+                            .collect()
+                    } else {
+                        vec![]
+                    };
                 if accounts_index_paths.is_empty() {
                     accounts_index_paths = vec![ledger_path.join("accounts_index")];
                 }
