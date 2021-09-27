@@ -273,51 +273,11 @@ impl BroadcastRun for BroadcastDuplicatesRun {
         blockstore_sender.send((data_shreds.clone(), None))?;
 
         // 3) Start broadcast step
-<<<<<<< HEAD
-        socket_sender.send(((bank.slot(), Arc::new(duplicate_data_shreds)), None))?;
-        socket_sender.send(((bank.slot(), Arc::new(duplicate_coding_shreds)), None))?;
-        socket_sender.send(((bank.slot(), data_shreds), None))?;
-        socket_sender.send(((bank.slot(), Arc::new(coding_shreds)), None))?;
-
-=======
-        info!(
-            "{} Sending good shreds for slot {} to network",
-            keypair.pubkey(),
-            data_shreds.first().unwrap().slot()
-        );
-        assert!(data_shreds.iter().all(|shred| shred.slot() == bank.slot()));
+        socket_sender.send((Arc::new(duplicate_data_shreds), None))?;
+        socket_sender.send((Arc::new(duplicate_coding_shreds), None))?;
         socket_sender.send((data_shreds, None))?;
+        socket_sender.send((Arc::new(coding_shreds), None))?;
 
-        // Special handling of last shred to cause partition
-        if let Some((original_last_data_shred, partition_last_data_shred)) = last_shreds {
-            let pubkey = keypair.pubkey();
-            self.original_last_data_shreds
-                .extend(original_last_data_shred.iter().map(|shred| {
-                    assert!(shred.verify(&pubkey));
-                    shred.signature()
-                }));
-            self.partition_last_data_shreds
-                .extend(partition_last_data_shred.iter().map(|shred| {
-                    assert!(shred.verify(&pubkey));
-                    shred.signature()
-                }));
-            let original_last_data_shred = Arc::new(original_last_data_shred);
-            let partition_last_data_shred = Arc::new(partition_last_data_shred);
-
-            // Store the original shreds that this node replayed
-            blockstore_sender.send((original_last_data_shred.clone(), None))?;
-
-            assert!(original_last_data_shred
-                .iter()
-                .all(|shred| shred.slot() == bank.slot()));
-            assert!(partition_last_data_shred
-                .iter()
-                .all(|shred| shred.slot() == bank.slot()));
-
-            socket_sender.send((original_last_data_shred, None))?;
-            socket_sender.send((partition_last_data_shred, None))?;
-        }
->>>>>>> 1deb4add8 (removes Slot from TransmitShreds (#19327))
         Ok(())
     }
     fn transmit(
@@ -327,7 +287,6 @@ impl BroadcastRun for BroadcastDuplicatesRun {
         sock: &UdpSocket,
         bank_forks: &Arc<RwLock<BankForks>>,
     ) -> Result<()> {
-<<<<<<< HEAD
         // Check the delay queue for shreds that are ready to be sent
         let (delayed_recipient, delayed_shreds) = {
             let mut delayed_deque = self.delayed_queue.lock().unwrap();
@@ -336,38 +295,14 @@ impl BroadcastRun for BroadcastDuplicatesRun {
             } else {
                 (None, None)
             }
-=======
+        };
+
         let (shreds, _) = receiver.lock().unwrap().recv()?;
         if shreds.is_empty() {
             return Ok(());
         }
         let slot = shreds.first().unwrap().slot();
         assert!(shreds.iter().all(|shred| shred.slot() == slot));
-        let (root_bank, working_bank) = {
-            let bank_forks = bank_forks.read().unwrap();
-            (bank_forks.root_bank(), bank_forks.working_bank())
-        };
-        let self_pubkey = cluster_info.id();
-        // Creat cluster partition.
-        let cluster_partition: HashSet<Pubkey> = {
-            let mut cumilative_stake = 0;
-            let epoch = root_bank.get_leader_schedule_epoch(slot);
-            root_bank
-                .epoch_staked_nodes(epoch)
-                .unwrap()
-                .iter()
-                .filter(|(pubkey, _)| **pubkey != self_pubkey)
-                .sorted_by_key(|(pubkey, stake)| (**stake, **pubkey))
-                .take_while(|(_, stake)| {
-                    cumilative_stake += *stake;
-                    cumilative_stake <= self.config.stake_partition
-                })
-                .map(|(pubkey, _)| *pubkey)
-                .collect()
->>>>>>> 1deb4add8 (removes Slot from TransmitShreds (#19327))
-        };
-
-        let ((slot, shreds), _) = receiver.lock().unwrap().recv()?;
         let root_bank = bank_forks.read().unwrap().root_bank();
         let epoch = root_bank.get_leader_schedule_epoch(slot);
         let stakes = root_bank.epoch_staked_nodes(epoch).unwrap_or_default();

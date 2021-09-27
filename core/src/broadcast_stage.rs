@@ -1,46 +1,9 @@
 //! A stage to broadcast data from a leader node to validators
 #![allow(clippy::rc_buffer)]
-<<<<<<< HEAD
-use self::{
-    broadcast_duplicates_run::BroadcastDuplicatesRun,
-    broadcast_fake_shreds_run::BroadcastFakeShredsRun, broadcast_metrics::*,
-    fail_entry_verification_broadcast_run::FailEntryVerificationBroadcastRun,
-    standard_broadcast_run::StandardBroadcastRun,
-};
-use crate::{
-    cluster_nodes::ClusterNodes,
-    result::{Error, Result},
-};
-use crossbeam_channel::{
-    Receiver as CrossbeamReceiver, RecvTimeoutError as CrossbeamRecvTimeoutError,
-    Sender as CrossbeamSender,
-};
-use solana_gossip::cluster_info::{ClusterInfo, ClusterInfoError};
-use solana_ledger::{blockstore::Blockstore, shred::Shred};
-use solana_measure::measure::Measure;
-use solana_metrics::{inc_new_counter_error, inc_new_counter_info};
-use solana_poh::poh_recorder::WorkingBankEntry;
-use solana_runtime::{bank::Bank, bank_forks::BankForks};
-use solana_sdk::timing::{timestamp, AtomicInterval};
-use solana_sdk::{clock::Slot, pubkey::Pubkey};
-use solana_streamer::{
-    sendmmsg::{batch_send, SendPktsError},
-    socket::SocketAddrSpace,
-};
-use std::{
-    collections::HashMap,
-    net::UdpSocket,
-    sync::atomic::{AtomicBool, Ordering},
-    sync::mpsc::{channel, Receiver, RecvError, RecvTimeoutError, Sender},
-    sync::{Arc, Mutex, RwLock},
-    thread::{self, Builder, JoinHandle},
-    time::{Duration, Instant},
-=======
 use {
     self::{
-        broadcast_duplicates_run::{BroadcastDuplicatesConfig, BroadcastDuplicatesRun},
-        broadcast_fake_shreds_run::BroadcastFakeShredsRun,
-        broadcast_metrics::*,
+        broadcast_duplicates_run::BroadcastDuplicatesRun,
+        broadcast_fake_shreds_run::BroadcastFakeShredsRun, broadcast_metrics::*,
         fail_entry_verification_broadcast_run::FailEntryVerificationBroadcastRun,
         standard_broadcast_run::StandardBroadcastRun,
     },
@@ -59,10 +22,8 @@ use {
     solana_metrics::{inc_new_counter_error, inc_new_counter_info},
     solana_poh::poh_recorder::WorkingBankEntry,
     solana_runtime::{bank::Bank, bank_forks::BankForks},
-    solana_sdk::{
-        timing::{timestamp, AtomicInterval},
-        {clock::Slot, pubkey::Pubkey, signature::Keypair},
-    },
+    solana_sdk::timing::{timestamp, AtomicInterval},
+    solana_sdk::{clock::Slot, pubkey::Pubkey},
     solana_streamer::{
         sendmmsg::{batch_send, SendPktsError},
         socket::SocketAddrSpace,
@@ -70,15 +31,12 @@ use {
     std::{
         collections::HashMap,
         net::UdpSocket,
-        sync::{
-            atomic::{AtomicBool, Ordering},
-            mpsc::{channel, Receiver, RecvError, RecvTimeoutError, Sender},
-            Arc, Mutex, RwLock,
-        },
+        sync::atomic::{AtomicBool, Ordering},
+        sync::mpsc::{channel, Receiver, RecvError, RecvTimeoutError, Sender},
+        sync::{Arc, Mutex, RwLock},
         thread::{self, Builder, JoinHandle},
         time::{Duration, Instant},
     },
->>>>>>> 1deb4add8 (removes Slot from TransmitShreds (#19327))
 };
 
 mod broadcast_duplicates_run;
@@ -441,12 +399,8 @@ pub fn broadcast_shreds(
     cluster_nodes_cache: &ClusterNodesCache<BroadcastStage>,
     last_datapoint_submit: &Arc<AtomicInterval>,
     transmit_stats: &mut TransmitShredsStats,
-<<<<<<< HEAD
     socket_addr_space: &SocketAddrSpace,
-    self_pubkey: Pubkey,
-=======
     cluster_info: &ClusterInfo,
->>>>>>> 1deb4add8 (removes Slot from TransmitShreds (#19327))
     bank_forks: &Arc<RwLock<BankForks>>,
 ) -> Result<()> {
     let mut result = Ok(());

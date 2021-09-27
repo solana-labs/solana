@@ -362,12 +362,8 @@ impl StandardBroadcastRun {
             &self.cluster_nodes_cache,
             &self.last_datapoint_submit,
             &mut transmit_stats,
-<<<<<<< HEAD
             cluster_info.socket_addr_space(),
-            cluster_info.id(),
-=======
             cluster_info,
->>>>>>> 1deb4add8 (removes Slot from TransmitShreds (#19327))
             bank_forks,
         )?;
         transmit_time.stop();

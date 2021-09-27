@@ -75,12 +75,8 @@ fn broadcast_shreds_bench(bencher: &mut Bencher) {
             &cluster_nodes_cache,
             &last_datapoint,
             &mut TransmitShredsStats::default(),
-<<<<<<< HEAD
             &SocketAddrSpace::Unspecified,
-            cluster_info.id(),
-=======
             &cluster_info,
->>>>>>> 1deb4add8 (removes Slot from TransmitShreds (#19327))
             &bank_forks,
         )
         .unwrap();

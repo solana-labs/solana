@@ -145,19 +145,10 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
             &self.cluster_nodes_cache,
             &Arc::new(AtomicInterval::default()),
             &mut TransmitShredsStats::default(),
-<<<<<<< HEAD
             cluster_info.socket_addr_space(),
-            cluster_info.id(),
-            bank_forks,
-        )?;
-
-        Ok(())
-=======
             cluster_info,
             bank_forks,
-            cluster_info.socket_addr_space(),
         )
->>>>>>> 1deb4add8 (removes Slot from TransmitShreds (#19327))
     }
     fn record(
         &mut self,
