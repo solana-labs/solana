@@ -12,7 +12,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 pub type Age = u8;
 
-pub const AGE_MS: u64 = SLOT_MS; // match one age per slot time
+const AGE_MS: u64 = SLOT_MS; // match one age per slot time
 
 pub struct BucketMapHolder<T: IndexValue> {
     pub disk: Option<BucketMap<SlotT<T>>>,
@@ -67,7 +67,7 @@ impl<T: IndexValue> BucketMapHolder<T> {
 
     fn has_age_interval_elapsed(&self) -> bool {
         // note that when this returns true, state of age_timer is modified
-        self.age_timer.should_update(AGE_MS)
+        self.age_timer.should_update(self.age_interval_ms())
     }
 
     /// used by bg processes to determine # active threads and how aggressively to flush
@@ -153,6 +153,12 @@ impl<T: IndexValue> BucketMapHolder<T> {
         result
     }
 
+    /// prepare for this to be dynamic if necessary
+    /// For example, maybe startup has a shorter age interval.
+    fn age_interval_ms(&self) -> u64 {
+        AGE_MS
+    }
+
     // intended to execute in a bg thread
     pub fn background(&self, exit: Arc<AtomicBool>, in_mem: Vec<Arc<InMemAccountsIndex<T>>>) {
         let bins = in_mem.len();
@@ -164,7 +170,8 @@ impl<T: IndexValue> BucketMapHolder<T> {
                 ));
             } else if self.all_buckets_flushed_at_current_age() {
                 let wait = std::cmp::min(
-                    self.age_timer.remaining_until_next_interval(AGE_MS),
+                    self.age_timer
+                        .remaining_until_next_interval(self.age_interval_ms()),
                     self.stats.remaining_until_next_interval(),
                 );
 
