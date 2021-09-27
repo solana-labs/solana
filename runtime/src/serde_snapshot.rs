@@ -536,6 +536,10 @@ where
         .fetch_add(snapshot_version, Ordering::Relaxed);
     accounts_db.generate_index(limit_load_slot_count_from_snapshot, verify_index);
 
+    let mut measure_notify = Measure::start("accounts_notify");
+    accounts_db.notify_accounts_data_at_start();
+    measure_notify.stop();
+
     datapoint_info!(
         "reconstruct_accountsdb_from_fields()",
         ("remap-time-us", measure_remap.as_us(), i64),
@@ -544,6 +548,7 @@ where
             num_collisions.load(Ordering::Relaxed),
             i64
         ),
+        ("accountsdb-notify-at-start-us", measure_notify.as_us(), i64),
     );
 
     Ok(accounts_db)

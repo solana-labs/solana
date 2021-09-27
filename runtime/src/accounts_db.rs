@@ -938,6 +938,7 @@ struct RemoveUnrootedSlotsSynchronization {
 type AccountInfoAccountsIndex = AccountsIndex<AccountInfo>;
 
 pub trait AccountsUpdateNotifierIntf: std::fmt::Debug {
+    /// Notified when an account is updated at runtime, due to transaction activities
     fn notify_account_update(
         &self,
         slot: Slot,
@@ -945,8 +946,18 @@ pub trait AccountsUpdateNotifierIntf: std::fmt::Debug {
         hash: Option<&Hash>,
         account: &AccountSharedData,
     );
+
+    /// Notified when the AccountsDb is initialized at start when restored
+    /// from a snapshot.
+    fn notify_account_data_at_start(&self, slot: Slot, account: &StoredAccountMeta);
+
+    /// Notified when a slot is optimistically confirmed
     fn notify_slot_confirmed(&self, slot: Slot, parent: Option<Slot>);
+
+    /// Notified when a slot is marked frozen.
     fn notify_slot_processed(&self, slot: Slot, parent: Option<Slot>);
+
+    /// Notified when a slot is rooted.
     fn notify_slot_rooted(&self, slot: Slot, parent: Option<Slot>);
 }
 
@@ -4248,19 +4259,6 @@ impl AccountsDb {
             .store_find_store
             .fetch_add(total_storage_find_us, Ordering::Relaxed);
 
-        if let Some(accounts_update_notifier) = &self.accounts_update_notifier {
-            let notifier = &accounts_update_notifier.read().unwrap();
-
-            for i in 0..accounts_and_meta_to_store.len() {
-                let meta = &accounts_and_meta_to_store[i].0;
-                let hash = hashes[i].borrow();
-                if let Some(account) = accounts_and_meta_to_store[i].1 {
-                    let account = account.to_account_shared_data();
-                    notifier.notify_account_update(slot, &meta.pubkey, Some(hash), &account)
-                }
-            }
-        }
-
         infos
     }
 
@@ -4647,13 +4645,6 @@ impl AccountsDb {
                     stored_size: CACHE_VIRTUAL_STORED_SIZE,
                     lamports: account.lamports(),
                 };
-
-                if let Some(accounts_update_notifier) = &self.accounts_update_notifier {
-                    accounts_update_notifier
-                        .read()
-                        .unwrap()
-                        .notify_account_update(slot, &meta.pubkey, hash, &account)
-                }
 
                 let cached_account = self.accounts_cache.store(slot, &meta.pubkey, account, hash);
                 // hash this account in the bg
@@ -5965,6 +5956,16 @@ impl AccountsDb {
 
     pub fn store_cached(&self, slot: Slot, accounts: &[(&Pubkey, &AccountSharedData)]) {
         self.store(slot, accounts, self.caching_enabled);
+
+        if let Some(accounts_update_notifier) = &self.accounts_update_notifier {
+            let notifier = &accounts_update_notifier.read().unwrap();
+
+            for account in accounts {
+                let pubkey = account.0;
+                let account = account.1;
+                notifier.notify_account_update(slot, pubkey, None, account);
+            }
+        }
     }
 
     /// Store the account update.
@@ -6703,6 +6704,24 @@ impl AccountsDb {
                     entry.accounts.len(),
                     entry.accounts.capacity(),
                 );
+            }
+        }
+    }
+
+    pub fn notify_accounts_data_at_start(&self) {
+        if let Some(accounts_update_notifier) = &self.accounts_update_notifier {
+            let notifier = &accounts_update_notifier.read().unwrap();
+            let slots = self.storage.all_slots();
+            for slot in &slots {
+                let slot_stores = self.storage.get_slot_stores(*slot).unwrap();
+
+                let slot_stores = slot_stores.read().unwrap();
+                for (_, storage_entry) in slot_stores.iter() {
+                    let accounts = storage_entry.all_accounts();
+                    for account in &accounts {
+                        notifier.notify_account_data_at_start(*slot, account);
+                    }
+                }
             }
         }
     }

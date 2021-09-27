@@ -5,7 +5,7 @@ use {
     solana_accountsdb_plugin_interface::accountsdb_plugin_interface::{
         ReplicaAccountInfo, ReplicaAccountMeta, SlotStatus,
     },
-    solana_runtime::accounts_db::AccountsUpdateNotifierIntf,
+    solana_runtime::{accounts_db::AccountsUpdateNotifierIntf, append_vec::StoredAccountMeta},
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         clock::Slot,
@@ -29,6 +29,12 @@ impl AccountsUpdateNotifierIntf for AccountsUpdateNotifierImpl {
     ) {
         if let Some(account_info) = self.accountinfo_from_shared_account_data(pubkey, hash, account)
         {
+            self.notify_plugins_of_account_update(account_info, slot);
+        }
+    }
+
+    fn notify_account_data_at_start(&self, slot: Slot, account: &StoredAccountMeta) {
+        if let Some(account_info) = self.accountinfo_from_stored_account_meta(account) {
             self.notify_plugins_of_account_update(account_info, slot);
         }
     }
@@ -68,6 +74,25 @@ impl AccountsUpdateNotifierImpl {
         Some(ReplicaAccountInfo {
             account_meta,
             hash: hash.map(|hash| bs58::encode(hash).into_string()),
+            data,
+        })
+    }
+
+    fn accountinfo_from_stored_account_meta(
+        &self,
+        stored_account_meta: &StoredAccountMeta,
+    ) -> Option<ReplicaAccountInfo> {
+        let account_meta = ReplicaAccountMeta {
+            pubkey: bs58::encode(stored_account_meta.meta.pubkey).into_string(),
+            lamports: stored_account_meta.account_meta.lamports,
+            owner: bs58::encode(stored_account_meta.account_meta.owner).into_string(),
+            executable: stored_account_meta.account_meta.executable,
+            rent_epoch: stored_account_meta.account_meta.rent_epoch,
+        };
+        let data = stored_account_meta.data.to_vec();
+        Some(ReplicaAccountInfo {
+            account_meta,
+            hash: Some(bs58::encode(stored_account_meta.hash.0).into_string()),
             data,
         })
     }
