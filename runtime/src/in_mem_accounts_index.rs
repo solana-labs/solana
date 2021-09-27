@@ -90,7 +90,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         let mut result = Vec::with_capacity(map.len());
         map.iter().for_each(|(k, v)| {
             if range.map(|range| range.contains(k)).unwrap_or(true) {
-                result.push((*k, v.clone()));
+                result.push((*k, Arc::clone(v)));
             }
         });
         self.start_stop_flush(false);
@@ -151,7 +151,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         result
     }
 
-    // lookup 'pubkey' in index
+    /// lookup 'pubkey' in index (in mem or on disk)
     pub fn get(&self, pubkey: &K) -> Option<AccountMapEntry<T>> {
         let result = self.get_only_in_mem(pubkey);
         if result.is_some() {
