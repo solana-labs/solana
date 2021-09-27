@@ -175,6 +175,8 @@ impl<T: IndexValue> BucketMapHolder<T> {
                 self.stats
                     .bg_waiting_us
                     .fetch_add(m.as_us(), Ordering::Relaxed);
+                // likely some time has elapsed. May have been waiting for age time interval to elapse.
+                self.maybe_advance_age();
             }
 
             if exit.load(Ordering::Relaxed) {
