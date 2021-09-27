@@ -503,12 +503,7 @@ fn get_rpc_node(
         }
         blacklist_timeout = Instant::now();
 
-        let mut highest_snapshot_hash: Option<(Slot, Hash)> =
-            snapshot_utils::get_highest_full_snapshot_archive_info(snapshot_archives_dir).map(
-                |snapshot_archive_info| {
-                    (snapshot_archive_info.slot(), *snapshot_archive_info.hash())
-                },
-            );
+        let mut highest_snapshot_hash = get_highest_local_snapshot_hash(snapshot_archives_dir);
         let eligible_rpc_peers = if snapshot_not_required {
             rpc_peers
         } else {
@@ -893,28 +888,31 @@ fn rpc_bootstrap(
             }
 
             if let Some(snapshot_hash) = snapshot_hash {
-                let mut use_local_snapshot = false;
-
-                if let Some(highest_local_snapshot_slot) =
-                    snapshot_utils::get_highest_full_snapshot_archive_slot(snapshot_archives_dir)
-                {
-                    if highest_local_snapshot_slot
-                        > snapshot_hash.0.saturating_sub(maximum_local_snapshot_age)
-                    {
-                        info!(
-                            "Reusing local snapshot at slot {} instead \
-                               of downloading a snapshot for slot {}",
-                            highest_local_snapshot_slot, snapshot_hash.0
-                        );
-                        use_local_snapshot = true;
-                    } else {
-                        info!(
-                            "Local snapshot from slot {} is too old. \
-                              Downloading a newer snapshot for slot {}",
-                            highest_local_snapshot_slot, snapshot_hash.0
-                        );
+                let use_local_snapshot = match get_highest_local_snapshot_hash(snapshot_archives_dir) {
+                    None => {
+                        info!("Downloading snapshot for slot {} since there is not a local snapshot", snapshot_hash.0);
+                        false
                     }
-                }
+                    Some((highest_local_snapshot_slot, _hash)) => {
+                        if highest_local_snapshot_slot
+                            > snapshot_hash.0.saturating_sub(maximum_local_snapshot_age)
+                        {
+                            info!(
+                                "Reusing local snapshot at slot {} instead \
+                                   of downloading a snapshot for slot {}",
+                                highest_local_snapshot_slot, snapshot_hash.0
+                            );
+                            true
+                        } else {
+                            info!(
+                                "Local snapshot from slot {} is too old. \
+                                  Downloading a newer snapshot for slot {}",
+                                highest_local_snapshot_slot, snapshot_hash.0
+                            );
+                            false
+                        }
+                    }
+                };
 
                 if use_local_snapshot {
                     Ok(())
@@ -3070,5 +3068,31 @@ fn process_account_indexes(matches: &ArgMatches) -> AccountSecondaryIndexes {
     AccountSecondaryIndexes {
         keys,
         indexes: account_indexes,
+    }
+}
+
+/// Get the Slot and Hash of the local snapshot with the highest slot.  Can be either a full
+/// snapshot or an incremental snapshot.
+fn get_highest_local_snapshot_hash(
+    snapshot_archives_dir: impl AsRef<Path>,
+) -> Option<(Slot, Hash)> {
+    if let Some(full_snapshot_info) =
+        snapshot_utils::get_highest_full_snapshot_archive_info(&snapshot_archives_dir)
+    {
+        if let Some(incremental_snapshot_info) =
+            snapshot_utils::get_highest_incremental_snapshot_archive_info(
+                &snapshot_archives_dir,
+                full_snapshot_info.slot(),
+            )
+        {
+            Some((
+                incremental_snapshot_info.slot(),
+                *incremental_snapshot_info.hash(),
+            ))
+        } else {
+            Some((full_snapshot_info.slot(), *full_snapshot_info.hash()))
+        }
+    } else {
+        None
     }
 }
