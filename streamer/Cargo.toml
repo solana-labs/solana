@@ -10,6 +10,7 @@ documentation = "https://docs.rs/solana-streamer"
 edition = "2018"
 
 [dependencies]
+itertools = "0.10.1"
 log = "0.4.11"
 solana-metrics = { path = "../metrics", version = "=1.7.13" }
 solana-sdk = { path = "../sdk", version = "=1.7.13" }
