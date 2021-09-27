@@ -172,13 +172,13 @@ impl Tvu {
         let (cluster_slots_update_sender, cluster_slots_update_receiver) = unbounded();
         let retransmit_stage = RetransmitStage::new(
             bank_forks.clone(),
-            leader_schedule_cache,
+            leader_schedule_cache.clone(),
             blockstore.clone(),
-            cluster_info,
+            cluster_info.clone(),
             Arc::new(retransmit_sockets),
             repair_socket,
             verified_receiver,
-            &exit,
+            exit.clone(),
             completed_slots_receiver,
             cluster_slots_update_receiver,
             *bank_forks.read().unwrap().working_bank().epoch_schedule(),
@@ -189,7 +189,7 @@ impl Tvu {
             verified_vote_receiver,
             tvu_config.repair_validators,
             completed_data_sets_sender,
-            max_slots,
+            max_slots.clone(),
             Some(rpc_subscriptions.clone()),
             duplicate_slots_sender,
         );

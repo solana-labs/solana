@@ -25,14 +25,15 @@ use {
     solana_perf::packet::{Packet, Packets},
     solana_rayon_threadlimit::get_thread_count,
     solana_runtime::{bank::Bank, bank_forks::BankForks},
-    solana_sdk::{clock::Slot, packet::PACKET_DATA_SIZE, pubkey::Pubkey, timing::duration_as_ms},
-    solana_streamer::streamer::PacketSender,
+    solana_sdk::{clock::Slot, packet::PACKET_DATA_SIZE, pubkey::Pubkey},
     std::collections::HashSet,
     std::{
+        cmp::Reverse,
+        collections::HashMap,
         net::{SocketAddr, UdpSocket},
-        ops::Deref,
         sync::{
             atomic::{AtomicBool, Ordering},
+            mpsc::Sender,
             Arc, RwLock,
         },
         thread::{self, Builder, JoinHandle},
@@ -68,6 +69,58 @@ impl WindowServiceMetrics {
                 i64
             ),
         );
+    }
+}
+
+#[derive(Default)]
+struct ReceiveWindowStats {
+    num_packets: usize,
+    num_shreds: usize, // num_discards: num_packets - num_shreds
+    num_repairs: usize,
+    elapsed: Duration, // excludes waiting time on the receiver channel.
+    slots: HashMap<Slot, /*num shreds:*/ usize>,
+    addrs: HashMap</*source:*/ SocketAddr, /*num packets:*/ usize>,
+    since: Option<Instant>,
+}
+
+impl ReceiveWindowStats {
+    fn maybe_submit(&mut self) {
+        const MAX_NUM_ADDRS: usize = 5;
+        const SUBMIT_CADENCE: Duration = Duration::from_secs(2);
+        let elapsed = self.since.as_ref().map(Instant::elapsed);
+        if elapsed.map(|e| e < SUBMIT_CADENCE).unwrap_or_default() {
+            return;
+        }
+        datapoint_info!(
+            "receive_window_stats",
+            ("num_packets", self.num_packets, i64),
+            ("num_shreds", self.num_shreds, i64),
+            ("num_repairs", self.num_repairs, i64),
+            ("elapsed_micros", self.elapsed.as_micros(), i64),
+        );
+        for (slot, num_shreds) in &self.slots {
+            datapoint_info!(
+                "receive_window_num_slot_shreds",
+                ("slot", *slot, i64),
+                ("num_shreds", *num_shreds, i64)
+            );
+        }
+        let mut addrs: Vec<_> = std::mem::take(&mut self.addrs).into_iter().collect();
+        let reverse_count = |(_addr, count): &_| Reverse(*count);
+        if addrs.len() > MAX_NUM_ADDRS {
+            addrs.select_nth_unstable_by_key(MAX_NUM_ADDRS, reverse_count);
+            addrs.truncate(MAX_NUM_ADDRS);
+        }
+        addrs.sort_unstable_by_key(reverse_count);
+        info!(
+            "num addresses: {}, top packets by source: {:?}",
+            self.addrs.len(),
+            addrs
+        );
+        *self = Self {
+            since: Some(Instant::now()),
+            ..Self::default()
+        };
     }
 }
 
@@ -204,6 +257,7 @@ fn run_insert<F>(
     metrics: &mut BlockstoreInsertionMetrics,
     ws_metrics: &mut WindowServiceMetrics,
     completed_data_sets_sender: &CompletedDataSetsSender,
+    retransmit_sender: &Sender<Vec<Shred>>,
     outstanding_requests: &RwLock<OutstandingRepairs>,
 ) -> Result<()>
 where
@@ -231,7 +285,8 @@ where
         shreds,
         repairs,
         Some(leader_schedule_cache),
-        false,
+        false, // is_trusted
+        Some(retransmit_sender),
         &handle_duplicate,
         metrics,
     )?;
@@ -252,14 +307,13 @@ where
 
 fn recv_window<F>(
     blockstore: &Blockstore,
-    leader_schedule_cache: &LeaderScheduleCache,
     bank_forks: &RwLock<BankForks>,
     insert_shred_sender: &CrossbeamSender<(Vec<Shred>, Vec<Option<RepairMeta>>)>,
-    my_pubkey: &Pubkey,
     verified_receiver: &CrossbeamReceiver<Vec<Packets>>,
-    retransmit: &PacketSender,
+    retransmit_sender: &Sender<Vec<Shred>>,
     shred_filter: F,
     thread_pool: &ThreadPool,
+    stats: &mut ReceiveWindowStats,
 ) -> Result<()>
 where
     F: Fn(&Shred, Arc<Bank>, /*last root:*/ Slot) -> bool + Sync,
@@ -267,16 +321,10 @@ where
     let timer = Duration::from_millis(200);
     let mut packets = verified_receiver.recv_timeout(timer)?;
     packets.extend(verified_receiver.try_iter().flatten());
-    let total_packets: usize = packets.iter().map(|p| p.packets.len()).sum();
     let now = Instant::now();
-    inc_new_counter_debug!("streamer-recv_window-recv", total_packets);
-
-    let (root_bank, working_bank) = {
-        let bank_forks = bank_forks.read().unwrap();
-        (bank_forks.root_bank(), bank_forks.working_bank())
-    };
     let last_root = blockstore.last_root();
-    let handle_packet = |packet: &mut Packet| {
+    let working_bank = bank_forks.read().unwrap().working_bank();
+    let handle_packet = |packet: &Packet| {
         if packet.meta.discard {
             inc_new_counter_debug!("streamer-recv_window-invalid_or_unnecessary_packet", 1);
             return None;
@@ -286,20 +334,10 @@ where
         // call to `new_from_serialized_shred` is safe.
         assert_eq!(packet.data.len(), PACKET_DATA_SIZE);
         let serialized_shred = packet.data.to_vec();
-        let working_bank = Arc::clone(&working_bank);
-        let shred = match Shred::new_from_serialized_shred(serialized_shred) {
-            Ok(shred) if shred_filter(&shred, working_bank, last_root) => {
-                let leader_pubkey =
-                    leader_schedule_cache.slot_leader_at(shred.slot(), Some(root_bank.deref()));
-                packet.meta.slot = shred.slot();
-                packet.meta.seed = shred.seed(leader_pubkey, root_bank.deref());
-                shred
-            }
-            Ok(_) | Err(_) => {
-                packet.meta.discard = true;
-                return None;
-            }
-        };
+        let shred = Shred::new_from_serialized_shred(serialized_shred).ok()?;
+        if !shred_filter(&shred, working_bank.clone(), last_root) {
+            return None;
+        }
         if packet.meta.repair {
             let repair_info = RepairMeta {
                 _from_addr: packet.meta.addr(),
@@ -313,29 +351,32 @@ where
     };
     let (shreds, repair_infos): (Vec<_>, Vec<_>) = thread_pool.install(|| {
         packets
-            .par_iter_mut()
-            .flat_map_iter(|packet| packet.packets.iter_mut().filter_map(handle_packet))
+            .par_iter()
+            .flat_map_iter(|pkt| pkt.packets.iter().filter_map(handle_packet))
             .unzip()
     });
-
-    trace!("{:?} shreds from packets", shreds.len());
-
-    trace!("{} num total shreds received: {}", my_pubkey, total_packets);
-
-    for packets in packets.into_iter() {
-        if !packets.is_empty() {
-            // Ignore the send error, as the retransmit is optional (e.g. archivers don't retransmit)
-            let _ = retransmit.send(packets);
-        }
+    // Exclude repair packets from retransmit.
+    let _ = retransmit_sender.send(
+        shreds
+            .iter()
+            .zip(&repair_infos)
+            .filter(|(_, repair_info)| repair_info.is_none())
+            .map(|(shred, _)| shred)
+            .cloned()
+            .collect(),
+    );
+    stats.num_repairs += repair_infos.iter().filter(|r| r.is_some()).count();
+    stats.num_shreds += shreds.len();
+    for shred in &shreds {
+        *stats.slots.entry(shred.slot()).or_default() += 1;
     }
-
     insert_shred_sender.send((shreds, repair_infos))?;
 
-    trace!(
-        "Elapsed processing time in recv_window(): {}",
-        duration_as_ms(&now.elapsed())
-    );
-
+    stats.num_packets += packets.iter().map(|pkt| pkt.packets.len()).sum::<usize>();
+    for packet in packets.iter().flat_map(|pkt| pkt.packets.iter()) {
+        *stats.addrs.entry(packet.meta.addr()).or_default() += 1;
+    }
+    stats.elapsed += now.elapsed();
     Ok(())
 }
 
@@ -375,7 +416,7 @@ impl WindowService {
         blockstore: Arc<Blockstore>,
         cluster_info: Arc<ClusterInfo>,
         verified_receiver: CrossbeamReceiver<Vec<Packets>>,
-        retransmit: PacketSender,
+        retransmit_sender: Sender<Vec<Shred>>,
         repair_socket: Arc<UdpSocket>,
         exit: Arc<AtomicBool>,
         repair_info: RepairInfo,
@@ -421,10 +462,11 @@ impl WindowService {
         let t_insert = Self::start_window_insert_thread(
             exit.clone(),
             blockstore.clone(),
-            leader_schedule_cache.clone(),
+            leader_schedule_cache,
             insert_receiver,
             duplicate_sender,
             completed_data_sets_sender,
+            retransmit_sender.clone(),
             outstanding_requests,
         );
 
@@ -435,9 +477,8 @@ impl WindowService {
             insert_sender,
             verified_receiver,
             shred_filter,
-            leader_schedule_cache,
             bank_forks,
-            retransmit,
+            retransmit_sender,
         );
 
         WindowService {
@@ -487,6 +528,7 @@ impl WindowService {
         insert_receiver: CrossbeamReceiver<(Vec<Shred>, Vec<Option<RepairMeta>>)>,
         check_duplicate_sender: CrossbeamSender<Shred>,
         completed_data_sets_sender: CompletedDataSetsSender,
+        retransmit_sender: Sender<Vec<Shred>>,
         outstanding_requests: Arc<RwLock<OutstandingRepairs>>,
     ) -> JoinHandle<()> {
         let mut handle_timeout = || {};
@@ -516,6 +558,7 @@ impl WindowService {
                         &mut metrics,
                         &mut ws_metrics,
                         &completed_data_sets_sender,
+                        &retransmit_sender,
                         &outstanding_requests,
                     ) {
                         if Self::should_exit_on_error(e, &mut handle_timeout, &handle_error) {
@@ -543,9 +586,8 @@ impl WindowService {
         insert_sender: CrossbeamSender<(Vec<Shred>, Vec<Option<RepairMeta>>)>,
         verified_receiver: CrossbeamReceiver<Vec<Packets>>,
         shred_filter: F,
-        leader_schedule_cache: Arc<LeaderScheduleCache>,
         bank_forks: Arc<RwLock<BankForks>>,
-        retransmit: PacketSender,
+        retransmit_sender: Sender<Vec<Shred>>,
     ) -> JoinHandle<()>
     where
         F: 'static
@@ -553,6 +595,7 @@ impl WindowService {
             + std::marker::Send
             + std::marker::Sync,
     {
+        let mut stats = ReceiveWindowStats::default();
         Builder::new()
             .name("solana-window".to_string())
             .spawn(move || {
@@ -567,34 +610,25 @@ impl WindowService {
                     inc_new_counter_error!("solana-window-error", 1, 1);
                 };
 
-                loop {
-                    if exit.load(Ordering::Relaxed) {
-                        break;
-                    }
-
+                while !exit.load(Ordering::Relaxed) {
                     let mut handle_timeout = || {
                         if now.elapsed() > Duration::from_secs(30) {
-                            warn!("Window does not seem to be receiving data. Ensure port configuration is correct...");
+                            warn!(
+                                "Window does not seem to be receiving data. \
+                            Ensure port configuration is correct..."
+                            );
                             now = Instant::now();
                         }
                     };
                     if let Err(e) = recv_window(
                         &blockstore,
-                        &leader_schedule_cache,
                         &bank_forks,
                         &insert_sender,
-                        &id,
                         &verified_receiver,
-                        &retransmit,
-                        |shred, bank, last_root| {
-                            shred_filter(
-                                &id,
-                                shred,
-                                Some(bank),
-                                last_root,
-                            )
-                        },
+                        &retransmit_sender,
+                        |shred, bank, last_root| shred_filter(&id, shred, Some(bank), last_root),
                         &thread_pool,
+                        &mut stats,
                     ) {
                         if Self::should_exit_on_error(e, &mut handle_timeout, &handle_error) {
                             break;
@@ -602,6 +636,7 @@ impl WindowService {
                     } else {
                         now = Instant::now();
                     }
+                    stats.maybe_submit();
                 }
             })
             .unwrap()
