@@ -1801,8 +1801,6 @@ fn test_program_bpf_upgrade_and_invoke_in_same_tx() {
         message.clone(),
         bank.last_blockhash(),
     );
-    // program_id is automatically demoted to readonly, preventing the upgrade, which requires
-    // writeability
     let (result, _) = process_transaction_and_record_inner(&bank, tx);
     assert_eq!(
         result.unwrap_err(),
