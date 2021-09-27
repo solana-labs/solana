@@ -9,7 +9,6 @@ use {
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         clock::Slot,
-        hash::Hash,
         pubkey::Pubkey,
     },
     std::sync::{Arc, RwLock},
@@ -20,15 +19,8 @@ pub(crate) struct AccountsUpdateNotifierImpl {
 }
 
 impl AccountsUpdateNotifierIntf for AccountsUpdateNotifierImpl {
-    fn notify_account_update(
-        &self,
-        slot: Slot,
-        pubkey: &Pubkey,
-        hash: Option<&Hash>,
-        account: &AccountSharedData,
-    ) {
-        if let Some(account_info) = self.accountinfo_from_shared_account_data(pubkey, hash, account)
-        {
+    fn notify_account_update(&self, slot: Slot, pubkey: &Pubkey, account: &AccountSharedData) {
+        if let Some(account_info) = self.accountinfo_from_shared_account_data(pubkey, account) {
             self.notify_plugins_of_account_update(account_info, slot);
         }
     }
@@ -60,7 +52,6 @@ impl AccountsUpdateNotifierImpl {
     fn accountinfo_from_shared_account_data(
         &self,
         pubkey: &Pubkey,
-        hash: Option<&Hash>,
         account: &AccountSharedData,
     ) -> Option<ReplicaAccountInfo> {
         let account_meta = ReplicaAccountMeta {
@@ -71,11 +62,7 @@ impl AccountsUpdateNotifierImpl {
             rent_epoch: account.rent_epoch(),
         };
         let data = account.data().to_vec();
-        Some(ReplicaAccountInfo {
-            account_meta,
-            hash: hash.map(|hash| bs58::encode(hash).into_string()),
-            data,
-        })
+        Some(ReplicaAccountInfo { account_meta, data })
     }
 
     fn accountinfo_from_stored_account_meta(
@@ -90,11 +77,7 @@ impl AccountsUpdateNotifierImpl {
             rent_epoch: stored_account_meta.account_meta.rent_epoch,
         };
         let data = stored_account_meta.data.to_vec();
-        Some(ReplicaAccountInfo {
-            account_meta,
-            hash: Some(bs58::encode(stored_account_meta.hash.0).into_string()),
-            data,
-        })
+        Some(ReplicaAccountInfo { account_meta, data })
     }
 
     fn notify_plugins_of_account_update(&self, account: ReplicaAccountInfo, slot: Slot) {

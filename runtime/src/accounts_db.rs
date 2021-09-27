@@ -939,13 +939,7 @@ type AccountInfoAccountsIndex = AccountsIndex<AccountInfo>;
 
 pub trait AccountsUpdateNotifierIntf: std::fmt::Debug {
     /// Notified when an account is updated at runtime, due to transaction activities
-    fn notify_account_update(
-        &self,
-        slot: Slot,
-        pubkey: &Pubkey,
-        hash: Option<&Hash>,
-        account: &AccountSharedData,
-    );
+    fn notify_account_update(&self, slot: Slot, pubkey: &Pubkey, account: &AccountSharedData);
 
     /// Notified when the AccountsDb is initialized at start when restored
     /// from a snapshot.
@@ -5963,7 +5957,7 @@ impl AccountsDb {
             for account in accounts {
                 let pubkey = account.0;
                 let account = account.1;
-                notifier.notify_account_update(slot, pubkey, None, account);
+                notifier.notify_account_update(slot, pubkey, account);
             }
         }
     }

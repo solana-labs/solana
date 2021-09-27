@@ -115,10 +115,10 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
                         });
                     }
                     Ok(mut client) => {
-                        let result = client.prepare("INSERT INTO account (pubkey, slot, owner, lamports, executable, rent_epoch, data, hash, updated_on) \
-                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) \
+                        let result = client.prepare("INSERT INTO account (pubkey, slot, owner, lamports, executable, rent_epoch, data, updated_on) \
+                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8) \
                             ON CONFLICT (pubkey) DO UPDATE SET slot=$2, owner=$3, lamports=$4, executable=$5, rent_epoch=$6, \
-                            data=$7, hash=$8, updated_on=$9");
+                            data=$7, updated_on=$8");
 
                         match result {
                             Err(err) => {
@@ -192,7 +192,6 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
                         &account.account_meta.executable,
                         &rent_epoch,
                         &account.data,
-                        &account.hash,
                         &updated_on,
                     ],
                 );
