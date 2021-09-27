@@ -2503,10 +2503,10 @@ impl Bank {
         txs: impl Iterator<Item = &'b Transaction>,
     ) -> TransactionBatch<'a, 'b> {
         let hashed_txs: Vec<HashedTransaction> = txs.map(HashedTransaction::from).collect();
-        let lock_results = self
-            .rc
-            .accounts
-            .lock_accounts(hashed_txs.as_transactions_iter());
+        let lock_results = self.rc.accounts.lock_accounts(
+            hashed_txs.as_transactions_iter(),
+            self.restore_write_lock_when_upgradeable(),
+        );
         TransactionBatch::new(lock_results, self, Cow::Owned(hashed_txs))
     }
 
@@ -2514,10 +2514,10 @@ impl Bank {
         &'a self,
         hashed_txs: &'b [HashedTransaction],
     ) -> TransactionBatch<'a, 'b> {
-        let lock_results = self
-            .rc
-            .accounts
-            .lock_accounts(hashed_txs.as_transactions_iter());
+        let lock_results = self.rc.accounts.lock_accounts(
+            hashed_txs.as_transactions_iter(),
+            self.restore_write_lock_when_upgradeable(),
+        );
         TransactionBatch::new(lock_results, self, Cow::Borrowed(hashed_txs))
     }
 
@@ -2585,9 +2585,11 @@ impl Bank {
     pub fn unlock_accounts(&self, batch: &mut TransactionBatch) {
         if batch.needs_unlock {
             batch.needs_unlock = false;
-            self.rc
-                .accounts
-                .unlock_accounts(batch.transactions_iter(), batch.lock_results())
+            self.rc.accounts.unlock_accounts(
+                batch.transactions_iter(),
+                batch.lock_results(),
+                self.restore_write_lock_when_upgradeable(),
+            )
         }
     }
 
@@ -3333,6 +3335,7 @@ impl Bank {
             &self.last_blockhash_with_fee_calculator(),
             self.fix_recent_blockhashes_sysvar_delay(),
             self.merge_nonce_error_into_system_error(),
+            self.restore_write_lock_when_upgradeable(),
         );
         let rent_debits = self.collect_rent(executed, loaded_accounts);
 
@@ -4886,6 +4889,11 @@ impl Bank {
     pub fn stakes_remove_delegation_if_inactive_enabled(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::stakes_remove_delegation_if_inactive::id())
+    }
+
+    pub fn restore_write_lock_when_upgradeable(&self) -> bool {
+        self.feature_set
+            .is_active(&feature_set::restore_write_lock_when_upgradeable::id())
     }
 
     // Check if the wallclock time from bank creation to now has exceeded the allotted

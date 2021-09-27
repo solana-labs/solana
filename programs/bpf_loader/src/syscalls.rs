@@ -20,8 +20,8 @@ use solana_sdk::{
     epoch_schedule::EpochSchedule,
     feature_set::{
         cpi_data_cost, cpi_share_ro_and_exec_accounts, enforce_aligned_host_addrs,
-        keccak256_syscall_enabled, memory_ops_syscalls, set_upgrade_authority_via_cpi_enabled,
-        sysvar_via_syscall, update_data_on_realloc,
+        keccak256_syscall_enabled, memory_ops_syscalls, restore_write_lock_when_upgradeable,
+        set_upgrade_authority_via_cpi_enabled, sysvar_via_syscall, update_data_on_realloc,
     },
     hash::{Hasher, HASH_BYTES},
     ic_msg,
@@ -2140,7 +2140,14 @@ fn call<'a>(
     signers_seeds_len: u64,
     memory_mapping: &MemoryMapping,
 ) -> Result<u64, EbpfError<BpfError>> {
-    let (message, executables, accounts, account_refs, caller_write_privileges) = {
+    let (
+        message,
+        executables,
+        accounts,
+        account_refs,
+        caller_write_privileges,
+        restore_write_lock_when_upgradeable,
+    ) = {
         let invoke_context = syscall.get_context()?;
 
         invoke_context
@@ -2230,6 +2237,7 @@ fn call<'a>(
             accounts,
             account_refs,
             caller_write_privileges,
+            invoke_context.is_feature_active(&restore_write_lock_when_upgradeable::id()),
         )
     };
 
@@ -2255,7 +2263,9 @@ fn call<'a>(
         for (i, (account, account_ref)) in accounts.iter().zip(account_refs).enumerate() {
             let account = account.borrow();
             if let Some(mut account_ref) = account_ref {
-                if message.is_writable(i) && !account.executable() {
+                if message.is_writable(i, restore_write_lock_when_upgradeable)
+                    && !account.executable()
+                {
                     *account_ref.lamports = account.lamports();
                     *account_ref.owner = *account.owner();
                     if account_ref.data.len() != account.data().len() {

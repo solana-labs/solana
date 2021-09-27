@@ -19,6 +19,7 @@ use {
         clock::{Clock, Slot},
         entrypoint::{ProgramResult, SUCCESS},
         epoch_schedule::EpochSchedule,
+        feature_set::restore_write_lock_when_upgradeable,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
         genesis_config::{ClusterType, GenesisConfig},
         hash::Hash,
@@ -255,12 +256,14 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             }
             panic!("Program id {} wasn't found in account_infos", program_id);
         };
+        let restore_write_lock_when_upgradeable =
+            invoke_context.is_feature_active(&restore_write_lock_when_upgradeable::id());
         // TODO don't have the caller's keyed_accounts so can't validate writer or signer escalation or deescalation yet
         let caller_privileges = message
             .account_keys
             .iter()
             .enumerate()
-            .map(|(i, _)| message.is_writable(i))
+            .map(|(i, _)| message.is_writable(i, restore_write_lock_when_upgradeable))
             .collect::<Vec<bool>>();
 
         stable_log::program_invoke(&logger, &program_id, invoke_context.invoke_depth());
@@ -331,7 +334,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
 
         // Copy writeable account modifications back into the caller's AccountInfos
         for (i, account_pubkey) in message.account_keys.iter().enumerate() {
-            if !message.is_writable(i) {
+            if !message.is_writable(i, restore_write_lock_when_upgradeable) {
                 continue;
             }
 

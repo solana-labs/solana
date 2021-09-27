@@ -174,6 +174,10 @@ pub mod stakes_remove_delegation_if_inactive {
     solana_sdk::declare_id!("HFpdDDNQjvcXnXKec697HDDsyk6tFoWS2o8fkxuhQZpL");
 }
 
+pub mod restore_write_lock_when_upgradeable {
+    solana_sdk::declare_id!("3Tye2iVqQTxprFSJNpyz5W6SjKNQVfRUDR2s3oVYS6h6");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -216,6 +220,7 @@ lazy_static! {
         (spl_token_v2_set_authority_fix::id(), "spl-token set_authority fix"),
         (demote_program_write_locks::id(), "demote program write locks to readonly #19593"),
         (stakes_remove_delegation_if_inactive::id(), "remove delegations from stakes cache when inactive"),
+        (restore_write_lock_when_upgradeable::id(), "restore program-id write lock when upgradeable loader present"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
