@@ -506,6 +506,12 @@ impl Message {
             .min(self.header.num_required_signatures as usize);
         self.account_keys[..last_key].iter().collect()
     }
+
+    pub fn is_upgradeable_loader_present(&self) -> bool {
+        self.account_keys
+            .iter()
+            .any(|&key| key == bpf_loader_upgradeable::id())
+    }
 }
 
 #[cfg(test)]

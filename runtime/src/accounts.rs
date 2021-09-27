@@ -201,7 +201,6 @@ impl Accounts {
             let mut accounts = Vec::with_capacity(message.account_keys.len());
             let mut account_deps = Vec::with_capacity(message.account_keys.len());
             let mut rent_debits = RentDebits::default();
-            let is_upgradeable_loader_present = is_upgradeable_loader_present(message);
 
             for (i, key) in message.account_keys.iter().enumerate() {
                 let account = if message.is_non_loader_key(key, i) {
@@ -229,7 +228,7 @@ impl Accounts {
                             .unwrap_or_default();
 
                         if bpf_loader_upgradeable::check_id(&account.owner) {
-                            if message.is_writable(i) && !is_upgradeable_loader_present {
+                            if message.is_writable(i) && !message.is_upgradeable_loader_present() {
                                 error_counters.invalid_writable_account += 1;
                                 return Err(TransactionError::InvalidWritableAccount);
                             }
@@ -1027,13 +1026,6 @@ pub fn prepare_if_nonce_account(
         }
     }
     false
-}
-
-fn is_upgradeable_loader_present(message: &Message) -> bool {
-    message
-        .account_keys
-        .iter()
-        .any(|&key| key == bpf_loader_upgradeable::id())
 }
 
 pub fn create_test_accounts(
