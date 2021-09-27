@@ -2184,7 +2184,7 @@ impl ClusterInfo {
                     let (num_success, origins) =
                         self.gossip.process_push_message(&from, crds_values, now);
                     self.stats
-                        .process_pull_response_success
+                        .process_push_success
                         .add_relaxed(num_success as u64);
                     origins
                 })
