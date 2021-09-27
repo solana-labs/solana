@@ -503,6 +503,13 @@ impl Message {
         }
         false
     }
+
+    /// Returns true if any account is the bpf upgradeable loader
+    pub fn is_upgradeable_loader_present(&self) -> bool {
+        self.account_keys
+            .iter()
+            .any(|&key| key == bpf_loader_upgradeable::id())
+    }
 }
 
 #[cfg(test)]

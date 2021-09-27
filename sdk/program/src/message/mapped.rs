@@ -1,5 +1,6 @@
 use {
     crate::{
+        bpf_loader_upgradeable,
         message::{legacy::BUILTIN_PROGRAMS_KEYS, v0},
         pubkey::Pubkey,
         sysvar,
@@ -115,6 +116,12 @@ impl MappedMessage {
         } else {
             false
         }
+    }
+
+    /// Returns true if any account is the bpf upgradeable loader
+    pub fn is_upgradeable_loader_present(&self) -> bool {
+        self.account_keys_iter()
+            .any(|&key| key == bpf_loader_upgradeable::id())
     }
 }
 
