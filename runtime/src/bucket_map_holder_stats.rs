@@ -82,11 +82,12 @@ impl BucketMapHolderStats {
     fn ms_per_age<T: IndexValue>(&self, storage: &BucketMapHolder<T>) -> u64 {
         if !storage.get_startup() {
             let elapsed_ms = self.get_elapsed_ms_and_reset();
-            let mut age_now = storage.current_age();
-            let last_age = self.last_age.swap(age_now, Ordering::Relaxed);
+            let age_now = storage.current_age();
+            let last_age = self.last_age.swap(age_now, Ordering::Relaxed) as u64;
+            let mut age_now = age_now as u64;
             if last_age > age_now {
-                // age may have wrapped
-                age_now += u8::MAX;
+                // age wrapped
+                age_now += u8::MAX as u64 + 1;
             }
             let age_delta = age_now.saturating_sub(last_age) as u64;
             if age_delta > 0 {
