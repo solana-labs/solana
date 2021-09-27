@@ -52,11 +52,11 @@ impl AccountsUpdateNotifierImpl {
         AccountsUpdateNotifierImpl { plugin_manager }
     }
 
-    fn accountinfo_from_shared_account_data(
+    fn accountinfo_from_shared_account_data<'a>(
         &self,
         pubkey: &Pubkey,
-        account: &AccountSharedData,
-    ) -> Option<ReplicaAccountInfo> {
+        account: &'a AccountSharedData,
+    ) -> Option<ReplicaAccountInfo<'a>> {
         let account_meta = ReplicaAccountMeta {
             pubkey: bs58::encode(pubkey).into_string(),
             lamports: account.lamports(),
@@ -64,14 +64,14 @@ impl AccountsUpdateNotifierImpl {
             executable: account.executable(),
             rent_epoch: account.rent_epoch(),
         };
-        let data = account.data().to_vec();
-        Some(ReplicaAccountInfo { account_meta, data })
+        //let data = account.data().to_vec();
+        Some(ReplicaAccountInfo { account_meta, data: account.data() })
     }
 
-    fn accountinfo_from_stored_account_meta(
+    fn accountinfo_from_stored_account_meta<'a>(
         &self,
-        stored_account_meta: &StoredAccountMeta,
-    ) -> Option<ReplicaAccountInfo> {
+        stored_account_meta: &'a StoredAccountMeta,
+    ) -> Option<ReplicaAccountInfo<'a>> {
         let account_meta = ReplicaAccountMeta {
             pubkey: bs58::encode(stored_account_meta.meta.pubkey).into_string(),
             lamports: stored_account_meta.account_meta.lamports,
@@ -79,8 +79,8 @@ impl AccountsUpdateNotifierImpl {
             executable: stored_account_meta.account_meta.executable,
             rent_epoch: stored_account_meta.account_meta.rent_epoch,
         };
-        let data = stored_account_meta.data.to_vec();
-        Some(ReplicaAccountInfo { account_meta, data })
+        //let data = stored_account_meta.data.to_vec();
+        Some(ReplicaAccountInfo { account_meta, data: &stored_account_meta.data })
     }
 
     fn notify_plugins_of_account_update(&self, account: ReplicaAccountInfo, slot: Slot) {

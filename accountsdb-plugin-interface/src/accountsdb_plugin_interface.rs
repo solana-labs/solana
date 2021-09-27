@@ -13,12 +13,12 @@ pub struct ReplicaAccountMeta {
     pub rent_epoch: u64,
 }
 
-impl Eq for ReplicaAccountInfo {}
+impl Eq for ReplicaAccountInfo<'_> {}
 
-#[derive(Clone, Default, PartialEq, Debug)]
-pub struct ReplicaAccountInfo {
+#[derive(Clone, PartialEq, Debug)]
+pub struct ReplicaAccountInfo<'a>  {
     pub account_meta: ReplicaAccountMeta,
-    pub data: Vec<u8>,
+    pub data: &'a [u8],
 }
 
 #[derive(Error, Debug)]
