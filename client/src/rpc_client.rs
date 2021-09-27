@@ -2993,7 +2993,7 @@ impl RpcClient {
         } = serde_json::from_value::<Response<Vec<Option<UiAccount>>>>(response)?;
         let accounts: Vec<Option<Account>> = accounts
             .into_iter()
-            .map(|rpc_account| rpc_account.map(|a| a.decode()).flatten())
+            .map(|rpc_account| rpc_account.and_then(|a| a.decode()))
             .collect();
         Ok(Response {
             context,
@@ -4025,7 +4025,7 @@ fn parse_keyed_accounts(
     accounts: Vec<RpcKeyedAccount>,
     request: RpcRequest,
 ) -> ClientResult<Vec<(Pubkey, Account)>> {
-    let mut pubkey_accounts: Vec<(Pubkey, Account)> = Vec::new();
+    let mut pubkey_accounts: Vec<(Pubkey, Account)> = Vec::with_capacity(accounts.len());
     for RpcKeyedAccount { pubkey, account } in accounts.into_iter() {
         let pubkey = pubkey.parse().map_err(|_| {
             ClientError::new_with_request(
