@@ -84,6 +84,19 @@ impl<T: IndexValue> BucketMapHolder<T> {
 
     pub(crate) fn wait_for_idle(&self) {
         assert!(self.get_startup());
+        if self.disk.is_none() {
+            return;
+        }
+
+        // when age has incremented twice, we know that we have made it through scanning all bins, so we are 'idle'
+        let end_age = self.current_age().wrapping_add(2);
+        loop {
+            self.wait_dirty_or_aged
+                .wait_timeout(Duration::from_millis(self.age_interval_ms()));
+            if end_age == self.current_age() {
+                break;
+            }
+        }
     }
 
     pub fn current_age(&self) -> Age {
