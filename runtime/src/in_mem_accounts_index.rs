@@ -638,7 +638,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 return false; // keep items with slot lists that contained cached items
             }
         }
-        !startup && (current_age == entry.age())
+        startup || (current_age == entry.age())
     }
 
     fn flush_internal(&self) {
@@ -799,53 +799,116 @@ mod tests {
     }
 
     #[test]
+    fn test_should_remove_from_mem() {
+        solana_logger::setup();
+        let bucket = new_for_test::<u64>();
+        let mut startup = false;
+        let mut current_age = 0;
+        let ref_count = 0;
+        let one_element_slot_list = vec![(0, 0)];
+        let one_element_slot_list_entry = Arc::new(AccountMapEntryInner::new(
+            one_element_slot_list,
+            ref_count,
+            AccountMapEntryMeta::default(),
+        ));
+
+        // empty slot list
+        assert!(!bucket.should_remove_from_mem(
+            current_age,
+            &Arc::new(AccountMapEntryInner::new(
+                vec![],
+                ref_count,
+                AccountMapEntryMeta::default()
+            )),
+            startup
+        ));
+        // 1 element slot list
+        assert!(bucket.should_remove_from_mem(current_age, &one_element_slot_list_entry, startup));
+        // 2 element slot list
+        assert!(!bucket.should_remove_from_mem(
+            current_age,
+            &Arc::new(AccountMapEntryInner::new(
+                vec![(0, 0), (1, 1)],
+                ref_count,
+                AccountMapEntryMeta::default()
+            )),
+            startup
+        ));
+
+        {
+            let bucket = new_for_test::<f64>();
+            // 1 element slot list with a CACHED item - f64 acts like cached
+            assert!(!bucket.should_remove_from_mem(
+                current_age,
+                &Arc::new(AccountMapEntryInner::new(
+                    vec![(0, 0.0)],
+                    ref_count,
+                    AccountMapEntryMeta::default()
+                )),
+                startup
+            ));
+        }
+
+        // 1 element slot list, age is now
+        assert!(bucket.should_remove_from_mem(current_age, &one_element_slot_list_entry, startup));
+
+        // 1 element slot list, but not current age
+        current_age = 1;
+        assert!(!bucket.should_remove_from_mem(current_age, &one_element_slot_list_entry, startup));
+
+        // 1 element slot list, but at startup and age not current
+        startup = true;
+        assert!(bucket.should_remove_from_mem(current_age, &one_element_slot_list_entry, startup));
+    }
+
+    #[test]
     fn test_hold_range_in_memory() {
-        let accts = new_for_test::<u64>();
+        let bucket = new_for_test::<u64>();
         // 0x81 is just some other range
         let ranges = [
             Pubkey::new(&[0; 32])..=Pubkey::new(&[0xff; 32]),
             Pubkey::new(&[0x81; 32])..=Pubkey::new(&[0xff; 32]),
         ];
         for range in ranges.clone() {
-            assert!(accts.cache_ranges_held.read().unwrap().is_empty());
-            accts.hold_range_in_memory(&range, true);
+            assert!(bucket.cache_ranges_held.read().unwrap().is_empty());
+            bucket.hold_range_in_memory(&range, true);
             assert_eq!(
-                accts.cache_ranges_held.read().unwrap().to_vec(),
+                bucket.cache_ranges_held.read().unwrap().to_vec(),
                 vec![Some(range.clone())]
             );
-            accts.hold_range_in_memory(&range, false);
-            assert!(accts.cache_ranges_held.read().unwrap().is_empty());
-            accts.hold_range_in_memory(&range, true);
+            bucket.hold_range_in_memory(&range, false);
+            assert!(bucket.cache_ranges_held.read().unwrap().is_empty());
+            bucket.hold_range_in_memory(&range, true);
             assert_eq!(
-                accts.cache_ranges_held.read().unwrap().to_vec(),
+                bucket.cache_ranges_held.read().unwrap().to_vec(),
                 vec![Some(range.clone())]
             );
-            accts.hold_range_in_memory(&range, true);
+            bucket.hold_range_in_memory(&range, true);
             assert_eq!(
-                accts.cache_ranges_held.read().unwrap().to_vec(),
+                bucket.cache_ranges_held.read().unwrap().to_vec(),
                 vec![Some(range.clone()), Some(range.clone())]
             );
-            accts.hold_range_in_memory(&ranges[0], true);
+            bucket.hold_range_in_memory(&ranges[0], true);
             assert_eq!(
-                accts.cache_ranges_held.read().unwrap().to_vec(),
+                bucket.cache_ranges_held.read().unwrap().to_vec(),
                 vec![
                     Some(range.clone()),
                     Some(range.clone()),
                     Some(ranges[0].clone())
                 ]
             );
-            accts.hold_range_in_memory(&range, false);
+            bucket.hold_range_in_memory(&range, false);
             assert_eq!(
-                accts.cache_ranges_held.read().unwrap().to_vec(),
+                bucket.cache_ranges_held.read().unwrap().to_vec(),
                 vec![Some(range.clone()), Some(ranges[0].clone())]
             );
-            accts.hold_range_in_memory(&range, false);
+            bucket.hold_range_in_memory(&range, false);
             assert_eq!(
-                accts.cache_ranges_held.read().unwrap().to_vec(),
+                bucket.cache_ranges_held.read().unwrap().to_vec(),
                 vec![Some(ranges[0].clone())]
             );
-            accts.hold_range_in_memory(&ranges[0].clone(), false);
-            assert!(accts.cache_ranges_held.read().unwrap().is_empty());
+            bucket.hold_range_in_memory(&ranges[0].clone(), false);
+            assert!(bucket.cache_ranges_held.read().unwrap().is_empty());
         }
     }
 
