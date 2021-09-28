@@ -157,8 +157,7 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
             {
                 return Ok(());
             }
-        }
-        if self.accounts_selector.is_none() {
+        } else {
             return Ok(());
         }
 
