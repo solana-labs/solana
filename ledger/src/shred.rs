@@ -49,46 +49,20 @@
 //! So, given a) - c), we must restrict data shred's payload length such that the entire coding
 //! payload can fit into one coding shred / packet.
 
-<<<<<<< HEAD
-use crate::{
-    blockstore::MAX_DATA_SHREDS_PER_SLOT,
-    entry::{create_ticks, Entry},
-    erasure::Session,
-};
-use bincode::config::Options;
-use core::cell::RefCell;
-use rayon::{
-    iter::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator},
-    slice::ParallelSlice,
-    ThreadPool,
-};
-use serde::{Deserialize, Serialize};
-use solana_measure::measure::Measure;
-use solana_perf::packet::{limited_deserialize, Packet};
-use solana_rayon_threadlimit::get_thread_count;
-use solana_runtime::bank::Bank;
-use solana_sdk::{
-    clock::Slot,
-    feature_set,
-    hash::hashv,
-    hash::Hash,
-    packet::PACKET_DATA_SIZE,
-    pubkey::Pubkey,
-    signature::{Keypair, Signature, Signer},
-};
-use std::{mem::size_of, ops::Deref, sync::Arc};
-use thiserror::Error;
-=======
 use {
-    crate::{blockstore::MAX_DATA_SHREDS_PER_SLOT, erasure::Session},
+    crate::{
+        blockstore::MAX_DATA_SHREDS_PER_SLOT,
+        entry::{create_ticks, Entry},
+        erasure::Session,
+    },
     bincode::config::Options,
+    core::cell::RefCell,
     rayon::{
         iter::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator},
         slice::ParallelSlice,
         ThreadPool,
     },
     serde::{Deserialize, Serialize},
-    solana_entry::entry::{create_ticks, Entry},
     solana_measure::measure::Measure,
     solana_perf::packet::{limited_deserialize, Packet},
     solana_rayon_threadlimit::get_thread_count,
@@ -96,15 +70,15 @@ use {
     solana_sdk::{
         clock::Slot,
         feature_set,
-        hash::{hashv, Hash},
+        hash::hashv,
+        hash::Hash,
         packet::PACKET_DATA_SIZE,
         pubkey::Pubkey,
         signature::{Keypair, Signature, Signer},
     },
-    std::{cell::RefCell, convert::TryInto, mem::size_of},
+    std::{convert::TryInto, mem::size_of, ops::Deref, sync::Arc},
     thiserror::Error,
 };
->>>>>>> 6d9818b8e (skips retransmit for shreds with unknown slot leader (#19472))
 
 #[derive(Default, Clone)]
 pub struct ProcessShredsStats {
