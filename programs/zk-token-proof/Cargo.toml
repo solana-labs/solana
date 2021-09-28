@@ -1,5 +1,5 @@
 [package]
-name = "spl-zk-token-proof"
+name = "spl-zk-token-proof-program"
 description = "Solana Program Library ZkToken Proof Program"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana-program-library"
@@ -13,4 +13,4 @@ getrandom = { version = "0.1", features = ["dummy"] }
 num-derive = "0.3"
 num-traits = "0.2"
 solana-sdk = "=1.7.11"
-spl-zk-token-program-sdk = { path = "../sdk" }
+spl-zk-token-sdk = { path = "../sdk" }
