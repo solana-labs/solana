@@ -308,6 +308,14 @@ impl SanitizedMessage {
                 .saturating_add(num_secp256k1_signatures),
         )
     }
+
+    /// Inspect all message keys for the bpf upgradeable loader
+    pub fn is_upgradeable_loader_present(&self) -> bool {
+        match self {
+            Self::Legacy(message) => message.is_upgradeable_loader_present(),
+            Self::V0(message) => message.is_upgradeable_loader_present(),
+        }
+    }
 }
 
 #[cfg(test)]
