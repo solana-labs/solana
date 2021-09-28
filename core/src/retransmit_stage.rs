@@ -19,18 +19,12 @@ use {
     solana_gossip::cluster_info::{ClusterInfo, DATA_PLANE_FANOUT},
     solana_ledger::{
         shred::Shred,
-        {
-            blockstore::{Blockstore, CompletedSlotsReceiver},
-            leader_schedule_cache::LeaderScheduleCache,
-        },
+        {blockstore::Blockstore, leader_schedule_cache::LeaderScheduleCache},
     },
     solana_measure::measure::Measure,
     solana_metrics::inc_new_counter_error,
     solana_perf::packet::Packets,
-    solana_rpc::{
-        max_slots::MaxSlots, rpc_completed_slots_service::RpcCompletedSlotsService,
-        rpc_subscriptions::RpcSubscriptions,
-    },
+    solana_rpc::{max_slots::MaxSlots, rpc_subscriptions::RpcSubscriptions},
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{
         clock::Slot,
@@ -457,7 +451,6 @@ impl RetransmitStage {
         repair_socket: Arc<UdpSocket>,
         verified_receiver: Receiver<Vec<Packets>>,
         exit: Arc<AtomicBool>,
-        rpc_completed_slots_receiver: CompletedSlotsReceiver,
         cluster_slots_update_receiver: ClusterSlotsUpdateReceiver,
         epoch_schedule: EpochSchedule,
         cfg: Option<Arc<AtomicBool>>,
@@ -476,18 +469,16 @@ impl RetransmitStage {
         let _retransmit_sender = retransmit_sender.clone();
 
         let retransmit_receiver = Arc::new(Mutex::new(retransmit_receiver));
-        let t_retransmit = retransmitter(
+        let thread_hdls = retransmitter(
             retransmit_sockets,
             bank_forks.clone(),
             leader_schedule_cache.clone(),
             cluster_info.clone(),
             retransmit_receiver,
             max_slots,
-            rpc_subscriptions.clone(),
+            rpc_subscriptions,
         );
 
-        let rpc_completed_slots_hdl =
-            RpcCompletedSlotsService::spawn(rpc_completed_slots_receiver, rpc_subscriptions);
         let cluster_slots_service = ClusterSlotsService::new(
             blockstore.clone(),
             cluster_slots.clone(),
@@ -533,11 +524,6 @@ impl RetransmitStage {
             completed_data_sets_sender,
             duplicate_slots_sender,
         );
-
-        let mut thread_hdls = t_retransmit;
-        if let Some(thread_hdl) = rpc_completed_slots_hdl {
-            thread_hdls.push(thread_hdl);
-        }
 
         Self {
             thread_hdls,

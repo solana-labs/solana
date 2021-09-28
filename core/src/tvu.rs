@@ -25,8 +25,7 @@ use crate::{
 use crossbeam_channel::unbounded;
 use solana_gossip::cluster_info::ClusterInfo;
 use solana_ledger::{
-    blockstore::{Blockstore, CompletedSlotsReceiver},
-    blockstore_processor::TransactionStatusSender,
+    blockstore::Blockstore, blockstore_processor::TransactionStatusSender,
     leader_schedule_cache::LeaderScheduleCache,
 };
 use solana_poh::poh_recorder::PohRecorder;
@@ -115,7 +114,6 @@ impl Tvu {
         tower: Tower,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         exit: &Arc<AtomicBool>,
-        completed_slots_receiver: CompletedSlotsReceiver,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         cfg: Option<Arc<AtomicBool>>,
         transaction_status_sender: Option<TransactionStatusSender>,
@@ -179,7 +177,6 @@ impl Tvu {
             repair_socket,
             verified_receiver,
             exit.clone(),
-            completed_slots_receiver,
             cluster_slots_update_receiver,
             *bank_forks.read().unwrap().working_bank().epoch_schedule(),
             cfg,
@@ -393,7 +390,6 @@ pub mod tests {
         let BlockstoreSignals {
             blockstore,
             ledger_signal_receiver,
-            completed_slots_receiver,
             ..
         } = Blockstore::open_with_signal(&blockstore_path, None, true)
             .expect("Expected to successfully open ledger");
@@ -437,7 +433,6 @@ pub mod tests {
             tower,
             &leader_schedule_cache,
             &exit,
-            completed_slots_receiver,
             block_commitment_cache,
             None,
             None,
