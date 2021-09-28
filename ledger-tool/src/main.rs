@@ -794,7 +794,7 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
 
                 let tx_cost = cost_model.calculate_cost(
                     &transaction,
-                    true, // demote_program_write_lock_features
+                    true, // demote_program_write_locks
                 );
                 if cost_tracker.try_add(tx_cost).is_err() {
                     println!(

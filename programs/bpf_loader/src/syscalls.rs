@@ -22,8 +22,8 @@ use solana_sdk::{
         allow_native_ids, blake3_syscall_enabled, check_seed_length,
         close_upgradeable_program_accounts, demote_program_write_locks, disable_fees_sysvar,
         do_support_realloc, libsecp256k1_0_5_upgrade_enabled, mem_overlap_fix,
-        restore_write_lock_when_upgradeable, return_data_syscall_enabled,
-        secp256k1_recover_syscall_enabled, sol_log_data_syscall_enabled,
+        return_data_syscall_enabled, secp256k1_recover_syscall_enabled,
+        sol_log_data_syscall_enabled,
     },
     hash::{Hasher, HASH_BYTES},
     ic_msg,
@@ -2079,9 +2079,8 @@ fn get_translated_accounts<'a, T, F>(
 where
     F: Fn(&T, &mut dyn InvokeContext) -> Result<CallerAccount<'a>, EbpfError<BpfError>>,
 {
-    let demote_program_write_lock_features = invoke_context
-        .is_feature_active(&demote_program_write_locks::id())
-        && invoke_context.is_feature_active(&restore_write_lock_when_upgradeable::id());
+    let demote_program_write_locks =
+        invoke_context.is_feature_active(&demote_program_write_locks::id());
     let mut account_indices = Vec::with_capacity(message.account_keys.len());
     let mut accounts = Vec::with_capacity(message.account_keys.len());
     for (i, account_key) in message.account_keys.iter().enumerate() {
@@ -2107,7 +2106,7 @@ where
                     account.set_executable(caller_account.executable);
                     account.set_rent_epoch(caller_account.rent_epoch);
                 }
-                let caller_account = if message.is_writable(i, demote_program_write_lock_features) {
+                let caller_account = if message.is_writable(i, demote_program_write_locks) {
                     Some(caller_account)
                 } else {
                     None

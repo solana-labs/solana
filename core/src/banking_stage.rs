@@ -1091,7 +1091,7 @@ impl BankingStage {
         feature_set: &Arc<feature_set::FeatureSet>,
         cost_tracker: &Arc<RwLock<CostTracker>>,
         banking_stage_stats: &BankingStageStats,
-        demote_program_write_lock_features: bool,
+        demote_program_write_locks: bool,
         votes_only: bool,
     ) -> (Vec<SanitizedTransaction>, Vec<usize>, Vec<usize>) {
         let mut retryable_transaction_packet_indexes: Vec<usize> = vec![];
@@ -1126,7 +1126,7 @@ impl BankingStage {
                 .into_iter()
                 .filter_map(|(tx, tx_index)| {
                     let result = cost_tracker_readonly
-                        .would_transaction_fit(&tx, demote_program_write_lock_features);
+                        .would_transaction_fit(&tx, demote_program_write_locks);
                     if result.is_err() {
                         debug!("transaction {:?} would exceed limit: {:?}", tx, result);
                         retryable_transaction_packet_indexes.push(tx_index);
@@ -1208,7 +1208,7 @@ impl BankingStage {
                 &bank.feature_set,
                 cost_tracker,
                 banking_stage_stats,
-                bank.demote_program_write_lock_features(),
+                bank.demote_program_write_locks(),
                 bank.vote_only_bank(),
             );
         packet_conversion_time.stop();
@@ -1249,7 +1249,7 @@ impl BankingStage {
                 cost_tracker
                     .write()
                     .unwrap()
-                    .add_transaction_cost(tx, bank.demote_program_write_lock_features());
+                    .add_transaction_cost(tx, bank.demote_program_write_locks());
             }
         });
         cost_tracking_time.stop();
@@ -1315,7 +1315,7 @@ impl BankingStage {
                 &bank.feature_set,
                 cost_tracker,
                 banking_stage_stats,
-                bank.demote_program_write_lock_features(),
+                bank.demote_program_write_locks(),
                 bank.vote_only_bank(),
             );
         unprocessed_packet_conversion_time.stop();

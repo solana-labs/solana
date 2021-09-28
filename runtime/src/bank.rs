@@ -2782,10 +2782,10 @@ impl Bank {
             .into_iter()
             .map(SanitizedTransaction::try_from)
             .collect::<Result<Vec<_>>>()?;
-        let lock_results = self.rc.accounts.lock_accounts(
-            sanitized_txs.iter(),
-            self.demote_program_write_lock_features(),
-        );
+        let lock_results = self
+            .rc
+            .accounts
+            .lock_accounts(sanitized_txs.iter(), self.demote_program_write_locks());
         Ok(TransactionBatch::new(
             lock_results,
             self,
@@ -2805,10 +2805,10 @@ impl Bank {
                 })
             })
             .collect::<Result<Vec<_>>>()?;
-        let lock_results = self.rc.accounts.lock_accounts(
-            sanitized_txs.iter(),
-            self.demote_program_write_lock_features(),
-        );
+        let lock_results = self
+            .rc
+            .accounts
+            .lock_accounts(sanitized_txs.iter(), self.demote_program_write_locks());
         Ok(TransactionBatch::new(
             lock_results,
             self,
@@ -2824,7 +2824,7 @@ impl Bank {
         let lock_results = self
             .rc
             .accounts
-            .lock_accounts(txs.iter(), self.demote_program_write_lock_features());
+            .lock_accounts(txs.iter(), self.demote_program_write_locks());
         TransactionBatch::new(lock_results, self, Cow::Borrowed(txs))
     }
 
@@ -2909,7 +2909,7 @@ impl Bank {
             self.rc.accounts.unlock_accounts(
                 batch.sanitized_transactions().iter(),
                 batch.lock_results(),
-                self.demote_program_write_lock_features(),
+                self.demote_program_write_locks(),
             )
         }
     }
@@ -3654,7 +3654,7 @@ impl Bank {
             &self.last_blockhash_with_fee_calculator(),
             self.rent_for_sysvars(),
             self.merge_nonce_error_into_system_error(),
-            self.demote_program_write_lock_features(),
+            self.demote_program_write_locks(),
         );
         let rent_debits = self.collect_rent(executed, loaded_txs);
 
@@ -5410,12 +5410,9 @@ impl Bank {
             .is_active(&feature_set::stake_program_advance_activating_credits_observed::id())
     }
 
-    pub fn demote_program_write_lock_features(&self) -> bool {
+    pub fn demote_program_write_locks(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::demote_program_write_locks::id())
-            && self
-                .feature_set
-                .is_active(&feature_set::restore_write_lock_when_upgradeable::id())
     }
 
     pub fn stakes_remove_delegation_if_inactive_enabled(&self) -> bool {
