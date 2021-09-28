@@ -53,11 +53,18 @@ impl CrdsGossip {
         let results = self
             .push
             .process_push_message(&self.crds, from, values, now);
-        let success_count = results.len();
-        (
-            success_count,
-            results.into_iter().filter_map(Result::ok).collect(),
-        )
+        let mut success_count = 0;
+        let successfully_inserted_origin_set: HashSet<Pubkey> = results
+            .into_iter()
+            .filter_map(|result| {
+                if result.is_ok() {
+                    success_count += 1;
+                }
+                Result::ok(result)
+            })
+            .collect();
+
+        (success_count, successfully_inserted_origin_set)
     }
 
     /// Remove redundant paths in the network.
