@@ -5,7 +5,7 @@ use {
     solana_sdk::{
         ic_msg, instruction::InstructionError, process_instruction::InvokeContext, pubkey::Pubkey,
     },
-    spl_zk_token_crypto::instruction::*,
+    spl_zk_token_program_sdk::zk_token_proof_instruction::*,
     std::result::Result,
 };
 
