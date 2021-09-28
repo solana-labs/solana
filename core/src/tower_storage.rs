@@ -1,5 +1,6 @@
 use {
-    crate::consensus::{Result, Tower, TowerError},
+    crate::consensus::{Result, Tower, TowerError, TowerVersions},
+    crate::tower1_7_14::SavedTower1_7_14,
     solana_sdk::{
         pubkey::Pubkey,
         signature::{Signature, Signer},
@@ -11,6 +12,67 @@ use {
         sync::RwLock,
     },
 };
+
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, AbiExample)]
+pub enum SavedTowerVersions {
+    V1_17_14(SavedTower1_7_14),
+    Current(SavedTower),
+}
+
+impl SavedTowerVersions {
+    fn try_into_tower(&self, node_pubkey: &Pubkey) -> Result<Tower> {
+        // This method assumes that `self` was just deserialized
+        assert_eq!(self.pubkey(), Pubkey::default());
+
+        let tv = match self {
+            SavedTowerVersions::V1_17_14(t) => {
+                if !t.signature.verify(node_pubkey.as_ref(), &t.data) {
+                    return Err(TowerError::InvalidSignature);
+                }
+                bincode::deserialize(&t.data).map(TowerVersions::V1_17_14)
+            }
+            SavedTowerVersions::Current(t) => {
+                if !t.signature.verify(node_pubkey.as_ref(), &t.data) {
+                    return Err(TowerError::InvalidSignature);
+                }
+                bincode::deserialize(&t.data).map(TowerVersions::Current)
+            }
+        };
+        tv.map_err(|e| e.into()).and_then(|tv: TowerVersions| {
+            let tower = tv.convert_to_current();
+            if tower.node_pubkey != *node_pubkey {
+                return Err(TowerError::WrongTower(format!(
+                    "node_pubkey is {:?} but found tower for {:?}",
+                    node_pubkey, tower.node_pubkey
+                )));
+            }
+            Ok(tower)
+        })
+    }
+
+    fn serialize_into(&self, file: &mut File) -> Result<()> {
+        bincode::serialize_into(file, self).map_err(|e| e.into())
+    }
+
+    fn pubkey(&self) -> Pubkey {
+        match self {
+            SavedTowerVersions::V1_17_14(t) => t.node_pubkey,
+            SavedTowerVersions::Current(t) => t.node_pubkey,
+        }
+    }
+}
+
+impl From<SavedTower> for SavedTowerVersions {
+    fn from(tower: SavedTower) -> SavedTowerVersions {
+        SavedTowerVersions::Current(tower)
+    }
+}
+
+impl From<SavedTower1_7_14> for SavedTowerVersions {
+    fn from(tower: SavedTower1_7_14) -> SavedTowerVersions {
+        SavedTowerVersions::V1_17_14(tower)
+    }
+}
 
 #[frozen_abi(digest = "Gaxfwvx5MArn52mKZQgzHmDCyn5YfCuTHvp5Et3rFfpp")]
 #[derive(Default, Clone, Serialize, Deserialize, Debug, PartialEq, AbiExample)]
@@ -39,45 +101,25 @@ impl SavedTower {
             node_pubkey,
         })
     }
-
-    pub fn try_into_tower(self, node_pubkey: &Pubkey) -> Result<Tower> {
-        // This method assumes that `self` was just deserialized
-        assert_eq!(self.node_pubkey, Pubkey::default());
-
-        if !self.signature.verify(node_pubkey.as_ref(), &self.data) {
-            return Err(TowerError::InvalidSignature);
-        }
-        bincode::deserialize(&self.data)
-            .map_err(|e| e.into())
-            .and_then(|tower: Tower| {
-                if tower.node_pubkey != *node_pubkey {
-                    return Err(TowerError::WrongTower(format!(
-                        "node_pubkey is {:?} but found tower for {:?}",
-                        node_pubkey, tower.node_pubkey
-                    )));
-                }
-                Ok(tower)
-            })
-    }
 }
 
 pub trait TowerStorage: Sync + Send {
-    fn load(&self, node_pubkey: &Pubkey) -> Result<SavedTower>;
-    fn store(&self, saved_tower: &SavedTower) -> Result<()>;
+    fn load(&self, node_pubkey: &Pubkey) -> Result<Tower>;
+    fn store(&self, saved_tower: &SavedTowerVersions) -> Result<()>;
 }
 
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct NullTowerStorage {}
 
 impl TowerStorage for NullTowerStorage {
-    fn load(&self, _node_pubkey: &Pubkey) -> Result<SavedTower> {
+    fn load(&self, _node_pubkey: &Pubkey) -> Result<Tower> {
         Err(TowerError::IoError(io::Error::new(
             io::ErrorKind::Other,
             "NullTowerStorage::load() not available",
         )))
     }
 
-    fn store(&self, _saved_tower: &SavedTower) -> Result<()> {
+    fn store(&self, _saved_tower: &SavedTowerVersions) -> Result<()> {
         Ok(())
     }
 }
@@ -92,35 +134,75 @@ impl FileTowerStorage {
         Self { tower_path }
     }
 
-    pub fn filename(&self, node_pubkey: &Pubkey) -> PathBuf {
+    // Old filename for towers pre 1.9 (VoteStateUpdate)
+    pub fn old_filename(&self, node_pubkey: &Pubkey) -> PathBuf {
         self.tower_path
             .join(format!("tower-{}", node_pubkey))
             .with_extension("bin")
     }
+
+    pub fn filename(&self, node_pubkey: &Pubkey) -> PathBuf {
+        self.tower_path
+            .join(format!("tower-1_9-{}", node_pubkey))
+            .with_extension("bin")
+    }
+
+    #[cfg(test)]
+    fn store_old(&self, saved_tower: &SavedTower1_7_14) -> Result<()> {
+        let pubkey = saved_tower.node_pubkey;
+        let filename = self.old_filename(&pubkey);
+        trace!("store: {}", filename.display());
+        let new_filename = filename.with_extension("bin.new");
+
+        {
+            // overwrite anything if exists
+            let file = File::create(&new_filename)?;
+            bincode::serialize_into(file, saved_tower)?;
+            // file.sync_all() hurts performance; pipeline sync-ing and submitting votes to the cluster!
+        }
+        fs::rename(&new_filename, &filename)?;
+        // self.path.parent().sync_all() hurts performance same as the above sync
+        Ok(())
+    }
 }
 
 impl TowerStorage for FileTowerStorage {
-    fn load(&self, node_pubkey: &Pubkey) -> Result<SavedTower> {
+    fn load(&self, node_pubkey: &Pubkey) -> Result<Tower> {
         let filename = self.filename(node_pubkey);
         trace!("load {}", filename.display());
 
         // Ensure to create parent dir here, because restore() precedes save() always
         fs::create_dir_all(&filename.parent().unwrap())?;
 
-        let file = File::open(&filename)?;
-        let mut stream = BufReader::new(file);
-        bincode::deserialize_from(&mut stream).map_err(|e| e.into())
+        if let Ok(file) = File::open(&filename) {
+            // New format
+            let mut stream = BufReader::new(file);
+
+            bincode::deserialize_from(&mut stream)
+                .map_err(|e| e.into())
+                .and_then(|t: SavedTowerVersions| t.try_into_tower(node_pubkey))
+        } else {
+            // Old format
+            let file = File::open(&self.old_filename(node_pubkey))?;
+            let mut stream = BufReader::new(file);
+            bincode::deserialize_from(&mut stream)
+                .map_err(|e| e.into())
+                .and_then(|t: SavedTower1_7_14| {
+                    SavedTowerVersions::from(t).try_into_tower(node_pubkey)
+                })
+        }
     }
 
-    fn store(&self, saved_tower: &SavedTower) -> Result<()> {
-        let filename = self.filename(&saved_tower.node_pubkey);
+    fn store(&self, saved_tower: &SavedTowerVersions) -> Result<()> {
+        let pubkey = saved_tower.pubkey();
+        let filename = self.filename(&pubkey);
         trace!("store: {}", filename.display());
         let new_filename = filename.with_extension("bin.new");
 
         {
             // overwrite anything if exists
             let mut file = File::create(&new_filename)?;
-            bincode::serialize_into(&mut file, saved_tower)?;
+            saved_tower.serialize_into(&mut file)?;
             // file.sync_all() hurts performance; pipeline sync-ing and submitting votes to the cluster!
         }
         fs::rename(&new_filename, &filename)?;
@@ -194,7 +276,7 @@ impl EtcdTowerStorage {
 }
 
 impl TowerStorage for EtcdTowerStorage {
-    fn load(&self, node_pubkey: &Pubkey) -> Result<SavedTower> {
+    fn load(&self, node_pubkey: &Pubkey) -> Result<Tower> {
         let (instance_key, tower_key) = Self::get_keys(node_pubkey);
         let mut client = self.client.write().unwrap();
 
@@ -236,7 +318,9 @@ impl TowerStorage for EtcdTowerStorage {
         for op_response in response.op_responses() {
             if let etcd_client::TxnOpResponse::Get(get_response) = op_response {
                 if let Some(kv) = get_response.kvs().get(0) {
-                    return bincode::deserialize_from(kv.value()).map_err(|e| e.into());
+                    return bincode::deserialize_from(kv.value())
+                        .map_err(|e| e.into())
+                        .and_then(|t: SavedTowerVersions| t.try_into_tower(node_pubkey));
                 }
             }
         }
@@ -248,8 +332,8 @@ impl TowerStorage for EtcdTowerStorage {
         )))
     }
 
-    fn store(&self, saved_tower: &SavedTower) -> Result<()> {
-        let (instance_key, tower_key) = Self::get_keys(&saved_tower.node_pubkey);
+    fn store(&self, saved_tower: &SavedTowerVersions) -> Result<()> {
+        let (instance_key, tower_key) = Self::get_keys(&saved_tower.pubkey());
         let mut client = self.client.write().unwrap();
 
         let txn = etcd_client::Txn::new()
@@ -260,7 +344,7 @@ impl TowerStorage for EtcdTowerStorage {
             )])
             .and_then(vec![etcd_client::TxnOp::put(
                 tower_key,
-                bincode::serialize(saved_tower)?,
+                bincode::serialize(&saved_tower)?,
                 None,
             )]);
 
@@ -276,9 +360,63 @@ impl TowerStorage for EtcdTowerStorage {
         if !response.succeeded() {
             return Err(TowerError::IoError(io::Error::new(
                 io::ErrorKind::Other,
-                format!("Lost etcd instance lock for {}", saved_tower.node_pubkey),
+                format!("Lost etcd instance lock for {}", saved_tower.pubkey()),
             )));
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+pub mod test {
+    use {
+        super::*,
+        crate::{
+            consensus::Tower,
+            tower1_7_14::{SavedTower1_7_14, Tower1_7_14},
+        },
+        solana_sdk::{hash::Hash, signature::Keypair},
+        solana_vote_program::vote_state::{
+            BlockTimestamp, Lockout, Vote, VoteState, VoteTransaction, MAX_LOCKOUT_HISTORY,
+        },
+        tempfile::TempDir,
+    };
+
+    #[test]
+    fn test_tower_migration() {
+        let tower_path = TempDir::new().unwrap();
+        let identity_keypair = Keypair::new();
+        let node_pubkey = identity_keypair.pubkey();
+        let mut vote_state = VoteState::default();
+        vote_state
+            .votes
+            .resize(MAX_LOCKOUT_HISTORY, Lockout::default());
+        vote_state.root_slot = Some(1);
+
+        let vote = Vote::new(vec![1, 2, 3, 4], Hash::default());
+        let tower_storage = FileTowerStorage::new(tower_path.path().to_path_buf());
+
+        let old_tower = Tower1_7_14 {
+            node_pubkey,
+            threshold_depth: 10,
+            threshold_size: 0.9,
+            vote_state,
+            last_vote: vote.clone(),
+            last_timestamp: BlockTimestamp::default(),
+            last_vote_tx_blockhash: Hash::default(),
+            stray_restored_slot: Some(2),
+            last_switch_threshold_check: Option::default(),
+        };
+
+        {
+            let saved_tower = SavedTower1_7_14::new(&old_tower, &identity_keypair).unwrap();
+            tower_storage.store_old(&saved_tower).unwrap();
+        }
+
+        let loaded = Tower::restore(&tower_storage, &node_pubkey).unwrap();
+        assert_eq!(loaded.node_pubkey, old_tower.node_pubkey);
+        assert_eq!(loaded.last_vote(), VoteTransaction::from(vote));
+        assert_eq!(loaded.vote_state.root_slot, Some(1));
+        assert_eq!(loaded.stray_restored_slot(), None);
     }
 }

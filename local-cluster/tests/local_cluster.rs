@@ -23,7 +23,7 @@ use {
         consensus::{Tower, SWITCH_FORK_THRESHOLD, VOTE_THRESHOLD_DEPTH},
         optimistic_confirmation_verifier::OptimisticConfirmationVerifier,
         replay_stage::DUPLICATE_THRESHOLD,
-        tower_storage::{FileTowerStorage, SavedTower, TowerStorage},
+        tower_storage::{FileTowerStorage, SavedTower, SavedTowerVersions, TowerStorage},
         validator::ValidatorConfig,
     },
     solana_download_utils::download_snapshot_archive,
@@ -1916,7 +1916,9 @@ fn test_validator_saves_tower() {
 fn save_tower(tower_path: &Path, tower: &Tower, node_keypair: &Keypair) {
     let file_tower_storage = FileTowerStorage::new(tower_path.to_path_buf());
     let saved_tower = SavedTower::new(tower, node_keypair).unwrap();
-    file_tower_storage.store(&saved_tower).unwrap();
+    file_tower_storage
+        .store(&SavedTowerVersions::from(saved_tower))
+        .unwrap();
 }
 
 fn root_in_tower(tower_path: &Path, node_pubkey: &Pubkey) -> Option<Slot> {
@@ -2317,6 +2319,14 @@ fn test_hard_fork_invalidates_tower() {
     validator_b_info.config.new_hard_forks = hard_fork_slots;
     validator_b_info.config.wait_for_supermajority = Some(hard_fork_slot);
     validator_b_info.config.expected_shred_version = Some(expected_shred_version);
+
+    // Clear ledger of all slots post hard fork
+    {
+        let blockstore_a = open_blockstore(&validator_a_info.info.ledger_path);
+        let blockstore_b = open_blockstore(&validator_b_info.info.ledger_path);
+        purge_slots(&blockstore_a, hard_fork_slot + 1, 100);
+        purge_slots(&blockstore_b, hard_fork_slot + 1, 100);
+    }
 
     // restart validator A first
     let cluster_for_a = cluster.clone();
