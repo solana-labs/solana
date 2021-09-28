@@ -1871,6 +1871,7 @@ pub fn main() {
             Arg::with_name("enable_accountsdb_plugin")
                 .long("enable-accountsdb-plugin")
                 .takes_value(false)
+                .requires("accountsdb_plugin_config")
                 .hidden(true)
                 .help("Enable AccountsDb plugin through which account data can streamed to external data store."),
         )
@@ -2581,14 +2582,7 @@ pub fn main() {
 
     let accountsdb_plugin_config_file = if matches.is_present("enable_accountsdb_plugin") {
         Some(PathBuf::from(
-            matches
-                .value_of("accountsdb_plugin_config")
-                .unwrap_or_else(|| {
-                    eprintln!(
-                        "The --accountsdb-plugin-config <plugin_config_file> is required when --enable-accountsdb-plugin is set.",
-                    );
-                    exit(1);
-                }),
+            matches.value_of("accountsdb_plugin_config").unwrap(),
         ))
     } else {
         None
