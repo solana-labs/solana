@@ -943,7 +943,7 @@ pub trait AccountsUpdateNotifierIntf: std::fmt::Debug {
 
     /// Notified when the AccountsDb is initialized at start when restored
     /// from a snapshot.
-    fn notify_account_data_at_start(&self, slot: Slot, account: &StoredAccountMeta);
+    fn notify_account_restore_from_snapshot(&self, slot: Slot, account: &StoredAccountMeta);
 
     /// Notified when a slot is optimistically confirmed
     fn notify_slot_confirmed(&self, slot: Slot, parent: Option<Slot>);
