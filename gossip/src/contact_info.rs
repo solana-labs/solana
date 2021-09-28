@@ -296,7 +296,7 @@ mod tests {
         let addr = socketaddr!("127.0.0.1:10");
         let ci = ContactInfo::new_with_socketaddr(&addr);
         assert_eq!(ci.tpu, addr);
-        assert_eq!(ci.tpu_vote.port(), 11);
+        assert_eq!(ci.tpu_vote.port(), 17);
         assert_eq!(ci.gossip.port(), 11);
         assert_eq!(ci.tvu.port(), 12);
         assert_eq!(ci.tpu_forwards.port(), 13);
