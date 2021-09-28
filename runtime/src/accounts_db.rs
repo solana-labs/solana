@@ -28,6 +28,7 @@ use crate::{
         SlotSlice, ZeroLamport, ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS,
         ACCOUNTS_INDEX_CONFIG_FOR_TESTING,
     },
+    accounts_update_notifier_interface::AccountsUpdateNotifier,
     ancestors::Ancestors,
     append_vec::{AppendVec, StoredAccountMeta, StoredMeta, StoredMetaWriteVersion},
     cache_hash_data::CacheHashData,
@@ -936,26 +937,6 @@ struct RemoveUnrootedSlotsSynchronization {
 }
 
 type AccountInfoAccountsIndex = AccountsIndex<AccountInfo>;
-
-pub trait AccountsUpdateNotifierIntf: std::fmt::Debug {
-    /// Notified when an account is updated at runtime, due to transaction activities
-    fn notify_account_update(&self, slot: Slot, pubkey: &Pubkey, account: &AccountSharedData);
-
-    /// Notified when the AccountsDb is initialized at start when restored
-    /// from a snapshot.
-    fn notify_account_restore_from_snapshot(&self, slot: Slot, account: &StoredAccountMeta);
-
-    /// Notified when a slot is optimistically confirmed
-    fn notify_slot_confirmed(&self, slot: Slot, parent: Option<Slot>);
-
-    /// Notified when a slot is marked frozen.
-    fn notify_slot_processed(&self, slot: Slot, parent: Option<Slot>);
-
-    /// Notified when a slot is rooted.
-    fn notify_slot_rooted(&self, slot: Slot, parent: Option<Slot>);
-}
-
-pub type AccountsUpdateNotifier = Arc<RwLock<dyn AccountsUpdateNotifierIntf + Sync + Send>>;
 
 // This structure handles the load/store of the accounts
 #[derive(Debug)]
@@ -6702,7 +6683,7 @@ impl AccountsDb {
         }
     }
 
-    pub fn notify_accounts_data_at_start(&self) {
+    pub fn notify_account_restore_from_snapshot(&self) {
         if let Some(accounts_update_notifier) = &self.accounts_update_notifier {
             let notifier = &accounts_update_notifier.read().unwrap();
             let slots = self.storage.all_slots();
@@ -6713,7 +6694,7 @@ impl AccountsDb {
                 for (_, storage_entry) in slot_stores.iter() {
                     let accounts = storage_entry.all_accounts();
                     for account in &accounts {
-                        notifier.notify_account_data_at_start(*slot, account);
+                        notifier.notify_account_restore_from_snapshot(*slot, account);
                     }
                 }
             }

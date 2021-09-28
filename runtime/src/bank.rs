@@ -36,10 +36,11 @@
 use crate::{
     accounts::{AccountAddressFilter, Accounts, TransactionAccounts, TransactionLoadResult},
     accounts_db::{
-        AccountShrinkThreshold, AccountsDbConfig, AccountsUpdateNotifier, ErrorCounters,
-        SnapshotStorages, ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
+        AccountShrinkThreshold, AccountsDbConfig, ErrorCounters, SnapshotStorages,
+        ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
     },
     accounts_index::{AccountSecondaryIndexes, IndexKey, ScanResult},
+    accounts_update_notifier_interface::AccountsUpdateNotifier,
     ancestors::{Ancestors, AncestorsForSerialization},
     blockhash_queue::BlockhashQueue,
     builtins::{self, ActivationType, Builtin, Builtins},

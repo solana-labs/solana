@@ -10,7 +10,7 @@ use crate::{
 use log::*;
 use solana_entry::entry::VerifyRecyclers;
 use solana_runtime::{
-    accounts_db::AccountsUpdateNotifier, bank_forks::BankForks,
+    accounts_update_notifier_interface::AccountsUpdateNotifier, bank_forks::BankForks,
     snapshot_archive_info::SnapshotArchiveInfoGetter, snapshot_config::SnapshotConfig,
     snapshot_package::AccountsPackageSender, snapshot_utils,
 };

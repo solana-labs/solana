@@ -1,7 +1,8 @@
 use {
     crate::{
-        accounts_db::{AccountShrinkThreshold, AccountsDbConfig, AccountsUpdateNotifier},
+        accounts_db::{AccountShrinkThreshold, AccountsDbConfig},
         accounts_index::AccountSecondaryIndexes,
+        accounts_update_notifier_interface::AccountsUpdateNotifier,
         bank::{Bank, BankSlotDelta},
         builtins::Builtins,
         hardened_unpack::{unpack_snapshot, ParallelSelector, UnpackError, UnpackedAppendVecMap},

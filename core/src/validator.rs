@@ -62,8 +62,9 @@ use {
         transaction_status_service::TransactionStatusService,
     },
     solana_runtime::{
-        accounts_db::{AccountShrinkThreshold, AccountsDbConfig, AccountsUpdateNotifier},
+        accounts_db::{AccountShrinkThreshold, AccountsDbConfig},
         accounts_index::AccountSecondaryIndexes,
+        accounts_update_notifier_interface::AccountsUpdateNotifier,
         bank::Bank,
         bank_forks::BankForks,
         commitment::BlockCommitmentCache,

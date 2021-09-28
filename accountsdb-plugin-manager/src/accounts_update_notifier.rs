@@ -5,7 +5,10 @@ use {
     solana_accountsdb_plugin_interface::accountsdb_plugin_interface::{
         ReplicaAccountInfo, ReplicaAccountMeta, SlotStatus,
     },
-    solana_runtime::{accounts_db::AccountsUpdateNotifierIntf, append_vec::StoredAccountMeta},
+    solana_runtime::{
+        accounts_update_notifier_interface::AccountsUpdateNotifierInterface,
+        append_vec::StoredAccountMeta,
+    },
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         clock::Slot,
@@ -18,14 +21,14 @@ pub(crate) struct AccountsUpdateNotifierImpl {
     plugin_manager: Arc<RwLock<AccountsDbPluginManager>>,
 }
 
-impl AccountsUpdateNotifierIntf for AccountsUpdateNotifierImpl {
+impl AccountsUpdateNotifierInterface for AccountsUpdateNotifierImpl {
     fn notify_account_update(&self, slot: Slot, pubkey: &Pubkey, account: &AccountSharedData) {
         if let Some(account_info) = self.accountinfo_from_shared_account_data(pubkey, account) {
             self.notify_plugins_of_account_update(account_info, slot);
         }
     }
 
-    fn notify_account_data_at_start(&self, slot: Slot, account: &StoredAccountMeta) {
+    fn notify_account_restore_from_snapshot(&self, slot: Slot, account: &StoredAccountMeta) {
         if let Some(account_info) = self.accountinfo_from_stored_account_meta(account) {
             self.notify_plugins_of_account_update(account_info, slot);
         }

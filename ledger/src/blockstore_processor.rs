@@ -16,8 +16,9 @@ use solana_measure::measure::Measure;
 use solana_metrics::{datapoint_error, inc_new_counter_debug};
 use solana_rayon_threadlimit::get_thread_count;
 use solana_runtime::{
-    accounts_db::{AccountShrinkThreshold, AccountsDbConfig, AccountsUpdateNotifier},
+    accounts_db::{AccountShrinkThreshold, AccountsDbConfig},
     accounts_index::AccountSecondaryIndexes,
+    accounts_update_notifier_interface::AccountsUpdateNotifier,
     bank::{
         Bank, ExecuteTimings, InnerInstructionsList, RentDebits, TransactionBalancesSet,
         TransactionExecutionResult, TransactionLogMessages, TransactionResults,

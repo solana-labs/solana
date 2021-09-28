@@ -2,7 +2,7 @@ use {
     crossbeam_channel::Receiver,
     solana_accountsdb_plugin_interface::accountsdb_plugin_interface::SlotStatus,
     solana_rpc::optimistically_confirmed_bank_tracker::BankNotification,
-    solana_runtime::accounts_db::AccountsUpdateNotifier,
+    solana_runtime::accounts_update_notifier_interface::AccountsUpdateNotifier,
     solana_sdk::clock::Slot,
     std::{
         collections::VecDeque,

@@ -2,10 +2,11 @@ use {
     crate::{
         accounts::Accounts,
         accounts_db::{
-            AccountShrinkThreshold, AccountStorageEntry, AccountsDb, AccountsDbConfig,
-            AccountsUpdateNotifier, AppendVecId, BankHashInfo,
+            AccountShrinkThreshold, AccountStorageEntry, AccountsDb, AccountsDbConfig, AppendVecId,
+            BankHashInfo,
         },
         accounts_index::AccountSecondaryIndexes,
+        accounts_update_notifier_interface::AccountsUpdateNotifier,
         ancestors::Ancestors,
         append_vec::{AppendVec, StoredMetaWriteVersion},
         bank::{Bank, BankFieldsToDeserialize, BankRc},
@@ -537,7 +538,7 @@ where
     accounts_db.generate_index(limit_load_slot_count_from_snapshot, verify_index);
 
     let mut measure_notify = Measure::start("accounts_notify");
-    accounts_db.notify_accounts_data_at_start();
+    accounts_db.notify_account_restore_from_snapshot();
     measure_notify.stop();
 
     datapoint_info!(
