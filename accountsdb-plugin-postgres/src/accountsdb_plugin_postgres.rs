@@ -32,9 +32,9 @@ impl std::fmt::Debug for AccountsDbPluginPostgres {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-struct AccountsDbPluginPostgresConfig {
-    host: String,
-    user: String,
+pub struct AccountsDbPluginPostgresConfig {
+    pub host: String,
+    pub user: String,
 }
 
 #[derive(Error, Debug)]
