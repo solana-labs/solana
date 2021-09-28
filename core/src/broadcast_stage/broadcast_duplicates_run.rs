@@ -150,7 +150,7 @@ impl BroadcastRun for BroadcastDuplicatesRun {
         &mut self,
         blockstore: &Arc<Blockstore>,
         receiver: &Receiver<WorkingBankEntry>,
-        socket_sender: &Sender<(TransmitShreds, Option<BroadcastShredBatchInfo>)>,
+        socket_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
         blockstore_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
     ) -> Result<()> {
         // 1) Pull entries from banking stage
@@ -273,10 +273,10 @@ impl BroadcastRun for BroadcastDuplicatesRun {
         blockstore_sender.send((data_shreds.clone(), None))?;
 
         // 3) Start broadcast step
-        socket_sender.send(((bank.slot(), Arc::new(duplicate_data_shreds)), None))?;
-        socket_sender.send(((bank.slot(), Arc::new(duplicate_coding_shreds)), None))?;
-        socket_sender.send(((bank.slot(), data_shreds), None))?;
-        socket_sender.send(((bank.slot(), Arc::new(coding_shreds)), None))?;
+        socket_sender.send((Arc::new(duplicate_data_shreds), None))?;
+        socket_sender.send((Arc::new(duplicate_coding_shreds), None))?;
+        socket_sender.send((data_shreds, None))?;
+        socket_sender.send((Arc::new(coding_shreds), None))?;
 
         Ok(())
     }
@@ -297,7 +297,12 @@ impl BroadcastRun for BroadcastDuplicatesRun {
             }
         };
 
-        let ((slot, shreds), _) = receiver.lock().unwrap().recv()?;
+        let (shreds, _) = receiver.lock().unwrap().recv()?;
+        if shreds.is_empty() {
+            return Ok(());
+        }
+        let slot = shreds.first().unwrap().slot();
+        assert!(shreds.iter().all(|shred| shred.slot() == slot));
         let root_bank = bank_forks.read().unwrap().root_bank();
         let epoch = root_bank.get_leader_schedule_epoch(slot);
         let stakes = root_bank.epoch_staked_nodes(epoch).unwrap_or_default();

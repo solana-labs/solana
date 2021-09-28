@@ -50,7 +50,7 @@ pub struct ClusterNodes<T> {
 
 type CacheEntry<T> = Option<(/*as of:*/ Instant, Arc<ClusterNodes<T>>)>;
 
-pub(crate) struct ClusterNodesCache<T> {
+pub struct ClusterNodesCache<T> {
     // Cache entries are wrapped in Arc<Mutex<...>>, so that, when needed, only
     // one thread does the computations to update the entry for the epoch.
     cache: Mutex<LruCache<Epoch, Arc<Mutex<CacheEntry<T>>>>>,
@@ -230,7 +230,7 @@ fn get_nodes(cluster_info: &ClusterInfo, stakes: &HashMap<Pubkey, u64>) -> Vec<N
 }
 
 impl<T> ClusterNodesCache<T> {
-    pub(crate) fn new(
+    pub fn new(
         // Capacity of underlying LRU-cache in terms of number of epochs.
         cap: usize,
         // A time-to-live eviction policy is enforced to refresh entries in
