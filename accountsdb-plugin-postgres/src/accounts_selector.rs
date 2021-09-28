@@ -30,8 +30,14 @@ impl AccountsSelector {
                 select_all_accounts,
             };
         }
-        let accounts = accounts.iter().map(|key| bs58::decode(key).into_vec().unwrap()).collect();
-        let owners = owners.iter().map(|key| bs58::decode(key).into_vec().unwrap()).collect();
+        let accounts = accounts
+            .iter()
+            .map(|key| bs58::decode(key).into_vec().unwrap())
+            .collect();
+        let owners = owners
+            .iter()
+            .map(|key| bs58::decode(key).into_vec().unwrap())
+            .collect();
         AccountsSelector {
             accounts,
             owners,

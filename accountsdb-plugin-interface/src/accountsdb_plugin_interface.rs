@@ -16,7 +16,7 @@ pub struct ReplicaAccountMeta<'a> {
 impl Eq for ReplicaAccountInfo<'_> {}
 
 #[derive(Clone, PartialEq, Debug)]
-pub struct   ReplicaAccountInfo<'a>  {
+pub struct ReplicaAccountInfo<'a> {
     pub account_meta: ReplicaAccountMeta<'a>,
     pub data: &'a [u8],
 }
