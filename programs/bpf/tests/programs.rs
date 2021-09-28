@@ -2113,7 +2113,7 @@ fn test_program_bpf_upgrade_self_via_cpi() {
         mint_keypair,
         ..
     } = create_genesis_config(50);
-    let mut bank = Bank::new_for_tests(&genesis_config);
+    let mut bank = Bank::new(&genesis_config);
     let (name, id, entrypoint) = solana_bpf_loader_program!();
     bank.add_builtin(&name, id, entrypoint);
     let (name, id, entrypoint) = solana_bpf_loader_upgradeable_program!();

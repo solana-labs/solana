@@ -1125,16 +1125,6 @@ pub fn prepare_if_nonce_account(
     false
 }
 
-<<<<<<< HEAD
-fn is_upgradeable_loader_present(message: &Message) -> bool {
-    message
-        .account_keys
-        .iter()
-        .any(|&key| key == bpf_loader_upgradeable::id())
-}
-
-=======
->>>>>>> 2cd9dc99b (Restore ability for programs to upgrade themselves (#20265))
 pub fn create_test_accounts(
     accounts: &Accounts,
     pubkeys: &mut Vec<Pubkey>,

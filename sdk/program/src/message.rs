@@ -540,22 +540,6 @@ impl Message {
             .min(self.header.num_required_signatures as usize);
         self.account_keys[..last_key].iter().collect()
     }
-<<<<<<< HEAD:sdk/program/src/message.rs
-=======
-
-    /// Return true if account_keys has any duplicate keys
-    pub fn has_duplicates(&self) -> bool {
-        // Note: This is an O(n^2) algorithm, but requires no heap allocations. The benchmark
-        // `bench_has_duplicates` in benches/message_processor.rs shows that this implementation is
-        // ~50 times faster than using HashSet for very short slices.
-        for i in 1..self.account_keys.len() {
-            #[allow(clippy::integer_arithmetic)]
-            if self.account_keys[i..].contains(&self.account_keys[i - 1]) {
-                return true;
-            }
-        }
-        false
-    }
 
     /// Returns true if any account is the bpf upgradeable loader
     pub fn is_upgradeable_loader_present(&self) -> bool {
@@ -563,7 +547,6 @@ impl Message {
             .iter()
             .any(|&key| key == bpf_loader_upgradeable::id())
     }
->>>>>>> 2cd9dc99b (Restore ability for programs to upgrade themselves (#20265)):sdk/program/src/message/legacy.rs
 }
 
 #[cfg(test)]
