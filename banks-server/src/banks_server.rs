@@ -1,7 +1,7 @@
 use solana_sdk::feature_set::FeatureSet;
 
 use {
-    bincode::{deserialize, serialize},
+    bincode::{deserialize, serialize, Options},
     futures::{future, prelude::stream::StreamExt},
     solana_banks_interface::{
         Banks, BanksRequest, BanksResponse, TransactionConfirmationStatus, TransactionStatus,
@@ -13,6 +13,7 @@ use {
         commitment_config::CommitmentLevel,
         fee_calculator::FeeCalculator,
         hash::Hash,
+        packet::PACKET_DATA_SIZE,
         pubkey::Pubkey,
         signature::Signature,
         transaction::{self, Transaction},
@@ -143,6 +144,12 @@ fn verify_transaction(
         Err(err)
     } else if let Err(err) = transaction.verify_precompiles(feature_set) {
         Err(err)
+    } else if bincode::options()
+        .with_limit(PACKET_DATA_SIZE as u64)
+        .serialize(&transaction)
+        .is_err()
+    {
+        Err(transaction::TransactionError::TooLarge)
     } else {
         Ok(())
     }

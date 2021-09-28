@@ -44,6 +44,7 @@ enum TransactionErrorType {
     WOULD_EXCEED_MAX_BLOCK_COST_LIMIT = 17;
     UNSUPPORTED_VERSION = 18;
     INVALID_WRITABLE_ACCOUNT = 19;
+    TOO_LARGE = 20;
 }
 
 message InstructionError {

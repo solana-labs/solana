@@ -122,6 +122,10 @@ pub enum TransactionError {
     /// Transaction loads a writable account that cannot be written
     #[error("Transaction loads a writable account that cannot be written")]
     InvalidWritableAccount,
+
+    /// Transaction is too large
+    #[error("Transaction too large")]
+    TooLarge,
 }
 
 pub type Result<T> = result::Result<T, TransactionError>;
