@@ -48,6 +48,7 @@ use {
             OptimisticallyConfirmedBank, OptimisticallyConfirmedBankTracker,
         },
         rpc::JsonRpcConfig,
+        rpc_completed_slots_service::RpcCompletedSlotsService,
         rpc_pubsub_service::{PubSubConfig, PubSubService},
         rpc_service::JsonRpcService,
         rpc_subscriptions::RpcSubscriptions,
@@ -84,49 +85,9 @@ use {
             mpsc::Receiver,
             Arc, Mutex, RwLock,
         },
-        thread::{sleep, Builder},
+        thread::{sleep, Builder, JoinHandle},
         time::{Duration, Instant},
     },
-<<<<<<< HEAD
-=======
-    rpc::JsonRpcConfig,
-    rpc_completed_slots_service::RpcCompletedSlotsService,
-    rpc_pubsub_service::{PubSubConfig, PubSubService},
-    rpc_service::JsonRpcService,
-    rpc_subscriptions::RpcSubscriptions,
-    transaction_status_service::TransactionStatusService,
-};
-use solana_runtime::{
-    accounts_db::AccountShrinkThreshold,
-    accounts_index::AccountSecondaryIndexes,
-    bank::Bank,
-    bank_forks::{BankForks, SnapshotConfig},
-    commitment::BlockCommitmentCache,
-    hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
-};
-use solana_sdk::{
-    clock::Slot,
-    epoch_schedule::MAX_LEADER_SCHEDULE_EPOCH_OFFSET,
-    exit::Exit,
-    genesis_config::GenesisConfig,
-    hash::Hash,
-    pubkey::Pubkey,
-    shred_version::compute_shred_version,
-    signature::{Keypair, Signer},
-    timing::timestamp,
-};
-use solana_vote_program::vote_state::VoteState;
-use std::{
-    collections::HashSet,
-    net::SocketAddr,
-    ops::Deref,
-    path::{Path, PathBuf},
-    sync::atomic::{AtomicBool, AtomicU64, Ordering},
-    sync::mpsc::Receiver,
-    sync::{Arc, Mutex, RwLock},
-    thread::{sleep, Builder, JoinHandle},
-    time::{Duration, Instant},
->>>>>>> fa04531c7 (Extricate RpcCompletedSlotsService from RetransmitStage)
 };
 
 const MAX_COMPLETED_DATA_SETS_IN_CHANNEL: usize = 100_000;
@@ -496,11 +457,7 @@ impl Validator {
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
 
-<<<<<<< HEAD
         let rpc_subscriptions = Arc::new(RpcSubscriptions::new_with_config(
-=======
-        let rpc_subscriptions = Arc::new(RpcSubscriptions::new_with_vote_subscription(
->>>>>>> fa04531c7 (Extricate RpcCompletedSlotsService from RetransmitStage)
             &exit,
             bank_forks.clone(),
             block_commitment_cache.clone(),

@@ -1,7 +1,6 @@
 //! The `retransmit_stage` retransmits shreds between validators
 #![allow(clippy::rc_buffer)]
 
-<<<<<<< HEAD
 use {
     crate::{
         cluster_info_vote_listener::VerifiedVoteReceiver,
@@ -20,18 +19,12 @@ use {
     solana_gossip::cluster_info::{ClusterInfo, DATA_PLANE_FANOUT},
     solana_ledger::{
         shred::Shred,
-        {
-            blockstore::{Blockstore, CompletedSlotsReceiver},
-            leader_schedule_cache::LeaderScheduleCache,
-        },
+        {blockstore::Blockstore, leader_schedule_cache::LeaderScheduleCache},
     },
     solana_measure::measure::Measure,
     solana_metrics::inc_new_counter_error,
     solana_perf::packet::Packets,
-    solana_rpc::{
-        max_slots::MaxSlots, rpc_completed_slots_service::RpcCompletedSlotsService,
-        rpc_subscriptions::RpcSubscriptions,
-    },
+    solana_rpc::{max_slots::MaxSlots, rpc_subscriptions::RpcSubscriptions},
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{
         clock::Slot,
@@ -51,46 +44,6 @@ use {
         thread::{self, Builder, JoinHandle},
         time::Duration,
     },
-=======
-use crate::{
-    cluster_info_vote_listener::VerifiedVoteReceiver,
-    cluster_slots::ClusterSlots,
-    cluster_slots_service::{ClusterSlotsService, ClusterSlotsUpdateReceiver},
-    completed_data_sets_service::CompletedDataSetsSender,
-    repair_service::{DuplicateSlotsResetSender, RepairInfo},
-    result::{Error, Result},
-    window_service::{should_retransmit_and_persist, WindowService},
-};
-use crossbeam_channel::{Receiver, Sender};
-use lru::LruCache;
-use solana_client::rpc_response::SlotUpdate;
-use solana_gossip::{
-    cluster_info::{compute_retransmit_peers, ClusterInfo, DATA_PLANE_FANOUT},
-    contact_info::ContactInfo,
-};
-use solana_ledger::shred::{get_shred_slot_index_type, ShredFetchStats};
-use solana_ledger::{blockstore::Blockstore, leader_schedule_cache::LeaderScheduleCache};
-use solana_measure::measure::Measure;
-use solana_metrics::inc_new_counter_error;
-use solana_perf::packet::{Packet, Packets};
-use solana_rpc::{max_slots::MaxSlots, rpc_subscriptions::RpcSubscriptions};
-use solana_runtime::{bank::Bank, bank_forks::BankForks};
-use solana_sdk::{clock::Slot, epoch_schedule::EpochSchedule, pubkey::Pubkey, timing::timestamp};
-use solana_streamer::streamer::PacketReceiver;
-use std::{
-    cmp,
-    collections::hash_set::HashSet,
-    collections::{BTreeMap, BTreeSet, HashMap},
-    net::UdpSocket,
-    ops::{Deref, DerefMut},
-    sync::atomic::{AtomicBool, AtomicU64, Ordering},
-    sync::mpsc::channel,
-    sync::mpsc::RecvTimeoutError,
-    sync::Mutex,
-    sync::{Arc, RwLock},
-    thread::{self, Builder, JoinHandle},
-    time::Duration,
->>>>>>> fa04531c7 (Extricate RpcCompletedSlotsService from RetransmitStage)
 };
 
 const MAX_DUPLICATE_COUNT: usize = 2;
@@ -497,12 +450,7 @@ impl RetransmitStage {
         retransmit_sockets: Arc<Vec<UdpSocket>>,
         repair_socket: Arc<UdpSocket>,
         verified_receiver: Receiver<Vec<Packets>>,
-<<<<<<< HEAD
         exit: Arc<AtomicBool>,
-        rpc_completed_slots_receiver: CompletedSlotsReceiver,
-=======
-        exit: &Arc<AtomicBool>,
->>>>>>> fa04531c7 (Extricate RpcCompletedSlotsService from RetransmitStage)
         cluster_slots_update_receiver: ClusterSlotsUpdateReceiver,
         epoch_schedule: EpochSchedule,
         cfg: Option<Arc<AtomicBool>>,
@@ -656,10 +604,7 @@ mod tests {
         let cluster_info = Arc::new(cluster_info);
 
         let (retransmit_sender, retransmit_receiver) = channel();
-<<<<<<< HEAD
         let _retransmit_sender = retransmit_sender.clone();
-=======
->>>>>>> fa04531c7 (Extricate RpcCompletedSlotsService from RetransmitStage)
         let _t_retransmit = retransmitter(
             retransmit_socket,
             bank_forks,
@@ -669,13 +614,6 @@ mod tests {
             Arc::default(), // MaxSlots
             None,
         );
-<<<<<<< HEAD
-=======
-
-        let mut shred = Shred::new_from_data(0, 0, 0, None, true, true, 0, 0x20, 0);
-        let mut packet = Packet::default();
-        shred.copy_to_packet(&mut packet);
->>>>>>> fa04531c7 (Extricate RpcCompletedSlotsService from RetransmitStage)
 
         let shred = Shred::new_from_data(0, 0, 0, None, true, true, 0, 0x20, 0);
         // it should send this over the sockets.

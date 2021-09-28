@@ -176,12 +176,7 @@ impl Tvu {
             Arc::new(retransmit_sockets),
             repair_socket,
             verified_receiver,
-<<<<<<< HEAD
             exit.clone(),
-            completed_slots_receiver,
-=======
-            &exit,
->>>>>>> fa04531c7 (Extricate RpcCompletedSlotsService from RetransmitStage)
             cluster_slots_update_receiver,
             *bank_forks.read().unwrap().working_bank().epoch_schedule(),
             cfg,
@@ -191,11 +186,7 @@ impl Tvu {
             verified_vote_receiver,
             tvu_config.repair_validators,
             completed_data_sets_sender,
-<<<<<<< HEAD
             max_slots.clone(),
-=======
-            max_slots,
->>>>>>> fa04531c7 (Extricate RpcCompletedSlotsService from RetransmitStage)
             Some(rpc_subscriptions.clone()),
             duplicate_slots_sender,
         );
