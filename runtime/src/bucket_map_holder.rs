@@ -218,7 +218,7 @@ impl<T: IndexValue> BucketMapHolder<T> {
                 self.wait_dirty_or_aged.wait_timeout(Duration::from_millis(
                     self.stats.remaining_until_next_interval(),
                 ));
-            } else if self.all_buckets_flushed_at_current_age() && throttling_wait_ms.is_none() {
+            } else if self.all_buckets_flushed_at_current_age() || throttling_wait_ms.is_some() {
                 let mut wait = std::cmp::min(
                     self.age_timer
                         .remaining_until_next_interval(self.age_interval_ms()),
@@ -230,7 +230,6 @@ impl<T: IndexValue> BucketMapHolder<T> {
                         .fetch_add(throttling_wait_ms * 1000, Ordering::Relaxed);
                     wait = std::cmp::min(throttling_wait_ms, wait);
                 }
-                throttling_wait_ms = None;
 
                 let mut m = Measure::start("wait");
                 self.wait_dirty_or_aged
@@ -242,6 +241,7 @@ impl<T: IndexValue> BucketMapHolder<T> {
                 // likely some time has elapsed. May have been waiting for age time interval to elapse.
                 self.maybe_advance_age();
             }
+            throttling_wait_ms = None;
 
             if exit.load(Ordering::Relaxed) {
                 break;
