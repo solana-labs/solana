@@ -45,6 +45,7 @@ use {
         commitment::{BlockCommitmentArray, BlockCommitmentCache, CommitmentSlots},
         inline_spl_token_v2_0::{SPL_TOKEN_ACCOUNT_MINT_OFFSET, SPL_TOKEN_ACCOUNT_OWNER_OFFSET},
         non_circulating_supply::calculate_non_circulating_supply,
+        snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_config::SnapshotConfig,
         snapshot_utils,
     },
@@ -2272,6 +2273,13 @@ pub mod rpc_minimal {
             commitment: Option<CommitmentConfig>,
         ) -> Result<u64>;
 
+        #[rpc(meta, name = "getHighestIncrementalSnapshotInfo")]
+        fn get_highest_incremental_snapshot_info(
+            &self,
+            meta: Self::Metadata,
+            base_slot: Slot,
+        ) -> Result<RpcSnapshotInfo>;
+
         #[rpc(meta, name = "getHighestSnapshotSlot")]
         fn get_highest_snapshot_slot(&self, meta: Self::Metadata) -> Result<RpcSnapshotSlotInfo>;
 
@@ -2367,6 +2375,38 @@ pub mod rpc_minimal {
         ) -> Result<u64> {
             debug!("get_block_height rpc request received");
             Ok(meta.get_block_height(commitment))
+        }
+
+        fn get_highest_incremental_snapshot_info(
+            &self,
+            meta: Self::Metadata,
+            base_slot: Slot,
+        ) -> Result<RpcSnapshotInfo> {
+            debug!("get_highest_incremental_snapshot_info rpc request received");
+
+            if meta.snapshot_config.is_none() {
+                return Err(RpcCustomError::NoSnapshot.into());
+            }
+
+            let snapshot_archives_dir = meta
+                .snapshot_config
+                .map(|snapshot_config| snapshot_config.snapshot_archives_dir)
+                .unwrap();
+
+            let incremental_snapshot_info =
+                snapshot_utils::get_highest_incremental_snapshot_archive_info(
+                    &snapshot_archives_dir,
+                    base_slot,
+                );
+            if incremental_snapshot_info.is_none() {
+                return Err(RpcCustomError::NoSnapshot.into());
+            }
+            let incremental_snapshot_info = incremental_snapshot_info.unwrap();
+
+            Ok(RpcSnapshotInfo {
+                slot: incremental_snapshot_info.slot(),
+                hash: incremental_snapshot_info.hash().to_string(),
+            })
         }
 
         fn get_highest_snapshot_slot(&self, meta: Self::Metadata) -> Result<RpcSnapshotSlotInfo> {

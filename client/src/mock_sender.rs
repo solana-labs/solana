@@ -2,18 +2,8 @@
 
 use {
     crate::{
-        client_error::Result,
-        rpc_config::RpcBlockProductionConfig,
-        rpc_request::RpcRequest,
-        rpc_response::{
-            Response, RpcAccountBalance, RpcBlockProduction, RpcBlockProductionRange, RpcBlockhash,
-            RpcConfirmedTransactionStatusWithSignature, RpcContactInfo, RpcFees, RpcIdentity,
-            RpcInflationGovernor, RpcInflationRate, RpcInflationReward, RpcKeyedAccount,
-            RpcPerfSample, RpcResponseContext, RpcSimulateTransactionResult, RpcSnapshotSlotInfo,
-            RpcStakeActivation, RpcSupply, RpcVersionInfo, RpcVoteAccountInfo,
-            RpcVoteAccountStatus, StakeActivationState,
-        },
-        rpc_sender::*,
+        client_error::Result, rpc_config::RpcBlockProductionConfig, rpc_request::RpcRequest,
+        rpc_response::*, rpc_sender::*,
     },
     serde_json::{json, Number, Value},
     solana_account_decoder::{UiAccount, UiAccountEncoding},
@@ -22,6 +12,7 @@ use {
         clock::{Slot, UnixTimestamp},
         epoch_info::EpochInfo,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
+        hash::Hash,
         instruction::InstructionError,
         message::MessageHeader,
         pubkey::Pubkey,
@@ -231,6 +222,10 @@ impl RpcSender for MockSender {
             "getMaxShredInsertSlot" => json![0],
             "requestAirdrop" => Value::String(Signature::new(&[8; 64]).to_string()),
             "getSnapshotSlot" => Value::Number(Number::from(0)),
+            "getHighestIncrementalSnapshotInfo" => json!(RpcSnapshotInfo {
+                slot: 8_200,
+                hash: Hash::new_unique().to_string(),
+            }),
             "getHighestSnapshotSlot" => json!(RpcSnapshotSlotInfo {
                 full: 100,
                 incremental: Some(110),

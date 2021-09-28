@@ -1052,6 +1052,38 @@ impl RpcClient {
         )
     }
 
+    /// Returns the information for the highest incremental snapshot this node has, _based on_
+    /// `base_slot`.
+    ///
+    /// # RPC Reference
+    ///
+    /// This method corresponds directly to the [`getHighestIncrementalSnapshotInfo`] RPC method.
+    ///
+    /// [`getHighestIncrementalSnapshotInfo`]: https://docs.solana.com/developing/clients/jsonrpc-api#gethighestincrementalsnapshotinfo
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use solana_client::{
+    /// #     rpc_client::RpcClient,
+    /// #     client_error::ClientError,
+    /// # };
+    /// # use solana_sdk::clock::Slot;
+    /// # let rpc_client = RpcClient::new_mock("succeeds".to_string());
+    /// # let full_snapshot_slot = Slot::default();
+    /// let incremental_snapshot_info = rpc_client.get_highest_incremental_snapshot_info(full_snapshot_slot)?;
+    /// # Ok::<(), ClientError>(())
+    /// ```
+    pub fn get_highest_incremental_snapshot_info(
+        &self,
+        base_slot: Slot,
+    ) -> ClientResult<RpcSnapshotInfo> {
+        self.send(
+            RpcRequest::GetHighestIncrementalSnapshotInfo,
+            json!([base_slot]),
+        )
+    }
+
     /// Returns the highest slot information that the node has snapshots for.
     ///
     /// This will find the highest full snapshot slot, and the highest incremental snapshot slot

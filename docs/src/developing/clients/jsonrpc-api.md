@@ -34,6 +34,7 @@ gives a convenient interface for the RPC methods.
 - [getFirstAvailableBlock](jsonrpc-api.md#getfirstavailableblock)
 - [getGenesisHash](jsonrpc-api.md#getgenesishash)
 - [getHealth](jsonrpc-api.md#gethealth)
+- [getHighestIncrementalSnapshotInfo](jsonrpc-api.md#gethighestincrementalsnapshotinfo)
 - [getHighestSnapshotSlot](jsonrpc-api.md#gethighestsnapshotslot)
 - [getIdentity](jsonrpc-api.md#getidentity)
 - [getInflationGovernor](jsonrpc-api.md#getinflationgovernor)
@@ -1292,6 +1293,56 @@ Unhealthy Result (if additional information is available)
     "data": {
       "numSlotsBehind": 42
     }
+  },
+  "id": 1
+}
+```
+
+### getHighestIncrementalSnapshotInfo
+
+**NEW: This method is only available in solana-core v1.8 or newer.**
+
+Returns the information for the highest incremental snapshot this node has,
+_based on_ `base_slot`.
+
+#### Parameters:
+
+- `base_slot: <u64>` - Base slot for the incremental snapshot, i.e. a full snapshot slot
+
+#### Results:
+
+- `<object>` - Highest incremental snapshot info _based on_ the full snapshot at slot `base_slot`
+    - `slot: <u64>` - Highest incremental snapshot slot
+    - `hash: <string>` - Highest incremental snapshot hash as a base-58 encoded string
+
+#### Example:
+
+Request:
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0","id":1,"method":"getHighestSnapshotInfo","params":[8000]}
+'
+```
+
+Result:
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "slot": 8200,
+    "hash": "8opHzTAnfzRpPEx21XtnrVTX28YQuCpAjcn1PczScKh"
+  },
+  "id": 1
+}
+```
+
+Result when the node has no snapshot:
+```json
+{
+  "jsonrpc": "2.0",
+  "error": {
+    "code": -32008,
+    "message": "No snapshot"
   },
   "id": 1
 }
