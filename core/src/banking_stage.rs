@@ -80,7 +80,6 @@ const DEFAULT_LRU_SIZE: usize = 200_000;
 
 const NUM_VOTE_PROCESSING_THREADS: u32 = 2;
 const MIN_THREADS_BANKING: u32 = 1;
-const MAX_WRITABLE_ACCOUNTS: usize = 256;
 
 #[derive(Debug, Default)]
 pub struct BankingStageStats {

@@ -2077,7 +2077,7 @@ dependencies = [
  "futures 0.3.8",
  "jsonrpc-core",
  "lazy_static",
- "log 0.4.11",
+ "log 0.4.14",
  "parking_lot 0.11.2",
  "rand 0.7.3",
  "serde",
@@ -4375,7 +4375,7 @@ dependencies = [
 
 [[package]]
 name = "solana-compute-budget-program"
-version = "1.7.13"
+version = "1.7.14"
 dependencies = [
  "solana-sdk",
 ]
