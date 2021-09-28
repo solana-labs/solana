@@ -172,9 +172,9 @@ impl Accounts {
 
     fn construct_instructions_account(
         message: &Message,
-        restore_write_lock_when_upgradeable: bool,
+        demote_program_write_locks: bool,
     ) -> AccountSharedData {
-        let mut data = message.serialize_instructions(restore_write_lock_when_upgradeable);
+        let mut data = message.serialize_instructions(demote_program_write_locks);
         // add room for current instruction index.
         data.resize(data.len() + 2, 0);
         AccountSharedData::from(Account {
@@ -204,8 +204,8 @@ impl Accounts {
             let mut accounts = Vec::with_capacity(message.account_keys.len());
             let mut account_deps = Vec::with_capacity(message.account_keys.len());
             let mut rent_debits = RentDebits::default();
-            let restore_write_lock_when_upgradeable =
-                feature_set.is_active(&feature_set::restore_write_lock_when_upgradeable::id());
+            let demote_program_write_locks =
+                feature_set.is_active(&feature_set::demote_program_write_locks::id());
 
             for (i, key) in message.account_keys.iter().enumerate() {
                 let account = if message.is_non_loader_key(key, i) {
@@ -216,16 +216,13 @@ impl Accounts {
                     if solana_sdk::sysvar::instructions::check_id(key)
                         && feature_set.is_active(&feature_set::instructions_sysvar_enabled::id())
                     {
-                        Self::construct_instructions_account(
-                            message,
-                            restore_write_lock_when_upgradeable,
-                        )
+                        Self::construct_instructions_account(message, demote_program_write_locks)
                     } else {
                         let (account, rent) = self
                             .accounts_db
                             .load(ancestors, key)
                             .map(|(mut account, _)| {
-                                if message.is_writable(i, restore_write_lock_when_upgradeable) {
+                                if message.is_writable(i, demote_program_write_locks) {
                                     let rent_due = rent_collector
                                         .collect_from_existing_account(&key, &mut account);
                                     (account, rent_due)
@@ -236,7 +233,7 @@ impl Accounts {
                             .unwrap_or_default();
 
                         if bpf_loader_upgradeable::check_id(&account.owner) {
-                            if message.is_writable(i, restore_write_lock_when_upgradeable)
+                            if message.is_writable(i, demote_program_write_locks)
                                 && !message.is_upgradeable_loader_present()
                             {
                                 error_counters.invalid_writable_account += 1;
@@ -265,7 +262,7 @@ impl Accounts {
                                 }
                             }
                         } else if account.executable
-                            && message.is_writable(i, restore_write_lock_when_upgradeable)
+                            && message.is_writable(i, demote_program_write_locks)
                         {
                             error_counters.invalid_writable_account += 1;
                             return Err(TransactionError::InvalidWritableAccount);
@@ -790,7 +787,7 @@ impl Accounts {
         tx: &Transaction,
         result: &Result<()>,
         locks: &mut AccountLocks,
-        restore_write_lock_when_upgradeable: bool,
+        demote_program_write_locks: bool,
     ) {
         match result {
             Err(TransactionError::AccountInUse) => (),
@@ -799,7 +796,7 @@ impl Accounts {
             _ => {
                 let (writable_keys, readonly_keys) = &tx
                     .message()
-                    .get_account_keys_by_lock_type(restore_write_lock_when_upgradeable);
+                    .get_account_keys_by_lock_type(demote_program_write_locks);
                 for k in writable_keys {
                     locks.unlock_write(k);
                 }
@@ -831,7 +828,7 @@ impl Accounts {
     pub fn lock_accounts<'a>(
         &self,
         txs: impl Iterator<Item = &'a Transaction>,
-        restore_write_lock_when_upgradeable: bool,
+        demote_program_write_locks: bool,
     ) -> Vec<Result<()>> {
         use solana_sdk::sanitize::Sanitize;
         let keys: Vec<Result<_>> = txs
@@ -844,7 +841,7 @@ impl Accounts {
 
                 Ok(tx
                     .message()
-                    .get_account_keys_by_lock_type(restore_write_lock_when_upgradeable))
+                    .get_account_keys_by_lock_type(demote_program_write_locks))
             })
             .collect();
         let mut account_locks = &mut self.account_locks.lock().unwrap();
@@ -863,7 +860,7 @@ impl Accounts {
         &self,
         txs: impl Iterator<Item = &'a Transaction>,
         results: &[Result<()>],
-        restore_write_lock_when_upgradeable: bool,
+        demote_program_write_locks: bool,
     ) {
         let mut account_locks = self.account_locks.lock().unwrap();
         debug!("bank unlock accounts");
@@ -872,7 +869,7 @@ impl Accounts {
                 tx,
                 lock_result,
                 &mut account_locks,
-                restore_write_lock_when_upgradeable,
+                demote_program_write_locks,
             );
         }
     }
@@ -890,7 +887,7 @@ impl Accounts {
         last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
         fix_recent_blockhashes_sysvar_delay: bool,
         merge_nonce_error_into_system_error: bool,
-        restore_write_lock_when_upgradeable: bool,
+        demote_program_write_locks: bool,
     ) {
         let accounts_to_store = self.collect_accounts_to_store(
             txs,
@@ -900,7 +897,7 @@ impl Accounts {
             last_blockhash_with_fee_calculator,
             fix_recent_blockhashes_sysvar_delay,
             merge_nonce_error_into_system_error,
-            restore_write_lock_when_upgradeable,
+            demote_program_write_locks,
         );
         self.accounts_db.store_cached(slot, &accounts_to_store);
     }
@@ -926,7 +923,7 @@ impl Accounts {
         last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
         fix_recent_blockhashes_sysvar_delay: bool,
         merge_nonce_error_into_system_error: bool,
-        restore_write_lock_when_upgradeable: bool,
+        demote_program_write_locks: bool,
     ) -> Vec<(&'a Pubkey, &'a AccountSharedData)> {
         let mut accounts = Vec::with_capacity(loaded.len());
         for (i, ((raccs, _nonce_rollback), tx)) in loaded.iter_mut().zip(txs).enumerate() {
@@ -979,7 +976,7 @@ impl Accounts {
                     fee_payer_index = Some(i);
                 }
                 let is_fee_payer = Some(i) == fee_payer_index;
-                if message.is_writable(i, restore_write_lock_when_upgradeable)
+                if message.is_writable(i, demote_program_write_locks)
                     && (res.is_ok()
                         || (maybe_nonce_rollback.is_some() && (is_nonce_account || is_fee_payer)))
                 {
@@ -2015,7 +2012,7 @@ mod tests {
         accounts.store_slow_uncached(0, &keypair2.pubkey(), &account2);
         accounts.store_slow_uncached(0, &keypair3.pubkey(), &account3);
 
-        let restore_write_lock_when_upgradeable = true;
+        let demote_program_write_locks = true;
 
         let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
         let message = Message::new_with_compiled_instructions(
@@ -2027,8 +2024,7 @@ mod tests {
             instructions,
         );
         let tx = Transaction::new(&[&keypair0], message, Hash::default());
-        let results0 =
-            accounts.lock_accounts([tx.clone()].iter(), restore_write_lock_when_upgradeable);
+        let results0 = accounts.lock_accounts([tx.clone()].iter(), demote_program_write_locks);
 
         assert!(results0[0].is_ok());
         assert_eq!(
@@ -2063,7 +2059,7 @@ mod tests {
         );
         let tx1 = Transaction::new(&[&keypair1], message, Hash::default());
         let txs = vec![tx0, tx1];
-        let results1 = accounts.lock_accounts(txs.iter(), restore_write_lock_when_upgradeable);
+        let results1 = accounts.lock_accounts(txs.iter(), demote_program_write_locks);
 
         assert!(results1[0].is_ok()); // Read-only account (keypair1) can be referenced multiple times
         assert!(results1[1].is_err()); // Read-only account (keypair1) cannot also be locked as writable
@@ -2078,8 +2074,8 @@ mod tests {
             2
         );
 
-        accounts.unlock_accounts([tx].iter(), &results0, restore_write_lock_when_upgradeable);
-        accounts.unlock_accounts(txs.iter(), &results1, restore_write_lock_when_upgradeable);
+        accounts.unlock_accounts([tx].iter(), &results0, demote_program_write_locks);
+        accounts.unlock_accounts(txs.iter(), &results1, demote_program_write_locks);
         let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
         let message = Message::new_with_compiled_instructions(
             1,
@@ -2090,7 +2086,7 @@ mod tests {
             instructions,
         );
         let tx = Transaction::new(&[&keypair1], message, Hash::default());
-        let results2 = accounts.lock_accounts([tx].iter(), restore_write_lock_when_upgradeable);
+        let results2 = accounts.lock_accounts([tx].iter(), demote_program_write_locks);
         assert!(results2[0].is_ok()); // Now keypair1 account can be locked as writable
 
         // Check that read-only lock with zero references is deleted
@@ -2126,7 +2122,7 @@ mod tests {
         accounts.store_slow_uncached(0, &keypair1.pubkey(), &account1);
         accounts.store_slow_uncached(0, &keypair2.pubkey(), &account2);
 
-        let restore_write_lock_when_upgradeable = true;
+        let demote_program_write_locks = true;
 
         let accounts_arc = Arc::new(accounts);
 
@@ -2162,17 +2158,13 @@ mod tests {
                 let txs = vec![writable_tx.clone()];
                 let results = accounts_clone
                     .clone()
-                    .lock_accounts(txs.iter(), restore_write_lock_when_upgradeable);
+                    .lock_accounts(txs.iter(), demote_program_write_locks);
                 for result in results.iter() {
                     if result.is_ok() {
                         counter_clone.clone().fetch_add(1, Ordering::SeqCst);
                     }
                 }
-                accounts_clone.unlock_accounts(
-                    txs.iter(),
-                    &results,
-                    restore_write_lock_when_upgradeable,
-                );
+                accounts_clone.unlock_accounts(txs.iter(), &results, demote_program_write_locks);
                 if exit_clone.clone().load(Ordering::Relaxed) {
                     break;
                 }
@@ -2183,13 +2175,13 @@ mod tests {
             let txs = vec![readonly_tx.clone()];
             let results = accounts_arc
                 .clone()
-                .lock_accounts(txs.iter(), restore_write_lock_when_upgradeable);
+                .lock_accounts(txs.iter(), demote_program_write_locks);
             if results[0].is_ok() {
                 let counter_value = counter_clone.clone().load(Ordering::SeqCst);
                 thread::sleep(time::Duration::from_millis(50));
                 assert_eq!(counter_value, counter_clone.clone().load(Ordering::SeqCst));
             }
-            accounts_arc.unlock_accounts(txs.iter(), &results, restore_write_lock_when_upgradeable);
+            accounts_arc.unlock_accounts(txs.iter(), &results, demote_program_write_locks);
             thread::sleep(time::Duration::from_millis(50));
         }
         exit.store(true, Ordering::Relaxed);
@@ -2218,7 +2210,7 @@ mod tests {
         accounts.store_slow_uncached(0, &keypair2.pubkey(), &account2);
         accounts.store_slow_uncached(0, &keypair3.pubkey(), &account3);
 
-        let restore_write_lock_when_upgradeable = true;
+        let demote_program_write_locks = true;
 
         let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
         let message = Message::new_with_compiled_instructions(
@@ -2230,7 +2222,7 @@ mod tests {
             instructions,
         );
         let tx = Transaction::new(&[&keypair0], message, Hash::default());
-        let results0 = accounts.lock_accounts([tx].iter(), restore_write_lock_when_upgradeable);
+        let results0 = accounts.lock_accounts([tx].iter(), demote_program_write_locks);
 
         assert!(results0[0].is_ok());
         // Instruction program-id account demoted to readonly
@@ -2347,7 +2339,7 @@ mod tests {
             &(Hash::default(), FeeCalculator::default()),
             true,
             true, // merge_nonce_error_into_system_error
-            true, // restore_write_lock_when_upgradeable
+            true, // demote_program_write_locks
         );
         assert_eq!(collected_accounts.len(), 2);
         assert!(collected_accounts
@@ -2733,7 +2725,7 @@ mod tests {
             &(next_blockhash, FeeCalculator::default()),
             true,
             true, // merge_nonce_error_into_system_error
-            true, // restore_write_lock_when_upgradeable
+            true, // demote_program_write_locks
         );
         assert_eq!(collected_accounts.len(), 2);
         assert_eq!(
@@ -2850,7 +2842,7 @@ mod tests {
             &(next_blockhash, FeeCalculator::default()),
             true,
             true, // merge_nonce_error_into_system_error
-            true, // restore_write_lock_when_upgradeable
+            true, // demote_program_write_locks
         );
         assert_eq!(collected_accounts.len(), 1);
         let collected_nonce_account = collected_accounts

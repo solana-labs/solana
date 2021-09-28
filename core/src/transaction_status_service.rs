@@ -109,10 +109,9 @@ impl TransactionStatusService {
                             })
                             .expect("FeeCalculator must exist");
                         let fee = fee_calculator.calculate_fee(transaction.message());
-                        let (writable_keys, readonly_keys) =
-                            transaction.message.get_account_keys_by_lock_type(
-                                bank.restore_write_lock_when_upgradeable(),
-                            );
+                        let (writable_keys, readonly_keys) = transaction
+                            .message
+                            .get_account_keys_by_lock_type(bank.demote_program_write_locks());
 
                         let inner_instructions = inner_instructions.map(|inner_instructions| {
                             inner_instructions
