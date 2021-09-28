@@ -219,6 +219,10 @@ pub mod stakes_remove_delegation_if_inactive {
     solana_sdk::declare_id!("HFpdDDNQjvcXnXKec697HDDsyk6tFoWS2o8fkxuhQZpL");
 }
 
+pub mod do_support_realloc {
+    solana_sdk::declare_id!("75m6ysz33AfLA5DDEzWM1obBrnPQRSsdVQ2nRmc8Vuu1");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -269,6 +273,7 @@ lazy_static! {
         (reduce_required_deploy_balance::id(), "reduce required payer balance for program deploys"),
         (sol_log_data_syscall_enabled::id(), "enable sol_log_data syscall"),
         (stakes_remove_delegation_if_inactive::id(), "remove delegations from stakes cache when inactive"),
+        (do_support_realloc::id(), "support account data reallocation"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

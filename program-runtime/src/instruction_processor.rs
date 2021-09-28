@@ -4,13 +4,14 @@ use solana_sdk::{
     account::{AccountSharedData, ReadableAccount, WritableAccount},
     account_utils::StateMut,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-    feature_set::{demote_program_write_locks, fix_write_privs},
+    feature_set::{demote_program_write_locks, do_support_realloc, fix_write_privs},
     ic_msg,
     instruction::{Instruction, InstructionError},
     message::Message,
     process_instruction::{Executor, InvokeContext, ProcessInstructionWithContext},
     pubkey::Pubkey,
     rent::Rent,
+    system_instruction::MAX_PERMITTED_DATA_LENGTH,
     system_program,
 };
 use std::{
@@ -115,6 +116,7 @@ impl PreAccount {
         post: &AccountSharedData,
         timings: &mut ExecuteDetailsTimings,
         outermost_call: bool,
+        do_support_realloc: bool,
     ) -> Result<(), InstructionError> {
         let pre = self.account.borrow();
 
@@ -150,15 +152,30 @@ impl PreAccount {
             }
         }
 
-        // Only the system program can change the size of the data
-        //  and only if the system program owns the account
-        let data_len_changed = pre.data().len() != post.data().len();
-        if data_len_changed
-            && (!system_program::check_id(program_id) // line coverage used to get branch coverage
-                || !system_program::check_id(pre.owner()))
-        {
-            return Err(InstructionError::AccountDataSizeChanged);
-        }
+        let data_len_changed = if do_support_realloc {
+            // Account data size cannot exceed a maxumum length
+            if post.data().len() > MAX_PERMITTED_DATA_LENGTH as usize {
+                return Err(InstructionError::InvalidRealloc);
+            }
+
+            // The owner of the account can change the size of the data
+            let data_len_changed = pre.data().len() != post.data().len();
+            if data_len_changed && program_id != pre.owner() {
+                return Err(InstructionError::AccountDataSizeChanged);
+            }
+            data_len_changed
+        } else {
+            // Only the system program can change the size of the data
+            //  and only if the system program owns the account
+            let data_len_changed = pre.data().len() != post.data().len();
+            if data_len_changed
+                && (!system_program::check_id(program_id) // line coverage used to get branch coverage
+                    || !system_program::check_id(pre.owner()))
+            {
+                return Err(InstructionError::AccountDataSizeChanged);
+            }
+            data_len_changed
+        };
 
         // Only the owner may change account data
         //   and if the account is writable
@@ -502,6 +519,7 @@ impl InstructionProcessor {
         keyed_account_indices_obsolete: &[usize],
         signers: &[Pubkey],
     ) -> Result<(), InstructionError> {
+        let do_support_realloc = invoke_context.is_feature_active(&do_support_realloc::id());
         let invoke_context = RefCell::new(invoke_context);
         let mut invoke_context = invoke_context.borrow_mut();
 
@@ -541,7 +559,8 @@ impl InstructionProcessor {
 
         // Verify the called program has not misbehaved
         for (account, prev_size) in accounts.iter() {
-            if *prev_size != account.borrow().data().len() && *prev_size != 0 {
+            if !do_support_realloc && *prev_size != account.borrow().data().len() && *prev_size != 0
+            {
                 // Only support for `CreateAccount` at this time.
                 // Need a way to limit total realloc size across multiple CPI calls
                 ic_msg!(
@@ -617,7 +636,7 @@ impl InstructionProcessor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_sdk::{account::Account, instruction::InstructionError};
+    use solana_sdk::{account::Account, instruction::InstructionError, system_program};
 
     #[test]
     fn test_is_zeroed() {
@@ -706,6 +725,7 @@ mod tests {
                 &self.post,
                 &mut ExecuteDetailsTimings::default(),
                 false,
+                true,
             )
         }
     }
@@ -1013,11 +1033,18 @@ mod tests {
             "system program should not be able to change another program's account data size"
         );
         assert_eq!(
-            Change::new(&alice_program_id, &alice_program_id)
+            Change::new(&alice_program_id, &solana_sdk::pubkey::new_rand())
                 .data(vec![0], vec![0, 0])
                 .verify(),
             Err(InstructionError::AccountDataSizeChanged),
-            "non-system programs cannot change their data size"
+            "one program should not be able to change another program's account data size"
+        );
+        assert_eq!(
+            Change::new(&alice_program_id, &alice_program_id)
+                .data(vec![0], vec![0, 0])
+                .verify(),
+            Ok(()),
+            "programs can change their own data size"
         );
         assert_eq!(
             Change::new(&system_program::id(), &system_program::id())
@@ -1039,7 +1066,7 @@ mod tests {
                 .executable(false, true)
                 .verify(),
             Err(InstructionError::ExecutableModified),
-            "Program should not be able to change owner and executable at the same time"
+            "program should not be able to change owner and executable at the same time"
         );
     }
 

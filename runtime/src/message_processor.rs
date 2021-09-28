@@ -10,7 +10,8 @@ use solana_sdk::{
     account::{AccountSharedData, ReadableAccount, WritableAccount},
     compute_budget::ComputeBudget,
     feature_set::{
-        demote_program_write_locks, neon_evm_compute_budget, tx_wide_compute_cap, FeatureSet,
+        demote_program_write_locks, do_support_realloc, neon_evm_compute_budget,
+        tx_wide_compute_cap, FeatureSet,
     },
     fee_calculator::FeeCalculator,
     hash::Hash,
@@ -206,6 +207,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
     ) -> Result<(), InstructionError> {
         let program_id = instruction.program_id(&message.account_keys);
         let demote_program_write_locks = self.is_feature_active(&demote_program_write_locks::id());
+        let do_support_realloc = self.feature_set.is_active(&do_support_realloc::id());
 
         // Verify all executable accounts have zero outstanding refs
         for account_index in program_indices.iter() {
@@ -234,6 +236,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
                     &account,
                     &mut self.timings,
                     true,
+                    do_support_realloc,
                 )
                 .map_err(|err| {
                     ic_logger_msg!(
@@ -262,6 +265,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         account_indices: &[usize],
         write_privileges: &[bool],
     ) -> Result<(), InstructionError> {
+        let do_support_realloc = self.feature_set.is_active(&do_support_realloc::id());
         let stack_frame = self
             .invoke_stack
             .last()
@@ -293,7 +297,15 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
                         }
                         let account = account.borrow();
                         pre_account
-                            .verify(program_id, is_writable, rent, &account, timings, false)
+                            .verify(
+                                program_id,
+                                is_writable,
+                                rent,
+                                &account,
+                                timings,
+                                false,
+                                do_support_realloc,
+                            )
                             .map_err(|err| {
                                 ic_logger_msg!(logger, "failed to verify account {}: {}", key, err);
                                 err

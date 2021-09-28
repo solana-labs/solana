@@ -2499,6 +2499,8 @@ dependencies = [
  "net2",
  "solana-account-decoder",
  "solana-bpf-loader-program",
+ "solana-bpf-rust-realloc",
+ "solana-bpf-rust-realloc-invoke",
  "solana-cli-output",
  "solana-logger 1.8.0",
  "solana-measure",
@@ -2722,6 +2724,21 @@ version = "1.8.0"
 dependencies = [
  "getrandom 0.1.14",
  "rand 0.7.3",
+ "solana-program 1.8.0",
+]
+
+[[package]]
+name = "solana-bpf-rust-realloc"
+version = "1.8.0"
+dependencies = [
+ "solana-program 1.8.0",
+]
+
+[[package]]
+name = "solana-bpf-rust-realloc-invoke"
+version = "1.8.0"
+dependencies = [
+ "solana-bpf-rust-realloc",
  "solana-program 1.8.0",
 ]
 
