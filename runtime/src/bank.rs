@@ -5010,7 +5010,7 @@ impl Bank {
     pub fn update_accounts_hash_with_index_option(
         &self,
         use_index: bool,
-        debug_verify: bool,
+        mut debug_verify: bool,
         slots_per_epoch: Option<Slot>,
     ) -> Hash {
         let (hash, total_lamports) = self
@@ -5033,6 +5033,24 @@ impl Bank {
                 ("calculated_lamports", total_lamports, i64),
                 ("capitalization", self.capitalization(), i64),
             );
+
+            if !debug_verify {
+                // cap mismatch detected. It has been logged to metrics above.
+                // Run both versions of the calculation to attempt to get more info.
+                debug_verify = true;
+                self.rc
+                    .accounts
+                    .accounts_db
+                    .update_accounts_hash_with_index_option(
+                        use_index,
+                        debug_verify,
+                        self.slot(),
+                        &self.ancestors,
+                        Some(self.capitalization()),
+                        false,
+                        slots_per_epoch,
+                    );
+            }
 
             panic!(
                 "capitalization_mismatch. slot: {}, calculated_lamports: {}, capitalization: {}",
