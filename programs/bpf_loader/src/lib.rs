@@ -945,9 +945,9 @@ impl Executor for BpfExecutor {
                 trace!("BPF Program Instruction Trace:\n{}", trace_string);
             }
             drop(vm);
-            let return_data = invoke_context.get_return_data();
-            if let Some((program_id, return_data)) = return_data {
-                stable_log::program_return(&logger, program_id, return_data);
+            let (program_id, return_data) = invoke_context.get_return_data();
+            if !return_data.is_empty() {
+                stable_log::program_return(&logger, &program_id, return_data);
             }
             match result {
                 Ok(status) => {
@@ -960,7 +960,7 @@ impl Executor for BpfExecutor {
                         } else {
                             status.into()
                         };
-                        stable_log::program_failure(&logger, program_id, &error);
+                        stable_log::program_failure(&logger, &program_id, &error);
                         return Err(error);
                     }
                 }
@@ -974,7 +974,7 @@ impl Executor for BpfExecutor {
                             InstructionError::ProgramFailedToComplete
                         }
                     };
-                    stable_log::program_failure(&logger, program_id, &error);
+                    stable_log::program_failure(&logger, &program_id, &error);
                     return Err(error);
                 }
             }

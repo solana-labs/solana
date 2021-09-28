@@ -124,9 +124,9 @@ pub trait InvokeContext {
     /// Get this invocation's `FeeCalculator`
     fn get_fee_calculator(&self) -> &FeeCalculator;
     /// Set the return data
-    fn set_return_data(&mut self, return_data: Option<(Pubkey, Vec<u8>)>);
+    fn set_return_data(&mut self, data: Vec<u8>) -> Result<(), InstructionError>;
     /// Get the return data
-    fn get_return_data(&self) -> &Option<(Pubkey, Vec<u8>)>;
+    fn get_return_data(&self) -> (Pubkey, &[u8]);
 }
 
 /// Convenience macro to log a message with an `Rc<RefCell<dyn Logger>>`
@@ -447,7 +447,7 @@ pub struct MockInvokeContext<'a> {
     pub disabled_features: HashSet<Pubkey>,
     pub blockhash: Hash,
     pub fee_calculator: FeeCalculator,
-    pub return_data: Option<(Pubkey, Vec<u8>)>,
+    pub return_data: (Pubkey, Vec<u8>),
 }
 
 impl<'a> MockInvokeContext<'a> {
@@ -467,7 +467,7 @@ impl<'a> MockInvokeContext<'a> {
             disabled_features: HashSet::default(),
             blockhash: Hash::default(),
             fee_calculator: FeeCalculator::default(),
-            return_data: None,
+            return_data: (Pubkey::default(), Vec::new()),
         };
         invoke_context
             .invoke_stack
@@ -605,10 +605,11 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
     fn get_fee_calculator(&self) -> &FeeCalculator {
         &self.fee_calculator
     }
-    fn set_return_data(&mut self, return_data: Option<(Pubkey, Vec<u8>)>) {
-        self.return_data = return_data;
+    fn set_return_data(&mut self, data: Vec<u8>) -> Result<(), InstructionError> {
+        self.return_data = (*self.get_caller()?, data);
+        Ok(())
     }
-    fn get_return_data(&self) -> &Option<(Pubkey, Vec<u8>)> {
-        &self.return_data
+    fn get_return_data(&self) -> (Pubkey, &[u8]) {
+        (self.return_data.0, &self.return_data.1)
     }
 }
