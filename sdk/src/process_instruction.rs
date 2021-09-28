@@ -58,19 +58,12 @@ pub trait InvokeContext {
         message: &Message,
         instruction: &CompiledInstruction,
         program_indices: &[usize],
-        account_indices: Option<&[usize]>,
+        account_indices: &[usize],
     ) -> Result<(), InstructionError>;
     /// Pop a stack frame from the invocation stack
     fn pop(&mut self);
     /// Current depth of the invocation stake
     fn invoke_depth(&self) -> usize;
-    /// Verify the results of an instruction
-    fn verify(
-        &mut self,
-        message: &Message,
-        instruction: &CompiledInstruction,
-        program_indices: &[usize],
-    ) -> Result<(), InstructionError>;
     /// Verify and update PreAccount state based on program execution
     fn verify_and_update(
         &mut self,
@@ -99,8 +92,6 @@ pub trait InvokeContext {
     fn add_executor(&self, pubkey: &Pubkey, executor: Arc<dyn Executor>);
     /// Get the completed loader work that can be re-used across executions
     fn get_executor(&self, pubkey: &Pubkey) -> Option<Arc<dyn Executor>>;
-    /// Set which instruction in the message is currently being recorded
-    fn set_instruction_index(&mut self, instruction_index: usize);
     /// Record invoked instruction
     fn record_instruction(&self, instruction: &Instruction);
     /// Get the bank's active feature set
@@ -501,7 +492,7 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
         _message: &Message,
         _instruction: &CompiledInstruction,
         _program_indices: &[usize],
-        _account_indices: Option<&[usize]>,
+        _account_indices: &[usize],
     ) -> Result<(), InstructionError> {
         self.invoke_stack.push(InvokeContextStackFrame::new(
             *_key,
@@ -514,14 +505,6 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
     }
     fn invoke_depth(&self) -> usize {
         self.invoke_stack.len()
-    }
-    fn verify(
-        &mut self,
-        _message: &Message,
-        _instruction: &CompiledInstruction,
-        _program_indices: &[usize],
-    ) -> Result<(), InstructionError> {
-        Ok(())
     }
     fn verify_and_update(
         &mut self,
@@ -570,7 +553,6 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
     fn get_executor(&self, _pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
         None
     }
-    fn set_instruction_index(&mut self, _instruction_index: usize) {}
     fn record_instruction(&self, _instruction: &Instruction) {}
     fn is_feature_active(&self, feature_id: &Pubkey) -> bool {
         !self.disabled_features.contains(feature_id)

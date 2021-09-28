@@ -603,7 +603,7 @@ impl InstructionProcessor {
             message,
             instruction,
             program_indices,
-            Some(account_indices),
+            account_indices,
         )?;
 
         let mut instruction_processor = InstructionProcessor::default();
