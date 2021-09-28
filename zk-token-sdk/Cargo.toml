@@ -1,0 +1,24 @@
+[package]
+name = "spl-zk-token-program-sdk"
+description = "Solana Program Library ZkToken Program SDK"
+authors = ["Solana Maintainers <maintainers@solana.foundation>"]
+repository = "https://github.com/solana-labs/solana-program-library"
+version = "0.1.0"
+edition = "2018"
+publish = false
+
+[dependencies]
+bytemuck = { version = "1.7.2", features = ["derive"] }
+#getrandom = { version = "0.1", features = ["dummy"] }
+num-derive = "0.3"
+num-traits = "0.2"
+solana-program = "=1.7.11"
+spl-zk-token-crypto = { path = "../crypto" }
+
+#[features]
+#test-bpf = []
+#
+#[dev-dependencies]
+#assert_matches = "1.4.0"
+#solana-program-test = "=1.7.11"
+#solana-validator = "=1.7.11"
