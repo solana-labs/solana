@@ -9,7 +9,7 @@ use solana_sdk::{clock::Slot, pubkey::Pubkey};
 use std::collections::{hash_map::Entry, HashMap};
 use std::ops::{Bound, RangeBounds, RangeInclusive};
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, RwLock, RwLockWriteGuard};
 
 use std::fmt::Debug;
 type K = Pubkey;
@@ -133,9 +133,15 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     }
 
     /// lookup 'pubkey' by only looking in memory. Does not look on disk.
-    fn get_only_in_mem(&self, pubkey: &K) -> Option<AccountMapEntry<T>> {
+    /// callback is called whether pubkey is found or not
+    fn get_only_in_mem<RT>(
+        &self,
+        pubkey: &K,
+        callback: impl for<'a> FnOnce(Option<&'a Arc<AccountMapEntryInner<T>>>) -> RT,
+    ) -> RT {
         let m = Measure::start("get");
-        let result = self.map().read().unwrap().get(pubkey).map(Arc::clone);
+        let map = self.map().read().unwrap();
+        let result = map.get(pubkey);
         let stats = self.stats();
         let (count, time) = if result.is_some() {
             (&stats.gets_from_mem, &stats.get_mem_us)
@@ -145,32 +151,50 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         Self::update_time_stat(time, m);
         Self::update_stat(count, 1);
 
-        if let Some(entry) = result.as_ref() {
+        callback(if let Some(entry) = result {
             entry.set_age(self.storage.future_age_to_flush());
-        }
-        result
+            Some(entry)
+        } else {
+            drop(map);
+            None
+        })
     }
 
     /// lookup 'pubkey' in index (in mem or on disk)
     pub fn get(&self, pubkey: &K) -> Option<AccountMapEntry<T>> {
-        let result = self.get_only_in_mem(pubkey);
-        if result.is_some() {
-            return result;
-        }
+        self.get_internal(pubkey, |entry| entry.map(Arc::clone))
+    }
 
-        // not in cache, look on disk
-        let stats = &self.stats();
-        let new_entry = self.load_account_entry_from_disk(pubkey)?;
-        let mut map = self.map().write().unwrap();
-        let entry = map.entry(*pubkey);
-        let result = match entry {
-            Entry::Occupied(occupied) => Arc::clone(occupied.get()),
-            Entry::Vacant(vacant) => {
-                stats.insert_or_delete_mem(true, self.bin);
-                Arc::clone(vacant.insert(new_entry))
+    /// lookup 'pubkey' in index.
+    /// call 'callback' whether found or not
+    fn get_internal<RT>(
+        &self,
+        pubkey: &K,
+        callback: impl for<'a> FnOnce(Option<&Arc<AccountMapEntryInner<T>>>) -> RT,
+    ) -> RT {
+        self.get_only_in_mem(pubkey, |entry| {
+            if let Some(entry) = entry {
+                entry.set_age(self.storage.future_age_to_flush());
+                callback(Some(entry))
+            } else {
+                // not in cache, look on disk
+                let stats = &self.stats();
+                let disk_entry = self.load_account_entry_from_disk(pubkey);
+                if disk_entry.is_none() {
+                    return callback(None);
+                }
+                let disk_entry = disk_entry.unwrap();
+                let mut map = self.map().write().unwrap();
+                let entry = map.entry(*pubkey);
+                match entry {
+                    Entry::Occupied(occupied) => callback(Some(occupied.get())),
+                    Entry::Vacant(vacant) => {
+                        stats.insert_or_delete_mem(true, self.bin);
+                        callback(Some(vacant.insert(disk_entry)))
+                    }
+                }
             }
-        };
-        Some(result)
+        })
     }
 
     fn remove_if_slot_list_empty_value(&self, slot_list: SlotSlice<T>) -> bool {
@@ -245,6 +269,20 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         self.remove_if_slot_list_empty_entry(entry)
     }
 
+    pub fn slot_list_mut<RT>(
+        &self,
+        pubkey: &Pubkey,
+        user: impl for<'a> FnOnce(&mut RwLockWriteGuard<'a, SlotList<T>>) -> RT,
+    ) -> Option<RT> {
+        self.get_internal(pubkey, |entry| {
+            entry.map(|entry| {
+                let result = user(&mut entry.slot_list.write().unwrap());
+                entry.set_dirty(true);
+                result
+            })
+        })
+    }
+
     pub fn upsert(
         &self,
         pubkey: &Pubkey,
@@ -253,62 +291,63 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         previous_slot_entry_was_cached: bool,
     ) {
         // try to get it just from memory first using only a read lock
-        if let Some(get) = self.get_only_in_mem(pubkey) {
-            Self::lock_and_update_slot_list(
-                &get,
-                new_value.into(),
-                reclaims,
-                previous_slot_entry_was_cached,
-            );
-            Self::update_stat(&self.stats().updates_in_mem, 1);
-            return;
-        }
-
-        let m = Measure::start("entry");
-        let mut map = self.map().write().unwrap();
-        let entry = map.entry(*pubkey);
-        let stats = &self.stats();
-        let (count, time) = if matches!(entry, Entry::Occupied(_)) {
-            (&stats.entries_from_mem, &stats.entry_mem_us)
-        } else {
-            (&stats.entries_missing, &stats.entry_missing_us)
-        };
-        Self::update_time_stat(time, m);
-        Self::update_stat(count, 1);
-        match entry {
-            Entry::Occupied(mut occupied) => {
-                let current = occupied.get_mut();
+        self.get_only_in_mem(pubkey, |entry| {
+            if let Some(entry) = entry {
                 Self::lock_and_update_slot_list(
-                    current,
+                    entry,
                     new_value.into(),
                     reclaims,
                     previous_slot_entry_was_cached,
                 );
-                current.set_age(self.storage.future_age_to_flush());
                 Self::update_stat(&self.stats().updates_in_mem, 1);
-            }
-            Entry::Vacant(vacant) => {
-                // not in cache, look on disk
-                let disk_entry = self.load_account_entry_from_disk(vacant.key());
-                let new_value = if let Some(disk_entry) = disk_entry {
-                    // on disk, so merge new_value with what was on disk
-                    Self::lock_and_update_slot_list(
-                        &disk_entry,
-                        new_value.into(),
-                        reclaims,
-                        previous_slot_entry_was_cached,
-                    );
-                    disk_entry
+            } else {
+                let m = Measure::start("entry");
+                let mut map = self.map().write().unwrap();
+                let entry = map.entry(*pubkey);
+                let stats = &self.stats();
+                let (count, time) = if matches!(entry, Entry::Occupied(_)) {
+                    (&stats.entries_from_mem, &stats.entry_mem_us)
                 } else {
-                    // not on disk, so insert new thing
-                    new_value.into()
+                    (&stats.entries_missing, &stats.entry_missing_us)
                 };
-                assert!(new_value.dirty());
-                vacant.insert(new_value);
-                self.stats().insert_or_delete_mem(true, self.bin);
-                self.stats().insert_or_delete(true, self.bin);
-            }
-        }
+                Self::update_time_stat(time, m);
+                Self::update_stat(count, 1);
+                match entry {
+                    Entry::Occupied(mut occupied) => {
+                        let current = occupied.get_mut();
+                        Self::lock_and_update_slot_list(
+                            current,
+                            new_value.into(),
+                            reclaims,
+                            previous_slot_entry_was_cached,
+                        );
+                        current.set_age(self.storage.future_age_to_flush());
+                        Self::update_stat(&self.stats().updates_in_mem, 1);
+                    }
+                    Entry::Vacant(vacant) => {
+                        // not in cache, look on disk
+                        let disk_entry = self.load_account_entry_from_disk(vacant.key());
+                        let new_value = if let Some(disk_entry) = disk_entry {
+                            // on disk, so merge new_value with what was on disk
+                            Self::lock_and_update_slot_list(
+                                &disk_entry,
+                                new_value.into(),
+                                reclaims,
+                                previous_slot_entry_was_cached,
+                            );
+                            disk_entry
+                        } else {
+                            // not on disk, so insert new thing
+                            new_value.into()
+                        };
+                        assert!(new_value.dirty());
+                        vacant.insert(new_value);
+                        self.stats().insert_or_delete_mem(true, self.bin);
+                        self.stats().insert_or_delete(true, self.bin);
+                    }
+                }
+            };
+        })
     }
 
     // Try to update an item in the slot list the given `slot` If an item for the slot
