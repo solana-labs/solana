@@ -634,8 +634,12 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
             let dump_script = config.bpf_sdk.join("scripts").join("dump.sh");
             #[cfg(windows)]
             {
-                println!("Dumping program is not supported from `build-bpf` on Windows, and must be done separately.");
-                println!("Please run \"{} {} {}\" from a Bash-supporting shell, then re-run this command.", &dump_script.display(), &program_unstripped_so.display(), &program_dump.display());
+                eprintln!("Using Bash scripts from within a program is not supported on Windows, skipping `--dump`.");
+                eprintln!(
+                    "Please run \"{} {} {}\" from a Bash-supporting shell, then re-run this command to see the processed program dump.",
+                    &dump_script.display(),
+                    &program_unstripped_so.display(),
+                    &program_dump.display());
             }
             #[cfg(not(windows))]
             {
