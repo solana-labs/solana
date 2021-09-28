@@ -13,12 +13,4 @@ getrandom = { version = "0.1", features = ["dummy"] }
 num-derive = "0.3"
 num-traits = "0.2"
 solana-sdk = "=1.7.11"
-spl-zk-token-crypto = { path = "../crypto" }
-
-[features]
-test-bpf = []
-
-[dev-dependencies]
-assert_matches = "1.4.0"
-solana-program-test = "=1.7.11"
-solana-validator = "=1.7.11"
+spl-zk-token-program-sdk = { path = "../sdk" }
