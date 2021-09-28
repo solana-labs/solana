@@ -46,6 +46,16 @@ pub enum SlotStatus {
     Confirmed,
 }
 
+impl SlotStatus {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            SlotStatus::Confirmed => "confirmed",
+            SlotStatus::Processed => "processed",
+            SlotStatus::Rooted => "rooted",
+        }
+    }
+}
+
 pub type Result<T> = std::result::Result<T, AccountsDbPluginError>;
 
 pub trait AccountsDbPlugin: Any + Send + Sync + std::fmt::Debug {

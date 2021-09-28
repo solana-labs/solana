@@ -35,14 +35,6 @@ struct AccountsDbPluginPostgresConfig {
     user: String,
 }
 
-fn get_status_str(status: SlotStatus) -> &'static str {
-    match status {
-        SlotStatus::Confirmed => "confirmed",
-        SlotStatus::Processed => "processed",
-        SlotStatus::Rooted => "rooted",
-    }
-}
-
 impl AccountsDbPlugin for AccountsDbPluginPostgres {
     fn name(&self) -> &'static str {
         "AccountsDbPluginPostgres"
@@ -221,10 +213,10 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
                 });
             }
             Some(client) => {
-                let slot = slot as i64; // postgres only support i64
+                let slot = slot as i64; // postgres only supports i64
                 let parent = parent.map(|parent| parent as i64);
                 let updated_on = Utc::now().naive_utc();
-                let status_str = get_status_str(status);
+                let status_str = status.as_str();
 
                 let result = match parent {
                         Some(parent) => {
