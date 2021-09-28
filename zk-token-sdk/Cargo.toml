@@ -1,5 +1,5 @@
 [package]
-name = "spl-zk-token-program-sdk"
+name = "spl-zk-token-sdk"
 description = "Solana Program Library ZkToken Program SDK"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana-program-library"
