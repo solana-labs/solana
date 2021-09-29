@@ -4043,8 +4043,11 @@ pub mod rpc_obsolete_v1_7 {
     }
 }
 
-const MAX_BASE58_SIZE: usize = 1683; // Golden, bump if PACKET_DATA_SIZE changes
-const MAX_BASE64_SIZE: usize = 1644; // Golden, bump if PACKET_DATA_SIZE changes
+// These values need to be updated if PACKET_DATA_SIZE changes. The correct values can
+// be found by hand or by simply encoding `PACKET_DATA_SIZE` bytes and checking length.
+// `test_max_encoded_tx_goldens` ensures these values are correct.
+const MAX_BASE58_SIZE: usize = 3365;
+const MAX_BASE64_SIZE: usize = 3288;
 fn decode_and_deserialize<T>(
     encoded: String,
     encoding: UiTransactionEncoding,
@@ -7828,7 +7831,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_worst_case_encoded_tx_goldens() {
+    fn test_max_encoded_tx_goldens() {
         let ff_tx = vec![0xffu8; PACKET_DATA_SIZE];
         let tx58 = bs58::encode(&ff_tx).into_string();
         assert_eq!(tx58.len(), MAX_BASE58_SIZE);
@@ -7838,8 +7841,11 @@ pub mod tests {
 
     #[test]
     fn test_decode_and_deserialize_too_large_payloads_fail() {
-        // +2 because +1 still fits in base64 encoded worst-case
-        let too_big = PACKET_DATA_SIZE + 2;
+        // 4 base64 digits are generated from groups of 3 bytes; however, those 4 digits
+        // are generated even if the group only has 1 or 2 bytes.
+        // So, we need 4 - (PACKET_DATA_SIZE % 3) extra bytes to ensure we'll spill over
+        let extra_bytes = 4 - (PACKET_DATA_SIZE % 3);
+        let too_big = PACKET_DATA_SIZE + extra_bytes;
         let tx_ser = vec![0xffu8; too_big];
         let tx58 = bs58::encode(&tx_ser).into_string();
         let tx58_len = tx58.len();
