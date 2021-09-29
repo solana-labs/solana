@@ -2499,6 +2499,7 @@ dependencies = [
  "net2",
  "solana-account-decoder",
  "solana-bpf-loader-program",
+ "solana-bpf-rust-invoke",
  "solana-bpf-rust-realloc",
  "solana-bpf-rust-realloc-invoke",
  "solana-cli-output",

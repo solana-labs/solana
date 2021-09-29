@@ -14,6 +14,7 @@ use solana_bpf_loader_program::{
     syscalls::register_syscalls,
     BpfError, ThisInstructionMeter,
 };
+use solana_bpf_rust_invoke::instructions::*;
 use solana_bpf_rust_realloc::instructions::*;
 use solana_bpf_rust_realloc_invoke::instructions::*;
 use solana_cli_output::display::println_transaction;
@@ -801,26 +802,6 @@ fn test_return_data_and_log_data_syscall() {
 fn test_program_bpf_invoke_sanity() {
     solana_logger::setup();
 
-    const TEST_SUCCESS: u8 = 1;
-    const TEST_PRIVILEGE_ESCALATION_SIGNER: u8 = 2;
-    const TEST_PRIVILEGE_ESCALATION_WRITABLE: u8 = 3;
-    const TEST_PPROGRAM_NOT_EXECUTABLE: u8 = 4;
-    const TEST_EMPTY_ACCOUNTS_SLICE: u8 = 5;
-    const TEST_CAP_SEEDS: u8 = 6;
-    const TEST_CAP_SIGNERS: u8 = 7;
-    const TEST_ALLOC_ACCESS_VIOLATION: u8 = 8;
-    const TEST_INSTRUCTION_DATA_TOO_LARGE: u8 = 9;
-    const TEST_INSTRUCTION_META_TOO_LARGE: u8 = 10;
-    const TEST_RETURN_ERROR: u8 = 11;
-    const TEST_PRIVILEGE_DEESCALATION_ESCALATION_SIGNER: u8 = 12;
-    const TEST_PRIVILEGE_DEESCALATION_ESCALATION_WRITABLE: u8 = 13;
-    const TEST_WRITABLE_DEESCALATION_WRITABLE: u8 = 14;
-    const TEST_NESTED_INVOKE_TOO_DEEP: u8 = 15;
-    const TEST_EXECUTABLE_LAMPORTS: u8 = 16;
-    const TEST_CALL_PRECOMPILE: u8 = 17;
-    // const ADD_LAMPORTS: u8 = 18;
-    const TEST_RETURN_DATA_TOO_LARGE: u8 = 19;
-
     #[allow(dead_code)]
     #[derive(Debug)]
     enum Languages {
@@ -1099,12 +1080,6 @@ fn test_program_bpf_invoke_sanity() {
 
         do_invoke_failure_test_local(
             TEST_CALL_PRECOMPILE,
-            TransactionError::InstructionError(0, InstructionError::ProgramFailedToComplete),
-            &[],
-        );
-
-        do_invoke_failure_test_local(
-            TEST_RETURN_DATA_TOO_LARGE,
             TransactionError::InstructionError(0, InstructionError::ProgramFailedToComplete),
             &[],
         );
@@ -2614,7 +2589,6 @@ fn test_program_bpf_ro_account_modify() {
     let instruction = Instruction::new_with_bytes(program_id, &[0], account_metas.clone());
     let message = Message::new(&[instruction], Some(&mint_pubkey));
     let result = bank_client.send_and_confirm_message(&[&mint_keypair], message);
-    println!("result: {:?}", result);
     assert_eq!(
         result.unwrap_err().unwrap(),
         TransactionError::InstructionError(0, InstructionError::ReadonlyDataModified)
@@ -2623,7 +2597,6 @@ fn test_program_bpf_ro_account_modify() {
     let instruction = Instruction::new_with_bytes(program_id, &[1], account_metas.clone());
     let message = Message::new(&[instruction], Some(&mint_pubkey));
     let result = bank_client.send_and_confirm_message(&[&mint_keypair], message);
-    println!("result: {:?}", result);
     assert_eq!(
         result.unwrap_err().unwrap(),
         TransactionError::InstructionError(0, InstructionError::ReadonlyDataModified)
@@ -2632,7 +2605,6 @@ fn test_program_bpf_ro_account_modify() {
     let instruction = Instruction::new_with_bytes(program_id, &[2], account_metas.clone());
     let message = Message::new(&[instruction], Some(&mint_pubkey));
     let result = bank_client.send_and_confirm_message(&[&mint_keypair], message);
-    println!("result: {:?}", result);
     assert_eq!(
         result.unwrap_err().unwrap(),
         TransactionError::InstructionError(0, InstructionError::ReadonlyDataModified)
