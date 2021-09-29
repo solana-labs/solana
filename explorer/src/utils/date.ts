@@ -25,7 +25,7 @@ export function displayTimestampUtc(
   const expireDate = new Date(unixTimestamp);
   const dateString = new Intl.DateTimeFormat("en-US", {
     year: "numeric",
-    month: "long",
+    month: "short",
     day: "numeric",
     timeZone: "UTC",
   }).format(expireDate);
