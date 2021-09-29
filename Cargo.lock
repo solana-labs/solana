@@ -4564,16 +4564,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-ed25519-program"
-version = "1.8.0"
-dependencies = [
- "ed25519-dalek",
- "rand 0.7.3",
- "solana-logger 1.8.0",
- "solana-sdk",
-]
-
-[[package]]
 name = "solana-entry"
 version = "1.8.0"
 dependencies = [
@@ -5365,10 +5355,12 @@ dependencies = [
  "crossbeam-channel",
  "dashmap",
  "dir-diff",
+ "ed25519-dalek",
  "flate2",
  "fnv",
  "itertools 0.10.1",
  "lazy_static",
+ "libsecp256k1 0.6.0",
  "log 0.4.14",
  "memmap2 0.5.0",
  "num_cpus",
@@ -5382,7 +5374,6 @@ dependencies = [
  "solana-bucket-map",
  "solana-compute-budget-program",
  "solana-config-program",
- "solana-ed25519-program",
  "solana-frozen-abi 1.8.0",
  "solana-frozen-abi-macro 1.8.0",
  "solana-logger 1.8.0",
@@ -5391,7 +5382,6 @@ dependencies = [
  "solana-program-runtime",
  "solana-rayon-threadlimit",
  "solana-sdk",
- "solana-secp256k1-program",
  "solana-stake-program",
  "solana-vote-program",
  "symlink",
@@ -5481,17 +5471,6 @@ dependencies = [
  "quote 1.0.9",
  "rustversion",
  "syn 1.0.67",
-]
-
-[[package]]
-name = "solana-secp256k1-program"
-version = "1.8.0"
-dependencies = [
- "bincode",
- "libsecp256k1 0.6.0",
- "rand 0.7.3",
- "solana-logger 1.8.0",
- "solana-sdk",
 ]
 
 [[package]]

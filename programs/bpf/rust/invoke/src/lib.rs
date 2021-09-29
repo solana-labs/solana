@@ -9,6 +9,7 @@ use solana_program::{
     account_info::AccountInfo,
     entrypoint,
     entrypoint::{ProgramResult, MAX_PERMITTED_DATA_INCREASE},
+    instruction::Instruction,
     msg,
     program::{get_return_data, invoke, invoke_signed, set_return_data},
     program_error::ProgramError,
@@ -32,7 +33,8 @@ const TEST_PRIVILEGE_DEESCALATION_ESCALATION_WRITABLE: u8 = 13;
 const TEST_WRITABLE_DEESCALATION_WRITABLE: u8 = 14;
 const TEST_NESTED_INVOKE_TOO_DEEP: u8 = 15;
 const TEST_EXECUTABLE_LAMPORTS: u8 = 16;
-const ADD_LAMPORTS: u8 = 17;
+const TEST_CALL_PRECOMPILE: u8 = 17;
+const ADD_LAMPORTS: u8 = 18;
 
 // const MINT_INDEX: usize = 0; // unused placeholder
 const ARGUMENT_INDEX: usize = 1;
@@ -45,6 +47,8 @@ const DERIVED_KEY2_INDEX: usize = 7;
 const DERIVED_KEY3_INDEX: usize = 8;
 const SYSTEM_PROGRAM_INDEX: usize = 9;
 const FROM_INDEX: usize = 10;
+const ED25519_PROGRAM_INDEX: usize = 11;
+// const INVOKE_PROGRAM_INDEX: usize = 12; unused placeholder
 
 fn do_nested_invokes(num_nested_invokes: u64, accounts: &[AccountInfo]) -> ProgramResult {
     assert!(accounts[ARGUMENT_INDEX].is_signer);
@@ -662,6 +666,12 @@ fn process_instruction(
 
             // reset executable account
             **(*accounts[ARGUMENT_INDEX].lamports).borrow_mut() += 1;
+        }
+        TEST_CALL_PRECOMPILE => {
+            msg!("Test calling precompiled program from cpi");
+            let instruction =
+                Instruction::new_with_bytes(*accounts[ED25519_PROGRAM_INDEX].key, &[], vec![]);
+            invoke(&instruction, accounts)?;
         }
         ADD_LAMPORTS => {
             // make sure the total balance is fine
