@@ -98,6 +98,14 @@ export function BlockOverviewCard({
               <span>{block.previousBlockhash}</span>
             </td>
           </tr>
+          {confirmedBlock.data.child && (
+            <tr>
+              <td className="w-100">Child Slot</td>
+              <td className="text-lg-right text-monospace">
+                <Slot slot={confirmedBlock.data.child} link />
+              </td>
+            </tr>
+          )}
           <tr>
             <td className="w-100">Processed Transactions</td>
             <td className="text-lg-right text-monospace">

@@ -17,6 +17,7 @@ export enum ActionType {
 
 type Block = {
   block?: BlockResponse;
+  child?: number;
 };
 
 type State = Cache.State<Block>;
@@ -71,13 +72,14 @@ export async function fetchBlock(
   let data: Block | undefined = undefined;
 
   try {
-    const connection = new Connection(url, "finalized");
-    const block = await connection.getBlock(Number(key));
+    const connection = new Connection(url, "confirmed");
+    const block = await connection.getBlock(key);
+    const child = (await connection.getBlocks(key + 1, key + 100)).shift();
     if (block === null) {
       data = {};
       status = FetchStatus.Fetched;
     } else {
-      data = { block };
+      data = { block, child };
       status = FetchStatus.Fetched;
     }
   } catch (err) {
