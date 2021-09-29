@@ -2,7 +2,10 @@
 /// the AccountsDbPlugin trait to work with the Solana Validator.
 /// In addition, the dynamic libraray must export a "C" function _create_plugin which
 /// creates the implementation of the plugin.
-use {std::any::Any, std::io, thiserror::Error};
+use {
+    std::{any::Any, error, io},
+    thiserror::Error,
+};
 
 #[derive(Clone, PartialEq, Default, Debug)]
 pub struct ReplicaAccountMeta<'a> {
@@ -29,14 +32,14 @@ pub enum AccountsDbPluginError {
     #[error("Error reading config file.")]
     ConfigFileReadError { msg: String },
 
-    #[error("Error connecting to the backend data store.")]
-    DataStoreConnectionError { msg: String },
-
-    #[error("Error preparing data store schema.")]
-    DataSchemaError { msg: String },
-
     #[error("Error updating account.")]
     AccountsUpdateError { msg: String },
+
+    #[error("Error updating slot status.")]
+    SlotStatusUpdateError { msg: String },
+
+    #[error("Plugin defined customer error.")]
+    Custom(Box<dyn error::Error>),
 }
 
 #[derive(Debug, Clone)]

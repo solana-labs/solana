@@ -10,6 +10,7 @@ use {
         AccountsDbPlugin, AccountsDbPluginError, ReplicaAccountInfo, Result, SlotStatus,
     },
     std::{fs::File, io::Read, sync::Mutex},
+    thiserror::Error,
 };
 
 struct PostgresSqlClientWrapper {
@@ -33,6 +34,15 @@ impl std::fmt::Debug for AccountsDbPluginPostgres {
 struct AccountsDbPluginPostgresConfig {
     host: String,
     user: String,
+}
+
+#[derive(Error, Debug)]
+enum AccountsDbPluginPostgresError {
+    #[error("Error connecting to the backend data store.")]
+    DataStoreConnectionError { msg: String },
+
+    #[error("Error preparing data store schema.")]
+    DataSchemaError { msg: String },
 }
 
 impl AccountsDbPlugin for AccountsDbPluginPostgres {
@@ -99,12 +109,12 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
                 let connection_str = format!("host={} user={}", config.host, config.user);
                 match Client::connect(&connection_str, NoTls) {
                     Err(err) => {
-                        return Err(AccountsDbPluginError::DataStoreConnectionError {
-                            msg: format!(
+                        return Err(AccountsDbPluginError::Custom(
+                            Box::new(AccountsDbPluginPostgresError::DataStoreConnectionError {
+                                msg: format!(
                                 "Error in connecting to the PostgreSQL database: {:?} host: {:?} user: {:?} config: {:?}",
-                                err, config.host, config.user, connection_str
-                            ),
-                        });
+                                err, config.host, config.user, connection_str),
+                            })));
                     }
                     Ok(mut client) => {
                         let result = client.prepare("INSERT INTO account (pubkey, slot, owner, lamports, executable, rent_epoch, data, updated_on) \
@@ -114,12 +124,13 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
 
                         match result {
                             Err(err) => {
-                                return Err(AccountsDbPluginError::DataSchemaError {
+                                return Err(AccountsDbPluginError::Custom(
+                                    Box::new(AccountsDbPluginPostgresError::DataSchemaError {
                                     msg: format!(
                                         "Error in preparing for the accounts update PostgreSQL database: {:?} host: {:?} user: {:?} config: {:?}",
                                         err, config.host, config.user, connection_str
                                     ),
-                                });
+                                })));
                             }
                             Ok(update_account_stmt) => {
                                 self.client = Some(Mutex::new(PostgresSqlClientWrapper {
@@ -163,9 +174,11 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
 
         match &mut self.client {
             None => {
-                return Err(AccountsDbPluginError::DataStoreConnectionError {
-                    msg: "There is no connection to the PostgreSQL database.".to_string(),
-                });
+                return Err(AccountsDbPluginError::Custom(Box::new(
+                    AccountsDbPluginPostgresError::DataStoreConnectionError {
+                        msg: "There is no connection to the PostgreSQL database.".to_string(),
+                    },
+                )));
             }
             Some(client) => {
                 let slot = slot as i64; // postgres only supports i64
@@ -208,9 +221,11 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
 
         match &mut self.client {
             None => {
-                return Err(AccountsDbPluginError::DataStoreConnectionError {
-                    msg: "There is no connection to the PostgreSQL database.".to_string(),
-                });
+                return Err(AccountsDbPluginError::Custom(Box::new(
+                    AccountsDbPluginPostgresError::DataStoreConnectionError {
+                        msg: "There is no connection to the PostgreSQL database.".to_string(),
+                    },
+                )));
             }
             Some(client) => {
                 let slot = slot as i64; // postgres only supports i64
@@ -248,7 +263,7 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
 
                 match result {
                     Err(err) => {
-                        return Err(AccountsDbPluginError::AccountsUpdateError {
+                        return Err(AccountsDbPluginError::SlotStatusUpdateError{
                             msg: format!("Failed to persist the update of slot to the PostgreSQL database. Error: {:?}", err)
                         });
                     }
