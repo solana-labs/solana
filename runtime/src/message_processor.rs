@@ -92,7 +92,6 @@ impl<'a> ThisInvokeContext<'a> {
         blockhash: &'a Hash,
         fee_calculator: &'a FeeCalculator,
     ) -> Result<Self, InstructionError> {
-        let pre_accounts = MessageProcessor::create_pre_accounts(message, instruction, accounts);
         let compute_meter = if feature_set.is_active(&tx_wide_compute_cap::id()) {
             compute_meter
         } else {
@@ -103,7 +102,7 @@ impl<'a> ThisInvokeContext<'a> {
         let mut invoke_context = Self {
             invoke_stack: Vec::with_capacity(compute_budget.max_invoke_depth),
             rent,
-            pre_accounts,
+            pre_accounts: Vec::new(),
             accounts,
             programs,
             logger: Rc::new(RefCell::new(ThisLogger { log_collector })),
@@ -143,6 +142,21 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
     ) -> Result<(), InstructionError> {
         if self.invoke_stack.len() > self.compute_budget.max_invoke_depth {
             return Err(InstructionError::CallDepth);
+        }
+
+        if self.invoke_stack.is_empty() {
+            self.pre_accounts = Vec::with_capacity(instruction.accounts.len());
+            let mut work = |_unique_index: usize, account_index: usize| {
+                if account_index < message.account_keys.len() && account_index < self.accounts.len()
+                {
+                    let account = self.accounts[account_index].1.borrow();
+                    self.pre_accounts
+                        .push(PreAccount::new(&self.accounts[account_index].0, &account));
+                    return Ok(());
+                }
+                Err(InstructionError::MissingAccount)
+            };
+            let _ = instruction.visit_each_account(&mut work);
         }
 
         let contains = self.invoke_stack.iter().any(|frame| frame.key == *key);
@@ -411,28 +425,6 @@ impl MessageProcessor {
     /// Remove a program.
     pub fn remove_program(&mut self, program_id: &Pubkey) {
         self.instruction_processor.remove_program(program_id);
-    }
-
-    /// Record the initial state of the accounts so that they can be compared
-    /// after the instruction is processed
-    pub fn create_pre_accounts(
-        message: &Message,
-        instruction: &CompiledInstruction,
-        accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
-    ) -> Vec<PreAccount> {
-        let mut pre_accounts = Vec::with_capacity(instruction.accounts.len());
-        {
-            let mut work = |_unique_index: usize, account_index: usize| {
-                if account_index < message.account_keys.len() && account_index < accounts.len() {
-                    let account = accounts[account_index].1.borrow();
-                    pre_accounts.push(PreAccount::new(&accounts[account_index].0, &account));
-                    return Ok(());
-                }
-                Err(InstructionError::MissingAccount)
-            };
-            let _ = instruction.visit_each_account(&mut work);
-        }
-        pre_accounts
     }
 
     /// Verify there are no outstanding borrows
