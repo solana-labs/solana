@@ -20,7 +20,7 @@ pub struct ReplicaAccountInfo<'a> {
 }
 
 pub enum ReplicaAccountInfoVersions<'a> {
-    V0_0_1(Box<&'a ReplicaAccountInfo<'a>>),
+    V0_0_1(&'a ReplicaAccountInfo<'a>),
 }
 
 #[derive(Error, Debug)]

@@ -91,7 +91,7 @@ impl AccountsUpdateNotifierImpl {
         }
         for plugin in plugin_manager.plugins.iter_mut() {
             match plugin
-                .update_account(ReplicaAccountInfoVersions::V0_0_1(Box::new(&account)), slot)
+                .update_account(ReplicaAccountInfoVersions::V0_0_1(&account), slot)
             {
                 Err(err) => {
                     error!(
