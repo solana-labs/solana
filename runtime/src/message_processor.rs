@@ -512,110 +512,11 @@ impl MessageProcessor {
         Ok(())
     }
 
-    /// Execute an instruction
-    /// This method calls the instruction's program entrypoint method and verifies that the result of
-    /// the call does not violate the bank's accounting rules.
-    /// The accounts are committed back to the bank only if this function returns Ok(_).
-    #[allow(clippy::too_many_arguments)]
-    fn execute_instruction(
-        &self,
-        message: &Message,
-        instruction: &CompiledInstruction,
-        program_indices: &[usize],
-        accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
-        rent_collector: &RentCollector,
-        log_collector: Option<Rc<LogCollector>>,
-        executors: Rc<RefCell<Executors>>,
-        instruction_recorder: Option<InstructionRecorder>,
-        instruction_index: usize,
-        feature_set: Arc<FeatureSet>,
-        compute_budget: ComputeBudget,
-        compute_meter: Rc<RefCell<dyn ComputeMeter>>,
-        timings: &mut ExecuteDetailsTimings,
-        account_db: Arc<Accounts>,
-        ancestors: &Ancestors,
-        blockhash: &Hash,
-        fee_calculator: &FeeCalculator,
-    ) -> Result<(), InstructionError> {
-        let program_id = instruction.program_id(&message.account_keys);
-        if feature_set.is_active(&prevent_calling_precompiles_as_programs::id())
-            && is_precompile(program_id, |id| feature_set.is_active(id))
-        {
-            // Precompiled programs don't have an instruction processor
-            return Ok(());
-        }
-
-        // Fixup the special instructions key if present
-        // before the account pre-values are taken care of
-        for (pubkey, accont) in accounts.iter().take(message.account_keys.len()) {
-            if instructions::check_id(pubkey) {
-                let mut mut_account_ref = accont.borrow_mut();
-                instructions::store_current_index(
-                    mut_account_ref.data_as_mut_slice(),
-                    instruction_index as u16,
-                );
-                break;
-            }
-        }
-
-        let program_id = instruction.program_id(&message.account_keys);
-
-        let mut compute_budget = compute_budget;
-        if feature_set.is_active(&neon_evm_compute_budget::id())
-            && *program_id == crate::neon_evm_program::id()
-        {
-            // Bump the compute budget for neon_evm
-            compute_budget.max_units = compute_budget.max_units.max(500_000);
-            compute_budget.heap_size = Some(256 * 1024);
-        }
-
-        let programs = self.instruction_processor.programs();
-        let mut invoke_context = ThisInvokeContext::new(
-            program_id,
-            rent_collector.rent,
-            message,
-            instruction,
-            program_indices,
-            accounts,
-            programs,
-            log_collector,
-            compute_budget,
-            compute_meter,
-            executors,
-            instruction_recorder,
-            feature_set,
-            account_db,
-            ancestors,
-            blockhash,
-            fee_calculator,
-        )?;
-
-        self.instruction_processor.process_instruction(
-            program_id,
-            &instruction.data,
-            &mut invoke_context,
-        )?;
-        Self::verify(
-            message,
-            instruction,
-            &invoke_context.pre_accounts,
-            program_indices,
-            accounts,
-            &rent_collector.rent,
-            timings,
-            invoke_context.get_logger(),
-            invoke_context.is_feature_active(&demote_program_write_locks::id()),
-            invoke_context.is_feature_active(&do_support_realloc::id()),
-        )?;
-
-        timings.accumulate(&invoke_context.timings);
-
-        Ok(())
-    }
-
     /// Process a message.
-    /// This method calls each instruction in the message over the set of loaded Accounts
-    /// The accounts are committed back to the bank only if every instruction succeeds
+    /// This method calls each instruction in the message over the set of loaded accounts.
+    /// For each instruction it calls the program entrypoint method and verifies that the result of
+    /// the call does not violate the bank's accounting rules.
+    /// The accounts are committed back to the bank only if every instruction succeeds.
     #[allow(clippy::too_many_arguments)]
     #[allow(clippy::type_complexity)]
     pub fn process_message(
@@ -637,42 +538,94 @@ impl MessageProcessor {
         fee_calculator: FeeCalculator,
     ) -> Result<(), TransactionError> {
         for (instruction_index, instruction) in message.instructions.iter().enumerate() {
+            let program_id = instruction.program_id(&message.account_keys);
+            if feature_set.is_active(&prevent_calling_precompiles_as_programs::id())
+                && is_precompile(program_id, |id| feature_set.is_active(id))
+            {
+                // Precompiled programs don't have an instruction processor
+                continue;
+            }
+
             let mut time = Measure::start("execute_instruction");
             let pre_remaining_units = compute_meter.borrow().get_remaining();
             let instruction_recorder = instruction_recorders
                 .as_ref()
                 .map(|recorders| recorders[instruction_index].clone());
-            let err = self
-                .execute_instruction(
+
+            // Fixup the special instructions key if present
+            // before the account pre-values are taken care of
+            for (pubkey, accont) in accounts.iter().take(message.account_keys.len()) {
+                if instructions::check_id(pubkey) {
+                    let mut mut_account_ref = accont.borrow_mut();
+                    instructions::store_current_index(
+                        mut_account_ref.data_as_mut_slice(),
+                        instruction_index as u16,
+                    );
+                    break;
+                }
+            }
+
+            let mut compute_budget = compute_budget;
+            if feature_set.is_active(&neon_evm_compute_budget::id())
+                && *program_id == crate::neon_evm_program::id()
+            {
+                // Bump the compute budget for neon_evm
+                compute_budget.max_units = compute_budget.max_units.max(500_000);
+                compute_budget.heap_size = Some(256 * 1024);
+            }
+
+            let programs = self.instruction_processor.programs();
+            let result = ThisInvokeContext::new(
+                program_id,
+                rent_collector.rent,
+                message,
+                instruction,
+                &program_indices[instruction_index],
+                accounts,
+                programs,
+                log_collector.clone(),
+                compute_budget,
+                compute_meter.clone(),
+                executors.clone(),
+                instruction_recorder,
+                feature_set.clone(),
+                account_db.clone(),
+                ancestors,
+                &blockhash,
+                &fee_calculator,
+            )
+            .and_then(|mut invoke_context| {
+                self.instruction_processor.process_instruction(
+                    program_id,
+                    &instruction.data,
+                    &mut invoke_context,
+                )?;
+                Self::verify(
                     message,
                     instruction,
+                    &invoke_context.pre_accounts,
                     &program_indices[instruction_index],
                     accounts,
-                    rent_collector,
-                    log_collector.clone(),
-                    executors.clone(),
-                    instruction_recorder,
-                    instruction_index,
-                    feature_set.clone(),
-                    compute_budget,
-                    compute_meter.clone(),
+                    &rent_collector.rent,
                     timings,
-                    account_db.clone(),
-                    ancestors,
-                    &blockhash,
-                    &fee_calculator,
-                )
-                .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err));
+                    invoke_context.get_logger(),
+                    invoke_context.is_feature_active(&demote_program_write_locks::id()),
+                    invoke_context.is_feature_active(&do_support_realloc::id()),
+                )?;
+                timings.accumulate(&invoke_context.timings);
+                Ok(())
+            })
+            .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err));
+
             time.stop();
             let post_remaining_units = compute_meter.borrow().get_remaining();
-
             timings.accumulate_program(
                 instruction.program_id(&message.account_keys),
                 time.as_us(),
                 pre_remaining_units - post_remaining_units,
             );
 
-            err?;
+            result?;
         }
         Ok(())
     }
