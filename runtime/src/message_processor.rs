@@ -525,15 +525,33 @@ impl MessageProcessor {
         blockhash: Hash,
         fee_calculator: FeeCalculator,
     ) -> Result<(), TransactionError> {
+        let programs = self.instruction_processor.programs();
         for (instruction_index, (instruction, program_indices)) in message
             .instructions
             .iter()
             .zip(program_indices.iter())
             .enumerate()
         {
+            let mut invoke_context = ThisInvokeContext::new(
+                rent_collector.rent,
+                accounts,
+                programs,
+                log_collector.clone(),
+                compute_budget,
+                compute_meter.clone(),
+                executors.clone(),
+                instruction_recorders,
+                feature_set.clone(),
+                account_db.clone(),
+                ancestors,
+                &blockhash,
+                &fee_calculator,
+            );
+            let compute_meter = invoke_context.get_compute_meter();
+
             let program_id = instruction.program_id(&message.account_keys);
-            if feature_set.is_active(&prevent_calling_precompiles_as_programs::id())
-                && is_precompile(program_id, |id| feature_set.is_active(id))
+            if invoke_context.is_feature_active(&prevent_calling_precompiles_as_programs::id())
+                && is_precompile(program_id, |id| invoke_context.is_feature_active(id))
             {
                 // Precompiled programs don't have an instruction processor
                 continue;
@@ -556,7 +574,7 @@ impl MessageProcessor {
             }
 
             let mut compute_budget = compute_budget;
-            if feature_set.is_active(&neon_evm_compute_budget::id())
+            if invoke_context.is_feature_active(&neon_evm_compute_budget::id())
                 && *program_id == crate::neon_evm_program::id()
             {
                 // Bump the compute budget for neon_evm
@@ -564,22 +582,6 @@ impl MessageProcessor {
                 compute_budget.heap_size = Some(256 * 1024);
             }
 
-            let programs = self.instruction_processor.programs();
-            let mut invoke_context = ThisInvokeContext::new(
-                rent_collector.rent,
-                accounts,
-                programs,
-                log_collector.clone(),
-                compute_budget,
-                compute_meter.clone(),
-                executors.clone(),
-                instruction_recorders,
-                feature_set.clone(),
-                account_db.clone(),
-                ancestors,
-                &blockhash,
-                &fee_calculator,
-            );
             invoke_context.set_instruction_index(instruction_index);
             let result = invoke_context
                 .push(program_id, message, instruction, program_indices, None)
