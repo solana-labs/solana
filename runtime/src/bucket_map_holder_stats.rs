@@ -28,6 +28,7 @@ pub struct BucketMapHolderStats {
     pub inserts: AtomicU64,
     pub count: AtomicU64,
     pub bg_waiting_us: AtomicU64,
+    pub bg_throttling_wait_us: AtomicU64,
     pub count_in_mem: AtomicU64,
     pub per_bucket_count: Vec<AtomicU64>,
     pub flush_entries_updated_on_disk: AtomicU64,
@@ -132,6 +133,11 @@ impl BucketMapHolderStats {
             (
                 "bg_waiting_us",
                 self.bg_waiting_us.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "bg_throttling_wait_us",
+                self.bg_throttling_wait_us.swap(0, Ordering::Relaxed),
                 i64
             ),
             ("min_in_bin", min, i64),
