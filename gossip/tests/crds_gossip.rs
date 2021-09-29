@@ -349,6 +349,7 @@ fn network_run_push(
                         .lock()
                         .unwrap()
                         .process_push_message(&from, msgs.clone(), now)
+                        .1
                         .into_iter()
                         .collect();
                     let prunes_map = network
