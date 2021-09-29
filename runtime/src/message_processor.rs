@@ -602,6 +602,7 @@ impl MessageProcessor {
                         invoke_context.is_feature_active(&demote_program_write_locks::id()),
                         invoke_context.is_feature_active(&do_support_realloc::id()),
                     )?;
+                    invoke_context.pop();
                     timings.accumulate(&invoke_context.timings);
                     Ok(())
                 })
