@@ -263,7 +263,7 @@ lazy_static! {
         (mem_overlap_fix::id(), "Memory overlap fix"),
         (close_upgradeable_program_accounts::id(), "enable closing upgradeable program accounts"),
         (stake_program_advance_activating_credits_observed::id(), "Enable advancing credits observed for activation epoch #19309"),
-        (demote_program_write_locks::id(), "demote program write locks to readonly #19593"),
+        (demote_program_write_locks::id(), "demote program write locks to readonly, except when upgradeable loader present #19593 #20265"),
         (allow_native_ids::id(), "allow native program ids in program derived addresses"),
         (check_seed_length::id(), "Check program address seed lengths"),
         (fix_write_privs::id(), "fix native invoke write privileges"),

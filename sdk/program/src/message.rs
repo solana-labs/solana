@@ -402,6 +402,9 @@ impl Message {
     }
 
     pub fn is_writable(&self, i: usize, demote_program_write_locks: bool) -> bool {
+        let demote_program_id = demote_program_write_locks
+            && self.is_key_called_as_program(i)
+            && !self.is_upgradeable_loader_present();
         (i < (self.header.num_required_signatures - self.header.num_readonly_signed_accounts)
             as usize
             || (i >= self.header.num_required_signatures as usize
@@ -411,7 +414,7 @@ impl Message {
                 let key = self.account_keys[i];
                 sysvar::is_sysvar_id(&key) || BUILTIN_PROGRAMS_KEYS.contains(&key)
             }
-            && !(demote_program_write_locks && self.is_key_called_as_program(i))
+            && !demote_program_id
     }
 
     pub fn is_signer(&self, i: usize) -> bool {
@@ -536,6 +539,13 @@ impl Message {
             .len()
             .min(self.header.num_required_signatures as usize);
         self.account_keys[..last_key].iter().collect()
+    }
+
+    /// Returns true if any account is the bpf upgradeable loader
+    pub fn is_upgradeable_loader_present(&self) -> bool {
+        self.account_keys
+            .iter()
+            .any(|&key| key == bpf_loader_upgradeable::id())
     }
 }
 
