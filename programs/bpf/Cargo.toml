@@ -26,9 +26,10 @@ itertools = "0.10.1"
 log = "0.4.11"
 miow = "0.3.6"
 net2 = "0.2.37"
+solana-bpf-rust-invoke = { path = "rust/invoke", version = "=1.8.0"}
 solana-bpf-loader-program = { path = "../bpf_loader", version = "=1.8.0"}
-solana-bpf-rust-realloc = { path = "rust/realloc", version = "=1.8.0", features = ["custom-heap"]}
-solana-bpf-rust-realloc-invoke = { path = "rust/realloc_invoke", version = "=1.8.0", features = ["custom-heap"]}
+solana-bpf-rust-realloc = { path = "rust/realloc", version = "=1.8.0"}
+solana-bpf-rust-realloc-invoke = { path = "rust/realloc_invoke", version = "=1.8.0"}
 solana-cli-output = { path = "../../cli-output", version = "=1.8.0" }
 solana-logger = { path = "../../logger", version = "=1.8.0" }
 solana-measure = { path = "../../measure", version = "=1.8.0" }

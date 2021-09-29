@@ -9,12 +9,16 @@ homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-bpf-rust-invoke"
 edition = "2018"
 
+[features]
+default = ["program"]
+program = []
+
 [dependencies]
 solana-bpf-rust-invoked = { path = "../invoked", default-features = false }
 solana-program = { path = "../../../../sdk/program", version = "=1.8.0" }
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["lib", "cdylib"]
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
