@@ -621,6 +621,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         self.storage.wait_dirty_or_aged.notify_one();
     }
 
+    /// return true if 'entry' should be removed from the in-mem index
     fn should_remove_from_mem(
         &self,
         current_age: Age,
@@ -629,16 +630,18 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     ) -> bool {
         // this could be tunable dynamically based on memory pressure
         // we could look at more ages or we could throw out more items we are choosing to keep in the cache
-        {
+        if startup || (current_age == entry.age()) {
+            // only read the slot list if we are planning to throw the item out
             let slot_list = entry.slot_list.read().unwrap();
             if slot_list.len() != 1 {
-                return false; // keep 0 and > 1 slot lists in mem. They will be cleaned or shrunk soon.
+                false // keep 0 and > 1 slot lists in mem. They will be cleaned or shrunk soon.
+            } else {
+                // keep items with slot lists that contained cached items
+                !slot_list.iter().any(|(_, info)| info.is_cached())
             }
-            if slot_list.iter().any(|(_, info)| info.is_cached()) {
-                return false; // keep items with slot lists that contained cached items
-            }
+        } else {
+            false
         }
-        startup || (current_age == entry.age())
     }
 
     fn flush_internal(&self) {
