@@ -75,11 +75,7 @@ pub struct ThisInvokeContext<'a> {
 impl<'a> ThisInvokeContext<'a> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        program_id: &Pubkey,
         rent: Rent,
-        message: &'a Message,
-        instruction: &'a CompiledInstruction,
-        program_indices: &[usize],
         accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
         programs: &'a [(Pubkey, ProcessInstructionWithContext)],
         log_collector: Option<Rc<LogCollector>>,
@@ -92,7 +88,7 @@ impl<'a> ThisInvokeContext<'a> {
         ancestors: &'a Ancestors,
         blockhash: &'a Hash,
         fee_calculator: &'a FeeCalculator,
-    ) -> Result<Self, InstructionError> {
+    ) -> Self {
         let compute_meter = if feature_set.is_active(&tx_wide_compute_cap::id()) {
             compute_meter
         } else {
@@ -100,7 +96,7 @@ impl<'a> ThisInvokeContext<'a> {
                 remaining: compute_budget.max_units,
             }))
         };
-        let mut invoke_context = Self {
+        Self {
             instruction_index: 0,
             invoke_stack: Vec::with_capacity(compute_budget.max_invoke_depth),
             rent,
@@ -121,9 +117,7 @@ impl<'a> ThisInvokeContext<'a> {
             blockhash,
             fee_calculator,
             return_data: None,
-        };
-        invoke_context.push(program_id, message, instruction, program_indices, None)?;
-        Ok(invoke_context)
+        }
     }
 }
 impl<'a> InvokeContext for ThisInvokeContext<'a> {
@@ -566,12 +560,8 @@ impl MessageProcessor {
             }
 
             let programs = self.instruction_processor.programs();
-            let result = ThisInvokeContext::new(
-                program_id,
+            let mut invoke_context = ThisInvokeContext::new(
                 rent_collector.rent,
-                message,
-                instruction,
-                &program_indices[instruction_index],
                 accounts,
                 programs,
                 log_collector.clone(),
@@ -584,30 +574,38 @@ impl MessageProcessor {
                 ancestors,
                 &blockhash,
                 &fee_calculator,
-            )
-            .and_then(|mut invoke_context| {
-                invoke_context.set_instruction_index(instruction_index);
-                self.instruction_processor.process_instruction(
+            );
+            invoke_context.set_instruction_index(instruction_index);
+            let result = invoke_context
+                .push(
                     program_id,
-                    &instruction.data,
-                    &mut invoke_context,
-                )?;
-                Self::verify(
                     message,
                     instruction,
-                    &invoke_context.pre_accounts,
                     &program_indices[instruction_index],
-                    accounts,
-                    &rent_collector.rent,
-                    timings,
-                    invoke_context.get_logger(),
-                    invoke_context.is_feature_active(&demote_program_write_locks::id()),
-                    invoke_context.is_feature_active(&do_support_realloc::id()),
-                )?;
-                timings.accumulate(&invoke_context.timings);
-                Ok(())
-            })
-            .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err));
+                    None,
+                )
+                .and_then(|_| {
+                    self.instruction_processor.process_instruction(
+                        program_id,
+                        &instruction.data,
+                        &mut invoke_context,
+                    )?;
+                    Self::verify(
+                        message,
+                        instruction,
+                        &invoke_context.pre_accounts,
+                        &program_indices[instruction_index],
+                        accounts,
+                        &rent_collector.rent,
+                        timings,
+                        invoke_context.get_logger(),
+                        invoke_context.is_feature_active(&demote_program_write_locks::id()),
+                        invoke_context.is_feature_active(&do_support_realloc::id()),
+                    )?;
+                    timings.accumulate(&invoke_context.timings);
+                    Ok(())
+                })
+                .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err));
 
             time.stop();
             let post_remaining_units = compute_meter.borrow().get_remaining();
@@ -674,11 +672,7 @@ mod tests {
         let blockhash = Hash::default();
         let fee_calculator = FeeCalculator::default();
         let mut invoke_context = ThisInvokeContext::new(
-            &invoke_stack[0],
             Rent::default(),
-            &message,
-            &message.instructions[0],
-            &[],
             &accounts,
             &[],
             None,
@@ -691,12 +685,11 @@ mod tests {
             &ancestors,
             &blockhash,
             &fee_calculator,
-        )
-        .unwrap();
+        );
 
         // Check call depth increases and has a limit
-        let mut depth_reached = 1;
-        for program_id in invoke_stack.iter().skip(1) {
+        let mut depth_reached = 0;
+        for program_id in invoke_stack.iter() {
             if Err(InstructionError::CallDepth)
                 == invoke_context.push(program_id, &message, &message.instructions[0], &[], None)
             {
@@ -1226,11 +1219,7 @@ mod tests {
         let blockhash = Hash::default();
         let fee_calculator = FeeCalculator::default();
         let mut invoke_context = ThisInvokeContext::new(
-            &caller_program_id,
             Rent::default(),
-            &message,
-            &caller_instruction,
-            &program_indices,
             &accounts,
             programs.as_slice(),
             None,
@@ -1243,8 +1232,16 @@ mod tests {
             &ancestors,
             &blockhash,
             &fee_calculator,
-        )
-        .unwrap();
+        );
+        invoke_context
+            .push(
+                &caller_program_id,
+                &message,
+                &caller_instruction,
+                &program_indices,
+                None,
+            )
+            .unwrap();
 
         // not owned account modified by the caller (before the invoke)
         let caller_write_privileges = message
@@ -1302,11 +1299,7 @@ mod tests {
             let blockhash = Hash::default();
             let fee_calculator = FeeCalculator::default();
             let mut invoke_context = ThisInvokeContext::new(
-                &caller_program_id,
                 Rent::default(),
-                &message,
-                &caller_instruction,
-                &program_indices,
                 &accounts,
                 programs.as_slice(),
                 None,
@@ -1319,8 +1312,16 @@ mod tests {
                 &ancestors,
                 &blockhash,
                 &fee_calculator,
-            )
-            .unwrap();
+            );
+            invoke_context
+                .push(
+                    &caller_program_id,
+                    &message,
+                    &caller_instruction,
+                    &program_indices,
+                    None,
+                )
+                .unwrap();
 
             let caller_write_privileges = message
                 .account_keys
@@ -1431,11 +1432,7 @@ mod tests {
         let blockhash = Hash::default();
         let fee_calculator = FeeCalculator::default();
         let mut invoke_context = ThisInvokeContext::new(
-            &caller_program_id,
             Rent::default(),
-            &message,
-            &caller_instruction,
-            &program_indices,
             &accounts,
             programs.as_slice(),
             None,
@@ -1448,8 +1445,16 @@ mod tests {
             &ancestors,
             &blockhash,
             &fee_calculator,
-        )
-        .unwrap();
+        );
+        invoke_context
+            .push(
+                &caller_program_id,
+                &message,
+                &caller_instruction,
+                &program_indices,
+                None,
+            )
+            .unwrap();
 
         // not owned account modified by the invoker
         accounts[0].1.borrow_mut().data_as_mut_slice()[0] = 1;
@@ -1503,11 +1508,7 @@ mod tests {
             let blockhash = Hash::default();
             let fee_calculator = FeeCalculator::default();
             let mut invoke_context = ThisInvokeContext::new(
-                &caller_program_id,
                 Rent::default(),
-                &message,
-                &caller_instruction,
-                &program_indices,
                 &accounts,
                 programs.as_slice(),
                 None,
@@ -1520,8 +1521,16 @@ mod tests {
                 &ancestors,
                 &blockhash,
                 &fee_calculator,
-            )
-            .unwrap();
+            );
+            invoke_context
+                .push(
+                    &caller_program_id,
+                    &message,
+                    &caller_instruction,
+                    &program_indices,
+                    None,
+                )
+                .unwrap();
 
             assert_eq!(
                 InstructionProcessor::native_invoke(
