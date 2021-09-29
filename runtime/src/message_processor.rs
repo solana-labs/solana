@@ -138,7 +138,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
                 }
                 Err(InstructionError::MissingAccount)
             };
-            let _ = instruction.visit_each_account(&mut work);
+            instruction.visit_each_account(&mut work)?;
         }
 
         let contains = self.invoke_stack.iter().any(|frame| frame.key == *key);
