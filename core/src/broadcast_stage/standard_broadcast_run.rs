@@ -362,9 +362,9 @@ impl StandardBroadcastRun {
             &self.cluster_nodes_cache,
             &self.last_datapoint_submit,
             &mut transmit_stats,
-            cluster_info.socket_addr_space(),
             cluster_info,
             bank_forks,
+            cluster_info.socket_addr_space(),
         )?;
         transmit_time.stop();
 
