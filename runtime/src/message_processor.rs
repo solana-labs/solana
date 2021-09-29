@@ -525,7 +525,12 @@ impl MessageProcessor {
         blockhash: Hash,
         fee_calculator: FeeCalculator,
     ) -> Result<(), TransactionError> {
-        for (instruction_index, instruction) in message.instructions.iter().enumerate() {
+        for (instruction_index, (instruction, program_indices)) in message
+            .instructions
+            .iter()
+            .zip(program_indices.iter())
+            .enumerate()
+        {
             let program_id = instruction.program_id(&message.account_keys);
             if feature_set.is_active(&prevent_calling_precompiles_as_programs::id())
                 && is_precompile(program_id, |id| feature_set.is_active(id))
@@ -577,13 +582,7 @@ impl MessageProcessor {
             );
             invoke_context.set_instruction_index(instruction_index);
             let result = invoke_context
-                .push(
-                    program_id,
-                    message,
-                    instruction,
-                    &program_indices[instruction_index],
-                    None,
-                )
+                .push(program_id, message, instruction, program_indices, None)
                 .and_then(|_| {
                     self.instruction_processor.process_instruction(
                         program_id,
@@ -594,7 +593,7 @@ impl MessageProcessor {
                         message,
                         instruction,
                         &invoke_context.pre_accounts,
-                        &program_indices[instruction_index],
+                        program_indices,
                         accounts,
                         &rent_collector.rent,
                         timings,
