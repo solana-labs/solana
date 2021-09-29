@@ -89,13 +89,6 @@ impl<'a> ThisInvokeContext<'a> {
         blockhash: &'a Hash,
         fee_calculator: &'a FeeCalculator,
     ) -> Self {
-        let compute_meter = if feature_set.is_active(&tx_wide_compute_cap::id()) {
-            compute_meter
-        } else {
-            Rc::new(RefCell::new(ThisComputeMeter {
-                remaining: compute_budget.max_units,
-            }))
-        };
         Self {
             instruction_index: 0,
             invoke_stack: Vec::with_capacity(compute_budget.max_invoke_depth),
@@ -311,6 +304,11 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         self.executors.borrow().get(pubkey)
     }
     fn set_instruction_index(&mut self, instruction_index: usize) {
+        if !self.feature_set.is_active(&tx_wide_compute_cap::id()) {
+            self.compute_meter = Rc::new(RefCell::new(ThisComputeMeter {
+                remaining: self.compute_budget.max_units,
+            }));
+        }
         self.instruction_index = instruction_index;
     }
     fn record_instruction(&self, instruction: &Instruction) {
@@ -526,29 +524,28 @@ impl MessageProcessor {
         fee_calculator: FeeCalculator,
     ) -> Result<(), TransactionError> {
         let programs = self.instruction_processor.programs();
+        let mut invoke_context = ThisInvokeContext::new(
+            rent_collector.rent,
+            accounts,
+            programs,
+            log_collector.clone(),
+            compute_budget,
+            compute_meter.clone(),
+            executors.clone(),
+            instruction_recorders,
+            feature_set.clone(),
+            account_db.clone(),
+            ancestors,
+            &blockhash,
+            &fee_calculator,
+        );
+        let compute_meter = invoke_context.get_compute_meter();
         for (instruction_index, (instruction, program_indices)) in message
             .instructions
             .iter()
             .zip(program_indices.iter())
             .enumerate()
         {
-            let mut invoke_context = ThisInvokeContext::new(
-                rent_collector.rent,
-                accounts,
-                programs,
-                log_collector.clone(),
-                compute_budget,
-                compute_meter.clone(),
-                executors.clone(),
-                instruction_recorders,
-                feature_set.clone(),
-                account_db.clone(),
-                ancestors,
-                &blockhash,
-                &fee_calculator,
-            );
-            let compute_meter = invoke_context.get_compute_meter();
-
             let program_id = instruction.program_id(&message.account_keys);
             if invoke_context.is_feature_active(&prevent_calling_precompiles_as_programs::id())
                 && is_precompile(program_id, |id| invoke_context.is_feature_active(id))
