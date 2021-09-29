@@ -3,7 +3,7 @@ use {
     crate::accountsdb_plugin_manager::AccountsDbPluginManager,
     log::*,
     solana_accountsdb_plugin_interface::accountsdb_plugin_interface::{
-        ReplicaAccountInfo, ReplicaAccountMeta, SlotStatus,
+        ReplicaAccountInfo, ReplicaAccountInfoVersions, SlotStatus,
     },
     solana_runtime::{
         accounts_update_notifier_interface::AccountsUpdateNotifierInterface,
@@ -57,16 +57,13 @@ impl AccountsUpdateNotifierImpl {
         pubkey: &'a Pubkey,
         account: &'a AccountSharedData,
     ) -> Option<ReplicaAccountInfo<'a>> {
-        let account_meta = ReplicaAccountMeta {
+        //let data = account.data().to_vec();
+        Some(ReplicaAccountInfo {
             pubkey: pubkey.as_ref(),
             lamports: account.lamports(),
             owner: account.owner().as_ref(),
             executable: account.executable(),
             rent_epoch: account.rent_epoch(),
-        };
-        //let data = account.data().to_vec();
-        Some(ReplicaAccountInfo {
-            account_meta,
             data: account.data(),
         })
     }
@@ -75,16 +72,13 @@ impl AccountsUpdateNotifierImpl {
         &self,
         stored_account_meta: &'a StoredAccountMeta,
     ) -> Option<ReplicaAccountInfo<'a>> {
-        let account_meta = ReplicaAccountMeta {
+        //let data = stored_account_meta.data.to_vec();
+        Some(ReplicaAccountInfo {
             pubkey: stored_account_meta.meta.pubkey.as_ref(),
             lamports: stored_account_meta.account_meta.lamports,
             owner: stored_account_meta.account_meta.owner.as_ref(),
             executable: stored_account_meta.account_meta.executable,
             rent_epoch: stored_account_meta.account_meta.rent_epoch,
-        };
-        //let data = stored_account_meta.data.to_vec();
-        Some(ReplicaAccountInfo {
-            account_meta,
             data: stored_account_meta.data,
         })
     }
@@ -96,17 +90,19 @@ impl AccountsUpdateNotifierImpl {
             return;
         }
         for plugin in plugin_manager.plugins.iter_mut() {
-            match plugin.update_account(&account, slot) {
+            match plugin
+                .update_account(ReplicaAccountInfoVersions::V0_0_1(Box::new(&account)), slot)
+            {
                 Err(err) => {
                     error!(
                         "Failed to update account {:?} at slot {:?}, error: {:?}",
-                        account.account_meta.pubkey, slot, err
+                        account.pubkey, slot, err
                     )
                 }
                 Ok(_) => {
                     trace!(
                         "Successfully updated account {:?} at slot {:?}",
-                        account.account_meta.pubkey,
+                        account.pubkey,
                         slot
                     );
                 }

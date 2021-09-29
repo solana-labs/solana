@@ -7,21 +7,20 @@ use {
     thiserror::Error,
 };
 
-#[derive(Clone, PartialEq, Default, Debug)]
-pub struct ReplicaAccountMeta<'a> {
+impl Eq for ReplicaAccountInfo<'_> {}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct ReplicaAccountInfo<'a> {
     pub pubkey: &'a [u8],
     pub lamports: u64,
     pub owner: &'a [u8],
     pub executable: bool,
     pub rent_epoch: u64,
+    pub data: &'a [u8],
 }
 
-impl Eq for ReplicaAccountInfo<'_> {}
-
-#[derive(Clone, PartialEq, Debug)]
-pub struct ReplicaAccountInfo<'a> {
-    pub account_meta: ReplicaAccountMeta<'a>,
-    pub data: &'a [u8],
+pub enum ReplicaAccountInfoVersions<'a> {
+    V0_0_1(Box<&'a ReplicaAccountInfo<'a>>),
 }
 
 #[derive(Error, Debug)]
@@ -38,7 +37,7 @@ pub enum AccountsDbPluginError {
     #[error("Error updating slot status.")]
     SlotStatusUpdateError { msg: String },
 
-    #[error("Plugin defined customer error.")]
+    #[error("Plugin-defined custom error.")]
     Custom(Box<dyn error::Error>),
 }
 
@@ -79,7 +78,7 @@ pub trait AccountsDbPlugin: Any + Send + Sync + std::fmt::Debug {
     fn on_unload(&mut self) {}
 
     /// Called when an account is updated at a slot.
-    fn update_account(&mut self, account: &ReplicaAccountInfo, slot: u64) -> Result<()>;
+    fn update_account(&mut self, account: ReplicaAccountInfoVersions, slot: u64) -> Result<()>;
 
     /// Called when a slot status is updated
     fn update_slot_status(

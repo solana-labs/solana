@@ -7,7 +7,7 @@ use {
     serde_derive::{Deserialize, Serialize},
     serde_json,
     solana_accountsdb_plugin_interface::accountsdb_plugin_interface::{
-        AccountsDbPlugin, AccountsDbPluginError, ReplicaAccountInfo, Result, SlotStatus,
+        AccountsDbPlugin, AccountsDbPluginError, ReplicaAccountInfoVersions, Result, SlotStatus,
     },
     std::{fs::File, io::Read, sync::Mutex},
     thiserror::Error,
@@ -153,61 +153,63 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
         info!("Unloading plugin: {:?}", self.name());
     }
 
-    fn update_account(&mut self, account: &ReplicaAccountInfo, slot: u64) -> Result<()> {
-        if let Some(accounts_selector) = &self.accounts_selector {
-            if !accounts_selector
-                .is_account_selected(account.account_meta.pubkey, account.account_meta.owner)
-            {
-                return Ok(());
-            }
-        } else {
-            return Ok(());
-        }
+    fn update_account(&mut self, account: ReplicaAccountInfoVersions, slot: u64) -> Result<()> {
+        match account {
+            ReplicaAccountInfoVersions::V0_0_1(account) => {
+                if let Some(accounts_selector) = &self.accounts_selector {
+                    if !accounts_selector.is_account_selected(account.pubkey, account.owner) {
+                        return Ok(());
+                    }
+                } else {
+                    return Ok(());
+                }
 
-        debug!(
-            "Updating account {:?} {:?} at slot {:?} {:?}",
-            account.account_meta.pubkey,
-            account.account_meta.owner,
-            slot,
-            self.accounts_selector.as_ref().unwrap()
-        );
-
-        match &mut self.client {
-            None => {
-                return Err(AccountsDbPluginError::Custom(Box::new(
-                    AccountsDbPluginPostgresError::DataStoreConnectionError {
-                        msg: "There is no connection to the PostgreSQL database.".to_string(),
-                    },
-                )));
-            }
-            Some(client) => {
-                let slot = slot as i64; // postgres only supports i64
-                let lamports = account.account_meta.lamports as i64;
-                let rent_epoch = account.account_meta.rent_epoch as i64;
-                let updated_on = Utc::now().naive_utc();
-                let client = client.get_mut().unwrap();
-                let result = client.client.query(
-                    &client.update_account_stmt,
-                    &[
-                        &account.account_meta.pubkey,
-                        &slot,
-                        &account.account_meta.owner,
-                        &lamports,
-                        &account.account_meta.executable,
-                        &rent_epoch,
-                        &account.data,
-                        &updated_on,
-                    ],
+                debug!(
+                    "Updating account {:?} {:?} at slot {:?} using account selector {:?}",
+                    account.pubkey,
+                    account.owner,
+                    slot,
+                    self.accounts_selector.as_ref().unwrap()
                 );
 
-                if let Err(err) = result {
-                    return Err(AccountsDbPluginError::AccountsUpdateError {
-                        msg: format!("Failed to persist the update of account to the PostgreSQL database. Error: {:?}", err)
-                    });
+                match &mut self.client {
+                    None => {
+                        return Err(AccountsDbPluginError::Custom(Box::new(
+                            AccountsDbPluginPostgresError::DataStoreConnectionError {
+                                msg: "There is no connection to the PostgreSQL database."
+                                    .to_string(),
+                            },
+                        )));
+                    }
+                    Some(client) => {
+                        let slot = slot as i64; // postgres only supports i64
+                        let lamports = account.lamports as i64;
+                        let rent_epoch = account.rent_epoch as i64;
+                        let updated_on = Utc::now().naive_utc();
+                        let client = client.get_mut().unwrap();
+                        let result = client.client.query(
+                            &client.update_account_stmt,
+                            &[
+                                &account.pubkey,
+                                &slot,
+                                &account.owner,
+                                &lamports,
+                                &account.executable,
+                                &rent_epoch,
+                                &account.data,
+                                &updated_on,
+                            ],
+                        );
+
+                        if let Err(err) = result {
+                            return Err(AccountsDbPluginError::AccountsUpdateError {
+                                msg: format!("Failed to persist the update of account to the PostgreSQL database. Error: {:?}", err)
+                            });
+                        }
+                    }
                 }
             }
         }
-
         Ok(())
     }
 
