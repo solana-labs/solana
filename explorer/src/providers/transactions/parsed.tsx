@@ -56,7 +56,8 @@ async function fetchDetails(
   let transaction;
   try {
     transaction = await new Connection(url).getParsedConfirmedTransaction(
-      signature
+      signature,
+      "confirmed"
     );
     fetchStatus = FetchStatus.Fetched;
   } catch (error) {
