@@ -48,6 +48,7 @@ impl ComputeMeter for ThisComputeMeter {
     }
 }
 pub struct ThisInvokeContext<'a> {
+    instruction_index: usize,
     invoke_stack: Vec<InvokeContextStackFrame<'a>>,
     rent: Rent,
     pre_accounts: Vec<PreAccount>,
@@ -59,7 +60,7 @@ pub struct ThisInvokeContext<'a> {
     bpf_compute_budget: solana_sdk::process_instruction::BpfComputeBudget,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     executors: Rc<RefCell<Executors>>,
-    instruction_recorder: Option<InstructionRecorder>,
+    instruction_recorders: Option<&'a [InstructionRecorder]>,
     feature_set: Arc<FeatureSet>,
     pub timings: ExecuteDetailsTimings,
     account_db: Arc<Accounts>,
@@ -85,7 +86,7 @@ impl<'a> ThisInvokeContext<'a> {
         compute_budget: ComputeBudget,
         compute_meter: Rc<RefCell<dyn ComputeMeter>>,
         executors: Rc<RefCell<Executors>>,
-        instruction_recorder: Option<InstructionRecorder>,
+        instruction_recorders: Option<&'a [InstructionRecorder]>,
         feature_set: Arc<FeatureSet>,
         account_db: Arc<Accounts>,
         ancestors: &'a Ancestors,
@@ -100,6 +101,7 @@ impl<'a> ThisInvokeContext<'a> {
             }))
         };
         let mut invoke_context = Self {
+            instruction_index: 0,
             invoke_stack: Vec::with_capacity(compute_budget.max_invoke_depth),
             rent,
             pre_accounts: Vec::new(),
@@ -110,7 +112,7 @@ impl<'a> ThisInvokeContext<'a> {
             bpf_compute_budget: compute_budget.into(),
             compute_meter,
             executors,
-            instruction_recorder,
+            instruction_recorders,
             feature_set,
             timings: ExecuteDetailsTimings::default(),
             account_db,
@@ -317,9 +319,12 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
     fn get_executor(&self, pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
         self.executors.borrow().get(pubkey)
     }
+    fn set_instruction_index(&mut self, instruction_index: usize) {
+        self.instruction_index = instruction_index;
+    }
     fn record_instruction(&self, instruction: &Instruction) {
-        if let Some(recorder) = &self.instruction_recorder {
-            recorder.record_instruction(instruction.clone());
+        if let Some(instruction_recorders) = &self.instruction_recorders {
+            instruction_recorders[self.instruction_index].record_instruction(instruction.clone());
         }
     }
     fn is_feature_active(&self, feature_id: &Pubkey) -> bool {
@@ -540,9 +545,6 @@ impl MessageProcessor {
 
             let mut time = Measure::start("execute_instruction");
             let pre_remaining_units = compute_meter.borrow().get_remaining();
-            let instruction_recorder = instruction_recorders
-                .as_ref()
-                .map(|recorders| recorders[instruction_index].clone());
 
             // Fixup the special instructions key if present
             // before the account pre-values are taken care of
@@ -579,7 +581,7 @@ impl MessageProcessor {
                 compute_budget,
                 compute_meter.clone(),
                 executors.clone(),
-                instruction_recorder,
+                instruction_recorders,
                 feature_set.clone(),
                 account_db.clone(),
                 ancestors,
@@ -587,6 +589,7 @@ impl MessageProcessor {
                 &fee_calculator,
             )
             .and_then(|mut invoke_context| {
+                invoke_context.set_instruction_index(instruction_index);
                 self.instruction_processor.process_instruction(
                     program_id,
                     &instruction.data,
