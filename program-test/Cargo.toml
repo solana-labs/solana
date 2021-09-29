@@ -5,7 +5,7 @@ edition = "2018"
 license = "Apache-2.0"
 name = "solana-program-test"
 repository = "https://github.com/solana-labs/solana"
-version = "1.7.13"
+version = "1.7.14"
 
 [dependencies]
 async-trait = "0.1.42"
@@ -17,13 +17,13 @@ log = "0.4.11"
 mio = "0.7.6"
 serde = "1.0.112"
 serde_derive = "1.0.103"
-solana-banks-client = { path = "../banks-client", version = "=1.7.13" }
-solana-banks-server = { path = "../banks-server", version = "=1.7.13" }
-solana-bpf-loader-program = { path = "../programs/bpf_loader", version = "=1.7.13" }
-solana-logger = { path = "../logger", version = "=1.7.13" }
-solana-runtime = { path = "../runtime", version = "=1.7.13" }
-solana-sdk = { path = "../sdk", version = "=1.7.13" }
-solana-vote-program = { path = "../programs/vote", version = "=1.7.13" }
+solana-banks-client = { path = "../banks-client", version = "=1.7.14" }
+solana-banks-server = { path = "../banks-server", version = "=1.7.14" }
+solana-bpf-loader-program = { path = "../programs/bpf_loader", version = "=1.7.14" }
+solana-logger = { path = "../logger", version = "=1.7.14" }
+solana-runtime = { path = "../runtime", version = "=1.7.14" }
+solana-sdk = { path = "../sdk", version = "=1.7.14" }
+solana-vote-program = { path = "../programs/vote", version = "=1.7.14" }
 thiserror = "1.0"
 tokio = { version = "1", features = ["full"] }
 

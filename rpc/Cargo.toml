@@ -1,6 +1,6 @@
 [package]
 name = "solana-rpc"
-version = "1.7.13"
+version = "1.7.14"
 description = "Solana RPC"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -29,22 +29,22 @@ serde = "1.0.122"
 serde_derive = "1.0.103"
 serde_json = "1.0.56"
 soketto = "0.6"
-solana-account-decoder = { path = "../account-decoder", version = "=1.7.13" }
-solana-client = { path = "../client", version = "=1.7.13" }
-solana-faucet = { path = "../faucet", version = "=1.7.13" }
-solana-gossip = { path = "../gossip", version = "=1.7.13" }
-solana-ledger = { path = "../ledger", version = "=1.7.13" }
-solana-measure = { path = "../measure", version = "=1.7.13" }
-solana-metrics = { path = "../metrics", version = "=1.7.13" }
-solana-perf = { path = "../perf", version = "=1.7.13" }
-solana-poh = { path = "../poh", version = "=1.7.13" }
-solana-runtime = { path = "../runtime", version = "=1.7.13" }
-solana-sdk = { path = "../sdk", version = "=1.7.13" }
-solana-streamer = { path = "../streamer", version = "=1.7.13" }
-solana-storage-bigtable = { path = "../storage-bigtable", version = "=1.7.13" }
-solana-transaction-status = { path = "../transaction-status", version = "=1.7.13" }
-solana-version = { path = "../version", version = "=1.7.13" }
-solana-vote-program = { path = "../programs/vote", version = "=1.7.13" }
+solana-account-decoder = { path = "../account-decoder", version = "=1.7.14" }
+solana-client = { path = "../client", version = "=1.7.14" }
+solana-faucet = { path = "../faucet", version = "=1.7.14" }
+solana-gossip = { path = "../gossip", version = "=1.7.14" }
+solana-ledger = { path = "../ledger", version = "=1.7.14" }
+solana-measure = { path = "../measure", version = "=1.7.14" }
+solana-metrics = { path = "../metrics", version = "=1.7.14" }
+solana-perf = { path = "../perf", version = "=1.7.14" }
+solana-poh = { path = "../poh", version = "=1.7.14" }
+solana-runtime = { path = "../runtime", version = "=1.7.14" }
+solana-sdk = { path = "../sdk", version = "=1.7.14" }
+solana-streamer = { path = "../streamer", version = "=1.7.14" }
+solana-storage-bigtable = { path = "../storage-bigtable", version = "=1.7.14" }
+solana-transaction-status = { path = "../transaction-status", version = "=1.7.14" }
+solana-version = { path = "../version", version = "=1.7.14" }
+solana-vote-program = { path = "../programs/vote", version = "=1.7.14" }
 spl-token-v2-0 = { package = "spl-token", version = "=3.2.0", features = ["no-entrypoint"] }
 stream-cancel = "0.8.1"
 thiserror = "1.0"
@@ -53,9 +53,9 @@ tokio-util = { version = "0.6", features = ["codec", "compat"] }
 
 [dev-dependencies]
 serial_test = "0.4.0"
-solana-logger = { path = "../logger", version = "=1.7.13" }
-solana-net-utils = { path = "../net-utils", version = "=1.7.13" }
-solana-stake-program = { path = "../programs/stake", version = "=1.7.13" }
+solana-logger = { path = "../logger", version = "=1.7.14" }
+solana-net-utils = { path = "../net-utils", version = "=1.7.14" }
+solana-stake-program = { path = "../programs/stake", version = "=1.7.14" }
 symlink = "0.1.0"
 
 [lib]
