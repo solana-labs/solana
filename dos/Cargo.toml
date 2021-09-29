@@ -20,6 +20,7 @@ solana-gossip = { path = "../gossip", version = "=1.7.14" }
 solana-ledger = { path = "../ledger", version = "=1.7.14" }
 solana-logger = { path = "../logger", version = "=1.7.14" }
 solana-net-utils = { path = "../net-utils", version = "=1.7.14" }
+solana-perf = { path = "../perf", version = "=1.7.14" }
 solana-runtime = { path = "../runtime", version = "=1.7.14" }
 solana-sdk = { path = "../sdk", version = "=1.7.14" }
 solana-streamer = { path = "../streamer", version = "=1.7.14" }
