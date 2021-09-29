@@ -150,7 +150,7 @@ impl BucketMapHolderStats {
             ),
             (
                 "get_mem_us",
-                self.get_mem_us.swap(0, Ordering::Relaxed) / 1000,
+                self.get_mem_us.swap(0, Ordering::Relaxed),
                 i64
             ),
             (
@@ -160,7 +160,7 @@ impl BucketMapHolderStats {
             ),
             (
                 "get_missing_us",
-                self.get_missing_us.swap(0, Ordering::Relaxed) / 1000,
+                self.get_missing_us.swap(0, Ordering::Relaxed),
                 i64
             ),
             (
@@ -170,7 +170,7 @@ impl BucketMapHolderStats {
             ),
             (
                 "entry_mem_us",
-                self.entry_mem_us.swap(0, Ordering::Relaxed) / 1000,
+                self.entry_mem_us.swap(0, Ordering::Relaxed),
                 i64
             ),
             (
@@ -180,7 +180,7 @@ impl BucketMapHolderStats {
             ),
             (
                 "load_disk_found_us",
-                self.load_disk_found_us.swap(0, Ordering::Relaxed) / 1000,
+                self.load_disk_found_us.swap(0, Ordering::Relaxed),
                 i64
             ),
             (
@@ -190,7 +190,7 @@ impl BucketMapHolderStats {
             ),
             (
                 "load_disk_missing_us",
-                self.load_disk_missing_us.swap(0, Ordering::Relaxed) / 1000,
+                self.load_disk_missing_us.swap(0, Ordering::Relaxed),
                 i64
             ),
             (
@@ -200,7 +200,7 @@ impl BucketMapHolderStats {
             ),
             (
                 "entry_missing_us",
-                self.entry_missing_us.swap(0, Ordering::Relaxed) / 1000,
+                self.entry_missing_us.swap(0, Ordering::Relaxed),
                 i64
             ),
             (
