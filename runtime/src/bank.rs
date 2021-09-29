@@ -8,7 +8,7 @@
 //! `Bank::process_transactions`
 //!
 //! It does this by loading the accounts using the reference it holds on the account store,
-//! and then passing those to the message_processor which handles loading the programs specified
+//! and then passing those to an InvokeContext which handles loading the programs specified
 //! by the Transaction and executing it.
 //!
 //! The bank then stores the results to the accounts store.
@@ -65,7 +65,7 @@ use log::*;
 use rayon::ThreadPool;
 use solana_measure::measure::Measure;
 use solana_metrics::{datapoint_debug, inc_new_counter_debug, inc_new_counter_info};
-use solana_program_runtime::{ExecuteDetailsTimings, Executors};
+use solana_program_runtime::{ExecuteDetailsTimings, Executors, InstructionProcessor};
 #[allow(deprecated)]
 use solana_sdk::recent_blockhashes_account;
 use solana_sdk::{
@@ -946,8 +946,8 @@ pub struct Bank {
     /// stream for the slot == self.slot
     is_delta: AtomicBool,
 
-    /// The Message processor
-    message_processor: MessageProcessor,
+    /// The InstructionProcessor
+    instruction_processor: InstructionProcessor,
 
     compute_budget: Option<ComputeBudget>,
 
@@ -1096,7 +1096,7 @@ impl Bank {
             stakes: RwLock::<Stakes>::default(),
             epoch_stakes: HashMap::<Epoch, EpochStakes>::default(),
             is_delta: AtomicBool::default(),
-            message_processor: MessageProcessor::default(),
+            instruction_processor: InstructionProcessor::default(),
             compute_budget: Option::<ComputeBudget>::default(),
             feature_builtins: Arc::<Vec<(Builtin, Pubkey, ActivationType)>>::default(),
             last_vote_sync: AtomicU64::default(),
@@ -1328,7 +1328,7 @@ impl Bank {
             is_delta: AtomicBool::new(false),
             tick_height: AtomicU64::new(parent.tick_height.load(Relaxed)),
             signature_count: AtomicU64::new(0),
-            message_processor: parent.message_processor.clone(),
+            instruction_processor: parent.instruction_processor.clone(),
             compute_budget: parent.compute_budget,
             feature_builtins: parent.feature_builtins.clone(),
             hard_forks: parent.hard_forks.clone(),
@@ -1483,7 +1483,7 @@ impl Bank {
             stakes: RwLock::new(fields.stakes),
             epoch_stakes: fields.epoch_stakes,
             is_delta: AtomicBool::new(fields.is_delta),
-            message_processor: new(),
+            instruction_processor: new(),
             compute_budget: None,
             feature_builtins: new(),
             last_vote_sync: new(),
@@ -3406,7 +3406,8 @@ impl Bank {
                         };
 
                         if let Some(legacy_message) = tx.message().legacy_message() {
-                            process_result = self.message_processor.process_message(
+                            process_result = MessageProcessor::process_message(
+                                &self.instruction_processor,
                                 legacy_message,
                                 &loaded_transaction.program_indices,
                                 &account_refcells,
@@ -5347,7 +5348,7 @@ impl Bank {
     ) {
         debug!("Adding program {} under {:?}", name, program_id);
         self.add_builtin_account(name, program_id, false);
-        self.message_processor
+        self.instruction_processor
             .add_program(program_id, process_instruction_with_context);
         debug!("Added program {} under {:?}", name, program_id);
     }
@@ -5361,7 +5362,7 @@ impl Bank {
     ) {
         debug!("Replacing program {} under {:?}", name, program_id);
         self.add_builtin_account(name, program_id, true);
-        self.message_processor
+        self.instruction_processor
             .add_program(program_id, process_instruction_with_context);
         debug!("Replaced program {} under {:?}", name, program_id);
     }
@@ -5371,7 +5372,7 @@ impl Bank {
         debug!("Removing program {} under {:?}", name, program_id);
         // Don't remove the account since the bank expects the account state to
         // be idempotent
-        self.message_processor.remove_program(program_id);
+        self.instruction_processor.remove_program(program_id);
         debug!("Removed program {} under {:?}", name, program_id);
     }
 
