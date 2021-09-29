@@ -2181,7 +2181,12 @@ impl ClusterInfo {
             messages
                 .into_iter()
                 .flat_map(|(from, crds_values)| {
-                    self.gossip.process_push_message(&from, crds_values, now)
+                    let (num_success, origins) =
+                        self.gossip.process_push_message(&from, crds_values, now);
+                    self.stats
+                        .process_push_success
+                        .add_relaxed(num_success as u64);
+                    origins
                 })
                 .collect()
         };
