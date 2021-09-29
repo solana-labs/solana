@@ -28,6 +28,7 @@ pub struct BucketMapHolderStats {
     pub inserts: AtomicU64,
     pub count: AtomicU64,
     pub bg_waiting_us: AtomicU64,
+    pub bg_throttling_wait_us: AtomicU64,
     pub count_in_mem: AtomicU64,
     pub per_bucket_count: Vec<AtomicU64>,
     pub flush_entries_updated_on_disk: AtomicU64,
@@ -80,19 +81,21 @@ impl BucketMapHolderStats {
     }
 
     fn ms_per_age<T: IndexValue>(&self, storage: &BucketMapHolder<T>) -> u64 {
-        let elapsed_ms = self.get_elapsed_ms_and_reset();
-        let mut age_now = storage.current_age();
-        let last_age = self.last_age.swap(age_now, Ordering::Relaxed);
-        if last_age > age_now {
-            // age may have wrapped
-            age_now += u8::MAX;
+        if !storage.get_startup() {
+            let elapsed_ms = self.get_elapsed_ms_and_reset();
+            let age_now = storage.current_age();
+            let last_age = self.last_age.swap(age_now, Ordering::Relaxed) as u64;
+            let mut age_now = age_now as u64;
+            if last_age > age_now {
+                // age wrapped
+                age_now += u8::MAX as u64 + 1;
+            }
+            let age_delta = age_now.saturating_sub(last_age) as u64;
+            if age_delta > 0 {
+                return elapsed_ms / age_delta;
+            }
         }
-        let age_delta = age_now.saturating_sub(last_age) as u64;
-        if age_delta > 0 {
-            elapsed_ms / age_delta
-        } else {
-            0
-        }
+        0 // avoid crazy numbers
     }
 
     pub fn remaining_until_next_interval(&self) -> u64 {
@@ -130,6 +133,11 @@ impl BucketMapHolderStats {
             (
                 "bg_waiting_us",
                 self.bg_waiting_us.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "bg_throttling_wait_us",
+                self.bg_throttling_wait_us.swap(0, Ordering::Relaxed),
                 i64
             ),
             ("min_in_bin", min, i64),

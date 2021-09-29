@@ -53,7 +53,7 @@ symlink = "0.1.0"
 jemallocator = {package = "tikv-jemallocator", version = "0.4.1"}
 
 [target."cfg(unix)".dependencies]
-libc = "0.2.102"
+libc = "0.2.103"
 signal-hook = "0.2.3"
 
 [package.metadata.docs.rs]

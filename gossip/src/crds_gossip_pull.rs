@@ -533,7 +533,6 @@ impl CrdsGossipPull {
                 dropped_requests.fetch_add(1, Ordering::Relaxed);
                 return Vec::default();
             }
-            let caller_pubkey = caller.pubkey();
             let caller_wallclock = caller_wallclock.checked_add(jitter).unwrap_or(0);
             let pred = |entry: &&VersionedCrdsValue| {
                 debug_assert!(filter.test_mask(&entry.value_hash));
@@ -543,8 +542,6 @@ impl CrdsGossipPull {
                     false
                 } else {
                     !filter.filter_contains(&entry.value_hash)
-                        && (entry.value.pubkey() != caller_pubkey
-                            || entry.value.should_force_push(&caller_pubkey))
                 }
             };
             let out: Vec<_> = crds

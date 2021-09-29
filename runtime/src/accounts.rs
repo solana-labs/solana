@@ -241,7 +241,6 @@ impl Accounts {
             let rent_for_sysvars = feature_set.is_active(&feature_set::rent_for_sysvars::id());
             let demote_program_write_locks =
                 feature_set.is_active(&feature_set::demote_program_write_locks::id());
-            let is_upgradeable_loader_present = is_upgradeable_loader_present(message);
 
             for (i, key) in message.account_keys_iter().enumerate() {
                 let account = if !message.is_non_loader_key(i) {
@@ -280,7 +279,7 @@ impl Accounts {
                         if bpf_loader_upgradeable::check_id(account.owner()) {
                             if demote_program_write_locks
                                 && message.is_writable(i, demote_program_write_locks)
-                                && !is_upgradeable_loader_present
+                                && !message.is_upgradeable_loader_present()
                             {
                                 error_counters.invalid_writable_account += 1;
                                 return Err(TransactionError::InvalidWritableAccount);
@@ -1131,12 +1130,6 @@ pub fn prepare_if_nonce_account(
         }
     }
     false
-}
-
-fn is_upgradeable_loader_present(message: &SanitizedMessage) -> bool {
-    message
-        .account_keys_iter()
-        .any(|&key| key == bpf_loader_upgradeable::id())
 }
 
 pub fn create_test_accounts(

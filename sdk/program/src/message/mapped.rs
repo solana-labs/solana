@@ -1,5 +1,6 @@
 use {
     crate::{
+        bpf_loader_upgradeable,
         message::{legacy::BUILTIN_PROGRAMS_KEYS, v0},
         pubkey::Pubkey,
         sysvar,
@@ -99,8 +100,12 @@ impl MappedMessage {
     pub fn is_writable(&self, key_index: usize, demote_program_write_locks: bool) -> bool {
         if self.is_writable_index(key_index) {
             if let Some(key) = self.get_account_key(key_index) {
-                return !(sysvar::is_sysvar_id(key) || BUILTIN_PROGRAMS_KEYS.contains(key)
-                    || (demote_program_write_locks && self.is_key_called_as_program(key_index)));
+                let demote_program_id = demote_program_write_locks
+                    && self.is_key_called_as_program(key_index)
+                    && !self.is_upgradeable_loader_present();
+                return !(sysvar::is_sysvar_id(key)
+                    || BUILTIN_PROGRAMS_KEYS.contains(key)
+                    || demote_program_id);
             }
         }
         false
@@ -115,6 +120,12 @@ impl MappedMessage {
         } else {
             false
         }
+    }
+
+    /// Returns true if any account is the bpf upgradeable loader
+    pub fn is_upgradeable_loader_present(&self) -> bool {
+        self.account_keys_iter()
+            .any(|&key| key == bpf_loader_upgradeable::id())
     }
 }
 

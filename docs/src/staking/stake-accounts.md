@@ -23,8 +23,8 @@ any control over the account. In fact, a keypair or private key may not even
 exist for a stake account's address.
 
 The only time a stake account's address has a keypair file is when [creating
-a stake account using the command line tools](../cli/delegate-stake.md#create-a-stake-account),
-a new keypair file is created first only to ensure that the stake account's
+a stake account using the command line tools](../cli/delegate-stake.md#create-a-stake-account).
+A new keypair file is created first only to ensure that the stake account's
 address is new and unique.
 
 #### Understanding Account Authorities
@@ -137,7 +137,5 @@ re-created for the address to be used again.
 
 #### Viewing Stake Accounts
 
-Stake account details can be viewed on the Solana Explorer by copying and pasting
-an account address into the search bar.
-
-- http://explorer.solana.com/accounts
+Stake account details can be viewed on the [Solana Explorer](http://explorer.solana.com/accounts)
+by copying and pasting an account address into the search bar.

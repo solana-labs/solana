@@ -66,8 +66,8 @@ pub enum InstructionError {
     #[error("sum of account balances before and after instruction do not match")]
     UnbalancedInstruction,
 
-    /// Program modified an account's program id
-    #[error("instruction modified the program id of an account")]
+    /// Program illegally modified an account's program id
+    #[error("instruction illegally modified the program id of an account")]
     ModifiedProgramId,
 
     /// Program spent the lamports of an account that doesn't belong to it
@@ -103,8 +103,8 @@ pub enum InstructionError {
     #[error("insufficient account keys for instruction")]
     NotEnoughAccountKeys,
 
-    /// A non-system program changed the size of the account data
-    #[error("non-system instruction changed account size")]
+    /// Program other than the account's owner changed the size of the account data
+    #[error("program other than the account's owner changed the size of the account data")]
     AccountDataSizeChanged,
 
     /// The instruction expected an executable account

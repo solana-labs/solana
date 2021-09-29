@@ -1364,9 +1364,9 @@ dependencies = [
 
 [[package]]
 name = "libc"
-version = "0.2.102"
+version = "0.2.103"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a2a5ac8f984bfcf3a823267e5fde638acc3325f6496633a5da6bb6eb2171e103"
+checksum = "dd8f7255a17a627354f321ef0055d63b898c6fb27eff628af4d1b66b7331edf6"
 
 [[package]]
 name = "libloading"
@@ -1696,9 +1696,9 @@ dependencies = [
 
 [[package]]
 name = "ouroboros"
-version = "0.10.1"
+version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84236d64f1718c387232287cf036eb6632a5ecff226f4ff9dccb8c2b79ba0bde"
+checksum = "3518a68fc597f6a42f83a31e41c039c3cbaa10fa8bb239c936c235e81cce873f"
 dependencies = [
  "aliasable",
  "ouroboros_macro",
@@ -1707,9 +1707,9 @@ dependencies = [
 
 [[package]]
 name = "ouroboros_macro"
-version = "0.10.1"
+version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f463857a6eb96c0136b1d56e56c718350cef30412ec065b48294799a088bca68"
+checksum = "4e23813b1bcb2d41a838849a2bbae40ae5c03c85ecabf04ba97086f438484714"
 dependencies = [
  "Inflector",
  "proc-macro-error",
@@ -2499,6 +2499,8 @@ dependencies = [
  "net2",
  "solana-account-decoder",
  "solana-bpf-loader-program",
+ "solana-bpf-rust-realloc",
+ "solana-bpf-rust-realloc-invoke",
  "solana-cli-output",
  "solana-logger 1.8.0",
  "solana-measure",
@@ -2726,6 +2728,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-bpf-rust-realloc"
+version = "1.8.0"
+dependencies = [
+ "solana-program 1.8.0",
+]
+
+[[package]]
+name = "solana-bpf-rust-realloc-invoke"
+version = "1.8.0"
+dependencies = [
+ "solana-bpf-rust-realloc",
+ "solana-program 1.8.0",
+]
+
+[[package]]
 name = "solana-bpf-rust-ro-account_modify"
 version = "1.8.0"
 dependencies = [
@@ -2933,13 +2950,6 @@ dependencies = [
  "syn 0.15.44",
  "syn 1.0.67",
  "winapi",
-]
-
-[[package]]
-name = "solana-ed25519-program"
-version = "1.8.0"
-dependencies = [
- "solana-sdk",
 ]
 
 [[package]]
@@ -3249,7 +3259,6 @@ dependencies = [
  "solana-bucket-map",
  "solana-compute-budget-program",
  "solana-config-program",
- "solana-ed25519-program",
  "solana-frozen-abi 1.8.0",
  "solana-frozen-abi-macro 1.8.0",
  "solana-logger 1.8.0",
@@ -3258,7 +3267,6 @@ dependencies = [
  "solana-program-runtime",
  "solana-rayon-threadlimit",
  "solana-sdk",
- "solana-secp256k1-program",
  "solana-stake-program",
  "solana-vote-program",
  "symlink",
@@ -3338,13 +3346,6 @@ dependencies = [
  "quote 1.0.6",
  "rustversion",
  "syn 1.0.67",
-]
-
-[[package]]
-name = "solana-secp256k1-program"
-version = "1.8.0"
-dependencies = [
- "solana-sdk",
 ]
 
 [[package]]

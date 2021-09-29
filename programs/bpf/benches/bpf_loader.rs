@@ -113,6 +113,7 @@ fn bench_program_alu(bencher: &mut Bencher) {
         executable.as_ref(),
         &mut inner_iter,
         &mut invoke_context,
+        &[],
     )
     .unwrap();
 
@@ -171,7 +172,7 @@ fn bench_program_execute_noop(bencher: &mut Bencher) {
     } = create_genesis_config(50);
     let mut bank = Bank::new_for_benches(&genesis_config);
     let (name, id, entrypoint) = solana_bpf_loader_program!();
-    bank.add_builtin(&name, id, entrypoint);
+    bank.add_builtin(&name, &id, entrypoint);
     let bank = Arc::new(bank);
     let bank_client = BankClient::new_shared(&bank);
 
@@ -220,7 +221,7 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
 
     // Serialize account data
     let keyed_accounts = invoke_context.get_keyed_accounts().unwrap();
-    let (mut serialized, _account_lengths) = serialize_parameters(
+    let (mut serialized, account_lengths) = serialize_parameters(
         &bpf_loader::id(),
         &solana_sdk::pubkey::new_rand(),
         keyed_accounts,
@@ -243,6 +244,7 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
         executable.as_ref(),
         serialized.as_slice_mut(),
         &mut invoke_context,
+        &account_lengths,
     )
     .unwrap();
 
