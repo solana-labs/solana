@@ -10,7 +10,8 @@ use std::{
 ///   1280 is IPv6 minimum MTU
 ///   40 bytes is the size of the IPv6 header
 ///   8 bytes is the size of the fragment header
-pub const PACKET_DATA_SIZE: usize = 1280 - 40 - 8;
+/// Double the minimum to support larger than MTU transactions
+pub const PACKET_DATA_SIZE: usize = 2 * (1280 - 40 - 8);
 
 #[derive(Clone, Default, Debug, PartialEq)]
 #[repr(C)]

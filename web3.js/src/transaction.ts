@@ -29,8 +29,10 @@ const DEFAULT_SIGNATURE = Buffer.alloc(64).fill(0);
  * 1280 is IPv6 minimum MTU
  * 40 bytes is the size of the IPv6 header
  * 8 bytes is the size of the fragment header
+ *
+ * Double the minimum to support larger than MTU transactions
  */
-export const PACKET_DATA_SIZE = 1280 - 40 - 8;
+export const PACKET_DATA_SIZE = 2464;
 
 const SIGNATURE_LENGTH = 64;
 
