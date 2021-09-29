@@ -5621,6 +5621,7 @@ pub mod tests {
             &poh_recorder,
             &tower_storage,
             vote_info,
+            false,
         );
 
         let mut cursor = Cursor::default();
@@ -5684,6 +5685,7 @@ pub mod tests {
             &poh_recorder,
             &tower_storage,
             vote_info,
+            false,
         );
         let (_, votes) = cluster_info.get_votes(&mut cursor);
         assert_eq!(votes.len(), 1);
@@ -5751,6 +5753,7 @@ pub mod tests {
             &poh_recorder,
             &tower_storage,
             vote_info,
+            false,
         );
 
         assert!(last_vote_refresh_time.last_refresh_time > clone_refresh_time);

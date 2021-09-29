@@ -350,7 +350,10 @@ impl ClusterInfoVoteListener {
         labels: Vec<CrdsValueLabel>,
     ) -> (Vec<Transaction>, Vec<(CrdsValueLabel, Slot, Packets)>) {
         let mut msgs = packet::to_packets_chunked(&votes, 1);
-        sigverify::ed25519_verify_cpu(&mut msgs);
+
+        // Votes should already be filtered by this point.
+        let reject_non_vote = false;
+        sigverify::ed25519_verify_cpu(&mut msgs, reject_non_vote);
 
         let (vote_txs, packets) = izip!(labels.into_iter(), votes.into_iter(), msgs,)
             .filter_map(|(label, vote, packet)| {

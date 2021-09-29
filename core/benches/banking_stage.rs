@@ -165,6 +165,7 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
     genesis_config.ticks_per_slot = 10_000;
 
     let (verified_sender, verified_receiver) = unbounded();
+    let (tpu_vote_sender, tpu_vote_receiver) = unbounded();
     let (vote_sender, vote_receiver) = unbounded();
     let mut bank = Bank::new_for_benches(&genesis_config);
     // Allow arbitrary transaction processing time for the purposes of this bench
@@ -220,6 +221,7 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
             &cluster_info,
             &poh_recorder,
             verified_receiver,
+            tpu_vote_receiver,
             vote_receiver,
             None,
             s,
@@ -269,6 +271,7 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
             start += chunk_len;
             start %= verified.len();
         });
+        drop(tpu_vote_sender);
         drop(vote_sender);
         exit.store(true, Ordering::Relaxed);
         poh_service.join().unwrap();

@@ -357,6 +357,9 @@ fn verify_reachable_ports(
     if ContactInfo::is_valid_address(&node.info.tpu_forwards, socket_addr_space) {
         udp_sockets.extend(node.sockets.tpu_forwards.iter());
     }
+    if ContactInfo::is_valid_address(&node.info.tpu_vote, socket_addr_space) {
+        udp_sockets.extend(node.sockets.tpu_vote.iter());
+    }
     if ContactInfo::is_valid_address(&node.info.tvu, socket_addr_space) {
         udp_sockets.extend(node.sockets.tvu.iter());
         udp_sockets.extend(node.sockets.broadcast.iter());
