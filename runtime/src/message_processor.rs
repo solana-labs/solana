@@ -122,14 +122,7 @@ impl<'a> ThisInvokeContext<'a> {
             fee_calculator,
             return_data: None,
         };
-        let account_indices = (0..accounts.len()).collect::<Vec<usize>>();
-        invoke_context.push(
-            program_id,
-            message,
-            instruction,
-            program_indices,
-            &account_indices,
-        )?;
+        invoke_context.push(program_id, message, instruction, program_indices, None)?;
         Ok(invoke_context)
     }
 }
@@ -140,7 +133,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         message: &Message,
         instruction: &CompiledInstruction,
         program_indices: &[usize],
-        account_indices: &[usize],
+        account_indices: Option<&[usize]>,
     ) -> Result<(), InstructionError> {
         if self.invoke_stack.len() > self.compute_budget.max_invoke_depth {
             return Err(InstructionError::CallDepth);
@@ -188,7 +181,11 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
             })
             .chain(instruction.accounts.iter().map(|index_in_instruction| {
                 let index_in_instruction = *index_in_instruction as usize;
-                let account_index = account_indices[index_in_instruction];
+                let account_index = if let Some(account_indices) = account_indices {
+                    account_indices[index_in_instruction]
+                } else {
+                    index_in_instruction
+                };
                 (
                     message.is_signer(index_in_instruction),
                     message.is_writable(index_in_instruction, demote_program_write_locks),
@@ -701,13 +698,7 @@ mod tests {
         let mut depth_reached = 1;
         for program_id in invoke_stack.iter().skip(1) {
             if Err(InstructionError::CallDepth)
-                == invoke_context.push(
-                    program_id,
-                    &message,
-                    &message.instructions[0],
-                    &[],
-                    &account_indices,
-                )
+                == invoke_context.push(program_id, &message, &message.instructions[0], &[], None)
             {
                 break;
             }

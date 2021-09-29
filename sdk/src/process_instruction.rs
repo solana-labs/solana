@@ -58,7 +58,7 @@ pub trait InvokeContext {
         message: &Message,
         instruction: &CompiledInstruction,
         program_indices: &[usize],
-        account_indices: &[usize],
+        account_indices: Option<&[usize]>,
     ) -> Result<(), InstructionError>;
     /// Pop a stack frame from the invocation stack
     fn pop(&mut self);
@@ -494,7 +494,7 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
         _message: &Message,
         _instruction: &CompiledInstruction,
         _program_indices: &[usize],
-        _account_indices: &[usize],
+        _account_indices: Option<&[usize]>,
     ) -> Result<(), InstructionError> {
         self.invoke_stack.push(InvokeContextStackFrame::new(
             *_key,
