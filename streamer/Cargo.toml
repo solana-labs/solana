@@ -1,6 +1,6 @@
 [package]
 name = "solana-streamer"
-version = "1.7.14"
+version = "1.7.15"
 description = "Solana Streamer"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -12,14 +12,14 @@ edition = "2018"
 [dependencies]
 itertools = "0.10.1"
 log = "0.4.11"
-solana-metrics = { path = "../metrics", version = "=1.7.14" }
-solana-sdk = { path = "../sdk", version = "=1.7.14" }
+solana-metrics = { path = "../metrics", version = "=1.7.15" }
+solana-sdk = { path = "../sdk", version = "=1.7.15" }
 thiserror = "1.0"
-solana-measure = { path = "../measure", version = "=1.7.14" }
-solana-logger = { path = "../logger", version = "=1.7.14" }
+solana-measure = { path = "../measure", version = "=1.7.15" }
+solana-logger = { path = "../logger", version = "=1.7.15" }
 libc = "0.2.81"
 nix = "0.19.0"
-solana-perf = { path = "../perf", version = "=1.7.14" }
+solana-perf = { path = "../perf", version = "=1.7.15" }
 
 [dev-dependencies]
 

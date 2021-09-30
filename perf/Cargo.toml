@@ -1,6 +1,6 @@
 [package]
 name = "solana-perf"
-version = "1.7.14"
+version = "1.7.15"
 description = "Solana Performance APIs"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -19,11 +19,11 @@ log = "0.4.11"
 rand = "0.7.0"
 rayon = "1.5.0"
 serde = "1.0.126"
-solana-logger = { path = "../logger", version = "=1.7.14" }
-solana-metrics = { path = "../metrics", version = "=1.7.14" }
-solana-sdk = { path = "../sdk", version = "=1.7.14" }
-solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.7.14" }
-solana-vote-program = { path = "../programs/vote", version = "=1.7.14" }
+solana-logger = { path = "../logger", version = "=1.7.15" }
+solana-metrics = { path = "../metrics", version = "=1.7.15" }
+solana-sdk = { path = "../sdk", version = "=1.7.15" }
+solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.7.15" }
+solana-vote-program = { path = "../programs/vote", version = "=1.7.15" }
 
 [lib]
 name = "solana_perf"
