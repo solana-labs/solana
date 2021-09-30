@@ -49,12 +49,22 @@ impl CrdsGossip {
         from: &Pubkey,
         values: Vec<CrdsValue>,
         now: u64,
-    ) -> HashSet<Pubkey> {
-        self.push
-            .process_push_message(&self.crds, from, values, now)
+    ) -> (usize, HashSet<Pubkey>) {
+        let results = self
+            .push
+            .process_push_message(&self.crds, from, values, now);
+        let mut success_count = 0;
+        let successfully_inserted_origin_set: HashSet<Pubkey> = results
             .into_iter()
-            .filter_map(Result::ok)
-            .collect()
+            .filter_map(|result| {
+                if result.is_ok() {
+                    success_count += 1;
+                }
+                Result::ok(result)
+            })
+            .collect();
+
+        (success_count, successfully_inserted_origin_set)
     }
 
     /// Remove redundant paths in the network.

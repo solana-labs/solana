@@ -14,6 +14,7 @@ use solana_bpf_loader_program::{
     syscalls::register_syscalls,
     BpfError, ThisInstructionMeter,
 };
+use solana_bpf_rust_invoke::instructions::*;
 use solana_bpf_rust_realloc::instructions::*;
 use solana_bpf_rust_realloc_invoke::instructions::*;
 use solana_cli_output::display::println_transaction;
@@ -230,7 +231,7 @@ fn run_program(
     for i in 0..2 {
         let mut parameter_bytes = parameter_bytes.clone();
         {
-            invoke_context.set_return_data(None);
+            invoke_context.set_return_data(Vec::new()).unwrap();
 
             let mut vm = create_vm(
                 &loader_id,
@@ -481,7 +482,7 @@ fn test_program_bpf_sanity() {
 
         let mut bank = Bank::new_for_tests(&genesis_config);
         let (name, id, entrypoint) = solana_bpf_loader_program!();
-        bank.add_builtin(&name, id, entrypoint);
+        bank.add_builtin(&name, &id, entrypoint);
         let bank_client = BankClient::new(bank);
 
         // Call user program
@@ -526,7 +527,7 @@ fn test_program_bpf_loader_deprecated() {
         } = create_genesis_config(50);
         let mut bank = Bank::new_for_tests(&genesis_config);
         let (name, id, entrypoint) = solana_bpf_loader_deprecated_program!();
-        bank.add_builtin(&name, id, entrypoint);
+        bank.add_builtin(&name, &id, entrypoint);
         let bank_client = BankClient::new(bank);
 
         let program_id = load_bpf_program(
@@ -566,7 +567,7 @@ fn test_program_bpf_duplicate_accounts() {
         } = create_genesis_config(50);
         let mut bank = Bank::new_for_tests(&genesis_config);
         let (name, id, entrypoint) = solana_bpf_loader_program!();
-        bank.add_builtin(&name, id, entrypoint);
+        bank.add_builtin(&name, &id, entrypoint);
         let bank = Arc::new(bank);
         let bank_client = BankClient::new_shared(&bank);
         let program_id = load_bpf_program(&bank_client, &bpf_loader::id(), &mint_keypair, program);
@@ -666,7 +667,7 @@ fn test_program_bpf_error_handling() {
         } = create_genesis_config(50);
         let mut bank = Bank::new_for_tests(&genesis_config);
         let (name, id, entrypoint) = solana_bpf_loader_program!();
-        bank.add_builtin(&name, id, entrypoint);
+        bank.add_builtin(&name, &id, entrypoint);
         let bank_client = BankClient::new(bank);
         let program_id = load_bpf_program(&bank_client, &bpf_loader::id(), &mint_keypair, program);
         let account_metas = vec![AccountMeta::new(mint_keypair.pubkey(), true)];
@@ -768,7 +769,7 @@ fn test_return_data_and_log_data_syscall() {
         } = create_genesis_config(50);
         let mut bank = Bank::new_for_tests(&genesis_config);
         let (name, id, entrypoint) = solana_bpf_loader_program!();
-        bank.add_builtin(&name, id, entrypoint);
+        bank.add_builtin(&name, &id, entrypoint);
         let bank = Arc::new(bank);
         let bank_client = BankClient::new_shared(&bank);
 
@@ -801,24 +802,6 @@ fn test_return_data_and_log_data_syscall() {
 fn test_program_bpf_invoke_sanity() {
     solana_logger::setup();
 
-    const TEST_SUCCESS: u8 = 1;
-    const TEST_PRIVILEGE_ESCALATION_SIGNER: u8 = 2;
-    const TEST_PRIVILEGE_ESCALATION_WRITABLE: u8 = 3;
-    const TEST_PPROGRAM_NOT_EXECUTABLE: u8 = 4;
-    const TEST_EMPTY_ACCOUNTS_SLICE: u8 = 5;
-    const TEST_CAP_SEEDS: u8 = 6;
-    const TEST_CAP_SIGNERS: u8 = 7;
-    const TEST_ALLOC_ACCESS_VIOLATION: u8 = 8;
-    const TEST_INSTRUCTION_DATA_TOO_LARGE: u8 = 9;
-    const TEST_INSTRUCTION_META_TOO_LARGE: u8 = 10;
-    const TEST_RETURN_ERROR: u8 = 11;
-    const TEST_PRIVILEGE_DEESCALATION_ESCALATION_SIGNER: u8 = 12;
-    const TEST_PRIVILEGE_DEESCALATION_ESCALATION_WRITABLE: u8 = 13;
-    const TEST_WRITABLE_DEESCALATION_WRITABLE: u8 = 14;
-    const TEST_NESTED_INVOKE_TOO_DEEP: u8 = 15;
-    const TEST_EXECUTABLE_LAMPORTS: u8 = 16;
-    const TEST_RETURN_DATA_TOO_LARGE: u8 = 18;
-
     #[allow(dead_code)]
     #[derive(Debug)]
     enum Languages {
@@ -849,7 +832,7 @@ fn test_program_bpf_invoke_sanity() {
         } = create_genesis_config(50);
         let mut bank = Bank::new_for_tests(&genesis_config);
         let (name, id, entrypoint) = solana_bpf_loader_program!();
-        bank.add_builtin(&name, id, entrypoint);
+        bank.add_builtin(&name, &id, entrypoint);
         let bank = Arc::new(bank);
         let bank_client = BankClient::new_shared(&bank);
 
@@ -892,6 +875,7 @@ fn test_program_bpf_invoke_sanity() {
             AccountMeta::new_readonly(derived_key3, false),
             AccountMeta::new_readonly(system_program::id(), false),
             AccountMeta::new(from_keypair.pubkey(), true),
+            AccountMeta::new_readonly(solana_sdk::ed25519_program::id(), false),
             AccountMeta::new_readonly(invoke_program_id, false),
         ];
 
@@ -1095,7 +1079,7 @@ fn test_program_bpf_invoke_sanity() {
         );
 
         do_invoke_failure_test_local(
-            TEST_RETURN_DATA_TOO_LARGE,
+            TEST_CALL_PRECOMPILE,
             TransactionError::InstructionError(0, InstructionError::ProgramFailedToComplete),
             &[],
         );
@@ -1161,7 +1145,7 @@ fn test_program_bpf_program_id_spoofing() {
     } = create_genesis_config(50);
     let mut bank = Bank::new_for_tests(&genesis_config);
     let (name, id, entrypoint) = solana_bpf_loader_program!();
-    bank.add_builtin(&name, id, entrypoint);
+    bank.add_builtin(&name, &id, entrypoint);
     let bank = Arc::new(bank);
     let bank_client = BankClient::new_shared(&bank);
 
@@ -1214,7 +1198,7 @@ fn test_program_bpf_caller_has_access_to_cpi_program() {
     } = create_genesis_config(50);
     let mut bank = Bank::new_for_tests(&genesis_config);
     let (name, id, entrypoint) = solana_bpf_loader_program!();
-    bank.add_builtin(&name, id, entrypoint);
+    bank.add_builtin(&name, &id, entrypoint);
     let bank = Arc::new(bank);
     let bank_client = BankClient::new_shared(&bank);
 
@@ -1254,7 +1238,7 @@ fn test_program_bpf_ro_modify() {
     } = create_genesis_config(50);
     let mut bank = Bank::new_for_tests(&genesis_config);
     let (name, id, entrypoint) = solana_bpf_loader_program!();
-    bank.add_builtin(&name, id, entrypoint);
+    bank.add_builtin(&name, &id, entrypoint);
     let bank = Arc::new(bank);
     let bank_client = BankClient::new_shared(&bank);
 
@@ -1311,7 +1295,7 @@ fn test_program_bpf_call_depth() {
     } = create_genesis_config(50);
     let mut bank = Bank::new_for_tests(&genesis_config);
     let (name, id, entrypoint) = solana_bpf_loader_program!();
-    bank.add_builtin(&name, id, entrypoint);
+    bank.add_builtin(&name, &id, entrypoint);
     let bank_client = BankClient::new(bank);
     let program_id = load_bpf_program(
         &bank_client,
@@ -1346,7 +1330,7 @@ fn test_program_bpf_compute_budget() {
     } = create_genesis_config(50);
     let mut bank = Bank::new_for_tests(&genesis_config);
     let (name, id, entrypoint) = solana_bpf_loader_program!();
-    bank.add_builtin(&name, id, entrypoint);
+    bank.add_builtin(&name, &id, entrypoint);
     let bank_client = BankClient::new(bank);
     let program_id = load_bpf_program(
         &bank_client,
@@ -1449,7 +1433,7 @@ fn test_program_bpf_instruction_introspection() {
     let mut bank = Bank::new_for_tests(&genesis_config);
 
     let (name, id, entrypoint) = solana_bpf_loader_program!();
-    bank.add_builtin(&name, id, entrypoint);
+    bank.add_builtin(&name, &id, entrypoint);
     let bank = Arc::new(bank);
     let bank_client = BankClient::new_shared(&bank);
 
@@ -1506,7 +1490,7 @@ fn test_program_bpf_test_use_latest_executor() {
     } = create_genesis_config(50);
     let mut bank = Bank::new_for_tests(&genesis_config);
     let (name, id, entrypoint) = solana_bpf_loader_program!();
-    bank.add_builtin(&name, id, entrypoint);
+    bank.add_builtin(&name, &id, entrypoint);
     let bank_client = BankClient::new(bank);
     let panic_id = load_bpf_program(
         &bank_client,
@@ -1601,7 +1585,7 @@ fn test_program_bpf_test_use_latest_executor2() {
     } = create_genesis_config(50);
     let mut bank = Bank::new_for_tests(&genesis_config);
     let (name, id, entrypoint) = solana_bpf_loader_program!();
-    bank.add_builtin(&name, id, entrypoint);
+    bank.add_builtin(&name, &id, entrypoint);
     let bank_client = BankClient::new(bank);
     let invoke_and_error = load_bpf_program(
         &bank_client,
@@ -1731,7 +1715,7 @@ fn test_program_bpf_upgrade() {
     } = create_genesis_config(50);
     let mut bank = Bank::new_for_tests(&genesis_config);
     let (name, id, entrypoint) = solana_bpf_loader_upgradeable_program!();
-    bank.add_builtin(&name, id, entrypoint);
+    bank.add_builtin(&name, &id, entrypoint);
     let bank_client = BankClient::new(bank);
 
     // Deploy upgrade program
@@ -1825,7 +1809,7 @@ fn test_program_bpf_upgrade_and_invoke_in_same_tx() {
     } = create_genesis_config(50);
     let mut bank = Bank::new_for_tests(&genesis_config);
     let (name, id, entrypoint) = solana_bpf_loader_upgradeable_program!();
-    bank.add_builtin(&name, id, entrypoint);
+    bank.add_builtin(&name, &id, entrypoint);
     let bank = Arc::new(bank);
     let bank_client = BankClient::new_shared(&bank);
 
@@ -1905,9 +1889,9 @@ fn test_program_bpf_invoke_upgradeable_via_cpi() {
     } = create_genesis_config(50);
     let mut bank = Bank::new_for_tests(&genesis_config);
     let (name, id, entrypoint) = solana_bpf_loader_program!();
-    bank.add_builtin(&name, id, entrypoint);
+    bank.add_builtin(&name, &id, entrypoint);
     let (name, id, entrypoint) = solana_bpf_loader_upgradeable_program!();
-    bank.add_builtin(&name, id, entrypoint);
+    bank.add_builtin(&name, &id, entrypoint);
     let bank_client = BankClient::new(bank);
     let invoke_and_return = load_bpf_program(
         &bank_client,
@@ -2020,7 +2004,7 @@ fn test_program_bpf_disguised_as_bpf_loader() {
         } = create_genesis_config(50);
         let mut bank = Bank::new_for_tests(&genesis_config);
         let (name, id, entrypoint) = solana_bpf_loader_deprecated_program!();
-        bank.add_builtin(&name, id, entrypoint);
+        bank.add_builtin(&name, &id, entrypoint);
         let bank_client = BankClient::new(bank);
 
         let program_id = load_bpf_program(
@@ -2052,7 +2036,7 @@ fn test_program_bpf_c_dup() {
     } = create_genesis_config(50);
     let mut bank = Bank::new_for_tests(&genesis_config);
     let (name, id, entrypoint) = solana_bpf_loader_program!();
-    bank.add_builtin(&name, id, entrypoint);
+    bank.add_builtin(&name, &id, entrypoint);
 
     let account_address = Pubkey::new_unique();
     let account = AccountSharedData::new_data(42, &[1_u8, 2, 3], &system_program::id()).unwrap();
@@ -2083,9 +2067,9 @@ fn test_program_bpf_upgrade_via_cpi() {
     } = create_genesis_config(50);
     let mut bank = Bank::new_for_tests(&genesis_config);
     let (name, id, entrypoint) = solana_bpf_loader_program!();
-    bank.add_builtin(&name, id, entrypoint);
+    bank.add_builtin(&name, &id, entrypoint);
     let (name, id, entrypoint) = solana_bpf_loader_upgradeable_program!();
-    bank.add_builtin(&name, id, entrypoint);
+    bank.add_builtin(&name, &id, entrypoint);
     let bank_client = BankClient::new(bank);
     let invoke_and_return = load_bpf_program(
         &bank_client,
@@ -2197,9 +2181,9 @@ fn test_program_bpf_upgrade_self_via_cpi() {
     } = create_genesis_config(50);
     let mut bank = Bank::new_for_tests(&genesis_config);
     let (name, id, entrypoint) = solana_bpf_loader_program!();
-    bank.add_builtin(&name, id, entrypoint);
+    bank.add_builtin(&name, &id, entrypoint);
     let (name, id, entrypoint) = solana_bpf_loader_upgradeable_program!();
-    bank.add_builtin(&name, id, entrypoint);
+    bank.add_builtin(&name, &id, entrypoint);
     let bank = Arc::new(bank);
     let bank_client = BankClient::new_shared(&bank);
     let noop_program_id = load_bpf_program(
@@ -2287,9 +2271,9 @@ fn test_program_bpf_set_upgrade_authority_via_cpi() {
     } = create_genesis_config(50);
     let mut bank = Bank::new_for_tests(&genesis_config);
     let (name, id, entrypoint) = solana_bpf_loader_program!();
-    bank.add_builtin(&name, id, entrypoint);
+    bank.add_builtin(&name, &id, entrypoint);
     let (name, id, entrypoint) = solana_bpf_loader_upgradeable_program!();
-    bank.add_builtin(&name, id, entrypoint);
+    bank.add_builtin(&name, &id, entrypoint);
     let bank_client = BankClient::new(bank);
 
     // Deploy CPI invoker program
@@ -2380,7 +2364,7 @@ fn test_program_upgradeable_locks() {
         } = create_genesis_config(2_000_000_000);
         let mut bank = Bank::new_for_tests(&genesis_config);
         let (name, id, entrypoint) = solana_bpf_loader_upgradeable_program!();
-        bank.add_builtin(&name, id, entrypoint);
+        bank.add_builtin(&name, &id, entrypoint);
         let bank = Arc::new(bank);
         let bank_client = BankClient::new_shared(&bank);
 
@@ -2515,7 +2499,7 @@ fn test_program_bpf_finalize() {
     } = create_genesis_config(50);
     let mut bank = Bank::new_for_tests(&genesis_config);
     let (name, id, entrypoint) = solana_bpf_loader_program!();
-    bank.add_builtin(&name, id, entrypoint);
+    bank.add_builtin(&name, &id, entrypoint);
     let bank = Arc::new(bank);
     let bank_client = BankClient::new_shared(&bank);
 
@@ -2577,7 +2561,7 @@ fn test_program_bpf_ro_account_modify() {
     } = create_genesis_config(50);
     let mut bank = Bank::new_for_tests(&genesis_config);
     let (name, id, entrypoint) = solana_bpf_loader_program!();
-    bank.add_builtin(&name, id, entrypoint);
+    bank.add_builtin(&name, &id, entrypoint);
     let bank = Arc::new(bank);
     let bank_client = BankClient::new_shared(&bank);
 
@@ -2605,7 +2589,6 @@ fn test_program_bpf_ro_account_modify() {
     let instruction = Instruction::new_with_bytes(program_id, &[0], account_metas.clone());
     let message = Message::new(&[instruction], Some(&mint_pubkey));
     let result = bank_client.send_and_confirm_message(&[&mint_keypair], message);
-    println!("result: {:?}", result);
     assert_eq!(
         result.unwrap_err().unwrap(),
         TransactionError::InstructionError(0, InstructionError::ReadonlyDataModified)
@@ -2614,7 +2597,6 @@ fn test_program_bpf_ro_account_modify() {
     let instruction = Instruction::new_with_bytes(program_id, &[1], account_metas.clone());
     let message = Message::new(&[instruction], Some(&mint_pubkey));
     let result = bank_client.send_and_confirm_message(&[&mint_keypair], message);
-    println!("result: {:?}", result);
     assert_eq!(
         result.unwrap_err().unwrap(),
         TransactionError::InstructionError(0, InstructionError::ReadonlyDataModified)
@@ -2623,7 +2605,6 @@ fn test_program_bpf_ro_account_modify() {
     let instruction = Instruction::new_with_bytes(program_id, &[2], account_metas.clone());
     let message = Message::new(&[instruction], Some(&mint_pubkey));
     let result = bank_client.send_and_confirm_message(&[&mint_keypair], message);
-    println!("result: {:?}", result);
     assert_eq!(
         result.unwrap_err().unwrap(),
         TransactionError::InstructionError(0, InstructionError::ReadonlyDataModified)
@@ -2645,7 +2626,7 @@ fn test_program_bpf_realloc() {
 
     let mut bank = Bank::new_for_tests(&genesis_config);
     let (name, id, entrypoint) = solana_bpf_loader_program!();
-    bank.add_builtin(&name, id, entrypoint);
+    bank.add_builtin(&name, &id, entrypoint);
     let bank = Arc::new(bank);
     let bank_client = BankClient::new_shared(&bank);
 
@@ -2901,7 +2882,7 @@ fn test_program_bpf_realloc_invoke() {
 
     let mut bank = Bank::new_for_tests(&genesis_config);
     let (name, id, entrypoint) = solana_bpf_loader_program!();
-    bank.add_builtin(&name, id, entrypoint);
+    bank.add_builtin(&name, &id, entrypoint);
     let bank = Arc::new(bank);
     let bank_client = BankClient::new_shared(&bank);
 

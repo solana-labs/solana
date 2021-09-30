@@ -9,12 +9,12 @@ homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-bpf-rust-invoked"
 edition = "2018"
 
-[dependencies]
-solana-program = { path = "../../../../sdk/program", version = "=1.8.0" }
-
 [features]
 default = ["program"]
 program = []
+
+[dependencies]
+solana-program = { path = "../../../../sdk/program", version = "=1.8.0" }
 
 [lib]
 crate-type = ["lib", "cdylib"]

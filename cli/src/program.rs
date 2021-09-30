@@ -2037,24 +2037,24 @@ fn complete_partial_program_init(
         if account.owner != *loader_id {
             instructions.push(system_instruction::assign(elf_pubkey, loader_id));
         }
-    }
-    if account.lamports < minimum_balance {
-        let balance = minimum_balance - account.lamports;
-        instructions.push(system_instruction::transfer(
-            payer_pubkey,
-            elf_pubkey,
-            balance,
-        ));
-        balance_needed = balance;
-    } else if account.lamports > minimum_balance
-        && system_program::check_id(&account.owner)
-        && !allow_excessive_balance
-    {
-        return Err(format!(
-            "Buffer account has a balance: {:?}; it may already be in use",
-            Sol(account.lamports)
-        )
-        .into());
+        if account.lamports < minimum_balance {
+            let balance = minimum_balance - account.lamports;
+            instructions.push(system_instruction::transfer(
+                payer_pubkey,
+                elf_pubkey,
+                balance,
+            ));
+            balance_needed = balance;
+        } else if account.lamports > minimum_balance
+            && system_program::check_id(&account.owner)
+            && !allow_excessive_balance
+        {
+            return Err(format!(
+                "Buffer account has a balance: {:?}; it may already be in use",
+                Sol(account.lamports)
+            )
+            .into());
+        }
     }
     Ok((instructions, balance_needed))
 }

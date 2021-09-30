@@ -4,6 +4,8 @@ use crate::accounts_index::{
 };
 use crate::bucket_map_holder::{Age, BucketMapHolder};
 use crate::bucket_map_holder_stats::BucketMapHolderStats;
+use rand::thread_rng;
+use rand::Rng;
 use solana_measure::measure::Measure;
 use solana_sdk::{clock::Slot, pubkey::Pubkey};
 use std::collections::{hash_map::Entry, HashMap};
@@ -621,6 +623,14 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         self.storage.wait_dirty_or_aged.notify_one();
     }
 
+    fn random_chance_of_eviction() -> bool {
+        // random eviction
+        const N: usize = 1000;
+        // 1/N chance of eviction
+        thread_rng().gen_range(0, N) == 0
+    }
+
+    /// return true if 'entry' should be removed from the in-mem index
     fn should_remove_from_mem(
         &self,
         current_age: Age,
@@ -629,16 +639,18 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     ) -> bool {
         // this could be tunable dynamically based on memory pressure
         // we could look at more ages or we could throw out more items we are choosing to keep in the cache
-        {
+        if startup || (current_age == entry.age()) {
+            // only read the slot list if we are planning to throw the item out
             let slot_list = entry.slot_list.read().unwrap();
             if slot_list.len() != 1 {
-                return false; // keep 0 and > 1 slot lists in mem. They will be cleaned or shrunk soon.
+                false // keep 0 and > 1 slot lists in mem. They will be cleaned or shrunk soon.
+            } else {
+                // keep items with slot lists that contained cached items
+                !slot_list.iter().any(|(_, info)| info.is_cached())
             }
-            if slot_list.iter().any(|(_, info)| info.is_cached()) {
-                return false; // keep items with slot lists that contained cached items
-            }
+        } else {
+            false
         }
-        !startup && (current_age == entry.age())
     }
 
     fn flush_internal(&self) {
@@ -653,6 +665,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         }
 
         let mut removes = Vec::default();
+        let mut removes_random = Vec::default();
         let disk = self.storage.disk.as_ref().unwrap();
 
         let mut updates = Vec::default();
@@ -675,6 +688,8 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
                 if self.should_remove_from_mem(current_age, v, startup) {
                     removes.push(*k);
+                } else if Self::random_chance_of_eviction() {
+                    removes_random.push(*k);
                 }
             }
             Self::update_time_stat(&self.stats().flush_scan_us, m);
@@ -687,7 +702,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     continue; // marked dirty after we grabbed it above, so handle this the next time this bucket is flushed
                 }
                 flush_entries_updated_on_disk += 1;
-                disk.insert(&k, (&v.slot_list.read().unwrap(), v.ref_count()));
+                disk.insert(self.bin, &k, (&v.slot_list.read().unwrap(), v.ref_count()));
             }
             Self::update_time_stat(&self.stats().flush_update_us, m);
             Self::update_stat(
@@ -697,7 +712,10 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         }
 
         let m = Measure::start("flush_remove");
-        if !self.flush_remove_from_cache(removes, current_age, startup) {
+        if !self.flush_remove_from_cache(removes, current_age, startup, false) {
+            iterate_for_age = false; // did not make it all the way through this bucket, so didn't handle age completely
+        }
+        if !self.flush_remove_from_cache(removes_random, current_age, startup, true) {
             iterate_for_age = false; // did not make it all the way through this bucket, so didn't handle age completely
         }
         Self::update_time_stat(&self.stats().flush_remove_us, m);
@@ -716,6 +734,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         removes: Vec<Pubkey>,
         current_age: Age,
         startup: bool,
+        randomly_evicted: bool,
     ) -> bool {
         let mut completed_scan = true;
         if removes.is_empty() {
@@ -736,7 +755,9 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     continue;
                 }
 
-                if v.dirty() || !self.should_remove_from_mem(current_age, v, startup) {
+                if v.dirty()
+                    || (!randomly_evicted && !self.should_remove_from_mem(current_age, v, startup))
+                {
                     // marked dirty or bumped in age after we looked above
                     // these will be handled in later passes
                     // but, at startup, everything is ready to age out if it isn't dirty
@@ -799,53 +820,116 @@ mod tests {
     }
 
     #[test]
+    fn test_should_remove_from_mem() {
+        solana_logger::setup();
+        let bucket = new_for_test::<u64>();
+        let mut startup = false;
+        let mut current_age = 0;
+        let ref_count = 0;
+        let one_element_slot_list = vec![(0, 0)];
+        let one_element_slot_list_entry = Arc::new(AccountMapEntryInner::new(
+            one_element_slot_list,
+            ref_count,
+            AccountMapEntryMeta::default(),
+        ));
+
+        // empty slot list
+        assert!(!bucket.should_remove_from_mem(
+            current_age,
+            &Arc::new(AccountMapEntryInner::new(
+                vec![],
+                ref_count,
+                AccountMapEntryMeta::default()
+            )),
+            startup
+        ));
+        // 1 element slot list
+        assert!(bucket.should_remove_from_mem(current_age, &one_element_slot_list_entry, startup));
+        // 2 element slot list
+        assert!(!bucket.should_remove_from_mem(
+            current_age,
+            &Arc::new(AccountMapEntryInner::new(
+                vec![(0, 0), (1, 1)],
+                ref_count,
+                AccountMapEntryMeta::default()
+            )),
+            startup
+        ));
+
+        {
+            let bucket = new_for_test::<f64>();
+            // 1 element slot list with a CACHED item - f64 acts like cached
+            assert!(!bucket.should_remove_from_mem(
+                current_age,
+                &Arc::new(AccountMapEntryInner::new(
+                    vec![(0, 0.0)],
+                    ref_count,
+                    AccountMapEntryMeta::default()
+                )),
+                startup
+            ));
+        }
+
+        // 1 element slot list, age is now
+        assert!(bucket.should_remove_from_mem(current_age, &one_element_slot_list_entry, startup));
+
+        // 1 element slot list, but not current age
+        current_age = 1;
+        assert!(!bucket.should_remove_from_mem(current_age, &one_element_slot_list_entry, startup));
+
+        // 1 element slot list, but at startup and age not current
+        startup = true;
+        assert!(bucket.should_remove_from_mem(current_age, &one_element_slot_list_entry, startup));
+    }
+
+    #[test]
     fn test_hold_range_in_memory() {
-        let accts = new_for_test::<u64>();
+        let bucket = new_for_test::<u64>();
         // 0x81 is just some other range
         let ranges = [
             Pubkey::new(&[0; 32])..=Pubkey::new(&[0xff; 32]),
             Pubkey::new(&[0x81; 32])..=Pubkey::new(&[0xff; 32]),
         ];
         for range in ranges.clone() {
-            assert!(accts.cache_ranges_held.read().unwrap().is_empty());
-            accts.hold_range_in_memory(&range, true);
+            assert!(bucket.cache_ranges_held.read().unwrap().is_empty());
+            bucket.hold_range_in_memory(&range, true);
             assert_eq!(
-                accts.cache_ranges_held.read().unwrap().to_vec(),
+                bucket.cache_ranges_held.read().unwrap().to_vec(),
                 vec![Some(range.clone())]
             );
-            accts.hold_range_in_memory(&range, false);
-            assert!(accts.cache_ranges_held.read().unwrap().is_empty());
-            accts.hold_range_in_memory(&range, true);
+            bucket.hold_range_in_memory(&range, false);
+            assert!(bucket.cache_ranges_held.read().unwrap().is_empty());
+            bucket.hold_range_in_memory(&range, true);
             assert_eq!(
-                accts.cache_ranges_held.read().unwrap().to_vec(),
+                bucket.cache_ranges_held.read().unwrap().to_vec(),
                 vec![Some(range.clone())]
             );
-            accts.hold_range_in_memory(&range, true);
+            bucket.hold_range_in_memory(&range, true);
             assert_eq!(
-                accts.cache_ranges_held.read().unwrap().to_vec(),
+                bucket.cache_ranges_held.read().unwrap().to_vec(),
                 vec![Some(range.clone()), Some(range.clone())]
             );
-            accts.hold_range_in_memory(&ranges[0], true);
+            bucket.hold_range_in_memory(&ranges[0], true);
             assert_eq!(
-                accts.cache_ranges_held.read().unwrap().to_vec(),
+                bucket.cache_ranges_held.read().unwrap().to_vec(),
                 vec![
                     Some(range.clone()),
                     Some(range.clone()),
                     Some(ranges[0].clone())
                 ]
             );
-            accts.hold_range_in_memory(&range, false);
+            bucket.hold_range_in_memory(&range, false);
             assert_eq!(
-                accts.cache_ranges_held.read().unwrap().to_vec(),
+                bucket.cache_ranges_held.read().unwrap().to_vec(),
                 vec![Some(range.clone()), Some(ranges[0].clone())]
             );
-            accts.hold_range_in_memory(&range, false);
+            bucket.hold_range_in_memory(&range, false);
             assert_eq!(
-                accts.cache_ranges_held.read().unwrap().to_vec(),
+                bucket.cache_ranges_held.read().unwrap().to_vec(),
                 vec![Some(ranges[0].clone())]
             );
-            accts.hold_range_in_memory(&ranges[0].clone(), false);
-            assert!(accts.cache_ranges_held.read().unwrap().is_empty());
+            bucket.hold_range_in_memory(&ranges[0].clone(), false);
+            assert!(bucket.cache_ranges_held.read().unwrap().is_empty());
         }
     }
 

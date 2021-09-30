@@ -28,6 +28,7 @@ pub struct BucketMapHolderStats {
     pub inserts: AtomicU64,
     pub count: AtomicU64,
     pub bg_waiting_us: AtomicU64,
+    pub bg_throttling_wait_us: AtomicU64,
     pub count_in_mem: AtomicU64,
     pub per_bucket_count: Vec<AtomicU64>,
     pub flush_entries_updated_on_disk: AtomicU64,
@@ -134,6 +135,11 @@ impl BucketMapHolderStats {
                 self.bg_waiting_us.swap(0, Ordering::Relaxed),
                 i64
             ),
+            (
+                "bg_throttling_wait_us",
+                self.bg_throttling_wait_us.swap(0, Ordering::Relaxed),
+                i64
+            ),
             ("min_in_bin", min, i64),
             ("max_in_bin", max, i64),
             ("count_from_bins", ct, i64),
@@ -144,7 +150,7 @@ impl BucketMapHolderStats {
             ),
             (
                 "get_mem_us",
-                self.get_mem_us.swap(0, Ordering::Relaxed) / 1000,
+                self.get_mem_us.swap(0, Ordering::Relaxed),
                 i64
             ),
             (
@@ -154,7 +160,7 @@ impl BucketMapHolderStats {
             ),
             (
                 "get_missing_us",
-                self.get_missing_us.swap(0, Ordering::Relaxed) / 1000,
+                self.get_missing_us.swap(0, Ordering::Relaxed),
                 i64
             ),
             (
@@ -164,7 +170,7 @@ impl BucketMapHolderStats {
             ),
             (
                 "entry_mem_us",
-                self.entry_mem_us.swap(0, Ordering::Relaxed) / 1000,
+                self.entry_mem_us.swap(0, Ordering::Relaxed),
                 i64
             ),
             (
@@ -174,7 +180,7 @@ impl BucketMapHolderStats {
             ),
             (
                 "load_disk_found_us",
-                self.load_disk_found_us.swap(0, Ordering::Relaxed) / 1000,
+                self.load_disk_found_us.swap(0, Ordering::Relaxed),
                 i64
             ),
             (
@@ -184,7 +190,7 @@ impl BucketMapHolderStats {
             ),
             (
                 "load_disk_missing_us",
-                self.load_disk_missing_us.swap(0, Ordering::Relaxed) / 1000,
+                self.load_disk_missing_us.swap(0, Ordering::Relaxed),
                 i64
             ),
             (
@@ -194,7 +200,7 @@ impl BucketMapHolderStats {
             ),
             (
                 "entry_missing_us",
-                self.entry_missing_us.swap(0, Ordering::Relaxed) / 1000,
+                self.entry_missing_us.swap(0, Ordering::Relaxed),
                 i64
             ),
             (

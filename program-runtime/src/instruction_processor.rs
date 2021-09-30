@@ -343,12 +343,19 @@ impl InstructionProcessor {
     /// Add a static entrypoint to intercept instructions before the dynamic loader.
     pub fn add_program(
         &mut self,
-        program_id: Pubkey,
+        program_id: &Pubkey,
         process_instruction: ProcessInstructionWithContext,
     ) {
-        match self.programs.iter_mut().find(|(key, _)| program_id == *key) {
+        match self.programs.iter_mut().find(|(key, _)| program_id == key) {
             Some((_, processor)) => *processor = process_instruction,
-            None => self.programs.push((program_id, process_instruction)),
+            None => self.programs.push((*program_id, process_instruction)),
+        }
+    }
+
+    /// Remove a program
+    pub fn remove_program(&mut self, program_id: &Pubkey) {
+        if let Some(position) = self.programs.iter().position(|(key, _)| program_id == key) {
+            self.programs.remove(position);
         }
     }
 
@@ -595,7 +602,7 @@ impl InstructionProcessor {
         invoke_context.verify_and_update(instruction, account_indices, caller_write_privileges)?;
 
         // clear the return data
-        invoke_context.set_return_data(None);
+        invoke_context.set_return_data(Vec::new())?;
 
         // Invoke callee
         invoke_context.push(
@@ -603,12 +610,12 @@ impl InstructionProcessor {
             message,
             instruction,
             program_indices,
-            account_indices,
+            Some(account_indices),
         )?;
 
         let mut instruction_processor = InstructionProcessor::default();
         for (program_id, process_instruction) in invoke_context.get_programs().iter() {
-            instruction_processor.add_program(*program_id, *process_instruction);
+            instruction_processor.add_program(program_id, *process_instruction);
         }
 
         let mut result = instruction_processor.process_instruction(
@@ -1090,8 +1097,8 @@ mod tests {
             Ok(())
         }
         let program_id = solana_sdk::pubkey::new_rand();
-        instruction_processor.add_program(program_id, mock_process_instruction);
-        instruction_processor.add_program(program_id, mock_ix_processor);
+        instruction_processor.add_program(&program_id, mock_process_instruction);
+        instruction_processor.add_program(&program_id, mock_ix_processor);
 
         assert!(!format!("{:?}", instruction_processor).is_empty());
     }

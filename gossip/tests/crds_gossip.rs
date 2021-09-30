@@ -357,6 +357,7 @@ fn network_run_push(
                         .unwrap()
                         .gossip
                         .process_push_message(&from, msgs.clone(), now)
+                        .1
                         .into_iter()
                         .collect();
                     let prunes_map = network

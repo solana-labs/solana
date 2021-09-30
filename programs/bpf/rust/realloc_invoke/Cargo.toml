@@ -10,11 +10,12 @@ documentation = "https://docs.rs/solana-bpf-rust-realloc-invoke"
 edition = "2018"
 
 [features]
-custom-heap = []
+default = ["program"]
+program = []
 
 [dependencies]
 solana-program = { path = "../../../../sdk/program", version = "=1.8.0" }
-solana-bpf-rust-realloc = { path = "../realloc", version = "=1.8.0", features = ["custom-heap"]}
+solana-bpf-rust-realloc = { path = "../realloc", version = "=1.8.0", default-features = false }
 
 [lib]
 crate-type = ["lib", "cdylib"]

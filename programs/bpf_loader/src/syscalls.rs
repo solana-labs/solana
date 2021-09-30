@@ -22,8 +22,8 @@ use solana_sdk::{
         allow_native_ids, blake3_syscall_enabled, check_seed_length,
         close_upgradeable_program_accounts, demote_program_write_locks, disable_fees_sysvar,
         do_support_realloc, libsecp256k1_0_5_upgrade_enabled, mem_overlap_fix,
-        return_data_syscall_enabled, secp256k1_recover_syscall_enabled,
-        sol_log_data_syscall_enabled,
+        prevent_calling_precompiles_as_programs, return_data_syscall_enabled,
+        secp256k1_recover_syscall_enabled, sol_log_data_syscall_enabled,
     },
     hash::{Hasher, HASH_BYTES},
     ic_msg,
@@ -31,6 +31,7 @@ use solana_sdk::{
     keccak,
     message::Message,
     native_loader,
+    precompiles::is_precompile,
     process_instruction::{self, stable_log, ComputeMeter, InvokeContext, Logger},
     program::MAX_RETURN_DATA,
     pubkey::{Pubkey, PubkeyError, MAX_SEEDS, MAX_SEED_LEN},
@@ -43,7 +44,6 @@ use solana_sdk::{
 use std::{
     alloc::Layout,
     cell::{Ref, RefCell, RefMut},
-    cmp::min,
     mem::{align_of, size_of},
     rc::Rc,
     slice::from_raw_parts_mut,
@@ -2157,16 +2157,21 @@ fn check_account_infos(
 fn check_authorized_program(
     program_id: &Pubkey,
     instruction_data: &[u8],
-    close_upgradeable_program_accounts: bool,
+    invoke_context: &dyn InvokeContext,
 ) -> Result<(), EbpfError<BpfError>> {
+    #[allow(clippy::blocks_in_if_conditions)]
     if native_loader::check_id(program_id)
         || bpf_loader::check_id(program_id)
         || bpf_loader_deprecated::check_id(program_id)
         || (bpf_loader_upgradeable::check_id(program_id)
             && !(bpf_loader_upgradeable::is_upgrade_instruction(instruction_data)
                 || bpf_loader_upgradeable::is_set_authority_instruction(instruction_data)
-                || (close_upgradeable_program_accounts
+                || (invoke_context.is_feature_active(&close_upgradeable_program_accounts::id())
                     && bpf_loader_upgradeable::is_close_instruction(instruction_data))))
+        || (invoke_context.is_feature_active(&prevent_calling_precompiles_as_programs::id())
+            && is_precompile(program_id, |feature_id: &Pubkey| {
+                invoke_context.is_feature_active(feature_id)
+            }))
     {
         return Err(SyscallError::ProgramNotSupported(*program_id).into());
     }
@@ -2204,11 +2209,7 @@ fn call<'a>(
     let (message, caller_write_privileges, program_indices) =
         InstructionProcessor::create_message(&instruction, &signers, &invoke_context)
             .map_err(SyscallError::InstructionError)?;
-    check_authorized_program(
-        &instruction.program_id,
-        &instruction.data,
-        invoke_context.is_feature_active(&close_upgradeable_program_accounts::id()),
-    )?;
+    check_authorized_program(&instruction.program_id, &instruction.data, *invoke_context)?;
     let (account_indices, mut accounts) = syscall.translate_accounts(
         &message,
         account_infos_addr,
@@ -2322,23 +2323,21 @@ impl<'a> SyscallObject<BpfError> for SyscallSetReturnData<'a> {
             return;
         }
 
-        if len == 0 {
-            invoke_context.set_return_data(None);
+        let return_data = if len == 0 {
+            Vec::new()
         } else {
-            let return_data = question_mark!(
+            question_mark!(
                 translate_slice::<u8>(memory_mapping, addr, len, self.loader_id),
                 result
-            );
-
-            let program_id = *question_mark!(
-                invoke_context
-                    .get_caller()
-                    .map_err(SyscallError::InstructionError),
-                result
-            );
-
-            invoke_context.set_return_data(Some((program_id, return_data.to_vec())));
-        }
+            )
+            .to_vec()
+        };
+        question_mark!(
+            invoke_context
+                .set_return_data(return_data)
+                .map_err(SyscallError::InstructionError),
+            result
+        );
 
         *result = Ok(0);
     }
@@ -2352,7 +2351,7 @@ impl<'a> SyscallObject<BpfError> for SyscallGetReturnData<'a> {
     fn call(
         &mut self,
         return_data_addr: u64,
-        len: u64,
+        mut length: u64,
         program_id_addr: u64,
         _arg4: u64,
         _arg5: u64,
@@ -2375,47 +2374,33 @@ impl<'a> SyscallObject<BpfError> for SyscallGetReturnData<'a> {
             result
         );
 
-        if let Some((program_id, return_data)) = invoke_context.get_return_data() {
-            if len != 0 {
-                let length = min(return_data.len() as u64, len);
+        let (program_id, return_data) = invoke_context.get_return_data();
+        length = length.min(return_data.len() as u64);
+        if length != 0 {
+            question_mark!(
+                invoke_context
+                    .get_compute_meter()
+                    .consume((length + size_of::<Pubkey>() as u64) / budget.cpi_bytes_per_unit),
+                result
+            );
 
-                question_mark!(
-                    invoke_context
-                        .get_compute_meter()
-                        .consume((length + size_of::<Pubkey>() as u64) / budget.cpi_bytes_per_unit),
-                    result
-                );
+            let return_data_result = question_mark!(
+                translate_slice_mut::<u8>(memory_mapping, return_data_addr, length, self.loader_id,),
+                result
+            );
 
-                let return_data_result = question_mark!(
-                    translate_slice_mut::<u8>(
-                        memory_mapping,
-                        return_data_addr,
-                        length,
-                        self.loader_id,
-                    ),
-                    result
-                );
+            return_data_result.copy_from_slice(&return_data[..length as usize]);
 
-                return_data_result.copy_from_slice(&return_data[..length as usize]);
+            let program_id_result = question_mark!(
+                translate_slice_mut::<Pubkey>(memory_mapping, program_id_addr, 1, self.loader_id,),
+                result
+            );
 
-                let program_id_result = question_mark!(
-                    translate_slice_mut::<Pubkey>(
-                        memory_mapping,
-                        program_id_addr,
-                        1,
-                        self.loader_id,
-                    ),
-                    result
-                );
-
-                program_id_result[0] = *program_id;
-            }
-
-            // Return the actual length, rather the length returned
-            *result = Ok(return_data.len() as u64);
-        } else {
-            *result = Ok(0);
+            program_id_result[0] = program_id;
         }
+
+        // Return the actual length, rather the length returned
+        *result = Ok(return_data.len() as u64);
     }
 }
 
