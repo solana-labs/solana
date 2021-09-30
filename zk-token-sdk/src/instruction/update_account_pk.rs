@@ -1,5 +1,5 @@
 use {
-    crate::pod::*,
+    crate::zk_token_elgamal::pod,
     bytemuck::{Pod, Zeroable},
 };
 #[cfg(not(target_arch = "bpf"))]
@@ -34,16 +34,16 @@ use {
 #[repr(C)]
 pub struct UpdateAccountPkData {
     /// Current ElGamal encryption key
-    pub current_pk: PodElGamalPK, // 32 bytes
+    pub current_pk: pod::ElGamalPK, // 32 bytes
 
     /// Current encrypted available balance
-    pub current_ct: PodElGamalCT, // 64 bytes
+    pub current_ct: pod::ElGamalCT, // 64 bytes
 
     /// New ElGamal encryption key
-    pub new_pk: PodElGamalPK, // 32 bytes
+    pub new_pk: pod::ElGamalPK, // 32 bytes
 
     /// New encrypted available balance
-    pub new_ct: PodElGamalCT, // 64 bytes
+    pub new_ct: pod::ElGamalCT, // 64 bytes
 
     /// Proof that the current and new ciphertexts are consistent
     pub proof: UpdateAccountPkProof, // 160 bytes
@@ -89,11 +89,11 @@ impl Verifiable for UpdateAccountPkData {
 #[repr(C)]
 #[allow(non_snake_case)]
 pub struct UpdateAccountPkProof {
-    pub R_0: PodCompressedRistretto, // 32 bytes
-    pub R_1: PodCompressedRistretto, // 32 bytes
-    pub z_sk_0: PodScalar,           // 32 bytes
-    pub z_sk_1: PodScalar,           // 32 bytes
-    pub z_x: PodScalar,              // 32 bytes
+    pub R_0: pod::CompressedRistretto, // 32 bytes
+    pub R_1: pod::CompressedRistretto, // 32 bytes
+    pub z_sk_0: pod::Scalar,           // 32 bytes
+    pub z_sk_1: pod::Scalar,           // 32 bytes
+    pub z_x: pod::Scalar,              // 32 bytes
 }
 
 #[allow(non_snake_case)]
@@ -233,7 +233,7 @@ mod test {
 
         // A zeroed cipehrtext should be considered as an account balance of 0
         let balance: u64 = 0;
-        let zeroed_ct_as_current_ct: ElGamalCT = PodElGamalCT::zeroed().try_into().unwrap();
+        let zeroed_ct_as_current_ct: ElGamalCT = pod::ElGamalCT::zeroed().try_into().unwrap();
         let new_ct: ElGamalCT = new_pk.encrypt(balance);
         let proof = UpdateAccountPkProof::new(
             balance,
@@ -244,8 +244,8 @@ mod test {
         );
         assert!(proof.verify(&zeroed_ct_as_current_ct, &new_ct).is_ok());
 
-        let current_ct: ElGamalCT = PodElGamalCT::zeroed().try_into().unwrap();
-        let zeroed_ct_as_new_ct: ElGamalCT = PodElGamalCT::zeroed().try_into().unwrap();
+        let current_ct: ElGamalCT = pod::ElGamalCT::zeroed().try_into().unwrap();
+        let zeroed_ct_as_new_ct: ElGamalCT = pod::ElGamalCT::zeroed().try_into().unwrap();
         let proof = UpdateAccountPkProof::new(
             balance,
             &current_sk,
@@ -255,8 +255,8 @@ mod test {
         );
         assert!(proof.verify(&current_ct, &zeroed_ct_as_new_ct).is_ok());
 
-        let zeroed_ct_as_current_ct: ElGamalCT = PodElGamalCT::zeroed().try_into().unwrap();
-        let zeroed_ct_as_new_ct: ElGamalCT = PodElGamalCT::zeroed().try_into().unwrap();
+        let zeroed_ct_as_current_ct: ElGamalCT = pod::ElGamalCT::zeroed().try_into().unwrap();
+        let zeroed_ct_as_new_ct: ElGamalCT = pod::ElGamalCT::zeroed().try_into().unwrap();
         let proof = UpdateAccountPkProof::new(
             balance,
             &current_sk,

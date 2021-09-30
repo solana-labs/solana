@@ -1,5 +1,5 @@
 use {
-    crate::pod::*,
+    crate::zk_token_elgamal::pod,
     bytemuck::{Pod, Zeroable},
 };
 #[cfg(not(target_arch = "bpf"))]
@@ -32,7 +32,7 @@ use {
 pub struct WithdrawData {
     /// The source account available balance *after* the withdraw (encrypted by
     /// `source_pk`
-    pub final_balance_ct: PodElGamalCT, // 64 bytes
+    pub final_balance_ct: pod::ElGamalCT, // 64 bytes
 
     /// Proof that the account is solvent
     pub proof: WithdrawProof, // 736 bytes
@@ -81,11 +81,11 @@ impl Verifiable for WithdrawData {
 #[allow(non_snake_case)]
 pub struct WithdrawProof {
     /// Wrapper for range proof: R component
-    pub R: PodCompressedRistretto, // 32 bytes
+    pub R: pod::CompressedRistretto, // 32 bytes
     /// Wrapper for range proof: z component
-    pub z: PodScalar, // 32 bytes
+    pub z: pod::Scalar, // 32 bytes
     /// Associated range proof
-    pub range_proof: PodRangeProof64, // 672 bytes
+    pub range_proof: pod::RangeProof64, // 672 bytes
 }
 
 #[allow(non_snake_case)]

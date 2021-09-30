@@ -1,5 +1,5 @@
 use {
-    crate::pod::*,
+    crate::zk_token_elgamal::pod,
     bytemuck::{Pod, Zeroable},
 };
 #[cfg(not(target_arch = "bpf"))]
@@ -145,7 +145,7 @@ pub struct TransferRangeProofData {
     ///   1. the source account has enough funds for the transfer (i.e. the final balance is a
     ///      64-bit positive number)
     ///   2. the transfer amount is a 64-bit positive number
-    pub proof: PodRangeProof128, // 736 bytes
+    pub proof: pod::RangeProof128, // 736 bytes
 
     /// Ephemeral state between the two transfer instruction data
     pub ephemeral_state: TransferEphemeralState, // 128 bytes
@@ -185,7 +185,7 @@ pub struct TransferValidityProofData {
     pub transfer_public_keys: TransferPubKeys, // 96 bytes
 
     /// The final spendable ciphertext after the transfer
-    pub new_spendable_ct: PodElGamalCT, // 64 bytes
+    pub new_spendable_ct: pod::ElGamalCT, // 64 bytes
 
     /// Proof that certifies that the decryption handles are generated correctly
     pub proof: ValidityProof, // 160 bytes
@@ -201,10 +201,10 @@ pub struct TransferValidityProofData {
 #[derive(Clone, Copy, Pod, Zeroable, PartialEq)]
 #[repr(C)]
 pub struct TransferEphemeralState {
-    pub spendable_comm_verification: PodPedersenComm, // 32 bytes
-    pub x: PodScalar,                                 // 32 bytes
-    pub z: PodScalar,                                 // 32 bytes
-    pub t_x_blinding: PodScalar,                      // 32 bytes
+    pub spendable_comm_verification: pod::PedersenComm, // 32 bytes
+    pub x: pod::Scalar,                                 // 32 bytes
+    pub z: pod::Scalar,                                 // 32 bytes
+    pub t_x_blinding: pod::Scalar,                      // 32 bytes
 }
 
 #[cfg(not(target_arch = "bpf"))]
@@ -222,8 +222,9 @@ impl Verifiable for TransferValidityProofData {
 
 /// Just a grouping struct for the two proofs that are needed for a transfer instruction. The two
 /// proofs have to be generated together as they share joint data.
+#[cfg(not(target_arch = "bpf"))]
 pub struct TransferProofs {
-    pub range_proof: PodRangeProof128,
+    pub range_proof: pod::RangeProof128,
     pub validity_proof: ValidityProof,
 }
 
@@ -330,15 +331,15 @@ impl TransferProofs {
 #[repr(C)]
 pub struct ValidityProof {
     // Proof component for the spendable ciphertext components: R
-    pub R: PodCompressedRistretto, // 32 bytes
+    pub R: pod::CompressedRistretto, // 32 bytes
     // Proof component for the spendable ciphertext components: z
-    pub z: PodScalar, // 32 bytes
+    pub z: pod::Scalar, // 32 bytes
     // Proof component for the transaction amount components: T_src
-    pub T_joint: PodCompressedRistretto, // 32 bytes
+    pub T_joint: pod::CompressedRistretto, // 32 bytes
     // Proof component for the transaction amount components: T_1
-    pub T_1: PodCompressedRistretto, // 32 bytes
+    pub T_1: pod::CompressedRistretto, // 32 bytes
     // Proof component for the transaction amount components: T_2
-    pub T_2: PodCompressedRistretto, // 32 bytes
+    pub T_2: pod::CompressedRistretto, // 32 bytes
 }
 
 #[allow(non_snake_case)]
@@ -454,26 +455,26 @@ impl ValidityProof {
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct TransferPubKeys {
-    pub source_pk: PodElGamalPK,  // 32 bytes
-    pub dest_pk: PodElGamalPK,    // 32 bytes
-    pub auditor_pk: PodElGamalPK, // 32 bytes
+    pub source_pk: pod::ElGamalPK,  // 32 bytes
+    pub dest_pk: pod::ElGamalPK,    // 32 bytes
+    pub auditor_pk: pod::ElGamalPK, // 32 bytes
 }
 
 /// The transfer amount commitments needed for a transfer
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct TransferComms {
-    pub lo: PodPedersenComm, // 32 bytes
-    pub hi: PodPedersenComm, // 32 bytes
+    pub lo: pod::PedersenComm, // 32 bytes
+    pub hi: pod::PedersenComm, // 32 bytes
 }
 
 /// The decryption handles needed for a transfer
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct TransferHandles {
-    pub source: PodPedersenDecHandle,  // 32 bytes
-    pub dest: PodPedersenDecHandle,    // 32 bytes
-    pub auditor: PodPedersenDecHandle, // 32 bytes
+    pub source: pod::PedersenDecHandle,  // 32 bytes
+    pub dest: pod::PedersenDecHandle,    // 32 bytes
+    pub auditor: pod::PedersenDecHandle, // 32 bytes
 }
 
 /// Split u64 number into two u32 numbers
@@ -502,10 +503,11 @@ pub fn combine_u32_handles(
     handle_lo + handle_hi * Scalar::from(TWO_32)
 }
 
-#[cfg(not(target_arch = "bpf"))]
+/*
 pub fn combine_u32_ciphertexts(ct_lo: ElGamalCT, ct_hi: ElGamalCT) -> ElGamalCT {
     ct_lo + ct_hi * Scalar::from(TWO_32)
 }
+*/
 
 #[cfg(test)]
 mod test {
