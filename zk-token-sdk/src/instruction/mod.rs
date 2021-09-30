@@ -1,5 +1,5 @@
 mod close_account;
-pub mod transfer;
+mod transfer;
 mod update_account_pk;
 mod withdraw;
 

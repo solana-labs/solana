@@ -1,5 +1,5 @@
 use {
-    crate::pod::*,
+    crate::zk_token_elgamal::pod,
     bytemuck::{Pod, Zeroable},
 };
 #[cfg(not(target_arch = "bpf"))]
@@ -31,7 +31,7 @@ use {
 #[repr(C)]
 pub struct CloseAccountData {
     /// The source account available balance in encrypted form
-    pub balance: PodElGamalCT, // 64 bytes
+    pub balance: pod::ElGamalCT, // 64 bytes
 
     /// Proof that the source account available balance is zero
     pub proof: CloseAccountProof, // 64 bytes
@@ -63,8 +63,8 @@ impl Verifiable for CloseAccountData {
 #[repr(C)]
 #[allow(non_snake_case)]
 pub struct CloseAccountProof {
-    pub R: PodCompressedRistretto, // 32 bytes
-    pub z: PodScalar,              // 32 bytes
+    pub R: pod::CompressedRistretto, // 32 bytes
+    pub z: pod::Scalar,              // 32 bytes
 }
 
 #[allow(non_snake_case)]
@@ -156,7 +156,7 @@ mod test {
         assert!(proof.verify(&balance).is_err());
 
         // A zeroed cyphertext should be considered as an account balance of 0
-        let zeroed_ct: ElGamalCT = PodElGamalCT::zeroed().try_into().unwrap();
+        let zeroed_ct: ElGamalCT = pod::ElGamalCT::zeroed().try_into().unwrap();
         let proof = CloseAccountProof::new(&source_sk, &zeroed_ct);
         assert!(proof.verify(&zeroed_ct).is_ok());
     }
