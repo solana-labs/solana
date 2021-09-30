@@ -68,7 +68,7 @@ mod target_arch {
         amount_as_ct[..32].copy_from_slice(RISTRETTO_BASEPOINT_COMPRESSED.as_bytes());
         add_ciphertexts(
             Scalar::one(),
-            ct,
+            &ct,
             Scalar::from(amount),
             &pod::ElGamalCiphertext(amount_as_ct),
         )
@@ -82,7 +82,7 @@ mod target_arch {
         amount_as_ct[..32].copy_from_slice(RISTRETTO_BASEPOINT_COMPRESSED.as_bytes());
         add_ciphertexts(
             Scalar::one(),
-            ct,
+            &ct,
             -Scalar::from(amount),
             &pod::ElGamalCiphertext(amount_as_ct),
         )
