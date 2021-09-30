@@ -63,8 +63,8 @@ pub type Result<T> = std::result::Result<T, AccountsDbPluginError>;
 pub trait AccountsDbPlugin: Any + Send + Sync + std::fmt::Debug {
     fn name(&self) -> &'static str;
 
-    /// The callback called when a plugin is loaded by the system
-    /// Used for doing whatever initialization by the plugin
+    /// The callback called when a plugin is loaded by the system,
+    /// used for doing whatever initialization is required by the plugin.
     /// The _config_file points to the file name contains the name of the
     /// of the config file. The config shall be in JSON format and
     /// it must has a field named "libpath" pointing to the full path
