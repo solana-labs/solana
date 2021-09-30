@@ -1,4 +1,4 @@
-/// Module responsible for notifying the plugins of accounts update
+/// Module responsible for notifying plugins of account updates
 use {
     crate::accountsdb_plugin_manager::AccountsDbPluginManager,
     log::*,
