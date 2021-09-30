@@ -9,7 +9,7 @@ use rand::{thread_rng, Rng};
 use rayon::prelude::*;
 use solana_core::banking_stage::{BankingStage, BankingStageStats};
 use solana_core::cost_model::CostModel;
-use solana_core::cost_tracker::CostTracker;
+use solana_core::cost_tracker::{CostTracker, CostTrackerStats};
 use solana_entry::entry::{next_hash, Entry};
 use solana_gossip::cluster_info::ClusterInfo;
 use solana_gossip::cluster_info::Node;
@@ -97,6 +97,7 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
                 &Arc::new(RwLock::new(CostTracker::new(Arc::new(RwLock::new(
                     CostModel::new(std::u64::MAX, std::u64::MAX),
                 ))))),
+                &mut CostTrackerStats::default(),
             );
         });
 
