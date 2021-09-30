@@ -690,7 +690,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     continue; // marked dirty after we grabbed it above, so handle this the next time this bucket is flushed
                 }
                 flush_entries_updated_on_disk += 1;
-                disk.insert(&k, (&v.slot_list.read().unwrap(), v.ref_count()));
+                disk.insert(self.bin, &k, (&v.slot_list.read().unwrap(), v.ref_count()));
             }
             Self::update_time_stat(&self.stats().flush_update_us, m);
             Self::update_stat(

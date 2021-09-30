@@ -198,6 +198,12 @@ impl<T: Clone + Copy> Bucket<T> {
         data: &[T],
         ref_count: u64,
     ) -> Result<(), BucketMapError> {
+        let best_fit_bucket = IndexEntry::data_bucket_from_num_slots(data.len() as u64);
+        if self.data.get(best_fit_bucket as usize).is_none() {
+            // fail early if the data bucket we need doesn't exist - we don't want the index entry partially allocated
+            //error!("resizing because missing bucket");
+            return Err(BucketMapError::DataNoSpace((best_fit_bucket, 0)));
+        }
         let index_entry = self.find_entry_mut(key);
         let (elem, elem_ix) = match index_entry {
             None => {
@@ -213,11 +219,6 @@ impl<T: Clone + Copy> Bucket<T> {
             }
         };
         let elem_uid = self.index.uid(elem_ix);
-        let best_fit_bucket = IndexEntry::data_bucket_from_num_slots(data.len() as u64);
-        if self.data.get(best_fit_bucket as usize).is_none() {
-            //error!("resizing because missing bucket");
-            return Err(BucketMapError::DataNoSpace((best_fit_bucket, 0)));
-        }
         let bucket_ix = elem.data_bucket_ix();
         let current_bucket = &self.data[bucket_ix as usize];
         if best_fit_bucket == bucket_ix && elem.num_slots > 0 {
@@ -366,22 +367,27 @@ impl<T: Clone + Copy> Bucket<T> {
         //debug!(            "INDEX_IX: {:?} uid:{} loc: {} cap:{}",            key,            uid,            location,            index.capacity()        );
     }
 
+    /// grow the appropriate piece
+    pub fn grow(&mut self, err: BucketMapError) {
+        match err {
+            BucketMapError::DataNoSpace(sz) => {
+                //debug!("GROWING SPACE {:?}", sz);
+                self.grow_data(sz);
+            }
+            BucketMapError::IndexNoSpace(sz) => {
+                //debug!("GROWING INDEX {}", sz);
+                self.grow_index(sz);
+            }
+        }
+    }
+
     pub fn insert(&mut self, key: &Pubkey, value: (&[T], RefCount)) {
         let (new, refct) = value;
         loop {
             let rv = self.try_write(key, new, refct);
             match rv {
-                Err(BucketMapError::DataNoSpace(sz)) => {
-                    //debug!("GROWING SPACE {:?}", sz);
-                    self.grow_data(sz);
-                    continue;
-                }
-                Err(BucketMapError::IndexNoSpace(sz)) => {
-                    //debug!("GROWING INDEX {}", sz);
-                    self.grow_index(sz);
-                    continue;
-                }
-                Ok(()) => return,
+                Ok(_) => return,
+                Err(err) => self.grow(err),
             }
         }
     }
