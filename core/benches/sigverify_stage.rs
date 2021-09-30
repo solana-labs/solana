@@ -19,6 +19,44 @@ use std::time::{Duration, Instant};
 use test::Bencher;
 
 #[bench]
+fn bench_packet_discard(bencher: &mut Bencher) {
+    solana_logger::setup();
+    let len = 30 * 1000;
+    let chunk_size = 1024;
+    let tx = test_tx();
+    let mut batches = to_packets_chunked(&vec![tx; len], chunk_size);
+
+    let mut total = 0;
+
+    let ips: Vec<_> = (0..10_000)
+        .into_iter()
+        .map(|_| {
+            let mut addr = [0u16; 8];
+            thread_rng().fill(&mut addr);
+            addr
+        })
+        .collect();
+
+    for batch in batches.iter_mut() {
+        total += batch.packets.len();
+        for p in batch.packets.iter_mut() {
+            let ip_index = thread_rng().gen_range(0, ips.len());
+            p.meta.addr = ips[ip_index];
+        }
+    }
+    info!("total packets: {}", total);
+
+    bencher.iter(move || {
+        SigVerifyStage::discard_excess_packets(&mut batches, 10_000);
+        for batch in batches.iter_mut() {
+            for p in batch.packets.iter_mut() {
+                p.meta.discard = false;
+            }
+        }
+    });
+}
+
+#[bench]
 fn bench_sigverify_stage(bencher: &mut Bencher) {
     solana_logger::setup();
     let (packet_s, packet_r) = channel();
