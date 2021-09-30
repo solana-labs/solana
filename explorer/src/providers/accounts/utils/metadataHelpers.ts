@@ -14,10 +14,7 @@ import {
   AUCTION_ID,
   toPublicKey,
 } from "metaplex/ids";
-import { findProgramAddress } from "metaplex/utils";
-import { reportError } from "utils/sentry";
 import { TOKEN_PROGRAM_ID } from "providers/accounts/tokens";
-import { Cluster } from "providers/cluster";
 
 let STORE: PublicKey | undefined;
 
@@ -38,80 +35,58 @@ export const programIds = () => {
 
 export async function getMetadata(
   pubkey: PublicKey,
-  cluster: Cluster,
   url: string
-) {
-  try {
-    const connection = new Connection(url);
-    const metadataKey = await generatePDA(pubkey.toBase58());
-    const accountInfo = await connection.getAccountInfo(
-      toPublicKey(metadataKey)
-    );
+): Promise<Metadata | undefined> {
+  const connection = new Connection(url, "confirmed");
+  const metadataKey = await generatePDA(pubkey);
+  const accountInfo = await connection.getAccountInfo(toPublicKey(metadataKey));
 
-    if (accountInfo && accountInfo.data.length > 0) {
-      if (!isMetadataAccount(accountInfo)) return;
+  if (accountInfo && accountInfo.data.length > 0) {
+    if (!isMetadataAccount(accountInfo)) return;
 
-      if (isMetadataV1Account(accountInfo)) {
-        const metadata = decodeMetadata(accountInfo.data);
+    if (isMetadataV1Account(accountInfo)) {
+      const metadata = decodeMetadata(accountInfo.data);
 
-        if (isValidHttpUrl(metadata.data.uri)) {
-          return metadata;
-        }
+      if (isValidHttpUrl(metadata.data.uri)) {
+        return metadata;
       }
-    }
-  } catch (error) {
-    if (cluster !== Cluster.Custom) {
-      reportError(error, { url });
     }
   }
 }
 
-export async function hasEdition(
-  pubkey: PublicKey,
-  cluster: Cluster,
-  url: string
-) {
-  try {
-    const connection = new Connection(url);
-    const editionkey = await generatePDA(
-      pubkey.toBase58(),
-      true /* addEditionToSeeds */
-    );
-    const accountInfo = await connection.getAccountInfo(
-      toPublicKey(editionkey)
-    );
+export async function hasEdition(pubkey: PublicKey, url: string) {
+  const connection = new Connection(url);
+  const editionkey = await generatePDA(pubkey, true /* addEditionToSeeds */);
+  const accountInfo = await connection.getAccountInfo(toPublicKey(editionkey));
 
-    if (accountInfo && accountInfo.data.length > 0) {
-      if (!isMetadataAccount(accountInfo)) return;
+  if (accountInfo && accountInfo.data.length > 0) {
+    if (!isMetadataAccount(accountInfo)) return;
 
-      return (
-        isEditionV1Account(accountInfo) || isMasterEditionAccount(accountInfo)
-      );
-    }
-  } catch (error) {
-    if (cluster !== Cluster.Custom) {
-      reportError(error, { url });
-    }
+    return (
+      isEditionV1Account(accountInfo) || isMasterEditionAccount(accountInfo)
+    );
   }
 }
 
 async function generatePDA(
-  tokenMint: StringPublicKey,
+  tokenMint: PublicKey,
   addEditionToSeeds: boolean = false
-): Promise<StringPublicKey> {
+): Promise<PublicKey> {
   const PROGRAM_IDS = programIds();
 
   const metadataSeeds = [
     Buffer.from(METADATA_PREFIX),
     toPublicKey(PROGRAM_IDS.metadata).toBuffer(),
-    toPublicKey(tokenMint).toBuffer(),
+    tokenMint.toBuffer(),
   ];
 
-  const editionSeeds = [...metadataSeeds, Buffer.from("edition")];
+  if (addEditionToSeeds) {
+    metadataSeeds.push(Buffer.from("edition"));
+  }
 
   return (
-    await findProgramAddress(
-      addEditionToSeeds ? editionSeeds : metadataSeeds,
+    await PublicKey.findProgramAddress(
+      metadataSeeds,
       toPublicKey(PROGRAM_IDS.metadata)
     )
   )[0];
@@ -124,6 +99,7 @@ const decodeMetadata = (buffer: Buffer): Metadata => {
     buffer
   ) as Metadata;
 
+  // Remove any trailing null characters from the deserialized strings
   metadata.data.name = metadata.data.name.replace(/\0/g, "");
   metadata.data.symbol = metadata.data.symbol.replace(/\0/g, "");
   metadata.data.uri = metadata.data.uri.replace(/\0/g, "");
@@ -144,14 +120,16 @@ const isMasterEditionAccount = (account: AccountInfo<Buffer>) =>
   account.data[0] === MetadataKey.MasterEditionV1 ||
   account.data[0] === MetadataKey.MasterEditionV2;
 
-export function isValidHttpUrl(text: string) {
-  if (text.startsWith("http:") || text.startsWith("https:")) {
-    return true;
+function isValidHttpUrl(text: string) {
+  try {
+    const url = new URL(text);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch (_) {
+    return false;
   }
-
-  return false;
 }
 
+// Required to properly serialize and deserialize pubKeyAsString types
 const extendBorsh = () => {
   (BinaryReader.prototype as any).readPubkey = function () {
     const reader = this as unknown as BinaryReader;

@@ -1,5 +1,9 @@
 import React from "react";
-import { Account, useFetchAccountInfo } from "providers/accounts";
+import {
+  Account,
+  useFetchAccountInfo,
+  useMetadataAccountInfo,
+} from "providers/accounts";
 import {
   TokenAccount,
   MintAccountInfo,
@@ -80,6 +84,7 @@ function MintAccountCard({
   const fetchInfo = useFetchAccountInfo();
   const refresh = () => fetchInfo(account.pubkey);
   const tokenInfo = tokenRegistry.get(mintAddress);
+  const metadata = useMetadataAccountInfo(account.pubkey.toBase58());
 
   const bridgeContractAddress = getEthAddress(
     tokenInfo?.extensions?.bridgeContract
@@ -164,7 +169,7 @@ function MintAccountCard({
       <div className="card">
         <div className="card-header">
           <h3 className="card-header-title mb-0 d-flex align-items-center">
-            {tokenInfo ? "Overview" : "Token Mint"}
+            {metadata ? "NFT Overview" : tokenInfo ? "Overview" : "Token Mint"}
           </h3>
           <button className="btn btn-white btn-sm" onClick={refresh}>
             <span className="fe fe-refresh-cw mr-2"></span>
@@ -230,6 +235,14 @@ function MintAccountCard({
             <tr>
               <td>Status</td>
               <td className="text-lg-right">Uninitialized</td>
+            </tr>
+          )}
+          {metadata?.data && (
+            <tr>
+              <td>Seller Fee</td>
+              <td className="text-lg-right">
+                {metadata?.data.sellerFeeBasisPoints}
+              </td>
             </tr>
           )}
           {tokenInfo?.extensions?.bridgeContract && bridgeContractAddress && (

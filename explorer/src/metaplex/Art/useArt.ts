@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 const cachedImages = new Map<string, string>();
 export const useCachedImage = (uri: string) => {
   const [cachedBlob, setCachedBlob] = useState<string | undefined>(undefined);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
 
   useEffect(() => {
     if (!uri) {
@@ -18,30 +18,33 @@ export const useCachedImage = (uri: string) => {
       return;
     }
 
-    (async () => {
-      let response: Response;
-      try {
-        response = await fetch(uri, { cache: "force-cache" });
-      } catch {
+    if (!isLoading) {
+      (async () => {
+        setIsLoading(true);
+        let response: Response;
         try {
-          response = await fetch(uri, { cache: "reload" });
+          response = await fetch(uri, { cache: "force-cache" });
         } catch {
-          // If external URL, just use the uri
-          if (uri?.startsWith("http")) {
-            setCachedBlob(uri);
+          try {
+            response = await fetch(uri, { cache: "reload" });
+          } catch {
+            // If external URL, just use the uri
+            if (uri?.startsWith("http")) {
+              setCachedBlob(uri);
+            }
+            setIsLoading(false);
+            return;
           }
-          setIsLoading(false);
-          return;
         }
-      }
 
-      const blob = await response.blob();
-      const blobURI = URL.createObjectURL(blob);
-      cachedImages.set(uri, blobURI);
-      setCachedBlob(blobURI);
-      setIsLoading(false);
-    })();
-  }, [uri, setCachedBlob, setIsLoading]);
+        const blob = await response.blob();
+        const blobURI = URL.createObjectURL(blob);
+        cachedImages.set(uri, blobURI);
+        setCachedBlob(blobURI);
+        setIsLoading(false);
+      })();
+    }
+  }, [uri, setCachedBlob, isLoading, setIsLoading]);
 
   return { cachedBlob, isLoading };
 };

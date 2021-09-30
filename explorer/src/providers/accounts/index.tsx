@@ -234,12 +234,12 @@ async function fetchAccountInfo(
 
               // Check the PDA for Metadata
               if (parsed.type === "mint") {
-                const metadataPromise = await getMetadata(pubkey, cluster, url);
-                if (metadataPromise) {
+                const fetchedMetadata = await getMetadata(pubkey, url);
+                if (fetchedMetadata) {
                   // We have a valid Metadata account. Try and pull an Edition.
-                  const isNFT = await hasEdition(pubkey, cluster, url);
+                  const isNFT = await hasEdition(pubkey, url);
                   if (isNFT) {
-                    metadata = metadataPromise;
+                    metadata = fetchedMetadata;
                   }
                 }
               }
@@ -336,6 +336,25 @@ export function useTokenAccountInfo(
     }
 
     return create(data.parsed.info, TokenAccountInfo);
+  } catch (err) {
+    reportError(err, { address });
+  }
+}
+
+export function useMetadataAccountInfo(
+  address: string | undefined
+): Metadata | undefined {
+  const accountInfo = useAccountInfo(address);
+  if (address === undefined) return;
+
+  try {
+    const data = accountInfo?.data?.details?.data;
+    if (!data) return;
+    if (data.program !== "spl-token" || data.parsed.type !== "mint") {
+      return;
+    }
+
+    return data.metadata;
   } catch (err) {
     reportError(err, { address });
   }

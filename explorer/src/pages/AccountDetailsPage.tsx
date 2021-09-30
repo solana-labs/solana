@@ -214,8 +214,8 @@ export function NFTHeader({
 
       <div className="col mb-3 ml-n3 ml-md-n2 mt-3">
         <h6 className="header-pretitle">NFT</h6>
-        <h2 className="header-title">{metadata.data?.name}</h2>
-        <h4 className="header-pretitle mt-1"> {metadata.data?.symbol}</h4>
+        <h2 className="header-title">{metadata.data.name}</h2>
+        <h4 className="header-pretitle mt-1"> {metadata.data.symbol}</h4>
         <div className="mb-3 mt-2">
           <span className="badge badge-pill badge-dark mr-2">{`${
             metadata.primarySaleHappened ? "Secondary Market" : "Primary Market"
@@ -235,7 +235,7 @@ export function NFTHeader({
             Creators
           </button>
           <div className="dropdown-menu mt-2">
-            {getCreatorDropdownItems(metadata.data.creators!)}
+            {getCreatorDropdownItems(metadata.data.creators)}
           </div>
         </div>
       </div>
@@ -453,10 +453,11 @@ function getTabs(data?: ProgramData): Tab[] {
   return tabs;
 }
 
-function getCreatorDropdownItems(creators?: Creator[]) {
+function getCreatorDropdownItems(creators: Creator[] | null) {
   const getVerifiedIcon = (isVerified: boolean) => {
-    const className = isVerified ? "fe fe-check-circle" : "fe fe-alert-octagon";
-    return <i className={`ml-3 ${className}`}></i>;
+    const className = isVerified ? "fe fe-check" : "fe fe-alert-octagon";
+    const tooltip = isVerified ? "Verified" : "Unverified";
+    return <i className={`ml-3 ${className}`} title={tooltip}></i>;
   };
 
   const CreatorEntry = (creator: Creator) => {
@@ -474,13 +475,19 @@ function getCreatorDropdownItems(creators?: Creator[]) {
     );
   };
 
-  let listOfCreators: JSX.Element[] = [];
+  if (creators && creators.length > 0) {
+    let listOfCreators: JSX.Element[] = [];
 
-  if (creators && creators?.length > 0) {
-    creators?.forEach((creator) => {
+    creators.forEach((creator) => {
       listOfCreators.push(<CreatorEntry key={creator.address} {...creator} />);
     });
+
+    return listOfCreators;
   }
 
-  return listOfCreators;
+  return (
+    <div className={"dropdown-item text-monospace"}>
+      <div className="mr-3">No creators are associated with this NFT.</div>
+    </div>
+  );
 }
