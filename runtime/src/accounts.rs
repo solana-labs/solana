@@ -247,7 +247,8 @@ impl Accounts {
                             .unwrap_or_default();
 
                         if bpf_loader_upgradeable::check_id(account.owner()) {
-                            if message.is_writable(i, demote_program_write_locks)
+                            if demote_program_write_locks
+                                && message.is_writable(i, demote_program_write_locks)
                                 && !message.is_upgradeable_loader_present()
                             {
                                 error_counters.invalid_writable_account += 1;
@@ -276,6 +277,7 @@ impl Accounts {
                                 }
                             }
                         } else if account.executable()
+                            && demote_program_write_locks
                             && message.is_writable(i, demote_program_write_locks)
                         {
                             error_counters.invalid_writable_account += 1;

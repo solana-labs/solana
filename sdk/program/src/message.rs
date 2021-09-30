@@ -402,6 +402,9 @@ impl Message {
     }
 
     pub fn is_writable(&self, i: usize, demote_program_write_locks: bool) -> bool {
+        let demote_program_id = demote_program_write_locks
+            && self.is_key_called_as_program(i)
+            && !self.is_upgradeable_loader_present();
         (i < (self.header.num_required_signatures - self.header.num_readonly_signed_accounts)
             as usize
             || (i >= self.header.num_required_signatures as usize
@@ -411,8 +414,7 @@ impl Message {
                 let key = self.account_keys[i];
                 sysvar::is_sysvar_id(&key) || BUILTIN_PROGRAMS_KEYS.contains(&key)
             }
-            && (!self.is_key_called_as_program(i)
-                || (demote_program_write_locks && self.is_upgradeable_loader_present()))
+            && !demote_program_id
     }
 
     pub fn is_signer(&self, i: usize) -> bool {
