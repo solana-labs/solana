@@ -6,8 +6,8 @@
 
 # Solana AccountsDb Plugin Interface
 
-This crate enables AccountsDb plugin to be developed and plugged into the Solana Validator runtime. This enables the plugin to take actions
-at the time of the update, for example saving the information to the external database. The plugin shall implement the `AccountsDbPlugin` trait. Please see the detail of the `accountsdb_plugin_interface.rs` on the definition of the interface.
+This crate enables an AccountsDb plugin to be plugged into the Solana Validator runtime to take actions
+at the time of each account update; for example, saving the account state to an external database. The plugin must implement the `AccountsDbPlugin` trait. Please see the detail of the `accountsdb_plugin_interface.rs` for the interface definition.
 
 The plugin should produce a `cdylib` dynamical library. And the dynamic library must expose a `C` function `_create_plugin` which
 instantiates the implementation of the interface.
