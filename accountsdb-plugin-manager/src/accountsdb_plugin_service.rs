@@ -93,10 +93,12 @@ impl AccountsDbPluginService {
         let result: serde_json::Value = match serde_json::from_str(&contents) {
             Ok(value) => value,
             Err(err) => {
-                return Err(AccountsdbPluginServiceError::InvalidConfigFileFormat(format!(
-                    "The config file {:?} is not in a valid Json format, error: {:?}",
-                    accountsdb_plugin_config_file, err
-                )));
+                return Err(AccountsdbPluginServiceError::InvalidConfigFileFormat(
+                    format!(
+                        "The config file {:?} is not in a valid Json format, error: {:?}",
+                        accountsdb_plugin_config_file, err
+                    ),
+                ));
             }
         };
 

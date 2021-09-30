@@ -320,12 +320,12 @@ impl Validator {
         warn!("identity: {}", id);
         warn!("vote account: {}", vote_account);
 
-        let mut confirmed_bank_senders = Vec::new();
+        let mut bank_notification_senders = Vec::new();
 
         let accountsdb_plugin_service =
             if let Some(accountsdb_plugin_config_file) = &config.accountsdb_plugin_config_file {
                 let (confirmed_bank_sender, confirmed_bank_receiver) = unbounded();
-                confirmed_bank_senders.push(confirmed_bank_sender);
+                bank_notification_senders.push(confirmed_bank_sender);
                 let result = AccountsDbPluginService::new(
                     confirmed_bank_receiver,
                     accountsdb_plugin_config_file,
@@ -576,15 +576,15 @@ impl Validator {
             }
 
             let accountsdb_repl_service = config.accountsdb_repl_service_config.as_ref().map(|accountsdb_repl_service_config| {
-                let (confirmed_bank_sender, confirmed_bank_receiver) = unbounded();
-                confirmed_bank_senders.push(confirmed_bank_sender);
+                let (bank_notification_sender, bank_notification_receiver) = unbounded();
+                bank_notification_senders.push(bank_notification_sender);
                 accountsdb_repl_server_factory::AccountsDbReplServerFactory::build_accountsdb_repl_server(
-                    accountsdb_repl_service_config.clone(), confirmed_bank_receiver, bank_forks.clone())
+                    accountsdb_repl_service_config.clone(), bank_notification_receiver, bank_forks.clone())
             });
 
             let (bank_notification_sender, bank_notification_receiver) = unbounded();
-            let confirmed_bank_subscribers = if !confirmed_bank_senders.is_empty() {
-                Some(Arc::new(RwLock::new(confirmed_bank_senders)))
+            let confirmed_bank_subscribers = if !bank_notification_senders.is_empty() {
+                Some(Arc::new(RwLock::new(bank_notification_senders)))
             } else {
                 None
             };

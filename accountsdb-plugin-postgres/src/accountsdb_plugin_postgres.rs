@@ -1,6 +1,7 @@
 /// Main entry for the PostgreSQL plugin
 use {
     crate::accounts_selector::AccountsSelector,
+    bs58,
     chrono::Utc,
     log::*,
     postgres::{Client, NoTls, Statement},
@@ -165,9 +166,9 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
                 }
 
                 debug!(
-                    "Updating account {:?} {:?} at slot {:?} using account selector {:?}",
-                    account.pubkey,
-                    account.owner,
+                    "Updating account {:?} with owner {:?} at slot {:?} using account selector {:?}",
+                    bs58::encode(account.pubkey).into_string(),
+                    bs58::encode(account.owner).into_string(),
                     slot,
                     self.accounts_selector.as_ref().unwrap()
                 );
