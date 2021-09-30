@@ -49,8 +49,11 @@ solana-version = { path = "../version", version = "=1.8.0" }
 solana-vote-program = { path = "../programs/vote", version = "=1.8.0" }
 symlink = "0.1.0"
 
+[target.'cfg(not(target_env = "msvc"))'.dependencies]
+jemallocator = {package = "tikv-jemallocator", version = "0.4.1", feautres = ["unprefixed_malloc_on_supported_platforms"]}
+
 [target."cfg(unix)".dependencies]
-libc = "0.2.102"
+libc = "0.2.103"
 signal-hook = "0.2.3"
 
 [package.metadata.docs.rs]

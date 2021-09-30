@@ -1,6 +1,6 @@
 import {Client as LiveClient} from 'rpc-websockets';
 import {expect} from 'chai';
-import sinon from 'sinon';
+import {createSandbox} from 'sinon';
 
 import {Connection} from '../../src';
 
@@ -17,7 +17,7 @@ type RpcResponse = {
 };
 
 const mockRpcSocket: Array<[RpcRequest, RpcResponse]> = [];
-const sandbox = sinon.createSandbox();
+const sandbox = createSandbox();
 
 export const mockRpcMessage = ({
   method,

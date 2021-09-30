@@ -17,6 +17,7 @@ solana-core = { path = "../core", version = "=1.8.0" }
 solana-gossip = { path = "../gossip", version = "=1.8.0" }
 solana-logger = { path = "../logger", version = "=1.8.0" }
 solana-net-utils = { path = "../net-utils", version = "=1.8.0" }
+solana-perf = { path = "../perf", version = "=1.8.0" }
 solana-sdk = { path = "../sdk", version = "=1.8.0" }
 solana-streamer = { path = "../streamer", version = "=1.8.0" }
 solana-version = { path = "../version", version = "=1.8.0" }

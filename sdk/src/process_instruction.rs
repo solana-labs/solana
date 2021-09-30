@@ -1,5 +1,6 @@
 #![cfg(feature = "full")]
 
+use itertools::Itertools;
 use solana_sdk::{
     account::AccountSharedData,
     compute_budget::ComputeBudget,
@@ -51,27 +52,30 @@ impl<'a> InvokeContextStackFrame<'a> {
 /// Invocation context passed to loaders
 pub trait InvokeContext {
     /// Push a stack frame onto the invocation stack
-    ///
-    /// Used in MessageProcessor::process_cross_program_instruction
     fn push(
         &mut self,
         key: &Pubkey,
         message: &Message,
         instruction: &CompiledInstruction,
         program_indices: &[usize],
-        instruction_accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        account_indices: Option<&[usize]>,
     ) -> Result<(), InstructionError>;
     /// Pop a stack frame from the invocation stack
-    ///
-    /// Used in MessageProcessor::process_cross_program_instruction
     fn pop(&mut self);
     /// Current depth of the invocation stake
     fn invoke_depth(&self) -> usize;
+    /// Verify the results of an instruction
+    fn verify(
+        &mut self,
+        message: &Message,
+        instruction: &CompiledInstruction,
+        program_indices: &[usize],
+    ) -> Result<(), InstructionError>;
     /// Verify and update PreAccount state based on program execution
     fn verify_and_update(
         &mut self,
         instruction: &CompiledInstruction,
-        accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        account_indices: &[usize],
         write_privileges: &[bool],
     ) -> Result<(), InstructionError>;
     /// Get the program ID of the currently executing program
@@ -95,6 +99,8 @@ pub trait InvokeContext {
     fn add_executor(&self, pubkey: &Pubkey, executor: Arc<dyn Executor>);
     /// Get the completed loader work that can be re-used across executions
     fn get_executor(&self, pubkey: &Pubkey) -> Option<Arc<dyn Executor>>;
+    /// Set which instruction in the message is currently being recorded
+    fn set_instruction_index(&mut self, instruction_index: usize);
     /// Record invoked instruction
     fn record_instruction(&self, instruction: &Instruction);
     /// Get the bank's active feature set
@@ -118,9 +124,9 @@ pub trait InvokeContext {
     /// Get this invocation's `FeeCalculator`
     fn get_fee_calculator(&self) -> &FeeCalculator;
     /// Set the return data
-    fn set_return_data(&mut self, return_data: Option<(Pubkey, Vec<u8>)>);
+    fn set_return_data(&mut self, data: Vec<u8>) -> Result<(), InstructionError>;
     /// Get the return data
-    fn get_return_data(&self) -> &Option<(Pubkey, Vec<u8>)>;
+    fn get_return_data(&self) -> (Pubkey, &[u8]);
 }
 
 /// Convenience macro to log a message with an `Rc<RefCell<dyn Logger>>`
@@ -321,20 +327,37 @@ pub mod stable_log {
         ic_logger_msg!(logger, "Program log: {}", message);
     }
 
+    /// Emit a program data.
+    ///
+    /// The general form is:
+    ///
+    /// ```notrust
+    /// "Program data: <binary-data-in-base64>*"
+    /// ```
+    ///
+    /// That is, any program-generated output is guaranteed to be prefixed by "Program data: "
+    pub fn program_data(logger: &Rc<RefCell<dyn Logger>>, data: &[&[u8]]) {
+        ic_logger_msg!(
+            logger,
+            "Program data: {}",
+            data.iter().map(base64::encode).join(" ")
+        );
+    }
+
     /// Log return data as from the program itself. This line will not be present if no return
     /// data was set, or if the return data was set to zero length.
     ///
     /// The general form is:
     ///
     /// ```notrust
-    /// "Program return data: <program-id> <program-generated-data-in-base64>"
+    /// "Program return: <program-id> <program-generated-data-in-base64>"
     /// ```
     ///
-    /// That is, any program-generated output is guaranteed to be prefixed by "Program return data: "
-    pub fn program_return_data(logger: &Rc<RefCell<dyn Logger>>, program_id: &Pubkey, data: &[u8]) {
+    /// That is, any program-generated output is guaranteed to be prefixed by "Program return: "
+    pub fn program_return(logger: &Rc<RefCell<dyn Logger>>, program_id: &Pubkey, data: &[u8]) {
         ic_logger_msg!(
             logger,
-            "Program return data: {} {}",
+            "Program return: {} {}",
             program_id,
             base64::encode(data)
         );
@@ -424,7 +447,7 @@ pub struct MockInvokeContext<'a> {
     pub disabled_features: HashSet<Pubkey>,
     pub blockhash: Hash,
     pub fee_calculator: FeeCalculator,
-    pub return_data: Option<(Pubkey, Vec<u8>)>,
+    pub return_data: (Pubkey, Vec<u8>),
 }
 
 impl<'a> MockInvokeContext<'a> {
@@ -444,7 +467,7 @@ impl<'a> MockInvokeContext<'a> {
             disabled_features: HashSet::default(),
             blockhash: Hash::default(),
             fee_calculator: FeeCalculator::default(),
-            return_data: None,
+            return_data: (Pubkey::default(), Vec::new()),
         };
         invoke_context
             .invoke_stack
@@ -478,7 +501,7 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
         _message: &Message,
         _instruction: &CompiledInstruction,
         _program_indices: &[usize],
-        _instruction_accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        _account_indices: Option<&[usize]>,
     ) -> Result<(), InstructionError> {
         self.invoke_stack.push(InvokeContextStackFrame::new(
             *_key,
@@ -492,10 +515,18 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
     fn invoke_depth(&self) -> usize {
         self.invoke_stack.len()
     }
+    fn verify(
+        &mut self,
+        _message: &Message,
+        _instruction: &CompiledInstruction,
+        _program_indices: &[usize],
+    ) -> Result<(), InstructionError> {
+        Ok(())
+    }
     fn verify_and_update(
         &mut self,
         _instruction: &CompiledInstruction,
-        _accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
+        _account_indices: &[usize],
         _write_pivileges: &[bool],
     ) -> Result<(), InstructionError> {
         Ok(())
@@ -539,6 +570,7 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
     fn get_executor(&self, _pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
         None
     }
+    fn set_instruction_index(&mut self, _instruction_index: usize) {}
     fn record_instruction(&self, _instruction: &Instruction) {}
     fn is_feature_active(&self, feature_id: &Pubkey) -> bool {
         !self.disabled_features.contains(feature_id)
@@ -573,10 +605,11 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
     fn get_fee_calculator(&self) -> &FeeCalculator {
         &self.fee_calculator
     }
-    fn set_return_data(&mut self, return_data: Option<(Pubkey, Vec<u8>)>) {
-        self.return_data = return_data;
+    fn set_return_data(&mut self, data: Vec<u8>) -> Result<(), InstructionError> {
+        self.return_data = (*self.get_caller()?, data);
+        Ok(())
     }
-    fn get_return_data(&self) -> &Option<(Pubkey, Vec<u8>)> {
-        &self.return_data
+    fn get_return_data(&self) -> (Pubkey, &[u8]) {
+        (self.return_data.0, &self.return_data.1)
     }
 }

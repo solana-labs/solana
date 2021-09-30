@@ -2,7 +2,6 @@ use crate::accounts_index::{AccountsIndexConfig, IndexValue};
 use crate::bucket_map_holder::BucketMapHolder;
 use crate::in_mem_accounts_index::InMemAccountsIndex;
 use std::fmt::Debug;
-use std::time::Duration;
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -45,18 +44,18 @@ impl<T: IndexValue> Drop for AccountsIndexStorage<T> {
 
 impl<T: IndexValue> AccountsIndexStorage<T> {
     pub fn new(bins: usize, config: &Option<AccountsIndexConfig>) -> AccountsIndexStorage<T> {
-        let storage = Arc::new(BucketMapHolder::new(bins, config));
+        let num_threads = std::cmp::max(2, num_cpus::get() / 4);
+        let threads = config
+            .as_ref()
+            .and_then(|config| config.flush_threads)
+            .unwrap_or(num_threads);
+
+        let storage = Arc::new(BucketMapHolder::new(bins, config, threads));
 
         let in_mem = (0..bins)
             .into_iter()
             .map(|bin| Arc::new(InMemAccountsIndex::new(&storage, bin)))
             .collect::<Vec<_>>();
-
-        const DEFAULT_THREADS: usize = 1; // soon, this will be a cpu calculation
-        let threads = config
-            .as_ref()
-            .and_then(|config| config.flush_threads)
-            .unwrap_or(DEFAULT_THREADS);
 
         let exit = Arc::new(AtomicBool::default());
         let handles = Some(
@@ -71,7 +70,7 @@ impl<T: IndexValue> AccountsIndexStorage<T> {
                     Builder::new()
                         .name("solana-idx-flusher".to_string())
                         .spawn(move || {
-                            Self::background(storage_, exit_, in_mem_);
+                            storage_.background(exit_, in_mem_);
                         })
                         .unwrap()
                 })
@@ -83,36 +82,6 @@ impl<T: IndexValue> AccountsIndexStorage<T> {
             handles,
             storage,
             in_mem,
-        }
-    }
-
-    pub fn storage(&self) -> &Arc<BucketMapHolder<T>> {
-        &self.storage
-    }
-
-    // intended to execute in a bg thread
-    pub fn background(
-        storage: Arc<BucketMapHolder<T>>,
-        exit: Arc<AtomicBool>,
-        in_mem: Vec<Arc<InMemAccountsIndex<T>>>,
-    ) {
-        let bins = in_mem.len();
-        loop {
-            // this will transition to waits and thread throttling
-            storage
-                .wait_dirty_or_aged
-                .wait_timeout(Duration::from_millis(10000));
-            if exit.load(Ordering::Relaxed) {
-                break;
-            }
-
-            storage.stats.active_threads.fetch_add(1, Ordering::Relaxed);
-            for _ in 0..bins {
-                let index = storage.next_bucket_to_flush();
-                in_mem[index].flush();
-                storage.stats.report_stats(&storage);
-            }
-            storage.stats.active_threads.fetch_sub(1, Ordering::Relaxed);
         }
     }
 }

@@ -16,7 +16,7 @@ clap = "2.33.1"
 criterion-stats = "0.3.0"
 ctrlc = { version = "3.1.9", features = ["termination"] }
 console = "0.14.1"
-const_format = "0.2.20"
+const_format = "0.2.21"
 log = "0.4.14"
 humantime = "2.0.1"
 num-traits = "0.2"
@@ -42,7 +42,7 @@ solana-version = { path = "../version", version = "=1.8.0" }
 solana-vote-program = { path = "../programs/vote", version = "=1.8.0" }
 spl-memo = { version = "=3.0.1", features = ["no-entrypoint"] }
 thiserror = "1.0.29"
-tiny-bip39 = "0.7.0"
+tiny-bip39 = "0.8.1"
 
 [dev-dependencies]
 solana-core = { path = "../core", version = "=1.8.0" }

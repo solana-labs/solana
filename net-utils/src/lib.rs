@@ -374,7 +374,7 @@ pub fn is_host_port(string: String) -> Result<(), String> {
 
 #[cfg(windows)]
 fn udp_socket(_reuseaddr: bool) -> io::Result<Socket> {
-    let sock = Socket::new(Domain::ipv4(), Type::dgram(), None)?;
+    let sock = Socket::new(Domain::IPV4, Type::DGRAM, None)?;
     Ok(sock)
 }
 

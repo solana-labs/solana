@@ -26,8 +26,9 @@ static const uint8_t TEST_PRIVILEGE_DEESCALATION_ESCALATION_WRITABLE = 13;
 static const uint8_t TEST_WRITABLE_DEESCALATION_WRITABLE = 14;
 static const uint8_t TEST_NESTED_INVOKE_TOO_DEEP = 15;
 static const uint8_t TEST_EXECUTABLE_LAMPORTS = 16;
-static const uint8_t ADD_LAMPORTS = 17;
-static const uint8_t TEST_RETURN_DATA_TOO_LARGE = 18;
+static const uint8_t TEST_CALL_PRECOMPILE = 17;
+static const uint8_t ADD_LAMPORTS = 18;
+static const uint8_t TEST_RETURN_DATA_TOO_LARGE = 19;
 
 static const int MINT_INDEX = 0;
 static const int ARGUMENT_INDEX = 1;
@@ -40,6 +41,8 @@ static const int DERIVED_KEY2_INDEX = 7;
 static const int DERIVED_KEY3_INDEX = 8;
 static const int SYSTEM_PROGRAM_INDEX = 9;
 static const int FROM_INDEX = 10;
+static const int ED25519_PROGRAM_INDEX = 11;
+static const int INVOKE_PROGRAM_INDEX = 12;
 
 uint64_t do_nested_invokes(uint64_t num_nested_invokes,
                            SolAccountInfo *accounts, uint64_t num_accounts) {
@@ -73,7 +76,7 @@ uint64_t do_nested_invokes(uint64_t num_nested_invokes,
 extern uint64_t entrypoint(const uint8_t *input) {
   sol_log("Invoke C program");
 
-  SolAccountInfo accounts[12];
+  SolAccountInfo accounts[13];
   SolParameters params = (SolParameters){.ka = accounts};
 
   if (!sol_deserialize(input, &params, SOL_ARRAY_SIZE(accounts))) {
@@ -586,6 +589,16 @@ extern uint64_t entrypoint(const uint8_t *input) {
 					data, SOL_ARRAY_SIZE(data)};
     sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts));
     *accounts[ARGUMENT_INDEX].lamports += 1;
+    break;
+  }
+  case TEST_CALL_PRECOMPILE: {
+    sol_log("Test calling precompile from cpi");
+    SolAccountMeta arguments[] = {};
+    uint8_t data[] = {};
+    const SolInstruction instruction = {accounts[ED25519_PROGRAM_INDEX].key,
+					arguments, SOL_ARRAY_SIZE(arguments),
+					data, SOL_ARRAY_SIZE(data)};
+    sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts));
     break;
   }
   case ADD_LAMPORTS: {

@@ -26,7 +26,6 @@ use {
             self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlotsIndex, LowestSlot, NodeInstance,
             SnapshotHash, Version, Vote, MAX_WALLCLOCK,
         },
-        data_budget::DataBudget,
         epoch_slots::EpochSlots,
         gossip_error::GossipError,
         ping_pong::{self, PingCache, Pong},
@@ -45,6 +44,7 @@ use {
         bind_common, bind_common_in_range, bind_in_range, find_available_port_in_range,
         multi_bind_in_range, PortRange,
     },
+    solana_perf::data_budget::DataBudget,
     solana_perf::packet::{
         limited_deserialize, to_packets_with_destination, Packet, Packets, PacketsRecycler,
         PACKET_DATA_SIZE,
@@ -2181,7 +2181,12 @@ impl ClusterInfo {
             messages
                 .into_iter()
                 .flat_map(|(from, crds_values)| {
-                    self.gossip.process_push_message(&from, crds_values, now)
+                    let (num_success, origins) =
+                        self.gossip.process_push_message(&from, crds_values, now);
+                    self.stats
+                        .process_push_success
+                        .add_relaxed(num_success as u64);
+                    origins
                 })
                 .collect()
         };
