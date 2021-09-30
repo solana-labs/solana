@@ -21,6 +21,15 @@ use {
 
 #[derive(Error, Debug)]
 pub enum AccountsdbPluginServiceError {
+    #[error("Cannot open the the plugin config file")]
+    CannotOpenConfigFile(String),
+
+    #[error("Cannot read the the plugin config file")]
+    CannotReadConfigFile(String),
+
+    #[error("The config file is not in a valid Json format")]
+    InvalidConfigFileFormat(String),
+
     #[error("Plugin library path is not specified in the config file")]
     LibPathNotSet,
 
@@ -63,11 +72,33 @@ impl AccountsDbPluginService {
         let plugin_manager = AccountsDbPluginManager::new();
         let plugin_manager = Arc::new(RwLock::new(plugin_manager));
 
-        let mut file = File::open(accountsdb_plugin_config_file).unwrap();
-        let mut contents = String::new();
-        file.read_to_string(&mut contents).unwrap();
+        let mut file = match File::open(accountsdb_plugin_config_file) {
+            Ok(file) => file,
+            Err(err) => {
+                return Err(AccountsdbPluginServiceError::CannotOpenConfigFile(format!(
+                    "Failed to open the plugin config file {:?}, error: {:?}",
+                    accountsdb_plugin_config_file, err
+                )));
+            }
+        };
 
-        let result: serde_json::Value = serde_json::from_str(&contents).unwrap();
+        let mut contents = String::new();
+        if let Err(err) = file.read_to_string(&mut contents) {
+            return Err(AccountsdbPluginServiceError::CannotReadConfigFile(format!(
+                "Failed to read the plugin config file {:?}, error: {:?}",
+                accountsdb_plugin_config_file, err
+            )));
+        }
+
+        let result: serde_json::Value = match serde_json::from_str(&contents) {
+            Ok(value) => value,
+            Err(err) => {
+                return Err(AccountsdbPluginServiceError::InvalidConfigFileFormat(format!(
+                    "The config file {:?} is not in a valid Json format, error: {:?}",
+                    accountsdb_plugin_config_file, err
+                )));
+            }
+        };
 
         let accounts_update_notifier = Arc::new(RwLock::new(AccountsUpdateNotifierImpl::new(
             plugin_manager.clone(),
