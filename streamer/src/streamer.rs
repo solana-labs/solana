@@ -126,10 +126,7 @@ fn recv_send(
     Ok(())
 }
 
-pub fn recv_batch(
-    recvr: &PacketReceiver,
-    max_batch: usize,
-) -> Result<(Vec<Packets>, usize, Duration)> {
+pub fn recv_batch(recvr: &PacketReceiver) -> Result<(Vec<Packets>, usize, Duration)> {
     let timer = Duration::new(1, 0);
     let msgs = recvr.recv_timeout(timer)?;
     let recv_start = Instant::now();
@@ -140,9 +137,6 @@ pub fn recv_batch(
         trace!("got more msgs");
         len += more.packets.len();
         batch.push(more);
-        if len > max_batch {
-            break;
-        }
     }
     let recv_duration = recv_start.elapsed();
     trace!("batch len {}", batch.len());
