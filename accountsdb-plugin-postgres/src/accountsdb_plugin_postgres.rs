@@ -38,7 +38,7 @@ pub struct AccountsDbPluginPostgresConfig {
 }
 
 #[derive(Error, Debug)]
-enum AccountsDbPluginPostgresError {
+pub enum AccountsDbPluginPostgresError {
     #[error("Error connecting to the backend data store.")]
     DataStoreConnectionError { msg: String },
 

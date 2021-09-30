@@ -1,6 +1,6 @@
 /// A concurrent implementation for writing accounts into the PostgreSQL in parallel.
 use {
-    crate::accountsdb_plugin_postgres::AccountsDbPluginPostgresConfig,
+    crate::accountsdb_plugin_postgres::{AccountsDbPluginPostgresConfig, AccountsDbPluginPostgresError},
     chrono::Utc,
     crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, Sender},
     log::*,
@@ -27,38 +27,28 @@ struct AccountsWriteWorker {
     client: Mutex<PostgresSqlClientWrapper>,
 }
 
-#[derive(Clone, PartialEq, Default, Debug)]
-pub struct DbAccountMeta {
+impl Eq for DbAccountInfo {}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct DbAccountInfo {
     pub pubkey: Vec<u8>,
     pub lamports: u64,
     pub owner: Vec<u8>,
     pub executable: bool,
     pub rent_epoch: u64,
-}
-
-impl Eq for DbAccountInfo {}
-
-#[derive(Clone, PartialEq, Debug)]
-pub struct DbAccountInfo {
-    pub account_meta: DbAccountMeta,
     pub data: Vec<u8>,
 }
-
 
 impl From<&ReplicaAccountInfo<'_>> for DbAccountInfo {
 
     fn from(account: &ReplicaAccountInfo<'_>) -> Self {
-        let account_meta = DbAccountMeta {
-            pubkey: account.account_meta.pubkey.to_vec(),
-            lamports: account.account_meta.lamports,
-            owner: account.account_meta.owner.to_vec(),
-            executable: account.account_meta.executable,
-            rent_epoch: account.account_meta.rent_epoch,
-        };
-
         let data = account.data.to_vec();
         Self {
-            account_meta,
+            pubkey: account.pubkey.to_vec(),
+            lamports: account.lamports,
+            owner: account.owner.to_vec(),
+            executable: account.executable,
+            rent_epoch: account.rent_epoch,
             data,
         }
     }
@@ -71,12 +61,12 @@ impl AccountsWriteWorker {
         let connection_str = format!("host={} user={}", config.host, config.user);
         match Client::connect(&connection_str, NoTls) {
             Err(err) => {
-                return Err(AccountsDbPluginError::DataStoreConnectionError {
+                return Err(AccountsDbPluginError::Custom(Box::new(AccountsDbPluginPostgresError::DataStoreConnectionError {
                     msg: format!(
                         "Error in connecting to the PostgreSQL database: {:?} host: {:?} user: {:?} config: {:?}",
                         err, config.host, config.user, connection_str
                     ),
-                });
+                })));
             }
             Ok(mut client) => {
                 let result = client.prepare("INSERT INTO account (pubkey, slot, owner, lamports, executable, rent_epoch, data, updated_on) \
@@ -86,12 +76,12 @@ impl AccountsWriteWorker {
 
                 match result {
                     Err(err) => {
-                        return Err(AccountsDbPluginError::DataSchemaError {
+                        return Err(AccountsDbPluginError::Custom(Box::new(AccountsDbPluginPostgresError::DataSchemaError {
                             msg: format!(
                                 "Error in preparing for the accounts update PostgreSQL database: {:?} host: {:?} user: {:?} config: {:?}",
                                 err, config.host, config.user, connection_str
                             ),
-                        });
+                        })));
                     }
                     Ok(update_account_stmt) => Ok(Self {
                         client: Mutex::new(PostgresSqlClientWrapper {
@@ -118,22 +108,22 @@ impl AccountsWriteWorker {
                     let account = account.0;
                     debug!(
                         "Updating account {:?} {:?} at slot {:?}",
-                        account.account_meta.pubkey, account.account_meta.owner, slot,
+                        account.pubkey, account.owner, slot,
                     );
 
                     let slot = slot as i64; // postgres only supports i64
-                    let lamports = account.account_meta.lamports as i64;
-                    let rent_epoch = account.account_meta.rent_epoch as i64;
+                    let lamports = account.lamports as i64;
+                    let rent_epoch = account.rent_epoch as i64;
                     let updated_on = Utc::now().naive_utc();
                     let client = self.client.get_mut().unwrap();
                     let result = client.client.query(
                         &client.update_account_stmt,
                         &[
-                            &account.account_meta.pubkey,
+                            &account.pubkey,
                             &slot,
-                            &account.account_meta.owner,
+                            &account.owner,
                             &lamports,
-                            &account.account_meta.executable,
+                            &account.executable,
                             &rent_epoch,
                             &account.data,
                             &updated_on,
@@ -215,7 +205,7 @@ impl AccountsWriter {
     pub fn update_account(&mut self, account: &ReplicaAccountInfo, slot: u64) -> Result<(), AccountsDbPluginError> {
         if let Err(err) = self.sender.send((DbAccountInfo::from(account), slot)) {
             return Err(AccountsDbPluginError::AccountsUpdateError {
-                msg: format!("Failed to update the account {:?}, error: {:?}", account.account_meta.pubkey, err)
+                msg: format!("Failed to update the account {:?}, error: {:?}", account.pubkey, err)
             });
         }
         Ok(())
