@@ -14,6 +14,6 @@ pub enum ProofError {
     InvalidBitsize,
     /// This error occurs when there are insufficient generators for the proof.
     InvalidGeneratorsLength,
-    /// This error occurs a `zk_token_elgamal::pod::ElGamalCT` contains invalid ElGamalCT ciphertext
+    /// This error occurs a `zk_token_elgamal::pod::ElGamalCiphertext` contains invalid ElGamalCiphertext ciphertext
     InconsistentCTData,
 }

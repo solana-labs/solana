@@ -1,12 +1,12 @@
 use super::pod;
 pub use target_arch::*;
 
-impl From<(pod::PedersenComm, pod::PedersenDecHandle)> for pod::ElGamalCT {
+impl From<(pod::PedersenComm, pod::PedersenDecHandle)> for pod::ElGamalCiphertext {
     fn from((comm, decrypt_handle): (pod::PedersenComm, pod::PedersenDecHandle)) -> Self {
         let mut buf = [0_u8; 64];
         buf[..32].copy_from_slice(&comm.0);
         buf[32..].copy_from_slice(&decrypt_handle.0);
-        pod::ElGamalCT(buf)
+        pod::ElGamalCiphertext(buf)
     }
 }
 
@@ -15,7 +15,7 @@ mod target_arch {
     use {
         super::pod,
         crate::{
-            encryption::elgamal::{ElGamalCT, ElGamalPK},
+            encryption::elgamal::{ElGamalCiphertext, ElGamalPubkey},
             encryption::pedersen::{PedersenComm, PedersenDecHandle},
             errors::ProofError,
             range_proof::RangeProof,
@@ -36,41 +36,41 @@ mod target_arch {
         }
     }
 
-    impl From<ElGamalCT> for pod::ElGamalCT {
-        fn from(ct: ElGamalCT) -> Self {
+    impl From<ElGamalCiphertext> for pod::ElGamalCiphertext {
+        fn from(ct: ElGamalCiphertext) -> Self {
             Self(ct.to_bytes())
         }
     }
 
-    impl TryFrom<pod::ElGamalCT> for ElGamalCT {
+    impl TryFrom<pod::ElGamalCiphertext> for ElGamalCiphertext {
         type Error = ProofError;
 
-        fn try_from(ct: pod::ElGamalCT) -> Result<Self, Self::Error> {
+        fn try_from(ct: pod::ElGamalCiphertext) -> Result<Self, Self::Error> {
             Self::from_bytes(&ct.0).ok_or(ProofError::InconsistentCTData)
         }
     }
 
-    impl fmt::Debug for pod::ElGamalCT {
+    impl fmt::Debug for pod::ElGamalCiphertext {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
             write!(f, "{:?}", self.0)
         }
     }
 
-    impl From<ElGamalPK> for pod::ElGamalPK {
-        fn from(pk: ElGamalPK) -> Self {
+    impl From<ElGamalPubkey> for pod::ElGamalPubkey {
+        fn from(pk: ElGamalPubkey) -> Self {
             Self(pk.to_bytes())
         }
     }
 
-    impl TryFrom<pod::ElGamalPK> for ElGamalPK {
+    impl TryFrom<pod::ElGamalPubkey> for ElGamalPubkey {
         type Error = ProofError;
 
-        fn try_from(pk: pod::ElGamalPK) -> Result<Self, Self::Error> {
+        fn try_from(pk: pod::ElGamalPubkey) -> Result<Self, Self::Error> {
             Self::from_bytes(&pk.0).ok_or(ProofError::InconsistentCTData)
         }
     }
 
-    impl fmt::Debug for pod::ElGamalPK {
+    impl fmt::Debug for pod::ElGamalPubkey {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
             write!(f, "{:?}", self.0)
         }

@@ -6,7 +6,7 @@ use {
 use {
     crate::{
         encryption::{
-            elgamal::{ElGamalCT, ElGamalPK, ElGamalSK},
+            elgamal::{ElGamalCiphertext, ElGamalPubkey, ElGamalSK},
             pedersen::PedersenBase,
         },
         errors::ProofError,
@@ -34,16 +34,16 @@ use {
 #[repr(C)]
 pub struct UpdateAccountPkData {
     /// Current ElGamal encryption key
-    pub current_pk: pod::ElGamalPK, // 32 bytes
+    pub current_pk: pod::ElGamalPubkey, // 32 bytes
 
     /// Current encrypted available balance
-    pub current_ct: pod::ElGamalCT, // 64 bytes
+    pub current_ct: pod::ElGamalCiphertext, // 64 bytes
 
     /// New ElGamal encryption key
-    pub new_pk: pod::ElGamalPK, // 32 bytes
+    pub new_pk: pod::ElGamalPubkey, // 32 bytes
 
     /// New encrypted available balance
-    pub new_ct: pod::ElGamalCT, // 64 bytes
+    pub new_ct: pod::ElGamalCiphertext, // 64 bytes
 
     /// Proof that the current and new ciphertexts are consistent
     pub proof: UpdateAccountPkProof, // 160 bytes
@@ -53,10 +53,10 @@ impl UpdateAccountPkData {
     #[cfg(not(target_arch = "bpf"))]
     pub fn new(
         current_balance: u64,
-        current_ct: ElGamalCT,
-        current_pk: ElGamalPK,
+        current_ct: ElGamalCiphertext,
+        current_pk: ElGamalPubkey,
         current_sk: &ElGamalSK,
-        new_pk: ElGamalPK,
+        new_pk: ElGamalPubkey,
         new_sk: &ElGamalSK,
     ) -> Self {
         let new_ct = new_pk.encrypt(current_balance);
@@ -107,8 +107,8 @@ impl UpdateAccountPkProof {
         current_balance: u64,
         current_sk: &ElGamalSK,
         new_sk: &ElGamalSK,
-        current_ct: &ElGamalCT,
-        new_ct: &ElGamalCT,
+        current_ct: &ElGamalCiphertext,
+        new_ct: &ElGamalCiphertext,
     ) -> Self {
         let mut transcript = Self::transcript_new();
 
@@ -153,7 +153,11 @@ impl UpdateAccountPkProof {
         }
     }
 
-    fn verify(&self, current_ct: &ElGamalCT, new_ct: &ElGamalCT) -> Result<(), ProofError> {
+    fn verify(
+        &self,
+        current_ct: &ElGamalCiphertext,
+        new_ct: &ElGamalCiphertext,
+    ) -> Result<(), ProofError> {
         let mut transcript = Self::transcript_new();
 
         // add a domain separator to record the start of the protocol
@@ -233,8 +237,9 @@ mod test {
 
         // A zeroed cipehrtext should be considered as an account balance of 0
         let balance: u64 = 0;
-        let zeroed_ct_as_current_ct: ElGamalCT = pod::ElGamalCT::zeroed().try_into().unwrap();
-        let new_ct: ElGamalCT = new_pk.encrypt(balance);
+        let zeroed_ct_as_current_ct: ElGamalCiphertext =
+            pod::ElGamalCiphertext::zeroed().try_into().unwrap();
+        let new_ct: ElGamalCiphertext = new_pk.encrypt(balance);
         let proof = UpdateAccountPkProof::new(
             balance,
             &current_sk,
@@ -244,8 +249,9 @@ mod test {
         );
         assert!(proof.verify(&zeroed_ct_as_current_ct, &new_ct).is_ok());
 
-        let current_ct: ElGamalCT = pod::ElGamalCT::zeroed().try_into().unwrap();
-        let zeroed_ct_as_new_ct: ElGamalCT = pod::ElGamalCT::zeroed().try_into().unwrap();
+        let current_ct: ElGamalCiphertext = pod::ElGamalCiphertext::zeroed().try_into().unwrap();
+        let zeroed_ct_as_new_ct: ElGamalCiphertext =
+            pod::ElGamalCiphertext::zeroed().try_into().unwrap();
         let proof = UpdateAccountPkProof::new(
             balance,
             &current_sk,
@@ -255,8 +261,10 @@ mod test {
         );
         assert!(proof.verify(&current_ct, &zeroed_ct_as_new_ct).is_ok());
 
-        let zeroed_ct_as_current_ct: ElGamalCT = pod::ElGamalCT::zeroed().try_into().unwrap();
-        let zeroed_ct_as_new_ct: ElGamalCT = pod::ElGamalCT::zeroed().try_into().unwrap();
+        let zeroed_ct_as_current_ct: ElGamalCiphertext =
+            pod::ElGamalCiphertext::zeroed().try_into().unwrap();
+        let zeroed_ct_as_new_ct: ElGamalCiphertext =
+            pod::ElGamalCiphertext::zeroed().try_into().unwrap();
         let proof = UpdateAccountPkProof::new(
             balance,
             &current_sk,

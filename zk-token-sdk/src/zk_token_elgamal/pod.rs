@@ -10,11 +10,11 @@ pub struct CompressedRistretto(pub [u8; 32]);
 
 #[derive(Clone, Copy, Pod, Zeroable, PartialEq)]
 #[repr(transparent)]
-pub struct ElGamalCT(pub [u8; 64]);
+pub struct ElGamalCiphertext(pub [u8; 64]);
 
 #[derive(Clone, Copy, Pod, Zeroable, PartialEq)]
 #[repr(transparent)]
-pub struct ElGamalPK(pub [u8; 32]);
+pub struct ElGamalPubkey(pub [u8; 32]);
 
 #[derive(Clone, Copy, Pod, Zeroable, PartialEq)]
 #[repr(transparent)]
