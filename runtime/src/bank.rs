@@ -1828,38 +1828,15 @@ impl Bank {
         thread_pool: &ThreadPool,
     ) -> (
         Vec<StakeDelegationAccount>,
-        DashMap<Pubkey, (Arc<VoteState>, Arc<AccountSharedData>)>,
+        DashMap<Pubkey, Option<(Arc<VoteState>, Arc<AccountSharedData>)>>,
     ) {
         let filter_stake_delegation_accounts = self
             .feature_set
             .is_active(&feature_set::filter_stake_delegation_accounts::id());
 
         let stakes = self.stakes.read().unwrap();
-        let vote_accounts: DashMap<Pubkey, (Arc<VoteState>, Arc<AccountSharedData>)> = thread_pool
-            .install(|| {
-                stakes
-                    .vote_accounts()
-                    .iter()
-                    .par_bridge()
-                    .filter_map(|(pubkey, (_lamports, arc_vote_account))| {
-                        arc_vote_account
-                            .vote_state()
-                            .as_ref()
-                            .ok()
-                            .map(|vote_state_result| {
-                                (
-                                    *pubkey,
-                                    (
-                                        Arc::new(vote_state_result.clone()),
-                                        Arc::new(AccountSharedData::from(
-                                            arc_vote_account.account().clone(),
-                                        )),
-                                    ),
-                                )
-                            })
-                    })
-                    .collect()
-            });
+        let vote_accounts: DashMap<Pubkey, Option<(Arc<VoteState>, Arc<AccountSharedData>)>> =
+            DashMap::default();
 
         let accounts: Vec<StakeDelegationAccount> = thread_pool.install(|| {
             stakes
@@ -1875,10 +1852,34 @@ impl Bank {
                         }
                     };
 
-                    // fetch vote account if it hasn't been fetched
-                    let fetched_vote_state_and_account = vote_accounts
+                    let fetched_vote_state_and_account: Option<(
+                        Arc<VoteState>,
+                        Arc<AccountSharedData>,
+                    )> = vote_accounts
                         .get(vote_pubkey)
-                        .map(|read_ref| read_ref.value().clone());
+                        .unwrap_or_else(|| {
+                            // fetch vote account if it hasn't been cached already
+                            vote_accounts
+                                .entry(*vote_pubkey)
+                                .or_insert(stakes.vote_accounts().get(vote_pubkey).and_then(
+                                    |(_lamports, arc_vote_account)| {
+                                        arc_vote_account.vote_state().as_ref().ok().map(
+                                            |vote_state_result| {
+                                                (
+                                                    Arc::new(vote_state_result.clone()),
+                                                    Arc::new(AccountSharedData::from(
+                                                        arc_vote_account.account().clone(),
+                                                    )),
+                                                )
+                                            },
+                                        )
+                                    },
+                                ))
+                                .downgrade()
+                        })
+                        .value()
+                        .clone();
+
                     let fetched_vote_account_owner = fetched_vote_state_and_account.as_ref().map(
                         |(_fetched_vote_state, fetched_vote_account)| fetched_vote_account.owner,
                     );
@@ -1973,8 +1974,10 @@ impl Bank {
         let vote_account_rewards: DashMap<Pubkey, (Arc<AccountSharedData>, u8, u64)> =
             vote_accounts
                 .into_iter()
-                .map(|(pubkey, (vote_state, vote_account))| {
-                    (pubkey, (vote_account, vote_state.commission, 0))
+                .filter_map(|(pubkey, vote_state_account_option)| {
+                    vote_state_account_option.map(|(vote_state, vote_account)| {
+                        (pubkey, (vote_account, vote_state.commission, 0))
+                    })
                 })
                 .collect();
 
