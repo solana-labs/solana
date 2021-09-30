@@ -1084,6 +1084,12 @@ fn test_program_bpf_invoke_sanity() {
             &[],
         );
 
+        do_invoke_failure_test_local(
+            TEST_RETURN_DATA_TOO_LARGE,
+            TransactionError::InstructionError(0, InstructionError::ProgramFailedToComplete),
+            &[],
+        );
+
         // Check resulting state
 
         assert_eq!(43, bank.get_balance(&derived_key1));

@@ -18,6 +18,7 @@ pub const TEST_NESTED_INVOKE_TOO_DEEP: u8 = 15;
 pub const TEST_EXECUTABLE_LAMPORTS: u8 = 16;
 pub const TEST_CALL_PRECOMPILE: u8 = 17;
 pub const ADD_LAMPORTS: u8 = 18;
+pub const TEST_RETURN_DATA_TOO_LARGE: u8 = 19;
 
 pub const MINT_INDEX: usize = 0;
 pub const ARGUMENT_INDEX: usize = 1;
