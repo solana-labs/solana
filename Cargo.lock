@@ -4375,7 +4375,7 @@ dependencies = [
 
 [[package]]
 name = "solana-compute-budget-program"
-version = "1.7.14"
+version = "1.7.15"
 dependencies = [
  "solana-sdk",
 ]
@@ -4931,7 +4931,7 @@ name = "solana-merkle-root-bench"
 version = "1.7.15"
 dependencies = [
  "clap",
- "log 0.4.11",
+ "log 0.4.14",
  "solana-logger 1.7.15",
  "solana-measure",
  "solana-runtime",
@@ -4999,7 +4999,7 @@ dependencies = [
 name = "solana-noop-program"
 version = "1.7.15"
 dependencies = [
- "log 0.4.11",
+ "log 0.4.14",
  "solana-logger 1.7.15",
  "solana-sdk",
 ]
@@ -5487,7 +5487,7 @@ name = "solana-store-tool"
 version = "1.7.15"
 dependencies = [
  "clap",
- "log 0.4.11",
+ "log 0.4.14",
  "solana-logger 1.7.15",
  "solana-measure",
  "solana-runtime",

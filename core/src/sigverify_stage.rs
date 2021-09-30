@@ -178,7 +178,6 @@ impl SigVerifyStage {
         if len > MAX_SIGVERIFY_BATCH {
             Self::discard_excess_packets(&mut batches, MAX_SIGVERIFY_BATCH);
         }
-        let mut verify_batch_time = Measure::start("sigverify_batch_time");
         sendr.send(verifier.verify_batch(batches))?;
         verify_batch_time.stop();
 
@@ -201,11 +200,11 @@ impl SigVerifyStage {
 
         stats
             .recv_batches_us_hist
-            .increment(recv_time.as_micros() as u64)
+            .increment(recv_time as u64)
             .unwrap();
         stats
             .verify_batches_pp_us_hist
-            .increment(verify_batch_time.as_us() / (num_packets as u64))
+            .increment(verify_batch_time.as_us() / (len as u64))
             .unwrap();
         stats.batches_hist.increment(batches_len as u64).unwrap();
         stats.packets_hist.increment(len as u64).unwrap();
@@ -226,7 +225,9 @@ impl SigVerifyStage {
         Builder::new()
             .name("solana-verifier".to_string())
             .spawn(move || loop {
-                if let Err(e) = Self::verifier(&packet_receiver, &verified_sender, &verifier, &mut stats) {
+                if let Err(e) =
+                    Self::verifier(&packet_receiver, &verified_sender, &verifier, &mut stats)
+                {
                     match e {
                         SigVerifyServiceError::Streamer(StreamerError::RecvTimeout(
                             RecvTimeoutError::Disconnected,

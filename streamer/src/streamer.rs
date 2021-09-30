@@ -140,7 +140,11 @@ pub fn recv_batch(recvr: &PacketReceiver) -> Result<(Vec<Packets>, usize, u64)> 
     }
     let recv_duration = recv_start.elapsed();
     trace!("batch len {}", batch.len());
-    Ok((batch, len, recv_duration))
+    Ok((
+        batch,
+        len,
+        solana_sdk::timing::duration_as_ms(&recv_duration),
+    ))
 }
 
 pub fn responder(
