@@ -159,11 +159,7 @@ impl CostModel {
         transaction.signatures.len() as u64 * SIGNATURE_COST
     }
 
-    fn get_write_lock_cost(
-        &mut self,
-        transaction: &Transaction,
-        demote_program_write_locks: bool,
-    ) {
+    fn get_write_lock_cost(&mut self, transaction: &Transaction, demote_program_write_locks: bool) {
         let message = transaction.message();
         message.account_keys.iter().enumerate().for_each(|(i, k)| {
             let is_writable = message.is_writable(i, demote_program_write_locks);
@@ -177,13 +173,9 @@ impl CostModel {
 
     fn get_data_bytes_cost(&self, transaction: &Transaction) -> u64 {
         let mut data_bytes_cost: u64 = 0;
-        transaction
-            .message()
-            .instructions
-            .iter()
-            .for_each(|ix| {
-                data_bytes_cost += ix.data.len() as u64 / DATA_BYTES_UNITS;
-            });
+        transaction.message().instructions.iter().for_each(|ix| {
+            data_bytes_cost += ix.data.len() as u64 / DATA_BYTES_UNITS;
+        });
         data_bytes_cost
     }
 

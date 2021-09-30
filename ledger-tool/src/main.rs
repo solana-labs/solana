@@ -16,7 +16,7 @@ use solana_clap_utils::{
     },
 };
 use solana_core::cost_model::CostModel;
-use solana_core::cost_tracker::CostTracker;
+use solana_core::cost_tracker::{CostTracker, CostTrackerStats};
 use solana_ledger::entry::Entry;
 use solana_ledger::{
     ancestor_iterator::AncestorIterator,
@@ -745,6 +745,7 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
     cost_model.initialize_cost_table(&blockstore.read_program_costs().unwrap());
     let cost_model = Arc::new(RwLock::new(cost_model));
     let mut cost_tracker = CostTracker::new(cost_model.clone());
+    let mut cost_tracker_stats = CostTrackerStats::default();
 
     for entry in &entries {
         transactions += entry.transactions.len();
@@ -752,7 +753,10 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
         for transaction in &entry.transactions {
             programs += transaction.message().instructions.len();
             let tx_cost = cost_model.calculate_cost(transaction, true);
-            if cost_tracker.try_add(tx_cost).is_err() {
+            if cost_tracker
+                .try_add(tx_cost, &mut cost_tracker_stats)
+                .is_err()
+            {
                 println!(
                     "Slot: {}, CostModel rejected transaction {:?}, stats {:?}!",
                     slot,
