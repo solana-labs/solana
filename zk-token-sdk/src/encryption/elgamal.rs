@@ -22,7 +22,7 @@ pub struct ElGamal;
 impl ElGamal {
     /// Generates the public and secret keys for ElGamal encryption.
     #[cfg(not(target_arch = "bpf"))]
-    pub fn keygen() -> (ElGamalPK, ElGamalSK) {
+    pub fn keygen() -> (ElGamalPubkey, ElGamalSK) {
         ElGamal::keygen_with(&mut OsRng) // using OsRng for now
     }
 
@@ -30,7 +30,7 @@ impl ElGamal {
     /// secret keys for ElGamal encryption.
     #[cfg(not(target_arch = "bpf"))]
     #[allow(non_snake_case)]
-    pub fn keygen_with<T: RngCore + CryptoRng>(rng: &mut T) -> (ElGamalPK, ElGamalSK) {
+    pub fn keygen_with<T: RngCore + CryptoRng>(rng: &mut T) -> (ElGamalPubkey, ElGamalSK) {
         // sample a non-zero scalar
         let mut s: Scalar;
         loop {
@@ -44,17 +44,17 @@ impl ElGamal {
         let H = PedersenBase::default().H;
         let P = s.invert() * H;
 
-        (ElGamalPK(P), ElGamalSK(s))
+        (ElGamalPubkey(P), ElGamalSK(s))
     }
 
     /// On input a public key and a message to be encrypted, the function
     /// returns an ElGamal ciphertext of the message under the public key.
     #[cfg(not(target_arch = "bpf"))]
-    pub fn encrypt<T: Into<Scalar>>(pk: &ElGamalPK, amount: T) -> ElGamalCT {
+    pub fn encrypt<T: Into<Scalar>>(pk: &ElGamalPubkey, amount: T) -> ElGamalCiphertext {
         let (message_comm, open) = Pedersen::commit(amount);
         let decrypt_handle = pk.gen_decrypt_handle(&open);
 
-        ElGamalCT {
+        ElGamalCiphertext {
             message_comm,
             decrypt_handle,
         }
@@ -64,14 +64,14 @@ impl ElGamal {
     /// returns an ElGamal ciphertext of the message under the public key using
     /// the opening.
     pub fn encrypt_with<T: Into<Scalar>>(
-        pk: &ElGamalPK,
+        pk: &ElGamalPubkey,
         amount: T,
         open: &PedersenOpen,
-    ) -> ElGamalCT {
+    ) -> ElGamalCiphertext {
         let message_comm = Pedersen::commit_with(amount, open);
         let decrypt_handle = pk.gen_decrypt_handle(open);
 
-        ElGamalCT {
+        ElGamalCiphertext {
             message_comm,
             decrypt_handle,
         }
@@ -81,9 +81,9 @@ impl ElGamal {
     ///
     /// The output of the function is of type `DiscreteLogInstance`. The exact message
     /// can be recovered via the DiscreteLogInstance's decode method.
-    pub fn decrypt(sk: &ElGamalSK, ct: &ElGamalCT) -> DiscreteLogInstance {
+    pub fn decrypt(sk: &ElGamalSK, ct: &ElGamalCiphertext) -> DiscreteLogInstance {
         let ElGamalSK(s) = sk;
-        let ElGamalCT {
+        let ElGamalCiphertext {
             message_comm,
             decrypt_handle,
         } = ct;
@@ -96,7 +96,7 @@ impl ElGamal {
 
     /// On input a secret key and a ciphertext, the function decrypts the
     /// ciphertext for a u32 value.
-    pub fn decrypt_u32(sk: &ElGamalSK, ct: &ElGamalCT) -> Option<u32> {
+    pub fn decrypt_u32(sk: &ElGamalSK, ct: &ElGamalCiphertext) -> Option<u32> {
         let discrete_log_instance = ElGamal::decrypt(sk, ct);
         discrete_log_instance.decode_u32()
     }
@@ -104,8 +104,8 @@ impl ElGamal {
 
 /// Public key for the ElGamal encryption scheme.
 #[derive(Serialize, Deserialize, Default, Clone, Copy, Debug, Eq, PartialEq)]
-pub struct ElGamalPK(RistrettoPoint);
-impl ElGamalPK {
+pub struct ElGamalPubkey(RistrettoPoint);
+impl ElGamalPubkey {
     pub fn get_point(&self) -> RistrettoPoint {
         self.0
     }
@@ -115,20 +115,20 @@ impl ElGamalPK {
         self.0.compress().to_bytes()
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Option<ElGamalPK> {
-        Some(ElGamalPK(
+    pub fn from_bytes(bytes: &[u8]) -> Option<ElGamalPubkey> {
+        Some(ElGamalPubkey(
             CompressedRistretto::from_slice(bytes).decompress()?,
         ))
     }
 
     /// Utility method for code ergonomics.
     #[cfg(not(target_arch = "bpf"))]
-    pub fn encrypt<T: Into<Scalar>>(&self, msg: T) -> ElGamalCT {
+    pub fn encrypt<T: Into<Scalar>>(&self, msg: T) -> ElGamalCiphertext {
         ElGamal::encrypt(self, msg)
     }
 
     /// Utility method for code ergonomics.
-    pub fn encrypt_with<T: Into<Scalar>>(&self, msg: T, open: &PedersenOpen) -> ElGamalCT {
+    pub fn encrypt_with<T: Into<Scalar>>(&self, msg: T, open: &PedersenOpen) -> ElGamalCiphertext {
         ElGamal::encrypt_with(self, msg, open)
     }
 
@@ -139,9 +139,9 @@ impl ElGamalPK {
     }
 }
 
-impl From<RistrettoPoint> for ElGamalPK {
-    fn from(point: RistrettoPoint) -> ElGamalPK {
-        ElGamalPK(point)
+impl From<RistrettoPoint> for ElGamalPubkey {
+    fn from(point: RistrettoPoint) -> ElGamalPubkey {
+        ElGamalPubkey(point)
     }
 }
 
@@ -155,12 +155,12 @@ impl ElGamalSK {
     }
 
     /// Utility method for code ergonomics.
-    pub fn decrypt(&self, ct: &ElGamalCT) -> DiscreteLogInstance {
+    pub fn decrypt(&self, ct: &ElGamalCiphertext) -> DiscreteLogInstance {
         ElGamal::decrypt(self, ct)
     }
 
     /// Utility method for code ergonomics.
-    pub fn decrypt_u32(&self, ct: &ElGamalCT) -> Option<u32> {
+    pub fn decrypt_u32(&self, ct: &ElGamalCiphertext) -> Option<u32> {
         ElGamal::decrypt_u32(self, ct)
     }
 
@@ -197,14 +197,14 @@ impl ConstantTimeEq for ElGamalSK {
 /// Ciphertext for the ElGamal encryption scheme.
 #[allow(non_snake_case)]
 #[derive(Serialize, Deserialize, Default, Clone, Copy, Debug, Eq, PartialEq)]
-pub struct ElGamalCT {
+pub struct ElGamalCiphertext {
     pub message_comm: PedersenComm,
     pub decrypt_handle: PedersenDecHandle,
 }
-impl ElGamalCT {
+impl ElGamalCiphertext {
     pub fn add_to_msg<T: Into<Scalar>>(&self, message: T) -> Self {
         let diff_comm = Pedersen::commit_with(message, &PedersenOpen::default());
-        ElGamalCT {
+        ElGamalCiphertext {
             message_comm: self.message_comm + diff_comm,
             decrypt_handle: self.decrypt_handle,
         }
@@ -212,7 +212,7 @@ impl ElGamalCT {
 
     pub fn sub_to_msg<T: Into<Scalar>>(&self, message: T) -> Self {
         let diff_comm = Pedersen::commit_with(message, &PedersenOpen::default());
-        ElGamalCT {
+        ElGamalCiphertext {
             message_comm: self.message_comm - diff_comm,
             decrypt_handle: self.decrypt_handle,
         }
@@ -227,14 +227,14 @@ impl ElGamalCT {
         bytes
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Option<ElGamalCT> {
+    pub fn from_bytes(bytes: &[u8]) -> Option<ElGamalCiphertext> {
         let bytes = array_ref![bytes, 0, 64];
         let (message_comm, decrypt_handle) = array_refs![bytes, 32, 32];
 
         let message_comm = CompressedRistretto::from_slice(message_comm).decompress()?;
         let decrypt_handle = CompressedRistretto::from_slice(decrypt_handle).decompress()?;
 
-        Some(ElGamalCT {
+        Some(ElGamalCiphertext {
             message_comm: PedersenComm(message_comm),
             decrypt_handle: PedersenDecHandle(decrypt_handle),
         })
@@ -251,57 +251,73 @@ impl ElGamalCT {
     }
 }
 
-impl<'a, 'b> Add<&'b ElGamalCT> for &'a ElGamalCT {
-    type Output = ElGamalCT;
+impl<'a, 'b> Add<&'b ElGamalCiphertext> for &'a ElGamalCiphertext {
+    type Output = ElGamalCiphertext;
 
-    fn add(self, other: &'b ElGamalCT) -> ElGamalCT {
-        ElGamalCT {
+    fn add(self, other: &'b ElGamalCiphertext) -> ElGamalCiphertext {
+        ElGamalCiphertext {
             message_comm: self.message_comm + other.message_comm,
             decrypt_handle: self.decrypt_handle + other.decrypt_handle,
         }
     }
 }
 
-define_add_variants!(LHS = ElGamalCT, RHS = ElGamalCT, Output = ElGamalCT);
+define_add_variants!(
+    LHS = ElGamalCiphertext,
+    RHS = ElGamalCiphertext,
+    Output = ElGamalCiphertext
+);
 
-impl<'a, 'b> Sub<&'b ElGamalCT> for &'a ElGamalCT {
-    type Output = ElGamalCT;
+impl<'a, 'b> Sub<&'b ElGamalCiphertext> for &'a ElGamalCiphertext {
+    type Output = ElGamalCiphertext;
 
-    fn sub(self, other: &'b ElGamalCT) -> ElGamalCT {
-        ElGamalCT {
+    fn sub(self, other: &'b ElGamalCiphertext) -> ElGamalCiphertext {
+        ElGamalCiphertext {
             message_comm: self.message_comm - other.message_comm,
             decrypt_handle: self.decrypt_handle - other.decrypt_handle,
         }
     }
 }
 
-define_sub_variants!(LHS = ElGamalCT, RHS = ElGamalCT, Output = ElGamalCT);
+define_sub_variants!(
+    LHS = ElGamalCiphertext,
+    RHS = ElGamalCiphertext,
+    Output = ElGamalCiphertext
+);
 
-impl<'a, 'b> Mul<&'b Scalar> for &'a ElGamalCT {
-    type Output = ElGamalCT;
+impl<'a, 'b> Mul<&'b Scalar> for &'a ElGamalCiphertext {
+    type Output = ElGamalCiphertext;
 
-    fn mul(self, other: &'b Scalar) -> ElGamalCT {
-        ElGamalCT {
+    fn mul(self, other: &'b Scalar) -> ElGamalCiphertext {
+        ElGamalCiphertext {
             message_comm: self.message_comm * other,
             decrypt_handle: self.decrypt_handle * other,
         }
     }
 }
 
-define_mul_variants!(LHS = ElGamalCT, RHS = Scalar, Output = ElGamalCT);
+define_mul_variants!(
+    LHS = ElGamalCiphertext,
+    RHS = Scalar,
+    Output = ElGamalCiphertext
+);
 
-impl<'a, 'b> Div<&'b Scalar> for &'a ElGamalCT {
-    type Output = ElGamalCT;
+impl<'a, 'b> Div<&'b Scalar> for &'a ElGamalCiphertext {
+    type Output = ElGamalCiphertext;
 
-    fn div(self, other: &'b Scalar) -> ElGamalCT {
-        ElGamalCT {
+    fn div(self, other: &'b Scalar) -> ElGamalCiphertext {
+        ElGamalCiphertext {
             message_comm: self.message_comm * other.invert(),
             decrypt_handle: self.decrypt_handle * other.invert(),
         }
     }
 }
 
-define_div_variants!(LHS = ElGamalCT, RHS = Scalar, Output = ElGamalCT);
+define_div_variants!(
+    LHS = ElGamalCiphertext,
+    RHS = Scalar,
+    Output = ElGamalCiphertext
+);
 
 #[cfg(test)]
 mod tests {
@@ -441,7 +457,7 @@ mod tests {
         let ct = pk.encrypt(msg);
 
         let encoded = bincode::serialize(&ct).unwrap();
-        let decoded: ElGamalCT = bincode::deserialize(&encoded).unwrap();
+        let decoded: ElGamalCiphertext = bincode::deserialize(&encoded).unwrap();
 
         assert_eq!(ct, decoded);
     }
@@ -451,7 +467,7 @@ mod tests {
         let (pk, _) = ElGamal::keygen();
 
         let encoded = bincode::serialize(&pk).unwrap();
-        let decoded: ElGamalPK = bincode::deserialize(&encoded).unwrap();
+        let decoded: ElGamalPubkey = bincode::deserialize(&encoded).unwrap();
 
         assert_eq!(pk, decoded);
     }

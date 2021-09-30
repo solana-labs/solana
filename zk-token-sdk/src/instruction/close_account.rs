@@ -5,7 +5,7 @@ use {
 #[cfg(not(target_arch = "bpf"))]
 use {
     crate::{
-        encryption::elgamal::{ElGamalCT, ElGamalSK},
+        encryption::elgamal::{ElGamalCiphertext, ElGamalSK},
         errors::ProofError,
         instruction::Verifiable,
         transcript::TranscriptProtocol,
@@ -31,7 +31,7 @@ use {
 #[repr(C)]
 pub struct CloseAccountData {
     /// The source account available balance in encrypted form
-    pub balance: pod::ElGamalCT, // 64 bytes
+    pub balance: pod::ElGamalCiphertext, // 64 bytes
 
     /// Proof that the source account available balance is zero
     pub proof: CloseAccountProof, // 64 bytes
@@ -39,7 +39,7 @@ pub struct CloseAccountData {
 
 #[cfg(not(target_arch = "bpf"))]
 impl CloseAccountData {
-    pub fn new(source_sk: &ElGamalSK, balance: ElGamalCT) -> Self {
+    pub fn new(source_sk: &ElGamalSK, balance: ElGamalCiphertext) -> Self {
         let proof = CloseAccountProof::new(source_sk, &balance);
 
         CloseAccountData {
@@ -74,7 +74,7 @@ impl CloseAccountProof {
         Transcript::new(b"CloseAccountProof")
     }
 
-    pub fn new(source_sk: &ElGamalSK, balance: &ElGamalCT) -> Self {
+    pub fn new(source_sk: &ElGamalSK, balance: &ElGamalCiphertext) -> Self {
         let mut transcript = Self::transcript_new();
 
         // add a domain separator to record the start of the protocol
@@ -101,7 +101,7 @@ impl CloseAccountProof {
         }
     }
 
-    pub fn verify(&self, balance: &ElGamalCT) -> Result<(), ProofError> {
+    pub fn verify(&self, balance: &ElGamalCiphertext) -> Result<(), ProofError> {
         let mut transcript = Self::transcript_new();
 
         // add a domain separator to record the start of the protocol
@@ -156,7 +156,7 @@ mod test {
         assert!(proof.verify(&balance).is_err());
 
         // A zeroed cyphertext should be considered as an account balance of 0
-        let zeroed_ct: ElGamalCT = pod::ElGamalCT::zeroed().try_into().unwrap();
+        let zeroed_ct: ElGamalCiphertext = pod::ElGamalCiphertext::zeroed().try_into().unwrap();
         let proof = CloseAccountProof::new(&source_sk, &zeroed_ct);
         assert!(proof.verify(&zeroed_ct).is_ok());
     }

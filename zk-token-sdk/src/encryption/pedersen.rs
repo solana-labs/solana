@@ -2,7 +2,7 @@
 use rand::{rngs::OsRng, CryptoRng, RngCore};
 use {
     crate::{
-        encryption::elgamal::{ElGamalCT, ElGamalPK},
+        encryption::elgamal::{ElGamalCiphertext, ElGamalPubkey},
         errors::ProofError,
     },
     core::ops::{Add, Div, Mul, Sub},
@@ -271,13 +271,13 @@ impl PedersenDecHandle {
         self.0
     }
 
-    pub fn generate_handle(open: &PedersenOpen, pk: &ElGamalPK) -> PedersenDecHandle {
+    pub fn generate_handle(open: &PedersenOpen, pk: &ElGamalPubkey) -> PedersenDecHandle {
         PedersenDecHandle(open.get_scalar() * pk.get_point())
     }
 
     /// Maps a decryption token and Pedersen commitment to ElGamal ciphertext
-    pub fn to_elgamal_ctxt(self, comm: PedersenComm) -> ElGamalCT {
-        ElGamalCT {
+    pub fn to_elgamal_ctxt(self, comm: PedersenComm) -> ElGamalCiphertext {
+        ElGamalCiphertext {
             message_comm: comm,
             decrypt_handle: self,
         }

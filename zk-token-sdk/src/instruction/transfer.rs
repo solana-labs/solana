@@ -6,7 +6,7 @@ use {
 use {
     crate::{
         encryption::{
-            elgamal::{ElGamalCT, ElGamalPK, ElGamalSK},
+            elgamal::{ElGamalCiphertext, ElGamalPubkey, ElGamalSK},
             pedersen::{Pedersen, PedersenBase, PedersenComm, PedersenDecHandle, PedersenOpen},
         },
         errors::ProofError,
@@ -36,11 +36,11 @@ impl TransferData {
     pub fn new(
         transfer_amount: u64,
         spendable_balance: u64,
-        spendable_ct: ElGamalCT,
-        source_pk: ElGamalPK,
+        spendable_ct: ElGamalCiphertext,
+        source_pk: ElGamalPubkey,
         source_sk: &ElGamalSK,
-        dest_pk: ElGamalPK,
-        auditor_pk: ElGamalPK,
+        dest_pk: ElGamalPubkey,
+        auditor_pk: ElGamalPubkey,
     ) -> Self {
         // split and encrypt transfer amount
         //
@@ -94,7 +94,7 @@ impl TransferData {
         let new_spendable_handle =
             spendable_handle - combine_u32_handles(handle_source_lo, handle_source_hi);
 
-        let new_spendable_ct = ElGamalCT {
+        let new_spendable_ct = ElGamalCiphertext {
             message_comm: new_spendable_comm,
             decrypt_handle: new_spendable_handle,
         };
@@ -185,7 +185,7 @@ pub struct TransferValidityProofData {
     pub transfer_public_keys: TransferPubKeys, // 96 bytes
 
     /// The final spendable ciphertext after the transfer
-    pub new_spendable_ct: pod::ElGamalCT, // 64 bytes
+    pub new_spendable_ct: pod::ElGamalCiphertext, // 64 bytes
 
     /// Proof that certifies that the decryption handles are generated correctly
     pub proof: ValidityProof, // 160 bytes
@@ -235,14 +235,14 @@ impl TransferProofs {
     #[allow(clippy::many_single_char_names)]
     pub fn new(
         source_sk: &ElGamalSK,
-        source_pk: &ElGamalPK,
-        dest_pk: &ElGamalPK,
-        auditor_pk: &ElGamalPK,
+        source_pk: &ElGamalPubkey,
+        dest_pk: &ElGamalPubkey,
+        auditor_pk: &ElGamalPubkey,
         transfer_amt: (u64, u64),
         lo_open: &PedersenOpen,
         hi_open: &PedersenOpen,
         new_spendable_balance: u64,
-        new_spendable_ct: &ElGamalCT,
+        new_spendable_ct: &ElGamalCiphertext,
     ) -> (Self, TransferEphemeralState) {
         // TODO: should also commit to pubkeys and commitments later
         let mut transcript_validity_proof = merlin::Transcript::new(b"TransferValidityProof");
@@ -347,7 +347,7 @@ pub struct ValidityProof {
 impl ValidityProof {
     pub fn verify(
         self,
-        new_spendable_ct: &ElGamalCT,
+        new_spendable_ct: &ElGamalCiphertext,
         decryption_handles_lo: &TransferHandles,
         decryption_handles_hi: &TransferHandles,
         transfer_public_keys: &TransferPubKeys,
@@ -355,9 +355,9 @@ impl ValidityProof {
     ) -> Result<(), ProofError> {
         let mut transcript = Transcript::new(b"TransferValidityProof");
 
-        let source_pk: ElGamalPK = transfer_public_keys.source_pk.try_into()?;
-        let dest_pk: ElGamalPK = transfer_public_keys.dest_pk.try_into()?;
-        let auditor_pk: ElGamalPK = transfer_public_keys.auditor_pk.try_into()?;
+        let source_pk: ElGamalPubkey = transfer_public_keys.source_pk.try_into()?;
+        let dest_pk: ElGamalPubkey = transfer_public_keys.dest_pk.try_into()?;
+        let auditor_pk: ElGamalPubkey = transfer_public_keys.auditor_pk.try_into()?;
 
         // verify Pedersen commitment in the ephemeral state
         let C_ephemeral: CompressedRistretto = ephemeral_state.spendable_comm_verification.into();
@@ -455,9 +455,9 @@ impl ValidityProof {
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct TransferPubKeys {
-    pub source_pk: pod::ElGamalPK,  // 32 bytes
-    pub dest_pk: pod::ElGamalPK,    // 32 bytes
-    pub auditor_pk: pod::ElGamalPK, // 32 bytes
+    pub source_pk: pod::ElGamalPubkey,  // 32 bytes
+    pub dest_pk: pod::ElGamalPubkey,    // 32 bytes
+    pub auditor_pk: pod::ElGamalPubkey, // 32 bytes
 }
 
 /// The transfer amount commitments needed for a transfer
@@ -504,7 +504,7 @@ pub fn combine_u32_handles(
 }
 
 /*
-pub fn combine_u32_ciphertexts(ct_lo: ElGamalCT, ct_hi: ElGamalCT) -> ElGamalCT {
+pub fn combine_u32_ciphertexts(ct_lo: ElGamalCiphertext, ct_hi: ElGamalCiphertext) -> ElGamalCiphertext {
     ct_lo + ct_hi * Scalar::from(TWO_32)
 }
 */

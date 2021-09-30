@@ -6,7 +6,7 @@ use {
 use {
     crate::{
         encryption::{
-            elgamal::{ElGamalCT, ElGamalPK, ElGamalSK},
+            elgamal::{ElGamalCiphertext, ElGamalPubkey, ElGamalSK},
             pedersen::{PedersenBase, PedersenOpen},
         },
         errors::ProofError,
@@ -32,7 +32,7 @@ use {
 pub struct WithdrawData {
     /// The source account available balance *after* the withdraw (encrypted by
     /// `source_pk`
-    pub final_balance_ct: pod::ElGamalCT, // 64 bytes
+    pub final_balance_ct: pod::ElGamalCiphertext, // 64 bytes
 
     /// Proof that the account is solvent
     pub proof: WithdrawProof, // 736 bytes
@@ -42,10 +42,10 @@ impl WithdrawData {
     #[cfg(not(target_arch = "bpf"))]
     pub fn new(
         amount: u64,
-        source_pk: ElGamalPK,
+        source_pk: ElGamalPubkey,
         source_sk: &ElGamalSK,
         current_balance: u64,
-        current_balance_ct: ElGamalCT,
+        current_balance_ct: ElGamalCiphertext,
     ) -> Self {
         // subtract withdraw amount from current balance
         //
@@ -95,7 +95,11 @@ impl WithdrawProof {
         Transcript::new(b"WithdrawProof")
     }
 
-    pub fn new(source_sk: &ElGamalSK, final_balance: u64, final_balance_ct: &ElGamalCT) -> Self {
+    pub fn new(
+        source_sk: &ElGamalSK,
+        final_balance: u64,
+        final_balance_ct: &ElGamalCiphertext,
+    ) -> Self {
         let mut transcript = Self::transcript_new();
 
         // add a domain separator to record the start of the protocol
@@ -138,7 +142,7 @@ impl WithdrawProof {
         }
     }
 
-    pub fn verify(&self, final_balance_ct: &ElGamalCT) -> Result<(), ProofError> {
+    pub fn verify(&self, final_balance_ct: &ElGamalCiphertext) -> Result<(), ProofError> {
         let mut transcript = Self::transcript_new();
 
         // Add a domain separator to record the start of the protocol
