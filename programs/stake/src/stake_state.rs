@@ -1523,7 +1523,6 @@ pub fn redeem_rewards(
     rewarded_epoch: Epoch,
     stake_state: StakeState,
     stake_account: &mut AccountSharedData,
-    vote_account: &mut AccountSharedData,
     vote_state: &VoteState,
     point_value: &PointValue,
     stake_history: Option<&StakeHistory>,
@@ -1555,8 +1554,6 @@ pub fn redeem_rewards(
             fix_stake_deactivate,
         ) {
             stake_account.lamports += stakers_reward;
-            vote_account.lamports += voters_reward;
-
             stake_account.set_state(&StakeState::Stake(meta, stake))?;
 
             Ok((stakers_reward, voters_reward))
