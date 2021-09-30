@@ -3,6 +3,7 @@ use clap::{
     crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App, AppSettings,
     Arg, ArgMatches, SubCommand,
 };
+use dashmap::DashMap;
 use itertools::Itertools;
 use log::*;
 use regex::Regex;
@@ -57,7 +58,7 @@ use std::{
     path::{Path, PathBuf},
     process::{exit, Command, Stdio},
     str::FromStr,
-    sync::Arc,
+    sync::{Arc, Mutex},
 };
 
 mod bigtable;
@@ -2333,7 +2334,7 @@ fn main() {
                             }
                         }
 
-                        #[derive(Default, Debug)]
+                        #[derive(Clone, Default, Debug)]
                         struct PointDetail {
                             epoch: Epoch,
                             points: u128,
@@ -2341,7 +2342,7 @@ fn main() {
                             credits: u128,
                         }
 
-                        #[derive(Default, Debug)]
+                        #[derive(Clone, Default, Debug)]
                         struct CalculationDetail {
                             epochs: usize,
                             voter: Pubkey,
@@ -2362,15 +2363,17 @@ fn main() {
                             skipped_reasons: String,
                         }
                         use solana_stake_program::stake_state::InflationPointCalculationEvent;
-                        let mut stake_calcuration_details: HashMap<Pubkey, CalculationDetail> =
-                            HashMap::new();
-                        let mut last_point_value = None;
+                        // TODO: Double-check this operation is thread-safe with Ryo
+                        let stake_calculation_details: DashMap<Pubkey, CalculationDetail> =
+                            DashMap::new();
+                        let last_point_value: Mutex<Option<PointValue>> = Mutex::new(None);
                         let tracer = |event: &RewardCalculationEvent| {
                             // Currently RewardCalculationEvent enum has only Staking variant
                             // because only staking tracing is supported!
                             #[allow(irrefutable_let_patterns)]
                             if let RewardCalculationEvent::Staking(pubkey, event) = event {
-                                let detail = stake_calcuration_details.entry(**pubkey).or_default();
+                                let mut detail =
+                                    stake_calculation_details.entry(**pubkey).or_default();
                                 match event {
                                     InflationPointCalculationEvent::CalculatedPoints(
                                         epoch,
@@ -2397,10 +2400,11 @@ fn main() {
                                         // miscalculation; do some minimum sanity check
                                         let point_value = detail.point_value.clone();
                                         if point_value.is_some() {
-                                            if last_point_value.is_some() {
-                                                assert_eq!(last_point_value, point_value,);
+                                            let mut last_point_value_locked = last_point_value.lock().unwrap();
+                                            if last_point_value_locked.is_some() {
+                                                assert_eq!(*last_point_value_locked, point_value);
                                             }
-                                            last_point_value = point_value;
+                                            *last_point_value_locked = point_value;
                                         }
                                     }
                                     InflationPointCalculationEvent::EffectiveStakeAtRewardedEpoch(stake) => {
@@ -2505,17 +2509,21 @@ fn main() {
                             },
                         );
 
-                        let mut unchanged_accounts = stake_calcuration_details
-                            .keys()
-                            .collect::<HashSet<_>>()
+                        // Ensure DashMap lock is dropped
+                        let unchanged_accounts = stake_calculation_details
+                            .iter()
+                            .map(|v| *v.key())
+                            .collect::<HashSet<Pubkey>>();
+
+                        let mut unchanged_accounts = unchanged_accounts
                             .difference(
                                 &rewarded_accounts
                                     .iter()
-                                    .map(|(pubkey, ..)| *pubkey)
+                                    .map(|(pubkey, ..)| **pubkey)
                                     .collect(),
                             )
-                            .map(|pubkey| (**pubkey, warped_bank.get_account(pubkey).unwrap()))
-                            .collect::<Vec<_>>();
+                            .map(|pubkey| (*pubkey, warped_bank.get_account(&pubkey).unwrap()))
+                            .collect::<Vec<(Pubkey, AccountSharedData)>>();
                         unchanged_accounts.sort_unstable_by_key(|(pubkey, account)| {
                             (account.owner, account.lamports, *pubkey)
                         });
@@ -2535,7 +2543,9 @@ fn main() {
 
                             if let Some(base_account) = base_bank.get_account(&pubkey) {
                                 let delta = warped_account.lamports - base_account.lamports;
-                                let detail = stake_calcuration_details.get(&pubkey);
+                                let detail: Option<CalculationDetail> = stake_calculation_details
+                                    .get(&pubkey)
+                                    .map(|d| d.value().clone());
                                 println!(
                                     "{:<45}({}): {} => {} (+{} {:>4.9}%) {:?}",
                                     format!("{}", pubkey), // format! is needed to pad/justify correctly.
@@ -2589,6 +2599,7 @@ fn main() {
                                             .unwrap_or_else(|| "N/A".to_owned())
                                     }
                                     let mut point_details = detail
+                                        .as_ref()
                                         .map(|d| d.points.iter().map(Some).collect::<Vec<_>>())
                                         .unwrap_or_default();
 
@@ -2606,62 +2617,84 @@ fn main() {
                                             old_balance: base_account.lamports,
                                             new_balance: warped_account.lamports,
                                             data_size: base_account.data().len(),
-                                            delegation: format_or_na(detail.map(|d| d.voter)),
+                                            delegation: format_or_na(
+                                                detail.as_ref().map(|d| d.voter),
+                                            ),
                                             delegation_owner: format_or_na(
-                                                detail.map(|d| d.voter_owner),
+                                                detail.as_ref().map(|d| d.voter_owner),
                                             ),
                                             effective_stake: format_or_na(
-                                                detail.map(|d| d.current_effective_stake),
+                                                detail.as_ref().map(|d| d.current_effective_stake),
                                             ),
                                             delegated_stake: format_or_na(
-                                                detail.map(|d| d.total_stake),
+                                                detail.as_ref().map(|d| d.total_stake),
                                             ),
                                             rent_exempt_reserve: format_or_na(
-                                                detail.map(|d| d.rent_exempt_reserve),
+                                                detail.as_ref().map(|d| d.rent_exempt_reserve),
                                             ),
-                                            activation_epoch: format_or_na(detail.map(|d| {
-                                                if d.activation_epoch < Epoch::max_value() {
-                                                    d.activation_epoch
-                                                } else {
-                                                    // bootstraped
-                                                    0
-                                                }
-                                            })),
+                                            activation_epoch: format_or_na(detail.as_ref().map(
+                                                |d| {
+                                                    if d.activation_epoch < Epoch::max_value() {
+                                                        d.activation_epoch
+                                                    } else {
+                                                        // bootstraped
+                                                        0
+                                                    }
+                                                },
+                                            )),
                                             deactivation_epoch: format_or_na(
-                                                detail.and_then(|d| d.deactivation_epoch),
+                                                detail.as_ref().and_then(|d| d.deactivation_epoch),
                                             ),
-                                            earned_epochs: format_or_na(detail.map(|d| d.epochs)),
-                                            epoch: format_or_na(point_detail.map(|d| d.epoch)),
+                                            earned_epochs: format_or_na(
+                                                detail.as_ref().map(|d| d.epochs),
+                                            ),
+                                            epoch: format_or_na(
+                                                point_detail.as_ref().map(|d| d.epoch),
+                                            ),
                                             epoch_credits: format_or_na(
-                                                point_detail.map(|d| d.credits),
+                                                point_detail.as_ref().map(|d| d.credits),
                                             ),
                                             epoch_points: format_or_na(
-                                                point_detail.map(|d| d.points),
+                                                point_detail.as_ref().map(|d| d.points),
                                             ),
                                             epoch_stake: format_or_na(
-                                                point_detail.map(|d| d.stake),
+                                                point_detail.as_ref().map(|d| d.stake),
                                             ),
                                             old_credits_observed: format_or_na(
-                                                detail.and_then(|d| d.old_credits_observed),
+                                                detail
+                                                    .as_ref()
+                                                    .and_then(|d| d.old_credits_observed),
                                             ),
                                             new_credits_observed: format_or_na(
-                                                detail.and_then(|d| d.new_credits_observed),
+                                                detail
+                                                    .as_ref()
+                                                    .and_then(|d| d.new_credits_observed),
                                             ),
                                             base_rewards: format_or_na(
-                                                detail.map(|d| d.base_rewards),
+                                                detail.as_ref().map(|d| d.base_rewards),
                                             ),
                                             stake_rewards: format_or_na(
-                                                detail.map(|d| d.stake_rewards),
+                                                detail.as_ref().map(|d| d.stake_rewards),
                                             ),
                                             vote_rewards: format_or_na(
-                                                detail.map(|d| d.vote_rewards),
+                                                detail.as_ref().map(|d| d.vote_rewards),
                                             ),
-                                            commission: format_or_na(detail.map(|d| d.commission)),
+                                            commission: format_or_na(
+                                                detail.as_ref().map(|d| d.commission),
+                                            ),
                                             cluster_rewards: format_or_na(
-                                                last_point_value.as_ref().map(|pv| pv.rewards),
+                                                last_point_value
+                                                    .lock()
+                                                    .unwrap()
+                                                    .as_ref()
+                                                    .map(|pv| pv.rewards),
                                             ),
                                             cluster_points: format_or_na(
-                                                last_point_value.as_ref().map(|pv| pv.points),
+                                                last_point_value
+                                                    .lock()
+                                                    .unwrap()
+                                                    .as_ref()
+                                                    .map(|pv| pv.points),
                                             ),
                                             old_capitalization: base_bank.capitalization(),
                                             new_capitalization: warped_bank.capitalization(),

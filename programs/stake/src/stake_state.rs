@@ -60,7 +60,7 @@ pub enum InflationPointCalculationEvent {
     Skipped(SkippedReason),
 }
 
-pub(crate) fn null_tracer() -> Option<impl FnMut(&InflationPointCalculationEvent)> {
+pub(crate) fn null_tracer() -> Option<impl Fn(&InflationPointCalculationEvent)> {
     None::<fn(&_)>
 }
 
@@ -575,7 +575,7 @@ impl Stake {
         point_value: &PointValue,
         vote_state: &VoteState,
         stake_history: Option<&StakeHistory>,
-        inflation_point_calc_tracer: &mut Option<impl FnMut(&InflationPointCalculationEvent)>,
+        inflation_point_calc_tracer: &Option<impl Fn(&InflationPointCalculationEvent)>,
         fix_stake_deactivate: bool,
     ) -> Option<(u64, u64)> {
         if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer {
@@ -608,7 +608,7 @@ impl Stake {
         &self,
         vote_state: &VoteState,
         stake_history: Option<&StakeHistory>,
-        inflation_point_calc_tracer: &mut Option<impl FnMut(&InflationPointCalculationEvent)>,
+        inflation_point_calc_tracer: &Option<impl Fn(&InflationPointCalculationEvent)>,
         fix_stake_deactivate: bool,
     ) -> u128 {
         self.calculate_points_and_credits(
@@ -627,7 +627,7 @@ impl Stake {
         &self,
         new_vote_state: &VoteState,
         stake_history: Option<&StakeHistory>,
-        inflation_point_calc_tracer: &mut Option<impl FnMut(&InflationPointCalculationEvent)>,
+        inflation_point_calc_tracer: &Option<impl Fn(&InflationPointCalculationEvent)>,
         fix_stake_deactivate: bool,
     ) -> (u128, u64) {
         // if there is no newer credits since observed, return no point
@@ -703,7 +703,7 @@ impl Stake {
         point_value: &PointValue,
         vote_state: &VoteState,
         stake_history: Option<&StakeHistory>,
-        inflation_point_calc_tracer: &mut Option<impl FnMut(&InflationPointCalculationEvent)>,
+        inflation_point_calc_tracer: &Option<impl Fn(&InflationPointCalculationEvent)>,
         fix_stake_deactivate: bool,
     ) -> Option<(u64, u64, u64)> {
         let (points, credits_observed) = self.calculate_points_and_credits(
@@ -1526,7 +1526,7 @@ pub fn redeem_rewards(
     vote_state: &VoteState,
     point_value: &PointValue,
     stake_history: Option<&StakeHistory>,
-    inflation_point_calc_tracer: &mut Option<impl FnMut(&InflationPointCalculationEvent)>,
+    inflation_point_calc_tracer: &Option<impl Fn(&InflationPointCalculationEvent)>,
     fix_stake_deactivate: bool,
 ) -> Result<(u64, u64), InstructionError> {
     if let StakeState::Stake(meta, mut stake) = stake_state {
@@ -1576,7 +1576,7 @@ pub fn calculate_points(
         Ok(stake.calculate_points(
             vote_state,
             stake_history,
-            &mut null_tracer(),
+            &null_tracer(),
             fix_stake_deactivate,
         ))
     } else {
@@ -3896,7 +3896,7 @@ mod tests {
                 },
                 &vote_state,
                 None,
-                &mut null_tracer(),
+                &null_tracer(),
                 true,
             )
         );
@@ -3915,7 +3915,7 @@ mod tests {
                 },
                 &vote_state,
                 None,
-                &mut null_tracer(),
+                &null_tracer(),
                 true,
             )
         );
@@ -3951,7 +3951,7 @@ mod tests {
                 },
                 &vote_state,
                 None,
-                &mut null_tracer(),
+                &null_tracer(),
                 true,
             )
         );
@@ -3966,7 +3966,7 @@ mod tests {
         // no overflow on points
         assert_eq!(
             u128::from(stake.delegation.stake) * epoch_slots,
-            stake.calculate_points(&vote_state, None, &mut null_tracer(), true)
+            stake.calculate_points(&vote_state, None, &null_tracer(), true)
         );
     }
 
@@ -3993,7 +3993,7 @@ mod tests {
                 },
                 &vote_state,
                 None,
-                &mut null_tracer(),
+                &null_tracer(),
                 true,
             )
         );
@@ -4012,7 +4012,7 @@ mod tests {
                 },
                 &vote_state,
                 None,
-                &mut null_tracer(),
+                &null_tracer(),
                 true,
             )
         );
@@ -4028,7 +4028,7 @@ mod tests {
                 },
                 &vote_state,
                 None,
-                &mut null_tracer(),
+                &null_tracer(),
                 true,
             )
         );
@@ -4047,7 +4047,7 @@ mod tests {
                 },
                 &vote_state,
                 None,
-                &mut null_tracer(),
+                &null_tracer(),
                 true,
             )
         );
@@ -4064,7 +4064,7 @@ mod tests {
                 },
                 &vote_state,
                 None,
-                &mut null_tracer(),
+                &null_tracer(),
                 true,
             )
         );
@@ -4087,7 +4087,7 @@ mod tests {
                 },
                 &vote_state,
                 None,
-                &mut null_tracer(),
+                &null_tracer(),
                 true,
             )
         );
@@ -4104,7 +4104,7 @@ mod tests {
                 },
                 &vote_state,
                 None,
-                &mut null_tracer(),
+                &null_tracer(),
                 true,
             )
         );
@@ -4118,7 +4118,7 @@ mod tests {
                 },
                 &vote_state,
                 None,
-                &mut null_tracer(),
+                &null_tracer(),
                 true,
             )
         );
@@ -4135,7 +4135,7 @@ mod tests {
                 },
                 &vote_state,
                 None,
-                &mut null_tracer(),
+                &null_tracer(),
                 true,
             )
         );
@@ -4152,7 +4152,7 @@ mod tests {
                 },
                 &vote_state,
                 None,
-                &mut null_tracer(),
+                &null_tracer(),
                 true,
             )
         );
@@ -4160,11 +4160,11 @@ mod tests {
         // assert the previous behavior is preserved where fix_stake_deactivate=false
         assert_eq!(
             (0, 0),
-            stake.calculate_points_and_credits(&vote_state, None, &mut null_tracer(), false)
+            stake.calculate_points_and_credits(&vote_state, None, &null_tracer(), false)
         );
         assert_eq!(
             (0, 4),
-            stake.calculate_points_and_credits(&vote_state, None, &mut null_tracer(), true)
+            stake.calculate_points_and_credits(&vote_state, None, &null_tracer(), true)
         );
     }
 

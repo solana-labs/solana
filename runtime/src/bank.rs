@@ -717,12 +717,8 @@ pub enum RewardCalculationEvent<'a, 'b> {
     Staking(&'a Pubkey, &'b InflationPointCalculationEvent),
 }
 
-fn null_tracer() -> Option<impl FnMut(&RewardCalculationEvent)> {
+fn null_tracer() -> Option<impl Fn(&RewardCalculationEvent) + Send + Sync> {
     None::<fn(&RewardCalculationEvent)>
-}
-
-fn null_inflation_tracer() -> Option<impl FnMut(&InflationPointCalculationEvent)> {
-    None::<fn(&InflationPointCalculationEvent)>
 }
 
 impl fmt::Display for RewardType {
@@ -1050,7 +1046,7 @@ impl Bank {
         parent: &Arc<Bank>,
         collector_id: &Pubkey,
         slot: Slot,
-        reward_calc_tracer: impl FnMut(&RewardCalculationEvent),
+        reward_calc_tracer: impl Fn(&RewardCalculationEvent) + Send + Sync,
     ) -> Self {
         Self::_new_from_parent(
             parent,
@@ -1065,7 +1061,7 @@ impl Bank {
         parent: &Arc<Bank>,
         collector_id: &Pubkey,
         slot: Slot,
-        reward_calc_tracer: &mut Option<impl FnMut(&RewardCalculationEvent)>,
+        reward_calc_tracer: &mut Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
         vote_only_bank: bool,
     ) -> Self {
         parent.freeze();
@@ -1727,7 +1723,7 @@ impl Bank {
     fn update_rewards(
         &mut self,
         prev_epoch: Epoch,
-        reward_calc_tracer: &mut Option<impl FnMut(&RewardCalculationEvent)>,
+        reward_calc_tracer: &mut Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
     ) {
         if prev_epoch == self.epoch() {
             return;
@@ -1831,7 +1827,7 @@ impl Bank {
     /// Filters out invalid pairs
     fn load_stake_delegation_accounts(
         &self,
-        reward_calc_tracer: &mut Option<impl FnMut(&RewardCalculationEvent)>,
+        reward_calc_tracer: &mut Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
     ) -> HashMap<Pubkey, StakeDelegationAccounts> {
         let filter_stake_delegation_accounts = self
             .feature_set
@@ -1925,7 +1921,7 @@ impl Bank {
         &mut self,
         rewarded_epoch: Epoch,
         rewards: u64,
-        reward_calc_tracer: &mut Option<impl FnMut(&RewardCalculationEvent)>,
+        reward_calc_tracer: &mut Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
         fix_stake_deactivate: bool,
     ) -> f64 {
         let thread_pool = ThreadPoolBuilder::new().build().unwrap();
@@ -1992,6 +1988,12 @@ impl Bank {
                         vote_state,
                         (stake_pubkey, (stake_state, mut stake_account)),
                     )| {
+                        let reward_calc_tracer = reward_calc_tracer.as_ref().map(|outer| {
+                            // inner
+                            move |inner_event: &_| {
+                                outer(&RewardCalculationEvent::Staking(&stake_pubkey, inner_event))
+                            }
+                        });
                         let redeemed = stake_state::redeem_rewards(
                             rewarded_epoch,
                             stake_state,
@@ -1999,7 +2001,7 @@ impl Bank {
                             &vote_state,
                             &point_value,
                             Some(&stake_history),
-                            &mut null_inflation_tracer(),
+                            &reward_calc_tracer,
                             fix_stake_deactivate,
                         );
                         if let Ok((stakers_reward, voters_reward)) = redeemed {
