@@ -1,6 +1,6 @@
 /// The interface for AccountsDb plugins. A plugin must implement
-/// the AccountsDbPlugin trait to work with the Solana Validator.
-/// In addition, the dynamic libraray must export a "C" function _create_plugin which
+/// the AccountsDbPlugin trait to work with the runtime.
+/// In addition, the dynamic library must export a "C" function _create_plugin which
 /// creates the implementation of the plugin.
 use {
     std::{any::Any, error, io},
