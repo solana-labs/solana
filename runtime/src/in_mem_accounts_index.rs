@@ -4,6 +4,8 @@ use crate::accounts_index::{
 };
 use crate::bucket_map_holder::{Age, BucketMapHolder};
 use crate::bucket_map_holder_stats::BucketMapHolderStats;
+use rand::thread_rng;
+use rand::Rng;
 use solana_measure::measure::Measure;
 use solana_sdk::{clock::Slot, pubkey::Pubkey};
 use std::collections::{hash_map::Entry, HashMap};
@@ -621,6 +623,13 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         self.storage.wait_dirty_or_aged.notify_one();
     }
 
+    fn random_chance_of_eviction() -> bool {
+        // random eviction
+        const N: usize = 1000;
+        // 1/N chance of eviction
+        thread_rng().gen_range(0, N) == 0
+    }
+
     /// return true if 'entry' should be removed from the in-mem index
     fn should_remove_from_mem(
         &self,
@@ -656,6 +665,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         }
 
         let mut removes = Vec::default();
+        let mut removes_random = Vec::default();
         let disk = self.storage.disk.as_ref().unwrap();
 
         let mut updates = Vec::default();
@@ -678,6 +688,8 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
                 if self.should_remove_from_mem(current_age, v, startup) {
                     removes.push(*k);
+                } else if Self::random_chance_of_eviction() {
+                    removes_random.push(*k);
                 }
             }
             Self::update_time_stat(&self.stats().flush_scan_us, m);
@@ -700,7 +712,10 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         }
 
         let m = Measure::start("flush_remove");
-        if !self.flush_remove_from_cache(removes, current_age, startup) {
+        if !self.flush_remove_from_cache(removes, current_age, startup, false) {
+            iterate_for_age = false; // did not make it all the way through this bucket, so didn't handle age completely
+        }
+        if !self.flush_remove_from_cache(removes_random, current_age, startup, true) {
             iterate_for_age = false; // did not make it all the way through this bucket, so didn't handle age completely
         }
         Self::update_time_stat(&self.stats().flush_remove_us, m);
@@ -719,6 +734,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         removes: Vec<Pubkey>,
         current_age: Age,
         startup: bool,
+        randomly_evicted: bool,
     ) -> bool {
         let mut completed_scan = true;
         if removes.is_empty() {
@@ -739,7 +755,9 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     continue;
                 }
 
-                if v.dirty() || !self.should_remove_from_mem(current_age, v, startup) {
+                if v.dirty()
+                    || (!randomly_evicted && !self.should_remove_from_mem(current_age, v, startup))
+                {
                     // marked dirty or bumped in age after we looked above
                     // these will be handled in later passes
                     // but, at startup, everything is ready to age out if it isn't dirty
