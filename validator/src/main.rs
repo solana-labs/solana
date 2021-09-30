@@ -1868,14 +1868,6 @@ pub fn main() {
                 .help("Number of threads to use for servicing AccountsDb Replication requests"),
         )
         .arg(
-            Arg::with_name("enable_accountsdb_plugin")
-                .long("enable-accountsdb-plugin")
-                .takes_value(false)
-                .requires("accountsdb_plugin_config")
-                .hidden(true)
-                .help("Enable AccountsDb plugin through which account data can streamed to external data store."),
-        )
-        .arg(
             Arg::with_name("accountsdb_plugin_config")
                 .long("accountsdb-plugin-config")
                 .value_name("FILE")
@@ -2580,13 +2572,9 @@ pub fn main() {
         None
     };
 
-    let accountsdb_plugin_config_file = if matches.is_present("enable_accountsdb_plugin") {
-        Some(PathBuf::from(
-            matches.value_of("accountsdb_plugin_config").unwrap(),
-        ))
-    } else {
-        None
-    };
+    let accountsdb_plugin_config_file = matches
+        .value_of("accountsdb_plugin_config")
+        .map(PathBuf::from);
 
     let mut validator_config = ValidatorConfig {
         require_tower: matches.is_present("require_tower"),
