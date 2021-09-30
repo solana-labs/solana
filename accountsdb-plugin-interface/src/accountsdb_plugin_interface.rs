@@ -38,7 +38,7 @@ pub enum AccountsDbPluginError {
     SlotStatusUpdateError { msg: String },
 
     #[error("Plugin-defined custom error.")]
-    Custom(Box<dyn error::Error>),
+    Custom(Box<dyn error::Error + Send + Sync>),
 }
 
 #[derive(Debug, Clone)]
