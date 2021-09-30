@@ -33,7 +33,7 @@ use dashmap::DashMap;
 use itertools::Itertools;
 use log::*;
 use rayon::{
-    iter::{IntoParallelIterator, ParallelBridge, ParallelIterator},
+    iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelBridge, ParallelIterator},
     ThreadPool, ThreadPoolBuilder,
 };
 use solana_measure::measure::Measure;
@@ -1824,7 +1824,7 @@ impl Bank {
     /// Filters out invalid pairs
     fn load_stake_delegation_accounts(
         &self,
-        reward_calc_tracer: &mut Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
+        reward_calc_tracer: &Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
         thread_pool: &ThreadPool,
     ) -> (
         Vec<StakeDelegationAccount>,
@@ -1835,8 +1835,6 @@ impl Bank {
             .is_active(&feature_set::filter_stake_delegation_accounts::id());
 
         let stakes = self.stakes.read().unwrap();
-        let mut accounts = Vec::with_capacity(stakes.vote_accounts().len());
-
         let vote_accounts: DashMap<Pubkey, (Arc<VoteState>, Arc<AccountSharedData>)> = thread_pool
             .install(|| {
                 stakes
@@ -1863,65 +1861,73 @@ impl Bank {
                     .collect()
             });
 
-        stakes
-            .stake_delegations()
-            .iter()
-            .for_each(|(stake_pubkey, delegation)| {
-                let vote_pubkey = &delegation.voter_pubkey;
-                let stake_account = match self.get_account(&stake_pubkey) {
-                    Some(stake_account) => stake_account,
-                    None => return,
-                };
+        let accounts: Vec<StakeDelegationAccount> = thread_pool.install(|| {
+            stakes
+                .stake_delegations()
+                .iter()
+                .par_bridge()
+                .filter_map(|(stake_pubkey, delegation)| {
+                    let vote_pubkey = &delegation.voter_pubkey;
+                    let stake_account = match self.get_account(&stake_pubkey) {
+                        Some(stake_account) => stake_account,
+                        None => {
+                            return None;
+                        }
+                    };
 
-                // fetch vote account if it hasn't been fetched
-                let fetched_vote_state_and_account = vote_accounts
-                    .get(vote_pubkey)
-                    .map(|read_ref| read_ref.value().clone());
-                let fetched_vote_account_owner = fetched_vote_state_and_account
-                    .as_ref()
-                    .map(|(_fetched_vote_state, fetched_vote_account)| fetched_vote_account.owner);
-
-                // call tracer to catch any illegal data if any
-                if let Some(reward_calc_tracer) = reward_calc_tracer {
-                    reward_calc_tracer(&RewardCalculationEvent::Staking(
-                        stake_pubkey,
-                        &InflationPointCalculationEvent::Delegation(
-                            *delegation,
-                            fetched_vote_account_owner
-                                .clone()
-                                .unwrap_or_else(solana_vote_program::id),
-                        ),
-                    ));
-                }
-
-                // filter invalid delegation accounts
-                if filter_stake_delegation_accounts
-                    && (stake_account.owner != solana_stake_program::id()
-                        || (fetched_vote_account_owner.is_some()
-                            && fetched_vote_account_owner != Some(solana_vote_program::id())))
-                {
-                    datapoint_warn!(
-                        "bank-stake_delegation_accounts-invalid-account",
-                        ("slot", self.slot() as i64, i64),
-                        ("stake-address", format!("{:?}", stake_pubkey), String),
-                        ("vote-address", format!("{:?}", vote_pubkey), String),
+                    // fetch vote account if it hasn't been fetched
+                    let fetched_vote_state_and_account = vote_accounts
+                        .get(vote_pubkey)
+                        .map(|read_ref| read_ref.value().clone());
+                    let fetched_vote_account_owner = fetched_vote_state_and_account.as_ref().map(
+                        |(_fetched_vote_state, fetched_vote_account)| fetched_vote_account.owner,
                     );
-                    return;
-                }
 
-                let stake_delegation = match stake_account.state().ok() {
-                    Some(stake_state) => (*stake_pubkey, (stake_state, stake_account)),
-                    None => return,
-                };
+                    // call tracer to catch any illegal data if any
+                    if let Some(reward_calc_tracer) = reward_calc_tracer {
+                        reward_calc_tracer(&RewardCalculationEvent::Staking(
+                            stake_pubkey,
+                            &InflationPointCalculationEvent::Delegation(
+                                *delegation,
+                                fetched_vote_account_owner
+                                    .clone()
+                                    .unwrap_or_else(solana_vote_program::id),
+                            ),
+                        ));
+                    }
 
-                if let Some((vote_state, _vote_account)) = fetched_vote_state_and_account {
-                    accounts.push(StakeDelegationAccount {
-                        vote_pubkey: *vote_pubkey,
-                        vote_state,
-                        stake_delegation,
-                    });
-                }
-            });
+                    // filter invalid delegation accounts
+                    if filter_stake_delegation_accounts
+                        && (stake_account.owner != solana_stake_program::id()
+                            || (fetched_vote_account_owner.is_some()
+                                && fetched_vote_account_owner != Some(solana_vote_program::id())))
+                    {
+                        datapoint_warn!(
+                            "bank-stake_delegation_accounts-invalid-account",
+                            ("slot", self.slot() as i64, i64),
+                            ("stake-address", format!("{:?}", stake_pubkey), String),
+                            ("vote-address", format!("{:?}", vote_pubkey), String),
+                        );
+                        return None;
+                    }
+
+                    let stake_delegation = match stake_account.state().ok() {
+                        Some(stake_state) => (*stake_pubkey, (stake_state, stake_account)),
+                        None => {
+                            return None;
+                        }
+                    };
+
+                    fetched_vote_state_and_account.map(|(vote_state, _vote_account)| {
+                        StakeDelegationAccount {
+                            vote_pubkey: *vote_pubkey,
+                            vote_state,
+                            stake_delegation,
+                        }
+                    })
+                })
+                .collect()
+        });
 
         (accounts, vote_accounts)
     }
@@ -1941,18 +1947,20 @@ impl Bank {
         let (stake_delegation_accounts, vote_accounts) =
             self.load_stake_delegation_accounts(reward_calc_tracer, &thread_pool);
 
-        let points: u128 = stake_delegation_accounts
-            .iter()
-            .map(|stake_delegation_accounts: &StakeDelegationAccount| {
-                stake_state::calculate_points(
-                    &stake_delegation_accounts.stake_delegation.1 .0,
-                    &stake_delegation_accounts.vote_state,
-                    Some(&stake_history),
-                    fix_stake_deactivate,
-                )
-                .unwrap_or(0)
-            })
-            .sum();
+        let points: u128 = thread_pool.install(|| {
+            stake_delegation_accounts
+                .par_iter()
+                .map(|stake_delegation_accounts: &StakeDelegationAccount| {
+                    stake_state::calculate_points(
+                        &stake_delegation_accounts.stake_delegation.1 .0,
+                        &stake_delegation_accounts.vote_state,
+                        Some(&stake_history),
+                        fix_stake_deactivate,
+                    )
+                    .unwrap_or(0)
+                })
+                .sum()
+        });
 
         if points == 0 {
             return 0.0;
