@@ -14,4 +14,4 @@ getrandom = { version = "0.1", features = ["dummy"] }
 num-derive = "0.3"
 num-traits = "0.2"
 solana-sdk = "=1.7.11"
-spl-zk-token-sdk = { path = "../sdk" }
+spl-zk-token-crypto = { path = "../crypto" }
