@@ -43,7 +43,7 @@ impl AccountsDbPluginService {
     /// # Arguments
     /// * `confirmed_bank_receiver` - The receiver for confirmed bank notification
     /// * `accountsdb_plugin_config_file` - The config file path for the plugin. The
-    ///    config file controls what accounts to stream and the plugin responsible
+    ///    config file controls the plugin responsible
     ///    for transporting the data to external data stores. It is defined in JSON format.
     ///    The `libpath` field should be pointed to the full path of the dynamic shared library
     ///    (.so file) to be loaded. The shared library must implement the `AccountsDbPlugin`
