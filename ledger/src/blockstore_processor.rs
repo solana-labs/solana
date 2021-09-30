@@ -18,6 +18,7 @@ use solana_rayon_threadlimit::get_thread_count;
 use solana_runtime::{
     accounts_db::{AccountShrinkThreshold, AccountsDbConfig},
     accounts_index::AccountSecondaryIndexes,
+    accounts_update_notifier_interface::AccountsUpdateNotifier,
     bank::{
         Bank, ExecuteTimings, InnerInstructionsList, RentDebits, TransactionBalancesSet,
         TransactionExecutionResult, TransactionLogMessages, TransactionResults,
@@ -483,6 +484,7 @@ pub fn process_blockstore(
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
     snapshot_config: Option<&SnapshotConfig>,
     accounts_package_sender: AccountsPackageSender,
+    accounts_update_notifier: Option<AccountsUpdateNotifier>,
 ) -> BlockstoreProcessorResult {
     if let Some(num_threads) = opts.override_num_threads {
         PAR_THREAD_POOL.with(|pool| {
@@ -505,6 +507,7 @@ pub fn process_blockstore(
         opts.shrink_ratio,
         false,
         opts.accounts_db_config.clone(),
+        accounts_update_notifier,
     );
     let bank0 = Arc::new(bank0);
     info!("processing ledger for slot 0...");
@@ -1513,6 +1516,7 @@ pub mod tests {
             None,
             None,
             accounts_package_sender,
+            None,
         )
         .unwrap()
     }

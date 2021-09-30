@@ -28,6 +28,7 @@ use crate::{
         SlotSlice, ZeroLamport, ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS,
         ACCOUNTS_INDEX_CONFIG_FOR_TESTING,
     },
+    accounts_update_notifier_interface::AccountsUpdateNotifier,
     ancestors::Ancestors,
     append_vec::{AppendVec, StoredAccountMeta, StoredMeta, StoredMetaWriteVersion},
     cache_hash_data::CacheHashData,
@@ -1037,6 +1038,9 @@ pub struct AccountsDb {
     /// Zero-lamport accounts that are *not* purged during clean because they need to stay alive
     /// for incremental snapshot support.
     zero_lamport_accounts_to_purge_after_full_snapshot: DashSet<(Slot, Pubkey)>,
+
+    /// AccountsDbPlugin accounts update notifier
+    accounts_update_notifier: Option<AccountsUpdateNotifier>,
 }
 
 #[derive(Debug, Default)]
@@ -1504,6 +1508,7 @@ impl AccountsDb {
             shrink_ratio: AccountShrinkThreshold::default(),
             dirty_stores: DashMap::default(),
             zero_lamport_accounts_to_purge_after_full_snapshot: DashSet::default(),
+            accounts_update_notifier: None,
         }
     }
 
@@ -1515,6 +1520,7 @@ impl AccountsDb {
             false,
             AccountShrinkThreshold::default(),
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
+            None,
         )
     }
 
@@ -1525,6 +1531,7 @@ impl AccountsDb {
         caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
         accounts_db_config: Option<AccountsDbConfig>,
+        accounts_update_notifier: Option<AccountsUpdateNotifier>,
     ) -> Self {
         let accounts_index =
             AccountsIndex::new(accounts_db_config.as_ref().and_then(|x| x.index.clone()));
@@ -1539,6 +1546,7 @@ impl AccountsDb {
                 account_indexes,
                 caching_enabled,
                 shrink_ratio,
+                accounts_update_notifier,
                 ..Self::default_with_accounts_index(accounts_index, accounts_hash_cache_path)
             }
         } else {
@@ -4205,6 +4213,7 @@ impl AccountsDb {
             {
                 let stored_size = offsets[1] - offsets[0];
                 storage.add_account(stored_size);
+
                 infos.push(AccountInfo {
                     store_id: storage.append_vec_id(),
                     offset: offsets[0],
@@ -4224,6 +4233,7 @@ impl AccountsDb {
         self.stats
             .store_find_store
             .fetch_add(total_storage_find_us, Ordering::Relaxed);
+
         infos
     }
 
@@ -5921,6 +5931,16 @@ impl AccountsDb {
 
     pub fn store_cached(&self, slot: Slot, accounts: &[(&Pubkey, &AccountSharedData)]) {
         self.store(slot, accounts, self.caching_enabled);
+
+        if let Some(accounts_update_notifier) = &self.accounts_update_notifier {
+            let notifier = &accounts_update_notifier.read().unwrap();
+
+            for account in accounts {
+                let pubkey = account.0;
+                let account = account.1;
+                notifier.notify_account_update(slot, pubkey, account);
+            }
+        }
     }
 
     /// Store the account update.
@@ -6662,6 +6682,24 @@ impl AccountsDb {
             }
         }
     }
+
+    pub fn notify_account_restore_from_snapshot(&self) {
+        if let Some(accounts_update_notifier) = &self.accounts_update_notifier {
+            let notifier = &accounts_update_notifier.read().unwrap();
+            let slots = self.storage.all_slots();
+            for slot in &slots {
+                let slot_stores = self.storage.get_slot_stores(*slot).unwrap();
+
+                let slot_stores = slot_stores.read().unwrap();
+                for (_, storage_entry) in slot_stores.iter() {
+                    let accounts = storage_entry.all_accounts();
+                    for account in &accounts {
+                        notifier.notify_account_restore_from_snapshot(*slot, account);
+                    }
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -6684,6 +6722,7 @@ impl AccountsDb {
             caching_enabled,
             shrink_ratio,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
+            None,
         )
     }
 

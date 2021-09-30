@@ -1866,6 +1866,14 @@ pub fn main() {
                 .help("Number of threads to use for servicing AccountsDb Replication requests"),
         )
         .arg(
+            Arg::with_name("accountsdb_plugin_config")
+                .long("accountsdb-plugin-config")
+                .value_name("FILE")
+                .takes_value(true)
+                .hidden(true)
+                .help("Specify the configuration file for the AccountsDb plugin."),
+        )
+        .arg(
             Arg::with_name("halt_on_trusted_validators_accounts_hash_mismatch")
                 .alias("halt-on-trusted-validators-accounts-hash-mismatch")
                 .long("halt-on-known-validators-accounts-hash-mismatch")
@@ -2579,6 +2587,10 @@ pub fn main() {
         None
     };
 
+    let accountsdb_plugin_config_file = matches
+        .value_of("accountsdb_plugin_config")
+        .map(PathBuf::from);
+
     let mut validator_config = ValidatorConfig {
         require_tower: matches.is_present("require_tower"),
         tower_storage,
@@ -2620,6 +2632,7 @@ pub fn main() {
             rpc_scan_and_fix_roots: matches.is_present("rpc_scan_and_fix_roots"),
         },
         accountsdb_repl_service_config,
+        accountsdb_plugin_config_file,
         rpc_addrs: value_t!(matches, "rpc_port", u16).ok().map(|rpc_port| {
             (
                 SocketAddr::new(rpc_bind_address, rpc_port),

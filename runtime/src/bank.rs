@@ -40,6 +40,7 @@ use crate::{
         ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
     },
     accounts_index::{AccountSecondaryIndexes, IndexKey, ScanResult},
+    accounts_update_notifier_interface::AccountsUpdateNotifier,
     ancestors::{Ancestors, AncestorsForSerialization},
     blockhash_queue::BlockhashQueue,
     builtins::{self, ActivationType, Builtin, Builtins},
@@ -1138,6 +1139,7 @@ impl Bank {
             shrink_ratio,
             debug_do_not_add_builtins,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
+            None,
         )
     }
 
@@ -1163,6 +1165,7 @@ impl Bank {
             shrink_ratio,
             debug_do_not_add_builtins,
             Some(ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS),
+            None,
         )
     }
 
@@ -1178,6 +1181,7 @@ impl Bank {
         shrink_ratio: AccountShrinkThreshold,
         debug_do_not_add_builtins: bool,
         accounts_db_config: Option<AccountsDbConfig>,
+        accounts_update_notifier: Option<AccountsUpdateNotifier>,
     ) -> Self {
         let accounts = Accounts::new_with_config(
             paths,
@@ -1186,6 +1190,7 @@ impl Bank {
             accounts_db_caching_enabled,
             shrink_ratio,
             accounts_db_config,
+            accounts_update_notifier,
         );
         let mut bank = Self::default_with_accounts(accounts);
         bank.ancestors = Ancestors::from(vec![bank.slot()]);
