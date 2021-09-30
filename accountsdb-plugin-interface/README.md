@@ -12,7 +12,7 @@ at the time of each account update; for example, saving the account state to an 
 The plugin should produce a `cdylib` dynamic library, which must expose a `C` function `_create_plugin()` that
 instantiates the implementation of the interface.
 
-The `solana-accountsdb-plugin-postgres` crate provides an exmaple on how to create a plugin which saves the accounts data into the
+The `solana-accountsdb-plugin-postgres` crate provides an example of how to create a plugin which saves the accounts data into an
 external PostgreSQL databases.
 
 More information about Solana is available in the [Solana documentation](https://docs.solana.com/).
