@@ -33,6 +33,7 @@ const TEST_WRITABLE_DEESCALATION_WRITABLE: u8 = 14;
 const TEST_NESTED_INVOKE_TOO_DEEP: u8 = 15;
 const TEST_EXECUTABLE_LAMPORTS: u8 = 16;
 const ADD_LAMPORTS: u8 = 17;
+const TEST_RETURN_DATA_TOO_LARGE: u8 = 19;
 
 // const MINT_INDEX: usize = 0; // unused placeholder
 const ARGUMENT_INDEX: usize = 1;
@@ -666,6 +667,9 @@ fn process_instruction(
         ADD_LAMPORTS => {
             // make sure the total balance is fine
             **accounts[0].lamports.borrow_mut() += 1;
+        }
+        TEST_RETURN_DATA_TOO_LARGE => {
+            set_return_data(&[1u8; 1028]);
         }
         _ => panic!(),
     }
