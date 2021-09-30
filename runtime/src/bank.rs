@@ -33,7 +33,7 @@ use dashmap::DashMap;
 use itertools::Itertools;
 use log::*;
 use rayon::{
-    iter::{ParallelBridge, ParallelIterator},
+    iter::{IntoParallelIterator, ParallelBridge, ParallelIterator},
     ThreadPool, ThreadPoolBuilder,
 };
 use solana_measure::measure::Measure;
@@ -923,10 +923,10 @@ impl Default for BlockhashQueue {
     }
 }
 
-struct StakeDelegationAccounts {
+struct StakeDelegationAccount {
+    vote_pubkey: Pubkey,
     vote_state: Arc<VoteState>,
-    vote_account: Arc<AccountSharedData>,
-    delegations: Vec<(Pubkey, (StakeState, AccountSharedData))>,
+    stake_delegation: (Pubkey, (StakeState, AccountSharedData)),
 }
 
 impl Bank {
@@ -1826,13 +1826,16 @@ impl Bank {
         &self,
         reward_calc_tracer: &mut Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
         thread_pool: &ThreadPool,
-    ) -> HashMap<Pubkey, StakeDelegationAccounts> {
+    ) -> (
+        Vec<StakeDelegationAccount>,
+        DashMap<Pubkey, (Arc<VoteState>, Arc<AccountSharedData>)>,
+    ) {
         let filter_stake_delegation_accounts = self
             .feature_set
             .is_active(&feature_set::filter_stake_delegation_accounts::id());
 
         let stakes = self.stakes.read().unwrap();
-        let mut accounts = HashMap::with_capacity(stakes.vote_accounts().len());
+        let mut accounts = Vec::with_capacity(stakes.vote_accounts().len());
 
         let vote_accounts: DashMap<Pubkey, (Arc<VoteState>, Arc<AccountSharedData>)> = thread_pool
             .install(|| {
@@ -1871,14 +1874,9 @@ impl Bank {
                 };
 
                 // fetch vote account if it hasn't been fetched
-                let fetched_vote_state_and_account = if !accounts.contains_key(vote_pubkey) {
-                    vote_accounts
-                        .get(vote_pubkey)
-                        .map(|read_ref| read_ref.value().clone())
-                } else {
-                    None
-                };
-
+                let fetched_vote_state_and_account = vote_accounts
+                    .get(vote_pubkey)
+                    .map(|read_ref| read_ref.value().clone());
                 let fetched_vote_account_owner = fetched_vote_state_and_account
                     .as_ref()
                     .map(|(_fetched_vote_state, fetched_vote_account)| fetched_vote_account.owner);
@@ -1916,21 +1914,16 @@ impl Bank {
                     None => return,
                 };
 
-                if let Some((vote_state, vote_account)) = fetched_vote_state_and_account {
-                    accounts.insert(
-                        *vote_pubkey,
-                        StakeDelegationAccounts {
-                            vote_state,
-                            vote_account,
-                            delegations: vec![stake_delegation],
-                        },
-                    );
-                } else if let Some(stake_delegation_accounts) = accounts.get_mut(vote_pubkey) {
-                    stake_delegation_accounts.delegations.push(stake_delegation);
+                if let Some((vote_state, _vote_account)) = fetched_vote_state_and_account {
+                    accounts.push(StakeDelegationAccount {
+                        vote_pubkey: *vote_pubkey,
+                        vote_state,
+                        stake_delegation,
+                    });
                 }
             });
 
-        accounts
+        (accounts, vote_accounts)
     }
 
     /// iterate over all stakes, redeem vote credits for each stake we can
@@ -1945,27 +1938,15 @@ impl Bank {
         let thread_pool = ThreadPoolBuilder::new().build().unwrap();
         let stake_history = self.stakes.read().unwrap().history().clone();
 
-        let stake_delegation_accounts =
+        let (stake_delegation_accounts, vote_accounts) =
             self.load_stake_delegation_accounts(reward_calc_tracer, &thread_pool);
+
         let points: u128 = stake_delegation_accounts
-            .values()
-            .flat_map(
-                |StakeDelegationAccounts {
-                     vote_state,
-                     delegations,
-                     ..
-                 }| {
-                    delegations
-                        .iter()
-                        .map(move |(_stake_pubkey, (stake_state, _stake_account))| {
-                            (stake_state, vote_state)
-                        })
-                },
-            )
-            .map(|(stake_state, vote_state)| {
+            .iter()
+            .map(|stake_delegation_accounts: &StakeDelegationAccount| {
                 stake_state::calculate_points(
-                    stake_state,
-                    vote_state,
+                    &stake_delegation_accounts.stake_delegation.1 .0,
+                    &stake_delegation_accounts.vote_state,
                     Some(&stake_history),
                     fix_stake_deactivate,
                 )
@@ -1979,84 +1960,73 @@ impl Bank {
 
         // pay according to point value
         let point_value = PointValue { rewards, points };
+
+        // TODO: Maybe could return this type directly from load_stake_delegation_accounts()
         let vote_account_rewards: DashMap<Pubkey, (Arc<AccountSharedData>, u8, u64)> =
-            DashMap::with_capacity(stake_delegation_accounts.len());
-        let stake_delegation_iterator = stake_delegation_accounts.into_iter().flat_map(
-            |(
-                vote_pubkey,
-                StakeDelegationAccounts {
-                    vote_state,
-                    vote_account,
-                    delegations,
-                },
-            )| {
-                vote_account_rewards.insert(vote_pubkey, (vote_account, vote_state.commission, 0));
-                let vote_state = Arc::new(vote_state);
-                delegations
-                    .into_iter()
-                    .map(move |delegation| (vote_pubkey, Arc::clone(&vote_state), delegation))
-            },
-        );
+            vote_accounts
+                .into_iter()
+                .map(|(pubkey, (vote_state, vote_account))| {
+                    (pubkey, (vote_account, vote_state.commission, 0))
+                })
+                .collect();
 
-        let mut stake_rewards = thread_pool.install(|| {
-            stake_delegation_iterator
-                .par_bridge()
-                .filter_map(
-                    |(
-                        vote_pubkey,
-                        vote_state,
-                        (stake_pubkey, (stake_state, mut stake_account)),
-                    )| {
-                        let reward_calc_tracer = reward_calc_tracer.as_ref().map(|outer| {
-                            // inner
-                            move |inner_event: &_| {
-                                outer(&RewardCalculationEvent::Staking(&stake_pubkey, inner_event))
-                            }
-                        });
-                        let redeemed = stake_state::redeem_rewards(
-                            rewarded_epoch,
-                            stake_state,
-                            &mut stake_account,
-                            &vote_state,
-                            &point_value,
-                            Some(&stake_history),
-                            &reward_calc_tracer,
-                            fix_stake_deactivate,
-                        );
-                        if let Ok((stakers_reward, voters_reward)) = redeemed {
-                            // track voter rewards
-                            if voters_reward > 0 {
-                                if let Some((_vote_account, _commission, vote_rewards_sum)) =
-                                    vote_account_rewards.get_mut(&vote_pubkey).as_deref_mut()
-                                {
-                                    *vote_rewards_sum += voters_reward
-                                }
-                            }
-
-                            // store stake account even if stakers_reward is 0
-                            // because credits observed has changed
-                            self.store_account(&stake_pubkey, &stake_account);
-
-                            if stakers_reward > 0 {
-                                return Some((
-                                    stake_pubkey,
-                                    RewardInfo {
-                                        reward_type: RewardType::Staking,
-                                        lamports: stakers_reward as i64,
-                                        post_balance: stake_account.lamports,
-                                        commission: Some(vote_state.commission),
-                                    },
-                                ));
-                            }
-                        } else {
-                            debug!(
-                                "stake_state::redeem_rewards() failed for {}: {:?}",
-                                stake_pubkey, redeemed
-                            );
+        let mut stake_rewards: Vec<(Pubkey, RewardInfo)> = thread_pool.install(|| {
+            stake_delegation_accounts
+                .into_par_iter()
+                .filter_map(|stake_delegation_accounts: StakeDelegationAccount| {
+                    let vote_state = stake_delegation_accounts.vote_state;
+                    let vote_pubkey = stake_delegation_accounts.vote_pubkey;
+                    let (stake_pubkey, (stake_state, mut stake_account)) =
+                        stake_delegation_accounts.stake_delegation;
+                    let reward_calc_tracer = reward_calc_tracer.as_ref().map(|outer| {
+                        // inner
+                        move |inner_event: &_| {
+                            outer(&RewardCalculationEvent::Staking(&stake_pubkey, inner_event))
                         }
-                        None
-                    },
-                )
+                    });
+                    let redeemed = stake_state::redeem_rewards(
+                        rewarded_epoch,
+                        stake_state,
+                        &mut stake_account,
+                        &vote_state,
+                        &point_value,
+                        Some(&stake_history),
+                        &reward_calc_tracer,
+                        fix_stake_deactivate,
+                    );
+                    if let Ok((stakers_reward, voters_reward)) = redeemed {
+                        // track voter rewards
+                        if voters_reward > 0 {
+                            if let Some((_vote_account, _commission, vote_rewards_sum)) =
+                                vote_account_rewards.get_mut(&vote_pubkey).as_deref_mut()
+                            {
+                                *vote_rewards_sum += voters_reward
+                            }
+                        }
+
+                        // store stake account even if stakers_reward is 0
+                        // because credits observed has changed
+                        self.store_account(&stake_pubkey, &stake_account);
+
+                        if stakers_reward > 0 {
+                            return Some((
+                                stake_pubkey,
+                                RewardInfo {
+                                    reward_type: RewardType::Staking,
+                                    lamports: stakers_reward as i64,
+                                    post_balance: stake_account.lamports,
+                                    commission: Some(vote_state.commission),
+                                },
+                            ));
+                        }
+                    } else {
+                        debug!(
+                            "stake_state::redeem_rewards() failed for {}: {:?}",
+                            stake_pubkey, redeemed
+                        );
+                    }
+                    None
+                })
                 .collect()
         });
 
@@ -7244,7 +7214,7 @@ pub(crate) mod tests {
             .load_stake_delegation_accounts(&mut null_tracer())
             .values()
             .flat_map(
-                |StakeDelegationAccounts {
+                |StakeDelegationAccount {
                      vote_state,
                      delegations,
                      ..
