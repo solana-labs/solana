@@ -172,6 +172,7 @@ mod tests {
             accounts_db::AccountShrinkThreshold::default(),
             check_hash_calculation,
             false,
+            None,
         )
         .unwrap();
 

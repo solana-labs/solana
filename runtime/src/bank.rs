@@ -40,6 +40,7 @@ use crate::{
     },
     accounts_db::{AccountShrinkThreshold, ErrorCounters, SnapshotStorages},
     accounts_index::{AccountSecondaryIndexes, IndexKey, ScanResult},
+    accounts_update_notifier_interface::AccountsUpdateNotifier,
     ancestors::{Ancestors, AncestorsForSerialization},
     blockhash_queue::BlockhashQueue,
     builtins::{self, ActivationType},
@@ -1119,6 +1120,7 @@ impl Bank {
         accounts_db_caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
         debug_do_not_add_builtins: bool,
+        accounts_update_notifier: Option<AccountsUpdateNotifier>,
     ) -> Self {
         let mut bank = Self::default();
         bank.ancestors = Ancestors::from(vec![bank.slot()]);
@@ -1131,6 +1133,7 @@ impl Bank {
             account_indexes,
             accounts_db_caching_enabled,
             shrink_ratio,
+            accounts_update_notifier,
         ));
         bank.process_genesis_config(genesis_config);
         bank.finish_init(
