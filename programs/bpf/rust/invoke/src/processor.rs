@@ -644,6 +644,9 @@ fn process_instruction(
             // make sure the total balance is fine
             **accounts[0].lamports.borrow_mut() += 1;
         }
+        TEST_RETURN_DATA_TOO_LARGE => {
+            set_return_data(&[1u8; 1028]);
+        }
         _ => panic!(),
     }
 
