@@ -1971,12 +1971,12 @@ impl Bank {
         let point_value = PointValue { rewards, points };
 
         // TODO: Maybe could return this type directly from load_stake_delegation_accounts()
-        let vote_account_rewards: DashMap<Pubkey, (Arc<AccountSharedData>, u8, u64)> =
+        let vote_account_rewards: DashMap<Pubkey, (Arc<AccountSharedData>, u8, u64, bool)> =
             vote_accounts
                 .into_iter()
                 .filter_map(|(pubkey, vote_state_account_option)| {
                     vote_state_account_option.map(|(vote_state, vote_account)| {
-                        (pubkey, (vote_account, vote_state.commission, 0))
+                        (pubkey, (vote_account, vote_state.commission, 0, false))
                     })
                 })
                 .collect();
@@ -2007,12 +2007,15 @@ impl Bank {
                     );
                     if let Ok((stakers_reward, voters_reward)) = redeemed {
                         // track voter rewards
-                        if voters_reward > 0 {
-                            if let Some((_vote_account, _commission, vote_rewards_sum)) =
-                                vote_account_rewards.get_mut(&vote_pubkey).as_deref_mut()
-                            {
-                                *vote_rewards_sum += voters_reward
-                            }
+                        if let Some((
+                            _vote_account,
+                            _commission,
+                            vote_rewards_sum,
+                            vote_needs_store,
+                        )) = vote_account_rewards.get_mut(&vote_pubkey).as_deref_mut()
+                        {
+                            *vote_needs_store = true;
+                            *vote_rewards_sum += voters_reward;
                         }
 
                         // store stake account even if stakers_reward is 0
@@ -2044,30 +2047,39 @@ impl Bank {
         let mut vote_rewards = vote_account_rewards
             .into_iter()
             .filter_map(
-                |(vote_pubkey, (mut vote_account, commission, vote_rewards))| {
-                    if vote_rewards == 0 {
-                        return None;
+                |(vote_pubkey, (mut vote_account, commission, vote_rewards, vote_needs_store))| {
+                    if vote_rewards > 0 {
+                        Arc::get_mut(&mut vote_account)
+                            .expect("Should be only reference to this Arc remaining")
+                            .lamports += vote_rewards;
                     }
 
-                    Arc::get_mut(&mut vote_account)
-                        .expect("Should be only reference to this Arc remaining")
-                        .lamports += vote_rewards;
-                    self.store_account(&vote_pubkey, &vote_account);
-                    Some((
-                        vote_pubkey,
-                        RewardInfo {
-                            reward_type: RewardType::Voting,
-                            lamports: vote_rewards as i64,
-                            post_balance: vote_account.lamports,
-                            commission: Some(commission),
-                        },
-                    ))
+                    if vote_needs_store {
+                        self.store_account(&vote_pubkey, &vote_account);
+                    }
+
+                    if vote_rewards > 0 {
+                        Some((
+                            vote_pubkey,
+                            RewardInfo {
+                                reward_type: RewardType::Voting,
+                                lamports: vote_rewards as i64,
+                                post_balance: vote_account.lamports,
+                                commission: Some(commission),
+                            },
+                        ))
+                    } else {
+                        None
+                    }
                 },
             )
             .collect();
 
-        self.rewards.write().unwrap().append(&mut vote_rewards);
-        self.rewards.write().unwrap().append(&mut stake_rewards);
+        {
+            let mut rewards = self.rewards.write().unwrap();
+            rewards.append(&mut vote_rewards);
+            rewards.append(&mut stake_rewards);
+        }
 
         point_value.rewards as f64 / point_value.points as f64
     }
