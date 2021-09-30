@@ -4,6 +4,7 @@ use crate::{
         ScanStorageResult,
     },
     accounts_index::{AccountSecondaryIndexes, IndexKey, ScanResult},
+    accounts_update_notifier_interface::AccountsUpdateNotifier,
     ancestors::Ancestors,
     bank::{
         NonceRollbackFull, NonceRollbackInfo, RentDebits, TransactionCheckResult,
@@ -128,8 +129,10 @@ impl Accounts {
             AccountSecondaryIndexes::default(),
             false,
             shrink_ratio,
+            None,
         )
     }
+
 
     pub fn new_with_config(
         paths: Vec<PathBuf>,
@@ -137,6 +140,7 @@ impl Accounts {
         account_indexes: AccountSecondaryIndexes,
         caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
+        accounts_update_notifier: Option<AccountsUpdateNotifier>,
     ) -> Self {
         Self {
             accounts_db: Arc::new(AccountsDb::new_with_config(
@@ -145,6 +149,7 @@ impl Accounts {
                 account_indexes,
                 caching_enabled,
                 shrink_ratio,
+                accounts_update_notifier,
             )),
             account_locks: Mutex::new(AccountLocks::default()),
         }

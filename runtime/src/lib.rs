@@ -6,6 +6,7 @@ pub mod accounts_cache;
 pub mod accounts_db;
 pub mod accounts_hash;
 pub mod accounts_index;
+pub mod accounts_update_notifier_interface;
 pub mod ancestors;
 pub mod append_vec;
 pub mod bank;
