@@ -29,9 +29,13 @@ use crate::{
     vote_account::ArcVoteAccount,
 };
 use byteorder::{ByteOrder, LittleEndian};
+use dashmap::DashMap;
 use itertools::Itertools;
 use log::*;
-use rayon::ThreadPool;
+use rayon::{
+    iter::{ParallelBridge, ParallelIterator},
+    ThreadPool, ThreadPoolBuilder,
+};
 use solana_measure::measure::Measure;
 use solana_metrics::{datapoint_debug, inc_new_counter_debug, inc_new_counter_info};
 use solana_sdk::{
@@ -715,6 +719,10 @@ pub enum RewardCalculationEvent<'a, 'b> {
 
 fn null_tracer() -> Option<impl FnMut(&RewardCalculationEvent)> {
     None::<fn(&RewardCalculationEvent)>
+}
+
+fn null_inflation_tracer() -> Option<impl FnMut(&InflationPointCalculationEvent)> {
+    None::<fn(&InflationPointCalculationEvent)>
 }
 
 impl fmt::Display for RewardType {
@@ -1920,6 +1928,7 @@ impl Bank {
         reward_calc_tracer: &mut Option<impl FnMut(&RewardCalculationEvent)>,
         fix_stake_deactivate: bool,
     ) -> f64 {
+        let thread_pool = ThreadPoolBuilder::new().build().unwrap();
         let stake_history = self.stakes.read().unwrap().history().clone();
 
         let stake_delegation_accounts = self.load_stake_delegation_accounts(reward_calc_tracer);
@@ -1953,83 +1962,108 @@ impl Bank {
             return 0.0;
         }
 
-        let point_value = PointValue { rewards, points };
-
-        let mut rewards = vec![];
         // pay according to point value
-        for (
-            vote_pubkey,
-            StakeDelegationAccounts {
-                vote_state,
-                mut vote_account,
-                delegations,
+        let point_value = PointValue { rewards, points };
+        let vote_account_rewards: DashMap<Pubkey, (AccountSharedData, u8, u64)> =
+            DashMap::with_capacity(stake_delegation_accounts.len());
+        let stake_delegation_iterator = stake_delegation_accounts.into_iter().flat_map(
+            |(
+                vote_pubkey,
+                StakeDelegationAccounts {
+                    vote_state,
+                    vote_account,
+                    delegations,
+                },
+            )| {
+                vote_account_rewards.insert(vote_pubkey, (vote_account, vote_state.commission, 0));
+                let vote_state = Arc::new(vote_state);
+                delegations
+                    .into_iter()
+                    .map(move |delegation| (vote_pubkey, Arc::clone(&vote_state), delegation))
             },
-        ) in stake_delegation_accounts.into_iter()
-        {
-            let mut vote_account_changed = false;
-            let voters_account_pre_balance = vote_account.lamports;
-            let commission = Some(vote_state.commission);
+        );
 
-            for (stake_pubkey, (stake_state, mut stake_account)) in delegations.into_iter() {
-                // curry closure to add the contextual stake_pubkey
-                let mut reward_calc_tracer = reward_calc_tracer.as_mut().map(|outer| {
-                    // inner
-                    move |inner_event: &_| {
-                        outer(&RewardCalculationEvent::Staking(&stake_pubkey, inner_event))
+        let mut stake_rewards = thread_pool.install(|| {
+            stake_delegation_iterator
+                .par_bridge()
+                .filter_map(
+                    |(
+                        vote_pubkey,
+                        vote_state,
+                        (stake_pubkey, (stake_state, mut stake_account)),
+                    )| {
+                        let redeemed = stake_state::redeem_rewards(
+                            rewarded_epoch,
+                            stake_state,
+                            &mut stake_account,
+                            &vote_state,
+                            &point_value,
+                            Some(&stake_history),
+                            &mut null_inflation_tracer(),
+                            fix_stake_deactivate,
+                        );
+                        if let Ok((stakers_reward, voters_reward)) = redeemed {
+                            // track voter rewards
+                            if voters_reward > 0 {
+                                if let Some((_vote_account, _commission, vote_rewards_sum)) =
+                                    vote_account_rewards.get_mut(&vote_pubkey).as_deref_mut()
+                                {
+                                    *vote_rewards_sum += voters_reward
+                                }
+                            }
+
+                            // store stake account even if stakers_reward is 0
+                            // because credits observed has changed
+                            self.store_account(&stake_pubkey, &stake_account);
+
+                            if stakers_reward > 0 {
+                                return Some((
+                                    stake_pubkey,
+                                    RewardInfo {
+                                        reward_type: RewardType::Staking,
+                                        lamports: stakers_reward as i64,
+                                        post_balance: stake_account.lamports,
+                                        commission: Some(vote_state.commission),
+                                    },
+                                ));
+                            }
+                        } else {
+                            debug!(
+                                "stake_state::redeem_rewards() failed for {}: {:?}",
+                                stake_pubkey, redeemed
+                            );
+                        }
+                        None
+                    },
+                )
+                .collect()
+        });
+
+        let mut vote_rewards = vote_account_rewards
+            .into_iter()
+            .filter_map(
+                |(vote_pubkey, (mut vote_account, commission, vote_rewards))| {
+                    if vote_rewards == 0 {
+                        return None;
                     }
-                });
-                let redeemed = stake_state::redeem_rewards(
-                    rewarded_epoch,
-                    stake_state,
-                    &mut stake_account,
-                    &mut vote_account,
-                    &vote_state,
-                    &point_value,
-                    Some(&stake_history),
-                    &mut reward_calc_tracer.as_mut(),
-                    fix_stake_deactivate,
-                );
-                if let Ok((stakers_reward, _voters_reward)) = redeemed {
-                    self.store_account(&stake_pubkey, &stake_account);
-                    vote_account_changed = true;
 
-                    if stakers_reward > 0 {
-                        rewards.push((
-                            stake_pubkey,
-                            RewardInfo {
-                                reward_type: RewardType::Staking,
-                                lamports: stakers_reward as i64,
-                                post_balance: stake_account.lamports,
-                                commission,
-                            },
-                        ));
-                    }
-                } else {
-                    debug!(
-                        "stake_state::redeem_rewards() failed for {}: {:?}",
-                        stake_pubkey, redeemed
-                    );
-                }
-            }
-
-            if vote_account_changed {
-                let post_balance = vote_account.lamports;
-                let lamports = (post_balance - voters_account_pre_balance) as i64;
-                if lamports != 0 {
-                    rewards.push((
+                    vote_account.lamports += vote_rewards;
+                    self.store_account(&vote_pubkey, &vote_account);
+                    Some((
                         vote_pubkey,
                         RewardInfo {
                             reward_type: RewardType::Voting,
-                            lamports,
-                            post_balance,
-                            commission,
+                            lamports: vote_rewards as i64,
+                            post_balance: vote_account.lamports,
+                            commission: Some(commission),
                         },
-                    ));
-                }
-                self.store_account(&vote_pubkey, &vote_account);
-            }
-        }
-        self.rewards.write().unwrap().append(&mut rewards);
+                    ))
+                },
+            )
+            .collect();
+
+        self.rewards.write().unwrap().append(&mut vote_rewards);
+        self.rewards.write().unwrap().append(&mut stake_rewards);
 
         point_value.rewards as f64 / point_value.points as f64
     }
