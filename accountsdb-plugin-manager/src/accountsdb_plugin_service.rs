@@ -33,7 +33,7 @@ pub enum AccountsdbPluginServiceError {
 
 /// The service managing the AccountsDb plugin workflow.
 pub struct AccountsDbPluginService {
-    confirmed_slots_observer: SlotStatusObserver,
+    slot_status_observer: SlotStatusObserver,
     plugin_manager: Arc<RwLock<AccountsDbPluginManager>>,
     accounts_update_notifier: AccountsUpdateNotifier,
 }
@@ -72,7 +72,7 @@ impl AccountsDbPluginService {
         let accounts_update_notifier = Arc::new(RwLock::new(AccountsUpdateNotifierImpl::new(
             plugin_manager.clone(),
         )));
-        let confirmed_slots_observer =
+        let slot_status_observer =
             SlotStatusObserver::new(confirmed_bank_receiver, accounts_update_notifier.clone());
 
         let libpath = result["libpath"]
@@ -99,7 +99,7 @@ impl AccountsDbPluginService {
 
         info!("Started AccountsDbPluginService");
         Ok(AccountsDbPluginService {
-            confirmed_slots_observer,
+            slot_status_observer,
             plugin_manager,
             accounts_update_notifier,
         })
@@ -110,7 +110,7 @@ impl AccountsDbPluginService {
     }
 
     pub fn join(mut self) -> thread::Result<()> {
-        self.confirmed_slots_observer.join()?;
+        self.slot_status_observer.join()?;
         self.plugin_manager.write().unwrap().unload();
         Ok(())
     }

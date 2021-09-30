@@ -13,20 +13,20 @@ use {
 
 #[derive(Debug)]
 pub(crate) struct SlotStatusObserver {
-    confirmed_bank_receiver_service: Option<JoinHandle<()>>,
+    bank_notification_receiver_service: Option<JoinHandle<()>>,
     exit_updated_slot_server: Arc<AtomicBool>,
 }
 
 impl SlotStatusObserver {
     pub fn new(
-        confirmed_bank_receiver: Receiver<BankNotification>,
+        bank_notification_receiver: Receiver<BankNotification>,
         accounts_update_notifier: AccountsUpdateNotifier,
     ) -> Self {
         let exit_updated_slot_server = Arc::new(AtomicBool::new(false));
 
         Self {
-            confirmed_bank_receiver_service: Some(Self::run_confirmed_bank_receiver(
-                confirmed_bank_receiver,
+            bank_notification_receiver_service: Some(Self::run_bank_notification_receiver(
+                bank_notification_receiver,
                 exit_updated_slot_server.clone(),
                 accounts_update_notifier,
             )),
@@ -36,22 +36,22 @@ impl SlotStatusObserver {
 
     pub fn join(&mut self) -> thread::Result<()> {
         self.exit_updated_slot_server.store(true, Ordering::Relaxed);
-        self.confirmed_bank_receiver_service
+        self.bank_notification_receiver_service
             .take()
             .map(JoinHandle::join)
             .unwrap()
     }
 
-    fn run_confirmed_bank_receiver(
-        confirmed_bank_receiver: Receiver<BankNotification>,
+    fn run_bank_notification_receiver(
+        bank_notification_receiver: Receiver<BankNotification>,
         exit: Arc<AtomicBool>,
         accounts_update_notifier: AccountsUpdateNotifier,
     ) -> JoinHandle<()> {
         Builder::new()
-            .name("confirmed_bank_receiver".to_string())
+            .name("bank_notification_receiver".to_string())
             .spawn(move || {
                 while !exit.load(Ordering::Relaxed) {
-                    if let Ok(slot) = confirmed_bank_receiver.recv() {
+                    if let Ok(slot) = bank_notification_receiver.recv() {
                         match slot {
                             BankNotification::OptimisticallyConfirmed(slot) => {
                                 accounts_update_notifier

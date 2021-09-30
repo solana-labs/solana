@@ -57,7 +57,6 @@ impl AccountsUpdateNotifierImpl {
         pubkey: &'a Pubkey,
         account: &'a AccountSharedData,
     ) -> Option<ReplicaAccountInfo<'a>> {
-        //let data = account.data().to_vec();
         Some(ReplicaAccountInfo {
             pubkey: pubkey.as_ref(),
             lamports: account.lamports(),
@@ -72,7 +71,6 @@ impl AccountsUpdateNotifierImpl {
         &self,
         stored_account_meta: &'a StoredAccountMeta,
     ) -> Option<ReplicaAccountInfo<'a>> {
-        //let data = stored_account_meta.data.to_vec();
         Some(ReplicaAccountInfo {
             pubkey: stored_account_meta.meta.pubkey.as_ref(),
             lamports: stored_account_meta.account_meta.lamports,
