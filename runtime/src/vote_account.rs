@@ -21,6 +21,16 @@ const INVALID_VOTE_STATE: Result<VoteState, InstructionError> =
 #[derive(Clone, Debug, Default, PartialEq, AbiExample)]
 pub struct ArcVoteAccount(Arc<VoteAccount>);
 
+impl ArcVoteAccount {
+    pub fn account(&self) -> &Account {
+        &self.0.account
+    }
+
+    pub fn vote_state(&self) -> RwLockReadGuard<Result<VoteState, InstructionError>> {
+        self.0.vote_state()
+    }
+}
+
 #[derive(Debug, AbiExample)]
 pub struct VoteAccount {
     account: Account,

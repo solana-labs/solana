@@ -80,10 +80,7 @@ use solana_sdk::{
 use solana_stake_program::stake_state::{
     self, Delegation, InflationPointCalculationEvent, PointValue, StakeState,
 };
-use solana_vote_program::{
-    vote_instruction::VoteInstruction,
-    vote_state::{VoteState, VoteStateVersions},
-};
+use solana_vote_program::{vote_instruction::VoteInstruction, vote_state::VoteState};
 use std::{
     borrow::Cow,
     cell::RefCell,
@@ -927,8 +924,8 @@ impl Default for BlockhashQueue {
 }
 
 struct StakeDelegationAccounts {
-    vote_state: VoteState,
-    vote_account: AccountSharedData,
+    vote_state: Arc<VoteState>,
+    vote_account: Arc<AccountSharedData>,
     delegations: Vec<(Pubkey, (StakeState, AccountSharedData))>,
 }
 
@@ -1828,6 +1825,7 @@ impl Bank {
     fn load_stake_delegation_accounts(
         &self,
         reward_calc_tracer: &mut Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
+        thread_pool: &ThreadPool,
     ) -> HashMap<Pubkey, StakeDelegationAccounts> {
         let filter_stake_delegation_accounts = self
             .feature_set
@@ -1835,6 +1833,32 @@ impl Bank {
 
         let stakes = self.stakes.read().unwrap();
         let mut accounts = HashMap::with_capacity(stakes.vote_accounts().len());
+
+        let vote_accounts: DashMap<Pubkey, (Arc<VoteState>, Arc<AccountSharedData>)> = thread_pool
+            .install(|| {
+                stakes
+                    .vote_accounts()
+                    .iter()
+                    .par_bridge()
+                    .filter_map(|(pubkey, (_lamports, arc_vote_account))| {
+                        arc_vote_account
+                            .vote_state()
+                            .as_ref()
+                            .ok()
+                            .map(|vote_state_result| {
+                                (
+                                    *pubkey,
+                                    (
+                                        Arc::new(vote_state_result.clone()),
+                                        Arc::new(AccountSharedData::from(
+                                            arc_vote_account.account().clone(),
+                                        )),
+                                    ),
+                                )
+                            })
+                    })
+                    .collect()
+            });
 
         stakes
             .stake_delegations()
@@ -1847,17 +1871,17 @@ impl Bank {
                 };
 
                 // fetch vote account if it hasn't been fetched
-                let fetched_vote_account = if !accounts.contains_key(vote_pubkey) {
-                    match self.get_account(vote_pubkey) {
-                        None => return,
-                        vote_account => vote_account,
-                    }
+                let fetched_vote_state_and_account = if !accounts.contains_key(vote_pubkey) {
+                    vote_accounts
+                        .get(vote_pubkey)
+                        .map(|read_ref| read_ref.value().clone())
                 } else {
                     None
                 };
 
-                let fetched_vote_account_owner =
-                    fetched_vote_account.as_ref().map(|account| &account.owner);
+                let fetched_vote_account_owner = fetched_vote_state_and_account
+                    .as_ref()
+                    .map(|(_fetched_vote_state, fetched_vote_account)| fetched_vote_account.owner);
 
                 // call tracer to catch any illegal data if any
                 if let Some(reward_calc_tracer) = reward_calc_tracer {
@@ -1866,7 +1890,7 @@ impl Bank {
                         &InflationPointCalculationEvent::Delegation(
                             *delegation,
                             fetched_vote_account_owner
-                                .cloned()
+                                .clone()
                                 .unwrap_or_else(solana_vote_program::id),
                         ),
                     ));
@@ -1876,7 +1900,7 @@ impl Bank {
                 if filter_stake_delegation_accounts
                     && (stake_account.owner != solana_stake_program::id()
                         || (fetched_vote_account_owner.is_some()
-                            && fetched_vote_account_owner != Some(&solana_vote_program::id())))
+                            && fetched_vote_account_owner != Some(solana_vote_program::id())))
                 {
                     datapoint_warn!(
                         "bank-stake_delegation_accounts-invalid-account",
@@ -1892,13 +1916,7 @@ impl Bank {
                     None => return,
                 };
 
-                if let Some(vote_account) = fetched_vote_account {
-                    let (vote_state, vote_account) =
-                        match StateMut::<VoteStateVersions>::state(&vote_account).ok() {
-                            Some(vote_state) => (vote_state.convert_to_current(), vote_account),
-                            None => return,
-                        };
-
+                if let Some((vote_state, vote_account)) = fetched_vote_state_and_account {
                     accounts.insert(
                         *vote_pubkey,
                         StakeDelegationAccounts {
@@ -1927,7 +1945,8 @@ impl Bank {
         let thread_pool = ThreadPoolBuilder::new().build().unwrap();
         let stake_history = self.stakes.read().unwrap().history().clone();
 
-        let stake_delegation_accounts = self.load_stake_delegation_accounts(reward_calc_tracer);
+        let stake_delegation_accounts =
+            self.load_stake_delegation_accounts(reward_calc_tracer, &thread_pool);
         let points: u128 = stake_delegation_accounts
             .values()
             .flat_map(
@@ -1960,7 +1979,7 @@ impl Bank {
 
         // pay according to point value
         let point_value = PointValue { rewards, points };
-        let vote_account_rewards: DashMap<Pubkey, (AccountSharedData, u8, u64)> =
+        let vote_account_rewards: DashMap<Pubkey, (Arc<AccountSharedData>, u8, u64)> =
             DashMap::with_capacity(stake_delegation_accounts.len());
         let stake_delegation_iterator = stake_delegation_accounts.into_iter().flat_map(
             |(
@@ -2049,7 +2068,9 @@ impl Bank {
                         return None;
                     }
 
-                    vote_account.lamports += vote_rewards;
+                    Arc::get_mut(&mut vote_account)
+                        .expect("Should be only reference to this Arc remaining")
+                        .lamports += vote_rewards;
                     self.store_account(&vote_pubkey, &vote_account);
                     Some((
                         vote_pubkey,
