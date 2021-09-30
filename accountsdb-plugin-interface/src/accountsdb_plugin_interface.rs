@@ -66,8 +66,8 @@ pub trait AccountsDbPlugin: Any + Send + Sync + std::fmt::Debug {
     /// The callback called when a plugin is loaded by the system,
     /// used for doing whatever initialization is required by the plugin.
     /// The _config_file contains the name of the
-    /// of the config file. The config shall be in JSON format and
-    /// it must has a field named "libpath" pointing to the full path
+    /// of the config file. The config must be in JSON format and
+    /// include a field "libpath" indicating the full path
     /// name of the shared library implementing this interface.
     fn on_load(&mut self, _config_file: &str) -> Result<()> {
         Ok(())
