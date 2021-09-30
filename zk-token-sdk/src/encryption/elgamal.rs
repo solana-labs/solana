@@ -2,7 +2,7 @@
 use rand::{rngs::OsRng, CryptoRng, RngCore};
 use {
     crate::encryption::{
-        encode::DiscreteLogInstance,
+        dlog::DiscreteLogInstance,
         pedersen::{Pedersen, PedersenBase, PedersenComm, PedersenDecHandle, PedersenOpen},
     },
     arrayref::{array_ref, array_refs},
@@ -12,6 +12,7 @@ use {
         scalar::Scalar,
     },
     serde::{Deserialize, Serialize},
+    std::collections::HashMap,
     std::convert::TryInto,
     subtle::{Choice, ConstantTimeEq},
     zeroize::Zeroize,
@@ -100,6 +101,17 @@ impl ElGamal {
         let discrete_log_instance = ElGamal::decrypt(sk, ct);
         discrete_log_instance.decode_u32()
     }
+
+    /// On input a secret key, ciphertext, and hashmap, the function decrypts the
+    /// ciphertext for a u32 value.
+    pub fn decrypt_u32_online(
+        sk: &ElGamalSK,
+        ct: &ElGamalCiphertext,
+        hashmap: &HashMap<[u8; 32], u32>,
+    ) -> Option<u32> {
+        let discrete_log_instance = ElGamal::decrypt(sk, ct);
+        discrete_log_instance.decode_u32_online(hashmap)
+    }
 }
 
 /// Public key for the ElGamal encryption scheme.
@@ -162,6 +174,15 @@ impl ElGamalSK {
     /// Utility method for code ergonomics.
     pub fn decrypt_u32(&self, ct: &ElGamalCiphertext) -> Option<u32> {
         ElGamal::decrypt_u32(self, ct)
+    }
+
+    /// Utility method for code ergonomics.
+    pub fn decrypt_u32_online(
+        &self,
+        ct: &ElGamalCiphertext,
+        hashmap: &HashMap<[u8; 32], u32>,
+    ) -> Option<u32> {
+        ElGamal::decrypt_u32_online(self, ct, hashmap)
     }
 
     pub fn to_bytes(&self) -> [u8; 32] {
@@ -248,6 +269,15 @@ impl ElGamalCiphertext {
     /// Utility method for code ergonomics.
     pub fn decrypt_u32(&self, sk: &ElGamalSK) -> Option<u32> {
         ElGamal::decrypt_u32(sk, self)
+    }
+
+    /// Utility method for code ergonomics.
+    pub fn decrypt_u32_online(
+        &self,
+        sk: &ElGamalSK,
+        hashmap: &HashMap<[u8; 32], u32>,
+    ) -> Option<u32> {
+        ElGamal::decrypt_u32_online(sk, self, hashmap)
     }
 }
 
