@@ -371,7 +371,7 @@ fn retain_staked(values: &mut Vec<CrdsValue>, stakes: &HashMap<Pubkey, u64>) {
             // Unstaked nodes can still help repair.
             CrdsData::EpochSlots(_, _) => true,
             // Unstaked nodes can still serve snapshots.
-            CrdsData::SnapshotHashes(_) => true,
+            CrdsData::SnapshotHashes(_) | CrdsData::IncrementalSnapshotHashes(_) => true,
             // Otherwise unstaked voting nodes will show up with no version in
             // the various dashboards.
             CrdsData::Version(_) => true,
