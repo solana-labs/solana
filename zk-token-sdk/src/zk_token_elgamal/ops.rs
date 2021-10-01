@@ -68,7 +68,7 @@ mod target_arch {
         amount_as_ct[..32].copy_from_slice(RISTRETTO_BASEPOINT_COMPRESSED.as_bytes());
         add_ciphertexts(
             Scalar::one(),
-            &ct,
+            ct,
             Scalar::from(amount),
             &pod::ElGamalCiphertext(amount_as_ct),
         )
@@ -82,7 +82,7 @@ mod target_arch {
         amount_as_ct[..32].copy_from_slice(RISTRETTO_BASEPOINT_COMPRESSED.as_bytes());
         add_ciphertexts(
             Scalar::one(),
-            &ct,
+            ct,
             -Scalar::from(amount),
             &pod::ElGamalCiphertext(amount_as_ct),
         )
@@ -264,7 +264,7 @@ mod tests {
         let transfer_amount_ct = pk.encrypt_with(55_u64, &open);
         let transfer_amount_pod: pod::ElGamalCiphertext = transfer_amount_ct.into();
 
-        let sum = ops::add(spendable_balance, transfer_amount_pod).unwrap();
+        let sum = ops::add(&spendable_balance, &transfer_amount_pod).unwrap();
 
         let expected: pod::ElGamalCiphertext = pk.encrypt_with(55_u64, &open).into();
         assert_eq!(expected, sum);
@@ -274,7 +274,7 @@ mod tests {
     fn test_add_to() {
         let spendable_balance = pod::ElGamalCiphertext::zeroed();
 
-        let added_ct = ops::add_to(spendable_balance, 55).unwrap();
+        let added_ct = ops::add_to(&spendable_balance, 55).unwrap();
 
         let (pk, _) = ElGamal::keygen();
         let expected: pod::ElGamalCiphertext =
@@ -290,7 +290,7 @@ mod tests {
         let open = PedersenOpen::random(&mut OsRng);
         let encrypted_amount: pod::ElGamalCiphertext = pk.encrypt_with(amount, &open).into();
 
-        let subtracted_ct = ops::subtract_from(encrypted_amount, 55).unwrap();
+        let subtracted_ct = ops::subtract_from(&encrypted_amount, 55).unwrap();
 
         let expected: pod::ElGamalCiphertext = pk.encrypt_with(22_u64, &open).into();
 
@@ -352,11 +352,11 @@ mod tests {
         let source_hi_ct: pod::ElGamalCiphertext = (comm_hi, handle_source_hi).into();
 
         // 2. Combine lo and hi ciphertexts
-        let source_combined_ct = ops::combine_lo_hi(source_lo_ct, source_hi_ct).unwrap();
+        let source_combined_ct = ops::combine_lo_hi(&source_lo_ct, &source_hi_ct).unwrap();
 
         // 3. Subtract from available balance
         let final_source_spendable =
-            ops::subtract(source_spendable_ct, source_combined_ct).unwrap();
+            ops::subtract(&source_spendable_ct, &source_combined_ct).unwrap();
 
         // test
         let final_source_open =
@@ -372,10 +372,10 @@ mod tests {
         let dest_hi_ct: pod::ElGamalCiphertext = (comm_hi, handle_dest_hi).into();
 
         // 2. Combine lo and hi ciphertexts
-        let dest_combined_ct = ops::combine_lo_hi(dest_lo_ct, dest_hi_ct).unwrap();
+        let dest_combined_ct = ops::combine_lo_hi(&dest_lo_ct, &dest_hi_ct).unwrap();
 
         // 3. Add to pending balance
-        let final_dest_pending = ops::add(dest_pending_ct, dest_combined_ct).unwrap();
+        let final_dest_pending = ops::add(&dest_pending_ct, &dest_combined_ct).unwrap();
 
         let final_dest_open = dest_open + (open_lo + open_hi * Scalar::from(ops::TWO_32));
         let expected_dest_ct: pod::ElGamalCiphertext =
