@@ -1176,12 +1176,10 @@ impl Bank {
             new.apply_feature_activations(false);
         }
 
-        let cloned = new
-            .stakes
-            .read()
+        new.stakes
+            .write()
             .unwrap()
-            .clone_with_epoch(epoch, new.stake_program_v2_enabled());
-        *new.stakes.write().unwrap() = cloned;
+            .update_with_epoch(epoch, new.stake_program_v2_enabled());
 
         let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
         new.update_epoch_stakes(leader_schedule_epoch);
