@@ -11,7 +11,7 @@ use {
         input_parsers::{keypair_of, keypairs_of, pubkey_of, value_of},
         input_validators::{
             is_bin, is_keypair, is_keypair_or_ask_keyword, is_parsable, is_pubkey,
-            is_pubkey_or_keypair, is_slot, is_valid_percentage
+            is_pubkey_or_keypair, is_slot, is_valid_percentage,
         },
         keypair::SKIP_SEED_PHRASE_VALIDATION_ARG,
     },
