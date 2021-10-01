@@ -2,7 +2,7 @@
 use rand::{rngs::OsRng, CryptoRng, RngCore};
 use {
     crate::encryption::{
-        dlog::DiscreteLogInstance,
+        discrete_log::DiscreteLog,
         pedersen::{Pedersen, PedersenBase, PedersenComm, PedersenDecHandle, PedersenOpen},
     },
     arrayref::{array_ref, array_refs},
@@ -80,16 +80,16 @@ impl ElGamal {
 
     /// On input a secret key and a ciphertext, the function decrypts the ciphertext.
     ///
-    /// The output of the function is of type `DiscreteLogInstance`. The exact message
-    /// can be recovered via the DiscreteLogInstance's decode method.
-    pub fn decrypt(sk: &ElGamalSK, ct: &ElGamalCiphertext) -> DiscreteLogInstance {
+    /// The output of the function is of type `DiscreteLog`. The exact message
+    /// can be recovered via the DiscreteLog's decode method.
+    pub fn decrypt(sk: &ElGamalSK, ct: &ElGamalCiphertext) -> DiscreteLog {
         let ElGamalSK(s) = sk;
         let ElGamalCiphertext {
             message_comm,
             decrypt_handle,
         } = ct;
 
-        DiscreteLogInstance {
+        DiscreteLog {
             generator: PedersenBase::default().G,
             target: message_comm.get_point() - s * decrypt_handle.get_point(),
         }
@@ -167,7 +167,7 @@ impl ElGamalSK {
     }
 
     /// Utility method for code ergonomics.
-    pub fn decrypt(&self, ct: &ElGamalCiphertext) -> DiscreteLogInstance {
+    pub fn decrypt(&self, ct: &ElGamalCiphertext) -> DiscreteLog {
         ElGamal::decrypt(self, ct)
     }
 
@@ -262,7 +262,7 @@ impl ElGamalCiphertext {
     }
 
     /// Utility method for code ergonomics.
-    pub fn decrypt(&self, sk: &ElGamalSK) -> DiscreteLogInstance {
+    pub fn decrypt(&self, sk: &ElGamalSK) -> DiscreteLog {
         ElGamal::decrypt(sk, self)
     }
 
@@ -360,7 +360,7 @@ mod tests {
         let msg: u32 = 57;
         let ct = ElGamal::encrypt(&pk, msg);
 
-        let expected_instance = DiscreteLogInstance {
+        let expected_instance = DiscreteLog {
             generator: PedersenBase::default().G,
             target: Scalar::from(msg) * PedersenBase::default().G,
         };
@@ -385,7 +385,7 @@ mod tests {
         let ct_1 = decrypt_handle_1.to_elgamal_ctxt(comm);
         let ct_2 = decrypt_handle_2.to_elgamal_ctxt(comm);
 
-        let expected_instance = DiscreteLogInstance {
+        let expected_instance = DiscreteLog {
             generator: PedersenBase::default().G,
             target: Scalar::from(msg) * PedersenBase::default().G,
         };
