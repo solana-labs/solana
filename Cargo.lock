@@ -6790,10 +6790,13 @@ dependencies = [
  "httparse",
  "log 0.4.14",
  "rand 0.8.3",
+ "rustls",
  "sha-1 0.9.6",
  "thiserror",
  "url 2.2.2",
  "utf-8",
+ "webpki",
+ "webpki-roots",
 ]
 
 [[package]]
