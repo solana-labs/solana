@@ -2351,6 +2351,8 @@ pub fn main() {
         ("wait-for-restart-window", Some(subcommand_matches)) => {
             let min_idle_time = value_t_or_exit!(subcommand_matches, "min_idle_time", usize);
             let identity = pubkey_of(subcommand_matches, "identity");
+            let ignore_delinquency = subcommand_matches.is_present("ignore_delinquency");
+            
             wait_for_restart_window(&ledger_path, identity, min_idle_time, ignore_delinquency).unwrap_or_else(|err| {
                 println!("{}", err);
                 exit(1);
