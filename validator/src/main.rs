@@ -11,7 +11,7 @@ use {
         input_parsers::{keypair_of, keypairs_of, pubkey_of, value_of},
         input_validators::{
             is_bin, is_keypair, is_keypair_or_ask_keyword, is_parsable, is_pubkey,
-            is_pubkey_or_keypair, is_slot,
+            is_pubkey_or_keypair, is_slot, is_valid_percentage
         },
         keypair::SKIP_SEED_PHRASE_VALIDATION_ARG,
     },
@@ -2130,10 +2130,10 @@ pub fn main() {
                 Arg::with_name("max_delinquent_stake")
                     .long("max-delinquent-stake")
                     .takes_value(true)
-                    .validator(solana_clap_utils:: input_validators::is_valid_percentage)
+                    .validator(is_valid_percentage)
                     .default_value("5")
                     .value_name("PERCENT")
-                    .help("The maximum delinquent stake % permitted for an exit [default: 5]")
+                    .help("The maximum delinquent stake % permitted for an exit")
             )
         )
         .subcommand(
@@ -2223,10 +2223,10 @@ pub fn main() {
                 Arg::with_name("max_delinquent_stake")
                     .long("max-delinquent-stake")
                     .takes_value(true)
-                    .validator(solana_clap_utils:: input_validators::is_valid_percentage)
+                    .validator(is_valid_percentage)
                     .default_value("5")
                     .value_name("PERCENT")
-                    .help("The maximum delinquent stake % permitted for a restart [default: 5]")
+                    .help("The maximum delinquent stake % permitted for a restart")
             )
             .after_help("Note: If this command exits with a non-zero status \
                          then this not a good time for a restart")
