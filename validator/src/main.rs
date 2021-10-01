@@ -122,7 +122,7 @@ fn wait_for_restart_window(
     ledger_path: &Path,
     identity: Option<Pubkey>,
     min_idle_time_in_minutes: usize,
-    ignore_delinquency: bool,
+    ignore_delinquent_stake: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sleep_interval = Duration::from_secs(5);
     let min_delinquency_percentage = 0.05;
@@ -150,7 +150,7 @@ fn wait_for_restart_window(
             min_idle_slots, min_idle_time_in_minutes
         ),
     );
-    if ignore_delinquency {
+    if ignore_delinquent_stake {
         println!("{}", style("Ignoring delinquent stake").yellow());
     }
 
@@ -304,7 +304,7 @@ fn wait_for_restart_window(
                         if restart_snapshot == snapshot_slot && !monitoring_another_validator {
                             "Waiting for a new snapshot".to_string()
                         } else if delinquent_stake_percentage >= min_delinquency_percentage
-                            && !ignore_delinquency
+                            && !ignore_delinquent_stake
                         {
                             style("Delinquency too high").red().to_string()
                         } else {
@@ -2126,11 +2126,11 @@ pub fn main() {
                     .help("Minimum time that the validator should not be leader before restarting")
             )
             .arg(
-                Arg::with_name("ignore_delinquency")
+                Arg::with_name("ignore_delinquent-stake")
                     .short("i")
-                    .long("ignore-delinquency")
+                    .long("ignore-delinquent-stake")
                     .takes_value(false)
-                    .help("Ignore delinquency threshold when exiting")
+                    .help("Ignore delinquent stake threshold when exiting")
             )
         )
         .subcommand(
@@ -2217,11 +2217,11 @@ pub fn main() {
                     .help("Validator identity to monitor [default: your validator]")
             )
             .arg(
-                Arg::with_name("ignore_delinquency")
+                Arg::with_name("ignore_delinquent-stake")
                     .short("i")
-                    .long("ignore-delinquency")
+                    .long("ignore-delinquent-stake")
                     .takes_value(false)
-                    .help("Ignore delinquency threshold when exiting")
+                    .help("Ignore delinquent stake threshold when exiting")
             )
             .after_help("Note: If this command exits with a non-zero status \
                          then this not a good time for a restart")
@@ -2289,10 +2289,10 @@ pub fn main() {
             let min_idle_time = value_t_or_exit!(subcommand_matches, "min_idle_time", usize);
             let force = subcommand_matches.is_present("force");
             let monitor = subcommand_matches.is_present("monitor");
-            let ignore_delinquency = subcommand_matches.is_present("ignore_delinquency");
+            let ignore_delinquent_stake = subcommand_matches.is_present("ignore_delinquent_stake");
 
             if !force {
-                wait_for_restart_window(&ledger_path, None, min_idle_time, ignore_delinquency)
+                wait_for_restart_window(&ledger_path, None, min_idle_time, ignore_delinquent_stake)
                     .unwrap_or_else(|err| {
                         println!("{}", err);
                         exit(1);
@@ -2354,8 +2354,8 @@ pub fn main() {
         ("wait-for-restart-window", Some(subcommand_matches)) => {
             let min_idle_time = value_t_or_exit!(subcommand_matches, "min_idle_time", usize);
             let identity = pubkey_of(subcommand_matches, "identity");
-            let ignore_delinquency = subcommand_matches.is_present("ignore_delinquency");
-            wait_for_restart_window(&ledger_path, identity, min_idle_time, ignore_delinquency)
+            let ignore_delinquent_stake = subcommand_matches.is_present("ignore_delinquent_stake");
+            wait_for_restart_window(&ledger_path, identity, min_idle_time, ignore_delinquent_stake)
                 .unwrap_or_else(|err| {
                     println!("{}", err);
                     exit(1);
