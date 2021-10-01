@@ -2026,7 +2026,13 @@ fn complete_partial_program_init(
         return Err("Buffer account is already executable".into());
     }
     if account.owner != *loader_id && !system_program::check_id(&account.owner) {
-        return Err("Buffer account is already owned by another account".into());
+        return Err("Buffer account passed is already in use by another program".into());
+    }
+    if !account.data.is_empty() && account.data.len() < account_data_len {
+        return Err(
+            "Buffer account passed is not large enough, may have been for a different deploy?"
+                .into(),
+        );
     }
 
     if account.data.is_empty() && system_program::check_id(&account.owner) {
