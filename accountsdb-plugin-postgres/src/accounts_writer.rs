@@ -1,6 +1,8 @@
 /// A concurrent implementation for writing accounts into the PostgreSQL in parallel.
 use {
-    crate::accountsdb_plugin_postgres::{AccountsDbPluginPostgresConfig, AccountsDbPluginPostgresError},
+    crate::accountsdb_plugin_postgres::{
+        AccountsDbPluginPostgresConfig, AccountsDbPluginPostgresError,
+    },
     chrono::Utc,
     crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, Sender},
     log::*,
@@ -23,8 +25,12 @@ struct PostgresSqlClientWrapper {
     update_account_stmt: Statement,
 }
 
-struct AccountsWriteWorker {
+struct AccountsWriter {
     client: Mutex<PostgresSqlClientWrapper>,
+}
+
+struct AccountsWriteWorker {
+    writer: AccountsWriter,
 }
 
 impl Eq for DbAccountInfo {}
@@ -40,7 +46,6 @@ pub struct DbAccountInfo {
 }
 
 impl From<&ReplicaAccountInfo<'_>> for DbAccountInfo {
-
     fn from(account: &ReplicaAccountInfo<'_>) -> Self {
         let data = account.data.to_vec();
         Self {
@@ -54,10 +59,72 @@ impl From<&ReplicaAccountInfo<'_>> for DbAccountInfo {
     }
 }
 
+pub trait ReadableAccountInfo: Sized {
+    fn pubkey(&self) -> &[u8];
+    fn owner(&self) -> &[u8];
+    fn lamports(&self) -> u64;
+    fn executable(&self) -> bool;
+    fn rent_epoch(&self) -> u64;
+    fn data(&self) -> &[u8];
+}
+
+impl ReadableAccountInfo for DbAccountInfo {
+    fn pubkey(&self) -> &[u8] {
+        &self.pubkey
+    }
+
+    fn owner(&self) -> &[u8] {
+        &self.owner
+    }
+
+    fn lamports(&self) -> u64 {
+        self.lamports
+    }
+
+    fn executable(&self) -> bool {
+        self.executable
+    }
+
+    fn rent_epoch(&self) -> u64 {
+        self.rent_epoch
+    }
+
+    fn data(&self) -> &[u8] {
+        &self.data
+    }
+}
+
+
+impl <'a> ReadableAccountInfo for ReplicaAccountInfo<'a> {
+    fn pubkey(&self) -> &[u8] {
+        &self.pubkey
+    }
+
+    fn owner(&self) -> &[u8] {
+        &self.owner
+    }
+
+    fn lamports(&self) -> u64 {
+        self.lamports
+    }
+
+    fn executable(&self) -> bool {
+        self.executable
+    }
+
+    fn rent_epoch(&self) -> u64 {
+        self.rent_epoch
+    }
+
+    fn data(&self) -> &[u8] {
+        &self.data
+    }
+}
+
 const NUM_ACCOUNTS_WRITE_WORKERS: usize = 10;
 
-impl AccountsWriteWorker {
-    fn new(config: AccountsDbPluginPostgresConfig) -> Result<Self, AccountsDbPluginError> {
+impl AccountsWriter {
+    pub fn new(config: AccountsDbPluginPostgresConfig) -> Result<Self, AccountsDbPluginError> {
         let connection_str = format!("host={} user={}", config.host, config.user);
         match Client::connect(&connection_str, NoTls) {
             Err(err) => {
@@ -94,6 +161,52 @@ impl AccountsWriteWorker {
         }
     }
 
+    pub fn write_account<T: ReadableAccountInfo>(
+        &mut self,
+        account: &T,
+        slot: u64,
+    ) -> Result<(), AccountsDbPluginError> {
+        debug!(
+            "Updating account {:?} {:?} at slot {:?}",
+            account.pubkey(),
+            account.owner(),
+            slot,
+        );
+
+        let slot = slot as i64; // postgres only supports i64
+        let lamports = account.lamports() as i64;
+        let rent_epoch = account.rent_epoch() as i64;
+        let updated_on = Utc::now().naive_utc();
+        let client = self.client.get_mut().unwrap();
+        let result = client.client.query(
+            &client.update_account_stmt,
+            &[
+                &account.pubkey(),
+                &slot,
+                &account.owner(),
+                &lamports,
+                &account.executable(),
+                &rent_epoch,
+                &account.data(),
+                &updated_on,
+            ],
+        );
+
+        if let Err(err) = result {
+            return Err(AccountsDbPluginError::AccountsUpdateError {
+                msg: format!("Failed to persist the update of account to the PostgreSQL database. Error: {:?}", err)
+            });
+        }
+        Ok(())
+    }
+}
+
+impl AccountsWriteWorker {
+    fn new(config: AccountsDbPluginPostgresConfig) -> Result<Self, AccountsDbPluginError> {
+        let writer = AccountsWriter::new(config)?;
+        Ok(AccountsWriteWorker { writer })
+    }
+
     fn do_work(
         &mut self,
         receiver: Receiver<(DbAccountInfo, u64)>,
@@ -104,37 +217,7 @@ impl AccountsWriteWorker {
 
             match account {
                 Ok(account) => {
-                    let slot = account.1;
-                    let account = account.0;
-                    debug!(
-                        "Updating account {:?} {:?} at slot {:?}",
-                        account.pubkey, account.owner, slot,
-                    );
-
-                    let slot = slot as i64; // postgres only supports i64
-                    let lamports = account.lamports as i64;
-                    let rent_epoch = account.rent_epoch as i64;
-                    let updated_on = Utc::now().naive_utc();
-                    let client = self.client.get_mut().unwrap();
-                    let result = client.client.query(
-                        &client.update_account_stmt,
-                        &[
-                            &account.pubkey,
-                            &slot,
-                            &account.owner,
-                            &lamports,
-                            &account.executable,
-                            &rent_epoch,
-                            &account.data,
-                            &updated_on,
-                        ],
-                    );
-
-                    if let Err(err) = result {
-                        return Err(AccountsDbPluginError::AccountsUpdateError {
-                            msg: format!("Failed to persist the update of account to the PostgreSQL database. Error: {:?}", err)
-                        });
-                    }
+                    self.writer.write_account(&account.0, account.1)?;
                 }
                 Err(err) => match err {
                     RecvTimeoutError::Timeout => {
@@ -150,13 +233,13 @@ impl AccountsWriteWorker {
         Ok(())
     }
 }
-pub struct AccountsWriter {
+pub struct ParallelAccountsWriter {
     workers: Vec<JoinHandle<Result<(), AccountsDbPluginError>>>,
     exit_worker: Arc<AtomicBool>,
     sender: Sender<(DbAccountInfo, u64)>,
 }
 
-impl AccountsWriter {
+impl ParallelAccountsWriter {
     pub fn new(config: &AccountsDbPluginPostgresConfig) -> Result<Self, AccountsDbPluginError> {
         let (sender, receiver) = unbounded();
         let exit_worker = Arc::new(AtomicBool::new(false));
@@ -202,10 +285,17 @@ impl AccountsWriter {
         Ok(())
     }
 
-    pub fn update_account(&mut self, account: &ReplicaAccountInfo, slot: u64) -> Result<(), AccountsDbPluginError> {
+    pub fn update_account(
+        &mut self,
+        account: &ReplicaAccountInfo,
+        slot: u64,
+    ) -> Result<(), AccountsDbPluginError> {
         if let Err(err) = self.sender.send((DbAccountInfo::from(account), slot)) {
             return Err(AccountsDbPluginError::AccountsUpdateError {
-                msg: format!("Failed to update the account {:?}, error: {:?}", account.pubkey, err)
+                msg: format!(
+                    "Failed to update the account {:?}, error: {:?}",
+                    account.pubkey, err
+                ),
             });
         }
         Ok(())
