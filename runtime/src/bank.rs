@@ -1852,10 +1852,10 @@ impl Bank {
                         }
                     };
 
-                    let fetched_vote_state_and_account: Option<(
+                    let (fetched_vote_state, fetched_vote_account): (
                         Arc<VoteState>,
                         Arc<AccountSharedData>,
-                    )> = vote_accounts
+                    ) = vote_accounts
                         .get(vote_pubkey)
                         .unwrap_or_else(|| {
                             // fetch vote account if it hasn't been cached already
@@ -1878,11 +1878,9 @@ impl Bank {
                                 .downgrade()
                         })
                         .value()
-                        .clone();
+                        .clone()?;
 
-                    let fetched_vote_account_owner = fetched_vote_state_and_account.as_ref().map(
-                        |(_fetched_vote_state, fetched_vote_account)| fetched_vote_account.owner,
-                    );
+                    let fetched_vote_account_owner = fetched_vote_account.owner;
 
                     // call tracer to catch any illegal data if any
                     if let Some(reward_calc_tracer) = reward_calc_tracer {
@@ -1890,9 +1888,7 @@ impl Bank {
                             stake_pubkey,
                             &InflationPointCalculationEvent::Delegation(
                                 *delegation,
-                                fetched_vote_account_owner
-                                    .clone()
-                                    .unwrap_or_else(solana_vote_program::id),
+                                fetched_vote_account_owner,
                             ),
                         ));
                     }
@@ -1900,8 +1896,7 @@ impl Bank {
                     // filter invalid delegation accounts
                     if filter_stake_delegation_accounts
                         && (stake_account.owner != solana_stake_program::id()
-                            || (fetched_vote_account_owner.is_some()
-                                && fetched_vote_account_owner != Some(solana_vote_program::id())))
+                            || fetched_vote_account_owner != solana_vote_program::id())
                     {
                         datapoint_warn!(
                             "bank-stake_delegation_accounts-invalid-account",
@@ -1919,12 +1914,10 @@ impl Bank {
                         }
                     };
 
-                    fetched_vote_state_and_account.map(|(vote_state, _vote_account)| {
-                        StakeDelegationAccount {
-                            vote_pubkey: *vote_pubkey,
-                            vote_state,
-                            stake_delegation,
-                        }
+                    Some(StakeDelegationAccount {
+                        vote_pubkey: *vote_pubkey,
+                        vote_state: fetched_vote_state,
+                        stake_delegation,
                     })
                 })
                 .collect()
