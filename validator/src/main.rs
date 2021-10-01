@@ -105,6 +105,8 @@ const INCLUDE_KEY: &str = "account-index-include-key";
 const DEFAULT_MIN_SNAPSHOT_DOWNLOAD_SPEED: u64 = 10485760;
 // The maximum times of snapshot download abort and retry
 const MAX_SNAPSHOT_DOWNLOAD_ABORT: u32 = 5;
+// The maximum delinquent stake to permit for a safe validator exit/restart
+const DEFAULT_MAX_DELINQUENT_STAKE_PERCENT: u8 = 5;
 
 fn monitor_validator(ledger_path: &Path) {
     let dashboard = Dashboard::new(ledger_path, None, None).unwrap_or_else(|err| {
@@ -122,10 +124,9 @@ fn wait_for_restart_window(
     ledger_path: &Path,
     identity: Option<Pubkey>,
     min_idle_time_in_minutes: usize,
-    ignore_delinquent_stake: bool,
+    max_delinquency_percentage: u8,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sleep_interval = Duration::from_secs(5);
-    let min_delinquency_percentage = 0.05;
 
     let min_idle_slots = (min_idle_time_in_minutes as f64 * 60. / DEFAULT_S_PER_SLOT) as Slot;
 
@@ -150,8 +151,12 @@ fn wait_for_restart_window(
             min_idle_slots, min_idle_time_in_minutes
         ),
     );
-    if ignore_delinquent_stake {
-        println!("{}", style("Ignoring delinquent stake").yellow());
+
+    if max_delinquency_percentage != DEFAULT_MAX_DELINQUENT_STAKE_PERCENT {
+        println!(
+            "Maximum permitted delinquency: {}%",
+            max_delinquency_percentage
+        );
     }
 
     let mut current_epoch = None;
@@ -303,8 +308,8 @@ fn wait_for_restart_window(
                         }
                         if restart_snapshot == snapshot_slot && !monitoring_another_validator {
                             "Waiting for a new snapshot".to_string()
-                        } else if delinquent_stake_percentage >= min_delinquency_percentage
-                            && !ignore_delinquent_stake
+                        } else if delinquent_stake_percentage
+                            >= (max_delinquency_percentage as f64 / 100.)
                         {
                             style("Delinquency too high").red().to_string()
                         } else {
@@ -2126,11 +2131,12 @@ pub fn main() {
                     .help("Minimum time that the validator should not be leader before restarting")
             )
             .arg(
-                Arg::with_name("ignore_delinquent-stake")
-                    .short("i")
-                    .long("ignore-delinquent-stake")
-                    .takes_value(false)
-                    .help("Ignore delinquent stake threshold when exiting")
+                Arg::with_name("max_delinquent_stake")
+                    .long("max-delinquent-stake")
+                    .takes_value(true)
+                    .validator(is_parsable::<u8>)
+                    .value_name("PERCENT")
+                    .help("The maximum delinquent stake % permitted for an exit [default: 5]")
             )
         )
         .subcommand(
@@ -2217,11 +2223,12 @@ pub fn main() {
                     .help("Validator identity to monitor [default: your validator]")
             )
             .arg(
-                Arg::with_name("ignore_delinquent-stake")
-                    .short("i")
-                    .long("ignore-delinquent-stake")
-                    .takes_value(false)
-                    .help("Ignore delinquent stake threshold when exiting")
+                Arg::with_name("max_delinquent_stake")
+                    .long("max-delinquent-stake")
+                    .takes_value(true)
+                    .validator(is_parsable::<u8>)
+                    .value_name("PERCENT")
+                    .help("The maximum delinquent stake % permitted for a restart [default: 5]")
             )
             .after_help("Note: If this command exits with a non-zero status \
                          then this not a good time for a restart")
@@ -2289,10 +2296,18 @@ pub fn main() {
             let min_idle_time = value_t_or_exit!(subcommand_matches, "min_idle_time", usize);
             let force = subcommand_matches.is_present("force");
             let monitor = subcommand_matches.is_present("monitor");
-            let ignore_delinquent_stake = subcommand_matches.is_present("ignore_delinquent_stake");
+            let max_delinquent_stake = value_t!(subcommand_matches, "max_delinquent_stake", u8)
+                .unwrap_or(DEFAULT_MAX_DELINQUENT_STAKE_PERCENT);
+
+            if max_delinquent_stake > 100 {
+                println!(
+                    "Maximum permitted delinquency can't exceed 100"
+                );
+                exit(1);
+            }
 
             if !force {
-                wait_for_restart_window(&ledger_path, None, min_idle_time, ignore_delinquent_stake)
+                wait_for_restart_window(&ledger_path, None, min_idle_time, max_delinquent_stake)
                     .unwrap_or_else(|err| {
                         println!("{}", err);
                         exit(1);
@@ -2354,8 +2369,17 @@ pub fn main() {
         ("wait-for-restart-window", Some(subcommand_matches)) => {
             let min_idle_time = value_t_or_exit!(subcommand_matches, "min_idle_time", usize);
             let identity = pubkey_of(subcommand_matches, "identity");
-            let ignore_delinquent_stake = subcommand_matches.is_present("ignore_delinquent_stake");
-            wait_for_restart_window(&ledger_path, identity, min_idle_time, ignore_delinquent_stake)
+            let max_delinquent_stake = value_t!(subcommand_matches, "max_delinquent_stake", u8)
+                .unwrap_or(DEFAULT_MAX_DELINQUENT_STAKE_PERCENT);
+
+            if max_delinquent_stake > 100 {
+                println!(
+                    "Maximum permitted delinquency can't exceed 100"
+                );
+                exit(1);
+            }
+
+            wait_for_restart_window(&ledger_path, identity, min_idle_time, max_delinquent_stake)
                 .unwrap_or_else(|err| {
                     println!("{}", err);
                     exit(1);
