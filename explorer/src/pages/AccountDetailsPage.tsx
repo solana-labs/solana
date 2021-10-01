@@ -37,6 +37,7 @@ import { TokenInstructionsCard } from "components/account/history/TokenInstructi
 import { RewardsCard } from "components/account/RewardsCard";
 import { Creator, Metadata } from "metaplex/classes";
 import { ArtContent } from "metaplex/Art/Art";
+import { InfoTooltip } from "components/common/InfoTooltip";
 
 const IDENTICON_WIDTH = 64;
 
@@ -213,17 +214,21 @@ export function NFTHeader({
       </div>
 
       <div className="col mb-3 ml-n3 ml-md-n2 mt-3">
-        <h6 className="header-pretitle">NFT</h6>
-        <h2 className="header-title">{metadata.data.name}</h2>
-        <h4 className="header-pretitle mt-1"> {metadata.data.symbol}</h4>
-        <div className="mb-3 mt-2">
-          <span className="badge badge-pill badge-dark mr-2">{`${
-            metadata.primarySaleHappened ? "Secondary Market" : "Primary Market"
-          }`}</span>
-          <span className="badge badge-pill badge-dark mr-2">{`${
-            metadata.isMutable ? "Mutable" : "Immutable"
-          }`}</span>
+        <h6 className="header-pretitle ml-1">NFT</h6>
+        <h2 className="header-title ml-1">
+          {metadata.data.name !== ""
+            ? metadata.data.name
+            : "No NFT name was found"}
+        </h2>
+        <h4 className="header-pretitle ml-1 mt-1">
+          {metadata.data.symbol !== ""
+            ? metadata.data.symbol
+            : "No Symbol was found"}
+        </h4>
+        <div className="mb-2 mt-2">
+          {getSaleTypePill(metadata.primarySaleHappened)}
         </div>
+        <div className="mb-3 mt-2">{getIsMutablePill(metadata.isMutable)}</div>
         <div className="btn-group">
           <button
             className="btn btn-dark btn-sm dropdown-toggle creators-dropdown-button-width"
@@ -454,10 +459,29 @@ function getTabs(data?: ProgramData): Tab[] {
 }
 
 function getCreatorDropdownItems(creators: Creator[] | null) {
+  const CreatorHeader = () => {
+    const shareTooltip =
+      "The percentage a creator receives, based on the Seller Fees, from all future sales of this NFT.";
+    return (
+      <div
+        className={
+          "d-flex align-items-center dropdown-header creator-dropdown-entry"
+        }
+      >
+        <span className="dropdown-header text-monospace creator-dropdown-entry-address">
+          Creator Address
+        </span>
+        <div className="d-flex text-monospace">
+          <span className="text-monospace">Share %</span>
+          <InfoTooltip bottom text={shareTooltip} />
+        </div>
+      </div>
+    );
+  };
+
   const getVerifiedIcon = (isVerified: boolean) => {
     const className = isVerified ? "fe fe-check" : "fe fe-alert-octagon";
-    const tooltip = isVerified ? "Verified" : "Unverified";
-    return <i className={`ml-3 ${className}`} title={tooltip}></i>;
+    return <i className={`ml-3 ${className}`}></i>;
   };
 
   const CreatorEntry = (creator: Creator) => {
@@ -478,6 +502,7 @@ function getCreatorDropdownItems(creators: Creator[] | null) {
   if (creators && creators.length > 0) {
     let listOfCreators: JSX.Element[] = [];
 
+    listOfCreators.push(<CreatorHeader />);
     creators.forEach((creator) => {
       listOfCreators.push(<CreatorEntry key={creator.address} {...creator} />);
     });
@@ -488,6 +513,40 @@ function getCreatorDropdownItems(creators: Creator[] | null) {
   return (
     <div className={"dropdown-item text-monospace"}>
       <div className="mr-3">No creators are associated with this NFT.</div>
+    </div>
+  );
+}
+
+function getSaleTypePill(hasPrimarySaleHappened: boolean) {
+  const primaryMarketTooltip =
+    "Primary Market involves the first sale of an NFT where creators share in 100% of the proceeds.";
+
+  const secondaryMarketTooltip =
+    "Secondary Market involves all sales after the first, where creators share in proceeds as a percentage.";
+
+  return (
+    <div className={"d-inline-flex align-items-center"}>
+      <span className="badge badge-pill badge-dark">{`${
+        hasPrimarySaleHappened ? "Secondary Market" : "Primary Market"
+      }`}</span>
+      <InfoTooltip
+        bottom
+        text={
+          hasPrimarySaleHappened ? secondaryMarketTooltip : primaryMarketTooltip
+        }
+      />
+    </div>
+  );
+}
+
+function getIsMutablePill(isMutable: boolean) {
+  const tooltipString = "Whether or not the NFT data is mutable";
+  return (
+    <div className={"d-inline-flex align-items-center"}>
+      <span className="badge badge-pill badge-dark">{`${
+        isMutable ? "Mutable" : "Immutable"
+      }`}</span>
+      <InfoTooltip bottom text={tooltipString} />
     </div>
   );
 }
