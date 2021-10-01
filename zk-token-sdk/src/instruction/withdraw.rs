@@ -6,7 +6,7 @@ use {
 use {
     crate::{
         encryption::{
-            elgamal::{ElGamalCiphertext, ElGamalPubkey, ElGamalSK},
+            elgamal::{ElGamalCiphertext, ElGamalPubkey, ElGamalSecretKey},
             pedersen::{PedersenBase, PedersenOpen},
         },
         errors::ProofError,
@@ -43,7 +43,7 @@ impl WithdrawData {
     pub fn new(
         amount: u64,
         source_pk: ElGamalPubkey,
-        source_sk: &ElGamalSK,
+        source_sk: &ElGamalSecretKey,
         current_balance: u64,
         current_balance_ct: ElGamalCiphertext,
     ) -> Self {
@@ -96,7 +96,7 @@ impl WithdrawProof {
     }
 
     pub fn new(
-        source_sk: &ElGamalSK,
+        source_sk: &ElGamalSecretKey,
         final_balance: u64,
         final_balance_ct: &ElGamalCiphertext,
     ) -> Self {

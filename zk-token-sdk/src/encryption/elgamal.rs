@@ -23,7 +23,7 @@ pub struct ElGamal;
 impl ElGamal {
     /// Generates the public and secret keys for ElGamal encryption.
     #[cfg(not(target_arch = "bpf"))]
-    pub fn keygen() -> (ElGamalPubkey, ElGamalSK) {
+    pub fn keygen() -> (ElGamalPubkey, ElGamalSecretKey) {
         ElGamal::keygen_with(&mut OsRng) // using OsRng for now
     }
 
@@ -31,7 +31,7 @@ impl ElGamal {
     /// secret keys for ElGamal encryption.
     #[cfg(not(target_arch = "bpf"))]
     #[allow(non_snake_case)]
-    pub fn keygen_with<T: RngCore + CryptoRng>(rng: &mut T) -> (ElGamalPubkey, ElGamalSK) {
+    pub fn keygen_with<T: RngCore + CryptoRng>(rng: &mut T) -> (ElGamalPubkey, ElGamalSecretKey) {
         // sample a non-zero scalar
         let mut s: Scalar;
         loop {
@@ -45,7 +45,7 @@ impl ElGamal {
         let H = PedersenBase::default().H;
         let P = s.invert() * H;
 
-        (ElGamalPubkey(P), ElGamalSK(s))
+        (ElGamalPubkey(P), ElGamalSecretKey(s))
     }
 
     /// On input a public key and a message to be encrypted, the function
@@ -82,8 +82,8 @@ impl ElGamal {
     ///
     /// The output of the function is of type `DiscreteLog`. The exact message
     /// can be recovered via the DiscreteLog's decode method.
-    pub fn decrypt(sk: &ElGamalSK, ct: &ElGamalCiphertext) -> DiscreteLog {
-        let ElGamalSK(s) = sk;
+    pub fn decrypt(sk: &ElGamalSecretKey, ct: &ElGamalCiphertext) -> DiscreteLog {
+        let ElGamalSecretKey(s) = sk;
         let ElGamalCiphertext {
             message_comm,
             decrypt_handle,
@@ -97,7 +97,7 @@ impl ElGamal {
 
     /// On input a secret key and a ciphertext, the function decrypts the
     /// ciphertext for a u32 value.
-    pub fn decrypt_u32(sk: &ElGamalSK, ct: &ElGamalCiphertext) -> Option<u32> {
+    pub fn decrypt_u32(sk: &ElGamalSecretKey, ct: &ElGamalCiphertext) -> Option<u32> {
         let discrete_log_instance = ElGamal::decrypt(sk, ct);
         discrete_log_instance.decode_u32()
     }
@@ -105,7 +105,7 @@ impl ElGamal {
     /// On input a secret key, ciphertext, and hashmap, the function decrypts the
     /// ciphertext for a u32 value.
     pub fn decrypt_u32_online(
-        sk: &ElGamalSK,
+        sk: &ElGamalSecretKey,
         ct: &ElGamalCiphertext,
         hashmap: &HashMap<[u8; 32], u32>,
     ) -> Option<u32> {
@@ -160,8 +160,8 @@ impl From<RistrettoPoint> for ElGamalPubkey {
 /// Secret key for the ElGamal encryption scheme.
 #[derive(Serialize, Deserialize, Debug, Zeroize)]
 #[zeroize(drop)]
-pub struct ElGamalSK(Scalar);
-impl ElGamalSK {
+pub struct ElGamalSecretKey(Scalar);
+impl ElGamalSecretKey {
     pub fn get_scalar(&self) -> Scalar {
         self.0
     }
@@ -189,27 +189,27 @@ impl ElGamalSK {
         self.0.to_bytes()
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Option<ElGamalSK> {
+    pub fn from_bytes(bytes: &[u8]) -> Option<ElGamalSecretKey> {
         match bytes.try_into() {
-            Ok(bytes) => Scalar::from_canonical_bytes(bytes).map(ElGamalSK),
+            Ok(bytes) => Scalar::from_canonical_bytes(bytes).map(ElGamalSecretKey),
             _ => None,
         }
     }
 }
 
-impl From<Scalar> for ElGamalSK {
-    fn from(scalar: Scalar) -> ElGamalSK {
-        ElGamalSK(scalar)
+impl From<Scalar> for ElGamalSecretKey {
+    fn from(scalar: Scalar) -> ElGamalSecretKey {
+        ElGamalSecretKey(scalar)
     }
 }
 
-impl Eq for ElGamalSK {}
-impl PartialEq for ElGamalSK {
+impl Eq for ElGamalSecretKey {}
+impl PartialEq for ElGamalSecretKey {
     fn eq(&self, other: &Self) -> bool {
         self.ct_eq(other).unwrap_u8() == 1u8
     }
 }
-impl ConstantTimeEq for ElGamalSK {
+impl ConstantTimeEq for ElGamalSecretKey {
     fn ct_eq(&self, other: &Self) -> Choice {
         self.0.ct_eq(&other.0)
     }
@@ -262,19 +262,19 @@ impl ElGamalCiphertext {
     }
 
     /// Utility method for code ergonomics.
-    pub fn decrypt(&self, sk: &ElGamalSK) -> DiscreteLog {
+    pub fn decrypt(&self, sk: &ElGamalSecretKey) -> DiscreteLog {
         ElGamal::decrypt(sk, self)
     }
 
     /// Utility method for code ergonomics.
-    pub fn decrypt_u32(&self, sk: &ElGamalSK) -> Option<u32> {
+    pub fn decrypt_u32(&self, sk: &ElGamalSecretKey) -> Option<u32> {
         ElGamal::decrypt_u32(sk, self)
     }
 
     /// Utility method for code ergonomics.
     pub fn decrypt_u32_online(
         &self,
-        sk: &ElGamalSK,
+        sk: &ElGamalSecretKey,
         hashmap: &HashMap<[u8; 32], u32>,
     ) -> Option<u32> {
         ElGamal::decrypt_u32_online(sk, self, hashmap)
@@ -507,7 +507,7 @@ mod tests {
         let (_, sk) = ElGamal::keygen();
 
         let encoded = bincode::serialize(&sk).unwrap();
-        let decoded: ElGamalSK = bincode::deserialize(&encoded).unwrap();
+        let decoded: ElGamalSecretKey = bincode::deserialize(&encoded).unwrap();
 
         assert_eq!(sk, decoded);
     }
