@@ -99,7 +99,8 @@ use std::{
     time::Instant,
 };
 
-type DashMapVoteAccounts = DashMap<Pubkey, Option<(Arc<VoteState>, Arc<AccountSharedData>)>>;
+pub type DashMapVoteAccounts =
+    DashMap<Pubkey, Option<(Arc<VoteState>, Arc<AccountSharedData>, Arc<AtomicU64>)>>;
 
 pub const SECONDS_PER_YEAR: f64 = 365.25 * 24.0 * 60.0 * 60.0;
 
@@ -1171,12 +1172,10 @@ impl Bank {
             new.apply_feature_activations(false);
         }
 
-        let cloned = new
-            .stakes
-            .read()
+        new.stakes
+            .write()
             .unwrap()
-            .clone_with_epoch(epoch, new.stake_program_v2_enabled());
-        *new.stakes.write().unwrap() = cloned;
+            .update_with_epoch(epoch, new.stake_program_v2_enabled());
 
         let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
         new.update_epoch_stakes(leader_schedule_epoch);
@@ -1828,98 +1827,125 @@ impl Bank {
         &self,
         reward_calc_tracer: &Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
         thread_pool: &ThreadPool,
+        fix_stake_deactivate: bool,
     ) -> (Vec<StakeDelegationAccount>, DashMapVoteAccounts) {
         let filter_stake_delegation_accounts = self
             .feature_set
             .is_active(&feature_set::filter_stake_delegation_accounts::id());
 
-        let stakes = self.stakes.read().unwrap();
-        let vote_accounts: DashMapVoteAccounts = DashMap::default();
+        let (accounts, vote_accounts) = {
+            let stakes = self.stakes.read().unwrap();
+            let vote_accounts: DashMapVoteAccounts = DashMap::default();
 
-        let accounts: Vec<StakeDelegationAccount> = thread_pool.install(|| {
-            stakes
-                .stake_delegations()
-                .iter()
-                .par_bridge()
-                .filter_map(|(stake_pubkey, delegation)| {
-                    let vote_pubkey = &delegation.voter_pubkey;
-                    let stake_account = match self.get_account(&stake_pubkey) {
-                        Some(stake_account) => stake_account,
-                        None => {
-                            return None;
-                        }
-                    };
+            let accounts: Vec<StakeDelegationAccount> = thread_pool.install(|| {
+                stakes
+                    .stake_delegations()
+                    .iter()
+                    .par_bridge()
+                    .filter_map(|(stake_pubkey, delegation)| {
+                        let vote_pubkey = &delegation.voter_pubkey;
+                        let stake_account = match self.get_account(&stake_pubkey) {
+                            Some(stake_account) => stake_account,
+                            None => {
+                                return None;
+                            }
+                        };
 
-                    let (fetched_vote_state, fetched_vote_account): (
-                        Arc<VoteState>,
-                        Arc<AccountSharedData>,
-                    ) = vote_accounts
-                        .get(vote_pubkey)
-                        .unwrap_or_else(|| {
-                            // fetch vote account if it hasn't been cached already
-                            vote_accounts
-                                .entry(*vote_pubkey)
-                                .or_insert(stakes.vote_accounts().get(vote_pubkey).and_then(
-                                    |(_lamports, arc_vote_account)| {
-                                        arc_vote_account.vote_state().as_ref().ok().map(
-                                            |vote_state_result| {
-                                                (
-                                                    Arc::new(vote_state_result.clone()),
-                                                    Arc::new(AccountSharedData::from(
-                                                        arc_vote_account.account().clone(),
-                                                    )),
-                                                )
-                                            },
+                        let fetched_vote_state_and_account: Option<(
+                            Arc<VoteState>,
+                            Arc<AccountSharedData>,
+                            Arc<AtomicU64>,
+                        )> = {
+                            let read_locked_state =
+                                vote_accounts.get(vote_pubkey).unwrap_or_else(|| {
+                                    // fetch vote account if it hasn't been cached already
+                                    vote_accounts
+                                        .entry(*vote_pubkey)
+                                        .or_insert(
+                                            stakes.vote_accounts().get(vote_pubkey).and_then(
+                                                |(_lamports, arc_vote_account)| {
+                                                    arc_vote_account.vote_state().as_ref().ok().map(
+                                                        |vote_state_result| {
+                                                            (
+                                                                Arc::new(vote_state_result.clone()),
+                                                                Arc::new(AccountSharedData::from(
+                                                                    arc_vote_account
+                                                                        .account()
+                                                                        .clone(),
+                                                                )),
+                                                                Arc::new(AtomicU64::new(0)),
+                                                            )
+                                                        },
+                                                    )
+                                                },
+                                            ),
                                         )
-                                    },
-                                ))
-                                .downgrade()
-                        })
-                        .value()
-                        .clone()?;
+                                        .downgrade()
+                                });
 
-                    let fetched_vote_account_owner = fetched_vote_account.owner;
+                            read_locked_state
+                                .as_ref()
+                                .map(|(_, _, vote_account_total_stake)| {
+                                    let stake_account_stake = delegation.stake(
+                                        self.epoch(),
+                                        Some(stakes.history()),
+                                        fix_stake_deactivate,
+                                    );
+                                    vote_account_total_stake.fetch_add(stake_account_stake, Relaxed)
+                                });
+                            read_locked_state.value().clone()
+                        };
 
-                    // call tracer to catch any illegal data if any
-                    if let Some(reward_calc_tracer) = reward_calc_tracer {
-                        reward_calc_tracer(&RewardCalculationEvent::Staking(
-                            stake_pubkey,
-                            &InflationPointCalculationEvent::Delegation(
-                                *delegation,
-                                fetched_vote_account_owner,
-                            ),
-                        ));
-                    }
+                        let (fetched_vote_state, fetched_vote_account, _vote_account_stake) =
+                            fetched_vote_state_and_account?;
 
-                    // filter invalid delegation accounts
-                    if filter_stake_delegation_accounts
-                        && (stake_account.owner != solana_stake_program::id()
-                            || fetched_vote_account_owner != solana_vote_program::id())
-                    {
-                        datapoint_warn!(
-                            "bank-stake_delegation_accounts-invalid-account",
-                            ("slot", self.slot() as i64, i64),
-                            ("stake-address", format!("{:?}", stake_pubkey), String),
-                            ("vote-address", format!("{:?}", vote_pubkey), String),
-                        );
-                        return None;
-                    }
+                        let fetched_vote_account_owner = fetched_vote_account.owner;
 
-                    let stake_delegation = match stake_account.state().ok() {
-                        Some(stake_state) => (*stake_pubkey, (stake_state, stake_account)),
-                        None => {
+                        // call tracer to catch any illegal data if any
+                        if let Some(reward_calc_tracer) = reward_calc_tracer {
+                            reward_calc_tracer(&RewardCalculationEvent::Staking(
+                                stake_pubkey,
+                                &InflationPointCalculationEvent::Delegation(
+                                    *delegation,
+                                    fetched_vote_account_owner,
+                                ),
+                            ));
+                        }
+
+                        // filter invalid delegation accounts
+                        if filter_stake_delegation_accounts
+                            && (stake_account.owner != solana_stake_program::id()
+                                || fetched_vote_account_owner != solana_vote_program::id())
+                        {
+                            datapoint_warn!(
+                                "bank-stake_delegation_accounts-invalid-account",
+                                ("slot", self.slot() as i64, i64),
+                                ("stake-address", format!("{:?}", stake_pubkey), String),
+                                ("vote-address", format!("{:?}", vote_pubkey), String),
+                            );
                             return None;
                         }
-                    };
 
-                    Some(StakeDelegationAccount {
-                        vote_pubkey: *vote_pubkey,
-                        vote_state: fetched_vote_state,
-                        stake_delegation,
+                        let stake_delegation = match stake_account.state().ok() {
+                            Some(stake_state) => (*stake_pubkey, (stake_state, stake_account)),
+                            None => {
+                                return None;
+                            }
+                        };
+
+                        Some(StakeDelegationAccount {
+                            vote_pubkey: *vote_pubkey,
+                            vote_state: fetched_vote_state,
+                            stake_delegation,
+                        })
                     })
-                })
-                .collect()
-        });
+                    .collect()
+            });
+            (accounts, vote_accounts)
+        };
+
+        let mut stakes = self.stakes.write().unwrap();
+        stakes.update_epoch_vote_account_stakes(&vote_accounts);
 
         (accounts, vote_accounts)
     }
@@ -1936,8 +1962,11 @@ impl Bank {
         let thread_pool = ThreadPoolBuilder::new().build().unwrap();
         let stake_history = self.stakes.read().unwrap().history().clone();
 
-        let (stake_delegation_accounts, vote_accounts) =
-            self.load_stake_delegation_accounts(reward_calc_tracer, &thread_pool);
+        let (stake_delegation_accounts, vote_accounts) = self.load_stake_delegation_accounts(
+            reward_calc_tracer,
+            &thread_pool,
+            fix_stake_deactivate,
+        );
 
         let points: u128 = thread_pool.install(|| {
             stake_delegation_accounts
@@ -1966,9 +1995,11 @@ impl Bank {
             vote_accounts
                 .into_iter()
                 .filter_map(|(pubkey, vote_state_account_option)| {
-                    vote_state_account_option.map(|(vote_state, vote_account)| {
-                        (pubkey, (vote_account, vote_state.commission, 0, false))
-                    })
+                    vote_state_account_option.map(
+                        |(vote_state, vote_account, _total_vote_account_stake)| {
+                            (pubkey, (vote_account, vote_state.commission, 0, false))
+                        },
+                    )
                 })
                 .collect();
 
@@ -7226,7 +7257,7 @@ pub(crate) mod tests {
 
         let thread_pool = ThreadPoolBuilder::new().build().unwrap();
         let validator_points: u128 = bank0
-            .load_stake_delegation_accounts(&null_tracer(), &thread_pool)
+            .load_stake_delegation_accounts(&null_tracer(), &thread_pool, true)
             .0
             .into_iter()
             .map(|stake_delegation_account| {
@@ -12397,7 +12428,7 @@ pub(crate) mod tests {
         let bank = Arc::new(Bank::new(&genesis_config));
         let thread_pool = ThreadPoolBuilder::new().build().unwrap();
         let stake_delegation_accounts =
-            bank.load_stake_delegation_accounts(&null_tracer(), &thread_pool);
+            bank.load_stake_delegation_accounts(&null_tracer(), &thread_pool, true);
         assert_eq!(stake_delegation_accounts.0.len(), 2);
 
         let mut vote_account = bank
@@ -12437,7 +12468,7 @@ pub(crate) mod tests {
 
         // Accounts must be valid stake and vote accounts
         let stake_delegation_accounts =
-            bank.load_stake_delegation_accounts(&null_tracer(), &thread_pool);
+            bank.load_stake_delegation_accounts(&null_tracer(), &thread_pool, true);
         assert!(stake_delegation_accounts.0.is_empty());
     }
 

@@ -91,6 +91,10 @@ impl VoteAccounts {
         self.vote_accounts.iter()
     }
 
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = (&Pubkey, &mut (u64, ArcVoteAccount))> {
+        self.vote_accounts.iter_mut()
+    }
+
     pub fn insert(&mut self, pubkey: Pubkey, (stake, vote_account): (u64, ArcVoteAccount)) {
         self.add_node_stake(stake, &vote_account);
         if let Some((stake, vote_account)) =

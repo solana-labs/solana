@@ -1,6 +1,9 @@
 //! Stakes serve as a cache of stake and vote accounts to derive
 //! node stakes
-use crate::vote_account::{ArcVoteAccount, VoteAccounts};
+use crate::{
+    bank::DashMapVoteAccounts,
+    vote_account::{ArcVoteAccount, VoteAccounts},
+};
 use solana_sdk::{
     account::{AccountSharedData, ReadableAccount},
     clock::Epoch,
@@ -9,7 +12,7 @@ use solana_sdk::{
 };
 use solana_stake_program::stake_state::{new_stake_history_entry, Delegation, StakeState};
 use solana_vote_program::vote_state::VoteState;
-use std::{borrow::Borrow, collections::HashMap};
+use std::{borrow::Borrow, collections::HashMap, sync::atomic::Ordering};
 
 #[derive(Default, Clone, PartialEq, Debug, Deserialize, Serialize, AbiExample)]
 pub struct Stakes {
@@ -33,14 +36,27 @@ impl Stakes {
     pub fn history(&self) -> &StakeHistory {
         &self.stake_history
     }
-    pub fn clone_with_epoch(&self, next_epoch: Epoch, fix_stake_deactivate: bool) -> Self {
+
+    pub fn update_epoch_vote_account_stakes(&mut self, new_stakes: &DashMapVoteAccounts) {
+        for (pubkey, (stake, _account)) in self.vote_accounts.iter_mut() {
+            let new_stake = new_stakes
+                .get(pubkey)
+                .and_then(|state| {
+                    state
+                        .value()
+                        .as_ref()
+                        .map(|state| state.2.load(Ordering::Relaxed))
+                })
+                .unwrap_or(0);
+            *stake = new_stake;
+        }
+    }
+
+    pub fn update_with_epoch(&mut self, next_epoch: Epoch, fix_stake_deactivate: bool) {
         let prev_epoch = self.epoch;
-        if prev_epoch == next_epoch {
-            self.clone()
-        } else {
+        if prev_epoch != next_epoch {
             // wrap up the prev epoch by adding new stake history entry for the prev epoch
-            let mut stake_history_upto_prev_epoch = self.stake_history.clone();
-            stake_history_upto_prev_epoch.add(
+            self.stake_history.add(
                 prev_epoch,
                 new_stake_history_entry(
                     prev_epoch,
@@ -51,34 +67,12 @@ impl Stakes {
                     fix_stake_deactivate,
                 ),
             );
-
-            // refresh the stake distribution of vote accounts for the next epoch, using new stake history
-            let vote_accounts_for_next_epoch = self
-                .vote_accounts
-                .iter()
-                .map(|(pubkey, (_ /*stake*/, account))| {
-                    let stake = self.calculate_stake(
-                        pubkey,
-                        next_epoch,
-                        Some(&stake_history_upto_prev_epoch),
-                        fix_stake_deactivate,
-                    );
-                    (*pubkey, (stake, account.clone()))
-                })
-                .collect();
-
-            Stakes {
-                stake_delegations: self.stake_delegations.clone(),
-                unused: self.unused,
-                epoch: next_epoch,
-                stake_history: stake_history_upto_prev_epoch,
-                vote_accounts: vote_accounts_for_next_epoch,
-            }
+            self.epoch = next_epoch;
         }
     }
 
     // sum the stakes that point to the given voter_pubkey
-    fn calculate_stake(
+    pub fn calculate_stake(
         &self,
         voter_pubkey: &Pubkey,
         epoch: Epoch,
@@ -537,7 +531,7 @@ pub mod tests {
                 stake.stake(stakes.epoch, Some(&stakes.stake_history), true)
             );
         }
-        let stakes = stakes.clone_with_epoch(3, true);
+        stakes.update_with_epoch(3, true);
         {
             let vote_accounts = stakes.vote_accounts();
             assert_eq!(
@@ -609,7 +603,7 @@ pub mod tests {
         assert_eq!(stakes.vote_balance_and_warmed_staked(), 1);
 
         for (epoch, expected_warmed_stake) in ((genesis_epoch + 1)..=3).zip(&[2, 3, 4]) {
-            stakes = stakes.clone_with_epoch(epoch, true);
+            stakes.update_with_epoch(epoch, true);
             // vote_balance_and_staked() always remain to return same lamports
             // while vote_balance_and_warmed_staked() gradually increases
             assert_eq!(stakes.vote_balance_and_staked(), 11);
