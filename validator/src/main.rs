@@ -122,7 +122,7 @@ fn wait_for_restart_window(
     ledger_path: &Path,
     identity: Option<Pubkey>,
     min_idle_time_in_minutes: usize,
-    ignore_delinquency: bool
+    ignore_delinquency: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sleep_interval = Duration::from_secs(5);
     let min_delinquency_percentage = 0.05;
@@ -303,7 +303,9 @@ fn wait_for_restart_window(
                         }
                         if restart_snapshot == snapshot_slot && !monitoring_another_validator {
                             "Waiting for a new snapshot".to_string()
-                        } else if delinquent_stake_percentage >= min_delinquency_percentage && !ignore_delinquency {
+                        } else if delinquent_stake_percentage >= min_delinquency_percentage
+                            && !ignore_delinquency
+                        {
                             style("Delinquency too high").red().to_string()
                         } else {
                             break; // Restart!
@@ -2290,10 +2292,11 @@ pub fn main() {
             let ignore_delinquency = subcommand_matches.is_present("ignore_delinquency");
 
             if !force {
-                wait_for_restart_window(&ledger_path, None, min_idle_time, ignore_delinquency).unwrap_or_else(|err| {
-                    println!("{}", err);
-                    exit(1);
-                });
+                wait_for_restart_window(&ledger_path, None, min_idle_time, ignore_delinquency)
+                    .unwrap_or_else(|err| {
+                        println!("{}", err);
+                        exit(1);
+                    });
             }
 
             let admin_client = admin_rpc_service::connect(&ledger_path);
@@ -2352,10 +2355,11 @@ pub fn main() {
             let min_idle_time = value_t_or_exit!(subcommand_matches, "min_idle_time", usize);
             let identity = pubkey_of(subcommand_matches, "identity");
             let ignore_delinquency = subcommand_matches.is_present("ignore_delinquency");
-            wait_for_restart_window(&ledger_path, identity, min_idle_time, ignore_delinquency).unwrap_or_else(|err| {
-                println!("{}", err);
-                exit(1);
-            });
+            wait_for_restart_window(&ledger_path, identity, min_idle_time, ignore_delinquency)
+                .unwrap_or_else(|err| {
+                    println!("{}", err);
+                    exit(1);
+                });
             return;
         }
         _ => unreachable!(),
