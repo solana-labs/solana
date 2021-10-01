@@ -1,3 +1,3 @@
 pub mod elgamal;
-pub mod encode;
+pub mod dlog;
 pub mod pedersen;
