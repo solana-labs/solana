@@ -10,8 +10,13 @@ use {
     solana_clap_utils::{
         input_parsers::{keypair_of, keypairs_of, pubkey_of, value_of},
         input_validators::{
+<<<<<<< HEAD
             is_keypair, is_keypair_or_ask_keyword, is_parsable, is_pubkey, is_pubkey_or_keypair,
             is_slot,
+=======
+            is_bin, is_keypair, is_keypair_or_ask_keyword, is_parsable, is_pubkey,
+            is_pubkey_or_keypair, is_slot, is_valid_percentage,
+>>>>>>> fc5dd7f3b (Ignore delinquent stake on exit (#20367))
         },
         keypair::SKIP_SEED_PHRASE_VALIDATION_ARG,
     },
@@ -114,9 +119,9 @@ fn wait_for_restart_window(
     ledger_path: &Path,
     identity: Option<Pubkey>,
     min_idle_time_in_minutes: usize,
+    max_delinquency_percentage: u8,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sleep_interval = Duration::from_secs(5);
-    let min_delinquency_percentage = 0.05;
 
     let min_idle_slots = (min_idle_time_in_minutes as f64 * 60. / DEFAULT_S_PER_SLOT) as Slot;
 
@@ -140,6 +145,11 @@ fn wait_for_restart_window(
             "{} slots (~{} minutes)",
             min_idle_slots, min_idle_time_in_minutes
         ),
+    );
+
+    println!(
+        "Maximum permitted delinquency: {}%",
+        max_delinquency_percentage
     );
 
     let mut current_epoch = None;
@@ -287,7 +297,9 @@ fn wait_for_restart_window(
 
                         if restart_snapshot == snapshot_slot && !monitoring_another_validator {
                             "Waiting for a new snapshot".to_string()
-                        } else if delinquent_stake_percentage >= min_delinquency_percentage {
+                        } else if delinquent_stake_percentage
+                            >= (max_delinquency_percentage as f64 / 100.)
+                        {
                             style("Delinquency too high").red().to_string()
                         } else {
                             break; // Restart!
@@ -1958,6 +1970,15 @@ pub fn main() {
                     .default_value("10")
                     .help("Minimum time that the validator should not be leader before restarting")
             )
+            .arg(
+                Arg::with_name("max_delinquent_stake")
+                    .long("max-delinquent-stake")
+                    .takes_value(true)
+                    .validator(is_valid_percentage)
+                    .default_value("5")
+                    .value_name("PERCENT")
+                    .help("The maximum delinquent stake % permitted for an exit")
+            )
         )
         .subcommand(
             SubCommand::with_name("authorized-voter")
@@ -2028,6 +2049,15 @@ pub fn main() {
                     .validator(is_pubkey_or_keypair)
                     .help("Validator identity to monitor [default: your validator]")
             )
+            .arg(
+                Arg::with_name("max_delinquent_stake")
+                    .long("max-delinquent-stake")
+                    .takes_value(true)
+                    .validator(is_valid_percentage)
+                    .default_value("5")
+                    .value_name("PERCENT")
+                    .help("The maximum delinquent stake % permitted for a restart")
+            )
             .after_help("Note: If this command exits with a non-zero status \
                          then this not a good time for a restart")
         )
@@ -2094,12 +2124,15 @@ pub fn main() {
             let min_idle_time = value_t_or_exit!(subcommand_matches, "min_idle_time", usize);
             let force = subcommand_matches.is_present("force");
             let monitor = subcommand_matches.is_present("monitor");
+            let max_delinquent_stake =
+                value_t_or_exit!(subcommand_matches, "max_delinquent_stake", u8);
 
             if !force {
-                wait_for_restart_window(&ledger_path, None, min_idle_time).unwrap_or_else(|err| {
-                    println!("{}", err);
-                    exit(1);
-                });
+                wait_for_restart_window(&ledger_path, None, min_idle_time, max_delinquent_stake)
+                    .unwrap_or_else(|err| {
+                        println!("{}", err);
+                        exit(1);
+                    });
             }
 
             let admin_client = admin_rpc_service::connect(&ledger_path);
@@ -2134,10 +2167,14 @@ pub fn main() {
         ("wait-for-restart-window", Some(subcommand_matches)) => {
             let min_idle_time = value_t_or_exit!(subcommand_matches, "min_idle_time", usize);
             let identity = pubkey_of(subcommand_matches, "identity");
-            wait_for_restart_window(&ledger_path, identity, min_idle_time).unwrap_or_else(|err| {
-                println!("{}", err);
-                exit(1);
-            });
+            let max_delinquent_stake =
+                value_t_or_exit!(subcommand_matches, "max_delinquent_stake", u8);
+
+            wait_for_restart_window(&ledger_path, identity, min_idle_time, max_delinquent_stake)
+                .unwrap_or_else(|err| {
+                    println!("{}", err);
+                    exit(1);
+                });
             return;
         }
         _ => unreachable!(),
