@@ -16,7 +16,7 @@ const TWO18: u32 = 262144; // 2^18
 ///
 /// The goal of discrete log is to find x such that x * generator = target.
 #[derive(Serialize, Deserialize, Copy, Clone, Debug, Eq, PartialEq)]
-pub struct DiscreteLogInstance {
+pub struct DiscreteLog {
     /// Generator point for discrete log
     pub generator: RistrettoPoint,
     /// Target point for discrete log
@@ -56,7 +56,7 @@ pub fn decode_u32_precomputation_for_G() -> HashMap<[u8; 32], u32> {
 }
 
 /// Solves the discrete log instance using a 18/14 bit offline/online split
-impl DiscreteLogInstance {
+impl DiscreteLog {
     /// Solves the discrete log problem under the assumption that the solution
     /// is a 32-bit number.
     pub fn decode_u32(self) -> Option<u32> {
@@ -120,7 +120,7 @@ mod tests {
     fn test_decode_correctness() {
         let amount: u32 = 65545;
 
-        let instance = DiscreteLogInstance {
+        let instance = DiscreteLog {
             generator: G,
             target: Scalar::from(amount) * G,
         };
