@@ -1,5 +1,8 @@
 use {
-    curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar, traits::Identity},
+    curve25519_dalek::{
+        constants::RISTRETTO_BASEPOINT_POINT as G, ristretto::RistrettoPoint, scalar::Scalar,
+        traits::Identity,
+    },
     serde::{Deserialize, Serialize},
     std::collections::HashMap,
 };
@@ -44,6 +47,12 @@ pub fn decode_u32_precomputation(generator: RistrettoPoint) -> HashMap<[u8; 32],
     println!("     [8/8] completed");
 
     hashmap
+}
+
+/// Pre-compute HashMap needed for decryption. The HashMap is independent of (works for) any key.
+#[allow(non_snake_case)]
+pub fn decode_u32_precomputation_for_G() -> HashMap<[u8; 32], u32> {
+    decode_u32_precomputation(G)
 }
 
 /// Solves the discrete log instance using a 18/14 bit offline/online split
@@ -100,7 +109,7 @@ impl Iterator for RistrettoIterator {
 
 #[cfg(test)]
 mod tests {
-    use {super::*, curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT as G};
+    use super::*;
 
     /// Discrete log test for 16/16 split
     ///
