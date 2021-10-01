@@ -2207,20 +2207,19 @@ pub fn main() {
                     .help("Minimum time that the validator should not be leader before restarting")
             )
             .arg(
-<<<<<<< HEAD
                 Arg::with_name("identity")
                     .long("identity")
                     .value_name("ADDRESS")
                     .takes_value(true)
                     .validator(is_pubkey_or_keypair)
                     .help("Validator identity to monitor [default: your validator]")
-=======
+            )
+            .arg(
                 Arg::with_name("ignore_delinquency")
                     .short("i")
                     .long("ignore-delinquency")
                     .takes_value(false)
                     .help("Ignore delinquency threshold when exiting")
->>>>>>> a07b61339... Add --ignore-delinquency flag to exit and wait-for-restart-window subcommands of solana-validator
             )
             .after_help("Note: If this command exits with a non-zero status \
                          then this not a good time for a restart")
