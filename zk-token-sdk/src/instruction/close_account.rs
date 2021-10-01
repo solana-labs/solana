@@ -5,7 +5,7 @@ use {
 #[cfg(not(target_arch = "bpf"))]
 use {
     crate::{
-        encryption::elgamal::{ElGamalCiphertext, ElGamalSK},
+        encryption::elgamal::{ElGamalCiphertext, ElGamalSecretKey},
         errors::ProofError,
         instruction::Verifiable,
         transcript::TranscriptProtocol,
@@ -39,7 +39,7 @@ pub struct CloseAccountData {
 
 #[cfg(not(target_arch = "bpf"))]
 impl CloseAccountData {
-    pub fn new(source_sk: &ElGamalSK, balance: ElGamalCiphertext) -> Self {
+    pub fn new(source_sk: &ElGamalSecretKey, balance: ElGamalCiphertext) -> Self {
         let proof = CloseAccountProof::new(source_sk, &balance);
 
         CloseAccountData {
@@ -74,7 +74,7 @@ impl CloseAccountProof {
         Transcript::new(b"CloseAccountProof")
     }
 
-    pub fn new(source_sk: &ElGamalSK, balance: &ElGamalCiphertext) -> Self {
+    pub fn new(source_sk: &ElGamalSecretKey, balance: &ElGamalCiphertext) -> Self {
         let mut transcript = Self::transcript_new();
 
         // add a domain separator to record the start of the protocol

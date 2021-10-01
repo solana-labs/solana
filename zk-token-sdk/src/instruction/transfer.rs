@@ -6,7 +6,7 @@ use {
 use {
     crate::{
         encryption::{
-            elgamal::{ElGamalCiphertext, ElGamalPubkey, ElGamalSK},
+            elgamal::{ElGamalCiphertext, ElGamalPubkey, ElGamalSecretKey},
             pedersen::{Pedersen, PedersenBase, PedersenComm, PedersenDecHandle, PedersenOpen},
         },
         errors::ProofError,
@@ -38,7 +38,7 @@ impl TransferData {
         spendable_balance: u64,
         spendable_ct: ElGamalCiphertext,
         source_pk: ElGamalPubkey,
-        source_sk: &ElGamalSK,
+        source_sk: &ElGamalSecretKey,
         dest_pk: ElGamalPubkey,
         auditor_pk: ElGamalPubkey,
     ) -> Self {
@@ -234,7 +234,7 @@ impl TransferProofs {
     #[allow(clippy::too_many_arguments)]
     #[allow(clippy::many_single_char_names)]
     pub fn new(
-        source_sk: &ElGamalSK,
+        source_sk: &ElGamalSecretKey,
         source_pk: &ElGamalPubkey,
         dest_pk: &ElGamalPubkey,
         auditor_pk: &ElGamalPubkey,

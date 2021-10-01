@@ -6,7 +6,7 @@ use {
 use {
     crate::{
         encryption::{
-            elgamal::{ElGamalCiphertext, ElGamalPubkey, ElGamalSK},
+            elgamal::{ElGamalCiphertext, ElGamalPubkey, ElGamalSecretKey},
             pedersen::PedersenBase,
         },
         errors::ProofError,
@@ -55,9 +55,9 @@ impl UpdateAccountPkData {
         current_balance: u64,
         current_ct: ElGamalCiphertext,
         current_pk: ElGamalPubkey,
-        current_sk: &ElGamalSK,
+        current_sk: &ElGamalSecretKey,
         new_pk: ElGamalPubkey,
-        new_sk: &ElGamalSK,
+        new_sk: &ElGamalSecretKey,
     ) -> Self {
         let new_ct = new_pk.encrypt(current_balance);
 
@@ -105,8 +105,8 @@ impl UpdateAccountPkProof {
 
     fn new(
         current_balance: u64,
-        current_sk: &ElGamalSK,
-        new_sk: &ElGamalSK,
+        current_sk: &ElGamalSecretKey,
+        new_sk: &ElGamalSecretKey,
         current_ct: &ElGamalCiphertext,
         new_ct: &ElGamalCiphertext,
     ) -> Self {
