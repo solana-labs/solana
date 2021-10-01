@@ -29,6 +29,10 @@ impl SnapshotPackagerService {
     ) -> Self {
         let exit = exit.clone();
         let cluster_info = cluster_info.clone();
+        let max_snapshot_hashes = std::cmp::min(
+            MAX_SNAPSHOT_HASHES,
+            snapshot_config.maximum_full_snapshot_archives_to_retain,
+        );
 
         let t_snapshot_packager = Builder::new()
             .name("snapshot-packager".to_string())
@@ -64,7 +68,7 @@ impl SnapshotPackagerService {
                     // can have their hashes pushed out to the cluster.
                     if snapshot_package.snapshot_type == SnapshotType::FullSnapshot {
                         hashes.push((snapshot_package.slot(), *snapshot_package.hash()));
-                        while hashes.len() > MAX_SNAPSHOT_HASHES {
+                        while hashes.len() > max_snapshot_hashes {
                             hashes.remove(0);
                         }
                         cluster_info.push_snapshot_hashes(hashes.clone());
