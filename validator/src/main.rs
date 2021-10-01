@@ -154,7 +154,6 @@ fn wait_for_restart_window(
         "Maximum permitted delinquency: {}%",
         max_delinquency_percentage
     );
-    
 
     let mut current_epoch = None;
     let mut leader_schedule = VecDeque::new();
@@ -2295,8 +2294,8 @@ pub fn main() {
             let min_idle_time = value_t_or_exit!(subcommand_matches, "min_idle_time", usize);
             let force = subcommand_matches.is_present("force");
             let monitor = subcommand_matches.is_present("monitor");
-            let max_delinquent_stake = value_t_or_exit!(subcommand_matches, "max_delinquent_stake", u8);
-
+            let max_delinquent_stake =
+                value_t_or_exit!(subcommand_matches, "max_delinquent_stake", u8);
 
             if !force {
                 wait_for_restart_window(&ledger_path, None, min_idle_time, max_delinquent_stake)
@@ -2361,7 +2360,8 @@ pub fn main() {
         ("wait-for-restart-window", Some(subcommand_matches)) => {
             let min_idle_time = value_t_or_exit!(subcommand_matches, "min_idle_time", usize);
             let identity = pubkey_of(subcommand_matches, "identity");
-            let max_delinquent_stake = value_t_or_exit!(subcommand_matches, "max_delinquent_stake", u8);
+            let max_delinquent_stake =
+                value_t_or_exit!(subcommand_matches, "max_delinquent_stake", u8);
 
             wait_for_restart_window(&ledger_path, identity, min_idle_time, max_delinquent_stake)
                 .unwrap_or_else(|err| {
