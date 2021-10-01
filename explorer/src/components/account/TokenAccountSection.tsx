@@ -1,9 +1,5 @@
 import React from "react";
-import {
-  Account,
-  useFetchAccountInfo,
-  useMetadataAccountInfo,
-} from "providers/accounts";
+import { Account, useFetchAccountInfo, useNFTData } from "providers/accounts";
 import {
   TokenAccount,
   MintAccountInfo,
@@ -84,7 +80,7 @@ function MintAccountCard({
   const fetchInfo = useFetchAccountInfo();
   const refresh = () => fetchInfo(account.pubkey);
   const tokenInfo = tokenRegistry.get(mintAddress);
-  const metadata = useMetadataAccountInfo(account.pubkey.toBase58());
+  const nftData = useNFTData(account.pubkey.toBase58());
 
   const bridgeContractAddress = getEthAddress(
     tokenInfo?.extensions?.bridgeContract
@@ -169,7 +165,7 @@ function MintAccountCard({
       <div className="card">
         <div className="card-header">
           <h3 className="card-header-title mb-0 d-flex align-items-center">
-            {metadata ? "NFT Overview" : tokenInfo ? "Overview" : "Token Mint"}
+            {nftData ? "NFT Overview" : tokenInfo ? "Overview" : "Token Mint"}
           </h3>
           <button className="btn btn-white btn-sm" onClick={refresh}>
             <span className="fe fe-refresh-cw mr-2"></span>
@@ -196,6 +192,14 @@ function MintAccountCard({
               )}
             </td>
           </tr>
+          {nftData && (
+            <tr>
+              <td>Max Supply</td>
+              <td className="text-lg-right">
+                {nftData.masterEdition.maxSupply?.toNumber() || 1}
+              </td>
+            </tr>
+          )}
           {tokenInfo?.extensions?.website && (
             <tr>
               <td>Website</td>
@@ -237,11 +241,11 @@ function MintAccountCard({
               <td className="text-lg-right">Uninitialized</td>
             </tr>
           )}
-          {metadata?.data && (
+          {nftData?.metadata.data && (
             <tr>
               <td>Seller Fee</td>
               <td className="text-lg-right">
-                {metadata?.data.sellerFeeBasisPoints}
+                {nftData?.metadata.data.sellerFeeBasisPoints}
               </td>
             </tr>
           )}

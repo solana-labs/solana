@@ -1,5 +1,10 @@
 import { AccountInfo, Connection, PublicKey } from "@solana/web3.js";
-import { Metadata, METADATA_SCHEMA } from "metaplex/classes";
+import {
+  MasterEditionV1,
+  MasterEditionV2,
+  Metadata,
+  METADATA_SCHEMA,
+} from "metaplex/classes";
 import { MetadataKey, METADATA_PREFIX, StringPublicKey } from "metaplex/types";
 import { deserializeUnchecked, BinaryReader, BinaryWriter } from "borsh";
 import base58 from "bs58";
@@ -54,17 +59,17 @@ export async function getMetadata(
   }
 }
 
-export async function hasEdition(pubkey: PublicKey, url: string) {
+export async function getMasterEdition(pubkey: PublicKey, url: string) {
   const connection = new Connection(url);
-  const editionkey = await generatePDA(pubkey, true /* addEditionToSeeds */);
-  const accountInfo = await connection.getAccountInfo(toPublicKey(editionkey));
+  const editionKey = await generatePDA(pubkey, true /* addEditionToSeeds */);
+  const accountInfo = await connection.getAccountInfo(toPublicKey(editionKey));
 
   if (accountInfo && accountInfo.data.length > 0) {
     if (!isMetadataAccount(accountInfo)) return;
 
-    return (
-      isEditionV1Account(accountInfo) || isMasterEditionAccount(accountInfo)
-    );
+    if (isMasterEditionAccount(accountInfo)) {
+      return decodeMasterEdition(accountInfo.data);
+    }
   }
 }
 
@@ -107,14 +112,29 @@ const decodeMetadata = (buffer: Buffer): Metadata => {
   return metadata;
 };
 
+export const decodeMasterEdition = (
+  buffer: Buffer
+): MasterEditionV1 | MasterEditionV2 => {
+  if (buffer[0] === MetadataKey.MasterEditionV1) {
+    return deserializeUnchecked(
+      METADATA_SCHEMA,
+      MasterEditionV1,
+      buffer
+    ) as MasterEditionV1;
+  } else {
+    return deserializeUnchecked(
+      METADATA_SCHEMA,
+      MasterEditionV2,
+      buffer
+    ) as MasterEditionV2;
+  }
+};
+
 const isMetadataAccount = (account: AccountInfo<Buffer>) =>
   account.owner.toBase58() === METADATA_PROGRAM_ID;
 
 const isMetadataV1Account = (account: AccountInfo<Buffer>) =>
   account.data[0] === MetadataKey.MetadataV1;
-
-const isEditionV1Account = (account: AccountInfo<Buffer>) =>
-  account.data[0] === MetadataKey.EditionV1;
 
 const isMasterEditionAccount = (account: AccountInfo<Buffer>) =>
   account.data[0] === MetadataKey.MasterEditionV1 ||

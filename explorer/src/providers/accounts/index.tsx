@@ -25,8 +25,8 @@ import {
   UpgradeableLoaderAccount,
 } from "validators/accounts/upgradeable-program";
 import { RewardsProvider } from "./rewards";
-import { Metadata } from "metaplex/classes";
-import { hasEdition, getMetadata } from "./utils/metadataHelpers";
+import { MasterEditionV1, MasterEditionV2, Metadata } from "metaplex/classes";
+import { getMasterEdition, getMetadata } from "./utils/metadataHelpers";
 export { useAccountHistory } from "./history";
 
 export type StakeProgramData = {
@@ -41,10 +41,15 @@ export type UpgradeableLoaderAccountData = {
   programData?: ProgramDataAccountInfo;
 };
 
+export type NFTData = {
+  metadata: Metadata;
+  masterEdition: MasterEditionV1 | MasterEditionV2;
+};
+
 export type TokenProgramData = {
   program: "spl-token";
   parsed: TokenAccount;
-  metadata?: Metadata;
+  nftData?: NFTData;
 };
 
 export type VoteProgramData = {
@@ -230,23 +235,25 @@ async function fetchAccountInfo(
 
             case "spl-token":
               const parsed = create(info, TokenAccount);
-              let metadata;
+              let nftData;
 
-              // Check the PDA for Metadata
+              // Generate a PDA and check for a Metadata Account
               if (parsed.type === "mint") {
-                const fetchedMetadata = await getMetadata(pubkey, url);
-                if (fetchedMetadata) {
-                  // We have a valid Metadata account. Try and pull an Edition.
-                  const isNFT = await hasEdition(pubkey, url);
-                  if (isNFT) {
-                    metadata = fetchedMetadata;
+                const metadata = await getMetadata(pubkey, url);
+                if (metadata) {
+                  // We have a valid Metadata account. Try and pull a Master Edition.
+                  // TODO - Support Editions minted from a Master Edition
+                  const masterEdition = await getMasterEdition(pubkey, url);
+                  console.log(masterEdition);
+                  if (masterEdition) {
+                    nftData = { metadata, masterEdition };
                   }
                 }
               }
               data = {
                 program: result.data.program,
                 parsed,
-                metadata,
+                nftData,
               };
               break;
             default:
@@ -341,9 +348,7 @@ export function useTokenAccountInfo(
   }
 }
 
-export function useMetadataAccountInfo(
-  address: string | undefined
-): Metadata | undefined {
+export function useNFTData(address: string | undefined): NFTData | undefined {
   const accountInfo = useAccountInfo(address);
   if (address === undefined) return;
 
@@ -354,7 +359,7 @@ export function useMetadataAccountInfo(
       return;
     }
 
-    return data.metadata;
+    return data.nftData;
   } catch (err) {
     reportError(err, { address });
   }

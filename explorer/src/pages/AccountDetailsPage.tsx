@@ -155,10 +155,10 @@ export function AccountHeader({
   const account = info?.data;
   const data = account?.details?.data;
   const isToken = data?.program === "spl-token" && data?.parsed.type === "mint";
-  const isNFT = isToken && data.metadata;
+  const isNFT = isToken && data.nftData;
 
   if (isNFT) {
-    return <NFTHeader metadata={data.metadata!} address={address} />;
+    return <NFTHeader metadata={data.nftData!.metadata} address={address} />;
   }
 
   if (tokenDetails || isToken) {
@@ -502,7 +502,7 @@ function getCreatorDropdownItems(creators: Creator[] | null) {
   if (creators && creators.length > 0) {
     let listOfCreators: JSX.Element[] = [];
 
-    listOfCreators.push(<CreatorHeader />);
+    listOfCreators.push(<CreatorHeader key={"header"} />);
     creators.forEach((creator) => {
       listOfCreators.push(<CreatorEntry key={creator.address} {...creator} />);
     });
