@@ -22,11 +22,11 @@ use std::{env, fs::File, io::Read, path::PathBuf, str::FromStr};
 fn test_cli_program_deploy_non_upgradeable() {
     solana_logger::setup();
 
-    let mut pathbuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    pathbuf.push("tests");
-    pathbuf.push("fixtures");
-    pathbuf.push("noop");
-    pathbuf.set_extension("so");
+    let mut noop_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    noop_path.push("tests");
+    noop_path.push("fixtures");
+    noop_path.push("noop");
+    noop_path.set_extension("so");
 
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
@@ -37,7 +37,7 @@ fn test_cli_program_deploy_non_upgradeable() {
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
 
-    let mut file = File::open(pathbuf.to_str().unwrap()).unwrap();
+    let mut file = File::open(noop_path.to_str().unwrap()).unwrap();
     let mut program_data = Vec::new();
     file.read_to_end(&mut program_data).unwrap();
     let minimum_balance_for_rent_exemption = rpc_client
@@ -55,7 +55,7 @@ fn test_cli_program_deploy_non_upgradeable() {
     process_command(&config).unwrap();
 
     config.command = CliCommand::Deploy {
-        program_location: pathbuf.to_str().unwrap().to_string(),
+        program_location: noop_path.to_str().unwrap().to_string(),
         address: None,
         use_deprecated_loader: false,
         allow_excessive_balance: false,
@@ -75,7 +75,7 @@ fn test_cli_program_deploy_non_upgradeable() {
     assert_eq!(account0.lamports, minimum_balance_for_rent_exemption);
     assert_eq!(account0.owner, bpf_loader::id());
     assert!(account0.executable);
-    let mut file = File::open(pathbuf.to_str().unwrap().to_string()).unwrap();
+    let mut file = File::open(noop_path.to_str().unwrap().to_string()).unwrap();
     let mut elf = Vec::new();
     file.read_to_end(&mut elf).unwrap();
     assert_eq!(account0.data, elf);
@@ -84,7 +84,7 @@ fn test_cli_program_deploy_non_upgradeable() {
     let custom_address_keypair = Keypair::new();
     config.signers = vec![&keypair, &custom_address_keypair];
     config.command = CliCommand::Deploy {
-        program_location: pathbuf.to_str().unwrap().to_string(),
+        program_location: noop_path.to_str().unwrap().to_string(),
         address: Some(1),
         use_deprecated_loader: false,
         allow_excessive_balance: false,
@@ -111,7 +111,7 @@ fn test_cli_program_deploy_non_upgradeable() {
     process_command(&config).unwrap();
     config.signers = vec![&keypair, &custom_address_keypair];
     config.command = CliCommand::Deploy {
-        program_location: pathbuf.to_str().unwrap().to_string(),
+        program_location: noop_path.to_str().unwrap().to_string(),
         address: Some(1),
         use_deprecated_loader: false,
         allow_excessive_balance: false,
@@ -120,7 +120,7 @@ fn test_cli_program_deploy_non_upgradeable() {
 
     // Use forcing parameter to deploy to account with excess balance
     config.command = CliCommand::Deploy {
-        program_location: pathbuf.to_str().unwrap().to_string(),
+        program_location: noop_path.to_str().unwrap().to_string(),
         address: Some(1),
         use_deprecated_loader: false,
         allow_excessive_balance: true,
@@ -139,11 +139,11 @@ fn test_cli_program_deploy_non_upgradeable() {
 fn test_cli_program_deploy_no_authority() {
     solana_logger::setup();
 
-    let mut pathbuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    pathbuf.push("tests");
-    pathbuf.push("fixtures");
-    pathbuf.push("noop");
-    pathbuf.set_extension("so");
+    let mut noop_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    noop_path.push("tests");
+    noop_path.push("fixtures");
+    noop_path.push("noop");
+    noop_path.set_extension("so");
 
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
@@ -154,7 +154,7 @@ fn test_cli_program_deploy_no_authority() {
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
 
-    let mut file = File::open(pathbuf.to_str().unwrap()).unwrap();
+    let mut file = File::open(noop_path.to_str().unwrap()).unwrap();
     let mut program_data = Vec::new();
     file.read_to_end(&mut program_data).unwrap();
     let max_len = program_data.len();
@@ -181,7 +181,7 @@ fn test_cli_program_deploy_no_authority() {
     // Deploy a program
     config.signers = vec![&keypair, &upgrade_authority];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
-        program_location: Some(pathbuf.to_str().unwrap().to_string()),
+        program_location: Some(noop_path.to_str().unwrap().to_string()),
         program_signer_index: None,
         program_pubkey: None,
         buffer_signer_index: None,
@@ -206,7 +206,7 @@ fn test_cli_program_deploy_no_authority() {
     // Attempt to upgrade the program
     config.signers = vec![&keypair, &upgrade_authority];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
-        program_location: Some(pathbuf.to_str().unwrap().to_string()),
+        program_location: Some(noop_path.to_str().unwrap().to_string()),
         program_signer_index: None,
         program_pubkey: Some(program_id),
         buffer_signer_index: None,
@@ -223,11 +223,11 @@ fn test_cli_program_deploy_no_authority() {
 fn test_cli_program_deploy_with_authority() {
     solana_logger::setup();
 
-    let mut pathbuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    pathbuf.push("tests");
-    pathbuf.push("fixtures");
-    pathbuf.push("noop");
-    pathbuf.set_extension("so");
+    let mut noop_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    noop_path.push("tests");
+    noop_path.push("fixtures");
+    noop_path.push("noop");
+    noop_path.set_extension("so");
 
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
@@ -238,7 +238,7 @@ fn test_cli_program_deploy_with_authority() {
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
 
-    let mut file = File::open(pathbuf.to_str().unwrap()).unwrap();
+    let mut file = File::open(noop_path.to_str().unwrap()).unwrap();
     let mut program_data = Vec::new();
     file.read_to_end(&mut program_data).unwrap();
     let max_len = program_data.len();
@@ -266,7 +266,7 @@ fn test_cli_program_deploy_with_authority() {
     let program_keypair = Keypair::new();
     config.signers = vec![&keypair, &upgrade_authority, &program_keypair];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
-        program_location: Some(pathbuf.to_str().unwrap().to_string()),
+        program_location: Some(noop_path.to_str().unwrap().to_string()),
         program_signer_index: Some(2),
         program_pubkey: Some(program_keypair.pubkey()),
         buffer_signer_index: None,
@@ -313,7 +313,7 @@ fn test_cli_program_deploy_with_authority() {
     // Deploy the upgradeable program
     config.signers = vec![&keypair, &upgrade_authority];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
-        program_location: Some(pathbuf.to_str().unwrap().to_string()),
+        program_location: Some(noop_path.to_str().unwrap().to_string()),
         program_signer_index: None,
         program_pubkey: None,
         buffer_signer_index: None,
@@ -354,7 +354,7 @@ fn test_cli_program_deploy_with_authority() {
     // Upgrade the program
     config.signers = vec![&keypair, &upgrade_authority];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
-        program_location: Some(pathbuf.to_str().unwrap().to_string()),
+        program_location: Some(noop_path.to_str().unwrap().to_string()),
         program_signer_index: None,
         program_pubkey: Some(program_pubkey),
         buffer_signer_index: None,
@@ -408,7 +408,7 @@ fn test_cli_program_deploy_with_authority() {
     // Upgrade with new authority
     config.signers = vec![&keypair, &new_upgrade_authority];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
-        program_location: Some(pathbuf.to_str().unwrap().to_string()),
+        program_location: Some(noop_path.to_str().unwrap().to_string()),
         program_signer_index: None,
         program_pubkey: Some(program_pubkey),
         buffer_signer_index: None,
@@ -482,7 +482,7 @@ fn test_cli_program_deploy_with_authority() {
     // Upgrade with no authority
     config.signers = vec![&keypair, &new_upgrade_authority];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
-        program_location: Some(pathbuf.to_str().unwrap().to_string()),
+        program_location: Some(noop_path.to_str().unwrap().to_string()),
         program_signer_index: None,
         program_pubkey: Some(program_pubkey),
         buffer_signer_index: None,
@@ -497,7 +497,7 @@ fn test_cli_program_deploy_with_authority() {
     // deploy with finality
     config.signers = vec![&keypair, &new_upgrade_authority];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
-        program_location: Some(pathbuf.to_str().unwrap().to_string()),
+        program_location: Some(noop_path.to_str().unwrap().to_string()),
         program_signer_index: None,
         program_pubkey: None,
         buffer_signer_index: None,
@@ -556,11 +556,11 @@ fn test_cli_program_deploy_with_authority() {
 fn test_cli_program_close_program() {
     solana_logger::setup();
 
-    let mut pathbuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    pathbuf.push("tests");
-    pathbuf.push("fixtures");
-    pathbuf.push("noop");
-    pathbuf.set_extension("so");
+    let mut noop_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    noop_path.push("tests");
+    noop_path.push("fixtures");
+    noop_path.push("noop");
+    noop_path.set_extension("so");
 
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
@@ -571,7 +571,7 @@ fn test_cli_program_close_program() {
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
 
-    let mut file = File::open(pathbuf.to_str().unwrap()).unwrap();
+    let mut file = File::open(noop_path.to_str().unwrap()).unwrap();
     let mut program_data = Vec::new();
     file.read_to_end(&mut program_data).unwrap();
     let max_len = program_data.len();
@@ -599,7 +599,7 @@ fn test_cli_program_close_program() {
     let program_keypair = Keypair::new();
     config.signers = vec![&keypair, &upgrade_authority, &program_keypair];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
-        program_location: Some(pathbuf.to_str().unwrap().to_string()),
+        program_location: Some(noop_path.to_str().unwrap().to_string()),
         program_signer_index: Some(2),
         program_pubkey: Some(program_keypair.pubkey()),
         buffer_signer_index: None,
@@ -638,11 +638,17 @@ fn test_cli_program_close_program() {
 fn test_cli_program_write_buffer() {
     solana_logger::setup();
 
-    let mut pathbuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    pathbuf.push("tests");
-    pathbuf.push("fixtures");
-    pathbuf.push("noop");
-    pathbuf.set_extension("so");
+    let mut noop_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    noop_path.push("tests");
+    noop_path.push("fixtures");
+    noop_path.push("noop");
+    noop_path.set_extension("so");
+
+    let mut noop_large_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    noop_large_path.push("tests");
+    noop_large_path.push("fixtures");
+    noop_large_path.push("noop_large");
+    noop_large_path.set_extension("so");
 
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
@@ -653,7 +659,7 @@ fn test_cli_program_write_buffer() {
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
 
-    let mut file = File::open(pathbuf.to_str().unwrap()).unwrap();
+    let mut file = File::open(noop_path.to_str().unwrap()).unwrap();
     let mut program_data = Vec::new();
     file.read_to_end(&mut program_data).unwrap();
     let max_len = program_data.len();
@@ -681,7 +687,7 @@ fn test_cli_program_write_buffer() {
     // Write a buffer with default params
     config.signers = vec![&keypair];
     config.command = CliCommand::Program(ProgramCliCommand::WriteBuffer {
-        program_location: pathbuf.to_str().unwrap().to_string(),
+        program_location: noop_path.to_str().unwrap().to_string(),
         buffer_signer_index: None,
         buffer_pubkey: None,
         buffer_authority_signer_index: None,
@@ -715,7 +721,7 @@ fn test_cli_program_write_buffer() {
     let buffer_keypair = Keypair::new();
     config.signers = vec![&keypair, &buffer_keypair];
     config.command = CliCommand::Program(ProgramCliCommand::WriteBuffer {
-        program_location: pathbuf.to_str().unwrap().to_string(),
+        program_location: noop_path.to_str().unwrap().to_string(),
         buffer_signer_index: Some(1),
         buffer_pubkey: Some(buffer_keypair.pubkey()),
         buffer_authority_signer_index: None,
@@ -776,7 +782,7 @@ fn test_cli_program_write_buffer() {
     let authority_keypair = Keypair::new();
     config.signers = vec![&keypair, &buffer_keypair, &authority_keypair];
     config.command = CliCommand::Program(ProgramCliCommand::WriteBuffer {
-        program_location: pathbuf.to_str().unwrap().to_string(),
+        program_location: noop_path.to_str().unwrap().to_string(),
         buffer_signer_index: Some(1),
         buffer_pubkey: Some(buffer_keypair.pubkey()),
         buffer_authority_signer_index: Some(2),
@@ -813,7 +819,7 @@ fn test_cli_program_write_buffer() {
     let authority_keypair = Keypair::new();
     config.signers = vec![&keypair, &buffer_keypair, &authority_keypair];
     config.command = CliCommand::Program(ProgramCliCommand::WriteBuffer {
-        program_location: pathbuf.to_str().unwrap().to_string(),
+        program_location: noop_path.to_str().unwrap().to_string(),
         buffer_signer_index: None,
         buffer_pubkey: None,
         buffer_authority_signer_index: Some(2),
@@ -885,7 +891,7 @@ fn test_cli_program_write_buffer() {
     // Write a buffer with default params
     config.signers = vec![&keypair];
     config.command = CliCommand::Program(ProgramCliCommand::WriteBuffer {
-        program_location: pathbuf.to_str().unwrap().to_string(),
+        program_location: noop_path.to_str().unwrap().to_string(),
         buffer_signer_index: None,
         buffer_pubkey: None,
         buffer_authority_signer_index: None,
@@ -919,17 +925,47 @@ fn test_cli_program_write_buffer() {
         pre_lamports + minimum_balance_for_buffer,
         recipient_account.lamports
     );
+
+    // write small buffer then attempt to deploy larger program
+    let buffer_keypair = Keypair::new();
+    config.signers = vec![&keypair, &buffer_keypair];
+    config.command = CliCommand::Program(ProgramCliCommand::WriteBuffer {
+        program_location: noop_path.to_str().unwrap().to_string(),
+        buffer_signer_index: Some(1),
+        buffer_pubkey: Some(buffer_keypair.pubkey()),
+        buffer_authority_signer_index: None,
+        max_len: None, //Some(max_len),
+    });
+    process_command(&config).unwrap();
+    config.signers = vec![&keypair, &buffer_keypair];
+    config.command = CliCommand::Program(ProgramCliCommand::Deploy {
+        program_location: Some(noop_large_path.to_str().unwrap().to_string()),
+        program_signer_index: None,
+        program_pubkey: None,
+        buffer_signer_index: Some(1),
+        buffer_pubkey: Some(buffer_keypair.pubkey()),
+        allow_excessive_balance: false,
+        upgrade_authority_signer_index: 1,
+        is_final: true,
+        max_len: None,
+    });
+    config.output_format = OutputFormat::JsonCompact;
+    let error = process_command(&config).unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "Buffer account passed is not large enough, may have been for a different deploy?"
+    );
 }
 
 #[test]
 fn test_cli_program_set_buffer_authority() {
     solana_logger::setup();
 
-    let mut pathbuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    pathbuf.push("tests");
-    pathbuf.push("fixtures");
-    pathbuf.push("noop");
-    pathbuf.set_extension("so");
+    let mut noop_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    noop_path.push("tests");
+    noop_path.push("fixtures");
+    noop_path.push("noop");
+    noop_path.set_extension("so");
 
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
@@ -940,7 +976,7 @@ fn test_cli_program_set_buffer_authority() {
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
 
-    let mut file = File::open(pathbuf.to_str().unwrap()).unwrap();
+    let mut file = File::open(noop_path.to_str().unwrap()).unwrap();
     let mut program_data = Vec::new();
     file.read_to_end(&mut program_data).unwrap();
     let max_len = program_data.len();
@@ -964,7 +1000,7 @@ fn test_cli_program_set_buffer_authority() {
     let buffer_keypair = Keypair::new();
     config.signers = vec![&keypair, &buffer_keypair];
     config.command = CliCommand::Program(ProgramCliCommand::WriteBuffer {
-        program_location: pathbuf.to_str().unwrap().to_string(),
+        program_location: noop_path.to_str().unwrap().to_string(),
         buffer_signer_index: Some(1),
         buffer_pubkey: Some(buffer_keypair.pubkey()),
         buffer_authority_signer_index: None,
@@ -1039,11 +1075,11 @@ fn test_cli_program_set_buffer_authority() {
 fn test_cli_program_mismatch_buffer_authority() {
     solana_logger::setup();
 
-    let mut pathbuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    pathbuf.push("tests");
-    pathbuf.push("fixtures");
-    pathbuf.push("noop");
-    pathbuf.set_extension("so");
+    let mut noop_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    noop_path.push("tests");
+    noop_path.push("fixtures");
+    noop_path.push("noop");
+    noop_path.set_extension("so");
 
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
@@ -1054,7 +1090,7 @@ fn test_cli_program_mismatch_buffer_authority() {
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
 
-    let mut file = File::open(pathbuf.to_str().unwrap()).unwrap();
+    let mut file = File::open(noop_path.to_str().unwrap()).unwrap();
     let mut program_data = Vec::new();
     file.read_to_end(&mut program_data).unwrap();
     let max_len = program_data.len();
@@ -1079,7 +1115,7 @@ fn test_cli_program_mismatch_buffer_authority() {
     let buffer_keypair = Keypair::new();
     config.signers = vec![&keypair, &buffer_keypair, &buffer_authority];
     config.command = CliCommand::Program(ProgramCliCommand::WriteBuffer {
-        program_location: pathbuf.to_str().unwrap().to_string(),
+        program_location: noop_path.to_str().unwrap().to_string(),
         buffer_signer_index: Some(1),
         buffer_pubkey: Some(buffer_keypair.pubkey()),
         buffer_authority_signer_index: Some(2),
@@ -1097,7 +1133,7 @@ fn test_cli_program_mismatch_buffer_authority() {
     let upgrade_authority = Keypair::new();
     config.signers = vec![&keypair, &upgrade_authority];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
-        program_location: Some(pathbuf.to_str().unwrap().to_string()),
+        program_location: Some(noop_path.to_str().unwrap().to_string()),
         program_signer_index: None,
         program_pubkey: None,
         buffer_signer_index: None,
@@ -1112,7 +1148,7 @@ fn test_cli_program_mismatch_buffer_authority() {
     // Attempt to deploy matched authority
     config.signers = vec![&keypair, &buffer_authority];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
-        program_location: Some(pathbuf.to_str().unwrap().to_string()),
+        program_location: Some(noop_path.to_str().unwrap().to_string()),
         program_signer_index: None,
         program_pubkey: None,
         buffer_signer_index: None,
@@ -1129,11 +1165,11 @@ fn test_cli_program_mismatch_buffer_authority() {
 fn test_cli_program_show() {
     solana_logger::setup();
 
-    let mut pathbuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    pathbuf.push("tests");
-    pathbuf.push("fixtures");
-    pathbuf.push("noop");
-    pathbuf.set_extension("so");
+    let mut noop_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    noop_path.push("tests");
+    noop_path.push("fixtures");
+    noop_path.push("noop");
+    noop_path.set_extension("so");
 
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
@@ -1144,7 +1180,7 @@ fn test_cli_program_show() {
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
 
-    let mut file = File::open(pathbuf.to_str().unwrap()).unwrap();
+    let mut file = File::open(noop_path.to_str().unwrap()).unwrap();
     let mut program_data = Vec::new();
     file.read_to_end(&mut program_data).unwrap();
     let max_len = program_data.len();
@@ -1172,7 +1208,7 @@ fn test_cli_program_show() {
     let authority_keypair = Keypair::new();
     config.signers = vec![&keypair, &buffer_keypair, &authority_keypair];
     config.command = CliCommand::Program(ProgramCliCommand::WriteBuffer {
-        program_location: pathbuf.to_str().unwrap().to_string(),
+        program_location: noop_path.to_str().unwrap().to_string(),
         buffer_signer_index: Some(1),
         buffer_pubkey: Some(buffer_keypair.pubkey()),
         buffer_authority_signer_index: Some(2),
@@ -1227,7 +1263,7 @@ fn test_cli_program_show() {
     let program_keypair = Keypair::new();
     config.signers = vec![&keypair, &authority_keypair, &program_keypair];
     config.command = CliCommand::Program(ProgramCliCommand::Deploy {
-        program_location: Some(pathbuf.to_str().unwrap().to_string()),
+        program_location: Some(noop_path.to_str().unwrap().to_string()),
         program_signer_index: Some(2),
         program_pubkey: Some(program_keypair.pubkey()),
         buffer_signer_index: None,
@@ -1314,11 +1350,11 @@ fn test_cli_program_show() {
 fn test_cli_program_dump() {
     solana_logger::setup();
 
-    let mut pathbuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    pathbuf.push("tests");
-    pathbuf.push("fixtures");
-    pathbuf.push("noop");
-    pathbuf.set_extension("so");
+    let mut noop_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    noop_path.push("tests");
+    noop_path.push("fixtures");
+    noop_path.push("noop");
+    noop_path.set_extension("so");
 
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
@@ -1329,7 +1365,7 @@ fn test_cli_program_dump() {
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
 
-    let mut file = File::open(pathbuf.to_str().unwrap()).unwrap();
+    let mut file = File::open(noop_path.to_str().unwrap()).unwrap();
     let mut program_data = Vec::new();
     file.read_to_end(&mut program_data).unwrap();
     let max_len = program_data.len();
@@ -1357,7 +1393,7 @@ fn test_cli_program_dump() {
     let authority_keypair = Keypair::new();
     config.signers = vec![&keypair, &buffer_keypair, &authority_keypair];
     config.command = CliCommand::Program(ProgramCliCommand::WriteBuffer {
-        program_location: pathbuf.to_str().unwrap().to_string(),
+        program_location: noop_path.to_str().unwrap().to_string(),
         buffer_signer_index: Some(1),
         buffer_pubkey: Some(buffer_keypair.pubkey()),
         buffer_authority_signer_index: Some(2),
