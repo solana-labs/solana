@@ -99,6 +99,8 @@ use std::{
     time::Instant,
 };
 
+type DashMapVoteAccounts = DashMap<Pubkey, Option<(Arc<VoteState>, Arc<AccountSharedData>)>>;
+
 pub const SECONDS_PER_YEAR: f64 = 365.25 * 24.0 * 60.0 * 60.0;
 
 pub const MAX_LEADER_SCHEDULE_STAKES: Epoch = 5;
@@ -1826,17 +1828,13 @@ impl Bank {
         &self,
         reward_calc_tracer: &Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
         thread_pool: &ThreadPool,
-    ) -> (
-        Vec<StakeDelegationAccount>,
-        DashMap<Pubkey, Option<(Arc<VoteState>, Arc<AccountSharedData>)>>,
-    ) {
+    ) -> (Vec<StakeDelegationAccount>, DashMapVoteAccounts) {
         let filter_stake_delegation_accounts = self
             .feature_set
             .is_active(&feature_set::filter_stake_delegation_accounts::id());
 
         let stakes = self.stakes.read().unwrap();
-        let vote_accounts: DashMap<Pubkey, Option<(Arc<VoteState>, Arc<AccountSharedData>)>> =
-            DashMap::default();
+        let vote_accounts: DashMapVoteAccounts = DashMap::default();
 
         let accounts: Vec<StakeDelegationAccount> = thread_pool.install(|| {
             stakes
@@ -7226,24 +7224,19 @@ pub(crate) mod tests {
         }
         bank0.store_account_and_update_capitalization(&vote_id, &vote_account);
 
+        let thread_pool = ThreadPoolBuilder::new().build().unwrap();
         let validator_points: u128 = bank0
-            .load_stake_delegation_accounts(&mut null_tracer())
-            .values()
-            .flat_map(
-                |StakeDelegationAccount {
-                     vote_state,
-                     delegations,
-                     ..
-                 }| {
-                    delegations
-                        .iter()
-                        .map(move |(_stake_pubkey, (stake_state, _stake_account))| {
-                            (stake_state, vote_state)
-                        })
-                },
-            )
-            .map(|(stake_state, vote_state)| {
-                stake_state::calculate_points(stake_state, vote_state, None, true).unwrap_or(0)
+            .load_stake_delegation_accounts(&null_tracer(), &thread_pool)
+            .0
+            .into_iter()
+            .map(|stake_delegation_account| {
+                stake_state::calculate_points(
+                    &stake_delegation_account.stake_delegation.1 .0,
+                    &stake_delegation_account.vote_state,
+                    None,
+                    true,
+                )
+                .unwrap_or(0)
             })
             .sum();
 
@@ -12402,8 +12395,10 @@ pub(crate) mod tests {
             vec![10_000; 2],
         );
         let bank = Arc::new(Bank::new(&genesis_config));
-        let stake_delegation_accounts = bank.load_stake_delegation_accounts(&mut null_tracer());
-        assert_eq!(stake_delegation_accounts.len(), 2);
+        let thread_pool = ThreadPoolBuilder::new().build().unwrap();
+        let stake_delegation_accounts =
+            bank.load_stake_delegation_accounts(&null_tracer(), &thread_pool);
+        assert_eq!(stake_delegation_accounts.0.len(), 2);
 
         let mut vote_account = bank
             .get_account(&validator_vote_keypairs0.vote_keypair.pubkey())
@@ -12441,8 +12436,9 @@ pub(crate) mod tests {
         );
 
         // Accounts must be valid stake and vote accounts
-        let stake_delegation_accounts = bank.load_stake_delegation_accounts(&mut null_tracer());
-        assert_eq!(stake_delegation_accounts.len(), 0);
+        let stake_delegation_accounts =
+            bank.load_stake_delegation_accounts(&null_tracer(), &thread_pool);
+        assert!(stake_delegation_accounts.0.is_empty());
     }
 
     #[test]
