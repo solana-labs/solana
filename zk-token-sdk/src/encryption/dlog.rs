@@ -25,7 +25,7 @@ pub struct DiscreteLogInstance {
     pub target: RistrettoPoint,
 }
 
-/// Solves the discrete log instance using a 18/14 bit offline/online split
+/// Solves the discrete log instance using a 16/16 bit offline/online split
 impl DiscreteLogInstance {
     /// Solves the discrete log problem under the assumption that the solution
     /// is a 32-bit number.
@@ -34,6 +34,7 @@ impl DiscreteLogInstance {
         self.decode_u32_online(&hashmap)
     }
 
+    /// Builds a HashMap of 2^16 elements
     pub fn decode_u32_precomputation(generator: RistrettoPoint) -> HashMap<HashableRistretto, u32> {
         let mut hashmap = HashMap::new();
 
@@ -50,6 +51,8 @@ impl DiscreteLogInstance {
         hashmap
     }
 
+    /// Solves the discrete log instance using the pre-computed HashMap by enumerating through 2^16
+    /// possible solutions
     pub fn decode_u32_online(self, hashmap: &HashMap<HashableRistretto, u32>) -> Option<u32> {
         // iterator for 0G, -1G, -2G, ...
         let ristretto_iter = RistrettoIterator::new(
@@ -77,6 +80,7 @@ impl DiscreteLogInstance {
         self.decode_u32_online_alt(&hashmap)
     }
 
+    /// Builds a HashMap of 2^18 elements
     pub fn decode_u32_precomputation_alt(
         generator: RistrettoPoint,
     ) -> HashMap<HashableRistretto, u32> {
@@ -95,6 +99,8 @@ impl DiscreteLogInstance {
         hashmap
     }
 
+    /// Solves the discrete log instance using the pre-computed HashMap by enumerating through 2^14
+    /// possible solutions
     pub fn decode_u32_online_alt(self, hashmap: &HashMap<HashableRistretto, u32>) -> Option<u32> {
         // iterator for 0G, -1G, -2G, ...
         let ristretto_iter = RistrettoIterator::new(
