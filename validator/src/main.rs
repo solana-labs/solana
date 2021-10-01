@@ -2300,9 +2300,7 @@ pub fn main() {
                 .unwrap_or(DEFAULT_MAX_DELINQUENT_STAKE_PERCENT);
 
             if max_delinquent_stake > 100 {
-                println!(
-                    "Maximum permitted delinquency can't exceed 100"
-                );
+                println!("Maximum permitted delinquency can't exceed 100");
                 exit(1);
             }
 
@@ -2373,9 +2371,7 @@ pub fn main() {
                 .unwrap_or(DEFAULT_MAX_DELINQUENT_STAKE_PERCENT);
 
             if max_delinquent_stake > 100 {
-                println!(
-                    "Maximum permitted delinquency can't exceed 100"
-                );
+                println!("Maximum permitted delinquency can't exceed 100");
                 exit(1);
             }
 
