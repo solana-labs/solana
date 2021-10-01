@@ -122,6 +122,7 @@ fn wait_for_restart_window(
     ledger_path: &Path,
     identity: Option<Pubkey>,
     min_idle_time_in_minutes: usize,
+    ignore_delinquency: bool
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sleep_interval = Duration::from_secs(5);
     let min_delinquency_percentage = 0.05;
@@ -149,6 +150,9 @@ fn wait_for_restart_window(
             min_idle_slots, min_idle_time_in_minutes
         ),
     );
+    if ignore_delinquency {
+        println!("{}", style("Ignoring delinquent stake").yellow());
+    }
 
     let mut current_epoch = None;
     let mut leader_schedule = VecDeque::new();
@@ -299,7 +303,7 @@ fn wait_for_restart_window(
                         }
                         if restart_snapshot == snapshot_slot && !monitoring_another_validator {
                             "Waiting for a new snapshot".to_string()
-                        } else if delinquent_stake_percentage >= min_delinquency_percentage {
+                        } else if delinquent_stake_percentage >= min_delinquency_percentage && !ignore_delinquency {
                             style("Delinquency too high").red().to_string()
                         } else {
                             break; // Restart!
@@ -2119,6 +2123,13 @@ pub fn main() {
                     .default_value("10")
                     .help("Minimum time that the validator should not be leader before restarting")
             )
+            .arg(
+                Arg::with_name("ignore_delinquency")
+                    .short("i")
+                    .long("ignore-delinquency")
+                    .takes_value(false)
+                    .help("Ignore delinquency threshold when exiting")
+            )
         )
         .subcommand(
             SubCommand::with_name("authorized-voter")
@@ -2196,12 +2207,20 @@ pub fn main() {
                     .help("Minimum time that the validator should not be leader before restarting")
             )
             .arg(
+<<<<<<< HEAD
                 Arg::with_name("identity")
                     .long("identity")
                     .value_name("ADDRESS")
                     .takes_value(true)
                     .validator(is_pubkey_or_keypair)
                     .help("Validator identity to monitor [default: your validator]")
+=======
+                Arg::with_name("ignore_delinquency")
+                    .short("i")
+                    .long("ignore-delinquency")
+                    .takes_value(false)
+                    .help("Ignore delinquency threshold when exiting")
+>>>>>>> a07b61339... Add --ignore-delinquency flag to exit and wait-for-restart-window subcommands of solana-validator
             )
             .after_help("Note: If this command exits with a non-zero status \
                          then this not a good time for a restart")
@@ -2269,9 +2288,10 @@ pub fn main() {
             let min_idle_time = value_t_or_exit!(subcommand_matches, "min_idle_time", usize);
             let force = subcommand_matches.is_present("force");
             let monitor = subcommand_matches.is_present("monitor");
+            let ignore_delinquency = subcommand_matches.is_present("ignore_delinquency");
 
             if !force {
-                wait_for_restart_window(&ledger_path, None, min_idle_time).unwrap_or_else(|err| {
+                wait_for_restart_window(&ledger_path, None, min_idle_time, ignore_delinquency).unwrap_or_else(|err| {
                     println!("{}", err);
                     exit(1);
                 });
@@ -2332,7 +2352,7 @@ pub fn main() {
         ("wait-for-restart-window", Some(subcommand_matches)) => {
             let min_idle_time = value_t_or_exit!(subcommand_matches, "min_idle_time", usize);
             let identity = pubkey_of(subcommand_matches, "identity");
-            wait_for_restart_window(&ledger_path, identity, min_idle_time).unwrap_or_else(|err| {
+            wait_for_restart_window(&ledger_path, identity, min_idle_time, ignore_delinquency).unwrap_or_else(|err| {
                 println!("{}", err);
                 exit(1);
             });
