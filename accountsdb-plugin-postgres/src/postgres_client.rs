@@ -4,7 +4,7 @@ use {
         AccountsDbPluginPostgresConfig, AccountsDbPluginPostgresError,
     },
     chrono::Utc,
-    crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, Sender},
+    crossbeam_channel::{bounded, Receiver, RecvTimeoutError, Sender},
     log::*,
     postgres::{Client, NoTls, Statement},
     solana_accountsdb_plugin_interface::accountsdb_plugin_interface::{
@@ -19,6 +19,8 @@ use {
         time::Duration,
     },
 };
+
+const MAX_ASYNC_REQUESTS: usize = 10240;
 
 struct PostgresSqlClientWrapper {
     client: Client,
@@ -340,7 +342,7 @@ pub struct ParallelPostgresClient {
 
 impl ParallelPostgresClient {
     pub fn new(config: &AccountsDbPluginPostgresConfig) -> Result<Self, AccountsDbPluginError> {
-        let (sender, receiver) = unbounded();
+        let (sender, receiver) = bounded(MAX_ASYNC_REQUESTS);
         let exit_worker = Arc::new(AtomicBool::new(false));
         let mut workers = Vec::default();
 
