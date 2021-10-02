@@ -100,14 +100,14 @@ impl VoteAccounts {
         if let Some((stake, vote_account)) =
             self.vote_accounts.insert(pubkey, (stake, vote_account))
         {
-            self.sub_node_stake(stake, &vote_account);
+            self.sub_node_stake(&pubkey, stake, &vote_account);
         }
     }
 
     pub fn remove(&mut self, pubkey: &Pubkey) -> Option<(u64, ArcVoteAccount)> {
         let value = self.vote_accounts.remove(pubkey);
         if let Some((stake, ref vote_account)) = value {
-            self.sub_node_stake(stake, vote_account);
+            self.sub_node_stake(pubkey, stake, vote_account);
         }
         value
     }
@@ -126,7 +126,7 @@ impl VoteAccounts {
                 .checked_sub(delta)
                 .expect("subtraction value exceeds account's stake");
             let vote_account = vote_account.clone();
-            self.sub_node_stake(delta, &vote_account);
+            self.sub_node_stake(pubkey, delta, &vote_account);
         }
     }
 
@@ -143,13 +143,15 @@ impl VoteAccounts {
         }
     }
 
-    fn sub_node_stake(&mut self, stake: u64, vote_account: &ArcVoteAccount) {
+    fn sub_node_stake(&mut self, pubkey: &Pubkey, stake: u64, vote_account: &ArcVoteAccount) {
         if stake != 0 && self.staked_nodes_once.is_completed() {
             if let Some(node_pubkey) = vote_account.node_pubkey() {
                 match self.staked_nodes.write().unwrap().entry(node_pubkey) {
                     Entry::Vacant(_) => panic!("this should not happen!"),
                     Entry::Occupied(mut entry) => match entry.get().cmp(&stake) {
-                        Ordering::Less => panic!("subtraction value exceeds node's stake"),
+                        Ordering::Less => {
+                            panic!("subtraction value exceeds node's {} stake", pubkey)
+                        }
                         Ordering::Equal => {
                             entry.remove_entry();
                         }

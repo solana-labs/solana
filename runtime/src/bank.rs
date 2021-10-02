@@ -1847,6 +1847,11 @@ impl Bank {
                         let stake_account = match self.get_account(&stake_pubkey) {
                             Some(stake_account) => stake_account,
                             None => {
+                                warn!(
+                                    "stake account {} delegated to vote account {}
+                                    exists in cache but not in backing store",
+                                    stake_pubkey, vote_pubkey
+                                );
                                 return None;
                             }
                         };
@@ -1896,6 +1901,13 @@ impl Bank {
                             read_locked_state.value().clone()
                         };
 
+                        if fetched_vote_state_and_account.is_none() {
+                            warn!(
+                                "stake account {} in cache is delegated to a
+                                vote account {} that does not exist in the cache",
+                                stake_pubkey, vote_pubkey
+                            );
+                        }
                         let (fetched_vote_state, fetched_vote_account, _vote_account_stake) =
                             fetched_vote_state_and_account?;
 

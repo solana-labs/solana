@@ -152,6 +152,7 @@ impl Stakes {
                 )
             });
 
+            // TODO: can pass in the stake state here from cached computation above
             let delegation = StakeState::delegation_from(account);
 
             let stake = delegation.map(|delegation| {
