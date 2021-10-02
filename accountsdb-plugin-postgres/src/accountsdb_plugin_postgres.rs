@@ -1,27 +1,30 @@
 /// Main entry for the PostgreSQL plugin
 use {
-    crate::accounts_selector::AccountsSelector,
+    crate::{
+        accounts_selector::AccountsSelector,
+        postgres_client::{
+            ParallelPostgresClient, PostgresClient, PostgresClientBuilder, SimplePostgresClient,
+        },
+    },
     bs58,
-    chrono::Utc,
     log::*,
-    postgres::{Client, NoTls, Statement},
     serde_derive::{Deserialize, Serialize},
     serde_json,
     solana_accountsdb_plugin_interface::accountsdb_plugin_interface::{
         AccountsDbPlugin, AccountsDbPluginError, ReplicaAccountInfoVersions, Result, SlotStatus,
     },
-    std::{fs::File, io::Read, sync::Mutex},
+    std::{fs::File, io::Read},
     thiserror::Error,
 };
 
-struct PostgresSqlClientWrapper {
-    client: Client,
-    update_account_stmt: Statement,
+enum PostgresClientEnum {
+    Simple(SimplePostgresClient),
+    Parallel(ParallelPostgresClient),
 }
 
 #[derive(Default)]
 pub struct AccountsDbPluginPostgres {
-    client: Option<Mutex<PostgresSqlClientWrapper>>,
+    client: Option<PostgresClientEnum>,
     accounts_selector: Option<AccountsSelector>,
 }
 
@@ -35,6 +38,7 @@ impl std::fmt::Debug for AccountsDbPluginPostgres {
 pub struct AccountsDbPluginPostgresConfig {
     pub host: String,
     pub user: String,
+    pub threads: usize,
 }
 
 #[derive(Error, Debug)]
@@ -107,51 +111,31 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
                 })
             }
             Ok(config) => {
-                let connection_str = format!("host={} user={}", config.host, config.user);
-                match Client::connect(&connection_str, NoTls) {
-                    Err(err) => {
-                        return Err(AccountsDbPluginError::Custom(
-                            Box::new(AccountsDbPluginPostgresError::DataStoreConnectionError {
-                                msg: format!(
-                                "Error in connecting to the PostgreSQL database: {:?} host: {:?} user: {:?} config: {:?}",
-                                err, config.host, config.user, connection_str),
-                            })));
-                    }
-                    Ok(mut client) => {
-                        let result = client.prepare("INSERT INTO account (pubkey, slot, owner, lamports, executable, rent_epoch, data, updated_on) \
-                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8) \
-                            ON CONFLICT (pubkey) DO UPDATE SET slot=$2, owner=$3, lamports=$4, executable=$5, rent_epoch=$6, \
-                            data=$7, updated_on=$8");
-
-                        match result {
-                            Err(err) => {
-                                return Err(AccountsDbPluginError::Custom(
-                                    Box::new(AccountsDbPluginPostgresError::DataSchemaError {
-                                    msg: format!(
-                                        "Error in preparing for the accounts update PostgreSQL database: {:?} host: {:?} user: {:?} config: {:?}",
-                                        err, config.host, config.user, connection_str
-                                    ),
-                                })));
-                            }
-                            Ok(update_account_stmt) => {
-                                self.client = Some(Mutex::new(PostgresSqlClientWrapper {
-                                    client,
-                                    update_account_stmt,
-                                }));
-                            }
-                        }
-                    }
-                }
+                self.client = if config.threads > 1 {
+                    let client = PostgresClientBuilder::build_pararallel_postgres_client(&config)?;
+                    Some(PostgresClientEnum::Parallel(client))
+                } else {
+                    let client = PostgresClientBuilder::build_simple_postgres_client(&config)?;
+                    Some(PostgresClientEnum::Simple(client))
+                };
             }
         }
 
         Ok(())
     }
 
-    /// Unload all plugins and loaded plugin libraries, making sure to fire
-    /// their `on_plugin_unload()` methods so they can do any necessary cleanup.
     fn on_unload(&mut self) {
         info!("Unloading plugin: {:?}", self.name());
+
+        match &mut self.client {
+            None => {}
+            Some(client) => match client {
+                PostgresClientEnum::Parallel(client) => client.join().unwrap(),
+                PostgresClientEnum::Simple(client) => {
+                    client.join().unwrap();
+                }
+            },
+        }
     }
 
     fn update_account(&mut self, account: ReplicaAccountInfoVersions, slot: u64) -> Result<()> {
@@ -183,24 +167,14 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
                         )));
                     }
                     Some(client) => {
-                        let slot = slot as i64; // postgres only supports i64
-                        let lamports = account.lamports as i64;
-                        let rent_epoch = account.rent_epoch as i64;
-                        let updated_on = Utc::now().naive_utc();
-                        let client = client.get_mut().unwrap();
-                        let result = client.client.query(
-                            &client.update_account_stmt,
-                            &[
-                                &account.pubkey,
-                                &slot,
-                                &account.owner,
-                                &lamports,
-                                &account.executable,
-                                &rent_epoch,
-                                &account.data,
-                                &updated_on,
-                            ],
-                        );
+                        let result = match client {
+                            PostgresClientEnum::Parallel(client) => {
+                                client.update_account(account, slot)
+                            }
+                            PostgresClientEnum::Simple(client) => {
+                                client.update_account(account, slot)
+                            }
+                        };
 
                         if let Err(err) = result {
                             return Err(AccountsDbPluginError::AccountsUpdateError {
@@ -231,48 +205,19 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
                 )));
             }
             Some(client) => {
-                let slot = slot as i64; // postgres only supports i64
-                let parent = parent.map(|parent| parent as i64);
-                let updated_on = Utc::now().naive_utc();
-                let status_str = status.as_str();
-
-                let result = match parent {
-                        Some(parent) => {
-                            client.get_mut().unwrap().client.execute(
-                                "INSERT INTO slot (slot, parent, status, updated_on) \
-                                VALUES ($1, $2, $3, $4) \
-                                ON CONFLICT (slot) DO UPDATE SET parent=$2, status=$3, updated_on=$4",
-                                &[
-                                    &slot,
-                                    &parent,
-                                    &status_str,
-                                    &updated_on,
-                                ],
-                            )
-                        }
-                        None => {
-                            client.get_mut().unwrap().client.execute(
-                                "INSERT INTO slot (slot, status, updated_on) \
-                                VALUES ($1, $2, $3) \
-                                ON CONFLICT (slot) DO UPDATE SET status=$2, updated_on=$3",
-                                &[
-                                    &slot,
-                                    &status_str,
-                                    &updated_on,
-                                ],
-                            )
-                        }
+                let result = match client {
+                    PostgresClientEnum::Parallel(client) => {
+                        client.update_slot_status(slot, parent, status)
+                    }
+                    PostgresClientEnum::Simple(client) => {
+                        client.update_slot_status(slot, parent, status)
+                    }
                 };
 
-                match result {
-                    Err(err) => {
-                        return Err(AccountsDbPluginError::SlotStatusUpdateError{
-                            msg: format!("Failed to persist the update of slot to the PostgreSQL database. Error: {:?}", err)
-                        });
-                    }
-                    Ok(rows) => {
-                        assert_eq!(1, rows, "Expected one rows to be updated a time");
-                    }
+                if let Err(err) = result {
+                    return Err(AccountsDbPluginError::SlotStatusUpdateError{
+                        msg: format!("Failed to persist the update of slot to the PostgreSQL database. Error: {:?}", err)
+                    });
                 }
             }
         }

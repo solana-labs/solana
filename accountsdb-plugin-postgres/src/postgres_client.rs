@@ -8,7 +8,7 @@ use {
     log::*,
     postgres::{Client, NoTls, Statement},
     solana_accountsdb_plugin_interface::accountsdb_plugin_interface::{
-        AccountsDbPluginError, ReplicaAccountInfo,
+        AccountsDbPluginError, ReplicaAccountInfo, SlotStatus,
     },
     std::{
         sync::{
@@ -25,12 +25,12 @@ struct PostgresSqlClientWrapper {
     update_account_stmt: Statement,
 }
 
-struct AccountsWriter {
+pub struct SimplePostgresClient {
     client: Mutex<PostgresSqlClientWrapper>,
 }
 
-struct AccountsWriteWorker {
-    writer: AccountsWriter,
+struct PostgresClientWorker {
+    client: SimplePostgresClient,
 }
 
 impl Eq for DbAccountInfo {}
@@ -45,15 +45,15 @@ pub struct DbAccountInfo {
     pub data: Vec<u8>,
 }
 
-impl From<&ReplicaAccountInfo<'_>> for DbAccountInfo {
-    fn from(account: &ReplicaAccountInfo<'_>) -> Self {
-        let data = account.data.to_vec();
+impl DbAccountInfo {
+    fn new<T: ReadableAccountInfo>(account: &T) -> DbAccountInfo {
+        let data = account.data().to_vec();
         Self {
-            pubkey: account.pubkey.to_vec(),
-            lamports: account.lamports,
-            owner: account.owner.to_vec(),
-            executable: account.executable,
-            rent_epoch: account.rent_epoch,
+            pubkey: account.pubkey().to_vec(),
+            lamports: account.lamports(),
+            owner: account.owner().to_vec(),
+            executable: account.executable(),
+            rent_epoch: account.rent_epoch(),
             data,
         }
     }
@@ -94,14 +94,13 @@ impl ReadableAccountInfo for DbAccountInfo {
     }
 }
 
-
-impl <'a> ReadableAccountInfo for ReplicaAccountInfo<'a> {
+impl<'a> ReadableAccountInfo for ReplicaAccountInfo<'a> {
     fn pubkey(&self) -> &[u8] {
-        &self.pubkey
+        self.pubkey
     }
 
     fn owner(&self) -> &[u8] {
-        &self.owner
+        self.owner
     }
 
     fn lamports(&self) -> u64 {
@@ -117,14 +116,31 @@ impl <'a> ReadableAccountInfo for ReplicaAccountInfo<'a> {
     }
 
     fn data(&self) -> &[u8] {
-        &self.data
+        self.data
     }
 }
 
-const NUM_ACCOUNTS_WRITE_WORKERS: usize = 10;
+pub trait PostgresClient {
+    fn join(&mut self) -> thread::Result<()> {
+        Ok(())
+    }
 
-impl AccountsWriter {
-    pub fn new(config: AccountsDbPluginPostgresConfig) -> Result<Self, AccountsDbPluginError> {
+    fn update_account<T: ReadableAccountInfo>(
+        &mut self,
+        account: &T,
+        slot: u64,
+    ) -> Result<(), AccountsDbPluginError>;
+
+    fn update_slot_status(
+        &mut self,
+        slot: u64,
+        parent: Option<u64>,
+        status: SlotStatus,
+    ) -> Result<(), AccountsDbPluginError>;
+}
+
+impl SimplePostgresClient {
+    pub fn new(config: &AccountsDbPluginPostgresConfig) -> Result<Self, AccountsDbPluginError> {
         let connection_str = format!("host={} user={}", config.host, config.user);
         match Client::connect(&connection_str, NoTls) {
             Err(err) => {
@@ -160,8 +176,10 @@ impl AccountsWriter {
             }
         }
     }
+}
 
-    pub fn write_account<T: ReadableAccountInfo>(
+impl PostgresClient for SimplePostgresClient {
+    fn update_account<T: ReadableAccountInfo>(
         &mut self,
         account: &T,
         slot: u64,
@@ -199,26 +217,107 @@ impl AccountsWriter {
         }
         Ok(())
     }
+
+    fn update_slot_status(
+        &mut self,
+        slot: u64,
+        parent: Option<u64>,
+        status: SlotStatus,
+    ) -> Result<(), AccountsDbPluginError> {
+        info!("Updating slot {:?} at with status {:?}", slot, status);
+
+        let slot = slot as i64; // postgres only supports i64
+        let parent = parent.map(|parent| parent as i64);
+        let updated_on = Utc::now().naive_utc();
+        let status_str = status.as_str();
+        let client = self.client.get_mut().unwrap();
+
+        let result = match parent {
+                        Some(parent) => {
+                            client.client.execute(
+                                "INSERT INTO slot (slot, parent, status, updated_on) \
+                                VALUES ($1, $2, $3, $4) \
+                                ON CONFLICT (slot) DO UPDATE SET parent=$2, status=$3, updated_on=$4",
+                                &[
+                                    &slot,
+                                    &parent,
+                                    &status_str,
+                                    &updated_on,
+                                ],
+                            )
+                        }
+                        None => {
+                            client.client.execute(
+                                "INSERT INTO slot (slot, status, updated_on) \
+                                VALUES ($1, $2, $3) \
+                                ON CONFLICT (slot) DO UPDATE SET status=$2, updated_on=$3",
+                                &[
+                                    &slot,
+                                    &status_str,
+                                    &updated_on,
+                                ],
+                            )
+                        }
+                };
+
+        match result {
+            Err(err) => {
+                return Err(AccountsDbPluginError::SlotStatusUpdateError{
+                            msg: format!("Failed to persist the update of slot to the PostgreSQL database. Error: {:?}", err)
+                        });
+            }
+            Ok(rows) => {
+                assert_eq!(1, rows, "Expected one rows to be updated a time");
+            }
+        }
+
+        Ok(())
+    }
 }
 
-impl AccountsWriteWorker {
+struct UpdateAccountRequest {
+    account: DbAccountInfo,
+    slot: u64,
+}
+
+struct UpdateSlotRequest {
+    slot: u64,
+    parent: Option<u64>,
+    slot_status: SlotStatus,
+}
+
+enum DbWorkItem {
+    UpdateAccount(UpdateAccountRequest),
+    UpdateSlot(UpdateSlotRequest),
+}
+
+impl PostgresClientWorker {
     fn new(config: AccountsDbPluginPostgresConfig) -> Result<Self, AccountsDbPluginError> {
-        let writer = AccountsWriter::new(config)?;
-        Ok(AccountsWriteWorker { writer })
+        let client = SimplePostgresClient::new(&config)?;
+        Ok(PostgresClientWorker { client })
     }
 
     fn do_work(
         &mut self,
-        receiver: Receiver<(DbAccountInfo, u64)>,
+        receiver: Receiver<DbWorkItem>,
         exit_worker: Arc<AtomicBool>,
     ) -> Result<(), AccountsDbPluginError> {
         while !exit_worker.load(Ordering::Relaxed) {
-            let account = receiver.recv_timeout(Duration::from_millis(500));
+            let work = receiver.recv_timeout(Duration::from_millis(500));
 
-            match account {
-                Ok(account) => {
-                    self.writer.write_account(&account.0, account.1)?;
-                }
+            match work {
+                Ok(work) => match work {
+                    DbWorkItem::UpdateAccount(request) => {
+                        self.client.update_account(&request.account, request.slot)?;
+                    }
+                    DbWorkItem::UpdateSlot(request) => {
+                        self.client.update_slot_status(
+                            request.slot,
+                            request.parent,
+                            request.slot_status,
+                        )?;
+                    }
+                },
                 Err(err) => match err {
                     RecvTimeoutError::Timeout => {
                         continue;
@@ -233,26 +332,26 @@ impl AccountsWriteWorker {
         Ok(())
     }
 }
-pub struct ParallelAccountsWriter {
+pub struct ParallelPostgresClient {
     workers: Vec<JoinHandle<Result<(), AccountsDbPluginError>>>,
     exit_worker: Arc<AtomicBool>,
-    sender: Sender<(DbAccountInfo, u64)>,
+    sender: Sender<DbWorkItem>,
 }
 
-impl ParallelAccountsWriter {
+impl ParallelPostgresClient {
     pub fn new(config: &AccountsDbPluginPostgresConfig) -> Result<Self, AccountsDbPluginError> {
         let (sender, receiver) = unbounded();
         let exit_worker = Arc::new(AtomicBool::new(false));
         let mut workers = Vec::default();
 
-        for i in 0..NUM_ACCOUNTS_WRITE_WORKERS {
+        for i in 0..config.threads {
             let cloned_receiver = receiver.clone();
             let exit_clone = exit_worker.clone();
             let config = config.clone();
             let worker = Builder::new()
                 .name(format!("worker-{}", i))
                 .spawn(move || -> Result<(), AccountsDbPluginError> {
-                    let mut worker = AccountsWriteWorker::new(config)?;
+                    let mut worker = PostgresClientWorker::new(config)?;
                     worker.do_work(cloned_receiver, exit_clone)?;
                     Ok(())
                 })
@@ -267,8 +366,10 @@ impl ParallelAccountsWriter {
             sender,
         })
     }
+}
 
-    pub fn join(mut self) -> thread::Result<()> {
+impl PostgresClient for ParallelPostgresClient {
+    fn join(&mut self) -> thread::Result<()> {
         self.exit_worker.store(true, Ordering::Relaxed);
         while !self.workers.is_empty() {
             let worker = self.workers.pop();
@@ -285,19 +386,60 @@ impl ParallelAccountsWriter {
         Ok(())
     }
 
-    pub fn update_account(
+    fn update_account<T: ReadableAccountInfo>(
         &mut self,
-        account: &ReplicaAccountInfo,
+        account: &T,
         slot: u64,
     ) -> Result<(), AccountsDbPluginError> {
-        if let Err(err) = self.sender.send((DbAccountInfo::from(account), slot)) {
+        if let Err(err) = self
+            .sender
+            .send(DbWorkItem::UpdateAccount(UpdateAccountRequest {
+                account: DbAccountInfo::new(account),
+                slot,
+            }))
+        {
             return Err(AccountsDbPluginError::AccountsUpdateError {
                 msg: format!(
                     "Failed to update the account {:?}, error: {:?}",
-                    account.pubkey, err
+                    account.pubkey(),
+                    err
                 ),
             });
         }
         Ok(())
+    }
+
+    fn update_slot_status(
+        &mut self,
+        slot: u64,
+        parent: Option<u64>,
+        status: SlotStatus,
+    ) -> Result<(), AccountsDbPluginError> {
+        if let Err(err) = self.sender.send(DbWorkItem::UpdateSlot(UpdateSlotRequest {
+            slot,
+            parent,
+            slot_status: status,
+        })) {
+            return Err(AccountsDbPluginError::SlotStatusUpdateError {
+                msg: format!("Failed to update the slot {:?}, error: {:?}", slot, err),
+            });
+        }
+        Ok(())
+    }
+}
+
+pub struct PostgresClientBuilder {}
+
+impl PostgresClientBuilder {
+    pub fn build_pararallel_postgres_client(
+        config: &AccountsDbPluginPostgresConfig,
+    ) -> Result<ParallelPostgresClient, AccountsDbPluginError> {
+        ParallelPostgresClient::new(config)
+    }
+
+    pub fn build_simple_postgres_client(
+        config: &AccountsDbPluginPostgresConfig,
+    ) -> Result<SimplePostgresClient, AccountsDbPluginError> {
+        SimplePostgresClient::new(config)
     }
 }
