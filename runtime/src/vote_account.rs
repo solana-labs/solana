@@ -258,7 +258,7 @@ impl PartialEq<VoteAccounts> for VoteAccounts {
     }
 }
 
-type VoteAccountsHashMap = HashMap<Pubkey, (u64 /*stake*/, ArcVoteAccount)>;
+pub type VoteAccountsHashMap = HashMap<Pubkey, (u64 /*stake*/, ArcVoteAccount)>;
 
 impl From<VoteAccountsHashMap> for VoteAccounts {
     fn from(vote_accounts: VoteAccountsHashMap) -> Self {

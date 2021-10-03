@@ -33,7 +33,7 @@ use dashmap::DashMap;
 use itertools::Itertools;
 use log::*;
 use rayon::{
-    iter::{IntoParallelRefIterator, ParallelBridge, ParallelIterator},
+    iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
     ThreadPool, ThreadPoolBuilder,
 };
 use solana_measure::measure::Measure;
@@ -72,8 +72,7 @@ use solana_sdk::{
     signature::{Keypair, Signature},
     slot_hashes::SlotHashes,
     slot_history::SlotHistory,
-    system_transaction,
-    sysvar::{self},
+    system_transaction, sysvar,
     timing::years_as_slots,
     transaction::{self, Result, Transaction, TransactionError},
 };
@@ -930,10 +929,10 @@ impl Default for BlockhashQueue {
     }
 }
 
-struct StakeDelegationAccounts {
-    vote_state: Arc<VoteState>,
-    vote_account: AccountSharedData,
-    delegations: Vec<(Pubkey, (StakeState, AccountSharedData))>,
+pub struct StakeDelegationAccounts {
+    pub vote_state: Arc<VoteState>,
+    pub vote_account: AccountSharedData,
+    pub delegations: Vec<(Pubkey, (StakeState, AccountSharedData))>,
 }
 
 impl Bank {
@@ -1174,17 +1173,31 @@ impl Bank {
         let parent_epoch = parent.epoch();
         if parent_epoch < new.epoch() {
             new.apply_feature_activations(false);
+
+            // Add new entry to stakes.stake_history, set appropriate epoch and
+            //   update vote accounts with warmed up stakes before saving a
+            //   snapshot of stakes in epoch stakes
+            let thread_pool = ThreadPoolBuilder::new().build().unwrap();
+            new.stakes.write().unwrap().activate_epoch(
+                epoch,
+                new.stake_program_v2_enabled(),
+                &thread_pool,
+            );
+
+            // Save a snapshot of stakes for use in consensus and stake weighted networking
+            let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
+            new.update_epoch_stakes(leader_schedule_epoch);
+
+            // After saving a snapshot of stakes, apply stake rewards and commission
+            new.update_rewards(parent_epoch, reward_calc_tracer, &thread_pool);
+        } else {
+            // Save a snapshot of stakes for use in consensus and stake weighted networking
+            let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
+            new.update_epoch_stakes(leader_schedule_epoch);
         }
 
-        new.stakes
-            .write()
-            .unwrap()
-            .update_with_epoch(epoch, new.stake_program_v2_enabled());
-
-        let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
-        new.update_epoch_stakes(leader_schedule_epoch);
+        // Update sysvars before processing transactions
         new.update_slot_hashes();
-        new.update_rewards(parent_epoch, reward_calc_tracer);
         new.update_stake_history(Some(parent_epoch));
         new.update_clock(Some(parent_epoch));
         new.update_fees();
@@ -1726,12 +1739,8 @@ impl Bank {
         &mut self,
         prev_epoch: Epoch,
         reward_calc_tracer: &mut Option<impl FnMut(&RewardCalculationEvent)>,
+        thread_pool: &ThreadPool,
     ) {
-        if prev_epoch == self.epoch() {
-            return;
-        }
-        // if I'm the first Bank in an epoch, count, claim, disburse rewards from Inflation
-
         let slot_in_year = self.slot_in_year_for_inflation();
         let epoch_duration_in_years = self.epoch_duration_in_years(prev_epoch);
 
@@ -1754,6 +1763,7 @@ impl Bank {
             validator_rewards,
             reward_calc_tracer,
             self.stake_program_v2_enabled(),
+            thread_pool,
         );
 
         if !self
@@ -1885,22 +1895,27 @@ impl Bank {
 
                     if let Some(vote_account) = fetched_vote_account {
                         let (vote_state, vote_account) =
-                            match StateMut::<VoteStateVersions>::state(&vote_account).ok() {
-                                Some(vote_state) => (vote_state.convert_to_current(), vote_account),
-                                None => return,
+                            match StateMut::<VoteStateVersions>::state(&vote_account) {
+                                Ok(vote_state) => (vote_state.convert_to_current(), vote_account),
+                                Err(err) => {
+                                    debug!(
+                                        "failed to deserialize vote account {}: {}",
+                                        vote_pubkey, err
+                                    );
+                                    return;
+                                }
                             };
 
-                        accounts.insert(
-                            *vote_pubkey,
-                            StakeDelegationAccounts {
+                        accounts
+                            .entry(*vote_pubkey)
+                            .or_insert_with(|| StakeDelegationAccounts {
                                 vote_state: Arc::new(vote_state),
                                 vote_account,
-                                delegations: vec![stake_delegation],
-                            },
-                        );
-                    } else if let Some(mut stake_delegation_accounts) =
-                        accounts.get_mut(vote_pubkey)
-                    {
+                                delegations: vec![],
+                            });
+                    }
+
+                    if let Some(mut stake_delegation_accounts) = accounts.get_mut(vote_pubkey) {
                         stake_delegation_accounts.delegations.push(stake_delegation);
                     }
                 });
@@ -1917,10 +1932,9 @@ impl Bank {
         rewards: u64,
         reward_calc_tracer: &mut Option<impl FnMut(&RewardCalculationEvent)>,
         fix_stake_deactivate: bool,
+        thread_pool: &ThreadPool,
     ) -> f64 {
-        let thread_pool = ThreadPoolBuilder::new().build().unwrap();
         let stake_history = self.stakes.read().unwrap().history().clone();
-
         let stake_delegation_accounts =
             self.load_stake_delegation_accounts(&thread_pool, reward_calc_tracer);
         let points: u128 = thread_pool.install(|| {
@@ -1957,7 +1971,7 @@ impl Bank {
         let point_value = PointValue { rewards, points };
         let vote_account_rewards: DashMap<Pubkey, (AccountSharedData, u8, u64, bool)> =
             DashMap::with_capacity(stake_delegation_accounts.len());
-        let stake_delegation_iterator = stake_delegation_accounts.into_iter().flat_map(
+        let stake_delegation_iterator = stake_delegation_accounts.into_par_iter().flat_map(
             |(
                 vote_pubkey,
                 StakeDelegationAccounts {
@@ -1969,14 +1983,13 @@ impl Bank {
                 vote_account_rewards
                     .insert(vote_pubkey, (vote_account, vote_state.commission, 0, false));
                 delegations
-                    .into_iter()
+                    .into_par_iter()
                     .map(move |delegation| (vote_pubkey, Arc::clone(&vote_state), delegation))
             },
         );
 
         let mut stake_rewards = thread_pool.install(|| {
             stake_delegation_iterator
-                .par_bridge()
                 .filter_map(
                     |(
                         vote_pubkey,
