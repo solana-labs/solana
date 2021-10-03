@@ -25,8 +25,13 @@ import {
   UpgradeableLoaderAccount,
 } from "validators/accounts/upgradeable-program";
 import { RewardsProvider } from "./rewards";
-import { MasterEditionV1, MasterEditionV2, Metadata } from "metaplex/classes";
-import { getMasterEdition, getMetadata } from "./utils/metadataHelpers";
+import {
+  Edition,
+  MasterEditionV1,
+  MasterEditionV2,
+  Metadata,
+} from "metaplex/classes";
+import { getEditionData, getMetadata } from "./utils/metadataHelpers";
 export { useAccountHistory } from "./history";
 
 export type StakeProgramData = {
@@ -44,6 +49,7 @@ export type UpgradeableLoaderAccountData = {
 export type NFTData = {
   metadata: Metadata;
   masterEdition: MasterEditionV1 | MasterEditionV2;
+  edition?: Edition;
 };
 
 export type TokenProgramData = {
@@ -241,12 +247,13 @@ async function fetchAccountInfo(
               if (parsed.type === "mint") {
                 const metadata = await getMetadata(pubkey, url);
                 if (metadata) {
-                  // We have a valid Metadata account. Try and pull a Master Edition.
-                  // TODO - Support Editions minted from a Master Edition
-                  const masterEdition = await getMasterEdition(pubkey, url);
-                  console.log(masterEdition);
+                  // We have a valid Metadata account. Try and pull edition data.
+                  const { masterEdition, edition } = await getEditionData(
+                    pubkey,
+                    url
+                  );
                   if (masterEdition) {
-                    nftData = { metadata, masterEdition };
+                    nftData = { metadata, masterEdition, edition };
                   }
                 }
               }

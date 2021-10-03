@@ -1,5 +1,6 @@
 import { AccountInfo, Connection, PublicKey } from "@solana/web3.js";
 import {
+  Edition,
   MasterEditionV1,
   MasterEditionV2,
   Metadata,
@@ -59,18 +60,49 @@ export async function getMetadata(
   }
 }
 
-export async function getMasterEdition(pubkey: PublicKey, url: string) {
-  const connection = new Connection(url);
+export async function getEditionData(pubkey: PublicKey, url: string) {
+  const connection = new Connection(url, "confirmed");
   const editionKey = await generatePDA(pubkey, true /* addEditionToSeeds */);
   const accountInfo = await connection.getAccountInfo(toPublicKey(editionKey));
 
   if (accountInfo && accountInfo.data.length > 0) {
-    if (!isMetadataAccount(accountInfo)) return;
+    if (!isMetadataAccount(accountInfo))
+      return {
+        masterEdition: undefined,
+        edition: undefined,
+      };
 
     if (isMasterEditionAccount(accountInfo)) {
-      return decodeMasterEdition(accountInfo.data);
+      return {
+        masterEdition: decodeMasterEdition(accountInfo.data),
+        edition: undefined,
+      };
+    }
+
+    // This is an Edition NFT. Pull the Parent (MasterEdition)
+    if (isEditionV1Account(accountInfo)) {
+      const edition = decodeEdition(accountInfo.data);
+      const masterEditionAccountInfo = await connection.getAccountInfo(
+        toPublicKey(edition.parent)
+      );
+
+      if (
+        masterEditionAccountInfo &&
+        masterEditionAccountInfo.data.length > 0 &&
+        isMasterEditionAccount(masterEditionAccountInfo)
+      ) {
+        return {
+          masterEdition: decodeMasterEdition(masterEditionAccountInfo.data),
+          edition,
+        };
+      }
     }
   }
+
+  return {
+    masterEdition: undefined,
+    edition: undefined,
+  };
 }
 
 async function generatePDA(
@@ -130,11 +162,18 @@ export const decodeMasterEdition = (
   }
 };
 
+export const decodeEdition = (buffer: Buffer) => {
+  return deserializeUnchecked(METADATA_SCHEMA, Edition, buffer) as Edition;
+};
+
 const isMetadataAccount = (account: AccountInfo<Buffer>) =>
   account.owner.toBase58() === METADATA_PROGRAM_ID;
 
 const isMetadataV1Account = (account: AccountInfo<Buffer>) =>
   account.data[0] === MetadataKey.MetadataV1;
+
+const isEditionV1Account = (account: AccountInfo<Buffer>) =>
+  account.data[0] === MetadataKey.EditionV1;
 
 const isMasterEditionAccount = (account: AccountInfo<Buffer>) =>
   account.data[0] === MetadataKey.MasterEditionV1 ||
