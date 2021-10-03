@@ -23,8 +23,8 @@ use {
         crds_gossip_error::CrdsGossipError,
         crds_gossip_pull::{CrdsFilter, ProcessPullStats, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS},
         crds_value::{
-            self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlotsIndex, LowestSlot, NodeInstance,
-            SnapshotHashes, Version, Vote, MAX_WALLCLOCK,
+            self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlotsIndex, IncrementalSnapshotHashes,
+            LowestSlot, NodeInstance, SnapshotHashes, Version, Vote, MAX_WALLCLOCK,
         },
         epoch_slots::EpochSlots,
         gossip_error::GossipError,
@@ -947,6 +947,28 @@ impl ClusterInfo {
         }
 
         let message = CrdsData::SnapshotHashes(SnapshotHashes::new(self.id(), snapshot_hashes));
+        self.push_message(CrdsValue::new_signed(message, &self.keypair()));
+    }
+
+    pub fn push_incremental_snapshot_hashes(
+        &self,
+        base: (Slot, Hash),
+        incremental_snapshot_hashes: Vec<(Slot, Hash)>,
+    ) {
+        if incremental_snapshot_hashes.len() > MAX_SNAPSHOT_HASHES {
+            warn!(
+                "incremental snapshot hashes too large, ignored: {}",
+                incremental_snapshot_hashes.len(),
+            );
+            return;
+        }
+
+        let message = CrdsData::IncrementalSnapshotHashes(IncrementalSnapshotHashes {
+            from: self.id(),
+            base,
+            hashes: incremental_snapshot_hashes,
+            wallclock: timestamp(),
+        });
         self.push_message(CrdsValue::new_signed(message, &self.keypair()));
     }
 
