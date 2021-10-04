@@ -141,7 +141,7 @@ mod test {
 
     #[test]
     fn test_close_account_correctness() {
-        let (source_pk, source_sk) = ElGamal::keygen();
+        let (source_pk, source_sk) = ElGamal::new();
 
         // If account balance is 0, then the proof should succeed
         let balance = source_pk.encrypt(0_u64);

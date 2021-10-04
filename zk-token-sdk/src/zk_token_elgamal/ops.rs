@@ -252,7 +252,7 @@ mod tests {
 
         // spendable_ct should be an encryption of 0 for any public key when
         // `PedersenOpen::default()` is used
-        let (pk, _) = ElGamal::keygen();
+        let (pk, _) = ElGamal::new();
         let balance: u64 = 0;
         assert_eq!(
             spendable_ct,
@@ -276,7 +276,7 @@ mod tests {
 
         let added_ct = ops::add_to(&spendable_balance, 55).unwrap();
 
-        let (pk, _) = ElGamal::keygen();
+        let (pk, _) = ElGamal::new();
         let expected: pod::ElGamalCiphertext =
             pk.encrypt_with(55_u64, &PedersenOpen::default()).into();
 
@@ -286,7 +286,7 @@ mod tests {
     #[test]
     fn test_subtract_from() {
         let amount = 77_u64;
-        let (pk, _) = ElGamal::keygen();
+        let (pk, _) = ElGamal::new();
         let open = PedersenOpen::random(&mut OsRng);
         let encrypted_amount: pod::ElGamalCiphertext = pk.encrypt_with(amount, &open).into();
 
@@ -312,9 +312,9 @@ mod tests {
         let (amount_lo, amount_hi) = split_u64_into_u32(transfer_amount);
 
         // generate public keys
-        let (source_pk, _) = ElGamal::keygen();
-        let (dest_pk, _) = ElGamal::keygen();
-        let (auditor_pk, _) = ElGamal::keygen();
+        let (source_pk, _) = ElGamal::new();
+        let (dest_pk, _) = ElGamal::new();
+        let (auditor_pk, _) = ElGamal::new();
 
         // commitments associated with TransferRangeProof
         let (comm_lo, open_lo) = Pedersen::commit(amount_lo);
