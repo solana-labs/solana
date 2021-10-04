@@ -16,14 +16,14 @@ pub struct StakeHistoryEntry {
 }
 
 impl StakeHistoryEntry {
-    pub fn fully_active(effective: u64) -> Self {
+    pub fn with_effective(effective: u64) -> Self {
         Self {
             effective,
             ..Self::default()
         }
     }
 
-    pub fn activating(effective: u64, activating: u64) -> Self {
+    pub fn with_effective_and_activating(effective: u64, activating: u64) -> Self {
         Self {
             effective,
             activating,
@@ -31,7 +31,7 @@ impl StakeHistoryEntry {
         }
     }
 
-    pub fn deactivating(deactivating: u64) -> Self {
+    pub fn with_deactivating(deactivating: u64) -> Self {
         Self {
             effective: deactivating,
             deactivating,

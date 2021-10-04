@@ -301,7 +301,7 @@ async fn stake_rewards_from_warp() {
         stake
             .delegation
             .stake_activating_and_deactivating(clock.epoch, Some(&stake_history)),
-        StakeActivationStatus::fully_active(stake.delegation.stake),
+        StakeActivationStatus::with_effective(stake.delegation.stake),
     );
 }
 

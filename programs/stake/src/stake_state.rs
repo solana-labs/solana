@@ -1757,19 +1757,19 @@ mod tests {
         // assert that this stake follows step function if there's no history
         assert_eq!(
             stake.stake_activating_and_deactivating(stake.activation_epoch, Some(&stake_history),),
-            StakeActivationStatus::activating(0, stake.stake),
+            StakeActivationStatus::with_effective_and_activating(0, stake.stake),
         );
         for epoch in stake.activation_epoch + 1..stake.deactivation_epoch {
             assert_eq!(
                 stake.stake_activating_and_deactivating(epoch, Some(&stake_history)),
-                StakeActivationStatus::fully_active(stake.stake),
+                StakeActivationStatus::with_effective(stake.stake),
             );
         }
         // assert that this stake is full deactivating
         assert_eq!(
             stake
                 .stake_activating_and_deactivating(stake.deactivation_epoch, Some(&stake_history),),
-            StakeActivationStatus::deactivating(stake.stake),
+            StakeActivationStatus::with_deactivating(stake.stake),
         );
         // assert that this stake is fully deactivated if there's no history
         assert_eq!(
@@ -1790,7 +1790,7 @@ mod tests {
         // assert that this stake is broken, because above setup is broken
         assert_eq!(
             stake.stake_activating_and_deactivating(1, Some(&stake_history)),
-            StakeActivationStatus::activating(0, stake.stake),
+            StakeActivationStatus::with_effective_and_activating(0, stake.stake),
         );
 
         stake_history.add(
@@ -1805,7 +1805,10 @@ mod tests {
         // assert that this stake is broken, because above setup is broken
         assert_eq!(
             stake.stake_activating_and_deactivating(2, Some(&stake_history)),
-            StakeActivationStatus::activating(increment, stake.stake - increment),
+            StakeActivationStatus::with_effective_and_activating(
+                increment,
+                stake.stake - increment
+            ),
         );
 
         // start over, test deactivation edge cases
@@ -1824,7 +1827,7 @@ mod tests {
                 stake.deactivation_epoch + 1,
                 Some(&stake_history),
             ),
-            StakeActivationStatus::deactivating(stake.stake),
+            StakeActivationStatus::with_deactivating(stake.stake),
         );
 
         // put in my initial deactivating amount, but don't put in an entry for next
@@ -1843,7 +1846,7 @@ mod tests {
                 Some(&stake_history),
             ),
             // hung, should be lower
-            StakeActivationStatus::deactivating(stake.stake - increment),
+            StakeActivationStatus::with_deactivating(stake.stake - increment),
         );
     }
 
@@ -2051,21 +2054,21 @@ mod tests {
         };
 
         let expected_staking_status_transition = vec![
-            StakeActivationStatus::activating(0, 700),
-            StakeActivationStatus::activating(250, 450),
-            StakeActivationStatus::activating(562, 138),
-            StakeActivationStatus::fully_active(700),
-            StakeActivationStatus::deactivating(700),
-            StakeActivationStatus::deactivating(275),
+            StakeActivationStatus::with_effective_and_activating(0, 700),
+            StakeActivationStatus::with_effective_and_activating(250, 450),
+            StakeActivationStatus::with_effective_and_activating(562, 138),
+            StakeActivationStatus::with_effective(700),
+            StakeActivationStatus::with_deactivating(700),
+            StakeActivationStatus::with_deactivating(275),
             StakeActivationStatus::default(),
         ];
         let expected_staking_status_transition_base = vec![
-            StakeActivationStatus::activating(0, 700),
-            StakeActivationStatus::activating(250, 450),
-            StakeActivationStatus::activating(562, 138 + 1), // +1 is needed for rounding
-            StakeActivationStatus::fully_active(700),
-            StakeActivationStatus::deactivating(700),
-            StakeActivationStatus::deactivating(275 + 1), // +1 is needed for rounding
+            StakeActivationStatus::with_effective_and_activating(0, 700),
+            StakeActivationStatus::with_effective_and_activating(250, 450),
+            StakeActivationStatus::with_effective_and_activating(562, 138 + 1), // +1 is needed for rounding
+            StakeActivationStatus::with_effective(700),
+            StakeActivationStatus::with_deactivating(700),
+            StakeActivationStatus::with_deactivating(275 + 1), // +1 is needed for rounding
             StakeActivationStatus::default(),
         ];
 

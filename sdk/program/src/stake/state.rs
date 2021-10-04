@@ -361,13 +361,16 @@ impl Delegation {
         if target_epoch < self.deactivation_epoch {
             // not deactivated
             if activating_stake == 0 {
-                StakeActivationStatus::fully_active(effective_stake)
+                StakeActivationStatus::with_effective(effective_stake)
             } else {
-                StakeActivationStatus::activating(effective_stake, activating_stake)
+                StakeActivationStatus::with_effective_and_activating(
+                    effective_stake,
+                    activating_stake,
+                )
             }
         } else if target_epoch == self.deactivation_epoch {
             // can only deactivate what's activated
-            StakeActivationStatus::deactivating(effective_stake)
+            StakeActivationStatus::with_deactivating(effective_stake)
         } else if let Some((history, mut prev_epoch, mut prev_cluster_stake)) =
             history.and_then(|history| {
                 history
@@ -424,7 +427,7 @@ impl Delegation {
             }
 
             // deactivating stake should equal to all of currently remaining effective stake
-            StakeActivationStatus::deactivating(current_effective_stake)
+            StakeActivationStatus::with_deactivating(current_effective_stake)
         } else {
             // no history or I've dropped out of history, so assume fully deactivated
             StakeActivationStatus::default()
