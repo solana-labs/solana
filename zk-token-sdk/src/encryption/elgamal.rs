@@ -23,6 +23,7 @@ pub struct ElGamal;
 impl ElGamal {
     /// Generates the public and secret keys for ElGamal encryption.
     #[cfg(not(target_arch = "bpf"))]
+    #[allow(clippy::new_ret_no_self)]
     pub fn new() -> (ElGamalPubkey, ElGamalSecretKey) {
         ElGamal::with(&mut OsRng) // using OsRng for now
     }
