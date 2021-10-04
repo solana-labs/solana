@@ -276,7 +276,7 @@ impl PedersenDecHandle {
     }
 
     /// Maps a decryption token and Pedersen commitment to ElGamal ciphertext
-    pub fn to_elgamal_ctxt(self, comm: PedersenComm) -> ElGamalCiphertext {
+    pub fn to_elgamal_ciphertext(self, comm: PedersenComm) -> ElGamalCiphertext {
         ElGamalCiphertext {
             message_comm: comm,
             decrypt_handle: self,

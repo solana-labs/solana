@@ -382,8 +382,8 @@ mod tests {
         let decrypt_handle_1 = pk_1.gen_decrypt_handle(&open);
         let decrypt_handle_2 = pk_2.gen_decrypt_handle(&open);
 
-        let ct_1 = decrypt_handle_1.to_elgamal_ctxt(comm);
-        let ct_2 = decrypt_handle_2.to_elgamal_ctxt(comm);
+        let ct_1 = decrypt_handle_1.to_elgamal_ciphertext(comm);
+        let ct_2 = decrypt_handle_2.to_elgamal_ciphertext(comm);
 
         let expected_instance = DiscreteLog {
             generator: PedersenBase::default().G,
