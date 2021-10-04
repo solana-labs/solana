@@ -26,9 +26,12 @@ use {
 
 /// Just a grouping struct for the data required for the two transfer instructions. It is
 /// convenient to generate the two components jointly as they share common components.
+#[derive(Clone, Copy, Pod, Zeroable)]
+#[repr(C)]
 pub struct TransferData {
     pub range_proof: TransferRangeProofData,
     pub validity_proof: TransferValidityProofData,
+    ephemeral_state: TransferEphemeralState, // 128 bytes
 }
 
 #[cfg(not(target_arch = "bpf"))]
@@ -116,7 +119,6 @@ impl TransferData {
         let range_proof = TransferRangeProofData {
             amount_comms,
             proof: transfer_proofs.range_proof,
-            ephemeral_state,
         };
 
         let validity_proof = TransferValidityProofData {
@@ -125,12 +127,12 @@ impl TransferData {
             transfer_public_keys,
             new_spendable_ct: new_spendable_ct.into(),
             proof: transfer_proofs.validity_proof,
-            ephemeral_state,
         };
 
         TransferData {
             range_proof,
             validity_proof,
+            ephemeral_state,
         }
     }
 
@@ -173,6 +175,14 @@ impl TransferData {
     }
 }
 
+#[cfg(not(target_arch = "bpf"))]
+impl Verifiable for TransferData {
+    fn verify(&self) -> Result<(), ProofError> {
+        self.range_proof.verify(&self.ephemeral_state)?;
+        self.validity_proof.verify(&self.ephemeral_state)
+    }
+}
+
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct TransferRangeProofData {
@@ -184,27 +194,24 @@ pub struct TransferRangeProofData {
     ///      64-bit positive number)
     ///   2. the transfer amount is a 64-bit positive number
     pub proof: pod::RangeProof128, // 736 bytes
-
-    /// Ephemeral state between the two transfer instruction data
-    pub ephemeral_state: TransferEphemeralState, // 128 bytes
 }
 
 #[cfg(not(target_arch = "bpf"))]
-impl Verifiable for TransferRangeProofData {
-    fn verify(&self) -> Result<(), ProofError> {
+impl TransferRangeProofData {
+    fn verify(&self, ephemeral_state: &TransferEphemeralState) -> Result<(), ProofError> {
         let mut transcript = Transcript::new(b"TransferRangeProof");
 
         // standard range proof verification
         let proof: RangeProof = self.proof.try_into()?;
         proof.verify_with(
             vec![
-                &self.ephemeral_state.spendable_comm_verification.into(),
+                &ephemeral_state.spendable_comm_verification.into(),
                 &self.amount_comms.lo.into(),
                 &self.amount_comms.hi.into(),
             ],
             vec![64_usize, 32_usize, 32_usize],
-            Some(self.ephemeral_state.x.into()),
-            Some(self.ephemeral_state.z.into()),
+            Some(ephemeral_state.x.into()),
+            Some(ephemeral_state.z.into()),
             &mut transcript,
         )
     }
@@ -227,9 +234,6 @@ pub struct TransferValidityProofData {
 
     /// Proof that certifies that the decryption handles are generated correctly
     pub proof: ValidityProof, // 160 bytes
-
-    /// Ephemeral state between the two transfer instruction data
-    pub ephemeral_state: TransferEphemeralState, // 128 bytes
 }
 
 /// The joint data that is shared between the two transfer instructions.
@@ -246,14 +250,14 @@ pub struct TransferEphemeralState {
 }
 
 #[cfg(not(target_arch = "bpf"))]
-impl Verifiable for TransferValidityProofData {
-    fn verify(&self) -> Result<(), ProofError> {
+impl TransferValidityProofData {
+    fn verify(&self, ephemeral_state: &TransferEphemeralState) -> Result<(), ProofError> {
         self.proof.verify(
             &self.new_spendable_ct.try_into()?,
             &self.decryption_handles_lo,
             &self.decryption_handles_hi,
             &self.transfer_public_keys,
-            &self.ephemeral_state,
+            ephemeral_state,
         )
     }
 }
@@ -576,11 +580,7 @@ mod test {
             auditor_pk,
         );
 
-        // verify range proof
-        assert!(transfer_data.range_proof.verify().is_ok());
-
-        // verify ciphertext validity proof
-        assert!(transfer_data.validity_proof.verify().is_ok());
+        assert!(transfer_data.verify().is_ok());
     }
 
     #[test]
