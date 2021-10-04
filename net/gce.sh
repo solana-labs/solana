@@ -646,7 +646,8 @@ EOF
 }
 
 delete() {
-  $metricsWriteDatapoint "testnet-deploy net-delete-begin=1"
+  e=$($metricsWriteDatapoint "testnet-deploy net-delete-begin=1")
+  echo "Delete begin: $e code: $?"
 
   case $cloudProvider in
     gce | ec2 | azure)
@@ -682,7 +683,8 @@ delete() {
     rm -f "$configFile"
   fi
 
-  $metricsWriteDatapoint "testnet-deploy net-delete-complete=1"
+  e=$($metricsWriteDatapoint "testnet-deploy net-delete-complete=1")
+  echo "Delete end: $e code: $?"
 }
 
 create_error_cleanup() {

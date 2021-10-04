@@ -7,4 +7,4 @@ set -ex
 [[ $(uname) = Linux ]] || exit 1
 [[ $USER = root ]] || exit 1
 
-apt-get --assume-yes install iftop
+apt-get --assume-yes install iftop net-tools
