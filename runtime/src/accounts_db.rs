@@ -5857,9 +5857,10 @@ impl AccountsDb {
                     .into_par_iter()
                     .map(|store| {
                         let accounts = store.all_accounts();
+                        let slot = store.slot();
                         accounts
                             .into_iter()
-                            .map(|account| (store.slot(), account.meta.pubkey))
+                            .map(|account| (slot, account.meta.pubkey))
                             .collect::<HashSet<(Slot, Pubkey)>>()
                     })
                     .reduce(HashSet::new, |mut reduced, store_pubkeys| {
