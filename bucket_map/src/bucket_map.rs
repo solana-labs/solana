@@ -1,17 +1,14 @@
 //! BucketMap is a mostly contention free concurrent map backed by MmapMut
 
-use crate::bucket::Bucket;
-use crate::bucket_item::BucketItem;
+use crate::bucket_api::BucketApi;
 use crate::bucket_stats::BucketMapStats;
 use crate::{MaxSearch, RefCount};
 use solana_sdk::pubkey::Pubkey;
 use std::convert::TryInto;
 use std::fmt::Debug;
 use std::fs;
-use std::ops::RangeBounds;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::{RwLock, RwLockWriteGuard};
 use tempfile::TempDir;
 
 #[derive(Debug, Default, Clone)]
@@ -33,10 +30,9 @@ impl BucketMapConfig {
 }
 
 pub struct BucketMap<T: Clone + Copy + Debug> {
-    buckets: Vec<RwLock<Option<Bucket<T>>>>,
+    buckets: Vec<Arc<BucketApi<T>>>,
     drives: Arc<Vec<PathBuf>>,
     max_buckets_pow2: u8,
-    max_search: MaxSearch,
     pub stats: Arc<BucketMapStats>,
     pub temp_dir: Option<TempDir>,
 }
@@ -71,8 +67,6 @@ impl<T: Clone + Copy + Debug> BucketMap<T> {
             config.max_buckets.is_power_of_two(),
             "Max number of buckets must be a power of two"
         );
-        let mut buckets = Vec::with_capacity(config.max_buckets);
-        buckets.resize_with(config.max_buckets, || RwLock::new(None));
         let stats = Arc::new(BucketMapStats::default());
         // this should be <= 1 << DEFAULT_CAPACITY or we end up searching the same items over and over - probably not a big deal since it is so small anyway
         const MAX_SEARCH: MaxSearch = 32;
@@ -88,6 +82,15 @@ impl<T: Clone + Copy + Debug> BucketMap<T> {
         });
         let drives = Arc::new(drives);
 
+        let mut buckets = Vec::with_capacity(config.max_buckets);
+        buckets.resize_with(config.max_buckets, || {
+            Arc::new(BucketApi::new(
+                Arc::clone(&drives),
+                max_search,
+                Arc::clone(&stats),
+            ))
+        });
+
         // A simple log2 function that is correct if x is a power of two
         let log2 = |x: usize| usize::BITS - x.leading_zeros() - 1;
 
@@ -96,7 +99,6 @@ impl<T: Clone + Copy + Debug> BucketMap<T> {
             drives,
             max_buckets_pow2: log2(config.max_buckets) as u8,
             stats,
-            max_search,
             temp_dir,
         }
     }
@@ -112,92 +114,24 @@ impl<T: Clone + Copy + Debug> BucketMap<T> {
         self.buckets.len()
     }
 
-    pub fn bucket_len(&self, ix: usize) -> u64 {
-        self.buckets[ix]
-            .read()
-            .unwrap()
-            .as_ref()
-            .map(|bucket| bucket.bucket_len())
-            .unwrap_or_default()
-    }
-
-    /// Get the items for bucket `ix` in `range`
-    pub fn items_in_range<R>(&self, ix: usize, range: &Option<&R>) -> Vec<BucketItem<T>>
-    where
-        R: RangeBounds<Pubkey>,
-    {
-        self.buckets[ix]
-            .read()
-            .unwrap()
-            .as_ref()
-            .map(|bucket| bucket.items_in_range(range))
-            .unwrap_or_default()
-    }
-
-    /// Get the Pubkeys for bucket `ix`
-    pub fn keys(&self, ix: usize) -> Vec<Pubkey> {
-        self.buckets[ix]
-            .read()
-            .unwrap()
-            .as_ref()
-            .map_or_else(Vec::default, |bucket| bucket.keys())
-    }
-
     /// Get the values for Pubkey `key`
     pub fn read_value(&self, key: &Pubkey) -> Option<(Vec<T>, RefCount)> {
-        let ix = self.bucket_ix(key);
-        self.buckets[ix]
-            .read()
-            .unwrap()
-            .as_ref()
-            .and_then(|bucket| {
-                bucket
-                    .read_value(key)
-                    .map(|(value, ref_count)| (value.to_vec(), ref_count))
-            })
+        self.get_bucket(key).read_value(key)
     }
 
     /// Delete the Pubkey `key`
     pub fn delete_key(&self, key: &Pubkey) {
-        let ix = self.bucket_ix(key);
-        if let Some(bucket) = self.buckets[ix].write().unwrap().as_mut() {
-            bucket.delete_key(key);
-        }
+        self.get_bucket(key).delete_key(key);
     }
 
     /// Update Pubkey `key`'s value with 'value'
-    pub fn insert(&self, ix: usize, key: &Pubkey, value: (&[T], RefCount)) {
-        let mut bucket = self.get_bucket(ix);
-        bucket.as_mut().unwrap().insert(key, value)
-    }
-
-    fn get_bucket(&self, ix: usize) -> RwLockWriteGuard<Option<Bucket<T>>> {
-        let mut bucket = self.buckets[ix].write().unwrap();
-        if bucket.is_none() {
-            *bucket = Some(Bucket::new(
-                Arc::clone(&self.drives),
-                self.max_search,
-                Arc::clone(&self.stats),
-            ));
-        }
-        bucket
+    pub fn insert(&self, key: &Pubkey, value: (&[T], RefCount)) {
+        self.get_bucket(key).insert(key, value)
     }
 
     /// Update Pubkey `key`'s value with 'value'
-    pub fn try_insert(
-        &self,
-        ix: usize,
-        key: &Pubkey,
-        value: (&[T], RefCount),
-    ) -> Result<(), BucketMapError> {
-        let mut bucket = self.get_bucket(ix);
-        bucket.as_mut().unwrap().try_write(key, value.0, value.1)
-    }
-
-    /// if err is a grow error, then grow the appropriate piece
-    pub fn grow(&self, ix: usize, err: BucketMapError) {
-        let mut bucket = self.get_bucket(ix);
-        bucket.as_mut().unwrap().grow(err);
+    pub fn try_insert(&self, key: &Pubkey, value: (&[T], RefCount)) -> Result<(), BucketMapError> {
+        self.get_bucket(key).try_write(key, value)
     }
 
     /// Update Pubkey `key`'s value with function `updatefn`
@@ -205,9 +139,15 @@ impl<T: Clone + Copy + Debug> BucketMap<T> {
     where
         F: Fn(Option<(&[T], RefCount)>) -> Option<(Vec<T>, RefCount)>,
     {
-        let ix = self.bucket_ix(key);
-        let mut bucket = self.get_bucket(ix);
-        bucket.as_mut().unwrap().update(key, updatefn)
+        self.get_bucket(key).update(key, updatefn)
+    }
+
+    pub fn get_bucket(&self, key: &Pubkey) -> &Arc<BucketApi<T>> {
+        self.get_bucket_from_index(self.bucket_ix(key))
+    }
+
+    pub fn get_bucket_from_index(&self, ix: usize) -> &Arc<BucketApi<T>> {
+        &self.buckets[ix]
     }
 
     /// Get the bucket index for Pubkey `key`
@@ -223,15 +163,15 @@ impl<T: Clone + Copy + Debug> BucketMap<T> {
     /// Increment the refcount for Pubkey `key`
     pub fn addref(&self, key: &Pubkey) -> Option<RefCount> {
         let ix = self.bucket_ix(key);
-        let mut bucket = self.buckets[ix].write().unwrap();
-        bucket.as_mut()?.addref(key)
+        let bucket = &self.buckets[ix];
+        bucket.addref(key)
     }
 
     /// Decrement the refcount for Pubkey `key`
     pub fn unref(&self, key: &Pubkey) -> Option<RefCount> {
         let ix = self.bucket_ix(key);
-        let mut bucket = self.buckets[ix].write().unwrap();
-        bucket.as_mut()?.unref(key)
+        let bucket = &self.buckets[ix];
+        bucket.unref(key)
     }
 }
 
@@ -247,6 +187,7 @@ mod tests {
     use rand::thread_rng;
     use rand::Rng;
     use std::collections::HashMap;
+    use std::sync::RwLock;
 
     #[test]
     fn bucket_map_test_insert() {
@@ -263,21 +204,21 @@ mod tests {
             let key = Pubkey::new_unique();
             let config = BucketMapConfig::new(1 << 1);
             let index = BucketMap::new(config);
-            let ix = index.bucket_ix(&key);
+            let bucket = index.get_bucket(&key);
             if pass == 0 {
-                index.insert(ix, &key, (&[0], 0));
+                index.insert(&key, (&[0], 0));
             } else {
-                let result = index.try_insert(ix, &key, (&[0], 0));
+                let result = index.try_insert(&key, (&[0], 0));
                 assert!(result.is_err());
                 assert_eq!(index.read_value(&key), None);
                 if pass == 2 {
                     // another call to try insert again - should still return an error
-                    let result = index.try_insert(ix, &key, (&[0], 0));
+                    let result = index.try_insert(&key, (&[0], 0));
                     assert!(result.is_err());
                     assert_eq!(index.read_value(&key), None);
                 }
-                index.grow(ix, result.unwrap_err());
-                let result = index.try_insert(ix, &key, (&[0], 0));
+                bucket.grow(result.unwrap_err());
+                let result = index.try_insert(&key, (&[0], 0));
                 assert!(result.is_ok());
             }
             assert_eq!(index.read_value(&key), Some((vec![0], 0)));
@@ -289,9 +230,9 @@ mod tests {
         let key = Pubkey::new_unique();
         let config = BucketMapConfig::new(1 << 1);
         let index = BucketMap::new(config);
-        index.insert(index.bucket_ix(&key), &key, (&[0], 0));
+        index.insert(&key, (&[0], 0));
         assert_eq!(index.read_value(&key), Some((vec![0], 0)));
-        index.insert(index.bucket_ix(&key), &key, (&[1], 0));
+        index.insert(&key, (&[1], 0));
         assert_eq!(index.read_value(&key), Some((vec![1], 0)));
     }
 
@@ -465,8 +406,8 @@ mod tests {
                     let mut r = vec![];
                     for bin in 0..map.num_buckets() {
                         r.append(
-                            &mut map
-                                .items_in_range(bin, &None::<&std::ops::RangeInclusive<Pubkey>>),
+                            &mut map.buckets[bin]
+                                .items_in_range(&None::<&std::ops::RangeInclusive<Pubkey>>),
                         );
                     }
                     r
@@ -505,7 +446,7 @@ mod tests {
                 let insert = thread_rng().gen_range(0, 2) == 0;
                 maps.iter().for_each(|map| {
                     if insert {
-                        map.insert(map.bucket_ix(&k), &k, (&v.0, v.1))
+                        map.insert(&k, (&v.0, v.1))
                     } else {
                         map.update(&k, |current| {
                             assert!(current.is_none());
@@ -524,7 +465,7 @@ mod tests {
                     let insert = thread_rng().gen_range(0, 2) == 0;
                     maps.iter().for_each(|map| {
                         if insert {
-                            map.insert(map.bucket_ix(&k), &k, (&v, rc))
+                            map.insert(&k, (&v, rc))
                         } else {
                             map.update(&k, |current| {
                                 assert_eq!(current, v_old.map(|(v, rc)| (&v[..], *rc)), "{}", k);
