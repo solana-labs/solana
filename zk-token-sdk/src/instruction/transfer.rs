@@ -134,34 +134,38 @@ impl TransferData {
         }
     }
 
-    pub fn source_ciphertexts(&self) -> Result<(ElGamalCiphertext, ElGamalCiphertext), ProofError> {
+    pub fn source_ciphertexts(&self) -> Result<ElGamalCiphertext, ProofError> {
         let transfer_comms_lo: PedersenComm = self.range_proof.amount_comms.lo.try_into()?;
         let transfer_comms_hi: PedersenComm = self.range_proof.amount_comms.hi.try_into()?;
+        let transfer_comm = combine_u32_comms(transfer_comms_lo, transfer_comms_hi);
 
-        let decryption_handle_lo_a: PedersenDecHandle = self.validity_proof
-            .decryption_handles_lo.source.try_into()?;
-        let decryption_handle_hi_a: PedersenDecHandle = self.validity_proof
-            .decryption_handles_hi.source.try_into()?;
+        let decryption_handle_lo: PedersenDecHandle = self
+            .validity_proof
+            .decryption_handles_lo
+            .source
+            .try_into()?;
+        let decryption_handle_hi: PedersenDecHandle = self
+            .validity_proof
+            .decryption_handles_hi
+            .source
+            .try_into()?;
+        let decryption_handle = combine_u32_handles(decryption_handle_lo, decryption_handle_hi);
 
-        let ciphertext_lo = decryption_handle_lo_a.to_elgamal_ciphertext(transfer_comms_lo);
-        let ciphertext_hi = decryption_handle_hi_a.to_elgamal_ciphertext(transfer_comms_hi);
-
-        Ok((ciphertext_lo, ciphertext_hi))
+        Ok(decryption_handle.to_elgamal_ciphertext(transfer_comm))
     }
 
-    pub fn dest_ciphertexts(&self) -> Result<(ElGamalCiphertext, ElGamalCiphertext), ProofError> {
+    pub fn dest_ciphertexts(&self) -> Result<ElGamalCiphertext, ProofError> {
         let transfer_comms_lo: PedersenComm = self.range_proof.amount_comms.lo.try_into()?;
         let transfer_comms_hi: PedersenComm = self.range_proof.amount_comms.hi.try_into()?;
+        let transfer_comm = combine_u32_comms(transfer_comms_lo, transfer_comms_hi);
 
-        let decryption_handle_lo_a: PedersenDecHandle = self.validity_proof
-            .decryption_handles_lo.dest.try_into()?;
-        let decryption_handle_hi_a: PedersenDecHandle = self.validity_proof
-            .decryption_handles_hi.dest.try_into()?;
+        let decryption_handle_lo: PedersenDecHandle =
+            self.validity_proof.decryption_handles_lo.dest.try_into()?;
+        let decryption_handle_hi: PedersenDecHandle =
+            self.validity_proof.decryption_handles_hi.dest.try_into()?;
+        let decryption_handle = combine_u32_handles(decryption_handle_lo, decryption_handle_hi);
 
-        let ciphertext_lo = decryption_handle_lo_a.to_elgamal_ciphertext(transfer_comms_lo);
-        let ciphertext_hi = decryption_handle_hi_a.to_elgamal_ciphertext(transfer_comms_hi);
-
-        Ok((ciphertext_lo, ciphertext_hi))
+        Ok(decryption_handle.to_elgamal_ciphertext(transfer_comm))
     }
 }
 
@@ -536,8 +540,7 @@ pub fn combine_u32_handles(
 /*
 pub fn combine_u32_ciphertexts(ct_lo: ElGamalCiphertext, ct_hi: ElGamalCiphertext) -> ElGamalCiphertext {
     ct_lo + ct_hi * Scalar::from(TWO_32)
-}
-*/
+}*/
 
 #[cfg(test)]
 mod test {
@@ -603,12 +606,20 @@ mod test {
 
         let decryption_data = decode_u32_precomputation_for_G();
 
-        let (source_ciphertext_lo, source_ciphertext_hi) = transfer_data.source_ciphertexts().unwrap();
-        assert_eq!(source_ciphertext_lo.decrypt_u32_online(&source_sk, &decryption_data).unwrap(), 55_u32);
-        assert_eq!(source_ciphertext_hi.decrypt_u32_online(&source_sk, &decryption_data).unwrap(), 0_u32);
+        let source_ciphertext = transfer_data.source_ciphertexts().unwrap();
+        assert_eq!(
+            source_ciphertext
+                .decrypt_u32_online(&source_sk, &decryption_data)
+                .unwrap(),
+            55_u32
+        );
 
-        let (dest_ciphertext_lo, dest_ciphertext_hi) = transfer_data.dest_ciphertexts().unwrap();
-        assert_eq!(dest_ciphertext_lo.decrypt_u32_online(&dest_sk, &decryption_data).unwrap(), 55_u32);
-        assert_eq!(dest_ciphertext_hi.decrypt_u32_online(&dest_sk, &decryption_data).unwrap(), 0_u32);
+        let dest_ciphertext = transfer_data.dest_ciphertexts().unwrap();
+        assert_eq!(
+            dest_ciphertext
+                .decrypt_u32_online(&dest_sk, &decryption_data)
+                .unwrap(),
+            55_u32
+        );
     }
 }
