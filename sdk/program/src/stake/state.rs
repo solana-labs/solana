@@ -360,7 +360,11 @@ impl Delegation {
         // then de-activate some portion if necessary
         if target_epoch < self.deactivation_epoch {
             // not deactivated
-            StakeActivationStatus::activating(effective_stake, activating_stake)
+            if activating_stake == 0 {
+                StakeActivationStatus::fully_active(effective_stake)
+            } else {
+                StakeActivationStatus::activating(effective_stake, activating_stake)
+            }
         } else if target_epoch == self.deactivation_epoch {
             // can only deactivate what's activated
             StakeActivationStatus::deactivating(effective_stake)

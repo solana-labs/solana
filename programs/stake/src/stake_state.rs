@@ -1824,7 +1824,6 @@ mod tests {
                 stake.deactivation_epoch + 1,
                 Some(&stake_history),
             ),
-            // says "I'm still waiting for deactivation"
             StakeActivationStatus::deactivating(stake.stake),
         );
 
