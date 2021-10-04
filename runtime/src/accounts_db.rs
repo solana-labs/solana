@@ -5804,12 +5804,23 @@ impl AccountsDb {
         purged_stored_account_slots: Option<&mut AccountSlots>,
     ) {
         if let Some(purged_stored_account_slots) = purged_stored_account_slots {
+            let len = purged_stored_account_slots.len();
+            // we could build a higher level function in accounts_index to group by bin
+            const BATCH_SIZE: usize = 10_000;
+            let batches = 1 + (len / BATCH_SIZE);
+            self.thread_pool_clean.install(|| {
+                (0..batches).into_par_iter().for_each(|batch| {
+                    let skip = batch * BATCH_SIZE;
+                    for (_slot, pubkey) in purged_slot_pubkeys.iter().skip(skip).take(BATCH_SIZE) {
+                        self.accounts_index.unref_from_storage(pubkey);
+                    }
+                })
+            });
             for (slot, pubkey) in purged_slot_pubkeys {
                 purged_stored_account_slots
                     .entry(pubkey)
                     .or_default()
                     .insert(slot);
-                self.accounts_index.unref_from_storage(&pubkey);
             }
         }
 
