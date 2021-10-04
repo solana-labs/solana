@@ -41,25 +41,15 @@ pub enum ProofInstruction {
     ///
     VerifyWithdraw,
 
-    /// Verify a `TransferRangeProofData` struct
+    /// Verify a `TransferData` struct
     ///
     /// Accounts expected by this instruction:
     ///   None
     ///
     /// Data expected by this instruction:
-    ///   `TransferRangeProofData`
+    ///   `TransferData`
     ///
-    VerifyTransferRangeProofData,
-
-    /// Verify a `TransferValidityProofData` struct
-    ///
-    /// Accounts expected by this instruction:
-    ///   None
-    ///
-    /// Data expected by this instruction:
-    ///   `TransferValidityProofData`
-    ///
-    VerifyTransferValidityProofData,
+    VerifyTransfer,
 }
 
 impl ProofInstruction {
