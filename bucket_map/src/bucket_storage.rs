@@ -85,10 +85,10 @@ impl BucketStorage {
         elem_size: u64,
         capacity_pow2: u8,
         max_search: MaxSearch,
-        mut stats: Arc<BucketStats>,
+        stats: Arc<BucketStats>,
     ) -> Self {
         let cell_size = elem_size * num_elems + std::mem::size_of::<Header>() as u64;
-        let (mmap, path) = Self::new_map(&drives, cell_size as usize, capacity_pow2, &mut stats);
+        let (mmap, path) = Self::new_map(&drives, cell_size as usize, capacity_pow2, &stats);
         Self {
             path,
             mmap,
@@ -249,7 +249,7 @@ impl BucketStorage {
         drives: &[PathBuf],
         cell_size: usize,
         capacity_pow2: u8,
-        stats: &mut Arc<BucketStats>,
+        stats: &BucketStats,
     ) -> (MmapMut, PathBuf) {
         let mut measure_new_file = Measure::start("measure_new_file");
         let capacity = 1u64 << capacity_pow2;
@@ -311,7 +311,7 @@ impl BucketStorage {
             &self.drives,
             self.cell_size as usize,
             self.capacity_pow2 + increment,
-            &mut self.stats,
+            &self.stats,
         );
         (0..old_cap as usize).into_iter().for_each(|i| {
             let old_ix = i * self.cell_size as usize;
