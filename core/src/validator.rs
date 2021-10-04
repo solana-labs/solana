@@ -331,7 +331,7 @@ impl Validator {
                 bank_notification_senders.push(confirmed_bank_sender);
                 let result = AccountsDbPluginService::new(
                     confirmed_bank_receiver,
-                    &accountsdb_plugin_config_files,
+                    accountsdb_plugin_config_files,
                 );
                 match result {
                     Ok(accountsdb_plugin_service) => Some(accountsdb_plugin_service),
