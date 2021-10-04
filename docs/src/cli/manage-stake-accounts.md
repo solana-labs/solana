@@ -22,6 +22,10 @@ solana-stake-accounts new <FUNDING_KEYPAIR> <BASE_KEYPAIR> <AMOUNT> \
     --fee-payer <KEYPAIR>
 ```
 
+As with [`create-stake-account`](delegate-stake#create-a-stake-account),
+`<AMOUNT>` tokens are transferred from the account at the `<FUNDING_KEYPAIR>`
+to a new stake account at `<BASE_KEYPAIR>`.
+
 ### Count accounts
 
 Count the number of derived accounts:
