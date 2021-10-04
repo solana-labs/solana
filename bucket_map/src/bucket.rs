@@ -201,7 +201,6 @@ impl<T: Clone + Copy> Bucket<T> {
         let best_fit_bucket = IndexEntry::data_bucket_from_num_slots(data.len() as u64);
         if self.data.get(best_fit_bucket as usize).is_none() {
             // fail early if the data bucket we need doesn't exist - we don't want the index entry partially allocated
-            //error!("resizing because missing bucket");
             return Err(BucketMapError::DataNoSpace((best_fit_bucket, 0)));
         }
         let index_entry = self.find_entry_mut(key);
@@ -276,7 +275,7 @@ impl<T: Clone + Copy> Bucket<T> {
 
     pub fn grow_index(&mut self, sz: u8) {
         if self.index.capacity_pow2 == sz {
-            let mut m = Measure::start("");
+            let mut m = Measure::start("grow_index");
             //debug!("GROW_INDEX: {}", sz);
             let increment = 1;
             for i in increment.. {
