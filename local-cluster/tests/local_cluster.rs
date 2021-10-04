@@ -20,7 +20,7 @@ use {
         consensus::{Tower, SWITCH_FORK_THRESHOLD, VOTE_THRESHOLD_DEPTH},
         optimistic_confirmation_verifier::OptimisticConfirmationVerifier,
         replay_stage::DUPLICATE_THRESHOLD,
-        tower_storage::FileTowerStorage,
+        tower_storage::{FileTowerStorage, SavedTower, TowerStorage},
         validator::ValidatorConfig,
     },
     solana_download_utils::download_snapshot_archive,
@@ -3174,6 +3174,12 @@ fn copy_blocks(end_slot: Slot, source: &Blockstore, dest: &Blockstore) {
     }
 }
 
+fn save_tower(tower_path: &Path, tower: &Tower, node_keypair: &Keypair) {
+    let file_tower_storage = FileTowerStorage::new(tower_path.to_path_buf());
+    let saved_tower = SavedTower::new(tower, node_keypair).unwrap();
+    file_tower_storage.store(&saved_tower).unwrap();
+}
+
 fn restore_tower(tower_path: &Path, node_pubkey: &Pubkey) -> Option<Tower> {
     let file_tower_storage = FileTowerStorage::new(tower_path.to_path_buf());
 
@@ -3754,6 +3760,91 @@ fn test_optimistic_confirmation_violation_without_tower() {
 #[serial]
 fn test_run_test_load_program_accounts_root() {
     run_test_load_program_accounts(CommitmentConfig::finalized());
+}
+
+#[test]
+#[serial]
+fn test_restart_tower_rollback() {
+    // Test node crashing and failing to save its tower before restart
+    solana_logger::setup_with_default(RUST_LOG_FILTER);
+
+    // First set up the cluster with 4 nodes
+    let slots_per_epoch = 2048;
+    let node_stakes = vec![10000, 1];
+
+    let validator_strings = vec![
+        "28bN3xyvrP4E8LwEgtLjhnkb7cY4amQb6DrYAbAYjgRV4GAGgkVM2K7wnxnAS7WDneuavza7x21MiafLu1HkwQt4",
+        "2saHBBoTkLMmttmPQP8KfBkcCw45S5cwtV3wTdGCscRC8uxdgvHxpHiWXKx4LvJjNJtnNcbSv5NdheokFFqnNDt8",
+    ];
+
+    let validator_b_keypair = Arc::new(Keypair::from_base58_string(validator_strings[1]));
+    let validator_b_pubkey = validator_b_keypair.pubkey();
+
+    let validator_keys = validator_strings
+        .iter()
+        .map(|s| (Arc::new(Keypair::from_base58_string(s)), true))
+        .take(node_stakes.len())
+        .collect::<Vec<_>>();
+    let mut config = ClusterConfig {
+        cluster_lamports: 100_000,
+        node_stakes: node_stakes.clone(),
+        validator_configs: make_identical_validator_configs(
+            &ValidatorConfig::default(),
+            node_stakes.len(),
+        ),
+        validator_keys: Some(validator_keys),
+        slots_per_epoch,
+        stakers_slot_offset: slots_per_epoch,
+        skip_warmup_slots: true,
+        ..ClusterConfig::default()
+    };
+    let mut cluster = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
+
+    let val_b_ledger_path = cluster.ledger_path(&validator_b_pubkey);
+
+    let mut earlier_tower: Tower;
+    loop {
+        sleep(Duration::from_millis(1000));
+
+        // Grab the current saved tower
+        earlier_tower = restore_tower(&val_b_ledger_path, &validator_b_pubkey).unwrap();
+        if earlier_tower.last_voted_slot().unwrap_or(0) > 1 {
+            break;
+        }
+    }
+
+    let exited_validator_info: ClusterValidatorInfo;
+    loop {
+        sleep(Duration::from_millis(1000));
+
+        // Wait for second, lesser staked validator to make a root past the earlier_tower's
+        // latest vote slot, then exit that validator
+        if let Some(root) = root_in_tower(&val_b_ledger_path, &validator_b_pubkey) {
+            if root
+                > earlier_tower
+                    .last_voted_slot()
+                    .expect("Earlier tower must have at least one vote")
+            {
+                exited_validator_info = cluster.exit_node(&validator_b_pubkey);
+                break;
+            }
+        }
+    }
+
+    // Now rewrite the tower with the *earlier_tower*
+    save_tower(&val_b_ledger_path, &earlier_tower, &validator_b_keypair);
+    cluster.restart_node(
+        &validator_b_pubkey,
+        exited_validator_info,
+        SocketAddrSpace::Unspecified,
+    );
+
+    // Check this node is making new roots
+    cluster.check_for_new_roots(
+        20,
+        "test_restart_tower_rollback",
+        SocketAddrSpace::Unspecified,
+    );
 }
 
 #[test]
