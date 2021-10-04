@@ -44,13 +44,9 @@ pub fn process_instruction(
             ic_msg!(invoke_context, "VerifyWithdraw");
             verify::<WithdrawData>(input, invoke_context)
         }
-        ProofInstruction::VerifyTransferRangeProofData => {
-            ic_msg!(invoke_context, "VerifyTransferRangeProofData");
-            verify::<TransferRangeProofData>(input, invoke_context)
-        }
-        ProofInstruction::VerifyTransferValidityProofData => {
-            ic_msg!(invoke_context, "VerifyTransferValidityProofData");
-            verify::<TransferValidityProofData>(input, invoke_context)
+        ProofInstruction::VerifyTransfer => {
+            ic_msg!(invoke_context, "VerifyTransfer");
+            verify::<TransferData>(input, invoke_context)
         }
     }
 }
