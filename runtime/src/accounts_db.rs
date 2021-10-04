@@ -1182,6 +1182,8 @@ struct LatestAccountsIndexRootsStats {
     roots_range: AtomicU64,
     rooted_cleaned_count: AtomicUsize,
     unrooted_cleaned_count: AtomicUsize,
+    clean_unref_from_storage_us: AtomicU64,
+    clean_dead_slot_us: AtomicU64,
 }
 
 impl LatestAccountsIndexRootsStats {
@@ -1204,6 +1206,14 @@ impl LatestAccountsIndexRootsStats {
         );
         self.unrooted_cleaned_count.fetch_add(
             accounts_index_roots_stats.unrooted_cleaned_count,
+            Ordering::Relaxed,
+        );
+        self.clean_unref_from_storage_us.fetch_add(
+            accounts_index_roots_stats.clean_unref_from_storage_us,
+            Ordering::Relaxed,
+        );
+        self.clean_dead_slot_us.fetch_add(
+            accounts_index_roots_stats.clean_dead_slot_us,
             Ordering::Relaxed,
         );
     }
@@ -1239,6 +1249,16 @@ impl LatestAccountsIndexRootsStats {
             (
                 "rooted_cleaned_count",
                 self.rooted_cleaned_count.swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "clean_unref_from_storage_us",
+                self.clean_unref_from_storage_us.swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "clean_dead_slot_us",
+                self.clean_dead_slot_us.swap(0, Ordering::Relaxed) as i64,
                 i64
             ),
         );
@@ -5783,6 +5803,7 @@ impl AccountsDb {
         // Should only be `Some` for non-cached slots
         purged_stored_account_slots: Option<&mut AccountSlots>,
     ) {
+        let mut measure = Measure::start("remove_dead_slots_metadata-ms");
         self.clean_dead_slots_from_accounts_index(
             dead_slots_iter.clone(),
             purged_slot_pubkeys,
@@ -5794,6 +5815,8 @@ impl AccountsDb {
                 bank_hashes.remove(slot);
             }
         }
+        measure.stop();
+        inc_new_counter_info!("remove_dead_slots_metadata-ms", measure.as_ms() as usize);
     }
 
     fn clean_dead_slots_from_accounts_index<'a>(
@@ -5803,6 +5826,8 @@ impl AccountsDb {
         // Should only be `Some` for non-cached slots
         purged_stored_account_slots: Option<&mut AccountSlots>,
     ) {
+        let mut accounts_index_root_stats = AccountsIndexRootsStats::default();
+        let mut measure = Measure::start("unref_from_storage");
         if let Some(purged_stored_account_slots) = purged_stored_account_slots {
             let len = purged_stored_account_slots.len();
             // we could build a higher level function in accounts_index to group by bin
@@ -5823,8 +5848,10 @@ impl AccountsDb {
                     .insert(slot);
             }
         }
+        measure.stop();
+        accounts_index_root_stats.clean_unref_from_storage_us += measure.as_us();
 
-        let mut accounts_index_root_stats = AccountsIndexRootsStats::default();
+        let mut measure = Measure::start("clean_dead_slot");
         let mut rooted_cleaned_count = 0;
         let mut unrooted_cleaned_count = 0;
         let dead_slots: Vec<_> = dead_slots_iter
@@ -5838,6 +5865,8 @@ impl AccountsDb {
                 *slot
             })
             .collect();
+        measure.stop();
+        accounts_index_root_stats.clean_dead_slot_us += measure.as_us();
         info!("remove_dead_slots_metadata: slots {:?}", dead_slots);
 
         accounts_index_root_stats.rooted_cleaned_count += rooted_cleaned_count;
