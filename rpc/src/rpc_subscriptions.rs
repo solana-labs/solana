@@ -501,15 +501,22 @@ impl RpcSubscriptions {
         let t_cleanup = Builder::new()
             .name("solana-rpc-notifications".to_string())
             .spawn(move || {
-                Self::process_notifications(
-                    exit_clone,
-                    notifier,
-                    notification_receiver,
-                    subscriptions,
-                    bank_forks,
-                    block_commitment_cache,
-                    optimistically_confirmed_bank,
-                );
+                let pool = rayon::ThreadPoolBuilder::new()
+                    .num_threads(16) // TODO: config
+                    .thread_name(|i| format!("solana-rpcray-{}", i))
+                    .build()
+                    .unwrap();
+                pool.install(|| {
+                    Self::process_notifications(
+                        exit_clone,
+                        notifier,
+                        notification_receiver,
+                        subscriptions,
+                        bank_forks,
+                        block_commitment_cache,
+                        optimistically_confirmed_bank,
+                    )
+                });
             })
             .unwrap();
 
