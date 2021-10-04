@@ -133,6 +133,36 @@ impl TransferData {
             validity_proof,
         }
     }
+
+    pub fn source_ciphertexts(&self) -> Result<(ElGamalCiphertext, ElGamalCiphertext), ProofError> {
+        let transfer_comms_lo: PedersenComm = self.range_proof.amount_comms.lo.try_into()?;
+        let transfer_comms_hi: PedersenComm = self.range_proof.amount_comms.hi.try_into()?;
+
+        let decryption_handle_lo_a: PedersenDecHandle = self.validity_proof
+            .decryption_handles_lo.source.try_into()?;
+        let decryption_handle_hi_a: PedersenDecHandle = self.validity_proof
+            .decryption_handles_hi.source.try_into()?;
+
+        let ciphertext_lo = decryption_handle_lo_a.to_elgamal_ciphertext(transfer_comms_lo);
+        let ciphertext_hi = decryption_handle_hi_a.to_elgamal_ciphertext(transfer_comms_hi);
+
+        Ok((ciphertext_lo, ciphertext_hi))
+    }
+
+    pub fn dest_ciphertexts(&self) -> Result<(ElGamalCiphertext, ElGamalCiphertext), ProofError> {
+        let transfer_comms_lo: PedersenComm = self.range_proof.amount_comms.lo.try_into()?;
+        let transfer_comms_hi: PedersenComm = self.range_proof.amount_comms.hi.try_into()?;
+
+        let decryption_handle_lo_a: PedersenDecHandle = self.validity_proof
+            .decryption_handles_lo.dest.try_into()?;
+        let decryption_handle_hi_a: PedersenDecHandle = self.validity_proof
+            .decryption_handles_hi.dest.try_into()?;
+
+        let ciphertext_lo = decryption_handle_lo_a.to_elgamal_ciphertext(transfer_comms_lo);
+        let ciphertext_hi = decryption_handle_hi_a.to_elgamal_ciphertext(transfer_comms_hi);
+
+        Ok((ciphertext_lo, ciphertext_hi))
+    }
 }
 
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -512,7 +542,7 @@ pub fn combine_u32_ciphertexts(ct_lo: ElGamalCiphertext, ct_hi: ElGamalCiphertex
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::encryption::elgamal::ElGamal;
+    use crate::encryption::{dlog::decode_u32_precomputation_for_G, elgamal::ElGamal};
 
     #[test]
     fn test_transfer_correctness() {
@@ -544,5 +574,41 @@ mod test {
 
         // verify ciphertext validity proof
         assert!(transfer_data.validity_proof.verify().is_ok());
+    }
+
+    #[test]
+    fn test_source_dest_ciphertexts() {
+        // ElGamal keys for source, destination, and auditor accounts
+        let (source_pk, source_sk) = ElGamal::keygen();
+        let (dest_pk, dest_sk) = ElGamal::keygen();
+        let (auditor_pk, _) = ElGamal::keygen();
+
+        // create source account spendable ciphertext
+        let spendable_balance: u64 = 77;
+        let spendable_ct = source_pk.encrypt(spendable_balance);
+
+        // transfer amount
+        let transfer_amount: u64 = 55;
+
+        // create transfer data
+        let transfer_data = TransferData::new(
+            transfer_amount,
+            spendable_balance,
+            spendable_ct,
+            source_pk,
+            &source_sk,
+            dest_pk,
+            auditor_pk,
+        );
+
+        let decryption_data = decode_u32_precomputation_for_G();
+
+        let (source_ciphertext_lo, source_ciphertext_hi) = transfer_data.source_ciphertexts().unwrap();
+        assert_eq!(source_ciphertext_lo.decrypt_u32_online(&source_sk, &decryption_data).unwrap(), 55_u32);
+        assert_eq!(source_ciphertext_hi.decrypt_u32_online(&source_sk, &decryption_data).unwrap(), 0_u32);
+
+        let (dest_ciphertext_lo, dest_ciphertext_hi) = transfer_data.dest_ciphertexts().unwrap();
+        assert_eq!(dest_ciphertext_lo.decrypt_u32_online(&dest_sk, &decryption_data).unwrap(), 55_u32);
+        assert_eq!(dest_ciphertext_hi.decrypt_u32_online(&dest_sk, &decryption_data).unwrap(), 0_u32);
     }
 }
