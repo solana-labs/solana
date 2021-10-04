@@ -196,7 +196,9 @@ function MintAccountCard({
             <tr>
               <td>Max Supply</td>
               <td className="text-lg-right">
-                {nftData.editionData.masterEdition.maxSupply?.toNumber()}
+                {nftData.editionData.masterEdition.maxSupply?.toNumber() === 0
+                  ? 1
+                  : nftData.editionData.masterEdition.maxSupply?.toNumber()}
               </td>
             </tr>
           )}
