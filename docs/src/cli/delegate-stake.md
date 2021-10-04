@@ -1,6 +1,10 @@
 ---
-title: Delegate Stake
+title: Staking
 ---
+For an overview of staking, read first the
+[Staking and Inflation FAQ](https://solana.com/staking).
+
+------
 
 After you have [received SOL](transfer-tokens.md), you might consider putting
 it to use by delegating _stake_ to a validator. Stake is what we call tokens
