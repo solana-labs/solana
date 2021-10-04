@@ -218,8 +218,8 @@ mod test {
 
     #[test]
     fn test_update_account_public_key_correctness() {
-        let (current_pk, current_sk) = ElGamal::keygen();
-        let (new_pk, new_sk) = ElGamal::keygen();
+        let (current_pk, current_sk) = ElGamal::new();
+        let (new_pk, new_sk) = ElGamal::new();
 
         // If current_ct and new_ct encrypt same values, then the proof verification should succeed
         let balance: u64 = 77;

@@ -23,15 +23,15 @@ pub struct ElGamal;
 impl ElGamal {
     /// Generates the public and secret keys for ElGamal encryption.
     #[cfg(not(target_arch = "bpf"))]
-    pub fn keygen() -> (ElGamalPubkey, ElGamalSecretKey) {
-        ElGamal::keygen_with(&mut OsRng) // using OsRng for now
+    pub fn new() -> (ElGamalPubkey, ElGamalSecretKey) {
+        ElGamal::with(&mut OsRng) // using OsRng for now
     }
 
     /// On input a randomness generator, the function generates the public and
     /// secret keys for ElGamal encryption.
     #[cfg(not(target_arch = "bpf"))]
     #[allow(non_snake_case)]
-    pub fn keygen_with<T: RngCore + CryptoRng>(rng: &mut T) -> (ElGamalPubkey, ElGamalSecretKey) {
+    pub fn with<T: RngCore + CryptoRng>(rng: &mut T) -> (ElGamalPubkey, ElGamalSecretKey) {
         // sample a non-zero scalar
         let mut s: Scalar;
         loop {
@@ -356,7 +356,7 @@ mod tests {
 
     #[test]
     fn test_encrypt_decrypt_correctness() {
-        let (pk, sk) = ElGamal::keygen();
+        let (pk, sk) = ElGamal::new();
         let msg: u32 = 57;
         let ct = ElGamal::encrypt(&pk, msg);
 
@@ -373,8 +373,8 @@ mod tests {
 
     #[test]
     fn test_decrypt_handle() {
-        let (pk_1, sk_1) = ElGamal::keygen();
-        let (pk_2, sk_2) = ElGamal::keygen();
+        let (pk_1, sk_1) = ElGamal::new();
+        let (pk_2, sk_2) = ElGamal::new();
 
         let msg: u32 = 77;
         let (comm, open) = Pedersen::commit(msg);
@@ -400,7 +400,7 @@ mod tests {
 
     #[test]
     fn test_homomorphic_addition() {
-        let (pk, _) = ElGamal::keygen();
+        let (pk, _) = ElGamal::new();
         let msg_0: u64 = 57;
         let msg_1: u64 = 77;
 
@@ -425,7 +425,7 @@ mod tests {
 
     #[test]
     fn test_homomorphic_subtraction() {
-        let (pk, _) = ElGamal::keygen();
+        let (pk, _) = ElGamal::new();
         let msg_0: u64 = 77;
         let msg_1: u64 = 55;
 
@@ -450,7 +450,7 @@ mod tests {
 
     #[test]
     fn test_homomorphic_multiplication() {
-        let (pk, _) = ElGamal::keygen();
+        let (pk, _) = ElGamal::new();
         let msg_0: u64 = 57;
         let msg_1: u64 = 77;
 
@@ -466,7 +466,7 @@ mod tests {
 
     #[test]
     fn test_homomorphic_division() {
-        let (pk, _) = ElGamal::keygen();
+        let (pk, _) = ElGamal::new();
         let msg_0: u64 = 55;
         let msg_1: u64 = 5;
 
@@ -482,7 +482,7 @@ mod tests {
 
     #[test]
     fn test_serde_ciphertext() {
-        let (pk, _) = ElGamal::keygen();
+        let (pk, _) = ElGamal::new();
         let msg: u64 = 77;
         let ct = pk.encrypt(msg);
 
@@ -494,7 +494,7 @@ mod tests {
 
     #[test]
     fn test_serde_pubkey() {
-        let (pk, _) = ElGamal::keygen();
+        let (pk, _) = ElGamal::new();
 
         let encoded = bincode::serialize(&pk).unwrap();
         let decoded: ElGamalPubkey = bincode::deserialize(&encoded).unwrap();
@@ -504,7 +504,7 @@ mod tests {
 
     #[test]
     fn test_serde_secretkey() {
-        let (_, sk) = ElGamal::keygen();
+        let (_, sk) = ElGamal::new();
 
         let encoded = bincode::serialize(&sk).unwrap();
         let decoded: ElGamalSecretKey = bincode::deserialize(&encoded).unwrap();

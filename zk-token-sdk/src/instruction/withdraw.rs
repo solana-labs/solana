@@ -179,7 +179,7 @@ mod test {
     #[ignore]
     fn test_withdraw_correctness() {
         // generate and verify proof for the proper setting
-        let (source_pk, source_sk) = ElGamal::keygen();
+        let (source_pk, source_sk) = ElGamal::new();
 
         let current_balance: u64 = 77;
         let current_balance_ct = source_pk.encrypt(current_balance);
