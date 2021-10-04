@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::{RwLock, RwLockWriteGuard};
 
-type LockedBucket<T> = Arc<RwLock<Option<Bucket<T>>>>;
+type LockedBucket<T> = RwLock<Option<Bucket<T>>>;
 
 pub struct BucketApi<T: Clone + Copy> {
     drives: Arc<Vec<PathBuf>>,
@@ -30,7 +30,7 @@ impl<T: Clone + Copy> BucketApi<T> {
             drives,
             max_search,
             stats,
-            bucket: Arc::default(),
+            bucket: RwLock::default(),
         }
     }
 
