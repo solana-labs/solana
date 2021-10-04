@@ -549,7 +549,7 @@ pub fn combine_u32_ciphertexts(ct_lo: ElGamalCiphertext, ct_hi: ElGamalCiphertex
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::encryption::{dlog::decode_u32_precomputation_for_G, elgamal::ElGamal};
+    use crate::encryption::{discrete_log::decode_u32_precomputation_for_G, elgamal::ElGamal};
 
     #[test]
     fn test_transfer_correctness() {
@@ -586,9 +586,9 @@ mod test {
     #[test]
     fn test_source_dest_ciphertext() {
         // ElGamal keys for source, destination, and auditor accounts
-        let (source_pk, source_sk) = ElGamal::keygen();
-        let (dest_pk, dest_sk) = ElGamal::keygen();
-        let (auditor_pk, _) = ElGamal::keygen();
+        let (source_pk, source_sk) = ElGamal::new();
+        let (dest_pk, dest_sk) = ElGamal::new();
+        let (auditor_pk, _) = ElGamal::new();
 
         // create source account spendable ciphertext
         let spendable_balance: u64 = 77;
