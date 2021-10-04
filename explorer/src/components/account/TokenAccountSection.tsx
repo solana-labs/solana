@@ -192,11 +192,11 @@ function MintAccountCard({
               )}
             </td>
           </tr>
-          {nftData && (
+          {nftData?.editionData?.masterEdition?.maxSupply && (
             <tr>
               <td>Max Supply</td>
               <td className="text-lg-right">
-                {nftData.masterEdition.maxSupply?.toNumber() || 1}
+                {nftData.editionData.masterEdition.maxSupply?.toNumber()}
               </td>
             </tr>
           )}
@@ -245,7 +245,7 @@ function MintAccountCard({
             <tr>
               <td>Seller Fee</td>
               <td className="text-lg-right">
-                {nftData?.metadata.data.sellerFeeBasisPoints}
+                {`${nftData?.metadata.data.sellerFeeBasisPoints / 100}%`}
               </td>
             </tr>
           )}

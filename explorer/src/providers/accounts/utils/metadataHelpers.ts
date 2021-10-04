@@ -24,6 +24,11 @@ import { TOKEN_PROGRAM_ID } from "providers/accounts/tokens";
 
 let STORE: PublicKey | undefined;
 
+export type EditionData = {
+  masterEdition?: MasterEditionV1 | MasterEditionV2;
+  edition?: Edition;
+};
+
 export const programIds = () => {
   return {
     token: TOKEN_PROGRAM_ID,
@@ -60,17 +65,16 @@ export async function getMetadata(
   }
 }
 
-export async function getEditionData(pubkey: PublicKey, url: string) {
+export async function getEditionData(
+  pubkey: PublicKey,
+  url: string
+): Promise<EditionData | undefined> {
   const connection = new Connection(url, "confirmed");
   const editionKey = await generatePDA(pubkey, true /* addEditionToSeeds */);
   const accountInfo = await connection.getAccountInfo(toPublicKey(editionKey));
 
   if (accountInfo && accountInfo.data.length > 0) {
-    if (!isMetadataAccount(accountInfo))
-      return {
-        masterEdition: undefined,
-        edition: undefined,
-      };
+    if (!isMetadataAccount(accountInfo)) return;
 
     if (isMasterEditionAccount(accountInfo)) {
       return {
@@ -99,10 +103,7 @@ export async function getEditionData(pubkey: PublicKey, url: string) {
     }
   }
 
-  return {
-    masterEdition: undefined,
-    edition: undefined,
-  };
+  return;
 }
 
 async function generatePDA(

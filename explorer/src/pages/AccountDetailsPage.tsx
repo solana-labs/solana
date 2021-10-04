@@ -7,6 +7,7 @@ import {
   useAccountInfo,
   Account,
   ProgramData,
+  NFTData,
 } from "providers/accounts";
 import { StakeAccountSection } from "components/account/StakeAccountSection";
 import { TokenAccountSection } from "components/account/TokenAccountSection";
@@ -35,9 +36,10 @@ import { TransactionHistoryCard } from "components/account/history/TransactionHi
 import { TokenTransfersCard } from "components/account/history/TokenTransfersCard";
 import { TokenInstructionsCard } from "components/account/history/TokenInstructionsCard";
 import { RewardsCard } from "components/account/RewardsCard";
-import { Creator, Metadata } from "metaplex/classes";
+import { Creator } from "metaplex/classes";
 import { ArtContent } from "metaplex/Art/Art";
 import { InfoTooltip } from "components/common/InfoTooltip";
+import { EditionData } from "providers/accounts/utils/metadataHelpers";
 
 const IDENTICON_WIDTH = 64;
 
@@ -158,7 +160,7 @@ export function AccountHeader({
   const isNFT = isToken && data.nftData;
 
   if (isNFT) {
-    return <NFTHeader metadata={data.nftData!.metadata} address={address} />;
+    return <NFTHeader nftData={data.nftData!} address={address} />;
   }
 
   if (tokenDetails || isToken) {
@@ -201,12 +203,13 @@ export function AccountHeader({
 }
 
 export function NFTHeader({
-  metadata,
+  nftData,
   address,
 }: {
-  metadata: Metadata;
+  nftData: NFTData;
   address: string;
 }) {
+  const metadata = nftData.metadata;
   return (
     <div className="row align-items-begin">
       <div className="col-auto ml-2">
@@ -214,12 +217,15 @@ export function NFTHeader({
       </div>
 
       <div className="col mb-3 ml-n3 ml-md-n2 mt-3">
-        <h6 className="header-pretitle ml-1">NFT</h6>
-        <h2 className="header-title ml-1">
-          {metadata.data.name !== ""
-            ? metadata.data.name
-            : "No NFT name was found"}
-        </h2>
+        {<h6 className="header-pretitle ml-1">NFT</h6>}
+        <div className="d-flex align-items-center">
+          <h2 className="header-title ml-1 align-items-center">
+            {metadata.data.name !== ""
+              ? metadata.data.name
+              : "No NFT name was found"}
+          </h2>
+          {getEditionPill(nftData.editionData)}
+        </div>
         <h4 className="header-pretitle ml-1 mt-1">
           {metadata.data.symbol !== ""
             ? metadata.data.symbol
@@ -472,7 +478,7 @@ function getCreatorDropdownItems(creators: Creator[] | null) {
           Creator Address
         </span>
         <div className="d-flex text-monospace">
-          <span className="text-monospace">Share %</span>
+          <span className="text-monospace">Royalty</span>
           <InfoTooltip bottom text={shareTooltip} />
         </div>
       </div>
@@ -513,6 +519,23 @@ function getCreatorDropdownItems(creators: Creator[] | null) {
   return (
     <div className={"dropdown-item text-monospace"}>
       <div className="mr-3">No creators are associated with this NFT.</div>
+    </div>
+  );
+}
+
+function getEditionPill(editionData?: EditionData) {
+  const masterEdition = editionData?.masterEdition;
+  const edition = editionData?.edition;
+
+  return (
+    <div className={"d-inline-flex ml-2"}>
+      <span className="badge badge-pill badge-dark">{`${
+        edition && masterEdition
+          ? `Edition ${edition.edition.toNumber()} / ${masterEdition.supply.toNumber()}`
+          : masterEdition
+          ? "Master Edition"
+          : "No Master Edition Information"
+      }`}</span>
     </div>
   );
 }

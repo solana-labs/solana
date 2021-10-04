@@ -25,13 +25,12 @@ import {
   UpgradeableLoaderAccount,
 } from "validators/accounts/upgradeable-program";
 import { RewardsProvider } from "./rewards";
+import { Metadata } from "metaplex/classes";
 import {
-  Edition,
-  MasterEditionV1,
-  MasterEditionV2,
-  Metadata,
-} from "metaplex/classes";
-import { getEditionData, getMetadata } from "./utils/metadataHelpers";
+  EditionData,
+  getEditionData,
+  getMetadata,
+} from "./utils/metadataHelpers";
 export { useAccountHistory } from "./history";
 
 export type StakeProgramData = {
@@ -48,8 +47,7 @@ export type UpgradeableLoaderAccountData = {
 
 export type NFTData = {
   metadata: Metadata;
-  masterEdition: MasterEditionV1 | MasterEditionV2;
-  edition?: Edition;
+  editionData?: EditionData;
 };
 
 export type TokenProgramData = {
@@ -248,13 +246,8 @@ async function fetchAccountInfo(
                 const metadata = await getMetadata(pubkey, url);
                 if (metadata) {
                   // We have a valid Metadata account. Try and pull edition data.
-                  const { masterEdition, edition } = await getEditionData(
-                    pubkey,
-                    url
-                  );
-                  if (masterEdition) {
-                    nftData = { metadata, masterEdition, edition };
-                  }
+                  const editionData = await getEditionData(pubkey, url);
+                  nftData = { metadata, editionData };
                 }
               }
               data = {
