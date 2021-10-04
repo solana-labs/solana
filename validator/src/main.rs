@@ -1221,6 +1221,7 @@ pub fn main() {
                 .long("accountsdb-plugin-config")
                 .value_name("FILE")
                 .takes_value(true)
+                .multiple(true)
                 .hidden(true)
                 .help("Specify the configuration file for the AccountsDb plugin."),
         )
@@ -1973,9 +1974,16 @@ pub fn main() {
         None
     };
 
-    let accountsdb_plugin_config_file = matches
-        .value_of("accountsdb_plugin_config")
-        .map(PathBuf::from);
+    let accountsdb_plugin_config_files = if matches.is_present("accountsdb_plugin_config") {
+        Some(
+            values_t_or_exit!(matches, "accountsdb_plugin_config", String)
+                .into_iter()
+                .map(PathBuf::from)
+                .collect(),
+        )
+    } else {
+        None
+    };
 
     let mut validator_config = ValidatorConfig {
         require_tower: matches.is_present("require_tower"),
@@ -2018,7 +2026,7 @@ pub fn main() {
             rpc_scan_and_fix_roots: matches.is_present("rpc_scan_and_fix_roots"),
         },
         accountsdb_repl_service_config,
-        accountsdb_plugin_config_file,
+        accountsdb_plugin_config_files,
         rpc_addrs: value_t!(matches, "rpc_port", u16).ok().map(|rpc_port| {
             (
                 SocketAddr::new(rpc_bind_address, rpc_port),

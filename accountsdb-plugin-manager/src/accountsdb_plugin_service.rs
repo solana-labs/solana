@@ -12,7 +12,7 @@ use {
     std::{
         fs::File,
         io::Read,
-        path::Path,
+        path::{Path, PathBuf},
         sync::{Arc, RwLock},
         thread,
     },
@@ -63,15 +63,37 @@ impl AccountsDbPluginService {
 
     pub fn new(
         confirmed_bank_receiver: Receiver<BankNotification>,
-        accountsdb_plugin_config_file: &Path,
+        accountsdb_plugin_config_files: &[PathBuf],
     ) -> Result<Self, AccountsdbPluginServiceError> {
         info!(
-            "Starting AccountsDbPluginService from config file: {:?}",
-            accountsdb_plugin_config_file
+            "Starting AccountsDbPluginService from config files: {:?}",
+            accountsdb_plugin_config_files
         );
-        let plugin_manager = AccountsDbPluginManager::new();
-        let plugin_manager = Arc::new(RwLock::new(plugin_manager));
+        let mut plugin_manager = AccountsDbPluginManager::new();
 
+        for accountsdb_plugin_config_file in accountsdb_plugin_config_files {
+            Self::load_plugin(&mut plugin_manager, accountsdb_plugin_config_file)?;
+        }
+
+        let plugin_manager = Arc::new(RwLock::new(plugin_manager));
+        let accounts_update_notifier = Arc::new(RwLock::new(AccountsUpdateNotifierImpl::new(
+            plugin_manager.clone(),
+        )));
+        let slot_status_observer =
+            SlotStatusObserver::new(confirmed_bank_receiver, accounts_update_notifier.clone());
+
+        info!("Started AccountsDbPluginService");
+        Ok(AccountsDbPluginService {
+            slot_status_observer,
+            plugin_manager,
+            accounts_update_notifier,
+        })
+    }
+
+    fn load_plugin(
+        plugin_manager: &mut AccountsDbPluginManager,
+        accountsdb_plugin_config_file: &Path,
+    ) -> Result<(), AccountsdbPluginServiceError> {
         let mut file = match File::open(accountsdb_plugin_config_file) {
             Ok(file) => file,
             Err(err) => {
@@ -102,12 +124,6 @@ impl AccountsDbPluginService {
             }
         };
 
-        let accounts_update_notifier = Arc::new(RwLock::new(AccountsUpdateNotifierImpl::new(
-            plugin_manager.clone(),
-        )));
-        let slot_status_observer =
-            SlotStatusObserver::new(confirmed_bank_receiver, accounts_update_notifier.clone());
-
         let libpath = result["libpath"]
             .as_str()
             .ok_or(AccountsdbPluginServiceError::LibPathNotSet)?;
@@ -117,10 +133,7 @@ impl AccountsDbPluginService {
             .ok_or(AccountsdbPluginServiceError::InvalidPluginPath)?;
 
         unsafe {
-            let result = plugin_manager
-                .write()
-                .unwrap()
-                .load_plugin(libpath, config_file);
+            let result = plugin_manager.load_plugin(libpath, config_file);
             if let Err(err) = result {
                 let msg = format!(
                     "Failed to load the plugin library: {:?}, error: {:?}",
@@ -129,13 +142,7 @@ impl AccountsDbPluginService {
                 return Err(AccountsdbPluginServiceError::PluginLoadError(msg));
             }
         }
-
-        info!("Started AccountsDbPluginService");
-        Ok(AccountsDbPluginService {
-            slot_status_observer,
-            plugin_manager,
-            accounts_update_notifier,
-        })
+        Ok(())
     }
 
     pub fn get_accounts_update_notifier(&self) -> AccountsUpdateNotifier {
