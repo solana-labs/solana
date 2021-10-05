@@ -50,11 +50,10 @@ use {
         PACKET_DATA_SIZE,
     },
     solana_rayon_threadlimit::get_thread_count,
-    solana_runtime::bank_forks::BankForks,
+    solana_runtime::{bank_forks::BankForks, snapshot_hash::SnapshotHash},
     solana_sdk::{
         clock::{Slot, DEFAULT_MS_PER_SLOT, DEFAULT_SLOTS_PER_EPOCH},
         feature_set::FeatureSet,
-        hash::Hash,
         pubkey::Pubkey,
         sanitize::{Sanitize, SanitizeError},
         signature::{Keypair, Signable, Signature, Signer},
@@ -245,7 +244,7 @@ struct PullData {
 
 pub fn make_accounts_hashes_message(
     keypair: &Keypair,
-    accounts_hashes: Vec<(Slot, Hash)>,
+    accounts_hashes: Vec<SnapshotHash>,
 ) -> Option<CrdsValue> {
     let message = CrdsData::AccountsHashes(SnapshotHashes::new(keypair.pubkey(), accounts_hashes));
     Some(CrdsValue::new_signed(message, keypair))
@@ -923,7 +922,7 @@ impl ClusterInfo {
             .push(message);
     }
 
-    pub fn push_accounts_hashes(&self, accounts_hashes: Vec<(Slot, Hash)>) {
+    pub fn push_accounts_hashes(&self, accounts_hashes: Vec<SnapshotHash>) {
         if accounts_hashes.len() > MAX_SNAPSHOT_HASHES {
             warn!(
                 "accounts hashes too large, ignored: {}",
@@ -936,7 +935,7 @@ impl ClusterInfo {
         self.push_message(CrdsValue::new_signed(message, &self.keypair()));
     }
 
-    pub fn push_snapshot_hashes(&self, snapshot_hashes: Vec<(Slot, Hash)>) {
+    pub fn push_snapshot_hashes(&self, snapshot_hashes: Vec<SnapshotHash>) {
         if snapshot_hashes.len() > MAX_SNAPSHOT_HASHES {
             warn!(
                 "snapshot hashes too large, ignored: {}",
@@ -1098,7 +1097,7 @@ impl ClusterInfo {
 
     pub fn get_accounts_hash_for_node<F, Y>(&self, pubkey: &Pubkey, map: F) -> Option<Y>
     where
-        F: FnOnce(&Vec<(Slot, Hash)>) -> Y,
+        F: FnOnce(&Vec<SnapshotHash>) -> Y,
     {
         self.time_gossip_read_lock("get_accounts_hash", &self.stats.get_accounts_hash)
             .get::<&CrdsValue>(&CrdsValueLabel::AccountsHashes(*pubkey))
@@ -1108,7 +1107,7 @@ impl ClusterInfo {
 
     pub fn get_snapshot_hash_for_node<F, Y>(&self, pubkey: &Pubkey, map: F) -> Option<Y>
     where
-        F: FnOnce(&Vec<(Slot, Hash)>) -> Y,
+        F: FnOnce(&Vec<SnapshotHash>) -> Y,
     {
         let gossip_crds = self.gossip.crds.read().unwrap();
         let hashes = &gossip_crds.get::<&SnapshotHashes>(*pubkey)?.hashes;
@@ -2973,7 +2972,10 @@ mod tests {
         rand::{seq::SliceRandom, SeedableRng},
         rand_chacha::ChaChaRng,
         solana_ledger::shred::Shredder,
-        solana_sdk::signature::{Keypair, Signer},
+        solana_sdk::{
+            hash::Hash,
+            signature::{Keypair, Signer},
+        },
         solana_vote_program::{vote_instruction, vote_state::Vote},
         std::{
             iter::repeat_with,

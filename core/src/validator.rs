@@ -71,6 +71,7 @@ use {
         hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_config::SnapshotConfig,
+        snapshot_hash::SnapshotHash,
         snapshot_package::{AccountsPackageSender, PendingSnapshotPackage},
         snapshot_utils,
     },
@@ -1145,7 +1146,7 @@ fn new_banks_from_ledger(
     CompletedSlotsReceiver,
     LeaderScheduleCache,
     Option<Slot>,
-    Option<(Slot, Hash)>,
+    Option<SnapshotHash>,
     TransactionHistoryServices,
     Tower,
 ) {

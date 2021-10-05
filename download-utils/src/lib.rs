@@ -3,10 +3,11 @@ use console::Emoji;
 use indicatif::{ProgressBar, ProgressStyle};
 use log::*;
 use solana_runtime::{
+    snapshot_hash::SnapshotHash,
     snapshot_package::SnapshotType,
     snapshot_utils::{self, ArchiveFormat},
 };
-use solana_sdk::{clock::Slot, genesis_config::DEFAULT_GENESIS_ARCHIVE, hash::Hash};
+use solana_sdk::genesis_config::DEFAULT_GENESIS_ARCHIVE;
 use std::fs::{self, File};
 use std::io;
 use std::io::Read;
@@ -252,7 +253,7 @@ pub fn download_genesis_if_missing(
 pub fn download_snapshot_archive<'a, 'b>(
     rpc_addr: &SocketAddr,
     snapshot_archives_dir: &Path,
-    desired_snapshot_hash: (Slot, Hash),
+    desired_snapshot_hash: SnapshotHash,
     snapshot_type: SnapshotType,
     maximum_full_snapshot_archives_to_retain: usize,
     maximum_incremental_snapshot_archives_to_retain: usize,

@@ -2,10 +2,10 @@ use solana_gossip::cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES};
 use solana_runtime::{
     snapshot_archive_info::SnapshotArchiveInfoGetter,
     snapshot_config::SnapshotConfig,
+    snapshot_hash::SnapshotHash,
     snapshot_package::{PendingSnapshotPackage, SnapshotType},
     snapshot_utils,
 };
-use solana_sdk::{clock::Slot, hash::Hash};
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -22,7 +22,7 @@ pub struct SnapshotPackagerService {
 impl SnapshotPackagerService {
     pub fn new(
         pending_snapshot_package: PendingSnapshotPackage,
-        starting_snapshot_hash: Option<(Slot, Hash)>,
+        starting_snapshot_hash: Option<SnapshotHash>,
         exit: &Arc<AtomicBool>,
         cluster_info: &Arc<ClusterInfo>,
         snapshot_config: SnapshotConfig,

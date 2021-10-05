@@ -13,6 +13,7 @@ use {
     solana_runtime::{
         hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
         snapshot_archive_info::SnapshotArchiveInfoGetter,
+        snapshot_hash::SnapshotHash,
         snapshot_package::SnapshotType,
         snapshot_utils::{
             self, DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
@@ -22,7 +23,6 @@ use {
     solana_sdk::{
         clock::Slot,
         commitment_config::CommitmentConfig,
-        hash::Hash,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
     },
@@ -52,7 +52,7 @@ fn is_trusted_validator(id: &Pubkey, trusted_validators: &Option<HashSet<Pubkey>
 fn get_trusted_snapshot_hashes(
     cluster_info: &ClusterInfo,
     trusted_validators: &Option<HashSet<Pubkey>>,
-) -> Option<HashSet<(Slot, Hash)>> {
+) -> Option<HashSet<SnapshotHash>> {
     if let Some(trusted_validators) = trusted_validators {
         let mut trusted_snapshot_hashes = HashSet::new();
         for trusted_validator in trusted_validators {
@@ -109,7 +109,7 @@ fn get_rpc_node(
     snapshot_not_required: bool,
     no_untrusted_rpc: bool,
     snapshot_archives_dir: &Path,
-) -> Option<(ContactInfo, Option<(Slot, Hash)>)> {
+) -> Option<(ContactInfo, Option<SnapshotHash>)> {
     let mut blacklist_timeout = Instant::now();
     let mut newer_cluster_snapshot_timeout = None;
     let mut retry_reason = None;
@@ -688,11 +688,11 @@ pub fn rpc_bootstrap(
     }
 }
 
-/// Get the Slot and Hash of the local snapshot with the highest slot.  Can be either a full
+/// Get the SnapshotHash of the local snapshot with the highest slot.  Can be either a full
 /// snapshot or an incremental snapshot.
 fn get_highest_local_snapshot_hash(
     snapshot_archives_dir: impl AsRef<Path>,
-) -> Option<(Slot, Hash)> {
+) -> Option<SnapshotHash> {
     if let Some(full_snapshot_info) =
         snapshot_utils::get_highest_full_snapshot_archive_info(&snapshot_archives_dir)
     {

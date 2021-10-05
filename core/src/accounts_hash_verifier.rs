@@ -11,6 +11,7 @@ use solana_runtime::{
     accounts_db::{self, AccountsDb},
     accounts_hash::HashStats,
     snapshot_config::SnapshotConfig,
+    snapshot_hash::SnapshotHash,
     snapshot_package::{
         AccountsPackage, AccountsPackageReceiver, PendingSnapshotPackage, SnapshotPackage,
         SnapshotType,
@@ -97,7 +98,7 @@ impl AccountsHashVerifier {
         trusted_validators: Option<&HashSet<Pubkey>>,
         halt_on_trusted_validator_accounts_hash_mismatch: bool,
         pending_snapshot_package: Option<&PendingSnapshotPackage>,
-        hashes: &mut Vec<(Slot, Hash)>,
+        hashes: &mut Vec<SnapshotHash>,
         exit: &Arc<AtomicBool>,
         fault_injection_rate_slots: u64,
         snapshot_config: Option<&SnapshotConfig>,
@@ -152,7 +153,7 @@ impl AccountsHashVerifier {
         cluster_info: &ClusterInfo,
         trusted_validators: Option<&HashSet<Pubkey>>,
         halt_on_trusted_validator_accounts_hash_mismatch: bool,
-        hashes: &mut Vec<(Slot, Hash)>,
+        hashes: &mut Vec<SnapshotHash>,
         exit: &Arc<AtomicBool>,
         fault_injection_rate_slots: u64,
     ) {

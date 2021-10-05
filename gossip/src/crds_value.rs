@@ -9,11 +9,11 @@ use {
     bincode::{serialize, serialized_size},
     rand::{CryptoRng, Rng},
     serde::de::{Deserialize, Deserializer},
+    solana_runtime::snapshot_hash::SnapshotHash,
     solana_sdk::sanitize::{Sanitize, SanitizeError},
     solana_sdk::timing::timestamp,
     solana_sdk::{
         clock::Slot,
-        hash::Hash,
         pubkey::{self, Pubkey},
         signature::{Keypair, Signable, Signature, Signer},
         transaction::Transaction,
@@ -164,7 +164,7 @@ impl CrdsData {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, AbiExample)]
 pub struct SnapshotHashes {
     pub from: Pubkey,
-    pub hashes: Vec<(Slot, Hash)>,
+    pub hashes: Vec<SnapshotHash>,
     pub wallclock: u64,
 }
 
@@ -181,7 +181,7 @@ impl Sanitize for SnapshotHashes {
 }
 
 impl SnapshotHashes {
-    pub fn new(from: Pubkey, hashes: Vec<(Slot, Hash)>) -> Self {
+    pub fn new(from: Pubkey, hashes: Vec<SnapshotHash>) -> Self {
         Self {
             from,
             hashes,
@@ -210,8 +210,8 @@ impl SnapshotHashes {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, AbiExample)]
 pub struct IncrementalSnapshotHashes {
     from: Pubkey,
-    base: (Slot, Hash),
-    hashes: Vec<(Slot, Hash)>,
+    base: SnapshotHash,
+    hashes: Vec<SnapshotHash>,
     wallclock: u64,
 }
 
