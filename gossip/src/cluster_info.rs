@@ -23,8 +23,8 @@ use {
         crds_gossip_error::CrdsGossipError,
         crds_gossip_pull::{CrdsFilter, ProcessPullStats, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS},
         crds_value::{
-            self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlotsIndex, LowestSlot, NodeInstance,
-            SnapshotHashes, Version, Vote, MAX_WALLCLOCK,
+            self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlotsIndex, IncrementalSnapshotHashes,
+            LowestSlot, NodeInstance, SnapshotHashes, Version, Vote, MAX_WALLCLOCK,
         },
         epoch_slots::EpochSlots,
         gossip_error::GossipError,
@@ -1114,6 +1114,18 @@ impl ClusterInfo {
         let gossip_crds = self.gossip.crds.read().unwrap();
         let hashes = &gossip_crds.get::<&SnapshotHashes>(*pubkey)?.hashes;
         Some(map(hashes))
+    }
+
+    pub fn get_incremental_snapshot_hash_for_node<F, Y>(&self, pubkey: &Pubkey, map: F) -> Option<Y>
+    where
+        F: FnOnce((&(Slot, Hash), &Vec<(Slot, Hash)>)) -> Y,
+    {
+        let gossip_crds = self.gossip.crds.read().unwrap();
+        let incremental_snapshot_hash = gossip_crds.get::<&IncrementalSnapshotHashes>(*pubkey)?;
+        Some(map((
+            &incremental_snapshot_hash.base,
+            &incremental_snapshot_hash.hashes,
+        )))
     }
 
     /// Returns epoch-slots inserted since the given cursor.
