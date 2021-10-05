@@ -123,7 +123,7 @@ impl CloseAccountProof {
         // Edge case #2: if D is zeroed, but C is not, then this is an invalid ciphertext
         if D.is_identity() {
             transcript.append_point(b"R", &R);
-            return Err(ProofError::VerificationError)
+            return Err(ProofError::VerificationError);
         }
 
         // generate a challenge scalar
@@ -148,7 +148,7 @@ impl CloseAccountProof {
 mod test {
     use super::*;
     use crate::encryption::elgamal::ElGamal;
-    use crate::encryption::pedersen::{Pedersen, PedersenOpening, PedersenDecryptHandle};
+    use crate::encryption::pedersen::{Pedersen, PedersenDecryptHandle, PedersenOpening};
 
     #[test]
     fn test_close_account_correctness() {
