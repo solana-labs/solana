@@ -1,6 +1,5 @@
 #![allow(clippy::integer_arithmetic)]
 use {
-    assert_matches::assert_matches,
     bincode::deserialize,
     solana_banks_client::BanksClient,
     solana_program_test::{processor, ProgramTest, ProgramTestContext, ProgramTestError},
@@ -15,7 +14,7 @@ use {
         signature::{Keypair, Signer},
         stake::{
             instruction as stake_instruction,
-            state::{Authorized, Lockup, StakeState},
+            state::{Authorized, Lockup, StakeActivationStatus, StakeState},
         },
         system_instruction, system_program,
         sysvar::{
@@ -298,11 +297,11 @@ async fn stake_rewards_from_warp() {
     let stake_history: StakeHistory = deserialize(&stake_history_account.data).unwrap();
     let clock: Clock = deserialize(&clock_account.data).unwrap();
     let stake = stake_state.stake().unwrap();
-    assert_matches!(
+    assert_eq!(
         stake
             .delegation
             .stake_activating_and_deactivating(clock.epoch, Some(&stake_history)),
-        (_, 0, 0)
+        StakeActivationStatus::with_effective(stake.delegation.stake),
     );
 }
 

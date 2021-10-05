@@ -9,7 +9,7 @@ use solana_sdk::{
         self,
         state::{Delegation, StakeState},
     },
-    sysvar::stake_history::StakeHistory,
+    stake_history::StakeHistory,
 };
 use solana_stake_program::stake_state;
 use solana_vote_program::vote_state::VoteState;
