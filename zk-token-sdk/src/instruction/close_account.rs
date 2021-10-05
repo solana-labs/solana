@@ -114,11 +114,20 @@ impl CloseAccountProof {
         let R = self.R.into();
         let z = self.z.into();
 
+        // Edge case #1: if both C and D are identities, then this is a valid encryption of zero
+        if C.is_identity() && D.is_identity() {
+            transcript.append_point(b"R", &R);
+            return Ok(());
+        }
+
+        // Edge case #2: if D is zeroed, but C is not, then this is an invalid ciphertext
+        if D.is_identity() {
+            transcript.append_point(b"R", &R);
+            return Err(ProofError::VerificationError)
+        }
+
         // generate a challenge scalar
-        //
-        // use `append_point` as opposed to `validate_and_append_point` as the ciphertext is
-        // already guaranteed to be well-formed
-        transcript.append_point(b"R", &R);
+        transcript.validate_and_append_point(b"R", &R)?;
         let c = transcript.challenge_scalar(b"c");
 
         // decompress R or return verification error
@@ -137,27 +146,51 @@ impl CloseAccountProof {
 
 #[cfg(test)]
 mod test {
-    use {super::*, crate::encryption::elgamal::ElGamal};
+    use super::*;
+    use crate::encryption::elgamal::ElGamal;
+    use crate::encryption::pedersen::{Pedersen, PedersenOpening, PedersenDecryptHandle};
 
     #[test]
     fn test_close_account_correctness() {
         let (source_pk, source_sk) = ElGamal::new();
 
-        // If account balance is 0, then the proof should succeed
+        // invalid ciphertexts
         let balance = source_pk.encrypt(0_u64);
 
-        let proof = CloseAccountProof::new(&source_sk, &balance);
-        assert!(proof.verify(&balance).is_ok());
+        let zeroed_comm = Pedersen::with(0_u64, &PedersenOpening::default());
+        let handle = balance.decrypt_handle;
 
-        // If account balance is not zero, then the proof verification should fail
+        let zeroed_comm_ciphertext = ElGamalCiphertext {
+            message_comm: zeroed_comm,
+            decrypt_handle: handle,
+        };
+
+        let proof = CloseAccountProof::new(&source_sk, &zeroed_comm_ciphertext);
+        assert!(proof.verify(&zeroed_comm_ciphertext).is_err());
+
+        let zeroed_handle_ciphertext = ElGamalCiphertext {
+            message_comm: balance.message_comm,
+            decrypt_handle: PedersenDecryptHandle::default(),
+        };
+
+        let proof = CloseAccountProof::new(&source_sk, &zeroed_handle_ciphertext);
+        assert!(proof.verify(&zeroed_handle_ciphertext).is_err());
+
+        // valid ciphertext, but encryption of non-zero amount
         let balance = source_pk.encrypt(55_u64);
 
         let proof = CloseAccountProof::new(&source_sk, &balance);
         assert!(proof.verify(&balance).is_err());
 
-        // A zeroed cyphertext should be considered as an account balance of 0
+        // all-zeroed ciphertext interpretted as a valid encryption of zero
         let zeroed_ct: ElGamalCiphertext = pod::ElGamalCiphertext::zeroed().try_into().unwrap();
         let proof = CloseAccountProof::new(&source_sk, &zeroed_ct);
         assert!(proof.verify(&zeroed_ct).is_ok());
+
+        // general case: valid encryption of zero
+        let balance = source_pk.encrypt(0_u64);
+
+        let proof = CloseAccountProof::new(&source_sk, &balance);
+        assert!(proof.verify(&balance).is_ok());
     }
 }
