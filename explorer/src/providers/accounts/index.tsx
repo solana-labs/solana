@@ -348,23 +348,6 @@ export function useTokenAccountInfo(
   }
 }
 
-export function useNFTData(address: string | undefined): NFTData | undefined {
-  const accountInfo = useAccountInfo(address);
-  if (address === undefined) return;
-
-  try {
-    const data = accountInfo?.data?.details?.data;
-    if (!data) return;
-    if (data.program !== "spl-token" || data.parsed.type !== "mint") {
-      return;
-    }
-
-    return data.nftData;
-  } catch (err) {
-    reportError(err, { address });
-  }
-}
-
 export function useFetchAccountInfo() {
   const dispatch = React.useContext(DispatchContext);
   if (!dispatch) {
