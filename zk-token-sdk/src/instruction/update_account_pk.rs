@@ -215,7 +215,7 @@ impl UpdateAccountPkProof {
 mod test {
     use super::*;
     use crate::encryption::elgamal::ElGamal;
-    use crate::encryption::pedersen::{Pedersen, PedersenOpening, PedersenDecryptHandle};
+    use crate::encryption::pedersen::{Pedersen, PedersenDecryptHandle, PedersenOpening};
 
     #[test]
     fn test_update_account_public_key_general_cases() {
@@ -284,6 +284,7 @@ mod test {
             .is_ok());
     }
 
+    #[test]
     fn test_update_account_public_key_partially_zeroed_ciphertexts() {
         let (current_pk, current_sk) = ElGamal::new();
         let (new_pk, new_sk) = ElGamal::new();
@@ -308,9 +309,7 @@ mod test {
             &zeroed_comm_ciphertext,
             &new_ct,
         );
-        assert!(proof
-            .verify(&zeroed_comm_ciphertext, &new_ct)
-            .is_err());
+        assert!(proof.verify(&zeroed_comm_ciphertext, &new_ct).is_err());
 
         let zeroed_handle_ciphertext = ElGamalCiphertext {
             message_comm: balance_ciphertext.message_comm,
@@ -324,9 +323,7 @@ mod test {
             &zeroed_handle_ciphertext,
             &new_ct,
         );
-        assert!(proof
-            .verify(&zeroed_handle_ciphertext, &new_ct)
-            .is_err());
+        assert!(proof.verify(&zeroed_handle_ciphertext, &new_ct).is_err());
 
         // Partially zeroed cipehrtext as new ciphertext
         let zeroed_comm_ciphertext = ElGamalCiphertext {
@@ -342,9 +339,7 @@ mod test {
             &current_ct,
             &zeroed_comm_ciphertext,
         );
-        assert!(proof
-            .verify(&current_ct, &zeroed_comm_ciphertext)
-            .is_err());
+        assert!(proof.verify(&current_ct, &zeroed_comm_ciphertext).is_err());
 
         let zeroed_handle_ciphertext = ElGamalCiphertext {
             message_comm: balance_ciphertext.message_comm,
@@ -361,6 +356,5 @@ mod test {
         assert!(proof
             .verify(&current_ct, &zeroed_handle_ciphertext)
             .is_err());
-
     }
 }
