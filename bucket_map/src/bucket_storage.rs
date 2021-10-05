@@ -299,44 +299,64 @@ impl BucketStorage {
         res
     }
 
-    pub fn grow(&mut self) {
+    /// copy contents from 'old_bucket' to 'self'
+    fn copy_contents(&mut self, old_bucket: &Self) {
         let mut m = Measure::start("grow");
-        let old_cap = self.capacity();
-        let old_map = &self.mmap;
-        let old_file = self.path.clone();
+        let old_cap = old_bucket.capacity();
+        let old_map = &old_bucket.mmap;
 
         let increment = 1;
         let index_grow = 1 << increment;
         let (new_map, new_file) = Self::new_map(
-            &self.drives,
-            self.cell_size as usize,
-            self.capacity_pow2 + increment,
-            &self.stats,
+            &old_bucket.drives,
+            old_bucket.cell_size as usize,
+            old_bucket.capacity_pow2 + increment,
+            &old_bucket.stats,
         );
         (0..old_cap as usize).into_iter().for_each(|i| {
-            let old_ix = i * self.cell_size as usize;
+            let old_ix = i * old_bucket.cell_size as usize;
             let new_ix = old_ix * index_grow;
-            let dst_slice: &[u8] = &new_map[new_ix..new_ix + self.cell_size as usize];
-            let src_slice: &[u8] = &old_map[old_ix..old_ix + self.cell_size as usize];
+            let dst_slice: &[u8] = &new_map[new_ix..new_ix + old_bucket.cell_size as usize];
+            let src_slice: &[u8] = &old_map[old_ix..old_ix + old_bucket.cell_size as usize];
 
             unsafe {
                 let dst = dst_slice.as_ptr() as *mut u8;
                 let src = src_slice.as_ptr() as *const u8;
-                std::ptr::copy_nonoverlapping(src, dst, self.cell_size as usize);
+                std::ptr::copy_nonoverlapping(src, dst, old_bucket.cell_size as usize);
             };
         });
         self.mmap = new_map;
         self.path = new_file;
-        self.capacity_pow2 += increment;
-        remove_file(old_file).unwrap();
         m.stop();
-        let sz = 1 << self.capacity_pow2;
-        {
-            let mut max = self.stats.max_size.lock().unwrap();
-            *max = std::cmp::max(*max, sz);
-        }
         self.stats.resizes.fetch_add(1, Ordering::Relaxed);
         self.stats.resize_us.fetch_add(m.as_us(), Ordering::Relaxed);
+    }
+
+    /// allocate a new bucket based on 'self', but copying data from 'bucket'
+    pub fn grow(
+        &self,
+        bucket: Option<&Self>,
+        capacity_pow_2: u8,
+        num_elems: u64,
+        elem_size: u64,
+    ) -> Self {
+        let mut new_bucket = Self::new_with_capacity(
+            Arc::clone(&self.drives),
+            num_elems,
+            elem_size,
+            capacity_pow_2,
+            self.max_search,
+            Arc::clone(&self.stats),
+        );
+        if let Some(bucket) = bucket {
+            new_bucket.copy_contents(bucket);
+        }
+        let sz = new_bucket.capacity();
+        {
+            let mut max = new_bucket.stats.max_size.lock().unwrap();
+            *max = std::cmp::max(*max, sz);
+        }
+        new_bucket
     }
 
     /// Return the number of cells currently allocated
