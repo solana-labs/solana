@@ -1,6 +1,6 @@
 #[cfg(not(target_arch = "bpf"))]
 use {
-    crate::encryption::pedersen::{Pedersen, PedersenOpen},
+    crate::encryption::pedersen::{Pedersen, PedersenOpening},
     curve25519_dalek::traits::MultiscalarMul,
     rand::rngs::OsRng,
     subtle::{Choice, ConditionallySelectable},
@@ -44,11 +44,11 @@ impl RangeProof {
     pub fn create(
         amounts: Vec<u64>,
         bit_lengths: Vec<usize>,
-        opens: Vec<&PedersenOpen>,
+        opens: Vec<&PedersenOpening>,
         transcript: &mut Transcript,
     ) -> Self {
-        let t_1_blinding = PedersenOpen::random(&mut OsRng);
-        let t_2_blinding = PedersenOpen::random(&mut OsRng);
+        let t_1_blinding = PedersenOpening::random(&mut OsRng);
+        let t_2_blinding = PedersenOpening::random(&mut OsRng);
 
         let (range_proof, _, _) = Self::create_with(
             amounts,
@@ -67,9 +67,9 @@ impl RangeProof {
     pub fn create_with(
         amounts: Vec<u64>,
         bit_lengths: Vec<usize>,
-        opens: Vec<&PedersenOpen>,
-        t_1_blinding: &PedersenOpen,
-        t_2_blinding: &PedersenOpen,
+        opens: Vec<&PedersenOpening>,
+        t_1_blinding: &PedersenOpening,
+        t_2_blinding: &PedersenOpening,
         transcript: &mut Transcript,
     ) -> (Self, Scalar, Scalar) {
         let nm = bit_lengths.iter().sum();
@@ -139,10 +139,10 @@ impl RangeProof {
 
         let t_poly = l_poly.inner_product(&r_poly);
 
-        let T_1 = Pedersen::commit_with(t_poly.1, t_1_blinding)
+        let T_1 = Pedersen::with(t_poly.1, t_1_blinding)
             .get_point()
             .compress();
-        let T_2 = Pedersen::commit_with(t_poly.2, t_2_blinding)
+        let T_2 = Pedersen::with(t_poly.2, t_2_blinding)
             .get_point()
             .compress();
 
@@ -407,7 +407,7 @@ mod tests {
 
     #[test]
     fn test_single_rangeproof() {
-        let (comm, open) = Pedersen::commit(55_u64);
+        let (comm, open) = Pedersen::new(55_u64);
 
         let mut transcript_create = Transcript::new(b"Test");
         let mut transcript_verify = Transcript::new(b"Test");
@@ -425,9 +425,9 @@ mod tests {
 
     #[test]
     fn test_aggregated_rangeproof() {
-        let (comm_1, open_1) = Pedersen::commit(55_u64);
-        let (comm_2, open_2) = Pedersen::commit(77_u64);
-        let (comm_3, open_3) = Pedersen::commit(99_u64);
+        let (comm_1, open_1) = Pedersen::new(55_u64);
+        let (comm_2, open_2) = Pedersen::new(77_u64);
+        let (comm_3, open_3) = Pedersen::new(99_u64);
 
         let mut transcript_create = Transcript::new(b"Test");
         let mut transcript_verify = Transcript::new(b"Test");

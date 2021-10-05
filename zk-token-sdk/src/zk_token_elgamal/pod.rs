@@ -18,11 +18,11 @@ pub struct ElGamalPubkey(pub [u8; 32]);
 
 #[derive(Clone, Copy, Pod, Zeroable, PartialEq)]
 #[repr(transparent)]
-pub struct PedersenComm(pub [u8; 32]);
+pub struct PedersenCommitment(pub [u8; 32]);
 
 #[derive(Clone, Copy, Pod, Zeroable, PartialEq)]
 #[repr(transparent)]
-pub struct PedersenDecHandle(pub [u8; 32]);
+pub struct PedersenDecryptHandle(pub [u8; 32]);
 
 /// Serialization of range proofs for 64-bit numbers (for `Withdraw` instruction)
 #[derive(Clone, Copy)]

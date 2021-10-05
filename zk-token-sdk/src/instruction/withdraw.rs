@@ -7,7 +7,7 @@ use {
     crate::{
         encryption::{
             elgamal::{ElGamalCiphertext, ElGamalPubkey, ElGamalSecretKey},
-            pedersen::{PedersenBase, PedersenOpen},
+            pedersen::{PedersenBase, PedersenOpening},
         },
         errors::ProofError,
         instruction::Verifiable,
@@ -54,7 +54,7 @@ impl WithdrawData {
 
         // encode withdraw amount as an ElGamal ciphertext and subtract it from
         // current source balance
-        let amount_encoded = source_pk.encrypt_with(amount, &PedersenOpen::default());
+        let amount_encoded = source_pk.encrypt_with(amount, &PedersenOpening::default());
         let final_balance_ct = current_balance_ct - amount_encoded;
 
         let proof = WithdrawProof::new(source_sk, final_balance, &final_balance_ct);
@@ -126,7 +126,7 @@ impl WithdrawProof {
         let z = s + c * y;
 
         // compute the new Pedersen commitment and opening
-        let new_open = PedersenOpen(c * r_new);
+        let new_open = PedersenOpening(c * r_new);
 
         let range_proof = RangeProof::create(
             vec![final_balance],
