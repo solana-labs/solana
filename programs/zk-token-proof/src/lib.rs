@@ -34,6 +34,12 @@ pub fn process_instruction(
         return Err(InstructionError::UnsupportedProgramId);
     }
 
+    // Consume compute units since proof verification is an expensive operation
+    {
+        let compute_meter = invoke_context.get_compute_meter();
+        compute_meter.borrow_mut().consume(25_000)?; // TODO: Tune the number of units consumed?
+    }
+
     match ProofInstruction::decode_type(program_id, input)
         .ok_or(InstructionError::InvalidInstructionData)?
     {
