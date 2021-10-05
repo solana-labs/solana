@@ -467,7 +467,8 @@ function getTabs(data?: ProgramData): Tab[] {
 function getCreatorDropdownItems(creators: Creator[] | null) {
   const CreatorHeader = () => {
     const shareTooltip =
-      "The percentage a creator receives, based on the Seller Fees, from all future sales of this NFT.";
+      "The percentage of the proceeds a creator receives when this NFT is sold.";
+
     return (
       <div
         className={
@@ -542,10 +543,10 @@ function getEditionPill(editionData?: EditionData) {
 
 function getSaleTypePill(hasPrimarySaleHappened: boolean) {
   const primaryMarketTooltip =
-    "Primary Market involves the first sale of an NFT where creators share in 100% of the proceeds.";
+    "Creator(s) split 100% of the proceeds when this NFT is sold.";
 
   const secondaryMarketTooltip =
-    "Secondary Market involves all sales after the first, where creators share in proceeds as a percentage.";
+    "Creator(s) split the Seller Fee when this NFT is sold. The owner receives the remaining proceeds.";
 
   return (
     <div className={"d-inline-flex align-items-center"}>
