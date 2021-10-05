@@ -2,7 +2,7 @@
 //! to contruct a software pipeline. The stage uses all available CPU cores and
 //! can do its processing in parallel with signature verification on the GPU.
 use crate::{
-    cost_tracker::CostTracker, cost_tracker::CostTrackerStats, packet_hasher::PacketHasher,
+    cost_tracker::CostTracker, cost_tracker_stats::CostTrackerStats, packet_hasher::PacketHasher,
 };
 use crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError};
 use itertools::Itertools;
@@ -433,13 +433,16 @@ impl BankingStage {
             return;
         }
 
-        cost_tracker
+        if cost_tracker
             .write()
             .unwrap()
-            .reset_if_new_bank(bank.slot(), cost_tracker_stats);
-        banking_stage_stats
-            .reset_cost_tracker_count
-            .fetch_add(1, Ordering::Relaxed);
+            .reset_if_new_bank(bank.slot(), cost_tracker_stats)
+        {
+            // only increase counter when bank changed
+            banking_stage_stats
+                .reset_cost_tracker_count
+                .fetch_add(1, Ordering::Relaxed);
+        }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -741,7 +744,7 @@ impl BankingStage {
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let mut buffered_packets = VecDeque::with_capacity(batch_limit);
         let banking_stage_stats = BankingStageStats::new(id);
-        let mut cost_tracker_stats = CostTrackerStats::default();
+        let mut cost_tracker_stats = CostTrackerStats::new(id, 0);
         loop {
             while !buffered_packets.is_empty() {
                 let decision = Self::process_buffered_packets(
