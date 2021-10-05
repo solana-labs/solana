@@ -210,7 +210,7 @@ impl SnapshotHashes {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, AbiExample)]
 pub struct IncrementalSnapshotHashes {
     from: Pubkey,
-    base: Slot,
+    base: (Slot, Hash),
     hashes: Vec<(Slot, Hash)>,
     wallclock: u64,
 }
@@ -218,14 +218,14 @@ pub struct IncrementalSnapshotHashes {
 impl Sanitize for IncrementalSnapshotHashes {
     fn sanitize(&self) -> Result<(), SanitizeError> {
         sanitize_wallclock(self.wallclock)?;
-        if self.base >= MAX_SLOT {
+        if self.base.0 >= MAX_SLOT {
             return Err(SanitizeError::ValueOutOfBounds);
         }
         for (slot, _) in &self.hashes {
             if *slot >= MAX_SLOT {
                 return Err(SanitizeError::ValueOutOfBounds);
             }
-            if self.base >= *slot {
+            if self.base.0 >= *slot {
                 return Err(SanitizeError::InvalidValue);
             }
         }
