@@ -50,16 +50,14 @@ impl RangeProof {
         let t_1_blinding = PedersenOpening::random(&mut OsRng);
         let t_2_blinding = PedersenOpening::random(&mut OsRng);
 
-        let (range_proof, _, _) = Self::create_with(
+        Self::create_with(
             amounts,
             bit_lengths,
             opens,
             &t_1_blinding,
             &t_2_blinding,
             transcript,
-        );
-
-        range_proof
+        )
     }
 
     #[allow(clippy::many_single_char_names)]
@@ -71,7 +69,7 @@ impl RangeProof {
         t_1_blinding: &PedersenOpening,
         t_2_blinding: &PedersenOpening,
         transcript: &mut Transcript,
-    ) -> (Self, Scalar, Scalar) {
+    ) -> Self {
         let nm = bit_lengths.iter().sum();
 
         // Computing the generators online for now. It should ultimately be precomputed.
@@ -195,7 +193,7 @@ impl RangeProof {
             transcript,
         );
 
-        let range_proof = RangeProof {
+        RangeProof {
             A: A.compress(),
             S: S.compress(),
             T_1,
@@ -204,9 +202,7 @@ impl RangeProof {
             t_x_blinding,
             e_blinding,
             ipp_proof,
-        };
-
-        (range_proof, x, z)
+        }
     }
 
     #[allow(clippy::many_single_char_names)]
@@ -216,18 +212,23 @@ impl RangeProof {
         bit_lengths: Vec<usize>,
         transcript: &mut Transcript,
     ) -> Result<(), ProofError> {
-        self.verify_with(comms, bit_lengths, None, None, transcript)
+        if self
+            .verify_challenges(comms, bit_lengths, transcript)
+            .is_ok()
+        {
+            Ok(())
+        } else {
+            Err(ProofError::VerificationError)
+        }
     }
 
     #[allow(clippy::many_single_char_names)]
-    pub fn verify_with(
+    pub fn verify_challenges(
         &self,
         comms: Vec<&CompressedRistretto>,
         bit_lengths: Vec<usize>,
-        x_ver: Option<Scalar>,
-        z_ver: Option<Scalar>,
         transcript: &mut Transcript,
-    ) -> Result<(), ProofError> {
+    ) -> Result<(Scalar, Scalar), ProofError> {
         let G = PedersenBase::default().G;
         let H = PedersenBase::default().H;
 
@@ -245,10 +246,6 @@ impl RangeProof {
         let y = transcript.challenge_scalar(b"y");
         let z = transcript.challenge_scalar(b"z");
 
-        if z_ver.is_some() && z_ver.unwrap() != z {
-            return Err(ProofError::VerificationError);
-        }
-
         let zz = z * z;
         let minus_z = -z;
 
@@ -256,10 +253,6 @@ impl RangeProof {
         transcript.validate_and_append_point(b"T_2", &self.T_2)?;
 
         let x = transcript.challenge_scalar(b"x");
-
-        if x_ver.is_some() && x_ver.unwrap() != x {
-            return Err(ProofError::VerificationError);
-        }
 
         transcript.append_scalar(b"t_x", &self.t_x);
         transcript.append_scalar(b"t_x_blinding", &self.t_x_blinding);
@@ -325,7 +318,7 @@ impl RangeProof {
         .ok_or(ProofError::VerificationError)?;
 
         if mega_check.is_identity() {
-            Ok(())
+            Ok((z, x))
         } else {
             Err(ProofError::VerificationError)
         }
