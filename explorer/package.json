@@ -5,6 +5,7 @@
   "dependencies": {
     "@blockworks-foundation/mango-client": "^3.0.24",
     "@bonfida/bot": "^0.5.3",
+    "@cloudflare/stream-react": "^1.2.0",
     "@metamask/jazzicon": "^2.0.0",
     "@project-serum/serum": "^0.13.60",
     "@react-hook/debounce": "^4.0.0",
@@ -39,6 +40,7 @@
     "prettier": "^2.4.1",
     "react": "^17.0.2",
     "react-chartjs-2": "^2.11.2",
+    "react-content-loader": "^6.0.3",
     "react-countup": "^6.0.0",
     "react-dom": "^17.0.2",
     "react-moment": "^1.1.1",

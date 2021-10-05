@@ -1,5 +1,4 @@
-import React from "react";
-import { Account, useFetchAccountInfo } from "providers/accounts";
+import { Account, NFTData, useFetchAccountInfo } from "providers/accounts";
 import {
   TokenAccount,
   MintAccountInfo,
@@ -20,6 +19,7 @@ import { Copyable } from "components/common/Copyable";
 import { CoingeckoStatus, useCoinGecko } from "utils/coingecko";
 import { displayTimestampWithoutDate } from "utils/date";
 import { LoadingCard } from "components/common/LoadingCard";
+import { toPublicKey } from "metaplex/ids";
 
 const getEthAddress = (link?: string) => {
   let address = "";
@@ -47,7 +47,21 @@ export function TokenAccountSection({
     switch (tokenAccount.type) {
       case "mint": {
         const info = create(tokenAccount.info, MintAccountInfo);
-        return <MintAccountCard account={account} info={info} />;
+
+        if (
+          account.details?.data?.program === "spl-token" &&
+          account.details.data.nftData
+        ) {
+          return (
+            <NonFungibleTokenMintAccountCard
+              account={account}
+              nftData={account.details.data.nftData}
+              mintInfo={info}
+            />
+          );
+        }
+
+        return <FungibleTokenMintAccountCard account={account} info={info} />;
       }
       case "account": {
         const info = create(tokenAccount.info, TokenAccountInfo);
@@ -68,7 +82,7 @@ export function TokenAccountSection({
   return <UnknownAccountCard account={account} />;
 }
 
-function MintAccountCard({
+function FungibleTokenMintAccountCard({
   account,
   info,
 }: {
@@ -267,6 +281,87 @@ function MintAccountCard({
         </TableCardBody>
       </div>
     </>
+  );
+}
+
+function NonFungibleTokenMintAccountCard({
+  account,
+  nftData,
+  mintInfo,
+}: {
+  account: Account;
+  nftData: NFTData;
+  mintInfo: MintAccountInfo;
+}) {
+  const fetchInfo = useFetchAccountInfo();
+  const refresh = () => fetchInfo(account.pubkey);
+
+  return (
+    <div className="card">
+      <div className="card-header">
+        <h3 className="card-header-title mb-0 d-flex align-items-center">
+          Overview
+        </h3>
+        <button className="btn btn-white btn-sm" onClick={refresh}>
+          <span className="fe fe-refresh-cw mr-2"></span>
+          Refresh
+        </button>
+      </div>
+      <TableCardBody>
+        <tr>
+          <td>Address</td>
+          <td className="text-lg-right">
+            <Address pubkey={account.pubkey} alignRight raw />
+          </td>
+        </tr>
+        {nftData?.editionData?.masterEdition?.maxSupply && (
+          <tr>
+            <td>Max Total Supply</td>
+            <td className="text-lg-right">
+              {nftData.editionData.masterEdition.maxSupply.toNumber() === 0
+                ? 1
+                : nftData.editionData.masterEdition.maxSupply.toNumber()}
+            </td>
+          </tr>
+        )}
+        {nftData?.editionData?.masterEdition?.supply && (
+          <tr>
+            <td>Current Supply</td>
+            <td className="text-lg-right">
+              {nftData.editionData.masterEdition.supply.toNumber() === 0
+                ? 1
+                : nftData.editionData.masterEdition.supply.toNumber()}
+            </td>
+          </tr>
+        )}
+        {mintInfo.mintAuthority && (
+          <tr>
+            <td>Mint Authority</td>
+            <td className="text-lg-right">
+              <Address pubkey={mintInfo.mintAuthority} alignRight link />
+            </td>
+          </tr>
+        )}
+        <tr>
+          <td>Update Authority</td>
+          <td className="text-lg-right">
+            <Address
+              pubkey={toPublicKey(nftData.metadata.updateAuthority)}
+              alignRight
+              link
+            />
+          </td>
+        </tr>
+        {nftData?.metadata.data && (
+          <tr>
+            <td>Seller Fee</td>
+            <td className="text-lg-right">
+              {`${nftData?.metadata.data.sellerFeeBasisPoints / 100}%`}
+            </td>
+          </tr>
+        )}
+      </TableCardBody>
+    </div>
   );
 }
 
