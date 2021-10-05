@@ -24,7 +24,7 @@ use {
         crds_gossip_pull::{CrdsFilter, ProcessPullStats, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS},
         crds_value::{
             self, CrdsData, CrdsValue, CrdsValueLabel, EpochSlotsIndex, LowestSlot, NodeInstance,
-            SnapshotHash, Version, Vote, MAX_WALLCLOCK,
+            SnapshotHashes, Version, Vote, MAX_WALLCLOCK,
         },
         epoch_slots::EpochSlots,
         gossip_error::GossipError,
@@ -247,14 +247,14 @@ pub fn make_accounts_hashes_message(
     keypair: &Keypair,
     accounts_hashes: Vec<(Slot, Hash)>,
 ) -> Option<CrdsValue> {
-    let message = CrdsData::AccountsHashes(SnapshotHash::new(keypair.pubkey(), accounts_hashes));
+    let message = CrdsData::AccountsHashes(SnapshotHashes::new(keypair.pubkey(), accounts_hashes));
     Some(CrdsValue::new_signed(message, keypair))
 }
 
 pub(crate) type Ping = ping_pong::Ping<[u8; GOSSIP_PING_TOKEN_SIZE]>;
 
 // TODO These messages should go through the gpu pipeline for spam filtering
-#[frozen_abi(digest = "AqKhoLDkFr85WPiZnXG4bcRwHU4qSSyDZ3MQZLk3cnJf")]
+#[frozen_abi(digest = "F2XvJ1e5qdQdtUcRhMNYAJFbMBJyFi3NRbfdfghzBajW")]
 #[derive(Serialize, Deserialize, Debug, AbiEnumVisitor, AbiExample)]
 #[allow(clippy::large_enum_variant)]
 pub(crate) enum Protocol {
@@ -932,7 +932,7 @@ impl ClusterInfo {
             return;
         }
 
-        let message = CrdsData::AccountsHashes(SnapshotHash::new(self.id(), accounts_hashes));
+        let message = CrdsData::AccountsHashes(SnapshotHashes::new(self.id(), accounts_hashes));
         self.push_message(CrdsValue::new_signed(message, &self.keypair()));
     }
 
@@ -945,7 +945,7 @@ impl ClusterInfo {
             return;
         }
 
-        let message = CrdsData::SnapshotHashes(SnapshotHash::new(self.id(), snapshot_hashes));
+        let message = CrdsData::SnapshotHashes(SnapshotHashes::new(self.id(), snapshot_hashes));
         self.push_message(CrdsValue::new_signed(message, &self.keypair()));
     }
 
@@ -1111,7 +1111,7 @@ impl ClusterInfo {
         F: FnOnce(&Vec<(Slot, Hash)>) -> Y,
     {
         let gossip_crds = self.gossip.crds.read().unwrap();
-        let hashes = &gossip_crds.get::<&SnapshotHash>(*pubkey)?.hashes;
+        let hashes = &gossip_crds.get::<&SnapshotHashes>(*pubkey)?.hashes;
         Some(map(hashes))
     }
 
@@ -3171,7 +3171,7 @@ mod tests {
     fn test_max_snapshot_hashes_with_push_messages() {
         let mut rng = rand::thread_rng();
         for _ in 0..256 {
-            let snapshot_hash = SnapshotHash::new_rand(&mut rng, None);
+            let snapshot_hash = SnapshotHashes::new_rand(&mut rng, None);
             let crds_value =
                 CrdsValue::new_signed(CrdsData::SnapshotHashes(snapshot_hash), &Keypair::new());
             let message = Protocol::PushMessage(Pubkey::new_unique(), vec![crds_value]);
@@ -3184,7 +3184,7 @@ mod tests {
     fn test_max_snapshot_hashes_with_pull_responses() {
         let mut rng = rand::thread_rng();
         for _ in 0..256 {
-            let snapshot_hash = SnapshotHash::new_rand(&mut rng, None);
+            let snapshot_hash = SnapshotHashes::new_rand(&mut rng, None);
             let crds_value =
                 CrdsValue::new_signed(CrdsData::AccountsHashes(snapshot_hash), &Keypair::new());
             let response = Protocol::PullResponse(Pubkey::new_unique(), vec![crds_value]);
@@ -3827,7 +3827,7 @@ mod tests {
     fn test_split_messages_packet_size() {
         // Test that if a value is smaller than payload size but too large to be wrapped in a vec
         // that it is still dropped
-        let mut value = CrdsValue::new_unsigned(CrdsData::SnapshotHashes(SnapshotHash {
+        let mut value = CrdsValue::new_unsigned(CrdsData::SnapshotHashes(SnapshotHashes {
             from: Pubkey::default(),
             hashes: vec![],
             wallclock: 0,
@@ -3835,7 +3835,7 @@ mod tests {
 
         let mut i = 0;
         while value.size() < PUSH_MESSAGE_MAX_PAYLOAD_SIZE as u64 {
-            value.data = CrdsData::SnapshotHashes(SnapshotHash {
+            value.data = CrdsData::SnapshotHashes(SnapshotHashes {
                 from: Pubkey::default(),
                 hashes: vec![(0, Hash::default()); i],
                 wallclock: 0,
