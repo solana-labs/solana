@@ -2,7 +2,6 @@
 use {
     assert_matches::assert_matches,
     crossbeam_channel::{unbounded, Receiver},
-    fs_extra::dir::CopyOptions,
     gag::BufferRedirect,
     log::*,
     serial_test::serial,
@@ -2048,6 +2047,28 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
         downloaded_incremental_snapshot_archive_info.base_slot()
     );
 
+    // closure to copy files in a directory to another directory
+    let copy_files = |from: &Path, to: &Path| {
+        trace!(
+            "copying files from dir {}, to dir {}",
+            from.display(),
+            to.display()
+        );
+        for entry in fs::read_dir(from).unwrap() {
+            let entry = entry.unwrap();
+            if entry.file_type().unwrap().is_dir() {
+                continue;
+            }
+            let from_file_path = entry.path();
+            let to_file_path = to.join(from_file_path.file_name().unwrap());
+            trace!(
+                "\t\tcopying file from {} to {}...",
+                from_file_path.display(),
+                to_file_path.display()
+            );
+            fs::copy(from_file_path, to_file_path).unwrap();
+        }
+    };
     // closure to delete files in a directory
     let delete_files = |dir: &Path| {
         trace!("deleting files in dir {}", dir.display());
@@ -2071,17 +2092,10 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
         "Backing up validator snapshots to dir: {}...",
         backup_validator_snapshot_archives_dir.path().display()
     );
-    let copy_options = CopyOptions {
-        content_only: true,
-        depth: 1,
-        ..CopyOptions::default()
-    };
-    fs_extra::dir::copy(
+    copy_files(
         validator_snapshot_test_config.snapshot_archives_dir.path(),
         backup_validator_snapshot_archives_dir.path(),
-        &copy_options,
-    )
-    .unwrap();
+    );
 
     info!("Starting a new validator...");
     let validator_identity = Arc::new(Keypair::new());
@@ -2157,12 +2171,10 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
         "Delete all the snapshots on the validator and restore the originals from the backup..."
     );
     delete_files(validator_snapshot_test_config.snapshot_archives_dir.path());
-    fs_extra::dir::copy(
+    copy_files(
         backup_validator_snapshot_archives_dir.path(),
         validator_snapshot_test_config.snapshot_archives_dir.path(),
-        &copy_options,
-    )
-    .unwrap();
+    );
 
     // Get the highest full snapshot slot *before* restarting, as a comparison
     let validator_full_snapshot_slot_at_startup =
@@ -2246,18 +2258,16 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
     );
 
     // Copy over the snapshots to the new node, but need to remove the tmp snapshot dir so it
-    // doesn't break the copy files.
+    // doesn't break the simple copy_files closure.
     snapshot_utils::remove_tmp_snapshot_archives(
         validator_snapshot_test_config.snapshot_archives_dir.path(),
     );
-    fs_extra::dir::copy(
+    copy_files(
         validator_snapshot_test_config.snapshot_archives_dir.path(),
         final_validator_snapshot_test_config
             .snapshot_archives_dir
             .path(),
-        &copy_options,
-    )
-    .unwrap();
+    );
 
     info!("Starting final validator...");
     let final_validator_identity = Arc::new(Keypair::new());
