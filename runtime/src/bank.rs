@@ -79,10 +79,7 @@ use solana_sdk::{
 use solana_stake_program::stake_state::{
     self, Delegation, InflationPointCalculationEvent, PointValue, StakeState,
 };
-use solana_vote_program::{
-    vote_instruction::VoteInstruction,
-    vote_state::{VoteState, VoteStateVersions},
-};
+use solana_vote_program::{vote_instruction::VoteInstruction, vote_state::VoteState};
 use std::{
     borrow::Cow,
     cell::RefCell,
@@ -1862,16 +1859,17 @@ impl Bank {
 
                     // fetch vote account if it hasn't been fetched
                     let fetched_vote_account = if !accounts.contains_key(vote_pubkey) {
-                        match self.get_account(vote_pubkey) {
-                            None => return,
-                            vote_account => vote_account,
-                        }
+                        stakes
+                            .vote_accounts()
+                            .get(vote_pubkey)
+                            .map(|(_lamports, arc_vote_account)| arc_vote_account.clone())
                     } else {
                         None
                     };
 
-                    let fetched_vote_account_owner =
-                        fetched_vote_account.as_ref().map(|account| &account.owner);
+                    let fetched_vote_account_owner = fetched_vote_account
+                        .as_ref()
+                        .map(|vote_account| &vote_account.account().owner);
 
                     // filter invalid delegation accounts
                     if filter_stake_delegation_accounts
@@ -1893,10 +1891,13 @@ impl Bank {
                         None => return,
                     };
 
-                    if let Some(vote_account) = fetched_vote_account {
+                    if let Some(arc_vote_account) = fetched_vote_account {
                         let (vote_state, vote_account) =
-                            match StateMut::<VoteStateVersions>::state(&vote_account) {
-                                Ok(vote_state) => (vote_state.convert_to_current(), vote_account),
+                            match arc_vote_account.vote_state().as_ref() {
+                                Ok(vote_state) => (
+                                    vote_state.clone(),
+                                    AccountSharedData::from(arc_vote_account.account().clone()),
+                                ),
                                 Err(err) => {
                                     debug!(
                                         "failed to deserialize vote account {}: {}",

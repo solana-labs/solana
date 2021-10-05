@@ -41,6 +41,10 @@ pub struct VoteAccounts {
 }
 
 impl VoteAccount {
+    pub fn account(&self) -> &Account {
+        &self.account
+    }
+
     pub fn lamports(&self) -> u64 {
         self.account.lamports
     }
@@ -202,6 +206,12 @@ impl From<Account> for VoteAccount {
             vote_state: RwLock::new(INVALID_VOTE_STATE),
             vote_state_once: Once::new(),
         }
+    }
+}
+
+impl AsRef<VoteAccount> for ArcVoteAccount {
+    fn as_ref(&self) -> &VoteAccount {
+        &self.0
     }
 }
 
