@@ -5,6 +5,7 @@
 //! - add_transaction_cost(&tx), mutable function to accumulate `tx` cost to tracker.
 //!
 use crate::cost_model::{CostModel, CostModelError, TransactionCost};
+use crate::cost_tracker_stats::CostTrackerStats;
 use solana_sdk::{clock::Slot, pubkey::Pubkey, transaction::SanitizedTransaction};
 use std::{
     collections::HashMap,
@@ -12,76 +13,6 @@ use std::{
 };
 
 const WRITABLE_ACCOUNTS_PER_BLOCK: usize = 512;
-
-// cist tracker stats reset for each bank
-#[derive(Debug, Default)]
-pub struct CostTrackerStats {
-    transaction_cost_histogram: histogram::Histogram,
-    writable_accounts_cost_histogram: histogram::Histogram,
-    block_cost: u64,
-    bank_slot: u64,
-}
-
-impl CostTrackerStats {
-    pub fn new(bank_slot: Slot) -> Self {
-        CostTrackerStats {
-            bank_slot,
-            ..CostTrackerStats::default()
-        }
-    }
-
-    fn report(&self) {
-        datapoint_info!(
-            "cost_tracker_stats",
-            (
-                "transaction_cost_unit_min",
-                self.transaction_cost_histogram.minimum().unwrap_or(0),
-                i64
-            ),
-            (
-                "transaction_cost_unit_max",
-                self.transaction_cost_histogram.maximum().unwrap_or(0),
-                i64
-            ),
-            (
-                "transaction_cost_unit_mean",
-                self.transaction_cost_histogram.mean().unwrap_or(0),
-                i64
-            ),
-            (
-                "transaction_cost_unit_2nd_std",
-                self.transaction_cost_histogram
-                    .percentile(95.0)
-                    .unwrap_or(0),
-                i64
-            ),
-            (
-                "writable_accounts_cost_min",
-                self.writable_accounts_cost_histogram.minimum().unwrap_or(0),
-                i64
-            ),
-            (
-                "writable_accounts_cost_max",
-                self.writable_accounts_cost_histogram.maximum().unwrap_or(0),
-                i64
-            ),
-            (
-                "writable_accounts_cost_mean",
-                self.writable_accounts_cost_histogram.mean().unwrap_or(0),
-                i64
-            ),
-            (
-                "writable_accounts_cost_2nd_std",
-                self.writable_accounts_cost_histogram
-                    .percentile(95.0)
-                    .unwrap_or(0),
-                i64
-            ),
-            ("block_cost", self.block_cost, i64),
-            ("bank_slot", self.bank_slot, i64),
-        );
-    }
-}
 
 #[derive(Debug)]
 pub struct CostTracker {
@@ -145,18 +76,25 @@ impl CostTracker {
         }
         self.block_cost += cost;
 
+        stats.transaction_count += 1;
         stats.block_cost += cost;
     }
 
-    pub fn reset_if_new_bank(&mut self, slot: Slot, stats: &mut CostTrackerStats) {
-        if slot != self.current_bank_slot {
-            stats.bank_slot = self.current_bank_slot;
+    pub fn reset_if_new_bank(&mut self, slot: Slot, stats: &mut CostTrackerStats) -> bool {
+        // report stats when slot changes
+        if slot != stats.bank_slot {
             stats.report();
-            *stats = CostTrackerStats::default();
+            *stats = CostTrackerStats::new(stats.id, slot);
+        }
 
+        if slot != self.current_bank_slot {
             self.current_bank_slot = slot;
             self.cost_by_writable_accounts.clear();
             self.block_cost = 0;
+
+            true
+        } else {
+            false
         }
     }
 
