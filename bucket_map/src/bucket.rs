@@ -315,10 +315,10 @@ impl<T: Clone + Copy> Bucket<T> {
         }
     }
 
-    pub fn grow_index(&self, current_capacity: u8) {
-        if self.index.capacity_pow2 == current_capacity {
+    pub fn grow_index(&self, current_capacity_pow2: u8) {
+        if self.index.capacity_pow2 == current_capacity_pow2 {
             let mut m = Measure::start("grow_index");
-            //debug!("GROW_INDEX: {}", current_capacity);
+            //debug!("GROW_INDEX: {}", current_capacity_pow2);
             let increment = 1;
             for i in increment.. {
                 //increasing the capacity by ^4 reduces the
@@ -408,10 +408,10 @@ impl<T: Clone + Copy> Bucket<T> {
 
     /// grow a data bucket
     /// The application of the new bucket is deferred until the next write lock.
-    pub fn grow_data(&self, data_index: u64, current_capacity: u8) {
+    pub fn grow_data(&self, data_index: u64, current_capacity_pow2: u8) {
         let new_bucket = self.index.grow(
             self.data.get(data_index as usize),
-            current_capacity + 1,
+            current_capacity_pow2 + 1,
             1 << data_index,
             Self::elem_size(),
         );
@@ -437,13 +437,13 @@ impl<T: Clone + Copy> Bucket<T> {
     /// The actual grow is set into self.reallocated and applied later on a write lock
     pub fn grow(&self, err: BucketMapError) {
         match err {
-            BucketMapError::DataNoSpace((data_index, current_capacity)) => {
-                //debug!("GROWING SPACE {:?}", (data_index, current_capacity));
-                self.grow_data(data_index, current_capacity);
+            BucketMapError::DataNoSpace((data_index, current_capacity_pow2)) => {
+                //debug!("GROWING SPACE {:?}", (data_index, current_capacity_pow2));
+                self.grow_data(data_index, current_capacity_pow2);
             }
-            BucketMapError::IndexNoSpace(current_capacity) => {
+            BucketMapError::IndexNoSpace(current_capacity_pow2) => {
                 //debug!("GROWING INDEX {}", sz);
-                self.grow_index(current_capacity);
+                self.grow_index(current_capacity_pow2);
             }
         }
     }
