@@ -69,7 +69,9 @@ use {
 
 pub mod blockstore_purge;
 mod blockstore_shreds;
-use blockstore_shreds::{ShredCache, SlotIterator, DATA_SHRED_DIRECTORY, SHRED_DIRECTORY};
+use blockstore_shreds::{ShredCache, DATA_SHRED_DIRECTORY, SHRED_DIRECTORY};
+pub mod blockstore_shred_iterator;
+use blockstore_shred_iterator::SlotIterator;
 mod blockstore_shred_wal;
 use blockstore_shred_wal::{ShredWAL, DEFAULT_MAX_WAL_SHREDS};
 
