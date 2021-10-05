@@ -39,6 +39,7 @@ pub struct BucketMapHolderStats {
     pub flush_scan_us: AtomicU64,
     pub flush_update_us: AtomicU64,
     pub flush_remove_us: AtomicU64,
+    pub flush_grow_us: AtomicU64,
     last_time: AtomicInterval,
 }
 
@@ -231,6 +232,11 @@ impl BucketMapHolderStats {
             (
                 "flush_update_us",
                 self.flush_update_us.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "flush_grow_us",
+                self.flush_remove_us.swap(0, Ordering::Relaxed),
                 i64
             ),
             (

@@ -729,7 +729,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 );
             }
 
-            let m = Measure::start("flush_remove");
+            let m = Measure::start("flush_remove_or_grow");
             match disk_resize {
                 Ok(_) => {
                     if !self.flush_remove_from_cache(removes, current_age, startup, false) {
@@ -751,6 +751,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     // grow the bucket, outside of all in-mem locks.
                     // then, loop to try again
                     disk.grow(err);
+                    Self::update_time_stat(&self.stats().flush_grow_us, m);
                 }
             }
         }
