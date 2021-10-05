@@ -215,9 +215,10 @@ impl UpdateAccountPkProof {
 mod test {
     use super::*;
     use crate::encryption::elgamal::ElGamal;
+    use crate::encryption::pedersen::{Pedersen, PedersenOpening, PedersenDecryptHandle};
 
     #[test]
-    fn test_update_account_public_key_correctness() {
+    fn test_update_account_public_key_general_cases() {
         let (current_pk, current_sk) = ElGamal::new();
         let (new_pk, new_sk) = ElGamal::new();
 
@@ -234,6 +235,12 @@ mod test {
 
         let proof = UpdateAccountPkProof::new(balance, &current_sk, &new_sk, &current_ct, &new_ct);
         assert!(proof.verify(&current_ct, &new_ct).is_err());
+    }
+
+    #[test]
+    fn test_update_account_public_key_zeroed_ciphertexts() {
+        let (current_pk, current_sk) = ElGamal::new();
+        let (new_pk, new_sk) = ElGamal::new();
 
         // A zeroed cipehrtext should be considered as an account balance of 0
         let balance: u64 = 0;
@@ -249,7 +256,7 @@ mod test {
         );
         assert!(proof.verify(&zeroed_ct_as_current_ct, &new_ct).is_ok());
 
-        let current_ct: ElGamalCiphertext = pod::ElGamalCiphertext::zeroed().try_into().unwrap();
+        let current_ct = current_pk.encrypt(balance);
         let zeroed_ct_as_new_ct: ElGamalCiphertext =
             pod::ElGamalCiphertext::zeroed().try_into().unwrap();
         let proof = UpdateAccountPkProof::new(
@@ -275,5 +282,85 @@ mod test {
         assert!(proof
             .verify(&zeroed_ct_as_current_ct, &zeroed_ct_as_new_ct)
             .is_ok());
+    }
+
+    fn test_update_account_public_key_partially_zeroed_ciphertexts() {
+        let (current_pk, current_sk) = ElGamal::new();
+        let (new_pk, new_sk) = ElGamal::new();
+
+        let balance = 0_u64;
+        let balance_ciphertext = new_pk.encrypt(balance);
+
+        let zeroed_comm = Pedersen::with(0_u64, &PedersenOpening::default());
+        let handle = balance_ciphertext.decrypt_handle;
+
+        // Partially zeroed ciphertext as current ciphertext
+        let zeroed_comm_ciphertext = ElGamalCiphertext {
+            message_comm: zeroed_comm,
+            decrypt_handle: handle,
+        };
+        let new_ct: ElGamalCiphertext = new_pk.encrypt(balance);
+
+        let proof = UpdateAccountPkProof::new(
+            balance,
+            &current_sk,
+            &new_sk,
+            &zeroed_comm_ciphertext,
+            &new_ct,
+        );
+        assert!(proof
+            .verify(&zeroed_comm_ciphertext, &new_ct)
+            .is_err());
+
+        let zeroed_handle_ciphertext = ElGamalCiphertext {
+            message_comm: balance_ciphertext.message_comm,
+            decrypt_handle: PedersenDecryptHandle::default(),
+        };
+
+        let proof = UpdateAccountPkProof::new(
+            balance,
+            &current_sk,
+            &new_sk,
+            &zeroed_handle_ciphertext,
+            &new_ct,
+        );
+        assert!(proof
+            .verify(&zeroed_handle_ciphertext, &new_ct)
+            .is_err());
+
+        // Partially zeroed cipehrtext as new ciphertext
+        let zeroed_comm_ciphertext = ElGamalCiphertext {
+            message_comm: zeroed_comm,
+            decrypt_handle: handle,
+        };
+        let current_ct: ElGamalCiphertext = current_pk.encrypt(balance);
+
+        let proof = UpdateAccountPkProof::new(
+            balance,
+            &current_sk,
+            &new_sk,
+            &current_ct,
+            &zeroed_comm_ciphertext,
+        );
+        assert!(proof
+            .verify(&current_ct, &zeroed_comm_ciphertext)
+            .is_err());
+
+        let zeroed_handle_ciphertext = ElGamalCiphertext {
+            message_comm: balance_ciphertext.message_comm,
+            decrypt_handle: PedersenDecryptHandle::default(),
+        };
+
+        let proof = UpdateAccountPkProof::new(
+            balance,
+            &current_sk,
+            &new_sk,
+            &current_ct,
+            &zeroed_handle_ciphertext,
+        );
+        assert!(proof
+            .verify(&current_ct, &zeroed_handle_ciphertext)
+            .is_err());
+
     }
 }
