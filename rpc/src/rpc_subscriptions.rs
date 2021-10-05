@@ -498,11 +498,12 @@ impl RpcSubscriptions {
                 config.queue_capacity_bytes,
             )),
         };
+        let notification_threads = config.notification_threads;
         let t_cleanup = Builder::new()
             .name("solana-rpc-notifications".to_string())
             .spawn(move || {
                 let pool = rayon::ThreadPoolBuilder::new()
-                    .num_threads(16) // TODO: config
+                    .num_threads(notification_threads.unwrap_or(0))
                     .thread_name(|i| format!("solana-rpcray-{}", i))
                     .build()
                     .unwrap();

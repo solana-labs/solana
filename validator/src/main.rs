@@ -1266,6 +1266,15 @@ pub fn main() {
                        across all connections."),
         )
         .arg(
+            Arg::with_name("rpc_pubsub_notification_threads")
+                .long("rpc-pubsub-notification-threads")
+                .takes_value(true)
+                .value_name("NUM_THREADS")
+                .validator(is_parsable::<usize>)
+                .help("The maximum number of threads that RPC PubSub will use \
+                       for generating notifications."),
+        )
+        .arg(
             Arg::with_name("rpc_send_transaction_retry_ms")
                 .long("rpc-send-retry-ms")
                 .value_name("MILLISECS")
@@ -2204,6 +2213,20 @@ pub fn main() {
                 usize
             ),
             worker_threads: value_t_or_exit!(matches, "rpc_pubsub_worker_threads", usize),
+            notification_threads: if let Some(v) =
+                matches.value_of("rpc_pubsub_notification_threads")
+            {
+                match v.parse::<usize>() {
+                    Ok(val) => Some(val),
+                    Err(err) => clap::Error::value_validation_auto(format!(
+                        "The argument '{}' isn't a valid value: {}",
+                        v, err
+                    ))
+                    .exit(),
+                }
+            } else {
+                None
+            },
         },
         voting_disabled: matches.is_present("no_voting") || restricted_repair_only_mode,
         wait_for_supermajority: value_t!(matches, "wait_for_supermajority", Slot).ok(),
