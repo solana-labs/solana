@@ -1,7 +1,6 @@
 //! Stakes serve as a cache of stake and vote accounts to derive
 //! node stakes
 use crate::vote_account::{ArcVoteAccount, VoteAccounts, VoteAccountsHashMap};
-use dashmap::DashMap;
 use rayon::{
     iter::{IntoParallelRefIterator, ParallelIterator},
     ThreadPool,
@@ -55,10 +54,10 @@ impl Stakes {
             let vote_accounts: &VoteAccountsHashMap = self.vote_accounts.borrow();
 
             // construct map of vote pubkey -> list of stake delegations
-            let vote_delegations: DashMap<Pubkey, Vec<&Delegation>> = {
-                let vote_delegations = DashMap::with_capacity(vote_accounts.len());
+            let vote_delegations: HashMap<Pubkey, Vec<&Delegation>> = {
+                let mut vote_delegations = HashMap::with_capacity(vote_accounts.len());
                 stake_delegations
-                    .par_iter()
+                    .iter()
                     .for_each(|(_stake_pubkey, delegation)| {
                         let vote_pubkey = &delegation.voter_pubkey;
                         vote_delegations
@@ -84,8 +83,7 @@ impl Stakes {
 
                 let (effective, activating, deactivating) = vote_delegations
                     .par_iter()
-                    .map(|entry| {
-                        let delegations = entry.value();
+                    .map(|(_vote_pubkey, delegations)| {
                         delegations
                             .par_iter()
                             .map(|delegation| {
@@ -115,8 +113,7 @@ impl Stakes {
                 .map(|(vote_pubkey, (_stake, vote_account))| {
                     let delegated_stake = vote_delegations
                         .get(vote_pubkey)
-                        .map(|entry| {
-                            let delegations = entry.value();
+                        .map(|delegations| {
                             delegations
                                 .par_iter()
                                 .map(|delegation| {
