@@ -8,183 +8,125 @@ The current fee structure lacks a comprehensive account of the work required by
 a validator to process a transaction.  The fee structure is only based on the
 number of signatures in a transaction but is meant to account for the work that
 the validator must perform to validate each transaction.  The validator performs
-a lot more user-defined work than just signature verification.  The work to
-process a transaction typically includes signature verifications, account
-locking, account loading, and instruction processing.
+a lot more user-defined work than just signature verification.  Processing a
+transaction typically includes signature verifications, account locking, account
+loading, and instruction processing.
 
 ## Proposed Solution
 
-### New fee structure
+The following solution does not specify what native token costs are to be
+associated with the new fee structure.  Instead, it sets the criteria and
+provides the knobs that a cost model can use to determine those costs.
 
-In addition to signature checking, the other work required to process an
-instruction should be taken into account.  To do this, the total fee should be
-an accumulated cost of all the work.  Each piece of work can be
-measured/accounted for in a way that makes sense for the type of work involved.
-
-A new fee structure could include:
-1. flat fee per signature
-2. flat fee for each write lock
-3. per-byte fee for the amount of data in each loaded account
-4. pre-calculated fee for builtin-in program instructions
-5. per-compute-unit fee based on the measured number of compute units used to
-   process an instruction
-
-Fees 1-3 can be determined upfront before the message is processed.  #4 could be
-measured and applied, probably by the program itself.  #5 would need to be
-finally accounted for after the message is processed, but the payer's balance
-could be pre-deducted against a compute budget cap for #4 and #5 to ensure they
-have enough lamports to cover a max fee, and then any unused compute budget
-could be credited back after the message is fully processed.
+### Fee
 
 The goal of the fees is to cover the computation cost of processing a
-transaction.  Each of the above fee categories could be represented as a compute
+transaction.  Each of the fee categories below will be represented as a compute
 unit cost that, when added together, encompasses the entire cost of processing
-the transaction.  By calculating the total cost of the transaction the runtime
-can make better decisions on what transactions to process and when, as well as
-throw out transactions that exceed a cap.
+the transaction.  By calculating the total cost of the transaction, the runtime
+can charge a more representative fee and make better transaction scheduling
+decisions.
 
-The per-compute unit fee doesn't have to be linear; developers could be
-non-linearly incentivized to reduce compute costs by optimizing in any of the 4
-fee categories listed above.
+A fee will be calculated based on:
 
-To give developers some control over fees and the compute cap, a new built-in
-instruction could be introduced that requests a specific transaction-wide
-compute budget cap.  The instruction can be used by a developer to reduce the
-cap and thus fees they expect to pay, or to request a higher than the default
-cap.  The runtime could in-turn, use these instructions to determine how to
-schedule these more expensive transactions.
+1. Number of signatures
+   - Fixed rate per signature
+2. Number of write locks
+   - Fixed rate per writable account
+3. Data byte cost
+   - Fixed rate per byte of the sum of the length all a transactions instruction
+     datas
+4. Account sizes
+   - Account sizes can't be known up-front but can account for a considerable
+     amount of the load the transaction incurs on the network.  The payer will
+     be charged for a maximum account size (10m) upfront and refunded the
+     difference after the actual account sizes are known.
+5. Compute budget
+   - Each transaction will be given a default transaction-wide compute budget of
+     200k units with the option of requesting a larger budget via a compute
+     budget instruction up to a maximum of 1m units.  This budget is used to
+     limit the time it takes to process a transaction.  The compute budget
+     portion of the fee will be charged up-front based on the default or
+     requested amount.  After processing, the actual number of units consumed
+     will be known, and the payer will be refunded the difference, so the payer
+     only pays for what they used.  Builtin programs will have a fixed cost
+     while BPF program's cost will be measured at runtime.
+6. Precompiled programs
+   - Precompiled programs are performing compute-intensive operations.  The work
+     incurred by a precompiled program is predictable based on the instruction's
+     data array.  Therefore a cost will be assigned per precompiled program
+     based on the parsing of instruction data.  Because precompiled programs are
+     processed outside of the bank, their compute cost will not be reflected in
+     the compute budget and will not be used in transaction scheduling
+     decisions. The methods used to determine the fixed cost of the components
+     above are described in
+     [#19627](https://github.com/solana-labs/solana/issues/19627)
 
-### Transaction compute caps
+### Cost model
 
-The current compute caps are independently applied to individual instructions.
-This means the overall transaction cap varies depending on how many instructions
-are in the transaction.  Instead, a transaction-wide cap is probably more
-appropriate.  One challenge of the transaction-wide cap is that each instruction
-(program) could no longer expect to be given an equal amount of compute units
-since the number of compute units will be based on the number of units already
-consumed by earlier instructions in the message.  This will provide some
-additional tuning and composability challenges for developers.
+The cost model is used to assess what load a transaction will incur during
+in-slot processing and then make decisions on how to best schedule transaction
+into batches.
 
-### Builtin program compute costs
+The cost model's criteria are identical to the fee's criteria except for
+signatures and precompiled programs.  These two costs are incurred before a
+transaction is scheduled and therefore do not affect how long a transaction
+takes within a slot to process.
 
-Builtin programs do not incur any compute cost at the moment and are therefore
-not accounted for even when a bpf program invokes a builtin program via cpi
-(except the direct overhead cost of the cpi call itself).  Builtin programs
-should incur a program compute cost like any other program.  The challenge is
-how to quantify that compute cost.  One approach would be to measure the cost of
-each builtin program's instructions.
+### Cache account sizes and use them instead of the max
 
-## Proposed steps to implement
+https://github.com/solana-labs/solana/issues/20511
 
-- Apply the compute budget cap across the entire transaction rather than
-  per-instruction
-- Convert the per-sig fee to a per-sig compute cost and incorporate it into the
-  transaction-wide cap.  Initially, keep charging the current per-sig fee.
-- Add compute costs for write locks and account data loading and incorporate
-  those into the transaction-wide cap
-- Remove the per-sig centric fee and start charging fees based on the
-  transaction compute budget
-- Rework how the bank decides which transactions to process and when based on
-  the compute budget expectations
-- Add a built-in instruction that requests the amount of compute budget up front
-- Transaction simulation where the results include the compute costs of the
-  transaction.  This could be granular so that each instruction's cost is
-  reported.
+### Transaction-wide compute caps
 
-## Things to ponder
+The current compute budget caps are independently applied to each instruction
+within a transaction. This means the overall transaction cap varies depending on
+how many instructions are in the transaction.  To more accurately schedule a
+transaction, the compute budget will be applied transaction-wide.  One challenge
+of the transaction-wide cap is that each instruction (program) can no longer
+expect to be given an equal amount of compute units.  Each instruction will be
+given the remaining units left over after processing earlier instructions.  This
+will provide some additional tuning and composability challenges for developers.
 
-- Can things like write locks be meaningfully converted into a compute cost/cap?
-- Should account data size be accounted for in the compute cost/cap
-- Calculating a transaction's fee upfront becomes more difficult, would probably
-  have to be reworded to be max fee based on the compute cap.  Actual fee would
-  be equal to or less than that.
-- "Compute cost" is a lame name, ideas for something better?
+### Requestable compute budget caps and heap sizes
 
-## Mainnet beta transaction wide compute measurements
+The precompiled
+[ComputeBudget](https://github.com/solana-labs/solana/blob/00929f836348d76cb3503d0ba5f76f0d275bcc66/sdk/src/compute_budget.rs#L34)
+program can be used to request higher transaction-wide compute budget caps and
+program heap sizes.  The requested increases will be reflected in the
+transaction's fee.
 
-Over 4 1/2 hours of Mainnet beta monitoring with a 200k instruction cap:
-675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8 (Radium v3?)
-  - exceeded 79669 times
-  - exceeded by between 1 and 800k units
-5fNfvyp5czQVX77yoACa3JJVEhdRaWjPuazuWgjhTqEH (Mango!)
-  - exceeded 60 times
-  - exceeded by < 100k units
+### Fees for precompiled program failures
 
-Both transactions contain 2 or more instructions and both are running the same program in each instruction
+https://github.com/solana-labs/solana/issues/20481
 
-Takeaways:
-- If the transactions were split into single instructions per transaction they would be below the tx-wide compute limit of 200k.
+### Rate governing
 
-## Mainnet beta program performance measurements
+Current rate governing needs to be re-assessed.  Current fees are being rate
+governed down to their minimums because the number of signatures in each slot is
+far lower than the "target" signatures per slot.
 
-```
-Per-program instruction characteristics over 5 minutes of mainnet
-Program                                                    count               Total us        total compute units     units/us
-                                                                     max  med  avg   sd     max   med    avg     sd  med avg  sd
+Instead of using the number of signatures to rate govern, the cost model will
+feed back information based on the batch/queue load it is seeing.  The fees will
+sit at a target rate and only increase if the load goes above a specified but to
+be determined threshold.  The governing will be applied across all the fee
+criteria.
 
-27haf8L6oxUeXrHrgEgsexjSY5hbVUWEmvv9Nyxg8vQv Radium v2       329    9082 1466 2298 3062  126131  58074  65212 24949   32  39  28
-4MNPdKu9wFMvEeZBMt3Eipfs5ovVWTJb31pEXDJAAxX5                  45     264   82   86   36  789       789    789     0   10  8   22
-675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8 (Radium v3?)   6183   15544  858 1310 1355  179980  43283  55484 31286   53  45  79
-7vxeyaXGLqcp66fFShqUdHxdacp4k4kwUpRSSeoZLCZ4                  27    3411 2101 2232  531  149039 115065 114843 18152   53  50 173
-9KEPoZmtHUrBbhWN1v1KWLMkkvwY6WLtAVUCPRtRjP4z                 483    3136  747  646  445   48069  35015  27749 14983   48  47 129
-9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin Serum v3     115445   31749  483  550  430   26388   2489   5232  5181    7   7   7
-ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL                 114    1485  651  681  158   47894  27498  27820  3966   42  40 158
-CBuCnLe26faBpcBP2fktp4rp8abpcAnTWft6ZrP5Q4T                  228    1188  121  240  285   35918   8010  11542  9716   63  54  94
-DjVE6JNiYqPL2QXyCUUh8rNjHrbz9hXHNYt99MQ59qw1                  82    2058  813  845   25   34272  28994  29111  1768   36  34 113
-EhhTKczWMGQt46ynNeRX1WfeagwwJd7ufHvCDjRxjo5Q                 634    1557  111  292  294   29485   6100  11707  8519   53  47 101
-FjJ5mhdRWeuaaremiHjeQextaAw1sKWDqr3D7pXjgztv                  86    2484  951  968  226   40565  40565  40565     0   43  42 179
-J21zqcffYQU2NUJrvAKhqpKZLQK1YaB9dY5kmcxkMQvQ                  72     952  332  334   96   10645  10315  10331   128   32  31 108
-SwaPpA9LAaLfeLi3a68M4DjnLqgtticKg6CnyNwgAC8                  203    9947 1076 1198  896   66633  58706  57275  4676   53  47  61
-TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA                72286    8453  101  112   98    4429   3531   3026   683   29  27  31
-Vote111111111111111111111111111111111111111                        39278  121  160  400
-11111111111111111111111111111111                                      24   11   11    3
-```
+### How do clients calculate a transaction's fee
 
-- Handy compute unit conversions
-  - 10,000 units/us => 20 us @ 200k max units => 50k TPS max
-  - 250 units/us => 800 us @ 200k max units => 1250 TPS max (original tune
-    target)
-  - 25 units/us => 8000 us @ 200k max units => 125 TPS max
-  - 15 units/us => 13333 us @ 200k max units => 75 TPS max
-  - 7 units/us => 30000 us @ 200k max units => 30 TPS max
+Transaction fees are currently calculated based on a fixed cost per signature
+and implemented via an object in the SDK that took a transaction and returned a
+cost.   This object is looked up via a blockhash and returned via RPC to
+calculate the fee offline.
 
-Observations:
-- These numbers only include program execution (message processor, vm
-  setup/takedown, parameter ser/de) but do not include account loading/storing
-- Fairly high level of variability in program measurements (for example, vote
-  program has a mx of 38ms with med of 121)
-- Current compute budget is 200k units max units
-  - At the measured median rate of 15 units/us the max program execution time
-    should be 13ms
-  - The original target was 250 units/us for a max program execution time of 800
-    us
-- Of the 196,243 instructions logged
-  - ~600 above 100k compute units
-  - ~1,700 above 50k
-  - ~9,500 above 20k
-  - ~2,400 above 10k
-  - ~38,000 above 5k
-  - ~196,200 above 2k
-- Currently traffic is dominated by Serum v3 which is very optimized (median
-  2489 units and 483 us)
-- It's possible that some of the programs are not in the executor cache which
-  will add a large time component loading the elf - Somewhere around 80 us of
-  program overhead with 1 account containing zero data
-  - Serializing large accounts can take a significant amount of time
-- Raydium v3 transactions contain many high unit instructions taking multiple ms
-  - In this sample period it appears that all programs besides Raydium would fit
-  within a ~200k transaction-wide limit (currently set to ~200k instruction-wide
-  limit)
+The comprehensive fee calculations are more sophisticated and depend on a
+greater amount of information (recent program compute meter measurements).  To
+move to the new fee structure the RPC APIs that return a FeeCalculator object
+will be deprecated, and clients will send their transactions over RPC and be
+returned the calculated fee.
 
-Takeaways:
-- Establish a targeted default max transaction unit cap
-  - 200k proposed
-  - Work with Raydium to break up their transactions and possibly help them
-    optimize their programs
-  - Can allow developer requested larger or small caps later as per this
-    proposal
-  - When things like account loading get incorporated into the compute budget
-    raise the default cap accordingly.
-- Establish a new unit/us rate that will be used to calculate and set the cost
-  of new program operations (syscalls for example)
-  - What should the target be for a program's max execution time?
+Fees will no longer be calculated based on a blockhash since it is
+cost-prohibitive to retain the fee cost inputs for each bank (program units,
+account sizes).  And mainly, the governed fee is based on network load now, not
+at some time in the past. This will mean that during offline-signing the actual
+fee charged will not be known until the transaction is submitted.
