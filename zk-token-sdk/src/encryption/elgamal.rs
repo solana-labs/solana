@@ -56,7 +56,7 @@ impl ElGamal {
     #[cfg(not(target_arch = "bpf"))]
     pub fn encrypt<T: Into<Scalar>>(pk: &ElGamalPubkey, amount: T) -> ElGamalCiphertext {
         let (message_comm, open) = Pedersen::new(amount);
-        let decrypt_handle = pk.gen_decrypt_handle(&open);
+        let decrypt_handle = pk.decrypt_handle(&open);
 
         ElGamalCiphertext {
             message_comm,
@@ -73,7 +73,7 @@ impl ElGamal {
         open: &PedersenOpening,
     ) -> ElGamalCiphertext {
         let message_comm = Pedersen::with(amount, open);
-        let decrypt_handle = pk.gen_decrypt_handle(open);
+        let decrypt_handle = pk.decrypt_handle(open);
 
         ElGamalCiphertext {
             message_comm,
@@ -153,7 +153,7 @@ impl ElGamalPubkey {
 
     /// Generate a decryption token from an ElGamal public key and a Pedersen
     /// opening.
-    pub fn gen_decrypt_handle(self, open: &PedersenOpening) -> PedersenDecryptHandle {
+    pub fn decrypt_handle(self, open: &PedersenOpening) -> PedersenDecryptHandle {
         PedersenDecryptHandle::new(&self, open)
     }
 }
@@ -395,8 +395,8 @@ mod tests {
         let msg: u32 = 77;
         let (comm, open) = Pedersen::new(msg);
 
-        let decrypt_handle_1 = pk_1.gen_decrypt_handle(&open);
-        let decrypt_handle_2 = pk_2.gen_decrypt_handle(&open);
+        let decrypt_handle_1 = pk_1.decrypt_handle(&open);
+        let decrypt_handle_2 = pk_2.decrypt_handle(&open);
 
         let ct_1: ElGamalCiphertext = (comm, decrypt_handle_1).into();
         let ct_2: ElGamalCiphertext = (comm, decrypt_handle_2).into();

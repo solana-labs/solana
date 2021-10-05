@@ -56,13 +56,13 @@ impl TransferData {
         let (comm_lo, open_lo) = Pedersen::new(amount_lo);
         let (comm_hi, open_hi) = Pedersen::new(amount_hi);
 
-        let handle_source_lo = source_pk.gen_decrypt_handle(&open_lo);
-        let handle_dest_lo = dest_pk.gen_decrypt_handle(&open_lo);
-        let handle_auditor_lo = auditor_pk.gen_decrypt_handle(&open_lo);
+        let handle_source_lo = source_pk.decrypt_handle(&open_lo);
+        let handle_dest_lo = dest_pk.decrypt_handle(&open_lo);
+        let handle_auditor_lo = auditor_pk.decrypt_handle(&open_lo);
 
-        let handle_source_hi = source_pk.gen_decrypt_handle(&open_hi);
-        let handle_dest_hi = dest_pk.gen_decrypt_handle(&open_hi);
-        let handle_auditor_hi = auditor_pk.gen_decrypt_handle(&open_hi);
+        let handle_source_hi = source_pk.decrypt_handle(&open_hi);
+        let handle_dest_hi = dest_pk.decrypt_handle(&open_hi);
+        let handle_auditor_hi = auditor_pk.decrypt_handle(&open_hi);
 
         // message encoding as Pedersen commitments, which will be included in range proof data
         let amount_comms = TransferComms {
