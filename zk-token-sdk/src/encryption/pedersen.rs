@@ -1,7 +1,7 @@
 #[cfg(not(target_arch = "bpf"))]
 use rand::{rngs::OsRng, CryptoRng, RngCore};
 use {
-    crate::encryption::elgamal::{ElGamalCiphertext, ElGamalPubkey},
+    crate::encryption::elgamal::ElGamalPubkey,
     core::ops::{Add, Div, Mul, Sub},
     curve25519_dalek::{
         constants::{RISTRETTO_BASEPOINT_COMPRESSED, RISTRETTO_BASEPOINT_POINT},
@@ -47,8 +47,6 @@ pub struct Pedersen;
 impl Pedersen {
     /// Given a number as input, the function returns a Pedersen commitment of
     /// the number and its corresponding opening.
-    ///
-    /// TODO: Interface that takes a random generator as input
     #[cfg(not(target_arch = "bpf"))]
     #[allow(clippy::new_ret_no_self)]
     pub fn new<T: Into<Scalar>>(amount: T) -> (PedersenCommitment, PedersenOpening) {
@@ -255,20 +253,12 @@ define_div_variants!(
 #[derive(Serialize, Deserialize, Default, Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PedersenDecryptHandle(pub(crate) RistrettoPoint);
 impl PedersenDecryptHandle {
+    pub fn new(pk: &ElGamalPubkey, open: &PedersenOpening) -> Self {
+        Self(pk.get_point() * open.get_scalar())
+    }
+
     pub fn get_point(&self) -> RistrettoPoint {
         self.0
-    }
-
-    pub fn generate_handle(open: &PedersenOpening, pk: &ElGamalPubkey) -> PedersenDecryptHandle {
-        PedersenDecryptHandle(open.get_scalar() * pk.get_point())
-    }
-
-    /// Maps a decryption token and Pedersen commitment to ElGamal ciphertext
-    pub fn to_elgamal_ciphertext(self, comm: PedersenCommitment) -> ElGamalCiphertext {
-        ElGamalCiphertext {
-            message_comm: comm,
-            decrypt_handle: self,
-        }
     }
 
     #[allow(clippy::wrong_self_convention)]

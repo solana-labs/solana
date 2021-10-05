@@ -157,7 +157,7 @@ impl TransferData {
             .try_into()?;
         let decryption_handle = combine_u32_handles(decryption_handle_lo, decryption_handle_hi);
 
-        Ok(decryption_handle.to_elgamal_ciphertext(transfer_comm))
+        Ok((transfer_comm, decryption_handle).into())
     }
 
     /// Extracts the lo and hi destination ciphertexts associated with a transfer data and returns
@@ -173,7 +173,7 @@ impl TransferData {
             self.validity_proof.decryption_handles_hi.dest.try_into()?;
         let decryption_handle = combine_u32_handles(decryption_handle_lo, decryption_handle_hi);
 
-        Ok(decryption_handle.to_elgamal_ciphertext(transfer_comm))
+        Ok((transfer_comm, decryption_handle).into())
     }
 }
 

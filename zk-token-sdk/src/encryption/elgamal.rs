@@ -154,7 +154,7 @@ impl ElGamalPubkey {
     /// Generate a decryption token from an ElGamal public key and a Pedersen
     /// opening.
     pub fn gen_decrypt_handle(self, open: &PedersenOpening) -> PedersenDecryptHandle {
-        PedersenDecryptHandle::generate_handle(open, &self)
+        PedersenDecryptHandle::new(&self, open)
     }
 }
 
@@ -288,6 +288,15 @@ impl ElGamalCiphertext {
     }
 }
 
+impl From<(PedersenCommitment, PedersenDecryptHandle)> for ElGamalCiphertext {
+    fn from((comm, handle): (PedersenCommitment, PedersenDecryptHandle)) -> Self {
+        ElGamalCiphertext {
+            message_comm: comm,
+            decrypt_handle: handle,
+        }
+    }
+}
+
 impl<'a, 'b> Add<&'b ElGamalCiphertext> for &'a ElGamalCiphertext {
     type Output = ElGamalCiphertext;
 
@@ -389,8 +398,8 @@ mod tests {
         let decrypt_handle_1 = pk_1.gen_decrypt_handle(&open);
         let decrypt_handle_2 = pk_2.gen_decrypt_handle(&open);
 
-        let ct_1 = decrypt_handle_1.to_elgamal_ciphertext(comm);
-        let ct_2 = decrypt_handle_2.to_elgamal_ciphertext(comm);
+        let ct_1: ElGamalCiphertext = (comm, decrypt_handle_1).into();
+        let ct_2: ElGamalCiphertext = (comm, decrypt_handle_2).into();
 
         let expected_instance = DiscreteLog {
             generator: PedersenBase::default().G,
