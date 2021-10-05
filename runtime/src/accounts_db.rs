@@ -28,6 +28,7 @@ use crate::{
         SlotSlice, ZeroLamport, ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS,
         ACCOUNTS_INDEX_CONFIG_FOR_TESTING,
     },
+    accounts_update_notifier_interface::AccountsUpdateNotifier,
     ancestors::Ancestors,
     append_vec::{AppendVec, StoredAccountMeta, StoredMeta, StoredMetaWriteVersion},
     cache_hash_data::CacheHashData,
@@ -1037,6 +1038,9 @@ pub struct AccountsDb {
     /// Zero-lamport accounts that are *not* purged during clean because they need to stay alive
     /// for incremental snapshot support.
     zero_lamport_accounts_to_purge_after_full_snapshot: DashSet<(Slot, Pubkey)>,
+
+    /// AccountsDbPlugin accounts update notifier
+    accounts_update_notifier: Option<AccountsUpdateNotifier>,
 }
 
 #[derive(Debug, Default)]
@@ -1178,6 +1182,8 @@ struct LatestAccountsIndexRootsStats {
     roots_range: AtomicU64,
     rooted_cleaned_count: AtomicUsize,
     unrooted_cleaned_count: AtomicUsize,
+    clean_unref_from_storage_us: AtomicU64,
+    clean_dead_slot_us: AtomicU64,
 }
 
 impl LatestAccountsIndexRootsStats {
@@ -1200,6 +1206,14 @@ impl LatestAccountsIndexRootsStats {
         );
         self.unrooted_cleaned_count.fetch_add(
             accounts_index_roots_stats.unrooted_cleaned_count,
+            Ordering::Relaxed,
+        );
+        self.clean_unref_from_storage_us.fetch_add(
+            accounts_index_roots_stats.clean_unref_from_storage_us,
+            Ordering::Relaxed,
+        );
+        self.clean_dead_slot_us.fetch_add(
+            accounts_index_roots_stats.clean_dead_slot_us,
             Ordering::Relaxed,
         );
     }
@@ -1235,6 +1249,16 @@ impl LatestAccountsIndexRootsStats {
             (
                 "rooted_cleaned_count",
                 self.rooted_cleaned_count.swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "clean_unref_from_storage_us",
+                self.clean_unref_from_storage_us.swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "clean_dead_slot_us",
+                self.clean_dead_slot_us.swap(0, Ordering::Relaxed) as i64,
                 i64
             ),
         );
@@ -1504,6 +1528,7 @@ impl AccountsDb {
             shrink_ratio: AccountShrinkThreshold::default(),
             dirty_stores: DashMap::default(),
             zero_lamport_accounts_to_purge_after_full_snapshot: DashSet::default(),
+            accounts_update_notifier: None,
         }
     }
 
@@ -1515,6 +1540,7 @@ impl AccountsDb {
             false,
             AccountShrinkThreshold::default(),
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
+            None,
         )
     }
 
@@ -1525,6 +1551,7 @@ impl AccountsDb {
         caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
         accounts_db_config: Option<AccountsDbConfig>,
+        accounts_update_notifier: Option<AccountsUpdateNotifier>,
     ) -> Self {
         let accounts_index =
             AccountsIndex::new(accounts_db_config.as_ref().and_then(|x| x.index.clone()));
@@ -1539,6 +1566,7 @@ impl AccountsDb {
                 account_indexes,
                 caching_enabled,
                 shrink_ratio,
+                accounts_update_notifier,
                 ..Self::default_with_accounts_index(accounts_index, accounts_hash_cache_path)
             }
         } else {
@@ -2776,10 +2804,10 @@ impl AccountsDb {
     pub fn shrink_all_slots(&self, is_startup: bool, last_full_snapshot_slot: Option<Slot>) {
         const DIRTY_STORES_CLEANING_THRESHOLD: usize = 10_000;
         const OUTER_CHUNK_SIZE: usize = 2000;
-        const INNER_CHUNK_SIZE: usize = OUTER_CHUNK_SIZE / 8;
         if is_startup && self.caching_enabled {
             let slots = self.all_slots_in_storage();
-            let inner_chunk_size = std::cmp::max(INNER_CHUNK_SIZE, 1);
+            let threads = num_cpus::get();
+            let inner_chunk_size = std::cmp::max(OUTER_CHUNK_SIZE / threads, 1);
             slots.chunks(OUTER_CHUNK_SIZE).for_each(|chunk| {
                 chunk.par_chunks(inner_chunk_size).for_each(|slots| {
                     for slot in slots {
@@ -4205,6 +4233,7 @@ impl AccountsDb {
             {
                 let stored_size = offsets[1] - offsets[0];
                 storage.add_account(stored_size);
+
                 infos.push(AccountInfo {
                     store_id: storage.append_vec_id(),
                     offset: offsets[0],
@@ -4224,6 +4253,7 @@ impl AccountsDb {
         self.stats
             .store_find_store
             .fetch_add(total_storage_find_us, Ordering::Relaxed);
+
         infos
     }
 
@@ -5773,6 +5803,7 @@ impl AccountsDb {
         // Should only be `Some` for non-cached slots
         purged_stored_account_slots: Option<&mut AccountSlots>,
     ) {
+        let mut measure = Measure::start("remove_dead_slots_metadata-ms");
         self.clean_dead_slots_from_accounts_index(
             dead_slots_iter.clone(),
             purged_slot_pubkeys,
@@ -5784,6 +5815,8 @@ impl AccountsDb {
                 bank_hashes.remove(slot);
             }
         }
+        measure.stop();
+        inc_new_counter_info!("remove_dead_slots_metadata-ms", measure.as_ms() as usize);
     }
 
     fn clean_dead_slots_from_accounts_index<'a>(
@@ -5793,17 +5826,32 @@ impl AccountsDb {
         // Should only be `Some` for non-cached slots
         purged_stored_account_slots: Option<&mut AccountSlots>,
     ) {
+        let mut accounts_index_root_stats = AccountsIndexRootsStats::default();
+        let mut measure = Measure::start("unref_from_storage");
         if let Some(purged_stored_account_slots) = purged_stored_account_slots {
+            let len = purged_stored_account_slots.len();
+            // we could build a higher level function in accounts_index to group by bin
+            const BATCH_SIZE: usize = 10_000;
+            let batches = 1 + (len / BATCH_SIZE);
+            self.thread_pool_clean.install(|| {
+                (0..batches).into_par_iter().for_each(|batch| {
+                    let skip = batch * BATCH_SIZE;
+                    for (_slot, pubkey) in purged_slot_pubkeys.iter().skip(skip).take(BATCH_SIZE) {
+                        self.accounts_index.unref_from_storage(pubkey);
+                    }
+                })
+            });
             for (slot, pubkey) in purged_slot_pubkeys {
                 purged_stored_account_slots
                     .entry(pubkey)
                     .or_default()
                     .insert(slot);
-                self.accounts_index.unref_from_storage(&pubkey);
             }
         }
+        measure.stop();
+        accounts_index_root_stats.clean_unref_from_storage_us += measure.as_us();
 
-        let mut accounts_index_root_stats = AccountsIndexRootsStats::default();
+        let mut measure = Measure::start("clean_dead_slot");
         let mut rooted_cleaned_count = 0;
         let mut unrooted_cleaned_count = 0;
         let dead_slots: Vec<_> = dead_slots_iter
@@ -5817,6 +5865,8 @@ impl AccountsDb {
                 *slot
             })
             .collect();
+        measure.stop();
+        accounts_index_root_stats.clean_dead_slot_us += measure.as_us();
         info!("remove_dead_slots_metadata: slots {:?}", dead_slots);
 
         accounts_index_root_stats.rooted_cleaned_count += rooted_cleaned_count;
@@ -5847,9 +5897,10 @@ impl AccountsDb {
                     .into_par_iter()
                     .map(|store| {
                         let accounts = store.all_accounts();
+                        let slot = store.slot();
                         accounts
                             .into_iter()
-                            .map(|account| (store.slot(), account.meta.pubkey))
+                            .map(|account| (slot, account.meta.pubkey))
                             .collect::<HashSet<(Slot, Pubkey)>>()
                     })
                     .reduce(HashSet::new, |mut reduced, store_pubkeys| {
@@ -5921,6 +5972,16 @@ impl AccountsDb {
 
     pub fn store_cached(&self, slot: Slot, accounts: &[(&Pubkey, &AccountSharedData)]) {
         self.store(slot, accounts, self.caching_enabled);
+
+        if let Some(accounts_update_notifier) = &self.accounts_update_notifier {
+            let notifier = &accounts_update_notifier.read().unwrap();
+
+            for account in accounts {
+                let pubkey = account.0;
+                let account = account.1;
+                notifier.notify_account_update(slot, pubkey, account);
+            }
+        }
     }
 
     /// Store the account update.
@@ -6662,6 +6723,24 @@ impl AccountsDb {
             }
         }
     }
+
+    pub fn notify_account_restore_from_snapshot(&self) {
+        if let Some(accounts_update_notifier) = &self.accounts_update_notifier {
+            let notifier = &accounts_update_notifier.read().unwrap();
+            let slots = self.storage.all_slots();
+            for slot in &slots {
+                let slot_stores = self.storage.get_slot_stores(*slot).unwrap();
+
+                let slot_stores = slot_stores.read().unwrap();
+                for (_, storage_entry) in slot_stores.iter() {
+                    let accounts = storage_entry.all_accounts();
+                    for account in &accounts {
+                        notifier.notify_account_restore_from_snapshot(*slot, account);
+                    }
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -6684,6 +6763,7 @@ impl AccountsDb {
             caching_enabled,
             shrink_ratio,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
+            None,
         )
     }
 

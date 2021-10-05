@@ -8,15 +8,17 @@ type Props = {
   link?: boolean;
 };
 export function Slot({ slot, link }: Props) {
-  return link ? (
-    <Copyable text={slot.toString()}>
-      <span className="text-monospace">
-        <Link to={clusterPath(`/block/${slot}`)}>
-          {slot.toLocaleString("en-US")}
-        </Link>
-      </span>
-    </Copyable>
-  ) : (
-    <span className="text-monospace">{slot.toLocaleString("en-US")}</span>
+  return (
+    <span className="text-monospace">
+      {link ? (
+        <Copyable text={slot.toString()}>
+          <Link to={clusterPath(`/block/${slot}`)}>
+            {slot.toLocaleString("en-US")}
+          </Link>
+        </Copyable>
+      ) : (
+        slot.toLocaleString("en-US")
+      )}
+    </span>
   );
 }

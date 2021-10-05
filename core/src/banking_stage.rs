@@ -41,6 +41,7 @@ use solana_sdk::{
     timing::{duration_as_ms, timestamp, AtomicInterval},
     transaction::{self, SanitizedTransaction, TransactionError, VersionedTransaction},
 };
+use solana_streamer::sendmmsg::{batch_send, SendPktsError};
 use solana_transaction_status::token_balances::{
     collect_token_balances, TransactionTokenBalancesSet,
 };
@@ -375,10 +376,15 @@ impl BankingStage {
         data_budget.update(INTERVAL_MS, |bytes| {
             std::cmp::min(bytes + MAX_BYTES_PER_INTERVAL, MAX_BYTES_BUDGET)
         });
+
+        let mut packet_vec = Vec::with_capacity(packets.len());
         for p in packets {
             if data_budget.take(p.meta.size) {
-                socket.send_to(&p.data[..p.meta.size], &tpu_forwards)?;
+                packet_vec.push((&p.data[..p.meta.size], tpu_forwards));
             }
+        }
+        if let Err(SendPktsError::IoError(ioerr, _num_failed)) = batch_send(socket, &packet_vec) {
+            return Err(ioerr);
         }
 
         Ok(())

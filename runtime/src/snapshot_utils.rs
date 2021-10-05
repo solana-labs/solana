@@ -2,6 +2,7 @@ use {
     crate::{
         accounts_db::{AccountShrinkThreshold, AccountsDbConfig},
         accounts_index::AccountSecondaryIndexes,
+        accounts_update_notifier_interface::AccountsUpdateNotifier,
         bank::{Bank, BankSlotDelta},
         builtins::Builtins,
         hardened_unpack::{unpack_snapshot, ParallelSelector, UnpackError, UnpackedAppendVecMap},
@@ -734,6 +735,7 @@ pub fn bank_from_snapshot_archives(
     accounts_db_skip_shrink: bool,
     verify_index: bool,
     accounts_db_config: Option<AccountsDbConfig>,
+    accounts_update_notifier: Option<AccountsUpdateNotifier>,
 ) -> Result<(Bank, BankFromArchiveTimings)> {
     check_are_snapshots_compatible(
         full_snapshot_archive_info,
@@ -798,6 +800,7 @@ pub fn bank_from_snapshot_archives(
         shrink_ratio,
         verify_index,
         accounts_db_config,
+        accounts_update_notifier,
     )?;
     measure_rebuild.stop();
     info!("{}", measure_rebuild);
@@ -844,6 +847,7 @@ pub fn bank_from_latest_snapshot_archives(
     accounts_db_skip_shrink: bool,
     verify_index: bool,
     accounts_db_config: Option<AccountsDbConfig>,
+    accounts_update_notifier: Option<AccountsUpdateNotifier>,
 ) -> Result<(
     Bank,
     BankFromArchiveTimings,
@@ -887,6 +891,7 @@ pub fn bank_from_latest_snapshot_archives(
         accounts_db_skip_shrink,
         verify_index,
         accounts_db_config,
+        accounts_update_notifier,
     )?;
 
     verify_bank_against_expected_slot_hash(
@@ -1424,6 +1429,7 @@ fn rebuild_bank_from_snapshots(
     shrink_ratio: AccountShrinkThreshold,
     verify_index: bool,
     accounts_db_config: Option<AccountsDbConfig>,
+    accounts_update_notifier: Option<AccountsUpdateNotifier>,
 ) -> Result<Bank> {
     let (full_snapshot_version, full_snapshot_root_paths) =
         verify_unpacked_snapshots_dir_and_version(
@@ -1472,6 +1478,7 @@ fn rebuild_bank_from_snapshots(
                     shrink_ratio,
                     verify_index,
                     accounts_db_config,
+                    accounts_update_notifier,
                 ),
             }?,
         )
@@ -1594,15 +1601,8 @@ pub fn snapshot_bank(
     hash_for_testing: Option<Hash>,
     snapshot_type: Option<SnapshotType>,
 ) -> Result<()> {
-    let snapshot_storages = snapshot_type.map_or_else(SnapshotStorages::default, |snapshot_type| {
-        let incremental_snapshot_base_slot = match snapshot_type {
-            SnapshotType::IncrementalSnapshot(incremental_snapshot_base_slot) => {
-                Some(incremental_snapshot_base_slot)
-            }
-            _ => None,
-        };
-        root_bank.get_snapshot_storages(incremental_snapshot_base_slot)
-    });
+    let snapshot_storages = get_snapshot_storages(root_bank, snapshot_type);
+
     let mut add_snapshot_time = Measure::start("add-snapshot-ms");
     let bank_snapshot_info = add_bank_snapshot(
         &bank_snapshots_dir,
@@ -1630,6 +1630,48 @@ pub fn snapshot_bank(
     accounts_package_sender.send(accounts_package)?;
 
     Ok(())
+}
+
+/// Get the snapshot storages for this bank and snapshot_type
+fn get_snapshot_storages(bank: &Bank, snapshot_type: Option<SnapshotType>) -> SnapshotStorages {
+    let mut measure_snapshot_storages = Measure::start("snapshot-storages");
+    let snapshot_storages = snapshot_type.map_or_else(SnapshotStorages::default, |snapshot_type| {
+        let incremental_snapshot_base_slot = match snapshot_type {
+            SnapshotType::IncrementalSnapshot(incremental_snapshot_base_slot) => {
+                Some(incremental_snapshot_base_slot)
+            }
+            _ => None,
+        };
+        bank.get_snapshot_storages(incremental_snapshot_base_slot)
+    });
+    measure_snapshot_storages.stop();
+
+    if let Some(snapshot_type) = snapshot_type {
+        let snapshot_storages_count_name;
+        let snapshot_storages_time_name;
+        match snapshot_type {
+            SnapshotType::FullSnapshot => {
+                snapshot_storages_count_name = "full-snapshot-storages-count";
+                snapshot_storages_time_name = "full-snapshot-storages-time-ms";
+            }
+            SnapshotType::IncrementalSnapshot(_) => {
+                snapshot_storages_count_name = "incremental-snapshot-storages-count";
+                snapshot_storages_time_name = "incremental-snapshot-storages-time-ms";
+            }
+        }
+        let snapshot_storages_count = snapshot_storages.iter().map(Vec::len).sum::<usize>();
+        datapoint_info!(
+            "get_snapshot_storages",
+            (snapshot_storages_count_name, snapshot_storages_count, i64),
+            (
+                snapshot_storages_time_name,
+                measure_snapshot_storages.as_ms(),
+                i64
+            ),
+        );
+    }
+
+    snapshot_storages
 }
 
 /// Convenience function to create a full snapshot archive out of any Bank, regardless of state.
@@ -2610,6 +2652,7 @@ mod tests {
             false,
             false,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
+            None,
         )
         .unwrap();
 
@@ -2701,6 +2744,7 @@ mod tests {
             false,
             false,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
+            None,
         )
         .unwrap();
 
@@ -2811,6 +2855,7 @@ mod tests {
             false,
             false,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
+            None,
         )
         .unwrap();
 
@@ -2910,6 +2955,7 @@ mod tests {
             false,
             false,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
+            None,
         )
         .unwrap();
 
@@ -3051,6 +3097,7 @@ mod tests {
             false,
             false,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
+            None,
         )
         .unwrap();
         assert_eq!(
@@ -3113,6 +3160,7 @@ mod tests {
             false,
             false,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
+            None,
         )
         .unwrap();
         assert_eq!(

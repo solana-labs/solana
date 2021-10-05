@@ -774,7 +774,7 @@ impl ProgramTest {
         // Add loaders
         macro_rules! add_builtin {
             ($b:expr) => {
-                bank.add_builtin(&$b.0, $b.1, $b.2)
+                bank.add_builtin(&$b.0, &$b.1, $b.2)
             };
         }
         add_builtin!(solana_bpf_loader_deprecated_program!());
@@ -795,7 +795,7 @@ impl ProgramTest {
         for builtin in self.builtins.iter() {
             bank.add_builtin(
                 &builtin.name,
-                builtin.id,
+                &builtin.id,
                 builtin.process_instruction_with_context,
             );
         }

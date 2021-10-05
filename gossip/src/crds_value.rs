@@ -84,8 +84,8 @@ pub enum CrdsData {
     ContactInfo(ContactInfo),
     Vote(VoteIndex, Vote),
     LowestSlot(/*DEPRECATED:*/ u8, LowestSlot),
-    SnapshotHashes(SnapshotHash),
-    AccountsHashes(SnapshotHash),
+    SnapshotHashes(SnapshotHashes),
+    AccountsHashes(SnapshotHashes),
     EpochSlots(EpochSlotsIndex, EpochSlots),
     LegacyVersion(LegacyVersion),
     Version(Version),
@@ -147,8 +147,8 @@ impl CrdsData {
         match kind {
             0 => CrdsData::ContactInfo(ContactInfo::new_rand(rng, pubkey)),
             1 => CrdsData::LowestSlot(rng.gen(), LowestSlot::new_rand(rng, pubkey)),
-            2 => CrdsData::SnapshotHashes(SnapshotHash::new_rand(rng, pubkey)),
-            3 => CrdsData::AccountsHashes(SnapshotHash::new_rand(rng, pubkey)),
+            2 => CrdsData::SnapshotHashes(SnapshotHashes::new_rand(rng, pubkey)),
+            3 => CrdsData::AccountsHashes(SnapshotHashes::new_rand(rng, pubkey)),
             4 => CrdsData::Version(Version::new_rand(rng, pubkey)),
             5 => CrdsData::Vote(rng.gen_range(0, MAX_VOTES), Vote::new_rand(rng, pubkey)),
             _ => CrdsData::EpochSlots(
@@ -160,13 +160,13 @@ impl CrdsData {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, AbiExample)]
-pub struct SnapshotHash {
+pub struct SnapshotHashes {
     pub from: Pubkey,
     pub hashes: Vec<(Slot, Hash)>,
     pub wallclock: u64,
 }
 
-impl Sanitize for SnapshotHash {
+impl Sanitize for SnapshotHashes {
     fn sanitize(&self) -> Result<(), SanitizeError> {
         sanitize_wallclock(self.wallclock)?;
         for (slot, _) in &self.hashes {
@@ -178,7 +178,7 @@ impl Sanitize for SnapshotHash {
     }
 }
 
-impl SnapshotHash {
+impl SnapshotHashes {
     pub fn new(from: Pubkey, hashes: Vec<(Slot, Hash)>) -> Self {
         Self {
             from,
@@ -187,7 +187,7 @@ impl SnapshotHash {
         }
     }
 
-    /// New random SnapshotHash for tests and benchmarks.
+    /// New random SnapshotHashes for tests and benchmarks.
     pub(crate) fn new_rand<R: Rng>(rng: &mut R, pubkey: Option<Pubkey>) -> Self {
         let num_hashes = rng.gen_range(0, MAX_SNAPSHOT_HASHES) + 1;
         let hashes = std::iter::repeat_with(|| {
@@ -475,7 +475,7 @@ impl fmt::Display for CrdsValueLabel {
             CrdsValueLabel::ContactInfo(_) => write!(f, "ContactInfo({})", self.pubkey()),
             CrdsValueLabel::Vote(ix, _) => write!(f, "Vote({}, {})", ix, self.pubkey()),
             CrdsValueLabel::LowestSlot(_) => write!(f, "LowestSlot({})", self.pubkey()),
-            CrdsValueLabel::SnapshotHashes(_) => write!(f, "SnapshotHash({})", self.pubkey()),
+            CrdsValueLabel::SnapshotHashes(_) => write!(f, "SnapshotHashes({})", self.pubkey()),
             CrdsValueLabel::EpochSlots(ix, _) => write!(f, "EpochSlots({}, {})", ix, self.pubkey()),
             CrdsValueLabel::AccountsHashes(_) => write!(f, "AccountsHashes({})", self.pubkey()),
             CrdsValueLabel::LegacyVersion(_) => write!(f, "LegacyVersion({})", self.pubkey()),
@@ -584,7 +584,7 @@ impl CrdsValue {
         }
     }
 
-    pub(crate) fn accounts_hash(&self) -> Option<&SnapshotHash> {
+    pub(crate) fn accounts_hash(&self) -> Option<&SnapshotHashes> {
         match &self.data {
             CrdsData::AccountsHashes(slots) => Some(slots),
             _ => None,

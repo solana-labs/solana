@@ -11,6 +11,7 @@ import {
 } from "validators/accounts/stake";
 import BN from "bn.js";
 import { StakeActivationData } from "@solana/web3.js";
+import { Epoch } from "components/common/Epoch";
 
 const MAX_EPOCH = new BN(2).pow(new BN(64)).sub(new BN(1));
 
@@ -162,12 +163,12 @@ function DelegationCard({
   const delegation = stakeAccount?.stake?.delegation;
   if (delegation) {
     voterPubkey = delegation.voter;
-    activationEpoch = delegation.activationEpoch.eq(MAX_EPOCH)
-      ? "-"
-      : delegation.activationEpoch.toString();
-    deactivationEpoch = delegation.deactivationEpoch.eq(MAX_EPOCH)
-      ? "-"
-      : delegation.deactivationEpoch.toString();
+    if (!delegation.activationEpoch.eq(MAX_EPOCH)) {
+      activationEpoch = delegation.activationEpoch.toNumber();
+    }
+    if (!delegation.deactivationEpoch.eq(MAX_EPOCH)) {
+      deactivationEpoch = delegation.deactivationEpoch.toNumber();
+    }
   }
   const { stake } = stakeAccount;
   return (
@@ -223,12 +224,23 @@ function DelegationCard({
 
             <tr>
               <td>Activation Epoch</td>
-              <td className="text-lg-right">{activationEpoch}</td>
+              <td className="text-lg-right">
+                {activationEpoch !== undefined ? (
+                  <Epoch epoch={activationEpoch} link />
+                ) : (
+                  "-"
+                )}
+              </td>
             </tr>
-
             <tr>
               <td>Deactivation Epoch</td>
-              <td className="text-lg-right">{deactivationEpoch}</td>
+              <td className="text-lg-right">
+                {deactivationEpoch !== undefined ? (
+                  <Epoch epoch={deactivationEpoch} link />
+                ) : (
+                  "-"
+                )}
+              </td>
             </tr>
           </>
         )}

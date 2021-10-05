@@ -1,11 +1,14 @@
-use solana_sdk::{
-    hash::Hash,
-    instruction::CompiledInstruction,
-    signature::{Keypair, Signer},
-    stake,
-    system_instruction::SystemInstruction,
-    system_program, system_transaction,
-    transaction::Transaction,
+use {
+    solana_sdk::{
+        hash::Hash,
+        instruction::CompiledInstruction,
+        signature::{Keypair, Signer},
+        stake,
+        system_instruction::SystemInstruction,
+        system_program, system_transaction,
+        transaction::Transaction,
+    },
+    solana_vote_program::vote_transaction,
 };
 
 pub fn test_tx() -> Transaction {
@@ -38,5 +41,18 @@ pub fn test_multisig_tx() -> Transaction {
         blockhash,
         program_ids,
         instructions,
+    )
+}
+
+pub fn vote_tx() -> Transaction {
+    let keypair = Keypair::new();
+    vote_transaction::new_vote_transaction(
+        vec![2],
+        Hash::default(),
+        Hash::default(),
+        &keypair,
+        &keypair,
+        &keypair,
+        None,
     )
 }

@@ -79,8 +79,6 @@ export function BlockHistoryCard({ block }: { block: BlockResponse }) {
   }, [block]);
 
   const filteredTransactions = React.useMemo(() => {
-    // console.log("Filter: ", filter);
-    // console.log("invocations", transactions);
     return transactions.filter(({ invocations }) => {
       if (filter === ALL_TRANSACTIONS) {
         return true;

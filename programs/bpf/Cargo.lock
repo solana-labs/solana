@@ -1012,6 +1012,7 @@ dependencies = [
  "cfg-if 0.1.10",
  "libc",
  "wasi 0.9.0+wasi-snapshot-preview1",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -1270,9 +1271,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "61124eeebbd69b8190558df225adf7e4caafce0d743919e5d6b19652314ec5ec"
 dependencies = [
  "cfg-if 1.0.0",
- "js-sys",
- "wasm-bindgen",
- "web-sys",
 ]
 
 [[package]]
@@ -1364,9 +1362,9 @@ dependencies = [
 
 [[package]]
 name = "libc"
-version = "0.2.102"
+version = "0.2.103"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a2a5ac8f984bfcf3a823267e5fde638acc3325f6496633a5da6bb6eb2171e103"
+checksum = "dd8f7255a17a627354f321ef0055d63b898c6fb27eff628af4d1b66b7331edf6"
 
 [[package]]
 name = "libloading"
@@ -1668,9 +1666,6 @@ name = "once_cell"
 version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "692fcb63b64b1758029e0a96ee63e049ce8c5948587f2f7208df04625e5f6b56"
-dependencies = [
- "parking_lot",
-]
 
 [[package]]
 name = "opaque-debug"
@@ -1696,9 +1691,9 @@ dependencies = [
 
 [[package]]
 name = "ouroboros"
-version = "0.10.1"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84236d64f1718c387232287cf036eb6632a5ecff226f4ff9dccb8c2b79ba0bde"
+checksum = "c711f35b4e881534535e7d943aa158ed673baf8e73b06bdd93b31703cf968cc3"
 dependencies = [
  "aliasable",
  "ouroboros_macro",
@@ -1707,9 +1702,9 @@ dependencies = [
 
 [[package]]
 name = "ouroboros_macro"
-version = "0.10.1"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f463857a6eb96c0136b1d56e56c718350cef30412ec065b48294799a088bca68"
+checksum = "adbdedd935f91827ea19bb8b97c20dd5870221eac3e9d9a2e70367ecc813479d"
 dependencies = [
  "Inflector",
  "proc-macro-error",
@@ -2499,6 +2494,9 @@ dependencies = [
  "net2",
  "solana-account-decoder",
  "solana-bpf-loader-program",
+ "solana-bpf-rust-invoke",
+ "solana-bpf-rust-realloc",
+ "solana-bpf-rust-realloc-invoke",
  "solana-cli-output",
  "solana-logger 1.8.0",
  "solana-measure",
@@ -2726,6 +2724,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-bpf-rust-realloc"
+version = "1.8.0"
+dependencies = [
+ "solana-program 1.8.0",
+]
+
+[[package]]
+name = "solana-bpf-rust-realloc-invoke"
+version = "1.8.0"
+dependencies = [
+ "solana-bpf-rust-realloc",
+ "solana-program 1.8.0",
+]
+
+[[package]]
 name = "solana-bpf-rust-ro-account_modify"
 version = "1.8.0"
 dependencies = [
@@ -2933,13 +2946,6 @@ dependencies = [
  "syn 0.15.44",
  "syn 1.0.67",
  "winapi",
-]
-
-[[package]]
-name = "solana-ed25519-program"
-version = "1.8.0"
-dependencies = [
- "solana-sdk",
 ]
 
 [[package]]
@@ -3249,7 +3255,6 @@ dependencies = [
  "solana-bucket-map",
  "solana-compute-budget-program",
  "solana-config-program",
- "solana-ed25519-program",
  "solana-frozen-abi 1.8.0",
  "solana-frozen-abi-macro 1.8.0",
  "solana-logger 1.8.0",
@@ -3258,7 +3263,6 @@ dependencies = [
  "solana-program-runtime",
  "solana-rayon-threadlimit",
  "solana-sdk",
- "solana-secp256k1-program",
  "solana-stake-program",
  "solana-vote-program",
  "symlink",
@@ -3338,13 +3342,6 @@ dependencies = [
  "quote 1.0.6",
  "rustversion",
  "syn 1.0.67",
-]
-
-[[package]]
-name = "solana-secp256k1-program"
-version = "1.8.0"
-dependencies = [
- "solana-sdk",
 ]
 
 [[package]]
@@ -3683,20 +3680,20 @@ dependencies = [
 
 [[package]]
 name = "tiny-bip39"
-version = "0.8.1"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "524daa5624d9d4ffb5a0625971d35205b882111daa6b6338a7a6c578a3c36928"
+checksum = "ffc59cb9dfc85bb312c3a78fd6aa8a8582e310b0fa885d5bb877f6dcc601839d"
 dependencies = [
  "anyhow",
  "hmac 0.8.1",
  "once_cell",
- "parking_lot",
  "pbkdf2 0.4.0",
  "rand 0.7.3",
  "rustc-hash",
  "sha2",
  "thiserror",
  "unicode-normalization",
+ "wasm-bindgen",
  "zeroize",
 ]
 
@@ -3888,10 +3885,13 @@ dependencies = [
  "httparse",
  "log",
  "rand 0.8.2",
+ "rustls",
  "sha-1",
  "thiserror",
  "url",
  "utf-8",
+ "webpki",
+ "webpki-roots",
 ]
 
 [[package]]
@@ -4196,9 +4196,9 @@ dependencies = [
 
 [[package]]
 name = "zeroize_derive"
-version = "1.0.0"
+version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "de251eec69fc7c1bc3923403d18ececb929380e016afe103da75f396704f8ca2"
+checksum = "bdff2024a851a322b08f179173ae2ba620445aef1e838f0c196820eade4ae0c7"
 dependencies = [
  "proc-macro2 1.0.24",
  "quote 1.0.6",

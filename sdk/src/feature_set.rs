@@ -219,6 +219,16 @@ pub mod stakes_remove_delegation_if_inactive {
     solana_sdk::declare_id!("HFpdDDNQjvcXnXKec697HDDsyk6tFoWS2o8fkxuhQZpL");
 }
 
+pub mod do_support_realloc {
+    solana_sdk::declare_id!("75m6ysz33AfLA5DDEzWM1obBrnPQRSsdVQ2nRmc8Vuu1");
+}
+
+// Note: when this feature is cleaned up, also remove the secp256k1 program from
+// the list of builtins and remove its files from /programs
+pub mod prevent_calling_precompiles_as_programs {
+    solana_sdk::declare_id!("4ApgRX3ud6p7LNMJmsuaAcZY5HWctGPr5obAsjB3A54d");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -260,7 +270,7 @@ lazy_static! {
         (instructions_sysvar_owned_by_sysvar::id(), "fix owner for instructions sysvar"),
         (close_upgradeable_program_accounts::id(), "enable closing upgradeable program accounts"),
         (stake_program_advance_activating_credits_observed::id(), "Enable advancing credits observed for activation epoch #19309"),
-        (demote_program_write_locks::id(), "demote program write locks to readonly #19593"),
+        (demote_program_write_locks::id(), "demote program write locks to readonly, except when upgradeable loader present #19593 #20265"),
         (ed25519_program_enabled::id(), "enable builtin ed25519 signature verify program"),
         (allow_native_ids::id(), "allow native program ids in program derived addresses"),
         (check_seed_length::id(), "Check program address seed lengths"),
@@ -269,6 +279,8 @@ lazy_static! {
         (reduce_required_deploy_balance::id(), "reduce required payer balance for program deploys"),
         (sol_log_data_syscall_enabled::id(), "enable sol_log_data syscall"),
         (stakes_remove_delegation_if_inactive::id(), "remove delegations from stakes cache when inactive"),
+        (do_support_realloc::id(), "support account data reallocation"),
+        (prevent_calling_precompiles_as_programs::id(), "Prevent calling precompiles as programs"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

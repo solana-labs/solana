@@ -9,11 +9,13 @@ use {
             config::Config,
             instruction::{LockupArgs, StakeError},
         },
-        stake_history::StakeHistory,
+        stake_history::{StakeHistory, StakeHistoryEntry},
     },
     borsh::{maybestd::io, BorshDeserialize, BorshSchema},
     std::collections::HashSet,
 };
+
+pub type StakeActivationStatus = StakeHistoryEntry;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Copy, AbiExample)]
 #[allow(clippy::large_enum_variant)]
@@ -342,28 +344,33 @@ impl Delegation {
     }
 
     pub fn stake(&self, epoch: Epoch, history: Option<&StakeHistory>) -> u64 {
-        self.stake_activating_and_deactivating(epoch, history).0
+        self.stake_activating_and_deactivating(epoch, history)
+            .effective
     }
 
-    // returned tuple is (effective, activating, deactivating) stake
     #[allow(clippy::comparison_chain)]
     pub fn stake_activating_and_deactivating(
         &self,
         target_epoch: Epoch,
         history: Option<&StakeHistory>,
-    ) -> (u64, u64, u64) {
-        let delegated_stake = self.stake;
-
+    ) -> StakeActivationStatus {
         // first, calculate an effective and activating stake
         let (effective_stake, activating_stake) = self.stake_and_activating(target_epoch, history);
 
         // then de-activate some portion if necessary
         if target_epoch < self.deactivation_epoch {
             // not deactivated
-            (effective_stake, activating_stake, 0)
+            if activating_stake == 0 {
+                StakeActivationStatus::with_effective(effective_stake)
+            } else {
+                StakeActivationStatus::with_effective_and_activating(
+                    effective_stake,
+                    activating_stake,
+                )
+            }
         } else if target_epoch == self.deactivation_epoch {
             // can only deactivate what's activated
-            (effective_stake, 0, effective_stake.min(delegated_stake))
+            StakeActivationStatus::with_deactivating(effective_stake)
         } else if let Some((history, mut prev_epoch, mut prev_cluster_stake)) =
             history.and_then(|history| {
                 history
@@ -420,10 +427,10 @@ impl Delegation {
             }
 
             // deactivating stake should equal to all of currently remaining effective stake
-            (current_effective_stake, 0, current_effective_stake)
+            StakeActivationStatus::with_deactivating(current_effective_stake)
         } else {
             // no history or I've dropped out of history, so assume fully deactivated
-            (0, 0, 0)
+            StakeActivationStatus::default()
         }
     }
 

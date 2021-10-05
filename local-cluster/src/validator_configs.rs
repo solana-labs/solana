@@ -13,6 +13,7 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         account_shrink_paths: config.account_shrink_paths.clone(),
         rpc_config: config.rpc_config.clone(),
         accountsdb_repl_service_config: config.accountsdb_repl_service_config.clone(),
+        accountsdb_plugin_config_file: config.accountsdb_plugin_config_file.clone(),
         rpc_addrs: config.rpc_addrs,
         pubsub_config: config.pubsub_config.clone(),
         snapshot_config: config.snapshot_config.clone(),

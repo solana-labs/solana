@@ -1,5 +1,10 @@
 import React from "react";
-import { clusterApiUrl, Connection } from "@solana/web3.js";
+import {
+  clusterApiUrl,
+  Connection,
+  EpochInfo,
+  EpochSchedule,
+} from "@solana/web3.js";
 import { useQuery } from "../utils/url";
 import { useHistory, useLocation } from "react-router-dom";
 import { reportError } from "utils/sentry";
@@ -74,6 +79,8 @@ interface State {
   cluster: Cluster;
   customUrl: string;
   firstAvailableBlock?: number;
+  epochSchedule?: EpochSchedule;
+  epochInfo?: EpochInfo;
   status: ClusterStatus;
 }
 
@@ -82,6 +89,8 @@ interface Action {
   cluster: Cluster;
   customUrl: string;
   firstAvailableBlock?: number;
+  epochSchedule?: EpochSchedule;
+  epochInfo?: EpochInfo;
 }
 
 type Dispatch = (action: Action) => void;
@@ -191,11 +200,15 @@ async function updateCluster(
   try {
     const connection = new Connection(clusterUrl(cluster, customUrl));
     const firstAvailableBlock = await connection.getFirstAvailableBlock();
+    const epochSchedule = await connection.getEpochSchedule();
+    const epochInfo = await connection.getEpochInfo();
     dispatch({
       status: ClusterStatus.Connected,
       cluster,
       customUrl,
       firstAvailableBlock,
+      epochSchedule,
+      epochInfo,
     });
   } catch (error) {
     if (cluster !== Cluster.Custom) {

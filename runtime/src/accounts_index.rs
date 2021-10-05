@@ -284,37 +284,6 @@ impl<T: IndexValue> PreAllocatedAccountMapEntry<T> {
     }
 }
 
-#[self_referencing]
-pub struct WriteAccountMapEntry<T: IndexValue> {
-    owned_entry: AccountMapEntry<T>,
-    #[borrows(owned_entry)]
-    #[covariant]
-    slot_list_guard: RwLockWriteGuard<'this, SlotList<T>>,
-}
-
-impl<T: IndexValue> WriteAccountMapEntry<T> {
-    pub fn from_account_map_entry(account_map_entry: AccountMapEntry<T>) -> Self {
-        WriteAccountMapEntryBuilder {
-            owned_entry: account_map_entry,
-            slot_list_guard_builder: |lock| lock.slot_list.write().unwrap(),
-        }
-        .build()
-    }
-
-    pub fn slot_list(&self) -> &SlotList<T> {
-        &*self.borrow_slot_list_guard()
-    }
-
-    pub fn slot_list_mut<RT>(
-        &mut self,
-        user: impl for<'this> FnOnce(&mut RwLockWriteGuard<'this, SlotList<T>>) -> RT,
-    ) -> RT {
-        let result = self.with_slot_list_guard_mut(user);
-        self.borrow_owned_entry().set_dirty(true);
-        result
-    }
-}
-
 #[derive(Debug, Default, AbiExample, Clone)]
 pub struct RollingBitField {
     max_width: u64,
@@ -602,6 +571,8 @@ pub struct AccountsIndexRootsStats {
     pub roots_range: u64,
     pub rooted_cleaned_count: usize,
     pub unrooted_cleaned_count: usize,
+    pub clean_unref_from_storage_us: u64,
+    pub clean_dead_slot_us: u64,
 }
 
 pub struct AccountsIndexIterator<'a, T: IndexValue> {
@@ -1199,12 +1170,15 @@ impl<T: IndexValue> AccountsIndex<T> {
             .map(ReadAccountMapEntry::from_account_map_entry)
     }
 
-    fn get_account_write_entry(&self, pubkey: &Pubkey) -> Option<WriteAccountMapEntry<T>> {
-        self.account_maps[self.bin_calculator.bin_from_pubkey(pubkey)]
+    fn slot_list_mut<RT>(
+        &self,
+        pubkey: &Pubkey,
+        user: impl for<'a> FnOnce(&mut RwLockWriteGuard<'a, SlotList<T>>) -> RT,
+    ) -> Option<RT> {
+        let read_lock = self.account_maps[self.bin_calculator.bin_from_pubkey(pubkey)]
             .read()
-            .unwrap()
-            .get(pubkey)
-            .map(WriteAccountMapEntry::from_account_map_entry)
+            .unwrap();
+        read_lock.slot_list_mut(pubkey, user)
     }
 
     pub fn handle_dead_keys(
@@ -1342,22 +1316,19 @@ impl<T: IndexValue> AccountsIndex<T> {
     where
         C: Contains<'a, Slot>,
     {
-        if let Some(mut write_account_map_entry) = self.get_account_write_entry(pubkey) {
-            write_account_map_entry.slot_list_mut(|slot_list| {
-                slot_list.retain(|(slot, item)| {
-                    let should_purge = slots_to_purge.contains(slot);
-                    if should_purge {
-                        reclaims.push((*slot, *item));
-                        false
-                    } else {
-                        true
-                    }
-                });
-                slot_list.is_empty()
-            })
-        } else {
-            true
-        }
+        self.slot_list_mut(pubkey, |slot_list| {
+            slot_list.retain(|(slot, item)| {
+                let should_purge = slots_to_purge.contains(slot);
+                if should_purge {
+                    reclaims.push((*slot, *item));
+                    false
+                } else {
+                    true
+                }
+            });
+            slot_list.is_empty()
+        })
+        .unwrap_or(true)
     }
 
     pub fn min_ongoing_scan_root(&self) -> Option<Slot> {
@@ -1651,22 +1622,9 @@ impl<T: IndexValue> AccountsIndex<T> {
         let new_item = PreAllocatedAccountMapEntry::new(slot, account_info, &self.storage.storage);
         let map = &self.account_maps[self.bin_calculator.bin_from_pubkey(pubkey)];
 
-        let r_account_maps = map.read().unwrap();
-        let (updated, new_item) = r_account_maps.update_key_if_exists(
-            pubkey,
-            new_item,
-            reclaims,
-            previous_slot_entry_was_cached,
-        );
-        if !updated {
-            drop(r_account_maps);
-            let w_account_maps = map.write().unwrap();
-            w_account_maps.upsert(
-                pubkey,
-                new_item.unwrap(),
-                reclaims,
-                previous_slot_entry_was_cached,
-            );
+        {
+            let r_account_maps = map.read().unwrap();
+            r_account_maps.upsert(pubkey, new_item, reclaims, previous_slot_entry_was_cached);
         }
         self.update_secondary_indexes(pubkey, account_owner, account_data, account_indexes);
     }
@@ -1732,12 +1690,10 @@ impl<T: IndexValue> AccountsIndex<T> {
         max_clean_root: Option<Slot>,
     ) {
         let mut is_slot_list_empty = false;
-        if let Some(mut locked_entry) = self.get_account_write_entry(pubkey) {
-            locked_entry.slot_list_mut(|slot_list| {
-                self.purge_older_root_entries(slot_list, reclaims, max_clean_root);
-                is_slot_list_empty = slot_list.is_empty();
-            });
-        }
+        self.slot_list_mut(pubkey, |slot_list| {
+            self.purge_older_root_entries(slot_list, reclaims, max_clean_root);
+            is_slot_list_empty = slot_list.is_empty();
+        });
 
         // If the slot list is empty, remove the pubkey from `account_maps`.  Make sure to grab the
         // lock and double check the slot list is still empty, because another writer could have
@@ -1851,6 +1807,8 @@ impl<T: IndexValue> AccountsIndex<T> {
             roots_range,
             rooted_cleaned_count: 0,
             unrooted_cleaned_count: 0,
+            clean_unref_from_storage_us: 0,
+            clean_dead_slot_us: 0,
         })
     }
 
@@ -1923,12 +1881,12 @@ impl<T: IndexValue> AccountsIndex<T> {
     // if this account has no more entries. Note this does not update the secondary
     // indexes!
     pub fn purge_roots(&self, pubkey: &Pubkey) -> (SlotList<T>, bool) {
-        let mut write_account_map_entry = self.get_account_write_entry(pubkey).unwrap();
-        write_account_map_entry.slot_list_mut(|slot_list| {
+        self.slot_list_mut(pubkey, |slot_list| {
             let reclaims = self.get_rooted_entries(slot_list, None);
             slot_list.retain(|(slot, _)| !self.is_root(*slot));
             (reclaims, slot_list.is_empty())
         })
+        .unwrap()
     }
 }
 
@@ -2999,20 +2957,6 @@ pub mod tests {
         let new_entry =
             PreAllocatedAccountMapEntry::new(slot, account_info, &index.storage.storage);
         assert_eq!(0, account_maps_len_expensive(&index));
-
-        // will fail because key doesn't exist
-        let r_account_maps = index.get_account_maps_read_lock(&key.pubkey());
-        assert!(
-            !r_account_maps
-                .update_key_if_exists(
-                    &key.pubkey(),
-                    new_entry.clone(),
-                    &mut SlotList::default(),
-                    UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
-                )
-                .0
-        );
-        drop(r_account_maps);
         assert_eq!((slot, account_info), new_entry.clone().into());
 
         assert_eq!(0, account_maps_len_expensive(&index));
@@ -3949,10 +3893,7 @@ pub mod tests {
 
         secondary_indexes.keys = None;
 
-        index
-            .get_account_write_entry(&account_key)
-            .unwrap()
-            .slot_list_mut(|slot_list| slot_list.clear());
+        index.slot_list_mut(&account_key, |slot_list| slot_list.clear());
 
         // Everything should be deleted
         index.handle_dead_keys(&[&account_key], &secondary_indexes);
@@ -4055,12 +3996,9 @@ pub mod tests {
         // was outdated by the update in the later slot, the primary account key is still alive,
         // so both secondary keys will still be kept alive.
         index.add_root(later_slot, false);
-        index
-            .get_account_write_entry(&account_key)
-            .unwrap()
-            .slot_list_mut(|slot_list| {
-                index.purge_older_root_entries(slot_list, &mut vec![], None)
-            });
+        index.slot_list_mut(&account_key, |slot_list| {
+            index.purge_older_root_entries(slot_list, &mut vec![], None)
+        });
 
         check_secondary_index_mapping_correct(
             secondary_index,

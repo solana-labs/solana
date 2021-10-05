@@ -20,17 +20,20 @@ pull_request_rules:
     conditions:
       - and:
         - status-success=buildkite/solana
-        - status-success=Travis CI - Pull Request
         - status-success=ci-gate
         - label=automerge
         - author≠@dont-squash-my-commits
+        - or:
+          # only require travis success if docs files changed
+          - status-success=Travis CI - Pull Request
+          - -files~=^docs/
         - or:
           # only require explorer checks if explorer files changed
           - status-success=check-explorer
           - -files~=^explorer/
         - or:
           # only require web3 checks if web3.js files changed
-          - status-success=check-web3
+          - status-success=all-web3-checks
           - -files~=^web3.js/
     actions:
       merge:
@@ -50,7 +53,7 @@ pull_request_rules:
           - -files~=^explorer/
         - or:
           # only require web3 checks if web3.js files changed
-          - status-success=check-web3
+          - status-success=all-web3-checks
           - -files~=^web3.js/
     actions:
       merge:

@@ -85,10 +85,10 @@ impl BucketStorage {
         elem_size: u64,
         capacity_pow2: u8,
         max_search: MaxSearch,
-        mut stats: Arc<BucketStats>,
+        stats: Arc<BucketStats>,
     ) -> Self {
         let cell_size = elem_size * num_elems + std::mem::size_of::<Header>() as u64;
-        let (mmap, path) = Self::new_map(&drives, cell_size as usize, capacity_pow2, &mut stats);
+        let (mmap, path) = Self::new_map(&drives, cell_size as usize, capacity_pow2, &stats);
         Self {
             path,
             mmap,
@@ -123,7 +123,7 @@ impl BucketStorage {
     }
 
     pub fn uid(&self, ix: u64) -> Uid {
-        if ix >= self.num_cells() {
+        if ix >= self.capacity() {
             panic!("bad index size");
         }
         let ix = (ix * self.cell_size) as usize;
@@ -135,7 +135,7 @@ impl BucketStorage {
     }
 
     pub fn allocate(&self, ix: u64, uid: Uid) -> Result<(), BucketStorageError> {
-        if ix >= self.num_cells() {
+        if ix >= self.capacity() {
             panic!("allocate: bad index size");
         }
         if UID_UNLOCKED == uid {
@@ -156,7 +156,7 @@ impl BucketStorage {
     }
 
     pub fn free(&self, ix: u64, uid: Uid) {
-        if ix >= self.num_cells() {
+        if ix >= self.capacity() {
             panic!("free: bad index size");
         }
         if UID_UNLOCKED == uid {
@@ -179,7 +179,7 @@ impl BucketStorage {
     }
 
     pub fn get<T: Sized>(&self, ix: u64) -> &T {
-        if ix >= self.num_cells() {
+        if ix >= self.capacity() {
             panic!("bad index size");
         }
         let start = (ix * self.cell_size) as usize + std::mem::size_of::<Header>();
@@ -201,7 +201,7 @@ impl BucketStorage {
     }
 
     pub fn get_cell_slice<T: Sized>(&self, ix: u64, len: u64) -> &[T] {
-        if ix >= self.num_cells() {
+        if ix >= self.capacity() {
             panic!("bad index size");
         }
         let ix = self.cell_size * ix;
@@ -217,7 +217,7 @@ impl BucketStorage {
 
     #[allow(clippy::mut_from_ref)]
     pub fn get_mut<T: Sized>(&self, ix: u64) -> &mut T {
-        if ix >= self.num_cells() {
+        if ix >= self.capacity() {
             panic!("bad index size");
         }
         let start = (ix * self.cell_size) as usize + std::mem::size_of::<Header>();
@@ -231,7 +231,7 @@ impl BucketStorage {
 
     #[allow(clippy::mut_from_ref)]
     pub fn get_mut_cell_slice<T: Sized>(&self, ix: u64, len: u64) -> &mut [T] {
-        if ix >= self.num_cells() {
+        if ix >= self.capacity() {
             panic!("bad index size");
         }
         let ix = self.cell_size * ix;
@@ -249,7 +249,7 @@ impl BucketStorage {
         drives: &[PathBuf],
         cell_size: usize,
         capacity_pow2: u8,
-        stats: &mut Arc<BucketStats>,
+        stats: &BucketStats,
     ) -> (MmapMut, PathBuf) {
         let mut measure_new_file = Measure::start("measure_new_file");
         let capacity = 1u64 << capacity_pow2;
@@ -301,7 +301,7 @@ impl BucketStorage {
 
     pub fn grow(&mut self) {
         let mut m = Measure::start("grow");
-        let old_cap = self.num_cells();
+        let old_cap = self.capacity();
         let old_map = &self.mmap;
         let old_file = self.path.clone();
 
@@ -311,7 +311,7 @@ impl BucketStorage {
             &self.drives,
             self.cell_size as usize,
             self.capacity_pow2 + increment,
-            &mut self.stats,
+            &self.stats,
         );
         (0..old_cap as usize).into_iter().for_each(|i| {
             let old_ix = i * self.cell_size as usize;
@@ -338,7 +338,9 @@ impl BucketStorage {
         self.stats.resizes.fetch_add(1, Ordering::Relaxed);
         self.stats.resize_us.fetch_add(m.as_us(), Ordering::Relaxed);
     }
-    pub fn num_cells(&self) -> u64 {
+
+    /// Return the number of cells currently allocated
+    pub fn capacity(&self) -> u64 {
         1 << self.capacity_pow2
     }
 }

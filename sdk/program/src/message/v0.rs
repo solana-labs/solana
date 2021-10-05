@@ -30,16 +30,6 @@ pub struct Message {
     #[serde(with = "short_vec")]
     pub account_keys: Vec<Pubkey>,
 
-    /// List of address map indexes used to succinctly load additional accounts
-    /// for this transaction.
-    ///
-    /// # Notes
-    ///
-    /// The last `address_map_indexes.len()` accounts of the read-only unsigned
-    /// accounts are loaded as address maps.
-    #[serde(with = "short_vec")]
-    pub address_map_indexes: Vec<AddressMapIndexes>,
-
     /// The blockhash of a recent block.
     pub recent_blockhash: Hash,
 
@@ -54,6 +44,16 @@ pub struct Message {
     /// map indexes.
     #[serde(with = "short_vec")]
     pub instructions: Vec<CompiledInstruction>,
+
+    /// List of address map indexes used to succinctly load additional accounts
+    /// for this transaction.
+    ///
+    /// # Notes
+    ///
+    /// The last `address_map_indexes.len()` accounts of the read-only unsigned
+    /// accounts are loaded as address maps.
+    #[serde(with = "short_vec")]
+    pub address_map_indexes: Vec<AddressMapIndexes>,
 }
 
 impl Sanitize for Message {
