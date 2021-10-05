@@ -29,7 +29,7 @@ use std::sync::Arc;
 23  8,388,608
 24  16,777,216
 */
-const DEFAULT_CAPACITY_POW2: u8 = 5;
+pub const DEFAULT_CAPACITY_POW2: u8 = 5;
 
 /// A Header UID of 0 indicates that the header is unlocked
 pub(crate) const UID_UNLOCKED: Uid = 0;
