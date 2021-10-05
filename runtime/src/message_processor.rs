@@ -601,10 +601,10 @@ mod tests {
         invoke_context: &mut dyn InvokeContext,
     ) -> Result<(), InstructionError> {
         let keyed_accounts = invoke_context.get_keyed_accounts()?;
-        assert_eq!(*program_id, keyed_accounts[0].owner()?);
+        assert_eq!(*program_id, keyed_accounts[1].owner()?);
         assert_ne!(
-            keyed_accounts[1].owner()?,
-            *keyed_accounts[0].unsigned_key()
+            keyed_accounts[2].owner()?,
+            *keyed_accounts[1].unsigned_key()
         );
 
         if let Ok(instruction) = bincode::deserialize(data) {
@@ -612,13 +612,13 @@ mod tests {
                 MockInstruction::NoopSuccess => (),
                 MockInstruction::NoopFail => return Err(InstructionError::GenericError),
                 MockInstruction::ModifyOwned => {
-                    keyed_accounts[0].try_account_ref_mut()?.data_as_mut_slice()[0] = 1
-                }
-                MockInstruction::ModifyNotOwned => {
                     keyed_accounts[1].try_account_ref_mut()?.data_as_mut_slice()[0] = 1
                 }
-                MockInstruction::ModifyReadonly => {
+                MockInstruction::ModifyNotOwned => {
                     keyed_accounts[2].try_account_ref_mut()?.data_as_mut_slice()[0] = 1
+                }
+                MockInstruction::ModifyReadonly => {
+                    keyed_accounts[3].try_account_ref_mut()?.data_as_mut_slice()[0] = 1
                 }
             }
         } else {
@@ -819,11 +819,11 @@ mod tests {
                 match instruction {
                     MockSystemInstruction::Correct => Ok(()),
                     MockSystemInstruction::AttemptCredit { lamports } => {
-                        keyed_accounts[0]
+                        keyed_accounts[1]
                             .account
                             .borrow_mut()
                             .checked_sub_lamports(lamports)?;
-                        keyed_accounts[1]
+                        keyed_accounts[2]
                             .account
                             .borrow_mut()
                             .checked_add_lamports(lamports)?;
@@ -831,7 +831,7 @@ mod tests {
                     }
                     // Change data in a read-only account
                     MockSystemInstruction::AttemptDataChange { data } => {
-                        keyed_accounts[1].account.borrow_mut().set_data(vec![data]);
+                        keyed_accounts[2].account.borrow_mut().set_data(vec![data]);
                         Ok(())
                     }
                 }
@@ -989,8 +989,8 @@ mod tests {
             if let Ok(instruction) = bincode::deserialize(data) {
                 match instruction {
                     MockSystemInstruction::BorrowFail => {
-                        let from_account = keyed_accounts[0].try_account_ref_mut()?;
-                        let dup_account = keyed_accounts[2].try_account_ref_mut()?;
+                        let from_account = keyed_accounts[1].try_account_ref_mut()?;
+                        let dup_account = keyed_accounts[3].try_account_ref_mut()?;
                         if from_account.lamports() != dup_account.lamports() {
                             return Err(InstructionError::InvalidArgument);
                         }
@@ -998,11 +998,11 @@ mod tests {
                     }
                     MockSystemInstruction::MultiBorrowMut => {
                         let from_lamports = {
-                            let from_account = keyed_accounts[0].try_account_ref_mut()?;
+                            let from_account = keyed_accounts[1].try_account_ref_mut()?;
                             from_account.lamports()
                         };
                         let dup_lamports = {
-                            let dup_account = keyed_accounts[2].try_account_ref_mut()?;
+                            let dup_account = keyed_accounts[3].try_account_ref_mut()?;
                             dup_account.lamports()
                         };
                         if from_lamports != dup_lamports {
@@ -1012,16 +1012,16 @@ mod tests {
                     }
                     MockSystemInstruction::DoWork { lamports, data } => {
                         {
-                            let mut to_account = keyed_accounts[1].try_account_ref_mut()?;
-                            let mut dup_account = keyed_accounts[2].try_account_ref_mut()?;
+                            let mut to_account = keyed_accounts[2].try_account_ref_mut()?;
+                            let mut dup_account = keyed_accounts[3].try_account_ref_mut()?;
                             dup_account.checked_sub_lamports(lamports)?;
                             to_account.checked_add_lamports(lamports)?;
                             dup_account.set_data(vec![data]);
                         }
-                        keyed_accounts[0]
+                        keyed_accounts[1]
                             .try_account_ref_mut()?
                             .checked_sub_lamports(lamports)?;
-                        keyed_accounts[1]
+                        keyed_accounts[2]
                             .try_account_ref_mut()?
                             .checked_add_lamports(lamports)?;
                         Ok(())

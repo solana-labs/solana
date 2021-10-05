@@ -110,7 +110,8 @@ pub fn builtin_process_instruction(
     let logger = invoke_context.get_logger();
     stable_log::program_invoke(&logger, program_id, invoke_context.invoke_depth());
 
-    let keyed_accounts = invoke_context.get_keyed_accounts()?;
+    // Skip the processor account
+    let keyed_accounts = &invoke_context.get_keyed_accounts()?[1..];
 
     // Copy all the accounts into a HashMap to ensure there are no duplicates
     let mut accounts: HashMap<Pubkey, Account> = keyed_accounts
