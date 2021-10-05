@@ -409,11 +409,14 @@ impl<T: Clone + Copy> Bucket<T> {
     /// grow a data bucket
     /// The application of the new bucket is deferred until the next write lock.
     pub fn grow_data(&self, data_index: u64, current_capacity_pow2: u8) {
-        let new_bucket = self.index.grow(
+        let new_bucket = BucketStorage::new_resized(
+            &self.drives,
+            self.index.max_search,
             self.data.get(data_index as usize),
             current_capacity_pow2 + 1,
             1 << data_index,
             Self::elem_size(),
+            &self.stats.data,
         );
         self.reallocated.add_reallocation();
         let mut items = self.reallocated.items.lock().unwrap();
