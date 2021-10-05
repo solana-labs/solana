@@ -1,6 +1,5 @@
 //! Stakes serve as a cache of stake and vote accounts to derive
 //! node stakes
-<<<<<<< HEAD
 use crate::vote_account::{ArcVoteAccount, VoteAccounts};
 use solana_sdk::{
     account::{AccountSharedData, ReadableAccount},
@@ -9,21 +8,8 @@ use solana_sdk::{
     stake::{
         self,
         state::{Delegation, StakeState},
-=======
-use {
-    crate::vote_account::{VoteAccount, VoteAccounts},
-    solana_sdk::{
-        account::{AccountSharedData, ReadableAccount},
-        clock::Epoch,
-        pubkey::Pubkey,
-        stake::{
-            self,
-            state::{Delegation, StakeState},
-        },
-        stake_history::StakeHistory,
->>>>>>> 0ddb34a0b (Add struct and convenience methods to track stake activation status (#20392))
     },
-    sysvar::stake_history::StakeHistory,
+    stake_history::StakeHistory,
 };
 use solana_stake_program::stake_state;
 use solana_vote_program::vote_state::VoteState;
