@@ -3,7 +3,9 @@ use rand::{rngs::OsRng, CryptoRng, RngCore};
 use {
     crate::encryption::{
         discrete_log::DiscreteLog,
-        pedersen::{Pedersen, PedersenBase, PedersenComm, PedersenDecHandle, PedersenOpen},
+        pedersen::{
+            Pedersen, PedersenBase, PedersenCommitment, PedersenDecryptHandle, PedersenOpening,
+        },
     },
     arrayref::{array_ref, array_refs},
     core::ops::{Add, Div, Mul, Sub},
@@ -53,7 +55,7 @@ impl ElGamal {
     /// returns an ElGamal ciphertext of the message under the public key.
     #[cfg(not(target_arch = "bpf"))]
     pub fn encrypt<T: Into<Scalar>>(pk: &ElGamalPubkey, amount: T) -> ElGamalCiphertext {
-        let (message_comm, open) = Pedersen::commit(amount);
+        let (message_comm, open) = Pedersen::new(amount);
         let decrypt_handle = pk.gen_decrypt_handle(&open);
 
         ElGamalCiphertext {
@@ -68,9 +70,9 @@ impl ElGamal {
     pub fn encrypt_with<T: Into<Scalar>>(
         pk: &ElGamalPubkey,
         amount: T,
-        open: &PedersenOpen,
+        open: &PedersenOpening,
     ) -> ElGamalCiphertext {
-        let message_comm = Pedersen::commit_with(amount, open);
+        let message_comm = Pedersen::with(amount, open);
         let decrypt_handle = pk.gen_decrypt_handle(open);
 
         ElGamalCiphertext {
@@ -141,14 +143,18 @@ impl ElGamalPubkey {
     }
 
     /// Utility method for code ergonomics.
-    pub fn encrypt_with<T: Into<Scalar>>(&self, msg: T, open: &PedersenOpen) -> ElGamalCiphertext {
+    pub fn encrypt_with<T: Into<Scalar>>(
+        &self,
+        msg: T,
+        open: &PedersenOpening,
+    ) -> ElGamalCiphertext {
         ElGamal::encrypt_with(self, msg, open)
     }
 
     /// Generate a decryption token from an ElGamal public key and a Pedersen
     /// opening.
-    pub fn gen_decrypt_handle(self, open: &PedersenOpen) -> PedersenDecHandle {
-        PedersenDecHandle::generate_handle(open, &self)
+    pub fn gen_decrypt_handle(self, open: &PedersenOpening) -> PedersenDecryptHandle {
+        PedersenDecryptHandle::generate_handle(open, &self)
     }
 }
 
@@ -220,12 +226,12 @@ impl ConstantTimeEq for ElGamalSecretKey {
 #[allow(non_snake_case)]
 #[derive(Serialize, Deserialize, Default, Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ElGamalCiphertext {
-    pub message_comm: PedersenComm,
-    pub decrypt_handle: PedersenDecHandle,
+    pub message_comm: PedersenCommitment,
+    pub decrypt_handle: PedersenDecryptHandle,
 }
 impl ElGamalCiphertext {
     pub fn add_to_msg<T: Into<Scalar>>(&self, message: T) -> Self {
-        let diff_comm = Pedersen::commit_with(message, &PedersenOpen::default());
+        let diff_comm = Pedersen::with(message, &PedersenOpening::default());
         ElGamalCiphertext {
             message_comm: self.message_comm + diff_comm,
             decrypt_handle: self.decrypt_handle,
@@ -233,7 +239,7 @@ impl ElGamalCiphertext {
     }
 
     pub fn sub_to_msg<T: Into<Scalar>>(&self, message: T) -> Self {
-        let diff_comm = Pedersen::commit_with(message, &PedersenOpen::default());
+        let diff_comm = Pedersen::with(message, &PedersenOpening::default());
         ElGamalCiphertext {
             message_comm: self.message_comm - diff_comm,
             decrypt_handle: self.decrypt_handle,
@@ -257,8 +263,8 @@ impl ElGamalCiphertext {
         let decrypt_handle = CompressedRistretto::from_slice(decrypt_handle).decompress()?;
 
         Some(ElGamalCiphertext {
-            message_comm: PedersenComm(message_comm),
-            decrypt_handle: PedersenDecHandle(decrypt_handle),
+            message_comm: PedersenCommitment(message_comm),
+            decrypt_handle: PedersenDecryptHandle(decrypt_handle),
         })
     }
 
@@ -378,7 +384,7 @@ mod tests {
         let (pk_2, sk_2) = ElGamal::new();
 
         let msg: u32 = 77;
-        let (comm, open) = Pedersen::commit(msg);
+        let (comm, open) = Pedersen::new(msg);
 
         let decrypt_handle_1 = pk_1.gen_decrypt_handle(&open);
         let decrypt_handle_2 = pk_2.gen_decrypt_handle(&open);
@@ -406,8 +412,8 @@ mod tests {
         let msg_1: u64 = 77;
 
         // Add two ElGamal ciphertexts
-        let open_0 = PedersenOpen::random(&mut OsRng);
-        let open_1 = PedersenOpen::random(&mut OsRng);
+        let open_0 = PedersenOpening::random(&mut OsRng);
+        let open_1 = PedersenOpening::random(&mut OsRng);
 
         let ct_0 = ElGamal::encrypt_with(&pk, msg_0, &open_0);
         let ct_1 = ElGamal::encrypt_with(&pk, msg_1, &open_1);
@@ -417,7 +423,7 @@ mod tests {
         assert_eq!(ct_sum, ct_0 + ct_1);
 
         // Add to ElGamal ciphertext
-        let open = PedersenOpen::random(&mut OsRng);
+        let open = PedersenOpening::random(&mut OsRng);
         let ct = ElGamal::encrypt_with(&pk, msg_0, &open);
         let ct_sum = ElGamal::encrypt_with(&pk, msg_0 + msg_1, &open);
 
@@ -431,8 +437,8 @@ mod tests {
         let msg_1: u64 = 55;
 
         // Subtract two ElGamal ciphertexts
-        let open_0 = PedersenOpen::random(&mut OsRng);
-        let open_1 = PedersenOpen::random(&mut OsRng);
+        let open_0 = PedersenOpening::random(&mut OsRng);
+        let open_1 = PedersenOpening::random(&mut OsRng);
 
         let ct_0 = ElGamal::encrypt_with(&pk, msg_0, &open_0);
         let ct_1 = ElGamal::encrypt_with(&pk, msg_1, &open_1);
@@ -442,7 +448,7 @@ mod tests {
         assert_eq!(ct_sub, ct_0 - ct_1);
 
         // Subtract to ElGamal ciphertext
-        let open = PedersenOpen::random(&mut OsRng);
+        let open = PedersenOpening::random(&mut OsRng);
         let ct = ElGamal::encrypt_with(&pk, msg_0, &open);
         let ct_sub = ElGamal::encrypt_with(&pk, msg_0 - msg_1, &open);
 
@@ -455,7 +461,7 @@ mod tests {
         let msg_0: u64 = 57;
         let msg_1: u64 = 77;
 
-        let open = PedersenOpen::random(&mut OsRng);
+        let open = PedersenOpening::random(&mut OsRng);
 
         let ct = ElGamal::encrypt_with(&pk, msg_0, &open);
         let scalar = Scalar::from(msg_1);
@@ -471,7 +477,7 @@ mod tests {
         let msg_0: u64 = 55;
         let msg_1: u64 = 5;
 
-        let open = PedersenOpen::random(&mut OsRng);
+        let open = PedersenOpening::random(&mut OsRng);
 
         let ct = ElGamal::encrypt_with(&pk, msg_0, &open);
         let scalar = Scalar::from(msg_1);

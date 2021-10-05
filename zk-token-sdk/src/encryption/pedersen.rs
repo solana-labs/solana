@@ -1,10 +1,7 @@
 #[cfg(not(target_arch = "bpf"))]
 use rand::{rngs::OsRng, CryptoRng, RngCore};
 use {
-    crate::{
-        encryption::elgamal::{ElGamalCiphertext, ElGamalPubkey},
-        errors::ProofError,
-    },
+    crate::encryption::elgamal::{ElGamalCiphertext, ElGamalPubkey},
     core::ops::{Add, Div, Mul, Sub},
     curve25519_dalek::{
         constants::{RISTRETTO_BASEPOINT_COMPRESSED, RISTRETTO_BASEPOINT_POINT},
@@ -53,9 +50,10 @@ impl Pedersen {
     ///
     /// TODO: Interface that takes a random generator as input
     #[cfg(not(target_arch = "bpf"))]
-    pub fn commit<T: Into<Scalar>>(amount: T) -> (PedersenComm, PedersenOpen) {
-        let open = PedersenOpen(Scalar::random(&mut OsRng));
-        let comm = Pedersen::commit_with(amount, &open);
+    #[allow(clippy::new_ret_no_self)]
+    pub fn new<T: Into<Scalar>>(amount: T) -> (PedersenCommitment, PedersenOpening) {
+        let open = PedersenOpening(Scalar::random(&mut OsRng));
+        let comm = Pedersen::with(amount, &open);
 
         (comm, open)
     }
@@ -63,54 +61,28 @@ impl Pedersen {
     /// Given a number and an opening as inputs, the function returns their
     /// Pedersen commitment.
     #[allow(non_snake_case)]
-    pub fn commit_with<T: Into<Scalar>>(amount: T, open: &PedersenOpen) -> PedersenComm {
+    pub fn with<T: Into<Scalar>>(amount: T, open: &PedersenOpening) -> PedersenCommitment {
         let G = PedersenBase::default().G;
         let H = PedersenBase::default().H;
 
         let x: Scalar = amount.into();
         let r = open.get_scalar();
 
-        PedersenComm(RistrettoPoint::multiscalar_mul(&[x, r], &[G, H]))
-    }
-
-    /// Given a number, opening, and Pedersen commitment, the function verifies
-    /// the validity of the commitment with respect to the number and opening.
-    ///
-    /// This function is included for completeness and is not used for the
-    /// c-token program.
-    #[allow(non_snake_case)]
-    pub fn verify<T: Into<Scalar>>(
-        comm: PedersenComm,
-        open: PedersenOpen,
-        amount: T,
-    ) -> Result<(), ProofError> {
-        let G = PedersenBase::default().G;
-        let H = PedersenBase::default().H;
-
-        let x: Scalar = amount.into();
-
-        let r = open.get_scalar();
-        let C = comm.get_point();
-
-        if C == RistrettoPoint::multiscalar_mul(&[x, r], &[G, H]) {
-            Ok(())
-        } else {
-            Err(ProofError::VerificationError)
-        }
+        PedersenCommitment(RistrettoPoint::multiscalar_mul(&[x, r], &[G, H]))
     }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Zeroize)]
 #[zeroize(drop)]
-pub struct PedersenOpen(pub(crate) Scalar);
-impl PedersenOpen {
+pub struct PedersenOpening(pub(crate) Scalar);
+impl PedersenOpening {
     pub fn get_scalar(&self) -> Scalar {
         self.0
     }
 
     #[cfg(not(target_arch = "bpf"))]
     pub fn random<T: RngCore + CryptoRng>(rng: &mut T) -> Self {
-        PedersenOpen(Scalar::random(rng))
+        PedersenOpening(Scalar::random(rng))
     }
 
     #[allow(clippy::wrong_self_convention)]
@@ -118,83 +90,91 @@ impl PedersenOpen {
         self.0.to_bytes()
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Option<PedersenOpen> {
+    pub fn from_bytes(bytes: &[u8]) -> Option<PedersenOpening> {
         match bytes.try_into() {
-            Ok(bytes) => Scalar::from_canonical_bytes(bytes).map(PedersenOpen),
+            Ok(bytes) => Scalar::from_canonical_bytes(bytes).map(PedersenOpening),
             _ => None,
         }
     }
 }
-impl Eq for PedersenOpen {}
-impl PartialEq for PedersenOpen {
+impl Eq for PedersenOpening {}
+impl PartialEq for PedersenOpening {
     fn eq(&self, other: &Self) -> bool {
         self.ct_eq(other).unwrap_u8() == 1u8
     }
 }
-impl ConstantTimeEq for PedersenOpen {
+impl ConstantTimeEq for PedersenOpening {
     fn ct_eq(&self, other: &Self) -> Choice {
         self.0.ct_eq(&other.0)
     }
 }
 
-impl Default for PedersenOpen {
+impl Default for PedersenOpening {
     fn default() -> Self {
-        PedersenOpen(Scalar::default())
+        PedersenOpening(Scalar::default())
     }
 }
 
-impl<'a, 'b> Add<&'b PedersenOpen> for &'a PedersenOpen {
-    type Output = PedersenOpen;
+impl<'a, 'b> Add<&'b PedersenOpening> for &'a PedersenOpening {
+    type Output = PedersenOpening;
 
-    fn add(self, other: &'b PedersenOpen) -> PedersenOpen {
-        PedersenOpen(self.get_scalar() + other.get_scalar())
+    fn add(self, other: &'b PedersenOpening) -> PedersenOpening {
+        PedersenOpening(self.get_scalar() + other.get_scalar())
     }
 }
 
 define_add_variants!(
-    LHS = PedersenOpen,
-    RHS = PedersenOpen,
-    Output = PedersenOpen
+    LHS = PedersenOpening,
+    RHS = PedersenOpening,
+    Output = PedersenOpening
 );
 
-impl<'a, 'b> Sub<&'b PedersenOpen> for &'a PedersenOpen {
-    type Output = PedersenOpen;
+impl<'a, 'b> Sub<&'b PedersenOpening> for &'a PedersenOpening {
+    type Output = PedersenOpening;
 
-    fn sub(self, other: &'b PedersenOpen) -> PedersenOpen {
-        PedersenOpen(self.get_scalar() - other.get_scalar())
+    fn sub(self, other: &'b PedersenOpening) -> PedersenOpening {
+        PedersenOpening(self.get_scalar() - other.get_scalar())
     }
 }
 
 define_sub_variants!(
-    LHS = PedersenOpen,
-    RHS = PedersenOpen,
-    Output = PedersenOpen
+    LHS = PedersenOpening,
+    RHS = PedersenOpening,
+    Output = PedersenOpening
 );
 
-impl<'a, 'b> Mul<&'b Scalar> for &'a PedersenOpen {
-    type Output = PedersenOpen;
+impl<'a, 'b> Mul<&'b Scalar> for &'a PedersenOpening {
+    type Output = PedersenOpening;
 
-    fn mul(self, other: &'b Scalar) -> PedersenOpen {
-        PedersenOpen(self.get_scalar() * other)
+    fn mul(self, other: &'b Scalar) -> PedersenOpening {
+        PedersenOpening(self.get_scalar() * other)
     }
 }
 
-define_mul_variants!(LHS = PedersenOpen, RHS = Scalar, Output = PedersenOpen);
+define_mul_variants!(
+    LHS = PedersenOpening,
+    RHS = Scalar,
+    Output = PedersenOpening
+);
 
-impl<'a, 'b> Div<&'b Scalar> for &'a PedersenOpen {
-    type Output = PedersenOpen;
+impl<'a, 'b> Div<&'b Scalar> for &'a PedersenOpening {
+    type Output = PedersenOpening;
 
     #[allow(clippy::suspicious_arithmetic_impl)]
-    fn div(self, other: &'b Scalar) -> PedersenOpen {
-        PedersenOpen(self.get_scalar() * other.invert())
+    fn div(self, other: &'b Scalar) -> PedersenOpening {
+        PedersenOpening(self.get_scalar() * other.invert())
     }
 }
 
-define_div_variants!(LHS = PedersenOpen, RHS = Scalar, Output = PedersenOpen);
+define_div_variants!(
+    LHS = PedersenOpening,
+    RHS = Scalar,
+    Output = PedersenOpening
+);
 
 #[derive(Serialize, Deserialize, Default, Clone, Copy, Debug, Eq, PartialEq)]
-pub struct PedersenComm(pub(crate) RistrettoPoint);
-impl PedersenComm {
+pub struct PedersenCommitment(pub(crate) RistrettoPoint);
+impl PedersenCommitment {
     pub fn get_point(&self) -> RistrettoPoint {
         self.0
     }
@@ -204,79 +184,87 @@ impl PedersenComm {
         self.0.compress().to_bytes()
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Option<PedersenComm> {
-        Some(PedersenComm(
+    pub fn from_bytes(bytes: &[u8]) -> Option<PedersenCommitment> {
+        Some(PedersenCommitment(
             CompressedRistretto::from_slice(bytes).decompress()?,
         ))
     }
 }
 
-impl<'a, 'b> Add<&'b PedersenComm> for &'a PedersenComm {
-    type Output = PedersenComm;
+impl<'a, 'b> Add<&'b PedersenCommitment> for &'a PedersenCommitment {
+    type Output = PedersenCommitment;
 
-    fn add(self, other: &'b PedersenComm) -> PedersenComm {
-        PedersenComm(self.get_point() + other.get_point())
+    fn add(self, other: &'b PedersenCommitment) -> PedersenCommitment {
+        PedersenCommitment(self.get_point() + other.get_point())
     }
 }
 
 define_add_variants!(
-    LHS = PedersenComm,
-    RHS = PedersenComm,
-    Output = PedersenComm
+    LHS = PedersenCommitment,
+    RHS = PedersenCommitment,
+    Output = PedersenCommitment
 );
 
-impl<'a, 'b> Sub<&'b PedersenComm> for &'a PedersenComm {
-    type Output = PedersenComm;
+impl<'a, 'b> Sub<&'b PedersenCommitment> for &'a PedersenCommitment {
+    type Output = PedersenCommitment;
 
-    fn sub(self, other: &'b PedersenComm) -> PedersenComm {
-        PedersenComm(self.get_point() - other.get_point())
+    fn sub(self, other: &'b PedersenCommitment) -> PedersenCommitment {
+        PedersenCommitment(self.get_point() - other.get_point())
     }
 }
 
 define_sub_variants!(
-    LHS = PedersenComm,
-    RHS = PedersenComm,
-    Output = PedersenComm
+    LHS = PedersenCommitment,
+    RHS = PedersenCommitment,
+    Output = PedersenCommitment
 );
 
-impl<'a, 'b> Mul<&'b Scalar> for &'a PedersenComm {
-    type Output = PedersenComm;
+impl<'a, 'b> Mul<&'b Scalar> for &'a PedersenCommitment {
+    type Output = PedersenCommitment;
 
-    fn mul(self, other: &'b Scalar) -> PedersenComm {
-        PedersenComm(self.get_point() * other)
+    fn mul(self, other: &'b Scalar) -> PedersenCommitment {
+        PedersenCommitment(self.get_point() * other)
     }
 }
 
-define_mul_variants!(LHS = PedersenComm, RHS = Scalar, Output = PedersenComm);
+define_mul_variants!(
+    LHS = PedersenCommitment,
+    RHS = Scalar,
+    Output = PedersenCommitment
+);
 
-impl<'a, 'b> Div<&'b Scalar> for &'a PedersenComm {
-    type Output = PedersenComm;
+impl<'a, 'b> Div<&'b Scalar> for &'a PedersenCommitment {
+    type Output = PedersenCommitment;
 
     #[allow(clippy::suspicious_arithmetic_impl)]
-    fn div(self, other: &'b Scalar) -> PedersenComm {
-        PedersenComm(self.get_point() * other.invert())
+    fn div(self, other: &'b Scalar) -> PedersenCommitment {
+        PedersenCommitment(self.get_point() * other.invert())
     }
 }
 
-define_div_variants!(LHS = PedersenComm, RHS = Scalar, Output = PedersenComm);
+define_div_variants!(
+    LHS = PedersenCommitment,
+    RHS = Scalar,
+    Output = PedersenCommitment
+);
 
 /// Decryption handle for Pedersen commitment.
 ///
 /// A decryption handle can be combined with Pedersen commitments to form an
 /// ElGamal ciphertext.
 #[derive(Serialize, Deserialize, Default, Clone, Copy, Debug, Eq, PartialEq)]
-pub struct PedersenDecHandle(pub(crate) RistrettoPoint);
-impl PedersenDecHandle {
+pub struct PedersenDecryptHandle(pub(crate) RistrettoPoint);
+impl PedersenDecryptHandle {
     pub fn get_point(&self) -> RistrettoPoint {
         self.0
     }
 
-    pub fn generate_handle(open: &PedersenOpen, pk: &ElGamalPubkey) -> PedersenDecHandle {
-        PedersenDecHandle(open.get_scalar() * pk.get_point())
+    pub fn generate_handle(open: &PedersenOpening, pk: &ElGamalPubkey) -> PedersenDecryptHandle {
+        PedersenDecryptHandle(open.get_scalar() * pk.get_point())
     }
 
     /// Maps a decryption token and Pedersen commitment to ElGamal ciphertext
-    pub fn to_elgamal_ciphertext(self, comm: PedersenComm) -> ElGamalCiphertext {
+    pub fn to_elgamal_ciphertext(self, comm: PedersenCommitment) -> ElGamalCiphertext {
         ElGamalCiphertext {
             message_comm: comm,
             decrypt_handle: self,
@@ -288,68 +276,68 @@ impl PedersenDecHandle {
         self.0.compress().to_bytes()
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Option<PedersenDecHandle> {
-        Some(PedersenDecHandle(
+    pub fn from_bytes(bytes: &[u8]) -> Option<PedersenDecryptHandle> {
+        Some(PedersenDecryptHandle(
             CompressedRistretto::from_slice(bytes).decompress()?,
         ))
     }
 }
 
-impl<'a, 'b> Add<&'b PedersenDecHandle> for &'a PedersenDecHandle {
-    type Output = PedersenDecHandle;
+impl<'a, 'b> Add<&'b PedersenDecryptHandle> for &'a PedersenDecryptHandle {
+    type Output = PedersenDecryptHandle;
 
-    fn add(self, other: &'b PedersenDecHandle) -> PedersenDecHandle {
-        PedersenDecHandle(self.get_point() + other.get_point())
+    fn add(self, other: &'b PedersenDecryptHandle) -> PedersenDecryptHandle {
+        PedersenDecryptHandle(self.get_point() + other.get_point())
     }
 }
 
 define_add_variants!(
-    LHS = PedersenDecHandle,
-    RHS = PedersenDecHandle,
-    Output = PedersenDecHandle
+    LHS = PedersenDecryptHandle,
+    RHS = PedersenDecryptHandle,
+    Output = PedersenDecryptHandle
 );
 
-impl<'a, 'b> Sub<&'b PedersenDecHandle> for &'a PedersenDecHandle {
-    type Output = PedersenDecHandle;
+impl<'a, 'b> Sub<&'b PedersenDecryptHandle> for &'a PedersenDecryptHandle {
+    type Output = PedersenDecryptHandle;
 
-    fn sub(self, other: &'b PedersenDecHandle) -> PedersenDecHandle {
-        PedersenDecHandle(self.get_point() - other.get_point())
+    fn sub(self, other: &'b PedersenDecryptHandle) -> PedersenDecryptHandle {
+        PedersenDecryptHandle(self.get_point() - other.get_point())
     }
 }
 
 define_sub_variants!(
-    LHS = PedersenDecHandle,
-    RHS = PedersenDecHandle,
-    Output = PedersenDecHandle
+    LHS = PedersenDecryptHandle,
+    RHS = PedersenDecryptHandle,
+    Output = PedersenDecryptHandle
 );
 
-impl<'a, 'b> Mul<&'b Scalar> for &'a PedersenDecHandle {
-    type Output = PedersenDecHandle;
+impl<'a, 'b> Mul<&'b Scalar> for &'a PedersenDecryptHandle {
+    type Output = PedersenDecryptHandle;
 
-    fn mul(self, other: &'b Scalar) -> PedersenDecHandle {
-        PedersenDecHandle(self.get_point() * other)
+    fn mul(self, other: &'b Scalar) -> PedersenDecryptHandle {
+        PedersenDecryptHandle(self.get_point() * other)
     }
 }
 
 define_mul_variants!(
-    LHS = PedersenDecHandle,
+    LHS = PedersenDecryptHandle,
     RHS = Scalar,
-    Output = PedersenDecHandle
+    Output = PedersenDecryptHandle
 );
 
-impl<'a, 'b> Div<&'b Scalar> for &'a PedersenDecHandle {
-    type Output = PedersenDecHandle;
+impl<'a, 'b> Div<&'b Scalar> for &'a PedersenDecryptHandle {
+    type Output = PedersenDecryptHandle;
 
     #[allow(clippy::suspicious_arithmetic_impl)]
-    fn div(self, other: &'b Scalar) -> PedersenDecHandle {
-        PedersenDecHandle(self.get_point() * other.invert())
+    fn div(self, other: &'b Scalar) -> PedersenDecryptHandle {
+        PedersenDecryptHandle(self.get_point() * other.invert())
     }
 }
 
 define_div_variants!(
-    LHS = PedersenDecHandle,
+    LHS = PedersenDecryptHandle,
     RHS = Scalar,
-    Output = PedersenDecHandle
+    Output = PedersenDecryptHandle
 );
 
 #[cfg(test)]
@@ -357,25 +345,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_commit_verification_correctness() {
-        let amt: u64 = 57;
-        let (comm, open) = Pedersen::commit(amt);
-
-        assert!(Pedersen::verify(comm, open, amt).is_ok());
-    }
-
-    #[test]
     fn test_homomorphic_addition() {
         let amt_0: u64 = 77;
         let amt_1: u64 = 57;
 
         let rng = &mut OsRng;
-        let open_0 = PedersenOpen(Scalar::random(rng));
-        let open_1 = PedersenOpen(Scalar::random(rng));
+        let open_0 = PedersenOpening(Scalar::random(rng));
+        let open_1 = PedersenOpening(Scalar::random(rng));
 
-        let comm_0 = Pedersen::commit_with(amt_0, &open_0);
-        let comm_1 = Pedersen::commit_with(amt_1, &open_1);
-        let comm_addition = Pedersen::commit_with(amt_0 + amt_1, &(open_0 + open_1));
+        let comm_0 = Pedersen::with(amt_0, &open_0);
+        let comm_1 = Pedersen::with(amt_1, &open_1);
+        let comm_addition = Pedersen::with(amt_0 + amt_1, &(open_0 + open_1));
 
         assert_eq!(comm_addition, comm_0 + comm_1);
     }
@@ -386,12 +366,12 @@ mod tests {
         let amt_1: u64 = 57;
 
         let rng = &mut OsRng;
-        let open_0 = PedersenOpen(Scalar::random(rng));
-        let open_1 = PedersenOpen(Scalar::random(rng));
+        let open_0 = PedersenOpening(Scalar::random(rng));
+        let open_1 = PedersenOpening(Scalar::random(rng));
 
-        let comm_0 = Pedersen::commit_with(amt_0, &open_0);
-        let comm_1 = Pedersen::commit_with(amt_1, &open_1);
-        let comm_addition = Pedersen::commit_with(amt_0 - amt_1, &(open_0 - open_1));
+        let comm_0 = Pedersen::with(amt_0, &open_0);
+        let comm_1 = Pedersen::with(amt_1, &open_1);
+        let comm_addition = Pedersen::with(amt_0 - amt_1, &(open_0 - open_1));
 
         assert_eq!(comm_addition, comm_0 - comm_1);
     }
@@ -401,9 +381,9 @@ mod tests {
         let amt_0: u64 = 77;
         let amt_1: u64 = 57;
 
-        let (comm, open) = Pedersen::commit(amt_0);
+        let (comm, open) = Pedersen::new(amt_0);
         let scalar = Scalar::from(amt_1);
-        let comm_addition = Pedersen::commit_with(amt_0 * amt_1, &(open * scalar));
+        let comm_addition = Pedersen::with(amt_0 * amt_1, &(open * scalar));
 
         assert_eq!(comm_addition, comm * scalar);
     }
@@ -413,9 +393,9 @@ mod tests {
         let amt_0: u64 = 77;
         let amt_1: u64 = 7;
 
-        let (comm, open) = Pedersen::commit(amt_0);
+        let (comm, open) = Pedersen::new(amt_0);
         let scalar = Scalar::from(amt_1);
-        let comm_addition = Pedersen::commit_with(amt_0 / amt_1, &(open / scalar));
+        let comm_addition = Pedersen::with(amt_0 / amt_1, &(open / scalar));
 
         assert_eq!(comm_addition, comm / scalar);
     }
@@ -423,30 +403,30 @@ mod tests {
     #[test]
     fn test_commitment_bytes() {
         let amt: u64 = 77;
-        let (comm, _) = Pedersen::commit(amt);
+        let (comm, _) = Pedersen::new(amt);
 
         let encoded = comm.to_bytes();
-        let decoded = PedersenComm::from_bytes(&encoded).unwrap();
+        let decoded = PedersenCommitment::from_bytes(&encoded).unwrap();
 
         assert_eq!(comm, decoded);
     }
 
     #[test]
     fn test_opening_bytes() {
-        let open = PedersenOpen(Scalar::random(&mut OsRng));
+        let open = PedersenOpening(Scalar::random(&mut OsRng));
 
         let encoded = open.to_bytes();
-        let decoded = PedersenOpen::from_bytes(&encoded).unwrap();
+        let decoded = PedersenOpening::from_bytes(&encoded).unwrap();
 
         assert_eq!(open, decoded);
     }
 
     #[test]
     fn test_decrypt_handle_bytes() {
-        let handle = PedersenDecHandle(RistrettoPoint::default());
+        let handle = PedersenDecryptHandle(RistrettoPoint::default());
 
         let encoded = handle.to_bytes();
-        let decoded = PedersenDecHandle::from_bytes(&encoded).unwrap();
+        let decoded = PedersenDecryptHandle::from_bytes(&encoded).unwrap();
 
         assert_eq!(handle, decoded);
     }
@@ -454,30 +434,30 @@ mod tests {
     #[test]
     fn test_serde_commitment() {
         let amt: u64 = 77;
-        let (comm, _) = Pedersen::commit(amt);
+        let (comm, _) = Pedersen::new(amt);
 
         let encoded = bincode::serialize(&comm).unwrap();
-        let decoded: PedersenComm = bincode::deserialize(&encoded).unwrap();
+        let decoded: PedersenCommitment = bincode::deserialize(&encoded).unwrap();
 
         assert_eq!(comm, decoded);
     }
 
     #[test]
     fn test_serde_opening() {
-        let open = PedersenOpen(Scalar::random(&mut OsRng));
+        let open = PedersenOpening(Scalar::random(&mut OsRng));
 
         let encoded = bincode::serialize(&open).unwrap();
-        let decoded: PedersenOpen = bincode::deserialize(&encoded).unwrap();
+        let decoded: PedersenOpening = bincode::deserialize(&encoded).unwrap();
 
         assert_eq!(open, decoded);
     }
 
     #[test]
     fn test_serde_decrypt_handle() {
-        let handle = PedersenDecHandle(RistrettoPoint::default());
+        let handle = PedersenDecryptHandle(RistrettoPoint::default());
 
         let encoded = bincode::serialize(&handle).unwrap();
-        let decoded: PedersenDecHandle = bincode::deserialize(&encoded).unwrap();
+        let decoded: PedersenDecryptHandle = bincode::deserialize(&encoded).unwrap();
 
         assert_eq!(handle, decoded);
     }

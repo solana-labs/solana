@@ -1,8 +1,8 @@
 use super::pod;
 pub use target_arch::*;
 
-impl From<(pod::PedersenComm, pod::PedersenDecHandle)> for pod::ElGamalCiphertext {
-    fn from((comm, decrypt_handle): (pod::PedersenComm, pod::PedersenDecHandle)) -> Self {
+impl From<(pod::PedersenCommitment, pod::PedersenDecryptHandle)> for pod::ElGamalCiphertext {
+    fn from((comm, decrypt_handle): (pod::PedersenCommitment, pod::PedersenDecryptHandle)) -> Self {
         let mut buf = [0_u8; 64];
         buf[..32].copy_from_slice(&comm.0);
         buf[32..].copy_from_slice(&decrypt_handle.0);
@@ -16,7 +16,7 @@ mod target_arch {
         super::pod,
         crate::{
             encryption::elgamal::{ElGamalCiphertext, ElGamalPubkey},
-            encryption::pedersen::{PedersenComm, PedersenDecHandle},
+            encryption::pedersen::{PedersenCommitment, PedersenDecryptHandle},
             errors::ProofError,
             range_proof::RangeProof,
         },
@@ -88,62 +88,62 @@ mod target_arch {
         }
     }
 
-    impl From<PedersenComm> for pod::PedersenComm {
-        fn from(comm: PedersenComm) -> Self {
+    impl From<PedersenCommitment> for pod::PedersenCommitment {
+        fn from(comm: PedersenCommitment) -> Self {
             Self(comm.to_bytes())
         }
     }
 
     // For proof verification, interpret pod::PedersenComm directly as CompressedRistretto
     #[cfg(not(target_arch = "bpf"))]
-    impl From<pod::PedersenComm> for CompressedRistretto {
-        fn from(pod: pod::PedersenComm) -> Self {
+    impl From<pod::PedersenCommitment> for CompressedRistretto {
+        fn from(pod: pod::PedersenCommitment) -> Self {
             Self(pod.0)
         }
     }
 
     #[cfg(not(target_arch = "bpf"))]
-    impl TryFrom<pod::PedersenComm> for PedersenComm {
+    impl TryFrom<pod::PedersenCommitment> for PedersenCommitment {
         type Error = ProofError;
 
-        fn try_from(pod: pod::PedersenComm) -> Result<Self, Self::Error> {
+        fn try_from(pod: pod::PedersenCommitment) -> Result<Self, Self::Error> {
             Self::from_bytes(&pod.0).ok_or(ProofError::InconsistentCTData)
         }
     }
 
     #[cfg(not(target_arch = "bpf"))]
-    impl fmt::Debug for pod::PedersenComm {
+    impl fmt::Debug for pod::PedersenCommitment {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
             write!(f, "{:?}", self.0)
         }
     }
 
     #[cfg(not(target_arch = "bpf"))]
-    impl From<PedersenDecHandle> for pod::PedersenDecHandle {
-        fn from(handle: PedersenDecHandle) -> Self {
+    impl From<PedersenDecryptHandle> for pod::PedersenDecryptHandle {
+        fn from(handle: PedersenDecryptHandle) -> Self {
             Self(handle.to_bytes())
         }
     }
 
     // For proof verification, interpret pod::PedersenDecHandle as CompressedRistretto
     #[cfg(not(target_arch = "bpf"))]
-    impl From<pod::PedersenDecHandle> for CompressedRistretto {
-        fn from(pod: pod::PedersenDecHandle) -> Self {
+    impl From<pod::PedersenDecryptHandle> for CompressedRistretto {
+        fn from(pod: pod::PedersenDecryptHandle) -> Self {
             Self(pod.0)
         }
     }
 
     #[cfg(not(target_arch = "bpf"))]
-    impl TryFrom<pod::PedersenDecHandle> for PedersenDecHandle {
+    impl TryFrom<pod::PedersenDecryptHandle> for PedersenDecryptHandle {
         type Error = ProofError;
 
-        fn try_from(pod: pod::PedersenDecHandle) -> Result<Self, Self::Error> {
+        fn try_from(pod: pod::PedersenDecryptHandle) -> Result<Self, Self::Error> {
             Self::from_bytes(&pod.0).ok_or(ProofError::InconsistentCTData)
         }
     }
 
     #[cfg(not(target_arch = "bpf"))]
-    impl fmt::Debug for pod::PedersenDecHandle {
+    impl fmt::Debug for pod::PedersenDecryptHandle {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
             write!(f, "{:?}", self.0)
         }
@@ -224,7 +224,7 @@ mod tests {
 
     #[test]
     fn test_pod_range_proof_64() {
-        let (comm, open) = Pedersen::commit(55_u64);
+        let (comm, open) = Pedersen::new(55_u64);
 
         let mut transcript_create = Transcript::new(b"Test");
         let mut transcript_verify = Transcript::new(b"Test");
@@ -250,9 +250,9 @@ mod tests {
 
     #[test]
     fn test_pod_range_proof_128() {
-        let (comm_1, open_1) = Pedersen::commit(55_u64);
-        let (comm_2, open_2) = Pedersen::commit(77_u64);
-        let (comm_3, open_3) = Pedersen::commit(99_u64);
+        let (comm_1, open_1) = Pedersen::new(55_u64);
+        let (comm_2, open_2) = Pedersen::new(77_u64);
+        let (comm_3, open_3) = Pedersen::new(99_u64);
 
         let mut transcript_create = Transcript::new(b"Test");
         let mut transcript_verify = Transcript::new(b"Test");

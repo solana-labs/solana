@@ -235,7 +235,7 @@ mod tests {
         crate::{
             encryption::{
                 elgamal::{ElGamal, ElGamalCiphertext},
-                pedersen::{Pedersen, PedersenOpen},
+                pedersen::{Pedersen, PedersenOpening},
             },
             zk_token_elgamal::{ops, pod},
         },
@@ -256,11 +256,11 @@ mod tests {
         let balance: u64 = 0;
         assert_eq!(
             spendable_ct,
-            pk.encrypt_with(balance, &PedersenOpen::default())
+            pk.encrypt_with(balance, &PedersenOpening::default())
         );
 
         // homomorphism should work like any other ciphertext
-        let open = PedersenOpen::random(&mut OsRng);
+        let open = PedersenOpening::random(&mut OsRng);
         let transfer_amount_ct = pk.encrypt_with(55_u64, &open);
         let transfer_amount_pod: pod::ElGamalCiphertext = transfer_amount_ct.into();
 
@@ -278,7 +278,7 @@ mod tests {
 
         let (pk, _) = ElGamal::new();
         let expected: pod::ElGamalCiphertext =
-            pk.encrypt_with(55_u64, &PedersenOpen::default()).into();
+            pk.encrypt_with(55_u64, &PedersenOpening::default()).into();
 
         assert_eq!(expected, added_ct);
     }
@@ -287,7 +287,7 @@ mod tests {
     fn test_subtract_from() {
         let amount = 77_u64;
         let (pk, _) = ElGamal::new();
-        let open = PedersenOpen::random(&mut OsRng);
+        let open = PedersenOpening::random(&mut OsRng);
         let encrypted_amount: pod::ElGamalCiphertext = pk.encrypt_with(amount, &open).into();
 
         let subtracted_ct = ops::subtract_from(&encrypted_amount, 55).unwrap();
@@ -317,28 +317,30 @@ mod tests {
         let (auditor_pk, _) = ElGamal::new();
 
         // commitments associated with TransferRangeProof
-        let (comm_lo, open_lo) = Pedersen::commit(amount_lo);
-        let (comm_hi, open_hi) = Pedersen::commit(amount_hi);
+        let (comm_lo, open_lo) = Pedersen::new(amount_lo);
+        let (comm_hi, open_hi) = Pedersen::new(amount_hi);
 
-        let comm_lo: pod::PedersenComm = comm_lo.into();
-        let comm_hi: pod::PedersenComm = comm_hi.into();
+        let comm_lo: pod::PedersenCommitment = comm_lo.into();
+        let comm_hi: pod::PedersenCommitment = comm_hi.into();
 
         // decryption handles associated with TransferValidityProof
-        let handle_source_lo: pod::PedersenDecHandle =
+        let handle_source_lo: pod::PedersenDecryptHandle =
             source_pk.gen_decrypt_handle(&open_lo).into();
-        let handle_dest_lo: pod::PedersenDecHandle = dest_pk.gen_decrypt_handle(&open_lo).into();
-        let _handle_auditor_lo: pod::PedersenDecHandle =
+        let handle_dest_lo: pod::PedersenDecryptHandle =
+            dest_pk.gen_decrypt_handle(&open_lo).into();
+        let _handle_auditor_lo: pod::PedersenDecryptHandle =
             auditor_pk.gen_decrypt_handle(&open_lo).into();
 
-        let handle_source_hi: pod::PedersenDecHandle =
+        let handle_source_hi: pod::PedersenDecryptHandle =
             source_pk.gen_decrypt_handle(&open_hi).into();
-        let handle_dest_hi: pod::PedersenDecHandle = dest_pk.gen_decrypt_handle(&open_hi).into();
-        let _handle_auditor_hi: pod::PedersenDecHandle =
+        let handle_dest_hi: pod::PedersenDecryptHandle =
+            dest_pk.gen_decrypt_handle(&open_hi).into();
+        let _handle_auditor_hi: pod::PedersenDecryptHandle =
             auditor_pk.gen_decrypt_handle(&open_hi).into();
 
         // source spendable and recipient pending
-        let source_open = PedersenOpen::random(&mut OsRng);
-        let dest_open = PedersenOpen::random(&mut OsRng);
+        let source_open = PedersenOpening::random(&mut OsRng);
+        let dest_open = PedersenOpening::random(&mut OsRng);
 
         let source_spendable_ct: pod::ElGamalCiphertext =
             source_pk.encrypt_with(77_u64, &source_open).into();

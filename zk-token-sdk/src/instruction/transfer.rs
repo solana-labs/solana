@@ -7,7 +7,9 @@ use {
     crate::{
         encryption::{
             elgamal::{ElGamalCiphertext, ElGamalPubkey, ElGamalSecretKey},
-            pedersen::{Pedersen, PedersenBase, PedersenComm, PedersenDecHandle, PedersenOpen},
+            pedersen::{
+                Pedersen, PedersenBase, PedersenCommitment, PedersenDecryptHandle, PedersenOpening,
+            },
         },
         errors::ProofError,
         instruction::Verifiable,
@@ -51,8 +53,8 @@ impl TransferData {
         // ciphertext separately.
         let (amount_lo, amount_hi) = split_u64_into_u32(transfer_amount);
 
-        let (comm_lo, open_lo) = Pedersen::commit(amount_lo);
-        let (comm_hi, open_hi) = Pedersen::commit(amount_hi);
+        let (comm_lo, open_lo) = Pedersen::new(amount_lo);
+        let (comm_hi, open_hi) = Pedersen::new(amount_hi);
 
         let handle_source_lo = source_pk.gen_decrypt_handle(&open_lo);
         let handle_dest_lo = dest_pk.gen_decrypt_handle(&open_lo);
@@ -139,16 +141,16 @@ impl TransferData {
     /// Extracts the lo and hi source ciphertexts associated with a transfer data and returns the
     /// *combined* ciphertext
     pub fn source_ciphertext(&self) -> Result<ElGamalCiphertext, ProofError> {
-        let transfer_comms_lo: PedersenComm = self.range_proof.amount_comms.lo.try_into()?;
-        let transfer_comms_hi: PedersenComm = self.range_proof.amount_comms.hi.try_into()?;
+        let transfer_comms_lo: PedersenCommitment = self.range_proof.amount_comms.lo.try_into()?;
+        let transfer_comms_hi: PedersenCommitment = self.range_proof.amount_comms.hi.try_into()?;
         let transfer_comm = combine_u32_comms(transfer_comms_lo, transfer_comms_hi);
 
-        let decryption_handle_lo: PedersenDecHandle = self
+        let decryption_handle_lo: PedersenDecryptHandle = self
             .validity_proof
             .decryption_handles_lo
             .source
             .try_into()?;
-        let decryption_handle_hi: PedersenDecHandle = self
+        let decryption_handle_hi: PedersenDecryptHandle = self
             .validity_proof
             .decryption_handles_hi
             .source
@@ -161,13 +163,13 @@ impl TransferData {
     /// Extracts the lo and hi destination ciphertexts associated with a transfer data and returns
     /// the *combined* ciphertext
     pub fn dest_ciphertext(&self) -> Result<ElGamalCiphertext, ProofError> {
-        let transfer_comms_lo: PedersenComm = self.range_proof.amount_comms.lo.try_into()?;
-        let transfer_comms_hi: PedersenComm = self.range_proof.amount_comms.hi.try_into()?;
+        let transfer_comms_lo: PedersenCommitment = self.range_proof.amount_comms.lo.try_into()?;
+        let transfer_comms_hi: PedersenCommitment = self.range_proof.amount_comms.hi.try_into()?;
         let transfer_comm = combine_u32_comms(transfer_comms_lo, transfer_comms_hi);
 
-        let decryption_handle_lo: PedersenDecHandle =
+        let decryption_handle_lo: PedersenDecryptHandle =
             self.validity_proof.decryption_handles_lo.dest.try_into()?;
-        let decryption_handle_hi: PedersenDecHandle =
+        let decryption_handle_hi: PedersenDecryptHandle =
             self.validity_proof.decryption_handles_hi.dest.try_into()?;
         let decryption_handle = combine_u32_handles(decryption_handle_lo, decryption_handle_hi);
 
@@ -243,10 +245,10 @@ pub struct TransferValidityProofData {
 #[derive(Clone, Copy, Pod, Zeroable, PartialEq)]
 #[repr(C)]
 pub struct TransferEphemeralState {
-    pub spendable_comm_verification: pod::PedersenComm, // 32 bytes
-    pub x: pod::Scalar,                                 // 32 bytes
-    pub z: pod::Scalar,                                 // 32 bytes
-    pub t_x_blinding: pod::Scalar,                      // 32 bytes
+    pub spendable_comm_verification: pod::PedersenCommitment, // 32 bytes
+    pub x: pod::Scalar,                                       // 32 bytes
+    pub z: pod::Scalar,                                       // 32 bytes
+    pub t_x_blinding: pod::Scalar,                            // 32 bytes
 }
 
 #[cfg(not(target_arch = "bpf"))]
@@ -281,8 +283,8 @@ impl TransferProofs {
         dest_pk: &ElGamalPubkey,
         auditor_pk: &ElGamalPubkey,
         transfer_amt: (u64, u64),
-        lo_open: &PedersenOpen,
-        hi_open: &PedersenOpen,
+        lo_open: &PedersenOpening,
+        hi_open: &PedersenOpening,
         new_spendable_balance: u64,
         new_spendable_ct: &ElGamalCiphertext,
     ) -> (Self, TransferEphemeralState) {
@@ -302,14 +304,14 @@ impl TransferProofs {
         let c = transcript_validity_proof.challenge_scalar(b"c");
 
         let z = s + c * y;
-        let new_spendable_open = PedersenOpen(c * r_new);
+        let new_spendable_open = PedersenOpening(c * r_new);
 
         let spendable_comm_verification =
-            Pedersen::commit_with(new_spendable_balance, &new_spendable_open);
+            Pedersen::with(new_spendable_balance, &new_spendable_open);
 
         // Generate proof for the transfer amounts
-        let t_1_blinding = PedersenOpen::random(&mut OsRng);
-        let t_2_blinding = PedersenOpen::random(&mut OsRng);
+        let t_1_blinding = PedersenOpening::random(&mut OsRng);
+        let t_2_blinding = PedersenOpening::random(&mut OsRng);
 
         let u = transcript_validity_proof.challenge_scalar(b"u");
         let P_joint = RistrettoPoint::multiscalar_mul(
@@ -441,9 +443,9 @@ impl ValidityProof {
         let x = ephemeral_state.x.into();
         let z: Scalar = ephemeral_state.z.into();
 
-        let handle_source_lo: PedersenDecHandle = decryption_handles_lo.source.try_into()?;
-        let handle_dest_lo: PedersenDecHandle = decryption_handles_lo.dest.try_into()?;
-        let handle_auditor_lo: PedersenDecHandle = decryption_handles_lo.auditor.try_into()?;
+        let handle_source_lo: PedersenDecryptHandle = decryption_handles_lo.source.try_into()?;
+        let handle_dest_lo: PedersenDecryptHandle = decryption_handles_lo.dest.try_into()?;
+        let handle_auditor_lo: PedersenDecryptHandle = decryption_handles_lo.auditor.try_into()?;
 
         let D_joint: CompressedRistretto = self.T_joint.into();
         let D_joint = D_joint.decompress().ok_or(ProofError::VerificationError)?;
@@ -457,9 +459,9 @@ impl ValidityProof {
             ],
         );
 
-        let handle_source_hi: PedersenDecHandle = decryption_handles_hi.source.try_into()?;
-        let handle_dest_hi: PedersenDecHandle = decryption_handles_hi.dest.try_into()?;
-        let handle_auditor_hi: PedersenDecHandle = decryption_handles_hi.auditor.try_into()?;
+        let handle_source_hi: PedersenDecryptHandle = decryption_handles_hi.source.try_into()?;
+        let handle_dest_hi: PedersenDecryptHandle = decryption_handles_hi.dest.try_into()?;
+        let handle_auditor_hi: PedersenDecryptHandle = decryption_handles_hi.auditor.try_into()?;
 
         let D_joint_hi = RistrettoPoint::vartime_multiscalar_mul(
             vec![Scalar::one(), u, u * u],
@@ -506,17 +508,17 @@ pub struct TransferPubKeys {
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct TransferComms {
-    pub lo: pod::PedersenComm, // 32 bytes
-    pub hi: pod::PedersenComm, // 32 bytes
+    pub lo: pod::PedersenCommitment, // 32 bytes
+    pub hi: pod::PedersenCommitment, // 32 bytes
 }
 
 /// The decryption handles needed for a transfer
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct TransferHandles {
-    pub source: pod::PedersenDecHandle,  // 32 bytes
-    pub dest: pod::PedersenDecHandle,    // 32 bytes
-    pub auditor: pod::PedersenDecHandle, // 32 bytes
+    pub source: pod::PedersenDecryptHandle,  // 32 bytes
+    pub dest: pod::PedersenDecryptHandle,    // 32 bytes
+    pub auditor: pod::PedersenDecryptHandle, // 32 bytes
 }
 
 /// Split u64 number into two u32 numbers
@@ -533,15 +535,18 @@ pub fn split_u64_into_u32(amt: u64) -> (u32, u32) {
 const TWO_32: u64 = 4294967296;
 
 #[cfg(not(target_arch = "bpf"))]
-pub fn combine_u32_comms(comm_lo: PedersenComm, comm_hi: PedersenComm) -> PedersenComm {
+pub fn combine_u32_comms(
+    comm_lo: PedersenCommitment,
+    comm_hi: PedersenCommitment,
+) -> PedersenCommitment {
     comm_lo + comm_hi * Scalar::from(TWO_32)
 }
 
 #[cfg(not(target_arch = "bpf"))]
 pub fn combine_u32_handles(
-    handle_lo: PedersenDecHandle,
-    handle_hi: PedersenDecHandle,
-) -> PedersenDecHandle {
+    handle_lo: PedersenDecryptHandle,
+    handle_hi: PedersenDecryptHandle,
+) -> PedersenDecryptHandle {
     handle_lo + handle_hi * Scalar::from(TWO_32)
 }
 
