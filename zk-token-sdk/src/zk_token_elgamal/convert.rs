@@ -21,7 +21,7 @@ mod target_arch {
             range_proof::RangeProof,
         },
         curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar},
-        std::{convert::TryFrom, fmt},
+        std::convert::TryFrom,
     };
 
     impl From<Scalar> for pod::Scalar {
@@ -50,12 +50,6 @@ mod target_arch {
         }
     }
 
-    impl fmt::Debug for pod::ElGamalCiphertext {
-        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            write!(f, "{:?}", self.0)
-        }
-    }
-
     impl From<ElGamalPubkey> for pod::ElGamalPubkey {
         fn from(pk: ElGamalPubkey) -> Self {
             Self(pk.to_bytes())
@@ -67,12 +61,6 @@ mod target_arch {
 
         fn try_from(pk: pod::ElGamalPubkey) -> Result<Self, Self::Error> {
             Self::from_bytes(&pk.0).ok_or(ProofError::InconsistentCTData)
-        }
-    }
-
-    impl fmt::Debug for pod::ElGamalPubkey {
-        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            write!(f, "{:?}", self.0)
         }
     }
 
@@ -112,13 +100,6 @@ mod target_arch {
     }
 
     #[cfg(not(target_arch = "bpf"))]
-    impl fmt::Debug for pod::PedersenCommitment {
-        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            write!(f, "{:?}", self.0)
-        }
-    }
-
-    #[cfg(not(target_arch = "bpf"))]
     impl From<PedersenDecryptHandle> for pod::PedersenDecryptHandle {
         fn from(handle: PedersenDecryptHandle) -> Self {
             Self(handle.to_bytes())
@@ -139,13 +120,6 @@ mod target_arch {
 
         fn try_from(pod: pod::PedersenDecryptHandle) -> Result<Self, Self::Error> {
             Self::from_bytes(&pod.0).ok_or(ProofError::InconsistentCTData)
-        }
-    }
-
-    #[cfg(not(target_arch = "bpf"))]
-    impl fmt::Debug for pod::PedersenDecryptHandle {
-        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            write!(f, "{:?}", self.0)
         }
     }
 

@@ -1,4 +1,6 @@
-use bytemuck::{Pod, Zeroable};
+use std::fmt;
+
+pub use bytemuck::{Pod, Zeroable};
 
 #[derive(Clone, Copy, Pod, Zeroable, PartialEq)]
 #[repr(transparent)]
@@ -12,17 +14,41 @@ pub struct CompressedRistretto(pub [u8; 32]);
 #[repr(transparent)]
 pub struct ElGamalCiphertext(pub [u8; 64]);
 
+impl fmt::Debug for ElGamalCiphertext {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self.0)
+    }
+}
+
 #[derive(Clone, Copy, Pod, Zeroable, PartialEq)]
 #[repr(transparent)]
 pub struct ElGamalPubkey(pub [u8; 32]);
+
+impl fmt::Debug for ElGamalPubkey {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self.0)
+    }
+}
 
 #[derive(Clone, Copy, Pod, Zeroable, PartialEq)]
 #[repr(transparent)]
 pub struct PedersenCommitment(pub [u8; 32]);
 
+impl fmt::Debug for PedersenCommitment {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self.0)
+    }
+}
+
 #[derive(Clone, Copy, Pod, Zeroable, PartialEq)]
 #[repr(transparent)]
 pub struct PedersenDecryptHandle(pub [u8; 32]);
+
+impl fmt::Debug for PedersenDecryptHandle {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self.0)
+    }
+}
 
 /// Serialization of range proofs for 64-bit numbers (for `Withdraw` instruction)
 #[derive(Clone, Copy)]
