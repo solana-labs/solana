@@ -709,13 +709,15 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 // it is possible that the item in the cache is marked as dirty while these updates are happening. That is ok.
                 let m = Measure::start("flush_update");
                 for (k, v) in updates.into_iter() {
+                    if v.dirty() {
+                        continue; // marked dirty after we grabbed it above, so handle this the next time this bucket is flushed
+                    }
                     if disk_resize.is_ok() {
-                        if v.dirty() {
-                            continue; // marked dirty after we grabbed it above, so handle this the next time this bucket is flushed
-                        }
-                        flush_entries_updated_on_disk += 1;
                         disk_resize =
                             disk.try_write(&k, (&v.slot_list.read().unwrap(), v.ref_count()));
+                        if disk_resize.is_ok() {
+                            flush_entries_updated_on_disk += 1;
+                        }
                     }
                     if disk_resize.is_err() {
                         // disk needs to resize, so mark all unprocessed items as dirty again so we pick them up after the resize
