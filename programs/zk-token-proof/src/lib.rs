@@ -29,6 +29,11 @@ pub fn process_instruction(
     input: &[u8],
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
+    if invoke_context.invoke_depth() != 1 {
+        // Not supported as an inner instruction
+        return Err(InstructionError::UnsupportedProgramId);
+    }
+
     match ProofInstruction::decode_type(program_id, input)
         .ok_or(InstructionError::InvalidInstructionData)?
     {
