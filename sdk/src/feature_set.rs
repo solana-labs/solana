@@ -229,6 +229,10 @@ pub mod prevent_calling_precompiles_as_programs {
     solana_sdk::declare_id!("4ApgRX3ud6p7LNMJmsuaAcZY5HWctGPr5obAsjB3A54d");
 }
 
+pub mod optimize_epoch_boundary_updates {
+    solana_sdk::declare_id!("265hPS8k8xJ37ot82KEgjRunsUp5w4n4Q4VwwiN9i9ps");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -281,6 +285,7 @@ lazy_static! {
         (stakes_remove_delegation_if_inactive::id(), "remove delegations from stakes cache when inactive"),
         (do_support_realloc::id(), "support account data reallocation"),
         (prevent_calling_precompiles_as_programs::id(), "Prevent calling precompiles as programs"),
+        (optimize_epoch_boundary_updates::id(), "Optimize epoch boundary updates"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
