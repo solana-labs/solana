@@ -38,7 +38,7 @@ impl std::fmt::Debug for AccountsDbPluginPostgres {
 pub struct AccountsDbPluginPostgresConfig {
     pub host: String,
     pub user: String,
-    pub threads: usize,
+    pub threads: Option<usize>,
 }
 
 #[derive(Error, Debug)]
@@ -65,7 +65,7 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
     /// }
     /// or:
     /// "accounts_selector" = {
-    ///     "owners" : \["pubkey-1', 'pubkey-2", ..., "pubkey-m"\]
+    ///     "owners" : \["pubkey-1", "pubkey-2", ..., "pubkey-m"\]
     /// }
     /// Accounts either satisyfing the accounts condition or owners condition will be selected.
     /// When only owners is specified,
@@ -76,11 +76,14 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
     /// }
     /// "host" specifies the PostgreSQL server.
     /// "user" specifies the PostgreSQL user.
+    /// "threads" optional, specifies the number of worker threads for the plugin. A thread
+    /// maintains a PostgreSQL connection to the server.
     /// # Examples
     /// {
     ///    "libpath": "/home/solana/target/release/libsolana_accountsdb_plugin_postgres.so",
     ///    "host": "host_foo",
     ///    "user": "solana",
+    ///    "threads": 10,
     ///    "accounts_selector" : {
     ///       "owners" : ["9oT9R5ZyRovSVnt37QvVoBttGpNqR3J7unkb567NP8k3"]
     /// }
@@ -111,7 +114,7 @@ impl AccountsDbPlugin for AccountsDbPluginPostgres {
                 })
             }
             Ok(config) => {
-                self.client = if config.threads > 1 {
+                self.client = if config.threads.is_some() && config.threads.unwrap() > 1 {
                     let client = PostgresClientBuilder::build_pararallel_postgres_client(&config)?;
                     Some(PostgresClientEnum::Parallel(client))
                 } else {

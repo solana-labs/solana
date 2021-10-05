@@ -346,7 +346,7 @@ impl ParallelPostgresClient {
         let exit_worker = Arc::new(AtomicBool::new(false));
         let mut workers = Vec::default();
 
-        for i in 0..config.threads {
+        for i in 0..config.threads.unwrap() {
             let cloned_receiver = receiver.clone();
             let exit_clone = exit_worker.clone();
             let config = config.clone();
