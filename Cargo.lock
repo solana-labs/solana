@@ -5001,6 +5001,7 @@ dependencies = [
  "bytecount",
  "clap 2.33.3",
  "csv",
+ "dashmap",
  "histogram",
  "itertools 0.10.1",
  "log 0.4.14",

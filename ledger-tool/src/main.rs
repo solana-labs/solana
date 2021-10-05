@@ -3,6 +3,7 @@ use clap::{
     crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App, AppSettings,
     Arg, ArgMatches, SubCommand,
 };
+use dashmap::DashMap;
 use itertools::Itertools;
 use log::*;
 use regex::Regex;
@@ -2547,15 +2548,16 @@ fn main() {
                             skipped_reasons: String,
                         }
                         use solana_stake_program::stake_state::InflationPointCalculationEvent;
-                        let mut stake_calcuration_details: HashMap<Pubkey, CalculationDetail> =
-                            HashMap::new();
-                        let mut last_point_value = None;
+                        let stake_calculation_details: DashMap<Pubkey, CalculationDetail> =
+                            DashMap::new();
+                        let last_point_value = Arc::new(RwLock::new(None));
                         let tracer = |event: &RewardCalculationEvent| {
                             // Currently RewardCalculationEvent enum has only Staking variant
                             // because only staking tracing is supported!
                             #[allow(irrefutable_let_patterns)]
                             if let RewardCalculationEvent::Staking(pubkey, event) = event {
-                                let detail = stake_calcuration_details.entry(**pubkey).or_default();
+                                let mut detail =
+                                    stake_calculation_details.entry(**pubkey).or_default();
                                 match event {
                                     InflationPointCalculationEvent::CalculatedPoints(
                                         epoch,
@@ -2580,12 +2582,11 @@ fn main() {
                                         detail.point_value = Some(point_value.clone());
                                         // we have duplicate copies of `PointValue`s for possible
                                         // miscalculation; do some minimum sanity check
-                                        let point_value = detail.point_value.clone();
-                                        if point_value.is_some() {
-                                            if last_point_value.is_some() {
-                                                assert_eq!(last_point_value, point_value,);
-                                            }
-                                            last_point_value = point_value;
+                                        let mut last_point_value = last_point_value.write().unwrap();
+                                        if let Some(last_point_value) = last_point_value.as_ref() {
+                                            assert_eq!(last_point_value, point_value);
+                                        } else {
+                                            *last_point_value = Some(point_value.clone());
                                         }
                                     }
                                     InflationPointCalculationEvent::EffectiveStakeAtRewardedEpoch(stake) => {
@@ -2690,16 +2691,17 @@ fn main() {
                             },
                         );
 
-                        let mut unchanged_accounts = stake_calcuration_details
-                            .keys()
+                        let mut unchanged_accounts = stake_calculation_details
+                            .iter()
+                            .map(|entry| *entry.key())
                             .collect::<HashSet<_>>()
                             .difference(
                                 &rewarded_accounts
                                     .iter()
-                                    .map(|(pubkey, ..)| *pubkey)
+                                    .map(|(pubkey, ..)| **pubkey)
                                     .collect(),
                             )
-                            .map(|pubkey| (**pubkey, warped_bank.get_account(pubkey).unwrap()))
+                            .map(|pubkey| (*pubkey, warped_bank.get_account(pubkey).unwrap()))
                             .collect::<Vec<_>>();
                         unchanged_accounts.sort_unstable_by_key(|(pubkey, account)| {
                             (*account.owner(), account.lamports(), *pubkey)
@@ -2720,7 +2722,9 @@ fn main() {
 
                             if let Some(base_account) = base_bank.get_account(&pubkey) {
                                 let delta = warped_account.lamports() - base_account.lamports();
-                                let detail = stake_calcuration_details.get(&pubkey);
+                                let detail_ref = stake_calculation_details.get(&pubkey);
+                                let detail: Option<&CalculationDetail> =
+                                    detail_ref.as_ref().map(|detail_ref| detail_ref.value());
                                 println!(
                                     "{:<45}({}): {} => {} (+{} {:>4.9}%) {:?}",
                                     format!("{}", pubkey), // format! is needed to pad/justify correctly.
@@ -2843,10 +2847,18 @@ fn main() {
                                             ),
                                             commission: format_or_na(detail.map(|d| d.commission)),
                                             cluster_rewards: format_or_na(
-                                                last_point_value.as_ref().map(|pv| pv.rewards),
+                                                last_point_value
+                                                    .read()
+                                                    .unwrap()
+                                                    .clone()
+                                                    .map(|pv| pv.rewards),
                                             ),
                                             cluster_points: format_or_na(
-                                                last_point_value.as_ref().map(|pv| pv.points),
+                                                last_point_value
+                                                    .read()
+                                                    .unwrap()
+                                                    .clone()
+                                                    .map(|pv| pv.points),
                                             ),
                                             old_capitalization: base_bank.capitalization(),
                                             new_capitalization: warped_bank.capitalization(),
