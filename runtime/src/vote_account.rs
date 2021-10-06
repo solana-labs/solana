@@ -28,9 +28,11 @@ pub struct VoteAccount {
     vote_state_once: Once,
 }
 
+pub type VoteAccountsHashMap = HashMap<Pubkey, (/*stake:*/ u64, ArcVoteAccount)>;
+
 #[derive(Debug, AbiExample)]
 pub struct VoteAccounts {
-    vote_accounts: HashMap<Pubkey, (u64 /*stake*/, ArcVoteAccount)>,
+    vote_accounts: VoteAccountsHashMap,
     staked_nodes: RwLock<
         HashMap<
             Pubkey, // VoteAccount.vote_state.node_pubkey.
@@ -41,6 +43,10 @@ pub struct VoteAccounts {
 }
 
 impl VoteAccount {
+    pub fn account(&self) -> &Account {
+        &self.account
+    }
+
     pub fn lamports(&self) -> u64 {
         self.account.lamports
     }
@@ -185,6 +191,12 @@ impl From<Account> for ArcVoteAccount {
     }
 }
 
+impl AsRef<VoteAccount> for ArcVoteAccount {
+    fn as_ref(&self) -> &VoteAccount {
+        &self.0
+    }
+}
+
 impl From<AccountSharedData> for VoteAccount {
     fn from(account: AccountSharedData) -> Self {
         Self {
@@ -257,8 +269,6 @@ impl PartialEq<VoteAccounts> for VoteAccounts {
         self.vote_accounts == other.vote_accounts
     }
 }
-
-type VoteAccountsHashMap = HashMap<Pubkey, (u64 /*stake*/, ArcVoteAccount)>;
 
 impl From<VoteAccountsHashMap> for VoteAccounts {
     fn from(vote_accounts: VoteAccountsHashMap) -> Self {

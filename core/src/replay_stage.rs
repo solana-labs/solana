@@ -38,8 +38,11 @@ use solana_ledger::{
 use solana_measure::{measure::Measure, thread_mem_usage};
 use solana_metrics::inc_new_counter_info;
 use solana_runtime::{
-    accounts_background_service::AbsRequestSender, bank::Bank, bank_forks::BankForks,
-    commitment::BlockCommitmentCache, vote_sender_types::ReplayVoteSender,
+    accounts_background_service::AbsRequestSender,
+    bank::{Bank, NewBankOptions},
+    bank_forks::BankForks,
+    commitment::BlockCommitmentCache,
+    vote_sender_types::ReplayVoteSender,
 };
 use solana_sdk::{
     clock::{Slot, MAX_PROCESSING_AGE, NUM_CONSECUTIVE_LEADER_SLOTS},
@@ -125,6 +128,7 @@ pub struct ReplayStageConfig {
     pub cache_block_meta_sender: Option<CacheBlockMetaSender>,
     pub bank_notification_sender: Option<BankNotificationSender>,
     pub wait_for_vote_to_start_leader: bool,
+    pub disable_epoch_boundary_optimization: bool,
 }
 
 #[derive(Default)]
@@ -323,6 +327,7 @@ impl ReplayStage {
             cache_block_meta_sender,
             bank_notification_sender,
             wait_for_vote_to_start_leader,
+            disable_epoch_boundary_optimization,
         } = config;
 
         trace!("replay stage");
@@ -700,6 +705,7 @@ impl ReplayStage {
                             &retransmit_slots_sender,
                             &mut skipped_slots_info,
                             has_new_vote_been_rooted,
+                            disable_epoch_boundary_optimization,
                         );
 
                         let poh_bank = poh_recorder.lock().unwrap().bank();
@@ -1122,6 +1128,7 @@ impl ReplayStage {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn maybe_start_leader(
         my_pubkey: &Pubkey,
         bank_forks: &Arc<RwLock<BankForks>>,
@@ -1132,6 +1139,7 @@ impl ReplayStage {
         retransmit_slots_sender: &RetransmitSlotsSender,
         skipped_slots_info: &mut SkippedSlotsInfo,
         has_new_vote_been_rooted: bool,
+        disable_epoch_boundary_optimization: bool,
     ) {
         // all the individual calls to poh_recorder.lock() are designed to
         // increase granularity, decrease contention
@@ -1242,7 +1250,10 @@ impl ReplayStage {
                 root_slot,
                 my_pubkey,
                 rpc_subscriptions,
-                vote_only_bank,
+                NewBankOptions {
+                    vote_only_bank,
+                    disable_epoch_boundary_optimization,
+                },
             );
 
             let tpu_bank = bank_forks.write().unwrap().insert(tpu_bank);
@@ -2499,7 +2510,7 @@ impl ReplayStage {
                     forks.root(),
                     &leader,
                     rpc_subscriptions,
-                    false,
+                    NewBankOptions::default(),
                 );
                 let empty: Vec<Pubkey> = vec![];
                 Self::update_fork_propagated_threshold_from_votes(
@@ -2526,10 +2537,10 @@ impl ReplayStage {
         root_slot: u64,
         leader: &Pubkey,
         rpc_subscriptions: &Arc<RpcSubscriptions>,
-        vote_only_bank: bool,
+        new_bank_options: NewBankOptions,
     ) -> Bank {
         rpc_subscriptions.notify_slot(slot, parent.slot(), root_slot);
-        Bank::new_from_parent_with_vote_only(parent, leader, slot, vote_only_bank)
+        Bank::new_from_parent_with_options(parent, leader, slot, new_bank_options)
     }
 
     fn record_rewards(bank: &Bank, rewards_recorder_sender: &Option<RewardsRecorderSender>) {

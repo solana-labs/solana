@@ -1802,6 +1802,14 @@ pub fn main() {
                 .help("Disables duplicate instance check")
                 .hidden(true),
         )
+        .arg(
+            Arg::with_name("disable_epoch_boundary_optimization")
+                .long("disable-epoch-boundary-optimization")
+                .takes_value(false)
+                .help("Disables epoch boundary optimization and overrides the \
+                optimize_epoch_boundary_updates feature switch if enabled.")
+                .hidden(true),
+        )
         .after_help("The default subcommand is run")
         .subcommand(
             SubCommand::with_name("exit")
@@ -2194,6 +2202,8 @@ pub fn main() {
         accounts_db_use_index_hash_calculation: matches.is_present("accounts_db_index_hashing"),
         tpu_coalesce_ms,
         no_wait_for_vote_to_start_leader: matches.is_present("no_wait_for_vote_to_start_leader"),
+        disable_epoch_boundary_optimization: matches
+            .is_present("disable_epoch_boundary_optimization"),
         ..ValidatorConfig::default()
     };
 

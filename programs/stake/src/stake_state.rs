@@ -1519,7 +1519,9 @@ impl MergeKind {
 
 // utility function, used by runtime
 // returns a tuple of (stakers_reward,voters_reward)
-pub fn redeem_rewards(
+#[doc(hidden)]
+#[deprecated(note = "remove after optimize_epoch_boundary_updates feature is active")]
+pub fn redeem_rewards_slow(
     rewarded_epoch: Epoch,
     stake_account: &mut AccountSharedData,
     vote_account: &mut AccountSharedData,
@@ -1568,7 +1570,9 @@ pub fn redeem_rewards(
 }
 
 // utility function, used by runtime
-pub fn calculate_points(
+#[doc(hidden)]
+#[deprecated(note = "remove after optimize_epoch_boundary_updates feature is active")]
+pub fn calculate_points_slow(
     stake_account: &AccountSharedData,
     vote_account: &AccountSharedData,
     stake_history: Option<&StakeHistory>,
@@ -1580,6 +1584,75 @@ pub fn calculate_points(
 
         Ok(stake.calculate_points(
             &vote_state,
+            stake_history,
+            null_tracer(),
+            fix_stake_deactivate,
+        ))
+    } else {
+        Err(InstructionError::InvalidAccountData)
+    }
+}
+
+// utility function, used by runtime
+// returns a tuple of (stakers_reward,voters_reward)
+#[doc(hidden)]
+pub fn redeem_rewards(
+    rewarded_epoch: Epoch,
+    stake_state: StakeState,
+    stake_account: &mut AccountSharedData,
+    vote_state: &VoteState,
+    point_value: &PointValue,
+    stake_history: Option<&StakeHistory>,
+    inflation_point_calc_tracer: Option<impl Fn(&InflationPointCalculationEvent)>,
+    fix_stake_deactivate: bool,
+) -> Result<(u64, u64), InstructionError> {
+    if let StakeState::Stake(meta, mut stake) = stake_state {
+        if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer.as_ref() {
+            inflation_point_calc_tracer(
+                &InflationPointCalculationEvent::EffectiveStakeAtRewardedEpoch(stake.stake(
+                    rewarded_epoch,
+                    stake_history,
+                    fix_stake_deactivate,
+                )),
+            );
+            inflation_point_calc_tracer(&InflationPointCalculationEvent::RentExemptReserve(
+                meta.rent_exempt_reserve,
+            ));
+            inflation_point_calc_tracer(&InflationPointCalculationEvent::Commission(
+                vote_state.commission,
+            ));
+        }
+
+        if let Some((stakers_reward, voters_reward)) = stake.redeem_rewards(
+            point_value,
+            vote_state,
+            stake_history,
+            inflation_point_calc_tracer,
+            fix_stake_deactivate,
+        ) {
+            stake_account.lamports += stakers_reward;
+            stake_account.set_state(&StakeState::Stake(meta, stake))?;
+
+            Ok((stakers_reward, voters_reward))
+        } else {
+            Err(StakeError::NoCreditsToRedeem.into())
+        }
+    } else {
+        Err(InstructionError::InvalidAccountData)
+    }
+}
+
+// utility function, used by runtime
+#[doc(hidden)]
+pub fn calculate_points(
+    stake_state: &StakeState,
+    vote_state: &VoteState,
+    stake_history: Option<&StakeHistory>,
+    fix_stake_deactivate: bool,
+) -> Result<u128, InstructionError> {
+    if let StakeState::Stake(_meta, stake) = stake_state {
+        Ok(stake.calculate_points(
+            vote_state,
             stake_history,
             null_tracer(),
             fix_stake_deactivate,
