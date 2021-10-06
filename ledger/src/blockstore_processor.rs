@@ -602,8 +602,8 @@ fn do_process_blockstore_from_root(
         blockstore
             .set_roots(std::iter::once(&start_slot))
             .expect("Couldn't set root slot on startup");
-    } else if !blockstore.is_root(start_slot) {
-        panic!("starting slot isn't root and can't update due to being secondary blockstore access: {}", start_slot);
+    } else {
+        assert!(blockstore.is_root(start_slot), "starting slot isn't root and can't update due to being secondary blockstore access: {}", start_slot);
     }
 
     if let Ok(metas) = blockstore.slot_meta_iterator(start_slot) {
@@ -1340,8 +1340,8 @@ fn process_single_slot(
             blockstore
                 .set_dead_slot(slot)
                 .expect("Failed to mark slot as dead in blockstore");
-        } else if !blockstore.is_dead(slot) {
-            panic!("Failed slot isn't dead and can't update due to being secondary blockstore access: {}", slot);
+        } else {
+            assert!(blockstore.is_dead(slot), "Failed slot isn't dead and can't update due to being secondary blockstore access: {}", slot);
         }
         err
     })?;

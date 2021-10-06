@@ -18,7 +18,6 @@ const RECYCLER_SHRINK_WINDOW: usize = 16384;
 #[derive(Debug, Default)]
 struct RecyclerStats {
     total: AtomicUsize,
-    freed: AtomicUsize,
     reuse: AtomicUsize,
     max_gc: AtomicUsize,
 }

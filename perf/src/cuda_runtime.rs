@@ -28,12 +28,13 @@ fn pin<T>(_mem: &mut Vec<T>) {
         let err = unsafe {
             (api.cuda_host_register)(ptr as *mut c_void, size, /*flags=*/ 0)
         };
-        if err != CUDA_SUCCESS {
-            panic!(
-                "cudaHostRegister error: {} ptr: {:?} bytes: {}",
-                err, ptr, size,
-            );
-        }
+        assert!(
+            err == CUDA_SUCCESS,
+            "cudaHostRegister error: {} ptr: {:?} bytes: {}",
+            err,
+            ptr,
+            size
+        );
     }
 }
 
@@ -42,9 +43,12 @@ fn unpin<T>(_mem: *mut T) {
         use std::ffi::c_void;
 
         let err = unsafe { (api.cuda_host_unregister)(_mem as *mut c_void) };
-        if err != CUDA_SUCCESS {
-            panic!("cudaHostUnregister returned: {} ptr: {:?}", err, _mem);
-        }
+        assert!(
+            err == CUDA_SUCCESS,
+            "cudaHostUnregister returned: {} ptr: {:?}",
+            err,
+            _mem
+        );
     }
 }
 

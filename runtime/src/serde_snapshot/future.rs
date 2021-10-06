@@ -75,9 +75,11 @@ pub(crate) struct DeserializableVersionedBank {
     pub(crate) epoch_schedule: EpochSchedule,
     pub(crate) inflation: Inflation,
     pub(crate) stakes: Stakes,
+    #[allow(dead_code)]
     pub(crate) unused_accounts: UnusedAccounts,
     pub(crate) epoch_stakes: HashMap<Epoch, EpochStakes>,
     pub(crate) is_delta: bool,
+    #[allow(dead_code)]
     pub(crate) message_processor: InstructionProcessor,
 }
 

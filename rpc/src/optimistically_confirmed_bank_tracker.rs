@@ -99,9 +99,9 @@ impl OptimisticallyConfirmedBankTracker {
         bank_forks: &Arc<RwLock<BankForks>>,
         optimistically_confirmed_bank: &Arc<RwLock<OptimisticallyConfirmedBank>>,
         subscriptions: &Arc<RpcSubscriptions>,
-        mut pending_optimistically_confirmed_banks: &mut HashSet<Slot>,
-        mut last_notified_confirmed_slot: &mut Slot,
-        mut highest_confirmed_slot: &mut Slot,
+        pending_optimistically_confirmed_banks: &mut HashSet<Slot>,
+        last_notified_confirmed_slot: &mut Slot,
+        highest_confirmed_slot: &mut Slot,
         bank_notification_subscribers: &Option<Arc<RwLock<Vec<BankNotificationSender>>>>,
     ) -> Result<(), RecvTimeoutError> {
         let notification = receiver.recv_timeout(Duration::from_secs(1))?;
@@ -110,9 +110,9 @@ impl OptimisticallyConfirmedBankTracker {
             bank_forks,
             optimistically_confirmed_bank,
             subscriptions,
-            &mut pending_optimistically_confirmed_banks,
-            &mut last_notified_confirmed_slot,
-            &mut highest_confirmed_slot,
+            pending_optimistically_confirmed_banks,
+            last_notified_confirmed_slot,
+            highest_confirmed_slot,
             bank_notification_subscribers,
         );
         Ok(())
@@ -169,8 +169,8 @@ impl OptimisticallyConfirmedBankTracker {
         bank_forks: &Arc<RwLock<BankForks>>,
         bank: &Arc<Bank>,
         slot_threshold: Slot,
-        mut last_notified_confirmed_slot: &mut Slot,
-        mut pending_optimistically_confirmed_banks: &mut HashSet<Slot>,
+        last_notified_confirmed_slot: &mut Slot,
+        pending_optimistically_confirmed_banks: &mut HashSet<Slot>,
         bank_notification_subscribers: &Option<Arc<RwLock<Vec<BankNotificationSender>>>>,
     ) {
         for confirmed_bank in bank.clone().parents_inclusive().iter().rev() {
@@ -183,8 +183,8 @@ impl OptimisticallyConfirmedBankTracker {
                     subscriptions,
                     bank_forks,
                     confirmed_bank,
-                    &mut last_notified_confirmed_slot,
-                    &mut pending_optimistically_confirmed_banks,
+                    last_notified_confirmed_slot,
+                    pending_optimistically_confirmed_banks,
                     bank_notification_subscribers,
                 );
             }
@@ -196,8 +196,8 @@ impl OptimisticallyConfirmedBankTracker {
         bank_forks: &Arc<RwLock<BankForks>>,
         optimistically_confirmed_bank: &Arc<RwLock<OptimisticallyConfirmedBank>>,
         subscriptions: &Arc<RpcSubscriptions>,
-        mut pending_optimistically_confirmed_banks: &mut HashSet<Slot>,
-        mut last_notified_confirmed_slot: &mut Slot,
+        pending_optimistically_confirmed_banks: &mut HashSet<Slot>,
+        last_notified_confirmed_slot: &mut Slot,
         highest_confirmed_slot: &mut Slot,
         bank_notification_subscribers: &Option<Arc<RwLock<Vec<BankNotificationSender>>>>,
     ) {
@@ -219,8 +219,8 @@ impl OptimisticallyConfirmedBankTracker {
                             bank_forks,
                             bank,
                             *highest_confirmed_slot,
-                            &mut last_notified_confirmed_slot,
-                            &mut pending_optimistically_confirmed_banks,
+                            last_notified_confirmed_slot,
+                            pending_optimistically_confirmed_banks,
                             bank_notification_subscribers,
                         );
 
@@ -273,8 +273,8 @@ impl OptimisticallyConfirmedBankTracker {
                         bank_forks,
                         &bank,
                         *last_notified_confirmed_slot,
-                        &mut last_notified_confirmed_slot,
-                        &mut pending_optimistically_confirmed_banks,
+                        last_notified_confirmed_slot,
+                        pending_optimistically_confirmed_banks,
                         bank_notification_subscribers,
                     );
 

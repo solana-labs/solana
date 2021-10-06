@@ -721,8 +721,8 @@ impl Shredder {
         // 2) Sign coding shreds
         PAR_THREAD_POOL.with(|thread_pool| {
             thread_pool.borrow().install(|| {
-                coding_shreds.par_iter_mut().for_each(|mut coding_shred| {
-                    Shredder::sign_shred(keypair, &mut coding_shred);
+                coding_shreds.par_iter_mut().for_each(|coding_shred| {
+                    Shredder::sign_shred(keypair, coding_shred);
                 })
             })
         });
@@ -858,7 +858,7 @@ impl Shredder {
 
         if num_coding > 0 && shreds.len() < fec_set_size {
             // Let's try recovering missing shreds using erasure
-            let mut present = &mut vec![true; fec_set_size];
+            let present = &mut vec![true; fec_set_size];
             let mut next_expected_index = first_index;
             let mut shred_bufs: Vec<Vec<u8>> = shreds
                 .into_iter()
@@ -871,7 +871,7 @@ impl Shredder {
                         first_index,
                         next_expected_index,
                         index,
-                        &mut present,
+                        present,
                     );
                     blocks.push(shred.payload);
                     next_expected_index = index + 1;
@@ -887,7 +887,7 @@ impl Shredder {
                 first_index,
                 next_expected_index,
                 first_index + fec_set_size,
-                &mut present,
+                present,
             );
 
             shred_bufs.append(&mut pending_shreds);

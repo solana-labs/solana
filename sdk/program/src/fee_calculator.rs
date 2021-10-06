@@ -5,20 +5,12 @@ use crate::message::Message;
 use crate::secp256k1_program;
 use log::*;
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, AbiExample)]
+#[derive(Serialize, Deserialize, Default, PartialEq, Eq, Clone, Debug, AbiExample)]
 #[serde(rename_all = "camelCase")]
 pub struct FeeCalculator {
     // The current cost of a signature  This amount may increase/decrease over time based on
     // cluster processing load.
     pub lamports_per_signature: u64,
-}
-
-impl Default for FeeCalculator {
-    fn default() -> Self {
-        Self {
-            lamports_per_signature: 0,
-        }
-    }
 }
 
 impl FeeCalculator {

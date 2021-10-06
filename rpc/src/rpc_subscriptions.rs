@@ -116,12 +116,6 @@ impl std::fmt::Debug for NotificationEntry {
     }
 }
 
-#[derive(Default, Clone)]
-struct ProgramConfig {
-    filters: Vec<RpcFilterType>,
-    encoding: Option<UiAccountEncoding>,
-}
-
 #[allow(clippy::type_complexity)]
 fn check_commitment_and_notify<P, S, B, F, X>(
     params: &P,

@@ -153,6 +153,7 @@ struct SnapshotRootPaths {
 /// Helper type to bundle up the results from `unarchive_snapshot()`
 #[derive(Debug)]
 struct UnarchivedSnapshot {
+    #[allow(dead_code)]
     unpack_dir: TempDir,
     unpacked_append_vec_map: UnpackedAppendVecMap,
     unpacked_snapshots_dir_and_version: UnpackedSnapshotsDirAndVersion,
@@ -464,7 +465,7 @@ pub fn deserialize_snapshot_data_file<T: Sized>(
     deserializer: impl FnOnce(&mut BufReader<File>) -> Result<T>,
 ) -> Result<T> {
     let wrapped_deserializer = move |streams: &mut SnapshotStreams<File>| -> Result<T> {
-        deserializer(&mut streams.full_snapshot_stream)
+        deserializer(streams.full_snapshot_stream)
     };
 
     let wrapped_data_file_path = SnapshotRootPaths {
@@ -1460,12 +1461,12 @@ fn rebuild_bank_from_snapshots(
             .map(|root_paths| root_paths.snapshot_path),
     };
 
-    let bank = deserialize_snapshot_data_files(&snapshot_root_paths, |mut snapshot_streams| {
+    let bank = deserialize_snapshot_data_files(&snapshot_root_paths, |snapshot_streams| {
         Ok(
             match incremental_snapshot_version.unwrap_or(full_snapshot_version) {
                 SnapshotVersion::V1_2_0 => bank_from_streams(
                     SerdeStyle::Newer,
-                    &mut snapshot_streams,
+                    snapshot_streams,
                     account_paths,
                     unpacked_append_vec_map,
                     genesis_config,

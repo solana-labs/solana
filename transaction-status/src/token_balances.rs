@@ -51,7 +51,7 @@ fn get_mint_decimals(bank: &Bank, mint: &Pubkey) -> Option<u8> {
 pub fn collect_token_balances(
     bank: &Bank,
     batch: &TransactionBatch,
-    mut mint_decimals: &mut HashMap<Pubkey, u8>,
+    mint_decimals: &mut HashMap<Pubkey, u8>,
 ) -> TransactionTokenBalances {
     let mut balances: TransactionTokenBalances = vec![];
 
@@ -59,7 +59,7 @@ pub fn collect_token_balances(
         let has_token_program = transaction
             .message()
             .account_keys_iter()
-            .any(|p| is_token_program(p));
+            .any(is_token_program);
 
         let mut transaction_balances: Vec<TransactionTokenBalance> = vec![];
         if has_token_program {
@@ -69,7 +69,7 @@ pub fn collect_token_balances(
                 }
 
                 if let Some((mint, ui_token_amount)) =
-                    collect_token_balance_from_account(bank, account_id, &mut mint_decimals)
+                    collect_token_balance_from_account(bank, account_id, mint_decimals)
                 {
                     transaction_balances.push(TransactionTokenBalance {
                         account_index: index as u8,

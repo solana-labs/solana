@@ -573,9 +573,7 @@ impl EntrySlice for [Entry] {
                     1,
                 );
             }
-            if res != 0 {
-                panic!("GPU PoH verify many failed");
-            }
+            assert!(res == 0, "GPU PoH verify many failed");
             inc_new_counter_info!(
                 "entry_verify-gpu_thread",
                 timing::duration_as_us(&gpu_wait.elapsed()) as usize

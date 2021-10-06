@@ -96,9 +96,7 @@ pub fn init() {
     if let Some(api) = perf_libs::api() {
         unsafe {
             (api.ed25519_set_verbose)(true);
-            if !(api.ed25519_init)() {
-                panic!("ed25519_init() failed");
-            }
+            assert!((api.ed25519_init)(), "ed25519_init() failed");
             (api.ed25519_set_verbose)(false);
         }
     }
@@ -413,7 +411,7 @@ pub fn ed25519_verify_cpu(batches: &mut [Packets]) {
     PAR_THREAD_POOL.install(|| {
         batches
             .into_par_iter()
-            .for_each(|p| p.packets.par_iter_mut().for_each(|p| verify_packet(p)))
+            .for_each(|p| p.packets.par_iter_mut().for_each(verify_packet))
     });
     inc_new_counter_debug!("ed25519_verify_cpu", count);
 }
