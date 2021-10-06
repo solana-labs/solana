@@ -477,51 +477,27 @@ fn process_instruction(
             let owner = *accounts[FROM_INDEX].owner;
             let ptr = accounts[FROM_INDEX].data.borrow().as_ptr() as u64 as *mut _;
             let len = accounts[FROM_INDEX].data_len();
-            let mut data = unsafe { std::slice::from_raw_parts_mut(ptr, len) };
+            let data = unsafe { std::slice::from_raw_parts_mut(ptr, len) };
             let mut lamports = accounts[FROM_INDEX].lamports();
-            let from_info = AccountInfo::new(
-                &pubkey,
-                false,
-                true,
-                &mut lamports,
-                &mut data,
-                &owner,
-                false,
-                0,
-            );
+            let from_info =
+                AccountInfo::new(&pubkey, false, true, &mut lamports, data, &owner, false, 0);
 
             let pubkey = *accounts[DERIVED_KEY1_INDEX].key;
             let owner = *accounts[DERIVED_KEY1_INDEX].owner;
             // Point to top edge of heap, attempt to allocate into unprivileged memory
-            let mut data = unsafe { std::slice::from_raw_parts_mut(0x300007ff8 as *mut _, 0) };
+            let data = unsafe { std::slice::from_raw_parts_mut(0x300007ff8 as *mut _, 0) };
             let mut lamports = accounts[DERIVED_KEY1_INDEX].lamports();
-            let derived_info = AccountInfo::new(
-                &pubkey,
-                false,
-                true,
-                &mut lamports,
-                &mut data,
-                &owner,
-                false,
-                0,
-            );
+            let derived_info =
+                AccountInfo::new(&pubkey, false, true, &mut lamports, data, &owner, false, 0);
 
             let pubkey = *accounts[SYSTEM_PROGRAM_INDEX].key;
             let owner = *accounts[SYSTEM_PROGRAM_INDEX].owner;
             let ptr = accounts[SYSTEM_PROGRAM_INDEX].data.borrow().as_ptr() as u64 as *mut _;
             let len = accounts[SYSTEM_PROGRAM_INDEX].data_len();
-            let mut data = unsafe { std::slice::from_raw_parts_mut(ptr, len) };
+            let data = unsafe { std::slice::from_raw_parts_mut(ptr, len) };
             let mut lamports = accounts[SYSTEM_PROGRAM_INDEX].lamports();
-            let system_info = AccountInfo::new(
-                &pubkey,
-                false,
-                false,
-                &mut lamports,
-                &mut data,
-                &owner,
-                true,
-                0,
-            );
+            let system_info =
+                AccountInfo::new(&pubkey, false, false, &mut lamports, data, &owner, true, 0);
 
             let instruction = system_instruction::create_account(
                 accounts[FROM_INDEX].key,
