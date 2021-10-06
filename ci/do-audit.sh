@@ -45,6 +45,5 @@ cargo_audit_ignores=(
   # Blocked on jsonrpc removing dependency on unmaintained `websocket`
   # https://github.com/paritytech/jsonrpc/issues/605
   --ignore RUSTSEC-2021-0079
-
 )
 scripts/cargo-for-all-lock-files.sh stable audit "${cargo_audit_ignores[@]}"

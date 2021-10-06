@@ -6,7 +6,7 @@ use crate::{
     recvmmsg::NUM_RCVMMSGS,
     socket::SocketAddrSpace,
 };
-use solana_sdk::timing::timestamp;
+use solana_sdk::timing::{duration_as_ms, timestamp};
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, SendError, Sender};
@@ -138,13 +138,8 @@ pub fn recv_batch(recvr: &PacketReceiver) -> Result<(Vec<Packets>, usize, u64)> 
         len += more.packets.len();
         batch.push(more);
     }
-    let recv_duration = recv_start.elapsed();
     trace!("batch len {}", batch.len());
-    Ok((
-        batch,
-        len,
-        solana_sdk::timing::duration_as_ms(&recv_duration),
-    ))
+    Ok((batch, len, duration_as_ms(&recv_start.elapsed())))
 }
 
 pub fn responder(

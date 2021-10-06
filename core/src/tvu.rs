@@ -12,8 +12,6 @@ use crate::{
     cluster_slots::ClusterSlots,
     completed_data_sets_service::CompletedDataSetsSender,
     consensus::Tower,
-    cost_model::CostModel,
-    cost_update_service::CostUpdateService,
     ledger_cleanup_service::LedgerCleanupService,
     replay_stage::{ReplayStage, ReplayStageConfig},
     retransmit_stage::RetransmitStage,
@@ -40,7 +38,6 @@ use solana_runtime::{
         AbsRequestHandler, AbsRequestSender, AccountsBackgroundService, SnapshotRequestHandler,
     },
     accounts_db::AccountShrinkThreshold,
-    bank::ExecuteTimings,
     bank_forks::{BankForks, SnapshotConfig},
     commitment::BlockCommitmentCache,
     vote_sender_types::ReplayVoteSender,
@@ -55,7 +52,7 @@ use std::{
     net::UdpSocket,
     sync::{
         atomic::AtomicBool,
-        mpsc::{channel, Receiver, Sender},
+        mpsc::{channel, Receiver},
         Arc, Mutex, RwLock,
     },
     thread,
@@ -70,7 +67,6 @@ pub struct Tvu {
     accounts_background_service: AccountsBackgroundService,
     accounts_hash_verifier: AccountsHashVerifier,
     voting_service: VotingService,
-    cost_update_service: CostUpdateService,
 }
 
 pub struct Sockets {
@@ -135,7 +131,6 @@ impl Tvu {
         gossip_confirmed_slots_receiver: GossipDuplicateConfirmedSlotsReceiver,
         tvu_config: TvuConfig,
         max_slots: &Arc<MaxSlots>,
-        cost_model: &Arc<RwLock<CostModel>>,
     ) -> Self {
         let keypair: Arc<Keypair> = cluster_info.keypair.clone();
 
@@ -290,17 +285,6 @@ impl Tvu {
             bank_forks.clone(),
         );
 
-        let (cost_update_sender, cost_update_receiver): (
-            Sender<ExecuteTimings>,
-            Receiver<ExecuteTimings>,
-        ) = channel();
-        let cost_update_service = CostUpdateService::new(
-            exit.clone(),
-            blockstore.clone(),
-            cost_model.clone(),
-            cost_update_receiver,
-        );
-
         let replay_stage = ReplayStage::new(
             replay_stage_config,
             blockstore.clone(),
@@ -319,7 +303,6 @@ impl Tvu {
             gossip_verified_vote_hash_receiver,
             cluster_slots_update_sender,
             voting_sender,
-            cost_update_sender,
         );
 
         let ledger_cleanup_service = tvu_config.max_ledger_shreds.map(|max_ledger_shreds| {
@@ -351,7 +334,6 @@ impl Tvu {
             accounts_background_service,
             accounts_hash_verifier,
             voting_service,
-            cost_update_service,
         }
     }
 
@@ -366,7 +348,6 @@ impl Tvu {
         self.replay_stage.join()?;
         self.accounts_hash_verifier.join()?;
         self.voting_service.join()?;
-        self.cost_update_service.join()?;
         Ok(())
     }
 }
@@ -474,7 +455,6 @@ pub mod tests {
             gossip_confirmed_slots_receiver,
             TvuConfig::default(),
             &Arc::new(MaxSlots::default()),
-            &Arc::new(RwLock::new(CostModel::default())),
         );
         exit.store(true, Ordering::Relaxed);
         tvu.join().unwrap();

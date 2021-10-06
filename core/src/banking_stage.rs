@@ -1,9 +1,7 @@
 //! The `banking_stage` processes Transaction messages. It is intended to be used
 //! to contruct a software pipeline. The stage uses all available CPU cores and
 //! can do its processing in parallel with signature verification on the GPU.
-use crate::{
-    cost_tracker::CostTracker, cost_tracker_stats::CostTrackerStats, packet_hasher::PacketHasher,
-};
+use crate::packet_hasher::PacketHasher;
 use crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError};
 use itertools::Itertools;
 use lru::LruCache;
@@ -54,7 +52,7 @@ use std::{
     net::{SocketAddr, UdpSocket},
     ops::DerefMut,
     sync::atomic::{AtomicU64, AtomicUsize, Ordering},
-    sync::{Arc, Mutex, RwLock},
+    sync::{Arc, Mutex},
     thread::{self, Builder, JoinHandle},
     time::Duration,
     time::Instant,
@@ -95,9 +93,6 @@ pub struct BankingStageStats {
     current_buffered_packet_batches_count: AtomicUsize,
     rebuffered_packets_count: AtomicUsize,
     consumed_buffered_packets_count: AtomicUsize,
-    reset_cost_tracker_count: AtomicUsize,
-    cost_tracker_check_count: AtomicUsize,
-    cost_forced_retry_transactions_count: AtomicUsize,
 
     // Timing
     consume_buffered_packets_elapsed: AtomicU64,
@@ -106,11 +101,7 @@ pub struct BankingStageStats {
     filter_pending_packets_elapsed: AtomicU64,
     packet_duplicate_check_elapsed: AtomicU64,
     packet_conversion_elapsed: AtomicU64,
-    unprocessed_packet_conversion_elapsed: AtomicU64,
     transaction_processing_elapsed: AtomicU64,
-    cost_tracker_update_elapsed: AtomicU64,
-    cost_tracker_clone_elapsed: AtomicU64,
-    cost_tracker_check_elapsed: AtomicU64,
 }
 
 impl BankingStageStats {
@@ -175,22 +166,6 @@ impl BankingStageStats {
                     i64
                 ),
                 (
-                    "reset_cost_tracker_count",
-                    self.reset_cost_tracker_count.swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
-                    "cost_tracker_check_count",
-                    self.cost_tracker_check_count.swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
-                    "cost_forced_retry_transactions_count",
-                    self.cost_forced_retry_transactions_count
-                        .swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
                     "consume_buffered_packets_elapsed",
                     self.consume_buffered_packets_elapsed
                         .swap(0, Ordering::Relaxed) as i64,
@@ -225,30 +200,9 @@ impl BankingStageStats {
                     i64
                 ),
                 (
-                    "unprocessed_packet_conversion_elapsed",
-                    self.unprocessed_packet_conversion_elapsed
-                        .swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
                     "transaction_processing_elapsed",
                     self.transaction_processing_elapsed
                         .swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
-                    "cost_tracker_update_elapsed",
-                    self.cost_tracker_update_elapsed.swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
-                    "cost_tracker_clone_elapsed",
-                    self.cost_tracker_clone_elapsed.swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
-                    "cost_tracker_check_elapsed",
-                    self.cost_tracker_check_elapsed.swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
             );
@@ -287,7 +241,6 @@ impl BankingStage {
         verified_vote_receiver: CrossbeamReceiver<Vec<Packets>>,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: ReplayVoteSender,
-        cost_tracker: Arc<RwLock<CostTracker>>,
     ) -> Self {
         Self::new_num_threads(
             cluster_info,
@@ -298,7 +251,6 @@ impl BankingStage {
             Self::num_threads(),
             transaction_status_sender,
             gossip_vote_sender,
-            cost_tracker,
         )
     }
 
@@ -311,7 +263,6 @@ impl BankingStage {
         num_threads: u32,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: ReplayVoteSender,
-        cost_tracker: Arc<RwLock<CostTracker>>,
     ) -> Self {
         let batch_limit = TOTAL_BUFFERED_PACKETS / ((num_threads - 1) as usize * PACKETS_PER_BATCH);
         // Single thread to generate entries from many banks.
@@ -347,7 +298,6 @@ impl BankingStage {
                 let gossip_vote_sender = gossip_vote_sender.clone();
                 let duplicates = duplicates.clone();
                 let data_budget = data_budget.clone();
-                let cost_tracker = cost_tracker.clone();
                 Builder::new()
                     .name("solana-banking-stage-tx".to_string())
                     .spawn(move || {
@@ -364,7 +314,6 @@ impl BankingStage {
                             gossip_vote_sender,
                             &duplicates,
                             &data_budget,
-                            &cost_tracker,
                         );
                     })
                     .unwrap()
@@ -422,25 +371,6 @@ impl BankingStage {
         has_more_unprocessed_transactions
     }
 
-    fn reset_cost_tracker_if_new_bank(
-        cost_tracker: &Arc<RwLock<CostTracker>>,
-        bank: Arc<Bank>,
-        banking_stage_stats: &BankingStageStats,
-        cost_tracker_stats: &mut CostTrackerStats,
-    ) {
-        if cost_tracker
-            .write()
-            .unwrap()
-            .reset_if_new_bank(bank.slot(), cost_tracker_stats)
-        {
-            // only increase counter when bank changed
-            banking_stage_stats
-                .reset_cost_tracker_count
-                .fetch_add(1, Ordering::Relaxed);
-        }
-    }
-
-    #[allow(clippy::too_many_arguments)]
     pub fn consume_buffered_packets(
         my_pubkey: &Pubkey,
         max_tx_ingestion_ns: u128,
@@ -451,8 +381,6 @@ impl BankingStage {
         test_fn: Option<impl Fn()>,
         banking_stage_stats: &BankingStageStats,
         recorder: &TransactionRecorder,
-        cost_tracker: &Arc<RwLock<CostTracker>>,
-        cost_tracker_stats: &mut CostTrackerStats,
     ) {
         let mut rebuffered_packets_len = 0;
         let mut new_tx_count = 0;
@@ -470,9 +398,6 @@ impl BankingStage {
                     original_unprocessed_indexes,
                     my_pubkey,
                     *next_leader,
-                    cost_tracker,
-                    banking_stage_stats,
-                    cost_tracker_stats,
                 );
                 Self::update_buffered_packets_with_new_unprocessed(
                     original_unprocessed_indexes,
@@ -481,12 +406,6 @@ impl BankingStage {
             } else {
                 let bank_start = poh_recorder.lock().unwrap().bank_start();
                 if let Some((bank, bank_creation_time)) = bank_start {
-                    Self::reset_cost_tracker_if_new_bank(
-                        cost_tracker,
-                        bank.clone(),
-                        banking_stage_stats,
-                        cost_tracker_stats,
-                    );
                     let (processed, verified_txs_len, new_unprocessed_indexes) =
                         Self::process_packets_transactions(
                             &bank,
@@ -497,8 +416,6 @@ impl BankingStage {
                             transaction_status_sender.clone(),
                             gossip_vote_sender,
                             banking_stage_stats,
-                            cost_tracker,
-                            cost_tracker_stats,
                         );
                     if processed < verified_txs_len
                         || !Bank::should_bank_still_be_processing_txs(
@@ -602,8 +519,6 @@ impl BankingStage {
         banking_stage_stats: &BankingStageStats,
         recorder: &TransactionRecorder,
         data_budget: &DataBudget,
-        cost_tracker: &Arc<RwLock<CostTracker>>,
-        cost_tracker_stats: &mut CostTrackerStats,
     ) -> BufferedPacketsDecision {
         let bank_start;
         let (
@@ -614,14 +529,6 @@ impl BankingStage {
         ) = {
             let poh = poh_recorder.lock().unwrap();
             bank_start = poh.bank_start();
-            if let Some((ref bank, _)) = bank_start {
-                Self::reset_cost_tracker_if_new_bank(
-                    cost_tracker,
-                    bank.clone(),
-                    banking_stage_stats,
-                    cost_tracker_stats,
-                );
-            };
             (
                 poh.leader_after_n_slots(FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET),
                 PohRecorder::get_bank_still_processing_txs(&bank_start),
@@ -652,8 +559,6 @@ impl BankingStage {
                     None::<Box<dyn Fn()>>,
                     banking_stage_stats,
                     recorder,
-                    cost_tracker,
-                    cost_tracker_stats,
                 );
             }
             BufferedPacketsDecision::Forward => {
@@ -733,13 +638,11 @@ impl BankingStage {
         gossip_vote_sender: ReplayVoteSender,
         duplicates: &Arc<Mutex<(LruCache<u64, ()>, PacketHasher)>>,
         data_budget: &DataBudget,
-        cost_tracker: &Arc<RwLock<CostTracker>>,
     ) {
         let recorder = poh_recorder.lock().unwrap().recorder();
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let mut buffered_packets = VecDeque::with_capacity(batch_limit);
         let banking_stage_stats = BankingStageStats::new(id);
-        let mut cost_tracker_stats = CostTrackerStats::new(id, 0);
         loop {
             while !buffered_packets.is_empty() {
                 let decision = Self::process_buffered_packets(
@@ -754,8 +657,6 @@ impl BankingStage {
                     &banking_stage_stats,
                     &recorder,
                     data_budget,
-                    cost_tracker,
-                    &mut cost_tracker_stats,
                 );
                 if matches!(decision, BufferedPacketsDecision::Hold)
                     || matches!(decision, BufferedPacketsDecision::ForwardAndHold)
@@ -790,8 +691,6 @@ impl BankingStage {
                 &banking_stage_stats,
                 duplicates,
                 &recorder,
-                cost_tracker,
-                &mut cost_tracker_stats,
             ) {
                 Ok(()) | Err(RecvTimeoutError::Timeout) => (),
                 Err(RecvTimeoutError::Disconnected) => break,
@@ -1036,12 +935,12 @@ impl BankingStage {
     ) -> (usize, Vec<usize>) {
         let mut chunk_start = 0;
         let mut unprocessed_txs = vec![];
-
         while chunk_start != transactions.len() {
             let chunk_end = std::cmp::min(
                 transactions.len(),
                 chunk_start + MAX_NUM_TRANSACTIONS_PER_BATCH,
             );
+
             let (result, retryable_txs_in_chunk) = Self::process_and_record_transactions(
                 bank,
                 &transactions[chunk_start..chunk_end],
@@ -1124,21 +1023,13 @@ impl BankingStage {
     // This function deserializes packets into transactions, computes the blake3 hash of transaction messages,
     // and verifies secp256k1 instructions. A list of valid transactions are returned with their message hashes
     // and packet indexes.
-    // Also returned is packet indexes for transaction should be retried due to cost limits.
-    #[allow(clippy::needless_collect)]
     fn transactions_from_packets(
         msgs: &Packets,
         transaction_indexes: &[usize],
         libsecp256k1_0_5_upgrade_enabled: bool,
         votes_only: bool,
-        cost_tracker: &Arc<RwLock<CostTracker>>,
-        banking_stage_stats: &BankingStageStats,
-        demote_program_write_locks: bool,
-        cost_tracker_stats: &mut CostTrackerStats,
-    ) -> (Vec<HashedTransaction<'static>>, Vec<usize>, Vec<usize>) {
-        let mut retryable_transaction_packet_indexes: Vec<usize> = vec![];
-
-        let verified_transactions_with_packet_indexes: Vec<_> = transaction_indexes
+    ) -> (Vec<HashedTransaction<'static>>, Vec<usize>) {
+        transaction_indexes
             .iter()
             .filter_map(|tx_index| {
                 let p = &msgs.packets[*tx_index];
@@ -1149,68 +1040,14 @@ impl BankingStage {
                 let tx: Transaction = limited_deserialize(&p.data[0..p.meta.size]).ok()?;
                 tx.verify_precompiles(libsecp256k1_0_5_upgrade_enabled)
                     .ok()?;
-
-                Some((tx, *tx_index))
+                let message_bytes = Self::packet_message(p)?;
+                let message_hash = Message::hash_raw_message(message_bytes);
+                Some((
+                    HashedTransaction::new(Cow::Owned(tx), message_hash),
+                    tx_index,
+                ))
             })
-            .collect();
-        banking_stage_stats.cost_tracker_check_count.fetch_add(
-            verified_transactions_with_packet_indexes.len(),
-            Ordering::Relaxed,
-        );
-
-        let mut cost_tracker_check_time = Measure::start("cost_tracker_check_time");
-        let filtered_transactions_with_packet_indexes: Vec<_> = {
-            let cost_tracker_readonly = cost_tracker.read().unwrap();
-            verified_transactions_with_packet_indexes
-                .into_iter()
-                .filter_map(|(tx, tx_index)| {
-                    // put transaction into retry queue if it wouldn't fit
-                    // into current bank
-                    let is_vote = &msgs.packets[tx_index].meta.is_simple_vote_tx;
-
-                    // excluding vote TX from cost_model, for now
-                    if !is_vote
-                        && cost_tracker_readonly
-                            .would_transaction_fit(
-                                &tx,
-                                demote_program_write_locks,
-                                cost_tracker_stats,
-                            )
-                            .is_err()
-                    {
-                        debug!("transaction {:?} would exceed limit", tx);
-                        retryable_transaction_packet_indexes.push(tx_index);
-                        return None;
-                    }
-                    Some((tx, tx_index))
-                })
-                .collect()
-        };
-        cost_tracker_check_time.stop();
-
-        let (filtered_transactions, filter_transaction_packet_indexes) =
-            filtered_transactions_with_packet_indexes
-                .into_iter()
-                .filter_map(|(tx, tx_index)| {
-                    let p = &msgs.packets[tx_index];
-                    let message_bytes = Self::packet_message(p)?;
-                    let message_hash = Message::hash_raw_message(message_bytes);
-                    Some((
-                        HashedTransaction::new(Cow::Owned(tx), message_hash),
-                        tx_index,
-                    ))
-                })
-                .unzip();
-
-        banking_stage_stats
-            .cost_tracker_check_elapsed
-            .fetch_add(cost_tracker_check_time.as_us(), Ordering::Relaxed);
-
-        (
-            filtered_transactions,
-            filter_transaction_packet_indexes,
-            retryable_transaction_packet_indexes,
-        )
+            .unzip()
     }
 
     /// This function filters pending packets that are still valid
@@ -1252,7 +1089,6 @@ impl BankingStage {
         Self::filter_valid_transaction_indexes(&results, transaction_to_packet_indexes)
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn process_packets_transactions(
         bank: &Arc<Bank>,
         bank_creation_time: &Instant,
@@ -1262,32 +1098,20 @@ impl BankingStage {
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
         banking_stage_stats: &BankingStageStats,
-        cost_tracker: &Arc<RwLock<CostTracker>>,
-        cost_tracker_stats: &mut CostTrackerStats,
     ) -> (usize, usize, Vec<usize>) {
         let mut packet_conversion_time = Measure::start("packet_conversion");
-        let (transactions, transaction_to_packet_indexes, retryable_packet_indexes) =
-            Self::transactions_from_packets(
-                msgs,
-                &packet_indexes,
-                bank.libsecp256k1_0_5_upgrade_enabled(),
-                bank.vote_only_bank(),
-                cost_tracker,
-                banking_stage_stats,
-                bank.demote_program_write_locks(),
-                cost_tracker_stats,
-            );
+        let (transactions, transaction_to_packet_indexes) = Self::transactions_from_packets(
+            msgs,
+            &packet_indexes,
+            bank.libsecp256k1_0_5_upgrade_enabled(),
+            bank.vote_only_bank(),
+        );
         packet_conversion_time.stop();
-        inc_new_counter_info!("banking_stage-packet_conversion", 1);
 
-        banking_stage_stats
-            .cost_forced_retry_transactions_count
-            .fetch_add(retryable_packet_indexes.len(), Ordering::Relaxed);
         debug!(
-            "bank: {} filtered transactions {} cost limited transactions {}",
+            "bank: {} filtered transactions {}",
             bank.slot(),
-            transactions.len(),
-            retryable_packet_indexes.len()
+            transactions.len()
         );
 
         let tx_len = transactions.len();
@@ -1302,27 +1126,11 @@ impl BankingStage {
             gossip_vote_sender,
         );
         process_tx_time.stop();
-        let unprocessed_tx_count = unprocessed_tx_indexes.len();
-        inc_new_counter_info!(
-            "banking_stage-unprocessed_transactions",
-            unprocessed_tx_count
-        );
 
-        // applying cost of processed transactions to shared cost_tracker
-        let mut cost_tracking_time = Measure::start("cost_tracking_time");
-        transactions.iter().enumerate().for_each(|(index, tx)| {
-            if unprocessed_tx_indexes.iter().all(|&i| i != index) {
-                cost_tracker.write().unwrap().add_transaction_cost(
-                    tx.transaction(),
-                    bank.demote_program_write_locks(),
-                    cost_tracker_stats,
-                );
-            }
-        });
-        cost_tracking_time.stop();
+        let unprocessed_tx_count = unprocessed_tx_indexes.len();
 
         let mut filter_pending_packets_time = Measure::start("filter_pending_packets_time");
-        let mut filtered_unprocessed_packet_indexes = Self::filter_pending_packets_from_pending_txs(
+        let filtered_unprocessed_packet_indexes = Self::filter_pending_packets_from_pending_txs(
             bank,
             &transactions,
             &transaction_to_packet_indexes,
@@ -1335,19 +1143,12 @@ impl BankingStage {
             unprocessed_tx_count.saturating_sub(filtered_unprocessed_packet_indexes.len())
         );
 
-        // combine cost-related unprocessed transactions with bank determined unprocessed for
-        // buffering
-        filtered_unprocessed_packet_indexes.extend(retryable_packet_indexes);
-
         banking_stage_stats
             .packet_conversion_elapsed
             .fetch_add(packet_conversion_time.as_us(), Ordering::Relaxed);
         banking_stage_stats
             .transaction_processing_elapsed
             .fetch_add(process_tx_time.as_us(), Ordering::Relaxed);
-        banking_stage_stats
-            .cost_tracker_update_elapsed
-            .fetch_add(cost_tracking_time.as_us(), Ordering::Relaxed);
         banking_stage_stats
             .filter_pending_packets_elapsed
             .fetch_add(filter_pending_packets_time.as_us(), Ordering::Relaxed);
@@ -1361,9 +1162,6 @@ impl BankingStage {
         transaction_indexes: &[usize],
         my_pubkey: &Pubkey,
         next_leader: Option<Pubkey>,
-        cost_tracker: &Arc<RwLock<CostTracker>>,
-        banking_stage_stats: &BankingStageStats,
-        cost_tracker_stats: &mut CostTrackerStats,
     ) -> Vec<usize> {
         // Check if we are the next leader. If so, let's not filter the packets
         // as we'll filter it again while processing the packets.
@@ -1374,43 +1172,27 @@ impl BankingStage {
             }
         }
 
-        let mut unprocessed_packet_conversion_time =
-            Measure::start("unprocessed_packet_conversion");
-        let (transactions, transaction_to_packet_indexes, retry_packet_indexes) =
-            Self::transactions_from_packets(
-                msgs,
-                &transaction_indexes,
-                bank.libsecp256k1_0_5_upgrade_enabled(),
-                bank.vote_only_bank(),
-                cost_tracker,
-                banking_stage_stats,
-                bank.demote_program_write_locks(),
-                cost_tracker_stats,
-            );
-        unprocessed_packet_conversion_time.stop();
+        let (transactions, transaction_to_packet_indexes) = Self::transactions_from_packets(
+            msgs,
+            &transaction_indexes,
+            bank.libsecp256k1_0_5_upgrade_enabled(),
+            bank.vote_only_bank(),
+        );
 
         let tx_count = transaction_to_packet_indexes.len();
 
         let unprocessed_tx_indexes = (0..transactions.len()).collect_vec();
-        let mut filtered_unprocessed_packet_indexes = Self::filter_pending_packets_from_pending_txs(
+        let filtered_unprocessed_packet_indexes = Self::filter_pending_packets_from_pending_txs(
             bank,
             &transactions,
             &transaction_to_packet_indexes,
             &unprocessed_tx_indexes,
         );
 
-        filtered_unprocessed_packet_indexes.extend(retry_packet_indexes);
-
         inc_new_counter_info!(
             "banking_stage-dropped_tx_before_forwarding",
             tx_count.saturating_sub(filtered_unprocessed_packet_indexes.len())
         );
-        banking_stage_stats
-            .unprocessed_packet_conversion_elapsed
-            .fetch_add(
-                unprocessed_packet_conversion_time.as_us(),
-                Ordering::Relaxed,
-            );
 
         filtered_unprocessed_packet_indexes
     }
@@ -1446,8 +1228,6 @@ impl BankingStage {
         banking_stage_stats: &BankingStageStats,
         duplicates: &Arc<Mutex<(LruCache<u64, ()>, PacketHasher)>>,
         recorder: &TransactionRecorder,
-        cost_tracker: &Arc<RwLock<CostTracker>>,
-        cost_tracker_stats: &mut CostTrackerStats,
     ) -> Result<(), RecvTimeoutError> {
         let mut recv_time = Measure::start("process_packets_recv");
         let mms = verified_receiver.recv_timeout(recv_timeout)?;
@@ -1488,12 +1268,6 @@ impl BankingStage {
                 continue;
             }
             let (bank, bank_creation_time) = bank_start.unwrap();
-            Self::reset_cost_tracker_if_new_bank(
-                cost_tracker,
-                bank.clone(),
-                banking_stage_stats,
-                cost_tracker_stats,
-            );
 
             let (processed, verified_txs_len, unprocessed_indexes) =
                 Self::process_packets_transactions(
@@ -1505,8 +1279,6 @@ impl BankingStage {
                     transaction_status_sender.clone(),
                     gossip_vote_sender,
                     banking_stage_stats,
-                    cost_tracker,
-                    cost_tracker_stats,
                 );
 
             new_tx_count += processed;
@@ -1538,9 +1310,6 @@ impl BankingStage {
                         &packet_indexes,
                         my_pubkey,
                         next_leader,
-                        cost_tracker,
-                        banking_stage_stats,
-                        cost_tracker_stats,
                     );
                     Self::push_unprocessed(
                         buffered_packets,
@@ -1695,7 +1464,6 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cost_model::CostModel;
     use crossbeam_channel::unbounded;
     use itertools::Itertools;
     use solana_gossip::{cluster_info::Node, contact_info::ContactInfo};
@@ -1768,9 +1536,6 @@ mod tests {
                 gossip_verified_vote_receiver,
                 None,
                 vote_forward_sender,
-                Arc::new(RwLock::new(CostTracker::new(Arc::new(RwLock::new(
-                    CostModel::default(),
-                ))))),
             );
             drop(verified_sender);
             drop(gossip_verified_vote_sender);
@@ -1819,9 +1584,6 @@ mod tests {
                 verified_gossip_vote_receiver,
                 None,
                 vote_forward_sender,
-                Arc::new(RwLock::new(CostTracker::new(Arc::new(RwLock::new(
-                    CostModel::default(),
-                ))))),
             );
             trace!("sending bank");
             drop(verified_sender);
@@ -1894,9 +1656,6 @@ mod tests {
                 gossip_verified_vote_receiver,
                 None,
                 gossip_vote_sender,
-                Arc::new(RwLock::new(CostTracker::new(Arc::new(RwLock::new(
-                    CostModel::default(),
-                ))))),
             );
 
             // fund another account so we can send 2 good transactions in a single batch.
@@ -2047,9 +1806,6 @@ mod tests {
                     3,
                     None,
                     gossip_vote_sender,
-                    Arc::new(RwLock::new(CostTracker::new(Arc::new(RwLock::new(
-                        CostModel::default(),
-                    ))))),
                 );
 
                 // wait for banking_stage to eat the packets
@@ -2871,10 +2627,6 @@ mod tests {
                 None::<Box<dyn Fn()>>,
                 &BankingStageStats::default(),
                 &recorder,
-                &Arc::new(RwLock::new(CostTracker::new(Arc::new(RwLock::new(
-                    CostModel::default(),
-                ))))),
-                &mut CostTrackerStats::default(),
             );
             assert_eq!(buffered_packets[0].1.len(), num_conflicting_transactions);
             // When the poh recorder has a bank, should process all non conflicting buffered packets.
@@ -2891,10 +2643,6 @@ mod tests {
                     None::<Box<dyn Fn()>>,
                     &BankingStageStats::default(),
                     &recorder,
-                    &Arc::new(RwLock::new(CostTracker::new(Arc::new(RwLock::new(
-                        CostModel::default(),
-                    ))))),
-                    &mut CostTrackerStats::default(),
                 );
                 if num_expected_unprocessed == 0 {
                     assert!(buffered_packets.is_empty())
@@ -2960,10 +2708,6 @@ mod tests {
                         test_fn,
                         &BankingStageStats::default(),
                         &recorder,
-                        &Arc::new(RwLock::new(CostTracker::new(Arc::new(RwLock::new(
-                            CostModel::default(),
-                        ))))),
-                        &mut CostTrackerStats::default(),
                     );
 
                     // Check everything is correct. All indexes after `interrupted_iteration`
@@ -3212,33 +2956,21 @@ mod tests {
                 make_test_packets(vec![transfer_tx.clone(), transfer_tx.clone()], vote_indexes);
 
             let mut votes_only = false;
-            let (txs, tx_packet_index, _) = BankingStage::transactions_from_packets(
+            let (txs, tx_packet_index) = BankingStage::transactions_from_packets(
                 &packets,
                 &packet_indexes,
                 false,
                 votes_only,
-                &Arc::new(RwLock::new(CostTracker::new(Arc::new(RwLock::new(
-                    CostModel::default(),
-                ))))),
-                &BankingStageStats::default(),
-                false,
-                &mut CostTrackerStats::default(),
             );
             assert_eq!(2, txs.len());
             assert_eq!(vec![0, 1], tx_packet_index);
 
             votes_only = true;
-            let (txs, tx_packet_index, _) = BankingStage::transactions_from_packets(
+            let (txs, tx_packet_index) = BankingStage::transactions_from_packets(
                 &packets,
                 &packet_indexes,
                 false,
                 votes_only,
-                &Arc::new(RwLock::new(CostTracker::new(Arc::new(RwLock::new(
-                    CostModel::default(),
-                ))))),
-                &BankingStageStats::default(),
-                false,
-                &mut CostTrackerStats::default(),
             );
             assert_eq!(0, txs.len());
             assert_eq!(0, tx_packet_index.len());
@@ -3253,33 +2985,21 @@ mod tests {
             );
 
             let mut votes_only = false;
-            let (txs, tx_packet_index, _) = BankingStage::transactions_from_packets(
+            let (txs, tx_packet_index) = BankingStage::transactions_from_packets(
                 &packets,
                 &packet_indexes,
                 false,
                 votes_only,
-                &Arc::new(RwLock::new(CostTracker::new(Arc::new(RwLock::new(
-                    CostModel::default(),
-                ))))),
-                &BankingStageStats::default(),
-                false,
-                &mut CostTrackerStats::default(),
             );
             assert_eq!(3, txs.len());
             assert_eq!(vec![0, 1, 2], tx_packet_index);
 
             votes_only = true;
-            let (txs, tx_packet_index, _) = BankingStage::transactions_from_packets(
+            let (txs, tx_packet_index) = BankingStage::transactions_from_packets(
                 &packets,
                 &packet_indexes,
                 false,
                 votes_only,
-                &Arc::new(RwLock::new(CostTracker::new(Arc::new(RwLock::new(
-                    CostModel::default(),
-                ))))),
-                &BankingStageStats::default(),
-                false,
-                &mut CostTrackerStats::default(),
             );
             assert_eq!(2, txs.len());
             assert_eq!(vec![0, 2], tx_packet_index);
@@ -3294,33 +3014,21 @@ mod tests {
             );
 
             let mut votes_only = false;
-            let (txs, tx_packet_index, _) = BankingStage::transactions_from_packets(
+            let (txs, tx_packet_index) = BankingStage::transactions_from_packets(
                 &packets,
                 &packet_indexes,
                 false,
                 votes_only,
-                &Arc::new(RwLock::new(CostTracker::new(Arc::new(RwLock::new(
-                    CostModel::default(),
-                ))))),
-                &BankingStageStats::default(),
-                false,
-                &mut CostTrackerStats::default(),
             );
             assert_eq!(3, txs.len());
             assert_eq!(vec![0, 1, 2], tx_packet_index);
 
             votes_only = true;
-            let (txs, tx_packet_index, _) = BankingStage::transactions_from_packets(
+            let (txs, tx_packet_index) = BankingStage::transactions_from_packets(
                 &packets,
                 &packet_indexes,
                 false,
                 votes_only,
-                &Arc::new(RwLock::new(CostTracker::new(Arc::new(RwLock::new(
-                    CostModel::default(),
-                ))))),
-                &BankingStageStats::default(),
-                false,
-                &mut CostTrackerStats::default(),
             );
             assert_eq!(3, txs.len());
             assert_eq!(vec![0, 1, 2], tx_packet_index);

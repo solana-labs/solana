@@ -175,6 +175,10 @@ pub mod stake_merge_with_unmatched_credits_observed {
     solana_sdk::declare_id!("meRgp4ArRPhD3KtCY9c5yAf2med7mBLsjKTPeVUHqBL");
 }
 
+pub mod gate_large_block {
+    solana_sdk::declare_id!("2ry7ygxiYURULZCrypHhveanvP5tzZ4toRwVp89oCNSj");
+}
+
 pub mod mem_overlap_fix {
     solana_sdk::declare_id!("vXDCFK7gphrEmyf5VnKgLmqbdJ4UxD2eZH1qbdouYKF");
 }
@@ -217,14 +221,6 @@ pub mod send_to_tpu_vote_port {
 
 pub mod optimize_epoch_boundary_updates {
     solana_sdk::declare_id!("265hPS8k8xJ37ot82KEgjRunsUp5w4n4Q4VwwiN9i9ps");
-}
-
-pub mod tx_wide_compute_cap {
-    solana_sdk::declare_id!("5ekBxc8itEnPv4NzGJtr8BVVQLNMQuLMNQQj7pHoLNZ9");
-}
-
-pub mod gate_large_block {
-    solana_sdk::declare_id!("2ry7ygxiYURULZCrypHhveanvP5tzZ4toRwVp89oCNSj");
 }
 
 lazy_static! {
@@ -271,6 +267,7 @@ lazy_static! {
         (merge_nonce_error_into_system_error::id(), "merge NonceError into SystemError"),
         (spl_token_v2_set_authority_fix::id(), "spl-token set_authority fix"),
         (stake_merge_with_unmatched_credits_observed::id(), "allow merging active stakes with unmatched credits_observed #18985"),
+        (gate_large_block::id(), "validator checks block cost against max limit in realtime, reject if exceeds."),
         (mem_overlap_fix::id(), "Memory overlap fix"),
         (close_upgradeable_program_accounts::id(), "enable closing upgradeable program accounts"),
         (stake_program_advance_activating_credits_observed::id(), "Enable advancing credits observed for activation epoch #19309"),
@@ -282,8 +279,6 @@ lazy_static! {
         (stakes_remove_delegation_if_inactive::id(), "remove delegations from stakes cache when inactive"),
         (send_to_tpu_vote_port::id(), "Send votes to the tpu vote port"),
         (optimize_epoch_boundary_updates::id(), "Optimize epoch boundary updates"),
-        (tx_wide_compute_cap::id(), "Transaction wide compute cap"),
-        (gate_large_block::id(), "validator checks block cost against max limit in realtime, reject if exceeds."),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

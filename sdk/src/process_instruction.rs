@@ -147,7 +147,7 @@ pub fn get_sysvar<T: Sysvar>(
     })
 }
 
-#[derive(Clone, Copy, Debug, AbiExample, PartialEq)]
+#[derive(Clone, Copy, Debug, AbiExample)]
 pub struct BpfComputeBudget {
     /// Number of compute units that an instruction is allowed.  Compute units
     /// are consumed by program execution, resources they use, etc...
