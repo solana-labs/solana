@@ -537,6 +537,11 @@ impl Rocks {
         Ok(())
     }
 
+    fn delete_cf(&self, cf: &ColumnFamily, key: &[u8]) -> Result<()> {
+        self.0.delete_cf(cf, key)?;
+        Ok(())
+    }
+
     fn iterator_cf<C>(&self, cf: &ColumnFamily, iterator_mode: IteratorMode<C::Index>) -> DBIterator
     where
         C: Column,
@@ -1217,6 +1222,10 @@ where
         self.backend
             .put_cf(self.handle(), &C::key(key), &serialized_value)
     }
+
+    pub fn delete(&self, key: C::Index) -> Result<()> {
+        self.backend.delete_cf(self.handle(), &C::key(key))
+    }
 }
 
 impl<C> LedgerColumn<C>
@@ -1364,7 +1373,7 @@ fn get_cf_options<C: 'static + Column + ColumnName>(
     options.set_max_bytes_for_level_base(total_size_base);
     options.set_target_file_size_base(file_size_base);
 
-    // TransactionStatusIndex must be excluded from LedgerCleanupService's rocksdb
+    // TransactionStatusIndex and ProgramCosts must be excluded from LedgerCleanupService's rocksdb
     // compactions....
     if matches!(access_type, AccessType::PrimaryOnly) && !excludes_from_compaction(C::NAME) {
         options.set_compaction_filter_factory(PurgedSlotFilterFactory::<C> {

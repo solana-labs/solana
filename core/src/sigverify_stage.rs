@@ -8,13 +8,13 @@
 use crate::sigverify;
 use crossbeam_channel::{SendError, Sender as CrossbeamSender};
 use solana_measure::measure::Measure;
-use solana_metrics::datapoint_debug;
 use solana_perf::packet::Packets;
 use solana_sdk::timing;
 use solana_streamer::streamer::{self, PacketReceiver, StreamerError};
 use std::collections::HashMap;
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::thread::{self, Builder, JoinHandle};
+use std::time::Instant;
 use thiserror::Error;
 
 const MAX_SIGVERIFY_BATCH: usize = 10_000;
@@ -40,6 +40,82 @@ pub trait SigVerifier {
 
 #[derive(Default, Clone)]
 pub struct DisabledSigVerifier {}
+
+#[derive(Default)]
+struct SigVerifierStats {
+    recv_batches_us_hist: histogram::Histogram, // time to call recv_batch
+    verify_batches_pp_us_hist: histogram::Histogram, // per-packet time to call verify_batch
+    batches_hist: histogram::Histogram,         // number of Packets structures per verify call
+    packets_hist: histogram::Histogram,         // number of packets per verify call
+    total_batches: usize,
+    total_packets: usize,
+}
+
+impl SigVerifierStats {
+    fn report(&self) {
+        datapoint_info!(
+            "sigverify_stage-total_verify_time",
+            (
+                "recv_batches_us_90pct",
+                self.recv_batches_us_hist.percentile(90.0).unwrap_or(0),
+                i64
+            ),
+            (
+                "recv_batches_us_min",
+                self.recv_batches_us_hist.minimum().unwrap_or(0),
+                i64
+            ),
+            (
+                "recv_batches_us_max",
+                self.recv_batches_us_hist.maximum().unwrap_or(0),
+                i64
+            ),
+            (
+                "recv_batches_us_mean",
+                self.recv_batches_us_hist.mean().unwrap_or(0),
+                i64
+            ),
+            (
+                "verify_batches_pp_us_90pct",
+                self.verify_batches_pp_us_hist.percentile(90.0).unwrap_or(0),
+                i64
+            ),
+            (
+                "verify_batches_pp_us_min",
+                self.verify_batches_pp_us_hist.minimum().unwrap_or(0),
+                i64
+            ),
+            (
+                "verify_batches_pp_us_max",
+                self.verify_batches_pp_us_hist.maximum().unwrap_or(0),
+                i64
+            ),
+            (
+                "verify_batches_pp_us_mean",
+                self.verify_batches_pp_us_hist.mean().unwrap_or(0),
+                i64
+            ),
+            (
+                "batches_90pct",
+                self.batches_hist.percentile(90.0).unwrap_or(0),
+                i64
+            ),
+            ("batches_min", self.batches_hist.minimum().unwrap_or(0), i64),
+            ("batches_max", self.batches_hist.maximum().unwrap_or(0), i64),
+            ("batches_mean", self.batches_hist.mean().unwrap_or(0), i64),
+            (
+                "packets_90pct",
+                self.packets_hist.percentile(90.0).unwrap_or(0),
+                i64
+            ),
+            ("packets_min", self.packets_hist.minimum().unwrap_or(0), i64),
+            ("packets_max", self.packets_hist.maximum().unwrap_or(0), i64),
+            ("packets_mean", self.packets_hist.mean().unwrap_or(0), i64),
+            ("total_batches", self.total_batches, i64),
+            ("total_packets", self.total_packets, i64),
+        );
+    }
+}
 
 impl SigVerifier for DisabledSigVerifier {
     fn verify_batch(&self, mut batch: Vec<Packets>) -> Vec<Packets> {
@@ -92,6 +168,7 @@ impl SigVerifyStage {
         recvr: &PacketReceiver,
         sendr: &CrossbeamSender<Vec<Packets>>,
         verifier: &T,
+        stats: &mut SigVerifierStats,
     ) -> Result<()> {
         let (mut batches, len, recv_time) = streamer::recv_batch(recvr)?;
 
@@ -121,6 +198,19 @@ impl SigVerifyStage {
             ("recv_time", recv_time, i64),
         );
 
+        stats
+            .recv_batches_us_hist
+            .increment(recv_time as u64)
+            .unwrap();
+        stats
+            .verify_batches_pp_us_hist
+            .increment(verify_batch_time.as_us() / (len as u64))
+            .unwrap();
+        stats.batches_hist.increment(batches_len as u64).unwrap();
+        stats.packets_hist.increment(len as u64).unwrap();
+        stats.total_batches += batches_len;
+        stats.total_packets += len;
+
         Ok(())
     }
 
@@ -130,10 +220,14 @@ impl SigVerifyStage {
         verifier: &T,
     ) -> JoinHandle<()> {
         let verifier = verifier.clone();
+        let mut stats = SigVerifierStats::default();
+        let mut last_print = Instant::now();
         Builder::new()
             .name("solana-verifier".to_string())
             .spawn(move || loop {
-                if let Err(e) = Self::verifier(&packet_receiver, &verified_sender, &verifier) {
+                if let Err(e) =
+                    Self::verifier(&packet_receiver, &verified_sender, &verifier, &mut stats)
+                {
                     match e {
                         SigVerifyServiceError::Streamer(StreamerError::RecvTimeout(
                             RecvTimeoutError::Disconnected,
@@ -146,6 +240,11 @@ impl SigVerifyStage {
                         }
                         _ => error!("{:?}", e),
                     }
+                }
+                if last_print.elapsed().as_secs() > 2 {
+                    stats.report();
+                    stats = SigVerifierStats::default();
+                    last_print = Instant::now();
                 }
             })
             .unwrap()

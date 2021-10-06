@@ -18,7 +18,6 @@ use crate::{
     latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
     progress_map::{ForkProgress, ProgressMap, PropagatedStats},
     repair_service::DuplicateSlotsResetReceiver,
-    result::Result,
     rewards_recorder_service::RewardsRecorderSender,
     unfrozen_gossip_verified_vote_hashes::UnfrozenGossipVerifiedVoteHashes,
     voting_service::VoteOp,
@@ -42,7 +41,7 @@ use solana_rpc::{
 };
 use solana_runtime::{
     accounts_background_service::AbsRequestSender,
-    bank::{Bank, NewBankOptions},
+    bank::{Bank, ExecuteTimings, NewBankOptions},
     bank_forks::BankForks,
     commitment::BlockCommitmentCache,
     vote_sender_types::ReplayVoteSender,
@@ -281,7 +280,7 @@ impl ReplayTiming {
                     "process_duplicate_slots_elapsed",
                     self.process_duplicate_slots_elapsed as i64,
                     i64
-                )
+                ),
             );
 
             *self = ReplayTiming::default();
@@ -291,7 +290,7 @@ impl ReplayTiming {
 }
 
 pub struct ReplayStage {
-    t_replay: JoinHandle<Result<()>>,
+    t_replay: JoinHandle<()>,
     commitment_service: AggregateCommitmentService,
 }
 
@@ -315,6 +314,7 @@ impl ReplayStage {
         gossip_verified_vote_hash_receiver: GossipVerifiedVoteHashReceiver,
         cluster_slots_update_sender: ClusterSlotsUpdateSender,
         voting_sender: Sender<VoteOp>,
+        cost_update_sender: Sender<ExecuteTimings>,
     ) -> Self {
         let ReplayStageConfig {
             my_pubkey,
@@ -412,6 +412,7 @@ impl ReplayStage {
                         &mut unfrozen_gossip_verified_vote_hashes,
                         &mut latest_validator_votes_for_frozen_banks,
                         &cluster_slots_update_sender,
+                        &cost_update_sender,
                     );
                     replay_active_banks_time.stop();
 
@@ -742,7 +743,6 @@ impl ReplayStage {
                         process_duplicate_slots_time.as_us(),
                     );
                 }
-                Ok(())
             })
             .unwrap();
 
@@ -1690,9 +1690,11 @@ impl ReplayStage {
         unfrozen_gossip_verified_vote_hashes: &mut UnfrozenGossipVerifiedVoteHashes,
         latest_validator_votes_for_frozen_banks: &mut LatestValidatorVotesForFrozenBanks,
         cluster_slots_update_sender: &ClusterSlotsUpdateSender,
+        cost_update_sender: &Sender<ExecuteTimings>,
     ) -> bool {
         let mut did_complete_bank = false;
         let mut tx_count = 0;
+        let mut execute_timings = ExecuteTimings::default();
         let active_banks = bank_forks.read().unwrap().active_banks();
         trace!("active banks {:?}", active_banks);
 
@@ -1763,6 +1765,12 @@ impl ReplayStage {
             }
             assert_eq!(*bank_slot, bank.slot());
             if bank.is_complete() {
+                execute_timings.accumulate(&bank_progress.replay_stats.execute_timings);
+                debug!("bank {} is completed replay from blockstore, contribute to update cost with {:?}",
+                       bank.slot(),
+                       bank_progress.replay_stats.execute_timings
+                       );
+
                 bank_progress.replay_stats.report_stats(
                     bank.slot(),
                     bank_progress.replay_progress.num_entries,
@@ -1824,6 +1832,14 @@ impl ReplayStage {
                 );
             }
         }
+
+        // send accumulated excute-timings to cost_update_service
+        if !execute_timings.details.per_program_timings.is_empty() {
+            cost_update_sender
+                .send(execute_timings)
+                .unwrap_or_else(|err| warn!("cost_update_sender failed: {:?}", err));
+        }
+
         inc_new_counter_info!("replay_stage-replay_transactions", tx_count);
         did_complete_bank
     }
@@ -4929,7 +4945,6 @@ mod tests {
         );
         assert_eq!(tower.last_voted_slot().unwrap(), 1);
     }
-
     fn run_compute_and_select_forks(
         bank_forks: &RwLock<BankForks>,
         progress: &mut ProgressMap,
