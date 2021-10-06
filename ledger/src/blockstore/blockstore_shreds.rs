@@ -326,8 +326,8 @@ impl Blockstore {
 
                         if !shred_db_index.data().is_present(index) {
                             full_insert_shreds.push(shred);
-                        } else if shred_file_index.is_some()
-                            && shred_file_index
+                        } else if shred_file_index.is_none()
+                            || shred_file_index
                                 .as_ref()
                                 .unwrap()
                                 .get(&(index as u32))
