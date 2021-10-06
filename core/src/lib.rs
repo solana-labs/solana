@@ -19,6 +19,15 @@ pub mod cluster_slots_service;
 pub mod commitment_service;
 pub mod completed_data_sets_service;
 pub mod consensus;
+<<<<<<< HEAD
+=======
+pub mod cost_model;
+pub mod cost_tracker;
+pub mod cost_tracker_stats;
+pub mod cost_update_service;
+pub mod duplicate_repair_status;
+pub mod execute_cost_table;
+>>>>>>> 03913f666 (add tx count and thread id to stats, each stat reports and resets when slot changes (#20451))
 pub mod fetch_stage;
 pub mod fork_choice;
 pub mod gen_keys;

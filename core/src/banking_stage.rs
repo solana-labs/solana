@@ -1,7 +1,13 @@
 //! The `banking_stage` processes Transaction messages. It is intended to be used
 //! to contruct a software pipeline. The stage uses all available CPU cores and
 //! can do its processing in parallel with signature verification on the GPU.
+<<<<<<< HEAD
 use crate::packet_hasher::PacketHasher;
+=======
+use crate::{
+    cost_tracker::CostTracker, cost_tracker_stats::CostTrackerStats, packet_hasher::PacketHasher,
+};
+>>>>>>> 03913f666 (add tx count and thread id to stats, each stat reports and resets when slot changes (#20451))
 use crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError};
 use itertools::Itertools;
 use lru::LruCache;
@@ -371,6 +377,28 @@ impl BankingStage {
         has_more_unprocessed_transactions
     }
 
+<<<<<<< HEAD
+=======
+    fn reset_cost_tracker_if_new_bank(
+        cost_tracker: &Arc<RwLock<CostTracker>>,
+        bank_slot: Slot,
+        banking_stage_stats: &BankingStageStats,
+        cost_tracker_stats: &mut CostTrackerStats,
+    ) {
+        if cost_tracker
+            .write()
+            .unwrap()
+            .reset_if_new_bank(bank_slot, cost_tracker_stats)
+        {
+            // only increase counter when bank changed
+            banking_stage_stats
+                .reset_cost_tracker_count
+                .fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+>>>>>>> 03913f666 (add tx count and thread id to stats, each stat reports and resets when slot changes (#20451))
     pub fn consume_buffered_packets(
         my_pubkey: &Pubkey,
         max_tx_ingestion_ns: u128,
@@ -643,6 +671,10 @@ impl BankingStage {
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let mut buffered_packets = VecDeque::with_capacity(batch_limit);
         let banking_stage_stats = BankingStageStats::new(id);
+<<<<<<< HEAD
+=======
+        let mut cost_tracker_stats = CostTrackerStats::new(id, 0);
+>>>>>>> 03913f666 (add tx count and thread id to stats, each stat reports and resets when slot changes (#20451))
         loop {
             while !buffered_packets.is_empty() {
                 let decision = Self::process_buffered_packets(
