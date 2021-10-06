@@ -52,7 +52,7 @@ use solana_measure::measure::Measure;
 use solana_rayon_threadlimit::get_thread_count;
 use solana_sdk::{
     account::{AccountSharedData, ReadableAccount},
-    clock::{BankId, Epoch, Slot},
+    clock::{BankId, Epoch, Slot, SlotCount},
     genesis_config::ClusterType,
     hash::{Hash, Hasher},
     pubkey::Pubkey,
@@ -68,6 +68,7 @@ use std::{
     io::{Error as IoError, Result as IoResult},
     ops::{Range, RangeBounds},
     path::{Path, PathBuf},
+    str::FromStr,
     sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
     sync::{Arc, Condvar, Mutex, MutexGuard, RwLock},
     thread::Builder,
@@ -129,10 +130,12 @@ const CACHE_VIRTUAL_STORED_SIZE: usize = 0;
 pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
     accounts_hash_cache_path: None,
+    filler_account_count: None,
 };
 pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS),
     accounts_hash_cache_path: None,
+    filler_account_count: None,
 };
 
 pub type BinnedHashData = Vec<Vec<CalculateHashIntermediate>>;
@@ -141,6 +144,7 @@ pub type BinnedHashData = Vec<Vec<CalculateHashIntermediate>>;
 pub struct AccountsDbConfig {
     pub index: Option<AccountsIndexConfig>,
     pub accounts_hash_cache_path: Option<PathBuf>,
+    pub filler_account_count: Option<usize>,
 }
 
 struct FoundStoredAccount<'a> {
@@ -1044,6 +1048,9 @@ pub struct AccountsDb {
 
     /// AccountsDbPlugin accounts update notifier
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
+
+    filler_account_count: usize,
+    pub filler_account_suffix: Option<Pubkey>,
 }
 
 #[derive(Debug, Default)]
@@ -1536,6 +1543,8 @@ impl AccountsDb {
             dirty_stores: DashMap::default(),
             zero_lamport_accounts_to_purge_after_full_snapshot: DashSet::default(),
             accounts_update_notifier: None,
+            filler_account_count: 0,
+            filler_account_suffix: None,
         }
     }
 
@@ -1565,6 +1574,15 @@ impl AccountsDb {
         let accounts_hash_cache_path = accounts_db_config
             .as_ref()
             .and_then(|x| x.accounts_hash_cache_path.clone());
+        let filler_account_count = accounts_db_config
+            .as_ref()
+            .and_then(|cfg| cfg.filler_account_count)
+            .unwrap_or_default();
+        let filler_account_suffix = if filler_account_count > 0 {
+            Some(solana_sdk::pubkey::new_rand())
+        } else {
+            None
+        };
         let paths_is_empty = paths.is_empty();
         let mut new = Self {
             paths,
@@ -1573,6 +1591,8 @@ impl AccountsDb {
             caching_enabled,
             shrink_ratio,
             accounts_update_notifier,
+            filler_account_count,
+            filler_account_suffix,
             ..Self::default_with_accounts_index(accounts_index, accounts_hash_cache_path)
         };
         if paths_is_empty {
@@ -1972,6 +1992,10 @@ impl AccountsDb {
                         let mut purges_zero_lamports = HashMap::new();
                         let mut purges_old_accounts = Vec::new();
                         for pubkey in pubkeys {
+                            if self.is_filler_account(pubkey) {
+                                continue;
+                            }
+
                             match self.accounts_index.get(pubkey, None, max_clean_root) {
                                 AccountIndexGetResult::Found(locked_entry, index) => {
                                     let slot_list = locked_entry.slot_list();
@@ -4855,6 +4879,9 @@ impl AccountsDb {
                     let result: Vec<Hash> = pubkeys
                         .iter()
                         .filter_map(|pubkey| {
+                            if self.is_filler_account(pubkey) {
+                                return None;
+                            }
                             if let AccountIndexGetResult::Found(lock, index) =
                                 self.accounts_index.get(pubkey, Some(ancestors), Some(slot))
                             {
@@ -4880,7 +4907,7 @@ impl AccountsDb {
                                         |loaded_account| {
                                             let loaded_hash = loaded_account.loaded_hash();
                                             let balance = account_info.lamports;
-                                            if check_hash {
+                                            if check_hash && !self.is_filler_account(pubkey) {
                                                 let computed_hash =
                                                     loaded_account.compute_hash(*slot, pubkey);
                                                 if computed_hash != loaded_hash {
@@ -5233,6 +5260,11 @@ impl AccountsDb {
                 timings,
                 check_hash,
                 accounts_cache_and_ancestors,
+                if self.filler_account_count > 0 {
+                    self.filler_account_suffix.as_ref()
+                } else {
+                    None
+                },
             )
         } else {
             self.calculate_accounts_hash(slot, ancestors, check_hash)
@@ -5318,6 +5350,7 @@ impl AccountsDb {
             &Ancestors,
             &AccountInfoAccountsIndex,
         )>,
+        filler_account_suffix: Option<&Pubkey>,
     ) -> Result<Vec<BinnedHashData>, BankHashVerificationError> {
         let bin_calculator = PubkeyBinCalculator16::new(bins);
         assert!(bin_range.start < bins && bin_range.end <= bins && bin_range.start < bin_range.end);
@@ -5352,7 +5385,7 @@ impl AccountsDb {
                 let source_item =
                     CalculateHashIntermediate::new(loaded_account.loaded_hash(), balance, *pubkey);
 
-                if check_hash {
+                if check_hash && !Self::is_filler_account_helper(pubkey, filler_account_suffix) {
                     let computed_hash = loaded_account.compute_hash(slot, pubkey);
                     if computed_hash != source_item.hash {
                         info!(
@@ -5425,6 +5458,7 @@ impl AccountsDb {
             &Ancestors,
             &AccountInfoAccountsIndex,
         )>,
+        filler_account_suffix: Option<&Pubkey>,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         let mut scan_and_hash = move || {
             assert_eq!(
@@ -5450,9 +5484,13 @@ impl AccountsDb {
                     &bounds,
                     check_hash,
                     accounts_cache_and_ancestors,
+                    filler_account_suffix,
                 )?;
 
-                let (hash, lamports, for_next_pass) = AccountsHash::rest_of_hash_calculation(
+                let hash = AccountsHash {
+                    filler_account_suffix: filler_account_suffix.cloned(),
+                };
+                let (hash, lamports, for_next_pass) = hash.rest_of_hash_calculation(
                     result,
                     &mut stats,
                     pass == NUM_SCAN_PASSES - 1,
@@ -5570,12 +5608,19 @@ impl AccountsDb {
             .scan_account_storage(
                 slot,
                 |loaded_account: LoadedAccount| {
-                    // Cache only has one version per key, don't need to worry about versioning
-                    Some((*loaded_account.pubkey(), loaded_account.loaded_hash()))
+                    if self.is_filler_account(loaded_account.pubkey()) {
+                        None
+                    } else {
+                        // Cache only has one version per key, don't need to worry about versioning
+                        Some((*loaded_account.pubkey(), loaded_account.loaded_hash()))
+                    }
                 },
                 |accum: &DashMap<Pubkey, (u64, Hash)>, loaded_account: LoadedAccount| {
                     let loaded_write_version = loaded_account.write_version();
                     let loaded_hash = loaded_account.loaded_hash();
+                    if self.is_filler_account(loaded_account.pubkey()) {
+                        return;
+                    }
                     let should_insert =
                         if let Some(existing_entry) = accum.get(loaded_account.pubkey()) {
                             loaded_write_version > existing_entry.value().version()
@@ -6398,7 +6443,7 @@ impl AccountsDb {
                                 stored_account,
                             });
                         } else {
-                            assert!(occupied_version != this_version);
+                            assert_ne!(occupied_version, this_version);
                         }
                     }
                 }
@@ -6460,6 +6505,108 @@ impl AccountsDb {
             self.uncleaned_pubkeys.insert(*slot, dirty_pubkeys);
         }
         insert_us
+    }
+
+    pub fn is_filler_account_helper(
+        pubkey: &Pubkey,
+        filler_account_suffix: Option<&Pubkey>,
+    ) -> bool {
+        let offset = 8 + std::mem::size_of::<u32>();
+        filler_account_suffix
+            .as_ref()
+            .map(|filler_account_suffix| {
+                pubkey.as_ref()[offset..] == filler_account_suffix.as_ref()[offset..]
+            })
+            .unwrap_or_default()
+    }
+
+    pub fn is_filler_account(&self, pubkey: &Pubkey) -> bool {
+        Self::is_filler_account_helper(pubkey, self.filler_account_suffix.as_ref())
+    }
+
+    /// filler accounts are space-holding accounts which are ignored by hash calculations and rent.
+    /// They are designed to allow a validator to run against a network successfully while simulating having many more accounts present.
+    /// All filler accounts share a common pubkey suffix. The suffix is randomly generated per validator on startup.
+    /// The filler accounts are added to each slot in the snapshot after index generation.
+    /// The accounts added in a slot are setup to have pubkeys such that rent will be collected from them before (or when?) their slot becomes an epoch old.
+    /// Thus, the filler accounts are rewritten by rent and the old slot can be thrown away successfully.
+    pub fn maybe_add_filler_accounts(&self, ticks_per_slot: SlotCount) {
+        if self.filler_account_count == 0 {
+            return;
+        }
+
+        info!("adding {} filler accounts", self.filler_account_count);
+        // break this up to force the accounts out of memory after each pass
+        let passes = 100;
+        let slots = self.storage.all_slots();
+        let outer_slots_len = slots.len();
+        let per_pass = std::cmp::max(1, outer_slots_len / passes);
+        let root_count = slots.len();
+        let overall_index = AtomicUsize::new(0);
+        let hash = Hash::from_str("FiLLERACCoUNTooooooooooooooooooooooooooooooo").unwrap();
+        let lamports = 100_000_000;
+        let owner = Pubkey::from_str("FiLLERACCoUNTooooooooooooooooooooooooooooooo").unwrap();
+        let space = 0;
+        let account = AccountSharedData::new(lamports, space, &owner);
+        let added = AtomicUsize::default();
+        for pass in 0..=passes {
+            self.accounts_index.set_startup(true);
+            let slots = slots
+                .iter()
+                .skip(pass * per_pass)
+                .take(per_pass)
+                .collect::<Vec<_>>();
+            let chunk_size = (slots.len() / 7) + 1; // approximately 400k slots in a snapshot
+            let slot_count_in_two_day =
+                crate::bank::Bank::slot_count_in_two_day_helper(ticks_per_slot);
+            slots.par_chunks(chunk_size).for_each(|slots| {
+                for (_index, slot) in slots.iter().enumerate() {
+                    let storage_maps: Vec<Arc<AccountStorageEntry>> = self
+                        .storage
+                        .get_slot_storage_entries(**slot)
+                        .unwrap_or_default();
+                    if storage_maps.is_empty() {
+                        continue;
+                    }
+
+                    let partition = *crate::bank::Bank::get_partitions(
+                        **slot,
+                        slot.saturating_sub(1),
+                        slot_count_in_two_day,
+                    )
+                    .last()
+                    .unwrap();
+                    let subrange = crate::bank::Bank::pubkey_range_from_partition(partition);
+
+                    let idx = overall_index.fetch_add(1, Ordering::Relaxed);
+                    let filler_entries = (idx + 1) * self.filler_account_count / root_count
+                        - idx * self.filler_account_count / root_count;
+                    let accounts = (0..filler_entries)
+                        .map(|_| {
+                            let mut key = self.filler_account_suffix.unwrap();
+                            let my_id = added.fetch_add(1, Ordering::Relaxed);
+                            let my_id_bytes = u32::to_be_bytes(my_id as u32);
+
+                            let bytes = 8;
+                            key.as_mut()[0..bytes]
+                                .copy_from_slice(&subrange.start().as_ref()[0..bytes]);
+                            key.as_mut()[bytes..(bytes + std::mem::size_of::<u32>())]
+                                .copy_from_slice(&my_id_bytes);
+                            assert!(subrange.contains(&key));
+                            key
+                        })
+                        .collect::<Vec<_>>();
+                    let add = accounts
+                        .iter()
+                        .map(|key| (key, &account))
+                        .collect::<Vec<_>>();
+                    let hashes = (0..filler_entries).map(|_| hash).collect::<Vec<_>>();
+                    self.store_accounts_frozen(**slot, &add[..], Some(&hashes[..]), None, None);
+                }
+            });
+            self.accounts_index.set_startup(false);
+        }
+        info!("added {} filler accounts", added.load(Ordering::Relaxed));
     }
 
     #[allow(clippy::needless_collect)]
@@ -6645,7 +6792,9 @@ impl AccountsDb {
         for slot_stores in self.storage.0.iter() {
             for (id, store) in slot_stores.value().read().unwrap().iter() {
                 // Should be default at this point
-                assert_eq!(store.alive_bytes(), 0);
+                if self.filler_account_count == 0 {
+                    assert_eq!(store.alive_bytes(), 0);
+                }
                 if let Some(entry) = stored_sizes_and_counts.get(id) {
                     trace!(
                         "id: {} setting count: {} cur: {}",
@@ -7005,6 +7154,7 @@ pub mod tests {
                 bin_range,
                 check_hash,
                 None,
+                None,
             )
         }
     }
@@ -7351,6 +7501,7 @@ pub mod tests {
             HashStats::default(),
             false,
             None,
+            None,
         )
         .unwrap();
         let expected_hash = Hash::from_str("GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn").unwrap();
@@ -7373,6 +7524,7 @@ pub mod tests {
             None,
             HashStats::default(),
             false,
+            None,
             None,
         )
         .unwrap();
