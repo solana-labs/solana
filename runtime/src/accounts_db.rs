@@ -7787,6 +7787,7 @@ pub mod tests {
             spl_token_mint_index_enabled(),
             false,
             AccountShrinkThreshold::default(),
+            None,
         );
         let pubkey1 = solana_sdk::pubkey::new_rand();
         let pubkey2 = solana_sdk::pubkey::new_rand();
@@ -9935,6 +9936,7 @@ pub mod tests {
             AccountSecondaryIndexes::default(),
             true,
             AccountShrinkThreshold::default(),
+            None,
         );
 
         let account = AccountSharedData::new(1, 16 * 4096, &Pubkey::default());
@@ -10246,6 +10248,7 @@ pub mod tests {
             AccountSecondaryIndexes::default(),
             caching_enabled,
             AccountShrinkThreshold::default(),
+            None,
         ));
 
         let account_key = Pubkey::new_unique();
@@ -10294,6 +10297,7 @@ pub mod tests {
             AccountSecondaryIndexes::default(),
             caching_enabled,
             AccountShrinkThreshold::default(),
+            None,
         ));
 
         let account_key = Pubkey::new_unique();
@@ -10343,6 +10347,7 @@ pub mod tests {
             AccountSecondaryIndexes::default(),
             caching_enabled,
             AccountShrinkThreshold::default(),
+            None,
         ));
 
         let zero_lamport_account_key = Pubkey::new_unique();
@@ -10478,6 +10483,7 @@ pub mod tests {
             AccountSecondaryIndexes::default(),
             caching_enabled,
             AccountShrinkThreshold::default(),
+            None,
         ));
         let account_key = Pubkey::new_unique();
         let account_key2 = Pubkey::new_unique();
@@ -10585,6 +10591,7 @@ pub mod tests {
             AccountSecondaryIndexes::default(),
             caching_enabled,
             AccountShrinkThreshold::default(),
+            None,
         );
         let slot: Slot = 0;
         let num_keys = 10;
@@ -10640,6 +10647,7 @@ pub mod tests {
             AccountSecondaryIndexes::default(),
             caching_enabled,
             AccountShrinkThreshold::default(),
+            None,
         ));
         let slots: Vec<_> = (0..num_slots as Slot).into_iter().collect();
         let stall_slot = num_slots as Slot;
@@ -11045,6 +11053,7 @@ pub mod tests {
             AccountSecondaryIndexes::default(),
             caching_enabled,
             AccountShrinkThreshold::default(),
+            None,
         );
         let account_key1 = Pubkey::new_unique();
         let account_key2 = Pubkey::new_unique();
@@ -11302,6 +11311,7 @@ pub mod tests {
             AccountSecondaryIndexes::default(),
             caching_enabled,
             AccountShrinkThreshold::default(),
+            None,
         );
         db.load_delay = RACY_SLEEP_MS;
         let db = Arc::new(db);
@@ -11374,6 +11384,7 @@ pub mod tests {
             AccountSecondaryIndexes::default(),
             caching_enabled,
             AccountShrinkThreshold::default(),
+            None,
         );
         db.load_delay = RACY_SLEEP_MS;
         let db = Arc::new(db);
@@ -11450,6 +11461,7 @@ pub mod tests {
             AccountSecondaryIndexes::default(),
             caching_enabled,
             AccountShrinkThreshold::default(),
+            None,
         );
         let db = Arc::new(db);
         let num_cached_slots = 100;

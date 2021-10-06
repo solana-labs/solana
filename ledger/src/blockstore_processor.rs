@@ -1459,6 +1459,7 @@ pub mod tests {
                 ..ProcessOptions::default()
             },
             None,
+            None,
         )
         .unwrap();
         assert_eq!(frozen_bank_slots(&bank_forks), vec![0]);
@@ -1504,6 +1505,7 @@ pub mod tests {
                 ..ProcessOptions::default()
             },
             None,
+            None,
         )
         .unwrap();
         assert_eq!(frozen_bank_slots(&bank_forks), vec![0]);
@@ -1520,6 +1522,7 @@ pub mod tests {
                 poh_verify: true,
                 ..ProcessOptions::default()
             },
+            None,
             None,
         )
         .unwrap();
@@ -1577,7 +1580,7 @@ pub mod tests {
             ..ProcessOptions::default()
         };
         let (bank_forks, _leader_schedule) =
-            process_blockstore(&genesis_config, &blockstore, Vec::new(), opts, None).unwrap();
+            process_blockstore(&genesis_config, &blockstore, Vec::new(), opts, None, None).unwrap();
         assert_eq!(frozen_bank_slots(&bank_forks), vec![0]);
     }
 
@@ -1643,7 +1646,7 @@ pub mod tests {
             ..ProcessOptions::default()
         };
         let (bank_forks, _leader_schedule) =
-            process_blockstore(&genesis_config, &blockstore, Vec::new(), opts, None).unwrap();
+            process_blockstore(&genesis_config, &blockstore, Vec::new(), opts, None, None).unwrap();
 
         assert_eq!(frozen_bank_slots(&bank_forks), vec![0]); // slot 1 isn't "full", we stop at slot zero
 
@@ -1663,7 +1666,7 @@ pub mod tests {
         fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 3, 0, blockhash);
         // Slot 0 should not show up in the ending bank_forks_info
         let (bank_forks, _leader_schedule) =
-            process_blockstore(&genesis_config, &blockstore, Vec::new(), opts, None).unwrap();
+            process_blockstore(&genesis_config, &blockstore, Vec::new(), opts, None, None).unwrap();
 
         // slot 1 isn't "full", we stop at slot zero
         assert_eq!(frozen_bank_slots(&bank_forks), vec![0, 3]);
@@ -1731,7 +1734,7 @@ pub mod tests {
             ..ProcessOptions::default()
         };
         let (bank_forks, _leader_schedule) =
-            process_blockstore(&genesis_config, &blockstore, Vec::new(), opts, None).unwrap();
+            process_blockstore(&genesis_config, &blockstore, Vec::new(), opts, None, None).unwrap();
 
         // One fork, other one is ignored b/c not a descendant of the root
         assert_eq!(frozen_bank_slots(&bank_forks), vec![4]);
@@ -1811,7 +1814,7 @@ pub mod tests {
             ..ProcessOptions::default()
         };
         let (bank_forks, _leader_schedule) =
-            process_blockstore(&genesis_config, &blockstore, Vec::new(), opts, None).unwrap();
+            process_blockstore(&genesis_config, &blockstore, Vec::new(), opts, None, None).unwrap();
 
         assert_eq!(frozen_bank_slots(&bank_forks), vec![1, 2, 3, 4]);
         assert_eq!(bank_forks.working_bank().slot(), 4);
@@ -1872,6 +1875,7 @@ pub mod tests {
             Vec::new(),
             ProcessOptions::default(),
             None,
+            None,
         )
         .unwrap();
 
@@ -1921,6 +1925,7 @@ pub mod tests {
             &blockstore,
             Vec::new(),
             ProcessOptions::default(),
+            None,
             None,
         )
         .unwrap();
@@ -1975,6 +1980,7 @@ pub mod tests {
             Vec::new(),
             ProcessOptions::default(),
             None,
+            None,
         )
         .unwrap();
 
@@ -2028,7 +2034,7 @@ pub mod tests {
             ..ProcessOptions::default()
         };
         let (bank_forks, _leader_schedule) =
-            process_blockstore(&genesis_config, &blockstore, Vec::new(), opts, None).unwrap();
+            process_blockstore(&genesis_config, &blockstore, Vec::new(), opts, None, None).unwrap();
 
         // There is one fork, head is last_slot + 1
         assert_eq!(frozen_bank_slots(&bank_forks), vec![last_slot + 1]);
@@ -2173,7 +2179,7 @@ pub mod tests {
             ..ProcessOptions::default()
         };
         let (bank_forks, _leader_schedule) =
-            process_blockstore(&genesis_config, &blockstore, Vec::new(), opts, None).unwrap();
+            process_blockstore(&genesis_config, &blockstore, Vec::new(), opts, None, None).unwrap();
 
         assert_eq!(frozen_bank_slots(&bank_forks), vec![0, 1]);
         assert_eq!(bank_forks.root(), 0);
@@ -2203,7 +2209,7 @@ pub mod tests {
             ..ProcessOptions::default()
         };
         let (bank_forks, _leader_schedule) =
-            process_blockstore(&genesis_config, &blockstore, Vec::new(), opts, None).unwrap();
+            process_blockstore(&genesis_config, &blockstore, Vec::new(), opts, None, None).unwrap();
 
         assert_eq!(frozen_bank_slots(&bank_forks), vec![0]);
         let bank = bank_forks[0].clone();
@@ -2221,7 +2227,7 @@ pub mod tests {
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
-        process_blockstore(&genesis_config, &blockstore, Vec::new(), opts, None).unwrap();
+        process_blockstore(&genesis_config, &blockstore, Vec::new(), opts, None, None).unwrap();
         PAR_THREAD_POOL.with(|pool| {
             assert_eq!(pool.borrow().current_num_threads(), 1);
         });
@@ -2239,7 +2245,7 @@ pub mod tests {
             ..ProcessOptions::default()
         };
         let (_bank_forks, leader_schedule) =
-            process_blockstore(&genesis_config, &blockstore, Vec::new(), opts, None).unwrap();
+            process_blockstore(&genesis_config, &blockstore, Vec::new(), opts, None, None).unwrap();
         assert_eq!(leader_schedule.max_schedules(), std::usize::MAX);
     }
 
@@ -2300,7 +2306,7 @@ pub mod tests {
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
-        process_blockstore(&genesis_config, &blockstore, Vec::new(), opts, None).unwrap();
+        process_blockstore(&genesis_config, &blockstore, Vec::new(), opts, None, None).unwrap();
         assert_eq!(*callback_counter.write().unwrap(), 2);
     }
 
@@ -2955,7 +2961,7 @@ pub mod tests {
             ..ProcessOptions::default()
         };
         let (bank_forks, _leader_schedule) =
-            process_blockstore(&genesis_config, &blockstore, Vec::new(), opts, None).unwrap();
+            process_blockstore(&genesis_config, &blockstore, Vec::new(), opts, None, None).unwrap();
 
         // Should be able to fetch slot 0 because we specified halting at slot 0, even
         // if there is a greater root at slot 1.
@@ -3205,6 +3211,7 @@ pub mod tests {
             false,
             AccountShrinkThreshold::default(),
             false,
+            None,
         );
         *bank.epoch_schedule()
     }
@@ -3463,7 +3470,7 @@ pub mod tests {
             ..ProcessOptions::default()
         };
         let (bank_forks, _leader_schedule) =
-            process_blockstore(&genesis_config, &blockstore, Vec::new(), opts.clone(), None)
+            process_blockstore(&genesis_config, &blockstore, Vec::new(), opts.clone(), None, None)
                 .unwrap();
 
         // prepare to add votes
@@ -3496,7 +3503,7 @@ pub mod tests {
         );
 
         let (bank_forks, _leader_schedule) =
-            process_blockstore(&genesis_config, &blockstore, Vec::new(), opts.clone(), None)
+            process_blockstore(&genesis_config, &blockstore, Vec::new(), opts.clone(), None, None)
                 .unwrap();
 
         assert_eq!(bank_forks.root(), expected_root_slot);
@@ -3552,7 +3559,7 @@ pub mod tests {
         );
 
         let (bank_forks, _leader_schedule) =
-            process_blockstore(&genesis_config, &blockstore, Vec::new(), opts, None).unwrap();
+            process_blockstore(&genesis_config, &blockstore, Vec::new(), opts, None, None).unwrap();
 
         assert_eq!(bank_forks.root(), really_expected_root_slot);
     }
