@@ -1,7 +1,7 @@
 [package]
 name = "solana-core"
 description = "Blockchain, Rebuilt for Scale"
-version = "1.8.0"
+version = "1.9.0"
 homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-core"
 readme = "../README.md"
@@ -34,32 +34,32 @@ rayon = "1.5.1"
 retain_mut = "0.1.4"
 serde = "1.0.130"
 serde_derive = "1.0.103"
-solana-account-decoder = { path = "../account-decoder", version = "=1.8.0" }
-solana-accountsdb-plugin-manager = { path = "../accountsdb-plugin-manager", version = "=1.8.0" }
-solana-client = { path = "../client", version = "=1.8.0" }
-solana-config-program = { path = "../programs/config", version = "=1.8.0" }
-solana-entry = { path = "../entry", version = "=1.8.0" }
-solana-gossip = { path = "../gossip", version = "=1.8.0" }
-solana-ledger = { path = "../ledger", version = "=1.8.0" }
-solana-logger = { path = "../logger", version = "=1.8.0" }
-solana-measure = { path = "../measure", version = "=1.8.0" }
-solana-metrics = { path = "../metrics", version = "=1.8.0" }
-solana-net-utils = { path = "../net-utils", version = "=1.8.0" }
-solana-perf = { path = "../perf", version = "=1.8.0" }
-solana-poh = { path = "../poh", version = "=1.8.0" }
-solana-program-test = { path = "../program-test", version = "=1.8.0" }
-solana-rpc = { path = "../rpc", version = "=1.8.0" }
-solana-replica-lib = { path = "../replica-lib", version = "=1.8.0" }
-solana-runtime = { path = "../runtime", version = "=1.8.0" }
-solana-sdk = { path = "../sdk", version = "=1.8.0" }
-solana-frozen-abi = { path = "../frozen-abi", version = "=1.8.0" }
-solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "=1.8.0" }
-solana-streamer = { path = "../streamer", version = "=1.8.0" }
-solana-transaction-status = { path = "../transaction-status", version = "=1.8.0" }
-solana-vote-program = { path = "../programs/vote", version = "=1.8.0" }
+solana-account-decoder = { path = "../account-decoder", version = "=1.9.0" }
+solana-accountsdb-plugin-manager = { path = "../accountsdb-plugin-manager", version = "=1.9.0" }
+solana-client = { path = "../client", version = "=1.9.0" }
+solana-config-program = { path = "../programs/config", version = "=1.9.0" }
+solana-entry = { path = "../entry", version = "=1.9.0" }
+solana-gossip = { path = "../gossip", version = "=1.9.0" }
+solana-ledger = { path = "../ledger", version = "=1.9.0" }
+solana-logger = { path = "../logger", version = "=1.9.0" }
+solana-measure = { path = "../measure", version = "=1.9.0" }
+solana-metrics = { path = "../metrics", version = "=1.9.0" }
+solana-net-utils = { path = "../net-utils", version = "=1.9.0" }
+solana-perf = { path = "../perf", version = "=1.9.0" }
+solana-poh = { path = "../poh", version = "=1.9.0" }
+solana-program-test = { path = "../program-test", version = "=1.9.0" }
+solana-rpc = { path = "../rpc", version = "=1.9.0" }
+solana-replica-lib = { path = "../replica-lib", version = "=1.9.0" }
+solana-runtime = { path = "../runtime", version = "=1.9.0" }
+solana-sdk = { path = "../sdk", version = "=1.9.0" }
+solana-frozen-abi = { path = "../frozen-abi", version = "=1.9.0" }
+solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "=1.9.0" }
+solana-streamer = { path = "../streamer", version = "=1.9.0" }
+solana-transaction-status = { path = "../transaction-status", version = "=1.9.0" }
+solana-vote-program = { path = "../programs/vote", version = "=1.9.0" }
 tempfile = "3.2.0"
 thiserror = "1.0"
-solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.8.0" }
+solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.9.0" }
 tokio = { version = "1", features = ["full"] }
 trees = "0.4.2"
 
@@ -72,9 +72,9 @@ matches = "0.1.9"
 reqwest = { version = "0.11.4", default-features = false, features = ["blocking", "rustls-tls", "json"] }
 serde_json = "1.0.68"
 serial_test = "0.5.1"
-solana-program-runtime = { path = "../program-runtime", version = "=1.8.0" }
-solana-stake-program = { path = "../programs/stake", version = "=1.8.0" }
-solana-version = { path = "../version", version = "=1.8.0" }
+solana-program-runtime = { path = "../program-runtime", version = "=1.9.0" }
+solana-stake-program = { path = "../programs/stake", version = "=1.9.0" }
+solana-version = { path = "../version", version = "=1.9.0" }
 static_assertions = "1.1.0"
 systemstat = "0.1.8"
 
