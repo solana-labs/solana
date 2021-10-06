@@ -16,7 +16,8 @@ use solana_clap_utils::{
     },
 };
 use solana_core::cost_model::CostModel;
-use solana_core::cost_tracker::{CostTracker, CostTrackerStats};
+use solana_core::cost_tracker::CostTracker;
+use solana_core::cost_tracker_stats::CostTrackerStats;
 use solana_entry::entry::Entry;
 use solana_ledger::{
     ancestor_iterator::AncestorIterator,
