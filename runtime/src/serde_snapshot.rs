@@ -405,7 +405,6 @@ where
         ("accountsdb-notify-at-start-us", measure_notify.as_us(), i64),
     );
 
-
     if max_id > AppendVecId::MAX / 2 {
         panic!("Storage id {} larger than allowed max", max_id);
     }

@@ -953,7 +953,6 @@ impl Validator {
             ip_echo_server.shutdown_background();
         }
 
-
         if let Some(accountsdb_plugin_service) = self.accountsdb_plugin_service {
             accountsdb_plugin_service
                 .join()

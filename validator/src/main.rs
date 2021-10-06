@@ -2281,7 +2281,6 @@ pub fn main() {
         .value_of("accountsdb_plugin_config")
         .map(PathBuf::from);
 
-
     let mut validator_config = ValidatorConfig {
         require_tower: matches.is_present("require_tower"),
         tower_path: value_t!(matches, "tower", PathBuf).ok(),
