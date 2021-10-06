@@ -1070,6 +1070,7 @@ impl Bank {
             false,
             AccountShrinkThreshold::default(),
             false,
+            None,
         )
     }
 
@@ -1084,6 +1085,7 @@ impl Bank {
             false,
             AccountShrinkThreshold::default(),
             false,
+            None,
         );
 
         bank.ns_per_slot = std::u128::MAX;
@@ -1107,6 +1109,7 @@ impl Bank {
             accounts_db_caching_enabled,
             shrink_ratio,
             false,
+            None,
         )
     }
 
