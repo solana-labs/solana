@@ -57,7 +57,6 @@ impl Header {
 }
 
 pub struct BucketStorage {
-    drives: Arc<Vec<PathBuf>>,
     path: PathBuf,
     mmap: MmapMut,
     pub cell_size: u64,
@@ -92,7 +91,6 @@ impl BucketStorage {
         Self {
             path,
             mmap,
-            drives,
             cell_size,
             used: AtomicU64::new(0),
             capacity_pow2,
@@ -305,18 +303,12 @@ impl BucketStorage {
         let old_cap = old_bucket.capacity();
         let old_map = &old_bucket.mmap;
 
-        let increment = 1;
+        let increment = self.capacity_pow2 - old_bucket.capacity_pow2;
         let index_grow = 1 << increment;
-        let (new_map, new_file) = Self::new_map(
-            &old_bucket.drives,
-            old_bucket.cell_size as usize,
-            old_bucket.capacity_pow2 + increment,
-            &old_bucket.stats,
-        );
         (0..old_cap as usize).into_iter().for_each(|i| {
             let old_ix = i * old_bucket.cell_size as usize;
             let new_ix = old_ix * index_grow;
-            let dst_slice: &[u8] = &new_map[new_ix..new_ix + old_bucket.cell_size as usize];
+            let dst_slice: &[u8] = &self.mmap[new_ix..new_ix + old_bucket.cell_size as usize];
             let src_slice: &[u8] = &old_map[old_ix..old_ix + old_bucket.cell_size as usize];
 
             unsafe {
@@ -325,8 +317,6 @@ impl BucketStorage {
                 std::ptr::copy_nonoverlapping(src, dst, old_bucket.cell_size as usize);
             };
         });
-        self.mmap = new_map;
-        self.path = new_file;
         m.stop();
         self.stats.resizes.fetch_add(1, Ordering::Relaxed);
         self.stats.resize_us.fetch_add(m.as_us(), Ordering::Relaxed);
