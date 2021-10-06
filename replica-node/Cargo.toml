@@ -3,7 +3,7 @@ authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 edition = "2018"
 name = "solana-replica-node"
 description = "Solana replication node"
-version = "1.8.0"
+version = "1.9.0"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
@@ -14,25 +14,25 @@ clap = "2.33.1"
 crossbeam-channel = "0.5"
 log = "0.4.14"
 rand = "0.7.0"
-solana-clap-utils = { path = "../clap-utils", version = "=1.8.0" }
-solana-download-utils = { path = "../download-utils", version = "=1.8.0" }
-solana-genesis-utils = { path = "../genesis-utils", version = "=1.8.0" }
-solana-gossip = { path = "../gossip", version = "=1.8.0" }
-solana-ledger = { path = "../ledger", version = "=1.8.0" }
-solana-logger = { path = "../logger", version = "=1.8.0" }
-solana-net-utils = { path = "../net-utils", version = "=1.8.0" }
-solana-rpc = { path = "../rpc", version = "=1.8.0" }
-solana-replica-lib = { path = "../replica-lib", version = "=1.8.0" }
-solana-runtime = { path = "../runtime", version = "=1.8.0" }
-solana-sdk = { path = "../sdk", version = "=1.8.0" }
-solana-streamer = { path = "../streamer", version = "=1.8.0" }
-solana-version = { path = "../version", version = "=1.8.0" }
-solana-validator = { path = "../validator", version = "=1.8.0" }
+solana-clap-utils = { path = "../clap-utils", version = "=1.9.0" }
+solana-download-utils = { path = "../download-utils", version = "=1.9.0" }
+solana-genesis-utils = { path = "../genesis-utils", version = "=1.9.0" }
+solana-gossip = { path = "../gossip", version = "=1.9.0" }
+solana-ledger = { path = "../ledger", version = "=1.9.0" }
+solana-logger = { path = "../logger", version = "=1.9.0" }
+solana-net-utils = { path = "../net-utils", version = "=1.9.0" }
+solana-rpc = { path = "../rpc", version = "=1.9.0" }
+solana-replica-lib = { path = "../replica-lib", version = "=1.9.0" }
+solana-runtime = { path = "../runtime", version = "=1.9.0" }
+solana-sdk = { path = "../sdk", version = "=1.9.0" }
+solana-streamer = { path = "../streamer", version = "=1.9.0" }
+solana-version = { path = "../version", version = "=1.9.0" }
+solana-validator = { path = "../validator", version = "=1.9.0" }
 
 [dev-dependencies]
 serial_test = "0.5.1"
-solana-core = { path = "../core", version = "=1.8.0" }
-solana-local-cluster = { path = "../local-cluster", version = "=1.8.0" }
+solana-core = { path = "../core", version = "=1.9.0" }
+solana-local-cluster = { path = "../local-cluster", version = "=1.9.0" }
 tempfile = "3.2.0"
 
 
