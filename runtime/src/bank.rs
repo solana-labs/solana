@@ -13234,13 +13234,8 @@ pub(crate) mod tests {
             &validator_keypairs,
             vec![10_000; 2],
         );
-<<<<<<< HEAD
         let bank = Arc::new(Bank::new(&genesis_config));
-        let stake_delegation_accounts = bank.stake_delegation_accounts(&mut null_tracer());
-=======
-        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
         let stake_delegation_accounts = bank.stake_delegation_accounts(null_tracer());
->>>>>>> 250a8503f (Make rewards tracer async friendly (#20452))
         assert_eq!(stake_delegation_accounts.len(), 2);
 
         let mut vote_account = bank

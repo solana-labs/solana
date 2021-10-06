@@ -58,7 +58,7 @@ use std::{
     path::{Path, PathBuf},
     process::{exit, Command, Stdio},
     str::FromStr,
-    sync::Arc,
+    sync::{Arc, RwLock},
 };
 
 mod bigtable;
