@@ -1,14 +1,18 @@
 //! Stakes serve as a cache of stake and vote accounts to derive
 //! node stakes
 use {
-    crate::vote_account::{VoteAccount, VoteAccounts},
+    crate::vote_account::{VoteAccount, VoteAccounts, VoteAccountsHashMap},
+    rayon::{
+        iter::{IntoParallelRefIterator, ParallelIterator},
+        ThreadPool,
+    },
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         clock::Epoch,
         pubkey::Pubkey,
         stake::{
             self,
-            state::{Delegation, StakeState},
+            state::{Delegation, StakeActivationStatus, StakeState},
         },
         stake_history::StakeHistory,
     },
@@ -39,6 +43,8 @@ impl Stakes {
     pub fn history(&self) -> &StakeHistory {
         &self.stake_history
     }
+
+    #[deprecated(note = "remove after optimize_epoch_boundary_updates feature is active")]
     pub fn clone_with_epoch(&self, next_epoch: Epoch) -> Self {
         let prev_epoch = self.epoch;
         if prev_epoch == next_epoch {
@@ -79,6 +85,73 @@ impl Stakes {
                 vote_accounts: vote_accounts_for_next_epoch,
             }
         }
+    }
+
+    pub fn activate_epoch(&mut self, next_epoch: Epoch, thread_pool: &ThreadPool) {
+        let prev_epoch = self.epoch;
+        self.epoch = next_epoch;
+
+        thread_pool.install(|| {
+            let stake_delegations = &self.stake_delegations;
+            let stake_history = &mut self.stake_history;
+            let vote_accounts: &VoteAccountsHashMap = self.vote_accounts.as_ref();
+
+            // construct map of vote pubkey -> list of stake delegations
+            let vote_delegations: HashMap<Pubkey, Vec<&Delegation>> = {
+                let mut vote_delegations = HashMap::with_capacity(vote_accounts.len());
+                stake_delegations
+                    .iter()
+                    .for_each(|(_stake_pubkey, delegation)| {
+                        let vote_pubkey = &delegation.voter_pubkey;
+                        vote_delegations
+                            .entry(*vote_pubkey)
+                            .and_modify(|delegations: &mut Vec<_>| delegations.push(delegation))
+                            .or_insert_with(|| vec![delegation]);
+                    });
+                vote_delegations
+            };
+
+            // wrap up the prev epoch by adding new stake history entry for the prev epoch
+            {
+                let stake_history_entry = vote_delegations
+                    .par_iter()
+                    .map(|(_vote_pubkey, delegations)| {
+                        delegations
+                            .par_iter()
+                            .map(|delegation| {
+                                delegation.stake_activating_and_deactivating(
+                                    prev_epoch,
+                                    Some(stake_history),
+                                )
+                            })
+                            .reduce(StakeActivationStatus::default, |a, b| a + b)
+                    })
+                    .reduce(StakeActivationStatus::default, |a, b| a + b);
+
+                stake_history.add(prev_epoch, stake_history_entry);
+            }
+
+            // refresh the stake distribution of vote accounts for the next epoch, using new stake history
+            let vote_accounts_for_next_epoch: VoteAccountsHashMap = vote_accounts
+                .par_iter()
+                .map(|(vote_pubkey, (_stake, vote_account))| {
+                    let delegated_stake = vote_delegations
+                        .get(vote_pubkey)
+                        .map(|delegations| {
+                            delegations
+                                .par_iter()
+                                .map(|delegation| delegation.stake(next_epoch, Some(stake_history)))
+                                .sum()
+                        })
+                        .unwrap_or_default();
+
+                    (*vote_pubkey, (delegated_stake, vote_account.clone()))
+                })
+                .collect();
+
+            // overwrite vote accounts so that staked nodes singleton is reset
+            self.vote_accounts = VoteAccounts::from(Arc::new(vote_accounts_for_next_epoch));
+        });
     }
 
     // sum the stakes that point to the given voter_pubkey
@@ -228,6 +301,7 @@ impl Stakes {
 #[cfg(test)]
 pub mod tests {
     use super::*;
+    use rayon::ThreadPoolBuilder;
     use solana_sdk::{account::WritableAccount, pubkey::Pubkey, rent::Rent};
     use solana_stake_program::stake_state;
     use solana_vote_program::vote_state::{self, VoteState, VoteStateVersions};
@@ -512,6 +586,7 @@ pub mod tests {
             assert_eq!(vote_accounts.get(&vote_pubkey).unwrap().0, 20);
         }
     }
+
     #[test]
     fn test_clone_with_epoch() {
         let mut stakes = Stakes::default();
@@ -530,7 +605,37 @@ pub mod tests {
                 stake.stake(stakes.epoch, Some(&stakes.stake_history))
             );
         }
+        #[allow(deprecated)]
         let stakes = stakes.clone_with_epoch(3);
+        {
+            let vote_accounts = stakes.vote_accounts();
+            assert_eq!(
+                vote_accounts.get(&vote_pubkey).unwrap().0,
+                stake.stake(stakes.epoch, Some(&stakes.stake_history))
+            );
+        }
+    }
+
+    #[test]
+    fn test_activate_epoch() {
+        let mut stakes = Stakes::default();
+
+        let ((vote_pubkey, vote_account), (stake_pubkey, stake_account)) =
+            create_staked_node_accounts(10);
+
+        stakes.store(&vote_pubkey, &vote_account, true, true);
+        stakes.store(&stake_pubkey, &stake_account, true, true);
+        let stake = stake_state::stake_from(&stake_account).unwrap();
+
+        {
+            let vote_accounts = stakes.vote_accounts();
+            assert_eq!(
+                vote_accounts.get(&vote_pubkey).unwrap().0,
+                stake.stake(stakes.epoch, Some(&stakes.stake_history))
+            );
+        }
+        let thread_pool = ThreadPoolBuilder::new().num_threads(1).build().unwrap();
+        stakes.activate_epoch(3, &thread_pool);
         {
             let vote_accounts = stakes.vote_accounts();
             assert_eq!(
@@ -600,8 +705,9 @@ pub mod tests {
         assert_eq!(stakes.vote_balance_and_staked(), 11);
         assert_eq!(stakes.vote_balance_and_warmed_staked(), 1);
 
+        let thread_pool = ThreadPoolBuilder::new().num_threads(1).build().unwrap();
         for (epoch, expected_warmed_stake) in ((genesis_epoch + 1)..=3).zip(&[2, 3, 4]) {
-            stakes = stakes.clone_with_epoch(epoch);
+            stakes.activate_epoch(epoch, &thread_pool);
             // vote_balance_and_staked() always remain to return same lamports
             // while vote_balance_and_warmed_staked() gradually increases
             assert_eq!(stakes.vote_balance_and_staked(), 11);
