@@ -28,17 +28,11 @@ pub struct VoteAccount {
     vote_state_once: Once,
 }
 
-pub type VoteAccountsHashMap = HashMap<Pubkey, (/*stake:*/ u64, VoteAccount)>;
+pub type VoteAccountsHashMap = HashMap<Pubkey, (/*stake:*/ u64, ArcVoteAccount)>;
 
 #[derive(Debug, AbiExample)]
 pub struct VoteAccounts {
-<<<<<<< HEAD
-    vote_accounts: HashMap<Pubkey, (u64 /*stake*/, ArcVoteAccount)>,
-=======
-    vote_accounts: Arc<VoteAccountsHashMap>,
-    // Inner Arc is meant to implement copy-on-write semantics as opposed to
-    // sharing mutations (hence RwLock<Arc<...>> instead of Arc<RwLock<...>>).
->>>>>>> 129716f3f (Optimize stakes cache and rewards at epoch boundaries (#20432))
+    vote_accounts: VoteAccountsHashMap,
     staked_nodes: RwLock<
         HashMap<
             Pubkey, // VoteAccount.vote_state.node_pubkey.
@@ -49,17 +43,12 @@ pub struct VoteAccounts {
 }
 
 impl VoteAccount {
-<<<<<<< HEAD
-    pub fn lamports(&self) -> u64 {
-        self.account.lamports
-=======
     pub fn account(&self) -> &Account {
-        &self.0.account
+        &self.account
     }
 
-    pub(crate) fn lamports(&self) -> u64 {
-        self.account().lamports
->>>>>>> 129716f3f (Optimize stakes cache and rewards at epoch boundaries (#20432))
+    pub fn lamports(&self) -> u64 {
+        self.account.lamports
     }
 
     pub fn vote_state(&self) -> RwLockReadGuard<Result<VoteState, InstructionError>> {
@@ -202,17 +191,13 @@ impl From<Account> for ArcVoteAccount {
     }
 }
 
-<<<<<<< HEAD
-impl From<AccountSharedData> for VoteAccount {
-=======
-impl AsRef<VoteAccountInner> for VoteAccount {
-    fn as_ref(&self) -> &VoteAccountInner {
+impl AsRef<VoteAccount> for ArcVoteAccount {
+    fn as_ref(&self) -> &VoteAccount {
         &self.0
     }
 }
 
-impl From<AccountSharedData> for VoteAccountInner {
->>>>>>> 129716f3f (Optimize stakes cache and rewards at epoch boundaries (#20432))
+impl From<AccountSharedData> for VoteAccount {
     fn from(account: AccountSharedData) -> Self {
         Self {
             account: Account::from(account),
@@ -285,15 +270,8 @@ impl PartialEq<VoteAccounts> for VoteAccounts {
     }
 }
 
-<<<<<<< HEAD
-type VoteAccountsHashMap = HashMap<Pubkey, (u64 /*stake*/, ArcVoteAccount)>;
-
 impl From<VoteAccountsHashMap> for VoteAccounts {
     fn from(vote_accounts: VoteAccountsHashMap) -> Self {
-=======
-impl From<Arc<VoteAccountsHashMap>> for VoteAccounts {
-    fn from(vote_accounts: Arc<VoteAccountsHashMap>) -> Self {
->>>>>>> 129716f3f (Optimize stakes cache and rewards at epoch boundaries (#20432))
         Self {
             vote_accounts,
             staked_nodes: RwLock::default(),

@@ -1604,14 +1604,16 @@ pub fn redeem_rewards(
     point_value: &PointValue,
     stake_history: Option<&StakeHistory>,
     inflation_point_calc_tracer: Option<impl Fn(&InflationPointCalculationEvent)>,
-    fix_activating_credits_observed: bool,
+    fix_stake_deactivate: bool,
 ) -> Result<(u64, u64), InstructionError> {
     if let StakeState::Stake(meta, mut stake) = stake_state {
         if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer.as_ref() {
             inflation_point_calc_tracer(
-                &InflationPointCalculationEvent::EffectiveStakeAtRewardedEpoch(
-                    stake.stake(rewarded_epoch, stake_history),
-                ),
+                &InflationPointCalculationEvent::EffectiveStakeAtRewardedEpoch(stake.stake(
+                    rewarded_epoch,
+                    stake_history,
+                    fix_stake_deactivate,
+                )),
             );
             inflation_point_calc_tracer(&InflationPointCalculationEvent::RentExemptReserve(
                 meta.rent_exempt_reserve,
@@ -1621,16 +1623,14 @@ pub fn redeem_rewards(
             ));
         }
 
-        if let Some((stakers_reward, voters_reward)) = redeem_stake_rewards(
-            rewarded_epoch,
-            &mut stake,
+        if let Some((stakers_reward, voters_reward)) = stake.redeem_rewards(
             point_value,
             vote_state,
             stake_history,
             inflation_point_calc_tracer,
-            fix_activating_credits_observed,
+            fix_stake_deactivate,
         ) {
-            stake_account.checked_add_lamports(stakers_reward)?;
+            stake_account.lamports += stakers_reward;
             stake_account.set_state(&StakeState::Stake(meta, stake))?;
 
             Ok((stakers_reward, voters_reward))
@@ -1648,13 +1648,14 @@ pub fn calculate_points(
     stake_state: &StakeState,
     vote_state: &VoteState,
     stake_history: Option<&StakeHistory>,
+    fix_stake_deactivate: bool,
 ) -> Result<u128, InstructionError> {
     if let StakeState::Stake(_meta, stake) = stake_state {
-        Ok(calculate_stake_points(
-            stake,
+        Ok(stake.calculate_points(
             vote_state,
             stake_history,
             null_tracer(),
+            fix_stake_deactivate,
         ))
     } else {
         Err(InstructionError::InvalidAccountData)

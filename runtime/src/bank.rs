@@ -78,14 +78,8 @@ use solana_sdk::{
     transaction::{self, Result, Transaction, TransactionError},
 };
 use solana_stake_program::stake_state::{
-    self, Delegation, InflationPointCalculationEvent, PointValue,
-};
-<<<<<<< HEAD
-=======
-use solana_stake_program::stake_state::{
     self, Delegation, InflationPointCalculationEvent, PointValue, StakeState,
 };
->>>>>>> 129716f3f (Optimize stakes cache and rewards at epoch boundaries (#20432))
 use solana_vote_program::{
     vote_instruction::VoteInstruction,
     vote_state::{VoteState, VoteStateVersions},
@@ -1189,13 +1183,6 @@ impl Bank {
             new.apply_feature_activations(false);
         }
 
-<<<<<<< HEAD
-        let cloned = new
-            .stakes
-            .read()
-            .unwrap()
-            .clone_with_epoch(epoch, new.stake_program_v2_enabled());
-=======
         let optimize_epoch_boundary_updates = !disable_epoch_boundary_optimization
             && new
                 .feature_set
@@ -1208,10 +1195,11 @@ impl Bank {
                 // Add new entry to stakes.stake_history, set appropriate epoch and
                 //   update vote accounts with warmed up stakes before saving a
                 //   snapshot of stakes in epoch stakes
-                new.stakes
-                    .write()
-                    .unwrap()
-                    .activate_epoch(epoch, &thread_pool);
+                new.stakes.write().unwrap().activate_epoch(
+                    epoch,
+                    &thread_pool,
+                    new.stake_program_v2_enabled(),
+                );
 
                 // Save a snapshot of stakes for use in consensus and stake weighted networking
                 let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
@@ -1235,8 +1223,11 @@ impl Bank {
         }
 
         #[allow(deprecated)]
-        let cloned = new.stakes.read().unwrap().clone_with_epoch(epoch);
->>>>>>> 129716f3f (Optimize stakes cache and rewards at epoch boundaries (#20432))
+        let cloned = new
+            .stakes
+            .read()
+            .unwrap()
+            .clone_with_epoch(epoch, new.stake_program_v2_enabled());
         *new.stakes.write().unwrap() = cloned;
 
         let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
@@ -1909,7 +1900,7 @@ impl Bank {
             prev_epoch,
             validator_rewards,
             reward_calc_tracer,
-            self.stake_program_advance_activating_credits_observed(),
+            self.stake_program_v2_enabled(),
             thread_pool,
         );
 
@@ -2015,13 +2006,8 @@ impl Bank {
                         if self
                             .feature_set
                             .is_active(&feature_set::filter_stake_delegation_accounts::id())
-<<<<<<< HEAD
                             && (stake_account.owner != solana_stake_program::id()
                                 || vote_account.owner != solana_vote_program::id())
-=======
-                            && (stake_account.owner() != &solana_stake_program::id()
-                                || vote_account.owner() != &solana_vote_program::id())
->>>>>>> 129716f3f (Optimize stakes cache and rewards at epoch boundaries (#20432))
                         {
                             datapoint_warn!(
                                 "bank-stake_delegation_accounts-invalid-account",
@@ -2062,7 +2048,7 @@ impl Bank {
             .is_active(&feature_set::filter_stake_delegation_accounts::id());
 
         let stakes = self.stakes.read().unwrap();
-        let accounts = DashMap::with_capacity(stakes.vote_accounts().as_ref().len());
+        let accounts = DashMap::with_capacity(stakes.vote_accounts().len());
 
         thread_pool.install(|| {
             stakes
@@ -2070,14 +2056,14 @@ impl Bank {
                 .par_iter()
                 .for_each(|(stake_pubkey, delegation)| {
                     let vote_pubkey = &delegation.voter_pubkey;
-                    let stake_account = match self.get_account_with_fixed_root(stake_pubkey) {
+                    let stake_account = match self.get_account(stake_pubkey) {
                         Some(stake_account) => stake_account,
                         None => return,
                     };
 
                     // fetch vote account from stakes cache if it hasn't been cached locally
                     let fetched_vote_account = if !accounts.contains_key(vote_pubkey) {
-                        let vote_account = match self.get_account_with_fixed_root(vote_pubkey) {
+                        let vote_account = match self.get_account(vote_pubkey) {
                             Some(vote_account) => vote_account,
                             None => return,
                         };
@@ -2178,19 +2164,12 @@ impl Bank {
                     .map(move |(_stake_pubkey, stake_account)| (stake_account, vote_account))
             })
             .map(|(stake_account, vote_account)| {
-<<<<<<< HEAD
-                stake_state::calculate_points(
-                    &stake_account,
-                    &vote_account,
-                    Some(&stake_history),
-                    fix_stake_deactivate,
-=======
                 #[allow(deprecated)]
                 stake_state::calculate_points_slow(
                     stake_account,
                     vote_account,
                     Some(&stake_history),
->>>>>>> 129716f3f (Optimize stakes cache and rewards at epoch boundaries (#20432))
+                    fix_stake_deactivate,
                 )
                 .unwrap_or(0)
             })
@@ -2291,7 +2270,7 @@ impl Bank {
         rewarded_epoch: Epoch,
         rewards: u64,
         reward_calc_tracer: Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
-        fix_activating_credits_observed: bool,
+        fix_stake_deactivate: bool,
         thread_pool: &ThreadPool,
     ) -> f64 {
         let stake_history = self.stakes.read().unwrap().history().clone();
@@ -2317,6 +2296,7 @@ impl Bank {
                                 stake_state,
                                 vote_state,
                                 Some(&stake_history),
+                                fix_stake_deactivate,
                             )
                             .unwrap_or(0)
                         })
@@ -2373,7 +2353,7 @@ impl Bank {
                             &point_value,
                             Some(&stake_history),
                             reward_calc_tracer.as_ref(),
-                            fix_activating_credits_observed,
+                            fix_stake_deactivate,
                         );
                         if let Ok((stakers_reward, voters_reward)) = redeemed {
                             // track voter rewards
@@ -2419,10 +2399,7 @@ impl Bank {
             .into_iter()
             .filter_map(
                 |(vote_pubkey, (mut vote_account, commission, vote_rewards, vote_needs_store))| {
-                    if let Err(err) = vote_account.checked_add_lamports(vote_rewards) {
-                        debug!("reward redemption failed for {}: {:?}", vote_pubkey, err);
-                        return None;
-                    }
+                    vote_account.lamports += vote_rewards;
 
                     if vote_needs_store {
                         self.store_account(&vote_pubkey, &vote_account);
@@ -7605,19 +7582,6 @@ pub(crate) mod tests {
 
         let thread_pool = ThreadPoolBuilder::new().num_threads(1).build().unwrap();
         let validator_points: u128 = bank0
-<<<<<<< HEAD
-            .stake_delegation_accounts(null_tracer())
-            .iter()
-            .flat_map(|(_vote_pubkey, (stake_group, vote_account))| {
-                stake_group
-                    .iter()
-                    .map(move |(_stake_pubkey, stake_account)| (stake_account, vote_account))
-            })
-            .map(|(stake_account, vote_account)| {
-                stake_state::calculate_points(&stake_account, &vote_account, None, true)
-                    .unwrap_or(0)
-            })
-=======
             .load_vote_and_stake_accounts_with_thread_pool(&thread_pool, null_tracer())
             .into_iter()
             .map(
@@ -7632,13 +7596,12 @@ pub(crate) mod tests {
                     delegations
                         .iter()
                         .map(move |(_stake_pubkey, (stake_state, _stake_account))| {
-                            stake_state::calculate_points(stake_state, &vote_state, None)
+                            stake_state::calculate_points(stake_state, &vote_state, None, true)
                                 .unwrap_or(0)
                         })
                         .sum::<u128>()
                 },
             )
->>>>>>> 129716f3f (Optimize stakes cache and rewards at epoch boundaries (#20432))
             .sum();
 
         // put a child bank in epoch 1, which calls update_rewards()...
@@ -12795,17 +12758,11 @@ pub(crate) mod tests {
             &validator_keypairs,
             vec![10_000; 2],
         );
-<<<<<<< HEAD
         let bank = Arc::new(Bank::new(&genesis_config));
-        let stake_delegation_accounts = bank.stake_delegation_accounts(null_tracer());
-        assert_eq!(stake_delegation_accounts.len(), 2);
-=======
-        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
         let thread_pool = ThreadPoolBuilder::new().num_threads(1).build().unwrap();
         let vote_and_stake_accounts =
             bank.load_vote_and_stake_accounts_with_thread_pool(&thread_pool, null_tracer());
         assert_eq!(vote_and_stake_accounts.len(), 2);
->>>>>>> 129716f3f (Optimize stakes cache and rewards at epoch boundaries (#20432))
 
         let mut vote_account = bank
             .get_account(&validator_vote_keypairs0.vote_keypair.pubkey())

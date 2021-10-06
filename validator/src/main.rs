@@ -1802,15 +1802,6 @@ pub fn main() {
                 .help("Disables duplicate instance check")
                 .hidden(true),
         )
-<<<<<<< HEAD
-=======
-        .arg(
-            Arg::with_name("allow_private_addr")
-                .long("allow-private-addr")
-                .takes_value(false)
-                .help("Allow contacting private ip addresses")
-                .hidden(true),
-        )
         .arg(
             Arg::with_name("disable_epoch_boundary_optimization")
                 .long("disable-epoch-boundary-optimization")
@@ -1819,7 +1810,6 @@ pub fn main() {
                 optimize_epoch_boundary_updates feature switch if enabled.")
                 .hidden(true),
         )
->>>>>>> 129716f3f (Optimize stakes cache and rewards at epoch boundaries (#20432))
         .after_help("The default subcommand is run")
         .subcommand(
             SubCommand::with_name("exit")
@@ -2212,12 +2202,8 @@ pub fn main() {
         accounts_db_use_index_hash_calculation: matches.is_present("accounts_db_index_hashing"),
         tpu_coalesce_ms,
         no_wait_for_vote_to_start_leader: matches.is_present("no_wait_for_vote_to_start_leader"),
-<<<<<<< HEAD
-=======
-        accounts_shrink_ratio,
         disable_epoch_boundary_optimization: matches
             .is_present("disable_epoch_boundary_optimization"),
->>>>>>> 129716f3f (Optimize stakes cache and rewards at epoch boundaries (#20432))
         ..ValidatorConfig::default()
     };
 
