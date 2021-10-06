@@ -48,7 +48,6 @@ use solana_runtime::{
 };
 use solana_sdk::{
     clock::{Slot, MAX_PROCESSING_AGE, NUM_CONSECUTIVE_LEADER_SLOTS},
-    feature_set,
     genesis_config::ClusterType,
     hash::Hash,
     pubkey::Pubkey,
@@ -1835,14 +1834,7 @@ impl ReplayStage {
         }
 
         // send accumulated excute-timings to cost_update_service
-        if bank_forks
-            .read()
-            .unwrap()
-            .root_bank()
-            .feature_set
-            .is_active(&feature_set::cost_model::id())
-            && !execute_timings.details.per_program_timings.is_empty()
-        {
+        if !execute_timings.details.per_program_timings.is_empty() {
             cost_update_sender
                 .send(execute_timings)
                 .unwrap_or_else(|err| warn!("cost_update_sender failed: {:?}", err));

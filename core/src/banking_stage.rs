@@ -35,7 +35,6 @@ use solana_sdk::{
         Slot, DEFAULT_TICKS_PER_SLOT, MAX_PROCESSING_AGE, MAX_TRANSACTION_FORWARDING_DELAY,
         MAX_TRANSACTION_FORWARDING_DELAY_GPU,
     },
-    feature_set,
     message::Message,
     pubkey::Pubkey,
     short_vec::decode_shortu16_len,
@@ -429,10 +428,6 @@ impl BankingStage {
         banking_stage_stats: &BankingStageStats,
         cost_tracker_stats: &mut CostTrackerStats,
     ) {
-        if !bank.feature_set.is_active(&feature_set::cost_model::id()) {
-            return;
-        }
-
         if cost_tracker
             .write()
             .unwrap()
@@ -1138,7 +1133,6 @@ impl BankingStage {
         votes_only: bool,
         cost_tracker: &Arc<RwLock<CostTracker>>,
         banking_stage_stats: &BankingStageStats,
-        cost_model_enabled: bool,
         demote_program_write_locks: bool,
         cost_tracker_stats: &mut CostTrackerStats,
     ) -> (Vec<HashedTransaction<'static>>, Vec<usize>, Vec<usize>) {
@@ -1170,16 +1164,11 @@ impl BankingStage {
             verified_transactions_with_packet_indexes
                 .into_iter()
                 .filter_map(|(tx, tx_index)| {
-                    // put transaction into retry queue if cost_model_enabled AND it wouldn't fit
+                    // put transaction into retry queue if it wouldn't fit
                     // into current bank
-                    if cost_model_enabled
-                        && cost_tracker_readonly
-                            .would_transaction_fit(
-                                &tx,
-                                demote_program_write_locks,
-                                cost_tracker_stats,
-                            )
-                            .is_err()
+                    if cost_tracker_readonly
+                        .would_transaction_fit(&tx, demote_program_write_locks, cost_tracker_stats)
+                        .is_err()
                     {
                         debug!("transaction {:?} would exceed limit", tx);
                         retryable_transaction_packet_indexes.push(tx_index);
@@ -1268,8 +1257,6 @@ impl BankingStage {
         cost_tracker: &Arc<RwLock<CostTracker>>,
         cost_tracker_stats: &mut CostTrackerStats,
     ) -> (usize, usize, Vec<usize>) {
-        let cost_model_enabled = bank.feature_set.is_active(&feature_set::cost_model::id());
-
         let mut packet_conversion_time = Measure::start("packet_conversion");
         let (transactions, transaction_to_packet_indexes, retryable_packet_indexes) =
             Self::transactions_from_packets(
@@ -1279,7 +1266,6 @@ impl BankingStage {
                 bank.vote_only_bank(),
                 cost_tracker,
                 banking_stage_stats,
-                cost_model_enabled,
                 bank.demote_program_write_locks(),
                 cost_tracker_stats,
             );
@@ -1316,17 +1302,15 @@ impl BankingStage {
 
         // applying cost of processed transactions to shared cost_tracker
         let mut cost_tracking_time = Measure::start("cost_tracking_time");
-        if cost_model_enabled {
-            transactions.iter().enumerate().for_each(|(index, tx)| {
-                if unprocessed_tx_indexes.iter().all(|&i| i != index) {
-                    cost_tracker.write().unwrap().add_transaction_cost(
-                        tx.transaction(),
-                        bank.demote_program_write_locks(),
-                        cost_tracker_stats,
-                    );
-                }
-            });
-        }
+        transactions.iter().enumerate().for_each(|(index, tx)| {
+            if unprocessed_tx_indexes.iter().all(|&i| i != index) {
+                cost_tracker.write().unwrap().add_transaction_cost(
+                    tx.transaction(),
+                    bank.demote_program_write_locks(),
+                    cost_tracker_stats,
+                );
+            }
+        });
         cost_tracking_time.stop();
 
         let mut filter_pending_packets_time = Measure::start("filter_pending_packets_time");
@@ -1382,7 +1366,6 @@ impl BankingStage {
             }
         }
 
-        let cost_model_enabled = bank.feature_set.is_active(&feature_set::cost_model::id());
         let mut unprocessed_packet_conversion_time =
             Measure::start("unprocessed_packet_conversion");
         let (transactions, transaction_to_packet_indexes, retry_packet_indexes) =
@@ -1393,7 +1376,6 @@ impl BankingStage {
                 bank.vote_only_bank(),
                 cost_tracker,
                 banking_stage_stats,
-                cost_model_enabled,
                 bank.demote_program_write_locks(),
                 cost_tracker_stats,
             );
@@ -3232,7 +3214,6 @@ mod tests {
                 ))))),
                 &BankingStageStats::default(),
                 false,
-                false,
                 &mut CostTrackerStats::default(),
             );
             assert_eq!(2, txs.len());
@@ -3248,7 +3229,6 @@ mod tests {
                     CostModel::default(),
                 ))))),
                 &BankingStageStats::default(),
-                false,
                 false,
                 &mut CostTrackerStats::default(),
             );
@@ -3275,7 +3255,6 @@ mod tests {
                 ))))),
                 &BankingStageStats::default(),
                 false,
-                false,
                 &mut CostTrackerStats::default(),
             );
             assert_eq!(3, txs.len());
@@ -3291,7 +3270,6 @@ mod tests {
                     CostModel::default(),
                 ))))),
                 &BankingStageStats::default(),
-                false,
                 false,
                 &mut CostTrackerStats::default(),
             );
@@ -3318,7 +3296,6 @@ mod tests {
                 ))))),
                 &BankingStageStats::default(),
                 false,
-                false,
                 &mut CostTrackerStats::default(),
             );
             assert_eq!(3, txs.len());
@@ -3334,7 +3311,6 @@ mod tests {
                     CostModel::default(),
                 ))))),
                 &BankingStageStats::default(),
-                false,
                 false,
                 &mut CostTrackerStats::default(),
             );

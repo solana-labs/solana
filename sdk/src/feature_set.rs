@@ -219,10 +219,6 @@ pub mod optimize_epoch_boundary_updates {
     solana_sdk::declare_id!("265hPS8k8xJ37ot82KEgjRunsUp5w4n4Q4VwwiN9i9ps");
 }
 
-pub mod cost_model {
-    solana_sdk::declare_id!("9FVQ9NkYZjS8xeR2pruUdwWLpFrXDoqBSjJKyrbnKaqd");
-}
-
 pub mod tx_wide_compute_cap {
     solana_sdk::declare_id!("5ekBxc8itEnPv4NzGJtr8BVVQLNMQuLMNQQj7pHoLNZ9");
 }
@@ -286,7 +282,6 @@ lazy_static! {
         (stakes_remove_delegation_if_inactive::id(), "remove delegations from stakes cache when inactive"),
         (send_to_tpu_vote_port::id(), "Send votes to the tpu vote port"),
         (optimize_epoch_boundary_updates::id(), "Optimize epoch boundary updates"),
-        (cost_model::id(), "cost model feature that regulates block cost limits"),
         (tx_wide_compute_cap::id(), "Transaction wide compute cap"),
         (gate_large_block::id(), "validator checks block cost against max limit in realtime, reject if exceeds."),
         /*************** ADD NEW FEATURES HERE ***************/
