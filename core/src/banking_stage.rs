@@ -1166,9 +1166,17 @@ impl BankingStage {
                 .filter_map(|(tx, tx_index)| {
                     // put transaction into retry queue if it wouldn't fit
                     // into current bank
-                    if cost_tracker_readonly
-                        .would_transaction_fit(&tx, demote_program_write_locks, cost_tracker_stats)
-                        .is_err()
+                    let is_vote = &msgs.packets[tx_index].meta.is_simple_vote_tx;
+
+                    // excluding vote TX from cost_model, for now
+                    if !is_vote
+                        && cost_tracker_readonly
+                            .would_transaction_fit(
+                                &tx,
+                                demote_program_write_locks,
+                                cost_tracker_stats,
+                            )
+                            .is_err()
                     {
                         debug!("transaction {:?} would exceed limit", tx);
                         retryable_transaction_packet_indexes.push(tx_index);
