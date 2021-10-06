@@ -12,6 +12,13 @@ use std::process::exit;
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 
+fn get_repair_contact(nodes: &[ContactInfo]) -> ContactInfo {
+    let source = thread_rng().gen_range(0, nodes.len());
+    let mut contact = nodes[source].clone();
+    contact.id = solana_sdk::pubkey::new_rand();
+    contact
+}
+
 fn run_dos(
     nodes: &[ContactInfo],
     iterations: usize,
@@ -56,38 +63,35 @@ fn run_dos(
 
     let mut data = Vec::new();
 
-    if !nodes.is_empty() {
-        let source = thread_rng().gen_range(0, nodes.len());
-        let mut contact = nodes[source].clone();
-        contact.id = solana_sdk::pubkey::new_rand();
-        match data_type.as_str() {
-            "repair_highest" => {
-                let slot = 100;
-                let req = RepairProtocol::WindowIndexWithNonce(contact, slot, 0, 0);
-                data = bincode::serialize(&req).unwrap();
-            }
-            "repair_shred" => {
-                let slot = 100;
-                let req = RepairProtocol::HighestWindowIndexWithNonce(contact, slot, 0, 0);
-                data = bincode::serialize(&req).unwrap();
-            }
-            "repair_orphan" => {
-                let slot = 100;
-                let req = RepairProtocol::OrphanWithNonce(contact, slot, 0);
-                data = bincode::serialize(&req).unwrap();
-            }
-            "random" => {
-                data.resize(data_size, 0);
-            }
-            "transaction" => {
-                let tx = solana_perf::test_tx::test_tx();
-                data = bincode::serialize(&tx).unwrap();
-            }
-            "get_account_info" => {}
-            "get_program_accounts" => {}
-            &_ => {
-                panic!("unknown data type");
-            }
+    match data_type.as_str() {
+        "repair_highest" => {
+            let slot = 100;
+            let req = RepairProtocol::WindowIndexWithNonce(get_repair_contact(nodes), slot, 0, 0);
+            data = bincode::serialize(&req).unwrap();
+        }
+        "repair_shred" => {
+            let slot = 100;
+            let req =
+                RepairProtocol::HighestWindowIndexWithNonce(get_repair_contact(nodes), slot, 0, 0);
+            data = bincode::serialize(&req).unwrap();
+        }
+        "repair_orphan" => {
+            let slot = 100;
+            let req = RepairProtocol::OrphanWithNonce(get_repair_contact(nodes), slot, 0);
+            data = bincode::serialize(&req).unwrap();
+        }
+        "random" => {
+            data.resize(data_size, 0);
+        }
+        "transaction" => {
+            let tx = solana_perf::test_tx::test_tx();
+            info!("{:?}", tx);
+            data = bincode::serialize(&tx).unwrap();
+        }
+        "get_account_info" => {}
+        "get_program_accounts" => {}
+        &_ => {
+            panic!("unknown data type");
         }
     }
 
