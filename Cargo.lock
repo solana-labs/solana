@@ -5541,14 +5541,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-scripts"
-version = "1.8.0"
-dependencies = [
- "csv",
- "serde",
-]
-
-[[package]]
 name = "solana-sdk"
 version = "1.8.0"
 dependencies = [

@@ -59,7 +59,6 @@ members = [
     "rpc",
     "runtime",
     "runtime/store-tool",
-    "scripts",
     "sdk",
     "sdk/cargo-build-bpf",
     "sdk/cargo-test-bpf",
