@@ -18,6 +18,8 @@ pub(crate) const SHRED_DIRECTORY: &str = "shreds";
 pub(crate) const DATA_SHRED_DIRECTORY: &str = "data";
 
 pub(crate) type ShredCache = BTreeMap<u64, Vec<u8>>;
+
+/// A mapping from shred index to shred offset within the data section of file
 pub(crate) type ShredFileIndex = BTreeMap<u32, u32>;
 
 /// Store shreds on the filesystem in a slot-per-file manner. The
@@ -31,18 +33,18 @@ pub(crate) struct ShredFileHeader {
     pub slot: Slot,
     pub shred_type: ShredType,
     pub num_shreds: u32,
-    // Offset (in bytes) of the index
+    // Offset (in bytes) of the beginning of the shred index
     pub index_offset: u32,
-    // Size (in bytes) of the index
+    // Size (in bytes) of the shred index
     pub index_size: u32,
-    // Offset (in bytes) of the data
+    // Offset (in bytes) of the beginning of the serialized shreds
     pub data_offset: u32,
     // Size (in bytes) of all the serialized shreds
     pub data_size: u32,
 }
 
 // The following constant is computed by hand and hardcoded;
-// 'test_asdf` ensures the value is correct.
+// TODO: add test that serializes header and confirms size
 const SIZE_OF_SHRED_FILE_HEADER: usize = 29;
 
 impl ShredFileHeader {

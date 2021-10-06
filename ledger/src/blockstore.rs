@@ -1561,9 +1561,9 @@ impl Blockstore {
         start_index: u64,
     ) -> ShredResult<Vec<Shred>> {
         let cache = self.data_slot_cache(slot);
-        let (cache_guard, file, file_index) =
+        let (cache_guard, file_data) =
             SlotIterator::setup(&cache, &self.slot_data_shreds_path(slot));
-        SlotIterator::new(slot, start_index, &cache_guard, file, &file_index)
+        SlotIterator::new(slot, start_index, &cache_guard, &file_data)
             .map(|data| Shred::new_from_serialized_shred(data.1))
             .collect()
     }
@@ -1720,9 +1720,9 @@ impl Blockstore {
         }
 
         let cache = self.data_slot_cache(slot);
-        let (cache_guard, file, file_index) =
+        let (cache_guard, file_data) =
             SlotIterator::setup(&cache, &self.slot_data_shreds_path(slot));
-        let shred_iter = SlotIterator::new(slot, start_index, &cache_guard, file, &file_index);
+        let shred_iter = SlotIterator::new(slot, start_index, &cache_guard, &file_data);
 
         let ticks_since_first_insert =
             DEFAULT_TICKS_PER_SECOND * (timestamp() - first_timestamp) / 1000;
@@ -3932,8 +3932,8 @@ pub mod tests {
         solana_logger::setup();
         let mint_total = 1_000_000_000_000;
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(mint_total);
-        let (ledger_path, _blockhash) = create_new_tmp_ledger_auto_delete!(&genesis_config);
-        let blockstore = Blockstore::open(ledger_path.path()).unwrap(); //FINDME
+        let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
+        let blockstore = Blockstore::open(&ledger_path).unwrap(); //FINDME
 
         let ticks = create_ticks(genesis_config.ticks_per_slot, 0, genesis_config.hash());
         let entries = blockstore.get_slot_entries(0, 0).unwrap();
