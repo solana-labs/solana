@@ -5,7 +5,6 @@ use solana_sdk::{
 };
 use solana_vote_program::vote_state::VoteState;
 use std::{
-    borrow::Borrow,
     cmp::Ordering,
     collections::{hash_map::Entry, HashMap},
     iter::FromIterator,
@@ -28,9 +27,11 @@ pub struct VoteAccount {
     vote_state_once: Once,
 }
 
+pub type VoteAccountsHashMap = HashMap<Pubkey, (/*stake:*/ u64, ArcVoteAccount)>;
+
 #[derive(Debug, AbiExample)]
 pub struct VoteAccounts {
-    vote_accounts: HashMap<Pubkey, (u64 /*stake*/, ArcVoteAccount)>,
+    vote_accounts: VoteAccountsHashMap,
     staked_nodes: RwLock<
         HashMap<
             Pubkey, // VoteAccount.vote_state.node_pubkey.
@@ -41,6 +42,10 @@ pub struct VoteAccounts {
 }
 
 impl VoteAccount {
+    pub fn account(&self) -> &Account {
+        &self.account
+    }
+
     pub fn lamports(&self) -> u64 {
         self.account.lamports
     }
@@ -185,6 +190,12 @@ impl From<Account> for ArcVoteAccount {
     }
 }
 
+impl AsRef<VoteAccount> for ArcVoteAccount {
+    fn as_ref(&self) -> &VoteAccount {
+        &self.0
+    }
+}
+
 impl From<AccountSharedData> for VoteAccount {
     fn from(account: AccountSharedData) -> Self {
         Self {
@@ -258,8 +269,6 @@ impl PartialEq<VoteAccounts> for VoteAccounts {
     }
 }
 
-type VoteAccountsHashMap = HashMap<Pubkey, (u64 /*stake*/, ArcVoteAccount)>;
-
 impl From<VoteAccountsHashMap> for VoteAccounts {
     fn from(vote_accounts: VoteAccountsHashMap) -> Self {
         Self {
@@ -270,8 +279,8 @@ impl From<VoteAccountsHashMap> for VoteAccounts {
     }
 }
 
-impl Borrow<VoteAccountsHashMap> for VoteAccounts {
-    fn borrow(&self) -> &VoteAccountsHashMap {
+impl AsRef<VoteAccountsHashMap> for VoteAccounts {
+    fn as_ref(&self) -> &VoteAccountsHashMap {
         &self.vote_accounts
     }
 }
