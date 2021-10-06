@@ -1558,30 +1558,23 @@ impl AccountsDb {
         let accounts_hash_cache_path = accounts_db_config
             .as_ref()
             .and_then(|x| x.accounts_hash_cache_path.clone());
-        let mut new = if !paths.is_empty() {
-            Self {
-                paths,
-                temp_paths: None,
-                cluster_type: Some(*cluster_type),
-                account_indexes,
-                caching_enabled,
-                shrink_ratio,
-                accounts_update_notifier,
-                ..Self::default_with_accounts_index(accounts_index, accounts_hash_cache_path)
-            }
-        } else {
+        let paths_is_empty = paths.is_empty();
+        let mut new = Self {
+            paths,
+            cluster_type: Some(*cluster_type),
+            account_indexes,
+            caching_enabled,
+            shrink_ratio,
+            accounts_update_notifier,
+            ..Self::default_with_accounts_index(accounts_index, accounts_hash_cache_path)
+        };
+        if paths_is_empty {
             // Create a temporary set of accounts directories, used primarily
             // for testing
             let (temp_dirs, paths) = get_temp_accounts_paths(DEFAULT_NUM_DIRS).unwrap();
-            Self {
-                paths,
-                temp_paths: Some(temp_dirs),
-                cluster_type: Some(*cluster_type),
-                account_indexes,
-                caching_enabled,
-                shrink_ratio,
-                ..Self::default_with_accounts_index(accounts_index, accounts_hash_cache_path)
-            }
+            new.accounts_update_notifier = None;
+            new.paths = paths;
+            new.temp_paths = Some(temp_dirs);
         };
 
         new.start_background_hasher();
