@@ -1,59 +1,10 @@
 //! The `replay_stage` replays transactions broadcast by the leader.
-<<<<<<< HEAD
 
 use crate::{
     broadcast_stage::RetransmitSlotsSender,
     cache_block_meta_service::CacheBlockMetaSender,
     cluster_info_vote_listener::{
         GossipDuplicateConfirmedSlotsReceiver, GossipVerifiedVoteHashReceiver, VoteTracker,
-=======
-use {
-    crate::{
-        ancestor_hashes_service::AncestorHashesReplayUpdateSender,
-        broadcast_stage::RetransmitSlotsSender,
-        cache_block_meta_service::CacheBlockMetaSender,
-        cluster_info_vote_listener::{
-            GossipDuplicateConfirmedSlotsReceiver, GossipVerifiedVoteHashReceiver, VoteTracker,
-        },
-        cluster_slot_state_verifier::*,
-        cluster_slots::ClusterSlots,
-        cluster_slots_service::ClusterSlotsUpdateSender,
-        commitment_service::{AggregateCommitmentService, CommitmentAggregationData},
-        consensus::{
-            ComputedBankState, Stake, SwitchForkDecision, Tower, VotedStakes, SWITCH_FORK_THRESHOLD,
-        },
-        fork_choice::{ForkChoice, SelectVoteAndResetForkResult},
-        heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
-        latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
-        progress_map::{ForkProgress, ProgressMap, PropagatedStats},
-        repair_service::DuplicateSlotsResetReceiver,
-        rewards_recorder_service::RewardsRecorderSender,
-        tower_storage::{SavedTower, TowerStorage},
-        unfrozen_gossip_verified_vote_hashes::UnfrozenGossipVerifiedVoteHashes,
-        voting_service::VoteOp,
-        window_service::DuplicateSlotReceiver,
-    },
-    solana_client::rpc_response::SlotUpdate,
-    solana_entry::entry::VerifyRecyclers,
-    solana_gossip::cluster_info::ClusterInfo,
-    solana_ledger::{
-        block_error::BlockError,
-        blockstore::Blockstore,
-        blockstore_processor::{self, BlockstoreProcessorError, TransactionStatusSender},
-        leader_schedule_cache::LeaderScheduleCache,
-    },
-    solana_measure::measure::Measure,
-    solana_metrics::inc_new_counter_info,
-    solana_poh::poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
-    solana_rpc::{
-        optimistically_confirmed_bank_tracker::{BankNotification, BankNotificationSender},
-        rpc_subscriptions::RpcSubscriptions,
-    },
-    solana_runtime::{
-        accounts_background_service::AbsRequestSender, bank::Bank, bank::ExecuteTimings,
-        bank::NewBankOptions, bank_forks::BankForks, commitment::BlockCommitmentCache,
-        vote_sender_types::ReplayVoteSender,
->>>>>>> 129716f3f (Optimize stakes cache and rewards at epoch boundaries (#20432))
     },
     cluster_slot_state_verifier::*,
     cluster_slots::ClusterSlots,
@@ -90,8 +41,11 @@ use solana_rpc::{
     rpc_subscriptions::RpcSubscriptions,
 };
 use solana_runtime::{
-    accounts_background_service::AbsRequestSender, bank::Bank, bank_forks::BankForks,
-    commitment::BlockCommitmentCache, vote_sender_types::ReplayVoteSender,
+    accounts_background_service::AbsRequestSender,
+    bank::{Bank, NewBankOptions},
+    bank_forks::BankForks,
+    commitment::BlockCommitmentCache,
+    vote_sender_types::ReplayVoteSender,
 };
 use solana_sdk::{
     clock::{Slot, MAX_PROCESSING_AGE, NUM_CONSECUTIVE_LEADER_SLOTS},
@@ -177,12 +131,7 @@ pub struct ReplayStageConfig {
     pub cache_block_meta_sender: Option<CacheBlockMetaSender>,
     pub bank_notification_sender: Option<BankNotificationSender>,
     pub wait_for_vote_to_start_leader: bool,
-<<<<<<< HEAD
-=======
-    pub ancestor_hashes_replay_update_sender: AncestorHashesReplayUpdateSender,
-    pub tower_storage: Arc<dyn TowerStorage>,
     pub disable_epoch_boundary_optimization: bool,
->>>>>>> 129716f3f (Optimize stakes cache and rewards at epoch boundaries (#20432))
 }
 
 #[derive(Default)]
@@ -382,12 +331,7 @@ impl ReplayStage {
             cache_block_meta_sender,
             bank_notification_sender,
             wait_for_vote_to_start_leader,
-<<<<<<< HEAD
-=======
-            ancestor_hashes_replay_update_sender,
-            tower_storage,
             disable_epoch_boundary_optimization,
->>>>>>> 129716f3f (Optimize stakes cache and rewards at epoch boundaries (#20432))
         } = config;
 
         trace!("replay stage");

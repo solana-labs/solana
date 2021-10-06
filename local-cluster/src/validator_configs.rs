@@ -57,11 +57,7 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         poh_hashes_per_batch: config.poh_hashes_per_batch,
         no_wait_for_vote_to_start_leader: config.no_wait_for_vote_to_start_leader,
         accounts_shrink_ratio: config.accounts_shrink_ratio,
-<<<<<<< HEAD
-=======
-        accounts_db_config: config.accounts_db_config.clone(),
         disable_epoch_boundary_optimization: config.disable_epoch_boundary_optimization,
->>>>>>> 129716f3f (Optimize stakes cache and rewards at epoch boundaries (#20432))
     }
 }
 

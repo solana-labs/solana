@@ -205,11 +205,7 @@ impl Default for ValidatorConfig {
             validator_exit: Arc::new(RwLock::new(Exit::default())),
             no_wait_for_vote_to_start_leader: true,
             accounts_shrink_ratio: AccountShrinkThreshold::default(),
-<<<<<<< HEAD
-=======
-            accounts_db_config: None,
             disable_epoch_boundary_optimization: false,
->>>>>>> 129716f3f (Optimize stakes cache and rewards at epoch boundaries (#20432))
         }
     }
 }

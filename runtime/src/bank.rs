@@ -2175,7 +2175,7 @@ impl Bank {
             .is_active(&feature_set::filter_stake_delegation_accounts::id());
 
         let stakes = self.stakes.read().unwrap();
-        let accounts = DashMap::with_capacity(stakes.vote_accounts().as_ref().len());
+        let accounts = DashMap::with_capacity(stakes.vote_accounts().len());
 
         thread_pool.install(|| {
             stakes
@@ -13703,17 +13703,11 @@ pub(crate) mod tests {
             &validator_keypairs,
             vec![10_000; 2],
         );
-<<<<<<< HEAD
         let bank = Arc::new(Bank::new(&genesis_config));
-        let stake_delegation_accounts = bank.stake_delegation_accounts(null_tracer());
-        assert_eq!(stake_delegation_accounts.len(), 2);
-=======
-        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
         let thread_pool = ThreadPoolBuilder::new().num_threads(1).build().unwrap();
         let vote_and_stake_accounts =
             bank.load_vote_and_stake_accounts_with_thread_pool(&thread_pool, null_tracer());
         assert_eq!(vote_and_stake_accounts.len(), 2);
->>>>>>> 129716f3f (Optimize stakes cache and rewards at epoch boundaries (#20432))
 
         let mut vote_account = bank
             .get_account(&validator_vote_keypairs0.vote_keypair.pubkey())

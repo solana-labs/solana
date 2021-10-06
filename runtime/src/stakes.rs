@@ -1,37 +1,23 @@
 //! Stakes serve as a cache of stake and vote accounts to derive
 //! node stakes
-<<<<<<< HEAD
-use crate::vote_account::{ArcVoteAccount, VoteAccounts};
+use crate::vote_account::{ArcVoteAccount, VoteAccounts, VoteAccountsHashMap};
+use rayon::{
+    iter::{IntoParallelRefIterator, ParallelIterator},
+    ThreadPool,
+};
 use solana_sdk::{
     account::{AccountSharedData, ReadableAccount},
     clock::Epoch,
     pubkey::Pubkey,
     stake::{
         self,
-        state::{Delegation, StakeState},
-=======
-use {
-    crate::vote_account::{VoteAccount, VoteAccounts, VoteAccountsHashMap},
-    rayon::{
-        iter::{IntoParallelRefIterator, ParallelIterator},
-        ThreadPool,
-    },
-    solana_sdk::{
-        account::{AccountSharedData, ReadableAccount},
-        clock::Epoch,
-        pubkey::Pubkey,
-        stake::{
-            self,
-            state::{Delegation, StakeActivationStatus, StakeState},
-        },
-        stake_history::StakeHistory,
->>>>>>> 129716f3f (Optimize stakes cache and rewards at epoch boundaries (#20432))
+        state::{Delegation, StakeActivationStatus, StakeState},
     },
     stake_history::StakeHistory,
 };
 use solana_stake_program::stake_state;
 use solana_vote_program::vote_state::VoteState;
-use std::{borrow::Borrow, collections::HashMap};
+use std::collections::HashMap;
 
 #[derive(Default, Clone, PartialEq, Debug, Deserialize, Serialize, AbiExample)]
 pub struct Stakes {
@@ -162,7 +148,7 @@ impl Stakes {
                 .collect();
 
             // overwrite vote accounts so that staked nodes singleton is reset
-            self.vote_accounts = VoteAccounts::from(Arc::new(vote_accounts_for_next_epoch));
+            self.vote_accounts = VoteAccounts::from(vote_accounts_for_next_epoch);
         });
     }
 
@@ -288,8 +274,8 @@ impl Stakes {
         }
     }
 
-    pub fn vote_accounts(&self) -> &HashMap<Pubkey, (u64, ArcVoteAccount)> {
-        self.vote_accounts.borrow()
+    pub fn vote_accounts(&self) -> &VoteAccountsHashMap {
+        self.vote_accounts.as_ref()
     }
 
     pub fn stake_delegations(&self) -> &HashMap<Pubkey, Delegation> {

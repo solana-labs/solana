@@ -277,13 +277,8 @@ lazy_static! {
         (fix_write_privs::id(), "fix native invoke write privileges"),
         (reduce_required_deploy_balance::id(), "reduce required payer balance for program deploys"),
         (stakes_remove_delegation_if_inactive::id(), "remove delegations from stakes cache when inactive"),
-<<<<<<< HEAD
         (send_to_tpu_vote_port::id(), "Send votes to the tpu vote port"),
-=======
-        (do_support_realloc::id(), "support account data reallocation"),
-        (prevent_calling_precompiles_as_programs::id(), "Prevent calling precompiles as programs"),
         (optimize_epoch_boundary_updates::id(), "Optimize epoch boundary updates"),
->>>>>>> 129716f3f (Optimize stakes cache and rewards at epoch boundaries (#20432))
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
