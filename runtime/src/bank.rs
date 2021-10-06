@@ -12548,6 +12548,7 @@ pub(crate) mod tests {
             false,
             AccountShrinkThreshold::default(),
             false,
+            None,
         ));
         // move to next epoch to create now deprecated rewards sysvar intentionally
         let bank1 = Arc::new(Bank::new_from_parent(

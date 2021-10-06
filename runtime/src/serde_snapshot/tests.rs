@@ -132,6 +132,7 @@ fn test_accounts_serialize_style(serde_style: SerdeStyle) {
         AccountSecondaryIndexes::default(),
         false,
         AccountShrinkThreshold::default(),
+        None,
     );
 
     let mut pubkeys: Vec<Pubkey> = vec![];

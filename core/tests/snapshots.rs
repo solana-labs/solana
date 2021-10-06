@@ -109,6 +109,7 @@ mod tests {
                 false,
                 accounts_db::AccountShrinkThreshold::default(),
                 false,
+                None,
             );
             bank0.freeze();
             let mut bank_forks = BankForks::new(bank0);
