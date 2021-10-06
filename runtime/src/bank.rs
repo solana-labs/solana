@@ -1007,6 +1007,12 @@ struct VoteWithStakeDelegations {
     delegations: Vec<(Pubkey, (StakeState, AccountSharedData))>,
 }
 
+#[derive(Debug, Default)]
+pub struct NewBankOptions {
+    pub vote_only_bank: bool,
+    pub disable_epoch_boundary_optimization: bool,
+}
+
 impl Bank {
     pub fn default_for_tests() -> Self {
         Self::default_with_accounts(Accounts::default_for_tests())
@@ -1239,16 +1245,22 @@ impl Bank {
 
     /// Create a new bank that points to an immutable checkpoint of another bank.
     pub fn new_from_parent(parent: &Arc<Bank>, collector_id: &Pubkey, slot: Slot) -> Self {
-        Self::_new_from_parent(parent, collector_id, slot, null_tracer(), false)
+        Self::_new_from_parent(
+            parent,
+            collector_id,
+            slot,
+            null_tracer(),
+            NewBankOptions::default(),
+        )
     }
 
-    pub fn new_from_parent_with_vote_only(
+    pub fn new_from_parent_with_options(
         parent: &Arc<Bank>,
         collector_id: &Pubkey,
         slot: Slot,
-        vote_only_bank: bool,
+        new_bank_options: NewBankOptions,
     ) -> Self {
-        Self::_new_from_parent(parent, collector_id, slot, null_tracer(), vote_only_bank)
+        Self::_new_from_parent(parent, collector_id, slot, null_tracer(), new_bank_options)
     }
 
     pub fn new_from_parent_with_tracer(
@@ -1257,7 +1269,13 @@ impl Bank {
         slot: Slot,
         reward_calc_tracer: impl Fn(&RewardCalculationEvent) + Send + Sync,
     ) -> Self {
-        Self::_new_from_parent(parent, collector_id, slot, Some(reward_calc_tracer), false)
+        Self::_new_from_parent(
+            parent,
+            collector_id,
+            slot,
+            Some(reward_calc_tracer),
+            NewBankOptions::default(),
+        )
     }
 
     fn _new_from_parent(
@@ -1265,8 +1283,13 @@ impl Bank {
         collector_id: &Pubkey,
         slot: Slot,
         reward_calc_tracer: Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
-        vote_only_bank: bool,
+        new_bank_options: NewBankOptions,
     ) -> Self {
+        let NewBankOptions {
+            vote_only_bank,
+            disable_epoch_boundary_optimization,
+        } = new_bank_options;
+
         parent.freeze();
         assert_ne!(slot, parent.slot());
 
@@ -1380,9 +1403,10 @@ impl Bank {
             new.apply_feature_activations(false, false);
         }
 
-        let optimize_epoch_boundary_updates = new
-            .feature_set
-            .is_active(&feature_set::optimize_epoch_boundary_updates::id());
+        let optimize_epoch_boundary_updates = !disable_epoch_boundary_optimization
+            && new
+                .feature_set
+                .is_active(&feature_set::optimize_epoch_boundary_updates::id());
 
         if optimize_epoch_boundary_updates {
             if parent_epoch < new.epoch() {
