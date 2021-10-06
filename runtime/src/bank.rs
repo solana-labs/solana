@@ -1866,13 +1866,8 @@ impl Bank {
         &mut self,
         rewarded_epoch: Epoch,
         rewards: u64,
-<<<<<<< HEAD
-        reward_calc_tracer: &mut Option<impl FnMut(&RewardCalculationEvent)>,
-        fix_stake_deactivate: bool,
-=======
         reward_calc_tracer: Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
-        fix_activating_credits_observed: bool,
->>>>>>> 250a8503f (Make rewards tracer async friendly (#20452))
+        fix_stake_deactivate: bool,
     ) -> f64 {
         let stake_history = self.stakes.read().unwrap().history().clone();
 
@@ -1936,13 +1931,8 @@ impl Bank {
                     &vote_state,
                     &point_value,
                     Some(&stake_history),
-<<<<<<< HEAD
-                    &mut reward_calc_tracer.as_mut(),
-                    fix_stake_deactivate,
-=======
                     reward_calc_tracer,
-                    fix_activating_credits_observed,
->>>>>>> 250a8503f (Make rewards tracer async friendly (#20452))
+                    fix_stake_deactivate,
                 );
                 if let Ok((stakers_reward, _voters_reward)) = redeemed {
                     self.store_account(&stake_pubkey, &stake_account);
@@ -12306,13 +12296,8 @@ pub(crate) mod tests {
             &validator_keypairs,
             vec![10_000; 2],
         );
-<<<<<<< HEAD
         let bank = Arc::new(Bank::new(&genesis_config));
-        let stake_delegation_accounts = bank.stake_delegation_accounts(&mut null_tracer());
-=======
-        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
         let stake_delegation_accounts = bank.stake_delegation_accounts(null_tracer());
->>>>>>> 250a8503f (Make rewards tracer async friendly (#20452))
         assert_eq!(stake_delegation_accounts.len(), 2);
 
         let mut vote_account = bank

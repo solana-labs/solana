@@ -58,7 +58,7 @@ use std::{
     path::{Path, PathBuf},
     process::{exit, Command, Stdio},
     str::FromStr,
-    sync::Arc,
+    sync::{Arc, RwLock},
 };
 
 mod bigtable;
@@ -2536,15 +2536,10 @@ fn main() {
                             }
 
                             if let Some(base_account) = base_bank.get_account(&pubkey) {
-<<<<<<< HEAD
                                 let delta = warped_account.lamports - base_account.lamports;
-                                let detail = stake_calcuration_details.get(&pubkey);
-=======
-                                let delta = warped_account.lamports() - base_account.lamports();
                                 let detail_ref = stake_calculation_details.get(&pubkey);
                                 let detail: Option<&CalculationDetail> =
                                     detail_ref.as_ref().map(|detail_ref| detail_ref.value());
->>>>>>> 250a8503f (Make rewards tracer async friendly (#20452))
                                 println!(
                                     "{:<45}({}): {} => {} (+{} {:>4.9}%) {:?}",
                                     format!("{}", pubkey), // format! is needed to pad/justify correctly.

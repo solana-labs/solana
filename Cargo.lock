@@ -4781,12 +4781,9 @@ dependencies = [
  "bytecount",
  "clap",
  "csv",
-<<<<<<< HEAD
+ "dashmap",
  "futures 0.3.8",
  "futures-util",
-=======
- "dashmap",
->>>>>>> 250a8503f (Make rewards tracer async friendly (#20452))
  "histogram",
  "itertools 0.9.0",
  "log 0.4.11",
