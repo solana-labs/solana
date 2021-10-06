@@ -4,7 +4,9 @@ use solana_sdk::{
     account::{AccountSharedData, ReadableAccount, WritableAccount},
     account_utils::StateMut,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-    feature_set::{demote_program_write_locks, do_support_realloc, fix_write_privs},
+    feature_set::{
+        demote_program_write_locks, do_support_realloc, fix_write_privs, remove_native_loader,
+    },
     ic_msg,
     instruction::{Instruction, InstructionError},
     message::Message,
@@ -364,12 +366,14 @@ impl InstructionProcessor {
                         return process_instruction(program_id, instruction_data, invoke_context);
                     }
                 }
-                // Call the program via the native loader
-                return self.native_loader.process_instruction(
-                    &solana_sdk::native_loader::id(),
-                    instruction_data,
-                    invoke_context,
-                );
+                if !invoke_context.is_feature_active(&remove_native_loader::id()) {
+                    // Call the program via the native loader
+                    return self.native_loader.process_instruction(
+                        &solana_sdk::native_loader::id(),
+                        instruction_data,
+                        invoke_context,
+                    );
+                }
             } else {
                 let owner_id = &root_account.owner()?;
                 for (id, process_instruction) in &self.programs {
