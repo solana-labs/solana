@@ -1,7 +1,7 @@
 use crate::bucket_item::BucketItem;
 use crate::bucket_map::BucketMapError;
 use crate::bucket_stats::BucketMapStats;
-use crate::bucket_storage::{BucketStorage, Uid, UID_UNLOCKED};
+use crate::bucket_storage::{BucketStorage, Uid, DEFAULT_CAPACITY_POW2, UID_UNLOCKED};
 use crate::index_entry::IndexEntry;
 use crate::{MaxSearch, RefCount};
 use rand::thread_rng;
@@ -413,7 +413,7 @@ impl<T: Clone + Copy> Bucket<T> {
             &self.drives,
             self.index.max_search,
             self.data.get(data_index as usize),
-            current_capacity_pow2 + 1,
+            std::cmp::max(current_capacity_pow2 + 1, DEFAULT_CAPACITY_POW2),
             1 << data_index,
             Self::elem_size(),
             &self.stats.data,
