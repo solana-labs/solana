@@ -90,6 +90,11 @@ pub struct TvuConfig {
     pub rocksdb_compaction_interval: Option<u64>,
     pub rocksdb_max_compaction_jitter: Option<u64>,
     pub wait_for_vote_to_start_leader: bool,
+<<<<<<< HEAD
+=======
+    pub accounts_shrink_ratio: AccountShrinkThreshold,
+    pub disable_epoch_boundary_optimization: bool,
+>>>>>>> 129716f3f (Optimize stakes cache and rewards at epoch boundaries (#20432))
 }
 
 impl Tvu {
@@ -265,6 +270,12 @@ impl Tvu {
             cache_block_meta_sender,
             bank_notification_sender,
             wait_for_vote_to_start_leader: tvu_config.wait_for_vote_to_start_leader,
+<<<<<<< HEAD
+=======
+            ancestor_hashes_replay_update_sender,
+            tower_storage: tower_storage.clone(),
+            disable_epoch_boundary_optimization: tvu_config.disable_epoch_boundary_optimization,
+>>>>>>> 129716f3f (Optimize stakes cache and rewards at epoch boundaries (#20432))
         };
 
         let (voting_sender, voting_receiver) = channel();

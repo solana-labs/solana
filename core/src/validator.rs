@@ -138,6 +138,11 @@ pub struct ValidatorConfig {
     pub tpu_coalesce_ms: u64,
     pub validator_exit: Arc<RwLock<ValidatorExit>>,
     pub no_wait_for_vote_to_start_leader: bool,
+<<<<<<< HEAD
+=======
+    pub accounts_shrink_ratio: AccountShrinkThreshold,
+    pub disable_epoch_boundary_optimization: bool,
+>>>>>>> 129716f3f (Optimize stakes cache and rewards at epoch boundaries (#20432))
 }
 
 impl Default for ValidatorConfig {
@@ -194,6 +199,12 @@ impl Default for ValidatorConfig {
             tpu_coalesce_ms: DEFAULT_TPU_COALESCE_MS,
             validator_exit: Arc::new(RwLock::new(ValidatorExit::default())),
             no_wait_for_vote_to_start_leader: true,
+<<<<<<< HEAD
+=======
+            accounts_shrink_ratio: AccountShrinkThreshold::default(),
+            accounts_db_config: None,
+            disable_epoch_boundary_optimization: false,
+>>>>>>> 129716f3f (Optimize stakes cache and rewards at epoch boundaries (#20432))
         }
     }
 }
@@ -751,6 +762,11 @@ impl Validator {
                 rocksdb_compaction_interval: config.rocksdb_compaction_interval,
                 rocksdb_max_compaction_jitter: config.rocksdb_compaction_interval,
                 wait_for_vote_to_start_leader,
+<<<<<<< HEAD
+=======
+                accounts_shrink_ratio: config.accounts_shrink_ratio,
+                disable_epoch_boundary_optimization: config.disable_epoch_boundary_optimization,
+>>>>>>> 129716f3f (Optimize stakes cache and rewards at epoch boundaries (#20432))
             },
             &max_slots,
         );

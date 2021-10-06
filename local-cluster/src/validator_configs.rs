@@ -55,6 +55,12 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         validator_exit: Arc::new(RwLock::new(ValidatorExit::default())),
         poh_hashes_per_batch: config.poh_hashes_per_batch,
         no_wait_for_vote_to_start_leader: config.no_wait_for_vote_to_start_leader,
+<<<<<<< HEAD
+=======
+        accounts_shrink_ratio: config.accounts_shrink_ratio,
+        accounts_db_config: config.accounts_db_config.clone(),
+        disable_epoch_boundary_optimization: config.disable_epoch_boundary_optimization,
+>>>>>>> 129716f3f (Optimize stakes cache and rewards at epoch boundaries (#20432))
     }
 }
 

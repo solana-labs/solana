@@ -174,6 +174,23 @@ pub mod stakes_remove_delegation_if_inactive {
     solana_sdk::declare_id!("HFpdDDNQjvcXnXKec697HDDsyk6tFoWS2o8fkxuhQZpL");
 }
 
+<<<<<<< HEAD
+=======
+pub mod do_support_realloc {
+    solana_sdk::declare_id!("75m6ysz33AfLA5DDEzWM1obBrnPQRSsdVQ2nRmc8Vuu1");
+}
+
+// Note: when this feature is cleaned up, also remove the secp256k1 program from
+// the list of builtins and remove its files from /programs
+pub mod prevent_calling_precompiles_as_programs {
+    solana_sdk::declare_id!("4ApgRX3ud6p7LNMJmsuaAcZY5HWctGPr5obAsjB3A54d");
+}
+
+pub mod optimize_epoch_boundary_updates {
+    solana_sdk::declare_id!("265hPS8k8xJ37ot82KEgjRunsUp5w4n4Q4VwwiN9i9ps");
+}
+
+>>>>>>> 129716f3f (Optimize stakes cache and rewards at epoch boundaries (#20432))
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -216,6 +233,12 @@ lazy_static! {
         (spl_token_v2_set_authority_fix::id(), "spl-token set_authority fix"),
         (demote_program_write_locks::id(), "demote program write locks to readonly, except when upgradeable loader present #19593 #20263"),
         (stakes_remove_delegation_if_inactive::id(), "remove delegations from stakes cache when inactive"),
+<<<<<<< HEAD
+=======
+        (do_support_realloc::id(), "support account data reallocation"),
+        (prevent_calling_precompiles_as_programs::id(), "Prevent calling precompiles as programs"),
+        (optimize_epoch_boundary_updates::id(), "Optimize epoch boundary updates"),
+>>>>>>> 129716f3f (Optimize stakes cache and rewards at epoch boundaries (#20432))
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
