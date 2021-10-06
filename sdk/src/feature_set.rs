@@ -174,6 +174,10 @@ pub mod stakes_remove_delegation_if_inactive {
     solana_sdk::declare_id!("HFpdDDNQjvcXnXKec697HDDsyk6tFoWS2o8fkxuhQZpL");
 }
 
+pub mod send_to_tpu_vote_port {
+    solana_sdk::declare_id!("C5fh68nJ7uyKAuYZg2x9sEQ5YrVf3dkW6oojNBSc3Jvo");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -216,6 +220,7 @@ lazy_static! {
         (spl_token_v2_set_authority_fix::id(), "spl-token set_authority fix"),
         (demote_program_write_locks::id(), "demote program write locks to readonly, except when upgradeable loader present #19593 #20263"),
         (stakes_remove_delegation_if_inactive::id(), "remove delegations from stakes cache when inactive"),
+        (send_to_tpu_vote_port::id(), "Send votes to the tpu vote port"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
