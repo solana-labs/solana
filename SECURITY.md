@@ -18,24 +18,24 @@ Expect a response as fast as possible, within one business day at the latest.
 We offer bounties for critical security issues. Please see below for more details.
 
 Loss of Funds:
-$500,000 USD in locked SOL tokens (locked for 12 months)
+$2,000,000 USD in locked SOL tokens (locked for 12 months)
 * Theft of funds without users signature from any account
 * Theft of funds without users interaction in system, token, stake, vote programs
 * Theft of funds that requires users signature - creating a vote program that drains the delegated stakes.
 
 Consensus/Safety Violations:
-$250,000 USD in locked SOL tokens (locked for 12 months)
+$1,000,000 USD in locked SOL tokens (locked for 12 months)
 * Consensus safety violation
 * Tricking a validator to accept an optimistic confirmation or rooted slot without a double vote, etc..
 
 Other Attacks:
- $100,000 USD in locked SOL tokens (locked for 12 months)
+ $400,000 USD in locked SOL tokens (locked for 12 months)
 * Protocol liveness attacks,
 * Eclipse attacks,
 * Remote attacks that partition the network,
 
 DoS Attacks:
-$25,000 USD in locked SOL tokens (locked for 12 months)
+$100,000 USD in locked SOL tokens (locked for 12 months)
 * Remote resource exaustion via Non-RPC protocols
 
 RPC DoS/Crashes:
