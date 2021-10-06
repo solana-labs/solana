@@ -3469,9 +3469,15 @@ pub mod tests {
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
-        let (bank_forks, _leader_schedule) =
-            process_blockstore(&genesis_config, &blockstore, Vec::new(), opts.clone(), None, None)
-                .unwrap();
+        let (bank_forks, _leader_schedule) = process_blockstore(
+            &genesis_config,
+            &blockstore,
+            Vec::new(),
+            opts.clone(),
+            None,
+            None,
+        )
+        .unwrap();
 
         // prepare to add votes
         let last_vote_bank_hash = bank_forks.get(last_main_fork_slot - 1).unwrap().hash();
@@ -3502,9 +3508,15 @@ pub mod tests {
             &leader_keypair,
         );
 
-        let (bank_forks, _leader_schedule) =
-            process_blockstore(&genesis_config, &blockstore, Vec::new(), opts.clone(), None, None)
-                .unwrap();
+        let (bank_forks, _leader_schedule) = process_blockstore(
+            &genesis_config,
+            &blockstore,
+            Vec::new(),
+            opts.clone(),
+            None,
+            None,
+        )
+        .unwrap();
 
         assert_eq!(bank_forks.root(), expected_root_slot);
         assert_eq!(

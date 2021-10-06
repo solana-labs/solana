@@ -133,7 +133,6 @@ impl Accounts {
         )
     }
 
-
     pub fn new_with_config(
         paths: Vec<PathBuf>,
         cluster_type: &ClusterType,
@@ -1730,7 +1729,6 @@ mod tests {
             false,
             AccountShrinkThreshold::default(),
             None,
-
         );
 
         // Load accounts owned by various programs into AccountsDb
