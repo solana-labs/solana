@@ -3535,7 +3535,7 @@ pub mod tests {
             let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
             bank_forks.write().unwrap().insert(bank1);
             let bank1 = bank_forks.read().unwrap().get(1).cloned().unwrap();
-            let mut bank1_progress = progress
+            let bank1_progress = progress
                 .entry(bank1.slot())
                 .or_insert_with(|| ForkProgress::new(bank1.last_blockhash(), None, None, 0, 0));
             let shreds = shred_to_insert(
@@ -3548,7 +3548,7 @@ pub mod tests {
             let res = ReplayStage::replay_blockstore_into_bank(
                 &bank1,
                 &blockstore,
-                &mut bank1_progress,
+                bank1_progress,
                 None,
                 &replay_vote_sender,
                 &VerifyRecyclers::default(),
@@ -3923,7 +3923,7 @@ pub mod tests {
             .values()
             .cloned()
             .collect();
-        let mut heaviest_subtree_fork_choice = &mut vote_simulator.heaviest_subtree_fork_choice;
+        let heaviest_subtree_fork_choice = &mut vote_simulator.heaviest_subtree_fork_choice;
         let mut latest_validator_votes_for_frozen_banks =
             LatestValidatorVotesForFrozenBanks::default();
         let ancestors = vote_simulator.bank_forks.read().unwrap().ancestors();
@@ -3938,7 +3938,7 @@ pub mod tests {
             &VoteTracker::default(),
             &ClusterSlots::default(),
             &vote_simulator.bank_forks,
-            &mut heaviest_subtree_fork_choice,
+            heaviest_subtree_fork_choice,
             &mut latest_validator_votes_for_frozen_banks,
         );
 

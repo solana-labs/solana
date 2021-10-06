@@ -1,3 +1,4 @@
+#![allow(clippy::redundant_closure)]
 use solana_cli::{
     cli::{process_command, request_and_confirm_airdrop, CliCommand, CliConfig},
     spend_utils::SpendAmount,

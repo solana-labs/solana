@@ -216,6 +216,7 @@ struct GenerateIndexTimings {
     pub insertion_time_us: u64,
     pub min_bin_size: usize,
     pub max_bin_size: usize,
+    #[allow(dead_code)]
     pub total_items: usize,
     pub storage_size_accounts_map_us: u64,
     pub storage_size_storages_us: u64,
@@ -971,11 +972,13 @@ pub struct AccountsDb {
 
     // used by tests
     // holds this until we are dropped
+    #[allow(dead_code)]
     temp_accounts_hash_cache_path: Option<TempDir>,
 
     pub shrink_paths: RwLock<Option<Vec<PathBuf>>>,
 
     /// Directory of paths this accounts_db needs to hold/remove
+    #[allow(dead_code)]
     pub(crate) temp_paths: Option<Vec<TempDir>>,
 
     /// Starting file size of appendvecs
@@ -1168,9 +1171,13 @@ impl PurgeStats {
 
 #[derive(Debug)]
 struct FlushStats {
+    #[allow(dead_code)]
     slot: Slot,
+    #[allow(dead_code)]
     num_flushed: usize,
+    #[allow(dead_code)]
     num_purged: usize,
+    #[allow(dead_code)]
     total_size: u64,
 }
 
@@ -3636,10 +3643,10 @@ impl AccountsDb {
             Self::page_align(size),
         ));
 
-        if store.append_vec_id() == CACHE_VIRTUAL_STORAGE_ID {
-            panic!("We've run out of storage ids!");
-        }
-
+        assert!(
+            store.append_vec_id() != CACHE_VIRTUAL_STORAGE_ID,
+            "We've run out of storage ids!"
+        );
         debug!(
             "creating store: {} slot: {} len: {} size: {} from: {} path: {:?}",
             store.append_vec_id(),
@@ -11734,11 +11741,10 @@ pub mod tests {
             let slot_accounts = accounts_db.scan_account_storage(
                 *slot as Slot,
                 |loaded_account: LoadedAccount| {
-                    if is_cache_at_limit {
-                        panic!(
-                            "When cache is at limit, all roots should have been flushed to storage"
-                        );
-                    }
+                    assert!(
+                        !is_cache_at_limit,
+                        "When cache is at limit, all roots should have been flushed to storage"
+                    );
                     // All slots <= requested_flush_root should have been flushed, regardless
                     // of ongoing scans
                     assert!(*slot > requested_flush_root);

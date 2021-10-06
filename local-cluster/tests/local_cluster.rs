@@ -1478,9 +1478,7 @@ fn generate_frozen_account_panic(mut cluster: LocalCluster, frozen_account: Arc<
 
         sleep(Duration::from_secs(1));
         i += 1;
-        if i > 10 {
-            panic!("FROZEN_ACCOUNT_PANIC still false");
-        }
+        assert!(i <= 10, "FROZEN_ACCOUNT_PANIC still false");
     }
 
     // The validator is now broken and won't shutdown properly.  Avoid LocalCluster panic in Drop
@@ -3340,12 +3338,11 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
     let now = Instant::now();
     loop {
         let elapsed = now.elapsed();
-        if elapsed > Duration::from_secs(30) {
-            panic!(
-                "LocalCluster nodes failed to log enough tower votes in {} secs",
-                elapsed.as_secs()
-            );
-        }
+        assert!(
+            elapsed <= Duration::from_secs(30),
+            "LocalCluster nodes failed to log enough tower votes in {} secs",
+            elapsed.as_secs()
+        );
         sleep(Duration::from_millis(100));
 
         if let Some((last_vote, _)) = last_vote_in_tower(&val_b_ledger_path, &validator_b_pubkey) {

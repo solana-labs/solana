@@ -685,6 +685,7 @@ pub(crate) struct BankFieldsToDeserialize {
     pub(crate) ns_per_slot: u128,
     pub(crate) genesis_creation_time: UnixTimestamp,
     pub(crate) slots_per_year: f64,
+    #[allow(dead_code)]
     pub(crate) unused: u64,
     pub(crate) slot: Slot,
     pub(crate) epoch: Epoch,
@@ -2902,9 +2903,11 @@ impl Bank {
         self.fee_calculator = self.fee_rate_governor.create_fee_calculator();
 
         for (pubkey, account) in genesis_config.accounts.iter() {
-            if self.get_account(pubkey).is_some() {
-                panic!("{} repeated in genesis config", pubkey);
-            }
+            assert!(
+                self.get_account(pubkey).is_none(),
+                "{} repeated in genesis config",
+                pubkey
+            );
             self.store_account(pubkey, &AccountSharedData::from(account.clone()));
             self.capitalization.fetch_add(account.lamports(), Relaxed);
         }
@@ -2913,9 +2916,11 @@ impl Bank {
         self.update_fees();
 
         for (pubkey, account) in genesis_config.rewards_pools.iter() {
-            if self.get_account(pubkey).is_some() {
-                panic!("{} repeated in genesis config", pubkey);
-            }
+            assert!(
+                self.get_account(pubkey).is_none(),
+                "{} repeated in genesis config",
+                pubkey
+            );
             self.store_account(pubkey, &AccountSharedData::from(account.clone()));
         }
 
@@ -3514,23 +3519,14 @@ impl Bank {
         sanitized_txs: &[SanitizedTransaction],
         lock_results: &[Result<()>],
         max_age: usize,
-        mut error_counters: &mut ErrorCounters,
+        error_counters: &mut ErrorCounters,
     ) -> Vec<TransactionCheckResult> {
-        let age_results = self.check_age(
-            sanitized_txs.iter(),
-            lock_results,
-            max_age,
-            &mut error_counters,
-        );
-        let cache_results =
-            self.check_status_cache(sanitized_txs, age_results, &mut error_counters);
+        let age_results =
+            self.check_age(sanitized_txs.iter(), lock_results, max_age, error_counters);
+        let cache_results = self.check_status_cache(sanitized_txs, age_results, error_counters);
         if self.upgrade_epoch() {
             // Reject all non-vote transactions
-            self.filter_by_vote_transactions(
-                sanitized_txs.iter(),
-                cache_results,
-                &mut error_counters,
-            )
+            self.filter_by_vote_transactions(sanitized_txs.iter(), cache_results, error_counters)
         } else {
             cache_results
         }

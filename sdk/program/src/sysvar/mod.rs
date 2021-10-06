@@ -45,9 +45,7 @@ macro_rules! declare_sysvar_id(
         #[cfg(test)]
         #[test]
         fn test_sysvar_id() {
-            if !$crate::sysvar::is_sysvar_id(&id()) {
-                panic!("sysvar::is_sysvar_id() doesn't know about {}", $name);
-            }
+            assert!($crate::sysvar::is_sysvar_id(&id()), "sysvar::is_sysvar_id() doesn't know about {}", $name);
         }
     )
 );
@@ -72,10 +70,7 @@ macro_rules! declare_deprecated_sysvar_id(
         #[cfg(test)]
         #[test]
         fn test_sysvar_id() {
-            #[allow(deprecated)]
-            if !$crate::sysvar::is_sysvar_id(&id()) {
-                panic!("sysvar::is_sysvar_id() doesn't know about {}", $name);
-            }
+            assert!($crate::sysvar::is_sysvar_id(&id()), "sysvar::is_sysvar_id() doesn't know about {}", $name);
         }
     )
 );

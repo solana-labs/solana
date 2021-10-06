@@ -323,7 +323,7 @@ pub fn sign_shreds_cpu(keypair: &Keypair, batches: &mut [Packets]) {
         batches.par_iter_mut().for_each(|p| {
             p.packets[..]
                 .par_iter_mut()
-                .for_each(|mut p| sign_shred_cpu(keypair, &mut p));
+                .for_each(|p| sign_shred_cpu(keypair, p));
         });
     });
     inc_new_counter_debug!("ed25519_shred_verify_cpu", count);

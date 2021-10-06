@@ -194,9 +194,7 @@ impl AbiDigester {
         label: &'static str,
         variant: &'static str,
     ) -> Result<(), DigestError> {
-        if !self.for_enum {
-            panic!("derive AbiEnumVisitor or implement it for the enum, which contains a variant ({}) named {}", label, variant);
-        }
+        assert!(self.for_enum, "derive AbiEnumVisitor or implement it for the enum, which contains a variant ({}) named {}", label, variant);
         Ok(())
     }
 

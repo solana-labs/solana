@@ -29,25 +29,24 @@ mod tests {
 
     #[derive(Debug)]
     struct BenchmarkConfig {
-        pub benchmark_slots: u64,
-        pub batch_size: u64,
-        pub max_ledger_shreds: u64,
-        pub entries_per_slot: u64,
-        pub stop_size_bytes: u64,
-        pub stop_size_iterations: u64,
-        pub pre_generate_data: bool,
-        pub cleanup_blockstore: bool,
-        pub emit_cpu_info: bool,
-        pub assert_compaction: bool,
-        pub compaction_interval: Option<u64>,
-        pub no_compaction: bool,
+        benchmark_slots: u64,
+        batch_size: u64,
+        max_ledger_shreds: u64,
+        entries_per_slot: u64,
+        stop_size_bytes: u64,
+        stop_size_iterations: u64,
+        pre_generate_data: bool,
+        cleanup_blockstore: bool,
+        assert_compaction: bool,
+        compaction_interval: Option<u64>,
+        no_compaction: bool,
     }
 
     #[derive(Clone, Copy, Debug)]
     struct CpuStatsInner {
-        pub cpu_user: f32,
-        pub cpu_system: f32,
-        pub cpu_idle: f32,
+        cpu_user: f32,
+        cpu_system: f32,
+        cpu_idle: f32,
     }
 
     impl From<CPULoad> for CpuStatsInner {
@@ -153,7 +152,6 @@ mod tests {
         let stop_size_iterations = read_env("STOP_SIZE_ITERATIONS", DEFAULT_STOP_SIZE_ITERATIONS);
         let pre_generate_data = read_env("PRE_GENERATE_DATA", false);
         let cleanup_blockstore = read_env("CLEANUP_BLOCKSTORE", true);
-        let emit_cpu_info = read_env("EMIT_CPU_INFO", true);
         // set default to `true` once compaction is merged
         let assert_compaction = read_env("ASSERT_COMPACTION", false);
         let compaction_interval = match read_env("COMPACTION_INTERVAL", 0) {
@@ -171,7 +169,6 @@ mod tests {
             stop_size_iterations,
             pre_generate_data,
             cleanup_blockstore,
-            emit_cpu_info,
             assert_compaction,
             compaction_interval,
             no_compaction,

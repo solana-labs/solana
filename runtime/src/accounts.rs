@@ -926,9 +926,9 @@ impl Accounts {
         let keys: Vec<_> = txs
             .map(|tx| tx.get_account_locks(demote_program_write_locks))
             .collect();
-        let mut account_locks = &mut self.account_locks.lock().unwrap();
+        let account_locks = &mut self.account_locks.lock().unwrap();
         keys.into_iter()
-            .map(|keys| self.lock_account(&mut account_locks, keys.writable, keys.readonly))
+            .map(|keys| self.lock_account(account_locks, keys.writable, keys.readonly))
             .collect()
     }
 

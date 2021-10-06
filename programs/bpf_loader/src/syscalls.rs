@@ -1822,7 +1822,9 @@ struct SolAccountInfo {
     data_addr: u64,
     owner_addr: u64,
     rent_epoch: u64,
+    #[allow(dead_code)]
     is_signer: bool,
+    #[allow(dead_code)]
     is_writable: bool,
     executable: bool,
 }
@@ -1837,7 +1839,9 @@ struct SolSignerSeedC {
 /// Rust representation of C's SolSignerSeeds
 #[derive(Debug)]
 struct SolSignerSeedsC {
+    #[allow(dead_code)]
     addr: u64,
+    #[allow(dead_code)]
     len: u64,
 }
 

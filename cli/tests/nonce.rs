@@ -215,6 +215,7 @@ fn full_battery_tests(
 }
 
 #[test]
+#[allow(clippy::redundant_closure)]
 fn test_create_account_with_seed() {
     solana_logger::setup();
     let mint_keypair = Keypair::new();

@@ -389,9 +389,7 @@ fn shape_network_steps(
     my_index: u64,
 ) -> bool {
     // Integrity checks
-    if !topology.verify() {
-        panic!("Failed to verify the configuration file");
-    }
+    assert!(topology.verify(), "Failed to verify the configuration file");
     assert!(my_index < network_size);
 
     // Figure out partition we belong in
@@ -479,9 +477,7 @@ fn configure(matches: &ArgMatches) {
         NetworkTopology::new_random(max_partitions, max_drop, max_delay)
     };
 
-    if !config.verify() {
-        panic!("Failed to verify the configuration");
-    }
+    assert!(config.verify(), "Failed to verify the configuration");
 
     let topology = serde_json::to_string(&config).expect("Failed to write as JSON");
 

@@ -21,17 +21,10 @@ use std::{
     sync::Arc,
 };
 
+#[derive(Default)]
 pub struct Executors {
     pub executors: HashMap<Pubkey, Arc<dyn Executor>>,
     pub is_dirty: bool,
-}
-impl Default for Executors {
-    fn default() -> Self {
-        Self {
-            executors: HashMap::default(),
-            is_dirty: false,
-        }
-    }
 }
 impl Executors {
     pub fn insert(&mut self, key: Pubkey, executor: Arc<dyn Executor>) {
@@ -267,7 +260,7 @@ impl PreAccount {
     }
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Default, Deserialize, Serialize)]
 pub struct InstructionProcessor {
     #[serde(skip)]
     programs: Vec<(Pubkey, ProcessInstructionWithContext)>,
@@ -279,7 +272,9 @@ impl std::fmt::Debug for InstructionProcessor {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         #[derive(Debug)]
         struct MessageProcessor<'a> {
+            #[allow(dead_code)]
             programs: Vec<String>,
+            #[allow(dead_code)]
             native_loader: &'a NativeLoader,
         }
 
@@ -309,14 +304,6 @@ impl std::fmt::Debug for InstructionProcessor {
     }
 }
 
-impl Default for InstructionProcessor {
-    fn default() -> Self {
-        Self {
-            programs: vec![],
-            native_loader: NativeLoader::default(),
-        }
-    }
-}
 impl Clone for InstructionProcessor {
     fn clone(&self) -> Self {
         InstructionProcessor {
