@@ -713,7 +713,7 @@ pub enum RewardCalculationEvent<'a, 'b> {
     Staking(&'a Pubkey, &'b InflationPointCalculationEvent),
 }
 
-fn null_tracer() -> Option<impl FnMut(&RewardCalculationEvent)> {
+fn null_tracer() -> Option<impl Fn(&RewardCalculationEvent) + Send + Sync> {
     None::<fn(&RewardCalculationEvent)>
 }
 
@@ -1014,7 +1014,7 @@ impl Bank {
 
     /// Create a new bank that points to an immutable checkpoint of another bank.
     pub fn new_from_parent(parent: &Arc<Bank>, collector_id: &Pubkey, slot: Slot) -> Self {
-        Self::_new_from_parent(parent, collector_id, slot, &mut null_tracer(), false)
+        Self::_new_from_parent(parent, collector_id, slot, null_tracer(), false)
     }
 
     pub fn new_from_parent_with_vote_only(
@@ -1023,35 +1023,23 @@ impl Bank {
         slot: Slot,
         vote_only_bank: bool,
     ) -> Self {
-        Self::_new_from_parent(
-            parent,
-            collector_id,
-            slot,
-            &mut null_tracer(),
-            vote_only_bank,
-        )
+        Self::_new_from_parent(parent, collector_id, slot, null_tracer(), vote_only_bank)
     }
 
     pub fn new_from_parent_with_tracer(
         parent: &Arc<Bank>,
         collector_id: &Pubkey,
         slot: Slot,
-        reward_calc_tracer: impl FnMut(&RewardCalculationEvent),
+        reward_calc_tracer: impl Fn(&RewardCalculationEvent) + Send + Sync,
     ) -> Self {
-        Self::_new_from_parent(
-            parent,
-            collector_id,
-            slot,
-            &mut Some(reward_calc_tracer),
-            false,
-        )
+        Self::_new_from_parent(parent, collector_id, slot, Some(reward_calc_tracer), false)
     }
 
     fn _new_from_parent(
         parent: &Arc<Bank>,
         collector_id: &Pubkey,
         slot: Slot,
-        reward_calc_tracer: &mut Option<impl FnMut(&RewardCalculationEvent)>,
+        reward_calc_tracer: Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
         vote_only_bank: bool,
     ) -> Self {
         parent.freeze();
@@ -1713,7 +1701,7 @@ impl Bank {
     fn update_rewards(
         &mut self,
         prev_epoch: Epoch,
-        reward_calc_tracer: &mut Option<impl FnMut(&RewardCalculationEvent)>,
+        reward_calc_tracer: Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
     ) {
         if prev_epoch == self.epoch() {
             return;
@@ -1817,7 +1805,7 @@ impl Bank {
     /// Filters out invalid pairs
     fn stake_delegation_accounts(
         &self,
-        reward_calc_tracer: &mut Option<impl FnMut(&RewardCalculationEvent)>,
+        reward_calc_tracer: Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
     ) -> HashMap<Pubkey, (Vec<(Pubkey, AccountSharedData)>, AccountSharedData)> {
         let mut accounts = HashMap::new();
 
@@ -1833,7 +1821,7 @@ impl Bank {
                 ) {
                     (Some(stake_account), Some(vote_account)) => {
                         // call tracer to catch any illegal data if any
-                        if let Some(reward_calc_tracer) = reward_calc_tracer {
+                        if let Some(reward_calc_tracer) = reward_calc_tracer.as_ref() {
                             reward_calc_tracer(&RewardCalculationEvent::Staking(
                                 stake_pubkey,
                                 &InflationPointCalculationEvent::Delegation(
@@ -1878,12 +1866,18 @@ impl Bank {
         &mut self,
         rewarded_epoch: Epoch,
         rewards: u64,
+<<<<<<< HEAD
         reward_calc_tracer: &mut Option<impl FnMut(&RewardCalculationEvent)>,
         fix_stake_deactivate: bool,
+=======
+        reward_calc_tracer: Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
+        fix_activating_credits_observed: bool,
+>>>>>>> 250a8503f (Make rewards tracer async friendly (#20452))
     ) -> f64 {
         let stake_history = self.stakes.read().unwrap().history().clone();
 
-        let mut stake_delegation_accounts = self.stake_delegation_accounts(reward_calc_tracer);
+        let mut stake_delegation_accounts =
+            self.stake_delegation_accounts(reward_calc_tracer.as_ref());
 
         let points: u128 = stake_delegation_accounts
             .iter()
@@ -1928,7 +1922,7 @@ impl Bank {
 
             for (stake_pubkey, stake_account) in stake_group.iter_mut() {
                 // curry closure to add the contextual stake_pubkey
-                let mut reward_calc_tracer = reward_calc_tracer.as_mut().map(|outer| {
+                let reward_calc_tracer = reward_calc_tracer.as_ref().map(|outer| {
                     let stake_pubkey = *stake_pubkey;
                     // inner
                     move |inner_event: &_| {
@@ -1942,8 +1936,13 @@ impl Bank {
                     &vote_state,
                     &point_value,
                     Some(&stake_history),
+<<<<<<< HEAD
                     &mut reward_calc_tracer.as_mut(),
                     fix_stake_deactivate,
+=======
+                    reward_calc_tracer,
+                    fix_activating_credits_observed,
+>>>>>>> 250a8503f (Make rewards tracer async friendly (#20452))
                 );
                 if let Ok((stakers_reward, _voters_reward)) = redeemed {
                     self.store_account(&stake_pubkey, &stake_account);
@@ -7140,7 +7139,7 @@ pub(crate) mod tests {
         bank0.store_account_and_update_capitalization(&vote_id, &vote_account);
 
         let validator_points: u128 = bank0
-            .stake_delegation_accounts(&mut null_tracer())
+            .stake_delegation_accounts(null_tracer())
             .iter()
             .flat_map(|(_vote_pubkey, (stake_group, vote_account))| {
                 stake_group
@@ -12307,8 +12306,13 @@ pub(crate) mod tests {
             &validator_keypairs,
             vec![10_000; 2],
         );
+<<<<<<< HEAD
         let bank = Arc::new(Bank::new(&genesis_config));
         let stake_delegation_accounts = bank.stake_delegation_accounts(&mut null_tracer());
+=======
+        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+        let stake_delegation_accounts = bank.stake_delegation_accounts(null_tracer());
+>>>>>>> 250a8503f (Make rewards tracer async friendly (#20452))
         assert_eq!(stake_delegation_accounts.len(), 2);
 
         let mut vote_account = bank
@@ -12347,7 +12351,7 @@ pub(crate) mod tests {
         );
 
         // Accounts must be valid stake and vote accounts
-        let stake_delegation_accounts = bank.stake_delegation_accounts(&mut null_tracer());
+        let stake_delegation_accounts = bank.stake_delegation_accounts(null_tracer());
         assert_eq!(stake_delegation_accounts.len(), 0);
     }
 
