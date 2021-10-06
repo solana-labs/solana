@@ -62,3 +62,10 @@ __**DEVS**__: integrate Zelcore wallet into your products by implementing Sollet
 Zelcore utilizes a username/password schema to derive private keys for all assets. Security layers include blockchain-based 2FA PIN, mobile device biometrics, and passphrases to allow users to set up as much or as little security as they like. All hashing functions done on-device, and no login/account info is stored nor transmitted off your device. The private keys only exist on-device while logged in, upon logging out there is no digital footprint left of your PKs.
 
 **Treat your username, password, d2FA PIN, passphrases, etc. with utmost care, just like your private keys. Never give these to anyone!**
+
+## Steakwallet
+
+Steakwallet is a multi-chain staking wallet with support for 10+ blockchains and 10,000+ currencies. Steakwallet supports Solana staking, SPL tokens, historical price data and more!
+
+Checkout [steakwallet.fi](https://steakwallet.fi/) to download for Android or iOS.
+
