@@ -2275,28 +2275,24 @@ impl Bank {
 
                     // fetch vote account from stakes cache if it hasn't been cached locally
                     let fetched_vote_account = if !accounts.contains_key(vote_pubkey) {
-                        let cached_vote_account = match stakes
-                            .vote_accounts()
-                            .get(vote_pubkey)
-                            .map(|(_lamports, vote_account)| vote_account)
-                        {
-                            Some(cached_vote_account) => cached_vote_account,
+                        let vote_account = match self.get_account_with_fixed_root(vote_pubkey) {
+                            Some(vote_account) => vote_account,
                             None => return,
                         };
 
-                        match cached_vote_account.vote_state().as_ref() {
-                            Ok(vote_state) => Some((
-                                vote_state.clone(),
-                                AccountSharedData::from(cached_vote_account.account().clone()),
-                            )),
-                            Err(err) => {
-                                debug!(
-                                    "failed to deserialize vote account {}: {}",
-                                    vote_pubkey, err
-                                );
-                                return;
-                            }
-                        }
+                        let vote_state: VoteState =
+                            match StateMut::<VoteStateVersions>::state(&vote_account) {
+                                Ok(vote_state) => vote_state.convert_to_current(),
+                                Err(err) => {
+                                    debug!(
+                                        "failed to deserialize vote account {}: {}",
+                                        vote_pubkey, err
+                                    );
+                                    return;
+                                }
+                            };
+
+                        Some((vote_state, vote_account))
                     } else {
                         None
                     };
