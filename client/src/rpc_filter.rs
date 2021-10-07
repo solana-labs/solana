@@ -1,6 +1,5 @@
 #![allow(deprecated)]
-use std::borrow::Cow;
-use thiserror::Error;
+use {std::borrow::Cow, thiserror::Error};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -18,19 +17,14 @@ impl RpcFilterType {
                 match encoding {
                     MemcmpEncoding::Binary => {
                         use MemcmpEncodedBytes::*;
-                        const FILTER_LIMIT: usize = 128;
-                        match &compare.bytes {
-                            Binary(bytes) | Base58(bytes) if bytes.len() > FILTER_LIMIT => {
-                                Err(RpcFilterError::Base58DataTooLarge)
-                            }
-                            Base64(bytes) if bytes.len() > FILTER_LIMIT => {
-                                Err(RpcFilterError::Base64DataTooLarge)
-                            }
-                            Bytes(bytes) if bytes.len() > FILTER_LIMIT => {
-                                Err(RpcFilterError::BytesDataTooLarge)
-                            }
-                            _ => Ok(()),
-                        }?;
+                        if match &compare.bytes {
+                            Binary(bytes) | Base58(bytes) => bytes.len(),
+                            Base64(bytes) => bytes.len(),
+                            Bytes(bytes) => bytes.len(),
+                        } > 128
+                        {
+                            return Err(RpcFilterError::DataTooLarge);
+                        }
                         match &compare.bytes {
                             Binary(bytes) => bs58::decode(&bytes)
                                 .into_vec()
@@ -52,22 +46,18 @@ impl RpcFilterType {
 
 #[derive(Error, PartialEq, Debug)]
 pub enum RpcFilterError {
+    #[error("encoded binary data should be less than 129 bytes")]
+    DataTooLarge,
     #[deprecated(
-        since = "1.8.0",
+        since = "1.9.0",
         note = "Error for MemcmpEncodedBytes::Binary which is deprecated"
     )]
     #[error("bs58 decode error")]
     DecodeError(bs58::decode::Error),
     #[error("base58 decode error")]
     Base58DecodeError(#[from] bs58::decode::Error),
-    #[error("encoded binary (base 58) data should be less than 129 bytes")]
-    Base58DataTooLarge,
     #[error("base64 decode error")]
     Base64DecodeError(#[from] base64::DecodeError),
-    #[error("encoded binary (base 64) data should be less than 129 bytes")]
-    Base64DataTooLarge,
-    #[error("encoded binary (bytes) data should be less than 129 bytes")]
-    BytesDataTooLarge,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -80,7 +70,7 @@ pub enum MemcmpEncoding {
 #[serde(rename_all = "camelCase", untagged)]
 pub enum MemcmpEncodedBytes {
     #[deprecated(
-        since = "1.8.0",
+        since = "1.9.0",
         note = "Please use MemcmpEncodedBytes::Base58 instead"
     )]
     Binary(String),
