@@ -295,6 +295,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3b5ca7a04898ad4bcd41c90c5285445ff5b791899bb1b0abdd2a2aa791211d7"
 
 [[package]]
+name = "bytemuck"
+version = "1.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "72957246c41db82b8ef88a5486143830adeb8227ef9837740bdec67724cf2c5b"
+dependencies = [
+ "bytemuck_derive",
+]
+
+[[package]]
+name = "bytemuck_derive"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8e215f8c2f9f79cb53c8335e687ffd07d5bfcb6fe5fc80723762d0be46e7cc54"
+dependencies = [
+ "proc-macro2 1.0.24",
+ "quote 1.0.6",
+ "syn 1.0.67",
+]
+
+[[package]]
 name = "byteorder"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3283,12 +3303,8 @@ dependencies = [
  "borsh-derive",
  "bs58",
  "bv",
-<<<<<<< HEAD
- "curve25519-dalek 2.1.0",
-=======
  "bytemuck",
- "curve25519-dalek 3.2.0",
->>>>>>> f96685982 (Derive Pod/Zeroable for Pubkey)
+ "curve25519-dalek 2.1.0",
  "hex",
  "itertools 0.9.0",
  "lazy_static",
