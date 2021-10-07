@@ -3135,6 +3135,7 @@ dependencies = [
  "borsh-derive",
  "bs58 0.4.0",
  "bv",
+ "bytemuck",
  "curve25519-dalek 3.2.0",
  "hex",
  "itertools 0.10.1",
