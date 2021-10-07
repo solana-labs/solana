@@ -4,7 +4,10 @@ use {
     itertools::Itertools,
     num_traits::{CheckedAdd, FromPrimitive, ToPrimitive},
     rand::{
-        distributions::uniform::{SampleUniform, UniformSampler},
+        distributions::{
+            uniform::{SampleUniform, Uniform, UniformSampler},
+            Distribution,
+        },
         Rng, SeedableRng,
     },
     rand_chacha::ChaChaRng,
@@ -172,6 +175,7 @@ pub fn weighted_best(weights_and_indexes: &[(u64, usize)], seed: [u8; 32]) -> us
     if weights_and_indexes.is_empty() {
         return 0;
     }
+    let between = Uniform::from(1..std::u16::MAX);
     let mut rng = ChaChaRng::from_seed(seed);
     let total_weight: u64 = weights_and_indexes.iter().map(|x| x.0).sum();
     let mut lowest_weight = std::u128::MAX;
@@ -182,14 +186,13 @@ pub fn weighted_best(weights_and_indexes: &[(u64, usize)], seed: [u8; 32]) -> us
             .to_u64()
             .expect("values > u64::max are not supported");
         // capture the u64 into u128s to prevent overflow
-        let computed_weight = rng.gen_range(1, u128::from(std::u16::MAX)) * u128::from(x);
+        let computed_weight = u128::from(between.sample(&mut rng)) * u128::from(x);
         // The highest input weight maps to the lowest computed weight
         if computed_weight < lowest_weight {
             lowest_weight = computed_weight;
             best_index = v.1;
         }
     }
-
     best_index
 }
 
