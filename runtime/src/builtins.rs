@@ -18,6 +18,9 @@ fn process_instruction_with_program_logging(
     instruction_data: &[u8],
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
+    debug_assert_eq!(first_instruction_account, 1);
+    invoke_context.remove_first_keyed_account()?;
+
     let logger = invoke_context.get_logger();
     stable_log::program_invoke(&logger, program_id, invoke_context.invoke_depth());
 

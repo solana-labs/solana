@@ -362,7 +362,6 @@ impl InstructionProcessor {
             if solana_sdk::native_loader::check_id(&root_account.owner()?) {
                 for (id, process_instruction) in &self.programs {
                     if id == root_id {
-                        invoke_context.remove_first_keyed_account()?;
                         // Call the builtin program
                         return process_instruction(
                             program_id,
