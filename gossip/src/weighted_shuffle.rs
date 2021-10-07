@@ -147,6 +147,7 @@ where
     F: Iterator<Item = B> + Clone,
 {
     let total_weight: T = weights.clone().map(|x| *x.borrow()).sum();
+    let between = Uniform::from(1..std::u16::MAX);
     let mut rng = ChaChaRng::from_seed(seed);
     weights
         .enumerate()
@@ -159,7 +160,7 @@ where
             (
                 i,
                 // capture the u64 into u128s to prevent overflow
-                rng.gen_range(1, u128::from(std::u16::MAX)) * u128::from(x),
+                u128::from(between.sample(&mut rng)) * u128::from(x),
             )
         })
         // sort in ascending order
