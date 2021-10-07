@@ -118,7 +118,7 @@ pub const MAX_SNAPSHOT_HASHES: usize = 16;
 /// Maximum number of hashes in IncrementalSnapshotHashes a node publishes
 /// such that the serialized size of the push/pull message stays below
 /// PACKET_DATA_SIZE.
-pub const MAX_INCREMENTAL_SNAPSHOT_HASHES: usize = 16;
+pub const MAX_INCREMENTAL_SNAPSHOT_HASHES: usize = 25;
 /// Maximum number of origin nodes that a PruneData may contain, such that the
 /// serialized size of the PruneMessage stays below PACKET_DATA_SIZE.
 const MAX_PRUNE_DATA_NODES: usize = 32;
@@ -954,15 +954,11 @@ impl ClusterInfo {
         self.push_message(CrdsValue::new_signed(message, &self.keypair()));
     }
 
-    pub fn push_incremental_snapshot_hashes(
-        &self,
-        base: (Slot, Hash),
-        incremental_snapshot_hashes: Vec<(Slot, Hash)>,
-    ) {
-        if incremental_snapshot_hashes.len() > MAX_INCREMENTAL_SNAPSHOT_HASHES {
+    pub fn push_incremental_snapshot_hashes(&self, base: (Slot, Hash), hashes: Vec<(Slot, Hash)>) {
+        if hashes.len() > MAX_INCREMENTAL_SNAPSHOT_HASHES {
             warn!(
                 "incremental snapshot hashes too large, ignored: {}",
-                incremental_snapshot_hashes.len(),
+                hashes.len(),
             );
             return;
         }
@@ -970,7 +966,7 @@ impl ClusterInfo {
         let message = CrdsData::IncrementalSnapshotHashes(IncrementalSnapshotHashes {
             from: self.id(),
             base,
-            hashes: incremental_snapshot_hashes,
+            hashes,
             wallclock: timestamp(),
         });
         self.push_message(CrdsValue::new_signed(message, &self.keypair()));
@@ -3222,6 +3218,46 @@ mod tests {
             let snapshot_hash = SnapshotHashes::new_rand(&mut rng, None);
             let crds_value =
                 CrdsValue::new_signed(CrdsData::AccountsHashes(snapshot_hash), &Keypair::new());
+            let response = Protocol::PullResponse(Pubkey::new_unique(), vec![crds_value]);
+            let socket = new_rand_socket_addr(&mut rng);
+            assert!(Packet::from_data(Some(&socket), response).is_ok());
+        }
+    }
+
+    #[test]
+    fn test_max_incremental_snapshot_hashes_with_push_messages() {
+        let mut rng = rand::thread_rng();
+        for _ in 0..256 {
+            let incremental_snapshot_hashes = IncrementalSnapshotHashes {
+                from: Pubkey::new_unique(),
+                base: (Slot::default(), Hash::default()),
+                hashes: vec![(Slot::default(), Hash::default()); MAX_INCREMENTAL_SNAPSHOT_HASHES],
+                wallclock: timestamp(),
+            };
+            let crds_value = CrdsValue::new_signed(
+                CrdsData::IncrementalSnapshotHashes(incremental_snapshot_hashes),
+                &Keypair::new(),
+            );
+            let message = Protocol::PushMessage(Pubkey::new_unique(), vec![crds_value]);
+            let socket = new_rand_socket_addr(&mut rng);
+            assert!(Packet::from_data(Some(&socket), message).is_ok());
+        }
+    }
+
+    #[test]
+    fn test_max_incremental_snapshot_hashes_with_pull_responses() {
+        let mut rng = rand::thread_rng();
+        for _ in 0..256 {
+            let incremental_snapshot_hashes = IncrementalSnapshotHashes {
+                from: Pubkey::new_unique(),
+                base: (Slot::default(), Hash::default()),
+                hashes: vec![(Slot::default(), Hash::default()); MAX_INCREMENTAL_SNAPSHOT_HASHES],
+                wallclock: timestamp(),
+            };
+            let crds_value = CrdsValue::new_signed(
+                CrdsData::IncrementalSnapshotHashes(incremental_snapshot_hashes),
+                &Keypair::new(),
+            );
             let response = Protocol::PullResponse(Pubkey::new_unique(), vec![crds_value]);
             let socket = new_rand_socket_addr(&mut rng);
             assert!(Packet::from_data(Some(&socket), response).is_ok());
