@@ -1,6 +1,5 @@
 {
   "github": {
-    "silent": true,
-    "autoJobCancelation": false
+    "silent": true
   }
 }
