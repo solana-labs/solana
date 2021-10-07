@@ -3,6 +3,7 @@ use clap::{
     crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App, AppSettings,
     Arg, ArgMatches, SubCommand,
 };
+use dashmap::DashMap;
 use itertools::Itertools;
 use log::*;
 use regex::Regex;
@@ -16,6 +17,7 @@ use solana_clap_utils::{
 };
 use solana_core::cost_model::CostModel;
 use solana_core::cost_tracker::CostTracker;
+use solana_core::cost_tracker_stats::CostTrackerStats;
 use solana_entry::entry::Entry;
 use solana_ledger::{
     ancestor_iterator::AncestorIterator,
@@ -752,6 +754,7 @@ fn load_bank_forks(
         None,
         None,
         accounts_package_sender,
+        None,
     )
 }
 
@@ -773,6 +776,7 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
     cost_model.initialize_cost_table(&blockstore.read_program_costs().unwrap());
     let cost_model = Arc::new(RwLock::new(cost_model));
     let mut cost_tracker = CostTracker::new(cost_model.clone());
+    let mut cost_tracker_stats = CostTrackerStats::default();
 
     for entry in entries {
         num_transactions += entry.transactions.len();
@@ -796,7 +800,10 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
                     &transaction,
                     true, // demote_program_write_locks
                 );
-                if cost_tracker.try_add(tx_cost).is_err() {
+                if cost_tracker
+                    .try_add(tx_cost, &mut cost_tracker_stats)
+                    .is_err()
+                {
                     println!(
                         "Slot: {}, CostModel rejected transaction {:?}, stats {:?}!",
                         slot,
@@ -891,6 +898,16 @@ fn main() {
         .value_name("PATHS")
         .takes_value(true)
         .help("Comma separated persistent accounts location");
+    let accounts_index_path_arg = Arg::with_name("accounts_index_path")
+        .long("accounts-index-path")
+        .value_name("PATH")
+        .takes_value(true)
+        .multiple(true)
+        .help(
+            "Persistent accounts-index location. \
+             May be specified multiple times. \
+             [default: [ledger]/accounts_index]",
+        );
     let accounts_db_test_hash_calculation_arg = Arg::with_name("accounts_db_test_hash_calculation")
         .long("accounts-db-test-hash-calculation")
         .help("Enable hash calculation test");
@@ -1195,6 +1212,7 @@ fn main() {
             .about("Verify the ledger")
             .arg(&no_snapshot_arg)
             .arg(&account_paths_arg)
+            .arg(&accounts_index_path_arg)
             .arg(&halt_at_slot_arg)
             .arg(&limit_load_slot_count_from_snapshot_arg)
             .arg(&accounts_index_bins)
@@ -1710,6 +1728,7 @@ fn main() {
         }
         ("shred-meta", Some(arg_matches)) => {
             #[derive(Debug)]
+            #[allow(dead_code)]
             struct ShredMeta<'a> {
                 slot: Slot,
                 full_slot: bool,
@@ -1858,9 +1877,10 @@ fn main() {
                 wal_recovery_mode,
             );
             let mut ancestors = BTreeSet::new();
-            if blockstore.meta(ending_slot).unwrap().is_none() {
-                panic!("Ending slot doesn't exist");
-            }
+            assert!(
+                blockstore.meta(ending_slot).unwrap().is_some(),
+                "Ending slot doesn't exist"
+            );
             for a in AncestorIterator::new(ending_slot, &blockstore) {
                 ancestors.insert(a);
                 if a <= starting_slot {
@@ -1925,7 +1945,15 @@ fn main() {
             }
 
             {
-                let mut accounts_index_paths = vec![]; // will be option
+                let mut accounts_index_paths: Vec<PathBuf> =
+                    if arg_matches.is_present("accounts_index_path") {
+                        values_t_or_exit!(arg_matches, "accounts_index_path", String)
+                            .into_iter()
+                            .map(PathBuf::from)
+                            .collect()
+                    } else {
+                        vec![]
+                    };
                 if accounts_index_paths.is_empty() {
                     accounts_index_paths = vec![ledger_path.join("accounts_index")];
                 }
@@ -2523,15 +2551,16 @@ fn main() {
                             skipped_reasons: String,
                         }
                         use solana_stake_program::stake_state::InflationPointCalculationEvent;
-                        let mut stake_calcuration_details: HashMap<Pubkey, CalculationDetail> =
-                            HashMap::new();
-                        let mut last_point_value = None;
+                        let stake_calculation_details: DashMap<Pubkey, CalculationDetail> =
+                            DashMap::new();
+                        let last_point_value = Arc::new(RwLock::new(None));
                         let tracer = |event: &RewardCalculationEvent| {
                             // Currently RewardCalculationEvent enum has only Staking variant
                             // because only staking tracing is supported!
                             #[allow(irrefutable_let_patterns)]
                             if let RewardCalculationEvent::Staking(pubkey, event) = event {
-                                let detail = stake_calcuration_details.entry(**pubkey).or_default();
+                                let mut detail =
+                                    stake_calculation_details.entry(**pubkey).or_default();
                                 match event {
                                     InflationPointCalculationEvent::CalculatedPoints(
                                         epoch,
@@ -2556,12 +2585,11 @@ fn main() {
                                         detail.point_value = Some(point_value.clone());
                                         // we have duplicate copies of `PointValue`s for possible
                                         // miscalculation; do some minimum sanity check
-                                        let point_value = detail.point_value.clone();
-                                        if point_value.is_some() {
-                                            if last_point_value.is_some() {
-                                                assert_eq!(last_point_value, point_value,);
-                                            }
-                                            last_point_value = point_value;
+                                        let mut last_point_value = last_point_value.write().unwrap();
+                                        if let Some(last_point_value) = last_point_value.as_ref() {
+                                            assert_eq!(last_point_value, point_value);
+                                        } else {
+                                            *last_point_value = Some(point_value.clone());
                                         }
                                     }
                                     InflationPointCalculationEvent::EffectiveStakeAtRewardedEpoch(stake) => {
@@ -2666,16 +2694,17 @@ fn main() {
                             },
                         );
 
-                        let mut unchanged_accounts = stake_calcuration_details
-                            .keys()
+                        let mut unchanged_accounts = stake_calculation_details
+                            .iter()
+                            .map(|entry| *entry.key())
                             .collect::<HashSet<_>>()
                             .difference(
                                 &rewarded_accounts
                                     .iter()
-                                    .map(|(pubkey, ..)| *pubkey)
+                                    .map(|(pubkey, ..)| **pubkey)
                                     .collect(),
                             )
-                            .map(|pubkey| (**pubkey, warped_bank.get_account(pubkey).unwrap()))
+                            .map(|pubkey| (*pubkey, warped_bank.get_account(pubkey).unwrap()))
                             .collect::<Vec<_>>();
                         unchanged_accounts.sort_unstable_by_key(|(pubkey, account)| {
                             (*account.owner(), account.lamports(), *pubkey)
@@ -2696,7 +2725,9 @@ fn main() {
 
                             if let Some(base_account) = base_bank.get_account(&pubkey) {
                                 let delta = warped_account.lamports() - base_account.lamports();
-                                let detail = stake_calcuration_details.get(&pubkey);
+                                let detail_ref = stake_calculation_details.get(&pubkey);
+                                let detail: Option<&CalculationDetail> =
+                                    detail_ref.as_ref().map(|detail_ref| detail_ref.value());
                                 println!(
                                     "{:<45}({}): {} => {} (+{} {:>4.9}%) {:?}",
                                     format!("{}", pubkey), // format! is needed to pad/justify correctly.
@@ -2819,10 +2850,18 @@ fn main() {
                                             ),
                                             commission: format_or_na(detail.map(|d| d.commission)),
                                             cluster_rewards: format_or_na(
-                                                last_point_value.as_ref().map(|pv| pv.rewards),
+                                                last_point_value
+                                                    .read()
+                                                    .unwrap()
+                                                    .clone()
+                                                    .map(|pv| pv.rewards),
                                             ),
                                             cluster_points: format_or_na(
-                                                last_point_value.as_ref().map(|pv| pv.points),
+                                                last_point_value
+                                                    .read()
+                                                    .unwrap()
+                                                    .clone()
+                                                    .map(|pv| pv.points),
                                             ),
                                             old_capitalization: base_bank.capitalization(),
                                             new_capitalization: warped_bank.capitalization(),

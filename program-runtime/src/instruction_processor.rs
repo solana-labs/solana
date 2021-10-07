@@ -4,13 +4,16 @@ use solana_sdk::{
     account::{AccountSharedData, ReadableAccount, WritableAccount},
     account_utils::StateMut,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-    feature_set::{demote_program_write_locks, fix_write_privs},
+    feature_set::{
+        demote_program_write_locks, do_support_realloc, fix_write_privs, remove_native_loader,
+    },
     ic_msg,
     instruction::{Instruction, InstructionError},
     message::Message,
     process_instruction::{Executor, InvokeContext, ProcessInstructionWithContext},
     pubkey::Pubkey,
     rent::Rent,
+    system_instruction::MAX_PERMITTED_DATA_LENGTH,
     system_program,
 };
 use std::{
@@ -20,17 +23,10 @@ use std::{
     sync::Arc,
 };
 
+#[derive(Default)]
 pub struct Executors {
     pub executors: HashMap<Pubkey, Arc<dyn Executor>>,
     pub is_dirty: bool,
-}
-impl Default for Executors {
-    fn default() -> Self {
-        Self {
-            executors: HashMap::default(),
-            is_dirty: false,
-        }
-    }
 }
 impl Executors {
     pub fn insert(&mut self, key: Pubkey, executor: Arc<dyn Executor>) {
@@ -115,6 +111,7 @@ impl PreAccount {
         post: &AccountSharedData,
         timings: &mut ExecuteDetailsTimings,
         outermost_call: bool,
+        do_support_realloc: bool,
     ) -> Result<(), InstructionError> {
         let pre = self.account.borrow();
 
@@ -150,15 +147,30 @@ impl PreAccount {
             }
         }
 
-        // Only the system program can change the size of the data
-        //  and only if the system program owns the account
-        let data_len_changed = pre.data().len() != post.data().len();
-        if data_len_changed
-            && (!system_program::check_id(program_id) // line coverage used to get branch coverage
-                || !system_program::check_id(pre.owner()))
-        {
-            return Err(InstructionError::AccountDataSizeChanged);
-        }
+        let data_len_changed = if do_support_realloc {
+            // Account data size cannot exceed a maxumum length
+            if post.data().len() > MAX_PERMITTED_DATA_LENGTH as usize {
+                return Err(InstructionError::InvalidRealloc);
+            }
+
+            // The owner of the account can change the size of the data
+            let data_len_changed = pre.data().len() != post.data().len();
+            if data_len_changed && program_id != pre.owner() {
+                return Err(InstructionError::AccountDataSizeChanged);
+            }
+            data_len_changed
+        } else {
+            // Only the system program can change the size of the data
+            //  and only if the system program owns the account
+            let data_len_changed = pre.data().len() != post.data().len();
+            if data_len_changed
+                && (!system_program::check_id(program_id) // line coverage used to get branch coverage
+                    || !system_program::check_id(pre.owner()))
+            {
+                return Err(InstructionError::AccountDataSizeChanged);
+            }
+            data_len_changed
+        };
 
         // Only the owner may change account data
         //   and if the account is writable
@@ -250,7 +262,7 @@ impl PreAccount {
     }
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Default, Deserialize, Serialize)]
 pub struct InstructionProcessor {
     #[serde(skip)]
     programs: Vec<(Pubkey, ProcessInstructionWithContext)>,
@@ -262,7 +274,9 @@ impl std::fmt::Debug for InstructionProcessor {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         #[derive(Debug)]
         struct MessageProcessor<'a> {
+            #[allow(dead_code)]
             programs: Vec<String>,
+            #[allow(dead_code)]
             native_loader: &'a NativeLoader,
         }
 
@@ -292,14 +306,6 @@ impl std::fmt::Debug for InstructionProcessor {
     }
 }
 
-impl Default for InstructionProcessor {
-    fn default() -> Self {
-        Self {
-            programs: vec![],
-            native_loader: NativeLoader::default(),
-        }
-    }
-}
 impl Clone for InstructionProcessor {
     fn clone(&self) -> Self {
         InstructionProcessor {
@@ -326,12 +332,19 @@ impl InstructionProcessor {
     /// Add a static entrypoint to intercept instructions before the dynamic loader.
     pub fn add_program(
         &mut self,
-        program_id: Pubkey,
+        program_id: &Pubkey,
         process_instruction: ProcessInstructionWithContext,
     ) {
-        match self.programs.iter_mut().find(|(key, _)| program_id == *key) {
+        match self.programs.iter_mut().find(|(key, _)| program_id == key) {
             Some((_, processor)) => *processor = process_instruction,
-            None => self.programs.push((program_id, process_instruction)),
+            None => self.programs.push((*program_id, process_instruction)),
+        }
+    }
+
+    /// Remove a program
+    pub fn remove_program(&mut self, program_id: &Pubkey) {
+        if let Some(position) = self.programs.iter().position(|(key, _)| program_id == key) {
+            self.programs.remove(position);
         }
     }
 
@@ -353,12 +366,14 @@ impl InstructionProcessor {
                         return process_instruction(program_id, instruction_data, invoke_context);
                     }
                 }
-                // Call the program via the native loader
-                return self.native_loader.process_instruction(
-                    &solana_sdk::native_loader::id(),
-                    instruction_data,
-                    invoke_context,
-                );
+                if !invoke_context.is_feature_active(&remove_native_loader::id()) {
+                    // Call the program via the native loader
+                    return self.native_loader.process_instruction(
+                        &solana_sdk::native_loader::id(),
+                        instruction_data,
+                        invoke_context,
+                    );
+                }
             } else {
                 let owner_id = &root_account.owner()?;
                 for (id, process_instruction) in &self.programs {
@@ -502,6 +517,7 @@ impl InstructionProcessor {
         keyed_account_indices_obsolete: &[usize],
         signers: &[Pubkey],
     ) -> Result<(), InstructionError> {
+        let do_support_realloc = invoke_context.is_feature_active(&do_support_realloc::id());
         let invoke_context = RefCell::new(invoke_context);
         let mut invoke_context = invoke_context.borrow_mut();
 
@@ -541,7 +557,8 @@ impl InstructionProcessor {
 
         // Verify the called program has not misbehaved
         for (account, prev_size) in accounts.iter() {
-            if *prev_size != account.borrow().data().len() && *prev_size != 0 {
+            if !do_support_realloc && *prev_size != account.borrow().data().len() && *prev_size != 0
+            {
                 // Only support for `CreateAccount` at this time.
                 // Need a way to limit total realloc size across multiple CPI calls
                 ic_msg!(
@@ -576,7 +593,7 @@ impl InstructionProcessor {
         invoke_context.verify_and_update(instruction, account_indices, caller_write_privileges)?;
 
         // clear the return data
-        invoke_context.set_return_data(None);
+        invoke_context.set_return_data(Vec::new())?;
 
         // Invoke callee
         invoke_context.push(
@@ -584,12 +601,12 @@ impl InstructionProcessor {
             message,
             instruction,
             program_indices,
-            account_indices,
+            Some(account_indices),
         )?;
 
         let mut instruction_processor = InstructionProcessor::default();
         for (program_id, process_instruction) in invoke_context.get_programs().iter() {
-            instruction_processor.add_program(*program_id, *process_instruction);
+            instruction_processor.add_program(program_id, *process_instruction);
         }
 
         let mut result = instruction_processor.process_instruction(
@@ -617,7 +634,7 @@ impl InstructionProcessor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_sdk::{account::Account, instruction::InstructionError};
+    use solana_sdk::{account::Account, instruction::InstructionError, system_program};
 
     #[test]
     fn test_is_zeroed() {
@@ -706,6 +723,7 @@ mod tests {
                 &self.post,
                 &mut ExecuteDetailsTimings::default(),
                 false,
+                true,
             )
         }
     }
@@ -1013,11 +1031,18 @@ mod tests {
             "system program should not be able to change another program's account data size"
         );
         assert_eq!(
-            Change::new(&alice_program_id, &alice_program_id)
+            Change::new(&alice_program_id, &solana_sdk::pubkey::new_rand())
                 .data(vec![0], vec![0, 0])
                 .verify(),
             Err(InstructionError::AccountDataSizeChanged),
-            "non-system programs cannot change their data size"
+            "one program should not be able to change another program's account data size"
+        );
+        assert_eq!(
+            Change::new(&alice_program_id, &alice_program_id)
+                .data(vec![0], vec![0, 0])
+                .verify(),
+            Ok(()),
+            "programs can change their own data size"
         );
         assert_eq!(
             Change::new(&system_program::id(), &system_program::id())
@@ -1039,7 +1064,7 @@ mod tests {
                 .executable(false, true)
                 .verify(),
             Err(InstructionError::ExecutableModified),
-            "Program should not be able to change owner and executable at the same time"
+            "program should not be able to change owner and executable at the same time"
         );
     }
 
@@ -1063,8 +1088,8 @@ mod tests {
             Ok(())
         }
         let program_id = solana_sdk::pubkey::new_rand();
-        instruction_processor.add_program(program_id, mock_process_instruction);
-        instruction_processor.add_program(program_id, mock_ix_processor);
+        instruction_processor.add_program(&program_id, mock_process_instruction);
+        instruction_processor.add_program(&program_id, mock_ix_processor);
 
         assert!(!format!("{:?}", instruction_processor).is_empty());
     }

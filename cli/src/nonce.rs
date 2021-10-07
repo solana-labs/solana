@@ -510,6 +510,7 @@ pub fn process_get_nonce(
     config: &CliConfig,
     nonce_account_pubkey: &Pubkey,
 ) -> ProcessResult {
+    #[allow(clippy::redundant_closure)]
     match get_account_with_commitment(rpc_client, nonce_account_pubkey, config.commitment)
         .and_then(|ref a| state_from_account(a))?
     {

@@ -116,12 +116,6 @@ impl std::fmt::Debug for NotificationEntry {
     }
 }
 
-#[derive(Default, Clone)]
-struct ProgramConfig {
-    filters: Vec<RpcFilterType>,
-    encoding: Option<UiAccountEncoding>,
-}
-
 #[allow(clippy::type_complexity)]
 fn check_commitment_and_notify<P, S, B, F, X>(
     params: &P,
@@ -213,6 +207,12 @@ impl RecentItems {
                 .checked_sub(item.len())
                 .expect("total bytes underflow");
         }
+
+        datapoint_info!(
+            "rpc_subscriptions_recent_items",
+            ("num", self.queue.len(), i64),
+            ("total_bytes", self.total_bytes, i64),
+        );
     }
 }
 

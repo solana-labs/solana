@@ -2,7 +2,7 @@ import React, { useState, ReactNode } from "react";
 
 type Props = {
   text: string;
-  children: ReactNode;
+  children?: ReactNode;
   bottom?: boolean;
   right?: boolean;
 };

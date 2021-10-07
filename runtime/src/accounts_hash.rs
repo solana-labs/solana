@@ -680,7 +680,7 @@ impl AccountsHash {
         max_bin: usize,
     ) -> (Hash, u64, PreviousPass) {
         let (mut hashes, mut total_lamports) =
-            Self::de_dup_and_eliminate_zeros(data_sections_by_pubkey, &mut stats, max_bin);
+            Self::de_dup_and_eliminate_zeros(data_sections_by_pubkey, stats, max_bin);
 
         total_lamports += previous_state.lamports;
 

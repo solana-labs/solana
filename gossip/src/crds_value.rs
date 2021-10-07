@@ -84,13 +84,14 @@ pub enum CrdsData {
     ContactInfo(ContactInfo),
     Vote(VoteIndex, Vote),
     LowestSlot(/*DEPRECATED:*/ u8, LowestSlot),
-    SnapshotHashes(SnapshotHash),
-    AccountsHashes(SnapshotHash),
+    SnapshotHashes(SnapshotHashes),
+    AccountsHashes(SnapshotHashes),
     EpochSlots(EpochSlotsIndex, EpochSlots),
     LegacyVersion(LegacyVersion),
     Version(Version),
     NodeInstance(NodeInstance),
     DuplicateShred(DuplicateShredIndex, DuplicateShred),
+    IncrementalSnapshotHashes(IncrementalSnapshotHashes),
 }
 
 impl Sanitize for CrdsData {
@@ -127,6 +128,7 @@ impl Sanitize for CrdsData {
                     shred.sanitize()
                 }
             }
+            CrdsData::IncrementalSnapshotHashes(val) => val.sanitize(),
         }
     }
 }
@@ -147,8 +149,8 @@ impl CrdsData {
         match kind {
             0 => CrdsData::ContactInfo(ContactInfo::new_rand(rng, pubkey)),
             1 => CrdsData::LowestSlot(rng.gen(), LowestSlot::new_rand(rng, pubkey)),
-            2 => CrdsData::SnapshotHashes(SnapshotHash::new_rand(rng, pubkey)),
-            3 => CrdsData::AccountsHashes(SnapshotHash::new_rand(rng, pubkey)),
+            2 => CrdsData::SnapshotHashes(SnapshotHashes::new_rand(rng, pubkey)),
+            3 => CrdsData::AccountsHashes(SnapshotHashes::new_rand(rng, pubkey)),
             4 => CrdsData::Version(Version::new_rand(rng, pubkey)),
             5 => CrdsData::Vote(rng.gen_range(0, MAX_VOTES), Vote::new_rand(rng, pubkey)),
             _ => CrdsData::EpochSlots(
@@ -160,13 +162,13 @@ impl CrdsData {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, AbiExample)]
-pub struct SnapshotHash {
+pub struct SnapshotHashes {
     pub from: Pubkey,
     pub hashes: Vec<(Slot, Hash)>,
     pub wallclock: u64,
 }
 
-impl Sanitize for SnapshotHash {
+impl Sanitize for SnapshotHashes {
     fn sanitize(&self) -> Result<(), SanitizeError> {
         sanitize_wallclock(self.wallclock)?;
         for (slot, _) in &self.hashes {
@@ -178,7 +180,7 @@ impl Sanitize for SnapshotHash {
     }
 }
 
-impl SnapshotHash {
+impl SnapshotHashes {
     pub fn new(from: Pubkey, hashes: Vec<(Slot, Hash)>) -> Self {
         Self {
             from,
@@ -187,7 +189,7 @@ impl SnapshotHash {
         }
     }
 
-    /// New random SnapshotHash for tests and benchmarks.
+    /// New random SnapshotHashes for tests and benchmarks.
     pub(crate) fn new_rand<R: Rng>(rng: &mut R, pubkey: Option<Pubkey>) -> Self {
         let num_hashes = rng.gen_range(0, MAX_SNAPSHOT_HASHES) + 1;
         let hashes = std::iter::repeat_with(|| {
@@ -204,6 +206,33 @@ impl SnapshotHash {
         }
     }
 }
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, AbiExample)]
+pub struct IncrementalSnapshotHashes {
+    from: Pubkey,
+    base: (Slot, Hash),
+    hashes: Vec<(Slot, Hash)>,
+    wallclock: u64,
+}
+
+impl Sanitize for IncrementalSnapshotHashes {
+    fn sanitize(&self) -> Result<(), SanitizeError> {
+        sanitize_wallclock(self.wallclock)?;
+        if self.base.0 >= MAX_SLOT {
+            return Err(SanitizeError::ValueOutOfBounds);
+        }
+        for (slot, _) in &self.hashes {
+            if *slot >= MAX_SLOT {
+                return Err(SanitizeError::ValueOutOfBounds);
+            }
+            if self.base.0 >= *slot {
+                return Err(SanitizeError::InvalidValue);
+            }
+        }
+        self.from.sanitize()
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, AbiExample)]
 pub struct LowestSlot {
     pub from: Pubkey,
@@ -467,6 +496,7 @@ pub enum CrdsValueLabel {
     Version(Pubkey),
     NodeInstance(Pubkey),
     DuplicateShred(DuplicateShredIndex, Pubkey),
+    IncrementalSnapshotHashes(Pubkey),
 }
 
 impl fmt::Display for CrdsValueLabel {
@@ -475,13 +505,16 @@ impl fmt::Display for CrdsValueLabel {
             CrdsValueLabel::ContactInfo(_) => write!(f, "ContactInfo({})", self.pubkey()),
             CrdsValueLabel::Vote(ix, _) => write!(f, "Vote({}, {})", ix, self.pubkey()),
             CrdsValueLabel::LowestSlot(_) => write!(f, "LowestSlot({})", self.pubkey()),
-            CrdsValueLabel::SnapshotHashes(_) => write!(f, "SnapshotHash({})", self.pubkey()),
+            CrdsValueLabel::SnapshotHashes(_) => write!(f, "SnapshotHashes({})", self.pubkey()),
             CrdsValueLabel::EpochSlots(ix, _) => write!(f, "EpochSlots({}, {})", ix, self.pubkey()),
             CrdsValueLabel::AccountsHashes(_) => write!(f, "AccountsHashes({})", self.pubkey()),
             CrdsValueLabel::LegacyVersion(_) => write!(f, "LegacyVersion({})", self.pubkey()),
             CrdsValueLabel::Version(_) => write!(f, "Version({})", self.pubkey()),
             CrdsValueLabel::NodeInstance(pk) => write!(f, "NodeInstance({})", pk),
             CrdsValueLabel::DuplicateShred(ix, pk) => write!(f, "DuplicateShred({}, {})", ix, pk),
+            CrdsValueLabel::IncrementalSnapshotHashes(_) => {
+                write!(f, "IncrementalSnapshotHashes({})", self.pubkey())
+            }
         }
     }
 }
@@ -499,6 +532,7 @@ impl CrdsValueLabel {
             CrdsValueLabel::Version(p) => *p,
             CrdsValueLabel::NodeInstance(p) => *p,
             CrdsValueLabel::DuplicateShred(_, p) => *p,
+            CrdsValueLabel::IncrementalSnapshotHashes(p) => *p,
         }
     }
 }
@@ -547,6 +581,7 @@ impl CrdsValue {
             CrdsData::Version(version) => version.wallclock,
             CrdsData::NodeInstance(node) => node.wallclock,
             CrdsData::DuplicateShred(_, shred) => shred.wallclock,
+            CrdsData::IncrementalSnapshotHashes(hash) => hash.wallclock,
         }
     }
     pub fn pubkey(&self) -> Pubkey {
@@ -561,6 +596,7 @@ impl CrdsValue {
             CrdsData::Version(version) => version.from,
             CrdsData::NodeInstance(node) => node.from,
             CrdsData::DuplicateShred(_, shred) => shred.from,
+            CrdsData::IncrementalSnapshotHashes(hash) => hash.from,
         }
     }
     pub fn label(&self) -> CrdsValueLabel {
@@ -575,6 +611,9 @@ impl CrdsValue {
             CrdsData::Version(_) => CrdsValueLabel::Version(self.pubkey()),
             CrdsData::NodeInstance(node) => CrdsValueLabel::NodeInstance(node.from),
             CrdsData::DuplicateShred(ix, shred) => CrdsValueLabel::DuplicateShred(*ix, shred.from),
+            CrdsData::IncrementalSnapshotHashes(_) => {
+                CrdsValueLabel::IncrementalSnapshotHashes(self.pubkey())
+            }
         }
     }
     pub fn contact_info(&self) -> Option<&ContactInfo> {
@@ -584,7 +623,7 @@ impl CrdsValue {
         }
     }
 
-    pub(crate) fn accounts_hash(&self) -> Option<&SnapshotHash> {
+    pub(crate) fn accounts_hash(&self) -> Option<&SnapshotHashes> {
         match &self.data {
             CrdsData::AccountsHashes(slots) => Some(slots),
             _ => None,

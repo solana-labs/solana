@@ -84,6 +84,8 @@ fn main() {
             "panic",
             "param_passing",
             "rand",
+            "realloc",
+            "realloc_invoke",
             "ro_modify",
             "ro_account_modify",
             "sanity",

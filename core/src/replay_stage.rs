@@ -43,7 +43,7 @@ use {
     },
     solana_runtime::{
         accounts_background_service::AbsRequestSender, bank::Bank, bank::ExecuteTimings,
-        bank_forks::BankForks, commitment::BlockCommitmentCache,
+        bank::NewBankOptions, bank_forks::BankForks, commitment::BlockCommitmentCache,
         vote_sender_types::ReplayVoteSender,
     },
     solana_sdk::{
@@ -132,6 +132,7 @@ pub struct ReplayStageConfig {
     pub wait_for_vote_to_start_leader: bool,
     pub ancestor_hashes_replay_update_sender: AncestorHashesReplayUpdateSender,
     pub tower_storage: Arc<dyn TowerStorage>,
+    pub disable_epoch_boundary_optimization: bool,
 }
 
 #[derive(Default)]
@@ -341,6 +342,7 @@ impl ReplayStage {
             wait_for_vote_to_start_leader,
             ancestor_hashes_replay_update_sender,
             tower_storage,
+            disable_epoch_boundary_optimization,
         } = config;
 
         trace!("replay stage");
@@ -769,6 +771,7 @@ impl ReplayStage {
                             &retransmit_slots_sender,
                             &mut skipped_slots_info,
                             has_new_vote_been_rooted,
+                            disable_epoch_boundary_optimization,
                         );
 
                         let poh_bank = poh_recorder.lock().unwrap().bank();
@@ -1341,6 +1344,7 @@ impl ReplayStage {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn maybe_start_leader(
         my_pubkey: &Pubkey,
         bank_forks: &Arc<RwLock<BankForks>>,
@@ -1351,6 +1355,7 @@ impl ReplayStage {
         retransmit_slots_sender: &RetransmitSlotsSender,
         skipped_slots_info: &mut SkippedSlotsInfo,
         has_new_vote_been_rooted: bool,
+        disable_epoch_boundary_optimization: bool,
     ) {
         // all the individual calls to poh_recorder.lock() are designed to
         // increase granularity, decrease contention
@@ -1468,7 +1473,10 @@ impl ReplayStage {
                 root_slot,
                 my_pubkey,
                 rpc_subscriptions,
-                vote_only_bank,
+                NewBankOptions {
+                    vote_only_bank,
+                    disable_epoch_boundary_optimization,
+                },
             );
 
             let tpu_bank = bank_forks.write().unwrap().insert(tpu_bank);
@@ -2794,7 +2802,7 @@ impl ReplayStage {
                     forks.root(),
                     &leader,
                     rpc_subscriptions,
-                    false,
+                    NewBankOptions::default(),
                 );
                 let empty: Vec<Pubkey> = vec![];
                 Self::update_fork_propagated_threshold_from_votes(
@@ -2821,10 +2829,10 @@ impl ReplayStage {
         root_slot: u64,
         leader: &Pubkey,
         rpc_subscriptions: &Arc<RpcSubscriptions>,
-        vote_only_bank: bool,
+        new_bank_options: NewBankOptions,
     ) -> Bank {
         rpc_subscriptions.notify_slot(slot, parent.slot(), root_slot);
-        Bank::new_from_parent_with_vote_only(parent, leader, slot, vote_only_bank)
+        Bank::new_from_parent_with_options(parent, leader, slot, new_bank_options)
     }
 
     fn record_rewards(bank: &Bank, rewards_recorder_sender: &Option<RewardsRecorderSender>) {
@@ -3527,7 +3535,7 @@ pub mod tests {
             let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
             bank_forks.write().unwrap().insert(bank1);
             let bank1 = bank_forks.read().unwrap().get(1).cloned().unwrap();
-            let mut bank1_progress = progress
+            let bank1_progress = progress
                 .entry(bank1.slot())
                 .or_insert_with(|| ForkProgress::new(bank1.last_blockhash(), None, None, 0, 0));
             let shreds = shred_to_insert(
@@ -3540,7 +3548,7 @@ pub mod tests {
             let res = ReplayStage::replay_blockstore_into_bank(
                 &bank1,
                 &blockstore,
-                &mut bank1_progress,
+                bank1_progress,
                 None,
                 &replay_vote_sender,
                 &VerifyRecyclers::default(),
@@ -3915,7 +3923,7 @@ pub mod tests {
             .values()
             .cloned()
             .collect();
-        let mut heaviest_subtree_fork_choice = &mut vote_simulator.heaviest_subtree_fork_choice;
+        let heaviest_subtree_fork_choice = &mut vote_simulator.heaviest_subtree_fork_choice;
         let mut latest_validator_votes_for_frozen_banks =
             LatestValidatorVotesForFrozenBanks::default();
         let ancestors = vote_simulator.bank_forks.read().unwrap().ancestors();
@@ -3930,7 +3938,7 @@ pub mod tests {
             &VoteTracker::default(),
             &ClusterSlots::default(),
             &vote_simulator.bank_forks,
-            &mut heaviest_subtree_fork_choice,
+            heaviest_subtree_fork_choice,
             &mut latest_validator_votes_for_frozen_banks,
         );
 
@@ -5613,6 +5621,7 @@ pub mod tests {
             &poh_recorder,
             &tower_storage,
             vote_info,
+            false,
         );
 
         let mut cursor = Cursor::default();
@@ -5676,6 +5685,7 @@ pub mod tests {
             &poh_recorder,
             &tower_storage,
             vote_info,
+            false,
         );
         let (_, votes) = cluster_info.get_votes(&mut cursor);
         assert_eq!(votes.len(), 1);
@@ -5743,6 +5753,7 @@ pub mod tests {
             &poh_recorder,
             &tower_storage,
             vote_info,
+            false,
         );
 
         assert!(last_vote_refresh_time.last_refresh_time > clone_refresh_time);

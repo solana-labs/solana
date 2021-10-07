@@ -322,9 +322,11 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
                             break;
                         }
                     }
-                    if !program_signer {
-                        panic!("Missing signer for {}", instruction_account.pubkey);
-                    }
+                    assert!(
+                        program_signer,
+                        "Missing signer for {}",
+                        instruction_account.pubkey
+                    );
                 }
             }
         }
@@ -355,15 +357,14 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
                         unsafe { transmute::<&Pubkey, &mut Pubkey>(account_info.owner) };
                     *account_info_mut = *account.borrow().owner();
                 }
-                if data.len() != new_data.len() {
-                    // TODO: Figure out how to allow the System Program to resize the account data
-                    panic!(
-                        "Account data resizing not supported yet: {} -> {}. \
+                // TODO: Figure out how to allow the System Program to resize the account data
+                assert!(
+                    data.len() == new_data.len(),
+                    "Account data resizing not supported yet: {} -> {}. \
                         Consider making this test conditional on `#[cfg(feature = \"test-bpf\")]`",
-                        data.len(),
-                        new_data.len()
-                    );
-                }
+                    data.len(),
+                    new_data.len()
+                );
                 data.clone_from_slice(new_data);
             }
         }
@@ -774,7 +775,7 @@ impl ProgramTest {
         // Add loaders
         macro_rules! add_builtin {
             ($b:expr) => {
-                bank.add_builtin(&$b.0, $b.1, $b.2)
+                bank.add_builtin(&$b.0, &$b.1, $b.2)
             };
         }
         add_builtin!(solana_bpf_loader_deprecated_program!());
@@ -795,7 +796,7 @@ impl ProgramTest {
         for builtin in self.builtins.iter() {
             bank.add_builtin(
                 &builtin.name,
-                builtin.id,
+                &builtin.id,
                 builtin.process_instruction_with_context,
             );
         }

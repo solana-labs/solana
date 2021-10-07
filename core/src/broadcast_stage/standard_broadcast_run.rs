@@ -32,7 +32,6 @@ pub struct StandardBroadcastRun {
     last_datapoint_submit: Arc<AtomicInterval>,
     num_batches: usize,
     cluster_nodes_cache: Arc<ClusterNodesCache<BroadcastStage>>,
-    last_peer_update: Arc<AtomicInterval>,
 }
 
 impl StandardBroadcastRun {
@@ -52,7 +51,6 @@ impl StandardBroadcastRun {
             last_datapoint_submit: Arc::default(),
             num_batches: 0,
             cluster_nodes_cache,
-            last_peer_update: Arc::new(AtomicInterval::default()),
         }
     }
 

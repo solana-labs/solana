@@ -18,6 +18,7 @@ use solana_rayon_threadlimit::get_thread_count;
 use solana_runtime::{
     accounts_db::{AccountShrinkThreshold, AccountsDbConfig},
     accounts_index::AccountSecondaryIndexes,
+    accounts_update_notifier_interface::AccountsUpdateNotifier,
     bank::{
         Bank, ExecuteTimings, InnerInstructionsList, RentDebits, TransactionBalancesSet,
         TransactionExecutionResult, TransactionLogMessages, TransactionResults,
@@ -483,6 +484,7 @@ pub fn process_blockstore(
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
     snapshot_config: Option<&SnapshotConfig>,
     accounts_package_sender: AccountsPackageSender,
+    accounts_update_notifier: Option<AccountsUpdateNotifier>,
 ) -> BlockstoreProcessorResult {
     if let Some(num_threads) = opts.override_num_threads {
         PAR_THREAD_POOL.with(|pool| {
@@ -505,6 +507,7 @@ pub fn process_blockstore(
         opts.shrink_ratio,
         false,
         opts.accounts_db_config.clone(),
+        accounts_update_notifier,
     );
     let bank0 = Arc::new(bank0);
     info!("processing ledger for slot 0...");
@@ -599,8 +602,8 @@ fn do_process_blockstore_from_root(
         blockstore
             .set_roots(std::iter::once(&start_slot))
             .expect("Couldn't set root slot on startup");
-    } else if !blockstore.is_root(start_slot) {
-        panic!("starting slot isn't root and can't update due to being secondary blockstore access: {}", start_slot);
+    } else {
+        assert!(blockstore.is_root(start_slot), "starting slot isn't root and can't update due to being secondary blockstore access: {}", start_slot);
     }
 
     if let Ok(metas) = blockstore.slot_meta_iterator(start_slot) {
@@ -1337,8 +1340,8 @@ fn process_single_slot(
             blockstore
                 .set_dead_slot(slot)
                 .expect("Failed to mark slot as dead in blockstore");
-        } else if !blockstore.is_dead(slot) {
-            panic!("Failed slot isn't dead and can't update due to being secondary blockstore access: {}", slot);
+        } else {
+            assert!(blockstore.is_dead(slot), "Failed slot isn't dead and can't update due to being secondary blockstore access: {}", slot);
         }
         err
     })?;
@@ -1513,6 +1516,7 @@ pub mod tests {
             None,
             None,
             accounts_package_sender,
+            None,
         )
         .unwrap()
     }
@@ -3123,8 +3127,8 @@ pub mod tests {
 
         let ticks_per_slot = 1;
         genesis_config.ticks_per_slot = ticks_per_slot;
-        let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_config);
-        let blockstore = Blockstore::open(&ledger_path).unwrap();
+        let (ledger_path, blockhash) = create_new_tmp_ledger_auto_delete!(&genesis_config);
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
         const ROOT_INTERVAL_SLOTS: Slot = 2;
         const FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS: Slot = ROOT_INTERVAL_SLOTS * 5;

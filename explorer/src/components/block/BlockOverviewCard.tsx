@@ -12,6 +12,8 @@ import { NavLink } from "react-router-dom";
 import { clusterPath } from "utils/url";
 import { BlockProgramsCard } from "./BlockProgramsCard";
 import { BlockAccountsCard } from "./BlockAccountsCard";
+import { displayTimestamp, displayTimestampUtc } from "utils/date";
+import { Epoch } from "components/common/Epoch";
 
 export function BlockOverviewCard({
   slot,
@@ -22,7 +24,7 @@ export function BlockOverviewCard({
 }) {
   const confirmedBlock = useBlock(slot);
   const fetchBlock = useFetchBlock();
-  const { status } = useCluster();
+  const { epochSchedule, status } = useCluster();
   const refresh = () => fetchBlock(slot);
 
   // Fetch block on load
@@ -43,6 +45,7 @@ export function BlockOverviewCard({
 
   const block = confirmedBlock.data.block;
   const committedTxs = block.transactions.filter((tx) => tx.meta?.err === null);
+  const epoch = epochSchedule?.getEpoch(slot);
 
   return (
     <>
@@ -65,18 +68,59 @@ export function BlockOverviewCard({
               <span>{block.blockhash}</span>
             </td>
           </tr>
+          {block.blockTime ? (
+            <>
+              <tr>
+                <td>Timestamp (Local)</td>
+                <td className="text-lg-right">
+                  <span className="text-monospace">
+                    {displayTimestamp(block.blockTime * 1000, true)}
+                  </span>
+                </td>
+              </tr>
+              <tr>
+                <td>Timestamp (UTC)</td>
+                <td className="text-lg-right">
+                  <span className="text-monospace">
+                    {displayTimestampUtc(block.blockTime * 1000, true)}
+                  </span>
+                </td>
+              </tr>
+            </>
+          ) : (
+            <tr>
+              <td className="w-100">Timestamp</td>
+              <td className="text-lg-right">Unavailable</td>
+            </tr>
+          )}
           <tr>
             <td className="w-100">Parent Slot</td>
             <td className="text-lg-right text-monospace">
               <Slot slot={block.parentSlot} link />
             </td>
           </tr>
+          {epoch !== undefined && (
+            <tr>
+              <td className="w-100">Epoch</td>
+              <td className="text-lg-right text-monospace">
+                <Epoch epoch={epoch} link />
+              </td>
+            </tr>
+          )}
           <tr>
             <td className="w-100">Parent Blockhash</td>
             <td className="text-lg-right text-monospace">
               <span>{block.previousBlockhash}</span>
             </td>
           </tr>
+          {confirmedBlock.data.child && (
+            <tr>
+              <td className="w-100">Child Slot</td>
+              <td className="text-lg-right text-monospace">
+                <Slot slot={confirmedBlock.data.child} link />
+              </td>
+            </tr>
+          )}
           <tr>
             <td className="w-100">Processed Transactions</td>
             <td className="text-lg-right text-monospace">

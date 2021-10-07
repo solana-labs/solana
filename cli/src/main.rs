@@ -149,7 +149,7 @@ fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error
 
 pub fn parse_args<'a>(
     matches: &ArgMatches<'_>,
-    mut wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<(CliConfig<'a>, CliSigners), Box<dyn error::Error>> {
     let config = if let Some(config_file) = matches.value_of("config_file") {
         Config::load(config_file).unwrap_or_default()
@@ -186,11 +186,11 @@ pub fn parse_args<'a>(
     let CliCommandInfo {
         command,
         mut signers,
-    } = parse_command(matches, &default_signer, &mut wallet_manager)?;
+    } = parse_command(matches, &default_signer, wallet_manager)?;
 
     if signers.is_empty() {
         if let Ok(signer_info) =
-            default_signer.generate_unique_signers(vec![None], matches, &mut wallet_manager)
+            default_signer.generate_unique_signers(vec![None], matches, wallet_manager)
         {
             signers.extend(signer_info.signers);
         }

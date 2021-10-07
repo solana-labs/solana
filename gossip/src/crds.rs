@@ -313,8 +313,13 @@ impl Crds {
             .map(move |i| self.table.index(*i))
     }
 
-    /// Returns number of known pubkeys (network size).
+    /// Returns number of known contact-infos (network size).
     pub(crate) fn num_nodes(&self) -> usize {
+        self.nodes.len()
+    }
+
+    /// Returns number of unique pubkeys.
+    pub(crate) fn num_pubkeys(&self) -> usize {
         self.records.len()
     }
 
@@ -559,7 +564,7 @@ mod tests {
         super::*,
         crate::{
             contact_info::ContactInfo,
-            crds_value::{new_rand_timestamp, NodeInstance, SnapshotHash},
+            crds_value::{new_rand_timestamp, NodeInstance, SnapshotHashes},
         },
         rand::{thread_rng, Rng, SeedableRng},
         rand_chacha::ChaChaRng,
@@ -1061,7 +1066,7 @@ mod tests {
         assert_eq!(crds.insert(node, timestamp()), Ok(()));
         assert_eq!(crds.get_shred_version(&pubkey), Some(8));
         // Add other crds values with the same pubkey.
-        let val = SnapshotHash::new_rand(&mut rng, Some(pubkey));
+        let val = SnapshotHashes::new_rand(&mut rng, Some(pubkey));
         let val = CrdsData::SnapshotHashes(val);
         let val = CrdsValue::new_unsigned(val);
         assert_eq!(crds.insert(val, timestamp()), Ok(()));

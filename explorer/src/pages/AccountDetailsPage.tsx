@@ -34,6 +34,7 @@ import { TransactionHistoryCard } from "components/account/history/TransactionHi
 import { TokenTransfersCard } from "components/account/history/TokenTransfersCard";
 import { TokenInstructionsCard } from "components/account/history/TokenInstructionsCard";
 import { RewardsCard } from "components/account/RewardsCard";
+import { NFTHeader } from "components/account/MetaplexNFTHeader";
 
 const IDENTICON_WIDTH = 64;
 
@@ -151,6 +152,11 @@ export function AccountHeader({
   const account = info?.data;
   const data = account?.details?.data;
   const isToken = data?.program === "spl-token" && data?.parsed.type === "mint";
+  const isNFT = isToken && data.nftData;
+
+  if (isNFT) {
+    return <NFTHeader nftData={data.nftData!} address={address} />;
+  }
 
   if (tokenDetails || isToken) {
     return (

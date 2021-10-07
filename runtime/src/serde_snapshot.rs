@@ -6,6 +6,7 @@ use {
             BankHashInfo,
         },
         accounts_index::AccountSecondaryIndexes,
+        accounts_update_notifier_interface::AccountsUpdateNotifier,
         ancestors::Ancestors,
         append_vec::{AppendVec, StoredMetaWriteVersion},
         bank::{Bank, BankFieldsToDeserialize, BankRc},
@@ -204,6 +205,7 @@ pub(crate) fn bank_from_streams<R>(
     shrink_ratio: AccountShrinkThreshold,
     verify_index: bool,
     accounts_db_config: Option<AccountsDbConfig>,
+    accounts_update_notifier: Option<AccountsUpdateNotifier>,
 ) -> std::result::Result<Bank, Error>
 where
     R: Read,
@@ -242,6 +244,7 @@ where
                 shrink_ratio,
                 verify_index,
                 accounts_db_config,
+                accounts_update_notifier,
             )?;
             Ok(bank)
         }};
@@ -335,6 +338,7 @@ fn reconstruct_bank_from_fields<E>(
     shrink_ratio: AccountShrinkThreshold,
     verify_index: bool,
     accounts_db_config: Option<AccountsDbConfig>,
+    accounts_update_notifier: Option<AccountsUpdateNotifier>,
 ) -> Result<Bank, Error>
 where
     E: SerializableStorage + std::marker::Sync,
@@ -350,6 +354,7 @@ where
         shrink_ratio,
         verify_index,
         accounts_db_config,
+        accounts_update_notifier,
     )?;
     accounts_db.freeze_accounts(
         &Ancestors::from(&bank_fields.ancestors),
@@ -404,6 +409,7 @@ fn reconstruct_accountsdb_from_fields<E>(
     shrink_ratio: AccountShrinkThreshold,
     verify_index: bool,
     accounts_db_config: Option<AccountsDbConfig>,
+    accounts_update_notifier: Option<AccountsUpdateNotifier>,
 ) -> Result<AccountsDb, Error>
 where
     E: SerializableStorage + std::marker::Sync,
@@ -415,6 +421,7 @@ where
         caching_enabled,
         shrink_ratio,
         accounts_db_config,
+        accounts_update_notifier,
     );
 
     let AccountsDbFields(
@@ -530,6 +537,10 @@ where
         .fetch_add(snapshot_version, Ordering::Relaxed);
     accounts_db.generate_index(limit_load_slot_count_from_snapshot, verify_index);
 
+    let mut measure_notify = Measure::start("accounts_notify");
+    accounts_db.notify_account_restore_from_snapshot();
+    measure_notify.stop();
+
     datapoint_info!(
         "reconstruct_accountsdb_from_fields()",
         ("remap-time-us", measure_remap.as_us(), i64),
@@ -538,6 +549,7 @@ where
             num_collisions.load(Ordering::Relaxed),
             i64
         ),
+        ("accountsdb-notify-at-start-us", measure_notify.as_us(), i64),
     );
 
     Ok(accounts_db)

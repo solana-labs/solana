@@ -5,6 +5,7 @@ use crate::{
         ACCOUNTS_DB_CONFIG_FOR_TESTING,
     },
     accounts_index::{AccountSecondaryIndexes, IndexKey, ScanResult},
+    accounts_update_notifier_interface::AccountsUpdateNotifier,
     ancestors::Ancestors,
     bank::{
         NonceRollbackFull, NonceRollbackInfo, RentDebits, TransactionCheckResult,
@@ -139,6 +140,7 @@ impl Accounts {
             caching_enabled,
             shrink_ratio,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
+            None,
         )
     }
 
@@ -156,6 +158,7 @@ impl Accounts {
             caching_enabled,
             shrink_ratio,
             Some(ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS),
+            None,
         )
     }
 
@@ -166,6 +169,7 @@ impl Accounts {
         caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
         accounts_db_config: Option<AccountsDbConfig>,
+        accounts_update_notifier: Option<AccountsUpdateNotifier>,
     ) -> Self {
         Self {
             accounts_db: Arc::new(AccountsDb::new_with_config(
@@ -175,6 +179,7 @@ impl Accounts {
                 caching_enabled,
                 shrink_ratio,
                 accounts_db_config,
+                accounts_update_notifier,
             )),
             account_locks: Mutex::new(AccountLocks::default()),
         }
@@ -241,7 +246,6 @@ impl Accounts {
             let rent_for_sysvars = feature_set.is_active(&feature_set::rent_for_sysvars::id());
             let demote_program_write_locks =
                 feature_set.is_active(&feature_set::demote_program_write_locks::id());
-            let is_upgradeable_loader_present = is_upgradeable_loader_present(message);
 
             for (i, key) in message.account_keys_iter().enumerate() {
                 let account = if !message.is_non_loader_key(i) {
@@ -280,7 +284,7 @@ impl Accounts {
                         if bpf_loader_upgradeable::check_id(account.owner()) {
                             if demote_program_write_locks
                                 && message.is_writable(i, demote_program_write_locks)
-                                && !is_upgradeable_loader_present
+                                && !message.is_upgradeable_loader_present()
                             {
                                 error_counters.invalid_writable_account += 1;
                                 return Err(TransactionError::InvalidWritableAccount);
@@ -922,9 +926,9 @@ impl Accounts {
         let keys: Vec<_> = txs
             .map(|tx| tx.get_account_locks(demote_program_write_locks))
             .collect();
-        let mut account_locks = &mut self.account_locks.lock().unwrap();
+        let account_locks = &mut self.account_locks.lock().unwrap();
         keys.into_iter()
-            .map(|keys| self.lock_account(&mut account_locks, keys.writable, keys.readonly))
+            .map(|keys| self.lock_account(account_locks, keys.writable, keys.readonly))
             .collect()
     }
 
@@ -1131,12 +1135,6 @@ pub fn prepare_if_nonce_account(
         }
     }
     false
-}
-
-fn is_upgradeable_loader_present(message: &SanitizedMessage) -> bool {
-    message
-        .account_keys_iter()
-        .any(|&key| key == bpf_loader_upgradeable::id())
 }
 
 pub fn create_test_accounts(

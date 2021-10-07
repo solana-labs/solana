@@ -153,10 +153,10 @@ native machine code before execting it in the virtual machine.",
     let mut account_refcells = Vec::new();
     let default_account = RefCell::new(AccountSharedData::default());
     let key = solana_sdk::pubkey::new_rand();
-    let mut mem = match matches.value_of("input").unwrap().parse::<usize>() {
+    let (mut mem, account_lengths) = match matches.value_of("input").unwrap().parse::<usize>() {
         Ok(allocate) => {
             accounts.push(KeyedAccount::new(&key, false, &default_account));
-            vec![0u8; allocate]
+            (vec![0u8; allocate], vec![allocate])
         }
         Err(_) => {
             let input = load_accounts(Path::new(matches.value_of("input").unwrap())).unwrap();
@@ -170,9 +170,9 @@ native machine code before execting it in the virtual machine.",
             }
             let lid = bpf_loader::id();
             let pid = Pubkey::new(&[0u8; 32]);
-            let (mut bytes, _account_lenghts) =
+            let (mut bytes, account_lengths) =
                 serialize_parameters(&lid, &pid, &accounts, &input.insndata).unwrap();
-            Vec::from(bytes.as_slice_mut())
+            (Vec::from(bytes.as_slice_mut()), account_lengths)
         }
     };
     let mut invoke_context = MockInvokeContext::new(accounts);
@@ -228,7 +228,14 @@ native machine code before execting it in the virtual machine.",
     }
 
     let id = bpf_loader::id();
-    let mut vm = create_vm(&id, executable.as_ref(), &mut mem, &mut invoke_context).unwrap();
+    let mut vm = create_vm(
+        &id,
+        executable.as_ref(),
+        &mut mem,
+        &mut invoke_context,
+        &account_lengths,
+    )
+    .unwrap();
     let start_time = Instant::now();
     let result = if matches.value_of("use").unwrap() == "interpreter" {
         vm.execute_program_interpreted(&mut instruction_meter)

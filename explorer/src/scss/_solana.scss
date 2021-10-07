@@ -381,7 +381,7 @@ pre.json-wrap {
 p.updated-time {
   position: absolute;
   font-size: 0.66rem;
-  margin: .375rem;
+  margin: 0.375rem;
   right: 0;
   bottom: 0;
 }
@@ -399,5 +399,24 @@ p.updated-time {
 }
 
 .identicon-wrapper-small {
-  margin-left: .4rem;
+  margin-left: 0.4rem;
+}
+
+.creators-dropdown-button-width {
+  width: 150px;
+}
+
+.creator-dropdown-entry {
+  flex-flow: row wrap;
+}
+
+.creator-dropdown-header {
+  max-width: 80%;
+  flex: 0 0 80%;
+}
+
+.creator-dropdown-entry-address {
+  @extend .creator-dropdown-header;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }

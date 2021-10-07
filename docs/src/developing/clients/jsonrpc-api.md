@@ -3139,7 +3139,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 
 Result:
 ```json
-{"jsonrpc":"2.0","result":{"solana-core": "1.8.0"},"id":1}
+{"jsonrpc":"2.0","result":{"solana-core": "1.9.0"},"id":1}
 ```
 
 ### getVoteAccounts
@@ -4295,7 +4295,7 @@ Response:
 ### getConfirmedBlock
 
 **DEPRECATED: Please use [getBlock](jsonrpc-api.md#getblock) instead**
-This method is expected to be removed in solana-core v1.8
+This method is expected to be removed in solana-core v2.0
 
 Returns identity and transaction information about a confirmed block in the ledger
 
@@ -4489,7 +4489,7 @@ For more details on returned data:
 ### getConfirmedBlocks
 
 **DEPRECATED: Please use [getBlocks](jsonrpc-api.md#getblocks) instead**
-This method is expected to be removed in solana-core v1.8
+This method is expected to be removed in solana-core v2.0
 
 Returns a list of confirmed blocks between two slots
 
@@ -4523,7 +4523,7 @@ Result:
 ### getConfirmedBlocksWithLimit
 
 **DEPRECATED: Please use [getBlocksWithLimit](jsonrpc-api.md#getblockswithlimit) instead**
-This method is expected to be removed in solana-core v1.8
+This method is expected to be removed in solana-core v2.0
 
 Returns a list of confirmed blocks starting at the given slot
 
@@ -4555,7 +4555,7 @@ Result:
 ### getConfirmedSignaturesForAddress2
 
 **DEPRECATED: Please use [getSignaturesForAddress](jsonrpc-api.md#getsignaturesforaddress) instead**
-This method is expected to be removed in solana-core v1.8
+This method is expected to be removed in solana-core v2.0
 
 Returns confirmed signatures for transactions involving an
 address backwards in time from the provided signature or most recent confirmed block
@@ -4617,7 +4617,7 @@ Result:
 ### getConfirmedTransaction
 
 **DEPRECATED: Please use [getTransaction](jsonrpc-api.md#gettransaction) instead**
-This method is expected to be removed in solana-core v1.8
+This method is expected to be removed in solana-core v2.0
 
 Returns transaction details for a confirmed transaction
 
@@ -4791,7 +4791,7 @@ Result:
 ### getSnapshotSlot
 
 **DEPRECATED: Please use [getHighestSnapshotSlot](jsonrpc-api.md#gethighestsnapshotslot) instead**
-This method is expected to be removed in solana-core v1.9
+This method is expected to be removed in solana-core v2.0
 
 Returns the highest slot that the node has a snapshot for
 

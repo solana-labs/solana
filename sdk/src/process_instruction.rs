@@ -58,12 +58,19 @@ pub trait InvokeContext {
         message: &Message,
         instruction: &CompiledInstruction,
         program_indices: &[usize],
-        account_indices: &[usize],
+        account_indices: Option<&[usize]>,
     ) -> Result<(), InstructionError>;
     /// Pop a stack frame from the invocation stack
     fn pop(&mut self);
     /// Current depth of the invocation stake
     fn invoke_depth(&self) -> usize;
+    /// Verify the results of an instruction
+    fn verify(
+        &mut self,
+        message: &Message,
+        instruction: &CompiledInstruction,
+        program_indices: &[usize],
+    ) -> Result<(), InstructionError>;
     /// Verify and update PreAccount state based on program execution
     fn verify_and_update(
         &mut self,
@@ -92,6 +99,8 @@ pub trait InvokeContext {
     fn add_executor(&self, pubkey: &Pubkey, executor: Arc<dyn Executor>);
     /// Get the completed loader work that can be re-used across executions
     fn get_executor(&self, pubkey: &Pubkey) -> Option<Arc<dyn Executor>>;
+    /// Set which instruction in the message is currently being recorded
+    fn set_instruction_index(&mut self, instruction_index: usize);
     /// Record invoked instruction
     fn record_instruction(&self, instruction: &Instruction);
     /// Get the bank's active feature set
@@ -115,9 +124,9 @@ pub trait InvokeContext {
     /// Get this invocation's `FeeCalculator`
     fn get_fee_calculator(&self) -> &FeeCalculator;
     /// Set the return data
-    fn set_return_data(&mut self, return_data: Option<(Pubkey, Vec<u8>)>);
+    fn set_return_data(&mut self, data: Vec<u8>) -> Result<(), InstructionError>;
     /// Get the return data
-    fn get_return_data(&self) -> &Option<(Pubkey, Vec<u8>)>;
+    fn get_return_data(&self) -> (Pubkey, &[u8]);
 }
 
 /// Convenience macro to log a message with an `Rc<RefCell<dyn Logger>>`
@@ -438,7 +447,7 @@ pub struct MockInvokeContext<'a> {
     pub disabled_features: HashSet<Pubkey>,
     pub blockhash: Hash,
     pub fee_calculator: FeeCalculator,
-    pub return_data: Option<(Pubkey, Vec<u8>)>,
+    pub return_data: (Pubkey, Vec<u8>),
 }
 
 impl<'a> MockInvokeContext<'a> {
@@ -458,7 +467,7 @@ impl<'a> MockInvokeContext<'a> {
             disabled_features: HashSet::default(),
             blockhash: Hash::default(),
             fee_calculator: FeeCalculator::default(),
-            return_data: None,
+            return_data: (Pubkey::default(), Vec::new()),
         };
         invoke_context
             .invoke_stack
@@ -492,7 +501,7 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
         _message: &Message,
         _instruction: &CompiledInstruction,
         _program_indices: &[usize],
-        _account_indices: &[usize],
+        _account_indices: Option<&[usize]>,
     ) -> Result<(), InstructionError> {
         self.invoke_stack.push(InvokeContextStackFrame::new(
             *_key,
@@ -505,6 +514,14 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
     }
     fn invoke_depth(&self) -> usize {
         self.invoke_stack.len()
+    }
+    fn verify(
+        &mut self,
+        _message: &Message,
+        _instruction: &CompiledInstruction,
+        _program_indices: &[usize],
+    ) -> Result<(), InstructionError> {
+        Ok(())
     }
     fn verify_and_update(
         &mut self,
@@ -553,6 +570,7 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
     fn get_executor(&self, _pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
         None
     }
+    fn set_instruction_index(&mut self, _instruction_index: usize) {}
     fn record_instruction(&self, _instruction: &Instruction) {}
     fn is_feature_active(&self, feature_id: &Pubkey) -> bool {
         !self.disabled_features.contains(feature_id)
@@ -587,10 +605,11 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
     fn get_fee_calculator(&self) -> &FeeCalculator {
         &self.fee_calculator
     }
-    fn set_return_data(&mut self, return_data: Option<(Pubkey, Vec<u8>)>) {
-        self.return_data = return_data;
+    fn set_return_data(&mut self, data: Vec<u8>) -> Result<(), InstructionError> {
+        self.return_data = (*self.get_caller()?, data);
+        Ok(())
     }
-    fn get_return_data(&self) -> &Option<(Pubkey, Vec<u8>)> {
-        &self.return_data
+    fn get_return_data(&self) -> (Pubkey, &[u8]) {
+        (self.return_data.0, &self.return_data.1)
     }
 }

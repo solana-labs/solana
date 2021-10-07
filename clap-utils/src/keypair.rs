@@ -324,17 +324,9 @@ pub fn presigner_from_pubkey_sigs(
     })
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct SignerFromPathConfig {
     pub allow_null_signer: bool,
-}
-
-impl Default for SignerFromPathConfig {
-    fn default() -> Self {
-        Self {
-            allow_null_signer: false,
-        }
-    }
 }
 
 pub fn signer_from_path(

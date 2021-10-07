@@ -1,6 +1,6 @@
 [package]
 name = "noop"
-version = "1.8.0"
+version = "1.9.0"
 description = "Solana BPF test program written in Rust"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -10,7 +10,7 @@ edition = "2018"
 publish = false
 
 [dependencies]
-solana-program = { path = "../../../../program", version = "=1.8.0" }
+solana-program = { path = "../../../../program", version = "=1.9.0" }
 
 [lib]
 crate-type = ["cdylib"]

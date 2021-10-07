@@ -84,16 +84,6 @@ pub enum FaucetRequest {
     },
 }
 
-impl Default for FaucetRequest {
-    fn default() -> Self {
-        Self::GetAirdrop {
-            lamports: u64::default(),
-            to: Pubkey::default(),
-            blockhash: Hash::default(),
-        }
-    }
-}
-
 pub enum FaucetTransaction {
     Airdrop(Transaction),
     Memo((Transaction, String)),
@@ -416,7 +406,15 @@ async fn process(
     mut stream: TokioTcpStream,
     faucet: Arc<Mutex<Faucet>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut request = vec![0u8; serialized_size(&FaucetRequest::default()).unwrap() as usize];
+    let mut request = vec![
+        0u8;
+        serialized_size(&FaucetRequest::GetAirdrop {
+            lamports: u64::default(),
+            to: Pubkey::default(),
+            blockhash: Hash::default(),
+        })
+        .unwrap() as usize
+    ];
     while stream.read_exact(&mut request).await.is_ok() {
         trace!("{:?}", request);
 

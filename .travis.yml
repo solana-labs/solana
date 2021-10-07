@@ -60,6 +60,12 @@ jobs:
     - <<: *release-artifacts
       name: "Windows release artifacts"
       os: windows
+      install:
+        - choco install openssl
+        - export OPENSSL_DIR="C:\Program Files\OpenSSL-Win64"
+        - source ci/rust-version.sh
+        - PATH="/usr/local/opt/coreutils/libexec/gnubin:$PATH"
+        - readlink -f .
     #  Linux release artifacts are still built by ci/buildkite-secondary.yml
     #- <<: *release-artifacts
     #  name: "Linux release artifacts"

@@ -15,6 +15,42 @@ pub struct StakeHistoryEntry {
     pub deactivating: u64, // requested to be cooled down, not fully deactivated yet
 }
 
+impl StakeHistoryEntry {
+    pub fn with_effective(effective: u64) -> Self {
+        Self {
+            effective,
+            ..Self::default()
+        }
+    }
+
+    pub fn with_effective_and_activating(effective: u64, activating: u64) -> Self {
+        Self {
+            effective,
+            activating,
+            ..Self::default()
+        }
+    }
+
+    pub fn with_deactivating(deactivating: u64) -> Self {
+        Self {
+            effective: deactivating,
+            deactivating,
+            ..Self::default()
+        }
+    }
+}
+
+impl std::ops::Add for StakeHistoryEntry {
+    type Output = StakeHistoryEntry;
+    fn add(self, rhs: StakeHistoryEntry) -> Self::Output {
+        Self {
+            effective: self.effective.saturating_add(rhs.effective),
+            activating: self.activating.saturating_add(rhs.activating),
+            deactivating: self.deactivating.saturating_add(rhs.deactivating),
+        }
+    }
+}
+
 #[repr(C)]
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Default, Clone, AbiExample)]
 pub struct StakeHistory(Vec<(Epoch, StakeHistoryEntry)>);

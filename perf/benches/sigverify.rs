@@ -19,7 +19,7 @@ fn bench_sigverify(bencher: &mut Bencher) {
     let recycler_out = Recycler::default();
     // verify packets
     bencher.iter(|| {
-        let _ans = sigverify::ed25519_verify(&mut batches, &recycler, &recycler_out);
+        let _ans = sigverify::ed25519_verify(&mut batches, &recycler, &recycler_out, false);
     })
 }
 
@@ -28,11 +28,12 @@ fn bench_get_offsets(bencher: &mut Bencher) {
     let tx = test_tx();
 
     // generate packet vector
-    let batches = to_packets_chunked(&std::iter::repeat(tx).take(1024).collect::<Vec<_>>(), 1024);
+    let mut batches =
+        to_packets_chunked(&std::iter::repeat(tx).take(1024).collect::<Vec<_>>(), 1024);
 
     let recycler = Recycler::default();
     // verify packets
     bencher.iter(|| {
-        let _ans = sigverify::generate_offsets(&batches, &recycler);
+        let _ans = sigverify::generate_offsets(&mut batches, &recycler, false);
     })
 }
