@@ -17,12 +17,16 @@ impl RpcFilterType {
                 match encoding {
                     MemcmpEncoding::Binary => {
                         use MemcmpEncodedBytes::*;
-                        if match &compare.bytes {
+                        const FILTER_LIMIT: usize = 128;
+                        let size = match &compare.bytes {
+                            Binary(bytes) if bytes.len() > FILTER_LIMIT => {
+                                return Err(RpcFilterError::Base58DataTooLarge);
+                            }
                             Binary(bytes) | Base58(bytes) => bytes.len(),
                             Base64(bytes) => bytes.len(),
                             Bytes(bytes) => bytes.len(),
-                        } > 128
-                        {
+                        };
+                        if size > FILTER_LIMIT {
                             return Err(RpcFilterError::DataTooLarge);
                         }
                         match &compare.bytes {
@@ -48,6 +52,12 @@ impl RpcFilterType {
 pub enum RpcFilterError {
     #[error("encoded binary data should be less than 129 bytes")]
     DataTooLarge,
+    #[deprecated(
+        since = "1.9.0",
+        note = "Error for MemcmpEncodedBytes::Binary which is deprecated"
+    )]
+    #[error("encoded binary (base 58) data should be less than 129 bytes")]
+    Base58DataTooLarge,
     #[deprecated(
         since = "1.9.0",
         note = "Error for MemcmpEncodedBytes::Binary which is deprecated"
