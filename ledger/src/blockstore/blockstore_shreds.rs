@@ -17,6 +17,7 @@ use {
 pub(crate) const SHRED_DIRECTORY: &str = "shreds";
 pub(crate) const DATA_SHRED_DIRECTORY: &str = "data";
 
+/// A mapping from shred index to shred payload
 pub(crate) type ShredCache = BTreeMap<u64, Vec<u8>>;
 
 /// A mapping from shred index to shred offset within the data section of file
@@ -43,8 +44,9 @@ pub(crate) struct ShredFileHeader {
     pub data_size: u32,
 }
 
-// The following constant is computed by hand and hardcoded;
-// TODO: add test that serializes header and confirms size
+/// The following constant is computed by hand and hardcoded.
+/// 'test_shred_file_header_constant' ensures the value is correct.
+/// Constant used over lazy_static for performance reasons.
 const SIZE_OF_SHRED_FILE_HEADER: usize = 29;
 
 impl ShredFileHeader {
@@ -482,6 +484,14 @@ impl Blockstore {
 pub mod tests {
     use super::*;
     use crate::{get_tmp_ledger_path_auto_delete, shred::max_ticks_per_n_shreds};
+
+    #[test]
+    fn test_shred_file_header_constant() {
+        // Header is fixed size, so values of parameters to new() are irrelevant
+        let header = ShredFileHeader::new(0, 0, 0, 0);
+        let serialized_header = bincode::serialize(&header).unwrap();
+        assert_eq!(serialized_header.len(), SIZE_OF_SHRED_FILE_HEADER);
+    }
 
     #[test]
     fn test_get_data_shred_from_cache() {
