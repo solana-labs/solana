@@ -365,7 +365,7 @@ impl InstructionProcessor {
                         // Call the builtin program
                         return process_instruction(
                             program_id,
-                            1,
+                            1, // root_id to be skipped
                             instruction_data,
                             invoke_context,
                         );
@@ -387,7 +387,7 @@ impl InstructionProcessor {
                         // Call the program via a builtin loader
                         return process_instruction(
                             program_id,
-                            0,
+                            0, // no root_id was provided
                             instruction_data,
                             invoke_context,
                         );
