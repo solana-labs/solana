@@ -21,20 +21,24 @@ use {
 };
 
 /// Handle for the (twisted) ElGamal encryption scheme
-pub struct ElGamal;
+pub struct ElGamal {
+    pub pk: ElGamalPubkey,
+    pub sk: ElGamalSecretKey,
+}
+
 impl ElGamal {
     /// Generates the public and secret keys for ElGamal encryption.
     #[cfg(not(target_arch = "bpf"))]
     #[allow(clippy::new_ret_no_self)]
-    pub fn new() -> (ElGamalPubkey, ElGamalSecretKey) {
-        ElGamal::with(&mut OsRng) // using OsRng for now
+    pub fn new() -> Self {
+        Self::with(&mut OsRng) // using OsRng for now
     }
 
     /// On input a randomness generator, the function generates the public and
     /// secret keys for ElGamal encryption.
     #[cfg(not(target_arch = "bpf"))]
     #[allow(non_snake_case)]
-    pub fn with<T: RngCore + CryptoRng>(rng: &mut T) -> (ElGamalPubkey, ElGamalSecretKey) {
+    pub fn with<T: RngCore + CryptoRng>(rng: &mut T) -> Self {
         // sample a non-zero scalar
         let mut s: Scalar;
         loop {
@@ -48,7 +52,10 @@ impl ElGamal {
         let H = PedersenBase::default().H;
         let P = s.invert() * H;
 
-        (ElGamalPubkey(P), ElGamalSecretKey(s))
+        Self {
+            pk: ElGamalPubkey(P),
+            sk: ElGamalSecretKey(s),
+        }
     }
 
     /// On input a public key and a message to be encrypted, the function
@@ -101,7 +108,7 @@ impl ElGamal {
     /// On input a secret key and a ciphertext, the function decrypts the
     /// ciphertext for a u32 value.
     pub fn decrypt_u32(sk: &ElGamalSecretKey, ct: &ElGamalCiphertext) -> Option<u32> {
-        let discrete_log_instance = ElGamal::decrypt(sk, ct);
+        let discrete_log_instance = Self::decrypt(sk, ct);
         discrete_log_instance.decode_u32()
     }
 
@@ -112,7 +119,7 @@ impl ElGamal {
         ct: &ElGamalCiphertext,
         hashmap: &HashMap<[u8; 32], u32>,
     ) -> Option<u32> {
-        let discrete_log_instance = ElGamal::decrypt(sk, ct);
+        let discrete_log_instance = Self::decrypt(sk, ct);
         discrete_log_instance.decode_u32_online(hashmap)
     }
 }
@@ -372,7 +379,7 @@ mod tests {
 
     #[test]
     fn test_encrypt_decrypt_correctness() {
-        let (pk, sk) = ElGamal::new();
+        let ElGamal { pk, sk } = ElGamal::new();
         let msg: u32 = 57;
         let ct = ElGamal::encrypt(&pk, msg);
 
@@ -389,8 +396,8 @@ mod tests {
 
     #[test]
     fn test_decrypt_handle() {
-        let (pk_1, sk_1) = ElGamal::new();
-        let (pk_2, sk_2) = ElGamal::new();
+        let ElGamal { pk: pk_1, sk: sk_1 } = ElGamal::new();
+        let ElGamal { pk: pk_2, sk: sk_2 } = ElGamal::new();
 
         let msg: u32 = 77;
         let (comm, open) = Pedersen::new(msg);
@@ -416,7 +423,7 @@ mod tests {
 
     #[test]
     fn test_homomorphic_addition() {
-        let (pk, _) = ElGamal::new();
+        let ElGamal { pk, sk: _ } = ElGamal::new();
         let msg_0: u64 = 57;
         let msg_1: u64 = 77;
 
@@ -441,7 +448,7 @@ mod tests {
 
     #[test]
     fn test_homomorphic_subtraction() {
-        let (pk, _) = ElGamal::new();
+        let ElGamal { pk, sk: _ } = ElGamal::new();
         let msg_0: u64 = 77;
         let msg_1: u64 = 55;
 
@@ -466,7 +473,7 @@ mod tests {
 
     #[test]
     fn test_homomorphic_multiplication() {
-        let (pk, _) = ElGamal::new();
+        let ElGamal { pk, sk: _ } = ElGamal::new();
         let msg_0: u64 = 57;
         let msg_1: u64 = 77;
 
@@ -482,7 +489,7 @@ mod tests {
 
     #[test]
     fn test_homomorphic_division() {
-        let (pk, _) = ElGamal::new();
+        let ElGamal { pk, sk: _ } = ElGamal::new();
         let msg_0: u64 = 55;
         let msg_1: u64 = 5;
 
@@ -498,7 +505,7 @@ mod tests {
 
     #[test]
     fn test_serde_ciphertext() {
-        let (pk, _) = ElGamal::new();
+        let ElGamal { pk, sk: _ } = ElGamal::new();
         let msg: u64 = 77;
         let ct = pk.encrypt(msg);
 
@@ -510,7 +517,7 @@ mod tests {
 
     #[test]
     fn test_serde_pubkey() {
-        let (pk, _) = ElGamal::new();
+        let ElGamal { pk, sk: _ } = ElGamal::new();
 
         let encoded = bincode::serialize(&pk).unwrap();
         let decoded: ElGamalPubkey = bincode::deserialize(&encoded).unwrap();
@@ -520,7 +527,7 @@ mod tests {
 
     #[test]
     fn test_serde_secretkey() {
-        let (_, sk) = ElGamal::new();
+        let ElGamal { pk: _, sk } = ElGamal::new();
 
         let encoded = bincode::serialize(&sk).unwrap();
         let decoded: ElGamalSecretKey = bincode::deserialize(&encoded).unwrap();
