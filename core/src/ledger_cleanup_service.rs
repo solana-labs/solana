@@ -136,21 +136,15 @@ impl LedgerCleanupService {
         last_flush_slot: &mut u64,
         flush_interval: u64,
     ) -> BlockstoreResult<()> {
-        let slots_to_flush: Vec<Slot> = blockstore
-            .data_shred_cache_slots
-            .lock()
-            .unwrap()
-            .iter()
-            .cloned()
-            .take_while(|slot| root > *slot + flush_interval)
-            .collect();
+        let slots_to_flush: Vec<Slot> =
+            blockstore.get_data_shred_slots_to_flush(root - flush_interval);
 
         if slots_to_flush.is_empty() {
-            trace!("No slots found to flush");
+            info!("No shreds found to flush");
             return Ok(());
         }
         info!(
-            "flushing shreds from slot {} to {}",
+            "Flushing shreds from slots {} to {}",
             slots_to_flush.first().unwrap(),
             slots_to_flush.last().unwrap()
         );

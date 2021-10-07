@@ -166,8 +166,7 @@ pub struct Blockstore {
     slots_stats: Arc<Mutex<SlotsStats>>,
     data_shred_path: PathBuf,
     data_shred_cache: DashMap<Slot, Arc<RwLock<ShredCache>>>,
-    // TODO: probably don't want this pub, work in a helper function for ledger_cleanup
-    pub data_shred_cache_slots: Mutex<BTreeSet<Slot>>,
+    data_shred_cache_slots: Mutex<BTreeSet<Slot>>,
     shred_wal: Mutex<ShredWAL>,
 }
 

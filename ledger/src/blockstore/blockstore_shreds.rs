@@ -118,8 +118,16 @@ impl Blockstore {
             .insert(index, shred.payload.clone());
     }
 
-    // TODO: change this back to pub(crate); possibly need to make wrapper in blockstore_purge instead
-    // of in ledger_cleanup_service
+    pub fn get_data_shred_slots_to_flush(&self, max_flush_slot: Slot) -> Vec<Slot> {
+        self.data_shred_cache_slots
+            .lock()
+            .unwrap()
+            .iter()
+            .cloned()
+            .take_while(|slot| *slot < max_flush_slot)
+            .collect()
+    }
+
     pub fn flush_data_shreds_for_slot_to_fs(&self, slot: Slot) -> Result<()> {
         let mut flush_timer = Measure::start("flush_timer");
 
