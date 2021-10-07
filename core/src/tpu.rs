@@ -23,7 +23,6 @@ use solana_rpc::{
 use solana_runtime::{
     bank_forks::BankForks,
     cost_model::CostModel,
-    cost_tracker::CostTracker,
     vote_sender_types::{ReplayVoteReceiver, ReplayVoteSender},
 };
 use std::{
@@ -123,7 +122,6 @@ impl Tpu {
             cluster_confirmed_slot_sender,
         );
 
-        let cost_tracker = Arc::new(RwLock::new(CostTracker::new(cost_model.clone())));
         let banking_stage = BankingStage::new(
             cluster_info,
             poh_recorder,
@@ -132,7 +130,7 @@ impl Tpu {
             verified_gossip_vote_packets_receiver,
             transaction_status_sender,
             replay_vote_sender,
-            cost_tracker,
+            cost_model.clone(),
         );
 
         let broadcast_stage = broadcast_type.new_broadcast_stage(
