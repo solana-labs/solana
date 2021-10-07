@@ -1116,16 +1116,16 @@ impl ClusterInfo {
         Some(map(hashes))
     }
 
-    pub fn get_incremental_snapshot_hash_for_node<F, Y>(&self, pubkey: &Pubkey, map: F) -> Option<Y>
-    where
-        F: FnOnce((&(Slot, Hash), &Vec<(Slot, Hash)>)) -> Y,
-    {
+    pub fn get_incremental_snapshot_hashes_for_node<F, Y>(
+        &self,
+        pubkey: &Pubkey,
+    ) -> Option<((Slot, Hash), Vec<(Slot, Hash)>)> {
         let gossip_crds = self.gossip.crds.read().unwrap();
-        let incremental_snapshot_hash = gossip_crds.get::<&IncrementalSnapshotHashes>(*pubkey)?;
-        Some(map((
-            &incremental_snapshot_hash.base,
-            &incremental_snapshot_hash.hashes,
-        )))
+        let incremental_snapshot_hashes = gossip_crds.get::<&IncrementalSnapshotHashes>(*pubkey)?;
+        Some((
+            incremental_snapshot_hashes.base.clone(),
+            incremental_snapshot_hashes.hashes.clone(),
+        ))
     }
 
     /// Returns epoch-slots inserted since the given cursor.
