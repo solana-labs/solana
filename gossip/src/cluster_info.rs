@@ -1117,7 +1117,7 @@ impl ClusterInfo {
     }
 
     #[allow(clippy::type_complexity)]
-    pub fn get_incremental_snapshot_hashes_for_node<F, Y>(
+    pub fn get_incremental_snapshot_hashes_for_node(
         &self,
         pubkey: &Pubkey,
     ) -> Option<((Slot, Hash), Vec<(Slot, Hash)>)> {
