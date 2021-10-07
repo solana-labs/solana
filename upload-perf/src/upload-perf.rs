@@ -64,17 +64,14 @@ fn main() {
                 let deviation: i64 = v["deviation"].to_string().parse().unwrap();
                 if upload_metrics {
                     panic!("TODO...");
-                    /*
-                    solana_metrics::datapoint_info!(
-                        &v["name"].as_str().unwrap().trim_matches('\"'),
-                        ("test", "bench", String),
-                        ("branch", branch.to_string(), String),
-                        ("median", median, i64),
-                        ("deviation", deviation, i64),
-                        ("commit", git_commit_hash.trim().to_string(), String)
-                    );
-                    */
-                    
+                    // solana_metrics::datapoint_info!(
+                    //     &v["name"].as_str().unwrap().trim_matches('\"'),
+                    //     ("test", "bench", String),
+                    //     ("branch", branch.to_string(), String),
+                    //     ("median", median, i64),
+                    //     ("deviation", deviation, i64),
+                    //     ("commit", git_commit_hash.trim().to_string(), String)
+                    // );
                 }
                 let last_median =
                     get_last_metrics(&"median".to_string(), &db, &name, branch).unwrap_or_default();

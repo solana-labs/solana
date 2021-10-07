@@ -5,6 +5,7 @@ use {
             AccountShrinkThreshold, AccountStorageEntry, AccountsDb, AppendVecId, BankHashInfo,
         },
         accounts_index::AccountSecondaryIndexes,
+        accounts_update_notifier_interface::AccountsUpdateNotifier,
         ancestors::Ancestors,
         append_vec::{AppendVec, StoredMetaWriteVersion},
         bank::{Bank, BankFieldsToDeserialize, BankRc, Builtins},
@@ -21,6 +22,7 @@ use {
     log::*,
     rayon::prelude::*,
     serde::{de::DeserializeOwned, Deserialize, Serialize},
+    solana_measure::measure::Measure,
     solana_sdk::{
         clock::{Epoch, Slot, UnixTimestamp},
         epoch_schedule::EpochSchedule,
@@ -140,6 +142,7 @@ pub(crate) fn bank_from_stream<R>(
     caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
+    accounts_update_notifier: Option<AccountsUpdateNotifier>,
 ) -> std::result::Result<Bank, Error>
 where
     R: Read,
@@ -161,6 +164,7 @@ where
                 caching_enabled,
                 limit_load_slot_count_from_snapshot,
                 shrink_ratio,
+                accounts_update_notifier,
             )?;
             Ok(bank)
         }};
@@ -252,6 +256,7 @@ fn reconstruct_bank_from_fields<E>(
     caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
+    accounts_update_notifier: Option<AccountsUpdateNotifier>,
 ) -> Result<Bank, Error>
 where
     E: SerializableStorage + std::marker::Sync,
@@ -265,6 +270,7 @@ where
         caching_enabled,
         limit_load_slot_count_from_snapshot,
         shrink_ratio,
+        accounts_update_notifier,
     )?;
     accounts_db.freeze_accounts(
         &Ancestors::from(&bank_fields.ancestors),
@@ -314,6 +320,7 @@ fn reconstruct_accountsdb_from_fields<E>(
     caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
+    accounts_update_notifier: Option<AccountsUpdateNotifier>,
 ) -> Result<AccountsDb, Error>
 where
     E: SerializableStorage + std::marker::Sync,
@@ -324,6 +331,7 @@ where
         account_indexes,
         caching_enabled,
         shrink_ratio,
+        accounts_update_notifier,
     );
     let AccountsDbFields(storage, version, slot, bank_hash_info) = accounts_db_fields;
 
@@ -387,6 +395,15 @@ where
             }),
         );
     }
+
+    let mut measure_notify = Measure::start("accounts_notify");
+    accounts_db.notify_account_restore_from_snapshot();
+    measure_notify.stop();
+
+    datapoint_info!(
+        "reconstruct_accountsdb_from_fields()",
+        ("accountsdb-notify-at-start-us", measure_notify.as_us(), i64),
+    );
 
     if max_id > AppendVecId::MAX / 2 {
         panic!("Storage id {} larger than allowed max", max_id);

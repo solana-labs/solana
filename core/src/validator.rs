@@ -19,6 +19,7 @@ use {
     },
     crossbeam_channel::{bounded, unbounded},
     rand::{thread_rng, Rng},
+    solana_accountsdb_plugin_manager::accountsdb_plugin_service::AccountsDbPluginService,
     solana_gossip::{
         cluster_info::{
             ClusterInfo, Node, DEFAULT_CONTACT_DEBUG_INTERVAL_MILLIS,
@@ -58,6 +59,7 @@ use {
     solana_runtime::{
         accounts_db::AccountShrinkThreshold,
         accounts_index::AccountSecondaryIndexes,
+        accounts_update_notifier_interface::AccountsUpdateNotifier,
         bank::Bank,
         bank_forks::{BankForks, SnapshotConfig},
         commitment::BlockCommitmentCache,
@@ -104,6 +106,7 @@ pub struct ValidatorConfig {
     pub account_paths: Vec<PathBuf>,
     pub account_shrink_paths: Option<Vec<PathBuf>>,
     pub rpc_config: JsonRpcConfig,
+    pub accountsdb_plugin_config_file: Option<PathBuf>,
     pub rpc_addrs: Option<(SocketAddr, SocketAddr)>, // (JsonRpc, JsonRpcPubSub)
     pub pubsub_config: PubSubConfig,
     pub snapshot_config: Option<SnapshotConfig>,
@@ -163,6 +166,7 @@ impl Default for ValidatorConfig {
             account_paths: Vec::new(),
             account_shrink_paths: None,
             rpc_config: JsonRpcConfig::default(),
+            accountsdb_plugin_config_file: None,
             rpc_addrs: None,
             pubsub_config: PubSubConfig::default(),
             snapshot_config: None,
@@ -267,6 +271,7 @@ pub struct Validator {
     tpu: Tpu,
     tvu: Tvu,
     ip_echo_server: Option<solana_net_utils::IpEchoServer>,
+    accountsdb_plugin_service: Option<AccountsDbPluginService>,
 }
 
 // in the distant future, get rid of ::new()/exit() and use Result properly...
@@ -302,6 +307,27 @@ impl Validator {
 
         warn!("identity: {}", id);
         warn!("vote account: {}", vote_account);
+
+        let mut bank_notification_senders = Vec::new();
+
+        let accountsdb_plugin_service =
+            if let Some(accountsdb_plugin_config_file) = &config.accountsdb_plugin_config_file {
+                let (confirmed_bank_sender, confirmed_bank_receiver) = unbounded();
+                bank_notification_senders.push(confirmed_bank_sender);
+                let result = AccountsDbPluginService::new(
+                    confirmed_bank_receiver,
+                    accountsdb_plugin_config_file,
+                );
+                match result {
+                    Ok(accountsdb_plugin_service) => Some(accountsdb_plugin_service),
+                    Err(err) => {
+                        error!("Failed to load the AccountsDb plugin: {:?}", err);
+                        abort();
+                    }
+                }
+            } else {
+                None
+            };
 
         if config.voting_disabled {
             warn!("voting disabled");
@@ -396,6 +422,9 @@ impl Validator {
             config.enforce_ulimit_nofile,
             &start_progress,
             config.no_poh_speed_test,
+            accountsdb_plugin_service
+                .as_ref()
+                .map(|plugin_service| plugin_service.get_accounts_update_notifier()),
         );
 
         *start_progress.write().unwrap() = ValidatorStartProgress::StartingServices;
@@ -533,6 +562,11 @@ impl Validator {
                 ));
             }
             let (bank_notification_sender, bank_notification_receiver) = unbounded();
+            let confirmed_bank_subscribers = if !bank_notification_senders.is_empty() {
+                Some(Arc::new(RwLock::new(bank_notification_senders)))
+            } else {
+                None
+            };
             (
                 Some(JsonRpcService::new(
                     rpc_addr,
@@ -577,6 +611,7 @@ impl Validator {
                     bank_forks.clone(),
                     optimistically_confirmed_bank,
                     rpc_subscriptions.clone(),
+                    confirmed_bank_subscribers,
                 )),
                 Some(bank_notification_sender),
             )
@@ -814,6 +849,7 @@ impl Validator {
             poh_recorder,
             ip_echo_server,
             validator_exit: config.validator_exit.clone(),
+            accountsdb_plugin_service,
         }
     }
 
@@ -915,6 +951,12 @@ impl Validator {
             .expect("completed_data_sets_service");
         if let Some(ip_echo_server) = self.ip_echo_server {
             ip_echo_server.shutdown_background();
+        }
+
+        if let Some(accountsdb_plugin_service) = self.accountsdb_plugin_service {
+            accountsdb_plugin_service
+                .join()
+                .expect("accountsdb_plugin_service");
         }
     }
 }
@@ -1049,6 +1091,7 @@ fn post_process_restored_tower(
 }
 
 #[allow(clippy::type_complexity)]
+#[allow(clippy::too_many_arguments)]
 fn new_banks_from_ledger(
     validator_identity: &Pubkey,
     vote_account: &Pubkey,
@@ -1059,6 +1102,7 @@ fn new_banks_from_ledger(
     enforce_ulimit_nofile: bool,
     start_progress: &Arc<RwLock<ValidatorStartProgress>>,
     no_poh_speed_test: bool,
+    accounts_update_notifier: Option<AccountsUpdateNotifier>,
 ) -> (
     GenesisConfig,
     BankForks,
@@ -1175,6 +1219,7 @@ fn new_banks_from_ledger(
         transaction_history_services
             .cache_block_meta_sender
             .as_ref(),
+        accounts_update_notifier,
     )
     .unwrap_or_else(|err| {
         error!("Failed to load ledger: {:?}", err);

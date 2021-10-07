@@ -40,6 +40,7 @@ use crate::{
     },
     accounts_db::{AccountShrinkThreshold, ErrorCounters, SnapshotStorages},
     accounts_index::{AccountSecondaryIndexes, IndexKey, ScanResult},
+    accounts_update_notifier_interface::AccountsUpdateNotifier,
     ancestors::{Ancestors, AncestorsForSerialization},
     blockhash_queue::BlockhashQueue,
     builtins::{self, ActivationType},
@@ -1069,6 +1070,7 @@ impl Bank {
             false,
             AccountShrinkThreshold::default(),
             false,
+            None,
         )
     }
 
@@ -1083,6 +1085,7 @@ impl Bank {
             false,
             AccountShrinkThreshold::default(),
             false,
+            None,
         );
 
         bank.ns_per_slot = std::u128::MAX;
@@ -1106,9 +1109,11 @@ impl Bank {
             accounts_db_caching_enabled,
             shrink_ratio,
             false,
+            None,
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn new_with_paths(
         genesis_config: &GenesisConfig,
         paths: Vec<PathBuf>,
@@ -1119,6 +1124,7 @@ impl Bank {
         accounts_db_caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
         debug_do_not_add_builtins: bool,
+        accounts_update_notifier: Option<AccountsUpdateNotifier>,
     ) -> Self {
         let mut bank = Self::default();
         bank.ancestors = Ancestors::from(vec![bank.slot()]);
@@ -1131,6 +1137,7 @@ impl Bank {
             account_indexes,
             accounts_db_caching_enabled,
             shrink_ratio,
+            accounts_update_notifier,
         ));
         bank.process_genesis_config(genesis_config);
         bank.finish_init(
@@ -12542,6 +12549,7 @@ pub(crate) mod tests {
             false,
             AccountShrinkThreshold::default(),
             false,
+            None,
         ));
         // move to next epoch to create now deprecated rewards sysvar intentionally
         let bank1 = Arc::new(Bank::new_from_parent(

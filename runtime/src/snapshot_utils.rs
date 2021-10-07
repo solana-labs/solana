@@ -2,6 +2,7 @@ use {
     crate::{
         accounts_db::{AccountShrinkThreshold, AccountsDb},
         accounts_index::AccountSecondaryIndexes,
+        accounts_update_notifier_interface::AccountsUpdateNotifier,
         bank::{Bank, BankSlotDelta, Builtins},
         bank_forks::ArchiveFormat,
         hardened_unpack::{unpack_snapshot, ParallelSelector, UnpackError, UnpackedAppendVecMap},
@@ -633,6 +634,7 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
     shrink_ratio: AccountShrinkThreshold,
     test_hash_calculation: bool,
     accounts_db_skip_shrink: bool,
+    accounts_update_notifier: Option<AccountsUpdateNotifier>,
 ) -> Result<(Bank, BankFromArchiveTimings)> {
     let unpack_dir = tempfile::Builder::new()
         .prefix(TMP_SNAPSHOT_PREFIX)
@@ -673,6 +675,7 @@ pub fn bank_from_archive<P: AsRef<Path> + std::marker::Sync>(
         accounts_db_caching_enabled,
         limit_load_slot_count_from_snapshot,
         shrink_ratio,
+        accounts_update_notifier,
     )?;
     measure.stop();
 
@@ -900,6 +903,7 @@ fn rebuild_bank_from_snapshots(
     accounts_db_caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
+    accounts_update_notifier: Option<AccountsUpdateNotifier>,
 ) -> Result<Bank> {
     let (snapshot_version_enum, root_paths) =
         verify_snapshot_version_and_folder(snapshot_version, unpacked_snapshots_dir)?;
@@ -922,6 +926,7 @@ fn rebuild_bank_from_snapshots(
                 accounts_db_caching_enabled,
                 limit_load_slot_count_from_snapshot,
                 shrink_ratio,
+                accounts_update_notifier,
             ),
         }?)
     })?;
