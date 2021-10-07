@@ -163,6 +163,7 @@ pub(crate) fn submit_gossip_stats(
     gossip: &RwLock<CrdsGossip>,
     stakes: &HashMap<Pubkey, u64>,
 ) {
+<<<<<<< HEAD
     let (table_size, num_nodes, purged_values_size, failed_inserts_size) = {
         let gossip = gossip.read().unwrap();
         (
@@ -170,6 +171,16 @@ pub(crate) fn submit_gossip_stats(
             gossip.crds.num_nodes(),
             gossip.crds.num_purged(),
             gossip.pull.failed_inserts.len(),
+=======
+    let (table_size, num_nodes, num_pubkeys, purged_values_size, failed_inserts_size) = {
+        let gossip_crds = gossip.crds.read().unwrap();
+        (
+            gossip_crds.len(),
+            gossip_crds.num_nodes(),
+            gossip_crds.num_pubkeys(),
+            gossip_crds.num_purged(),
+            gossip.pull.failed_inserts_size(),
+>>>>>>> 0da661de6 (adds metrics for number of nodes vs number of pubkeys (#20512))
         )
     };
     let num_nodes_staked = stakes.values().filter(|stake| **stake > 0).count();
@@ -192,6 +203,7 @@ pub(crate) fn submit_gossip_stats(
         ("failed_inserts_size", failed_inserts_size as i64, i64),
         ("num_nodes", num_nodes as i64, i64),
         ("num_nodes_staked", num_nodes_staked as i64, i64),
+        ("num_pubkeys", num_pubkeys, i64),
     );
     datapoint_info!(
         "cluster_info_stats2",
