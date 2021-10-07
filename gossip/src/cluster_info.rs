@@ -1116,6 +1116,7 @@ impl ClusterInfo {
         Some(map(hashes))
     }
 
+    #[allow(clippy::type_complexity)]
     pub fn get_incremental_snapshot_hashes_for_node<F, Y>(
         &self,
         pubkey: &Pubkey,
@@ -1123,7 +1124,7 @@ impl ClusterInfo {
         let gossip_crds = self.gossip.crds.read().unwrap();
         let incremental_snapshot_hashes = gossip_crds.get::<&IncrementalSnapshotHashes>(*pubkey)?;
         Some((
-            incremental_snapshot_hashes.base.clone(),
+            incremental_snapshot_hashes.base,
             incremental_snapshot_hashes.hashes.clone(),
         ))
     }
