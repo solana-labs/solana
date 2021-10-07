@@ -292,6 +292,7 @@ impl Tvu {
             cluster_info.clone(),
             poh_recorder.clone(),
             tower_storage,
+            bank_forks.clone(),
         );
 
         let (cost_update_sender, cost_update_receiver): (

@@ -837,6 +837,7 @@ impl Validator {
             retransmit_slots_receiver,
             node.sockets.tpu,
             node.sockets.tpu_forwards,
+            node.sockets.tpu_vote,
             node.sockets.broadcast,
             &rpc_subscriptions,
             transaction_status_sender,
