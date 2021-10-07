@@ -994,156 +994,10 @@ Result:
 }
 ```
 
-### getFeeCalculatorForBlockhash
-
-Returns the fee calculator associated with the query blockhash, or `null` if the blockhash has expired
-
-#### Parameters:
-
-- `<string>` - query blockhash as a Base58 encoded string
-- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
-
-#### Results:
-
-The result will be an RpcResponse JSON object with `value` equal to:
-
-- `<null>` - if the query blockhash has expired
-- `<object>` - otherwise, a JSON object containing:
-  - `feeCalculator: <object>`, `FeeCalculator` object describing the cluster fee rate at the queried blockhash
-
-#### Example:
-
-Request:
-```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
-  {
-    "jsonrpc": "2.0",
-    "id": 1,
-    "method": "getFeeCalculatorForBlockhash",
-    "params": [
-      "GJxqhuxcgfn5Tcj6y3f8X4FeCDd2RQ6SnEMo1AAxrPRZ"
-    ]
-  }
-'
-```
-
-Result:
-```json
-{
-  "jsonrpc": "2.0",
-  "result": {
-    "context": {
-      "slot": 221
-    },
-    "value": {
-      "feeCalculator": {
-        "lamportsPerSignature": 5000
-      }
-    }
-  },
-  "id": 1
-}
-```
-
-### getFeeRateGovernor
-
-Returns the fee rate governor information from the root bank
-
-#### Parameters:
-
-None
-
-#### Results:
-
-The `result` field will be an `object` with the following fields:
-
-- `burnPercent: <u8>`, Percentage of fees collected to be destroyed
-- `maxLamportsPerSignature: <u64>`, Largest value `lamportsPerSignature` can attain for the next slot
-- `minLamportsPerSignature: <u64>`, Smallest value `lamportsPerSignature` can attain for the next slot
-- `targetLamportsPerSignature: <u64>`, Desired fee rate for the cluster
-- `targetSignaturesPerSlot: <u64>`, Desired signature rate for the cluster
-
-#### Example:
-
-Request:
-```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
-  {"jsonrpc":"2.0","id":1, "method":"getFeeRateGovernor"}
-'
-```
-
-Result:
-```json
-{
-  "jsonrpc": "2.0",
-  "result": {
-    "context": {
-      "slot": 54
-    },
-    "value": {
-      "feeRateGovernor": {
-        "burnPercent": 50,
-        "maxLamportsPerSignature": 100000,
-        "minLamportsPerSignature": 5000,
-        "targetLamportsPerSignature": 10000,
-        "targetSignaturesPerSlot": 20000
-      }
-    }
-  },
-  "id": 1
-}
-```
-
-### getFees
-
-Returns a recent block hash from the ledger, a fee schedule that can be used to
-compute the cost of submitting a transaction using it, and the last slot in
-which the blockhash will be valid.
-
-#### Parameters:
-
-- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
-
-#### Results:
-
-The result will be an RpcResponse JSON object with `value` set to a JSON object with the following fields:
-
-- `blockhash: <string>` - a Hash as base-58 encoded string
-- `feeCalculator: <object>` - FeeCalculator object, the fee schedule for this block hash
-- `lastValidSlot: <u64>` - DEPRECATED - this value is inaccurate and should not be relied upon
-- `lastValidBlockHeight: <u64>` - last [block height](../../terminology.md#block-height) at which a blockhash will be valid
-
-#### Example:
-
-Request:
-```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
-  {"jsonrpc":"2.0","id":1, "method":"getFees"}
-'
-```
-
-Result:
-```json
-{
-  "jsonrpc": "2.0",
-  "result": {
-    "context": {
-      "slot": 1
-    },
-    "value": {
-      "blockhash": "CSymwgTNX1j3E4qhKfJAUE41nBWEwXufoYryPbkde5RR",
-      "feeCalculator": {
-        "lamportsPerSignature": 5000
-      },
-      "lastValidSlot": 297,
-      "lastValidBlockHeight": 296
-    }
-  },
-  "id": 1
-}
-```
-
 ### getFeeForMessage
+
+**NEW: This method is only available in solana-core v1.9 or newer. Please use
+[getFees](jsonrpc-api.md#getfees) for solana-core v1.7/v1.8**
 
 Get the fee the network will charge for a particular Message
 
@@ -1299,8 +1153,8 @@ Unhealthy Result (if additional information is available)
 
 ### getHighestSnapshotSlot
 
-**NEW: This method is only available in solana-core v1.8 or newer. Please use
-[getSnapshotSlot](jsonrpc-api.md#getsnapshotslot) for solana-core v1.7**
+**NEW: This method is only available in solana-core v1.9 or newer. Please use
+[getSnapshotSlot](jsonrpc-api.md#getsnapshotslot) for solana-core v1.7/v1.8**
 
 Returns the highest slot information that the node has snapshots for.
 
@@ -2052,50 +1906,6 @@ Result:
       "pubkey": "CxELquR1gPP8wHe33gZ4QxqGB3sZ9RSwsJ2KshVewkFY"
     }
   ],
-  "id": 1
-}
-```
-
-### getRecentBlockhash
-
-Returns a recent block hash from the ledger, and a fee schedule that can be used to compute the cost of submitting a transaction using it.
-
-#### Parameters:
-
-- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
-
-#### Results:
-
-An RpcResponse containing a JSON object consisting of a string blockhash and FeeCalculator JSON object.
-
-- `RpcResponse<object>` - RpcResponse JSON object with `value` field set to a JSON object including:
-- `blockhash: <string>` - a Hash as base-58 encoded string
-- `feeCalculator: <object>` - FeeCalculator object, the fee schedule for this block hash
-
-#### Example:
-
-Request:
-```bash
-curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
-  {"jsonrpc":"2.0","id":1, "method":"getRecentBlockhash"}
-'
-```
-
-Result:
-```json
-{
-  "jsonrpc": "2.0",
-  "result": {
-    "context": {
-      "slot": 1
-    },
-    "value": {
-      "blockhash": "CSymwgTNX1j3E4qhKfJAUE41nBWEwXufoYryPbkde5RR",
-      "feeCalculator": {
-        "lamportsPerSignature": 5000
-      }
-    }
-  },
   "id": 1
 }
 ```
@@ -4783,6 +4593,208 @@ Result:
       "AVj7dxHlQ9IrvdYVIjuiRFs1jLaDMHixgrv+qtHBwz51L4/ImLZhszwiyEJDIp7xeBSpm/TX5B7mYzxa+fPOMw0BAAMFJMJVqLw+hJYheizSoYlLm53KzgT82cDVmazarqQKG2GQsLgiqktA+a+FDR4/7xnDX7rsusMwryYVUdixfz1B1Qan1RcZLwqvxvJl4/t3zHragsUp0L47E24tAFUgAAAABqfVFxjHdMkoVmOYaR1etoteuKObS21cc1VbIQAAAAAHYUgdNXR0u3xNdiTr072z2DVec9EQQ/wNo1OAAAAAAAtxOUhPBp2WSjUNJEgfvy70BbxI00fZyEPvFHNfxrtEAQQEAQIDADUCAAAAAQAAAAAAAACtAQAAAAAAAAdUE18R96XTJCe+YfRfUp6WP+YKCy/72ucOL8AoBFSpAA==",
       "base64"
     ]
+  },
+  "id": 1
+}
+```
+
+### getFeeCalculatorForBlockhash
+
+**DEPRECATED: Please use [isBlockhashValid](jsonrpc-api.md#isblockhashvalid) or [getFeeForMessage](jsonrpc-api.md#getfeeformessage) instead**
+This method is expected to be removed in solana-core v2.0
+
+Returns the fee calculator associated with the query blockhash, or `null` if the blockhash has expired
+
+#### Parameters:
+
+- `<string>` - query blockhash as a Base58 encoded string
+- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+
+#### Results:
+
+The result will be an RpcResponse JSON object with `value` equal to:
+
+- `<null>` - if the query blockhash has expired
+- `<object>` - otherwise, a JSON object containing:
+  - `feeCalculator: <object>`, `FeeCalculator` object describing the cluster fee rate at the queried blockhash
+
+#### Example:
+
+Request:
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "getFeeCalculatorForBlockhash",
+    "params": [
+      "GJxqhuxcgfn5Tcj6y3f8X4FeCDd2RQ6SnEMo1AAxrPRZ"
+    ]
+  }
+'
+```
+
+Result:
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "context": {
+      "slot": 221
+    },
+    "value": {
+      "feeCalculator": {
+        "lamportsPerSignature": 5000
+      }
+    }
+  },
+  "id": 1
+}
+```
+
+### getFeeRateGovernor
+
+Returns the fee rate governor information from the root bank
+
+#### Parameters:
+
+None
+
+#### Results:
+
+The `result` field will be an `object` with the following fields:
+
+- `burnPercent: <u8>`, Percentage of fees collected to be destroyed
+- `maxLamportsPerSignature: <u64>`, Largest value `lamportsPerSignature` can attain for the next slot
+- `minLamportsPerSignature: <u64>`, Smallest value `lamportsPerSignature` can attain for the next slot
+- `targetLamportsPerSignature: <u64>`, Desired fee rate for the cluster
+- `targetSignaturesPerSlot: <u64>`, Desired signature rate for the cluster
+
+#### Example:
+
+Request:
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0","id":1, "method":"getFeeRateGovernor"}
+'
+```
+
+Result:
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "context": {
+      "slot": 54
+    },
+    "value": {
+      "feeRateGovernor": {
+        "burnPercent": 50,
+        "maxLamportsPerSignature": 100000,
+        "minLamportsPerSignature": 5000,
+        "targetLamportsPerSignature": 10000,
+        "targetSignaturesPerSlot": 20000
+      }
+    }
+  },
+  "id": 1
+}
+```
+
+### getFees
+
+**DEPRECATED: Please use [getFeeForMessage](jsonrpc-api.md#getfeeformessage) instead**
+This method is expected to be removed in solana-core v2.0
+
+Returns a recent block hash from the ledger, a fee schedule that can be used to
+compute the cost of submitting a transaction using it, and the last slot in
+which the blockhash will be valid.
+
+#### Parameters:
+
+- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+
+#### Results:
+
+The result will be an RpcResponse JSON object with `value` set to a JSON object with the following fields:
+
+- `blockhash: <string>` - a Hash as base-58 encoded string
+- `feeCalculator: <object>` - FeeCalculator object, the fee schedule for this block hash
+- `lastValidSlot: <u64>` - DEPRECATED - this value is inaccurate and should not be relied upon
+- `lastValidBlockHeight: <u64>` - last [block height](../../terminology.md#block-height) at which a blockhash will be valid
+
+#### Example:
+
+Request:
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0","id":1, "method":"getFees"}
+'
+```
+
+Result:
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "context": {
+      "slot": 1
+    },
+    "value": {
+      "blockhash": "CSymwgTNX1j3E4qhKfJAUE41nBWEwXufoYryPbkde5RR",
+      "feeCalculator": {
+        "lamportsPerSignature": 5000
+      },
+      "lastValidSlot": 297,
+      "lastValidBlockHeight": 296
+    }
+  },
+  "id": 1
+}
+```
+
+### getRecentBlockhash
+
+**DEPRECATED: Please use [getFeeForMessage](jsonrpc-api.md#getfeeformessage) instead**
+This method is expected to be removed in solana-core v2.0
+
+Returns a recent block hash from the ledger, and a fee schedule that can be used to compute the cost of submitting a transaction using it.
+
+#### Parameters:
+
+- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+
+#### Results:
+
+An RpcResponse containing a JSON object consisting of a string blockhash and FeeCalculator JSON object.
+
+- `RpcResponse<object>` - RpcResponse JSON object with `value` field set to a JSON object including:
+- `blockhash: <string>` - a Hash as base-58 encoded string
+- `feeCalculator: <object>` - FeeCalculator object, the fee schedule for this block hash
+
+#### Example:
+
+Request:
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0","id":1, "method":"getRecentBlockhash"}
+'
+```
+
+Result:
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "context": {
+      "slot": 1
+    },
+    "value": {
+      "blockhash": "CSymwgTNX1j3E4qhKfJAUE41nBWEwXufoYryPbkde5RR",
+      "feeCalculator": {
+        "lamportsPerSignature": 5000
+      }
+    }
   },
   "id": 1
 }
