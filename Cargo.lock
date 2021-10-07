@@ -5101,7 +5101,12 @@ dependencies = [
  "borsh-derive",
  "bs58",
  "bv",
+<<<<<<< HEAD
  "curve25519-dalek 2.1.0",
+=======
+ "bytemuck",
+ "curve25519-dalek 3.2.0",
+>>>>>>> f96685982 (Derive Pod/Zeroable for Pubkey)
  "hex",
  "itertools 0.9.0",
  "lazy_static",
