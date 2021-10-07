@@ -25,6 +25,7 @@ pub use solana_sdk::stake::instruction::*;
 
 pub fn process_instruction(
     _program_id: &Pubkey,
+    _first_instruction_account: usize,
     data: &[u8],
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {

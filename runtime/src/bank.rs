@@ -6683,6 +6683,7 @@ pub(crate) mod tests {
 
     fn mock_process_instruction(
         _program_id: &Pubkey,
+        _first_instruction_account: usize,
         data: &[u8],
         invoke_context: &mut dyn InvokeContext,
     ) -> result::Result<(), InstructionError> {
@@ -10330,6 +10331,7 @@ pub(crate) mod tests {
         }
         fn mock_vote_processor(
             program_id: &Pubkey,
+            _first_instruction_account: usize,
             _instruction_data: &[u8],
             _invoke_context: &mut dyn InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
@@ -10387,6 +10389,7 @@ pub(crate) mod tests {
 
         fn mock_vote_processor(
             _pubkey: &Pubkey,
+            _first_instruction_account: usize,
             _data: &[u8],
             _invoke_context: &mut dyn InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
@@ -10437,6 +10440,7 @@ pub(crate) mod tests {
 
         fn mock_ix_processor(
             _pubkey: &Pubkey,
+            _first_instruction_account: usize,
             _data: &[u8],
             _invoke_context: &mut dyn InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
@@ -11278,6 +11282,7 @@ pub(crate) mod tests {
 
         fn mock_process_instruction(
             _program_id: &Pubkey,
+            _first_instruction_account: usize,
             data: &[u8],
             invoke_context: &mut dyn InvokeContext,
         ) -> result::Result<(), InstructionError> {
@@ -11336,6 +11341,7 @@ pub(crate) mod tests {
         #[allow(clippy::unnecessary_wraps)]
         fn mock_process_instruction(
             _program_id: &Pubkey,
+            _first_instruction_account: usize,
             _data: &[u8],
             _invoke_context: &mut dyn InvokeContext,
         ) -> result::Result<(), InstructionError> {
@@ -11522,6 +11528,7 @@ pub(crate) mod tests {
     #[allow(clippy::unnecessary_wraps)]
     fn mock_ok_vote_processor(
         _pubkey: &Pubkey,
+        _first_instruction_account: usize,
         _data: &[u8],
         _invoke_context: &mut dyn InvokeContext,
     ) -> std::result::Result<(), InstructionError> {
@@ -11772,6 +11779,7 @@ pub(crate) mod tests {
     fn test_same_program_id_uses_unqiue_executable_accounts() {
         fn nested_processor(
             _program_id: &Pubkey,
+            _first_instruction_account: usize,
             _data: &[u8],
             invoke_context: &mut dyn InvokeContext,
         ) -> result::Result<(), InstructionError> {
@@ -12138,6 +12146,7 @@ pub(crate) mod tests {
         #[allow(clippy::unnecessary_wraps)]
         fn mock_ix_processor(
             _pubkey: &Pubkey,
+            _first_instruction_account: usize,
             _data: &[u8],
             _invoke_context: &mut dyn InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
@@ -12187,6 +12196,7 @@ pub(crate) mod tests {
         #[allow(clippy::unnecessary_wraps)]
         fn mock_ix_processor(
             _pubkey: &Pubkey,
+            _first_instruction_account: usize,
             _data: &[u8],
             _context: &mut dyn InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
@@ -13078,6 +13088,7 @@ pub(crate) mod tests {
         #[allow(clippy::unnecessary_wraps)]
         fn mock_process_instruction(
             _program_id: &Pubkey,
+            _first_instruction_account: usize,
             _data: &[u8],
             _invoke_context: &mut dyn InvokeContext,
         ) -> std::result::Result<(), solana_sdk::instruction::InstructionError> {
@@ -14575,6 +14586,7 @@ pub(crate) mod tests {
 
         fn mock_ix_processor(
             _pubkey: &Pubkey,
+            _first_instruction_account: usize,
             _data: &[u8],
             invoke_context: &mut dyn InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
@@ -14784,6 +14796,7 @@ pub(crate) mod tests {
 
         fn mock_ix_processor(
             _pubkey: &Pubkey,
+            _first_instruction_account: usize,
             _data: &[u8],
             invoke_context: &mut dyn InvokeContext,
         ) -> std::result::Result<(), InstructionError> {

@@ -264,6 +264,7 @@ fn transfer_with_seed(
 
 pub fn process_instruction(
     _owner: &Pubkey,
+    _first_instruction_account: usize,
     instruction_data: &[u8],
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
@@ -511,6 +512,7 @@ mod tests {
     ) -> Result<(), InstructionError> {
         super::process_instruction(
             owner,
+            1,
             instruction_data,
             &mut MockInvokeContext::new(keyed_accounts),
         )
@@ -1592,6 +1594,7 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
+                1,
                 &serialize(&SystemInstruction::AdvanceNonceAccount).unwrap(),
                 invoke_context,
             ),
@@ -1972,6 +1975,7 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
+                1,
                 &serialize(&SystemInstruction::AdvanceNonceAccount).unwrap(),
                 invoke_context,
             ),

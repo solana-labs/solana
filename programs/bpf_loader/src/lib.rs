@@ -168,22 +168,37 @@ pub fn create_vm<'a>(
 
 pub fn process_instruction(
     program_id: &Pubkey,
+    first_instruction_account: usize,
     instruction_data: &[u8],
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
-    process_instruction_common(program_id, instruction_data, invoke_context, false)
+    process_instruction_common(
+        program_id,
+        first_instruction_account,
+        instruction_data,
+        invoke_context,
+        false,
+    )
 }
 
 pub fn process_instruction_jit(
     program_id: &Pubkey,
+    first_instruction_account: usize,
     instruction_data: &[u8],
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
-    process_instruction_common(program_id, instruction_data, invoke_context, true)
+    process_instruction_common(
+        program_id,
+        first_instruction_account,
+        instruction_data,
+        invoke_context,
+        true,
+    )
 }
 
 fn process_instruction_common(
     program_id: &Pubkey,
+    _first_instruction_account: usize,
     instruction_data: &[u8],
     invoke_context: &mut dyn InvokeContext,
     use_jit: bool,

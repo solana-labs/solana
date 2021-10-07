@@ -80,6 +80,7 @@ macro_rules! declare_builtin_name {
 ///
 /// fn my_process_instruction(
 ///     program_id: &Pubkey,
+///     first_instruction_account: usize,
 ///     keyed_accounts: &[KeyedAccount],
 ///     instruction_data: &[u8],
 /// ) -> Result<(), InstructionError> {
@@ -111,6 +112,7 @@ macro_rules! declare_builtin_name {
 ///
 /// fn my_process_instruction(
 ///     program_id: &Pubkey,
+///     first_instruction_account: usize,
 ///     keyed_accounts: &[KeyedAccount],
 ///     instruction_data: &[u8],
 /// ) -> Result<(), InstructionError> {

@@ -138,6 +138,7 @@ impl NativeLoader {
     pub fn process_instruction(
         &self,
         program_id: &Pubkey,
+        _first_instruction_account: usize,
         instruction_data: &[u8],
         invoke_context: &mut dyn InvokeContext,
     ) -> Result<(), InstructionError> {

@@ -27,7 +27,7 @@ pub type LoaderEntrypoint = unsafe extern "C" fn(
 ) -> Result<(), InstructionError>;
 
 pub type ProcessInstructionWithContext =
-    fn(&Pubkey, &[u8], &mut dyn InvokeContext) -> Result<(), InstructionError>;
+    fn(&Pubkey, usize, &[u8], &mut dyn InvokeContext) -> Result<(), InstructionError>;
 
 pub struct InvokeContextStackFrame<'a> {
     pub key: Pubkey,

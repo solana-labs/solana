@@ -596,6 +596,7 @@ mod tests {
 
     fn mock_process_instruction(
         program_id: &Pubkey,
+        _first_instruction_account: usize,
         data: &[u8],
         invoke_context: &mut dyn InvokeContext,
     ) -> Result<(), InstructionError> {
@@ -809,6 +810,7 @@ mod tests {
 
         fn mock_system_process_instruction(
             _program_id: &Pubkey,
+            _first_instruction_account: usize,
             data: &[u8],
             invoke_context: &mut dyn InvokeContext,
         ) -> Result<(), InstructionError> {
@@ -979,6 +981,7 @@ mod tests {
 
         fn mock_system_process_instruction(
             _program_id: &Pubkey,
+            _first_instruction_account: usize,
             data: &[u8],
             invoke_context: &mut dyn InvokeContext,
         ) -> Result<(), InstructionError> {
@@ -1500,6 +1503,7 @@ mod tests {
         let mock_program_id = Pubkey::new_unique();
         fn mock_process_instruction(
             _program_id: &Pubkey,
+            _first_instruction_account: usize,
             _data: &[u8],
             _invoke_context: &mut dyn InvokeContext,
         ) -> Result<(), InstructionError> {
