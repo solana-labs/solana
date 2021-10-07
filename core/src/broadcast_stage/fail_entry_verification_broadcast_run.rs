@@ -145,9 +145,9 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
             &self.cluster_nodes_cache,
             &Arc::new(AtomicInterval::default()),
             &mut TransmitShredsStats::default(),
-            cluster_info.socket_addr_space(),
             cluster_info,
             bank_forks,
+            cluster_info.socket_addr_space(),
         )
     }
     fn record(

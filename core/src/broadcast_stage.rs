@@ -22,8 +22,10 @@ use {
     solana_metrics::{inc_new_counter_error, inc_new_counter_info},
     solana_poh::poh_recorder::WorkingBankEntry,
     solana_runtime::{bank::Bank, bank_forks::BankForks},
-    solana_sdk::timing::{timestamp, AtomicInterval},
-    solana_sdk::{clock::Slot, pubkey::Pubkey},
+    solana_sdk::{
+        timing::{timestamp, AtomicInterval},
+        {clock::Slot, pubkey::Pubkey},
+    },
     solana_streamer::{
         sendmmsg::{batch_send, SendPktsError},
         socket::SocketAddrSpace,
@@ -31,9 +33,11 @@ use {
     std::{
         collections::HashMap,
         net::UdpSocket,
-        sync::atomic::{AtomicBool, Ordering},
-        sync::mpsc::{channel, Receiver, RecvError, RecvTimeoutError, Sender},
-        sync::{Arc, Mutex, RwLock},
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            mpsc::{channel, Receiver, RecvError, RecvTimeoutError, Sender},
+            Arc, Mutex, RwLock,
+        },
         thread::{self, Builder, JoinHandle},
         time::{Duration, Instant},
     },
@@ -399,9 +403,9 @@ pub fn broadcast_shreds(
     cluster_nodes_cache: &ClusterNodesCache<BroadcastStage>,
     last_datapoint_submit: &Arc<AtomicInterval>,
     transmit_stats: &mut TransmitShredsStats,
-    socket_addr_space: &SocketAddrSpace,
     cluster_info: &ClusterInfo,
     bank_forks: &Arc<RwLock<BankForks>>,
+    socket_addr_space: &SocketAddrSpace,
 ) -> Result<()> {
     let mut result = Ok(());
     let mut shred_select = Measure::start("shred_select");
