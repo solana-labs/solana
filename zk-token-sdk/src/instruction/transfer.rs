@@ -468,9 +468,12 @@ mod test {
     #[test]
     fn test_transfer_correctness() {
         // ElGamal keys for source, destination, and auditor accounts
-        let (source_pk, source_sk) = ElGamal::new();
-        let (dest_pk, _) = ElGamal::new();
-        let (auditor_pk, _) = ElGamal::new();
+        let ElGamal {
+            pk: source_pk,
+            sk: source_sk,
+        } = ElGamal::new();
+        let dest_pk = ElGamal::new().pk;
+        let auditor_pk = ElGamal::new().pk;
 
         // create source account spendable ciphertext
         let spendable_balance: u64 = 77;
@@ -496,9 +499,15 @@ mod test {
     #[test]
     fn test_source_dest_ciphertext() {
         // ElGamal keys for source, destination, and auditor accounts
-        let (source_pk, source_sk) = ElGamal::new();
-        let (dest_pk, dest_sk) = ElGamal::new();
-        let (auditor_pk, _) = ElGamal::new();
+        let ElGamal {
+            pk: source_pk,
+            sk: source_sk,
+        } = ElGamal::new();
+        let ElGamal {
+            pk: dest_pk,
+            sk: dest_sk,
+        } = ElGamal::new();
+        let auditor_pk = ElGamal::new().pk;
 
         // create source account spendable ciphertext
         let spendable_balance: u64 = 77;
