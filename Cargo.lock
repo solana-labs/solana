@@ -4162,7 +4162,7 @@ dependencies = [
 
 [[package]]
 name = "solana-accountsdb-plugin-interface"
-version = "1.7.15"
+version = "1.8.1"
 dependencies = [
  "log 0.4.14",
  "thiserror",
@@ -4170,7 +4170,7 @@ dependencies = [
 
 [[package]]
 name = "solana-accountsdb-plugin-manager"
-version = "1.7.15"
+version = "1.8.1"
 dependencies = [
  "bs58 0.4.0",
  "crossbeam-channel 0.4.4",
@@ -4180,7 +4180,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "solana-accountsdb-plugin-interface",
- "solana-logger 1.7.15",
+ "solana-logger 1.8.1",
  "solana-metrics",
  "solana-rpc",
  "solana-runtime",
@@ -4190,7 +4190,7 @@ dependencies = [
 
 [[package]]
 name = "solana-accountsdb-plugin-postgres"
-version = "1.7.15"
+version = "1.8.1"
 dependencies = [
  "bs58 0.4.0",
  "chrono",
@@ -4201,7 +4201,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "solana-accountsdb-plugin-interface",
- "solana-logger 1.7.15",
+ "solana-logger 1.8.1",
  "thiserror",
 ]
 
