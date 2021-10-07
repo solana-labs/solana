@@ -42,6 +42,7 @@ impl TransactionCost {
     }
 }
 
+// TODO TAO - does CostMOdel needs AbiExample?
 #[derive(AbiExample, Debug)]
 pub struct CostModel {
     account_cost_limit: u64,
@@ -149,6 +150,8 @@ impl CostModel {
         message.account_keys_iter().enumerate().for_each(|(i, k)| {
             let is_writable = message.is_writable(i, demote_program_write_locks);
 
+            // TODO TAO - is pushing key really this expensive? Test it, otherwise,
+            // can push index
             if is_writable {
                 tx_cost.writable_accounts.push(*k);
                 tx_cost.write_lock_cost += WRITE_LOCK_UNITS;

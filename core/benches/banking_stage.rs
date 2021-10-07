@@ -228,6 +228,7 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
             None,
             s,
             Arc::new(RwLock::new(CostModel::default())),
+            Arc::new(RwLock::new(CostModel::new(std::u64::MAX, std::u64::MAX))),
         );
         poh_recorder.lock().unwrap().set_bank(&bank);
 

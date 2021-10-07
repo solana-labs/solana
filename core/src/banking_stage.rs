@@ -963,6 +963,16 @@ impl BankingStage {
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
     ) -> (Result<usize, PohRecorderError>, Vec<usize>) {
+        // TODO TAO - before locking account for txs, do
+        // 1. calculate TXs costs: cost_model.calculate_costs(txs) -> [transaction_cost]
+        // 2, combine txs and [transaction_costs] into txs_costs, do packing logic:
+        //    for (tx, cost) { bank.cost_tracker_mutable().add(tx, cost)->result;
+        //        for OK: tx into candidates_txs list;
+        //        for err: tx into retryable_txs;
+        // 3. continue with candidate_txs to lock accounts and process_load_record.
+        //     *passing [transaction_costs] with transactions, it will be used within _locked() to
+        //     compare account balance, and drop txs if necessary*
+
         let mut lock_time = Measure::start("lock_time");
         // Once accounts are locked, other threads cannot encode transactions that will modify the
         // same account state
