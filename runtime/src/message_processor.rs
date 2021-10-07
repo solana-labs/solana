@@ -11,7 +11,8 @@ use solana_sdk::{
     compute_budget::ComputeBudget,
     feature_set::{
         demote_program_write_locks, do_support_realloc, neon_evm_compute_budget,
-        prevent_calling_precompiles_as_programs, tx_wide_compute_cap, FeatureSet,
+        prevent_calling_precompiles_as_programs, remove_native_loader, tx_wide_compute_cap,
+        FeatureSet,
     },
     fee_calculator::FeeCalculator,
     hash::Hash,
@@ -329,12 +330,14 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
             .ok_or(InstructionError::CallDepth)
     }
     fn remove_first_keyed_account(&mut self) -> Result<(), InstructionError> {
-        let stack_frame = &mut self
-            .invoke_stack
-            .last_mut()
-            .ok_or(InstructionError::CallDepth)?;
-        stack_frame.keyed_accounts_range.start =
-            stack_frame.keyed_accounts_range.start.saturating_add(1);
+        if !self.is_feature_active(&remove_native_loader::id()) {
+            let stack_frame = &mut self
+                .invoke_stack
+                .last_mut()
+                .ok_or(InstructionError::CallDepth)?;
+            stack_frame.keyed_accounts_range.start =
+                stack_frame.keyed_accounts_range.start.saturating_add(1);
+        }
         Ok(())
     }
     fn get_keyed_accounts(&self) -> Result<&[KeyedAccount], InstructionError> {

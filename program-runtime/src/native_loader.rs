@@ -174,6 +174,7 @@ impl NativeLoader {
             return Err(NativeLoaderError::InvalidAccountData.into());
         }
         trace!("Call native {:?}", name);
+        #[allow(deprecated)]
         invoke_context.remove_first_keyed_account()?;
         if name.ends_with("loader_program") {
             let entrypoint =
