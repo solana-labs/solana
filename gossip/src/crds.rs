@@ -313,8 +313,13 @@ impl Crds {
             .map(move |i| self.table.index(*i))
     }
 
-    /// Returns number of known pubkeys (network size).
+    /// Returns number of known contact-infos (network size).
     pub(crate) fn num_nodes(&self) -> usize {
+        self.nodes.len()
+    }
+
+    /// Returns number of unique pubkeys.
+    pub(crate) fn num_pubkeys(&self) -> usize {
         self.records.len()
     }
 
