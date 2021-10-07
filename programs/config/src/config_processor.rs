@@ -15,14 +15,15 @@ use std::collections::BTreeSet;
 
 pub fn process_instruction(
     _program_id: &Pubkey,
-    _first_instruction_account: usize,
+    first_instruction_account: usize,
     data: &[u8],
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
     let keyed_accounts = invoke_context.get_keyed_accounts()?;
 
     let key_list: ConfigKeys = limited_deserialize(data)?;
-    let config_keyed_account = &mut keyed_account_at_index(keyed_accounts, 1)?;
+    let config_keyed_account =
+        &mut keyed_account_at_index(keyed_accounts, first_instruction_account)?;
     let current_data: ConfigKeys = {
         let config_account = config_keyed_account.try_account_ref_mut()?;
         if config_account.owner() != &crate::id() {

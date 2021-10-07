@@ -309,7 +309,7 @@ fn verify_rent_exemption(
 
 pub fn process_instruction(
     _program_id: &Pubkey,
-    _first_instruction_account: usize,
+    first_instruction_account: usize,
     data: &[u8],
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
@@ -318,7 +318,7 @@ pub fn process_instruction(
     trace!("process_instruction: {:?}", data);
     trace!("keyed_accounts: {:?}", keyed_accounts);
 
-    let me = &mut keyed_account_at_index(keyed_accounts, 1)?;
+    let me = &mut keyed_account_at_index(keyed_accounts, first_instruction_account)?;
     if me.owner()? != id() {
         return Err(InstructionError::InvalidAccountOwner);
     }
@@ -326,12 +326,18 @@ pub fn process_instruction(
     let signers: HashSet<Pubkey> = get_signers(&keyed_accounts[1..]);
     match limited_deserialize(data)? {
         VoteInstruction::InitializeAccount(vote_init) => {
-            verify_rent_exemption(me, keyed_account_at_index(keyed_accounts, 2)?)?;
+            verify_rent_exemption(
+                me,
+                keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?,
+            )?;
             vote_state::initialize_account(
                 me,
                 &vote_init,
                 &signers,
-                &from_keyed_account::<Clock>(keyed_account_at_index(keyed_accounts, 3)?)?,
+                &from_keyed_account::<Clock>(keyed_account_at_index(
+                    keyed_accounts,
+                    first_instruction_account + 2,
+                )?)?,
                 invoke_context.is_feature_active(&feature_set::check_init_vote_data::id()),
             )
         }
@@ -340,11 +346,14 @@ pub fn process_instruction(
             &voter_pubkey,
             vote_authorize,
             &signers,
-            &from_keyed_account::<Clock>(keyed_account_at_index(keyed_accounts, 2)?)?,
+            &from_keyed_account::<Clock>(keyed_account_at_index(
+                keyed_accounts,
+                first_instruction_account + 1,
+            )?)?,
         ),
         VoteInstruction::UpdateValidatorIdentity => vote_state::update_validator_identity(
             me,
-            keyed_account_at_index(keyed_accounts, 2)?.unsigned_key(),
+            keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?.unsigned_key(),
             &signers,
         ),
         VoteInstruction::UpdateCommission(commission) => {
@@ -354,28 +363,38 @@ pub fn process_instruction(
             inc_new_counter_info!("vote-native", 1);
             vote_state::process_vote(
                 me,
-                &from_keyed_account::<SlotHashes>(keyed_account_at_index(keyed_accounts, 2)?)?,
-                &from_keyed_account::<Clock>(keyed_account_at_index(keyed_accounts, 3)?)?,
+                &from_keyed_account::<SlotHashes>(keyed_account_at_index(
+                    keyed_accounts,
+                    first_instruction_account + 1,
+                )?)?,
+                &from_keyed_account::<Clock>(keyed_account_at_index(
+                    keyed_accounts,
+                    first_instruction_account + 2,
+                )?)?,
                 &vote,
                 &signers,
             )
         }
         VoteInstruction::Withdraw(lamports) => {
-            let to = keyed_account_at_index(keyed_accounts, 2)?;
+            let to = keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
             vote_state::withdraw(me, lamports, to, &signers)
         }
         VoteInstruction::AuthorizeChecked(vote_authorize) => {
             if invoke_context.is_feature_active(&feature_set::vote_stake_checked_instructions::id())
             {
-                let voter_pubkey = &keyed_account_at_index(keyed_accounts, 4)?
-                    .signer_key()
-                    .ok_or(InstructionError::MissingRequiredSignature)?;
+                let voter_pubkey =
+                    &keyed_account_at_index(keyed_accounts, first_instruction_account + 3)?
+                        .signer_key()
+                        .ok_or(InstructionError::MissingRequiredSignature)?;
                 vote_state::authorize(
                     me,
                     voter_pubkey,
                     vote_authorize,
                     &signers,
-                    &from_keyed_account::<Clock>(keyed_account_at_index(keyed_accounts, 2)?)?,
+                    &from_keyed_account::<Clock>(keyed_account_at_index(
+                        keyed_accounts,
+                        first_instruction_account + 1,
+                    )?)?,
                 )
             } else {
                 Err(InstructionError::InvalidInstructionData)

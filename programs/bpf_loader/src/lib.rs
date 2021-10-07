@@ -294,12 +294,19 @@ fn process_instruction_common(
         if bpf_loader_upgradeable::check_id(program_id) {
             process_loader_upgradeable_instruction(
                 program_id,
+                first_instruction_account,
                 instruction_data,
                 invoke_context,
                 use_jit,
             )?;
         } else {
-            process_loader_instruction(program_id, instruction_data, invoke_context, use_jit)?;
+            process_loader_instruction(
+                program_id,
+                first_instruction_account,
+                instruction_data,
+                invoke_context,
+                use_jit,
+            )?;
         }
     }
     Ok(())
@@ -307,6 +314,7 @@ fn process_instruction_common(
 
 fn process_loader_upgradeable_instruction(
     program_id: &Pubkey,
+    first_instruction_account: usize,
     instruction_data: &[u8],
     invoke_context: &mut dyn InvokeContext,
     use_jit: bool,
@@ -316,22 +324,22 @@ fn process_loader_upgradeable_instruction(
 
     match limited_deserialize(instruction_data)? {
         UpgradeableLoaderInstruction::InitializeBuffer => {
-            let buffer = keyed_account_at_index(keyed_accounts, 1)?;
+            let buffer = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
 
             if UpgradeableLoaderState::Uninitialized != buffer.state()? {
                 ic_logger_msg!(logger, "Buffer account already initialized");
                 return Err(InstructionError::AccountAlreadyInitialized);
             }
 
-            let authority = keyed_account_at_index(keyed_accounts, 2)?;
+            let authority = keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
 
             buffer.set_state(&UpgradeableLoaderState::Buffer {
                 authority_address: Some(*authority.unsigned_key()),
             })?;
         }
         UpgradeableLoaderInstruction::Write { offset, bytes } => {
-            let buffer = keyed_account_at_index(keyed_accounts, 1)?;
-            let authority = keyed_account_at_index(keyed_accounts, 2)?;
+            let buffer = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
+            let authority = keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
 
             if let UpgradeableLoaderState::Buffer { authority_address } = buffer.state()? {
                 if authority_address.is_none() {
@@ -358,13 +366,20 @@ fn process_loader_upgradeable_instruction(
             )?;
         }
         UpgradeableLoaderInstruction::DeployWithMaxDataLen { max_data_len } => {
-            let payer = keyed_account_at_index(keyed_accounts, 1)?;
-            let programdata = keyed_account_at_index(keyed_accounts, 2)?;
-            let program = keyed_account_at_index(keyed_accounts, 3)?;
-            let buffer = keyed_account_at_index(keyed_accounts, 4)?;
-            let rent = from_keyed_account::<Rent>(keyed_account_at_index(keyed_accounts, 5)?)?;
-            let clock = from_keyed_account::<Clock>(keyed_account_at_index(keyed_accounts, 6)?)?;
-            let authority = keyed_account_at_index(keyed_accounts, 8)?;
+            let payer = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
+            let programdata =
+                keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
+            let program = keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?;
+            let buffer = keyed_account_at_index(keyed_accounts, first_instruction_account + 3)?;
+            let rent = from_keyed_account::<Rent>(keyed_account_at_index(
+                keyed_accounts,
+                first_instruction_account + 4,
+            )?)?;
+            let clock = from_keyed_account::<Clock>(keyed_account_at_index(
+                keyed_accounts,
+                first_instruction_account + 5,
+            )?)?;
+            let authority = keyed_account_at_index(keyed_accounts, first_instruction_account + 7)?;
             let upgrade_authority_address = Some(*authority.unsigned_key());
             let upgrade_authority_signer = authority.signer_key().is_none();
 
@@ -471,10 +486,11 @@ fn process_loader_upgradeable_instruction(
             invoke_context.add_executor(&new_program_id, executor);
 
             let keyed_accounts = invoke_context.get_keyed_accounts()?;
-            let payer = keyed_account_at_index(keyed_accounts, 1)?;
-            let programdata = keyed_account_at_index(keyed_accounts, 2)?;
-            let program = keyed_account_at_index(keyed_accounts, 3)?;
-            let buffer = keyed_account_at_index(keyed_accounts, 4)?;
+            let payer = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
+            let programdata =
+                keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
+            let program = keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?;
+            let buffer = keyed_account_at_index(keyed_accounts, first_instruction_account + 3)?;
 
             // Update the ProgramData account and record the program bits
             programdata.set_state(&UpgradeableLoaderState::ProgramData {
@@ -502,12 +518,18 @@ fn process_loader_upgradeable_instruction(
             ic_logger_msg!(logger, "Deployed program {:?}", new_program_id);
         }
         UpgradeableLoaderInstruction::Upgrade => {
-            let programdata = keyed_account_at_index(keyed_accounts, 1)?;
-            let program = keyed_account_at_index(keyed_accounts, 2)?;
-            let buffer = keyed_account_at_index(keyed_accounts, 3)?;
-            let rent = from_keyed_account::<Rent>(keyed_account_at_index(keyed_accounts, 5)?)?;
-            let clock = from_keyed_account::<Clock>(keyed_account_at_index(keyed_accounts, 6)?)?;
-            let authority = keyed_account_at_index(keyed_accounts, 7)?;
+            let programdata = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
+            let program = keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
+            let buffer = keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?;
+            let rent = from_keyed_account::<Rent>(keyed_account_at_index(
+                keyed_accounts,
+                first_instruction_account + 4,
+            )?)?;
+            let clock = from_keyed_account::<Clock>(keyed_account_at_index(
+                keyed_accounts,
+                first_instruction_account + 5,
+            )?)?;
+            let authority = keyed_account_at_index(keyed_accounts, first_instruction_account + 6)?;
 
             // Verify Program account
 
@@ -603,10 +625,10 @@ fn process_loader_upgradeable_instruction(
             invoke_context.add_executor(&new_program_id, executor);
 
             let keyed_accounts = invoke_context.get_keyed_accounts()?;
-            let programdata = keyed_account_at_index(keyed_accounts, 1)?;
-            let buffer = keyed_account_at_index(keyed_accounts, 3)?;
-            let spill = keyed_account_at_index(keyed_accounts, 4)?;
-            let authority = keyed_account_at_index(keyed_accounts, 7)?;
+            let programdata = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
+            let buffer = keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?;
+            let spill = keyed_account_at_index(keyed_accounts, first_instruction_account + 3)?;
+            let authority = keyed_account_at_index(keyed_accounts, first_instruction_account + 6)?;
 
             // Update the ProgramData account, record the upgraded data, and zero
             // the rest
@@ -635,11 +657,13 @@ fn process_loader_upgradeable_instruction(
             ic_logger_msg!(logger, "Upgraded program {:?}", new_program_id);
         }
         UpgradeableLoaderInstruction::SetAuthority => {
-            let account = keyed_account_at_index(keyed_accounts, 1)?;
-            let present_authority = keyed_account_at_index(keyed_accounts, 2)?;
-            let new_authority = keyed_account_at_index(keyed_accounts, 3)
-                .ok()
-                .map(|account| account.unsigned_key());
+            let account = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
+            let present_authority =
+                keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
+            let new_authority =
+                keyed_account_at_index(keyed_accounts, first_instruction_account + 2)
+                    .ok()
+                    .map(|account| account.unsigned_key());
 
             match account.state()? {
                 UpgradeableLoaderState::Buffer { authority_address } => {
@@ -693,10 +717,11 @@ fn process_loader_upgradeable_instruction(
             ic_logger_msg!(logger, "New authority {:?}", new_authority);
         }
         UpgradeableLoaderInstruction::Close => {
-            let close_account = keyed_account_at_index(keyed_accounts, 1)?;
-            let recipient_account = keyed_account_at_index(keyed_accounts, 2)?;
+            let close_account = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
+            let recipient_account =
+                keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
             if !invoke_context.is_feature_active(&close_upgradeable_program_accounts::id()) {
-                let _ = keyed_account_at_index(keyed_accounts, 3)?;
+                let _ = keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?;
             }
 
             if close_account.unsigned_key() == recipient_account.unsigned_key() {
@@ -730,7 +755,8 @@ fn process_loader_upgradeable_instruction(
                     );
                 }
                 UpgradeableLoaderState::Buffer { authority_address } => {
-                    let authority = keyed_account_at_index(keyed_accounts, 3)?;
+                    let authority =
+                        keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?;
 
                     common_close_account(
                         &authority_address,
@@ -748,7 +774,8 @@ fn process_loader_upgradeable_instruction(
                     slot: _,
                     upgrade_authority_address: authority_address,
                 } => {
-                    let program_account = keyed_account_at_index(keyed_accounts, 4)?;
+                    let program_account =
+                        keyed_account_at_index(keyed_accounts, first_instruction_account + 3)?;
 
                     if !program_account.is_writable() {
                         ic_logger_msg!(logger, "Program account is not writable");
@@ -771,7 +798,10 @@ fn process_loader_upgradeable_instruction(
                                 return Err(InstructionError::InvalidArgument);
                             }
 
-                            let authority = keyed_account_at_index(keyed_accounts, 3)?;
+                            let authority = keyed_account_at_index(
+                                keyed_accounts,
+                                first_instruction_account + 2,
+                            )?;
                             common_close_account(
                                 &authority_address,
                                 authority,
@@ -838,12 +868,13 @@ fn common_close_account(
 
 fn process_loader_instruction(
     program_id: &Pubkey,
+    first_instruction_account: usize,
     instruction_data: &[u8],
     invoke_context: &mut dyn InvokeContext,
     use_jit: bool,
 ) -> Result<(), InstructionError> {
     let keyed_accounts = invoke_context.get_keyed_accounts()?;
-    let program = keyed_account_at_index(keyed_accounts, 1)?;
+    let program = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
     if program.owner()? != *program_id {
         ic_msg!(
             invoke_context,
@@ -867,7 +898,7 @@ fn process_loader_instruction(
 
             let executor = create_executor(1, 0, invoke_context, use_jit)?;
             let keyed_accounts = invoke_context.get_keyed_accounts()?;
-            let program = keyed_account_at_index(keyed_accounts, 1)?;
+            let program = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
             invoke_context.add_executor(program.unsigned_key(), executor);
             program.try_account_ref_mut()?.set_executable(true);
             ic_msg!(
