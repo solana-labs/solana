@@ -1116,17 +1116,16 @@ impl ClusterInfo {
         Some(map(hashes))
     }
 
-    #[allow(clippy::type_complexity)]
     pub fn get_incremental_snapshot_hashes_for_node(
         &self,
         pubkey: &Pubkey,
-    ) -> Option<((Slot, Hash), Vec<(Slot, Hash)>)> {
-        let gossip_crds = self.gossip.crds.read().unwrap();
-        let incremental_snapshot_hashes = gossip_crds.get::<&IncrementalSnapshotHashes>(*pubkey)?;
-        Some((
-            incremental_snapshot_hashes.base,
-            incremental_snapshot_hashes.hashes.clone(),
-        ))
+    ) -> Option<IncrementalSnapshotHashes> {
+        self.gossip
+            .crds
+            .read()
+            .unwrap()
+            .get::<&IncrementalSnapshotHashes>(*pubkey)
+            .cloned()
     }
 
     /// Returns epoch-slots inserted since the given cursor.
