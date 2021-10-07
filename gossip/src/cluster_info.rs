@@ -144,6 +144,7 @@ pub enum ClusterInfoError {
     NoLeader,
     BadContactInfo,
     BadGossipAddress,
+    TooManyIncrementalSnapshotHashes,
 }
 
 pub struct ClusterInfo {
@@ -954,13 +955,13 @@ impl ClusterInfo {
         self.push_message(CrdsValue::new_signed(message, &self.keypair()));
     }
 
-    pub fn push_incremental_snapshot_hashes(&self, base: (Slot, Hash), hashes: Vec<(Slot, Hash)>) {
+    pub fn push_incremental_snapshot_hashes(
+        &self,
+        base: (Slot, Hash),
+        hashes: Vec<(Slot, Hash)>,
+    ) -> Result<(), ClusterInfoError> {
         if hashes.len() > MAX_INCREMENTAL_SNAPSHOT_HASHES {
-            warn!(
-                "incremental snapshot hashes too large, ignored: {}",
-                hashes.len(),
-            );
-            return;
+            return Err(ClusterInfoError::TooManyIncrementalSnapshotHashes);
         }
 
         let message = CrdsData::IncrementalSnapshotHashes(IncrementalSnapshotHashes {
@@ -970,6 +971,8 @@ impl ClusterInfo {
             wallclock: timestamp(),
         });
         self.push_message(CrdsValue::new_signed(message, &self.keypair()));
+
+        Ok(())
     }
 
     pub fn push_vote_at_index(&self, vote: Transaction, vote_index: u8) {
