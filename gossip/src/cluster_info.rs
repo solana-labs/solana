@@ -3195,7 +3195,7 @@ mod tests {
         for _ in 0..256 {
             let snapshot_hash = SnapshotHashes::new_rand(&mut rng, None);
             let crds_value =
-                CrdsValue::new_signed(CrdsData::AccountsHashes(snapshot_hash), &Keypair::new());
+                CrdsValue::new_signed(CrdsData::SnapshotHashes(snapshot_hash), &Keypair::new());
             let response = Protocol::PullResponse(Pubkey::new_unique(), vec![crds_value]);
             let socket = new_rand_socket_addr(&mut rng);
             assert!(Packet::from_data(Some(&socket), response).is_ok());
