@@ -400,7 +400,6 @@ pub trait Executor: Debug + Send + Sync {
     /// Execute the program
     fn execute(
         &self,
-        program_id: &Pubkey,
         first_instruction_account: usize,
         instruction_data: &[u8],
         invoke_context: &mut dyn InvokeContext,

@@ -598,11 +598,12 @@ mod tests {
     }
 
     fn mock_process_instruction(
-        program_id: &Pubkey,
+        _program_id: &Pubkey,
         first_instruction_account: usize,
         data: &[u8],
         invoke_context: &mut dyn InvokeContext,
     ) -> Result<(), InstructionError> {
+        let program_id = invoke_context.get_caller()?;
         let keyed_accounts = invoke_context.get_keyed_accounts()?;
         assert_eq!(
             *program_id,

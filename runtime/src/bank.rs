@@ -10333,11 +10333,12 @@ pub(crate) mod tests {
             Pubkey::new(&[42u8; 32])
         }
         fn mock_vote_processor(
-            program_id: &Pubkey,
+            _program_id: &Pubkey,
             _first_instruction_account: usize,
             _instruction_data: &[u8],
-            _invoke_context: &mut dyn InvokeContext,
+            invoke_context: &mut dyn InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
+            let program_id = invoke_context.get_caller()?;
             if mock_vote_program_id() != *program_id {
                 return Err(InstructionError::IncorrectProgramId);
             }
@@ -12593,7 +12594,6 @@ pub(crate) mod tests {
     impl Executor for TestExecutor {
         fn execute(
             &self,
-            _program_id: &Pubkey,
             _first_instruction_account: usize,
             _instruction_data: &[u8],
             _invoke_context: &mut dyn InvokeContext,
