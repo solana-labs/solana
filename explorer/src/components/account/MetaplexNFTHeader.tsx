@@ -92,7 +92,11 @@ function getCreatorDropdownItems(creators: Creator[] | null) {
 
   const CreatorEntry = (creator: Creator) => {
     return (
-      <div className={"d-flex align-items-center creator-dropdown-entry"}>
+      <div
+        className={
+          "d-flex align-items-center text-monospace creator-dropdown-entry ml-3 mr-3"
+        }
+      >
         {getVerifiedIcon(creator.verified)}
         <Link
           className="dropdown-item text-monospace creator-dropdown-entry-address"
