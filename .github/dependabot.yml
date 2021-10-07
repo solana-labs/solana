@@ -8,7 +8,7 @@ updates:
 - package-ecosystem: cargo
   directory: "/"
   schedule:
-    interval: daily
+    interval: weekly
     time: "01:00"
     timezone: America/Los_Angeles
   #labels:
@@ -18,7 +18,7 @@ updates:
 - package-ecosystem: npm
   directory: "/web3.js"
   schedule:
-    interval: daily
+    interval: weekly
     time: "01:00"
     timezone: America/Los_Angeles
   labels:
@@ -30,7 +30,7 @@ updates:
 - package-ecosystem: npm
   directory: "/explorer"
   schedule:
-    interval: daily
+    interval: weekly
     time: "01:00"
     timezone: America/Los_Angeles
   labels:
