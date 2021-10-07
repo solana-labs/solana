@@ -115,6 +115,10 @@ const DUPLICATE_SHRED_MAX_PAYLOAD_SIZE: usize = PACKET_DATA_SIZE - 115;
 /// PACKET_DATA_SIZE.
 // TODO: Update this to 26 once payload sizes are upgraded across fleet.
 pub const MAX_SNAPSHOT_HASHES: usize = 16;
+/// Maximum number of hashes in IncrementalSnapshotHashes a node publishes
+/// such that the serialized size of the push/pull message stays below
+/// PACKET_DATA_SIZE.
+pub const MAX_INCREMENTAL_SNAPSHOT_HASHES: usize = 16;
 /// Maximum number of origin nodes that a PruneData may contain, such that the
 /// serialized size of the PruneMessage stays below PACKET_DATA_SIZE.
 const MAX_PRUNE_DATA_NODES: usize = 32;
@@ -955,7 +959,7 @@ impl ClusterInfo {
         base: (Slot, Hash),
         incremental_snapshot_hashes: Vec<(Slot, Hash)>,
     ) {
-        if incremental_snapshot_hashes.len() > MAX_SNAPSHOT_HASHES {
+        if incremental_snapshot_hashes.len() > MAX_INCREMENTAL_SNAPSHOT_HASHES {
             warn!(
                 "incremental snapshot hashes too large, ignored: {}",
                 incremental_snapshot_hashes.len(),
