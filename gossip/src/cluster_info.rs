@@ -3227,41 +3227,37 @@ mod tests {
     #[test]
     fn test_max_incremental_snapshot_hashes_with_push_messages() {
         let mut rng = rand::thread_rng();
-        for _ in 0..256 {
-            let incremental_snapshot_hashes = IncrementalSnapshotHashes {
-                from: Pubkey::new_unique(),
-                base: (Slot::default(), Hash::default()),
-                hashes: vec![(Slot::default(), Hash::default()); MAX_INCREMENTAL_SNAPSHOT_HASHES],
-                wallclock: timestamp(),
-            };
-            let crds_value = CrdsValue::new_signed(
-                CrdsData::IncrementalSnapshotHashes(incremental_snapshot_hashes),
-                &Keypair::new(),
-            );
-            let message = Protocol::PushMessage(Pubkey::new_unique(), vec![crds_value]);
-            let socket = new_rand_socket_addr(&mut rng);
-            assert!(Packet::from_data(Some(&socket), message).is_ok());
-        }
+        let incremental_snapshot_hashes = IncrementalSnapshotHashes {
+            from: Pubkey::new_unique(),
+            base: (Slot::default(), Hash::default()),
+            hashes: vec![(Slot::default(), Hash::default()); MAX_INCREMENTAL_SNAPSHOT_HASHES],
+            wallclock: timestamp(),
+        };
+        let crds_value = CrdsValue::new_signed(
+            CrdsData::IncrementalSnapshotHashes(incremental_snapshot_hashes),
+            &Keypair::new(),
+        );
+        let message = Protocol::PushMessage(Pubkey::new_unique(), vec![crds_value]);
+        let socket = new_rand_socket_addr(&mut rng);
+        assert!(Packet::from_data(Some(&socket), message).is_ok());
     }
 
     #[test]
     fn test_max_incremental_snapshot_hashes_with_pull_responses() {
         let mut rng = rand::thread_rng();
-        for _ in 0..256 {
-            let incremental_snapshot_hashes = IncrementalSnapshotHashes {
-                from: Pubkey::new_unique(),
-                base: (Slot::default(), Hash::default()),
-                hashes: vec![(Slot::default(), Hash::default()); MAX_INCREMENTAL_SNAPSHOT_HASHES],
-                wallclock: timestamp(),
-            };
-            let crds_value = CrdsValue::new_signed(
-                CrdsData::IncrementalSnapshotHashes(incremental_snapshot_hashes),
-                &Keypair::new(),
-            );
-            let response = Protocol::PullResponse(Pubkey::new_unique(), vec![crds_value]);
-            let socket = new_rand_socket_addr(&mut rng);
-            assert!(Packet::from_data(Some(&socket), response).is_ok());
-        }
+        let incremental_snapshot_hashes = IncrementalSnapshotHashes {
+            from: Pubkey::new_unique(),
+            base: (Slot::default(), Hash::default()),
+            hashes: vec![(Slot::default(), Hash::default()); MAX_INCREMENTAL_SNAPSHOT_HASHES],
+            wallclock: timestamp(),
+        };
+        let crds_value = CrdsValue::new_signed(
+            CrdsData::IncrementalSnapshotHashes(incremental_snapshot_hashes),
+            &Keypair::new(),
+        );
+        let response = Protocol::PullResponse(Pubkey::new_unique(), vec![crds_value]);
+        let socket = new_rand_socket_addr(&mut rng);
+        assert!(Packet::from_data(Some(&socket), response).is_ok());
     }
 
     #[test]
