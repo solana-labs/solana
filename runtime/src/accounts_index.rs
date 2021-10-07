@@ -1768,47 +1768,35 @@ impl<T: IndexValue> AccountsIndex<T> {
 
     /// Remove the slot when the storage for the slot is freed
     /// Accounts no longer reference this slot.
-    pub fn clean_dead_slot(&self, slot: Slot) -> Option<AccountsIndexRootsStats> {
-        let (roots_len, uncleaned_roots_len, previous_uncleaned_roots_len, roots_range) = {
-            let mut w_roots_tracker = self.roots_tracker.write().unwrap();
-            let removed_from_unclean_roots = w_roots_tracker.uncleaned_roots.remove(&slot);
-            let removed_from_previous_uncleaned_roots =
-                w_roots_tracker.previous_uncleaned_roots.remove(&slot);
-            if !w_roots_tracker.roots.remove(&slot) {
-                if removed_from_unclean_roots {
-                    error!("clean_dead_slot-removed_from_unclean_roots: {}", slot);
-                    inc_new_counter_error!("clean_dead_slot-removed_from_unclean_roots", 1, 1);
-                }
-                if removed_from_previous_uncleaned_roots {
-                    error!(
-                        "clean_dead_slot-removed_from_previous_uncleaned_roots: {}",
-                        slot
-                    );
-                    inc_new_counter_error!(
-                        "clean_dead_slot-removed_from_previous_uncleaned_roots",
-                        1,
-                        1
-                    );
-                }
-                return None;
+    pub fn clean_dead_slot(&self, slot: Slot, stats: &mut AccountsIndexRootsStats) -> bool {
+        let mut w_roots_tracker = self.roots_tracker.write().unwrap();
+        let removed_from_unclean_roots = w_roots_tracker.uncleaned_roots.remove(&slot);
+        let removed_from_previous_uncleaned_roots =
+            w_roots_tracker.previous_uncleaned_roots.remove(&slot);
+        if !w_roots_tracker.roots.remove(&slot) {
+            if removed_from_unclean_roots {
+                error!("clean_dead_slot-removed_from_unclean_roots: {}", slot);
+                inc_new_counter_error!("clean_dead_slot-removed_from_unclean_roots", 1, 1);
             }
-            (
-                w_roots_tracker.roots.len(),
-                w_roots_tracker.uncleaned_roots.len(),
-                w_roots_tracker.previous_uncleaned_roots.len(),
-                w_roots_tracker.roots.range_width(),
-            )
-        };
-        Some(AccountsIndexRootsStats {
-            roots_len,
-            uncleaned_roots_len,
-            previous_uncleaned_roots_len,
-            roots_range,
-            rooted_cleaned_count: 0,
-            unrooted_cleaned_count: 0,
-            clean_unref_from_storage_us: 0,
-            clean_dead_slot_us: 0,
-        })
+            if removed_from_previous_uncleaned_roots {
+                error!(
+                    "clean_dead_slot-removed_from_previous_uncleaned_roots: {}",
+                    slot
+                );
+                inc_new_counter_error!(
+                    "clean_dead_slot-removed_from_previous_uncleaned_roots",
+                    1,
+                    1
+                );
+            }
+            false
+        } else {
+            stats.roots_len = w_roots_tracker.roots.len();
+            stats.uncleaned_roots_len = w_roots_tracker.uncleaned_roots.len();
+            stats.previous_uncleaned_roots_len = w_roots_tracker.previous_uncleaned_roots.len();
+            stats.roots_range = w_roots_tracker.roots.range_width();
+            true
+        }
     }
 
     pub fn min_root(&self) -> Option<Slot> {
@@ -1870,7 +1858,6 @@ impl<T: IndexValue> AccountsIndex<T> {
         self.roots_tracker.write().unwrap().roots.clear()
     }
 
-    #[cfg(test)]
     pub fn uncleaned_roots_len(&self) -> usize {
         self.roots_tracker.read().unwrap().uncleaned_roots.len()
     }
@@ -3274,7 +3261,7 @@ pub mod tests {
         let index = AccountsIndex::<bool>::default_for_tests();
         index.add_root(0, false);
         index.add_root(1, false);
-        index.clean_dead_slot(0);
+        index.clean_dead_slot(0, &mut AccountsIndexRootsStats::default());
         assert!(index.is_root(1));
         assert!(!index.is_root(0));
     }
@@ -3285,7 +3272,7 @@ pub mod tests {
         let index = AccountsIndex::<bool>::default_for_tests();
         index.add_root(0, false);
         index.add_root(1, false);
-        index.clean_dead_slot(1);
+        index.clean_dead_slot(1, &mut AccountsIndexRootsStats::default());
         assert!(!index.is_root(1));
         assert!(index.is_root(0));
     }
@@ -3334,7 +3321,7 @@ pub mod tests {
                 .len()
         );
 
-        index.clean_dead_slot(1);
+        index.clean_dead_slot(1, &mut AccountsIndexRootsStats::default());
         assert_eq!(3, index.roots_tracker.read().unwrap().roots.len());
         assert_eq!(2, index.roots_tracker.read().unwrap().uncleaned_roots.len());
         assert_eq!(
@@ -3347,7 +3334,7 @@ pub mod tests {
                 .len()
         );
 
-        index.clean_dead_slot(2);
+        index.clean_dead_slot(2, &mut AccountsIndexRootsStats::default());
         assert_eq!(2, index.roots_tracker.read().unwrap().roots.len());
         assert_eq!(1, index.roots_tracker.read().unwrap().uncleaned_roots.len());
         assert_eq!(
