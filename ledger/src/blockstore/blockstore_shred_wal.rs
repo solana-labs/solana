@@ -38,9 +38,9 @@ pub struct ShredWAL {
     max_slots: BTreeMap<u128, u64>,
 }
 
-// TODO: this value picked somewhat arbitrarily ...
-// Shreds are 1228 bytes, so WAL filesize will be at most 1228 * 1024 * 128 = 153.5 MB
-pub const DEFAULT_MAX_WAL_SHREDS: usize = 1024 * 128;
+// Shreds WAL entries are 1232 bytes
+// So, WAL filesize will be at most 1232 * 1024 * 32 = 39.4 MB
+pub const DEFAULT_MAX_WAL_SHREDS: usize = 1024 * 32;
 
 // WAL entries consist of a SHRED_PAYLOAD_SIZE data section and 4 byte identifier footer
 // Types of WAL entries:
