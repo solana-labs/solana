@@ -26,9 +26,10 @@ genesisOptions="${17}"
 extraNodeArgs="${18}"
 gpuMode="${19:-auto}"
 maybeWarpSlot="${20}"
-waitForNodeInit="${21}"
-extraPrimordialStakes="${22:=0}"
-tmpfsAccounts="${23:false}"
+maybeFullRpc="${21}"
+waitForNodeInit="${22}"
+extraPrimordialStakes="${23:=0}"
+tmpfsAccounts="${24:false}"
 set +x
 
 missing() {
@@ -286,6 +287,11 @@ EOF
       args+=(--accounts /mnt/solana-accounts)
     fi
 
+    if $maybeFullRpc; then
+      args+=(--enable-rpc-transaction-history)
+      args+=(--enable-cpi-and-log-storage)
+    fi
+
     if [[ $airdropsEnabled = true ]]; then
 cat >> ~/solana/on-reboot <<EOF
       ./multinode-demo/faucet.sh > faucet.log 2>&1 &
@@ -407,6 +413,11 @@ EOF
 
     if [[ "$tmpfsAccounts" = "true" ]]; then
       args+=(--accounts /mnt/solana-accounts)
+    fi
+
+    if $maybeFullRpc; then
+      args+=(--enable-rpc-transaction-history)
+      args+=(--enable-cpi-and-log-storage)
     fi
 
 cat >> ~/solana/on-reboot <<EOF
