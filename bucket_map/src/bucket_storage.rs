@@ -46,13 +46,13 @@ impl Header {
         Ok(UID_UNLOCKED)
             == self
                 .lock
-                .compare_exchange(UID_UNLOCKED, uid, Ordering::Acquire, Ordering::Relaxed)
+                .compare_exchange(UID_UNLOCKED, uid, Ordering::AcqRel, Ordering::Relaxed)
     }
     fn unlock(&self) -> Uid {
         self.lock.swap(UID_UNLOCKED, Ordering::Release)
     }
     fn uid(&self) -> Uid {
-        self.lock.load(Ordering::Relaxed)
+        self.lock.load(Ordering::Acquire)
     }
 }
 
