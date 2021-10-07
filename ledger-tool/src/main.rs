@@ -1936,11 +1936,12 @@ fn main() {
         }
         ("verify", Some(arg_matches)) => {
             let mut accounts_index_config = AccountsIndexConfig::default();
-            if let Some(bins) = value_t!(matches, "accounts_index_bins", usize).ok() {
+            if let Some(bins) = value_t!(arg_matches, "accounts_index_bins", usize).ok() {
                 accounts_index_config.bins = Some(bins);
             }
 
-            if let Some(limit) = value_t!(matches, "accounts_index_memory_limit_mb", usize).ok() {
+            if let Some(limit) = value_t!(arg_matches, "accounts_index_memory_limit_mb", usize).ok()
+            {
                 accounts_index_config.index_limit_mb = Some(limit);
             }
 
