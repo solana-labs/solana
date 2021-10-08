@@ -1,5 +1,4 @@
-use std::io;
-use std::process::Child;
+use std::{io, process::Child};
 
 fn kill_process(process: &mut Child) -> Result<(), io::Error> {
     if let Ok(()) = process.kill() {
@@ -17,13 +16,18 @@ pub fn stop_process(process: &mut Child) -> Result<(), io::Error> {
 
 #[cfg(not(windows))]
 pub fn stop_process(process: &mut Child) -> Result<(), io::Error> {
-    use nix::errno::Errno::{EINVAL, EPERM, ESRCH};
-    use nix::sys::signal::{kill, Signal};
-    use nix::unistd::Pid;
-    use nix::Error::Sys;
-    use std::io::ErrorKind;
-    use std::thread;
-    use std::time::{Duration, Instant};
+    use {
+        nix::{
+            errno::Errno::{EINVAL, EPERM, ESRCH},
+            sys::signal::{kill, Signal},
+            unistd::Pid,
+        },
+        std::{
+            io::ErrorKind,
+            thread,
+            time::{Duration, Instant},
+        },
+    };
 
     let nice_wait = Duration::from_secs(5);
     let pid = Pid::from_raw(process.id() as i32);
@@ -40,17 +44,17 @@ pub fn stop_process(process: &mut Child) -> Result<(), io::Error> {
                 kill_process(process)?;
             }
         }
-        Err(Sys(EINVAL)) => {
+        Err(EINVAL) => {
             println!("Invalid signal. Killing process {}", pid);
             kill_process(process)?;
         }
-        Err(Sys(EPERM)) => {
+        Err(EPERM) => {
             return Err(io::Error::new(
                 ErrorKind::InvalidInput,
                 format!("Insufficient permissions to signal process {}", pid),
             ));
         }
-        Err(Sys(ESRCH)) => {
+        Err(ESRCH) => {
             return Err(io::Error::new(
                 ErrorKind::InvalidInput,
                 format!("Process {} does not exist", pid),
