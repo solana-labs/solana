@@ -10,11 +10,15 @@ use crate::{
 use log::*;
 use solana_entry::entry::VerifyRecyclers;
 use solana_runtime::{
-    accounts_update_notifier_interface::AccountsUpdateNotifier, bank_forks::BankForks,
-    snapshot_archive_info::SnapshotArchiveInfoGetter, snapshot_config::SnapshotConfig,
-    snapshot_package::AccountsPackageSender, snapshot_utils,
+    accounts_update_notifier_interface::AccountsUpdateNotifier,
+    bank_forks::BankForks,
+    snapshot_archive_info::SnapshotArchiveInfoGetter,
+    snapshot_config::SnapshotConfig,
+    snapshot_hash::{FullSnapshotHash, IncrementalSnapshotHash, StartingSnapshotHashes},
+    snapshot_package::AccountsPackageSender,
+    snapshot_utils,
 };
-use solana_sdk::{clock::Slot, genesis_config::GenesisConfig, hash::Hash};
+use solana_sdk::{clock::Slot, genesis_config::GenesisConfig};
 use std::{fs, path::PathBuf, process, result};
 
 pub type LoadResult = result::Result<
@@ -22,14 +26,14 @@ pub type LoadResult = result::Result<
         BankForks,
         LeaderScheduleCache,
         Option<Slot>,
-        Option<(Slot, Hash)>,
+        Option<StartingSnapshotHashes>,
     ),
     BlockstoreProcessorError,
 >;
 
 fn to_loadresult(
     bpr: BlockstoreProcessorResult,
-    snapshot_slot_and_hash: Option<(Slot, Hash)>,
+    starting_snapshot_hashes: Option<StartingSnapshotHashes>,
 ) -> LoadResult {
     bpr.map(
         |(bank_forks, leader_schedule_cache, last_full_snapshot_slot)| {
@@ -37,7 +41,7 @@ fn to_loadresult(
                 bank_forks,
                 leader_schedule_cache,
                 last_full_snapshot_slot,
-                snapshot_slot_and_hash,
+                starting_snapshot_hashes,
             )
         },
     )
@@ -150,7 +154,7 @@ fn load_from_snapshot(
         process::exit(1);
     }
 
-    let (deserialized_bank, timings, full_snapshot_archive_info, _) =
+    let (deserialized_bank, timings, full_snapshot_archive_info, incremental_snapshot_archive_info) =
         snapshot_utils::bank_from_latest_snapshot_archives(
             &snapshot_config.bank_snapshots_dir,
             &snapshot_config.snapshot_archives_dir,
@@ -171,14 +175,30 @@ fn load_from_snapshot(
         )
         .expect("Load from snapshot failed");
 
-    let deserialized_bank_slot_and_hash = (
-        deserialized_bank.slot(),
-        deserialized_bank.get_accounts_hash(),
-    );
-
     if let Some(shrink_paths) = shrink_paths {
         deserialized_bank.set_shrink_paths(shrink_paths);
     }
+
+    let starting_full_snapshot_hash = FullSnapshotHash {
+        hash: (
+            full_snapshot_archive_info.slot(),
+            *full_snapshot_archive_info.hash(),
+        ),
+    };
+    let starting_incremental_snapshot_hash =
+        incremental_snapshot_archive_info.map(|incremental_snapshot_archive_info| {
+            IncrementalSnapshotHash {
+                base: starting_full_snapshot_hash.hash,
+                hash: (
+                    incremental_snapshot_archive_info.slot(),
+                    *incremental_snapshot_archive_info.hash(),
+                ),
+            }
+        });
+    let starting_snapshot_hashes = StartingSnapshotHashes {
+        full: starting_full_snapshot_hash,
+        incremental: starting_incremental_snapshot_hash,
+    };
 
     to_loadresult(
         blockstore_processor::process_blockstore_from_root(
@@ -193,6 +213,6 @@ fn load_from_snapshot(
             timings,
             full_snapshot_archive_info.slot(),
         ),
-        Some(deserialized_bank_slot_and_hash),
+        Some(starting_snapshot_hashes),
     )
 }
