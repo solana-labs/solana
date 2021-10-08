@@ -26,7 +26,7 @@ pub struct BucketMapHolderStats {
     pub keys: AtomicU64,
     pub deletes: AtomicU64,
     pub inserts: AtomicU64,
-    pub count: AtomicU64,
+    count: AtomicU64,
     pub bg_waiting_us: AtomicU64,
     pub bg_throttling_wait_us: AtomicU64,
     pub count_in_mem: AtomicU64,

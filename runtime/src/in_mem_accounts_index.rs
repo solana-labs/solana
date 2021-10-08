@@ -348,12 +348,12 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                             disk_entry
                         } else {
                             // not on disk, so insert new thing
+                            self.stats().insert_or_delete(true, self.bin);
                             new_value.into()
                         };
                         assert!(new_value.dirty());
                         vacant.insert(new_value);
                         self.stats().insert_or_delete_mem(true, self.bin);
-                        self.stats().insert_or_delete(true, self.bin);
                     }
                 }
             };
