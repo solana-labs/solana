@@ -99,6 +99,7 @@ pub fn load(
 
     if process_options
         .accounts_db_config
+        .as_ref()
         .and_then(|config| config.filler_account_count)
         .unwrap_or_default()
         > 0

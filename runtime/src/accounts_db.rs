@@ -1992,10 +1992,6 @@ impl AccountsDb {
                         let mut purges_zero_lamports = HashMap::new();
                         let mut purges_old_accounts = Vec::new();
                         for pubkey in pubkeys {
-                            if self.is_filler_account(pubkey) {
-                                continue;
-                            }
-
                             match self.accounts_index.get(pubkey, None, max_clean_root) {
                                 AccountIndexGetResult::Found(locked_entry, index) => {
                                     let slot_list = locked_entry.slot_list();
@@ -6515,7 +6511,7 @@ impl AccountsDb {
     }
 
     fn filler_rent_partition_prefix_bytes() -> usize {
-        std::mem::size_of::<u32>()
+        std::mem::size_of::<u64>()
     }
 
     fn filler_prefix_bytes() -> usize {
@@ -6603,10 +6599,10 @@ impl AccountsDb {
                             // pubkey begins life as entire filler 'suffix' pubkey
                             let mut key = self.filler_account_suffix.unwrap();
                             let rent_prefix_bytes = Self::filler_rent_partition_prefix_bytes();
-                            // first bytes are replace with rent partition range: filler_rent_partition_prefix_bytes (u32)
+                            // first bytes are replaced with rent partition range: filler_rent_partition_prefix_bytes
                             key.as_mut()[0..rent_prefix_bytes]
                                 .copy_from_slice(&subrange.start().as_ref()[0..rent_prefix_bytes]);
-                            // next bytes are replace with my_id: filler_unique_id_bytes (u32)
+                            // next bytes are replaced with my_id: filler_unique_id_bytes
                             key.as_mut()[rent_prefix_bytes
                                 ..(rent_prefix_bytes + Self::filler_unique_id_bytes())]
                                 .copy_from_slice(&my_id_bytes);
