@@ -219,17 +219,16 @@ pub mod optimize_epoch_boundary_updates {
     solana_sdk::declare_id!("265hPS8k8xJ37ot82KEgjRunsUp5w4n4Q4VwwiN9i9ps");
 }
 
-<<<<<<< HEAD
 pub mod tx_wide_compute_cap {
     solana_sdk::declare_id!("5ekBxc8itEnPv4NzGJtr8BVVQLNMQuLMNQQj7pHoLNZ9");
 }
 
 pub mod gate_large_block {
     solana_sdk::declare_id!("2ry7ygxiYURULZCrypHhveanvP5tzZ4toRwVp89oCNSj");
-=======
+}
+
 pub mod remove_native_loader {
     solana_sdk::declare_id!("HTTgmruMYRZEntyL3EdCDdnS6e4D5wRq1FA7kQsb66qq");
->>>>>>> 785fcb63f (Remove support for dynamically loaded native programs (#20444))
 }
 
 lazy_static! {
@@ -287,12 +286,9 @@ lazy_static! {
         (stakes_remove_delegation_if_inactive::id(), "remove delegations from stakes cache when inactive"),
         (send_to_tpu_vote_port::id(), "Send votes to the tpu vote port"),
         (optimize_epoch_boundary_updates::id(), "Optimize epoch boundary updates"),
-<<<<<<< HEAD
         (tx_wide_compute_cap::id(), "Transaction wide compute cap"),
         (gate_large_block::id(), "validator checks block cost against max limit in realtime, reject if exceeds."),
-=======
         (remove_native_loader::id(), "Remove support for the native loader"),
->>>>>>> 785fcb63f (Remove support for dynamically loaded native programs (#20444))
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

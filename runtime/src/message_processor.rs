@@ -11,7 +11,8 @@ use solana_sdk::{
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     feature_set::{
         demote_program_write_locks, fix_write_privs, instructions_sysvar_enabled,
-        neon_evm_compute_budget, tx_wide_compute_cap, updated_verify_policy, FeatureSet,
+        neon_evm_compute_budget, remove_native_loader, tx_wide_compute_cap, updated_verify_policy,
+        FeatureSet,
     },
     ic_logger_msg, ic_msg,
     instruction::{CompiledInstruction, Instruction, InstructionError},
@@ -669,12 +670,14 @@ impl MessageProcessor {
                         return process_instruction(program_id, instruction_data, invoke_context);
                     }
                 }
-                // Call the program via the native loader
-                return self.native_loader.process_instruction(
-                    &native_loader::id(),
-                    instruction_data,
-                    invoke_context,
-                );
+                if !invoke_context.is_feature_active(&remove_native_loader::id()) {
+                    // Call the program via the native loader
+                    return self.native_loader.process_instruction(
+                        &native_loader::id(),
+                        instruction_data,
+                        invoke_context,
+                    );
+                }
             } else {
                 let owner_id = &root_account.owner()?;
                 for (id, process_instruction) in &self.programs {

@@ -48,14 +48,8 @@ members = [
     "programs/bpf_loader",
     "programs/compute-budget",
     "programs/config",
-<<<<<<< HEAD
     "programs/exchange",
-    "programs/failure",
-    "programs/noop",
-    "programs/ownable",
     "programs/secp256k1",
-=======
->>>>>>> 785fcb63f (Remove support for dynamically loaded native programs (#20444))
     "programs/stake",
     "programs/vote",
     "remote-wallet",

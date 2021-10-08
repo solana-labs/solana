@@ -5986,15 +5986,9 @@ pub(crate) mod tests {
             create_genesis_config_with_leader, create_genesis_config_with_vote_accounts,
             GenesisConfigInfo, ValidatorVoteKeypairs,
         },
-        native_loader::NativeLoaderError,
         status_cache::MAX_CACHE_ENTRIES,
     };
     use crossbeam_channel::{bounded, unbounded};
-<<<<<<< HEAD
-=======
-    #[allow(deprecated)]
-    use solana_sdk::sysvar::fees::Fees;
->>>>>>> 785fcb63f (Remove support for dynamically loaded native programs (#20444))
     use solana_sdk::{
         account::Account,
         clock::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT},
@@ -12869,70 +12863,6 @@ pub(crate) mod tests {
     }
 
     #[test]
-<<<<<<< HEAD
-    fn test_bad_native_loader() {
-        let (genesis_config, mint_keypair) = create_genesis_config(50000);
-        let bank = Bank::new(&genesis_config);
-        let to_keypair = Keypair::new();
-
-        let tx = Transaction::new_signed_with_payer(
-            &[
-                system_instruction::create_account(
-                    &mint_keypair.pubkey(),
-                    &to_keypair.pubkey(),
-                    10000,
-                    0,
-                    &native_loader::id(),
-                ),
-                Instruction::new_with_bincode(
-                    native_loader::id(),
-                    &(),
-                    vec![AccountMeta::new(to_keypair.pubkey(), false)],
-                ),
-            ],
-            Some(&mint_keypair.pubkey()),
-            &[&mint_keypair, &to_keypair],
-            bank.last_blockhash(),
-        );
-        assert_eq!(
-            bank.process_transaction(&tx),
-            Err(TransactionError::InstructionError(
-                1,
-                InstructionError::Custom(NativeLoaderError::InvalidAccountData as u32)
-            ))
-        );
-
-        let tx = Transaction::new_signed_with_payer(
-            &[
-                system_instruction::create_account(
-                    &mint_keypair.pubkey(),
-                    &to_keypair.pubkey(),
-                    10000,
-                    100,
-                    &native_loader::id(),
-                ),
-                Instruction::new_with_bincode(
-                    native_loader::id(),
-                    &(),
-                    vec![AccountMeta::new(to_keypair.pubkey(), false)],
-                ),
-            ],
-            Some(&mint_keypair.pubkey()),
-            &[&mint_keypair, &to_keypair],
-            bank.last_blockhash(),
-        );
-        assert_eq!(
-            bank.process_transaction(&tx),
-            Err(TransactionError::InstructionError(
-                1,
-                InstructionError::Custom(NativeLoaderError::InvalidAccountData as u32)
-            ))
-        );
-    }
-
-    #[test]
-=======
->>>>>>> 785fcb63f (Remove support for dynamically loaded native programs (#20444))
     fn test_debug_bank() {
         let (genesis_config, _mint_keypair) = create_genesis_config(50000);
         let mut bank = Bank::new(&genesis_config);
