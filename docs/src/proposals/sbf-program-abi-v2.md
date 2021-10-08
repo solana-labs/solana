@@ -85,23 +85,33 @@ The idea is to serialize the meta data of all accounts once per transaction, and
   - Read-only or read-write depends on the instruction context
   - Content: `[u8]`
 
-### Writable Attributes
+#### Writable Attributes
 Alternative options:
 - Three regions per account: Read-only metadata, writable metadata, account data
 - All meta data in readonly region, plus duplicate for writable metadata in extra region
 - Two regions: Definitely read-only metadata and potentially writable metadata including readonly accounts and unmapped accounts
 
-### Encoding Alignment
+#### Encoding Alignment
 Alternative options:
 - Tightly pack everything
 - Tightly pack attributes, pad values
 - Pad attributes and their values
 
-### Host and Guest (VM) Address Space for Indirections / Pointers
+#### Host and Guest (VM) Address Space for Indirections / Pointers
 Alternative options:
 - Store guest pointers only, map host on demand
 - Translate on every context switch (invocation, exit, syscall)
 - Store both guest and host, but encrypt host pointers
+
+### Interface
+
+#### Instruction Structs
+TODO: Design a structured interface to deal with the account indices of different instructions.
+Replacing: `keyed_account_at_index(keyed_accounts, first_instruction_account + x)`
+
+#### Tests & Mockups
+TODO: Design a better way to create the mocked instruction accounts.
+Replacing: `create_keyed_accounts_unified(&keyed_account_tuples)`
 
 ### Syscalls
 
@@ -113,8 +123,3 @@ In the old ABI return data was implemented by a setter and a getter syscall for 
 
 #### Account Reallocation / Resizing
 TODO
-
-### Usage / Integration
-Replace `KeyedAccounts`, `serialize_parameters`, `deserialize_parameters` and parts of the `InvokeContext` with a new interface which directly operates on the new encoding. It would be used by the runtime and programs alike.
-
-As we have already seen in [#15410](https://github.com/solana-labs/solana/pull/15410) this will most likely cause problems with the Rust borrow checker, because we can not have multiple mutable references to the `InvokeContext`. So the workaround using indices as account handles might continue to be necessary.
