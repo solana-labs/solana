@@ -66,7 +66,7 @@ pub struct BlockCostCapacityMeter {
 
 impl Default for BlockCostCapacityMeter {
     fn default() -> Self {
-        BlockCostCapacityMeter::new(BLOCK_COST_MAX)
+        BlockCostCapacityMeter::new(MAX_BLOCK_UNITS)
     }
 }
 
@@ -143,7 +143,8 @@ fn aggregate_total_execution_units(execute_timings: &ExecuteTimings) -> u64 {
         if timing.count < 1 {
             continue;
         }
-        execute_cost_units += timing.accumulated_units / timing.count as u64;
+        execute_cost_units =
+            execute_cost_units.saturating_add(timing.accumulated_units / timing.count as u64);
         trace!("aggregated execution cost of {:?} {:?}", program_id, timing);
     }
     execute_cost_units

@@ -1,34 +1,56 @@
 //! defines block cost related limits
 //!
+use lazy_static::lazy_static;
+use solana_sdk::{
+    feature, incinerator, native_loader, pubkey::Pubkey, secp256k1_program, system_program,
+};
+use std::collections::HashMap;
 
-// see https://github.com/solana-labs/solana/issues/18944
-// and https://github.com/solana-labs/solana/pull/18994#issuecomment-896128992
-//
-pub const MAX_BLOCK_TIME_US: u64 = 400_000; // aiming at 400ms/block max time
-pub const AVG_INSTRUCTION_TIME_US: u64 = 1_000; // average instruction execution time
-pub const SYSTEM_PARALLELISM: u64 = 10;
-pub const MAX_INSTRUCTION_COST: u64 = 200_000;
-pub const MAX_NUMBER_BPF_INSTRUCTIONS_PER_ACCOUNT: u64 = 200;
+/// Static configurations:
+///
+/// Number of microseconds replaying a block should take, 400 millisecond block times
+/// is curerntly publicly communicated on solana.com
+pub const MAX_BLOCK_REPLAY_TIME_US: u64 = 400_000;
+/// number of concurrent processes,
+pub const MAX_CONCURRENCY: u64 = 10;
 
-// 4_000
-pub const MAX_INSTRUCTIONS_PER_BLOCK: u64 =
-    (MAX_BLOCK_TIME_US / AVG_INSTRUCTION_TIME_US) * SYSTEM_PARALLELISM;
+/// Cluster data, method of collecting at https://github.com/solana-labs/solana/issues/19627
+///
+/// cluster avergaed compute unit to microsec conversion rate
+pub const COMPUTE_UNIT_TO_US_RATIO: u64 = 40;
+/// Number of compute units for one signature verification.
+pub const SIGNATURE_COST: u64 = COMPUTE_UNIT_TO_US_RATIO * 175;
+/// Number of compute units for one write lock
+pub const WRITE_LOCK_UNITS: u64 = COMPUTE_UNIT_TO_US_RATIO * 20;
+/// Number of data bytes per compute units
+pub const DATA_BYTES_UNITS: u64 = 220 /*bytes per us*/ / COMPUTE_UNIT_TO_US_RATIO;
+// Number of compute units for each built-in programs
+lazy_static! {
+    /// Number of compute units for each built-in programs
+    pub static ref BUILT_IN_INSTRUCTION_COSTS: HashMap<Pubkey, u64> = [
+        (feature::id(), COMPUTE_UNIT_TO_US_RATIO * 2),
+        (incinerator::id(), COMPUTE_UNIT_TO_US_RATIO * 2),
+        (native_loader::id(), COMPUTE_UNIT_TO_US_RATIO * 2),
+        (solana_sdk::stake::config::id(), COMPUTE_UNIT_TO_US_RATIO * 2),
+        (solana_sdk::stake::program::id(), COMPUTE_UNIT_TO_US_RATIO * 50),
+        (solana_vote_program::id(), COMPUTE_UNIT_TO_US_RATIO * 200),
+        (secp256k1_program::id(), COMPUTE_UNIT_TO_US_RATIO * 4),
+        (system_program::id(), COMPUTE_UNIT_TO_US_RATIO * 15),
+    ]
+    .iter()
+    .cloned()
+    .collect();
+}
 
-// 8_000_000_000
-pub const BLOCK_COST_MAX: u64 = MAX_INSTRUCTION_COST * MAX_INSTRUCTIONS_PER_BLOCK * 10;
-
-// 800_000_000
-pub const ACCOUNT_COST_MAX: u64 = MAX_INSTRUCTION_COST * MAX_INSTRUCTIONS_PER_BLOCK;
-
-// 2_000
-pub const COMPUTE_UNIT_TO_US_RATIO: u64 =
-    (MAX_INSTRUCTION_COST / AVG_INSTRUCTION_TIME_US) * SYSTEM_PARALLELISM;
-
-// signature takes average 10us, or 20K CU
-pub const SIGNATURE_COST: u64 = COMPUTE_UNIT_TO_US_RATIO * 10;
-
-// read account averages 5us, or 10K CU
-pub const ACCOUNT_READ_COST: u64 = COMPUTE_UNIT_TO_US_RATIO * 5;
-
-// write account averages 25us, or 50K CU
-pub const ACCOUNT_WRITE_COST: u64 = COMPUTE_UNIT_TO_US_RATIO * 25;
+/// Statically computed data:
+///
+/// Number of compute units that a block is allowed. A block's compute units are
+/// accumualted by Transactions added to it; A transaction's compute units are
+/// calculated by cost_model, based on transaction's signarures, write locks,
+/// data size and built-in and BPF instructinos.
+pub const MAX_BLOCK_UNITS: u64 =
+    MAX_BLOCK_REPLAY_TIME_US * COMPUTE_UNIT_TO_US_RATIO * MAX_CONCURRENCY;
+/// Number of compute units that a writable account in a block is allowed. The
+/// limit is to prevent too many transactions write to same account, threrefore
+/// reduce block's paralellism.
+pub const MAX_WRITABLE_ACCOUNT_UNITS: u64 = MAX_BLOCK_REPLAY_TIME_US * COMPUTE_UNIT_TO_US_RATIO;

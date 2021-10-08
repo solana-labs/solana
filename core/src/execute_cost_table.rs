@@ -78,7 +78,7 @@ impl ExecuteCostTable {
         self.table.get(key)
     }
 
-    pub fn upsert(&mut self, key: &Pubkey, value: u64) {
+    pub fn upsert(&mut self, key: &Pubkey, value: u64) -> Option<u64> {
         let need_to_add = self.table.get(key).is_none();
         let current_size = self.get_count();
         if current_size == self.capacity && need_to_add {
@@ -94,6 +94,8 @@ impl ExecuteCostTable {
             .or_insert((0, SystemTime::now()));
         *count += 1;
         *timestamp = SystemTime::now();
+
+        Some(*program_cost)
     }
 
     // prune the old programs so the table contains `new_size` of records,
