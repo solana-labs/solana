@@ -76,7 +76,7 @@ impl SnapshotPackagerService {
                     )
                     .expect("failed to archive snapshot package");
 
-                    snapshot_gossip_manager.push_snapshot_hashes(
+                    snapshot_gossip_manager.push_snapshot_hash(
                         snapshot_package.snapshot_type,
                         (snapshot_package.slot(), *snapshot_package.hash()),
                     );
@@ -103,24 +103,28 @@ struct SnapshotGossipManager {
 }
 
 impl SnapshotGossipManager {
+    /// If there were starting snapshot hashes, add those to their respective vectors, then push
+    /// those vectors to the cluster via CRDS.
     fn push_starting_snapshot_hashes(
         &mut self,
         starting_snapshot_hashes: Option<StartingSnapshotHashes>,
     ) {
         if let Some(starting_snapshot_hashes) = starting_snapshot_hashes {
             let starting_full_snapshot_hash = starting_snapshot_hashes.full;
-            self.push_full_snapshot_hashes(starting_full_snapshot_hash);
+            self.push_full_snapshot_hash(starting_full_snapshot_hash);
 
             if let Some(starting_incremental_snapshot_hash) = starting_snapshot_hashes.incremental {
-                self.push_incremental_snapshot_hashes(starting_incremental_snapshot_hash);
+                self.push_incremental_snapshot_hash(starting_incremental_snapshot_hash);
             };
         }
     }
 
-    fn push_snapshot_hashes(&mut self, snapshot_type: SnapshotType, snapshot_hash: (Slot, Hash)) {
+    /// Add `snapshot_hash` to its respective vector of hashes, then push that vector to the
+    /// cluster via CRDS.
+    fn push_snapshot_hash(&mut self, snapshot_type: SnapshotType, snapshot_hash: (Slot, Hash)) {
         match snapshot_type {
             SnapshotType::FullSnapshot => {
-                self.push_full_snapshot_hashes(FullSnapshotHash {
+                self.push_full_snapshot_hash(FullSnapshotHash {
                     hash: snapshot_hash,
                 });
             }
@@ -130,7 +134,7 @@ impl SnapshotGossipManager {
                     base_slot, latest_full_snapshot_hash.0,
                     "the incremental snapshot's base slot must match the latest full snapshot hash's slot"
                 );
-                self.push_incremental_snapshot_hashes(IncrementalSnapshotHash {
+                self.push_incremental_snapshot_hash(IncrementalSnapshotHash {
                     base: latest_full_snapshot_hash,
                     hash: snapshot_hash,
                 });
@@ -138,7 +142,9 @@ impl SnapshotGossipManager {
         }
     }
 
-    fn push_full_snapshot_hashes(&mut self, full_snapshot_hash: FullSnapshotHash) {
+    /// Add `full_snapshot_hash` to the vector of full snapshot hashes, then push that vector to
+    /// the cluster via CRDS.
+    fn push_full_snapshot_hash(&mut self, full_snapshot_hash: FullSnapshotHash) {
         self.full_snapshot_hashes
             .hashes
             .push(full_snapshot_hash.hash);
@@ -149,7 +155,9 @@ impl SnapshotGossipManager {
             .push_snapshot_hashes(self.full_snapshot_hashes.hashes.clone());
     }
 
-    fn push_incremental_snapshot_hashes(
+    /// Add `incremental_snapshot_hash` to the vector of incremental snapshot hashes, then push
+    /// that vector to the cluster via CRDS.
+    fn push_incremental_snapshot_hash(
         &mut self,
         incremental_snapshot_hash: IncrementalSnapshotHash,
     ) {
@@ -167,10 +175,20 @@ impl SnapshotGossipManager {
         while self.incremental_snapshot_hashes.hashes.len() > self.max_incremental_snapshot_hashes {
             self.incremental_snapshot_hashes.hashes.remove(0);
         }
-        self.cluster_info.push_incremental_snapshot_hashes(
-            self.incremental_snapshot_hashes.base,
-            self.incremental_snapshot_hashes.hashes.clone(),
-        );
+        // Pushing incremental snapshot hashes to the cluster should never fail.  The only error
+        // case is when the length of the hashes is too big, but we account for that with
+        // `max_incremental_snapshot_hashes`.  If this call ever does error, it's a programmer bug!
+        // Check to see what changed in `push_incremental_snapshot_hashes()` and handle the new
+        // error condition here.
+        self.cluster_info
+            .push_incremental_snapshot_hashes(
+                self.incremental_snapshot_hashes.base,
+                self.incremental_snapshot_hashes.hashes.clone(),
+            )
+            .expect(
+                "Bug! The programmer contract has changed for push_incremental_snapshot_hashes() \
+                 and a new error case has been added, which has not been handled here.",
+            );
     }
 }
 
