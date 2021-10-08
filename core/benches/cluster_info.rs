@@ -75,9 +75,9 @@ fn broadcast_shreds_bench(bencher: &mut Bencher) {
             &cluster_nodes_cache,
             &last_datapoint,
             &mut TransmitShredsStats::default(),
-            &SocketAddrSpace::Unspecified,
             &cluster_info,
             &bank_forks,
+            &SocketAddrSpace::Unspecified,
         )
         .unwrap();
     });
