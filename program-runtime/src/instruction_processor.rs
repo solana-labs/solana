@@ -283,6 +283,7 @@ impl std::fmt::Debug for InstructionProcessor {
         // These are just type aliases for work around of Debug-ing above pointers
         type ErasedProcessInstructionWithContext = fn(
             &'static Pubkey,
+            usize,
             &'static [u8],
             &'static mut dyn InvokeContext,
         ) -> Result<(), InstructionError>;
@@ -361,15 +362,20 @@ impl InstructionProcessor {
             if solana_sdk::native_loader::check_id(&root_account.owner()?) {
                 for (id, process_instruction) in &self.programs {
                     if id == root_id {
-                        invoke_context.remove_first_keyed_account()?;
                         // Call the builtin program
-                        return process_instruction(program_id, instruction_data, invoke_context);
+                        return process_instruction(
+                            program_id,
+                            1, // root_id to be skipped
+                            instruction_data,
+                            invoke_context,
+                        );
                     }
                 }
                 if !invoke_context.is_feature_active(&remove_native_loader::id()) {
                     // Call the program via the native loader
                     return self.native_loader.process_instruction(
                         &solana_sdk::native_loader::id(),
+                        0,
                         instruction_data,
                         invoke_context,
                     );
@@ -379,7 +385,12 @@ impl InstructionProcessor {
                 for (id, process_instruction) in &self.programs {
                     if id == owner_id {
                         // Call the program via a builtin loader
-                        return process_instruction(program_id, instruction_data, invoke_context);
+                        return process_instruction(
+                            program_id,
+                            0, // no root_id was provided
+                            instruction_data,
+                            invoke_context,
+                        );
                     }
                 }
             }
@@ -1074,6 +1085,7 @@ mod tests {
         #[allow(clippy::unnecessary_wraps)]
         fn mock_process_instruction(
             _program_id: &Pubkey,
+            _first_instruction_account: usize,
             _data: &[u8],
             _invoke_context: &mut dyn InvokeContext,
         ) -> Result<(), InstructionError> {
@@ -1082,6 +1094,7 @@ mod tests {
         #[allow(clippy::unnecessary_wraps)]
         fn mock_ix_processor(
             _pubkey: &Pubkey,
+            _first_instruction_account: usize,
             _data: &[u8],
             _context: &mut dyn InvokeContext,
         ) -> Result<(), InstructionError> {

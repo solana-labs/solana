@@ -264,6 +264,7 @@ fn transfer_with_seed(
 
 pub fn process_instruction(
     _owner: &Pubkey,
+    first_instruction_account: usize,
     instruction_data: &[u8],
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
@@ -273,16 +274,16 @@ pub fn process_instruction(
     trace!("process_instruction: {:?}", instruction);
     trace!("keyed_accounts: {:?}", keyed_accounts);
 
-    let signers = get_signers(keyed_accounts);
-
+    let _ = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
+    let signers = get_signers(&keyed_accounts[first_instruction_account..]);
     match instruction {
         SystemInstruction::CreateAccount {
             lamports,
             space,
             owner,
         } => {
-            let from = keyed_account_at_index(keyed_accounts, 0)?;
-            let to = keyed_account_at_index(keyed_accounts, 1)?;
+            let from = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
+            let to = keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
             let to_address = Address::create(to.unsigned_key(), None, invoke_context)?;
             create_account(
                 from,
@@ -302,8 +303,8 @@ pub fn process_instruction(
             space,
             owner,
         } => {
-            let from = keyed_account_at_index(keyed_accounts, 0)?;
-            let to = keyed_account_at_index(keyed_accounts, 1)?;
+            let from = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
+            let to = keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
             let to_address = Address::create(
                 to.unsigned_key(),
                 Some((&base, &seed, &owner)),
@@ -321,14 +322,14 @@ pub fn process_instruction(
             )
         }
         SystemInstruction::Assign { owner } => {
-            let keyed_account = keyed_account_at_index(keyed_accounts, 0)?;
+            let keyed_account = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
             let mut account = keyed_account.try_account_ref_mut()?;
             let address = Address::create(keyed_account.unsigned_key(), None, invoke_context)?;
             assign(&mut account, &address, &owner, &signers, invoke_context)
         }
         SystemInstruction::Transfer { lamports } => {
-            let from = keyed_account_at_index(keyed_accounts, 0)?;
-            let to = keyed_account_at_index(keyed_accounts, 1)?;
+            let from = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
+            let to = keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
             transfer(from, to, lamports, invoke_context)
         }
         SystemInstruction::TransferWithSeed {
@@ -336,9 +337,9 @@ pub fn process_instruction(
             from_seed,
             from_owner,
         } => {
-            let from = keyed_account_at_index(keyed_accounts, 0)?;
-            let base = keyed_account_at_index(keyed_accounts, 1)?;
-            let to = keyed_account_at_index(keyed_accounts, 2)?;
+            let from = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
+            let base = keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
+            let to = keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?;
             transfer_with_seed(
                 from,
                 base,
@@ -350,10 +351,10 @@ pub fn process_instruction(
             )
         }
         SystemInstruction::AdvanceNonceAccount => {
-            let me = &mut keyed_account_at_index(keyed_accounts, 0)?;
+            let me = &mut keyed_account_at_index(keyed_accounts, first_instruction_account)?;
             #[allow(deprecated)]
             if from_keyed_account::<solana_sdk::sysvar::recent_blockhashes::RecentBlockhashes>(
-                keyed_account_at_index(keyed_accounts, 1)?,
+                keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?,
             )?
             .is_empty()
             {
@@ -366,25 +367,28 @@ pub fn process_instruction(
             me.advance_nonce_account(&signers, invoke_context)
         }
         SystemInstruction::WithdrawNonceAccount(lamports) => {
-            let me = &mut keyed_account_at_index(keyed_accounts, 0)?;
-            let to = &mut keyed_account_at_index(keyed_accounts, 1)?;
+            let me = &mut keyed_account_at_index(keyed_accounts, first_instruction_account)?;
+            let to = &mut keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
             #[allow(deprecated)]
             let _ = from_keyed_account::<solana_sdk::sysvar::recent_blockhashes::RecentBlockhashes>(
-                keyed_account_at_index(keyed_accounts, 2)?,
+                keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?,
             )?;
             me.withdraw_nonce_account(
                 lamports,
                 to,
-                &from_keyed_account::<Rent>(keyed_account_at_index(keyed_accounts, 3)?)?,
+                &from_keyed_account::<Rent>(keyed_account_at_index(
+                    keyed_accounts,
+                    first_instruction_account + 3,
+                )?)?,
                 &signers,
                 invoke_context,
             )
         }
         SystemInstruction::InitializeNonceAccount(authorized) => {
-            let me = &mut keyed_account_at_index(keyed_accounts, 0)?;
+            let me = &mut keyed_account_at_index(keyed_accounts, first_instruction_account)?;
             #[allow(deprecated)]
             if from_keyed_account::<solana_sdk::sysvar::recent_blockhashes::RecentBlockhashes>(
-                keyed_account_at_index(keyed_accounts, 1)?,
+                keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?,
             )?
             .is_empty()
             {
@@ -396,16 +400,19 @@ pub fn process_instruction(
             }
             me.initialize_nonce_account(
                 &authorized,
-                &from_keyed_account::<Rent>(keyed_account_at_index(keyed_accounts, 2)?)?,
+                &from_keyed_account::<Rent>(keyed_account_at_index(
+                    keyed_accounts,
+                    first_instruction_account + 2,
+                )?)?,
                 invoke_context,
             )
         }
         SystemInstruction::AuthorizeNonceAccount(nonce_authority) => {
-            let me = &mut keyed_account_at_index(keyed_accounts, 0)?;
+            let me = &mut keyed_account_at_index(keyed_accounts, first_instruction_account)?;
             me.authorize_nonce_account(&nonce_authority, &signers, invoke_context)
         }
         SystemInstruction::Allocate { space } => {
-            let keyed_account = keyed_account_at_index(keyed_accounts, 0)?;
+            let keyed_account = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
             let mut account = keyed_account.try_account_ref_mut()?;
             let address = Address::create(keyed_account.unsigned_key(), None, invoke_context)?;
             allocate(&mut account, &address, space, &signers, invoke_context)
@@ -416,7 +423,7 @@ pub fn process_instruction(
             space,
             owner,
         } => {
-            let keyed_account = keyed_account_at_index(keyed_accounts, 0)?;
+            let keyed_account = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
             let mut account = keyed_account.try_account_ref_mut()?;
             let address = Address::create(
                 keyed_account.unsigned_key(),
@@ -433,7 +440,7 @@ pub fn process_instruction(
             )
         }
         SystemInstruction::AssignWithSeed { base, seed, owner } => {
-            let keyed_account = keyed_account_at_index(keyed_accounts, 0)?;
+            let keyed_account = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
             let mut account = keyed_account.try_account_ref_mut()?;
             let address = Address::create(
                 keyed_account.unsigned_key(),
@@ -484,6 +491,7 @@ mod tests {
         genesis_config::create_genesis_config,
         hash::{hash, Hash},
         instruction::{AccountMeta, Instruction, InstructionError},
+        keyed_account::create_keyed_accounts_unified,
         message::Message,
         nonce, nonce_account,
         process_instruction::MockInvokeContext,
@@ -506,13 +514,21 @@ mod tests {
 
     fn process_instruction(
         owner: &Pubkey,
-        keyed_accounts: Vec<KeyedAccount>,
         instruction_data: &[u8],
+        keyed_accounts: &[(bool, bool, &Pubkey, &RefCell<AccountSharedData>)],
     ) -> Result<(), InstructionError> {
+        let processor_account = RefCell::new(AccountSharedData::from(Account {
+            owner: solana_sdk::native_loader::id(),
+            ..Account::default()
+        }));
+        let mut keyed_accounts = keyed_accounts.to_vec();
+        let processor_id = Pubkey::default();
+        keyed_accounts.insert(0, (false, false, &processor_id, &processor_account));
         super::process_instruction(
             owner,
+            1,
             instruction_data,
-            &mut MockInvokeContext::new(keyed_accounts),
+            &mut MockInvokeContext::new(create_keyed_accounts_unified(&keyed_accounts)),
         )
     }
 
@@ -546,16 +562,16 @@ mod tests {
         assert_eq!(
             process_instruction(
                 &Pubkey::default(),
-                vec![
-                    KeyedAccount::new(&from, true, &from_account),
-                    KeyedAccount::new(&to, true, &to_account)
-                ],
                 &bincode::serialize(&SystemInstruction::CreateAccount {
                     lamports: 50,
                     space: 2,
                     owner: new_owner
                 })
-                .unwrap()
+                .unwrap(),
+                &[
+                    (true, false, &from, &from_account),
+                    (true, false, &to, &to_account),
+                ],
             ),
             Ok(())
         );
@@ -571,17 +587,12 @@ mod tests {
         let from = solana_sdk::pubkey::new_rand();
         let seed = "shiny pepper";
         let to = Pubkey::create_with_seed(&from, seed, &new_owner).unwrap();
-
         let from_account = AccountSharedData::new_ref(100, 0, &system_program::id());
         let to_account = AccountSharedData::new_ref(0, 0, &Pubkey::default());
 
         assert_eq!(
             process_instruction(
                 &Pubkey::default(),
-                vec![
-                    KeyedAccount::new(&from, true, &from_account),
-                    KeyedAccount::new(&to, false, &to_account)
-                ],
                 &bincode::serialize(&SystemInstruction::CreateAccountWithSeed {
                     base: from,
                     seed: seed.to_string(),
@@ -589,7 +600,11 @@ mod tests {
                     space: 2,
                     owner: new_owner
                 })
-                .unwrap()
+                .unwrap(),
+                &[
+                    (true, false, &from, &from_account),
+                    (false, false, &to, &to_account),
+                ],
             ),
             Ok(())
         );
@@ -606,7 +621,6 @@ mod tests {
         let base = solana_sdk::pubkey::new_rand();
         let seed = "shiny pepper";
         let to = Pubkey::create_with_seed(&base, seed, &new_owner).unwrap();
-
         let from_account = AccountSharedData::new_ref(100, 0, &system_program::id());
         let to_account = AccountSharedData::new_ref(0, 0, &Pubkey::default());
         let base_account = AccountSharedData::new_ref(0, 0, &Pubkey::default());
@@ -614,11 +628,6 @@ mod tests {
         assert_eq!(
             process_instruction(
                 &Pubkey::default(),
-                vec![
-                    KeyedAccount::new(&from, true, &from_account),
-                    KeyedAccount::new(&to, false, &to_account),
-                    KeyedAccount::new(&base, true, &base_account)
-                ],
                 &bincode::serialize(&SystemInstruction::CreateAccountWithSeed {
                     base,
                     seed: seed.to_string(),
@@ -626,7 +635,12 @@ mod tests {
                     space: 2,
                     owner: new_owner
                 })
-                .unwrap()
+                .unwrap(),
+                &[
+                    (true, false, &from, &from_account),
+                    (false, false, &to, &to_account),
+                    (true, false, &base, &base_account),
+                ],
             ),
             Ok(())
         );
@@ -1036,7 +1050,6 @@ mod tests {
     #[test]
     fn test_assign() {
         let new_owner = Pubkey::new(&[9; 32]);
-
         let pubkey = solana_sdk::pubkey::new_rand();
         let mut account = AccountSharedData::new(100, 0, &system_program::id());
 
@@ -1050,6 +1063,7 @@ mod tests {
             ),
             Err(InstructionError::MissingRequiredSignature)
         );
+
         // no change, no signature needed
         assert_eq!(
             assign(
@@ -1066,8 +1080,8 @@ mod tests {
         assert_eq!(
             process_instruction(
                 &Pubkey::default(),
-                vec![KeyedAccount::new(&pubkey, true, &account)],
-                &bincode::serialize(&SystemInstruction::Assign { owner: new_owner }).unwrap()
+                &bincode::serialize(&SystemInstruction::Assign { owner: new_owner }).unwrap(),
+                &[(true, false, &pubkey, &account)],
             ),
             Ok(())
         );
@@ -1123,18 +1137,18 @@ mod tests {
             owner: solana_sdk::pubkey::new_rand(),
         };
         let data = serialize(&instruction).unwrap();
-        let result = process_instruction(&system_program::id(), vec![], &data);
+        let result = process_instruction(&system_program::id(), &data, &[]);
         assert_eq!(result, Err(InstructionError::NotEnoughAccountKeys));
 
+        // Attempt to transfer with no destination
         let from = solana_sdk::pubkey::new_rand();
         let from_account = AccountSharedData::new_ref(100, 0, &system_program::id());
-        // Attempt to transfer with no destination
         let instruction = SystemInstruction::Transfer { lamports: 0 };
         let data = serialize(&instruction).unwrap();
         let result = process_instruction(
             &system_program::id(),
-            vec![KeyedAccount::new(&from, true, &from_account)],
             &data,
+            &[(true, false, &from, &from_account)],
         );
         assert_eq!(result, Err(InstructionError::NotEnoughAccountKeys));
     }
@@ -1178,7 +1192,7 @@ mod tests {
             0,
             &MockInvokeContext::new(vec![]),
         )
-        .is_ok(),);
+        .is_ok());
         assert_eq!(from_keyed_account.account.borrow().lamports(), 50);
         assert_eq!(to_keyed_account.account.borrow().lamports(), 51);
 
@@ -1252,7 +1266,7 @@ mod tests {
             0,
             &MockInvokeContext::new(vec![]),
         )
-        .is_ok(),);
+        .is_ok());
         assert_eq!(from_keyed_account.account.borrow().lamports(), 50);
         assert_eq!(to_keyed_account.account.borrow().lamports(), 51);
     }
@@ -1487,9 +1501,9 @@ mod tests {
                 .accounts
                 .iter()
                 .zip(accounts.iter())
-                .map(|(meta, account)| KeyedAccount::new(&meta.pubkey, meta.is_signer, account))
+                .map(|(meta, account)| (meta.is_signer, false, &meta.pubkey, account))
                 .collect();
-            process_instruction(&Pubkey::default(), keyed_accounts, &instruction.data)
+            process_instruction(&Pubkey::default(), &instruction.data, &keyed_accounts)
         }
     }
 
@@ -1509,8 +1523,8 @@ mod tests {
         assert_eq!(
             process_instruction(
                 &Pubkey::default(),
-                vec![],
-                &serialize(&SystemInstruction::AdvanceNonceAccount).unwrap()
+                &serialize(&SystemInstruction::AdvanceNonceAccount).unwrap(),
+                &[],
             ),
             Err(InstructionError::NotEnoughAccountKeys),
         );
@@ -1521,12 +1535,8 @@ mod tests {
         assert_eq!(
             process_instruction(
                 &Pubkey::default(),
-                vec![KeyedAccount::new(
-                    &Pubkey::default(),
-                    true,
-                    &create_default_account(),
-                )],
                 &serialize(&SystemInstruction::AdvanceNonceAccount).unwrap(),
+                &[(true, false, &Pubkey::default(), &create_default_account())],
             ),
             Err(InstructionError::NotEnoughAccountKeys),
         );
@@ -1537,16 +1547,17 @@ mod tests {
         assert_eq!(
             process_instruction(
                 &Pubkey::default(),
-                vec![
-                    KeyedAccount::new(&Pubkey::default(), true, &create_default_account()),
-                    KeyedAccount::new(
+                &serialize(&SystemInstruction::AdvanceNonceAccount).unwrap(),
+                &[
+                    (true, false, &Pubkey::default(), &create_default_account()),
+                    (
+                        false,
+                        false,
                         #[allow(deprecated)]
                         &sysvar::recent_blockhashes::id(),
-                        false,
                         &create_default_account(),
                     ),
                 ],
-                &serialize(&SystemInstruction::AdvanceNonceAccount).unwrap(),
             ),
             Err(InstructionError::InvalidArgument),
         );
@@ -1557,17 +1568,23 @@ mod tests {
         let nonce_acc = nonce_account::create_account(1_000_000);
         process_instruction(
             &Pubkey::default(),
-            vec![
-                KeyedAccount::new(&Pubkey::default(), true, &nonce_acc),
-                KeyedAccount::new(
+            &serialize(&SystemInstruction::InitializeNonceAccount(Pubkey::default())).unwrap(),
+            &[
+                (true, false, &Pubkey::default(), &nonce_acc),
+                (
+                    false,
+                    false,
                     #[allow(deprecated)]
                     &sysvar::recent_blockhashes::id(),
-                    false,
                     &create_default_recent_blockhashes_account(),
                 ),
-                KeyedAccount::new(&sysvar::rent::id(), false, &create_default_rent_account()),
+                (
+                    false,
+                    false,
+                    &sysvar::rent::id(),
+                    &create_default_rent_account(),
+                ),
             ],
-            &serialize(&SystemInstruction::InitializeNonceAccount(Pubkey::default())).unwrap(),
         )
         .unwrap();
         let blockhash = &hash(&serialize(&0).unwrap());
@@ -1584,14 +1601,22 @@ mod tests {
         let owner = Pubkey::default();
         #[allow(deprecated)]
         let blockhash_id = sysvar::recent_blockhashes::id();
-        let mut invoke_context = &mut MockInvokeContext::new(vec![
-            KeyedAccount::new(&owner, true, &nonce_acc),
-            KeyedAccount::new(&blockhash_id, false, &new_recent_blockhashes_account),
-        ]);
+        let processor_account = RefCell::new(AccountSharedData::from(Account {
+            owner: solana_sdk::native_loader::id(),
+            ..Account::default()
+        }));
+        let keyed_accounts = [
+            (false, false, &Pubkey::default(), &processor_account),
+            (true, false, &owner, &nonce_acc),
+            (false, false, &blockhash_id, &new_recent_blockhashes_account),
+        ];
+        let mut invoke_context =
+            &mut MockInvokeContext::new(create_keyed_accounts_unified(&keyed_accounts));
         invoke_context.blockhash = *blockhash;
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
+                1,
                 &serialize(&SystemInstruction::AdvanceNonceAccount).unwrap(),
                 invoke_context,
             ),
@@ -1617,8 +1642,8 @@ mod tests {
         assert_eq!(
             process_instruction(
                 &Pubkey::default(),
-                vec![],
                 &serialize(&SystemInstruction::WithdrawNonceAccount(42)).unwrap(),
+                &[],
             ),
             Err(InstructionError::NotEnoughAccountKeys),
         );
@@ -1629,12 +1654,8 @@ mod tests {
         assert_eq!(
             process_instruction(
                 &Pubkey::default(),
-                vec![KeyedAccount::new(
-                    &Pubkey::default(),
-                    true,
-                    &create_default_account()
-                )],
                 &serialize(&SystemInstruction::WithdrawNonceAccount(42)).unwrap(),
+                &[(true, false, &Pubkey::default(), &create_default_account())],
             ),
             Err(InstructionError::NotEnoughAccountKeys),
         );
@@ -1645,17 +1666,18 @@ mod tests {
         assert_eq!(
             process_instruction(
                 &Pubkey::default(),
-                vec![
-                    KeyedAccount::new(&Pubkey::default(), true, &create_default_account()),
-                    KeyedAccount::new(&Pubkey::default(), false, &create_default_account()),
-                    KeyedAccount::new(
+                &serialize(&SystemInstruction::WithdrawNonceAccount(42)).unwrap(),
+                &[
+                    (true, false, &Pubkey::default(), &create_default_account()),
+                    (false, false, &Pubkey::default(), &create_default_account()),
+                    (
+                        false,
+                        false,
                         #[allow(deprecated)]
                         &sysvar::recent_blockhashes::id(),
-                        false,
                         &create_default_account()
                     ),
                 ],
-                &serialize(&SystemInstruction::WithdrawNonceAccount(42)).unwrap(),
             ),
             Err(InstructionError::InvalidArgument),
         );
@@ -1666,22 +1688,24 @@ mod tests {
         assert_eq!(
             process_instruction(
                 &Pubkey::default(),
-                vec![
-                    KeyedAccount::new(
-                        &Pubkey::default(),
+                &serialize(&SystemInstruction::WithdrawNonceAccount(42)).unwrap(),
+                &[
+                    (
                         true,
+                        false,
+                        &Pubkey::default(),
                         &nonce_account::create_account(1_000_000),
                     ),
-                    KeyedAccount::new(&Pubkey::default(), true, &create_default_account()),
-                    KeyedAccount::new(
+                    (true, false, &Pubkey::default(), &create_default_account()),
+                    (
+                        false,
+                        false,
                         #[allow(deprecated)]
                         &sysvar::recent_blockhashes::id(),
-                        false,
                         &create_default_recent_blockhashes_account(),
                     ),
-                    KeyedAccount::new(&sysvar::rent::id(), false, &create_default_account()),
+                    (false, false, &sysvar::rent::id(), &create_default_account()),
                 ],
-                &serialize(&SystemInstruction::WithdrawNonceAccount(42)).unwrap(),
             ),
             Err(InstructionError::InvalidArgument),
         );
@@ -1692,22 +1716,29 @@ mod tests {
         assert_eq!(
             process_instruction(
                 &Pubkey::default(),
-                vec![
-                    KeyedAccount::new(
-                        &Pubkey::default(),
+                &serialize(&SystemInstruction::WithdrawNonceAccount(42)).unwrap(),
+                &[
+                    (
                         true,
+                        false,
+                        &Pubkey::default(),
                         &nonce_account::create_account(1_000_000),
                     ),
-                    KeyedAccount::new(&Pubkey::default(), true, &create_default_account()),
-                    KeyedAccount::new(
+                    (true, false, &Pubkey::default(), &create_default_account()),
+                    (
+                        false,
+                        false,
                         #[allow(deprecated)]
                         &sysvar::recent_blockhashes::id(),
-                        false,
                         &create_default_recent_blockhashes_account(),
                     ),
-                    KeyedAccount::new(&sysvar::rent::id(), false, &create_default_rent_account()),
+                    (
+                        false,
+                        false,
+                        &sysvar::rent::id(),
+                        &create_default_rent_account()
+                    ),
                 ],
-                &serialize(&SystemInstruction::WithdrawNonceAccount(42)).unwrap(),
             ),
             Ok(()),
         );
@@ -1718,8 +1749,8 @@ mod tests {
         assert_eq!(
             process_instruction(
                 &Pubkey::default(),
-                vec![],
                 &serialize(&SystemInstruction::InitializeNonceAccount(Pubkey::default())).unwrap(),
+                &[],
             ),
             Err(InstructionError::NotEnoughAccountKeys),
         );
@@ -1730,12 +1761,13 @@ mod tests {
         assert_eq!(
             process_instruction(
                 &Pubkey::default(),
-                vec![KeyedAccount::new(
-                    &Pubkey::default(),
+                &serialize(&SystemInstruction::InitializeNonceAccount(Pubkey::default())).unwrap(),
+                &[(
                     true,
+                    false,
+                    &Pubkey::default(),
                     &nonce_account::create_account(1_000_000),
                 )],
-                &serialize(&SystemInstruction::InitializeNonceAccount(Pubkey::default())).unwrap(),
             ),
             Err(InstructionError::NotEnoughAccountKeys),
         );
@@ -1746,20 +1778,22 @@ mod tests {
         assert_eq!(
             process_instruction(
                 &Pubkey::default(),
-                vec![
-                    KeyedAccount::new(
-                        &Pubkey::default(),
+                &serialize(&SystemInstruction::InitializeNonceAccount(Pubkey::default())).unwrap(),
+                &[
+                    (
                         true,
+                        false,
+                        &Pubkey::default(),
                         &nonce_account::create_account(1_000_000),
                     ),
-                    KeyedAccount::new(
+                    (
+                        true,
+                        false,
                         #[allow(deprecated)]
                         &sysvar::recent_blockhashes::id(),
-                        false,
                         &create_default_account()
                     ),
                 ],
-                &serialize(&SystemInstruction::InitializeNonceAccount(Pubkey::default())).unwrap(),
             ),
             Err(InstructionError::InvalidArgument),
         );
@@ -1770,21 +1804,23 @@ mod tests {
         assert_eq!(
             process_instruction(
                 &Pubkey::default(),
-                vec![
-                    KeyedAccount::new(
-                        &Pubkey::default(),
+                &serialize(&SystemInstruction::InitializeNonceAccount(Pubkey::default())).unwrap(),
+                &[
+                    (
                         true,
+                        false,
+                        &Pubkey::default(),
                         &nonce_account::create_account(1_000_000),
                     ),
-                    KeyedAccount::new(
+                    (
+                        false,
+                        false,
                         #[allow(deprecated)]
                         &sysvar::recent_blockhashes::id(),
-                        false,
                         &create_default_recent_blockhashes_account(),
                     ),
-                    KeyedAccount::new(&sysvar::rent::id(), false, &create_default_account()),
+                    (false, false, &sysvar::rent::id(), &create_default_account()),
                 ],
-                &serialize(&SystemInstruction::InitializeNonceAccount(Pubkey::default())).unwrap(),
             ),
             Err(InstructionError::InvalidArgument),
         );
@@ -1795,21 +1831,28 @@ mod tests {
         assert_eq!(
             process_instruction(
                 &Pubkey::default(),
-                vec![
-                    KeyedAccount::new(
-                        &Pubkey::default(),
+                &serialize(&SystemInstruction::InitializeNonceAccount(Pubkey::default())).unwrap(),
+                &[
+                    (
                         true,
+                        false,
+                        &Pubkey::default(),
                         &nonce_account::create_account(1_000_000),
                     ),
-                    KeyedAccount::new(
+                    (
+                        false,
+                        false,
                         #[allow(deprecated)]
                         &sysvar::recent_blockhashes::id(),
-                        false,
                         &create_default_recent_blockhashes_account(),
                     ),
-                    KeyedAccount::new(&sysvar::rent::id(), false, &create_default_rent_account()),
+                    (
+                        false,
+                        false,
+                        &sysvar::rent::id(),
+                        &create_default_rent_account()
+                    ),
                 ],
-                &serialize(&SystemInstruction::InitializeNonceAccount(Pubkey::default())).unwrap(),
             ),
             Ok(()),
         );
@@ -1820,24 +1863,30 @@ mod tests {
         let nonce_acc = nonce_account::create_account(1_000_000);
         process_instruction(
             &Pubkey::default(),
-            vec![
-                KeyedAccount::new(&Pubkey::default(), true, &nonce_acc),
-                KeyedAccount::new(
+            &serialize(&SystemInstruction::InitializeNonceAccount(Pubkey::default())).unwrap(),
+            &[
+                (true, false, &Pubkey::default(), &nonce_acc),
+                (
+                    false,
+                    false,
                     #[allow(deprecated)]
                     &sysvar::recent_blockhashes::id(),
-                    false,
                     &create_default_recent_blockhashes_account(),
                 ),
-                KeyedAccount::new(&sysvar::rent::id(), false, &create_default_rent_account()),
+                (
+                    false,
+                    false,
+                    &sysvar::rent::id(),
+                    &create_default_rent_account(),
+                ),
             ],
-            &serialize(&SystemInstruction::InitializeNonceAccount(Pubkey::default())).unwrap(),
         )
         .unwrap();
         assert_eq!(
             process_instruction(
                 &Pubkey::default(),
-                vec![KeyedAccount::new(&Pubkey::default(), true, &nonce_acc,),],
-                &serialize(&SystemInstruction::AuthorizeNonceAccount(Pubkey::default(),)).unwrap(),
+                &serialize(&SystemInstruction::AuthorizeNonceAccount(Pubkey::default())).unwrap(),
+                &[(true, false, &Pubkey::default(), &nonce_acc)],
             ),
             Ok(()),
         );
@@ -1920,17 +1969,23 @@ mod tests {
         assert_eq!(
             process_instruction(
                 &Pubkey::default(),
-                vec![
-                    KeyedAccount::new(&Pubkey::default(), true, &nonce_acc),
-                    KeyedAccount::new(
+                &serialize(&SystemInstruction::InitializeNonceAccount(Pubkey::default())).unwrap(),
+                &[
+                    (true, false, &Pubkey::default(), &nonce_acc),
+                    (
+                        false,
+                        false,
                         #[allow(deprecated)]
                         &sysvar::recent_blockhashes::id(),
-                        false,
                         &new_recent_blockhashes_account,
                     ),
-                    KeyedAccount::new(&sysvar::rent::id(), false, &create_default_rent_account()),
+                    (
+                        false,
+                        false,
+                        &sysvar::rent::id(),
+                        &create_default_rent_account()
+                    ),
                 ],
-                &serialize(&SystemInstruction::InitializeNonceAccount(Pubkey::default())).unwrap(),
             ),
             Err(NonceError::NoRecentBlockhashes.into())
         );
@@ -1941,17 +1996,23 @@ mod tests {
         let nonce_acc = nonce_account::create_account(1_000_000);
         process_instruction(
             &Pubkey::default(),
-            vec![
-                KeyedAccount::new(&Pubkey::default(), true, &nonce_acc),
-                KeyedAccount::new(
+            &serialize(&SystemInstruction::InitializeNonceAccount(Pubkey::default())).unwrap(),
+            &[
+                (true, false, &Pubkey::default(), &nonce_acc),
+                (
+                    false,
+                    false,
                     #[allow(deprecated)]
                     &sysvar::recent_blockhashes::id(),
-                    false,
                     &create_default_recent_blockhashes_account(),
                 ),
-                KeyedAccount::new(&sysvar::rent::id(), false, &create_default_rent_account()),
+                (
+                    false,
+                    false,
+                    &sysvar::rent::id(),
+                    &create_default_rent_account(),
+                ),
             ],
-            &serialize(&SystemInstruction::InitializeNonceAccount(Pubkey::default())).unwrap(),
         )
         .unwrap();
         let blockhash = &hash(&serialize(&0).unwrap());
@@ -1964,14 +2025,22 @@ mod tests {
         let owner = Pubkey::default();
         #[allow(deprecated)]
         let blockhash_id = sysvar::recent_blockhashes::id();
-        let mut invoke_context = &mut MockInvokeContext::new(vec![
-            KeyedAccount::new(&owner, true, &nonce_acc),
-            KeyedAccount::new(&blockhash_id, false, &new_recent_blockhashes_account),
-        ]);
+        let processor_account = RefCell::new(AccountSharedData::from(Account {
+            owner: solana_sdk::native_loader::id(),
+            ..Account::default()
+        }));
+        let keyed_accounts = [
+            (false, false, &Pubkey::default(), &processor_account),
+            (true, false, &owner, &nonce_acc),
+            (false, false, &blockhash_id, &new_recent_blockhashes_account),
+        ];
+        let mut invoke_context =
+            &mut MockInvokeContext::new(create_keyed_accounts_unified(&keyed_accounts));
         invoke_context.blockhash = *blockhash;
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
+                1,
                 &serialize(&SystemInstruction::AdvanceNonceAccount).unwrap(),
                 invoke_context,
             ),

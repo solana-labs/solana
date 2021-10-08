@@ -4,6 +4,7 @@ use itertools::Itertools;
 use solana_sdk::{
     account::AccountSharedData,
     compute_budget::ComputeBudget,
+    feature_set::remove_native_loader,
     fee_calculator::FeeCalculator,
     hash::Hash,
     instruction::{CompiledInstruction, Instruction, InstructionError},
@@ -27,7 +28,7 @@ pub type LoaderEntrypoint = unsafe extern "C" fn(
 ) -> Result<(), InstructionError>;
 
 pub type ProcessInstructionWithContext =
-    fn(&Pubkey, &[u8], &mut dyn InvokeContext) -> Result<(), InstructionError>;
+    fn(&Pubkey, usize, &[u8], &mut dyn InvokeContext) -> Result<(), InstructionError>;
 
 pub struct InvokeContextStackFrame<'a> {
     pub key: Pubkey,
@@ -81,6 +82,10 @@ pub trait InvokeContext {
     /// Get the program ID of the currently executing program
     fn get_caller(&self) -> Result<&Pubkey, InstructionError>;
     /// Removes the first keyed account
+    #[deprecated(
+        since = "1.9.0",
+        note = "To be removed together with remove_native_loader"
+    )]
     fn remove_first_keyed_account(&mut self) -> Result<(), InstructionError>;
     /// Get the list of keyed accounts
     fn get_keyed_accounts(&self) -> Result<&[KeyedAccount], InstructionError>;
@@ -395,8 +400,8 @@ pub trait Executor: Debug + Send + Sync {
     /// Execute the program
     fn execute(
         &self,
-        loader_id: &Pubkey,
         program_id: &Pubkey,
+        first_instruction_account: usize,
         instruction_data: &[u8],
         invoke_context: &mut dyn InvokeContext,
         use_jit: bool,
@@ -538,12 +543,14 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
             .ok_or(InstructionError::CallDepth)
     }
     fn remove_first_keyed_account(&mut self) -> Result<(), InstructionError> {
-        let stack_frame = &mut self
-            .invoke_stack
-            .last_mut()
-            .ok_or(InstructionError::CallDepth)?;
-        stack_frame.keyed_accounts_range.start =
-            stack_frame.keyed_accounts_range.start.saturating_add(1);
+        if !self.is_feature_active(&remove_native_loader::id()) {
+            let stack_frame = &mut self
+                .invoke_stack
+                .last_mut()
+                .ok_or(InstructionError::CallDepth)?;
+            stack_frame.keyed_accounts_range.start =
+                stack_frame.keyed_accounts_range.start.saturating_add(1);
+        }
         Ok(())
     }
     fn get_keyed_accounts(&self) -> Result<&[KeyedAccount], InstructionError> {

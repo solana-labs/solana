@@ -6693,6 +6693,7 @@ pub(crate) mod tests {
 
     fn mock_process_instruction(
         _program_id: &Pubkey,
+        first_instruction_account: usize,
         data: &[u8],
         invoke_context: &mut dyn InvokeContext,
     ) -> result::Result<(), InstructionError> {
@@ -6700,11 +6701,11 @@ pub(crate) mod tests {
         if let Ok(instruction) = bincode::deserialize(data) {
             match instruction {
                 MockInstruction::Deduction => {
-                    keyed_accounts[1]
+                    keyed_accounts[first_instruction_account + 1]
                         .account
                         .borrow_mut()
                         .checked_add_lamports(1)?;
-                    keyed_accounts[2]
+                    keyed_accounts[first_instruction_account + 2]
                         .account
                         .borrow_mut()
                         .checked_sub_lamports(1)?;
@@ -10340,6 +10341,7 @@ pub(crate) mod tests {
         }
         fn mock_vote_processor(
             program_id: &Pubkey,
+            _first_instruction_account: usize,
             _instruction_data: &[u8],
             _invoke_context: &mut dyn InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
@@ -10397,6 +10399,7 @@ pub(crate) mod tests {
 
         fn mock_vote_processor(
             _pubkey: &Pubkey,
+            _first_instruction_account: usize,
             _data: &[u8],
             _invoke_context: &mut dyn InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
@@ -10447,6 +10450,7 @@ pub(crate) mod tests {
 
         fn mock_ix_processor(
             _pubkey: &Pubkey,
+            _first_instruction_account: usize,
             _data: &[u8],
             _invoke_context: &mut dyn InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
@@ -11288,21 +11292,24 @@ pub(crate) mod tests {
 
         fn mock_process_instruction(
             _program_id: &Pubkey,
+            first_instruction_account: usize,
             data: &[u8],
             invoke_context: &mut dyn InvokeContext,
         ) -> result::Result<(), InstructionError> {
             let keyed_accounts = invoke_context.get_keyed_accounts()?;
             let lamports = data[0] as u64;
             {
-                let mut to_account = keyed_accounts[1].try_account_ref_mut()?;
-                let mut dup_account = keyed_accounts[2].try_account_ref_mut()?;
+                let mut to_account =
+                    keyed_accounts[first_instruction_account + 1].try_account_ref_mut()?;
+                let mut dup_account =
+                    keyed_accounts[first_instruction_account + 2].try_account_ref_mut()?;
                 dup_account.checked_sub_lamports(lamports)?;
                 to_account.checked_add_lamports(lamports)?;
             }
-            keyed_accounts[0]
+            keyed_accounts[first_instruction_account]
                 .try_account_ref_mut()?
                 .checked_sub_lamports(lamports)?;
-            keyed_accounts[1]
+            keyed_accounts[first_instruction_account + 1]
                 .try_account_ref_mut()?
                 .checked_add_lamports(lamports)?;
             Ok(())
@@ -11346,6 +11353,7 @@ pub(crate) mod tests {
         #[allow(clippy::unnecessary_wraps)]
         fn mock_process_instruction(
             _program_id: &Pubkey,
+            _first_instruction_account: usize,
             _data: &[u8],
             _invoke_context: &mut dyn InvokeContext,
         ) -> result::Result<(), InstructionError> {
@@ -11532,6 +11540,7 @@ pub(crate) mod tests {
     #[allow(clippy::unnecessary_wraps)]
     fn mock_ok_vote_processor(
         _pubkey: &Pubkey,
+        _first_instruction_account: usize,
         _data: &[u8],
         _invoke_context: &mut dyn InvokeContext,
     ) -> std::result::Result<(), InstructionError> {
@@ -11782,12 +11791,18 @@ pub(crate) mod tests {
     fn test_same_program_id_uses_unqiue_executable_accounts() {
         fn nested_processor(
             _program_id: &Pubkey,
+            first_instruction_account: usize,
             _data: &[u8],
             invoke_context: &mut dyn InvokeContext,
         ) -> result::Result<(), InstructionError> {
             let keyed_accounts = invoke_context.get_keyed_accounts()?;
-            assert_eq!(42, keyed_accounts[0].lamports().unwrap());
-            let mut account = keyed_accounts[0].try_account_ref_mut()?;
+            assert_eq!(
+                42,
+                keyed_accounts[first_instruction_account]
+                    .lamports()
+                    .unwrap()
+            );
+            let mut account = keyed_accounts[first_instruction_account].try_account_ref_mut()?;
             account.checked_add_lamports(1)?;
             Ok(())
         }
@@ -12148,6 +12163,7 @@ pub(crate) mod tests {
         #[allow(clippy::unnecessary_wraps)]
         fn mock_ix_processor(
             _pubkey: &Pubkey,
+            _first_instruction_account: usize,
             _data: &[u8],
             _invoke_context: &mut dyn InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
@@ -12197,6 +12213,7 @@ pub(crate) mod tests {
         #[allow(clippy::unnecessary_wraps)]
         fn mock_ix_processor(
             _pubkey: &Pubkey,
+            _first_instruction_account: usize,
             _data: &[u8],
             _context: &mut dyn InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
@@ -12583,8 +12600,8 @@ pub(crate) mod tests {
     impl Executor for TestExecutor {
         fn execute(
             &self,
-            _loader_id: &Pubkey,
             _program_id: &Pubkey,
+            _first_instruction_account: usize,
             _instruction_data: &[u8],
             _invoke_context: &mut dyn InvokeContext,
             _use_jit: bool,
@@ -13088,6 +13105,7 @@ pub(crate) mod tests {
         #[allow(clippy::unnecessary_wraps)]
         fn mock_process_instruction(
             _program_id: &Pubkey,
+            _first_instruction_account: usize,
             _data: &[u8],
             _invoke_context: &mut dyn InvokeContext,
         ) -> std::result::Result<(), solana_sdk::instruction::InstructionError> {
@@ -14585,12 +14603,13 @@ pub(crate) mod tests {
 
         fn mock_ix_processor(
             _pubkey: &Pubkey,
+            first_instruction_account: usize,
             _data: &[u8],
             invoke_context: &mut dyn InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
             use solana_sdk::account::WritableAccount;
             let keyed_accounts = invoke_context.get_keyed_accounts()?;
-            let mut data = keyed_accounts[1].try_account_ref_mut()?;
+            let mut data = keyed_accounts[first_instruction_account + 1].try_account_ref_mut()?;
             data.data_as_mut_slice()[0] = 5;
             Ok(())
         }
@@ -14794,6 +14813,7 @@ pub(crate) mod tests {
 
         fn mock_ix_processor(
             _pubkey: &Pubkey,
+            _first_instruction_account: usize,
             _data: &[u8],
             invoke_context: &mut dyn InvokeContext,
         ) -> std::result::Result<(), InstructionError> {

@@ -217,6 +217,8 @@ pub fn next_keyed_account<'a, 'b, I: Iterator<Item = &'a KeyedAccount<'b>>>(
 }
 
 /// Return the KeyedAccount at the specified index or a NotEnoughAccountKeys error
+///
+/// Index zero starts at the chain of program accounts, followed by the instruction accounts.
 pub fn keyed_account_at_index<'a>(
     keyed_accounts: &'a [KeyedAccount],
     index: usize,
