@@ -17,18 +17,15 @@ impl RpcFilterType {
                 match encoding {
                     MemcmpEncoding::Binary => {
                         use MemcmpEncodedBytes::*;
-                        const FILTER_LIMIT: usize = 128;
-                        let size = match &compare.bytes {
-                            Binary(bytes) if bytes.len() > FILTER_LIMIT => {
-                                return Err(RpcFilterError::Base58DataTooLarge);
+                        match &compare.bytes {
+                            Binary(bytes) if bytes.len() > 128 => {
+                                Err(RpcFilterError::Base58DataTooLarge)
                             }
-                            Binary(bytes) | Base58(bytes) => bytes.len(),
-                            Base64(bytes) => bytes.len(),
-                            Bytes(bytes) => bytes.len(),
-                        };
-                        if size > FILTER_LIMIT {
-                            return Err(RpcFilterError::DataTooLarge);
-                        }
+                            Base58(bytes) if bytes.len() > 175 => Err(RpcFilterError::DataTooLarge),
+                            Base64(bytes) if bytes.len() > 172 => Err(RpcFilterError::DataTooLarge),
+                            Bytes(bytes) if bytes.len() > 128 => Err(RpcFilterError::DataTooLarge),
+                            _ => Ok(()),
+                        }?;
                         match &compare.bytes {
                             Binary(bytes) => bs58::decode(&bytes)
                                 .into_vec()
