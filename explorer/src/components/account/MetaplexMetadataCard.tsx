@@ -1,7 +1,7 @@
 import { NFTData } from "providers/accounts";
 import ReactJson from "react-json-view";
 
-export function MetaplexMetadataCardCard({ nftData }: { nftData: NFTData }) {
+export function MetaplexMetadataCard({ nftData }: { nftData: NFTData }) {
   return (
     <>
       <div className="card">
