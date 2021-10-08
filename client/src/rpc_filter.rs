@@ -31,10 +31,14 @@ impl RpcFilterType {
                                 .into_vec()
                                 .map(|_| ())
                                 .map_err(RpcFilterError::DecodeError),
-                            Base58(bytes) => bs58::decode(&bytes)
-                                .into_vec()
-                                .map(|_| ())
-                                .map_err(Into::into),
+                            Base58(bytes) => {
+                                let bytes = bs58::decode(&bytes).into_vec()?;
+                                if bytes.len() > 128 {
+                                    Err(RpcFilterError::DataTooLarge)
+                                } else {
+                                    Ok(())
+                                }
+                            }
                             Base64(bytes) => base64::decode(&bytes).map(|_| ()).map_err(Into::into),
                             Bytes(_) => Ok(()),
                         }
