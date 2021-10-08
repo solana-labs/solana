@@ -20,6 +20,8 @@ use {
     },
 };
 
+/// The maximum asynchronous requests allowed in the channel to avoid excessive
+/// memory usage. The downside -- calls after this threshold is reached can get blocked.
 const MAX_ASYNC_REQUESTS: usize = 10240;
 
 struct PostgresSqlClientWrapper {
