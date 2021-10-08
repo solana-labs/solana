@@ -6414,9 +6414,10 @@ impl AccountsDb {
         (result, slots)
     }
 
-    fn process_storage_slot(
-        storage_maps: &[Arc<AccountStorageEntry>],
-    ) -> GenerateIndexAccountsMap<'_> {
+    fn process_storage_slot<'a>(
+        &self,
+        storage_maps: &'a [Arc<AccountStorageEntry>],
+    ) -> GenerateIndexAccountsMap<'a> {
         let num_accounts = storage_maps
             .iter()
             .map(|storage| storage.approx_stored_count())
@@ -6426,7 +6427,9 @@ impl AccountsDb {
             let accounts = storage.all_accounts();
             accounts.into_iter().for_each(|stored_account| {
                 let this_version = stored_account.meta.write_version;
-                match accounts_map.entry(stored_account.meta.pubkey) {
+                let pubkey = stored_account.meta.pubkey;
+                assert!(!self.is_filler_account(&pubkey));
+                match accounts_map.entry(pubkey) {
                     std::collections::hash_map::Entry::Vacant(entry) => {
                         entry.insert(IndexAccountMapEntry {
                             write_version: this_version,
@@ -6792,9 +6795,7 @@ impl AccountsDb {
         for slot_stores in self.storage.0.iter() {
             for (id, store) in slot_stores.value().read().unwrap().iter() {
                 // Should be default at this point
-                if self.filler_account_count == 0 {
                     assert_eq!(store.alive_bytes(), 0);
-                }
                 if let Some(entry) = stored_sizes_and_counts.get(id) {
                     trace!(
                         "id: {} setting count: {} cur: {}",
@@ -12888,7 +12889,7 @@ pub mod tests {
             .get_slot_storage_entries(slot0)
             .unwrap_or_default();
         let storage_info = StorageSizeAndCountMap::default();
-        let accounts_map = AccountsDb::process_storage_slot(&storage_maps[..]);
+        let accounts_map = accounts.process_storage_slot(&storage_maps[..]);
         AccountsDb::update_storage_info(&storage_info, &accounts_map, &Mutex::default());
         assert_eq!(storage_info.len(), 1);
         for entry in storage_info.iter() {
@@ -12901,9 +12902,10 @@ pub mod tests {
 
     #[test]
     fn test_calculate_storage_count_and_alive_bytes_0_accounts() {
+        let accounts = AccountsDb::new_single_for_tests();
         let storage_maps = vec![];
         let storage_info = StorageSizeAndCountMap::default();
-        let accounts_map = AccountsDb::process_storage_slot(&storage_maps[..]);
+        let accounts_map = accounts.process_storage_slot(&storage_maps[..]);
         AccountsDb::update_storage_info(&storage_info, &accounts_map, &Mutex::default());
         assert!(storage_info.is_empty());
     }
@@ -12938,7 +12940,7 @@ pub mod tests {
             .get_slot_storage_entries(slot0)
             .unwrap_or_default();
         let storage_info = StorageSizeAndCountMap::default();
-        let accounts_map = AccountsDb::process_storage_slot(&storage_maps[..]);
+        let accounts_map = accounts.process_storage_slot(&storage_maps[..]);
         AccountsDb::update_storage_info(&storage_info, &accounts_map, &Mutex::default());
         assert_eq!(storage_info.len(), 1);
         for entry in storage_info.iter() {
