@@ -6510,11 +6510,23 @@ impl AccountsDb {
         insert_us
     }
 
+    fn filler_unique_id_bytes() -> usize {
+        std::mem::size_of::<u32>()
+    }
+
+    fn filler_rent_partition_prefix_bytes() -> usize {
+        std::mem::size_of::<u32>()
+    }
+
+    fn filler_prefix_bytes() -> usize {
+        Self::filler_unique_id_bytes() + Self::filler_rent_partition_prefix_bytes()
+    }
+
     pub fn is_filler_account_helper(
         pubkey: &Pubkey,
         filler_account_suffix: Option<&Pubkey>,
     ) -> bool {
-        let offset = 8 + std::mem::size_of::<u32>();
+        let offset = Self::filler_prefix_bytes();
         filler_account_suffix
             .as_ref()
             .map(|filler_account_suffix| {
@@ -6586,14 +6598,18 @@ impl AccountsDb {
                         - idx * self.filler_account_count / root_count;
                     let accounts = (0..filler_entries)
                         .map(|_| {
-                            let mut key = self.filler_account_suffix.unwrap();
                             let my_id = added.fetch_add(1, Ordering::Relaxed);
                             let my_id_bytes = u32::to_be_bytes(my_id as u32);
 
-                            let bytes = 8;
-                            key.as_mut()[0..bytes]
-                                .copy_from_slice(&subrange.start().as_ref()[0..bytes]);
-                            key.as_mut()[bytes..(bytes + std::mem::size_of::<u32>())]
+                            // pubkey begins life as entire filler 'suffix' pubkey
+                            let mut key = self.filler_account_suffix.unwrap();
+                            let rent_prefix_bytes = Self::filler_rent_partition_prefix_bytes();
+                            // first bytes are replace with rent partition range: filler_rent_partition_prefix_bytes (u32)
+                            key.as_mut()[0..rent_prefix_bytes]
+                                .copy_from_slice(&subrange.start().as_ref()[0..rent_prefix_bytes]);
+                            // next bytes are replace with my_id: filler_unique_id_bytes (u32)
+                            key.as_mut()[rent_prefix_bytes
+                                ..(rent_prefix_bytes + Self::filler_unique_id_bytes())]
                                 .copy_from_slice(&my_id_bytes);
                             assert!(subrange.contains(&key));
                             key
@@ -6651,7 +6667,7 @@ impl AccountsDb {
                             .storage
                             .get_slot_storage_entries(*slot)
                             .unwrap_or_default();
-                        let accounts_map = Self::process_storage_slot(&storage_maps);
+                        let accounts_map = self.process_storage_slot(&storage_maps);
                         scan_time.stop();
                         scan_time_sum += scan_time.as_us();
                         Self::update_storage_info(
@@ -6795,7 +6811,7 @@ impl AccountsDb {
         for slot_stores in self.storage.0.iter() {
             for (id, store) in slot_stores.value().read().unwrap().iter() {
                 // Should be default at this point
-                    assert_eq!(store.alive_bytes(), 0);
+                assert_eq!(store.alive_bytes(), 0);
                 if let Some(entry) = stored_sizes_and_counts.get(id) {
                     trace!(
                         "id: {} setting count: {} cur: {}",
