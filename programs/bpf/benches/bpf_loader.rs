@@ -95,7 +95,7 @@ fn bench_program_alu(bencher: &mut Bencher) {
         .unwrap();
     inner_iter.write_u64::<LittleEndian>(0).unwrap();
     let loader_id = bpf_loader::id();
-    let mut invoke_context = MockInvokeContext::new(vec![]);
+    let mut invoke_context = MockInvokeContext::new(&Pubkey::default(), vec![]);
 
     let elf = load_elf("bench_alu").unwrap();
     let mut executable = <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(
@@ -216,13 +216,13 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
         .collect();
     let instruction_data = vec![0u8];
 
-    let mut invoke_context = MockInvokeContext::new(keyed_accounts);
+    let mut invoke_context = MockInvokeContext::new(&loader_id, keyed_accounts);
     invoke_context.compute_meter.remaining = BUDGET;
 
     // Serialize account data
     let keyed_accounts = invoke_context.get_keyed_accounts().unwrap();
     let (mut serialized, account_lengths) = serialize_parameters(
-        &bpf_loader::id(),
+        &loader_id,
         &solana_sdk::pubkey::new_rand(),
         keyed_accounts,
         &instruction_data,

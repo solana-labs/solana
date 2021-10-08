@@ -167,13 +167,11 @@ pub fn create_vm<'a>(
 }
 
 pub fn process_instruction(
-    _program_id: &Pubkey,
     first_instruction_account: usize,
     instruction_data: &[u8],
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
     process_instruction_common(
-        _program_id,
         first_instruction_account,
         instruction_data,
         invoke_context,
@@ -182,13 +180,11 @@ pub fn process_instruction(
 }
 
 pub fn process_instruction_jit(
-    _program_id: &Pubkey,
     first_instruction_account: usize,
     instruction_data: &[u8],
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
     process_instruction_common(
-        _program_id,
         first_instruction_account,
         instruction_data,
         invoke_context,
@@ -197,7 +193,6 @@ pub fn process_instruction_jit(
 }
 
 fn process_instruction_common(
-    _program_id: &Pubkey,
     first_instruction_account: usize,
     instruction_data: &[u8],
     invoke_context: &mut dyn InvokeContext,
@@ -1124,10 +1119,9 @@ mod tests {
         let mut keyed_accounts = keyed_accounts.to_vec();
         keyed_accounts.insert(0, (false, false, owner, &processor_account));
         super::process_instruction(
-            owner,
             1,
             instruction_data,
-            &mut MockInvokeContext::new(create_keyed_accounts_unified(&keyed_accounts)),
+            &mut MockInvokeContext::new(owner, create_keyed_accounts_unified(&keyed_accounts)),
         )
     }
 
@@ -1318,11 +1312,11 @@ mod tests {
         let mut keyed_accounts = keyed_accounts.clone();
         keyed_accounts.insert(0, (false, false, &program_key, &processor_account));
         let mut invoke_context =
-            MockInvokeContext::new(create_keyed_accounts_unified(&keyed_accounts));
+            MockInvokeContext::new(&program_key, create_keyed_accounts_unified(&keyed_accounts));
         invoke_context.compute_meter = MockComputeMeter::default();
         assert_eq!(
             Err(InstructionError::ProgramFailedToComplete),
-            super::process_instruction(&program_key, 1, &[], &mut invoke_context)
+            super::process_instruction(1, &[], &mut invoke_context)
         );
     }
 

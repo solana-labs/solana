@@ -14,7 +14,6 @@ use solana_sdk::{
 use std::collections::BTreeSet;
 
 pub fn process_instruction(
-    _program_id: &Pubkey,
     first_instruction_account: usize,
     data: &[u8],
     invoke_context: &mut dyn InvokeContext,
@@ -144,6 +143,7 @@ mod tests {
         account::{Account, AccountSharedData},
         keyed_account::create_keyed_accounts_unified,
         process_instruction::MockInvokeContext,
+        pubkey::Pubkey,
         signature::{Keypair, Signer},
         system_instruction::SystemInstruction,
     };
@@ -158,10 +158,9 @@ mod tests {
         let mut keyed_accounts = keyed_accounts.to_vec();
         keyed_accounts.insert(0, (false, false, owner, &processor_account));
         super::process_instruction(
-            owner,
             1,
             instruction_data,
-            &mut MockInvokeContext::new(create_keyed_accounts_unified(&keyed_accounts)),
+            &mut MockInvokeContext::new(owner, create_keyed_accounts_unified(&keyed_accounts)),
         )
     }
 

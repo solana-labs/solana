@@ -14,7 +14,6 @@ use solana_sdk::{
     keyed_account::keyed_account_at_index,
     native_loader,
     process_instruction::{InvokeContext, LoaderEntrypoint},
-    pubkey::Pubkey,
 };
 use std::{
     collections::HashMap,

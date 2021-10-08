@@ -282,7 +282,6 @@ impl std::fmt::Debug for InstructionProcessor {
 
         // These are just type aliases for work around of Debug-ing above pointers
         type ErasedProcessInstructionWithContext = fn(
-            &'static Pubkey,
             usize,
             &'static [u8],
             &'static mut dyn InvokeContext,
@@ -353,18 +352,17 @@ impl InstructionProcessor {
     /// This method calls the instruction's program entrypoint method
     pub fn process_instruction(
         &self,
-        program_id: &Pubkey,
         instruction_data: &[u8],
         invoke_context: &mut dyn InvokeContext,
     ) -> Result<(), InstructionError> {
         if let Some(root_account) = invoke_context.get_keyed_accounts()?.iter().next() {
             let root_id = root_account.unsigned_key();
-            if solana_sdk::native_loader::check_id(&root_account.owner()?) {
+            let owner_id = &root_account.owner()?;
+            if solana_sdk::native_loader::check_id(owner_id) {
                 for (id, process_instruction) in &self.programs {
                     if id == root_id {
                         // Call the builtin program
                         return process_instruction(
-                            program_id,
                             1, // root_id to be skipped
                             instruction_data,
                             invoke_context,
@@ -374,19 +372,16 @@ impl InstructionProcessor {
                 if !invoke_context.is_feature_active(&remove_native_loader::id()) {
                     // Call the program via the native loader
                     return self.native_loader.process_instruction(
-                        &solana_sdk::native_loader::id(),
                         0,
                         instruction_data,
                         invoke_context,
                     );
                 }
             } else {
-                let owner_id = &root_account.owner()?;
                 for (id, process_instruction) in &self.programs {
                     if id == owner_id {
                         // Call the program via a builtin loader
                         return process_instruction(
-                            program_id,
                             0, // no root_id was provided
                             instruction_data,
                             invoke_context,
@@ -620,11 +615,8 @@ impl InstructionProcessor {
             instruction_processor.add_program(program_id, *process_instruction);
         }
 
-        let mut result = instruction_processor.process_instruction(
-            program_id,
-            &instruction.data,
-            invoke_context,
-        );
+        let mut result =
+            instruction_processor.process_instruction(&instruction.data, invoke_context);
         if result.is_ok() {
             // Verify the called program has not misbehaved
             let demote_program_write_locks =
@@ -1084,7 +1076,6 @@ mod tests {
         let mut instruction_processor = InstructionProcessor::default();
         #[allow(clippy::unnecessary_wraps)]
         fn mock_process_instruction(
-            _program_id: &Pubkey,
             _first_instruction_account: usize,
             _data: &[u8],
             _invoke_context: &mut dyn InvokeContext,
@@ -1093,7 +1084,6 @@ mod tests {
         }
         #[allow(clippy::unnecessary_wraps)]
         fn mock_ix_processor(
-            _pubkey: &Pubkey,
             _first_instruction_account: usize,
             _data: &[u8],
             _context: &mut dyn InvokeContext,
