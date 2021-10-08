@@ -6553,29 +6553,29 @@ impl AccountsDb {
         info!("adding {} filler accounts", self.filler_account_count);
         // break this up to force the accounts out of memory after each pass
         let passes = 100;
-        let slots = self.storage.all_slots();
-        let outer_slots_len = slots.len();
-        let per_pass = std::cmp::max(1, outer_slots_len / passes);
-        let root_count = slots.len();
+        let roots = self.storage.all_slots();
+        let root_count = roots.len();
+        let per_pass = std::cmp::max(1, root_count / passes);
         let overall_index = AtomicUsize::new(0);
-        let hash = Hash::from_str("FiLLERACCoUNTooooooooooooooooooooooooooooooo").unwrap();
+        let string = "FiLLERACCoUNTooooooooooooooooooooooooooooooo";
+        let hash = Hash::from_str(string).unwrap();
+        let owner = Pubkey::from_str(string).unwrap();
         let lamports = 100_000_000;
-        let owner = Pubkey::from_str("FiLLERACCoUNTooooooooooooooooooooooooooooooo").unwrap();
         let space = 0;
         let account = AccountSharedData::new(lamports, space, &owner);
         let added = AtomicUsize::default();
         for pass in 0..=passes {
             self.accounts_index.set_startup(true);
-            let slots = slots
+            let roots = roots
                 .iter()
                 .skip(pass * per_pass)
                 .take(per_pass)
                 .collect::<Vec<_>>();
-            let chunk_size = (slots.len() / 7) + 1; // approximately 400k slots in a snapshot
+            let chunk_size = (roots.len() / 7) + 1; // approximately 400k slots in a snapshot
             let slot_count_in_two_day =
                 crate::bank::Bank::slot_count_in_two_day_helper(ticks_per_slot);
-            slots.par_chunks(chunk_size).for_each(|slots| {
-                for (_index, slot) in slots.iter().enumerate() {
+            roots.par_chunks(chunk_size).for_each(|roots| {
+                for slot in roots.iter() {
                     let storage_maps: Vec<Arc<AccountStorageEntry>> = self
                         .storage
                         .get_slot_storage_entries(**slot)
