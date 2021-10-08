@@ -18,7 +18,7 @@ indicatif = "0.16.2"
 jsonrpc-core = "18.0.0"
 log = "0.4.14"
 rayon = "1.5.1"
-reqwest = { version = "0.11.4", default-features = false, features = ["blocking", "rustls-tls", "json"] }
+reqwest = { version = "0.11.5", default-features = false, features = ["blocking", "rustls-tls", "json"] }
 semver = "1.0.4"
 serde = "1.0.130"
 serde_derive = "1.0.103"
