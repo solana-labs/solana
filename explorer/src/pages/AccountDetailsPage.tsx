@@ -375,10 +375,10 @@ function MoreSection({
           <BlockhashesCard blockhashes={data.parsed.info} />
         )}
       {tab === "metadata" && (
-          <MetaplexMetadataCard
-            nftData={(account.details?.data as TokenProgramData).nftData!}
-          />
-        )}
+        <MetaplexMetadataCard
+          nftData={(account.details?.data as TokenProgramData).nftData!}
+        />
+      )}
     </>
   );
 }
@@ -406,7 +406,11 @@ function getTabs(data?: ProgramData): Tab[] {
   }
 
   // Add the key for Metaplex NFTs
-  if (data && programTypeKey === "spl-token:mint" && (data as TokenProgramData).nftData) {
+  if (
+    data &&
+    programTypeKey === "spl-token:mint" &&
+    (data as TokenProgramData).nftData
+  ) {
     tabs.push(...TABS_LOOKUP[`${programTypeKey}:metaplexNFT`]);
   }
 
