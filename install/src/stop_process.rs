@@ -20,7 +20,6 @@ pub fn stop_process(process: &mut Child) -> Result<(), io::Error> {
     use nix::errno::Errno::{EINVAL, EPERM, ESRCH};
     use nix::sys::signal::{kill, Signal};
     use nix::unistd::Pid;
-    use nix::Error::Sys;
     use std::io::ErrorKind;
     use std::thread;
     use std::time::{Duration, Instant};
@@ -40,17 +39,17 @@ pub fn stop_process(process: &mut Child) -> Result<(), io::Error> {
                 kill_process(process)?;
             }
         }
-        Err(Sys(EINVAL)) => {
+        Err(EINVAL) => {
             println!("Invalid signal. Killing process {}", pid);
             kill_process(process)?;
         }
-        Err(Sys(EPERM)) => {
+        Err(EPERM) => {
             return Err(io::Error::new(
                 ErrorKind::InvalidInput,
                 format!("Insufficient permissions to signal process {}", pid),
             ));
         }
-        Err(Sys(ESRCH)) => {
+        Err(ESRCH) => {
             return Err(io::Error::new(
                 ErrorKind::InvalidInput,
                 format!("Process {} does not exist", pid),
