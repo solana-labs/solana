@@ -36,8 +36,7 @@ pub struct BucketMapHolderStats {
     pub get_range_us: AtomicU64,
     last_age: AtomicU8,
     last_age_time: AtomicU64,
-    pub flush_scan_us: AtomicU64,
-    pub flush_update_us: AtomicU64,
+    pub flush_scan_update_us: AtomicU64,
     pub flush_remove_us: AtomicU64,
     pub flush_grow_us: AtomicU64,
     last_time: AtomicInterval,
@@ -251,13 +250,8 @@ impl BucketMapHolderStats {
             ("keys", self.keys.swap(0, Ordering::Relaxed), i64),
             ("ms_per_age", ms_per_age, i64),
             (
-                "flush_scan_us",
-                self.flush_scan_us.swap(0, Ordering::Relaxed),
-                i64
-            ),
-            (
-                "flush_update_us",
-                self.flush_update_us.swap(0, Ordering::Relaxed),
+                "flush_scan_update_us",
+                self.flush_scan_update_us.swap(0, Ordering::Relaxed),
                 i64
             ),
             (

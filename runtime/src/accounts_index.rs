@@ -184,6 +184,14 @@ impl<T: IndexValue> AccountMapEntryInner<T> {
         self.meta.dirty.store(value, Ordering::Release)
     }
 
+    /// set dirty to false, return true if was dirty
+    pub fn clear_dirty(&self) -> bool {
+        self.meta
+            .dirty
+            .compare_exchange(true, false, Ordering::AcqRel, Ordering::Relaxed)
+            .is_ok()
+    }
+
     pub fn age(&self) -> Age {
         self.meta.age.load(Ordering::Relaxed)
     }
