@@ -92,7 +92,7 @@ impl StandardBroadcastRun {
                     stats,
                 );
                 shreds.insert(0, shred);
-                self.report_and_reset_stats();
+                self.report_and_reset_stats(true);
                 self.unfinished_slot = None;
                 shreds
             }
@@ -240,6 +240,7 @@ impl StandardBroadcastRun {
                     "Old broadcast start time for previous slot must exist if the previous slot
                  was interrupted",
                 ),
+                was_interrupted: true,
             });
             let shreds = Arc::new(prev_slot_shreds);
             debug_assert!(shreds.iter().all(|shred| shred.slot() == slot));
@@ -262,6 +263,7 @@ impl StandardBroadcastRun {
             slot_start_ts: self
                 .slot_broadcast_start
                 .expect("Start timestamp must exist for a slot if we're broadcasting the slot"),
+            was_interrupted: false,
         });
         get_leader_schedule_time.stop();
 
@@ -297,7 +299,7 @@ impl StandardBroadcastRun {
         self.process_shreds_stats.update(&process_stats);
 
         if last_tick_height == bank.max_tick_height() {
-            self.report_and_reset_stats();
+            self.report_and_reset_stats(false);
             self.unfinished_slot = None;
         }
 
@@ -380,35 +382,59 @@ impl StandardBroadcastRun {
         transmit_shreds_stats.update(new_transmit_shreds_stats, broadcast_shred_batch_info);
     }
 
-    fn report_and_reset_stats(&mut self) {
+    fn report_and_reset_stats(&mut self, was_interrupted: bool) {
         let stats = &self.process_shreds_stats;
         let unfinished_slot = self.unfinished_slot.as_ref().unwrap();
-        datapoint_info!(
-            "broadcast-process-shreds-stats",
-            ("slot", unfinished_slot.slot as i64, i64),
-            ("shredding_time", stats.shredding_elapsed, i64),
-            ("receive_time", stats.receive_elapsed, i64),
-            (
-                "num_data_shreds",
-                unfinished_slot.next_shred_index as i64,
-                i64
-            ),
-            (
-                "slot_broadcast_time",
-                self.slot_broadcast_start.unwrap().elapsed().as_micros() as i64,
-                i64
-            ),
-            (
-                "get_leader_schedule_time",
-                stats.get_leader_schedule_elapsed,
-                i64
-            ),
-            ("serialize_shreds_time", stats.serialize_elapsed, i64),
-            ("gen_data_time", stats.gen_data_elapsed, i64),
-            ("gen_coding_time", stats.gen_coding_elapsed, i64),
-            ("sign_coding_time", stats.sign_coding_elapsed, i64),
-            ("coding_send_time", stats.coding_send_elapsed, i64),
-        );
+        if was_interrupted {
+            datapoint_info!(
+                "broadcast-process-shreds-interrupted-stats",
+                ("slot", unfinished_slot.slot as i64, i64),
+                ("shredding_time", stats.shredding_elapsed, i64),
+                ("receive_time", stats.receive_elapsed, i64),
+                (
+                    "num_data_shreds",
+                    unfinished_slot.next_shred_index as i64,
+                    i64
+                ),
+                (
+                    "get_leader_schedule_time",
+                    stats.get_leader_schedule_elapsed,
+                    i64
+                ),
+                ("serialize_shreds_time", stats.serialize_elapsed, i64),
+                ("gen_data_time", stats.gen_data_elapsed, i64),
+                ("gen_coding_time", stats.gen_coding_elapsed, i64),
+                ("sign_coding_time", stats.sign_coding_elapsed, i64),
+                ("coding_send_time", stats.coding_send_elapsed, i64),
+            );
+        } else {
+            datapoint_info!(
+                "broadcast-process-shreds-stats",
+                ("slot", unfinished_slot.slot as i64, i64),
+                ("shredding_time", stats.shredding_elapsed, i64),
+                ("receive_time", stats.receive_elapsed, i64),
+                (
+                    "num_data_shreds",
+                    unfinished_slot.next_shred_index as i64,
+                    i64
+                ),
+                (
+                    "slot_broadcast_time",
+                    self.slot_broadcast_start.unwrap().elapsed().as_micros() as i64,
+                    i64
+                ),
+                (
+                    "get_leader_schedule_time",
+                    stats.get_leader_schedule_elapsed,
+                    i64
+                ),
+                ("serialize_shreds_time", stats.serialize_elapsed, i64),
+                ("gen_data_time", stats.gen_data_elapsed, i64),
+                ("gen_coding_time", stats.gen_coding_elapsed, i64),
+                ("sign_coding_time", stats.sign_coding_elapsed, i64),
+                ("coding_send_time", stats.coding_send_elapsed, i64),
+            );
+        }
         self.process_shreds_stats.reset();
     }
 }
