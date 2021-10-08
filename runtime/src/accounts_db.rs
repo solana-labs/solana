@@ -6571,61 +6571,57 @@ impl AccountsDb {
                 .skip(pass * per_pass)
                 .take(per_pass)
                 .collect::<Vec<_>>();
-            let chunk_size = (roots_in_this_pass.len() / 7) + 1; // approximately 400k slots in a snapshot
             let slot_count_in_two_day =
                 crate::bank::Bank::slot_count_in_two_day_helper(ticks_per_slot);
-            roots_in_this_pass
-                .par_chunks(chunk_size)
-                .for_each(|roots_in_this_pass| {
-                    for slot in roots_in_this_pass.iter() {
-                        let storage_maps: Vec<Arc<AccountStorageEntry>> = self
-                            .storage
-                            .get_slot_storage_entries(**slot)
-                            .unwrap_or_default();
-                        if storage_maps.is_empty() {
-                            continue;
-                        }
-
-                        let partition = *crate::bank::Bank::get_partitions(
-                            **slot,
-                            slot.saturating_sub(1),
-                            slot_count_in_two_day,
-                        )
-                        .last()
-                        .unwrap();
-                        let subrange = crate::bank::Bank::pubkey_range_from_partition(partition);
-
-                        let idx = overall_index.fetch_add(1, Ordering::Relaxed);
-                        let filler_entries = (idx + 1) * self.filler_account_count / root_count
-                            - idx * self.filler_account_count / root_count;
-                        let accounts = (0..filler_entries)
-                            .map(|_| {
-                                let my_id = added.fetch_add(1, Ordering::Relaxed);
-                                let my_id_bytes = u32::to_be_bytes(my_id as u32);
-
-                                // pubkey begins life as entire filler 'suffix' pubkey
-                                let mut key = self.filler_account_suffix.unwrap();
-                                let rent_prefix_bytes = Self::filler_rent_partition_prefix_bytes();
-                                // first bytes are replace with rent partition range: filler_rent_partition_prefix_bytes (u32)
-                                key.as_mut()[0..rent_prefix_bytes].copy_from_slice(
-                                    &subrange.start().as_ref()[0..rent_prefix_bytes],
-                                );
-                                // next bytes are replace with my_id: filler_unique_id_bytes (u32)
-                                key.as_mut()[rent_prefix_bytes
-                                    ..(rent_prefix_bytes + Self::filler_unique_id_bytes())]
-                                    .copy_from_slice(&my_id_bytes);
-                                assert!(subrange.contains(&key));
-                                key
-                            })
-                            .collect::<Vec<_>>();
-                        let add = accounts
-                            .iter()
-                            .map(|key| (key, &account))
-                            .collect::<Vec<_>>();
-                        let hashes = (0..filler_entries).map(|_| hash).collect::<Vec<_>>();
-                        self.store_accounts_frozen(**slot, &add[..], Some(&hashes[..]), None, None);
+            self.thread_pool.install(|| {
+                roots_in_this_pass.into_par_iter().for_each(|slot| {
+                    let storage_maps: Vec<Arc<AccountStorageEntry>> = self
+                        .storage
+                        .get_slot_storage_entries(*slot)
+                        .unwrap_or_default();
+                    if storage_maps.is_empty() {
+                        return;
                     }
-                });
+
+                    let partition = *crate::bank::Bank::get_partitions(
+                        *slot,
+                        slot.saturating_sub(1),
+                        slot_count_in_two_day,
+                    )
+                    .last()
+                    .unwrap();
+                    let subrange = crate::bank::Bank::pubkey_range_from_partition(partition);
+
+                    let idx = overall_index.fetch_add(1, Ordering::Relaxed);
+                    let filler_entries = (idx + 1) * self.filler_account_count / root_count
+                        - idx * self.filler_account_count / root_count;
+                    let accounts = (0..filler_entries)
+                        .map(|_| {
+                            let my_id = added.fetch_add(1, Ordering::Relaxed);
+                            let my_id_bytes = u32::to_be_bytes(my_id as u32);
+
+                            // pubkey begins life as entire filler 'suffix' pubkey
+                            let mut key = self.filler_account_suffix.unwrap();
+                            let rent_prefix_bytes = Self::filler_rent_partition_prefix_bytes();
+                            // first bytes are replace with rent partition range: filler_rent_partition_prefix_bytes (u32)
+                            key.as_mut()[0..rent_prefix_bytes]
+                                .copy_from_slice(&subrange.start().as_ref()[0..rent_prefix_bytes]);
+                            // next bytes are replace with my_id: filler_unique_id_bytes (u32)
+                            key.as_mut()[rent_prefix_bytes
+                                ..(rent_prefix_bytes + Self::filler_unique_id_bytes())]
+                                .copy_from_slice(&my_id_bytes);
+                            assert!(subrange.contains(&key));
+                            key
+                        })
+                        .collect::<Vec<_>>();
+                    let add = accounts
+                        .iter()
+                        .map(|key| (key, &account))
+                        .collect::<Vec<_>>();
+                    let hashes = (0..filler_entries).map(|_| hash).collect::<Vec<_>>();
+                    self.store_accounts_frozen(*slot, &add[..], Some(&hashes[..]), None, None);
+                })
+            });
             self.accounts_index.set_startup(false);
         }
         info!("added {} filler accounts", added.load(Ordering::Relaxed));
