@@ -132,7 +132,8 @@ impl SnapshotGossipManager {
                 let latest_full_snapshot_hash = *self.full_snapshot_hashes.hashes.last().unwrap();
                 assert_eq!(
                     base_slot, latest_full_snapshot_hash.0,
-                    "the incremental snapshot's base slot must match the latest full snapshot hash's slot"
+                    "the incremental snapshot's base slot ({}) must match the latest full snapshot hash's slot ({})",
+                    base_slot, latest_full_snapshot_hash.0,
                 );
                 self.push_incremental_snapshot_hash(IncrementalSnapshotHash {
                     base: latest_full_snapshot_hash,
