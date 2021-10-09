@@ -1,5 +1,6 @@
 //! The `validator` module hosts all the validator microservices.
 
+pub use solana_perf::report_target_features;
 use {
     crate::{
         broadcast_stage::BroadcastStageType,
@@ -1547,76 +1548,6 @@ fn wait_for_supermajority(
     rpc_override_health_check.store(false, Ordering::Relaxed);
     Ok(true)
 }
-
-fn is_rosetta_emulated() -> bool {
-    #[cfg(target_os = "macos")]
-    {
-        use std::str::FromStr;
-        std::process::Command::new("sysctl")
-            .args(&["-in", "sysctl.proc_translated"])
-            .output()
-            .map_err(|_| ())
-            .and_then(|output| String::from_utf8(output.stdout).map_err(|_| ()))
-            .and_then(|stdout| u8::from_str(stdout.trim()).map_err(|_| ()))
-            .map(|enabled| enabled == 1)
-            .unwrap_or(false)
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        false
-    }
-}
-
-pub fn report_target_features() {
-    warn!(
-        "CUDA is {}abled",
-        if solana_perf::perf_libs::api().is_some() {
-            "en"
-        } else {
-            "dis"
-        }
-    );
-
-    if !is_rosetta_emulated() {
-        unsafe { check_avx() };
-        unsafe { check_avx2() };
-    }
-}
-
-// Validator binaries built on a machine with AVX support will generate invalid opcodes
-// when run on machines without AVX causing a non-obvious process abort.  Instead detect
-// the mismatch and error cleanly.
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-#[target_feature(enable = "avx")]
-unsafe fn check_avx() {
-    if is_x86_feature_detected!("avx") {
-        info!("AVX detected");
-    } else {
-        error!(
-            "Incompatible CPU detected: missing AVX support. Please build from source on the target"
-        );
-        abort();
-    }
-}
-
-#[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
-unsafe fn check_avx() {}
-
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-#[target_feature(enable = "avx2")]
-unsafe fn check_avx2() {
-    if is_x86_feature_detected!("avx2") {
-        info!("AVX2 detected");
-    } else {
-        error!(
-            "Incompatible CPU detected: missing AVX2 support. Please build from source on the target"
-        );
-        abort();
-    }
-}
-
-#[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
-unsafe fn check_avx2() {}
 
 // Get the activated stake percentage (based on the provided bank) that is visible in gossip
 fn get_stake_percent_in_gossip(bank: &Bank, cluster_info: &ClusterInfo, log: bool) -> u64 {
