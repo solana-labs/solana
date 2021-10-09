@@ -4755,7 +4755,6 @@ impl Bank {
             self.stakes.write().unwrap().store(
                 pubkey,
                 account,
-                self.check_init_vote_data_enabled(),
                 self.stakes_remove_delegation_if_inactive_enabled(),
             );
         }
@@ -5439,7 +5438,6 @@ impl Bank {
                 self.stakes.write().unwrap().store(
                     pubkey,
                     account,
-                    self.check_init_vote_data_enabled(),
                     self.stakes_remove_delegation_if_inactive_enabled(),
                 );
             }
@@ -5648,11 +5646,6 @@ impl Bank {
     pub fn no_overflow_rent_distribution_enabled(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::no_overflow_rent_distribution::id())
-    }
-
-    pub fn check_init_vote_data_enabled(&self) -> bool {
-        self.feature_set
-            .is_active(&feature_set::check_init_vote_data::id())
     }
 
     pub fn verify_tx_signatures_len_enabled(&self) -> bool {

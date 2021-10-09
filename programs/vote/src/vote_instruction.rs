@@ -335,7 +335,6 @@ pub fn process_instruction(
                 &vote_init,
                 &signers,
                 &from_keyed_account::<Clock>(keyed_account_at_index(keyed_accounts, 2)?)?,
-                invoke_context.is_feature_active(&feature_set::check_init_vote_data::id()),
             )
         }
         VoteInstruction::Authorize(voter_pubkey, vote_authorize) => vote_state::authorize(
