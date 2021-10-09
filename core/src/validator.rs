@@ -116,7 +116,7 @@ pub struct ValidatorConfig {
     pub account_shrink_paths: Option<Vec<PathBuf>>,
     pub rpc_config: JsonRpcConfig,
     pub accountsdb_repl_service_config: Option<AccountsDbReplServiceConfig>,
-    pub accountsdb_plugin_config_file: Option<PathBuf>,
+    pub accountsdb_plugin_config_files: Option<Vec<PathBuf>>,
     pub rpc_addrs: Option<(SocketAddr, SocketAddr)>, // (JsonRpc, JsonRpcPubSub)
     pub pubsub_config: PubSubConfig,
     pub snapshot_config: Option<SnapshotConfig>,
@@ -178,7 +178,7 @@ impl Default for ValidatorConfig {
             account_shrink_paths: None,
             rpc_config: JsonRpcConfig::default(),
             accountsdb_repl_service_config: None,
-            accountsdb_plugin_config_file: None,
+            accountsdb_plugin_config_files: None,
             rpc_addrs: None,
             pubsub_config: PubSubConfig::default(),
             snapshot_config: None,
@@ -326,12 +326,12 @@ impl Validator {
         let mut bank_notification_senders = Vec::new();
 
         let accountsdb_plugin_service =
-            if let Some(accountsdb_plugin_config_file) = &config.accountsdb_plugin_config_file {
+            if let Some(accountsdb_plugin_config_files) = &config.accountsdb_plugin_config_files {
                 let (confirmed_bank_sender, confirmed_bank_receiver) = unbounded();
                 bank_notification_senders.push(confirmed_bank_sender);
                 let result = AccountsDbPluginService::new(
                     confirmed_bank_receiver,
-                    accountsdb_plugin_config_file,
+                    accountsdb_plugin_config_files,
                 );
                 match result {
                     Ok(accountsdb_plugin_service) => Some(accountsdb_plugin_service),
