@@ -223,6 +223,10 @@ pub mod optimize_epoch_boundary_updates {
     solana_sdk::declare_id!("265hPS8k8xJ37ot82KEgjRunsUp5w4n4Q4VwwiN9i9ps");
 }
 
+pub mod remove_native_loader {
+    solana_sdk::declare_id!("HTTgmruMYRZEntyL3EdCDdnS6e4D5wRq1FA7kQsb66qq");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -279,6 +283,7 @@ lazy_static! {
         (stakes_remove_delegation_if_inactive::id(), "remove delegations from stakes cache when inactive"),
         (send_to_tpu_vote_port::id(), "Send votes to the tpu vote port"),
         (optimize_epoch_boundary_updates::id(), "Optimize epoch boundary updates"),
+        (remove_native_loader::id(), "Remove support for the native loader"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
