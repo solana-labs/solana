@@ -362,7 +362,7 @@ await web3.sendAndConfirmTransaction(connection, transaction, [fromPublicKey]);
 
 [Source Documentation](https://solana-labs.github.io/solana-web3.js/classes/Message.html)
 
-Message is used as another way to construct transactions. You can construct a message using the accounts, header, instructions, and recentBlockhash that are a part of a transaction. A [Transaction](javascript-api.md#Transaction) is a Message plus the list of required signatures required to execute the transaction.
+Message is used as another way to construct transactions. You can construct a message using the accounts, header, instructions, and recentBlockhash that are a part of a transaction. A [Transaction](https://solana-labs.github.io/solana-web3.js/classes/Transaction.html) is a Message plus the list of required signatures required to execute the transaction.
 
 #### Example Usage
 
@@ -455,7 +455,7 @@ export class Fee extends Struct {
 
 [Source Documentation](https://solana-labs.github.io/solana-web3.js/classes/Enum.html)
 
-The Enum class is used to represent a Rust compatible Enum in javascript. The enum will just be a string representation if logged but can be properly encoded/decoded when used in conjunction with [Struct](javascript-api.md#Struct). This class is only compatible with Borsch encoded Rust enumerations.
+The Enum class is used to represent a Rust compatible Enum in javascript. The enum will just be a string representation if logged but can be properly encoded/decoded when used in conjunction with [Struct](https://solana-labs.github.io/solana-web3.js/classes/Struct.html). This class is only compatible with Borsch encoded Rust enumerations.
 
 #### Example Usage
 
@@ -698,13 +698,13 @@ await web3.sendAndConfirmTransaction(connection, withdrawTransaction, [fromPubli
 
 Authorized is an object used when creating an authorized account for staking within Solana. You can designate a `staker` and `withdrawer` separately, allowing for a different account to withdraw other than the staker.
 
-You can find more usage of the `Authorized` object under [`StakeProgram`](javascript-api.md#StakeProgram)
+You can find more usage of the `Authorized` object under [`StakeProgram`](https://solana-labs.github.io/solana-web3.js/classes/StakeProgram.html)
 
 ### Lockup
 
 [Source Documentation](https://solana-labs.github.io/solana-web3.js/classes/Lockup.html)
 
-Lockup is used in conjunction with the [StakeProgram](javascript-api.md#StakeProgram) to create an account. The Lockup is used to determine how long the stake will be locked, or unable to be retrieved. If the Lockup is set to 0 for both epoch and the Unix timestamp, the lockup will be disabled for the stake account.
+Lockup is used in conjunction with the [StakeProgram](https://solana-labs.github.io/solana-web3.js/classes/StakeProgram.html) to create an account. The Lockup is used to determine how long the stake will be locked, or unable to be retrieved. If the Lockup is set to 0 for both epoch and the Unix timestamp, the lockup will be disabled for the stake account.
 
 #### Example Usage
 
@@ -726,4 +726,4 @@ let createStakeAccountInstruction = StakeProgram.createAccount({
 ```
 The above code creates a `createStakeAccountInstruction` to be used when creating an account with the `StakeProgram`. The Lockup is set to 0 for both the epoch and Unix timestamp, disabling lockup for the account.
 
-See [StakeProgram](javascript-api.md#StakeProgram) for more.
+See [StakeProgram](https://solana-labs.github.io/solana-web3.js/classes/StakeProgram.html) for more.
