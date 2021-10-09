@@ -2278,7 +2278,6 @@ pub fn main() {
         .ok()
         .or_else(|| get_cluster_shred_version(&entrypoint_addrs));
 
-
     let accountsdb_plugin_config_files = if matches.is_present("accountsdb_plugin_config") {
         Some(
             values_t_or_exit!(matches, "accountsdb_plugin_config", String)
@@ -2289,7 +2288,6 @@ pub fn main() {
     } else {
         None
     };
-
 
     let mut validator_config = ValidatorConfig {
         require_tower: matches.is_present("require_tower"),
