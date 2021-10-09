@@ -334,8 +334,15 @@ pub fn process_instruction(
                 me,
                 &vote_init,
                 &signers,
+<<<<<<< HEAD
                 &from_keyed_account::<Clock>(keyed_account_at_index(keyed_accounts, 2)?)?,
                 invoke_context.is_feature_active(&feature_set::check_init_vote_data::id()),
+=======
+                &from_keyed_account::<Clock>(keyed_account_at_index(
+                    keyed_accounts,
+                    first_instruction_account + 2,
+                )?)?,
+>>>>>>> db9336c99 (Remove feature switch handling for checking vote init (#20557))
             )
         }
         VoteInstruction::Authorize(voter_pubkey, vote_authorize) => vote_state::authorize(

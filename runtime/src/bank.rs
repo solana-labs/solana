@@ -4658,7 +4658,6 @@ impl Bank {
             self.stakes.write().unwrap().store(
                 pubkey,
                 account,
-                self.check_init_vote_data_enabled(),
                 self.stakes_remove_delegation_if_inactive_enabled(),
             );
         }
@@ -5322,6 +5321,7 @@ impl Bank {
                 .zip(loaded_transaction.accounts.iter())
                 .filter(|(_i, (_pubkey, account))| (Stakes::is_stake(account)))
             {
+<<<<<<< HEAD
                 if Stakes::is_stake(account) {
                     if let Some(old_vote_account) = self.stakes.write().unwrap().store(
                         pubkey,
@@ -5336,6 +5336,19 @@ impl Bank {
                             transaction_result_index: i,
                         });
                     }
+=======
+                if let Some(old_vote_account) = self.stakes.write().unwrap().store(
+                    pubkey,
+                    account,
+                    self.stakes_remove_delegation_if_inactive_enabled(),
+                ) {
+                    // TODO: one of the indices is redundant.
+                    overwritten_vote_accounts.push(OverwrittenVoteAccount {
+                        account: old_vote_account,
+                        transaction_index: i,
+                        transaction_result_index: i,
+                    });
+>>>>>>> db9336c99 (Remove feature switch handling for checking vote init (#20557))
                 }
             }
         }
@@ -5545,11 +5558,6 @@ impl Bank {
     pub fn no_overflow_rent_distribution_enabled(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::no_overflow_rent_distribution::id())
-    }
-
-    pub fn check_init_vote_data_enabled(&self) -> bool {
-        self.feature_set
-            .is_active(&feature_set::check_init_vote_data::id())
     }
 
     pub fn verify_tx_signatures_len_enabled(&self) -> bool {
