@@ -4198,7 +4198,7 @@ version = "1.8.1"
 dependencies = [
  "bs58 0.4.0",
  "chrono",
- "libloading 0.7.0",
+ "crossbeam-channel 0.5.0",
  "log 0.4.14",
  "postgres",
  "serde",
