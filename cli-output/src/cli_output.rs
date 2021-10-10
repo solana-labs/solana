@@ -576,7 +576,7 @@ impl fmt::Display for CliValidators {
         for (version, info) in self.stake_by_version.iter() {
             writeln!(
                 f,
-                "{:<8} - {:3} current validators ({:>5.2}%){}",
+                "{:<8} - {:4} current validators ({:>5.2}%){}",
                 version,
                 info.current_validators,
                 100. * info.current_active_stake as f64 / self.total_active_stake as f64,
