@@ -645,6 +645,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         current_age: Age,
         entry: &AccountMapEntry<T>,
         startup: bool,
+        update_stats: bool,
     ) -> bool {
         // this could be tunable dynamically based on memory pressure
         // we could look at more ages or we could throw out more items we are choosing to keep in the cache
@@ -652,10 +653,17 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             // only read the slot list if we are planning to throw the item out
             let slot_list = entry.slot_list.read().unwrap();
             if slot_list.len() != 1 {
+                if update_stats {
+                    Self::update_stat(&self.stats().held_in_mem_slot_list_len, 1);
+                }
                 false // keep 0 and > 1 slot lists in mem. They will be cleaned or shrunk soon.
             } else {
                 // keep items with slot lists that contained cached items
-                !slot_list.iter().any(|(_, info)| info.is_cached())
+                let remove = !slot_list.iter().any(|(_, info)| info.is_cached());
+                if !remove && update_stats {
+                    Self::update_stat(&self.stats().held_in_mem_slot_list_cached, 1);
+                }
+                remove
             }
         } else {
             false
@@ -688,6 +696,16 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 removes = Vec::with_capacity(map.len());
                 let m = Measure::start("flush_scan_and_update"); // we don't care about lock time in this metric - bg threads can wait
                 for (k, v) in map.iter() {
+                    if self.should_remove_from_mem(current_age, v, startup, true) {
+                        removes.push(*k);
+                    } else if Self::random_chance_of_eviction() {
+                        removes_random.push(*k);
+                    } else {
+                        // not planning to remove this item from memory now, so don't write it to disk yet
+                        continue;
+                    }
+
+                    // if we are removing it, then we need to update disk if we're dirty
                     if v.clear_dirty() {
                         // step 1: clear the dirty flag
                         // step 2: perform the update on disk based on the fields in the entry
@@ -705,12 +723,6 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                             v.set_dirty(true);
                             break;
                         }
-                    }
-
-                    if self.should_remove_from_mem(current_age, v, startup) {
-                        removes.push(*k);
-                    } else if Self::random_chance_of_eviction() {
-                        removes_random.push(*k);
                     }
                 }
                 Self::update_time_stat(&self.stats().flush_scan_update_us, m);
@@ -778,7 +790,8 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 }
 
                 if v.dirty()
-                    || (!randomly_evicted && !self.should_remove_from_mem(current_age, v, startup))
+                    || (!randomly_evicted
+                        && !self.should_remove_from_mem(current_age, v, startup, false))
                 {
                     // marked dirty or bumped in age after we looked above
                     // these will be handled in later passes
@@ -863,10 +876,16 @@ mod tests {
                 ref_count,
                 AccountMapEntryMeta::default()
             )),
-            startup
+            startup,
+            false,
         ));
         // 1 element slot list
-        assert!(bucket.should_remove_from_mem(current_age, &one_element_slot_list_entry, startup));
+        assert!(bucket.should_remove_from_mem(
+            current_age,
+            &one_element_slot_list_entry,
+            startup,
+            false,
+        ));
         // 2 element slot list
         assert!(!bucket.should_remove_from_mem(
             current_age,
@@ -875,7 +894,8 @@ mod tests {
                 ref_count,
                 AccountMapEntryMeta::default()
             )),
-            startup
+            startup,
+            false,
         ));
 
         {
@@ -888,20 +908,36 @@ mod tests {
                     ref_count,
                     AccountMapEntryMeta::default()
                 )),
-                startup
+                startup,
+                false,
             ));
         }
 
         // 1 element slot list, age is now
-        assert!(bucket.should_remove_from_mem(current_age, &one_element_slot_list_entry, startup));
+        assert!(bucket.should_remove_from_mem(
+            current_age,
+            &one_element_slot_list_entry,
+            startup,
+            false,
+        ));
 
         // 1 element slot list, but not current age
         current_age = 1;
-        assert!(!bucket.should_remove_from_mem(current_age, &one_element_slot_list_entry, startup));
+        assert!(!bucket.should_remove_from_mem(
+            current_age,
+            &one_element_slot_list_entry,
+            startup,
+            false,
+        ));
 
         // 1 element slot list, but at startup and age not current
         startup = true;
-        assert!(bucket.should_remove_from_mem(current_age, &one_element_slot_list_entry, startup));
+        assert!(bucket.should_remove_from_mem(
+            current_age,
+            &one_element_slot_list_entry,
+            startup,
+            false,
+        ));
     }
 
     #[test]
