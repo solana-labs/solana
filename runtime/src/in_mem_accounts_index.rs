@@ -723,10 +723,9 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             let m = Measure::start("flush_remove_or_grow");
             match disk_resize {
                 Ok(_) => {
-                    if !self.flush_remove_from_cache(removes, current_age, startup, false) {
-                        iterate_for_age = false; // did not make it all the way through this bucket, so didn't handle age completely
-                    }
-                    if !self.flush_remove_from_cache(removes_random, current_age, startup, true) {
+                    if !self.flush_remove_from_cache(removes, current_age, startup, false)
+                        || !self.flush_remove_from_cache(removes_random, current_age, startup, true)
+                    {
                         iterate_for_age = false; // did not make it all the way through this bucket, so didn't handle age completely
                     }
                     Self::update_time_stat(&self.stats().flush_remove_us, m);
