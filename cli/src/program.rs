@@ -1993,7 +1993,7 @@ fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::e
     let mut program_data = Vec::new();
     file.read_to_end(&mut program_data)
         .map_err(|err| format!("Unable to read program file: {}", err))?;
-    let mut invoke_context = MockInvokeContext::new(vec![]);
+    let mut invoke_context = MockInvokeContext::new(&Pubkey::default(), vec![]);
 
     // Verify the program
     <dyn Executable<BpfError, ThisInstructionMeter>>::from_elf(

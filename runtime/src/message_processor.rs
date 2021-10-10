@@ -550,11 +550,8 @@ impl MessageProcessor {
             let result = invoke_context
                 .push(program_id, message, instruction, program_indices, None)
                 .and_then(|_| {
-                    instruction_processor.process_instruction(
-                        program_id,
-                        &instruction.data,
-                        &mut invoke_context,
-                    )?;
+                    instruction_processor
+                        .process_instruction(&instruction.data, &mut invoke_context)?;
                     invoke_context.verify(message, instruction, program_indices)?;
                     timings.accumulate(&invoke_context.timings);
                     Ok(())
@@ -598,11 +595,11 @@ mod tests {
     }
 
     fn mock_process_instruction(
-        program_id: &Pubkey,
         first_instruction_account: usize,
         data: &[u8],
         invoke_context: &mut dyn InvokeContext,
     ) -> Result<(), InstructionError> {
+        let program_id = invoke_context.get_caller()?;
         let keyed_accounts = invoke_context.get_keyed_accounts()?;
         assert_eq!(
             *program_id,
@@ -821,7 +818,6 @@ mod tests {
         }
 
         fn mock_system_process_instruction(
-            _program_id: &Pubkey,
             first_instruction_account: usize,
             data: &[u8],
             invoke_context: &mut dyn InvokeContext,
@@ -995,7 +991,6 @@ mod tests {
         }
 
         fn mock_system_process_instruction(
-            _program_id: &Pubkey,
             first_instruction_account: usize,
             data: &[u8],
             invoke_context: &mut dyn InvokeContext,
@@ -1523,7 +1518,6 @@ mod tests {
     fn test_precompile() {
         let mock_program_id = Pubkey::new_unique();
         fn mock_process_instruction(
-            _program_id: &Pubkey,
             _first_instruction_account: usize,
             _data: &[u8],
             _invoke_context: &mut dyn InvokeContext,

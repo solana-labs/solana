@@ -94,7 +94,6 @@ macro_rules! declare_name {
 /// };
 ///
 /// fn my_process_instruction(
-///     program_id: &Pubkey,
 ///     first_instruction_account: usize,
 ///     instruction_data: &[u8],
 ///     invoke_context: &mut dyn InvokeContext,
@@ -128,7 +127,6 @@ macro_rules! declare_name {
 /// };
 ///
 /// fn my_process_instruction(
-///     program_id: &Pubkey,
 ///     first_instruction_account: usize,
 ///     instruction_data: &[u8],
 ///     invoke_context: &mut dyn InvokeContext,
@@ -155,12 +153,11 @@ macro_rules! declare_program(
 
         #[no_mangle]
         pub extern "C" fn $name(
-            program_id: &$crate::pubkey::Pubkey,
             first_instruction_account: usize,
             instruction_data: &[u8],
             invoke_context: &mut dyn $crate::process_instruction::InvokeContext,
         ) -> Result<(), $crate::instruction::InstructionError> {
-            $entrypoint(program_id, first_instruction_account, instruction_data, invoke_context)
+            $entrypoint(first_instruction_account, instruction_data, invoke_context)
         }
     )
 );

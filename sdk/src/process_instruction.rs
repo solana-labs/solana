@@ -28,7 +28,7 @@ pub type LoaderEntrypoint = unsafe extern "C" fn(
 ) -> Result<(), InstructionError>;
 
 pub type ProcessInstructionWithContext =
-    fn(&Pubkey, usize, &[u8], &mut dyn InvokeContext) -> Result<(), InstructionError>;
+    fn(usize, &[u8], &mut dyn InvokeContext) -> Result<(), InstructionError>;
 
 pub struct InvokeContextStackFrame<'a> {
     pub key: Pubkey,
@@ -400,7 +400,6 @@ pub trait Executor: Debug + Send + Sync {
     /// Execute the program
     fn execute(
         &self,
-        program_id: &Pubkey,
         first_instruction_account: usize,
         instruction_data: &[u8],
         invoke_context: &mut dyn InvokeContext,
@@ -456,7 +455,7 @@ pub struct MockInvokeContext<'a> {
 }
 
 impl<'a> MockInvokeContext<'a> {
-    pub fn new(keyed_accounts: Vec<KeyedAccount<'a>>) -> Self {
+    pub fn new(program_id: &Pubkey, keyed_accounts: Vec<KeyedAccount<'a>>) -> Self {
         let compute_budget = ComputeBudget::default();
         let mut invoke_context = MockInvokeContext {
             invoke_stack: Vec::with_capacity(compute_budget.max_invoke_depth),
@@ -476,10 +475,7 @@ impl<'a> MockInvokeContext<'a> {
         };
         invoke_context
             .invoke_stack
-            .push(InvokeContextStackFrame::new(
-                Pubkey::default(),
-                keyed_accounts,
-            ));
+            .push(InvokeContextStackFrame::new(*program_id, keyed_accounts));
         invoke_context
     }
 }

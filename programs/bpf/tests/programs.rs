@@ -203,13 +203,13 @@ fn run_program(
     file.read_to_end(&mut data).unwrap();
     let loader_id = bpf_loader::id();
     let (parameter_bytes, account_lengths) = serialize_parameters(
-        &bpf_loader::id(),
+        &loader_id,
         program_id,
         &parameter_accounts,
         &instruction_data,
     )
     .unwrap();
-    let mut invoke_context = MockInvokeContext::new(parameter_accounts);
+    let mut invoke_context = MockInvokeContext::new(&loader_id, parameter_accounts);
     let compute_meter = invoke_context.get_compute_meter();
     let mut instruction_meter = ThisInstructionMeter { compute_meter };
 
@@ -284,7 +284,7 @@ fn run_program(
         }
         let parameter_accounts = invoke_context.get_keyed_accounts().unwrap();
         deserialize_parameters(
-            &bpf_loader::id(),
+            &loader_id,
             parameter_accounts,
             parameter_bytes.as_slice(),
             &account_lengths,

@@ -7,7 +7,6 @@ use {
         keyed_account::{from_keyed_account, get_signers, keyed_account_at_index},
         process_instruction::{get_sysvar, InvokeContext},
         program_utils::limited_deserialize,
-        pubkey::Pubkey,
         stake::{
             instruction::StakeInstruction,
             program::id,
@@ -24,7 +23,6 @@ use {
 pub use solana_sdk::stake::instruction::*;
 
 pub fn process_instruction(
-    _program_id: &Pubkey,
     first_instruction_account: usize,
     data: &[u8],
     invoke_context: &mut dyn InvokeContext,
@@ -333,6 +331,7 @@ mod tests {
         instruction::{AccountMeta, Instruction},
         keyed_account::create_keyed_accounts_unified,
         process_instruction::{mock_set_sysvar, MockInvokeContext},
+        pubkey::Pubkey,
         rent::Rent,
         stake::{
             config as stake_config,
@@ -379,10 +378,9 @@ mod tests {
         let mut keyed_accounts = keyed_accounts.to_vec();
         keyed_accounts.insert(0, (false, false, owner, &processor_account));
         super::process_instruction(
-            owner,
             1,
             instruction_data,
-            &mut MockInvokeContext::new(create_keyed_accounts_unified(&keyed_accounts)),
+            &mut MockInvokeContext::new(owner, create_keyed_accounts_unified(&keyed_accounts)),
         )
     }
 
@@ -440,20 +438,17 @@ mod tests {
                 .collect();
             let processor_id = id();
             keyed_accounts.insert(0, (false, false, &processor_id, &processor_account));
-            let mut invoke_context =
-                MockInvokeContext::new(create_keyed_accounts_unified(&keyed_accounts));
+            let mut invoke_context = MockInvokeContext::new(
+                &processor_id,
+                create_keyed_accounts_unified(&keyed_accounts),
+            );
             mock_set_sysvar(
                 &mut invoke_context,
                 sysvar::clock::id(),
                 sysvar::clock::Clock::default(),
             )
             .unwrap();
-            super::process_instruction(
-                &Pubkey::default(),
-                1,
-                &instruction.data,
-                &mut invoke_context,
-            )
+            super::process_instruction(1, &instruction.data, &mut invoke_context)
         }
     }
 
@@ -1104,7 +1099,7 @@ mod tests {
             (true, false, &custodian, &custodian_account),
         ];
         let mut invoke_context =
-            MockInvokeContext::new(create_keyed_accounts_unified(&keyed_accounts));
+            MockInvokeContext::new(&id(), create_keyed_accounts_unified(&keyed_accounts));
         let clock = Clock::default();
         let mut data = vec![];
         bincode::serialize_into(&mut data, &clock).unwrap();
@@ -1114,7 +1109,6 @@ mod tests {
 
         assert_eq!(
             super::process_instruction(
-                &Pubkey::default(),
                 1,
                 &serialize(&StakeInstruction::SetLockupChecked(LockupCheckedArgs {
                     unix_timestamp: None,

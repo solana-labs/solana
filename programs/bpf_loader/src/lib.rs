@@ -167,13 +167,11 @@ pub fn create_vm<'a>(
 }
 
 pub fn process_instruction(
-    program_id: &Pubkey,
     first_instruction_account: usize,
     instruction_data: &[u8],
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
     process_instruction_common(
-        program_id,
         first_instruction_account,
         instruction_data,
         invoke_context,
@@ -182,13 +180,11 @@ pub fn process_instruction(
 }
 
 pub fn process_instruction_jit(
-    program_id: &Pubkey,
     first_instruction_account: usize,
     instruction_data: &[u8],
     invoke_context: &mut dyn InvokeContext,
 ) -> Result<(), InstructionError> {
     process_instruction_common(
-        program_id,
         first_instruction_account,
         instruction_data,
         invoke_context,
@@ -197,7 +193,6 @@ pub fn process_instruction_jit(
 }
 
 fn process_instruction_common(
-    program_id: &Pubkey,
     first_instruction_account: usize,
     instruction_data: &[u8],
     invoke_context: &mut dyn InvokeContext,
@@ -213,6 +208,7 @@ fn process_instruction_common(
             1 - (invoke_context.invoke_depth() > 1) as usize,
         );
 
+        let program_id = invoke_context.get_caller()?;
         if first_account.unsigned_key() != program_id {
             ic_logger_msg!(logger, "Program id mismatch");
             return Err(InstructionError::IncorrectProgramId);
@@ -273,12 +269,12 @@ fn process_instruction_common(
                     invoke_context,
                     use_jit,
                 )?;
+                let program_id = invoke_context.get_caller()?;
                 invoke_context.add_executor(program_id, executor.clone());
                 executor
             }
         };
         executor.execute(
-            program_id,
             first_instruction_account,
             instruction_data,
             invoke_context,
@@ -286,6 +282,8 @@ fn process_instruction_common(
         )?
     } else {
         debug_assert_eq!(first_instruction_account, 1);
+
+        let program_id = invoke_context.get_caller()?;
         if !check_loader_id(program_id) {
             ic_logger_msg!(logger, "Invalid BPF loader id");
             return Err(InstructionError::IncorrectProgramId);
@@ -293,7 +291,6 @@ fn process_instruction_common(
 
         if bpf_loader_upgradeable::check_id(program_id) {
             process_loader_upgradeable_instruction(
-                program_id,
                 first_instruction_account,
                 instruction_data,
                 invoke_context,
@@ -301,7 +298,6 @@ fn process_instruction_common(
             )?;
         } else {
             process_loader_instruction(
-                program_id,
                 first_instruction_account,
                 instruction_data,
                 invoke_context,
@@ -313,13 +309,13 @@ fn process_instruction_common(
 }
 
 fn process_loader_upgradeable_instruction(
-    program_id: &Pubkey,
     first_instruction_account: usize,
     instruction_data: &[u8],
     invoke_context: &mut dyn InvokeContext,
     use_jit: bool,
 ) -> Result<(), InstructionError> {
     let logger = invoke_context.get_logger();
+    let program_id = invoke_context.get_caller()?;
     let keyed_accounts = invoke_context.get_keyed_accounts()?;
 
     match limited_deserialize(instruction_data)? {
@@ -867,12 +863,12 @@ fn common_close_account(
 }
 
 fn process_loader_instruction(
-    program_id: &Pubkey,
     first_instruction_account: usize,
     instruction_data: &[u8],
     invoke_context: &mut dyn InvokeContext,
     use_jit: bool,
 ) -> Result<(), InstructionError> {
+    let program_id = invoke_context.get_caller()?;
     let keyed_accounts = invoke_context.get_keyed_accounts()?;
     let program = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
     if program.owner()? != *program_id {
@@ -947,7 +943,6 @@ impl Debug for BpfExecutor {
 impl Executor for BpfExecutor {
     fn execute(
         &self,
-        program_id: &Pubkey,
         first_instruction_account: usize,
         instruction_data: &[u8],
         invoke_context: &mut dyn InvokeContext,
@@ -962,6 +957,7 @@ impl Executor for BpfExecutor {
         let keyed_accounts = invoke_context.get_keyed_accounts()?;
         let program = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
         let loader_id = &program.owner()?;
+        let program_id = invoke_context.get_caller()?;
         let (mut parameter_bytes, account_lengths) = serialize_parameters(
             loader_id,
             program_id,
@@ -972,6 +968,7 @@ impl Executor for BpfExecutor {
         let mut create_vm_time = Measure::start("create_vm");
         let mut execute_time;
         {
+            let program_id = &invoke_context.get_caller()?.clone();
             let compute_meter = invoke_context.get_compute_meter();
             let mut vm = match create_vm(
                 loader_id,
@@ -1064,6 +1061,7 @@ impl Executor for BpfExecutor {
             execute_time.as_us(),
             deserialize_time.as_us(),
         );
+        let program_id = invoke_context.get_caller()?;
         stable_log::program_success(&logger, program_id);
         Ok(())
     }
@@ -1121,10 +1119,9 @@ mod tests {
         let mut keyed_accounts = keyed_accounts.to_vec();
         keyed_accounts.insert(0, (false, false, owner, &processor_account));
         super::process_instruction(
-            owner,
             1,
             instruction_data,
-            &mut MockInvokeContext::new(create_keyed_accounts_unified(&keyed_accounts)),
+            &mut MockInvokeContext::new(owner, create_keyed_accounts_unified(&keyed_accounts)),
         )
     }
 
@@ -1315,11 +1312,11 @@ mod tests {
         let mut keyed_accounts = keyed_accounts.clone();
         keyed_accounts.insert(0, (false, false, &program_key, &processor_account));
         let mut invoke_context =
-            MockInvokeContext::new(create_keyed_accounts_unified(&keyed_accounts));
+            MockInvokeContext::new(&program_key, create_keyed_accounts_unified(&keyed_accounts));
         invoke_context.compute_meter = MockComputeMeter::default();
         assert_eq!(
             Err(InstructionError::ProgramFailedToComplete),
-            super::process_instruction(&program_key, 1, &[], &mut invoke_context)
+            super::process_instruction(1, &[], &mut invoke_context)
         );
     }
 
