@@ -224,16 +224,18 @@ mod test {
 
         // If current_ct and new_ct encrypt same values, then the proof verification should succeed
         let balance: u64 = 77;
-        let current_ct = current.pk.encrypt(balance);
-        let new_ct = new.pk.encrypt(balance);
+        let current_ct = current.public.encrypt(balance);
+        let new_ct = new.public.encrypt(balance);
 
-        let proof = UpdateAccountPkProof::new(balance, &current.sk, &new.sk, &current_ct, &new_ct);
+        let proof =
+            UpdateAccountPkProof::new(balance, &current.secret, &new.secret, &current_ct, &new_ct);
         assert!(proof.verify(&current_ct, &new_ct).is_ok());
 
         // If current_ct and new_ct encrypt different values, then the proof verification should fail
-        let new_ct = new.pk.encrypt(55_u64);
+        let new_ct = new.public.encrypt(55_u64);
 
-        let proof = UpdateAccountPkProof::new(balance, &current.sk, &new.sk, &current_ct, &new_ct);
+        let proof =
+            UpdateAccountPkProof::new(balance, &current.secret, &new.secret, &current_ct, &new_ct);
         assert!(proof.verify(&current_ct, &new_ct).is_err());
     }
 
@@ -246,23 +248,23 @@ mod test {
         let balance: u64 = 0;
         let zeroed_ct_as_current_ct: ElGamalCiphertext =
             pod::ElGamalCiphertext::zeroed().try_into().unwrap();
-        let new_ct: ElGamalCiphertext = new.pk.encrypt(balance);
+        let new_ct: ElGamalCiphertext = new.public.encrypt(balance);
         let proof = UpdateAccountPkProof::new(
             balance,
-            &current.sk,
-            &new.sk,
+            &current.secret,
+            &new.secret,
             &zeroed_ct_as_current_ct,
             &new_ct,
         );
         assert!(proof.verify(&zeroed_ct_as_current_ct, &new_ct).is_ok());
 
-        let current_ct = current.pk.encrypt(balance);
+        let current_ct = current.public.encrypt(balance);
         let zeroed_ct_as_new_ct: ElGamalCiphertext =
             pod::ElGamalCiphertext::zeroed().try_into().unwrap();
         let proof = UpdateAccountPkProof::new(
             balance,
-            &current.sk,
-            &new.sk,
+            &current.secret,
+            &new.secret,
             &current_ct,
             &zeroed_ct_as_new_ct,
         );
@@ -274,8 +276,8 @@ mod test {
             pod::ElGamalCiphertext::zeroed().try_into().unwrap();
         let proof = UpdateAccountPkProof::new(
             balance,
-            &current.sk,
-            &new.sk,
+            &current.secret,
+            &new.secret,
             &zeroed_ct_as_current_ct,
             &zeroed_ct_as_new_ct,
         );
@@ -290,7 +292,7 @@ mod test {
         let new = ElGamalKeypair::default();
 
         let balance = 0_u64;
-        let balance_ciphertext = new.pk.encrypt(balance);
+        let balance_ciphertext = new.public.encrypt(balance);
 
         let zeroed_comm = Pedersen::with(0_u64, &PedersenOpening::default());
         let handle = balance_ciphertext.decrypt_handle;
@@ -300,12 +302,12 @@ mod test {
             message_comm: zeroed_comm,
             decrypt_handle: handle,
         };
-        let new_ct: ElGamalCiphertext = new.pk.encrypt(balance);
+        let new_ct: ElGamalCiphertext = new.public.encrypt(balance);
 
         let proof = UpdateAccountPkProof::new(
             balance,
-            &current.sk,
-            &new.sk,
+            &current.secret,
+            &new.secret,
             &zeroed_comm_ciphertext,
             &new_ct,
         );
@@ -318,8 +320,8 @@ mod test {
 
         let proof = UpdateAccountPkProof::new(
             balance,
-            &current.sk,
-            &new.sk,
+            &current.secret,
+            &new.secret,
             &zeroed_handle_ciphertext,
             &new_ct,
         );
@@ -330,12 +332,12 @@ mod test {
             message_comm: zeroed_comm,
             decrypt_handle: handle,
         };
-        let current_ct: ElGamalCiphertext = current.pk.encrypt(balance);
+        let current_ct: ElGamalCiphertext = current.public.encrypt(balance);
 
         let proof = UpdateAccountPkProof::new(
             balance,
-            &current.sk,
-            &new.sk,
+            &current.secret,
+            &new.secret,
             &current_ct,
             &zeroed_comm_ciphertext,
         );
@@ -348,8 +350,8 @@ mod test {
 
         let proof = UpdateAccountPkProof::new(
             balance,
-            &current.sk,
-            &new.sk,
+            &current.secret,
+            &new.secret,
             &current_ct,
             &zeroed_handle_ciphertext,
         );

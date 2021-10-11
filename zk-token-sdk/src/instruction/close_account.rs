@@ -155,7 +155,7 @@ mod test {
         let source = ElGamalKeypair::default();
 
         // invalid ciphertexts
-        let balance = source.pk.encrypt(0_u64);
+        let balance = source.public.encrypt(0_u64);
 
         let zeroed_comm = Pedersen::with(0_u64, &PedersenOpening::default());
         let handle = balance.decrypt_handle;
@@ -165,7 +165,7 @@ mod test {
             decrypt_handle: handle,
         };
 
-        let proof = CloseAccountProof::new(&source.sk, &zeroed_comm_ciphertext);
+        let proof = CloseAccountProof::new(&source.secret, &zeroed_comm_ciphertext);
         assert!(proof.verify(&zeroed_comm_ciphertext).is_err());
 
         let zeroed_handle_ciphertext = ElGamalCiphertext {
@@ -173,24 +173,24 @@ mod test {
             decrypt_handle: PedersenDecryptHandle::default(),
         };
 
-        let proof = CloseAccountProof::new(&source.sk, &zeroed_handle_ciphertext);
+        let proof = CloseAccountProof::new(&source.secret, &zeroed_handle_ciphertext);
         assert!(proof.verify(&zeroed_handle_ciphertext).is_err());
 
         // valid ciphertext, but encryption of non-zero amount
-        let balance = source.pk.encrypt(55_u64);
+        let balance = source.public.encrypt(55_u64);
 
-        let proof = CloseAccountProof::new(&source.sk, &balance);
+        let proof = CloseAccountProof::new(&source.secret, &balance);
         assert!(proof.verify(&balance).is_err());
 
         // all-zeroed ciphertext interpretted as a valid encryption of zero
         let zeroed_ct: ElGamalCiphertext = pod::ElGamalCiphertext::zeroed().try_into().unwrap();
-        let proof = CloseAccountProof::new(&source.sk, &zeroed_ct);
+        let proof = CloseAccountProof::new(&source.secret, &zeroed_ct);
         assert!(proof.verify(&zeroed_ct).is_ok());
 
         // general case: valid encryption of zero
-        let balance = source.pk.encrypt(0_u64);
+        let balance = source.public.encrypt(0_u64);
 
-        let proof = CloseAccountProof::new(&source.sk, &balance);
+        let proof = CloseAccountProof::new(&source.secret, &balance);
         assert!(proof.verify(&balance).is_ok());
     }
 }
