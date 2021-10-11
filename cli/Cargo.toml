@@ -41,7 +41,7 @@ solana-transaction-status = { path = "../transaction-status", version = "=1.9.0"
 solana-version = { path = "../version", version = "=1.9.0" }
 solana-vote-program = { path = "../programs/vote", version = "=1.9.0" }
 spl-memo = { version = "=3.0.1", features = ["no-entrypoint"] }
-thiserror = "1.0.29"
+thiserror = "1.0.30"
 tiny-bip39 = "0.8.2"
 
 [dev-dependencies]
