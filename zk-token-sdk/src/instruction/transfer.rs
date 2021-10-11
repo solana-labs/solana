@@ -471,11 +471,11 @@ mod test {
     fn test_transfer_correctness() {
         // ElGamalKeypair keys for source, destination, and auditor accounts
         let ElGamalKeypair {
-            pk: source_pk,
-            sk: source_sk,
+            public: source_pk,
+            secret: source_sk,
         } = ElGamalKeypair::default();
-        let dest_pk = ElGamalKeypair::default().pk;
-        let auditor_pk = ElGamalKeypair::default().pk;
+        let dest_pk = ElGamalKeypair::default().public;
+        let auditor_pk = ElGamalKeypair::default().public;
 
         // create source account spendable ciphertext
         let spendable_balance: u64 = 77;
@@ -502,14 +502,14 @@ mod test {
     fn test_source_dest_ciphertext() {
         // ElGamalKeypair keys for source, destination, and auditor accounts
         let ElGamalKeypair {
-            pk: source_pk,
-            sk: source_sk,
+            public: source_pk,
+            secret: source_sk,
         } = ElGamalKeypair::default();
         let ElGamalKeypair {
-            pk: dest_pk,
-            sk: dest_sk,
+            public: dest_pk,
+            secret: dest_sk,
         } = ElGamalKeypair::default();
-        let auditor_pk = ElGamalKeypair::default().pk;
+        let auditor_pk = ElGamalKeypair::default().public;
 
         // create source account spendable ciphertext
         let spendable_balance: u64 = 77;

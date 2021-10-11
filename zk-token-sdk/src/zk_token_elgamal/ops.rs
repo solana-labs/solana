@@ -252,21 +252,21 @@ mod tests {
 
         // spendable_ct should be an encryption of 0 for any public key when
         // `PedersenOpen::default()` is used
-        let pk = ElGamalKeypair::default().pk;
+        let public = ElGamalKeypair::default().public;
         let balance: u64 = 0;
         assert_eq!(
             spendable_ct,
-            pk.encrypt_with(balance, &PedersenOpening::default())
+            public.encrypt_with(balance, &PedersenOpening::default())
         );
 
         // homomorphism should work like any other ciphertext
         let open = PedersenOpening::random(&mut OsRng);
-        let transfer_amount_ct = pk.encrypt_with(55_u64, &open);
+        let transfer_amount_ct = public.encrypt_with(55_u64, &open);
         let transfer_amount_pod: pod::ElGamalCiphertext = transfer_amount_ct.into();
 
         let sum = ops::add(&spendable_balance, &transfer_amount_pod).unwrap();
 
-        let expected: pod::ElGamalCiphertext = pk.encrypt_with(55_u64, &open).into();
+        let expected: pod::ElGamalCiphertext = public.encrypt_with(55_u64, &open).into();
         assert_eq!(expected, sum);
     }
 
@@ -276,9 +276,10 @@ mod tests {
 
         let added_ct = ops::add_to(&spendable_balance, 55).unwrap();
 
-        let pk = ElGamalKeypair::default().pk;
-        let expected: pod::ElGamalCiphertext =
-            pk.encrypt_with(55_u64, &PedersenOpening::default()).into();
+        let public = ElGamalKeypair::default().public;
+        let expected: pod::ElGamalCiphertext = public
+            .encrypt_with(55_u64, &PedersenOpening::default())
+            .into();
 
         assert_eq!(expected, added_ct);
     }
@@ -286,13 +287,13 @@ mod tests {
     #[test]
     fn test_subtract_from() {
         let amount = 77_u64;
-        let pk = ElGamalKeypair::default().pk;
+        let public = ElGamalKeypair::default().public;
         let open = PedersenOpening::random(&mut OsRng);
-        let encrypted_amount: pod::ElGamalCiphertext = pk.encrypt_with(amount, &open).into();
+        let encrypted_amount: pod::ElGamalCiphertext = public.encrypt_with(amount, &open).into();
 
         let subtracted_ct = ops::subtract_from(&encrypted_amount, 55).unwrap();
 
-        let expected: pod::ElGamalCiphertext = pk.encrypt_with(22_u64, &open).into();
+        let expected: pod::ElGamalCiphertext = public.encrypt_with(22_u64, &open).into();
 
         assert_eq!(expected, subtracted_ct);
     }
@@ -312,9 +313,9 @@ mod tests {
         let (amount_lo, amount_hi) = split_u64_into_u32(transfer_amount);
 
         // generate public keys
-        let source_pk = ElGamalKeypair::default().pk;
-        let dest_pk = ElGamalKeypair::default().pk;
-        let auditor_pk = ElGamalKeypair::default().pk;
+        let source_pk = ElGamalKeypair::default().public;
+        let dest_pk = ElGamalKeypair::default().public;
+        let auditor_pk = ElGamalKeypair::default().public;
 
         // commitments associated with TransferRangeProof
         let (comm_lo, open_lo) = Pedersen::new(amount_lo);

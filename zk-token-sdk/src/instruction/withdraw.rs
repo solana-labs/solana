@@ -179,17 +179,17 @@ mod test {
     #[ignore]
     fn test_withdraw_correctness() {
         // generate and verify proof for the proper setting
-        let ElGamalKeypair { pk, sk } = ElGamalKeypair::default();
+        let ElGamalKeypair { public, secret } = ElGamalKeypair::default();
 
         let current_balance: u64 = 77;
-        let current_balance_ct = pk.encrypt(current_balance);
+        let current_balance_ct = public.encrypt(current_balance);
 
         let withdraw_amount: u64 = 55;
 
         let data = WithdrawData::new(
             withdraw_amount,
-            pk,
-            &sk,
+            public,
+            &secret,
             current_balance,
             current_balance_ct,
         );
@@ -197,7 +197,13 @@ mod test {
 
         // generate and verify proof with wrong balance
         let wrong_balance: u64 = 99;
-        let data = WithdrawData::new(withdraw_amount, pk, &sk, wrong_balance, current_balance_ct);
+        let data = WithdrawData::new(
+            withdraw_amount,
+            public,
+            &secret,
+            wrong_balance,
+            current_balance_ct,
+        );
         assert!(data.verify().is_err());
 
         // TODO: test for ciphertexts that encrypt numbers outside the 0, 2^64 range
