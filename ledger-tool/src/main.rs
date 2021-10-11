@@ -893,6 +893,12 @@ fn main() {
         .validator(is_parsable::<usize>)
         .takes_value(true)
         .help("How much memory the accounts index can consume. If this is exceeded, some account index entries will be stored on disk. If missing, the entire index is stored in memory.");
+    let accounts_filler_count = Arg::with_name("accounts_filler_count")
+        .long("accounts-filler-count")
+        .value_name("COUNT")
+        .validator(is_parsable::<usize>)
+        .takes_value(true)
+        .help("How many accounts to add to stress the system. Accounts are ignored in operations related to correctness.");
     let account_paths_arg = Arg::with_name("account_paths")
         .long("accounts")
         .value_name("PATHS")
@@ -1217,6 +1223,7 @@ fn main() {
             .arg(&limit_load_slot_count_from_snapshot_arg)
             .arg(&accounts_index_bins)
             .arg(&accounts_index_limit)
+            .arg(&accounts_filler_count)
             .arg(&verify_index_arg)
             .arg(&hard_forks_arg)
             .arg(&no_accounts_db_caching_arg)
@@ -1961,9 +1968,12 @@ fn main() {
                 accounts_index_config.drives = Some(accounts_index_paths);
             }
 
+            let filler_account_count = value_t!(arg_matches, "accounts_filler_count", usize).ok();
+
             let accounts_db_config = Some(AccountsDbConfig {
                 index: Some(accounts_index_config),
                 accounts_hash_cache_path: Some(ledger_path.clone()),
+                filler_account_count,
             });
 
             let process_options = ProcessOptions {

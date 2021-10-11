@@ -97,6 +97,16 @@ pub fn load(
         info!("Snapshots disabled; will load from genesis");
     }
 
+    if process_options
+        .accounts_db_config
+        .as_ref()
+        .and_then(|config| config.filler_account_count)
+        .unwrap_or_default()
+        > 0
+    {
+        panic!("filler accounts specified, but not loading from snapshot");
+    }
+
     load_from_genesis(
         genesis_config,
         blockstore,

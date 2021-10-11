@@ -29,7 +29,6 @@ use {
         clock::{Epoch, Slot, UnixTimestamp},
         epoch_schedule::EpochSchedule,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
-        genesis_config::ClusterType,
         genesis_config::GenesisConfig,
         hard_forks::HardForks,
         hash::Hash,
@@ -347,7 +346,7 @@ where
         snapshot_accounts_db_fields,
         account_paths,
         unpacked_append_vec_map,
-        &genesis_config.cluster_type,
+        genesis_config,
         account_secondary_indexes,
         caching_enabled,
         limit_load_slot_count_from_snapshot,
@@ -402,7 +401,7 @@ fn reconstruct_accountsdb_from_fields<E>(
     snapshot_accounts_db_fields: SnapshotAccountsDbFields<E>,
     account_paths: &[PathBuf],
     unpacked_append_vec_map: UnpackedAppendVecMap,
-    cluster_type: &ClusterType,
+    genesis_config: &GenesisConfig,
     account_secondary_indexes: AccountSecondaryIndexes,
     caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
@@ -416,7 +415,7 @@ where
 {
     let mut accounts_db = AccountsDb::new_with_config(
         account_paths.to_vec(),
-        cluster_type,
+        &genesis_config.cluster_type,
         account_secondary_indexes,
         caching_enabled,
         shrink_ratio,
@@ -536,6 +535,7 @@ where
         .write_version
         .fetch_add(snapshot_version, Ordering::Relaxed);
     accounts_db.generate_index(limit_load_slot_count_from_snapshot, verify_index);
+    accounts_db.maybe_add_filler_accounts(genesis_config.ticks_per_slot());
 
     let mut measure_notify = Measure::start("accounts_notify");
     accounts_db.notify_account_restore_from_snapshot();

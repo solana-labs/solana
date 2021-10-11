@@ -4410,6 +4410,7 @@ impl Bank {
                 &pubkey,
                 &mut account,
                 rent_for_sysvars,
+                self.rc.accounts.accounts_db.filler_account_suffix.as_ref(),
             );
             total_rent += rent;
             // Store all of them unconditionally to purge old AppendVec,
@@ -4431,7 +4432,7 @@ impl Bank {
     // start_index..=end_index. But it has some exceptional cases, including
     // this important and valid one:
     //   0..=0: the first partition in the new epoch when crossing epochs
-    fn pubkey_range_from_partition(
+    pub fn pubkey_range_from_partition(
         (start_index, end_index, partition_count): Partition,
     ) -> RangeInclusive<Pubkey> {
         assert!(start_index <= end_index);
@@ -4496,13 +4497,15 @@ impl Bank {
         Pubkey::new_from_array(start_pubkey)..=Pubkey::new_from_array(end_pubkey)
     }
 
-    fn fixed_cycle_partitions(&self) -> Vec<Partition> {
-        let slot_count_in_two_day = self.slot_count_in_two_day();
-
-        let parent_cycle = self.parent_slot() / slot_count_in_two_day;
-        let current_cycle = self.slot() / slot_count_in_two_day;
-        let mut parent_cycle_index = self.parent_slot() % slot_count_in_two_day;
-        let current_cycle_index = self.slot() % slot_count_in_two_day;
+    pub fn get_partitions(
+        slot: Slot,
+        parent_slot: Slot,
+        slot_count_in_two_day: SlotCount,
+    ) -> Vec<Partition> {
+        let parent_cycle = parent_slot / slot_count_in_two_day;
+        let current_cycle = slot / slot_count_in_two_day;
+        let mut parent_cycle_index = parent_slot % slot_count_in_two_day;
+        let current_cycle_index = slot % slot_count_in_two_day;
         let mut partitions = vec![];
         if parent_cycle < current_cycle {
             if current_cycle_index > 0 {
@@ -4529,6 +4532,11 @@ impl Bank {
         ));
 
         partitions
+    }
+
+    fn fixed_cycle_partitions(&self) -> Vec<Partition> {
+        let slot_count_in_two_day = self.slot_count_in_two_day();
+        Self::get_partitions(self.slot(), self.parent_slot(), slot_count_in_two_day)
     }
 
     fn variable_cycle_partitions(&self) -> Vec<Partition> {
@@ -4722,11 +4730,15 @@ impl Bank {
             && self.slot_count_per_normal_epoch() < self.slot_count_in_two_day()
     }
 
+    fn slot_count_in_two_day(&self) -> SlotCount {
+        Self::slot_count_in_two_day_helper(self.ticks_per_slot)
+    }
+
     // This value is specially chosen to align with slots per epoch in mainnet-beta and testnet
     // Also, assume 500GB account data set as the extreme, then for 2 day (=48 hours) to collect
     // rent eagerly, we'll consume 5.7 MB/s IO bandwidth, bidirectionally.
-    fn slot_count_in_two_day(&self) -> SlotCount {
-        2 * DEFAULT_TICKS_PER_SECOND * SECONDS_PER_DAY / self.ticks_per_slot
+    pub fn slot_count_in_two_day_helper(ticks_per_slot: SlotCount) -> SlotCount {
+        2 * DEFAULT_TICKS_PER_SECOND * SECONDS_PER_DAY / ticks_per_slot
     }
 
     fn slot_count_per_normal_epoch(&self) -> SlotCount {

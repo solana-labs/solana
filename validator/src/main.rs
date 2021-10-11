@@ -1380,8 +1380,14 @@ pub fn main() {
                 .help("Persistent accounts-index location. \
                        May be specified multiple times. \
                        [default: [ledger]/accounts_index]"),
- )
-        .arg(
+         )
+         .arg(Arg::with_name("accounts_filler_count")
+            .long("accounts-filler-count")
+            .value_name("COUNT")
+            .validator(is_parsable::<usize>)
+            .takes_value(true)
+            .help("How many accounts to add to stress the system. Accounts are ignored in operations related to correctness."))
+         .arg(
             Arg::with_name("accounts_db_test_hash_calculation")
                 .long("accounts-db-test-hash-calculation")
                 .help("Enables testing of hash calculation using stores in \
@@ -1949,9 +1955,11 @@ pub fn main() {
         accounts_index_config.drives = Some(accounts_index_paths);
     }
 
+    let filler_account_count = value_t!(matches, "accounts_filler_count", usize).ok();
     let accounts_db_config = Some(AccountsDbConfig {
         index: Some(accounts_index_config),
         accounts_hash_cache_path: Some(ledger_path.clone()),
+        filler_account_count,
     });
 
     let accountsdb_repl_service_config = if matches.is_present("enable_accountsdb_repl") {
