@@ -189,12 +189,16 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             } else {
                 // not in cache, look on disk
                 let stats = &self.stats();
+                // prevent window of item being removed from in-memory racing with load from disk here
+                self.start_stop_flush_no_wake(true);
                 let disk_entry = self.load_account_entry_from_disk(pubkey);
                 if disk_entry.is_none() {
+                    self.start_stop_flush_no_wake(false); // allow this once we have the lock on the map
                     return callback(None);
                 }
                 let disk_entry = disk_entry.unwrap();
                 let mut map = self.map().write().unwrap();
+                self.start_stop_flush_no_wake(false); // allow this once we have the lock on the map
                 let entry = map.entry(*pubkey);
                 match entry {
                     Entry::Occupied(occupied) => callback(Some(occupied.get())),
@@ -308,9 +312,16 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 );
                 Self::update_stat(&self.stats().updates_in_mem, 1);
             } else {
+                // prevent window of item being removed from in-memory racing with load from disk here
+                self.start_stop_flush_no_wake(true);
+                // not in cache, look on disk
+                // do this outside of write lock on in mem acct idx
+                let disk_entry = self.load_account_entry_from_disk(pubkey);
+
                 let mut m = Measure::start("entry");
                 let mut map = self.map().write().unwrap();
                 let entry = map.entry(*pubkey);
+                self.start_stop_flush_no_wake(false);
                 m.stop();
                 let found = matches!(entry, Entry::Occupied(_));
                 match entry {
@@ -326,8 +337,6 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                         Self::update_stat(&self.stats().updates_in_mem, 1);
                     }
                     Entry::Vacant(vacant) => {
-                        // not in cache, look on disk
-                        let disk_entry = self.load_account_entry_from_disk(vacant.key());
                         let new_value = if let Some(disk_entry) = disk_entry {
                             // on disk, so merge new_value with what was on disk
                             Self::lock_and_update_slot_list(
@@ -555,12 +564,27 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         }
     }
 
+    /// stop=true to cause flush to halt on this bucket
+    /// stop=false to allow flush to continue on this bucket
+    /// if flushing is halted, no entries will be thrown out of memory
     fn start_stop_flush(&self, stop: bool) {
-        if stop {
-            self.stop_flush.fetch_add(1, Ordering::Release);
-        } else if 1 == self.stop_flush.fetch_sub(1, Ordering::Release) {
+        let last = self.start_stop_flush_no_wake(stop);
+        if !stop && last {
             // stop_flush went to 0, so this bucket could now be ready to be aged
-            self.storage.wait_dirty_or_aged.notify_one();
+            let current_age = self.storage.current_age();
+            if self.get_should_age(current_age) {
+                self.storage.wait_dirty_or_aged.notify_one();
+            }
+        }
+    }
+
+    /// inc/dec stop_flush
+    /// returns if this was last start or first stop
+    fn start_stop_flush_no_wake(&self, stop: bool) -> bool {
+        if stop {
+            self.stop_flush.fetch_add(1, Ordering::Release) == 0
+        } else {
+            self.stop_flush.fetch_sub(1, Ordering::Release) == 1
         }
     }
 
