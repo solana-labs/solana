@@ -485,7 +485,7 @@ impl InstructionProcessor {
             );
             return Err(InstructionError::AccountNotExecutable);
         }
-        let mut program_indices = vec![program_account_index];
+        let mut program_indices = vec![];
         if program_account.borrow().owner() == &bpf_loader_upgradeable::id() {
             if let UpgradeableLoaderState::Program {
                 programdata_address,
@@ -512,6 +512,7 @@ impl InstructionProcessor {
                 return Err(InstructionError::MissingAccount);
             }
         }
+        program_indices.push(program_account_index);
 
         Ok((message, caller_write_privileges, program_indices))
     }
