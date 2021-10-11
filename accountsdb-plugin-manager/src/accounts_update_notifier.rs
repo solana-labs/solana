@@ -5,6 +5,8 @@ use {
     solana_accountsdb_plugin_interface::accountsdb_plugin_interface::{
         ReplicaAccountInfo, ReplicaAccountInfoVersions, SlotStatus,
     },
+    solana_measure::measure::Measure,
+    solana_metrics::*,
     solana_runtime::{
         accounts_update_notifier_interface::AccountsUpdateNotifierInterface,
         append_vec::StoredAccountMeta,
@@ -13,12 +15,14 @@ use {
         account::{AccountSharedData, ReadableAccount},
         clock::Slot,
         pubkey::Pubkey,
+        timing::AtomicInterval,
     },
     std::sync::{Arc, RwLock},
 };
 #[derive(Debug)]
 pub(crate) struct AccountsUpdateNotifierImpl {
     plugin_manager: Arc<RwLock<AccountsDbPluginManager>>,
+    last_report: AtomicInterval,
 }
 
 impl AccountsUpdateNotifierInterface for AccountsUpdateNotifierImpl {
@@ -49,7 +53,10 @@ impl AccountsUpdateNotifierInterface for AccountsUpdateNotifierImpl {
 
 impl AccountsUpdateNotifierImpl {
     pub fn new(plugin_manager: Arc<RwLock<AccountsDbPluginManager>>) -> Self {
-        AccountsUpdateNotifierImpl { plugin_manager }
+        AccountsUpdateNotifierImpl {
+            plugin_manager,
+            last_report: AtomicInterval::default(),
+        }
     }
 
     fn accountinfo_from_shared_account_data<'a>(
@@ -88,21 +95,29 @@ impl AccountsUpdateNotifierImpl {
             return;
         }
         for plugin in plugin_manager.plugins.iter_mut() {
+            let mut measure = Measure::start("accountsdb-plugin-update-account");
             match plugin.update_account(ReplicaAccountInfoVersions::V0_0_1(&account), slot) {
                 Err(err) => {
                     error!(
                         "Failed to update account {:?} at slot {:?}, error: {:?}",
-                        account.pubkey, slot, err
+                        bs58::encode(account.pubkey).into_string(),
+                        slot,
+                        err
                     )
                 }
                 Ok(_) => {
                     trace!(
                         "Successfully updated account {:?} at slot {:?}",
-                        account.pubkey,
+                        bs58::encode(account.pubkey).into_string(),
                         slot
                     );
                 }
             }
+            measure.stop();
+            inc_new_counter_info!(
+                "accountsdb-plugin-update-account-ms",
+                measure.as_ms() as usize
+            );
         }
     }
 
@@ -113,6 +128,7 @@ impl AccountsUpdateNotifierImpl {
         }
 
         for plugin in plugin_manager.plugins.iter_mut() {
+            let mut measure = Measure::start("accountsdb-plugin-update-slot");
             match plugin.update_slot_status(slot, parent, slot_status.clone()) {
                 Err(err) => {
                     error!(
@@ -124,6 +140,8 @@ impl AccountsUpdateNotifierImpl {
                     trace!("Successfully updated slot status at slot {:?}", slot);
                 }
             }
+            measure.stop();
+            inc_new_counter_info!("accountsdb-plugin-update-slot-ms", measure.as_ms() as usize);
         }
     }
 }

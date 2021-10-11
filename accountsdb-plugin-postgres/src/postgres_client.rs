@@ -192,7 +192,7 @@ impl PostgresClient for SimplePostgresClient {
     ) -> Result<(), AccountsDbPluginError> {
         debug!(
             "Updating account {:?} {:?} at slot {:?}",
-            account.pubkey(),
+            bs58::encode(account.pubkey()).into_string(),
             account.owner(),
             slot,
         );
@@ -421,7 +421,7 @@ impl PostgresClient for ParallelPostgresClient {
             return Err(AccountsDbPluginError::AccountsUpdateError {
                 msg: format!(
                     "Failed to update the account {:?}, error: {:?}",
-                    account.pubkey(),
+                    bs58::encode(account.pubkey()).into_string(),
                     err
                 ),
             });
