@@ -1277,7 +1277,7 @@ The result field will be a JSON object with the following fields:
 - `total: <f64>`, total inflation
 - `validator: <f64>`, inflation allocated to validators
 - `foundation: <f64>`, inflation allocated to the foundation
-- `epoch: <f64>`, epoch for which these values are valid
+- `epoch: <u64>`, epoch for which these values are valid
 
 #### Example:
 
