@@ -217,9 +217,12 @@ impl PostgresClient for SimplePostgresClient {
         );
 
         if let Err(err) = result {
-            return Err(AccountsDbPluginError::AccountsUpdateError {
-                msg: format!("Failed to persist the update of account to the PostgreSQL database. Error: {:?}", err)
-            });
+            let msg = format!(
+                "Failed to persist the update of account to the PostgreSQL database. Error: {:?}",
+                err
+            );
+            error!("{:?}", msg);
+            return Err(AccountsDbPluginError::AccountsUpdateError { msg });
         }
         Ok(())
     }
@@ -268,9 +271,12 @@ impl PostgresClient for SimplePostgresClient {
 
         match result {
             Err(err) => {
-                return Err(AccountsDbPluginError::SlotStatusUpdateError{
-                            msg: format!("Failed to persist the update of slot to the PostgreSQL database. Error: {:?}", err)
-                        });
+                let msg = format!(
+                    "Failed to persist the update of slot to the PostgreSQL database. Error: {:?}",
+                    err
+                );
+                error!("{:?}", msg);
+                return Err(AccountsDbPluginError::SlotStatusUpdateError { msg });
             }
             Ok(rows) => {
                 assert_eq!(1, rows, "Expected one rows to be updated a time");
