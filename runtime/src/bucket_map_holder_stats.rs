@@ -9,6 +9,8 @@ const STATS_INTERVAL_MS: u64 = 10_000;
 
 #[derive(Debug, Default)]
 pub struct BucketMapHolderStats {
+    pub held_in_mem_slot_list_len: AtomicU64,
+    pub held_in_mem_slot_list_cached: AtomicU64,
     pub get_mem_us: AtomicU64,
     pub gets_from_mem: AtomicU64,
     pub get_missing_us: AtomicU64,
@@ -159,6 +161,16 @@ impl BucketMapHolderStats {
             (
                 "bg_throttling_wait_us",
                 self.bg_throttling_wait_us.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "held_in_mem_slot_list_len",
+                self.held_in_mem_slot_list_len.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "held_in_mem_slot_list_cached",
+                self.held_in_mem_slot_list_cached.swap(0, Ordering::Relaxed),
                 i64
             ),
             ("min_in_bin_mem", in_mem_stats.0, i64),
