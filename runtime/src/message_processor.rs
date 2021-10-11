@@ -507,6 +507,8 @@ impl MessageProcessor {
             &fee_calculator,
         );
         let compute_meter = invoke_context.get_compute_meter();
+
+        debug_assert_eq!(program_indices.len(), message.instructions.len());
         for (instruction_index, (instruction, program_indices)) in message
             .instructions
             .iter()
