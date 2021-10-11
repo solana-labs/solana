@@ -10,6 +10,8 @@ use {
     solana_accountsdb_plugin_interface::accountsdb_plugin_interface::{
         AccountsDbPluginError, ReplicaAccountInfo, SlotStatus,
     },
+    solana_metrics::datapoint_info,
+    solana_sdk::timing::AtomicInterval,
     std::{
         sync::{
             atomic::{AtomicBool, Ordering},
@@ -340,6 +342,7 @@ pub struct ParallelPostgresClient {
     workers: Vec<JoinHandle<Result<(), AccountsDbPluginError>>>,
     exit_worker: Arc<AtomicBool>,
     sender: Sender<DbWorkItem>,
+    last_report: AtomicInterval,
 }
 
 impl ParallelPostgresClient {
@@ -365,6 +368,7 @@ impl ParallelPostgresClient {
         }
 
         Ok(Self {
+            last_report: AtomicInterval::default(),
             workers,
             exit_worker,
             sender,
@@ -395,6 +399,12 @@ impl PostgresClient for ParallelPostgresClient {
         account: &T,
         slot: u64,
     ) -> Result<(), AccountsDbPluginError> {
+        if self.last_report.should_update(30000) {
+            datapoint_info!(
+                "postgres-plugin-stats",
+                ("message-queue-length", self.sender.len() as i64, i64),
+            );
+        }
         if let Err(err) = self
             .sender
             .send(DbWorkItem::UpdateAccount(UpdateAccountRequest {
