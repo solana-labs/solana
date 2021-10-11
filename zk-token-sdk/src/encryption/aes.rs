@@ -6,13 +6,18 @@ use aes::{Aes128, Block};
 
 use arrayref::array_ref;
 
+use zeroize::Zeroize;
+
 pub struct AES;
 impl AES {
+    #[cfg(not(target_arch = "bpf"))]
+    #[allow(clippy::new_ret_no_self)]
     pub fn new() -> AESKey {
         let random_bytes = OsRng.gen::<[u8; 16]>();
         AESKey(random_bytes)
     }
 
+    #[cfg(not(target_arch = "bpf"))]
     pub fn encrypt(sk: &AESKey, amount: u64) -> AESCiphertext {
         let amount_bytes = amount.to_le_bytes();
 
@@ -23,6 +28,7 @@ impl AES {
         AESCiphertext(aes_block.into())
     }
 
+    #[cfg(not(target_arch = "bpf"))]
     pub fn decrypt(sk: &AESKey, ct: &AESCiphertext) -> u64 {
         let mut aes_block: Block = ct.0.into();
         Aes128::new(&sk.0.into()).decrypt_block(&mut aes_block);
@@ -32,7 +38,7 @@ impl AES {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Zeroize)]
 pub struct AESKey([u8; 16]);
 impl AESKey {
     pub fn encrypt(&self, amount: u64) -> AESCiphertext {
