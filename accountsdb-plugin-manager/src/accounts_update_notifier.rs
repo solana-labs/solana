@@ -117,8 +117,8 @@ impl AccountsUpdateNotifierImpl {
             inc_new_counter_info!(
                 "accountsdb-plugin-update-account-ms",
                 measure.as_ms() as usize,
-                10000,
-                10000
+                100000,
+                100000
             );
         }
     }
