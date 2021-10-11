@@ -1,5 +1,3 @@
-#[cfg(not(target_arch = "bpf"))]
-use rand::{rngs::OsRng, CryptoRng, RngCore};
 use {
     crate::encryption::{
         discrete_log::DiscreteLog,
@@ -18,6 +16,16 @@ use {
     std::convert::TryInto,
     subtle::{Choice, ConstantTimeEq},
     zeroize::Zeroize,
+};
+#[cfg(not(target_arch = "bpf"))]
+use {
+    rand::{rngs::OsRng, CryptoRng, RngCore},
+    std::{
+        fmt,
+        fs::{self, File, OpenOptions},
+        io::{Read, Write},
+        path::Path,
+    },
 };
 
 /// Handle for the (twisted) ElGamal encryption scheme
@@ -122,6 +130,74 @@ impl ElGamal {
         let discrete_log_instance = Self::decrypt(sk, ct);
         discrete_log_instance.decode_u32_online(hashmap)
     }
+
+    pub fn to_bytes(&self) -> [u8; 64] {
+        let mut bytes = self.pk.to_bytes().to_vec();
+        bytes.extend(self.sk.to_bytes());
+        bytes.try_into().expect("incorrect length")
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
+        Some(Self {
+            pk: ElGamalPubkey::from_bytes(bytes[..32].try_into().ok()?)?,
+            sk: ElGamalSecretKey::from_bytes(bytes[32..].try_into().ok()?)?,
+        })
+    }
+
+    /// Reads a JSON-encoded keypair from a `Reader` implementor
+    pub fn read_json<R: Read>(reader: &mut R) -> Result<Self, Box<dyn std::error::Error>> {
+        let bytes: Vec<u8> = serde_json::from_reader(reader)?;
+        Self::from_bytes(&bytes).ok_or_else(|| {
+            std::io::Error::new(std::io::ErrorKind::Other, "Invalid ElGamal keypair").into()
+        })
+    }
+
+    /// Reads keypair from a file
+    pub fn read_json_file<F: AsRef<Path>>(path: F) -> Result<Self, Box<dyn std::error::Error>> {
+        let mut file = File::open(path.as_ref())?;
+        Self::read_json(&mut file)
+    }
+
+    /// Writes to a `Write` implementer with JSON-encoding
+    pub fn write_json<W: Write>(
+        &self,
+        writer: &mut W,
+    ) -> Result<String, Box<dyn std::error::Error>> {
+        let bytes = self.to_bytes();
+        let json = serde_json::to_string(&bytes.to_vec())?;
+        writer.write_all(&json.clone().into_bytes())?;
+        Ok(json)
+    }
+
+    /// Write keypair to a file with JSON-encoding
+    pub fn write_json_file<F: AsRef<Path>>(
+        &self,
+        outfile: F,
+    ) -> Result<String, Box<dyn std::error::Error>> {
+        let outfile = outfile.as_ref();
+
+        if let Some(outdir) = outfile.parent() {
+            fs::create_dir_all(outdir)?;
+        }
+
+        let mut f = {
+            #[cfg(not(unix))]
+            {
+                OpenOptions::new()
+            }
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt;
+                OpenOptions::new().mode(0o600)
+            }
+        }
+        .write(true)
+        .truncate(true)
+        .create(true)
+        .open(outfile)?;
+
+        self.write_json(&mut f)
+    }
 }
 
 /// Public key for the ElGamal encryption scheme.
@@ -137,7 +213,7 @@ impl ElGamalPubkey {
         self.0.compress().to_bytes()
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Option<ElGamalPubkey> {
+    pub fn from_bytes(bytes: &[u8; 32]) -> Option<ElGamalPubkey> {
         Some(ElGamalPubkey(
             CompressedRistretto::from_slice(bytes).decompress()?,
         ))
@@ -168,6 +244,12 @@ impl ElGamalPubkey {
 impl From<RistrettoPoint> for ElGamalPubkey {
     fn from(point: RistrettoPoint) -> ElGamalPubkey {
         ElGamalPubkey(point)
+    }
+}
+
+impl fmt::Display for ElGamalPubkey {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", base64::encode(self.to_bytes()))
     }
 }
 
@@ -203,11 +285,8 @@ impl ElGamalSecretKey {
         self.0.to_bytes()
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Option<ElGamalSecretKey> {
-        match bytes.try_into() {
-            Ok(bytes) => Scalar::from_canonical_bytes(bytes).map(ElGamalSecretKey),
-            _ => None,
-        }
+    pub fn from_bytes(bytes: [u8; 32]) -> Option<ElGamalSecretKey> {
+        Scalar::from_canonical_bytes(bytes).map(ElGamalSecretKey)
     }
 }
 
@@ -533,5 +612,68 @@ mod tests {
         let decoded: ElGamalSecretKey = bincode::deserialize(&encoded).unwrap();
 
         assert_eq!(sk, decoded);
+    }
+
+    fn tmp_file_path(name: &str) -> String {
+        use std::env;
+        let out_dir = env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
+        let keypair = ElGamal::new();
+        format!("{}/tmp/{}-{}", out_dir, name, keypair.pk)
+    }
+
+    #[test]
+    fn test_write_keypair_file() {
+        let outfile = tmp_file_path("test_write_keypair_file.json");
+        let serialized_keypair = ElGamal::new().write_json_file(&outfile).unwrap();
+        let keypair_vec: Vec<u8> = serde_json::from_str(&serialized_keypair).unwrap();
+        assert!(Path::new(&outfile).exists());
+        assert_eq!(
+            keypair_vec,
+            ElGamal::read_json_file(&outfile)
+                .unwrap()
+                .to_bytes()
+                .to_vec()
+        );
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(
+                File::open(&outfile)
+                    .expect("open")
+                    .metadata()
+                    .expect("metadata")
+                    .permissions()
+                    .mode()
+                    & 0o777,
+                0o600
+            );
+        }
+        fs::remove_file(&outfile).unwrap();
+    }
+
+    #[test]
+    fn test_write_keypair_file_overwrite_ok() {
+        let outfile = tmp_file_path("test_write_keypair_file_overwrite_ok.json");
+
+        ElGamal::new().write_json_file(&outfile).unwrap();
+        ElGamal::new().write_json_file(&outfile).unwrap();
+    }
+
+    #[test]
+    fn test_write_keypair_file_truncate() {
+        let outfile = tmp_file_path("test_write_keypair_file_truncate.json");
+
+        ElGamal::new().write_json_file(&outfile).unwrap();
+        ElGamal::read_json_file(&outfile).unwrap();
+
+        // Ensure outfile is truncated
+        {
+            let mut f = File::create(&outfile).unwrap();
+            f.write_all(String::from_utf8([b'a'; 2048].to_vec()).unwrap().as_bytes())
+                .unwrap();
+        }
+        ElGamal::new().write_json_file(&outfile).unwrap();
+        ElGamal::read_json_file(&outfile).unwrap();
     }
 }

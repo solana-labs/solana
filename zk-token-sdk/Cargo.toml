@@ -9,6 +9,7 @@ edition = "2018"
 publish = false
 
 [dependencies]
+base64 = "0.13"
 bytemuck = { version = "1.7.2", features = ["derive"] }
 num-derive = "0.3"
 num-traits = "0.2"
@@ -24,6 +25,7 @@ getrandom = { version = "0.1", features = ["dummy"] }
 merlin = "2"
 rand = "0.7"
 serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 sha3 = "0.9"
 subtle = "2"
 thiserror = "1"
