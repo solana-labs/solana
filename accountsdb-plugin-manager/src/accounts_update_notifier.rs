@@ -116,7 +116,9 @@ impl AccountsUpdateNotifierImpl {
             measure.stop();
             inc_new_counter_info!(
                 "accountsdb-plugin-update-account-ms",
-                measure.as_ms() as usize
+                measure.as_ms() as usize,
+                10000,
+                10000
             );
         }
     }
@@ -141,7 +143,12 @@ impl AccountsUpdateNotifierImpl {
                 }
             }
             measure.stop();
-            inc_new_counter_info!("accountsdb-plugin-update-slot-ms", measure.as_ms() as usize);
+            inc_new_counter_info!(
+                "accountsdb-plugin-update-slot-ms",
+                measure.as_ms() as usize,
+                10000,
+                10000
+            );
         }
     }
 }
