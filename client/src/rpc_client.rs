@@ -534,46 +534,8 @@ impl RpcClient {
     ///
     /// [cl]: https://docs.solana.com/developing/clients/jsonrpc-api#configuring-state-commitment
     ///
-<<<<<<< HEAD
-    /// Note that this method does not wait for a transaction to be confirmed
-    /// &mdash; it only checks whether a transaction has been confirmed. To
-    /// submit a transaction and wait for it to confirm, use
-    /// [`send_and_confirm_transaction`][RpcClient::send_and_confirm_transaction].
-    ///
-    /// _This method returns `false` if the transaction failed, even if it has
-    /// been confirmed._
-    ///
-    /// # RPC Reference
-    ///
-    /// This method is built on the [`getSignatureStatuses`] RPC method.
-    ///
-    /// [`getSignatureStatuses`]: https://docs.solana.com/developing/clients/jsonrpc-api#getsignaturestatuses
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use solana_client::{
-    /// #     client_error::ClientError,
-    /// #     rpc_client::RpcClient,
-    /// # };
-    /// # use solana_sdk::{
-    /// #     signature::Signer,
-    /// #     signature::Signature,
-    /// #     signer::keypair::Keypair,
-    /// #     system_transaction,
-    /// # };
-    /// # let rpc_client = RpcClient::new_mock("succeeds".to_string());
-    /// // Transfer lamports from Alice to Bob and wait for confirmation
-    /// # let alice = Keypair::new();
-    /// # let bob = Keypair::new();
-    /// # let lamports = 50;
-    /// let (recent_blockhash, _) = rpc_client.get_recent_blockhash()?;
-    /// let tx = system_transaction::transfer(&alice, &bob.pubkey(), lamports, recent_blockhash);
-    /// let signature = rpc_client.send_transaction(&tx)?;
-=======
     /// After sending the transaction, this method polls in a loop for the
     /// status of the transaction until it has ben confirmed.
->>>>>>> 1417c1456 (Reorder RpcClient method defs for more logical docs. (#20549))
     ///
     /// # Errors
     ///
@@ -620,23 +582,9 @@ impl RpcClient {
     /// # let alice = Keypair::new();
     /// # let bob = Keypair::new();
     /// # let lamports = 50;
-<<<<<<< HEAD
-    /// let (recent_blockhash, _) = rpc_client.get_recent_blockhash()?;
+    /// # let (recent_blockhash, _) = rpc_client.get_recent_blockhash()?;
     /// let tx = system_transaction::transfer(&alice, &bob.pubkey(), lamports, recent_blockhash);
-    /// let signature = rpc_client.send_transaction(&tx)?;
-    ///
-    /// loop {
-    ///     let commitment_config = CommitmentConfig::processed();
-    ///     let confirmed = rpc_client.confirm_transaction_with_commitment(&signature, commitment_config)?;
-    ///     if confirmed.value {
-    ///         break;
-    ///     }
-    /// }
-=======
-    /// # let latest_blockhash = rpc_client.get_latest_blockhash()?;
-    /// let tx = system_transaction::transfer(&alice, &bob.pubkey(), lamports, latest_blockhash);
     /// let signature = rpc_client.send_and_confirm_transaction(&tx)?;
->>>>>>> 1417c1456 (Reorder RpcClient method defs for more logical docs. (#20549))
     /// # Ok::<(), ClientError>(())
     /// ```
     pub fn send_and_confirm_transaction(
@@ -650,8 +598,9 @@ impl RpcClient {
             let signature = self.send_transaction(transaction)?;
 
             let recent_blockhash = if uses_durable_nonce(transaction).is_some() {
-                let (recent_blockhash, ..) =
-                    self.get_latest_blockhash_with_commitment(CommitmentConfig::processed())?;
+                let (recent_blockhash, ..) = self
+                    .get_recent_blockhash_with_commitment(CommitmentConfig::processed())?
+                    .value;
                 recent_blockhash
             } else {
                 transaction.message.recent_blockhash
@@ -662,10 +611,14 @@ impl RpcClient {
                     Some(Ok(_)) => return Ok(signature),
                     Some(Err(e)) => return Err(e.into()),
                     None => {
-                        if !self
-                            .is_blockhash_valid(&recent_blockhash, CommitmentConfig::processed())?
-                        {
-                            // Block hash is not found by some reason
+                        let fee_calculator = self
+                            .get_fee_calculator_for_blockhash_with_commitment(
+                                &recent_blockhash,
+                                CommitmentConfig::processed(),
+                            )?
+                            .value;
+                        if fee_calculator.is_none() {
+                            // Block hash is not found for some reason
                             break 'sending;
                         } else if cfg!(not(test))
                             // Ignore sleep at last step.
@@ -721,7 +674,8 @@ impl RpcClient {
         config: RpcSendTransactionConfig,
     ) -> ClientResult<Signature> {
         let recent_blockhash = if uses_durable_nonce(transaction).is_some() {
-            self.get_latest_blockhash_with_commitment(CommitmentConfig::processed())?
+            self.get_recent_blockhash_with_commitment(CommitmentConfig::processed())?
+                .value
                 .0
         } else {
             transaction.message.recent_blockhash
@@ -1011,8 +965,8 @@ impl RpcClient {
     /// # let alice = Keypair::new();
     /// # let bob = Keypair::new();
     /// # let lamports = 50;
-    /// let latest_blockhash = rpc_client.get_latest_blockhash()?;
-    /// let tx = system_transaction::transfer(&alice, &bob.pubkey(), lamports, latest_blockhash);
+    /// let (recent_blockhash, _) = rpc_client.get_recent_blockhash()?;
+    /// let tx = system_transaction::transfer(&alice, &bob.pubkey(), lamports, recent_blockhash);
     /// let signature = rpc_client.send_transaction(&tx)?;
     ///
     /// loop {
@@ -1070,8 +1024,8 @@ impl RpcClient {
     /// # let alice = Keypair::new();
     /// # let bob = Keypair::new();
     /// # let lamports = 50;
-    /// let latest_blockhash = rpc_client.get_latest_blockhash()?;
-    /// let tx = system_transaction::transfer(&alice, &bob.pubkey(), lamports, latest_blockhash);
+    /// let (recent_blockhash, _) = rpc_client.get_recent_blockhash()?;
+    /// let tx = system_transaction::transfer(&alice, &bob.pubkey(), lamports, recent_blockhash);
     /// let signature = rpc_client.send_transaction(&tx)?;
     ///
     /// loop {
@@ -1115,7 +1069,7 @@ impl RpcClient {
 
         let progress_bar = new_spinner_progress_bar();
 
-        progress_bar.set_message(format!(
+        progress_bar.set_message(&format!(
             "[{}/{}] Finalizing transaction {}",
             confirmations, desired_confirmations, signature,
         ));
@@ -1130,8 +1084,13 @@ impl RpcClient {
             let status = self
                 .get_signature_status_with_commitment(signature, CommitmentConfig::processed())?;
             if status.is_none() {
-                let blockhash_not_found =
-                    !self.is_blockhash_valid(recent_blockhash, CommitmentConfig::processed())?;
+                let blockhash_not_found = self
+                    .get_fee_calculator_for_blockhash_with_commitment(
+                        recent_blockhash,
+                        CommitmentConfig::processed(),
+                    )?
+                    .value
+                    .is_none();
                 if blockhash_not_found && now.elapsed() >= confirm_transaction_initial_timeout {
                     break (signature, status);
                 }
@@ -1169,7 +1128,7 @@ impl RpcClient {
                 return Ok(());
             }
 
-            progress_bar.set_message(format!(
+            progress_bar.set_message(&format!(
                 "[{}/{}] Finalizing transaction {}",
                 min(confirmations + 1, desired_confirmations),
                 desired_confirmations,
@@ -3530,124 +3489,6 @@ impl RpcClient {
         self.send(RpcRequest::MinimumLedgerSlot, Value::Null)
     }
 
-<<<<<<< HEAD
-    /// Submit a transaction and wait for confirmation.
-    ///
-    /// Once this function returns successfully, the given transaction is
-    /// guaranteed to be processed with the configured [commitment level][cl].
-    ///
-    /// [cl]: https://docs.solana.com/developing/clients/jsonrpc-api#configuring-state-commitment
-    ///
-    /// After sending the transaction, this method polls in a loop for the
-    /// status of the transaction until it has ben confirmed.
-    ///
-    /// # Errors
-    ///
-    /// If the transaction is not signed then an error with kind [`RpcError`] is
-    /// returned, containing an [`RpcResponseError`] with `code` set to
-    /// [`JSON_RPC_SERVER_ERROR_TRANSACTION_SIGNATURE_VERIFICATION_FAILURE`].
-    ///
-    /// If the preflight transaction simulation fails then an error with kind
-    /// [`RpcError`] is returned, containing an [`RpcResponseError`] with `code`
-    /// set to [`JSON_RPC_SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE`].
-    ///
-    /// If the receiving node is unhealthy, e.g. it is not fully synced to
-    /// the cluster, then an error with kind [`RpcError`] is returned,
-    /// containing an [`RpcResponseError`] with `code` set to
-    /// [`JSON_RPC_SERVER_ERROR_NODE_UNHEALTHY`].
-    ///
-    /// [`RpcResponseError`]: RpcError::RpcResponseError
-    /// [`JSON_RPC_SERVER_ERROR_TRANSACTION_SIGNATURE_VERIFICATION_FAILURE`]: crate::rpc_custom_error::JSON_RPC_SERVER_ERROR_TRANSACTION_SIGNATURE_VERIFICATION_FAILURE
-    /// [`JSON_RPC_SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE`]: crate::rpc_custom_error::JSON_RPC_SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE
-    /// [`JSON_RPC_SERVER_ERROR_NODE_UNHEALTHY`]: crate::rpc_custom_error::JSON_RPC_SERVER_ERROR_NODE_UNHEALTHY
-    ///
-    /// # RPC Reference
-    ///
-    /// This method is built on the [`sendTransaction`] RPC method, and the
-    /// [`getLatestBlockhash`] RPC method.
-    ///
-    /// [`sendTransaction`]: https://docs.solana.com/developing/clients/jsonrpc-api#sendtransaction
-    /// [`getLatestBlockhash`]: https://docs.solana.com/developing/clients/jsonrpc-api#getlatestblockhash
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use solana_client::{
-    /// #     rpc_client::RpcClient,
-    /// #     client_error::ClientError,
-    /// # };
-    /// # use solana_sdk::{
-    /// #     signature::Signer,
-    /// #     signature::Signature,
-    /// #     signer::keypair::Keypair,
-    /// #     system_transaction,
-    /// # };
-    /// # let rpc_client = RpcClient::new_mock("succeeds".to_string());
-    /// # let alice = Keypair::new();
-    /// # let bob = Keypair::new();
-    /// # let lamports = 50;
-    /// # let recent_blockhash = rpc_client.get_recent_blockhash()?.0;
-    /// let tx = system_transaction::transfer(&alice, &bob.pubkey(), lamports, recent_blockhash);
-    /// let signature = rpc_client.send_and_confirm_transaction(&tx)?;
-    /// # Ok::<(), ClientError>(())
-    /// ```
-    pub fn send_and_confirm_transaction(
-        &self,
-        transaction: &Transaction,
-    ) -> ClientResult<Signature> {
-        const SEND_RETRIES: usize = 1;
-        const GET_STATUS_RETRIES: usize = usize::MAX;
-
-        'sending: for _ in 0..SEND_RETRIES {
-            let signature = self.send_transaction(transaction)?;
-
-            let recent_blockhash = if uses_durable_nonce(transaction).is_some() {
-                let (recent_blockhash, ..) = self
-                    .get_recent_blockhash_with_commitment(CommitmentConfig::processed())?
-                    .value;
-                recent_blockhash
-            } else {
-                transaction.message.recent_blockhash
-            };
-
-            for status_retry in 0..GET_STATUS_RETRIES {
-                match self.get_signature_status(&signature)? {
-                    Some(Ok(_)) => return Ok(signature),
-                    Some(Err(e)) => return Err(e.into()),
-                    None => {
-                        let fee_calculator = self
-                            .get_fee_calculator_for_blockhash_with_commitment(
-                                &recent_blockhash,
-                                CommitmentConfig::processed(),
-                            )?
-                            .value;
-                        if fee_calculator.is_none() {
-                            // Block hash is not found by some reason
-                            break 'sending;
-                        } else if cfg!(not(test))
-                            // Ignore sleep at last step.
-                            && status_retry < GET_STATUS_RETRIES
-                        {
-                            // Retry twice a second
-                            sleep(Duration::from_millis(500));
-                            continue;
-                        }
-                    }
-                }
-            }
-        }
-
-        Err(RpcError::ForUser(
-            "unable to confirm transaction. \
-             This can happen in situations such as transaction expiration \
-             and insufficient fee-payer funds"
-                .to_string(),
-        )
-        .into())
-    }
-
-=======
->>>>>>> 1417c1456 (Reorder RpcClient method defs for more logical docs. (#20549))
     /// Returns all information associated with the account of the provided pubkey.
     ///
     /// This method uses the configured [commitment level][cl].
@@ -4849,261 +4690,6 @@ impl RpcClient {
             .confirmations
             .unwrap_or(MAX_LOCKOUT_HISTORY + 1);
         Ok(confirmations)
-    }
-
-<<<<<<< HEAD
-    pub fn send_and_confirm_transaction_with_spinner(
-        &self,
-        transaction: &Transaction,
-    ) -> ClientResult<Signature> {
-        self.send_and_confirm_transaction_with_spinner_and_commitment(
-            transaction,
-            self.commitment(),
-        )
-    }
-
-    pub fn send_and_confirm_transaction_with_spinner_and_commitment(
-        &self,
-        transaction: &Transaction,
-        commitment: CommitmentConfig,
-    ) -> ClientResult<Signature> {
-        self.send_and_confirm_transaction_with_spinner_and_config(
-            transaction,
-            commitment,
-            RpcSendTransactionConfig {
-                preflight_commitment: Some(commitment.commitment),
-                ..RpcSendTransactionConfig::default()
-            },
-        )
-    }
-
-    pub fn send_and_confirm_transaction_with_spinner_and_config(
-        &self,
-        transaction: &Transaction,
-        commitment: CommitmentConfig,
-        config: RpcSendTransactionConfig,
-    ) -> ClientResult<Signature> {
-        let recent_blockhash = if uses_durable_nonce(transaction).is_some() {
-            self.get_recent_blockhash_with_commitment(CommitmentConfig::processed())?
-                .value
-                .0
-        } else {
-            transaction.message.recent_blockhash
-        };
-        let signature = self.send_transaction_with_config(transaction, config)?;
-        self.confirm_transaction_with_spinner(&signature, &recent_blockhash, commitment)?;
-        Ok(signature)
-    }
-
-    pub fn confirm_transaction_with_spinner(
-        &self,
-        signature: &Signature,
-        recent_blockhash: &Hash,
-        commitment: CommitmentConfig,
-    ) -> ClientResult<()> {
-        let desired_confirmations = if commitment.is_finalized() {
-            MAX_LOCKOUT_HISTORY + 1
-        } else {
-            1
-        };
-        let mut confirmations = 0;
-
-        let progress_bar = new_spinner_progress_bar();
-
-        progress_bar.set_message(&format!(
-            "[{}/{}] Finalizing transaction {}",
-            confirmations, desired_confirmations, signature,
-        ));
-
-        let now = Instant::now();
-        let confirm_transaction_initial_timeout = self
-            .config
-            .confirm_transaction_initial_timeout
-            .unwrap_or_default();
-        let (signature, status) = loop {
-            // Get recent commitment in order to count confirmations for successful transactions
-            let status = self
-                .get_signature_status_with_commitment(signature, CommitmentConfig::processed())?;
-            if status.is_none() {
-                let blockhash_not_found = self
-                    .get_fee_calculator_for_blockhash_with_commitment(
-                        recent_blockhash,
-                        CommitmentConfig::processed(),
-                    )?
-                    .value
-                    .is_none();
-                if blockhash_not_found && now.elapsed() >= confirm_transaction_initial_timeout {
-                    break (signature, status);
-                }
-            } else {
-                break (signature, status);
-            }
-
-            if cfg!(not(test)) {
-                sleep(Duration::from_millis(500));
-            }
-        };
-        if let Some(result) = status {
-            if let Err(err) = result {
-                return Err(err.into());
-            }
-        } else {
-            return Err(RpcError::ForUser(
-                "unable to confirm transaction. \
-                                      This can happen in situations such as transaction expiration \
-                                      and insufficient fee-payer funds"
-                    .to_string(),
-            )
-            .into());
-        }
-        let now = Instant::now();
-        loop {
-            // Return when specified commitment is reached
-            // Failed transactions have already been eliminated, `is_some` check is sufficient
-            if self
-                .get_signature_status_with_commitment(signature, commitment)?
-                .is_some()
-            {
-                progress_bar.set_message("Transaction confirmed");
-                progress_bar.finish_and_clear();
-                return Ok(());
-            }
-
-            progress_bar.set_message(&format!(
-                "[{}/{}] Finalizing transaction {}",
-                min(confirmations + 1, desired_confirmations),
-                desired_confirmations,
-                signature,
-            ));
-            sleep(Duration::from_millis(500));
-            confirmations = self
-                .get_num_blocks_since_signature_confirmation(signature)
-                .unwrap_or(confirmations);
-            if now.elapsed().as_secs() >= MAX_HASH_AGE_IN_SECONDS as u64 {
-                return Err(
-                    RpcError::ForUser("transaction not finalized. \
-                                      This can happen when a transaction lands in an abandoned fork. \
-                                      Please retry.".to_string()).into(),
-                );
-            }
-        }
-    }
-
-    pub fn send<T>(&self, request: RpcRequest, params: Value) -> ClientResult<T>
-    where
-        T: serde::de::DeserializeOwned,
-    {
-        assert!(params.is_array() || params.is_null());
-
-        let response = self
-            .sender
-            .send(request, params)
-            .map_err(|err| err.into_with_request(request))?;
-        serde_json::from_value(response)
-            .map_err(|err| ClientError::new_with_request(err.into(), request))
-=======
-    pub fn get_latest_blockhash(&self) -> ClientResult<Hash> {
-        let (blockhash, _) = self.get_latest_blockhash_with_commitment(self.commitment())?;
-        Ok(blockhash)
-    }
-
-    #[allow(deprecated)]
-    pub fn get_latest_blockhash_with_commitment(
-        &self,
-        commitment: CommitmentConfig,
-    ) -> ClientResult<(Hash, u64)> {
-        let (blockhash, last_valid_block_height) =
-            if self.get_node_version()? < semver::Version::new(1, 8, 0) {
-                let Fees {
-                    blockhash,
-                    last_valid_block_height,
-                    ..
-                } = self.get_fees_with_commitment(commitment)?.value;
-                (blockhash, last_valid_block_height)
-            } else {
-                let RpcBlockhash {
-                    blockhash,
-                    last_valid_block_height,
-                } = self
-                    .send::<Response<RpcBlockhash>>(
-                        RpcRequest::GetLatestBlockhash,
-                        json!([self.maybe_map_commitment(commitment)?]),
-                    )?
-                    .value;
-                let blockhash = blockhash.parse().map_err(|_| {
-                    ClientError::new_with_request(
-                        RpcError::ParseError("Hash".to_string()).into(),
-                        RpcRequest::GetLatestBlockhash,
-                    )
-                })?;
-                (blockhash, last_valid_block_height)
-            };
-        Ok((blockhash, last_valid_block_height))
-    }
-
-    #[allow(deprecated)]
-    pub fn is_blockhash_valid(
-        &self,
-        blockhash: &Hash,
-        commitment: CommitmentConfig,
-    ) -> ClientResult<bool> {
-        let result = if self.get_node_version()? < semver::Version::new(1, 8, 0) {
-            self.get_fee_calculator_for_blockhash_with_commitment(blockhash, commitment)?
-                .value
-                .is_some()
-        } else {
-            self.send::<Response<bool>>(
-                RpcRequest::IsBlockhashValid,
-                json!([blockhash.to_string(), commitment,]),
-            )?
-            .value
-        };
-        Ok(result)
-    }
-
-    #[allow(deprecated)]
-    pub fn get_fee_for_message(&self, blockhash: &Hash, message: &Message) -> ClientResult<u64> {
-        if self.get_node_version()? < semver::Version::new(1, 8, 0) {
-            let Fees { fee_calculator, .. } = self.get_fees()?;
-            Ok(fee_calculator
-                .lamports_per_signature
-                .saturating_mul(message.header.num_required_signatures as u64))
-        } else {
-            let serialized_encoded =
-                serialize_and_encode::<Message>(message, UiTransactionEncoding::Base64)?;
-            let result = self.send::<Response<Option<u64>>>(
-                RpcRequest::GetFeeForMessage,
-                json!([blockhash.to_string(), serialized_encoded, self.commitment()]),
-            )?;
-            result
-                .value
-                .ok_or_else(|| ClientErrorKind::Custom("Invalid blockhash".to_string()).into())
-        }
-    }
-
-    pub fn get_new_latest_blockhash(&self, blockhash: &Hash) -> ClientResult<Hash> {
-        let mut num_retries = 0;
-        let start = Instant::now();
-        while start.elapsed().as_secs() < 5 {
-            if let Ok(new_blockhash) = self.get_latest_blockhash() {
-                if new_blockhash != *blockhash {
-                    return Ok(new_blockhash);
-                }
-            }
-            debug!("Got same blockhash ({:?}), will retry...", blockhash);
-
-            // Retry ~twice during a slot
-            sleep(Duration::from_millis(DEFAULT_MS_PER_SLOT / 2));
-            num_retries += 1;
-        }
-        Err(RpcError::ForUser(format!(
-            "Unable to get new blockhash after {}ms (retried {} times), stuck at {}",
-            start.elapsed().as_millis(),
-            num_retries,
-            blockhash
-        ))
-        .into())
->>>>>>> 1417c1456 (Reorder RpcClient method defs for more logical docs. (#20549))
     }
 
     pub fn get_transport_stats(&self) -> RpcTransportStats {
