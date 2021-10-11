@@ -14,6 +14,7 @@ use {
         serve_repair_service::ServeRepairService,
         sigverify,
         snapshot_packager_service::SnapshotPackagerService,
+        system_monitor_service::SystemMonitorService,
         tower_storage::TowerStorage,
         tpu::{Tpu, DEFAULT_TPU_COALESCE_MS},
         tvu::{Sockets, Tvu, TvuConfig},
@@ -274,6 +275,7 @@ pub struct Validator {
     transaction_status_service: Option<TransactionStatusService>,
     rewards_recorder_service: Option<RewardsRecorderService>,
     cache_block_meta_service: Option<CacheBlockMetaService>,
+    system_monitor_service: Option<SystemMonitorService>,
     sample_performance_service: Option<SamplePerformanceService>,
     gossip_service: GossipService,
     serve_repair_service: ServeRepairService,
@@ -446,6 +448,8 @@ impl Validator {
         );
 
         *start_progress.write().unwrap() = ValidatorStartProgress::StartingServices;
+
+        let system_monitor_service = Some(SystemMonitorService::new(&exit));
 
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
         let bank = bank_forks.working_bank();
@@ -871,6 +875,7 @@ impl Validator {
             transaction_status_service,
             rewards_recorder_service,
             cache_block_meta_service,
+            system_monitor_service,
             sample_performance_service,
             snapshot_packager_service,
             completed_data_sets_service,
@@ -963,6 +968,12 @@ impl Validator {
             cache_block_meta_service
                 .join()
                 .expect("cache_block_meta_service");
+        }
+
+        if let Some(system_monitor_service) = self.system_monitor_service {
+            system_monitor_service
+                .join()
+                .expect("system_monitor_service");
         }
 
         if let Some(sample_performance_service) = self.sample_performance_service {
