@@ -80,3 +80,18 @@ impl fmt::Debug for AESCiphertext {
         write!(f, "{:?}", self.0)
     }
 }
+
+/// Temporary serialization of Option<AESCiphertext>
+#[derive(Clone, Copy, Pod, Zeroable, PartialEq)]
+#[repr(transparent)]
+pub struct OptionAESCiphertext(pub [u8; 17]);
+
+impl fmt::Debug for OptionAESCiphertext {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.0[0] == 1_u8 {
+            write!(f, "Some({:?})", &self.0[1..17])
+        } else {
+            write!(f, "None")
+        }
+    }
+}

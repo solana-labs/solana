@@ -47,7 +47,7 @@ impl AESKey {
 }
 
 #[derive(Debug)]
-pub struct AESCiphertext([u8; 16]);
+pub struct AESCiphertext(pub [u8; 16]);
 impl AESCiphertext {
     pub fn decrypt(&self, sk: &AESKey) -> u64 {
         AES::decrypt(sk, self)
