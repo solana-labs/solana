@@ -173,13 +173,13 @@ impl WithdrawProof {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::encryption::elgamal::ElGamal;
+    use crate::encryption::elgamal::ElGamalKeypair;
 
     #[test]
     #[ignore]
     fn test_withdraw_correctness() {
         // generate and verify proof for the proper setting
-        let ElGamal { pk, sk } = ElGamal::default();
+        let ElGamalKeypair { pk, sk } = ElGamalKeypair::default();
 
         let current_balance: u64 = 77;
         let current_balance_ct = pk.encrypt(current_balance);

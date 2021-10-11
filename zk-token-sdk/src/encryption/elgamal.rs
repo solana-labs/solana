@@ -29,12 +29,12 @@ use {
 };
 
 /// Handle for the (twisted) ElGamal encryption scheme
-pub struct ElGamal {
+pub struct ElGamalKeypair {
     pub pk: ElGamalPubkey,
     pub sk: ElGamalSecretKey,
 }
 
-impl ElGamal {
+impl ElGamalKeypair {
     /// Generates the public and secret keys for ElGamal encryption.
     #[cfg(not(target_arch = "bpf"))]
     #[allow(clippy::new_ret_no_self)]
@@ -148,7 +148,7 @@ impl ElGamal {
     pub fn read_json<R: Read>(reader: &mut R) -> Result<Self, Box<dyn std::error::Error>> {
         let bytes: Vec<u8> = serde_json::from_reader(reader)?;
         Self::from_bytes(&bytes).ok_or_else(|| {
-            std::io::Error::new(std::io::ErrorKind::Other, "Invalid ElGamal keypair").into()
+            std::io::Error::new(std::io::ErrorKind::Other, "Invalid ElGamalKeypair").into()
         })
     }
 
@@ -222,7 +222,7 @@ impl ElGamalPubkey {
     /// Utility method for code ergonomics.
     #[cfg(not(target_arch = "bpf"))]
     pub fn encrypt<T: Into<Scalar>>(&self, msg: T) -> ElGamalCiphertext {
-        ElGamal::encrypt(self, msg)
+        ElGamalKeypair::encrypt(self, msg)
     }
 
     /// Utility method for code ergonomics.
@@ -231,7 +231,7 @@ impl ElGamalPubkey {
         msg: T,
         open: &PedersenOpening,
     ) -> ElGamalCiphertext {
-        ElGamal::encrypt_with(self, msg, open)
+        ElGamalKeypair::encrypt_with(self, msg, open)
     }
 
     /// Generate a decryption token from an ElGamal public key and a Pedersen
@@ -264,12 +264,12 @@ impl ElGamalSecretKey {
 
     /// Utility method for code ergonomics.
     pub fn decrypt(&self, ct: &ElGamalCiphertext) -> DiscreteLog {
-        ElGamal::decrypt(self, ct)
+        ElGamalKeypair::decrypt(self, ct)
     }
 
     /// Utility method for code ergonomics.
     pub fn decrypt_u32(&self, ct: &ElGamalCiphertext) -> Option<u32> {
-        ElGamal::decrypt_u32(self, ct)
+        ElGamalKeypair::decrypt_u32(self, ct)
     }
 
     /// Utility method for code ergonomics.
@@ -278,7 +278,7 @@ impl ElGamalSecretKey {
         ct: &ElGamalCiphertext,
         hashmap: &HashMap<[u8; 32], u32>,
     ) -> Option<u32> {
-        ElGamal::decrypt_u32_online(self, ct, hashmap)
+        ElGamalKeypair::decrypt_u32_online(self, ct, hashmap)
     }
 
     pub fn to_bytes(&self) -> [u8; 32] {
@@ -356,12 +356,12 @@ impl ElGamalCiphertext {
 
     /// Utility method for code ergonomics.
     pub fn decrypt(&self, sk: &ElGamalSecretKey) -> DiscreteLog {
-        ElGamal::decrypt(sk, self)
+        ElGamalKeypair::decrypt(sk, self)
     }
 
     /// Utility method for code ergonomics.
     pub fn decrypt_u32(&self, sk: &ElGamalSecretKey) -> Option<u32> {
-        ElGamal::decrypt_u32(sk, self)
+        ElGamalKeypair::decrypt_u32(sk, self)
     }
 
     /// Utility method for code ergonomics.
@@ -370,7 +370,7 @@ impl ElGamalCiphertext {
         sk: &ElGamalSecretKey,
         hashmap: &HashMap<[u8; 32], u32>,
     ) -> Option<u32> {
-        ElGamal::decrypt_u32_online(sk, self, hashmap)
+        ElGamalKeypair::decrypt_u32_online(sk, self, hashmap)
     }
 }
 
@@ -458,25 +458,25 @@ mod tests {
 
     #[test]
     fn test_encrypt_decrypt_correctness() {
-        let ElGamal { pk, sk } = ElGamal::default();
+        let ElGamalKeypair { pk, sk } = ElGamalKeypair::default();
         let msg: u32 = 57;
-        let ct = ElGamal::encrypt(&pk, msg);
+        let ct = ElGamalKeypair::encrypt(&pk, msg);
 
         let expected_instance = DiscreteLog {
             generator: PedersenBase::default().G,
             target: Scalar::from(msg) * PedersenBase::default().G,
         };
 
-        assert_eq!(expected_instance, ElGamal::decrypt(&sk, &ct));
+        assert_eq!(expected_instance, ElGamalKeypair::decrypt(&sk, &ct));
 
         // Commenting out for faster testing
-        // assert_eq!(msg, ElGamal::decrypt_u32(&sk, &ct).unwrap());
+        // assert_eq!(msg, ElGamalKeypair::decrypt_u32(&sk, &ct).unwrap());
     }
 
     #[test]
     fn test_decrypt_handle() {
-        let ElGamal { pk: pk_1, sk: sk_1 } = ElGamal::default();
-        let ElGamal { pk: pk_2, sk: sk_2 } = ElGamal::default();
+        let ElGamalKeypair { pk: pk_1, sk: sk_1 } = ElGamalKeypair::default();
+        let ElGamalKeypair { pk: pk_2, sk: sk_2 } = ElGamalKeypair::default();
 
         let msg: u32 = 77;
         let (comm, open) = Pedersen::new(msg);
@@ -502,7 +502,7 @@ mod tests {
 
     #[test]
     fn test_homomorphic_addition() {
-        let ElGamal { pk, sk: _ } = ElGamal::default();
+        let ElGamalKeypair { pk, sk: _ } = ElGamalKeypair::default();
         let msg_0: u64 = 57;
         let msg_1: u64 = 77;
 
@@ -510,24 +510,24 @@ mod tests {
         let open_0 = PedersenOpening::random(&mut OsRng);
         let open_1 = PedersenOpening::random(&mut OsRng);
 
-        let ct_0 = ElGamal::encrypt_with(&pk, msg_0, &open_0);
-        let ct_1 = ElGamal::encrypt_with(&pk, msg_1, &open_1);
+        let ct_0 = ElGamalKeypair::encrypt_with(&pk, msg_0, &open_0);
+        let ct_1 = ElGamalKeypair::encrypt_with(&pk, msg_1, &open_1);
 
-        let ct_sum = ElGamal::encrypt_with(&pk, msg_0 + msg_1, &(open_0 + open_1));
+        let ct_sum = ElGamalKeypair::encrypt_with(&pk, msg_0 + msg_1, &(open_0 + open_1));
 
         assert_eq!(ct_sum, ct_0 + ct_1);
 
         // Add to ElGamal ciphertext
         let open = PedersenOpening::random(&mut OsRng);
-        let ct = ElGamal::encrypt_with(&pk, msg_0, &open);
-        let ct_sum = ElGamal::encrypt_with(&pk, msg_0 + msg_1, &open);
+        let ct = ElGamalKeypair::encrypt_with(&pk, msg_0, &open);
+        let ct_sum = ElGamalKeypair::encrypt_with(&pk, msg_0 + msg_1, &open);
 
         assert_eq!(ct_sum, ct.add_to_msg(msg_1));
     }
 
     #[test]
     fn test_homomorphic_subtraction() {
-        let ElGamal { pk, sk: _ } = ElGamal::default();
+        let ElGamalKeypair { pk, sk: _ } = ElGamalKeypair::default();
         let msg_0: u64 = 77;
         let msg_1: u64 = 55;
 
@@ -535,56 +535,56 @@ mod tests {
         let open_0 = PedersenOpening::random(&mut OsRng);
         let open_1 = PedersenOpening::random(&mut OsRng);
 
-        let ct_0 = ElGamal::encrypt_with(&pk, msg_0, &open_0);
-        let ct_1 = ElGamal::encrypt_with(&pk, msg_1, &open_1);
+        let ct_0 = ElGamalKeypair::encrypt_with(&pk, msg_0, &open_0);
+        let ct_1 = ElGamalKeypair::encrypt_with(&pk, msg_1, &open_1);
 
-        let ct_sub = ElGamal::encrypt_with(&pk, msg_0 - msg_1, &(open_0 - open_1));
+        let ct_sub = ElGamalKeypair::encrypt_with(&pk, msg_0 - msg_1, &(open_0 - open_1));
 
         assert_eq!(ct_sub, ct_0 - ct_1);
 
         // Subtract to ElGamal ciphertext
         let open = PedersenOpening::random(&mut OsRng);
-        let ct = ElGamal::encrypt_with(&pk, msg_0, &open);
-        let ct_sub = ElGamal::encrypt_with(&pk, msg_0 - msg_1, &open);
+        let ct = ElGamalKeypair::encrypt_with(&pk, msg_0, &open);
+        let ct_sub = ElGamalKeypair::encrypt_with(&pk, msg_0 - msg_1, &open);
 
         assert_eq!(ct_sub, ct.sub_to_msg(msg_1));
     }
 
     #[test]
     fn test_homomorphic_multiplication() {
-        let ElGamal { pk, sk: _ } = ElGamal::default();
+        let ElGamalKeypair { pk, sk: _ } = ElGamalKeypair::default();
         let msg_0: u64 = 57;
         let msg_1: u64 = 77;
 
         let open = PedersenOpening::random(&mut OsRng);
 
-        let ct = ElGamal::encrypt_with(&pk, msg_0, &open);
+        let ct = ElGamalKeypair::encrypt_with(&pk, msg_0, &open);
         let scalar = Scalar::from(msg_1);
 
-        let ct_prod = ElGamal::encrypt_with(&pk, msg_0 * msg_1, &(open * scalar));
+        let ct_prod = ElGamalKeypair::encrypt_with(&pk, msg_0 * msg_1, &(open * scalar));
 
         assert_eq!(ct_prod, ct * scalar);
     }
 
     #[test]
     fn test_homomorphic_division() {
-        let ElGamal { pk, sk: _ } = ElGamal::default();
+        let ElGamalKeypair { pk, sk: _ } = ElGamalKeypair::default();
         let msg_0: u64 = 55;
         let msg_1: u64 = 5;
 
         let open = PedersenOpening::random(&mut OsRng);
 
-        let ct = ElGamal::encrypt_with(&pk, msg_0, &open);
+        let ct = ElGamalKeypair::encrypt_with(&pk, msg_0, &open);
         let scalar = Scalar::from(msg_1);
 
-        let ct_div = ElGamal::encrypt_with(&pk, msg_0 / msg_1, &(open / scalar));
+        let ct_div = ElGamalKeypair::encrypt_with(&pk, msg_0 / msg_1, &(open / scalar));
 
         assert_eq!(ct_div, ct / scalar);
     }
 
     #[test]
     fn test_serde_ciphertext() {
-        let ElGamal { pk, sk: _ } = ElGamal::default();
+        let ElGamalKeypair { pk, sk: _ } = ElGamalKeypair::default();
         let msg: u64 = 77;
         let ct = pk.encrypt(msg);
 
@@ -596,7 +596,7 @@ mod tests {
 
     #[test]
     fn test_serde_pubkey() {
-        let ElGamal { pk, sk: _ } = ElGamal::default();
+        let ElGamalKeypair { pk, sk: _ } = ElGamalKeypair::default();
 
         let encoded = bincode::serialize(&pk).unwrap();
         let decoded: ElGamalPubkey = bincode::deserialize(&encoded).unwrap();
@@ -606,7 +606,7 @@ mod tests {
 
     #[test]
     fn test_serde_secretkey() {
-        let ElGamal { pk: _, sk } = ElGamal::default();
+        let ElGamalKeypair { pk: _, sk } = ElGamalKeypair::default();
 
         let encoded = bincode::serialize(&sk).unwrap();
         let decoded: ElGamalSecretKey = bincode::deserialize(&encoded).unwrap();
@@ -617,19 +617,19 @@ mod tests {
     fn tmp_file_path(name: &str) -> String {
         use std::env;
         let out_dir = env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
-        let keypair = ElGamal::default();
+        let keypair = ElGamalKeypair::default();
         format!("{}/tmp/{}-{}", out_dir, name, keypair.pk)
     }
 
     #[test]
     fn test_write_keypair_file() {
         let outfile = tmp_file_path("test_write_keypair_file.json");
-        let serialized_keypair = ElGamal::default().write_json_file(&outfile).unwrap();
+        let serialized_keypair = ElGamalKeypair::default().write_json_file(&outfile).unwrap();
         let keypair_vec: Vec<u8> = serde_json::from_str(&serialized_keypair).unwrap();
         assert!(Path::new(&outfile).exists());
         assert_eq!(
             keypair_vec,
-            ElGamal::read_json_file(&outfile)
+            ElGamalKeypair::read_json_file(&outfile)
                 .unwrap()
                 .to_bytes()
                 .to_vec()
@@ -656,16 +656,16 @@ mod tests {
     fn test_write_keypair_file_overwrite_ok() {
         let outfile = tmp_file_path("test_write_keypair_file_overwrite_ok.json");
 
-        ElGamal::default().write_json_file(&outfile).unwrap();
-        ElGamal::default().write_json_file(&outfile).unwrap();
+        ElGamalKeypair::default().write_json_file(&outfile).unwrap();
+        ElGamalKeypair::default().write_json_file(&outfile).unwrap();
     }
 
     #[test]
     fn test_write_keypair_file_truncate() {
         let outfile = tmp_file_path("test_write_keypair_file_truncate.json");
 
-        ElGamal::default().write_json_file(&outfile).unwrap();
-        ElGamal::read_json_file(&outfile).unwrap();
+        ElGamalKeypair::default().write_json_file(&outfile).unwrap();
+        ElGamalKeypair::read_json_file(&outfile).unwrap();
 
         // Ensure outfile is truncated
         {
@@ -673,7 +673,7 @@ mod tests {
             f.write_all(String::from_utf8([b'a'; 2048].to_vec()).unwrap().as_bytes())
                 .unwrap();
         }
-        ElGamal::default().write_json_file(&outfile).unwrap();
-        ElGamal::read_json_file(&outfile).unwrap();
+        ElGamalKeypair::default().write_json_file(&outfile).unwrap();
+        ElGamalKeypair::read_json_file(&outfile).unwrap();
     }
 }
