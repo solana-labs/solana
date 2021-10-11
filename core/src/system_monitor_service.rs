@@ -203,6 +203,6 @@ UdpLite: 0 0 0 0 0 0 0 0" as &[u8];
 
         let mut mock_snmp = b"unexpected data" as &[u8];
         let stats = parse_udp_stats(&mut mock_snmp);
-        assert_eq!(stats.is_err(), true);
+        assert!(stats.is_err());
     }
 }
