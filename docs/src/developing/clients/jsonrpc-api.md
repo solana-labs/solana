@@ -923,6 +923,7 @@ The result field will be an object with the following fields:
 - `epoch: <u64>`, the current epoch
 - `slotIndex: <u64>`, the current slot relative to the start of the current epoch
 - `slotsInEpoch: <u64>`, the number of slots in this epoch
+- `transactionCount: <u64 | null>`, total number of transactions processed without error since genesis
 
 #### Example:
 
@@ -942,7 +943,8 @@ Result:
     "blockHeight": 166500,
     "epoch": 27,
     "slotIndex": 2790,
-    "slotsInEpoch": 8192
+    "slotsInEpoch": 8192,
+    "transactionCount": 22661093
   },
   "id": 1
 }
