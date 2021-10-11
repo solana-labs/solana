@@ -152,7 +152,7 @@ mod test {
 
     #[test]
     fn test_close_account_correctness() {
-        let source = ElGamal::new();
+        let source = ElGamal::default();
 
         // invalid ciphertexts
         let balance = source.pk.encrypt(0_u64);

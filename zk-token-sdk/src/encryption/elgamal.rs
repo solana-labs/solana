@@ -38,7 +38,7 @@ impl ElGamal {
     /// Generates the public and secret keys for ElGamal encryption.
     #[cfg(not(target_arch = "bpf"))]
     #[allow(clippy::new_ret_no_self)]
-    pub fn new() -> Self {
+    pub fn default() -> Self {
         Self::with(&mut OsRng) // using OsRng for now
     }
 
@@ -458,7 +458,7 @@ mod tests {
 
     #[test]
     fn test_encrypt_decrypt_correctness() {
-        let ElGamal { pk, sk } = ElGamal::new();
+        let ElGamal { pk, sk } = ElGamal::default();
         let msg: u32 = 57;
         let ct = ElGamal::encrypt(&pk, msg);
 
@@ -475,8 +475,8 @@ mod tests {
 
     #[test]
     fn test_decrypt_handle() {
-        let ElGamal { pk: pk_1, sk: sk_1 } = ElGamal::new();
-        let ElGamal { pk: pk_2, sk: sk_2 } = ElGamal::new();
+        let ElGamal { pk: pk_1, sk: sk_1 } = ElGamal::default();
+        let ElGamal { pk: pk_2, sk: sk_2 } = ElGamal::default();
 
         let msg: u32 = 77;
         let (comm, open) = Pedersen::new(msg);
@@ -502,7 +502,7 @@ mod tests {
 
     #[test]
     fn test_homomorphic_addition() {
-        let ElGamal { pk, sk: _ } = ElGamal::new();
+        let ElGamal { pk, sk: _ } = ElGamal::default();
         let msg_0: u64 = 57;
         let msg_1: u64 = 77;
 
@@ -527,7 +527,7 @@ mod tests {
 
     #[test]
     fn test_homomorphic_subtraction() {
-        let ElGamal { pk, sk: _ } = ElGamal::new();
+        let ElGamal { pk, sk: _ } = ElGamal::default();
         let msg_0: u64 = 77;
         let msg_1: u64 = 55;
 
@@ -552,7 +552,7 @@ mod tests {
 
     #[test]
     fn test_homomorphic_multiplication() {
-        let ElGamal { pk, sk: _ } = ElGamal::new();
+        let ElGamal { pk, sk: _ } = ElGamal::default();
         let msg_0: u64 = 57;
         let msg_1: u64 = 77;
 
@@ -568,7 +568,7 @@ mod tests {
 
     #[test]
     fn test_homomorphic_division() {
-        let ElGamal { pk, sk: _ } = ElGamal::new();
+        let ElGamal { pk, sk: _ } = ElGamal::default();
         let msg_0: u64 = 55;
         let msg_1: u64 = 5;
 
@@ -584,7 +584,7 @@ mod tests {
 
     #[test]
     fn test_serde_ciphertext() {
-        let ElGamal { pk, sk: _ } = ElGamal::new();
+        let ElGamal { pk, sk: _ } = ElGamal::default();
         let msg: u64 = 77;
         let ct = pk.encrypt(msg);
 
@@ -596,7 +596,7 @@ mod tests {
 
     #[test]
     fn test_serde_pubkey() {
-        let ElGamal { pk, sk: _ } = ElGamal::new();
+        let ElGamal { pk, sk: _ } = ElGamal::default();
 
         let encoded = bincode::serialize(&pk).unwrap();
         let decoded: ElGamalPubkey = bincode::deserialize(&encoded).unwrap();
@@ -606,7 +606,7 @@ mod tests {
 
     #[test]
     fn test_serde_secretkey() {
-        let ElGamal { pk: _, sk } = ElGamal::new();
+        let ElGamal { pk: _, sk } = ElGamal::default();
 
         let encoded = bincode::serialize(&sk).unwrap();
         let decoded: ElGamalSecretKey = bincode::deserialize(&encoded).unwrap();
@@ -617,14 +617,14 @@ mod tests {
     fn tmp_file_path(name: &str) -> String {
         use std::env;
         let out_dir = env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
-        let keypair = ElGamal::new();
+        let keypair = ElGamal::default();
         format!("{}/tmp/{}-{}", out_dir, name, keypair.pk)
     }
 
     #[test]
     fn test_write_keypair_file() {
         let outfile = tmp_file_path("test_write_keypair_file.json");
-        let serialized_keypair = ElGamal::new().write_json_file(&outfile).unwrap();
+        let serialized_keypair = ElGamal::default().write_json_file(&outfile).unwrap();
         let keypair_vec: Vec<u8> = serde_json::from_str(&serialized_keypair).unwrap();
         assert!(Path::new(&outfile).exists());
         assert_eq!(
@@ -656,15 +656,15 @@ mod tests {
     fn test_write_keypair_file_overwrite_ok() {
         let outfile = tmp_file_path("test_write_keypair_file_overwrite_ok.json");
 
-        ElGamal::new().write_json_file(&outfile).unwrap();
-        ElGamal::new().write_json_file(&outfile).unwrap();
+        ElGamal::default().write_json_file(&outfile).unwrap();
+        ElGamal::default().write_json_file(&outfile).unwrap();
     }
 
     #[test]
     fn test_write_keypair_file_truncate() {
         let outfile = tmp_file_path("test_write_keypair_file_truncate.json");
 
-        ElGamal::new().write_json_file(&outfile).unwrap();
+        ElGamal::default().write_json_file(&outfile).unwrap();
         ElGamal::read_json_file(&outfile).unwrap();
 
         // Ensure outfile is truncated
@@ -673,7 +673,7 @@ mod tests {
             f.write_all(String::from_utf8([b'a'; 2048].to_vec()).unwrap().as_bytes())
                 .unwrap();
         }
-        ElGamal::new().write_json_file(&outfile).unwrap();
+        ElGamal::default().write_json_file(&outfile).unwrap();
         ElGamal::read_json_file(&outfile).unwrap();
     }
 }
