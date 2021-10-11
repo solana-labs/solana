@@ -7,11 +7,11 @@ use merlin::Transcript;
 use crate::errors::ProofError;
 
 pub trait TranscriptProtocol {
-    /// Append a domain separator for an `n`-bit rangeproof for ElGamal
+    /// Append a domain separator for an `n`-bit rangeproof for ElGamalKeypair
     /// ciphertext using a decryption key
     fn rangeproof_from_key_domain_sep(&mut self, n: u64);
 
-    /// Append a domain separator for an `n`-bit rangeproof for ElGamal
+    /// Append a domain separator for an `n`-bit rangeproof for ElGamalKeypair
     /// ciphertext using an opening
     fn rangeproof_from_opening_domain_sep(&mut self, n: u64);
 

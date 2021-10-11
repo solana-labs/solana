@@ -61,7 +61,7 @@ impl TransferData {
     ) -> Self {
         // split and encrypt transfer amount
         //
-        // encryption is a bit more involved since we are generating each components of an ElGamal
+        // encryption is a bit more involved since we are generating each components of an ElGamalKeypair
         // ciphertext separately.
         let (amount_lo, amount_hi) = split_u64_into_u32(transfer_amount);
 
@@ -463,17 +463,19 @@ pub fn combine_u32_ciphertexts(ct_lo: ElGamalCiphertext, ct_hi: ElGamalCiphertex
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::encryption::{discrete_log::decode_u32_precomputation_for_G, elgamal::ElGamal};
+    use crate::encryption::{
+        discrete_log::decode_u32_precomputation_for_G, elgamal::ElGamalKeypair,
+    };
 
     #[test]
     fn test_transfer_correctness() {
-        // ElGamal keys for source, destination, and auditor accounts
-        let ElGamal {
+        // ElGamalKeypair keys for source, destination, and auditor accounts
+        let ElGamalKeypair {
             pk: source_pk,
             sk: source_sk,
-        } = ElGamal::default();
-        let dest_pk = ElGamal::default().pk;
-        let auditor_pk = ElGamal::default().pk;
+        } = ElGamalKeypair::default();
+        let dest_pk = ElGamalKeypair::default().pk;
+        let auditor_pk = ElGamalKeypair::default().pk;
 
         // create source account spendable ciphertext
         let spendable_balance: u64 = 77;
@@ -498,16 +500,16 @@ mod test {
 
     #[test]
     fn test_source_dest_ciphertext() {
-        // ElGamal keys for source, destination, and auditor accounts
-        let ElGamal {
+        // ElGamalKeypair keys for source, destination, and auditor accounts
+        let ElGamalKeypair {
             pk: source_pk,
             sk: source_sk,
-        } = ElGamal::default();
-        let ElGamal {
+        } = ElGamalKeypair::default();
+        let ElGamalKeypair {
             pk: dest_pk,
             sk: dest_sk,
-        } = ElGamal::default();
-        let auditor_pk = ElGamal::default().pk;
+        } = ElGamalKeypair::default();
+        let auditor_pk = ElGamalKeypair::default().pk;
 
         // create source account spendable ciphertext
         let spendable_balance: u64 = 77;

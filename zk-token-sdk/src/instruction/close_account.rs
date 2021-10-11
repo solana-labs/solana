@@ -147,12 +147,12 @@ impl CloseAccountProof {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::encryption::elgamal::ElGamal;
+    use crate::encryption::elgamal::ElGamalKeypair;
     use crate::encryption::pedersen::{Pedersen, PedersenDecryptHandle, PedersenOpening};
 
     #[test]
     fn test_close_account_correctness() {
-        let source = ElGamal::default();
+        let source = ElGamalKeypair::default();
 
         // invalid ciphertexts
         let balance = source.pk.encrypt(0_u64);
