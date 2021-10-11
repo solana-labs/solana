@@ -12,7 +12,7 @@ documentation = "https://docs.rs/solana-validator"
 [dependencies]
 bs58 = "0.4.0"
 crossbeam-channel = "0.5"
-libloading = "0.7.0"
+libloading = "0.7.1"
 log = "0.4.11"
 serde = "1.0.130"
 serde_derive = "1.0.103"
