@@ -219,8 +219,8 @@ mod test {
 
     #[test]
     fn test_update_account_public_key_general_cases() {
-        let current = ElGamal::new();
-        let new = ElGamal::new();
+        let current = ElGamal::default();
+        let new = ElGamal::default();
 
         // If current_ct and new_ct encrypt same values, then the proof verification should succeed
         let balance: u64 = 77;
@@ -239,8 +239,8 @@ mod test {
 
     #[test]
     fn test_update_account_public_key_zeroed_ciphertexts() {
-        let current = ElGamal::new();
-        let new = ElGamal::new();
+        let current = ElGamal::default();
+        let new = ElGamal::default();
 
         // A zeroed cipehrtext should be considered as an account balance of 0
         let balance: u64 = 0;
@@ -286,8 +286,8 @@ mod test {
 
     #[test]
     fn test_update_account_public_key_partially_zeroed_ciphertexts() {
-        let current = ElGamal::new();
-        let new = ElGamal::new();
+        let current = ElGamal::default();
+        let new = ElGamal::default();
 
         let balance = 0_u64;
         let balance_ciphertext = new.pk.encrypt(balance);

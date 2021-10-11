@@ -471,9 +471,9 @@ mod test {
         let ElGamal {
             pk: source_pk,
             sk: source_sk,
-        } = ElGamal::new();
-        let dest_pk = ElGamal::new().pk;
-        let auditor_pk = ElGamal::new().pk;
+        } = ElGamal::default();
+        let dest_pk = ElGamal::default().pk;
+        let auditor_pk = ElGamal::default().pk;
 
         // create source account spendable ciphertext
         let spendable_balance: u64 = 77;
@@ -502,12 +502,12 @@ mod test {
         let ElGamal {
             pk: source_pk,
             sk: source_sk,
-        } = ElGamal::new();
+        } = ElGamal::default();
         let ElGamal {
             pk: dest_pk,
             sk: dest_sk,
-        } = ElGamal::new();
-        let auditor_pk = ElGamal::new().pk;
+        } = ElGamal::default();
+        let auditor_pk = ElGamal::default().pk;
 
         // create source account spendable ciphertext
         let spendable_balance: u64 = 77;
