@@ -227,6 +227,10 @@ pub mod gate_large_block {
     solana_sdk::declare_id!("2ry7ygxiYURULZCrypHhveanvP5tzZ4toRwVp89oCNSj");
 }
 
+pub mod remove_native_loader {
+    solana_sdk::declare_id!("HTTgmruMYRZEntyL3EdCDdnS6e4D5wRq1FA7kQsb66qq");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -284,6 +288,7 @@ lazy_static! {
         (optimize_epoch_boundary_updates::id(), "Optimize epoch boundary updates"),
         (tx_wide_compute_cap::id(), "Transaction wide compute cap"),
         (gate_large_block::id(), "validator checks block cost against max limit in realtime, reject if exceeds."),
+        (remove_native_loader::id(), "Remove support for the native loader"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

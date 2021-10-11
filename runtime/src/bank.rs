@@ -5986,7 +5986,6 @@ pub(crate) mod tests {
             create_genesis_config_with_leader, create_genesis_config_with_vote_accounts,
             GenesisConfigInfo, ValidatorVoteKeypairs,
         },
-        native_loader::NativeLoaderError,
         status_cache::MAX_CACHE_ENTRIES,
     };
     use crossbeam_channel::{bounded, unbounded};
@@ -12859,67 +12858,6 @@ pub(crate) mod tests {
             Err(TransactionError::InstructionError(
                 0,
                 InstructionError::UnsupportedProgramId
-            ))
-        );
-    }
-
-    #[test]
-    fn test_bad_native_loader() {
-        let (genesis_config, mint_keypair) = create_genesis_config(50000);
-        let bank = Bank::new(&genesis_config);
-        let to_keypair = Keypair::new();
-
-        let tx = Transaction::new_signed_with_payer(
-            &[
-                system_instruction::create_account(
-                    &mint_keypair.pubkey(),
-                    &to_keypair.pubkey(),
-                    10000,
-                    0,
-                    &native_loader::id(),
-                ),
-                Instruction::new_with_bincode(
-                    native_loader::id(),
-                    &(),
-                    vec![AccountMeta::new(to_keypair.pubkey(), false)],
-                ),
-            ],
-            Some(&mint_keypair.pubkey()),
-            &[&mint_keypair, &to_keypair],
-            bank.last_blockhash(),
-        );
-        assert_eq!(
-            bank.process_transaction(&tx),
-            Err(TransactionError::InstructionError(
-                1,
-                InstructionError::Custom(NativeLoaderError::InvalidAccountData as u32)
-            ))
-        );
-
-        let tx = Transaction::new_signed_with_payer(
-            &[
-                system_instruction::create_account(
-                    &mint_keypair.pubkey(),
-                    &to_keypair.pubkey(),
-                    10000,
-                    100,
-                    &native_loader::id(),
-                ),
-                Instruction::new_with_bincode(
-                    native_loader::id(),
-                    &(),
-                    vec![AccountMeta::new(to_keypair.pubkey(), false)],
-                ),
-            ],
-            Some(&mint_keypair.pubkey()),
-            &[&mint_keypair, &to_keypair],
-            bank.last_blockhash(),
-        );
-        assert_eq!(
-            bank.process_transaction(&tx),
-            Err(TransactionError::InstructionError(
-                1,
-                InstructionError::Custom(NativeLoaderError::InvalidAccountData as u32)
             ))
         );
     }

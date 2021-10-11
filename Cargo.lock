@@ -4704,14 +4704,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-failure-program"
-version = "1.8.1"
-dependencies = [
- "solana-runtime",
- "solana-sdk",
-]
-
-[[package]]
 name = "solana-faucet"
 version = "1.8.1"
 dependencies = [
@@ -5151,33 +5143,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-noop-program"
-version = "1.8.1"
-dependencies = [
- "log 0.4.14",
- "solana-logger 1.8.1",
- "solana-sdk",
-]
-
-[[package]]
 name = "solana-notifier"
 version = "1.8.1"
 dependencies = [
  "log 0.4.14",
  "reqwest",
  "serde_json",
-]
-
-[[package]]
-name = "solana-ownable"
-version = "1.8.1"
-dependencies = [
- "bincode",
- "num-derive",
- "num-traits",
- "solana-runtime",
- "solana-sdk",
- "thiserror",
 ]
 
 [[package]]
@@ -5453,7 +5424,6 @@ dependencies = [
  "solana-logger 1.8.1",
  "solana-measure",
  "solana-metrics",
- "solana-noop-program",
  "solana-rayon-threadlimit",
  "solana-sdk",
  "solana-secp256k1-program",
