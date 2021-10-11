@@ -2,6 +2,7 @@ use std::{
     collections::HashMap,
     fs::File,
     io::{BufRead, BufReader},
+    path::Path,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -10,8 +11,8 @@ use std::{
     time::{Duration, Instant},
 };
 
-const SAMPLE_INTERVAL: u64 = 60;
-const SLEEP_INTERVAL: u64 = 500;
+const SAMPLE_INTERVAL: Duration = Duration::from_secs(60);
+const SLEEP_INTERVAL: Duration = Duration::from_millis(500);
 
 pub struct SystemMonitorService {
     thread_hdl: JoinHandle<()>,
@@ -30,14 +31,14 @@ struct UdpStats {
 }
 
 #[allow(dead_code)]
-fn read_udp_stats(file_path: &str) -> Result<UdpStats, String> {
+fn read_udp_stats(file_path: impl AsRef<Path>) -> Result<UdpStats, String> {
     let file = File::open(file_path).map_err(|e| e.to_string())?;
     let mut reader = BufReader::new(file);
     parse_udp_stats(&mut reader)
 }
 
 #[allow(dead_code)]
-fn parse_udp_stats(reader: &mut dyn std::io::BufRead) -> Result<UdpStats, String> {
+fn parse_udp_stats(reader: &mut impl BufRead) -> Result<UdpStats, String> {
     let mut udp_lines = Vec::default();
     for line in reader.lines() {
         let line = line.map_err(|e| e.to_string())?;
@@ -79,9 +80,7 @@ fn parse_udp_stats(reader: &mut dyn std::io::BufRead) -> Result<UdpStats, String
 }
 
 impl SystemMonitorService {
-    pub fn new(exit: &Arc<AtomicBool>) -> Self {
-        let exit = exit.clone();
-
+    pub fn new(exit: Arc<AtomicBool>) -> Self {
         info!("Starting SystemMonitorService");
         let thread_hdl = Builder::new()
             .name("system-monitor".to_string())
@@ -163,13 +162,13 @@ impl SystemMonitorService {
                 break;
             }
 
-            if now.elapsed().as_secs() >= SAMPLE_INTERVAL {
+            if now.elapsed() >= SAMPLE_INTERVAL {
                 now = Instant::now();
 
                 SystemMonitorService::report_net_stats(&mut udp_stats);
             }
 
-            sleep(Duration::from_millis(SLEEP_INTERVAL));
+            sleep(SLEEP_INTERVAL);
         }
     }
 

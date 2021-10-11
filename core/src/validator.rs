@@ -449,7 +449,7 @@ impl Validator {
 
         *start_progress.write().unwrap() = ValidatorStartProgress::StartingServices;
 
-        let system_monitor_service = Some(SystemMonitorService::new(&exit));
+        let system_monitor_service = Some(SystemMonitorService::new(Arc::clone(&exit)));
 
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
         let bank = bank_forks.working_bank();
