@@ -28,6 +28,98 @@ use {
     },
 };
 
+struct ElGamal;
+impl ElGamal {
+    /// On input a randomness generator, the function generates the public and
+    /// secret keys for ElGamal encryption.
+    #[cfg(not(target_arch = "bpf"))]
+    #[allow(non_snake_case)]
+    fn keygen<T: RngCore + CryptoRng>(rng: &mut T) -> ElGamalKeypair {
+        // sample a non-zero scalar
+        let mut s: Scalar;
+        loop {
+            s = Scalar::random(rng);
+
+            if s != Scalar::zero() {
+                break;
+            }
+        }
+
+        let H = PedersenBase::default().H;
+        let P = s.invert() * H;
+
+        ElGamalKeypair {
+            public: ElGamalPubkey(P),
+            secret: ElGamalSecretKey(s),
+        }
+    }
+
+    /// On input a public key and a message to be encrypted, the function
+    /// returns an ElGamal ciphertext of the message under the public key.
+    #[cfg(not(target_arch = "bpf"))]
+    fn encrypt<T: Into<Scalar>>(public: &ElGamalPubkey, amount: T) -> ElGamalCiphertext {
+        let (message_comm, open) = Pedersen::new(amount);
+        let decrypt_handle = public.decrypt_handle(&open);
+
+        ElGamalCiphertext {
+            message_comm,
+            decrypt_handle,
+        }
+    }
+
+    /// On input a public key, message, and Pedersen opening, the function
+    /// returns an ElGamal ciphertext of the message under the public key using
+    /// the opening.
+    fn encrypt_with<T: Into<Scalar>>(
+        public: &ElGamalPubkey,
+        amount: T,
+        open: &PedersenOpening,
+    ) -> ElGamalCiphertext {
+        let message_comm = Pedersen::with(amount, open);
+        let decrypt_handle = public.decrypt_handle(open);
+
+        ElGamalCiphertext {
+            message_comm,
+            decrypt_handle,
+        }
+    }
+
+    /// On input a secret key and a ciphertext, the function decrypts the ciphertext.
+    ///
+    /// The output of the function is of type `DiscreteLog`. The exact message
+    /// can be recovered via the DiscreteLog's decode method.
+    fn decrypt(secret: &ElGamalSecretKey, ct: &ElGamalCiphertext) -> DiscreteLog {
+        let ElGamalSecretKey(s) = secret;
+        let ElGamalCiphertext {
+            message_comm,
+            decrypt_handle,
+        } = ct;
+
+        DiscreteLog {
+            generator: PedersenBase::default().G,
+            target: message_comm.get_point() - s * decrypt_handle.get_point(),
+        }
+    }
+
+    /// On input a secret key and a ciphertext, the function decrypts the
+    /// ciphertext for a u32 value.
+    fn decrypt_u32(secret: &ElGamalSecretKey, ct: &ElGamalCiphertext) -> Option<u32> {
+        let discrete_log_instance = Self::decrypt(secret, ct);
+        discrete_log_instance.decode_u32()
+    }
+
+    /// On input a secret key, ciphertext, and hashmap, the function decrypts the
+    /// ciphertext for a u32 value.
+    fn decrypt_u32_online(
+        secret: &ElGamalSecretKey,
+        ct: &ElGamalCiphertext,
+        hashmap: &HashMap<[u8; 32], u32>,
+    ) -> Option<u32> {
+        let discrete_log_instance = Self::decrypt(secret, ct);
+        discrete_log_instance.decode_u32_online(hashmap)
+    }
+}
+
 /// A (twisted) ElGamal encryption keypair.
 pub struct ElGamalKeypair {
     /// The public half of this keypair.
@@ -49,88 +141,7 @@ impl ElGamalKeypair {
     #[cfg(not(target_arch = "bpf"))]
     #[allow(non_snake_case)]
     pub fn with<T: RngCore + CryptoRng>(rng: &mut T) -> Self {
-        // sample a non-zero scalar
-        let mut s: Scalar;
-        loop {
-            s = Scalar::random(rng);
-
-            if s != Scalar::zero() {
-                break;
-            }
-        }
-
-        let H = PedersenBase::default().H;
-        let P = s.invert() * H;
-
-        Self {
-            public: ElGamalPubkey(P),
-            secret: ElGamalSecretKey(s),
-        }
-    }
-
-    /// On input a public key and a message to be encrypted, the function
-    /// returns an ElGamal ciphertext of the message under the public key.
-    #[cfg(not(target_arch = "bpf"))]
-    pub fn encrypt<T: Into<Scalar>>(public: &ElGamalPubkey, amount: T) -> ElGamalCiphertext {
-        let (message_comm, open) = Pedersen::new(amount);
-        let decrypt_handle = public.decrypt_handle(&open);
-
-        ElGamalCiphertext {
-            message_comm,
-            decrypt_handle,
-        }
-    }
-
-    /// On input a public key, message, and Pedersen opening, the function
-    /// returns an ElGamal ciphertext of the message under the public key using
-    /// the opening.
-    pub fn encrypt_with<T: Into<Scalar>>(
-        public: &ElGamalPubkey,
-        amount: T,
-        open: &PedersenOpening,
-    ) -> ElGamalCiphertext {
-        let message_comm = Pedersen::with(amount, open);
-        let decrypt_handle = public.decrypt_handle(open);
-
-        ElGamalCiphertext {
-            message_comm,
-            decrypt_handle,
-        }
-    }
-
-    /// On input a secret key and a ciphertext, the function decrypts the ciphertext.
-    ///
-    /// The output of the function is of type `DiscreteLog`. The exact message
-    /// can be recovered via the DiscreteLog's decode method.
-    pub fn decrypt(secret: &ElGamalSecretKey, ct: &ElGamalCiphertext) -> DiscreteLog {
-        let ElGamalSecretKey(s) = secret;
-        let ElGamalCiphertext {
-            message_comm,
-            decrypt_handle,
-        } = ct;
-
-        DiscreteLog {
-            generator: PedersenBase::default().G,
-            target: message_comm.get_point() - s * decrypt_handle.get_point(),
-        }
-    }
-
-    /// On input a secret key and a ciphertext, the function decrypts the
-    /// ciphertext for a u32 value.
-    pub fn decrypt_u32(secret: &ElGamalSecretKey, ct: &ElGamalCiphertext) -> Option<u32> {
-        let discrete_log_instance = Self::decrypt(secret, ct);
-        discrete_log_instance.decode_u32()
-    }
-
-    /// On input a secret key, ciphertext, and hashmap, the function decrypts the
-    /// ciphertext for a u32 value.
-    pub fn decrypt_u32_online(
-        secret: &ElGamalSecretKey,
-        ct: &ElGamalCiphertext,
-        hashmap: &HashMap<[u8; 32], u32>,
-    ) -> Option<u32> {
-        let discrete_log_instance = Self::decrypt(secret, ct);
-        discrete_log_instance.decode_u32_online(hashmap)
+        ElGamal::keygen(rng)
     }
 
     pub fn to_bytes(&self) -> [u8; 64] {
@@ -224,7 +235,7 @@ impl ElGamalPubkey {
     /// Utility method for code ergonomics.
     #[cfg(not(target_arch = "bpf"))]
     pub fn encrypt<T: Into<Scalar>>(&self, msg: T) -> ElGamalCiphertext {
-        ElGamalKeypair::encrypt(self, msg)
+        ElGamal::encrypt(self, msg)
     }
 
     /// Utility method for code ergonomics.
@@ -233,7 +244,7 @@ impl ElGamalPubkey {
         msg: T,
         open: &PedersenOpening,
     ) -> ElGamalCiphertext {
-        ElGamalKeypair::encrypt_with(self, msg, open)
+        ElGamal::encrypt_with(self, msg, open)
     }
 
     /// Generate a decryption token from an ElGamal public key and a Pedersen
@@ -266,12 +277,12 @@ impl ElGamalSecretKey {
 
     /// Utility method for code ergonomics.
     pub fn decrypt(&self, ct: &ElGamalCiphertext) -> DiscreteLog {
-        ElGamalKeypair::decrypt(self, ct)
+        ElGamal::decrypt(self, ct)
     }
 
     /// Utility method for code ergonomics.
     pub fn decrypt_u32(&self, ct: &ElGamalCiphertext) -> Option<u32> {
-        ElGamalKeypair::decrypt_u32(self, ct)
+        ElGamal::decrypt_u32(self, ct)
     }
 
     /// Utility method for code ergonomics.
@@ -280,7 +291,7 @@ impl ElGamalSecretKey {
         ct: &ElGamalCiphertext,
         hashmap: &HashMap<[u8; 32], u32>,
     ) -> Option<u32> {
-        ElGamalKeypair::decrypt_u32_online(self, ct, hashmap)
+        ElGamal::decrypt_u32_online(self, ct, hashmap)
     }
 
     pub fn to_bytes(&self) -> [u8; 32] {
@@ -358,12 +369,12 @@ impl ElGamalCiphertext {
 
     /// Utility method for code ergonomics.
     pub fn decrypt(&self, secret: &ElGamalSecretKey) -> DiscreteLog {
-        ElGamalKeypair::decrypt(secret, self)
+        ElGamal::decrypt(secret, self)
     }
 
     /// Utility method for code ergonomics.
     pub fn decrypt_u32(&self, secret: &ElGamalSecretKey) -> Option<u32> {
-        ElGamalKeypair::decrypt_u32(secret, self)
+        ElGamal::decrypt_u32(secret, self)
     }
 
     /// Utility method for code ergonomics.
@@ -372,7 +383,7 @@ impl ElGamalCiphertext {
         secret: &ElGamalSecretKey,
         hashmap: &HashMap<[u8; 32], u32>,
     ) -> Option<u32> {
-        ElGamalKeypair::decrypt_u32_online(secret, self, hashmap)
+        ElGamal::decrypt_u32_online(secret, self, hashmap)
     }
 }
 
@@ -462,14 +473,14 @@ mod tests {
     fn test_encrypt_decrypt_correctness() {
         let ElGamalKeypair { public, secret } = ElGamalKeypair::default();
         let msg: u32 = 57;
-        let ct = ElGamalKeypair::encrypt(&public, msg);
+        let ct = ElGamal::encrypt(&public, msg);
 
         let expected_instance = DiscreteLog {
             generator: PedersenBase::default().G,
             target: Scalar::from(msg) * PedersenBase::default().G,
         };
 
-        assert_eq!(expected_instance, ElGamalKeypair::decrypt(&secret, &ct));
+        assert_eq!(expected_instance, ElGamal::decrypt(&secret, &ct));
 
         // Commenting out for faster testing
         // assert_eq!(msg, ElGamalKeypair::decrypt_u32(&secret, &ct).unwrap());
@@ -518,17 +529,17 @@ mod tests {
         let open_0 = PedersenOpening::random(&mut OsRng);
         let open_1 = PedersenOpening::random(&mut OsRng);
 
-        let ct_0 = ElGamalKeypair::encrypt_with(&public, msg_0, &open_0);
-        let ct_1 = ElGamalKeypair::encrypt_with(&public, msg_1, &open_1);
+        let ct_0 = ElGamal::encrypt_with(&public, msg_0, &open_0);
+        let ct_1 = ElGamal::encrypt_with(&public, msg_1, &open_1);
 
-        let ct_sum = ElGamalKeypair::encrypt_with(&public, msg_0 + msg_1, &(open_0 + open_1));
+        let ct_sum = ElGamal::encrypt_with(&public, msg_0 + msg_1, &(open_0 + open_1));
 
         assert_eq!(ct_sum, ct_0 + ct_1);
 
         // Add to ElGamal ciphertext
         let open = PedersenOpening::random(&mut OsRng);
-        let ct = ElGamalKeypair::encrypt_with(&public, msg_0, &open);
-        let ct_sum = ElGamalKeypair::encrypt_with(&public, msg_0 + msg_1, &open);
+        let ct = ElGamal::encrypt_with(&public, msg_0, &open);
+        let ct_sum = ElGamal::encrypt_with(&public, msg_0 + msg_1, &open);
 
         assert_eq!(ct_sum, ct.add_to_msg(msg_1));
     }
@@ -543,17 +554,17 @@ mod tests {
         let open_0 = PedersenOpening::random(&mut OsRng);
         let open_1 = PedersenOpening::random(&mut OsRng);
 
-        let ct_0 = ElGamalKeypair::encrypt_with(&public, msg_0, &open_0);
-        let ct_1 = ElGamalKeypair::encrypt_with(&public, msg_1, &open_1);
+        let ct_0 = ElGamal::encrypt_with(&public, msg_0, &open_0);
+        let ct_1 = ElGamal::encrypt_with(&public, msg_1, &open_1);
 
-        let ct_sub = ElGamalKeypair::encrypt_with(&public, msg_0 - msg_1, &(open_0 - open_1));
+        let ct_sub = ElGamal::encrypt_with(&public, msg_0 - msg_1, &(open_0 - open_1));
 
         assert_eq!(ct_sub, ct_0 - ct_1);
 
         // Subtract to ElGamal ciphertext
         let open = PedersenOpening::random(&mut OsRng);
-        let ct = ElGamalKeypair::encrypt_with(&public, msg_0, &open);
-        let ct_sub = ElGamalKeypair::encrypt_with(&public, msg_0 - msg_1, &open);
+        let ct = ElGamal::encrypt_with(&public, msg_0, &open);
+        let ct_sub = ElGamal::encrypt_with(&public, msg_0 - msg_1, &open);
 
         assert_eq!(ct_sub, ct.sub_to_msg(msg_1));
     }
@@ -566,10 +577,10 @@ mod tests {
 
         let open = PedersenOpening::random(&mut OsRng);
 
-        let ct = ElGamalKeypair::encrypt_with(&public, msg_0, &open);
+        let ct = ElGamal::encrypt_with(&public, msg_0, &open);
         let scalar = Scalar::from(msg_1);
 
-        let ct_prod = ElGamalKeypair::encrypt_with(&public, msg_0 * msg_1, &(open * scalar));
+        let ct_prod = ElGamal::encrypt_with(&public, msg_0 * msg_1, &(open * scalar));
 
         assert_eq!(ct_prod, ct * scalar);
     }
@@ -582,10 +593,10 @@ mod tests {
 
         let open = PedersenOpening::random(&mut OsRng);
 
-        let ct = ElGamalKeypair::encrypt_with(&public, msg_0, &open);
+        let ct = ElGamal::encrypt_with(&public, msg_0, &open);
         let scalar = Scalar::from(msg_1);
 
-        let ct_div = ElGamalKeypair::encrypt_with(&public, msg_0 / msg_1, &(open / scalar));
+        let ct_div = ElGamal::encrypt_with(&public, msg_0 / msg_1, &(open / scalar));
 
         assert_eq!(ct_div, ct / scalar);
     }
