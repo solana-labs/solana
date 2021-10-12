@@ -9,6 +9,8 @@ import { Metadata } from "metaplex/classes";
 import ContentLoader from "react-content-loader";
 import ErrorLogo from "img/logos-solana/dark-solana-logo.svg";
 
+const MAX_TIME_LOADING_IMAGE = 5000; /* 5 seconds */
+
 const LoadingPlaceholder = () => (
   <ContentLoader
     viewBox="0 0 212 200"
@@ -27,36 +29,56 @@ const ErrorPlaceHolder = () => (
 );
 
 const CachedImageContent = ({ uri }: { uri?: string }) => {
-  const [loaded, setLoaded] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [showError, setShowError] = useState<boolean>(false);
+  const [timeout, setTimeout] = useState<NodeJS.Timeout | undefined>(undefined);
+
+  useEffect(() => {
+    // Set the timeout if we don't have a valid uri
+    if (!uri && !timeout) {
+      setTimeout(setInterval(() => setShowError(true), MAX_TIME_LOADING_IMAGE));
+    }
+
+    // We have a uri - clear the timeout
+    if (uri && timeout) {
+      clearInterval(timeout);
+    }
+
+    return () => {
+      if (timeout) {
+        clearInterval(timeout);
+      }
+    };
+  }, [uri, setShowError, timeout, setTimeout]);
+
   const { cachedBlob } = useCachedImage(uri || "");
 
   return (
     <>
-      {!loaded && <LoadingPlaceholder />}
-      <img
-        className={`rounded mx-auto ${loaded ? "d-block" : "d-none"}`}
-        src={cachedBlob}
-        alt={"nft"}
-        style={{
-          width: 150,
-          height: "auto",
-        }}
-        onLoad={() => {
-          setLoaded(true);
-        }}
-        onError={() => {
-          setLoaded(true);
-          setShowError(true);
-        }}
-      />
-      {showError && (
+      {showError ? (
         <div className={"art-error-image-placeholder"}>
           <ErrorPlaceHolder />
-          <h6 className={"header-pretitle mt-2"}>
-            <a href={uri}>Error Loading Image</a>
-          </h6>
+          <h6 className={"header-pretitle mt-2"}>Error Loading Image</h6>
         </div>
+      ) : (
+        <>
+          {isLoading && <LoadingPlaceholder />}
+          <img
+            className={`rounded mx-auto ${isLoading ? "d-none" : "d-block"}`}
+            src={cachedBlob}
+            alt={"nft"}
+            style={{
+              width: 150,
+              height: "auto",
+            }}
+            onLoad={() => {
+              setIsLoading(false);
+            }}
+            onError={() => {
+              setShowError(true);
+            }}
+          />
+        </>
       )}
     </>
   );
@@ -160,12 +182,11 @@ const HTMLContent = ({
       <iframe
         allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
         title={"html-content"}
+        sandbox="allow-scripts"
         frameBorder="0"
         src={htmlURL}
         className={`${loaded ? "d-block" : "d-none"}`}
-        style={{
-          borderRadius: 12,
-        }}
+        style={{ width: 150, borderRadius: 12 }}
         onLoad={() => {
           setLoaded(true);
         }}

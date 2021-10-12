@@ -2,7 +2,7 @@ import { IMetadataExtension, Metadata } from "metaplex/classes";
 import { StringPublicKey } from "metaplex/types";
 import { useEffect, useState } from "react";
 
-export enum FetchStatus {
+enum ArtFetchStatus {
   ReadyToFetch,
   Fetching,
   FetchFailed,
@@ -12,8 +12,8 @@ export enum FetchStatus {
 const cachedImages = new Map<string, string>();
 export const useCachedImage = (uri: string) => {
   const [cachedBlob, setCachedBlob] = useState<string | undefined>(undefined);
-  const [fetchStatus, setFetchStatus] = useState<FetchStatus>(
-    FetchStatus.ReadyToFetch
+  const [fetchStatus, setFetchStatus] = useState<ArtFetchStatus>(
+    ArtFetchStatus.ReadyToFetch
   );
 
   useEffect(() => {
@@ -21,7 +21,7 @@ export const useCachedImage = (uri: string) => {
       return;
     }
 
-    if (fetchStatus === FetchStatus.FetchFailed) {
+    if (fetchStatus === ArtFetchStatus.FetchFailed) {
       setCachedBlob(uri);
       return;
     }
@@ -32,9 +32,9 @@ export const useCachedImage = (uri: string) => {
       return;
     }
 
-    if (fetchStatus === FetchStatus.ReadyToFetch) {
+    if (fetchStatus === ArtFetchStatus.ReadyToFetch) {
       (async () => {
-        setFetchStatus(FetchStatus.Fetching);
+        setFetchStatus(ArtFetchStatus.Fetching);
         let response: Response;
         try {
           response = await fetch(uri, { cache: "force-cache" });
@@ -45,7 +45,7 @@ export const useCachedImage = (uri: string) => {
             if (uri?.startsWith("http")) {
               setCachedBlob(uri);
             }
-            setFetchStatus(FetchStatus.FetchFailed);
+            setFetchStatus(ArtFetchStatus.FetchFailed);
             return;
           }
         }
@@ -54,7 +54,7 @@ export const useCachedImage = (uri: string) => {
         const blobURI = URL.createObjectURL(blob);
         cachedImages.set(uri, blobURI);
         setCachedBlob(blobURI);
-        setFetchStatus(FetchStatus.FetchSucceeded);
+        setFetchStatus(ArtFetchStatus.FetchSucceeded);
       })();
     }
   }, [uri, setCachedBlob, fetchStatus, setFetchStatus]);
