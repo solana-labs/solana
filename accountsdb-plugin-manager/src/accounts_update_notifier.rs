@@ -94,17 +94,19 @@ impl AccountsUpdateNotifierImpl {
             match plugin.update_account(ReplicaAccountInfoVersions::V0_0_1(&account), slot) {
                 Err(err) => {
                     error!(
-                        "Failed to update account {:?} at slot {:?}, error: {:?}",
+                        "Failed to update account {} at slot {}, error: {} to plugin {}",
                         bs58::encode(account.pubkey).into_string(),
                         slot,
-                        err
+                        err,
+                        plugin.name()
                     )
                 }
                 Ok(_) => {
                     trace!(
-                        "Successfully updated account {:?} at slot {:?}",
+                        "Successfully updated account {} at slot {} to plugin {}",
                         bs58::encode(account.pubkey).into_string(),
-                        slot
+                        slot,
+                        plugin.name()
                     );
                 }
             }
@@ -129,12 +131,18 @@ impl AccountsUpdateNotifierImpl {
             match plugin.update_slot_status(slot, parent, slot_status.clone()) {
                 Err(err) => {
                     error!(
-                        "Failed to update slot status at slot {:?}, error: {:?}",
-                        slot, err
+                        "Failed to update slot status at slot {}, error: {} to plugin {}",
+                        slot,
+                        err,
+                        plugin.name()
                     )
                 }
                 Ok(_) => {
-                    trace!("Successfully updated slot status at slot {:?}", slot);
+                    trace!(
+                        "Successfully updated slot status at slot {} to plugin {}",
+                        slot,
+                        plugin.name()
+                    );
                 }
             }
             measure.stop();

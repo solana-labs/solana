@@ -190,10 +190,10 @@ impl PostgresClient for SimplePostgresClient {
         account: &T,
         slot: u64,
     ) -> Result<(), AccountsDbPluginError> {
-        debug!(
-            "Updating account {:?} {:?} at slot {:?}",
+        trace!(
+            "Updating account {} with owner {} at slot {}",
             bs58::encode(account.pubkey()).into_string(),
-            account.owner(),
+            bs58::encode(account.owner()).into_string(),
             slot,
         );
 
@@ -221,7 +221,7 @@ impl PostgresClient for SimplePostgresClient {
                 "Failed to persist the update of account to the PostgreSQL database. Error: {:?}",
                 err
             );
-            error!("{:?}", msg);
+            error!("{}", msg);
             return Err(AccountsDbPluginError::AccountsUpdateError { msg });
         }
         Ok(())
