@@ -62,7 +62,7 @@ impl ElGamal {
     pub fn from_signing_key(signing_key: &SigningKey, label: &'static [u8]) -> Self {
         let secret = ElGamalSecretKey::new(signing_key, label);
         let public = ElGamalPubkey::new(&secret);
-        Self {secret, public}
+        Self { secret, public }
     }
 
     /// On input a public key and a message to be encrypted, the function
