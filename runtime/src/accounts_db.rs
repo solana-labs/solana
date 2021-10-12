@@ -2210,6 +2210,10 @@ impl AccountsDb {
         reclaims_time.stop();
         measure_all.stop();
 
+        if let Some(slot) = max_clean_root {
+            self.accounts_index.set_slot_for_caching(slot);
+        }
+
         self.clean_accounts_stats.report();
         datapoint_info!(
             "clean_accounts",

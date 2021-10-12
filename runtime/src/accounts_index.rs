@@ -1400,6 +1400,11 @@ impl<T: IndexValue> AccountsIndex<T> {
         self.storage.set_startup(value);
     }
 
+    /// tell the accounts index the slot above which accounts index entries should be cached
+    pub fn set_slot_for_caching(&self, slot: Slot) {
+        self.storage.storage.set_slot_for_caching(slot);
+    }
+
     /// Get an account
     /// The latest account that appears in `ancestors` or `roots` is returned.
     pub(crate) fn get(

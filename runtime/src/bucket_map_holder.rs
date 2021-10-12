@@ -5,10 +5,10 @@ use crate::in_mem_accounts_index::{InMemAccountsIndex, SlotT};
 use crate::waitable_condvar::WaitableCondvar;
 use solana_bucket_map::bucket_map::{BucketMap, BucketMapConfig};
 use solana_measure::measure::Measure;
-use solana_sdk::clock::SLOT_MS;
+use solana_sdk::clock::{Slot, SLOT_MS};
 use solana_sdk::timing::AtomicInterval;
 use std::fmt::Debug;
-use std::sync::atomic::{AtomicBool, AtomicU8, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 pub type Age = u8;
@@ -43,6 +43,8 @@ pub struct BucketMapHolder<T: IndexValue> {
     startup: AtomicBool,
 
     startup_worker_threads: Mutex<Option<AccountsIndexStorage<T>>>,
+    /// used as an input for cache retention
+    pub slot_for_caching: AtomicU64,
 }
 
 impl<T: IndexValue> Debug for BucketMapHolder<T> {
@@ -76,6 +78,11 @@ impl<T: IndexValue> BucketMapHolder<T> {
     /// used by bg processes to determine # active threads and how aggressively to flush
     pub fn get_startup(&self) -> bool {
         self.startup.load(Ordering::Relaxed)
+    }
+
+    /// tell the accounts index the slot above which accounts index entries should be cached
+    pub fn set_slot_for_caching(&self, slot: Slot) {
+        self.slot_for_caching.store(slot, Ordering::Relaxed);
     }
 
     pub fn set_startup(&self, storage: &AccountsIndexStorage<T>, value: bool) {
@@ -161,6 +168,7 @@ impl<T: IndexValue> BucketMapHolder<T> {
             startup: AtomicBool::default(),
             mem_budget_mb,
             startup_worker_threads: Mutex::default(),
+            slot_for_caching: AtomicU64::new(u64::MAX),
             _threads: threads,
         }
     }

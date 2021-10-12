@@ -676,12 +676,23 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 }
                 false // keep 0 and > 1 slot lists in mem. They will be cleaned or shrunk soon.
             } else {
-                // keep items with slot lists that contained cached items
-                let remove = !slot_list.iter().any(|(_, info)| info.is_cached());
-                if !remove && update_stats {
-                    Self::update_stat(&self.stats().held_in_mem_slot_list_cached, 1);
-                }
-                remove
+                !slot_list.iter().any(|(slot, info)| {
+                    if info.is_cached() {
+                        // keep items with slot lists that contained cached items
+                        if update_stats {
+                            Self::update_stat(&self.stats().held_in_mem_slot_list_cached, 1);
+                        }
+                        true
+                    } else if slot >= &self.storage.slot_for_caching.load(Ordering::Relaxed) {
+                        // keep items with entries where slot >= slot_for_caching
+                        if update_stats {
+                            Self::update_stat(&self.stats().held_in_mem_slot, 1);
+                        }
+                        true
+                    } else {
+                        false
+                    }
+                })
             }
         } else {
             false
