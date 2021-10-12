@@ -79,3 +79,19 @@ impl ProofInstruction {
         }
     }
 }
+
+pub fn verify_close_account(proof_data: &CloseAccountData) -> Instruction {
+    ProofInstruction::VerifyCloseAccount.encode(proof_data)
+}
+
+pub fn verify_update_account_pk(proof_data: &UpdateAccountPkData) -> Instruction {
+    ProofInstruction::VerifyUpdateAccountPk.encode(proof_data)
+}
+
+pub fn verify_withdraw(proof_data: &WithdrawData) -> Instruction {
+    ProofInstruction::VerifyWithdraw.encode(proof_data)
+}
+
+pub fn verify_transfer(proof_data: &TransferData) -> Instruction {
+    ProofInstruction::VerifyTransfer.encode(proof_data)
+}
