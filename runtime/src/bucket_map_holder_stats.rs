@@ -34,6 +34,7 @@ pub struct BucketMapHolderStats {
     pub count_in_mem: AtomicU64,
     pub per_bucket_count: Vec<AtomicU64>,
     pub flush_entries_updated_on_disk: AtomicU64,
+    pub flush_entries_removed_from_mem: AtomicU64,
     pub active_threads: AtomicU64,
     pub get_range_us: AtomicU64,
     last_age: AtomicU8,
@@ -66,13 +67,17 @@ impl BucketMapHolderStats {
     }
 
     pub fn insert_or_delete_mem(&self, insert: bool, bin: usize) {
+        self.insert_or_delete_mem_count(insert, bin, 1)
+    }
+
+    pub fn insert_or_delete_mem_count(&self, insert: bool, bin: usize, count: u64) {
         let per_bucket = self.per_bucket_count.get(bin);
         if insert {
-            self.count_in_mem.fetch_add(1, Ordering::Relaxed);
-            per_bucket.map(|count| count.fetch_add(1, Ordering::Relaxed));
+            self.count_in_mem.fetch_add(count, Ordering::Relaxed);
+            per_bucket.map(|stat| stat.fetch_add(count, Ordering::Relaxed));
         } else {
-            self.count_in_mem.fetch_sub(1, Ordering::Relaxed);
-            per_bucket.map(|count| count.fetch_sub(1, Ordering::Relaxed));
+            self.count_in_mem.fetch_sub(count, Ordering::Relaxed);
+            per_bucket.map(|stat| stat.fetch_sub(count, Ordering::Relaxed));
         }
     }
 
@@ -361,6 +366,12 @@ impl BucketMapHolderStats {
             (
                 "flush_entries_updated_on_disk",
                 self.flush_entries_updated_on_disk
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "flush_entries_removed_from_mem",
+                self.flush_entries_removed_from_mem
                     .swap(0, Ordering::Relaxed),
                 i64
             ),
