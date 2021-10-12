@@ -293,20 +293,17 @@ impl SanitizedMessage {
 
     /// Calculate the total fees for a transaction given a fee calculator
     pub fn calculate_fee(&self, fee_calculator: &FeeCalculator) -> u64 {
-        let mut num_secp256k1_signatures: u64 = 0;
+        let mut num_signatures =  u64::from(self.header().num_required_signatures);
         for (program_id, instruction) in self.program_instructions_iter() {
             if secp256k1_program::check_id(program_id) {
-                if let Some(num_signatures) = instruction.data.get(0) {
-                    num_secp256k1_signatures =
-                        num_secp256k1_signatures.saturating_add(u64::from(*num_signatures));
+                if let Some(num_verifies) = instruction.data.get(0) {
+                    num_signatures =
+                    num_signatures.saturating_add(u64::from(*num_verifies));
                 }
             }
         }
 
-        fee_calculator.lamports_per_signature.saturating_mul(
-            u64::from(self.header().num_required_signatures)
-                .saturating_add(num_secp256k1_signatures),
-        )
+        fee_calculator.lamports_per_signature.saturating_mul(num_signatures)
     }
 
     /// Inspect all message keys for the bpf upgradeable loader
