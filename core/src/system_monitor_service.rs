@@ -100,7 +100,7 @@ impl SystemMonitorService {
         match read_udp_stats(PROC_NET_SNMP_PATH) {
             Ok(new_stats) => {
                 if let Some(old_stats) = udp_stats {
-                    SystemMonitorService::report_udp_stats(&old_stats, &new_stats);
+                    SystemMonitorService::report_udp_stats(old_stats, &new_stats);
                 }
                 *udp_stats = Some(new_stats);
             }
