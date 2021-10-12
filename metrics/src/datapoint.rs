@@ -1,9 +1,9 @@
-use std::fmt;
+use std::{fmt, time::SystemTime};
 
 #[derive(Clone, Debug)]
 pub struct DataPoint {
     pub name: &'static str,
-    pub timestamp: u64,
+    pub timestamp: SystemTime,
     pub fields: Vec<(&'static str, String)>,
 }
 
@@ -11,7 +11,7 @@ impl DataPoint {
     pub fn new(name: &'static str) -> Self {
         DataPoint {
             name,
-            timestamp: solana_sdk::timing::timestamp(),
+            timestamp: SystemTime::now(),
             fields: vec![],
         }
     }
