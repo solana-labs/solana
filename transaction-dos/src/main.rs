@@ -117,13 +117,13 @@ fn make_dos_message(
     num_instructions: usize,
     program_id: Pubkey,
     num_program_iterations: u8,
-    account_metas: Vec<AccountMeta>,
+    account_metas: &[AccountMeta], // Vec<AccountMeta>,
 ) -> Message {
     let instructions: Vec<_> = (0..num_instructions)
         .into_iter()
         .map(|_| {
             let data = [num_program_iterations, thread_rng().gen_range(0, 255)];
-            Instruction::new_with_bytes(program_id, &data, account_metas.clone())
+            Instruction::new_with_bytes(program_id, &data, account_metas.to_vec())
         })
         .collect();
 
@@ -371,9 +371,8 @@ fn run_transactions_dos(
                             num_instructions,
                             program_id,
                             num_program_iterations as u8,
-                            account_metas[(x % account_groups) * account_group_size
-                                ..(x % account_groups) * account_group_size + account_group_size]
-                                .to_vec(),
+                            &account_metas[(x % account_groups) * account_group_size
+                                ..(x % account_groups) * account_group_size + account_group_size],
                         );
                         let signers: Vec<&Keypair> = vec![keypair];
                         let tx = Transaction::new(&signers, message, blockhash);
@@ -656,7 +655,7 @@ pub mod test {
             num_instructions,
             program_id,
             num_program_iterations,
-            account_metas,
+            &account_metas,
         );
         let signers: Vec<&Keypair> = vec![&keypair];
         let blockhash = solana_sdk::hash::Hash::default();
