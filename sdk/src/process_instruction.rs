@@ -51,7 +51,7 @@ impl<'a> InvokeContextStackFrame<'a> {
 
     pub fn program_id(&self) -> Option<&Pubkey> {
         self.keyed_accounts
-            .get(self.number_of_program_accounts)
+            .get(self.number_of_program_accounts.saturating_sub(1))
             .map(|keyed_account| keyed_account.unsigned_key())
     }
 }
@@ -61,7 +61,6 @@ pub trait InvokeContext {
     /// Push a stack frame onto the invocation stack
     fn push(
         &mut self,
-        key: &Pubkey,
         message: &Message,
         instruction: &CompiledInstruction,
         program_indices: &[usize],
@@ -482,7 +481,8 @@ impl<'a> MockInvokeContext<'a> {
         let number_of_program_accounts = keyed_accounts
             .iter()
             .position(|keyed_account| keyed_account.unsigned_key() == program_id)
-            .unwrap_or(0);
+            .unwrap_or(0)
+            .saturating_add(1);
         invoke_context
             .invoke_stack
             .push(InvokeContextStackFrame::new(
@@ -511,7 +511,6 @@ pub fn mock_set_sysvar<T: Sysvar>(
 impl<'a> InvokeContext for MockInvokeContext<'a> {
     fn push(
         &mut self,
-        _key: &Pubkey,
         _message: &Message,
         _instruction: &CompiledInstruction,
         _program_indices: &[usize],

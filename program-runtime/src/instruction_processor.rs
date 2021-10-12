@@ -594,8 +594,6 @@ impl InstructionProcessor {
             .get(0)
             .ok_or(InstructionError::GenericError)?;
 
-        let program_id = instruction.program_id(&message.account_keys);
-
         // Verify the calling program hasn't misbehaved
         invoke_context.verify_and_update(instruction, account_indices, caller_write_privileges)?;
 
@@ -603,13 +601,7 @@ impl InstructionProcessor {
         invoke_context.set_return_data(Vec::new())?;
 
         // Invoke callee
-        invoke_context.push(
-            program_id,
-            message,
-            instruction,
-            program_indices,
-            Some(account_indices),
-        )?;
+        invoke_context.push(message, instruction, program_indices, Some(account_indices))?;
 
         let mut instruction_processor = InstructionProcessor::default();
         for (program_id, process_instruction) in invoke_context.get_programs().iter() {
