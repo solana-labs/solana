@@ -1,4 +1,4 @@
-import React, { Ref, useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { MetadataCategory, MetadataFile } from "../types";
 import { pubkeyToString } from "../utils";
 import { useCachedImage, useExtendedArt } from "./useArt";
@@ -7,8 +7,11 @@ import { PublicKey } from "@solana/web3.js";
 import { getLast } from "../utils";
 import { Metadata } from "metaplex/classes";
 import ContentLoader from "react-content-loader";
+import ErrorLogo from "img/logos-solana/dark-solana-logo.svg";
 
-const Placeholder = () => (
+const MAX_TIME_LOADING_IMAGE = 5000; /* 5 seconds */
+
+const LoadingPlaceholder = () => (
   <ContentLoader
     viewBox="0 0 212 200"
     height={150}
@@ -21,50 +24,72 @@ const Placeholder = () => (
   </ContentLoader>
 );
 
-const CachedImageContent = ({
-  uri,
-}: {
-  uri?: string;
-  className?: string;
-  preview?: boolean;
-  style?: React.CSSProperties;
-}) => {
-  const [loaded, setLoaded] = useState<boolean>(false);
+const ErrorPlaceHolder = () => (
+  <img src={ErrorLogo} width="120" height="120" alt="Solana Logo" />
+);
+
+const CachedImageContent = ({ uri }: { uri?: string }) => {
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [showError, setShowError] = useState<boolean>(false);
+  const [timeout, setTimeout] = useState<NodeJS.Timeout | undefined>(undefined);
+
+  useEffect(() => {
+    // Set the timeout if we don't have a valid uri
+    if (!uri && !timeout) {
+      setTimeout(setInterval(() => setShowError(true), MAX_TIME_LOADING_IMAGE));
+    }
+
+    // We have a uri - clear the timeout
+    if (uri && timeout) {
+      clearInterval(timeout);
+    }
+
+    return () => {
+      if (timeout) {
+        clearInterval(timeout);
+      }
+    };
+  }, [uri, setShowError, timeout, setTimeout]);
+
   const { cachedBlob } = useCachedImage(uri || "");
 
   return (
     <>
-      {!loaded && <Placeholder />}
-      <img
-        className={`rounded mx-auto ${loaded ? "d-block" : "d-none"}`}
-        src={cachedBlob}
-        loading="lazy"
-        alt={"nft"}
-        style={{
-          width: 150,
-          height: "auto",
-        }}
-        onLoad={() => {
-          setLoaded(true);
-        }}
-        onError={() => {
-          setLoaded(true);
-        }}
-      />
+      {showError ? (
+        <div className={"art-error-image-placeholder"}>
+          <ErrorPlaceHolder />
+          <h6 className={"header-pretitle mt-2"}>Error Loading Image</h6>
+        </div>
+      ) : (
+        <>
+          {isLoading && <LoadingPlaceholder />}
+          <img
+            className={`rounded mx-auto ${isLoading ? "d-none" : "d-block"}`}
+            src={cachedBlob}
+            alt={"nft"}
+            style={{
+              width: 150,
+              height: "auto",
+            }}
+            onLoad={() => {
+              setIsLoading(false);
+            }}
+            onError={() => {
+              setShowError(true);
+            }}
+          />
+        </>
+      )}
     </>
   );
 };
 
 const VideoArtContent = ({
-  className,
-  style,
   files,
   uri,
   animationURL,
   active,
 }: {
-  className?: string;
-  style?: React.CSSProperties;
   files?: (MetadataFile | string)[];
   uri?: string;
   animationURL?: string;
@@ -97,7 +122,7 @@ const VideoArtContent = ({
   const content =
     likelyVideo &&
     likelyVideo.startsWith("https://watch.videodelivery.net/") ? (
-      <div className={`${className} square`}>
+      <div className={"square"}>
         <Stream
           streamRef={(e: any) => playerRef(e)}
           src={likelyVideo.replace("https://watch.videodelivery.net/", "")}
@@ -116,26 +141,21 @@ const VideoArtContent = ({
       </div>
     ) : (
       <video
-        className={className}
         playsInline={true}
         autoPlay={true}
         muted={true}
         controls={true}
         controlsList="nodownload"
-        style={{ borderRadius: 12, ...style }}
+        style={{ borderRadius: 12 }}
         loop={true}
         poster={uri}
       >
-        {likelyVideo && (
-          <source src={likelyVideo} type="video/mp4" style={style} />
-        )}
-        {animationURL && (
-          <source src={animationURL} type="video/mp4" style={style} />
-        )}
+        {likelyVideo && <source src={likelyVideo} type="video/mp4" />}
+        {animationURL && <source src={animationURL} type="video/mp4" />}
         {files
           ?.filter((f) => typeof f !== "string")
           .map((f: any) => (
-            <source src={f.uri} type={f.type} style={style} />
+            <source src={f.uri} type={f.type} />
           ))}
       </video>
     );
@@ -145,13 +165,9 @@ const VideoArtContent = ({
 
 const HTMLContent = ({
   animationUrl,
-  className,
-  style,
   files,
 }: {
   animationUrl?: string;
-  className?: string;
-  style?: React.CSSProperties;
   files?: (MetadataFile | string)[];
 }) => {
   const [loaded, setLoaded] = useState<boolean>(false);
@@ -162,15 +178,15 @@ const HTMLContent = ({
 
   return (
     <>
-      {!loaded && <Placeholder />}
+      {!loaded && <LoadingPlaceholder />}
       <iframe
         allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
         title={"html-content"}
         sandbox="allow-scripts"
         frameBorder="0"
         src={htmlURL}
-        className={`${className} ${loaded ? "d-block" : "d-none"}`}
-        style={{ width: 150, borderRadius: 12, ...style }}
+        className={`${loaded ? "d-block" : "d-none"}`}
+        style={{ width: 150, borderRadius: 12 }}
         onLoad={() => {
           setLoaded(true);
         }}
@@ -185,9 +201,6 @@ const HTMLContent = ({
 export const ArtContent = ({
   metadata,
   category,
-  className,
-  preview,
-  style,
   active,
   pubkey,
   uri,
@@ -196,12 +209,6 @@ export const ArtContent = ({
 }: {
   metadata: Metadata;
   category?: MetadataCategory;
-  className?: string;
-  preview?: boolean;
-  style?: React.CSSProperties;
-  width?: number;
-  height?: number;
-  ref?: Ref<HTMLDivElement>;
   active?: boolean;
   pubkey?: PublicKey | string;
   uri?: string;
@@ -231,27 +238,15 @@ export const ArtContent = ({
   const content =
     category === "video" ? (
       <VideoArtContent
-        className={className}
-        style={style}
         files={files}
         uri={uri}
         animationURL={animationURL}
         active={active}
       />
     ) : category === "html" || animationUrlExt === "html" ? (
-      <HTMLContent
-        animationUrl={animationURL}
-        className={className}
-        style={style}
-        files={files}
-      />
+      <HTMLContent animationUrl={animationURL} files={files} />
     ) : (
-      <CachedImageContent
-        uri={uri}
-        className={className}
-        preview={preview}
-        style={style}
-      />
+      <CachedImageContent uri={uri} />
     );
 
   return (
