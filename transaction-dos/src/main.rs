@@ -165,12 +165,12 @@ fn run_transactions_dos(
             .expect("min balance")
     });
     assert!(min_balance > 0);
-    
+
     let account_groups = maybe_account_groups.unwrap_or(1);
 
-    assert!(account_keypairs.len()%account_groups == 0);
+    assert!(account_keypairs.len() % account_groups == 0);
 
-    let account_group_size=account_keypairs.len()/account_groups;
+    let account_group_size = account_keypairs.len() / account_groups;
 
     let program_account = client.get_account(&program_id);
 
@@ -364,15 +364,16 @@ fn run_transactions_dos(
             let chunk_size = batch_size / payer_keypairs.len();
             for (i, keypair) in payer_keypairs.iter().enumerate() {
                 let txs: Vec<_> = (0..chunk_size)
-                    //.into_par_iter()
-                    .into_iter()
+                    .into_par_iter()
                     .map(|x| {
                         let message = make_dos_message(
                             keypair,
                             num_instructions,
                             program_id,
                             num_program_iterations as u8,
-                            account_metas[x*account_group_size.. x*account_group_size + account_group_size].to_vec(),
+                            account_metas[(x % account_groups) * account_group_size
+                                ..(x % account_groups) * account_group_size + account_group_size]
+                                .to_vec(),
                         );
                         let signers: Vec<&Keypair> = vec![keypair];
                         let tx = Transaction::new(&signers, message, blockhash);
@@ -577,7 +578,7 @@ fn main() {
         })
         .collect();
 
-    let account_groups = value_t!(matches, "account_groups", usize).ok();    
+    let account_groups = value_t!(matches, "account_groups", usize).ok();
     let payer_keypair_refs: Vec<&Keypair> = payer_keypairs.iter().collect();
     let account_keypair_refs: Vec<&Keypair> = account_keypairs.iter().collect();
 
@@ -689,7 +690,7 @@ pub mod test {
         let maybe_space = Some(10_000_000);
         let batch_size = 1;
         let maybe_lamports = Some(10);
-        let maybe_account_groups=Some(1);
+        let maybe_account_groups = Some(1);
         // 85 inst, 142 iterations, 5 accounts
         // 20 inst, 30 * 20 iterations, 1 account
         //
