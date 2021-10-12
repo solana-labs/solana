@@ -1,6 +1,7 @@
 use crate::TransactionTokenBalance;
 use solana_account_decoder::parse_token::{
-    spl_token_id_v2_0, spl_token_v2_0_native_mint, token_amount_to_ui_amount, UiTokenAmount,
+    pubkey_from_spl_token_v2_0, spl_token_id_v2_0, spl_token_v2_0_native_mint,
+    token_amount_to_ui_amount, UiTokenAmount,
 };
 use solana_runtime::{bank::Bank, transaction_batch::TransactionBatch};
 use solana_sdk::{account::ReadableAccount, pubkey::Pubkey};
@@ -8,7 +9,7 @@ use spl_token_v2_0::{
     solana_program::program_pack::Pack,
     state::{Account as TokenAccount, Mint},
 };
-use std::{collections::HashMap, str::FromStr};
+use std::collections::HashMap;
 
 pub type TransactionTokenBalances = Vec<Vec<TransactionTokenBalance>>;
 
@@ -93,17 +94,16 @@ pub fn collect_token_balance_from_account(
     let account = bank.get_account(account_id)?;
 
     let token_account = TokenAccount::unpack(account.data()).ok()?;
-    let mint_string = &token_account.mint.to_string();
-    let mint = &Pubkey::from_str(mint_string).unwrap_or_default();
+    let mint = pubkey_from_spl_token_v2_0(&token_account.mint);
 
-    let decimals = mint_decimals.get(mint).cloned().or_else(|| {
-        let decimals = get_mint_decimals(bank, mint)?;
-        mint_decimals.insert(*mint, decimals);
+    let decimals = mint_decimals.get(&mint).cloned().or_else(|| {
+        let decimals = get_mint_decimals(bank, &mint)?;
+        mint_decimals.insert(mint, decimals);
         Some(decimals)
     })?;
 
     Some((
-        mint_string.to_string(),
+        token_account.mint.to_string(),
         token_amount_to_ui_amount(token_account.amount, decimals),
         token_account.owner.to_string(),
     ))
