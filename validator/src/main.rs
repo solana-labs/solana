@@ -298,13 +298,8 @@ fn wait_for_restart_window(
             }
         };
 
-<<<<<<< HEAD
         progress_bar.set_message(&format!(
-            "{} | Processed Slot: {} | Snapshot Slot: {} | {:.2}% delinquent stake | {}",
-=======
-        progress_bar.set_message(format!(
             "{} | Processed Slot: {} {} | {:.2}% delinquent stake | {}",
->>>>>>> c418e8f37 (wait-for-restart-window command now accepts an optional --identity argument)
             {
                 let elapsed =
                     chrono::Duration::from_std(monitor_start_time.elapsed().unwrap()).unwrap();
