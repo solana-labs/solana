@@ -16,29 +16,33 @@ export default async function getEditionInfo(
   metadata: Metadata,
   connection: Connection
 ): Promise<EditionInfo> {
-  const edition = (await metadata.getEdition(connection)).data;
+  try {
+    const edition = (await metadata.getEdition(connection)).data;
 
-  if (edition) {
-    if (
-      edition.key === MetadataKey.MasterEditionV1 ||
-      edition.key === MetadataKey.MasterEditionV2
-    ) {
-      return {
-        masterEdition: edition as MasterEditionData,
-        edition: undefined,
-      };
-    }
+    if (edition) {
+      if (
+        edition.key === MetadataKey.MasterEditionV1 ||
+        edition.key === MetadataKey.MasterEditionV2
+      ) {
+        return {
+          masterEdition: edition as MasterEditionData,
+          edition: undefined,
+        };
+      }
 
-    // This is an Edition NFT. Pull the Parent (MasterEdition)
-    const masterEdition = (
-      await MasterEdition.load(connection, (edition as EditionData).parent)
-    ).data;
-    if (masterEdition) {
-      return {
-        masterEdition,
-        edition: edition as EditionData,
-      };
+      // This is an Edition NFT. Pull the Parent (MasterEdition)
+      const masterEdition = (
+        await MasterEdition.load(connection, (edition as EditionData).parent)
+      ).data;
+      if (masterEdition) {
+        return {
+          masterEdition,
+          edition: edition as EditionData,
+        };
+      }
     }
+  } catch {
+    /* ignore */
   }
 
   return {
