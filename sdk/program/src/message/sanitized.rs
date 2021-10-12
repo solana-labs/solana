@@ -6,6 +6,7 @@ use {
         pubkey::Pubkey,
         sanitize::{Sanitize, SanitizeError},
         secp256k1_program,
+        ed25519_program,
         serialize_utils::{append_slice, append_u16, append_u8},
     },
     bitflags::bitflags,
@@ -294,7 +295,7 @@ impl SanitizedMessage {
     pub fn calculate_fee(&self, lamports_per_signature: u64) -> u64 {
         let mut num_signatures =  u64::from(self.header().num_required_signatures);
         for (program_id, instruction) in self.program_instructions_iter() {
-            if secp256k1_program::check_id(program_id) {
+            if secp256k1_program::check_id(program_id) || ed25519_program::check_id(program_id) {
                 if let Some(num_verifies) = instruction.data.get(0) {
                     num_signatures =
                     num_signatures.saturating_add(u64::from(*num_verifies));
