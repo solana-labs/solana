@@ -31,22 +31,28 @@ pub type ProcessInstructionWithContext =
     fn(usize, &[u8], &mut dyn InvokeContext) -> Result<(), InstructionError>;
 
 pub struct InvokeContextStackFrame<'a> {
-    pub key: Pubkey,
+    pub number_of_program_accounts: usize,
     pub keyed_accounts: Vec<KeyedAccount<'a>>,
     pub keyed_accounts_range: std::ops::Range<usize>,
 }
 
 impl<'a> InvokeContextStackFrame<'a> {
-    pub fn new(key: Pubkey, keyed_accounts: Vec<KeyedAccount<'a>>) -> Self {
+    pub fn new(number_of_program_accounts: usize, keyed_accounts: Vec<KeyedAccount<'a>>) -> Self {
         let keyed_accounts_range = std::ops::Range {
             start: 0,
             end: keyed_accounts.len(),
         };
         Self {
-            key,
+            number_of_program_accounts,
             keyed_accounts,
             keyed_accounts_range,
         }
+    }
+
+    pub fn program_id(&self) -> Option<&Pubkey> {
+        self.keyed_accounts
+            .get(self.number_of_program_accounts)
+            .map(|keyed_account| keyed_account.unsigned_key())
     }
 }
 
@@ -473,9 +479,16 @@ impl<'a> MockInvokeContext<'a> {
             fee_calculator: FeeCalculator::default(),
             return_data: (Pubkey::default(), Vec::new()),
         };
+        let number_of_program_accounts = keyed_accounts
+            .iter()
+            .position(|keyed_account| keyed_account.unsigned_key() == program_id)
+            .unwrap_or(0);
         invoke_context
             .invoke_stack
-            .push(InvokeContextStackFrame::new(*program_id, keyed_accounts));
+            .push(InvokeContextStackFrame::new(
+                number_of_program_accounts,
+                keyed_accounts,
+            ));
         invoke_context
     }
 }
@@ -505,7 +518,7 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
         _account_indices: Option<&[usize]>,
     ) -> Result<(), InstructionError> {
         self.invoke_stack.push(InvokeContextStackFrame::new(
-            *_key,
+            0,
             create_keyed_accounts_unified(&[]),
         ));
         Ok(())
@@ -535,7 +548,7 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
     fn get_caller(&self) -> Result<&Pubkey, InstructionError> {
         self.invoke_stack
             .last()
-            .map(|frame| &frame.key)
+            .and_then(|frame| frame.program_id())
             .ok_or(InstructionError::CallDepth)
     }
     fn remove_first_keyed_account(&mut self) -> Result<(), InstructionError> {

@@ -140,9 +140,12 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
             instruction.visit_each_account(&mut work)?;
         }
 
-        let contains = self.invoke_stack.iter().any(|frame| frame.key == *key);
+        let contains = self
+            .invoke_stack
+            .iter()
+            .any(|frame| frame.program_id() == Some(key));
         let is_last = if let Some(last_frame) = self.invoke_stack.last() {
-            last_frame.key == *key
+            last_frame.program_id() == Some(key)
         } else {
             false
         };
@@ -180,8 +183,13 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
                 )
             }))
             .collect::<Vec<_>>();
+        let index_of_program_id = keyed_accounts
+            .iter()
+            .take(program_indices.len())
+            .position(|keyed_account| keyed_account.2 == key)
+            .unwrap();
         self.invoke_stack.push(InvokeContextStackFrame::new(
-            *key,
+            index_of_program_id,
             create_keyed_accounts_unified(keyed_accounts.as_slice()),
         ));
         Ok(())
@@ -259,11 +267,11 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         write_privileges: &[bool],
     ) -> Result<(), InstructionError> {
         let do_support_realloc = self.feature_set.is_active(&do_support_realloc::id());
-        let stack_frame = self
+        let program_id = self
             .invoke_stack
             .last()
+            .and_then(|frame| frame.program_id())
             .ok_or(InstructionError::CallDepth)?;
-        let program_id = &stack_frame.key;
         let rent = &self.rent;
         let logger = &self.logger;
         let accounts = &self.accounts;
@@ -325,7 +333,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
     fn get_caller(&self) -> Result<&Pubkey, InstructionError> {
         self.invoke_stack
             .last()
-            .map(|frame| &frame.key)
+            .and_then(|frame| frame.program_id())
             .ok_or(InstructionError::CallDepth)
     }
     fn remove_first_keyed_account(&mut self) -> Result<(), InstructionError> {
