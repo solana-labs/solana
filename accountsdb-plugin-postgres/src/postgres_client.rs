@@ -147,7 +147,12 @@ pub trait PostgresClient {
 
 impl SimplePostgresClient {
     pub fn new(config: &AccountsDbPluginPostgresConfig) -> Result<Self, AccountsDbPluginError> {
-        let connection_str = format!("host={} user={}", config.host, config.user);
+        let connection_str = if let Some(port) = config.port {
+            format!("host={} user={} port={}", config.host, config.user, port)
+        } else {
+            format!("host={} user={}", config.host, config.user)
+        };
+
         match Client::connect(&connection_str, NoTls) {
             Err(err) => {
                 return Err(AccountsDbPluginError::Custom(Box::new(AccountsDbPluginPostgresError::DataStoreConnectionError {
