@@ -1,18 +1,22 @@
 #![allow(clippy::integer_arithmetic)]
 use log::*;
-use solana_client::{tpu_client::{TpuClientConfig, TpuClient}, rpc_client::RpcClient, rpc_config::RpcSendTransactionConfig};
+use solana_client::{
+    rpc_client::RpcClient,
+    rpc_config::RpcSendTransactionConfig,
+    tpu_client::{TpuClient, TpuClientConfig},
+};
 use solana_measure::measure::Measure;
 use solana_sdk::{
     commitment_config::CommitmentConfig, signature::Signature, timing::timestamp,
     transaction::Transaction,
 };
 use std::{
+    collections::VecDeque,
     net::SocketAddr,
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering},
         Arc, RwLock,
     },
-    collections::VecDeque,
     thread::{sleep, Builder, JoinHandle},
     time::{Duration, Instant},
 };
@@ -34,13 +38,27 @@ pub struct TransactionExecutor {
 }
 
 impl TransactionExecutor {
-    pub fn new(entrypoint_addr: SocketAddr, skip_preflight: bool, use_tpu_client: bool, tpu_client_fanout_slots: Option<u64>) -> Self {
+    pub fn new(
+        entrypoint_addr: SocketAddr,
+        skip_preflight: bool,
+        use_tpu_client: bool,
+        tpu_client_fanout_slots: Option<u64>,
+    ) -> Self {
         let sigs = Arc::new(RwLock::new(Vec::new()));
         let cleared = Arc::new(RwLock::new(Vec::new()));
         let exit = Arc::new(AtomicBool::new(false));
         let pending_transactions = Arc::new(RwLock::new(VecDeque::new()));
         let sig_clear_t = Self::start_sig_clear_thread(&exit, &sigs, &cleared, entrypoint_addr);
-        let transfer_t = Self::start_transfer_thread(&exit, &sigs, &pending_transactions, skip_preflight, &cleared, entrypoint_addr, use_tpu_client, tpu_client_fanout_slots);
+        let transfer_t = Self::start_transfer_thread(
+            &exit,
+            &sigs,
+            &pending_transactions,
+            skip_preflight,
+            &cleared,
+            entrypoint_addr,
+            use_tpu_client,
+            tpu_client_fanout_slots,
+        );
         Self {
             sigs,
             cleared,
@@ -73,8 +91,10 @@ impl TransactionExecutor {
         Builder::new()
             .name("transfer".to_string())
             .spawn(move || {
-                let client =
-                    Arc::new(RpcClient::new_socket_with_commitment(entrypoint_addr, CommitmentConfig::confirmed()));
+                let client = Arc::new(RpcClient::new_socket_with_commitment(
+                    entrypoint_addr,
+                    CommitmentConfig::confirmed(),
+                ));
                 let tpu_client = if use_tpu_client {
                     let mut tpu_config = TpuClientConfig::default();
                     if let Some(fanout_slots) = tpu_client_fanout_slots {
@@ -98,7 +118,7 @@ impl TransactionExecutor {
                                     if tpu_client.send_transaction(&tx) {
                                         return Some((tx.signatures[0], timestamp(), id));
                                     }
-                                },
+                                }
                                 None => {
                                     let config = RpcSendTransactionConfig {
                                         skip_preflight,
@@ -129,7 +149,8 @@ impl TransactionExecutor {
                         sleep(Duration::from_millis(10));
                     }
                 }
-            }).unwrap()
+            })
+            .unwrap()
     }
 
     pub fn push_transactions(&self, txs: Vec<Transaction>) -> Vec<u64> {
