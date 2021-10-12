@@ -8,13 +8,6 @@ use log::*;
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
 use solana_core::banking_stage::{BankingStage, BankingStageStats};
-<<<<<<< HEAD
-use solana_core::cost_model::CostModel;
-use solana_core::cost_tracker::CostTracker;
-use solana_core::cost_tracker_stats::CostTrackerStats;
-=======
-use solana_entry::entry::{next_hash, Entry};
->>>>>>> 005d6863f (- move cost tracker into bank, so each bank has its own cost tracker; (#20527))
 use solana_gossip::cluster_info::ClusterInfo;
 use solana_gossip::cluster_info::Node;
 use solana_ledger::blockstore_processor::process_entries;

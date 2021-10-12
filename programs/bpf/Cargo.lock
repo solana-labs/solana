@@ -3412,12 +3412,8 @@ dependencies = [
  "dir-diff",
  "flate2",
  "fnv",
-<<<<<<< HEAD
- "itertools 0.9.0",
-=======
  "histogram",
- "itertools 0.10.1",
->>>>>>> 005d6863f (- move cost tracker into bank, so each bank has its own cost tracker; (#20527))
+ "itertools 0.9.0",
  "lazy_static",
  "libc",
  "libloading",

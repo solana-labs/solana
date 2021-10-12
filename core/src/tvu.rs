@@ -42,12 +42,7 @@ use solana_runtime::{
     bank::ExecuteTimings,
     bank_forks::{BankForks, SnapshotConfig},
     commitment::BlockCommitmentCache,
-<<<<<<< HEAD
-=======
     cost_model::CostModel,
-    snapshot_config::SnapshotConfig,
-    snapshot_package::{AccountsPackageReceiver, AccountsPackageSender, PendingSnapshotPackage},
->>>>>>> 005d6863f (- move cost tracker into bank, so each bank has its own cost tracker; (#20527))
     vote_sender_types::ReplayVoteSender,
 };
 use solana_sdk::{

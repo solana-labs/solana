@@ -6,12 +6,7 @@
 //!
 use crate::{block_cost_limits::*, execute_cost_table::ExecuteCostTable};
 use log::*;
-<<<<<<< HEAD:core/src/cost_model.rs
-use solana_ledger::block_cost_limits::*;
 use solana_sdk::{pubkey::Pubkey, transaction::Transaction};
-=======
-use solana_sdk::{pubkey::Pubkey, transaction::SanitizedTransaction};
->>>>>>> 005d6863f (- move cost tracker into bank, so each bank has its own cost tracker; (#20527)):runtime/src/cost_model.rs
 use std::collections::HashMap;
 
 const MAX_WRITABLE_ACCOUNTS: usize = 256;

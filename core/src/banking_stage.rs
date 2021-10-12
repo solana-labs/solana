@@ -24,12 +24,9 @@ use solana_runtime::{
         TransactionExecutionResult,
     },
     bank_utils,
-<<<<<<< HEAD
-    hashed_transaction::HashedTransaction,
-=======
     cost_tracker::CostTracker,
     cost_tracker_stats::CostTrackerStats,
->>>>>>> 005d6863f (- move cost tracker into bank, so each bank has its own cost tracker; (#20527))
+    hashed_transaction::HashedTransaction,
     transaction_batch::TransactionBatch,
     vote_sender_types::ReplayVoteSender,
 };
