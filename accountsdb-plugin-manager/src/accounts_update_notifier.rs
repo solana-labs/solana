@@ -15,14 +15,12 @@ use {
         account::{AccountSharedData, ReadableAccount},
         clock::Slot,
         pubkey::Pubkey,
-        timing::AtomicInterval,
     },
     std::sync::{Arc, RwLock},
 };
 #[derive(Debug)]
 pub(crate) struct AccountsUpdateNotifierImpl {
     plugin_manager: Arc<RwLock<AccountsDbPluginManager>>,
-    last_report: AtomicInterval,
 }
 
 impl AccountsUpdateNotifierInterface for AccountsUpdateNotifierImpl {
@@ -53,10 +51,7 @@ impl AccountsUpdateNotifierInterface for AccountsUpdateNotifierImpl {
 
 impl AccountsUpdateNotifierImpl {
     pub fn new(plugin_manager: Arc<RwLock<AccountsDbPluginManager>>) -> Self {
-        AccountsUpdateNotifierImpl {
-            plugin_manager,
-            last_report: AtomicInterval::default(),
-        }
+        AccountsUpdateNotifierImpl { plugin_manager }
     }
 
     fn accountinfo_from_shared_account_data<'a>(
