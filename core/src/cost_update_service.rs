@@ -3,10 +3,9 @@
 //! packing transactions into block; it also triggers persisting cost
 //! table to blockstore.
 
-use crate::cost_model::CostModel;
 use solana_ledger::blockstore::Blockstore;
 use solana_measure::measure::Measure;
-use solana_runtime::bank::ExecuteTimings;
+use solana_runtime::{bank::ExecuteTimings, cost_model::CostModel};
 use solana_sdk::timing::timestamp;
 use std::{
     sync::{
