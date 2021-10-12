@@ -18,7 +18,7 @@ export function NFTHeader({
   return (
     <div className="row align-items-begin">
       <div className="col-auto ml-2">
-        <ArtContent metadata={metadata} pubkey={address} preview={false} />
+        <ArtContent metadata={metadata} pubkey={address} />
       </div>
 
       <div className="col mb-3 ml-n3 ml-md-n2 mt-3">
