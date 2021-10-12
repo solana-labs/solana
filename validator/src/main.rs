@@ -10,13 +10,8 @@ use {
     solana_clap_utils::{
         input_parsers::{keypair_of, keypairs_of, pubkey_of, value_of},
         input_validators::{
-<<<<<<< HEAD
             is_keypair, is_keypair_or_ask_keyword, is_parsable, is_pubkey, is_pubkey_or_keypair,
-            is_slot,
-=======
-            is_bin, is_keypair, is_keypair_or_ask_keyword, is_parsable, is_pubkey,
-            is_pubkey_or_keypair, is_slot, is_valid_percentage,
->>>>>>> fc5dd7f3b (Ignore delinquent stake on exit (#20367))
+            is_slot, is_valid_percentage,
         },
         keypair::SKIP_SEED_PHRASE_VALIDATION_ARG,
     },
