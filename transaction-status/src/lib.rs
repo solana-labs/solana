@@ -126,6 +126,7 @@ pub struct TransactionTokenBalance {
     pub account_index: u8,
     pub mint: String,
     pub ui_token_amount: UiTokenAmount,
+    pub owner: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -134,6 +135,8 @@ pub struct UiTransactionTokenBalance {
     pub account_index: u8,
     pub mint: String,
     pub ui_token_amount: UiTokenAmount,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owner: Option<String>,
 }
 
 impl From<TransactionTokenBalance> for UiTransactionTokenBalance {
@@ -142,6 +145,11 @@ impl From<TransactionTokenBalance> for UiTransactionTokenBalance {
             account_index: token_balance.account_index,
             mint: token_balance.mint,
             ui_token_amount: token_balance.ui_token_amount,
+            owner: if !token_balance.owner.is_empty() {
+                Some(token_balance.owner)
+            } else {
+                None
+            },
         }
     }
 }

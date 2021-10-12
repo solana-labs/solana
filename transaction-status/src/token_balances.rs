@@ -68,13 +68,14 @@ pub fn collect_token_balances(
                     continue;
                 }
 
-                if let Some((mint, ui_token_amount)) =
+                if let Some((mint, ui_token_amount, owner)) =
                     collect_token_balance_from_account(bank, account_id, mint_decimals)
                 {
                     transaction_balances.push(TransactionTokenBalance {
                         account_index: index as u8,
                         mint,
                         ui_token_amount,
+                        owner,
                     });
                 }
             }
@@ -88,7 +89,7 @@ pub fn collect_token_balance_from_account(
     bank: &Bank,
     account_id: &Pubkey,
     mint_decimals: &mut HashMap<Pubkey, u8>,
-) -> Option<(String, UiTokenAmount)> {
+) -> Option<(String, UiTokenAmount, String)> {
     let account = bank.get_account(account_id)?;
 
     let token_account = TokenAccount::unpack(account.data()).ok()?;
@@ -104,5 +105,6 @@ pub fn collect_token_balance_from_account(
     Some((
         mint_string.to_string(),
         token_amount_to_ui_amount(token_account.amount, decimals),
+        token_account.owner.to_string(),
     ))
 }
