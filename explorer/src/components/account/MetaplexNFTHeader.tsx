@@ -1,11 +1,11 @@
 import "bootstrap/dist/js/bootstrap.min.js";
 import { NFTData } from "providers/accounts";
-import { Creator } from "metaplex/classes";
-import { ArtContent } from "metaplex/Art/Art";
+import { Creator } from "@metaplex/js";
+import { ArtContent } from "components/common/NFTArt";
 import { InfoTooltip } from "components/common/InfoTooltip";
-import { EditionData } from "providers/accounts/utils/metadataHelpers";
 import { clusterPath } from "utils/url";
 import { Link } from "react-router-dom";
+import { EditionInfo } from "providers/accounts/utils/getEditionInfo";
 
 export function NFTHeader({
   nftData,
@@ -29,7 +29,7 @@ export function NFTHeader({
               ? metadata.data.name
               : "No NFT name was found"}
           </h2>
-          {getEditionPill(nftData.editionData)}
+          {getEditionPill(nftData.editionInfo)}
         </div>
         <h4 className="header-pretitle ml-1 mt-1">
           {metadata.data.symbol !== ""
@@ -127,9 +127,9 @@ function getCreatorDropdownItems(creators: Creator[] | null) {
   );
 }
 
-function getEditionPill(editionData?: EditionData) {
-  const masterEdition = editionData?.masterEdition;
-  const edition = editionData?.edition;
+function getEditionPill(editionInfo: EditionInfo) {
+  const masterEdition = editionInfo.masterEdition;
+  const edition = editionInfo.edition;
 
   return (
     <div className={"d-inline-flex ml-2"}>

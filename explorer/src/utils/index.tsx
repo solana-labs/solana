@@ -1,9 +1,9 @@
-import React from "react";
 import BN from "bn.js";
 import {
   HumanizeDuration,
   HumanizeDurationLanguage,
 } from "humanize-duration-ts";
+import { PublicKey } from "@solana/web3.js";
 
 // Switch to web3 constant when web3 updates superstruct
 export const LAMPORTS_PER_SOL = 1000000000;
@@ -133,3 +133,15 @@ export function abbreviatedNumber(value: number, fixed = 1) {
   if (value >= 1e9 && value < 1e12) return +(value / 1e9).toFixed(fixed) + "B";
   if (value >= 1e12) return +(value / 1e12).toFixed(fixed) + "T";
 }
+
+export const pubkeyToString = (key: PublicKey | string = "") => {
+  return typeof key === "string" ? key : key?.toBase58() || "";
+};
+
+export const getLast = (arr: string[]) => {
+  if (arr.length <= 0) {
+    return undefined;
+  }
+
+  return arr[arr.length - 1];
+};

@@ -1,12 +1,14 @@
 import React, { Ref, useCallback, useEffect, useState } from "react";
-import { MetadataCategory, MetadataFile } from "../types";
-import { pubkeyToString } from "../utils";
-import { useCachedImage, useExtendedArt } from "./useArt";
 import { Stream, StreamPlayerApi } from "@cloudflare/stream-react";
 import { PublicKey } from "@solana/web3.js";
-import { getLast } from "../utils";
-import { Metadata } from "metaplex/classes";
+import {
+  MetadataData,
+  MetadataJson,
+  MetaDataJsonCategory,
+  MetadataJsonFile,
+} from "@metaplex/js";
 import ContentLoader from "react-content-loader";
+import { getLast, pubkeyToString } from "utils";
 
 const Placeholder = () => (
   <ContentLoader
@@ -65,7 +67,7 @@ const VideoArtContent = ({
 }: {
   className?: string;
   style?: React.CSSProperties;
-  files?: (MetadataFile | string)[];
+  files?: (MetadataJsonFile | string)[];
   uri?: string;
   animationURL?: string;
   active?: boolean;
@@ -152,7 +154,7 @@ const HTMLContent = ({
   animationUrl?: string;
   className?: string;
   style?: React.CSSProperties;
-  files?: (MetadataFile | string)[];
+  files?: (MetadataJsonFile | string)[];
 }) => {
   const [loaded, setLoaded] = useState<boolean>(false);
   const htmlURL =
@@ -194,8 +196,8 @@ export const ArtContent = ({
   animationURL,
   files,
 }: {
-  metadata: Metadata;
-  category?: MetadataCategory;
+  metadata: MetadataData;
+  category?: MetaDataJsonCategory;
   className?: string;
   preview?: boolean;
   style?: React.CSSProperties;
@@ -206,7 +208,7 @@ export const ArtContent = ({
   pubkey?: PublicKey | string;
   uri?: string;
   animationURL?: string;
-  files?: (MetadataFile | string)[];
+  files?: (MetadataJsonFile | string)[];
 }) => {
   const id = pubkeyToString(pubkey);
 
@@ -238,7 +240,7 @@ export const ArtContent = ({
         animationURL={animationURL}
         active={active}
       />
-    ) : category === "html" || animationUrlExt === "html" ? (
+    ) : animationUrlExt === "html" ? (
       <HTMLContent
         animationUrl={animationURL}
         className={className}
@@ -265,4 +267,115 @@ export const ArtContent = ({
       {content}
     </div>
   );
+};
+
+const cachedImages = new Map<string, string>();
+export const useCachedImage = (uri: string) => {
+  const [cachedBlob, setCachedBlob] = useState<string | undefined>(undefined);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!uri) {
+      return;
+    }
+
+    const result = cachedImages.get(uri);
+    if (result) {
+      setCachedBlob(result);
+      return;
+    }
+
+    if (!isLoading) {
+      (async () => {
+        setIsLoading(true);
+        let response: Response;
+        try {
+          response = await fetch(uri, { cache: "force-cache" });
+        } catch {
+          try {
+            response = await fetch(uri, { cache: "reload" });
+          } catch {
+            // If external URL, just use the uri
+            if (uri?.startsWith("http")) {
+              setCachedBlob(uri);
+            }
+            setIsLoading(false);
+            return;
+          }
+        }
+
+        const blob = await response.blob();
+        const blobURI = URL.createObjectURL(blob);
+        cachedImages.set(uri, blobURI);
+        setCachedBlob(blobURI);
+        setIsLoading(false);
+      })();
+    }
+  }, [uri, setCachedBlob, isLoading, setIsLoading]);
+
+  return { cachedBlob, isLoading };
+};
+
+export const useExtendedArt = (id: string, metadata: MetadataData) => {
+  const [data, setData] = useState<MetadataJson>();
+
+  useEffect(() => {
+    if (id && !data) {
+      const USE_CDN = false;
+      const routeCDN = (uri: string) => {
+        let result = uri;
+        if (USE_CDN) {
+          result = uri.replace(
+            "https://arweave.net/",
+            "https://coldcdn.com/api/cdn/bronil/"
+          );
+        }
+
+        return result;
+      };
+
+      if (metadata.data.uri) {
+        const uri = routeCDN(metadata.data.uri);
+
+        const processJson = (extended: any) => {
+          if (!extended || extended?.properties?.files?.length === 0) {
+            return;
+          }
+
+          if (extended?.image) {
+            const file = extended.image.startsWith("http")
+              ? extended.image
+              : `${metadata.data.uri}/${extended.image}`;
+            extended.image = routeCDN(file);
+          }
+
+          return extended;
+        };
+
+        try {
+          fetch(uri)
+            .then(async (_) => {
+              try {
+                const data = await _.json();
+                try {
+                  localStorage.setItem(uri, JSON.stringify(data));
+                } catch {
+                  // ignore
+                }
+                setData(processJson(data));
+              } catch {
+                return undefined;
+              }
+            })
+            .catch(() => {
+              return undefined;
+            });
+        } catch (ex) {
+          console.error(ex);
+        }
+      }
+    }
+  }, [id, data, setData, metadata.data.uri]);
+
+  return { data };
 };
