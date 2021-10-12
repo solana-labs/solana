@@ -144,6 +144,7 @@ fn run_transactions_dos(
     program_id: Pubkey,
     program_options: Option<(Keypair, String)>,
     account_keypairs: &[&Keypair],
+    maybe_account_groups: Option<usize>,
     just_calculate_fees: bool,
     batch_sleep_ms: u64,
     use_tpu_client: bool,
@@ -164,6 +165,12 @@ fn run_transactions_dos(
             .expect("min balance")
     });
     assert!(min_balance > 0);
+    
+    let account_groups = maybe_account_groups.unwrap_or(1);
+
+    assert!(account_keypairs.len()%account_groups == 0);
+
+    let account_group_size=account_keypairs.len()/account_groups;
 
     let program_account = client.get_account(&program_id);
 
@@ -357,14 +364,15 @@ fn run_transactions_dos(
             let chunk_size = batch_size / payer_keypairs.len();
             for (i, keypair) in payer_keypairs.iter().enumerate() {
                 let txs: Vec<_> = (0..chunk_size)
-                    .into_par_iter()
-                    .map(|_| {
+                    //.into_par_iter()
+                    .into_iter()
+                    .map(|x| {
                         let message = make_dos_message(
                             keypair,
                             num_instructions,
                             program_id,
                             num_program_iterations as u8,
-                            account_metas.clone(),
+                            account_metas[x*account_group_size.. x*account_group_size + account_group_size].to_vec(),
                         );
                         let signers: Vec<&Keypair> = vec![keypair];
                         let tx = Transaction::new(&signers, message, blockhash);
@@ -452,6 +460,13 @@ fn main() {
                 .multiple(true)
                 .value_name("FILE")
                 .help("One or more keypairs to create accounts owned by the program and which the program will write to."),
+        )
+        .arg(
+            Arg::with_name("account_groups")
+            .long("account_groups")
+            .takes_value(true)
+            .value_name("NUM")
+            .help("Number of groups of accounts to split the accounts into")
         )
         .arg(
             Arg::with_name("batch_size")
@@ -562,6 +577,7 @@ fn main() {
         })
         .collect();
 
+    let account_groups = value_t!(matches, "account_groups", usize).ok();    
     let payer_keypair_refs: Vec<&Keypair> = payer_keypairs.iter().collect();
     let account_keypair_refs: Vec<&Keypair> = account_keypairs.iter().collect();
 
@@ -603,6 +619,7 @@ fn main() {
         program_id,
         None,
         &account_keypair_refs,
+        account_groups,
         just_calculate_fees,
         batch_sleep_ms,
         use_tpu_client,
@@ -672,6 +689,7 @@ pub mod test {
         let maybe_space = Some(10_000_000);
         let batch_size = 1;
         let maybe_lamports = Some(10);
+        let maybe_account_groups=Some(1);
         // 85 inst, 142 iterations, 5 accounts
         // 20 inst, 30 * 20 iterations, 1 account
         //
@@ -701,6 +719,7 @@ pub mod test {
                 String::from("../programs/bpf/c/out/tuner.so"),
             )),
             &account_keypair_refs,
+            maybe_account_groups,
             false,
             100,
             true,
