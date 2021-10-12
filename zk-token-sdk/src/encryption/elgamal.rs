@@ -56,6 +56,14 @@ impl ElGamal {
         }
     }
 
+    #[cfg(not(target_arch = "bpf"))]
+    #[allow(non_snake_case)]
+    pub fn from_signing_key(signing_key: &SigningKey, label: &'static [u8]) -> Self {
+        let secret = ElGamalSecretKey::new(signing_key, label);
+        let public = ElGamalPubkey::new(&secret);
+        Self {secret, public}
+    }
+
     /// On input a public key and a message to be encrypted, the function
     /// returns an ElGamal ciphertext of the message under the public key.
     #[cfg(not(target_arch = "bpf"))]
@@ -221,9 +229,9 @@ pub struct ElGamalPubkey(RistrettoPoint);
 impl ElGamalPubkey {
     /// Derive the `ElGamalPubkey` that uniquely corresponds to an `ElGamalSecretKey`
     #[allow(non_snake_case)]
-    pub fn new(sk: ElGamalSecretKey) -> Self {
+    pub fn new(secret: &ElGamalSecretKey) -> Self {
         let H = PedersenBase::default().H;
-        ElGamalPubkey(sk.0 * H)
+        ElGamalPubkey(secret.0 * H)
     }
 
     pub fn get_point(&self) -> RistrettoPoint {
@@ -280,7 +288,7 @@ impl fmt::Display for ElGamalPubkey {
 #[zeroize(drop)]
 pub struct ElGamalSecretKey(Scalar);
 impl ElGamalSecretKey {
-    pub fn new(signing_key: SigningKey, label: &'static [u8]) -> Self {
+    pub fn new(signing_key: &SigningKey, label: &'static [u8]) -> Self {
         let hashable = [&signing_key.to_bytes(), label].concat();
         ElGamalSecretKey(Scalar::hash_from_bytes::<Sha3_512>(&hashable))
     }
