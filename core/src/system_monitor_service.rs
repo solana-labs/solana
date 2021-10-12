@@ -14,6 +14,9 @@ use std::{
 const SAMPLE_INTERVAL: Duration = Duration::from_secs(60);
 const SLEEP_INTERVAL: Duration = Duration::from_millis(500);
 
+#[cfg(target_os = "linux")]
+const PROC_NET_SNMP_PATH: &str = "/proc/net/snmp";
+
 pub struct SystemMonitorService {
     thread_hdl: JoinHandle<()>,
 }
@@ -94,7 +97,7 @@ impl SystemMonitorService {
 
     #[cfg(target_os = "linux")]
     fn report_net_stats(udp_stats: &mut Option<UdpStats>) {
-        match read_udp_stats("/proc/net/snmp") {
+        match read_udp_stats(PROC_NET_SNMP_PATH) {
             Ok(new_stats) => {
                 if let Some(udp_stats) = udp_stats {
                     datapoint_info!(
