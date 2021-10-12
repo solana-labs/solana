@@ -112,7 +112,9 @@ impl TransactionStatusService {
                                 bank.get_fee_calculator(transaction.message().recent_blockhash())
                             })
                             .expect("FeeCalculator must exist");
-                        let fee = transaction.message().calculate_fee(&fee_calculator);
+                        let fee = transaction
+                            .message()
+                            .calculate_fee(fee_calculator.lamports_per_signature);
                         let tx_account_locks =
                             transaction.get_account_locks(bank.demote_program_write_locks());
 

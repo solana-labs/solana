@@ -375,7 +375,7 @@ fn run_accounts_bench(
     let mut latest_blockhash = Instant::now();
     let mut last_log = Instant::now();
     let mut count = 0;
-    let mut blockhash = client.get_latest_blockhash().expect("blockhash");
+    let blockhash = client.get_latest_blockhash().expect("blockhash");
     let mut tx_sent_count = 0;
     let mut total_accounts_created = 0;
     let mut total_accounts_closed = 0;
@@ -422,12 +422,11 @@ fn run_accounts_bench(
 
     loop {
         if latest_blockhash.elapsed().as_millis() > 10_000 {
-            blockhash = client.get_latest_blockhash().expect("blockhash");
             latest_blockhash = Instant::now();
         }
 
         let fee = client
-            .get_fee_for_message(&blockhash, &message)
+            .get_fee_for_message(&message)
             .expect("get_fee_for_message");
         let lamports = min_balance + fee;
 

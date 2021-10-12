@@ -2071,14 +2071,11 @@ fn check_payer(
     balance_needed: u64,
     messages: &[&Message],
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let blockhash = rpc_client.get_latest_blockhash()?;
-
     // Does the payer have enough?
     check_account_for_spend_multiple_fees_with_commitment(
         rpc_client,
         &config.signers[0].pubkey(),
         balance_needed,
-        &blockhash,
         messages,
         config.commitment,
     )?;

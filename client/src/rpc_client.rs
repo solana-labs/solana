@@ -4800,7 +4800,7 @@ impl RpcClient {
     }
 
     #[allow(deprecated)]
-    pub fn get_fee_for_message(&self, blockhash: &Hash, message: &Message) -> ClientResult<u64> {
+    pub fn get_fee_for_message(&self, message: &Message) -> ClientResult<u64> {
         if self.get_node_version()? < semver::Version::new(1, 8, 0) {
             let Fees { fee_calculator, .. } = self.get_fees()?;
             Ok(fee_calculator
@@ -4811,7 +4811,7 @@ impl RpcClient {
                 serialize_and_encode::<Message>(message, UiTransactionEncoding::Base64)?;
             let result = self.send::<Response<Option<u64>>>(
                 RpcRequest::GetFeeForMessage,
-                json!([blockhash.to_string(), serialized_encoded, self.commitment()]),
+                json!([serialized_encoded, self.commitment()]),
             )?;
             result
                 .value
