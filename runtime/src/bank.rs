@@ -3809,7 +3809,7 @@ impl Bank {
                     let mut compute_budget = self.compute_budget.unwrap_or_else(ComputeBudget::new);
 
                     let mut process_result = if feature_set.is_active(&tx_wide_compute_cap::id()) {
-                        compute_budget.process_transaction(tx)
+                        compute_budget.process_transaction(tx, feature_set.clone())
                     } else {
                         Ok(())
                     };
@@ -14810,6 +14810,7 @@ pub(crate) mod tests {
                 *compute_budget,
                 ComputeBudget {
                     max_units: 1,
+                    heap_size: Some(48 * 1024),
                     ..ComputeBudget::default()
                 }
             );
@@ -14821,6 +14822,7 @@ pub(crate) mod tests {
         let message = Message::new(
             &[
                 ComputeBudgetInstruction::request_units(1),
+                ComputeBudgetInstruction::request_heap_frame(48 * 1024),
                 Instruction::new_with_bincode(program_id, &0, vec![]),
             ],
             Some(&mint_keypair.pubkey()),

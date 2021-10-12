@@ -245,6 +245,10 @@ pub mod turbine_peers_shuffle {
     solana_sdk::declare_id!("4VvpgRD6UsHvkXwpuQhtR5NG1G4esMaExeWuSEpsYRUa");
 }
 
+pub mod requestable_heap_size {
+    solana_sdk::declare_id!("CCu4boMmfLuqcmfTLPHQiUo22ZdUsXjgzPAURYaWt1Bw");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -301,6 +305,7 @@ lazy_static! {
         (remove_native_loader::id(), "Remove support for the native loader"),
         (send_to_tpu_vote_port::id(), "Send votes to the tpu vote port"),
         (turbine_peers_shuffle::id(), "turbine peers shuffle patch"),
+        (requestable_heap_size::id(), "Requestable heap frame size"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
