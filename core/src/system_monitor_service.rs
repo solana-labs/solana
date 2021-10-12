@@ -111,7 +111,7 @@ impl SystemMonitorService {
     #[cfg(not(target_os = "linux"))]
     fn process_udp_stats(_udp_stats: &mut Option<UdpStats>) {}
 
-    #[allow(dead_code)]
+    #[cfg(target_os = "linux")]
     fn report_udp_stats(old_stats: &UdpStats, new_stats: &UdpStats) {
         datapoint_info!(
             "net-stats",
