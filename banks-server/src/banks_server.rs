@@ -185,12 +185,16 @@ impl Banks for BanksServer {
         commitment: CommitmentLevel,
     ) -> (FeeCalculator, Hash, u64) {
         let bank = self.bank(commitment);
-        #[allow(deprecated)]
-        let (blockhash, fee_calculator) = bank.last_blockhash_with_fee_calculator();
+        let blockhash = bank.last_blockhash();
+        let lamports_per_signature = bank.get_lamports_per_signature();
         let last_valid_block_height = bank
             .get_blockhash_last_valid_block_height(&blockhash)
             .unwrap();
-        (fee_calculator, blockhash, last_valid_block_height)
+        (
+            FeeCalculator::new(lamports_per_signature),
+            blockhash,
+            last_valid_block_height,
+        )
     }
 
     async fn get_transaction_status_with_context(

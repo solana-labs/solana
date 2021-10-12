@@ -8,7 +8,7 @@ use crate::{
     accounts_update_notifier_interface::AccountsUpdateNotifier,
     ancestors::Ancestors,
     bank::{
-        NonceRollbackFull, NonceRollbackInfo, RentDebits, TransactionCheckResult,
+        Bank, NonceRollbackFull, NonceRollbackInfo, RentDebits, TransactionCheckResult,
         TransactionExecutionResult,
     },
     blockhash_queue::BlockhashQueue,
@@ -27,7 +27,6 @@ use solana_sdk::{
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     clock::{BankId, Slot, INITIAL_RENT_EPOCH},
     feature_set::{self, FeatureSet},
-    fee_calculator::FeeCalculator,
     genesis_config::ClusterType,
     hash::Hash,
     message::SanitizedMessage,
@@ -475,18 +474,15 @@ impl Accounts {
             .zip(lock_results)
             .map(|etx| match etx {
                 (tx, (Ok(()), nonce_rollback)) => {
-                    let fee_calculator = nonce_rollback
+                    let lamports_per_signature = nonce_rollback
                         .as_ref()
-                        .map(|nonce_rollback| nonce_rollback.fee_calculator())
+                        .map(|nonce_rollback| nonce_rollback.lamports_per_signature())
                         .unwrap_or_else(|| {
                             #[allow(deprecated)]
-                            hash_queue
-                                .get_fee_calculator(tx.message().recent_blockhash())
-                                .cloned()
+                            hash_queue.get_lamports_per_signature(tx.message().recent_blockhash())
                         });
-                    let fee = if let Some(fee_calculator) = fee_calculator {
-                        tx.message()
-                            .calculate_fee(fee_calculator.lamports_per_signature)
+                    let fee = if let Some(lamports_per_signature) = lamports_per_signature {
+                        Bank::calculate_fee(tx.message(), lamports_per_signature)
                     } else {
                         return (Err(TransactionError::BlockhashNotFound), None);
                     };
@@ -969,7 +965,8 @@ impl Accounts {
         res: &'a [TransactionExecutionResult],
         loaded: &'a mut [TransactionLoadResult],
         rent_collector: &RentCollector,
-        last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
+        blockhash: &Hash,
+        lamports_per_signature: u64,
         rent_for_sysvars: bool,
         merge_nonce_error_into_system_error: bool,
         demote_program_write_locks: bool,
@@ -979,7 +976,8 @@ impl Accounts {
             res,
             loaded,
             rent_collector,
-            last_blockhash_with_fee_calculator,
+            blockhash,
+            lamports_per_signature,
             rent_for_sysvars,
             merge_nonce_error_into_system_error,
             demote_program_write_locks,
@@ -999,13 +997,15 @@ impl Accounts {
         self.accounts_db.add_root(slot)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn collect_accounts_to_store<'a>(
         &self,
         txs: &'a [SanitizedTransaction],
         res: &'a [TransactionExecutionResult],
         loaded: &'a mut [TransactionLoadResult],
         rent_collector: &RentCollector,
-        last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
+        blockhash: &Hash,
+        lamports_per_signature: u64,
         rent_for_sysvars: bool,
         merge_nonce_error_into_system_error: bool,
         demote_program_write_locks: bool,
@@ -1051,7 +1051,8 @@ impl Accounts {
                     key,
                     res,
                     maybe_nonce_rollback,
-                    last_blockhash_with_fee_calculator,
+                    blockhash,
+                    lamports_per_signature,
                 );
                 if fee_payer_index.is_none() {
                     fee_payer_index = Some(i);
@@ -1103,7 +1104,8 @@ pub fn prepare_if_nonce_account(
         Option<&AccountSharedData>,
         bool,
     )>,
-    last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
+    blockhash: &Hash,
+    lamports_per_signature: u64,
 ) -> bool {
     if let Some((nonce_key, nonce_acc, _maybe_fee_account, advance_blockhash)) =
         maybe_nonce_rollback
@@ -1125,11 +1127,7 @@ pub fn prepare_if_nonce_account(
                     .convert_to_current();
                 if let nonce::State::Initialized(ref data) = state {
                     let new_data = nonce::state::Versions::new_current(nonce::State::Initialized(
-                        nonce::state::Data {
-                            blockhash: last_blockhash_with_fee_calculator.0,
-                            fee_calculator: last_blockhash_with_fee_calculator.1.clone(),
-                            ..data.clone()
-                        },
+                        nonce::state::Data::new(data.authority, *blockhash, lamports_per_signature),
                     ));
                     account.set_state(&new_data).unwrap();
                 }
@@ -1172,7 +1170,6 @@ mod tests {
     use solana_sdk::{
         account::{AccountSharedData, WritableAccount},
         epoch_schedule::EpochSchedule,
-        fee_calculator::FeeCalculator,
         genesis_config::ClusterType,
         hash::Hash,
         instruction::{CompiledInstruction, InstructionError},
@@ -1201,12 +1198,12 @@ mod tests {
     fn load_accounts_with_fee_and_rent(
         tx: Transaction,
         ka: &[(Pubkey, AccountSharedData)],
-        fee_calculator: &FeeCalculator,
+        lamports_per_signature: u64,
         rent_collector: &RentCollector,
         error_counters: &mut ErrorCounters,
     ) -> Vec<TransactionLoadResult> {
         let mut hash_queue = BlockhashQueue::new(100);
-        hash_queue.register_hash(&tx.message().recent_blockhash, fee_calculator);
+        hash_queue.register_hash(&tx.message().recent_blockhash, lamports_per_signature);
         let accounts = Accounts::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
@@ -1234,11 +1231,16 @@ mod tests {
     fn load_accounts_with_fee(
         tx: Transaction,
         ka: &[(Pubkey, AccountSharedData)],
-        fee_calculator: &FeeCalculator,
+        lamports_per_signature: u64,
         error_counters: &mut ErrorCounters,
     ) -> Vec<TransactionLoadResult> {
-        let rent_collector = RentCollector::default();
-        load_accounts_with_fee_and_rent(tx, ka, fee_calculator, &rent_collector, error_counters)
+        load_accounts_with_fee_and_rent(
+            tx,
+            ka,
+            lamports_per_signature,
+            &RentCollector::default(),
+            error_counters,
+        )
     }
 
     fn load_accounts(
@@ -1246,8 +1248,7 @@ mod tests {
         ka: &[(Pubkey, AccountSharedData)],
         error_counters: &mut ErrorCounters,
     ) -> Vec<TransactionLoadResult> {
-        let fee_calculator = FeeCalculator::default();
-        load_accounts_with_fee(tx, ka, &fee_calculator, error_counters)
+        load_accounts_with_fee(tx, ka, 0, error_counters)
     }
 
     #[test]
@@ -1383,13 +1384,13 @@ mod tests {
             instructions,
         );
 
-        let fee_calculator = FeeCalculator::new(10);
-        #[allow(deprecated)]
-        let fee = fee_calculator.calculate_fee(tx.message());
+        let fee = Bank::calculate_fee(
+            &SanitizedMessage::try_from(tx.message().clone()).unwrap(),
+            10,
+        );
         assert_eq!(fee, 10);
 
-        let loaded_accounts =
-            load_accounts_with_fee(tx, &accounts, &fee_calculator, &mut error_counters);
+        let loaded_accounts = load_accounts_with_fee(tx, &accounts, 10, &mut error_counters);
 
         assert_eq!(error_counters.insufficient_funds, 1);
         assert_eq!(loaded_accounts.len(), 1);
@@ -1442,7 +1443,6 @@ mod tests {
             },
         );
         let min_balance = rent_collector.rent.minimum_balance(nonce::State::size());
-        let fee_calculator = FeeCalculator::new(min_balance);
         let nonce = Keypair::new();
         let mut accounts = vec![(
             nonce.pubkey(),
@@ -1468,7 +1468,7 @@ mod tests {
         let loaded_accounts = load_accounts_with_fee_and_rent(
             tx.clone(),
             &accounts,
-            &fee_calculator,
+            min_balance,
             &rent_collector,
             &mut error_counters,
         );
@@ -1482,7 +1482,7 @@ mod tests {
         let loaded_accounts = load_accounts_with_fee_and_rent(
             tx.clone(),
             &accounts,
-            &fee_calculator,
+            min_balance,
             &rent_collector,
             &mut error_counters,
         );
@@ -1495,7 +1495,7 @@ mod tests {
         let loaded_accounts = load_accounts_with_fee_and_rent(
             tx,
             &accounts,
-            &fee_calculator,
+            min_balance,
             &rent_collector,
             &mut error_counters,
         );
@@ -2403,7 +2403,8 @@ mod tests {
             &programs,
             loaded.as_mut_slice(),
             &rent_collector,
-            &(Hash::default(), FeeCalculator::default()),
+            &Hash::default(),
+            0,
             true,
             true, // merge_nonce_error_into_system_error
             true, // demote_program_write_locks
@@ -2461,9 +2462,8 @@ mod tests {
     fn load_accounts_no_store(accounts: &Accounts, tx: Transaction) -> Vec<TransactionLoadResult> {
         let tx = SanitizedTransaction::try_from(tx).unwrap();
         let rent_collector = RentCollector::default();
-        let fee_calculator = FeeCalculator::new(10);
         let mut hash_queue = BlockhashQueue::new(100);
-        hash_queue.register_hash(tx.message().recent_blockhash(), &fee_calculator);
+        hash_queue.register_hash(tx.message().recent_blockhash(), 10);
 
         let ancestors = vec![(0, 0)].into_iter().collect();
         let mut error_counters = ErrorCounters::default();
@@ -2510,7 +2510,7 @@ mod tests {
         AccountSharedData,
         AccountSharedData,
         Hash,
-        FeeCalculator,
+        u64,
         Option<AccountSharedData>,
     ) {
         let data = nonce::state::Versions::new_current(nonce::State::Initialized(
@@ -2524,9 +2524,7 @@ mod tests {
             pre_account,
             account,
             Hash::new(&[1u8; 32]),
-            FeeCalculator {
-                lamports_per_signature: 1234,
-            },
+            1234,
             None,
         )
     }
@@ -2541,7 +2539,8 @@ mod tests {
             Option<&AccountSharedData>,
             bool,
         )>,
-        last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
+        blockhash: &Hash,
+        lamports_per_signature: u64,
         expect_account: &AccountSharedData,
     ) -> bool {
         // Verify expect_account's relationship
@@ -2564,7 +2563,8 @@ mod tests {
             account_pubkey,
             tx_result,
             maybe_nonce_rollback,
-            last_blockhash_with_fee_calculator,
+            blockhash,
+            lamports_per_signature,
         );
         expect_account == account
     }
@@ -2575,8 +2575,8 @@ mod tests {
             pre_account_pubkey,
             pre_account,
             mut post_account,
-            last_blockhash,
-            last_fee_calculator,
+            blockhash,
+            lamports_per_signature,
             maybe_fee_account,
         ) = create_accounts_prepare_if_nonce_account();
         let post_account_pubkey = pre_account_pubkey;
@@ -2597,7 +2597,8 @@ mod tests {
                 maybe_fee_account.as_ref(),
                 false,
             )),
-            &(last_blockhash, last_fee_calculator),
+            &blockhash,
+            lamports_per_signature,
             &expect_account,
         ));
     }
@@ -2608,8 +2609,8 @@ mod tests {
             pre_account_pubkey,
             _pre_account,
             _post_account,
-            last_blockhash,
-            last_fee_calculator,
+            blockhash,
+            lamports_per_signature,
             _maybe_fee_account,
         ) = create_accounts_prepare_if_nonce_account();
         let post_account_pubkey = pre_account_pubkey;
@@ -2621,7 +2622,8 @@ mod tests {
             &post_account_pubkey,
             &Ok(()),
             None,
-            &(last_blockhash, last_fee_calculator),
+            &blockhash,
+            lamports_per_signature,
             &expect_account,
         ));
     }
@@ -2632,8 +2634,8 @@ mod tests {
             pre_account_pubkey,
             pre_account,
             mut post_account,
-            last_blockhash,
-            last_fee_calculator,
+            blockhash,
+            lamports_per_signature,
             maybe_fee_account,
         ) = create_accounts_prepare_if_nonce_account();
 
@@ -2649,7 +2651,8 @@ mod tests {
                 maybe_fee_account.as_ref(),
                 true,
             )),
-            &(last_blockhash, last_fee_calculator),
+            &blockhash,
+            lamports_per_signature,
             &expect_account,
         ));
     }
@@ -2660,8 +2663,8 @@ mod tests {
             pre_account_pubkey,
             pre_account,
             mut post_account,
-            last_blockhash,
-            last_fee_calculator,
+            blockhash,
+            lamports_per_signature,
             maybe_fee_account,
         ) = create_accounts_prepare_if_nonce_account();
         let post_account_pubkey = pre_account_pubkey;
@@ -2669,11 +2672,11 @@ mod tests {
         let mut expect_account = pre_account.clone();
         expect_account
             .set_state(&nonce::state::Versions::new_current(
-                nonce::State::Initialized(nonce::state::Data {
-                    blockhash: last_blockhash,
-                    fee_calculator: last_fee_calculator.clone(),
-                    ..nonce::state::Data::default()
-                }),
+                nonce::State::Initialized(nonce::state::Data::new(
+                    Pubkey::default(),
+                    blockhash,
+                    lamports_per_signature,
+                )),
             ))
             .unwrap();
 
@@ -2690,7 +2693,8 @@ mod tests {
                 maybe_fee_account.as_ref(),
                 true,
             )),
-            &(last_blockhash, last_fee_calculator),
+            &blockhash,
+            lamports_per_signature,
             &expect_account,
         ));
     }
@@ -2704,12 +2708,9 @@ mod tests {
         let from = keypair_from_seed(&[1; 32]).unwrap();
         let from_address = from.pubkey();
         let to_address = Pubkey::new_unique();
-        let nonce_state =
-            nonce::state::Versions::new_current(nonce::State::Initialized(nonce::state::Data {
-                authority: nonce_authority.pubkey(),
-                blockhash: Hash::new_unique(),
-                fee_calculator: FeeCalculator::default(),
-            }));
+        let nonce_state = nonce::state::Versions::new_current(nonce::State::Initialized(
+            nonce::state::Data::new(nonce_authority.pubkey(), Hash::new_unique(), 0),
+        ));
         let nonce_account_post =
             AccountSharedData::new_data(43, &nonce_state, &system_program::id()).unwrap();
         let from_account_post = AccountSharedData::new(4199, 0, &Pubkey::default());
@@ -2732,12 +2733,9 @@ mod tests {
         ];
         let tx = new_sanitized_tx(&[&nonce_authority, &from], message, blockhash);
 
-        let nonce_state =
-            nonce::state::Versions::new_current(nonce::State::Initialized(nonce::state::Data {
-                authority: nonce_authority.pubkey(),
-                blockhash,
-                fee_calculator: FeeCalculator::default(),
-            }));
+        let nonce_state = nonce::state::Versions::new_current(nonce::State::Initialized(
+            nonce::state::Data::new(nonce_authority.pubkey(), Hash::new_unique(), 0),
+        ));
         let nonce_account_pre =
             AccountSharedData::new_data(42, &nonce_state, &system_program::id()).unwrap();
         let from_account_pre = AccountSharedData::new(4242, 0, &Pubkey::default());
@@ -2781,7 +2779,8 @@ mod tests {
             &programs,
             loaded.as_mut_slice(),
             &rent_collector,
-            &(next_blockhash, FeeCalculator::default()),
+            &next_blockhash,
+            0,
             true,
             true, // merge_nonce_error_into_system_error
             true, // demote_program_write_locks
@@ -2821,12 +2820,9 @@ mod tests {
         let from = keypair_from_seed(&[1; 32]).unwrap();
         let from_address = from.pubkey();
         let to_address = Pubkey::new_unique();
-        let nonce_state =
-            nonce::state::Versions::new_current(nonce::State::Initialized(nonce::state::Data {
-                authority: nonce_authority.pubkey(),
-                blockhash: Hash::new_unique(),
-                fee_calculator: FeeCalculator::default(),
-            }));
+        let nonce_state = nonce::state::Versions::new_current(nonce::State::Initialized(
+            nonce::state::Data::new(nonce_authority.pubkey(), Hash::new_unique(), 0),
+        ));
         let nonce_account_post =
             AccountSharedData::new_data(43, &nonce_state, &system_program::id()).unwrap();
         let from_account_post = AccountSharedData::new(4200, 0, &Pubkey::default());
@@ -2849,12 +2845,9 @@ mod tests {
         ];
         let tx = new_sanitized_tx(&[&nonce_authority, &from], message, blockhash);
 
-        let nonce_state =
-            nonce::state::Versions::new_current(nonce::State::Initialized(nonce::state::Data {
-                authority: nonce_authority.pubkey(),
-                blockhash,
-                fee_calculator: FeeCalculator::default(),
-            }));
+        let nonce_state = nonce::state::Versions::new_current(nonce::State::Initialized(
+            nonce::state::Data::new(nonce_authority.pubkey(), Hash::new_unique(), 0),
+        ));
         let nonce_account_pre =
             AccountSharedData::new_data(42, &nonce_state, &system_program::id()).unwrap();
 
@@ -2897,7 +2890,8 @@ mod tests {
             &programs,
             loaded.as_mut_slice(),
             &rent_collector,
-            &(next_blockhash, FeeCalculator::default()),
+            &next_blockhash,
+            0,
             true,
             true, // merge_nonce_error_into_system_error
             true, // demote_program_write_locks

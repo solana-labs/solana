@@ -14,7 +14,6 @@ use solana_sdk::{
         prevent_calling_precompiles_as_programs, remove_native_loader, requestable_heap_size,
         tx_wide_compute_cap, FeatureSet,
     },
-    fee_calculator::FeeCalculator,
     hash::Hash,
     ic_logger_msg,
     instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
@@ -93,7 +92,7 @@ pub struct ThisInvokeContext<'a> {
     #[allow(clippy::type_complexity)]
     sysvars: RefCell<Vec<(Pubkey, Option<Rc<Vec<u8>>>)>>,
     blockhash: Hash,
-    fee_calculator: FeeCalculator,
+    lamports_per_signature: u64,
     return_data: (Pubkey, Vec<u8>),
 }
 impl<'a> ThisInvokeContext<'a> {
@@ -111,7 +110,7 @@ impl<'a> ThisInvokeContext<'a> {
         account_db: Arc<Accounts>,
         ancestors: Option<&'a Ancestors>,
         blockhash: Hash,
-        fee_calculator: FeeCalculator,
+        lamports_per_signature: u64,
     ) -> Self {
         Self {
             instruction_index: 0,
@@ -131,7 +130,7 @@ impl<'a> ThisInvokeContext<'a> {
             ancestors,
             sysvars: RefCell::new(Vec::new()),
             blockhash,
-            fee_calculator,
+            lamports_per_signature,
             return_data: (Pubkey::default(), Vec::new()),
         }
     }
@@ -154,7 +153,7 @@ impl<'a> ThisInvokeContext<'a> {
             Arc::new(Accounts::default_for_tests()),
             None,
             Hash::default(),
-            FeeCalculator::default(),
+            0,
         )
     }
 
@@ -488,11 +487,11 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
     fn get_blockhash(&self) -> &Hash {
         &self.blockhash
     }
-    fn set_fee_calculator(&mut self, fee_calculator: FeeCalculator) {
-        self.fee_calculator = fee_calculator;
+    fn set_lamports_per_signature(&mut self, lamports_per_signature: u64) {
+        self.lamports_per_signature = lamports_per_signature;
     }
-    fn get_fee_calculator(&self) -> &FeeCalculator {
-        &self.fee_calculator
+    fn get_lamports_per_signature(&self) -> u64 {
+        self.lamports_per_signature
     }
     fn set_return_data(&mut self, data: Vec<u8>) -> Result<(), InstructionError> {
         self.return_data = (*self.get_caller()?, data);
@@ -622,7 +621,7 @@ impl MessageProcessor {
         account_db: Arc<Accounts>,
         ancestors: &Ancestors,
         blockhash: Hash,
-        fee_calculator: FeeCalculator,
+        lamports_per_signature: u64,
     ) -> Result<(), TransactionError> {
         let mut invoke_context = ThisInvokeContext::new(
             rent_collector.rent,
@@ -637,7 +636,7 @@ impl MessageProcessor {
             account_db,
             Some(ancestors),
             blockhash,
-            fee_calculator,
+            lamports_per_signature,
         );
         let compute_meter = invoke_context.get_compute_meter();
 
@@ -1011,7 +1010,7 @@ mod tests {
             Arc::new(Accounts::default_for_tests()),
             &ancestors,
             Hash::default(),
-            FeeCalculator::default(),
+            0,
         );
         assert_eq!(result, Ok(()));
         assert_eq!(accounts[0].1.borrow().lamports(), 100);
@@ -1042,7 +1041,7 @@ mod tests {
             Arc::new(Accounts::default_for_tests()),
             &ancestors,
             Hash::default(),
-            FeeCalculator::default(),
+            0,
         );
         assert_eq!(
             result,
@@ -1077,7 +1076,7 @@ mod tests {
             Arc::new(Accounts::default_for_tests()),
             &ancestors,
             Hash::default(),
-            FeeCalculator::default(),
+            0,
         );
         assert_eq!(
             result,
@@ -1222,7 +1221,7 @@ mod tests {
             Arc::new(Accounts::default_for_tests()),
             &ancestors,
             Hash::default(),
-            FeeCalculator::default(),
+            0,
         );
         assert_eq!(
             result,
@@ -1257,7 +1256,7 @@ mod tests {
             Arc::new(Accounts::default_for_tests()),
             &ancestors,
             Hash::default(),
-            FeeCalculator::default(),
+            0,
         );
         assert_eq!(result, Ok(()));
 
@@ -1290,7 +1289,7 @@ mod tests {
             Arc::new(Accounts::default_for_tests()),
             &ancestors,
             Hash::default(),
-            FeeCalculator::default(),
+            0,
         );
         assert_eq!(result, Ok(()));
         assert_eq!(accounts[0].1.borrow().lamports(), 80);
@@ -1593,7 +1592,7 @@ mod tests {
             Arc::new(Accounts::default_for_tests()),
             &Ancestors::default(),
             Hash::default(),
-            FeeCalculator::default(),
+            0,
         );
         assert_eq!(
             result,

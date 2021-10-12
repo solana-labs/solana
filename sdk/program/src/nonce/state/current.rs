@@ -9,6 +9,19 @@ pub struct Data {
     pub fee_calculator: FeeCalculator,
 }
 
+impl Data {
+    pub fn new(authority: Pubkey, blockhash: Hash, lamports_per_signature: u64) -> Self {
+        Data {
+            authority,
+            blockhash,
+            fee_calculator: FeeCalculator::new(lamports_per_signature),
+        }
+    }
+    pub fn get_lamports_per_signature(&self) -> u64 {
+        self.fee_calculator.lamports_per_signature
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub enum State {
     Uninitialized,

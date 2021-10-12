@@ -22,7 +22,7 @@ use {
         commitment_config::CommitmentConfig,
         epoch_schedule::EpochSchedule,
         exit::Exit,
-        fee_calculator::{FeeCalculator, FeeRateGovernor},
+        fee_calculator::FeeRateGovernor,
         hash::Hash,
         instruction::{AccountMeta, Instruction},
         message::Message,
@@ -636,15 +636,14 @@ impl TestValidator {
 
     /// Return an RpcClient for the validator.  As a convenience, also return a recent blockhash and
     /// associated fee calculator
-    pub fn rpc_client(&self) -> (RpcClient, Hash, FeeCalculator) {
+    pub fn rpc_client(&self) -> (RpcClient, Hash) {
         let rpc_client =
             RpcClient::new_with_commitment(self.rpc_url.clone(), CommitmentConfig::processed());
-        #[allow(deprecated)]
-        let (recent_blockhash, fee_calculator) = rpc_client
-            .get_recent_blockhash()
-            .expect("get_recent_blockhash");
+        let blockhash = rpc_client
+            .get_latest_blockhash()
+            .expect("get_latest_blockhash");
 
-        (rpc_client, recent_blockhash, fee_calculator)
+        (rpc_client, blockhash)
     }
 
     pub fn join(mut self) {

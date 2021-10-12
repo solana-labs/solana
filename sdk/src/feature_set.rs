@@ -249,6 +249,10 @@ pub mod requestable_heap_size {
     solana_sdk::declare_id!("CCu4boMmfLuqcmfTLPHQiUo22ZdUsXjgzPAURYaWt1Bw");
 }
 
+pub mod disable_fee_calculator {
+    solana_sdk::declare_id!("2jXx2yDmGysmBKfKYNgLj2DQyAQv6mMk2BPh4eSbyB4H");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -300,12 +304,13 @@ lazy_static! {
         (sol_log_data_syscall_enabled::id(), "enable sol_log_data syscall"),
         (stakes_remove_delegation_if_inactive::id(), "remove delegations from stakes cache when inactive"),
         (do_support_realloc::id(), "support account data reallocation"),
-        (prevent_calling_precompiles_as_programs::id(), "Prevent calling precompiles as programs"),
-        (optimize_epoch_boundary_updates::id(), "Optimize epoch boundary updates"),
-        (remove_native_loader::id(), "Remove support for the native loader"),
-        (send_to_tpu_vote_port::id(), "Send votes to the tpu vote port"),
+        (prevent_calling_precompiles_as_programs::id(), "prevent calling precompiles as programs"),
+        (optimize_epoch_boundary_updates::id(), "optimize epoch boundary updates"),
+        (remove_native_loader::id(), "remove support for the native loader"),
+        (send_to_tpu_vote_port::id(), "send votes to the tpu vote port"),
         (turbine_peers_shuffle::id(), "turbine peers shuffle patch"),
         (requestable_heap_size::id(), "Requestable heap frame size"),
+        (disable_fee_calculator::id(), "deprecate fee calculator"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

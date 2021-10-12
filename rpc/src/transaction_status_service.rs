@@ -5,9 +5,7 @@ use {
         blockstore::Blockstore,
         blockstore_processor::{TransactionStatusBatch, TransactionStatusMessage},
     },
-    solana_runtime::bank::{
-        Bank, InnerInstructionsList, NonceRollbackInfo, TransactionLogMessages,
-    },
+    solana_runtime::bank::{Bank, InnerInstructionsList, TransactionLogMessages},
     solana_transaction_status::{
         extract_and_fmt_memos, InnerInstructions, Reward, TransactionStatusMeta,
     },
@@ -105,16 +103,18 @@ impl TransactionStatusService {
                     rent_debits,
                 ) {
                     if Bank::can_commit(&status) {
-                        let fee_calculator = nonce_rollback
-                            .map(|nonce_rollback| nonce_rollback.fee_calculator())
+                        let lamports_per_signature = nonce_rollback
+                            .map(|nonce_rollback| nonce_rollback.lamports_per_signature())
                             .unwrap_or_else(|| {
-                                #[allow(deprecated)]
-                                bank.get_fee_calculator(transaction.message().recent_blockhash())
+                                bank.get_lamports_per_signature_for_blockhash(
+                                    transaction.message().recent_blockhash(),
+                                )
                             })
-                            .expect("FeeCalculator must exist");
-                        let fee = transaction
-                            .message()
-                            .calculate_fee(fee_calculator.lamports_per_signature);
+                            .expect("lamports_per_signature must be available");
+                        let fee = Bank::get_fee_for_message_with_lamports_per_signature(
+                            transaction.message(),
+                            lamports_per_signature,
+                        );
                         let tx_account_locks =
                             transaction.get_account_locks(bank.demote_program_write_locks());
 

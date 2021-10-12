@@ -23,7 +23,7 @@ use solana_rbpf::{
     vm::{Config, Executable, Tracer},
 };
 use solana_runtime::{
-    bank::{Bank, ExecuteTimings, NonceRollbackInfo, TransactionBalancesSet, TransactionResults},
+    bank::{Bank, ExecuteTimings, TransactionBalancesSet, TransactionResults},
     bank_client::BankClient,
     genesis_utils::{create_genesis_config, GenesisConfigInfo},
     loader_utils::{
@@ -42,7 +42,7 @@ use solana_sdk::{
     instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
     keyed_account::KeyedAccount,
     loader_instruction,
-    message::Message,
+    message::{Message, SanitizedMessage},
     process_instruction::{InvokeContext, MockInvokeContext},
     pubkey::Pubkey,
     signature::{keypair_from_seed, Keypair, Signer},
@@ -56,8 +56,8 @@ use solana_transaction_status::{
     TransactionStatusMeta, TransactionWithStatusMeta, UiTransactionEncoding,
 };
 use std::{
-    cell::RefCell, collections::HashMap, convert::TryInto, env, fs::File, io::Read, path::PathBuf,
-    str::FromStr, sync::Arc,
+    cell::RefCell, collections::HashMap, convert::TryFrom, convert::TryInto, env, fs::File,
+    io::Read, path::PathBuf, str::FromStr, sync::Arc,
 };
 
 /// BPF program file extension
@@ -370,13 +370,16 @@ fn execute_transactions(bank: &Bank, txs: Vec<Transaction>) -> Vec<ConfirmedTran
             post_token_balances,
             log_messages,
         )| {
-            #[allow(deprecated)]
-            let fee_calculator = nonce_rollback
-                .map(|nonce_rollback| nonce_rollback.fee_calculator())
-                .unwrap_or_else(|| bank.get_fee_calculator(&tx.message().recent_blockhash))
-                .expect("FeeCalculator must exist");
-            #[allow(deprecated)]
-            let fee = fee_calculator.calculate_fee(tx.message());
+            let lamports_per_signature = nonce_rollback
+                .map(|nonce_rollback| nonce_rollback.lamports_per_signature())
+                .unwrap_or_else(|| {
+                    bank.get_lamports_per_signature_for_blockhash(&tx.message().recent_blockhash)
+                })
+                .expect("lamports_per_signature must exist");
+            let fee = Bank::get_fee_for_message_with_lamports_per_signature(
+                &SanitizedMessage::try_from(tx.message().clone()).unwrap(),
+                lamports_per_signature,
+            );
 
             let inner_instructions = inner_instructions.map(|inner_instructions| {
                 inner_instructions
