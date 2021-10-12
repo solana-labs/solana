@@ -96,56 +96,11 @@ impl SystemMonitorService {
     }
 
     #[cfg(target_os = "linux")]
-    fn report_net_stats(udp_stats: &mut Option<UdpStats>) {
+    fn process_udp_stats(udp_stats: &mut Option<UdpStats>) {
         match read_udp_stats(PROC_NET_SNMP_PATH) {
             Ok(new_stats) => {
-                if let Some(udp_stats) = udp_stats {
-                    datapoint_info!(
-                        "net-stats",
-                        (
-                            "in_datagrams_delta",
-                            new_stats.in_datagrams - udp_stats.in_datagrams,
-                            i64
-                        ),
-                        (
-                            "no_ports_delta",
-                            new_stats.no_ports - udp_stats.no_ports,
-                            i64
-                        ),
-                        (
-                            "in_errors_delta",
-                            new_stats.in_errors - udp_stats.in_errors,
-                            i64
-                        ),
-                        (
-                            "out_datagrams_delta",
-                            new_stats.out_datagrams - udp_stats.out_datagrams,
-                            i64
-                        ),
-                        (
-                            "rcvbuf_errors_delta",
-                            new_stats.rcvbuf_errors - udp_stats.rcvbuf_errors,
-                            i64
-                        ),
-                        (
-                            "sndbuf_errors_delta",
-                            new_stats.sndbuf_errors - udp_stats.sndbuf_errors,
-                            i64
-                        ),
-                        (
-                            "in_csum_errors_delta",
-                            new_stats.in_csum_errors - udp_stats.in_csum_errors,
-                            i64
-                        ),
-                        (
-                            "ignored_multi_delta",
-                            new_stats.ignored_multi - udp_stats.ignored_multi,
-                            i64
-                        ),
-                        ("in_errors", new_stats.in_errors, i64),
-                        ("rcvbuf_errors", new_stats.rcvbuf_errors, i64),
-                        ("sndbuf_errors", new_stats.sndbuf_errors, i64),
-                    );
+                if let Some(old_stats) = udp_stats {
+                    report_udp_stats(&old_stats, &new_stats);
                 }
                 *udp_stats = Some(new_stats);
             }
@@ -154,7 +109,57 @@ impl SystemMonitorService {
     }
 
     #[cfg(not(target_os = "linux"))]
-    fn report_net_stats(_udp_stats: &mut Option<UdpStats>) {}
+    fn process_udp_stats(_udp_stats: &mut Option<UdpStats>) {}
+
+    #[allow(dead_code)]
+    fn report_udp_stats(old_stats: &UdpStats, new_stats: &UdpStats) {
+        datapoint_info!(
+            "net-stats",
+            (
+                "in_datagrams_delta",
+                new_stats.in_datagrams - old_stats.in_datagrams,
+                i64
+            ),
+            (
+                "no_ports_delta",
+                new_stats.no_ports - old_stats.no_ports,
+                i64
+            ),
+            (
+                "in_errors_delta",
+                new_stats.in_errors - old_stats.in_errors,
+                i64
+            ),
+            (
+                "out_datagrams_delta",
+                new_stats.out_datagrams - old_stats.out_datagrams,
+                i64
+            ),
+            (
+                "rcvbuf_errors_delta",
+                new_stats.rcvbuf_errors - old_stats.rcvbuf_errors,
+                i64
+            ),
+            (
+                "sndbuf_errors_delta",
+                new_stats.sndbuf_errors - old_stats.sndbuf_errors,
+                i64
+            ),
+            (
+                "in_csum_errors_delta",
+                new_stats.in_csum_errors - old_stats.in_csum_errors,
+                i64
+            ),
+            (
+                "ignored_multi_delta",
+                new_stats.ignored_multi - old_stats.ignored_multi,
+                i64
+            ),
+            ("in_errors", new_stats.in_errors, i64),
+            ("rcvbuf_errors", new_stats.rcvbuf_errors, i64),
+            ("sndbuf_errors", new_stats.sndbuf_errors, i64),
+        );
+    }
 
     pub fn run(exit: Arc<AtomicBool>) {
         let mut udp_stats = None;
@@ -168,7 +173,7 @@ impl SystemMonitorService {
             if now.elapsed() >= SAMPLE_INTERVAL {
                 now = Instant::now();
 
-                SystemMonitorService::report_net_stats(&mut udp_stats);
+                SystemMonitorService::process_udp_stats(&mut udp_stats);
             }
 
             sleep(SLEEP_INTERVAL);
