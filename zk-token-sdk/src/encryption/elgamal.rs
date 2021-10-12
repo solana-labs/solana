@@ -11,6 +11,7 @@ use {
         ristretto::{CompressedRistretto, RistrettoPoint},
         scalar::Scalar,
     },
+    ed25519_dalek::SecretKey as SigningKey,
     serde::{Deserialize, Serialize},
     std::collections::HashMap,
     std::convert::TryInto,
@@ -20,6 +21,7 @@ use {
 #[cfg(not(target_arch = "bpf"))]
 use {
     rand::{rngs::OsRng, CryptoRng, RngCore},
+    sha3::Sha3_512,
     std::{
         fmt,
         fs::{self, File, OpenOptions},
@@ -217,6 +219,13 @@ impl ElGamalKeypair {
 #[derive(Serialize, Deserialize, Default, Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ElGamalPubkey(RistrettoPoint);
 impl ElGamalPubkey {
+    /// Derive the `ElGamalPubkey` that uniquely corresponds to an `ElGamalSecretKey`
+    #[allow(non_snake_case)]
+    pub fn new(sk: ElGamalSecretKey) -> Self {
+        let H = PedersenBase::default().H;
+        ElGamalPubkey(sk.0 * H)
+    }
+
     pub fn get_point(&self) -> RistrettoPoint {
         self.0
     }
@@ -271,6 +280,11 @@ impl fmt::Display for ElGamalPubkey {
 #[zeroize(drop)]
 pub struct ElGamalSecretKey(Scalar);
 impl ElGamalSecretKey {
+    pub fn new(signing_key: SigningKey, label: &'static [u8]) -> Self {
+        let hashable = [&signing_key.to_bytes(), label].concat();
+        ElGamalSecretKey(Scalar::hash_from_bytes::<Sha3_512>(&hashable))
+    }
+
     pub fn get_scalar(&self) -> Scalar {
         self.0
     }
