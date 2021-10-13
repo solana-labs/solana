@@ -85,9 +85,6 @@ rustc_version = "0.4"
 name = "banking_stage"
 
 [[bench]]
-name = "blockstore"
-
-[[bench]]
 name = "cluster_info"
 
 [[bench]]

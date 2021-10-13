@@ -116,7 +116,6 @@ impl<'a> ThisInvokeContext<'a> {
 impl<'a> InvokeContext for ThisInvokeContext<'a> {
     fn push(
         &mut self,
-        key: &Pubkey,
         message: &Message,
         instruction: &CompiledInstruction,
         program_indices: &[usize],
@@ -124,6 +123,23 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
     ) -> Result<(), InstructionError> {
         if self.invoke_stack.len() > self.compute_budget.max_invoke_depth {
             return Err(InstructionError::CallDepth);
+        }
+
+        if let Some(index_of_program_id) = program_indices.last() {
+            let program_id = &self.accounts[*index_of_program_id].0;
+            let contains = self
+                .invoke_stack
+                .iter()
+                .any(|frame| frame.program_id() == Some(program_id));
+            let is_last = if let Some(last_frame) = self.invoke_stack.last() {
+                last_frame.program_id() == Some(program_id)
+            } else {
+                false
+            };
+            if contains && !is_last {
+                // Reentrancy not allowed unless caller is calling itself
+                return Err(InstructionError::ReentrancyNotAllowed);
+            }
         }
 
         if self.invoke_stack.is_empty() {
@@ -138,17 +154,6 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
                 Err(InstructionError::MissingAccount)
             };
             instruction.visit_each_account(&mut work)?;
-        }
-
-        let contains = self.invoke_stack.iter().any(|frame| frame.key == *key);
-        let is_last = if let Some(last_frame) = self.invoke_stack.last() {
-            last_frame.key == *key
-        } else {
-            false
-        };
-        if contains && !is_last {
-            // Reentrancy not allowed unless caller is calling itself
-            return Err(InstructionError::ReentrancyNotAllowed);
         }
 
         // Create the KeyedAccounts that will be passed to the program
@@ -180,8 +185,9 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
                 )
             }))
             .collect::<Vec<_>>();
+
         self.invoke_stack.push(InvokeContextStackFrame::new(
-            *key,
+            program_indices.len(),
             create_keyed_accounts_unified(keyed_accounts.as_slice()),
         ));
         Ok(())
@@ -259,11 +265,11 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
         write_privileges: &[bool],
     ) -> Result<(), InstructionError> {
         let do_support_realloc = self.feature_set.is_active(&do_support_realloc::id());
-        let stack_frame = self
+        let program_id = self
             .invoke_stack
             .last()
+            .and_then(|frame| frame.program_id())
             .ok_or(InstructionError::CallDepth)?;
-        let program_id = &stack_frame.key;
         let rent = &self.rent;
         let logger = &self.logger;
         let accounts = &self.accounts;
@@ -325,7 +331,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
     fn get_caller(&self) -> Result<&Pubkey, InstructionError> {
         self.invoke_stack
             .last()
-            .map(|frame| &frame.key)
+            .and_then(|frame| frame.program_id())
             .ok_or(InstructionError::CallDepth)
     }
     fn remove_first_keyed_account(&mut self) -> Result<(), InstructionError> {
@@ -549,7 +555,7 @@ impl MessageProcessor {
 
             invoke_context.set_instruction_index(instruction_index);
             let result = invoke_context
-                .push(program_id, message, instruction, program_indices, None)
+                .push(message, instruction, program_indices, None)
                 .and_then(|_| {
                     instruction_processor
                         .process_instruction(&instruction.data, &mut invoke_context)?;
@@ -693,10 +699,9 @@ mod tests {
 
         // Check call depth increases and has a limit
         let mut depth_reached = 0;
-        for program_id in invoke_stack.iter() {
+        for _ in 0..invoke_stack.len() {
             if Err(InstructionError::CallDepth)
                 == invoke_context.push(
-                    program_id,
                     &message,
                     &message.instructions[0],
                     &[MAX_DEPTH + depth_reached],
@@ -796,13 +801,7 @@ mod tests {
             &fee_calculator,
         );
         invoke_context
-            .push(
-                &accounts[0].0,
-                &message,
-                &message.instructions[0],
-                &[0],
-                None,
-            )
+            .push(&message, &message.instructions[0], &[0], None)
             .unwrap();
         assert!(invoke_context
             .verify(&message, &message.instructions[0], &[0])
@@ -1253,13 +1252,7 @@ mod tests {
             &fee_calculator,
         );
         invoke_context
-            .push(
-                &caller_program_id,
-                &message,
-                &caller_instruction,
-                &program_indices[..1],
-                None,
-            )
+            .push(&message, &caller_instruction, &program_indices[..1], None)
             .unwrap();
 
         // not owned account modified by the caller (before the invoke)
@@ -1317,13 +1310,7 @@ mod tests {
                 Instruction::new_with_bincode(callee_program_id, &case.0, metas.clone());
             let message = Message::new(&[callee_instruction], None);
             invoke_context
-                .push(
-                    &caller_program_id,
-                    &message,
-                    &caller_instruction,
-                    &program_indices[..1],
-                    None,
-                )
+                .push(&message, &caller_instruction, &program_indices[..1], None)
                 .unwrap();
             let caller_write_privileges = message
                 .account_keys
@@ -1410,13 +1397,7 @@ mod tests {
             &fee_calculator,
         );
         invoke_context
-            .push(
-                &caller_program_id,
-                &message,
-                &caller_instruction,
-                &program_indices,
-                None,
-            )
+            .push(&message, &caller_instruction, &program_indices, None)
             .unwrap();
 
         // not owned account modified by the invoker
@@ -1469,13 +1450,7 @@ mod tests {
                 Instruction::new_with_bincode(callee_program_id, &case.0, metas.clone());
             let message = Message::new(&[callee_instruction.clone()], None);
             invoke_context
-                .push(
-                    &caller_program_id,
-                    &message,
-                    &caller_instruction,
-                    &program_indices,
-                    None,
-                )
+                .push(&message, &caller_instruction, &program_indices, None)
                 .unwrap();
             assert_eq!(
                 InstructionProcessor::native_invoke(

@@ -129,13 +129,13 @@ const VideoArtContent = ({
           streamRef={(e: any) => playerRef(e)}
           src={likelyVideo.replace("https://watch.videodelivery.net/", "")}
           loop={true}
-          height={150}
-          width={150}
+          height={180}
+          width={320}
           controls={false}
           style={{ borderRadius: 12 }}
           videoDimensions={{
-            videoHeight: 150,
-            videoWidth: 150,
+            videoWidth: 320,
+            videoHeight: 180,
           }}
           autoplay={true}
           muted={true}
@@ -148,7 +148,7 @@ const VideoArtContent = ({
         muted={true}
         controls={true}
         controlsList="nodownload"
-        style={{ borderRadius: 12 }}
+        style={{ borderRadius: 12, width: 320, height: 180 }}
         loop={true}
         poster={uri}
       >
@@ -188,7 +188,7 @@ const HTMLContent = ({
         frameBorder="0"
         src={htmlURL}
         className={`${loaded ? "d-block" : "d-none"}`}
-        style={{ width: 150, borderRadius: 12 }}
+        style={{ width: 320, height: 180, borderRadius: 12 }}
         onLoad={() => {
           setLoaded(true);
         }}
