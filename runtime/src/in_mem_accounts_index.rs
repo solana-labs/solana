@@ -654,7 +654,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         // random eviction
         const N: usize = 1000;
         // 1/N chance of eviction
-        false//thread_rng().gen_range(0, N) == 0
+        false //thread_rng().gen_range(0, N) == 0
     }
 
     /// return true if 'entry' should be removed from the in-mem index
@@ -843,6 +843,19 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 if self.get_stop_flush() {
                     return false; // did NOT complete, told to stop
                 }
+
+                // todo: slow
+                let max_slot = self.storage.slot_for_caching.load(Ordering::Relaxed);
+                assert!(
+                    !v.slot_list
+                        .read()
+                        .unwrap()
+                        .iter()
+                        .any(|entry| entry.0 >= max_slot),
+                    "{:?}, {}",
+                    v.slot_list.read().unwrap(),
+                    max_slot
+                );
 
                 // all conditions for removing succeeded, so really remove item from in-mem cache
                 removed += 1;
