@@ -44,6 +44,7 @@ pub struct BucketMapHolderStats {
     pub flush_remove_us: AtomicU64,
     pub flush_grow_us: AtomicU64,
     last_was_startup: AtomicBool,
+    pub last_slot_for_caching: AtomicU64,
     last_time: AtomicInterval,
 }
 
@@ -387,6 +388,14 @@ impl BucketMapHolderStats {
                 "flush_entries_removed_from_mem",
                 self.flush_entries_removed_from_mem
                     .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "slot_for_caching_delta",
+                storage
+                    .slot_for_caching
+                    .load(Ordering::Relaxed)
+                    .saturating_sub(self.last_slot_for_caching.swap(0, Ordering::Relaxed)),
                 i64
             ),
         );
