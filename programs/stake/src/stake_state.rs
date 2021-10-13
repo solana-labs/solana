@@ -428,7 +428,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         if let StakeState::Uninitialized = self.state()? {
             let rent_exempt_reserve = rent.minimum_balance(self.data_len()?);
 
-            if rent_exempt_reserve < self.lamports()? {
+            if rent_exempt_reserve <= self.lamports()? {
                 self.set_state(&StakeState::Initialized(Meta {
                     rent_exempt_reserve,
                     authorized: *authorized,
