@@ -69,8 +69,11 @@ pub fn collect_token_balances(
                     continue;
                 }
 
-                if let Some((mint, ui_token_amount, owner)) =
-                    collect_token_balance_from_account(bank, account_id, mint_decimals)
+                if let Some(TokenBalanceData {
+                    mint,
+                    ui_token_amount,
+                    owner,
+                }) = collect_token_balance_from_account(bank, account_id, mint_decimals)
                 {
                     transaction_balances.push(TransactionTokenBalance {
                         account_index: index as u8,
@@ -86,11 +89,17 @@ pub fn collect_token_balances(
     balances
 }
 
-pub fn collect_token_balance_from_account(
+struct TokenBalanceData {
+    mint: String,
+    owner: String,
+    ui_token_amount: UiTokenAmount,
+}
+
+fn collect_token_balance_from_account(
     bank: &Bank,
     account_id: &Pubkey,
     mint_decimals: &mut HashMap<Pubkey, u8>,
-) -> Option<(String, UiTokenAmount, String)> {
+) -> Option<TokenBalanceData> {
     let account = bank.get_account(account_id)?;
 
     let token_account = TokenAccount::unpack(account.data()).ok()?;
@@ -102,9 +111,9 @@ pub fn collect_token_balance_from_account(
         Some(decimals)
     })?;
 
-    Some((
-        token_account.mint.to_string(),
-        token_amount_to_ui_amount(token_account.amount, decimals),
-        token_account.owner.to_string(),
-    ))
+    Some(TokenBalanceData {
+        mint: token_account.mint.to_string(),
+        owner: token_account.owner.to_string(),
+        ui_token_amount: token_amount_to_ui_amount(token_account.amount, decimals),
+    })
 }
