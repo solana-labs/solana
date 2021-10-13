@@ -185,20 +185,21 @@ fn output_slot(
         }
     }
 
-    let (entries, num_shreds, _is_full) = blockstore
+    let (entries, num_shreds, is_full) = blockstore
         .get_slot_entries_with_shred_info(slot, 0, allow_dead_slots)
         .map_err(|err| format!("Failed to load entries for slot {}: {:?}", slot, err))?;
 
     if *method == LedgerOutputMethod::Print {
         if let Ok(Some(meta)) = blockstore.meta(slot) {
             if verbose_level >= 2 {
-                println!(" Slot Meta {:?}", meta);
+                println!(" Slot Meta {:?} is_full: {}", meta, is_full);
             } else {
                 println!(
-                    " num_shreds: {} parent_slot: {} num_entries: {}",
+                    " num_shreds: {} parent_slot: {} num_entries: {} is_full: {}",
                     num_shreds,
                     meta.parent_slot,
-                    entries.len()
+                    entries.len(),
+                    is_full,
                 );
             }
         }
