@@ -144,7 +144,7 @@ impl<T: IndexValue> BucketMapHolder<T> {
     }
 
     pub fn new(bins: usize, config: &Option<AccountsIndexConfig>, threads: usize) -> Self {
-        const DEFAULT_AGE_TO_STAY_IN_CACHE: Age = 5;
+        const DEFAULT_AGE_TO_STAY_IN_CACHE: Age = 30;
         let ages_to_stay_in_cache = config
             .as_ref()
             .and_then(|config| config.ages_to_stay_in_cache)
