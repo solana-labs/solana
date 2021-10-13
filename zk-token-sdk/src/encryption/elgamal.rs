@@ -12,6 +12,7 @@ use {
         scalar::Scalar,
     },
     ed25519_dalek::SecretKey as SigningKey,
+    solana_sdk::pubkey::Pubkey,
     serde::{Deserialize, Serialize},
     std::collections::HashMap,
     std::convert::TryInto,
@@ -54,14 +55,6 @@ impl ElGamal {
             public: ElGamalPubkey(P),
             secret: ElGamalSecretKey(s),
         }
-    }
-
-    #[cfg(not(target_arch = "bpf"))]
-    #[allow(non_snake_case)]
-    pub fn from_signing_key(signing_key: &SigningKey, label: &'static [u8]) -> Self {
-        let secret = ElGamalSecretKey::new(signing_key, label);
-        let public = ElGamalPubkey::new(&secret);
-        Self { secret, public }
     }
 
     /// On input a public key and a message to be encrypted, the function
@@ -139,6 +132,21 @@ pub struct ElGamalKeypair {
 }
 
 impl ElGamalKeypair {
+    /// Generates the public and secret keys for ElGamal encryption from Ed25519 signing key and an
+    /// address.
+    #[cfg(not(target_arch = "bpf"))]
+    #[allow(non_snake_case)]
+    pub fn new(signing_key: &SigningKey, address: &Pubkey) -> Self {
+        let secret = ElGamalSecretKey::new(signing_key, address);
+        let public = ElGamalPubkey::new(&secret);
+
+        Self {
+            secret,
+            public,
+        }
+    }
+
+
     /// Generates the public and secret keys for ElGamal encryption.
     #[cfg(not(target_arch = "bpf"))]
     #[allow(clippy::new_ret_no_self)]
@@ -288,8 +296,10 @@ impl fmt::Display for ElGamalPubkey {
 #[zeroize(drop)]
 pub struct ElGamalSecretKey(Scalar);
 impl ElGamalSecretKey {
-    pub fn new(signing_key: &SigningKey, label: &'static [u8]) -> Self {
-        let hashable = [&signing_key.to_bytes(), label].concat();
+    pub fn new(signing_key: &SigningKey, address: &Pubkey) -> Self {
+        let mut hashable = [0_u8; 64];
+        hashable[..32].copy_from_slice(&signing_key.to_bytes());
+        hashable[32..].copy_from_slice(&address.to_bytes());
         ElGamalSecretKey(Scalar::hash_from_bytes::<Sha3_512>(&hashable))
     }
 
