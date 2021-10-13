@@ -15,25 +15,26 @@ pub mod parse_token;
 pub mod parse_vote;
 pub mod token_balances;
 
-pub use crate::extract_memos::extract_and_fmt_memos;
-use crate::{
-    parse_accounts::{parse_accounts, ParsedAccount},
-    parse_instruction::{parse, ParsedInstruction},
+pub use {crate::extract_memos::extract_and_fmt_memos, solana_runtime::bank::RewardType};
+use {
+    crate::{
+        parse_accounts::{parse_accounts, ParsedAccount},
+        parse_instruction::{parse, ParsedInstruction},
+    },
+    solana_account_decoder::parse_token::UiTokenAmount,
+    solana_sdk::{
+        clock::{Slot, UnixTimestamp},
+        commitment_config::CommitmentConfig,
+        deserialize_utils::default_on_eof,
+        instruction::CompiledInstruction,
+        message::{Message, MessageHeader},
+        pubkey::Pubkey,
+        sanitize::Sanitize,
+        signature::Signature,
+        transaction::{Result, Transaction, TransactionError},
+    },
+    std::fmt,
 };
-use solana_account_decoder::parse_token::UiTokenAmount;
-pub use solana_runtime::bank::RewardType;
-use solana_sdk::{
-    clock::{Slot, UnixTimestamp},
-    commitment_config::CommitmentConfig,
-    deserialize_utils::default_on_eof,
-    instruction::CompiledInstruction,
-    message::{Message, MessageHeader},
-    pubkey::Pubkey,
-    sanitize::Sanitize,
-    signature::Signature,
-    transaction::{Result, Transaction, TransactionError},
-};
-use std::fmt;
 /// A duplicate representation of an Instruction for pretty JSON serialization
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", untagged)]
