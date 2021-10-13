@@ -429,7 +429,7 @@ impl Accounts {
 
             // Add loader to chain
             let program_owner = *program.owner();
-
+            account_indices.insert(0, program_account_index);
             if bpf_loader_upgradeable::check_id(&program_owner) {
                 // The upgradeable loader requires the derived ProgramData account
                 if let Ok(UpgradeableLoaderState::Program {
@@ -457,7 +457,6 @@ impl Accounts {
                 }
             }
 
-            account_indices.insert(0, program_account_index);
             program_id = program_owner;
         }
         Ok(account_indices)
@@ -1923,8 +1922,8 @@ mod tests {
         let result = loaded_accounts[0].0.as_ref().unwrap();
         assert_eq!(result.accounts[..2], accounts[..2]);
         assert_eq!(result.accounts[result.program_indices[0][0]], accounts[5]);
-        assert_eq!(result.accounts[result.program_indices[0][1]], accounts[3]);
-        assert_eq!(result.accounts[result.program_indices[0][2]], accounts[4]);
+        assert_eq!(result.accounts[result.program_indices[0][1]], accounts[4]);
+        assert_eq!(result.accounts[result.program_indices[0][2]], accounts[3]);
     }
 
     #[test]
