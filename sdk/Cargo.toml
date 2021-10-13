@@ -77,6 +77,10 @@ solana-program = { path = "program", version = "=1.10.0" }
 solana-sdk-macro = { path = "macro", version = "=1.10.0" }
 thiserror = "1.0"
 uriparse = "0.6.3"
+wasm-bindgen = "0.2"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys = "0.3.55"
 
 [dev-dependencies]
 curve25519-dalek = "3.2.0"
