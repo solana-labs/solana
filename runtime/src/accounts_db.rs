@@ -2020,6 +2020,8 @@ impl AccountsDb {
         let found_not_zero_accum = AtomicU64::new(0);
         let not_found_on_fork_accum = AtomicU64::new(0);
         let missing_accum = AtomicU64::new(0);
+        let after_max_accum = AtomicU64::new(0);
+        let more_than_one_info_accum = AtomicU64::new(0);
 
         // parallel scan the index.
         let (mut purges_zero_lamports, purges_old_accounts) = {
@@ -2032,6 +2034,8 @@ impl AccountsDb {
                         let mut found_not_zero = 0;
                         let mut not_found_on_fork = 0;
                         let mut missing = 0;
+                        let mut after_max = 0;
+                        let mut more_than_one_info = 0;
                         for pubkey in pubkeys {
                             match self.accounts_index.get(pubkey, None, max_clean_root) {
                                 AccountIndexGetResult::Found(locked_entry, index) => {
@@ -2046,6 +2050,15 @@ impl AccountsDb {
                                     } else {
                                         found_not_zero += 1;
                                     }
+                                    if slot_list.len() != 1 {
+                                        more_than_one_info += 1;
+                                    }
+                                    max_clean_root.map(|x|
+                                        if slot_list.iter().any(|item| item.0 > x.saturating_sub(100)) {
+                                            after_max += 1;
+                                        }
+                                    );
+
                                     // Release the lock
                                     let slot = *slot;
                                     drop(locked_entry);
@@ -2077,6 +2090,8 @@ impl AccountsDb {
                         found_not_zero_accum.fetch_add(found_not_zero, Ordering::Relaxed);
                         not_found_on_fork_accum.fetch_add(not_found_on_fork, Ordering::Relaxed);
                         missing_accum.fetch_add(missing, Ordering::Relaxed);
+                        after_max_accum.fetch_add(after_max, Ordering::Relaxed);
+                        more_than_one_info_accum.fetch_add(more_than_one_info, Ordering::Relaxed);
                         (purges_zero_lamports, purges_old_accounts)
                     })
                     .reduce(
@@ -2250,6 +2265,8 @@ impl AccountsDb {
                 i64
             ),
             ("scan_missing", missing_accum.load(Ordering::Relaxed), i64),
+            ("scan_after_max", after_max_accum.load(Ordering::Relaxed), i64),
+            ("scan_more_than_one_info", more_than_one_info_accum.load(Ordering::Relaxed), i64),
             ("uncleaned_roots_len", uncleaned_roots_len, i64),
             (
                 "clean_old_root_us",
