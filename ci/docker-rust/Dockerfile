@@ -29,9 +29,10 @@ RUN set -x \
  && rustup component add rustfmt \
  && rustup component add clippy \
  && cargo install cargo-audit \
- && cargo install svgbob_cli \
  && cargo install mdbook \
  && cargo install mdbook-linkcheck \
+ && cargo install svgbob_cli \
+ && cargo install wasm-pack \
  && rustc --version \
  && cargo --version \
  && curl -OL https://github.com/google/protobuf/releases/download/v$PROTOC_VERSION/$PROTOC_ZIP \
