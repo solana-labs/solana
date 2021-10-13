@@ -21,7 +21,7 @@
     "@types/chart.js": "^2.9.34",
     "@types/classnames": "^2.3.1",
     "@types/jest": "^27.0.2",
-    "@types/node": "^16.10.3",
+    "@types/node": "^16.10.5",
     "@types/react": "^17.0.28",
     "@types/react-dom": "^17.0.9",
     "@types/react-router-dom": "^5.3.1",
