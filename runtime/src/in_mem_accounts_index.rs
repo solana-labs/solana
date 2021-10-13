@@ -654,7 +654,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         // random eviction
         const N: usize = 1000;
         // 1/N chance of eviction
-        thread_rng().gen_range(0, N) == 0
+        false//thread_rng().gen_range(0, N) == 0
     }
 
     /// return true if 'entry' should be removed from the in-mem index
