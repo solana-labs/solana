@@ -57,14 +57,6 @@ impl ElGamal {
         }
     }
 
-    #[cfg(not(target_arch = "bpf"))]
-    #[allow(non_snake_case)]
-    pub fn from_signing_key(signing_key: &SigningKey, label: &'static [u8]) -> Self {
-        let secret = ElGamalSecretKey::new(signing_key, label);
-        let public = ElGamalPubkey::new(&secret);
-        Self { secret, public }
-    }
-
     /// On input a public key and a message to be encrypted, the function
     /// returns an ElGamal ciphertext of the message under the public key.
     #[cfg(not(target_arch = "bpf"))]
