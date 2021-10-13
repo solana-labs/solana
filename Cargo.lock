@@ -4185,6 +4185,7 @@ dependencies = [
  "serde_json",
  "solana-accountsdb-plugin-interface",
  "solana-logger 1.8.1",
+ "solana-measure",
  "solana-metrics",
  "solana-rpc",
  "solana-runtime",
@@ -4206,6 +4207,8 @@ dependencies = [
  "serde_json",
  "solana-accountsdb-plugin-interface",
  "solana-logger 1.8.1",
+ "solana-metrics",
+ "solana-sdk",
  "thiserror",
 ]
 
