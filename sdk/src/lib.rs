@@ -47,6 +47,7 @@ pub mod system_transaction;
 pub mod timing;
 pub mod transaction;
 pub mod transport;
+pub mod wasm;
 
 /// Same as `declare_id` except report that this id has been deprecated
 pub use solana_sdk_macro::declare_deprecated_id;

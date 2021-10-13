@@ -11,6 +11,7 @@ RUN set -x \
  && apt-get install apt-transport-https \
  && echo deb https://apt.buildkite.com/buildkite-agent stable main > /etc/apt/sources.list.d/buildkite-agent.list \
  && apt-key adv --no-tty --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 32A37959C2FA5C3C99EFBC32A79206696452D198 \
+ && curl -fsSL https://deb.nodesource.com/setup_current.x | bash - \
  && apt update \
  && apt install -y \
       buildkite-agent \
@@ -19,6 +20,7 @@ RUN set -x \
       lcov \
       libudev-dev \
       mscgen \
+      nodejs \
       net-tools \
       rsync \
       sudo \
@@ -26,8 +28,11 @@ RUN set -x \
       unzip \
       \
  && rm -rf /var/lib/apt/lists/* \
+ && node --version \
+ && npm --version \
  && rustup component add rustfmt \
  && rustup component add clippy \
+ && rustup target add wasm32-unknown-unknown \
  && cargo install cargo-audit \
  && cargo install mdbook \
  && cargo install mdbook-linkcheck \
