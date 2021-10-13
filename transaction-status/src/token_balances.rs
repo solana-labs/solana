@@ -5,7 +5,7 @@ use {
         token_amount_to_ui_amount, UiTokenAmount,
     },
     solana_measure::measure::Measure,
-    solana_metrics::datapoint_info,
+    solana_metrics::datapoint_debug,
     solana_runtime::{bank::Bank, transaction_batch::TransactionBatch},
     solana_sdk::{account::ReadableAccount, pubkey::Pubkey},
     spl_token_v2_0::{
@@ -92,7 +92,7 @@ pub fn collect_token_balances(
         balances.push(transaction_balances);
     }
     collect_time.stop();
-    datapoint_info!(
+    datapoint_debug!(
         "collect_token_balances",
         ("collect_time_us", collect_time.as_us(), i64),
     );
