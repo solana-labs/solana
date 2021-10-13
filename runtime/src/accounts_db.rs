@@ -1285,6 +1285,14 @@ impl LatestAccountsIndexRootsStats {
 struct CleanAccountsStats {
     purge_stats: PurgeStats,
     latest_accounts_index_roots_stats: LatestAccountsIndexRootsStats,
+
+    // stats held here and reported by clean_accounts
+    clean_old_root_us: AtomicU64,
+    clean_old_root_reclaim_us: AtomicU64,
+    reset_uncleaned_roots_us: AtomicU64,
+    remove_dead_accounts_remove_us: AtomicU64,
+    remove_dead_accounts_shrink_us: AtomicU64,
+    clean_stored_dead_slots_us: AtomicU64,
 }
 
 impl CleanAccountsStats {
@@ -1674,6 +1682,9 @@ impl AccountsDb {
         let reclaims: Vec<_> = reclaim_vecs.flatten().collect();
         clean_rooted.stop();
         inc_new_counter_info!("clean-old-root-par-clean-ms", clean_rooted.as_ms() as usize);
+        self.clean_accounts_stats
+            .clean_old_root_us
+            .fetch_add(clean_rooted.as_us(), Ordering::Relaxed);
 
         let mut measure = Measure::start("clean_old_root_reclaims");
 
@@ -1692,11 +1703,19 @@ impl AccountsDb {
         measure.stop();
         debug!("{} {}", clean_rooted, measure);
         inc_new_counter_info!("clean-old-root-reclaim-ms", measure.as_ms() as usize);
+        self.clean_accounts_stats
+            .clean_old_root_reclaim_us
+            .fetch_add(measure.as_us(), Ordering::Relaxed);
         reclaim_result
     }
 
     fn do_reset_uncleaned_roots(&self, max_clean_root: Option<Slot>) {
+        let mut measure = Measure::start("reset");
         self.accounts_index.reset_uncleaned_roots(max_clean_root);
+        measure.stop();
+        self.clean_accounts_stats
+            .reset_uncleaned_roots_us
+            .fetch_add(measure.as_us(), Ordering::Relaxed);
     }
 
     fn calc_delete_dependencies(
@@ -2183,6 +2202,48 @@ impl AccountsDb {
             ("dirty_pubkeys_count", key_timings.dirty_pubkeys_count, i64),
             ("total_keys_count", total_keys_count, i64),
             ("uncleaned_roots_len", uncleaned_roots_len, i64),
+            (
+                "clean_old_root_us",
+                self.clean_accounts_stats
+                    .clean_old_root_us
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "clean_old_root_reclaim_us",
+                self.clean_accounts_stats
+                    .clean_old_root_reclaim_us
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "reset_uncleaned_roots_us",
+                self.clean_accounts_stats
+                    .reset_uncleaned_roots_us
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "remove_dead_accounts_remove_us",
+                self.clean_accounts_stats
+                    .remove_dead_accounts_remove_us
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "remove_dead_accounts_shrink_us",
+                self.clean_accounts_stats
+                    .remove_dead_accounts_shrink_us
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "clean_stored_dead_slots_us",
+                self.clean_accounts_stats
+                    .clean_stored_dead_slots_us
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
         );
     }
 
@@ -5753,6 +5814,7 @@ impl AccountsDb {
     ) -> HashSet<Slot> {
         let mut dead_slots = HashSet::new();
         let mut new_shrink_candidates: ShrinkCandidates = HashMap::new();
+        let mut measure = Measure::start("remove");
         for (slot, account_info) in reclaims {
             // No cached accounts should make it here
             assert_ne!(account_info.store_id, CACHE_VIRTUAL_STORAGE_ID);
@@ -5796,33 +5858,40 @@ impl AccountsDb {
                 }
             }
         }
+        measure.stop();
+        self.clean_accounts_stats
+            .remove_dead_accounts_remove_us
+            .fetch_add(measure.as_us(), Ordering::Relaxed);
 
         if self.caching_enabled {
-            {
-                let mut shrink_candidate_slots = self.shrink_candidate_slots.lock().unwrap();
-                for (slot, slot_shrink_candidates) in new_shrink_candidates {
-                    for (store_id, store) in slot_shrink_candidates {
-                        // count could be == 0 if multiple accounts are removed
-                        // at once
-                        if store.count() != 0 {
-                            debug!(
-                                "adding: {} {} to shrink candidates: count: {}/{} bytes: {}/{}",
-                                store_id,
-                                slot,
-                                store.approx_stored_count(),
-                                store.count(),
-                                store.alive_bytes(),
-                                store.total_bytes()
-                            );
+            let mut measure = Measure::start("shrink");
+            let mut shrink_candidate_slots = self.shrink_candidate_slots.lock().unwrap();
+            for (slot, slot_shrink_candidates) in new_shrink_candidates {
+                for (store_id, store) in slot_shrink_candidates {
+                    // count could be == 0 if multiple accounts are removed
+                    // at once
+                    if store.count() != 0 {
+                        debug!(
+                            "adding: {} {} to shrink candidates: count: {}/{} bytes: {}/{}",
+                            store_id,
+                            slot,
+                            store.approx_stored_count(),
+                            store.count(),
+                            store.alive_bytes(),
+                            store.total_bytes()
+                        );
 
-                            shrink_candidate_slots
-                                .entry(slot)
-                                .or_default()
-                                .insert(store_id, store);
-                        }
+                        shrink_candidate_slots
+                            .entry(slot)
+                            .or_default()
+                            .insert(store_id, store);
                     }
                 }
             }
+            measure.stop();
+            self.clean_accounts_stats
+                .remove_dead_accounts_shrink_us
+                .fetch_add(measure.as_us(), Ordering::Relaxed);
         }
 
         dead_slots.retain(|slot| {
@@ -5961,6 +6030,9 @@ impl AccountsDb {
         );
         measure.stop();
         inc_new_counter_info!("clean_stored_dead_slots-ms", measure.as_ms() as usize);
+        self.clean_accounts_stats
+            .clean_stored_dead_slots_us
+            .fetch_add(measure.as_us(), Ordering::Relaxed);
     }
 
     pub(crate) fn freeze_accounts(&mut self, ancestors: &Ancestors, account_pubkeys: &[Pubkey]) {
