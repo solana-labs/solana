@@ -599,4 +599,42 @@ mod tests {
         .unwrap();
         assert_eq!(message.calculate_fee(1), 11);
     }
+
+    #[test]
+    fn test_calculate_fee_ed25519() {
+        let key0 = Pubkey::new_unique();
+        let key1 = Pubkey::new_unique();
+        let ix0 = system_instruction::transfer(&key0, &key1, 1);
+
+        let mut instruction1 = Instruction {
+            program_id: ed25519_program::id(),
+            accounts: vec![],
+            data: vec![],
+        };
+        let mut instruction2 = Instruction {
+            program_id: ed25519_program::id(),
+            accounts: vec![],
+            data: vec![1],
+        };
+
+        let message = SanitizedMessage::try_from(Message::new(
+            &[
+                ix0.clone(),
+                instruction1.clone(),
+                instruction2.clone(),
+            ],
+            Some(&key0),
+        ))
+        .unwrap();
+        assert_eq!(message.calculate_fee(&FeeCalculator::new(1)), 2);
+
+        instruction1.data = vec![0];
+        instruction2.data = vec![10];
+        let message = SanitizedMessage::try_from(Message::new(
+            &[ix0, instruction1, instruction2],
+            Some(&key0),
+        ))
+        .unwrap();
+        assert_eq!(message.calculate_fee(&FeeCalculator::new(1)), 11);
+    }
 }
