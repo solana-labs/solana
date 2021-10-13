@@ -19,7 +19,6 @@ use solana_perf::test_tx::test_tx;
 use solana_poh::poh_recorder::{create_test_recorder, WorkingBankEntry};
 use solana_runtime::bank::Bank;
 use solana_runtime::cost_model::CostModel;
-use solana_runtime::cost_tracker_stats::CostTrackerStats;
 use solana_sdk::genesis_config::GenesisConfig;
 use solana_sdk::hash::Hash;
 use solana_sdk::message::Message;
@@ -95,7 +94,6 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
                 &BankingStageStats::default(),
                 &recorder,
                 &Arc::new(RwLock::new(CostModel::default())),
-                &mut CostTrackerStats::default(),
             );
         });
 
@@ -228,7 +226,6 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
             None,
             s,
             Arc::new(RwLock::new(CostModel::default())),
-            Arc::new(RwLock::new(CostModel::new(std::u64::MAX, std::u64::MAX))),
         );
         poh_recorder.lock().unwrap().set_bank(&bank);
 

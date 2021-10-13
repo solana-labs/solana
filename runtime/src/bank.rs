@@ -2824,6 +2824,9 @@ impl Bank {
             self.freeze_started.store(true, Relaxed);
             *hash = self.hash_internal_state();
             self.rc.accounts.accounts_db.mark_slot_frozen(self.slot());
+
+            // report cost tracker stats
+            self.read_cost_tracker().unwrap().report_stats(self.slot());
         }
     }
 
