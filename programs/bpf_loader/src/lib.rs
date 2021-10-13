@@ -261,7 +261,7 @@ fn process_instruction_common(
             Some(executor) => executor,
             None => {
                 let executor = create_executor(
-                    next_first_instruction_account,
+                    first_instruction_account,
                     program_data_offset,
                     invoke_context,
                     use_jit,
