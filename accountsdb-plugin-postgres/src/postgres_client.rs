@@ -165,12 +165,13 @@ impl SimplePostgresClient {
 
         match Client::connect(&connection_str, NoTls) {
             Err(err) => {
-                return Err(AccountsDbPluginError::Custom(Box::new(AccountsDbPluginPostgresError::DataStoreConnectionError {
-                    msg: format!(
+                let msg = format!(
                         "Error in connecting to the PostgreSQL database: {:?} host: {:?} user: {:?} config: {:?}",
-                        err, config.host, config.user, connection_str
-                    ),
-                })));
+                        err, config.host, config.user, connection_str);
+                error!("{}", msg);
+                return Err(AccountsDbPluginError::Custom(Box::new(
+                    AccountsDbPluginPostgresError::DataStoreConnectionError { msg },
+                )));
             }
             Ok(client) => Ok(client),
         }
@@ -205,6 +206,7 @@ impl SimplePostgresClient {
             }
         }
 
+        info!("{}", stmt);
         let bulk_stmt = client.prepare(&stmt);
 
         match bulk_stmt {
@@ -317,6 +319,7 @@ impl SimplePostgresClient {
     }
 
     pub fn new(config: &AccountsDbPluginPostgresConfig) -> Result<Self, AccountsDbPluginError> {
+        info!("Creating SimplePostgresClient...");
         let mut client = Self::connect_to_db(config)?;
         let bulk_account_insert_stmt =
             Self::build_bulk_account_insert_statement(&mut client, config)?;
@@ -325,6 +328,7 @@ impl SimplePostgresClient {
         let batch_size = config
             .batch_size
             .unwrap_or(DEFAULT_ACCOUNTS_INSERT_BATCH_SIZE);
+        info!("Created SimplePostgresClient.");
         Ok(Self {
             batch_size,
             accounts: Vec::with_capacity(batch_size),
@@ -433,8 +437,14 @@ enum DbWorkItem {
 
 impl PostgresClientWorker {
     fn new(config: AccountsDbPluginPostgresConfig) -> Result<Self, AccountsDbPluginError> {
-        let client = SimplePostgresClient::new(&config)?;
-        Ok(PostgresClientWorker { client })
+        let result = SimplePostgresClient::new(&config);
+        match result {
+            Ok(client) => Ok(PostgresClientWorker { client }),
+            Err(err) => {
+                error!("Error in creating SimplePostgresClient: {}", err);
+                Err(err)
+            }
+        }
     }
 
     fn do_work(
@@ -482,6 +492,7 @@ pub struct ParallelPostgresClient {
 
 impl ParallelPostgresClient {
     pub fn new(config: &AccountsDbPluginPostgresConfig) -> Result<Self, AccountsDbPluginError> {
+        info!("Creating ParallelPostgresClient...");
         let (sender, receiver) = bounded(MAX_ASYNC_REQUESTS);
         let exit_worker = Arc::new(AtomicBool::new(false));
         let mut workers = Vec::default();
@@ -502,6 +513,7 @@ impl ParallelPostgresClient {
             workers.push(worker);
         }
 
+        info!("Created ParallelPostgresClient.");
         Ok(Self {
             last_report: AtomicInterval::default(),
             workers,
