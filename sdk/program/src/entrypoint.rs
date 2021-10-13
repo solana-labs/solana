@@ -28,7 +28,7 @@ pub type ProcessInstruction =
 pub const SUCCESS: u64 = 0;
 
 /// Start address of the memory region used for program heap.
-pub const HEAP_START_ADDRESS: usize = 0x300000000;
+pub const HEAP_START_ADDRESS: u64 = 0x300000000;
 /// Length of the heap memory region used for program heap.
 pub const HEAP_LENGTH: usize = 32 * 1024;
 
@@ -70,7 +70,7 @@ macro_rules! custom_heap_default {
         #[cfg(all(not(feature = "custom-heap"), target_arch = "bpf"))]
         #[global_allocator]
         static A: $crate::entrypoint::BumpAllocator = $crate::entrypoint::BumpAllocator {
-            start: $crate::entrypoint::HEAP_START_ADDRESS,
+            start: $crate::entrypoint::HEAP_START_ADDRESS as usize,
             len: $crate::entrypoint::HEAP_LENGTH,
         };
     };
