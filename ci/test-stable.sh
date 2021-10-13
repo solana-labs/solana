@@ -103,6 +103,19 @@ test-local-cluster)
   _ "$cargo" stable test --release --package solana-local-cluster ${V:+--verbose} -- --nocapture --test-threads=1
   exit 0
   ;;
+test-wasm)
+  _ node --version
+  _ npm --version
+  for dir in sdk/{program,}; do
+    if [[ -r "$dir"/package.json ]]; then
+      pushd "$dir"
+      _ npm install
+      _ npm test
+      popd
+    fi
+  done
+  exit 0
+  ;;
 *)
   echo "Error: Unknown test: $testName"
   ;;

@@ -1,6 +1,6 @@
 #![allow(clippy::integer_arithmetic)]
 use {
-    crate::{decode_error::DecodeError, hash::hashv},
+    crate::{decode_error::DecodeError, hash::hashv, wasm_bindgen},
     borsh::{BorshDeserialize, BorshSchema, BorshSerialize},
     bytemuck::{Pod, Zeroable},
     num_derive::{FromPrimitive, ToPrimitive},
@@ -48,6 +48,7 @@ impl From<u64> for PubkeyError {
     }
 }
 
+#[wasm_bindgen]
 #[repr(transparent)]
 #[derive(
     AbiExample,
@@ -67,7 +68,7 @@ impl From<u64> for PubkeyError {
     Serialize,
     Zeroable,
 )]
-pub struct Pubkey([u8; 32]);
+pub struct Pubkey(pub(crate) [u8; 32]);
 
 impl crate::sanitize::Sanitize for Pubkey {}
 
