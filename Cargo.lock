@@ -4290,6 +4290,7 @@ dependencies = [
  "solana-metrics",
  "solana-sdk",
  "thiserror",
+ "tokio-postgres",
 ]
 
 [[package]]
