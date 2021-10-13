@@ -2396,6 +2396,35 @@ impl Blockstore {
             .map(|signatures| signatures.iter().map(|(_, signature)| *signature).collect())
     }
 
+    fn get_sorted_block_signatures(&self, slot: Slot) -> Result<Vec<Signature>> {
+        let block = self.get_complete_block(slot, false).map_err(|err| {
+            BlockstoreError::Io(IoError::new(
+                ErrorKind::Other,
+                format!("Unable to get block: {}", err),
+            ))
+        })?;
+
+        // Load all signatures for the block
+        let mut slot_signatures: Vec<_> = block
+            .transactions
+            .into_iter()
+            .filter_map(|transaction_with_meta| {
+                transaction_with_meta
+                    .transaction
+                    .signatures
+                    .into_iter()
+                    .next()
+            })
+            .collect();
+
+        // Reverse sort signatures as a way to entire a stable ordering within a slot, as
+        // the AddressSignatures column is ordered by signatures within a slot,
+        // not by block ordering
+        slot_signatures.sort_unstable_by(|a, b| b.cmp(a));
+
+        Ok(slot_signatures)
+    }
+
     pub fn get_confirmed_signatures_for_address2(
         &self,
         address: Pubkey,
@@ -2429,32 +2458,7 @@ impl Blockstore {
                 match transaction_status {
                     None => return Ok(vec![]),
                     Some((slot, _)) => {
-                        let block = self.get_complete_block(slot, false).map_err(|err| {
-                            BlockstoreError::Io(IoError::new(
-                                ErrorKind::Other,
-                                format!("Unable to get block: {}", err),
-                            ))
-                        })?;
-
-                        // Load all signatures for the block
-                        let mut slot_signatures: Vec<_> = block
-                            .transactions
-                            .into_iter()
-                            .filter_map(|transaction_with_meta| {
-                                transaction_with_meta
-                                    .transaction
-                                    .signatures
-                                    .into_iter()
-                                    .next()
-                            })
-                            .collect();
-
-                        // Sort signatures as a way to entire a stable ordering within a slot, as
-                        // the AddressSignatures column is ordered by signatures within a slot,
-                        // not by block ordering
-                        slot_signatures.sort();
-                        slot_signatures.reverse();
-
+                        let mut slot_signatures = self.get_sorted_block_signatures(slot)?;
                         if let Some(pos) = slot_signatures.iter().position(|&x| x == before) {
                             slot_signatures.truncate(pos + 1);
                         }
@@ -2480,32 +2484,7 @@ impl Blockstore {
                 match transaction_status {
                     None => (0, HashSet::new()),
                     Some((slot, _)) => {
-                        let block = self.get_complete_block(slot, false).map_err(|err| {
-                            BlockstoreError::Io(IoError::new(
-                                ErrorKind::Other,
-                                format!("Unable to get block: {}", err),
-                            ))
-                        })?;
-
-                        // Load all signatures for the block
-                        let mut slot_signatures: Vec<_> = block
-                            .transactions
-                            .into_iter()
-                            .filter_map(|transaction_with_meta| {
-                                transaction_with_meta
-                                    .transaction
-                                    .signatures
-                                    .into_iter()
-                                    .next()
-                            })
-                            .collect();
-
-                        // Sort signatures as a way to entire a stable ordering within a slot, as
-                        // the AddressSignatures column is ordered by signatures within a slot,
-                        // not by block ordering
-                        slot_signatures.sort();
-                        slot_signatures.reverse();
-
+                        let mut slot_signatures = self.get_sorted_block_signatures(slot)?;
                         if let Some(pos) = slot_signatures.iter().position(|&x| x == until) {
                             slot_signatures = slot_signatures.split_off(pos);
                         }
