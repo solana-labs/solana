@@ -185,14 +185,19 @@ mod tests {
         let key2 = Pubkey::new_unique();
         let key3 = Pubkey::new_unique();
 
-        testee.upsert(&key1, 1);
-        testee.upsert(&key1, 1);
+        // simulate a lot of occurences to key1, so even there're longer than
+        // usual delay between upsert(key1..) and upsert(key2, ..), test
+        // would still satisfy as key1 has enough occurences to compensate
+        // its age.
+        for i in 0..1000 {
+            testee.upsert(&key1, i);
+        }
         testee.upsert(&key2, 2);
         testee.upsert(&key3, 3);
 
         testee.prune_to(&(capacity - 1));
 
-        // the oldest, key1, has 2 counts; 2nd oldest Key2 has 1 count;
+        // the oldest, key1, has many counts; 2nd oldest Key2 has 1 count;
         // expect key2 to be pruned.
         assert!(testee.get_cost(&key1).is_some());
         assert!(testee.get_cost(&key2).is_none());
