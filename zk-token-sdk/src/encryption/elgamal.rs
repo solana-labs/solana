@@ -12,6 +12,7 @@ use {
         scalar::Scalar,
     },
     ed25519_dalek::SecretKey as SigningKey,
+    solana_sdk::pubkey::Pubkey,
     serde::{Deserialize, Serialize},
     solana_sdk::pubkey::Pubkey,
     std::collections::HashMap,
@@ -55,14 +56,6 @@ impl ElGamal {
             public: ElGamalPubkey(P),
             secret: ElGamalSecretKey(s),
         }
-    }
-
-    #[cfg(not(target_arch = "bpf"))]
-    #[allow(non_snake_case)]
-    pub fn from_signing_key(signing_key: &SigningKey, label: &'static [u8]) -> Self {
-        let secret = ElGamalSecretKey::new(signing_key, label);
-        let public = ElGamalPubkey::new(&secret);
-        Self { secret, public }
     }
 
     /// On input a public key and a message to be encrypted, the function
