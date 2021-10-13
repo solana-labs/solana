@@ -78,7 +78,12 @@ pub trait AccountsDbPlugin: Any + Send + Sync + std::fmt::Debug {
     fn on_unload(&mut self) {}
 
     /// Called when an account is updated at a slot.
-    fn update_account(&mut self, account: ReplicaAccountInfoVersions, slot: u64) -> Result<()>;
+    fn update_account(
+        &mut self,
+        account: ReplicaAccountInfoVersions,
+        slot: u64,
+        at_startup: bool,
+    ) -> Result<()>;
 
     /// Called when a slot status is updated
     fn update_slot_status(

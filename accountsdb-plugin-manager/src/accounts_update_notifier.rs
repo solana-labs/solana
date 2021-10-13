@@ -26,13 +26,13 @@ pub(crate) struct AccountsUpdateNotifierImpl {
 impl AccountsUpdateNotifierInterface for AccountsUpdateNotifierImpl {
     fn notify_account_update(&self, slot: Slot, pubkey: &Pubkey, account: &AccountSharedData) {
         if let Some(account_info) = self.accountinfo_from_shared_account_data(pubkey, account) {
-            self.notify_plugins_of_account_update(account_info, slot);
+            self.notify_plugins_of_account_update(account_info, slot, false);
         }
     }
 
     fn notify_account_restore_from_snapshot(&self, slot: Slot, account: &StoredAccountMeta) {
         if let Some(account_info) = self.accountinfo_from_stored_account_meta(account) {
-            self.notify_plugins_of_account_update(account_info, slot);
+            self.notify_plugins_of_account_update(account_info, slot, true);
         }
     }
 
@@ -83,7 +83,12 @@ impl AccountsUpdateNotifierImpl {
         })
     }
 
-    fn notify_plugins_of_account_update(&self, account: ReplicaAccountInfo, slot: Slot) {
+    fn notify_plugins_of_account_update(
+        &self,
+        account: ReplicaAccountInfo,
+        slot: Slot,
+        at_startup: bool,
+    ) {
         let mut plugin_manager = self.plugin_manager.write().unwrap();
 
         if plugin_manager.plugins.is_empty() {
@@ -91,7 +96,11 @@ impl AccountsUpdateNotifierImpl {
         }
         for plugin in plugin_manager.plugins.iter_mut() {
             let mut measure = Measure::start("accountsdb-plugin-update-account");
-            match plugin.update_account(ReplicaAccountInfoVersions::V0_0_1(&account), slot) {
+            match plugin.update_account(
+                ReplicaAccountInfoVersions::V0_0_1(&account),
+                slot,
+                at_startup,
+            ) {
                 Err(err) => {
                     error!(
                         "Failed to update account {} at slot {}, error: {} to plugin {}",

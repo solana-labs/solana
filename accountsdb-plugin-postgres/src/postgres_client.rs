@@ -30,9 +30,12 @@ const DEFAULT_POSTGRES_PORT: u16 = 5432;
 struct PostgresSqlClientWrapper {
     client: Client,
     update_account_stmt: Statement,
+    bulk_account_insert_stmt: Statement,
 }
 
 pub struct SimplePostgresClient {
+    batch_size: Option<u32>,
+    accounts: Vec<DbAccountInfo>,
     client: Mutex<PostgresSqlClientWrapper>,
 }
 
@@ -132,10 +135,11 @@ pub trait PostgresClient {
         Ok(())
     }
 
-    fn update_account<T: ReadableAccountInfo>(
+    fn update_account(
         &mut self,
-        account: &T,
+        account: &DbAccountInfo,
         slot: u64,
+        at_startup: bool,
     ) -> Result<(), AccountsDbPluginError>;
 
     fn update_slot_status(
@@ -147,7 +151,10 @@ pub trait PostgresClient {
 }
 
 impl SimplePostgresClient {
-    pub fn new(config: &AccountsDbPluginPostgresConfig) -> Result<Self, AccountsDbPluginError> {
+
+    fn connect_to_db(
+        config: &AccountsDbPluginPostgresConfig,
+    ) -> Result<Client, AccountsDbPluginError> {
         let port = config.port.unwrap_or(DEFAULT_POSTGRES_PORT);
 
         let connection_str = format!("host={} user={} port={}", config.host, config.user, port);
@@ -161,46 +168,81 @@ impl SimplePostgresClient {
                     ),
                 })));
             }
-            Ok(mut client) => {
-                let result = client.prepare("INSERT INTO account (pubkey, slot, owner, lamports, executable, rent_epoch, data, updated_on) \
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8) \
-                    ON CONFLICT (pubkey) DO UPDATE SET slot=$2, owner=$3, lamports=$4, executable=$5, rent_epoch=$6, \
-                    data=$7, updated_on=$8");
-
-                match result {
-                    Err(err) => {
-                        return Err(AccountsDbPluginError::Custom(Box::new(AccountsDbPluginPostgresError::DataSchemaError {
-                            msg: format!(
-                                "Error in preparing for the accounts update PostgreSQL database: {:?} host: {:?} user: {:?} config: {:?}",
-                                err, config.host, config.user, connection_str
-                            ),
-                        })));
-                    }
-                    Ok(update_account_stmt) => Ok(Self {
-                        client: Mutex::new(PostgresSqlClientWrapper {
-                            client,
-                            update_account_stmt,
-                        }),
-                    }),
-                }
-            }
+            Ok(client) => Ok(client),
         }
     }
-}
 
-impl PostgresClient for SimplePostgresClient {
-    fn update_account<T: ReadableAccountInfo>(
+    fn build_bulk_account_insert_statement(
+        client: &mut Client,
+        config: &AccountsDbPluginPostgresConfig,
+    ) -> Result<Statement, AccountsDbPluginError> {
+        let batch_size = config.batch_size.unwrap_or(1);
+        let mut stmt = String::from("INSERT INTO account (pubkey, slot, owner, lamports, executable, rent_epoch, data, updated_on) VALUES");
+        for j in 0..batch_size {
+            let row = j * 8;
+            let val_str = format!(
+                "(${}, ${}, ${}, ${}, ${}, ${}, ${}, ${})",
+                row + 1,
+                row + 2,
+                row + 3,
+                row + 4,
+                row + 5,
+                row + 6,
+                row + 7,
+                row + 8,
+            );
+
+            if j == 0 {
+                stmt = format!("{} {}", &stmt, val_str);
+            } else {
+                stmt = format!("{}, {}", &stmt, val_str);
+            }
+        }
+
+        let bulk_stmt = client.prepare(&stmt);
+
+        match bulk_stmt {
+            Err(err) => {
+                return Err(AccountsDbPluginError::Custom(Box::new(AccountsDbPluginPostgresError::DataSchemaError {
+                    msg: format!(
+                        "Error in preparing for the accounts update PostgreSQL database: {} host: {} user: {} config: {:?}",
+                        err, config.host, config.user, config
+                    ),
+                })));
+            }
+            Ok(update_account_stmt) => Ok(update_account_stmt),
+        }
+    }
+
+    fn build_single_account_upsert_statement(
+        client: &mut Client,
+        config: &AccountsDbPluginPostgresConfig,
+    ) -> Result<Statement, AccountsDbPluginError> {
+        let stmt = "INSERT INTO account (pubkey, slot, owner, lamports, executable, rent_epoch, data, updated_on) \
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8) \
+        ON CONFLICT (pubkey) DO UPDATE SET slot=$2, owner=$3, lamports=$4, executable=$5, rent_epoch=$6, \
+        data=$7, updated_on=$8";
+
+        let stmt = client.prepare(&stmt);
+
+        match stmt {
+            Err(err) => {
+                return Err(AccountsDbPluginError::Custom(Box::new(AccountsDbPluginPostgresError::DataSchemaError {
+                    msg: format!(
+                        "Error in preparing for the accounts update PostgreSQL database: {} host: {} user: {} config: {:?}",
+                        err, config.host, config.user, config
+                    ),
+                })));
+            }
+            Ok(update_account_stmt) => Ok(update_account_stmt),
+        }
+    }
+
+    fn upsert_account(
         &mut self,
-        account: &T,
+        account: &DbAccountInfo,
         slot: u64,
     ) -> Result<(), AccountsDbPluginError> {
-        trace!(
-            "Updating account {} with owner {} at slot {}",
-            bs58::encode(account.pubkey()).into_string(),
-            bs58::encode(account.owner()).into_string(),
-            slot,
-        );
-
         let slot = slot as i64; // postgres only supports i64
         let lamports = account.lamports() as i64;
         let rent_epoch = account.rent_epoch() as i64;
@@ -227,6 +269,52 @@ impl PostgresClient for SimplePostgresClient {
             );
             error!("{}", msg);
             return Err(AccountsDbPluginError::AccountsUpdateError { msg });
+        }
+
+        Ok(())
+    }
+
+    fn insert_accounts_in_batch<T: ReadableAccountInfo>(
+        &mut self,
+        account: &T,
+        slot: u64,
+    ) -> Result<(), AccountsDbPluginError> {
+        Ok(())
+    }
+
+    pub fn new(config: &AccountsDbPluginPostgresConfig) -> Result<Self, AccountsDbPluginError> {
+        let mut client = Self::connect_to_db(config)?;
+        let bulk_account_insert_stmt =
+            Self::build_bulk_account_insert_statement(&mut client, config)?;
+        let update_account_stmt = Self::build_single_account_upsert_statement(&mut client, config)?;
+
+        Ok(Self {
+            batch_size: config.batch_size,
+            accounts: Vec::default(),
+            client: Mutex::new(PostgresSqlClientWrapper {
+                client,
+                update_account_stmt,
+                bulk_account_insert_stmt,
+            }),
+        })
+    }
+}
+
+impl PostgresClient for SimplePostgresClient {
+    fn update_account(
+        &mut self,
+        account: &DbAccountInfo,
+        slot: u64,
+        at_startup: bool,
+    ) -> Result<(), AccountsDbPluginError> {
+        trace!(
+            "Updating account {} with owner {} at slot {}",
+            bs58::encode(account.pubkey()).into_string(),
+            bs58::encode(account.owner()).into_string(),
+            slot,
+        );
+        if !at_startup {
+            return self.upsert_account(account, slot);
         }
         Ok(())
     }
@@ -294,6 +382,7 @@ impl PostgresClient for SimplePostgresClient {
 struct UpdateAccountRequest {
     account: DbAccountInfo,
     slot: u64,
+    at_startup: bool,
 }
 
 struct UpdateSlotRequest {
@@ -324,7 +413,11 @@ impl PostgresClientWorker {
             match work {
                 Ok(work) => match work {
                     DbWorkItem::UpdateAccount(request) => {
-                        self.client.update_account(&request.account, request.slot)?;
+                        self.client.update_account(
+                            &request.account,
+                            request.slot,
+                            request.at_startup,
+                        )?;
                     }
                     DbWorkItem::UpdateSlot(request) => {
                         self.client.update_slot_status(
@@ -404,10 +497,11 @@ impl PostgresClient for ParallelPostgresClient {
         Ok(())
     }
 
-    fn update_account<T: ReadableAccountInfo>(
+    fn update_account(
         &mut self,
-        account: &T,
+        account: &DbAccountInfo,
         slot: u64,
+        at_startup: bool,
     ) -> Result<(), AccountsDbPluginError> {
         if self.last_report.should_update(30000) {
             datapoint_info!(
@@ -420,6 +514,7 @@ impl PostgresClient for ParallelPostgresClient {
             .send(DbWorkItem::UpdateAccount(UpdateAccountRequest {
                 account: DbAccountInfo::new(account),
                 slot,
+                at_startup,
             }))
         {
             return Err(AccountsDbPluginError::AccountsUpdateError {
