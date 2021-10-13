@@ -445,7 +445,7 @@ mod tests {
     #[test]
     fn test_verify_keybase_username_not_string() {
         let pubkey = solana_sdk::pubkey::new_rand();
-        let value = &Value::Bool(true);
+        let value = Value::Bool(true);
 
         assert_eq!(
             verify_keybase(&pubkey, &value).unwrap_err().to_string(),
