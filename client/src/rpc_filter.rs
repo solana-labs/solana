@@ -1,6 +1,10 @@
 #![allow(deprecated)]
 use {std::borrow::Cow, thiserror::Error};
 
+const MAX_DATA_SIZE: usize = 128;
+const MAX_DATA_BASE58_SIZE: usize = 175;
+const MAX_DATA_BASE64_SIZE: usize = 172;
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum RpcFilterType {
@@ -18,28 +22,47 @@ impl RpcFilterType {
                     MemcmpEncoding::Binary => {
                         use MemcmpEncodedBytes::*;
                         match &compare.bytes {
-                            Binary(bytes) if bytes.len() > 128 => {
+                            Binary(bytes) if bytes.len() > MAX_DATA_BASE58_SIZE => {
                                 Err(RpcFilterError::Base58DataTooLarge)
                             }
-                            Base58(bytes) if bytes.len() > 175 => Err(RpcFilterError::DataTooLarge),
-                            Base64(bytes) if bytes.len() > 172 => Err(RpcFilterError::DataTooLarge),
-                            Bytes(bytes) if bytes.len() > 128 => Err(RpcFilterError::DataTooLarge),
+                            Base58(bytes) if bytes.len() > MAX_DATA_BASE58_SIZE => {
+                                Err(RpcFilterError::DataTooLarge)
+                            }
+                            Base64(bytes) if bytes.len() > MAX_DATA_BASE64_SIZE => {
+                                Err(RpcFilterError::DataTooLarge)
+                            }
+                            Bytes(bytes) if bytes.len() > MAX_DATA_SIZE => {
+                                Err(RpcFilterError::DataTooLarge)
+                            }
                             _ => Ok(()),
                         }?;
                         match &compare.bytes {
-                            Binary(bytes) => bs58::decode(&bytes)
-                                .into_vec()
-                                .map(|_| ())
-                                .map_err(RpcFilterError::DecodeError),
+                            Binary(bytes) => {
+                                let bytes = bs58::decode(&bytes)
+                                    .into_vec()
+                                    .map_err(RpcFilterError::DecodeError)?;
+                                if bytes.len() > MAX_DATA_SIZE {
+                                    Err(RpcFilterError::Base58DataTooLarge)
+                                } else {
+                                    Ok(())
+                                }
+                            }
                             Base58(bytes) => {
                                 let bytes = bs58::decode(&bytes).into_vec()?;
-                                if bytes.len() > 128 {
+                                if bytes.len() > MAX_DATA_SIZE {
                                     Err(RpcFilterError::DataTooLarge)
                                 } else {
                                     Ok(())
                                 }
                             }
-                            Base64(bytes) => base64::decode(&bytes).map(|_| ()).map_err(Into::into),
+                            Base64(bytes) => {
+                                let bytes = base64::decode(&bytes)?;
+                                if bytes.len() > MAX_DATA_SIZE {
+                                    Err(RpcFilterError::DataTooLarge)
+                                } else {
+                                    Ok(())
+                                }
+                            }
                             Bytes(_) => Ok(()),
                         }
                     }
@@ -129,6 +152,15 @@ impl Memcmp {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_worst_case_encoded_tx_goldens() {
+        let ff_data = vec![0xffu8; MAX_DATA_SIZE];
+        let data58 = bs58::encode(&ff_data).into_string();
+        assert_eq!(data58.len(), MAX_DATA_BASE58_SIZE);
+        let data64 = base64::encode(&ff_data);
+        assert_eq!(data64.len(), MAX_DATA_BASE64_SIZE);
+    }
 
     #[test]
     fn test_bytes_match() {
