@@ -29,6 +29,7 @@ pub struct BucketMapHolderStats {
     pub keys: AtomicU64,
     pub deletes: AtomicU64,
     pub inserts: AtomicU64,
+    pub put_range_in_mem_entry_count: AtomicU64,
     count: AtomicU64,
     pub bg_waiting_us: AtomicU64,
     pub bg_throttling_wait_us: AtomicU64,
@@ -279,6 +280,11 @@ impl BucketMapHolderStats {
                 i64
             ),
             ("items", self.items.swap(0, Ordering::Relaxed), i64),
+            (
+                "put_range_in_mem_entry_count",
+                self.put_range_in_mem_entry_count.swap(0, Ordering::Relaxed),
+                i64
+            ),
             ("keys", self.keys.swap(0, Ordering::Relaxed), i64),
             ("ms_per_age", ms_per_age, i64),
             (

@@ -610,6 +610,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             let items = disk.items_in_range(range);
             let mut map = self.map().write().unwrap();
             let future_age = self.storage.future_age_to_flush();
+            let mut items_added = 0;
             for item in items {
                 let entry = map.entry(item.pubkey);
                 match entry {
@@ -619,10 +620,13 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     }
                     Entry::Vacant(vacant) => {
                         vacant.insert(self.disk_to_cache_entry(item.slot_list, item.ref_count));
-                        self.stats().insert_or_delete_mem(true, self.bin);
+                        items_added += 1;
                     }
                 }
             }
+            self.stats()
+                .insert_or_delete_mem_count(true, self.bin, items_added);
+            Self::update_stat(&self.stats().put_range_in_mem_entry_count, items_added);
         }
 
         Self::update_time_stat(&self.stats().get_range_us, m);
