@@ -19,7 +19,6 @@ solana-program = "=1.7.15"
 arrayref = "0.3.6"
 bincode = "1"
 byteorder = "1"
-clear_on_drop = "0.2"
 curve25519-dalek = { version = "3.2.0", features = ["serde"]}
 getrandom = { version = "0.1", features = ["dummy"] }
 merlin = "2"
@@ -33,3 +32,6 @@ zeroize = { version = "1.2.0", default-features = false, features = ["zeroize_de
 
 [dev-dependencies]
 time = "0.1.40"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
