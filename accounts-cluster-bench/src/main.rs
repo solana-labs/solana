@@ -271,7 +271,7 @@ fn run_accounts_bench(
         }
 
         let fee = client
-            .get_fee_for_message(&blockhash, &message)
+            .get_fee_for_message(&message)
             .expect("get_fee_for_message");
         let lamports = min_balance + fee;
 

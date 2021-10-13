@@ -303,10 +303,10 @@ impl SyncClient for BankClient {
         Ok(self.bank.is_blockhash_valid(blockhash))
     }
 
-    fn get_fee_for_message(&self, blockhash: &Hash, message: &Message) -> Result<u64> {
+    fn get_fee_for_message(&self, message: &Message) -> Result<u64> {
         SanitizedMessage::try_from(message.clone())
             .ok()
-            .and_then(|message| self.bank.get_fee_for_message(blockhash, &message))
+            .and_then(|message| self.bank.get_fee_for_message(&message))
             .ok_or_else(|| {
                 TransportError::IoError(io::Error::new(
                     io::ErrorKind::Other,

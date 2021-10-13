@@ -1961,12 +1961,11 @@ impl JsonRpcRequestProcessor {
 
     fn get_fee_for_message(
         &self,
-        blockhash: &Hash,
         message: &SanitizedMessage,
         commitment: Option<CommitmentConfig>,
     ) -> Result<RpcResponse<Option<u64>>> {
         let bank = self.bank(commitment);
-        let fee = bank.get_fee_for_message(blockhash, message);
+        let fee = bank.get_fee_for_message(message);
         Ok(new_response(&bank, fee))
     }
 }
@@ -3124,7 +3123,6 @@ pub mod rpc_full {
         fn get_fee_for_message(
             &self,
             meta: Self::Metadata,
-            blockhash: String,
             data: String,
             commitment: Option<CommitmentConfig>,
         ) -> Result<RpcResponse<Option<u64>>>;
@@ -3640,20 +3638,17 @@ pub mod rpc_full {
         fn get_fee_for_message(
             &self,
             meta: Self::Metadata,
-            blockhash: String,
             data: String,
             commitment: Option<CommitmentConfig>,
         ) -> Result<RpcResponse<Option<u64>>> {
             debug!("get_fee_for_message rpc request received");
-            let blockhash = Hash::from_str(&blockhash)
-                .map_err(|e| Error::invalid_params(format!("{:?}", e)))?;
             let (_, message) =
                 decode_and_deserialize::<Message>(data, UiTransactionEncoding::Base64)?;
             SanitizedMessage::try_from(message)
                 .map_err(|err| {
                     Error::invalid_params(format!("invalid transaction message: {}", err))
                 })
-                .and_then(|message| meta.get_fee_for_message(&blockhash, &message, commitment))
+                .and_then(|message| meta.get_fee_for_message(&message, commitment))
         }
     }
 }

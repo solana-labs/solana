@@ -1,6 +1,5 @@
 use {
     crate::{
-        fee_calculator::FeeCalculator,
         hash::Hash,
         instruction::{CompiledInstruction, Instruction},
         message::{MappedAddresses, MappedMessage, Message, MessageHeader},
@@ -292,7 +291,7 @@ impl SanitizedMessage {
     }
 
     /// Calculate the total fees for a transaction given a fee calculator
-    pub fn calculate_fee(&self, fee_calculator: &FeeCalculator) -> u64 {
+    pub fn calculate_fee(&self, lamports_per_signature: u64) -> u64 {
         let mut num_signatures =  u64::from(self.header().num_required_signatures);
         for (program_id, instruction) in self.program_instructions_iter() {
             if secp256k1_program::check_id(program_id) {
@@ -303,7 +302,7 @@ impl SanitizedMessage {
             }
         }
 
-        fee_calculator.lamports_per_signature.saturating_mul(num_signatures)
+        lamports_per_signature.saturating_mul(num_signatures)
     }
 
     /// Inspect all message keys for the bpf upgradeable loader
@@ -465,10 +464,10 @@ mod tests {
         // Default: no fee.
         let message =
             SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique()))).unwrap();
-        assert_eq!(message.calculate_fee(&FeeCalculator::default()), 0);
+        assert_eq!(message.calculate_fee(0), 0);
 
         // One signature, a fee.
-        assert_eq!(message.calculate_fee(&FeeCalculator::new(1)), 1);
+        assert_eq!(message.calculate_fee(1), 1);
 
         // Two signatures, double the fee.
         let key0 = Pubkey::new_unique();
@@ -476,7 +475,7 @@ mod tests {
         let ix0 = system_instruction::transfer(&key0, &key1, 1);
         let ix1 = system_instruction::transfer(&key1, &key0, 1);
         let message = SanitizedMessage::try_from(Message::new(&[ix0, ix1], Some(&key0))).unwrap();
-        assert_eq!(message.calculate_fee(&FeeCalculator::new(2)), 4);
+        assert_eq!(message.calculate_fee(2), 4);
     }
 
     #[test]
@@ -588,7 +587,7 @@ mod tests {
             Some(&key0),
         ))
         .unwrap();
-        assert_eq!(message.calculate_fee(&FeeCalculator::new(1)), 2);
+        assert_eq!(message.calculate_fee(1), 2);
 
         secp_instruction1.data = vec![0];
         secp_instruction2.data = vec![10];
@@ -597,6 +596,6 @@ mod tests {
             Some(&key0),
         ))
         .unwrap();
-        assert_eq!(message.calculate_fee(&FeeCalculator::new(1)), 11);
+        assert_eq!(message.calculate_fee(1), 11);
     }
 }
