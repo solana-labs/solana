@@ -140,7 +140,7 @@ impl ElGamalKeypair {
         let secret = ElGamalSecretKey::new(signing_key, address);
         let public = ElGamalPubkey::new(&secret);
 
-        Self { secret, public }
+        Self { public, secret }
     }
 
     /// Generates the public and secret keys for ElGamal encryption.
