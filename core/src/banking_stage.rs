@@ -1,9 +1,7 @@
 //! The `banking_stage` processes Transaction messages. It is intended to be used
 //! to contruct a software pipeline. The stage uses all available CPU cores and
 //! can do its processing in parallel with signature verification on the GPU.
-use crate::{
-    cost_tracker::CostTracker, cost_tracker_stats::CostTrackerStats, packet_hasher::PacketHasher,
-};
+use crate::packet_hasher::PacketHasher;
 use crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError};
 use itertools::Itertools;
 use lru::LruCache;
@@ -26,6 +24,8 @@ use solana_runtime::{
         TransactionExecutionResult,
     },
     bank_utils,
+    cost_tracker::CostTracker,
+    cost_tracker_stats::CostTrackerStats,
     hashed_transaction::HashedTransaction,
     transaction_batch::TransactionBatch,
     vote_sender_types::ReplayVoteSender,
@@ -1695,7 +1695,6 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cost_model::CostModel;
     use crossbeam_channel::unbounded;
     use itertools::Itertools;
     use solana_gossip::{cluster_info::Node, contact_info::ContactInfo};
@@ -1712,6 +1711,7 @@ mod tests {
         poh_service::PohService,
     };
     use solana_rpc::transaction_status_service::TransactionStatusService;
+    use solana_runtime::cost_model::CostModel;
     use solana_sdk::{
         hash::Hash,
         instruction::InstructionError,

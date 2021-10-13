@@ -8,7 +8,6 @@ use {
         cluster_info_vote_listener::VoteTracker,
         completed_data_sets_service::CompletedDataSetsService,
         consensus::{reconcile_blockstore_roots_with_tower, Tower},
-        cost_model::CostModel,
         rewards_recorder_service::{RewardsRecorderSender, RewardsRecorderService},
         sample_performance_service::SamplePerformanceService,
         serve_repair::ServeRepair,
@@ -64,6 +63,7 @@ use {
         bank::Bank,
         bank_forks::{BankForks, SnapshotConfig},
         commitment::BlockCommitmentCache,
+        cost_model::CostModel,
         hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
     },
     solana_sdk::{
