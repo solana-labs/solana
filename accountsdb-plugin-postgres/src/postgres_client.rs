@@ -34,8 +34,8 @@ struct PostgresSqlClientWrapper {
 }
 
 pub struct SimplePostgresClient {
-    batch_size: Option<u32>,
-    accounts: Vec<DbAccountInfo>,
+    batch_size: usize,
+    accounts: Vec<(DbAccountInfo, u64)>,
     client: Mutex<PostgresSqlClientWrapper>,
 }
 
@@ -137,7 +137,7 @@ pub trait PostgresClient {
 
     fn update_account(
         &mut self,
-        account: &DbAccountInfo,
+        account: DbAccountInfo,
         slot: u64,
         at_startup: bool,
     ) -> Result<(), AccountsDbPluginError>;
@@ -274,11 +274,14 @@ impl SimplePostgresClient {
         Ok(())
     }
 
-    fn insert_accounts_in_batch<T: ReadableAccountInfo>(
+    fn insert_accounts_in_batch(
         &mut self,
-        account: &T,
+        account: DbAccountInfo,
         slot: u64,
     ) -> Result<(), AccountsDbPluginError> {
+        self.accounts.push((account, slot));
+
+        if self.accounts.len() == self.batch_size {}
         Ok(())
     }
 
@@ -289,7 +292,7 @@ impl SimplePostgresClient {
         let update_account_stmt = Self::build_single_account_upsert_statement(&mut client, config)?;
 
         Ok(Self {
-            batch_size: config.batch_size,
+            batch_size: config.batch_size.unwrap_or(1),
             accounts: Vec::default(),
             client: Mutex::new(PostgresSqlClientWrapper {
                 client,
@@ -303,7 +306,7 @@ impl SimplePostgresClient {
 impl PostgresClient for SimplePostgresClient {
     fn update_account(
         &mut self,
-        account: &DbAccountInfo,
+        account: DbAccountInfo,
         slot: u64,
         at_startup: bool,
     ) -> Result<(), AccountsDbPluginError> {
@@ -314,9 +317,9 @@ impl PostgresClient for SimplePostgresClient {
             slot,
         );
         if !at_startup {
-            return self.upsert_account(account, slot);
+            return self.upsert_account(&account, slot);
         }
-        Ok(())
+        return self.insert_accounts_in_batch(account, slot);
     }
 
     fn update_slot_status(
@@ -414,7 +417,7 @@ impl PostgresClientWorker {
                 Ok(work) => match work {
                     DbWorkItem::UpdateAccount(request) => {
                         self.client.update_account(
-                            &request.account,
+                            request.account,
                             request.slot,
                             request.at_startup,
                         )?;
@@ -477,10 +480,8 @@ impl ParallelPostgresClient {
             sender,
         })
     }
-}
 
-impl PostgresClient for ParallelPostgresClient {
-    fn join(&mut self) -> thread::Result<()> {
+    pub fn join(&mut self) -> thread::Result<()> {
         self.exit_worker.store(true, Ordering::Relaxed);
         while !self.workers.is_empty() {
             let worker = self.workers.pop();
@@ -497,9 +498,9 @@ impl PostgresClient for ParallelPostgresClient {
         Ok(())
     }
 
-    fn update_account(
+    pub fn update_account(
         &mut self,
-        account: &DbAccountInfo,
+        account: &ReplicaAccountInfo,
         slot: u64,
         at_startup: bool,
     ) -> Result<(), AccountsDbPluginError> {
@@ -528,7 +529,7 @@ impl PostgresClient for ParallelPostgresClient {
         Ok(())
     }
 
-    fn update_slot_status(
+    pub fn update_slot_status(
         &mut self,
         slot: u64,
         parent: Option<u64>,
