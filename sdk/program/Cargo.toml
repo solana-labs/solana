@@ -54,3 +54,6 @@ rustc_version = "0.2"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
