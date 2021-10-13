@@ -392,10 +392,11 @@ impl BucketMapHolderStats {
             ),
             (
                 "slot_for_caching_delta",
-                storage
-                    .slot_for_caching
-                    .load(Ordering::Relaxed)
-                    .saturating_sub(self.last_slot_for_caching.swap(0, Ordering::Relaxed)),
+                {
+                    let current = storage.slot_for_caching.load(Ordering::Relaxed);
+                    current
+                        .saturating_sub(self.last_slot_for_caching.swap(current, Ordering::Relaxed))
+                },
                 i64
             ),
         );
