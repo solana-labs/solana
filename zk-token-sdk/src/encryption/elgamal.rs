@@ -12,8 +12,8 @@ use {
         scalar::Scalar,
     },
     ed25519_dalek::SecretKey as SigningKey,
-    solana_sdk::pubkey::Pubkey,
     serde::{Deserialize, Serialize},
+    solana_sdk::pubkey::Pubkey,
     std::collections::HashMap,
     std::convert::TryInto,
     subtle::{Choice, ConstantTimeEq},
@@ -140,12 +140,8 @@ impl ElGamalKeypair {
         let secret = ElGamalSecretKey::new(signing_key, address);
         let public = ElGamalPubkey::new(&secret);
 
-        Self {
-            secret,
-            public,
-        }
+        Self { secret, public }
     }
-
 
     /// Generates the public and secret keys for ElGamal encryption.
     #[cfg(not(target_arch = "bpf"))]
