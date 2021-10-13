@@ -45,6 +45,7 @@ pub struct BucketMapHolder<T: IndexValue> {
     startup_worker_threads: Mutex<Option<AccountsIndexStorage<T>>>,
     /// used as an input for cache retention
     pub slot_for_caching: AtomicU64,
+    pub slot_for_caching_last: AtomicU64,
 }
 
 impl<T: IndexValue> Debug for BucketMapHolder<T> {
@@ -82,7 +83,7 @@ impl<T: IndexValue> BucketMapHolder<T> {
 
     /// tell the accounts index the slot above which accounts index entries should be cached
     pub fn set_slot_for_caching(&self, slot: Slot) {
-        self.slot_for_caching.store(slot, Ordering::Relaxed);
+        self.slot_for_caching.store(self.slot_for_caching_last.swap(slot, Ordering::Relaxed), Ordering::Relaxed);
     }
 
     pub fn set_startup(&self, storage: &AccountsIndexStorage<T>, value: bool) {
@@ -169,6 +170,7 @@ impl<T: IndexValue> BucketMapHolder<T> {
             mem_budget_mb,
             startup_worker_threads: Mutex::default(),
             slot_for_caching: AtomicU64::new(u64::MAX),
+            slot_for_caching_last: AtomicU64::new(u64::MAX),
             _threads: threads,
         }
     }
